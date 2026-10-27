@@ -1884,5 +1884,290 @@
     "missing": "This building block no longer exists in the meeting template.",
     "back": "Back to minutes content",
     "reset": "Reset"
+  },
+  "simple": {
+    "title": "Design the document",
+    "titlePage": "Title page",
+    "step": {
+      "look": "Appearance",
+      "content": "Content",
+      "page": "Page"
+    },
+    "contentSummary": "{visible} of {total} blocks visible",
+    "contentHelp": "What the document contains, from top to bottom. Tap a block to adjust it; clicking in the preview jumps here.",
+    "hidden": "Hidden",
+    "visible": "Show «{name}»",
+    "custom": "This area was designed freely. You can show, hide and move it here; everything else is done in «Advanced» mode.",
+    "customShort": "Custom area",
+    "openAdvanced": "Open advanced",
+    "openAdvancedHelp": "Free design with canvas, data fields and page masters",
+    "remove": "Remove block",
+    "removeConfirm": "Remove «{name}» from the template?",
+    "add": "+ Add block",
+    "variantInherit": "Like style ({value})",
+    "textWithFields": "This text contains data fields and can be edited in «Advanced» mode.",
+    "signatureLabel": "Signature {number}",
+    "signatureRemove": "Remove signature {number}",
+    "signatureAdd": "+ Signature",
+    "imageChoose": "Choose image",
+    "conditionCustom": "This area has its own condition («Advanced» mode).",
+    "condition": {
+      "open_todos": "Only show if there are open to-dos",
+      "protocol_open_todos": "Only show if there are open to-dos",
+      "upcoming_events": "Only show if there are upcoming events"
+    },
+    "sourceTitle": "Appearance of «{name}»",
+    "look": {
+      "style": "Style",
+      "styleHelp": "Gives all elements a consistent appearance. Colours, logo and font come from your corporate design.",
+      "fromBrand": "As in profile",
+      "fromBrandHelp": "Style of the corporate design",
+      "color": "Main colour",
+      "colorBrand": "Main colour from profile",
+      "colorCustom": "Custom colour",
+      "font": "Font",
+      "fontBrand": "As in profile",
+      "fontSans": "Sans serif",
+      "fontSerif": "Serif",
+      "styleFromBrandShort": "Style from profile",
+      "fontFromBrandShort": "Font from profile"
+    },
+    "page": {
+      "withTitlePage": "With title page",
+      "withoutTitlePage": "Without title page",
+      "portrait": "Portrait",
+      "landscape": "Landscape",
+      "titlePage": "Own title page",
+      "titlePageHelp": "Large title with logo, the content starts on page 2",
+      "header": "Header on every page",
+      "headerLogo": "Logo or organisation",
+      "headerTitle": "Document title",
+      "headerDate": "Date",
+      "footer": "Footer on every page",
+      "footerPages": "Page number («Page 1 of 2»)",
+      "footerNumber": "Document number",
+      "footerText": "Footer text",
+      "format": "Format"
+    },
+    "block": {
+      "protocol": {
+        "name": "Agenda items",
+        "help": "The agenda items with their blocks"
+      },
+      "todos": {
+        "name": "To-dos",
+        "help": "Tasks with assignees and due dates"
+      },
+      "attendance": {
+        "name": "Participants",
+        "help": "Who attended and who was excused"
+      },
+      "session_date": {
+        "name": "Next meeting",
+        "help": "Date of the next meeting"
+      },
+      "signatures": {
+        "name": "Signatures",
+        "help": "Lines to sign on"
+      },
+      "events": {
+        "name": "Events",
+        "help": "The upcoming events"
+      },
+      "balance": {
+        "name": "Account balances",
+        "help": "Balance of the accounts"
+      },
+      "kpis": {
+        "name": "Key figures",
+        "help": "Figures at a glance"
+      },
+      "data": {
+        "name": "Data from hocX",
+        "help": "Content from hocX"
+      },
+      "verify": {
+        "name": "Verification note",
+        "help": "So recipients can verify authenticity"
+      },
+      "metadata": {
+        "name": "Document details",
+        "help": "Number, date, status"
+      },
+      "title": {
+        "name": "Title",
+        "help": "The document title"
+      },
+      "subtitle": {
+        "name": "Subtitle",
+        "help": "Line below the title"
+      },
+      "heading": {
+        "name": "Heading",
+        "help": "Structures the document"
+      },
+      "text": {
+        "name": "Text",
+        "help": "A fixed paragraph"
+      },
+      "rich_text": {
+        "name": "Text",
+        "help": "Formatted text"
+      },
+      "image": {
+        "name": "Image",
+        "help": "Photo or graphic"
+      },
+      "toc": {
+        "name": "Table of contents",
+        "help": "Overview of the sections"
+      },
+      "divider": {
+        "name": "Divider",
+        "help": "Horizontal line"
+      },
+      "page_break": {
+        "name": "New page",
+        "help": "A new page starts after this"
+      },
+      "spacer": {
+        "name": "Spacing",
+        "help": "Empty space"
+      },
+      "list": {
+        "name": "List",
+        "help": "Bulleted list"
+      },
+      "table": {
+        "name": "Table",
+        "help": "Values in rows and columns"
+      },
+      "qr_code": {
+        "name": "QR code",
+        "help": "To scan with a phone"
+      },
+      "page_number": {
+        "name": "Page number",
+        "help": "Number of the page"
+      },
+      "group": {
+        "name": "Area",
+        "help": "Several elements together"
+      }
+    },
+    "setting": {
+      "protocol": {
+        "session_todos": {
+          "label": "Show to-dos with the agenda item",
+          "help": "Tasks tagged with the agenda item"
+        },
+        "images": {
+          "label": "Show images",
+          "help": "Photos and graphics from the minutes"
+        },
+        "titles_only": {
+          "label": "Titles only",
+          "help": "For a short agenda"
+        }
+      },
+      "todos": {
+        "only_if_any": {
+          "label": "Only show if there are entries",
+          "help": "Otherwise the section is left out"
+        },
+        "style": {
+          "label": "Appearance"
+        }
+      },
+      "attendance": {
+        "style": {
+          "label": "Appearance"
+        }
+      },
+      "session_date": {
+        "style": {
+          "label": "Appearance"
+        }
+      },
+      "balance": {
+        "style": {
+          "label": "Appearance"
+        }
+      },
+      "kpis": {
+        "style": {
+          "label": "Appearance"
+        }
+      },
+      "signatures": {
+        "names": {
+          "label": "Signatures by",
+          "placeholder": "e.g. President"
+        },
+        "place_date": {
+          "label": "«Place, date» field",
+          "help": "Space for place and date next to the signatures"
+        }
+      },
+      "events": {
+        "only_if_any": {
+          "label": "Only show if there are events",
+          "help": "Otherwise the section is left out"
+        }
+      },
+      "data": {
+        "only_if_any": {
+          "label": "Only show if there are entries",
+          "help": "Otherwise the section is left out"
+        }
+      },
+      "verify": {
+        "qr": {
+          "label": "Show QR code",
+          "help": "Recipients can check the PDF with their phone"
+        }
+      },
+      "metadata": {
+        "fields": {
+          "label": "Details"
+        }
+      },
+      "title": {
+        "text": {
+          "label": "Title"
+        }
+      },
+      "subtitle": {
+        "text": {
+          "label": "Subtitle"
+        }
+      },
+      "heading": {
+        "text": {
+          "label": "Heading"
+        }
+      },
+      "text": {
+        "text": {
+          "label": "Text"
+        }
+      },
+      "rich_text": {
+        "text": {
+          "label": "Text",
+          "help": "**bold**, *italic*, lists with «- »"
+        }
+      },
+      "image": {
+        "image": {
+          "label": "Image"
+        }
+      },
+      "group": {
+        "condition": {
+          "label": "Condition"
+        }
+      }
+    }
   }
 }

@@ -20,6 +20,7 @@ import { DocumentPanel } from "@/components/documents/designer/document-panel";
 import { InsertSource, LeftPanel } from "@/components/documents/designer/left-panel";
 import { PreviewPanel } from "@/components/documents/designer/preview-panel";
 import { PropertiesPanel } from "@/components/documents/designer/properties-panel";
+import { SimpleDesigner } from "@/components/documents/designer/simple-designer";
 import { SaveState, Toolbar, ViewMode } from "@/components/documents/designer/toolbar";
 import { templateDisplayName } from "@/components/documents/studio-labels";
 import { StatusBanner } from "@/components/ui/status-banner";
@@ -58,7 +59,10 @@ export function TemplateDesigner({ templateId, sessionTemplateId = null }: { tem
   return <DesignerWorkspace key={loaded.template.working_revision_id ?? loaded.template.id} initial={loaded} sessionTemplateId={sessionTemplateId} />;
 }
 
-function readMode(): EditorMode {
+/** Gemerkter Modus; wer kein Corporate Design verwaltet (keine Admin-Rechte), startet immer im
+ * Modus «Einfach» und kann von dort aus «Erweitert» öffnen. */
+function readMode(capabilities: Capabilities): EditorMode {
+  if (!capabilities.manage_brand) return "simple";
   try {
     const value = window.localStorage.getItem(MODE_STORAGE_KEY);
     return value === "advanced" || value === "expert" ? value : "simple";
@@ -119,7 +123,7 @@ function DesignerWorkspace({ initial, sessionTemplateId }: { initial: Loaded; se
   const isDirty = () => contentRef.current !== savedContent.current || brandModeRef.current !== savedBrandMode.current;
   const editable = template.editable;
 
-  useEffect(() => setModeState(readMode()), []);
+  useEffect(() => setModeState(readMode(initial.capabilities)), [initial.capabilities]);
   // Bausteine der Sitzungsvorlage für die Darstellung je Baustein (nur bei eigener Gestaltung)
   useEffect(() => {
     studioApi
@@ -545,6 +549,7 @@ function DesignerWorkspace({ initial, sessionTemplateId }: { initial: Loaded; se
             onDiscard={editable && template.draft_revision && template.published_revision ? () => void discard() : null}
             onBack={sessionTemplateId ? undefined : () => void leave(isSessionDocument ? "/documents/protocols" : "/documents")}
             errorCount={errorCount}
+            onOpenAdvanced={mode === "simple" ? () => setMode("advanced") : undefined}
           />
           {!editable && (
             <div className="studio-readonly">
@@ -567,6 +572,9 @@ function DesignerWorkspace({ initial, sessionTemplateId }: { initial: Loaded; se
               </button>
             </div>
           )}
+          {mode === "simple" ? (
+            <SimpleDesigner brandId={template.brand_id} onDiagnostics={setPreviewDiagnostics} onOpenAdvanced={() => setMode("advanced")} />
+          ) : (
           <div className={`studio-workspace studio-workspace-${view}`}>
             <LeftPanel onInsert={insertAtSelection} />
             <main ref={centerRef} className="studio-center" aria-label={t("designer.workspace")}>
@@ -583,6 +591,7 @@ function DesignerWorkspace({ initial, sessionTemplateId }: { initial: Loaded; se
               )}
             </aside>
           </div>
+          )}
         </div>
       </DndContext>
     </DesignerProvider>

@@ -211,6 +211,15 @@ class DiagnosticRead(BaseModel):
     detail: str = ""
 
 
+class NodeBoxRead(BaseModel):
+    node_id: str
+    page: int
+    x: float
+    y: float
+    width: float
+    height: float
+
+
 class PreviewRead(BaseModel):
     pages: list[str]
     page_count: int
@@ -218,6 +227,10 @@ class PreviewRead(BaseModel):
     template_id: uuid.UUID | None = None
     template_source: str | None = None
     design_hash: str | None = None
+    # Nur mit node_boxes=true: wo jeder Knoten steht (Seite ab 1, x/y/Breite/Höhe in pt) und die
+    # Seitengrösse in pt; Bausteine einer Sitzungsvorlage als «source:<schlüssel>»
+    node_boxes: list[NodeBoxRead] | None = None
+    page_size: tuple[float, float] | None = None
 
 
 async def _until_disconnected(request: Request) -> None:
@@ -230,6 +243,7 @@ async def preview_document(
     body: DocumentRequest,
     request: Request,
     max_pages: int = Query(default=4, ge=1, le=20),
+    node_boxes: bool = Query(default=False),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -237,7 +251,7 @@ async def preview_document(
     check_preview_rights(user, body)
     # Bricht der Browser die Vorschau ab (neuere Eingabe, Dialog geschlossen), wartet der Server
     # nicht weiter: noch wartende Renders entfallen ganz (TYPST-005).
-    render = asyncio.ensure_future(document_service.preview(db, user, user.current_tenant_id, body, max_pages=max_pages))  # loop-ok: preview lagert DB-Arbeit selbst aus
+    render = asyncio.ensure_future(document_service.preview(db, user, user.current_tenant_id, body, max_pages=max_pages, with_node_boxes=node_boxes))  # loop-ok: preview lagert DB-Arbeit selbst aus
     watcher = asyncio.ensure_future(_until_disconnected(request))
     try:
         await asyncio.wait({render, watcher}, return_when=asyncio.FIRST_COMPLETED)
@@ -259,6 +273,8 @@ async def preview_document(
         template_id=result.template_id,
         template_source=result.template_source,
         design_hash=result.design_hash,
+        node_boxes=[NodeBoxRead(**box) for box in result.node_boxes] if result.node_boxes is not None else None,
+        page_size=result.page_size,
     )
 
 

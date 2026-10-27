@@ -204,6 +204,25 @@ Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116_document_reg
   gehört zur Gestaltung (Entwurf, Vorschau, Veröffentlichen). Die Darstellungs-Auswahl im
   Sitzungsvorlagen-Editor entfällt; dort führt ein Link in die PDF-Gestaltung.
 
+### Neu: Modus «Einfach» im Dokument-Designer (Nachtrag vom 2026-10-27)
+
+- Der Designer startet im Modus **Einfach**: drei Schritte (Aussehen, Inhalt, Seite), die
+  PDF-Vorschau ist die Arbeitsfläche. Ein Klick in die Vorschau öffnet den passenden Baustein,
+  bei Protokollen auch einzelne Bausteine eines Traktandums mit ihrer Darstellung.
+- **Aussehen:** Stilkarten mit den sechs Designs, Logo, Hauptfarbe, Schrift - nur für diese
+  Vorlage (neue Felder in `BrandOverrides`: `appearance_base`, Kopf-/Fusszeilen-Schalter,
+  Fusszeilentext).
+- **Inhalt:** Bausteine mit Ein/Aus, Reihenfolge und 1–3 Einstellungen in Alltagssprache
+  (Beschreibung in `backend/app/documents/simple.py`), fertige Bedingungen statt Regel-Editor,
+  «+ Baustein hinzufügen» mit acht häufigen Bausteinen; frei gestaltete Bereiche bleiben als
+  «Eigener Bereich» erhalten.
+- **Seite:** Titelseite, Kopf- und Fusszeile, Hoch-/Querformat.
+- Werkzeugleiste reduziert (Name, Status, Speicherstand, Rückgängig, «Erweitert öffnen»,
+  Veröffentlichen). Wer kein Corporate Design verwaltet, startet immer im Einfach-Modus.
+- Vorschau: `node_boxes` (Positionen der Knoten per Typst-Query), Server-Cache gerenderter
+  Vorschauen, kürzere Entprellung im Einfach-Modus. Die Seitenvorlagen der Designs folgen jetzt
+  den Kopf-/Fusszeilen-Schaltern.
+
 ### Neu: Dokument-Engine und Document Studio
 
 - **Document Studio** (Navigation «Dokument-Studio», eigenes Icon zur Unterscheidung von «Dateien»):

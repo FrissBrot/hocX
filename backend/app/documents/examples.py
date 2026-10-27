@@ -90,14 +90,17 @@ def _kpi_row(prefix: str, *, box: dict[str, Any], **kwargs: Any) -> dict[str, An
 
 
 def _running_master(prefix: str, *, brand_color: str, line_color: str = "$brand.border", line: float = 0.5, dot: bool = False, page_color: str = "$brand.primary", page_bold: bool = True, background: list[dict[str, Any]] | None = None, upper_name: bool = False) -> dict[str, Any]:
-    """Kopf «Organisation · Titel · Datum» und Fuss «Nummer · Seite x von y» der Inhaltsseiten."""
+    """Kopf «Organisation · Titel · Datum» und Fuss «Nummer · Seite x von y» der Inhaltsseiten.
+    Die Teile folgen den Kopf-/Fusszeilen-Schaltern des Brand-Profils bzw. der Vorlage
+    (Organisation = Schalter «Logo», wie das Logo der Standard-Seitenvorlage)."""
     name_style: dict[str, Any] = {"size": 8, "weight": "bold", "color": brand_color}
     if upper_name:
         name_style.update(transform="upper", letter_spacing=0.4)
     left: list[dict[str, Any]] = []
     if dot:
-        left.append(node("container", f"{prefix}-dot", style={"width": "2.2mm", "height": "2.2mm", **_fill(brand_color, radius=1.1)}))
-    left.append(label_text(f"{prefix}-org", bind("organization.name"), role="small", style={"text": name_style}))
+        left.append(node("container", f"{prefix}-dot", style={"width": "2.2mm", "height": "2.2mm", **_fill(brand_color, radius=1.1)}, visible_if=when("brand.header_show_logo")))
+    left.append(label_text(f"{prefix}-org", bind("organization.name"), role="small", style={"text": name_style}, visible_if=when("brand.header_show_logo")))
+    meta_style = {"size": 8, "align": "right", "color": "$brand.muted"}
     header = node(
         "header",
         f"{prefix}-hdr",
@@ -109,7 +112,8 @@ def _running_master(prefix: str, *, brand_color: str, line_color: str = "$brand.
                 gap=2,
                 children=[
                     *left,
-                    label_text(f"{prefix}-hdr-title", bind("document.title"), lit(" · "), bind("document.date"), role="small", style={"width": "fill", "text": {"size": 8, "align": "right", "color": "$brand.muted"}}),
+                    label_text(f"{prefix}-hdr-title", bind("document.title"), role="small", style={"width": "fill", "text": meta_style}, visible_if=when("brand.header_show_title")),
+                    label_text(f"{prefix}-hdr-date", bind("document.date"), role="small", style={"text": meta_style}, visible_if=when("brand.header_show_date")),
                 ],
             ),
             node("divider", f"{prefix}-hdr-line", thickness=line, color=line_color),
@@ -125,9 +129,9 @@ def _running_master(prefix: str, *, brand_color: str, line_color: str = "$brand.
                 f"{prefix}-ftr-row",
                 gap=4,
                 children=[
-                    label_text(f"{prefix}-ftr-number", bind("document.number"), role="small", style={"width": "fill", "text": {"size": 8, "color": "$brand.muted"}}),
+                    label_text(f"{prefix}-ftr-number", bind("document.number"), role="small", style={"width": "fill", "text": {"size": 8, "color": "$brand.muted"}}, visible_if=when("brand.footer_show_number")),
                     label_text(f"{prefix}-ftr-text", bind("brand.footer_text"), role="small", style={"width": "fill", "text": {"size": 8, "align": "center", "color": "$brand.muted"}}),
-                    node("page_number", f"{prefix}-ftr-page", style={"text": {"size": 8, "color": page_color, **({"weight": "bold"} if page_bold else {})}}),
+                    node("page_number", f"{prefix}-ftr-page", style={"text": {"size": 8, "color": page_color, **({"weight": "bold"} if page_bold else {})}}, visible_if=when("brand.footer_show_pages")),
                 ],
             ),
         ],

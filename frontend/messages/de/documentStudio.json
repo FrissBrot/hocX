@@ -1884,5 +1884,290 @@
     "missing": "Diesen Baustein gibt es in der Sitzungsvorlage nicht mehr.",
     "back": "Zum Protokollinhalt",
     "reset": "Zurücksetzen"
+  },
+  "simple": {
+    "title": "Dokument einfach gestalten",
+    "titlePage": "Titelseite",
+    "step": {
+      "look": "Aussehen",
+      "content": "Inhalt",
+      "page": "Seite"
+    },
+    "contentSummary": "{visible} von {total} Bausteinen sichtbar",
+    "contentHelp": "Was im Dokument steht, von oben nach unten. Antippen zum Einstellen; ein Klick in die Vorschau springt hierher.",
+    "hidden": "Ausgeblendet",
+    "visible": "«{name}» anzeigen",
+    "custom": "Diesen Bereich hat jemand frei gestaltet. Ein- und ausblenden und verschieben geht hier, alles Weitere im Modus «Erweitert».",
+    "customShort": "Eigener Bereich",
+    "openAdvanced": "Erweitert öffnen",
+    "openAdvancedHelp": "Freie Gestaltung mit Arbeitsfläche, Datenfeldern und Seitenvorlagen",
+    "remove": "Baustein entfernen",
+    "removeConfirm": "«{name}» aus der Vorlage entfernen?",
+    "add": "+ Baustein hinzufügen",
+    "variantInherit": "Wie Stil ({value})",
+    "textWithFields": "Dieser Text enthält Datenfelder und lässt sich im Modus «Erweitert» bearbeiten.",
+    "signatureLabel": "Unterschrift {number}",
+    "signatureRemove": "Unterschrift {number} entfernen",
+    "signatureAdd": "+ Unterschrift",
+    "imageChoose": "Bild wählen",
+    "conditionCustom": "Dieser Bereich hat eine eigene Bedingung (Modus «Erweitert»).",
+    "condition": {
+      "open_todos": "Nur zeigen, wenn es offene Pendenzen gibt",
+      "protocol_open_todos": "Nur zeigen, wenn es offene Pendenzen gibt",
+      "upcoming_events": "Nur zeigen, wenn es kommende Termine gibt"
+    },
+    "sourceTitle": "Darstellung von «{name}»",
+    "look": {
+      "style": "Stil",
+      "styleHelp": "Gibt allen Elementen eine Darstellung vor. Farben, Logo und Schrift kommen aus eurem Corporate Design.",
+      "fromBrand": "Wie im Profil",
+      "fromBrandHelp": "Stil des Corporate Designs",
+      "color": "Hauptfarbe",
+      "colorBrand": "Hauptfarbe aus dem Profil",
+      "colorCustom": "Eigene Farbe",
+      "font": "Schrift",
+      "fontBrand": "Wie im Profil",
+      "fontSans": "Serifenlos",
+      "fontSerif": "Mit Serifen",
+      "styleFromBrandShort": "Stil aus dem Profil",
+      "fontFromBrandShort": "Schrift aus dem Profil"
+    },
+    "page": {
+      "withTitlePage": "Mit Titelseite",
+      "withoutTitlePage": "Ohne Titelseite",
+      "portrait": "Hochformat",
+      "landscape": "Querformat",
+      "titlePage": "Eigene Titelseite",
+      "titlePageHelp": "Grosser Titel mit Logo, der Inhalt beginnt auf Seite 2",
+      "header": "Kopfzeile auf jeder Seite",
+      "headerLogo": "Logo bzw. Organisation",
+      "headerTitle": "Titel des Dokuments",
+      "headerDate": "Datum",
+      "footer": "Fusszeile auf jeder Seite",
+      "footerPages": "Seitenzahl («Seite 1 von 2»)",
+      "footerNumber": "Dokumentnummer",
+      "footerText": "Text in der Fusszeile",
+      "format": "Format"
+    },
+    "block": {
+      "protocol": {
+        "name": "Traktanden",
+        "help": "Die Traktanden mit ihren Bausteinen"
+      },
+      "todos": {
+        "name": "Pendenzen",
+        "help": "Aufgaben mit Zuständigen und Fälligkeit"
+      },
+      "attendance": {
+        "name": "Teilnehmende",
+        "help": "Wer da war und wer entschuldigt ist"
+      },
+      "session_date": {
+        "name": "Nächste Sitzung",
+        "help": "Datum der nächsten Sitzung"
+      },
+      "signatures": {
+        "name": "Unterschriften",
+        "help": "Linien zum Unterschreiben"
+      },
+      "events": {
+        "name": "Termine",
+        "help": "Die kommenden Termine"
+      },
+      "balance": {
+        "name": "Kontostände",
+        "help": "Saldo der Konten"
+      },
+      "kpis": {
+        "name": "Kennzahlen",
+        "help": "Zahlen auf einen Blick"
+      },
+      "data": {
+        "name": "Daten aus hocX",
+        "help": "Inhalte aus hocX"
+      },
+      "verify": {
+        "name": "Prüfvermerk",
+        "help": "Damit Empfänger die Echtheit prüfen können"
+      },
+      "metadata": {
+        "name": "Angaben zum Dokument",
+        "help": "Nummer, Datum, Status"
+      },
+      "title": {
+        "name": "Titel",
+        "help": "Der Titel des Dokuments"
+      },
+      "subtitle": {
+        "name": "Untertitel",
+        "help": "Zeile unter dem Titel"
+      },
+      "heading": {
+        "name": "Zwischentitel",
+        "help": "Gliedert das Dokument"
+      },
+      "text": {
+        "name": "Text",
+        "help": "Ein fester Absatz"
+      },
+      "rich_text": {
+        "name": "Text",
+        "help": "Formatierter Text"
+      },
+      "image": {
+        "name": "Bild",
+        "help": "Foto oder Grafik"
+      },
+      "toc": {
+        "name": "Inhaltsverzeichnis",
+        "help": "Übersicht der Abschnitte"
+      },
+      "divider": {
+        "name": "Trennlinie",
+        "help": "Waagrechte Linie"
+      },
+      "page_break": {
+        "name": "Neue Seite",
+        "help": "Danach beginnt eine neue Seite"
+      },
+      "spacer": {
+        "name": "Abstand",
+        "help": "Leerer Raum"
+      },
+      "list": {
+        "name": "Liste",
+        "help": "Aufzählung"
+      },
+      "table": {
+        "name": "Tabelle",
+        "help": "Werte in Zeilen und Spalten"
+      },
+      "qr_code": {
+        "name": "QR-Code",
+        "help": "Zum Scannen mit dem Handy"
+      },
+      "page_number": {
+        "name": "Seitenzahl",
+        "help": "Nummer der Seite"
+      },
+      "group": {
+        "name": "Bereich",
+        "help": "Mehrere Elemente zusammen"
+      }
+    },
+    "setting": {
+      "protocol": {
+        "session_todos": {
+          "label": "Pendenzen beim Traktandum zeigen",
+          "help": "Aufgaben mit dem Namen des Traktandums als Tag"
+        },
+        "images": {
+          "label": "Bilder zeigen",
+          "help": "Fotos und Grafiken aus dem Protokoll"
+        },
+        "titles_only": {
+          "label": "Nur die Titel",
+          "help": "Für eine kurze Traktandenliste"
+        }
+      },
+      "todos": {
+        "only_if_any": {
+          "label": "Nur zeigen, wenn es Einträge gibt",
+          "help": "Sonst fällt der Abschnitt weg"
+        },
+        "style": {
+          "label": "Darstellung"
+        }
+      },
+      "attendance": {
+        "style": {
+          "label": "Darstellung"
+        }
+      },
+      "session_date": {
+        "style": {
+          "label": "Darstellung"
+        }
+      },
+      "balance": {
+        "style": {
+          "label": "Darstellung"
+        }
+      },
+      "kpis": {
+        "style": {
+          "label": "Darstellung"
+        }
+      },
+      "signatures": {
+        "names": {
+          "label": "Unterschriften von",
+          "placeholder": "z. B. Präsidentin"
+        },
+        "place_date": {
+          "label": "Feld «Ort, Datum»",
+          "help": "Platz für Ort und Datum neben den Unterschriften"
+        }
+      },
+      "events": {
+        "only_if_any": {
+          "label": "Nur zeigen, wenn es Termine gibt",
+          "help": "Sonst fällt der Abschnitt weg"
+        }
+      },
+      "data": {
+        "only_if_any": {
+          "label": "Nur zeigen, wenn es Einträge gibt",
+          "help": "Sonst fällt der Abschnitt weg"
+        }
+      },
+      "verify": {
+        "qr": {
+          "label": "QR-Code zeigen",
+          "help": "Empfänger können das PDF mit dem Handy prüfen"
+        }
+      },
+      "metadata": {
+        "fields": {
+          "label": "Angaben"
+        }
+      },
+      "title": {
+        "text": {
+          "label": "Titel"
+        }
+      },
+      "subtitle": {
+        "text": {
+          "label": "Untertitel"
+        }
+      },
+      "heading": {
+        "text": {
+          "label": "Zwischentitel"
+        }
+      },
+      "text": {
+        "text": {
+          "label": "Text"
+        }
+      },
+      "rich_text": {
+        "text": {
+          "label": "Text",
+          "help": "**fett**, *kursiv*, Listen mit «- »"
+        }
+      },
+      "image": {
+        "image": {
+          "label": "Bild"
+        }
+      },
+      "group": {
+        "condition": {
+          "label": "Bedingung"
+        }
+      }
+    }
   }
 }

@@ -78,6 +78,8 @@ class CompileResult:
     trace: list[str] = field(default_factory=list)
     # Gesamtzahl der Seiten, wenn nur ein Teil gerastert wurde
     page_count: int | None = None
+    # Positionsmarken der Knoten (nur wenn das Dokument «node_marks» anfordert, Vorschau)
+    marks: list[dict] | None = None
 
 
 @dataclass
@@ -87,6 +89,8 @@ class RenderOutput:
     warnings: list[str] = field(default_factory=list)
     # Seiten insgesamt (PNG-Vorschau liefert höchstens max_pages davon)
     page_count: int = 0
+    # Positionsmarken (Typst-Query <hocx-node>): Anfang/Ende jedes Knotens, Seite, x/y in pt
+    marks: list[dict] | None = None
 
 
 class DocumentRenderError(Exception):
@@ -267,6 +271,11 @@ def _compile_job(
                 timestamp=datetime.now(UTC).replace(microsecond=0),
             )
             page_count = None
+            marks = None
+            if rasterize_pages and json.loads(document_json).get("node_marks"):
+                # Wo jeder Knoten steht (Klick in der Vorschau wählt ihn aus); gleicher Compiler,
+                # Typst nutzt seinen Cache, das Dokument wird nicht neu gesetzt
+                marks = json.loads(compiler.query("<hocx-node>", field="value"))
             if rasterize_pages:
                 output, page_count = _rasterize(output, ppi=ppi or PREVIEW_PPI, max_pages=max_pages)
         except typst.TypstError as exc:
@@ -278,7 +287,7 @@ def _compile_job(
             )
         except Exception as exc:  # noqa: BLE001 - Diagnose wird als Daten zurückgegeben
             return CompileResult(ok=False, error=f"{type(exc).__name__}: {exc}")
-        return CompileResult(ok=True, output=output, warnings=[getattr(w, "message", str(w)) for w in warnings], page_count=page_count)
+        return CompileResult(ok=True, output=output, warnings=[getattr(w, "message", str(w)) for w in warnings], page_count=page_count, marks=marks)
 
 
 # ── Pool ─────────────────────────────────────────────────────────────────────
@@ -553,7 +562,7 @@ class DocumentRenderer:
         total = result.page_count if result.page_count is not None else len(pages)
         if max_pages is not None:
             pages = pages[:max_pages]
-        return RenderOutput(pages=list(pages), warnings=result.warnings, page_count=total)
+        return RenderOutput(pages=list(pages), warnings=result.warnings, page_count=total, marks=result.marks)
 
     async def render_svg(self, document: dict, assets: RenderAssets | None = None, *, tenant_id: int | None = None) -> RenderOutput:
         return await self.render(document, assets, fmt="svg", priority=PRIORITY_PREVIEW, tenant_id=tenant_id, locate=False)

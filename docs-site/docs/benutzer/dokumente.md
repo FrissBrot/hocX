@@ -92,7 +92,34 @@ Dokumenttyp und jede Protokollvorlage fest, welche Vorlage und welches Corporate
 
 ## Visual Designer
 
-Ein Klick auf **Bearbeiten** öffnet den Designer.
+Ein Klick auf **Bearbeiten** öffnet den Designer. Er startet im Modus **Einfach**; wer kein
+Corporate Design verwaltet, startet immer dort.
+
+### Modus «Einfach»
+
+Links stehen drei Schritte, rechts die PDF-Vorschau. Die Vorschau ist hier die Arbeitsfläche:
+Ein Klick auf einen Bereich im PDF öffnet links den passenden Baustein, ein Klick auf einen
+Baustein im Protokollinhalt (z. B. die Pendenzen eines Traktandums) zusätzlich dessen
+Darstellung.
+
+1. **Aussehen:** Stil (die Designs Alpin, Kreide, Signal, Fokus, Siegel, Atlas oder «Wie im
+   Profil»), Logo, Hauptfarbe und Schrift. Das gilt nur für diese Vorlage; das Corporate Design
+   selbst bleibt unverändert.
+2. **Inhalt:** die Bausteine von oben nach unten, mit Schalter zum Ein- und Ausblenden und
+   Pfeilen zum Umsortieren. Jeder Baustein hat wenige Einstellungen in Alltagssprache, zum
+   Beispiel «Nur zeigen, wenn es Einträge gibt» oder die Darstellung der Pendenzen.
+   **+ Baustein hinzufügen** bietet häufige Bausteine an (Text, Zwischentitel, Termine,
+   Kontostände, Bild, Trennlinie, Unterschriften, neue Seite). Bereiche, die jemand frei
+   gestaltet hat, erscheinen als «Eigener Bereich»: ein- und ausblenden und verschieben geht,
+   alles Weitere im Modus «Erweitert».
+3. **Seite:** eigene Titelseite, Logo, Titel und Datum in der Kopfzeile, Seitenzahl,
+   Dokumentnummer und Text in der Fusszeile, Hoch- oder Querformat - ebenfalls nur für diese
+   Vorlage.
+
+**Erweitert öffnen** wechselt zur freien Gestaltung unten; beide Modi bearbeiten dieselbe
+Vorlage, nichts geht verloren.
+
+### Modus «Erweitert» und «Experte»
 
 | Bereich | Inhalt |
 |---|---|

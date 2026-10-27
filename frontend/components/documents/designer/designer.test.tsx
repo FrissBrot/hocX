@@ -24,6 +24,7 @@ const api = vi.hoisted(() => ({
     discardDraft: vi.fn(),
     createComponent: vi.fn(),
     protocolStructure: vi.fn(),
+    exampleThumbnailUrl: vi.fn((key: string) => `/thumb/${key}.png`),
   },
 }));
 const { toast, confirm, push } = vi.hoisted(() => ({ toast: vi.fn(), confirm: vi.fn(), push: vi.fn() }));
@@ -64,9 +65,11 @@ function detail(overrides: Record<string, unknown> = {}) {
 const capabilities = { export: true, view_templates: true, edit_templates: true, publish_templates: true, manage_brand: true, finance_data: true, personal_data: true };
 const brand = { id: "brand-1", name: "Standard", description: null, is_default: true, archived: false, revision: 1, lock_version: 1, tokens: studio.brand_tokens, updated_at: "" };
 
-async function renderDesigner() {
+async function renderDesigner({ simple = false }: { simple?: boolean } = {}) {
   render(<TemplateDesigner templateId="tpl" />);
   await screen.findByRole("textbox", { name: "Name der Vorlage" });
+  // Der Designer startet im Modus «Einfach»; die meisten Tests prüfen die freie Gestaltung
+  if (!simple) fireEvent.click(screen.getByRole("button", { name: "Erweitert öffnen" }));
 }
 
 async function advance(ms: number) {
@@ -450,4 +453,76 @@ describe("TemplateDesigner", () => {
     expect(canvasNode("Einleitung")).toHaveClass("studio-node-hidden");
     expect(canvasNode("Abschnitt").querySelector(".studio-heading")).toHaveTextContent("1 Abschnitt");
   });
+
+  describe("simple mode", () => {
+    const boxes = { node_boxes: [{ node_id: "intro", page: 1, x: 50, y: 60, width: 495, height: 40 }], page_size: [595, 842] };
+
+    beforeEach(() => {
+      api.previewDocument.mockResolvedValue({ pages: ["data:image/png;base64,AAA"], page_count: 1, diagnostics: [], template_id: null, template_source: null, design_hash: null, ...boxes });
+    });
+
+    it("lists the blocks and shows, hides and styles them", async () => {
+      await renderDesigner({ simple: true });
+      const panel = screen.getByRole("complementary", { name: "Dokument einfach gestalten" });
+      expect(within(panel).getByRole("button", { name: /Einleitung/ })).toBeInTheDocument();
+      // Abschnitt mit Titel heisst wie sein Titel, der Prüfvermerk nach seiner Bausteinart
+      expect(within(panel).getByRole("button", { name: /Abschnitt/ })).toBeInTheDocument();
+      expect(within(panel).getByRole("button", { name: /Prüfvermerk/ })).toBeInTheDocument();
+      fireEvent.click(within(panel).getByRole("switch", { name: "«Einleitung» anzeigen" }));
+      fireEvent.click(within(panel).getByRole("radio", { name: "Signal" }));
+      await advance(1300);
+      await waitFor(() => expect(api.studioApi.saveDraft).toHaveBeenCalled());
+      const saved = api.studioApi.saveDraft.mock.calls.at(-1)![1].content;
+      expect(saved.body[0].enabled).toBe(false);
+      expect(saved.settings.brand_overrides.appearance_base).toBe("signal");
+    });
+
+    it("edits the settings of a block and adds a new one", async () => {
+      await renderDesigner({ simple: true });
+      const panel = screen.getByRole("complementary", { name: "Dokument einfach gestalten" });
+      fireEvent.click(within(panel).getByRole("button", { name: /Einleitung/ }));
+      fireEvent.change(within(panel).getByRole("textbox", { name: "Text" }), { target: { value: "Willkommen" } });
+      fireEvent.click(within(panel).getByRole("button", { name: "+ Baustein hinzufügen" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: /Trennlinie/ }));
+      await advance(1300);
+      await waitFor(() => expect(api.studioApi.saveDraft).toHaveBeenCalled());
+      const saved = api.studioApi.saveDraft.mock.calls.at(-1)![1].content;
+      expect(saved.body[0].content.default).toEqual([{ t: "text", v: "Willkommen" }]);
+      // Neuer Baustein direkt nach dem gewählten
+      expect(saved.body[1].type).toBe("divider");
+    });
+
+    it("selects a block by clicking into the preview", async () => {
+      await renderDesigner({ simple: true });
+      await advance(400);
+      const hit = await screen.findByRole("button", { name: "Einleitung", pressed: false });
+      fireEvent.click(hit);
+      expect(screen.getByRole("button", { name: "Einleitung", pressed: true })).toBeInTheDocument();
+      expect(within(screen.getByRole("complementary", { name: "Dokument einfach gestalten" })).getByRole("textbox", { name: "Text" })).toHaveValue("Einleitung");
+      expect(api.previewDocument.mock.calls.at(-1)![3]).toEqual({ nodeBoxes: true });
+    });
+
+    it("switches header and footer parts and the title page for this template only", async () => {
+      await renderDesigner({ simple: true });
+      const panel = screen.getByRole("complementary", { name: "Dokument einfach gestalten" });
+      fireEvent.click(within(panel).getByRole("button", { name: /^3/ }));
+      fireEvent.click(within(panel).getByRole("switch", { name: "Logo bzw. Organisation" }));
+      fireEvent.click(within(panel).getByRole("switch", { name: "Eigene Titelseite" }));
+      fireEvent.click(within(panel).getByRole("radio", { name: "Querformat" }));
+      await advance(1300);
+      await waitFor(() => expect(api.studioApi.saveDraft).toHaveBeenCalled());
+      const saved = api.studioApi.saveDraft.mock.calls.at(-1)![1].content;
+      expect(saved.settings.brand_overrides.header_show_logo).toBe(false);
+      expect(saved.title_page).toMatchObject({ enabled: true, visible_if: null });
+      expect(saved.page.orientation).toBe("landscape");
+    });
+
+    it("always starts in simple mode for people who do not manage the corporate design", async () => {
+      api.studioApi.capabilities.mockResolvedValue({ ...capabilities, manage_brand: false });
+      await renderDesigner({ simple: true });
+      expect(screen.getByRole("button", { name: "Erweitert öffnen" })).toBeInTheDocument();
+      expect(screen.queryByRole("combobox", { name: "Bearbeitungsmodus" })).not.toBeInTheDocument();
+    });
+  });
 });
+

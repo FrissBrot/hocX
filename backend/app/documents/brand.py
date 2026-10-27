@@ -302,4 +302,17 @@ def apply_overrides(tokens: BrandTokens, overrides) -> BrandTokens:
         data["typography"]["heading"] = {"builtin": overrides.heading_font, "asset_ids": []}
     if overrides.base_size is not None:
         data["typography"]["base_size"] = overrides.base_size
+    if overrides.appearance_base is not None:
+        # Wie die Wahl im Brand Studio: Grundstil plus dessen Seitenaufbau; Übersteuerungen
+        # einzelner Elementarten im Profil bleiben bestehen
+        data["appearance"]["base"] = overrides.appearance_base
+        data["layout"].update(APPEARANCE_BASES[overrides.appearance_base]["layout"])
+    for key in HEADER_FOOTER_OVERRIDES:
+        value = getattr(overrides, key)
+        if value is not None:
+            data["layout"]["header_footer"][key] = value
     return BrandTokens.model_validate(data)
+
+
+# Felder von BrandHeaderFooter, die eine Vorlage übersteuern kann (layout.BrandOverrides)
+HEADER_FOOTER_OVERRIDES = ("header_show_logo", "header_show_title", "header_show_date", "footer_show_number", "footer_show_pages", "footer_text")

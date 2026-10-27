@@ -80,6 +80,14 @@ export type BrandOverrides = {
   body_font?: string | null;
   heading_font?: string | null;
   base_size?: number | null;
+  // Stil (Design-Grundstil) sowie Kopf- und Fusszeile nur für diese Vorlage (Modus «Einfach»)
+  appearance_base?: string | null;
+  header_show_logo?: boolean | null;
+  header_show_title?: boolean | null;
+  header_show_date?: boolean | null;
+  footer_show_number?: boolean | null;
+  footer_show_pages?: boolean | null;
+  footer_text?: string | null;
 };
 
 export type TemplateSettings = {

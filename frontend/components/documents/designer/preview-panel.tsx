@@ -13,14 +13,21 @@ import { useDesigner } from "@/components/documents/designer/designer-context";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { ApiError } from "@/lib/api/client";
-import { apiErrorMessage, Diagnostic, previewDocument, SourceOption } from "@/lib/documents/api";
+import { apiErrorMessage, Diagnostic, NodeBox, previewDocument, SourceOption } from "@/lib/documents/api";
 import { Select } from "@/components/ui/select";
 
 const DEBOUNCE_MS = 700;
+// Modus «Einfach»: die Vorschau ist die Arbeitsfläche, Änderungen sollen schneller sichtbar sein
+const SIMPLE_DEBOUNCE_MS = 350;
 
-type Props = { brandId: string | null; onDiagnostics: (items: Diagnostic[]) => void };
+/** Modus «Einfach»: ein Klick in die Vorschau wählt den Knoten bzw. Baustein («source:…»). */
+export type PreviewPicking = { selected: string | null; onPick: (nodeId: string) => void; labelFor: (nodeId: string) => string | null };
 
-export function PreviewPanel({ brandId, onDiagnostics }: Props) {
+type Props = { brandId: string | null; onDiagnostics: (items: Diagnostic[]) => void; picking?: PreviewPicking };
+
+type PreviewState = { pages: string[]; count: number; diagnostics: Diagnostic[]; boxes: NodeBox[]; pageSize: [number, number] | null };
+
+export function PreviewPanel({ brandId, onDiagnostics, picking }: Props) {
   const t = useTranslations("documentStudio");
   const { content, documentType, catalog, select, dataMode, setDataMode, protocolId, setProtocolId, sessionTemplateId } = useDesigner();
   const [protocols, setProtocols] = useState<SourceOption[]>([]);
@@ -30,7 +37,10 @@ export function PreviewPanel({ brandId, onDiagnostics }: Props) {
   const [error, setError] = useState<{ message: string; nodeId?: string | null } | null>(null);
   const [zoom, setZoom] = useState(1);
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
-  const cache = useRef(new Map<string, { pages: string[]; count: number; diagnostics: Diagnostic[] }>());
+  const [boxes, setBoxes] = useState<NodeBox[]>([]);
+  const [pageSize, setPageSize] = useState<[number, number] | null>(null);
+  const cache = useRef(new Map<string, PreviewState>());
+  const withBoxes = picking !== undefined;
   const hiddenPages = Math.max(0, pageCount - pages.length);
   // Im Vorlagen-Editor wählt das Backend ohne Auswahl die letzte Sitzung der Vorlage
   const needsProtocol = !sessionTemplateId && (catalog.document_types.find((item) => item.key === documentType)?.needs_protocol ?? false);
@@ -39,7 +49,15 @@ export function PreviewPanel({ brandId, onDiagnostics }: Props) {
     if (dataMode === "data" && protocols.length === 0) void loadSource("protocols").then(setProtocols);
   }, [dataMode, protocols.length]);
 
-  const key = JSON.stringify([content, dataMode, protocolId, brandId, documentType, sessionTemplateId]);
+  const key = JSON.stringify([content, dataMode, protocolId, brandId, documentType, sessionTemplateId, withBoxes]);
+  const show = (result: PreviewState) => {
+    setPages(result.pages);
+    setPageCount(result.count);
+    setDiagnostics(result.diagnostics);
+    setBoxes(result.boxes);
+    setPageSize(result.pageSize);
+    onDiagnostics(result.diagnostics);
+  };
   useEffect(() => {
     if (dataMode === "data" && needsProtocol && !protocolId) {
       setPages([]);
@@ -47,24 +65,19 @@ export function PreviewPanel({ brandId, onDiagnostics }: Props) {
     }
     const cached = cache.current.get(key);
     if (cached) {
-      setPages(cached.pages);
-      setPageCount(cached.count);
-      setDiagnostics(cached.diagnostics);
-      onDiagnostics(cached.diagnostics);
+      show(cached);
       setState("idle");
       return;
     }
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       setState("loading");
-      previewDocument({ document_type: documentType, content, data_mode: dataMode, protocol_id: dataMode === "data" ? protocolId : null, brand_id: brandId, protocol_template_id: sessionTemplateId }, 12, controller.signal)
+      previewDocument({ document_type: documentType, content, data_mode: dataMode, protocol_id: dataMode === "data" ? protocolId : null, brand_id: brandId, protocol_template_id: sessionTemplateId }, 12, controller.signal, { nodeBoxes: withBoxes })
         .then((result) => {
-          cache.current.set(key, { pages: result.pages, count: result.page_count, diagnostics: result.diagnostics });
+          const loaded: PreviewState = { pages: result.pages, count: result.page_count, diagnostics: result.diagnostics, boxes: result.node_boxes ?? [], pageSize: result.page_size ?? null };
+          cache.current.set(key, loaded);
           if (cache.current.size > 30) cache.current.delete(cache.current.keys().next().value as string);
-          setPages(result.pages);
-          setPageCount(result.page_count);
-          setDiagnostics(result.diagnostics);
-          onDiagnostics(result.diagnostics);
+          show(loaded);
           setError(null);
           setState("idle");
         })
@@ -74,7 +87,7 @@ export function PreviewPanel({ brandId, onDiagnostics }: Props) {
           setError({ message: apiErrorMessage(reason, t("preview.failed")), nodeId: detail?.node_id ?? null });
           setState("error");
         });
-    }, DEBOUNCE_MS);
+    }, withBoxes ? SIMPLE_DEBOUNCE_MS : DEBOUNCE_MS);
     return () => {
       window.clearTimeout(timer);
       controller.abort();
@@ -131,13 +144,50 @@ export function PreviewPanel({ brandId, onDiagnostics }: Props) {
         </ul>
       )}
       {dataMode === "data" && needsProtocol && !protocolId && <p className="field-help">{t("preview.protocolRequired")}</p>}
-      <div className="studio-preview-pages" style={{ zoom }}>
-        {pages.map((page, index) => (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img key={index} className="studio-preview-page" src={page} alt={t("preview.pageAlt", { page: index + 1 })} />
-        ))}
+      <div className={picking ? "studio-preview-pages studio-preview-pages-spread" : "studio-preview-pages"} style={{ zoom }}>
+        {pages.map((page, index) =>
+          picking ? (
+            <PickablePage key={index} src={page} alt={t("preview.pageAlt", { page: index + 1 })} boxes={boxes.filter((box) => box.page === index + 1)} pageSize={pageSize} picking={picking} />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img key={index} className="studio-preview-page" src={page} alt={t("preview.pageAlt", { page: index + 1 })} />
+          )
+        )}
       </div>
       {hiddenPages ? <p className="field-help">{t("preview.morePages", { count: hiddenPages })}</p> : null}
     </section>
+  );
+}
+
+/** Seite mit Klickflächen: je Knoten bzw. Baustein ein Rechteck (Prozent der Seite), grössere
+ * zuerst, damit Bausteine innerhalb des Protokollinhalts obenauf liegen. */
+function PickablePage({ src, alt, boxes, pageSize, picking }: { src: string; alt: string; boxes: NodeBox[]; pageSize: [number, number] | null; picking: PreviewPicking }) {
+  const ordered = [...boxes].sort((left, right) => right.width * right.height - left.width * left.height);
+  return (
+    <div className="studio-preview-page-wrap">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img className="studio-preview-page" src={src} alt={alt} />
+      {pageSize &&
+        ordered.map((box, index) => {
+          const label = picking.labelFor(box.node_id);
+          if (!label) return null;
+          const selected = picking.selected === box.node_id;
+          return (
+            <button
+              key={`${box.node_id}-${index}`}
+              type="button"
+              className={selected ? "studio-preview-hit studio-preview-hit-selected" : "studio-preview-hit"}
+              // Laufzeitposition aus der Vorschau
+              style={{ left: `${(box.x / pageSize[0]) * 100}%`, top: `${(box.y / pageSize[1]) * 100}%`, width: `${(box.width / pageSize[0]) * 100}%`, height: `${(box.height / pageSize[1]) * 100}%` }}
+              aria-label={label}
+              aria-pressed={selected}
+              title={label}
+              onClick={() => picking.onPick(box.node_id)}
+            >
+              {selected ? <span className="studio-preview-hit-label">{label}</span> : null}
+            </button>
+          );
+        })}
+    </div>
   );
 }

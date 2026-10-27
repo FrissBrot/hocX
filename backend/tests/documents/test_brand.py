@@ -90,3 +90,24 @@ def test_appearance_rejects_unknown_values():
         DataBlockNode(component="protocol_element", appearance={"heading": {"variant": "bar"}})
     # Leere Übersteuerungen werden nicht gespeichert
     assert BrandTokens.model_validate({"appearance": {"elements": {"form": {}}}}).appearance.elements == {}
+
+
+def test_template_overrides_style_and_header_footer_without_touching_the_profile():
+    """Einfach-Modus: Stil (Design) sowie Kopf- und Fusszeile gelten nur für diese Vorlage."""
+    from app.documents.appearance import APPEARANCE_BASES
+    from app.documents.brand import apply_overrides
+    from app.documents.layout import BrandOverrides
+
+    tokens = BrandTokens.model_validate({"appearance": {"elements": {"attendance": {"variant": "chips"}}}, "layout": {"header_footer": {"footer_text": "Profil"}}})
+    merged = apply_overrides(tokens, BrandOverrides(appearance_base="signal", header_show_logo=False, footer_show_pages=False, footer_text="Vorlage"))
+    assert merged.appearance.base == "signal"
+    assert merged.layout.table_style == APPEARANCE_BASES["signal"]["layout"]["table_style"] and merged.layout.radius == 0
+    assert merged.appearance.elements["attendance"].variant == "chips"
+    resolved = resolve_appearance(merged)
+    assert resolved["todo"]["variant"] == "status" and resolved["attendance"]["variant"] == "chips"
+    footer = merged.layout.header_footer
+    assert footer.header_show_logo is False and footer.header_show_title is True and footer.footer_show_pages is False and footer.footer_text == "Vorlage"
+    # Das Profil selbst bleibt unverändert
+    assert tokens.appearance.base == "classic" and tokens.layout.header_footer.footer_text == "Profil"
+    with pytest.raises(ValidationError):
+        BrandOverrides(appearance_base="neon")

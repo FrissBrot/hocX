@@ -3,7 +3,7 @@
 // Inhaltssegmente. Gestaltung kommt ausschliesslich aus den Daten (Brand-Profil, Vorlage).
 
 #import "theme.typ": make-ctx
-#import "layout.typ": render-node, render-nodes, verify-block
+#import "layout.typ": render-marked, render-node, render-nodes, verify-block
 
 #let doc = json("/document.json")
 #let ctx = make-ctx(doc)
@@ -90,7 +90,7 @@
   let tp = doc.title_page
   let args = if tp.master != none { page-args(tp.master) } else { page-args(none) + (header: none, footer: none, background: none) }
   if tp.background != none { args.insert("fill", rgb(tp.background)) }
-  page(..args, render-nodes(ctx, tp.children))
+  page(..args, render-marked(ctx, tp.children))
   counter(page).update(1)
 }
 
@@ -100,7 +100,7 @@
     let last = index == doc.segments.len() - 1
     page(..page-args(segment.master, first-id: first-id), {
       if index == 0 { [#metadata("start") <hocx-content-start>] }
-      render-nodes(ctx, segment.nodes)
+      render-marked(ctx, segment.nodes)
       // Prüfvermerk am Ende, falls die Vorlage keinen eigenen enthält (unten auf der letzten Seite)
       if last and doc.verify.auto {
         v(1fr, weak: true)

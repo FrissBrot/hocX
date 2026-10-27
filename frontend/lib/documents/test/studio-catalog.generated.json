@@ -4626,6 +4626,446 @@
     "master_only": true,
     "mode": "advanced"
    }
+  },
+  "simple": {
+   "add": [
+    "text",
+    "heading",
+    "events_table",
+    "finance_balance",
+    "image",
+    "divider",
+    "signatures",
+    "page_break"
+   ],
+   "blocks": [
+    {
+     "key": "protocol",
+     "match": {
+      "component": [
+       "protocol_element"
+      ],
+      "type": "data_block"
+     },
+     "settings": [
+      {
+       "default": true,
+       "key": "session_todos",
+       "kind": "toggle",
+       "path": "params.include_session_todos"
+      },
+      {
+       "default": true,
+       "key": "images",
+       "kind": "toggle",
+       "path": "params.include_images"
+      },
+      {
+       "default": false,
+       "key": "titles_only",
+       "kind": "toggle",
+       "path": "params.titles_only"
+      }
+     ]
+    },
+    {
+     "key": "todos",
+     "match": {
+      "component": [
+       "todo_table"
+      ],
+      "type": "data_block"
+     },
+     "settings": [
+      {
+       "default": true,
+       "key": "only_if_any",
+       "kind": "toggle",
+       "path": "hide_if_empty"
+      },
+      {
+       "appearance": "todo",
+       "key": "style",
+       "kind": "variant",
+       "options": [
+        "table",
+        "checklist",
+        "status"
+       ]
+      }
+     ]
+    },
+    {
+     "key": "attendance",
+     "match": {
+      "component": [
+       "attendance"
+      ],
+      "type": "data_block"
+     },
+     "settings": [
+      {
+       "appearance": "attendance",
+       "key": "style",
+       "kind": "variant",
+       "options": [
+        "list",
+        "compact",
+        "table",
+        "grid",
+        "chips"
+       ]
+      }
+     ]
+    },
+    {
+     "key": "session_date",
+     "match": {
+      "component": [
+       "session_date"
+      ],
+      "type": "data_block"
+     },
+     "settings": [
+      {
+       "appearance": "session_date",
+       "key": "style",
+       "kind": "variant",
+       "options": [
+        "line",
+        "box"
+       ]
+      }
+     ]
+    },
+    {
+     "key": "signatures",
+     "match": {
+      "component": [
+       "signature_fields"
+      ],
+      "type": "data_block"
+     },
+     "settings": [
+      {
+       "key": "names",
+       "kind": "names",
+       "path": "params.fields"
+      },
+      {
+       "default": true,
+       "key": "place_date",
+       "kind": "toggle",
+       "path": "params.with_place_date"
+      }
+     ]
+    },
+    {
+     "key": "events",
+     "match": {
+      "component": [
+       "event_table",
+       "event_agenda",
+       "event_calendar_month"
+      ],
+      "type": "data_block"
+     },
+     "settings": [
+      {
+       "default": true,
+       "key": "only_if_any",
+       "kind": "toggle",
+       "path": "hide_if_empty"
+      }
+     ]
+    },
+    {
+     "key": "balance",
+     "match": {
+      "component": [
+       "finance_balance"
+      ],
+      "type": "data_block"
+     },
+     "settings": [
+      {
+       "appearance": "finance_balance",
+       "key": "style",
+       "kind": "variant",
+       "options": [
+        "list",
+        "tiles"
+       ]
+      }
+     ]
+    },
+    {
+     "key": "kpis",
+     "match": {
+      "component": [
+       "kpi_tiles"
+      ],
+      "type": "data_block"
+     },
+     "settings": [
+      {
+       "appearance": "kpi_tiles",
+       "key": "style",
+       "kind": "variant",
+       "options": [
+        "outlined",
+        "filled",
+        "plain",
+        "divided"
+       ]
+      }
+     ]
+    },
+    {
+     "key": "data",
+     "match": {
+      "type": "data_block"
+     },
+     "settings": [
+      {
+       "default": true,
+       "key": "only_if_any",
+       "kind": "toggle",
+       "path": "hide_if_empty"
+      }
+     ]
+    },
+    {
+     "key": "verify",
+     "match": {
+      "type": "verify_note"
+     },
+     "settings": [
+      {
+       "default": false,
+       "key": "qr",
+       "kind": "toggle",
+       "path": "show_qr"
+      }
+     ]
+    },
+    {
+     "key": "metadata",
+     "match": {
+      "type": "metadata"
+     },
+     "settings": [
+      {
+       "default": [
+        "number",
+        "date",
+        "status",
+        "version"
+       ],
+       "key": "fields",
+       "kind": "multi",
+       "options": [
+        "number",
+        "date",
+        "status",
+        "version",
+        "place"
+       ],
+       "path": "fields"
+      }
+     ]
+    },
+    {
+     "key": "title",
+     "match": {
+      "role": [
+       "title"
+      ],
+      "type": "text"
+     },
+     "settings": [
+      {
+       "key": "text",
+       "kind": "text",
+       "path": "content"
+      }
+     ]
+    },
+    {
+     "key": "subtitle",
+     "match": {
+      "role": [
+       "subtitle"
+      ],
+      "type": "text"
+     },
+     "settings": [
+      {
+       "key": "text",
+       "kind": "text",
+       "path": "content"
+      }
+     ]
+    },
+    {
+     "key": "heading",
+     "match": {
+      "role": [
+       "heading"
+      ],
+      "type": "text"
+     },
+     "settings": [
+      {
+       "key": "text",
+       "kind": "text",
+       "path": "content"
+      }
+     ]
+    },
+    {
+     "key": "text",
+     "match": {
+      "type": "text"
+     },
+     "settings": [
+      {
+       "key": "text",
+       "kind": "text",
+       "path": "content"
+      }
+     ]
+    },
+    {
+     "key": "rich_text",
+     "match": {
+      "type": "rich_text"
+     },
+     "settings": [
+      {
+       "key": "text",
+       "kind": "markdown",
+       "path": "markdown"
+      }
+     ]
+    },
+    {
+     "key": "image",
+     "match": {
+      "type": "image"
+     },
+     "settings": [
+      {
+       "key": "image",
+       "kind": "image",
+       "path": "source"
+      }
+     ]
+    },
+    {
+     "key": "toc",
+     "match": {
+      "type": "toc"
+     },
+     "settings": []
+    },
+    {
+     "key": "divider",
+     "match": {
+      "type": "divider"
+     },
+     "settings": []
+    },
+    {
+     "key": "page_break",
+     "match": {
+      "type": "page_break"
+     },
+     "settings": []
+    },
+    {
+     "key": "spacer",
+     "match": {
+      "type": "spacer"
+     },
+     "settings": []
+    },
+    {
+     "key": "list",
+     "match": {
+      "type": "list"
+     },
+     "settings": []
+    },
+    {
+     "key": "table",
+     "match": {
+      "type": "table"
+     },
+     "settings": []
+    },
+    {
+     "key": "qr_code",
+     "match": {
+      "type": "qr_code"
+     },
+     "settings": []
+    },
+    {
+     "key": "page_number",
+     "match": {
+      "type": "page_number"
+     },
+     "settings": []
+    },
+    {
+     "key": "group",
+     "match": {
+      "type": [
+       "section",
+       "container",
+       "stack",
+       "row",
+       "column",
+       "grid"
+      ]
+     },
+     "settings": [
+      {
+       "key": "condition",
+       "kind": "condition"
+      }
+     ]
+    }
+   ],
+   "conditions": {
+    "open_todos": {
+     "cmp": "gt",
+     "op": "count",
+     "path": "todos.open",
+     "value": 0
+    },
+    "protocol_open_todos": {
+     "cmp": "gt",
+     "op": "count",
+     "path": "protocol.open_todos",
+     "value": 0
+    },
+    "upcoming_events": {
+     "cmp": "gt",
+     "op": "count",
+     "path": "events.upcoming",
+     "value": 0
+    }
+   },
+   "styles": [
+    "alpin",
+    "kreide",
+    "signal",
+    "fokus",
+    "siegel",
+    "atlas"
+   ]
   }
  }
 }

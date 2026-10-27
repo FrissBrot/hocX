@@ -7,7 +7,7 @@
 #import "rich.typ": render-rich, render-inline
 #import "table.typ": data-table, render-cell, header-label
 #import "chart.typ": render-chart
-#import "../theme.typ": heading-above, heading-aside, look, with-appearance
+#import "../theme.typ": heading-above, heading-aside, look, node-mark, with-appearance
 
 // Hervorgehobene Fläche (Varianten «box»/«tiles»/«filled»)
 #let surface-box(ctx, radius, body, accent: false) = block(
@@ -570,7 +570,9 @@
   }
 }
 
-#let render-block(ctx, b) = {
+// ``render-child`` rendert verschachtelte Bausteine (render-block, wegen der Reihenfolge der
+// Definitionen als Parameter)
+#let render-block-body(ctx, b, render-child) = {
   // Darstellung eines einzelnen Bausteins (Sitzungsvorlage), bereits aufgelöst
   let ctx = if b.at("appearance", default: none) != none { with-appearance(ctx, b.appearance) } else { ctx }
   // Leere Bausteine und Traktanden weglassen statt «Keine Einträge» (brand.layout.empty_blocks)
@@ -583,7 +585,7 @@
       if b.empty or children.len() == 0 {
         empty-note(ctx, b.type)
       } else {
-        for child in children { render-block(ctx, child) }
+        for child in children { render-child(ctx, child) }
       }
     }
     // Ein Traktandum bleibt auf einer Seite, solange es auf eine ganze Seite passt; sonst
@@ -618,6 +620,16 @@
       v(space.s4, weak: true)
     }
   }
+}
+
+// Bausteine einer Sitzungsvorlage tragen ihre Herkunft (source): Positionsmarken dafür, damit
+// ein Klick in der Vorschau den Baustein wählt (nur mit node_marks, siehe theme.node-mark)
+#let render-block(ctx, b) = {
+  let source = b.at("source", default: none)
+  let mark-id = if source != none { "source:" + source } else { none }
+  node-mark(ctx, mark-id, "start")
+  render-block-body(ctx, b, render-block)
+  node-mark(ctx, mark-id, "end")
 }
 
 #let render-blocks(ctx, blocks) = {

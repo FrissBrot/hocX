@@ -23,7 +23,7 @@ from typing import Annotated, Any, Iterator, Literal, Union, get_args
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.documents.appearance import ElementAppearance, validate_appearance_elements, validate_block_overrides
+from app.documents.appearance import AppearanceBase, ElementAppearance, validate_appearance_elements, validate_block_overrides
 from app.documents.conditions import Condition
 
 LAYOUT_SCHEMA_VERSION = 1
@@ -596,6 +596,15 @@ class BrandOverrides(_Strict):
     body_font: Literal["inter", "liberation_sans", "liberation_serif", "noto_sans"] | None = None
     heading_font: Literal["inter", "liberation_sans", "liberation_serif", "noto_sans"] | None = None
     base_size: float | None = Field(None, ge=7, le=16)
+    # Stil (Design als Grundstil, appearance.APPEARANCE_BASES) nur für diese Vorlage
+    appearance_base: AppearanceBase | None = None
+    # Kopf- und Fusszeile nur für diese Vorlage (sonst BrandHeaderFooter des Profils)
+    header_show_logo: bool | None = None
+    header_show_title: bool | None = None
+    header_show_date: bool | None = None
+    footer_show_number: bool | None = None
+    footer_show_pages: bool | None = None
+    footer_text: str | None = Field(None, max_length=300)
 
     def is_empty(self) -> bool:
         return not any(value is not None for value in self.model_dump().values())

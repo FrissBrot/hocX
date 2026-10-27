@@ -38,11 +38,15 @@ type Props = {
   // Fehlt im Vorlagen-Editor (eingebetteter Designer)
   onBack?: () => void;
   errorCount: number;
+  /** Modus «Einfach»: nur Name, Status, Speicherstand, Rückgängig, «Erweitert öffnen» und
+   * Veröffentlichen (Ansicht, Format und Zoom entfallen; Format steht im Schritt «Seite») */
+  onOpenAdvanced?: () => void;
 };
 
 export function Toolbar(props: Props) {
   const t = useTranslations("documentStudio");
   const { editable } = props;
+  const simple = props.onOpenAdvanced !== undefined;
   return (
     <header className="studio-toolbar" aria-label={t("toolbar.title")}>
       <div className="studio-toolbar-group">
@@ -66,6 +70,13 @@ export function Toolbar(props: Props) {
         <button type="button" className="button-ghost button-icon" aria-label={t("toolbar.redo")} title={t("toolbar.redoShortcut")} disabled={!props.canRedo || !editable} onClick={props.onRedo}>
           ↷
         </button>
+        {simple ? (
+          <button type="button" className="button-ghost" title={t("simple.openAdvancedHelp")} onClick={props.onOpenAdvanced}>
+            {t("simple.openAdvanced")}
+          </button>
+        ) : null}
+        {simple ? null : (
+          <>
         <Select value={props.mode} onChange={(event) => props.onModeChange(event.target.value as EditorMode)} aria-label={t("toolbar.mode")}>
           {(["simple", "advanced", "expert"] as const).map((mode) => (
             <option key={mode} value={mode}>
@@ -99,6 +110,8 @@ export function Toolbar(props: Props) {
             +
           </button>
         </span>
+          </>
+        )}
       </div>
       <div className="studio-toolbar-group">
         {props.onDiscard && (
@@ -106,7 +119,7 @@ export function Toolbar(props: Props) {
             {t("toolbar.discard")}
           </button>
         )}
-        {editable && (
+        {editable && !simple && (
           <button type="button" className="button-secondary" onClick={props.onSave} disabled={props.saveState === "saving" || props.saveState === "saved"}>
             {t("toolbar.save")}
           </button>

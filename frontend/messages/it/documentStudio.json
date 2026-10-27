@@ -1884,5 +1884,290 @@
     "missing": "Questo blocco non esiste più nel modello di seduta.",
     "back": "Torna al contenuto del verbale",
     "reset": "Reimposta"
+  },
+  "simple": {
+    "title": "Impaginare il documento",
+    "titlePage": "Pagina del titolo",
+    "step": {
+      "look": "Aspetto",
+      "content": "Contenuto",
+      "page": "Pagina"
+    },
+    "contentSummary": "{visible} di {total} blocchi visibili",
+    "contentHelp": "Il contenuto del documento, dall'alto in basso. Tocca un blocco per regolarlo; un clic nell'anteprima porta qui.",
+    "hidden": "Nascosto",
+    "visible": "Mostra «{name}»",
+    "custom": "Questa area è stata impaginata liberamente. Qui puoi mostrarla, nasconderla e spostarla; il resto si fa in modalità «Avanzata».",
+    "customShort": "Area personalizzata",
+    "openAdvanced": "Apri modalità avanzata",
+    "openAdvancedHelp": "Impaginazione libera con area di lavoro, campi dati e modelli di pagina",
+    "remove": "Rimuovi blocco",
+    "removeConfirm": "Rimuovere «{name}» dal modello?",
+    "add": "+ Aggiungi blocco",
+    "variantInherit": "Come lo stile ({value})",
+    "textWithFields": "Questo testo contiene campi dati e si modifica in modalità «Avanzata».",
+    "signatureLabel": "Firma {number}",
+    "signatureRemove": "Rimuovi firma {number}",
+    "signatureAdd": "+ Firma",
+    "imageChoose": "Scegli immagine",
+    "conditionCustom": "Questa area ha una propria condizione (modalità «Avanzata»).",
+    "condition": {
+      "open_todos": "Mostra solo se ci sono pendenze aperte",
+      "protocol_open_todos": "Mostra solo se ci sono pendenze aperte",
+      "upcoming_events": "Mostra solo se ci sono appuntamenti in arrivo"
+    },
+    "sourceTitle": "Presentazione di «{name}»",
+    "look": {
+      "style": "Stile",
+      "styleHelp": "Dà una presentazione a tutti gli elementi. Colori, logo e carattere vengono dalla vostra identità visiva.",
+      "fromBrand": "Come nel profilo",
+      "fromBrandHelp": "Stile dell'identità visiva",
+      "color": "Colore principale",
+      "colorBrand": "Colore principale del profilo",
+      "colorCustom": "Colore personalizzato",
+      "font": "Carattere",
+      "fontBrand": "Come nel profilo",
+      "fontSans": "Senza grazie",
+      "fontSerif": "Con grazie",
+      "styleFromBrandShort": "Stile del profilo",
+      "fontFromBrandShort": "Carattere del profilo"
+    },
+    "page": {
+      "withTitlePage": "Con pagina del titolo",
+      "withoutTitlePage": "Senza pagina del titolo",
+      "portrait": "Verticale",
+      "landscape": "Orizzontale",
+      "titlePage": "Pagina del titolo propria",
+      "titlePageHelp": "Titolo grande con logo, il contenuto inizia a pagina 2",
+      "header": "Intestazione su ogni pagina",
+      "headerLogo": "Logo o organizzazione",
+      "headerTitle": "Titolo del documento",
+      "headerDate": "Data",
+      "footer": "Piè di pagina su ogni pagina",
+      "footerPages": "Numero di pagina («Pagina 1 di 2»)",
+      "footerNumber": "Numero del documento",
+      "footerText": "Testo del piè di pagina",
+      "format": "Formato"
+    },
+    "block": {
+      "protocol": {
+        "name": "Trattande",
+        "help": "Le trattande con i loro blocchi"
+      },
+      "todos": {
+        "name": "Pendenze",
+        "help": "Compiti con responsabili e scadenze"
+      },
+      "attendance": {
+        "name": "Partecipanti",
+        "help": "Chi era presente e chi era scusato"
+      },
+      "session_date": {
+        "name": "Prossima seduta",
+        "help": "Data della prossima seduta"
+      },
+      "signatures": {
+        "name": "Firme",
+        "help": "Linee per firmare"
+      },
+      "events": {
+        "name": "Appuntamenti",
+        "help": "I prossimi appuntamenti"
+      },
+      "balance": {
+        "name": "Saldi dei conti",
+        "help": "Saldo dei conti"
+      },
+      "kpis": {
+        "name": "Cifre chiave",
+        "help": "Le cifre in sintesi"
+      },
+      "data": {
+        "name": "Dati da hocX",
+        "help": "Contenuti da hocX"
+      },
+      "verify": {
+        "name": "Nota di verifica",
+        "help": "Per verificare l'autenticità"
+      },
+      "metadata": {
+        "name": "Dati del documento",
+        "help": "Numero, data, stato"
+      },
+      "title": {
+        "name": "Titolo",
+        "help": "Il titolo del documento"
+      },
+      "subtitle": {
+        "name": "Sottotitolo",
+        "help": "Riga sotto il titolo"
+      },
+      "heading": {
+        "name": "Sottotitolo intermedio",
+        "help": "Struttura il documento"
+      },
+      "text": {
+        "name": "Testo",
+        "help": "Un paragrafo fisso"
+      },
+      "rich_text": {
+        "name": "Testo",
+        "help": "Testo formattato"
+      },
+      "image": {
+        "name": "Immagine",
+        "help": "Foto o grafica"
+      },
+      "toc": {
+        "name": "Indice",
+        "help": "Panoramica delle sezioni"
+      },
+      "divider": {
+        "name": "Linea di separazione",
+        "help": "Linea orizzontale"
+      },
+      "page_break": {
+        "name": "Nuova pagina",
+        "help": "Dopo inizia una nuova pagina"
+      },
+      "spacer": {
+        "name": "Spazio",
+        "help": "Spazio vuoto"
+      },
+      "list": {
+        "name": "Elenco",
+        "help": "Elenco puntato"
+      },
+      "table": {
+        "name": "Tabella",
+        "help": "Valori in righe e colonne"
+      },
+      "qr_code": {
+        "name": "Codice QR",
+        "help": "Da scansionare con il telefono"
+      },
+      "page_number": {
+        "name": "Numero di pagina",
+        "help": "Numero della pagina"
+      },
+      "group": {
+        "name": "Area",
+        "help": "Più elementi insieme"
+      }
+    },
+    "setting": {
+      "protocol": {
+        "session_todos": {
+          "label": "Mostra le pendenze con la trattanda",
+          "help": "Compiti con il nome della trattanda come tag"
+        },
+        "images": {
+          "label": "Mostra immagini",
+          "help": "Foto e grafiche del verbale"
+        },
+        "titles_only": {
+          "label": "Solo i titoli",
+          "help": "Per un ordine del giorno breve"
+        }
+      },
+      "todos": {
+        "only_if_any": {
+          "label": "Mostra solo se ci sono voci",
+          "help": "Altrimenti la sezione viene omessa"
+        },
+        "style": {
+          "label": "Presentazione"
+        }
+      },
+      "attendance": {
+        "style": {
+          "label": "Presentazione"
+        }
+      },
+      "session_date": {
+        "style": {
+          "label": "Presentazione"
+        }
+      },
+      "balance": {
+        "style": {
+          "label": "Presentazione"
+        }
+      },
+      "kpis": {
+        "style": {
+          "label": "Presentazione"
+        }
+      },
+      "signatures": {
+        "names": {
+          "label": "Firme di",
+          "placeholder": "ad es. Presidente"
+        },
+        "place_date": {
+          "label": "Campo «Luogo, data»",
+          "help": "Spazio per luogo e data accanto alle firme"
+        }
+      },
+      "events": {
+        "only_if_any": {
+          "label": "Mostra solo se ci sono appuntamenti",
+          "help": "Altrimenti la sezione viene omessa"
+        }
+      },
+      "data": {
+        "only_if_any": {
+          "label": "Mostra solo se ci sono voci",
+          "help": "Altrimenti la sezione viene omessa"
+        }
+      },
+      "verify": {
+        "qr": {
+          "label": "Mostra codice QR",
+          "help": "I destinatari possono verificare il PDF con il telefono"
+        }
+      },
+      "metadata": {
+        "fields": {
+          "label": "Dati"
+        }
+      },
+      "title": {
+        "text": {
+          "label": "Titolo"
+        }
+      },
+      "subtitle": {
+        "text": {
+          "label": "Sottotitolo"
+        }
+      },
+      "heading": {
+        "text": {
+          "label": "Sottotitolo intermedio"
+        }
+      },
+      "text": {
+        "text": {
+          "label": "Testo"
+        }
+      },
+      "rich_text": {
+        "text": {
+          "label": "Testo",
+          "help": "**grassetto**, *corsivo*, elenchi con «- »"
+        }
+      },
+      "image": {
+        "image": {
+          "label": "Immagine"
+        }
+      },
+      "group": {
+        "condition": {
+          "label": "Condizione"
+        }
+      }
+    }
   }
 }

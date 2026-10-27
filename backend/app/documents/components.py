@@ -21,6 +21,7 @@ from typing import Any, Literal
 
 from app.documents.catalog import CATALOG, NEEDS_PROTOCOL
 from app.documents.layout import CONTAINER_TYPES, MASTER_ONLY_TYPES, NODE_MODELS
+from app.documents.simple import simple_payload
 
 Mode = Literal["simple", "advanced", "expert"]
 MODES: tuple[Mode, ...] = ("simple", "advanced", "expert")
@@ -250,4 +251,5 @@ def catalog_payload() -> dict[str, Any]:
         "document_types": [{"key": item.key, "category": item.category, "needs_protocol": item.needs_protocol, "formats": list(item.formats)} for item in DOCUMENT_TYPES.values()],
         "categories": list(CATEGORIES),
         "modes": list(MODES),
+        "simple": simple_payload(),
     }

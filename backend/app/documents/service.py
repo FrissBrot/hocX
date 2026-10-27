@@ -22,7 +22,9 @@ import hashlib
 import json
 import logging
 import re
+import threading
 import uuid
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -47,6 +49,7 @@ from app.documents.doc_types import get_type
 from app.documents.hashing import content_hash, design_hash
 from app.documents.layout import LayoutJson, TemplateContent, content_json, parse_content
 from app.documents.model import DocumentMeta, RenderInfo
+from app.documents.node_boxes import node_boxes, page_size_pt
 from app.documents.providers.common import PROTOCOL_STATUS_CODES
 from app.documents.locking import lock_row
 from app.documents.renderer import DocumentRenderError, RenderAssets, RenderOutput, get_renderer
@@ -440,6 +443,58 @@ class PreviewResult:
     template_id: uuid.UUID | None
     template_source: str | None
     design_hash: str
+    # Nur mit node_boxes=True: wo jeder Knoten steht (node_boxes.NodeBox als dict) und die
+    # Seitengrösse in pt (Klick in der Vorschau des Designers)
+    node_boxes: list[dict[str, Any]] | None = None
+    page_size: tuple[float, float] | None = None
+
+
+class _PreviewCache:
+    """Zuletzt gerenderte Vorschauen je Worker-Prozess (Designer: Rückgängig, Hin- und
+    Herschalten, mehrere Ansichten). Schlüssel ist ein Hash über Mandant, das vollständig
+    aufgelöste Dokument (mit den Rechten der anfragenden Person), Dateien, Schriften und
+    Seitenzahl - ein Treffer ist also genau dieselbe Ausgabe. Begrenzt auf ``MAX_BYTES``."""
+
+    MAX_BYTES = 40 * 1024 * 1024
+
+    def __init__(self) -> None:
+        self._items: OrderedDict[str, tuple[RenderOutput, int]] = OrderedDict()
+        self._bytes = 0
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def key(tenant_id: int, data: dict[str, Any], assets: RenderAssets, max_pages: int | None) -> str:
+        digest = hashlib.sha256()
+        digest.update(f"{tenant_id}|{max_pages}|".encode())
+        digest.update(json.dumps(data, sort_keys=True, ensure_ascii=False, default=str).encode())
+        for name, content in sorted({**assets.files, **{f"font:{key}": value for key, value in assets.fonts.items()}}.items()):
+            digest.update(name.encode())
+            digest.update(hashlib.sha256(content).digest())
+        return digest.hexdigest()
+
+    def get(self, key: str) -> RenderOutput | None:
+        with self._lock:
+            item = self._items.get(key)
+            if item is None:
+                return None
+            self._items.move_to_end(key)
+            return item[0]
+
+    def put(self, key: str, output: RenderOutput) -> None:
+        size = sum(len(page) for page in output.pages)
+        if size > self.MAX_BYTES:
+            return
+        with self._lock:
+            if key in self._items:
+                return
+            self._items[key] = (output, size)
+            self._bytes += size
+            while self._bytes > self.MAX_BYTES and self._items:
+                _key, (_output, removed) = self._items.popitem(last=False)
+                self._bytes -= removed
+
+
+_preview_cache = _PreviewCache()
 
 
 async def _prepare_off_loop(db: Session, user: CurrentUser | None, tenant_id: int, request: DocumentRequest, **kwargs: Any) -> PreparedDocument:
@@ -449,8 +504,9 @@ async def _prepare_off_loop(db: Session, user: CurrentUser | None, tenant_id: in
     return await run_in_threadpool(prepare, db, user, tenant_id, request, **kwargs)
 
 
-async def preview(db: Session, user: CurrentUser | None, tenant_id: int, request: DocumentRequest, *, max_pages: int | None = None) -> PreviewResult:
-    """Seiten als PNG: ohne Register-Eintrag, ohne Speicherung, ohne Versionserhöhung."""
+async def preview(db: Session, user: CurrentUser | None, tenant_id: int, request: DocumentRequest, *, max_pages: int | None = None, with_node_boxes: bool = False) -> PreviewResult:
+    """Seiten als PNG: ohne Register-Eintrag, ohne Speicherung, ohne Versionserhöhung.
+    ``with_node_boxes``: zusätzlich, wo jeder Knoten steht (Designer, Klick in der Vorschau)."""
 
     def prepare_and_release() -> tuple[PreparedDocument, uuid.UUID | None]:
         # Die Vorschau darf nichts verändern (z. B. nachgeführte Mitgliedschaftsblöcke): alles in
@@ -468,7 +524,14 @@ async def preview(db: Session, user: CurrentUser | None, tenant_id: int, request
 
     prepared, template_public_id = await run_in_threadpool(prepare_and_release)
     compiled = prepared.compiled
-    output = await get_renderer().render_preview(compiled.data, RenderAssets(files=compiled.files, fonts=compiled.fonts), max_pages=max_pages, tenant_id=tenant_id)
+    data = {**compiled.data, "node_marks": True} if with_node_boxes else compiled.data
+    assets = RenderAssets(files=compiled.files, fonts=compiled.fonts)
+    cache_key = _PreviewCache.key(tenant_id, data, assets, max_pages)
+    output = _preview_cache.get(cache_key)
+    if output is None:
+        output = await get_renderer().render_preview(data, assets, max_pages=max_pages, tenant_id=tenant_id)
+        _preview_cache.put(cache_key, output)
+    boxes = [box.as_dict() for box in node_boxes(output.marks, data["page"])] if with_node_boxes else None
     return PreviewResult(
         pages=output.pages,
         diagnostics=prepared.diagnostics,
@@ -476,6 +539,8 @@ async def preview(db: Session, user: CurrentUser | None, tenant_id: int, request
         template_id=template_public_id,
         template_source=prepared.template_source,
         design_hash=prepared.design_hash,
+        node_boxes=boxes,
+        page_size=page_size_pt(data["page"]) if with_node_boxes else None,
     )
 
 

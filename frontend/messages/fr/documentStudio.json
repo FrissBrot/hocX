@@ -1884,5 +1884,290 @@
     "missing": "Ce bloc n'existe plus dans le modèle de séance.",
     "back": "Retour au contenu du procès-verbal",
     "reset": "Réinitialiser"
+  },
+  "simple": {
+    "title": "Mettre en page le document",
+    "titlePage": "Page de titre",
+    "step": {
+      "look": "Apparence",
+      "content": "Contenu",
+      "page": "Page"
+    },
+    "contentSummary": "{visible} blocs visibles sur {total}",
+    "contentHelp": "Ce que contient le document, de haut en bas. Touche un bloc pour le régler ; un clic dans l'aperçu mène ici.",
+    "hidden": "Masqué",
+    "visible": "Afficher «{name}»",
+    "custom": "Cette zone a été mise en page librement. Tu peux l'afficher, la masquer et la déplacer ici ; le reste se fait en mode «Avancé».",
+    "customShort": "Zone personnalisée",
+    "openAdvanced": "Ouvrir le mode avancé",
+    "openAdvancedHelp": "Mise en page libre avec surface de travail, champs de données et modèles de page",
+    "remove": "Supprimer le bloc",
+    "removeConfirm": "Supprimer «{name}» du modèle ?",
+    "add": "+ Ajouter un bloc",
+    "variantInherit": "Comme le style ({value})",
+    "textWithFields": "Ce texte contient des champs de données et se modifie en mode «Avancé».",
+    "signatureLabel": "Signature {number}",
+    "signatureRemove": "Supprimer la signature {number}",
+    "signatureAdd": "+ Signature",
+    "imageChoose": "Choisir une image",
+    "conditionCustom": "Cette zone a sa propre condition (mode «Avancé»).",
+    "condition": {
+      "open_todos": "Afficher seulement s'il y a des tâches ouvertes",
+      "protocol_open_todos": "Afficher seulement s'il y a des tâches ouvertes",
+      "upcoming_events": "Afficher seulement s'il y a des rendez-vous à venir"
+    },
+    "sourceTitle": "Présentation de «{name}»",
+    "look": {
+      "style": "Style",
+      "styleHelp": "Donne une présentation à tous les éléments. Couleurs, logo et police viennent de votre identité visuelle.",
+      "fromBrand": "Comme le profil",
+      "fromBrandHelp": "Style de l'identité visuelle",
+      "color": "Couleur principale",
+      "colorBrand": "Couleur principale du profil",
+      "colorCustom": "Couleur personnalisée",
+      "font": "Police",
+      "fontBrand": "Comme le profil",
+      "fontSans": "Sans empattements",
+      "fontSerif": "Avec empattements",
+      "styleFromBrandShort": "Style du profil",
+      "fontFromBrandShort": "Police du profil"
+    },
+    "page": {
+      "withTitlePage": "Avec page de titre",
+      "withoutTitlePage": "Sans page de titre",
+      "portrait": "Portrait",
+      "landscape": "Paysage",
+      "titlePage": "Page de titre propre",
+      "titlePageHelp": "Grand titre avec logo, le contenu commence à la page 2",
+      "header": "En-tête sur chaque page",
+      "headerLogo": "Logo ou organisation",
+      "headerTitle": "Titre du document",
+      "headerDate": "Date",
+      "footer": "Pied de page sur chaque page",
+      "footerPages": "Numéro de page («Page 1 sur 2»)",
+      "footerNumber": "Numéro du document",
+      "footerText": "Texte du pied de page",
+      "format": "Format"
+    },
+    "block": {
+      "protocol": {
+        "name": "Points de l'ordre du jour",
+        "help": "Les points avec leurs blocs"
+      },
+      "todos": {
+        "name": "Tâches",
+        "help": "Tâches avec responsables et échéances"
+      },
+      "attendance": {
+        "name": "Participants",
+        "help": "Qui était présent et qui était excusé"
+      },
+      "session_date": {
+        "name": "Prochaine séance",
+        "help": "Date de la prochaine séance"
+      },
+      "signatures": {
+        "name": "Signatures",
+        "help": "Lignes pour signer"
+      },
+      "events": {
+        "name": "Rendez-vous",
+        "help": "Les prochains rendez-vous"
+      },
+      "balance": {
+        "name": "Soldes des comptes",
+        "help": "Solde des comptes"
+      },
+      "kpis": {
+        "name": "Chiffres clés",
+        "help": "Les chiffres en un coup d'œil"
+      },
+      "data": {
+        "name": "Données de hocX",
+        "help": "Contenus de hocX"
+      },
+      "verify": {
+        "name": "Mention de vérification",
+        "help": "Pour que les destinataires vérifient l'authenticité"
+      },
+      "metadata": {
+        "name": "Informations sur le document",
+        "help": "Numéro, date, statut"
+      },
+      "title": {
+        "name": "Titre",
+        "help": "Le titre du document"
+      },
+      "subtitle": {
+        "name": "Sous-titre",
+        "help": "Ligne sous le titre"
+      },
+      "heading": {
+        "name": "Intertitre",
+        "help": "Structure le document"
+      },
+      "text": {
+        "name": "Texte",
+        "help": "Un paragraphe fixe"
+      },
+      "rich_text": {
+        "name": "Texte",
+        "help": "Texte formaté"
+      },
+      "image": {
+        "name": "Image",
+        "help": "Photo ou graphique"
+      },
+      "toc": {
+        "name": "Table des matières",
+        "help": "Aperçu des sections"
+      },
+      "divider": {
+        "name": "Ligne de séparation",
+        "help": "Ligne horizontale"
+      },
+      "page_break": {
+        "name": "Nouvelle page",
+        "help": "Une nouvelle page commence ensuite"
+      },
+      "spacer": {
+        "name": "Espace",
+        "help": "Espace vide"
+      },
+      "list": {
+        "name": "Liste",
+        "help": "Énumération"
+      },
+      "table": {
+        "name": "Tableau",
+        "help": "Valeurs en lignes et colonnes"
+      },
+      "qr_code": {
+        "name": "Code QR",
+        "help": "À scanner avec le téléphone"
+      },
+      "page_number": {
+        "name": "Numéro de page",
+        "help": "Numéro de la page"
+      },
+      "group": {
+        "name": "Zone",
+        "help": "Plusieurs éléments ensemble"
+      }
+    },
+    "setting": {
+      "protocol": {
+        "session_todos": {
+          "label": "Afficher les tâches avec le point",
+          "help": "Tâches avec le nom du point comme tag"
+        },
+        "images": {
+          "label": "Afficher les images",
+          "help": "Photos et graphiques du procès-verbal"
+        },
+        "titles_only": {
+          "label": "Seulement les titres",
+          "help": "Pour un ordre du jour court"
+        }
+      },
+      "todos": {
+        "only_if_any": {
+          "label": "Afficher seulement s'il y a des entrées",
+          "help": "Sinon la section est omise"
+        },
+        "style": {
+          "label": "Présentation"
+        }
+      },
+      "attendance": {
+        "style": {
+          "label": "Présentation"
+        }
+      },
+      "session_date": {
+        "style": {
+          "label": "Présentation"
+        }
+      },
+      "balance": {
+        "style": {
+          "label": "Présentation"
+        }
+      },
+      "kpis": {
+        "style": {
+          "label": "Présentation"
+        }
+      },
+      "signatures": {
+        "names": {
+          "label": "Signatures de",
+          "placeholder": "p. ex. Présidente"
+        },
+        "place_date": {
+          "label": "Champ «Lieu, date»",
+          "help": "Place pour le lieu et la date à côté des signatures"
+        }
+      },
+      "events": {
+        "only_if_any": {
+          "label": "Afficher seulement s'il y a des rendez-vous",
+          "help": "Sinon la section est omise"
+        }
+      },
+      "data": {
+        "only_if_any": {
+          "label": "Afficher seulement s'il y a des entrées",
+          "help": "Sinon la section est omise"
+        }
+      },
+      "verify": {
+        "qr": {
+          "label": "Afficher le code QR",
+          "help": "Les destinataires peuvent vérifier le PDF avec leur téléphone"
+        }
+      },
+      "metadata": {
+        "fields": {
+          "label": "Informations"
+        }
+      },
+      "title": {
+        "text": {
+          "label": "Titre"
+        }
+      },
+      "subtitle": {
+        "text": {
+          "label": "Sous-titre"
+        }
+      },
+      "heading": {
+        "text": {
+          "label": "Intertitre"
+        }
+      },
+      "text": {
+        "text": {
+          "label": "Texte"
+        }
+      },
+      "rich_text": {
+        "text": {
+          "label": "Texte",
+          "help": "**gras**, *italique*, listes avec «- »"
+        }
+      },
+      "image": {
+        "image": {
+          "label": "Image"
+        }
+      },
+      "group": {
+        "condition": {
+          "label": "Condition"
+        }
+      }
+    }
   }
 }

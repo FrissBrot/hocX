@@ -221,6 +221,37 @@ Designer lädt deren Traktanden und Bausteine über
 Gestaltungen). Welche Elementarten ein Baustein übersteuern kann, steht in
 `appearance.APPEARANCE_KINDS_BY_ELEMENT_TYPE`.
 
+### Modus «Einfach» des Designers (`simple.py`, `node_boxes.py`)
+
+Der Einfach-Modus (`frontend/components/documents/designer/simple-designer.tsx`) bearbeitet
+dieselbe `TemplateContent` wie «Erweitert»: Bausteine sind die Knoten der obersten Ebene von
+`body`. Welche Bausteine er kennt und welche 1–3 Einstellungen er zeigt, beschreibt
+`simple.SIMPLE_BLOCKS` (Katalog-Payload `simple`): Zuordnung über Knotentyp, Fachkomponente
+oder Textrolle, Einstellungen als Pfad im Knoten (`toggle`, `variant`, `text`, `markdown`,
+`names`, `multi`, `image`, `condition` mit `CONDITION_PRESETS`). Unbekannte Knoten bleiben als
+«Eigener Bereich» erhalten. `tests/documents/test_simple.py` prüft Pfade gegen die Modelle und
+dass jeder Knoten der mitgelieferten Vorlagen und Designs zugeordnet wird.
+
+Aussehen und Seite schreiben nur in `settings.brand_overrides` (`layout.BrandOverrides`):
+neben Farben, Logo und Schriften jetzt `appearance_base` (Design als Grundstil inkl. dessen
+Seitenaufbau) und die Kopf-/Fusszeilen-Schalter aus `BrandHeaderFooter`; `brand.apply_overrides`
+wendet sie an, die Seitenvorlagen fragen sie über `brand.*`-Bedingungen ab (auch die der
+Designs, `examples._running_master`).
+
+**Klick in die Vorschau:** `POST /api/documents/preview?node_boxes=true` setzt `node_marks` im
+Dokument. Typst schreibt dann am Anfang und Ende jedes Knotens der obersten Ebene (Inhalt,
+Titelseite) und jedes Bausteins mit Herkunft (`source:<schlüssel>`) eine Positionsmarke
+(`theme.node-mark`, `metadata` mit `here().position()`); der Worker liest sie per
+`compiler.query("<hocx-node>")`. `node_boxes.node_boxes` macht daraus Rechtecke je Seite in pt
+(seitenübergreifend aufgeteilt, eine Anfangsmarke knapp über dem Seitenende zählt zur nächsten
+Seite). Ohne `node_marks` entsteht nichts; `test_node_boxes.py` prüft, dass die Seiten mit
+und ohne Marken pixelgleich sind.
+
+**Vorschau-Tempo:** `service._PreviewCache` hält die zuletzt gerenderten Vorschauen je
+Worker-Prozess (bis 40 MB). Schlüssel ist ein Hash über Mandant, das vollständig aufgelöste
+Dokument (mit den Rechten der anfragenden Person), Dateien, Schriften und Seitenzahl. Im
+Einfach-Modus entprellt die Vorschau mit 350 statt 700 ms.
+
 Priorität beim Export:
 
 1. explizit gewählte Vorlage (Export-Dialog)

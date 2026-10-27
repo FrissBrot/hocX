@@ -157,7 +157,15 @@
 #let make-ctx(doc) = {
   let c = palette(doc.brand)
   let appearance = doc.brand.at("appearance", default: (:))
-  (doc: doc, strings: doc.strings, brand: doc.brand, c: c, theme: make-theme(doc.brand, c), appearance: appearance)
+  (doc: doc, strings: doc.strings, brand: doc.brand, c: c, theme: make-theme(doc.brand, c), appearance: appearance, marks: doc.at("node_marks", default: false))
+}
+
+// Positionsmarke für die Vorschau des Designers (Klick wählt den Knoten): nur wenn das Dokument
+// sie anfordert (node_marks), sonst nichts - der Export bleibt unverändert.
+#let node-mark(ctx, id, edge) = {
+  if ctx.at("marks", default: false) and id != none {
+    context [#metadata((id: id, edge: edge, pos: here().position())) <hocx-node>]
+  }
 }
 
 // Block-Übersteuerung aus dem Designer (data-Knoten mit «appearance»): bereits vollständig

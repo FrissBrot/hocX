@@ -7,7 +7,7 @@
 #import "@preview/tiaoma:0.3.0": qrcode
 #import "lib/core.typ": tr, is-blank
 #import "base/blocks.typ": render-block
-#import "theme.typ": look, with-appearance
+#import "theme.typ": look, node-mark, with-appearance
 #import "base/rich.typ": render-rich
 
 // ── Längen und Stil ─────────────────────────────────────────────────────────
@@ -354,4 +354,13 @@
 
 #let render-nodes(ctx, nodes) = {
   for node in nodes { render-node(ctx, node) }
+}
+
+// Wie render-nodes, mit Positionsmarken je Knoten (oberste Ebene von Inhalt und Titelseite)
+#let render-marked(ctx, nodes) = {
+  for node in nodes {
+    node-mark(ctx, node.at("id", default: none), "start")
+    render-node(ctx, node)
+    node-mark(ctx, node.at("id", default: none), "end")
+  }
 }

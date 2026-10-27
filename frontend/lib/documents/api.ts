@@ -3,7 +3,7 @@
 // Schnittstelle siehe backend/app/api/routes/document_studio.py und documents.py.
 
 import { ApiError, browserApiFetch } from "@/lib/api/client";
-import type { BrandTokens, TemplateContent, TemplateNode } from "@/lib/documents/layout";
+import type { BrandTokens, Condition, TemplateContent, TemplateNode } from "@/lib/documents/layout";
 
 export const DOCUMENT_TIMEOUT_MS = 120_000;
 
@@ -91,6 +91,29 @@ export type StudioCatalog = {
   color_references: string[];
   fonts: string[];
   brand_presets: string[];
+  simple: SimpleCatalog;
+};
+
+// Modus «Einfach» (backend/app/documents/simple.py): bekannte Bausteine mit 1–3 Einstellungen
+export type SimpleSetting =
+  | { key: string; kind: "toggle"; path: string; default: boolean }
+  | { key: string; kind: "variant"; appearance: string; options: string[] }
+  | { key: string; kind: "text"; path: string }
+  | { key: string; kind: "markdown"; path: string }
+  | { key: string; kind: "names"; path: string }
+  | { key: string; kind: "image"; path: string }
+  | { key: string; kind: "multi"; path: string; options: string[]; default: string[] }
+  | { key: string; kind: "condition" };
+export type SimpleBlock = {
+  key: string;
+  match: { type: string | string[]; component?: string[]; role?: string[] };
+  settings: SimpleSetting[];
+};
+export type SimpleCatalog = {
+  blocks: SimpleBlock[];
+  add: string[];
+  styles: string[];
+  conditions: Record<string, Condition>;
 };
 
 export type Capabilities = {
@@ -273,7 +296,12 @@ export type PreviewResult = {
   template_id: string | null;
   template_source: string | null;
   design_hash: string | null;
+  // Nur mit nodeBoxes: wo jeder Knoten steht (Seite ab 1, pt), Bausteine als «source:<schlüssel>»
+  node_boxes?: NodeBox[] | null;
+  page_size?: [number, number] | null;
 };
+
+export type NodeBox = { node_id: string; page: number; x: number; y: number; width: number; height: number };
 
 export type SourceOption = { id: string; label: string; detail?: string | null };
 
@@ -356,8 +384,8 @@ export const studioApi = {
   deleteComponent: (id: string) => browserApiFetch<null>(`/api/document-components/${id}`, { method: "DELETE" }),
 };
 
-export function previewDocument(request: DocumentRequest, maxPages = 4, signal?: AbortSignal) {
-  return browserApiFetch<PreviewResult>(`/api/documents/preview?max_pages=${maxPages}`, {
+export function previewDocument(request: DocumentRequest, maxPages = 4, signal?: AbortSignal, options?: { nodeBoxes?: boolean }) {
+  return browserApiFetch<PreviewResult>(`/api/documents/preview?max_pages=${maxPages}${options?.nodeBoxes ? "&node_boxes=true" : ""}`, {
     method: "POST",
     body: JSON.stringify(request),
     signal: signal ?? AbortSignal.timeout(DOCUMENT_TIMEOUT_MS),
