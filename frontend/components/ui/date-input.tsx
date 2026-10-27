@@ -3,12 +3,13 @@
 import { FocusEvent, InputHTMLAttributes, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
+import { DatePicker } from "@/components/ui/date-picker";
 import { formatDateInputValue, parseDateInputValue } from "@/lib/utils/format";
 
 type DateInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "value" | "onChange"> & {
   value: string | null | undefined;
   onChange: (value: string) => void;
-  /** Ersetzt den nativen Picker, z. B. durch die Kalenderansicht mit Terminen. */
+  /** Ersetzt den Kalender, z. B. durch die Kalenderansicht mit Terminen. */
   onPickerClick?: () => void;
 };
 
@@ -28,7 +29,9 @@ export function DateInput({
   const t = useTranslations("common");
   const [displayValue, setDisplayValue] = useState(() => formatDateInputValue(value));
   const textInputRef = useRef<HTMLInputElement | null>(null);
-  const nativeInputRef = useRef<HTMLInputElement | null>(null);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const pickerButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   useEffect(() => {
     setDisplayValue(formatDateInputValue(value));
@@ -69,7 +72,7 @@ export function DateInput({
     onBlur?.(event);
   }
 
-  function openNativePicker() {
+  function openPicker() {
     if (disabled || readOnly) {
       return;
     }
@@ -77,16 +80,11 @@ export function DateInput({
       onPickerClick();
       return;
     }
-    if (nativeInputRef.current && typeof nativeInputRef.current.showPicker === "function") {
-      nativeInputRef.current.showPicker();
-      return;
-    }
-    nativeInputRef.current?.focus();
-    nativeInputRef.current?.click();
+    setCalendarOpen((current) => !current);
   }
 
   return (
-    <div className={`date-input${className ? ` ${className}` : ""}`}>
+    <div ref={wrapperRef} className={`date-input${className ? ` ${className}` : ""}`}>
       <input
         ref={textInputRef}
         {...props}
@@ -117,9 +115,12 @@ export function DateInput({
         onBlur={handleBlur}
       />
       <button
+        ref={pickerButtonRef}
         type="button"
         className="date-input-picker"
-        onClick={openNativePicker}
+        onClick={openPicker}
+        aria-haspopup="dialog"
+        aria-expanded={onPickerClick ? undefined : calendarOpen}
         disabled={disabled || readOnly}
         aria-label={t("dateField.chooseDate")}
         title={t("dateField.chooseDate")}
@@ -129,18 +130,17 @@ export function DateInput({
           <path d="M5 1.75v3M11 1.75v3M2.5 6h11" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
       </button>
-      <input
-        ref={nativeInputRef}
-        type="date"
-        tabIndex={-1}
-        aria-hidden="true"
-        className="date-input-native"
-        value={parseDateInputValue(value) || ""}
-        onChange={(event) => commitValue(event.target.value)}
-        min={min}
-        max={max}
-        disabled={disabled}
-      />
+      {calendarOpen && (
+        <DatePicker
+          anchorRef={wrapperRef}
+          returnFocusRef={pickerButtonRef}
+          value={parseDateInputValue(value) || null}
+          min={min === undefined ? undefined : String(min)}
+          max={max === undefined ? undefined : String(max)}
+          onSelect={(selected) => commitValue(selected)}
+          onClose={() => setCalendarOpen(false)}
+        />
+      )}
     </div>
   );
 }

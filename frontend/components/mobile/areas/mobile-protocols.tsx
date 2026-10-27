@@ -22,6 +22,7 @@ import { browserApiFetch } from "@/lib/api/client";
 import { useProtocolCreation } from "@/lib/hooks/use-protocol-creation";
 import { usePdfExport } from "@/lib/hooks/use-pdf-export";
 import type { ProtocolListCycle, ProtocolSummary, TemplateSummary } from "@/types/api";
+import { Select } from "@/components/ui/select";
 
 const STATUSES = ["geplant", "vorbereitet", "durchgeführt", "abgeschlossen"] as const;
 const PREVIOUS_STATUS: Record<string, string> = { vorbereitet: "geplant", durchgeführt: "vorbereitet", abgeschlossen: "durchgeführt" };
@@ -230,13 +231,13 @@ function CreateProtocolSheet({ templates, onClose, preferredTemplateId, onTempla
       <form className="grid mobile-sheet-body" onSubmit={submit}>
         <label className="field-stack">
           <span className="field-label">{t("template")}</span>
-          <select value={templateId} onChange={(event) => { setTemplateId(event.target.value); onTemplateChange(event.target.value); rememberTemplate(event.target.value); }}>
+          <Select value={templateId} onChange={(event) => { setTemplateId(event.target.value); onTemplateChange(event.target.value); rememberTemplate(event.target.value); }}>
             {templates.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="field-stack">
           <span className="field-label">{t("date")}</span>

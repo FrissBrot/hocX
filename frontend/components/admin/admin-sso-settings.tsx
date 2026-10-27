@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { PlatformOidcConfigRead, PlatformOidcConfigWrite } from "@/types/api";
+import { Select } from "@/components/ui/select";
 
 type Props = {
   initialConfig: PlatformOidcConfigRead | null;
@@ -62,10 +63,10 @@ export function AdminSsoSettings({ initialConfig }: Props) {
       <form className="grid" onSubmit={submit}>
         <label className="field-stack">
           <span className="field-label">{t("enabledLabel")}</span>
-          <select value={form.enabled ? "1" : "0"} onChange={(e) => setForm((f) => ({ ...f, enabled: e.target.value === "1" }))}>
+          <Select value={form.enabled ? "1" : "0"} onChange={(e) => setForm((f) => ({ ...f, enabled: e.target.value === "1" }))}>
             <option value="0">{t("no")}</option>
             <option value="1">{t("yes")}</option>
-          </select>
+          </Select>
         </label>
 
         <label className="field-stack">

@@ -16,6 +16,7 @@ import type { EventSummary, ParticipantSummary, StructuredListDefinition, Struct
 
 import { defaultRowConfig, EVENT_DISPLAY_DEFAULTS, EVENTS_ROW_DISPLAY_DEFAULTS, type EventDisplayKey, isSimpleRowType, rowTypeAllowed, SIMPLE_ROW_TYPES, type TableRow } from "./block-form";
 import { EventFilterEditor } from "./event-filter-editor";
+import { Select } from "@/components/ui/select";
 
 type TFunc = (key: string, values?: Record<string, string | number>) => string;
 
@@ -126,7 +127,7 @@ export function RowInspector({
 
       <label className="field-stack">
         <span className="field-label">{t("row.type")}</span>
-        <select value={row.row_type} onChange={(event) => changeRowType(event.target.value)}>
+        <Select value={row.row_type} onChange={(event) => changeRowType(event.target.value)}>
           <optgroup label={t("row.simpleTypes")}>
             {simpleTypes.map((type) => (
               <option key={type} value={type}>{t(`rowType.${type}`)}</option>
@@ -139,7 +140,7 @@ export function RowInspector({
               ))}
             </optgroup>
           ) : null}
-        </select>
+        </Select>
         <span className="field-help">
           {isSimpleRowType(row.row_type) ? t(`rowTypeHelp.${row.row_type}`) : t("rowTypeHelp.embedded", { type: typeLabels[Number(row.row_type)] ?? "" })}
         </span>
@@ -247,10 +248,10 @@ export function RowInspector({
                 </label>
                 <label className="field-stack">
                   <span className="field-label">{t("row.fixedColumn")}</span>
-                  <select value={fixed} onChange={(event) => patchConfig({ list_fixed_column: event.target.value })}>
+                  <Select value={fixed} onChange={(event) => patchConfig({ list_fixed_column: event.target.value })}>
                     <option value="column_one">{t("row.fixedColumnOption", { column: definition?.column_one_title || t("row.columnOne") })}</option>
                     <option value="column_two">{t("row.fixedColumnOption", { column: definition?.column_two_title || t("row.columnTwo") })}</option>
-                  </select>
+                  </Select>
                 </label>
                 <label className="checkbox-row">
                   <input
@@ -303,12 +304,12 @@ export function RowInspector({
           <div className="eyebrow">{t("row.autoValueHeading")}</div>
           <label className="field-stack">
             <span className="field-label">{t(`row.autoValueFrom.${autoSource}`)}</span>
-            <select value={row.auto_source_field ?? ""} onChange={(event) => patch({ auto_source_field: event.target.value || null })}>
+            <Select value={row.auto_source_field ?? ""} onChange={(event) => patch({ auto_source_field: event.target.value || null })}>
               <option value="">{t("row.noAutoValue")}</option>
               {AUTO_SOURCE_FIELDS[autoSource].map((field) => (
                 <option key={field} value={field}>{t(`autoField.${field}`)}</option>
               ))}
-            </select>
+            </Select>
             <span className="field-help">{t("row.autoValueHelp")}</span>
           </label>
         </div>

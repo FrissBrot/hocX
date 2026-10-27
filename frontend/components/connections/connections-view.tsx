@@ -15,6 +15,7 @@ import { browserApiFetch } from "@/lib/api/client";
 import { appleSubscribeUrl, calendarFeedUrl, canSubscribeCalendar, googleSubscribeUrl } from "@/lib/calendar-feeds";
 import { formatDateTime } from "@/lib/utils/format";
 import type { CalendarFeed, CalendarFeedKind } from "@/types/api";
+import { Select } from "@/components/ui/select";
 
 type Options = Pick<CalendarFeed, "todo_scope" | "include_completed" | "hide_details">;
 
@@ -220,10 +221,10 @@ function FeedCard({
         {kind === "todos" ? (
           <label className="field-stack">
             <span className="field-label">{t("options.scope")}</span>
-            <select value={options.todo_scope} onChange={(event) => updateOption({ todo_scope: event.target.value as Options["todo_scope"] })}>
+            <Select value={options.todo_scope} onChange={(event) => updateOption({ todo_scope: event.target.value as Options["todo_scope"] })}>
               <option value="mine">{t("options.scopeMine")}</option>
               <option value="all">{t("options.scopeAll")}</option>
-            </select>
+            </Select>
           </label>
         ) : null}
         {kind === "todos" ? (

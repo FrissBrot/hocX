@@ -58,7 +58,11 @@
   },
   "dateField": {
     "invalidFormat": "Veuillez saisir la date au format JJ.MM.AAAA",
-    "chooseDate": "Choisir la date"
+    "chooseDate": "Choisir la date",
+    "calendar": "Calendrier",
+    "previousMonth": "Mois précédent",
+    "nextMonth": "Mois suivant",
+    "today": "Aujourd'hui"
   },
   "copyField": {
     "copy": "Copier",
@@ -196,5 +200,17 @@
   "featureNotice": {
     "readOnly": "« {name} » ne fait plus partie de votre abonnement. Les données existantes restent visibles, les modifications sont bloquées.",
     "notBooked": "« {name} » n’est pas inclus dans votre abonnement. Votre administration peut étendre l’abonnement."
+  },
+  "timeField": {
+    "chooseTime": "Choisir l'heure",
+    "invalidFormat": "Saisis l'heure au format HH:MM."
+  },
+  "colorField": {
+    "choose": "Choisir une couleur",
+    "saturationBrightness": "Saturation et luminosité",
+    "saturationBrightnessValue": "Saturation {saturation} %, luminosité {brightness} %",
+    "hue": "Teinte",
+    "hex": "Valeur hexadécimale",
+    "swatches": "Suggestions de couleurs"
   }
 }

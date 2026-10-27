@@ -17,6 +17,7 @@ import {
   SubmissionSortOrder,
   SubmissionSourceType,
 } from "@/types/api";
+import { Select } from "@/components/ui/select";
 
 export type FormState = {
   title: string;
@@ -539,11 +540,11 @@ export function SubmissionAssignmentFormModal({
               {form.source_type !== "manual" ? (
                 <label className="field-stack">
                   <span className="field-label">{t("sortOrderLabel")}</span>
-                  <select value={form.sort_order} onChange={(e) => setForm((c) => ({ ...c, sort_order: e.target.value as SubmissionSortOrder }))}>
+                  <Select value={form.sort_order} onChange={(e) => setForm((c) => ({ ...c, sort_order: e.target.value as SubmissionSortOrder }))}>
                     {(Object.keys(sortOrderLabel(t)) as SubmissionSortOrder[]).map((value) => (
                       <option key={value} value={value}>{sortOrderLabel(t)[value]}</option>
                     ))}
-                  </select>
+                  </Select>
                 </label>
               ) : null}
             </div>

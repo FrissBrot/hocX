@@ -11,6 +11,7 @@ import {
   StructuredListDefinition,
   StructuredListEntry,
 } from "@/types/api";
+import { Select } from "@/components/ui/select";
 
 type SortColumn = "" | "column_one" | "column_two";
 
@@ -93,14 +94,14 @@ export function StructuredListEditModal({
           />
         </label>
         <label className="list-block-config-item">
-          <select
+          <Select
             value={sortDirection}
             disabled={!sortByColumn}
             onChange={(e) => onChangeSortDirection(e.target.value === "desc" ? "desc" : "asc")}
           >
             <option value="asc">A–Z</option>
             <option value="desc">Z–A</option>
-          </select>
+          </Select>
         </label>
       </div>
       <StructuredListTable

@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 
 import { Menu, MenuItem, Popover } from "@/components/ui/popover";
 import type { BadgeVariant } from "@/components/ui/badge";
+import { Select } from "@/components/ui/select";
 
 export type PillMenuOption<T extends string> = { value: T; label: string; variant: BadgeVariant };
 
@@ -14,7 +15,7 @@ type Props<T extends string> = {
 };
 
 // Colored pill trigger (same look as the read-only Badge) that opens the app's
-// standard Popover/menu-item dropdown, replacing a native <select> so Rolle/Status
+// standard Popover/menu-item dropdown, replacing a native <Select> so Rolle/Status
 // pickers match the rest of the app's dropdown pattern (e.g. TodoAssigneeMenu).
 export function PillMenu<T extends string>({ value, options, onChange }: Props<T>) {
   const [open, setOpen] = useState(false);

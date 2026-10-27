@@ -11,6 +11,7 @@ import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/utils/format";
 import { NotificationSettings, NotificationSettingsWrite, NotificationTestResult } from "@/types/api";
+import { Select } from "@/components/ui/select";
 
 type Props = {
   initialSettings: NotificationSettings;
@@ -125,10 +126,10 @@ export function AdminNotificationSettings({ initialSettings }: Props) {
         <form className="grid" onSubmit={submit}>
           <label className="field-stack">
             <span className="field-label">{t("enabledLabel")}</span>
-            <select value={form.ntfy_enabled ? "1" : "0"} onChange={(e) => setForm((f) => ({ ...f, ntfy_enabled: e.target.value === "1" }))}>
+            <Select value={form.ntfy_enabled ? "1" : "0"} onChange={(e) => setForm((f) => ({ ...f, ntfy_enabled: e.target.value === "1" }))}>
               <option value="0">{t("no")}</option>
               <option value="1">{t("yes")}</option>
-            </select>
+            </Select>
           </label>
 
           <div className="two-col">

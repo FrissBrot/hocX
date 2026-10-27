@@ -12,6 +12,7 @@ import { StatusBanner } from "@/components/ui/status-banner";
 import { browserApiBaseUrl } from "@/lib/api/client";
 import { apiErrorMessage, DocumentExport, DocumentTypeInfo, listExports, studioApi } from "@/lib/documents/api";
 import { formatDateTime } from "@/lib/utils/format";
+import { Select } from "@/components/ui/select";
 
 const PAGE_SIZE = 25;
 
@@ -53,14 +54,14 @@ export function ExportHistory() {
       <div className="list-filter-row">
         <label className="field-stack">
           <span className="field-label">{t("exports.documentType")}</span>
-          <select value={documentType} onChange={(event) => { setDocumentType(event.target.value); setOffset(0); }}>
+          <Select value={documentType} onChange={(event) => { setDocumentType(event.target.value); setOffset(0); }}>
             <option value="">{t("exports.allTypes")}</option>
             {types.map((type) => (
               <option key={type.key} value={type.key}>
                 {t(`docType.${type.key}`)}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       </div>
       {error && <StatusBanner tone="error" message={error} />}

@@ -9,6 +9,7 @@ import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
 import { PlatformAdminSummary } from "@/types/api";
+import { Select } from "@/components/ui/select";
 
 type Props = {
   initialAdmins: PlatformAdminSummary[];
@@ -149,10 +150,10 @@ export function AdminAccountManagement({ initialAdmins, currentAdminId }: Props)
           </label>
           <label className="field-stack">
             <span className="field-label">{t("columns.role")}</span>
-            <select value={role} onChange={(event) => setRole(event.target.value as "owner" | "support")}>
+            <Select value={role} onChange={(event) => setRole(event.target.value as "owner" | "support")}>
               <option value="owner">{t("fullAccess")}</option>
               <option value="support">{t("readOnlyAccess")}</option>
-            </select>
+            </Select>
           </label>
           <div className="table-actions table-actions-start">
             <button data-modal-save type="submit" className="button-secondary">

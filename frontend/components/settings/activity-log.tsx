@@ -11,6 +11,7 @@ import { browserApiFetch } from "@/lib/api/client";
 import { AUDIT_CATEGORIES, describeAuditAction, humanizeCode } from "@/lib/audit-labels";
 import { formatDateTime } from "@/lib/utils/format";
 import { ActivityEntry, ActivityPage } from "@/types/api";
+import { Select } from "@/components/ui/select";
 
 const PAGE_SIZE = 50;
 type OutcomeFilter = "all" | "failure";
@@ -74,7 +75,7 @@ export function ActivityLog({ initialPage }: { initialPage: ActivityPage }) {
         />
         <label className="field-stack">
           <span className="field-label">{t("category")}</span>
-          <select
+          <Select
             value={category}
             onChange={(event) => {
               setCategory(event.target.value);
@@ -87,7 +88,7 @@ export function ActivityLog({ initialPage }: { initialPage: ActivityPage }) {
                 {categoryLabel(code)}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       </div>
       <DataTable columns={[t("colTime"), t("colAction"), t("colActor"), t("colOutcome")]} emptyMessage={loading ? t("loading") : t("empty")}>

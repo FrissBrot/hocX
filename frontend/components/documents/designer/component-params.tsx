@@ -11,6 +11,7 @@ import { useTranslations } from "next-intl";
 import { DateInput } from "@/components/ui/date-input";
 import { SearchableMultiSelect, SearchableSelect } from "@/components/ui/searchable-select";
 import { fetchSourceOptions, JsonSchema, resolveSchema, SourceOption, unwrapNullable } from "@/lib/documents/api";
+import { Select } from "@/components/ui/select";
 
 type Props = {
   schema: JsonSchema;
@@ -190,13 +191,13 @@ export function ComponentParamForm({ schema, params, onChange, protocolId }: Pro
           control = <SourceField source={source} value={value} onChange={(next) => set(name, next)} protocolId={contextProtocol} multiple={false} />;
         } else if (property.enum) {
           control = (
-            <select value={String(value ?? "")} onChange={(event) => set(name, typeof property.enum?.[0] === "number" ? Number(event.target.value) : event.target.value)}>
+            <Select value={String(value ?? "")} onChange={(event) => set(name, typeof property.enum?.[0] === "number" ? Number(event.target.value) : event.target.value)}>
               {property.enum.map((option) => (
                 <option key={String(option)} value={String(option)}>
                   {enumLabel(t, option)}
                 </option>
               ))}
-            </select>
+            </Select>
           );
         } else if (property.format === "date") {
           control = <DateInput value={typeof value === "string" ? value : ""} onChange={(next) => set(name, next || null)} />;

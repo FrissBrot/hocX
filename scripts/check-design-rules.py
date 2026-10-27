@@ -30,6 +30,14 @@ ALLOWED_HEX_FILES = {
     "frontend/components/protocol/collaboration-presence.tsx",  # Avatar-Farben pro Person
 }
 
+# Bausteine, die das native Auswahl-/Picker-Element selbst kapseln
+NATIVE_PICKER_FILES = {
+    "frontend/components/ui/select.tsx",
+    "frontend/components/ui/date-input.tsx",
+    "frontend/components/ui/time-input.tsx",
+    "frontend/components/ui/color-input.tsx",
+}
+
 SPACE_SCALE = {4, 8, 12, 16, 24, 32}
 DEPRECATED = {
     "button-inline": "button-secondary",
@@ -140,8 +148,16 @@ def check_line(path: Path, no: int, line: str, defined: set[str], is_css: bool) 
                 report(path, no, "klasse", f"'{old}' ist umbenannt - '{new}' nutzen")
         if re.search(r"\bwindow\.(confirm|alert|prompt)\(|(?<![\w.])(?:alert|prompt)\(", code):
             report(path, no, "dialog", "Native Dialoge vermeiden - useConfirm()/useToast() nutzen")
-        if re.search(r"<(?:select|dialog)\b", code):
-            pass  # <select> ist fuer einfache Listen erlaubt
+        # Natives Auswahl-/Datums-/Zeit-/Farbfeld zeigt die Oberflaeche des Betriebssystems:
+        # Select, DateInput, TimeInput, ColorInput nutzen (nur Hauptanwendung; die Bausteine
+        # selbst kapseln das native Element)
+        if r.startswith("frontend/") and r not in NATIVE_PICKER_FILES and not code.lstrip().startswith(("//", "*")):
+            if re.search(r"<select\b", code):
+                report(path, no, "auswahl", "Natives <select> - Select aus @/components/ui/select nutzen")
+            m = re.search(r"type=[\"'{]+(date|time|datetime-local|color)[\"'}]", code)
+            if m:
+                component = {"date": "DateInput", "datetime-local": "DateInput + TimeInput", "time": "TimeInput", "color": "ColorInput"}[m.group(1)]
+                report(path, no, "auswahl", f"Natives type=\"{m.group(1)}\" - {component} nutzen")
 
 
 def main() -> int:

@@ -13,6 +13,8 @@ import { bindingLabel } from "@/components/documents/studio-labels";
 import { locales } from "@/i18n/locale-config.generated";
 import type { BindingInfo } from "@/lib/documents/api";
 import { Border, Condition, FormatSpec, Inline, Spacing, TextContent, TextStyle } from "@/lib/documents/layout";
+import { Select } from "@/components/ui/select";
+import { ColorInput } from "@/components/ui/color-input";
 
 const HEX = /^#[0-9A-Fa-f]{6}$/;
 
@@ -75,13 +77,13 @@ export function ColorField({ label, value, onChange, allowEmpty = true }: { labe
       </div>
       {modeAllows(mode, "advanced") && (
         <div className="studio-color-custom">
-          <input
-            type="color"
+          <ColorInput
             aria-label={t("fields.customColor")}
-            value={HEX.test(custom) ? custom : "#000000"} // design-ok: Dokumentfarbe (Daten), keine UI-Farbe
-            onChange={(event) => {
-              setCustom(event.target.value);
-              onChange(event.target.value.toUpperCase());
+            value={HEX.test(custom) ? custom : null}
+            swatches={references.map((ref) => ({ value: resolveColor(ref, brand) ?? "", label: colorRefLabel(t, ref) }))}
+            onChange={(value) => {
+              setCustom(value);
+              onChange(value);
             }}
           />
           <input
@@ -115,7 +117,7 @@ export function LengthField({ label, value, onChange, allowFr = false, allowNull
     <div className="field-stack">
       <span className="field-label">{label}</span>
       <div className="studio-length">
-        <select
+        <Select
           value={unit}
           aria-label={t("fields.unit")}
           onChange={(event) => {
@@ -131,7 +133,7 @@ export function LengthField({ label, value, onChange, allowFr = false, allowNull
               {t(`fields.lengthUnit.${item === "%" ? "percent" : item}`)}
             </option>
           ))}
-        </select>
+        </Select>
         {unit !== "auto" && unit !== "fill" && unit !== "" && (
           <input
             type="number"
@@ -189,35 +191,35 @@ export function TextStyleFields({ value, onChange, mergeKey }: { value: TextStyl
   return (
     <div className="studio-field-grid">
       <Field label={t("fields.font")}>
-        <select value={style.font ?? ""} onChange={(event) => set({ font: event.target.value || null }, "font")}>
+        <Select value={style.font ?? ""} onChange={(event) => set({ font: event.target.value || null }, "font")}>
           <option value="">{t("fields.inherit")}</option>
           {fonts.map((font) => (
             <option key={font} value={font}>
               {font.startsWith("$brand.font.") ? t(`fields.brandFont.${font.slice(12)}`) : font}
             </option>
           ))}
-        </select>
+        </Select>
       </Field>
       <NumberField label={t("fields.fontSize")} value={style.size ?? null} min={4} max={96} step={0.5} suffix={t("brand.unitPt")} onChange={(size) => set({ size }, "size")} />
       <Field label={t("fields.weight")}>
-        <select value={style.weight ?? ""} onChange={(event) => set({ weight: (event.target.value || null) as TextStyle["weight"] }, "weight")}>
+        <Select value={style.weight ?? ""} onChange={(event) => set({ weight: (event.target.value || null) as TextStyle["weight"] }, "weight")}>
           <option value="">{t("fields.inherit")}</option>
           {(["regular", "medium", "bold"] as const).map((weight) => (
             <option key={weight} value={weight}>
               {t(`fields.weightValue.${weight}`)}
             </option>
           ))}
-        </select>
+        </Select>
       </Field>
       <Field label={t("fields.align")}>
-        <select value={style.align ?? ""} onChange={(event) => set({ align: (event.target.value || null) as TextStyle["align"] }, "align")}>
+        <Select value={style.align ?? ""} onChange={(event) => set({ align: (event.target.value || null) as TextStyle["align"] }, "align")}>
           <option value="">{t("fields.inherit")}</option>
           {(["left", "center", "right", "justify"] as const).map((align) => (
             <option key={align} value={align}>
               {t(`fields.alignValue.${align}`)}
             </option>
           ))}
-        </select>
+        </Select>
       </Field>
       <div className="studio-field-span">
         <ColorField label={t("fields.textColor")} value={style.color} onChange={(color) => set({ color }, "color")} />
@@ -228,14 +230,14 @@ export function TextStyleFields({ value, onChange, mergeKey }: { value: TextStyl
           <NumberField label={t("fields.lineHeight")} value={style.line_height ?? null} min={0.8} max={3} step={0.05} onChange={(line_height) => set({ line_height }, "lineHeight")} />
           <NumberField label={t("fields.letterSpacing")} value={style.letter_spacing ?? null} min={-2} max={10} step={0.1} suffix={t("brand.unitPt")} onChange={(letter_spacing) => set({ letter_spacing }, "letterSpacing")} />
           <Field label={t("fields.transform")}>
-            <select value={style.transform ?? ""} onChange={(event) => set({ transform: (event.target.value || null) as TextStyle["transform"] }, "transform")}>
+            <Select value={style.transform ?? ""} onChange={(event) => set({ transform: (event.target.value || null) as TextStyle["transform"] }, "transform")}>
               <option value="">{t("fields.inherit")}</option>
               {(["none", "upper", "lower"] as const).map((transform) => (
                 <option key={transform} value={transform}>
                   {t(`fields.transformValue.${transform}`)}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
         </>
       )}
@@ -255,13 +257,13 @@ export function BorderField({ value, onChange }: { value: Border | null | undefi
           <NumberField label={t("fields.borderWidth")} value={border.width} min={0.1} max={10} step={0.1} suffix={t("brand.unitPt")} onChange={(width) => onChange({ ...border, width })} />
           <NumberField label={t("fields.radius")} value={border.radius} min={0} max={30} step={0.5} suffix={t("brand.unitMm")} onChange={(radius) => onChange({ ...border, radius })} />
           <Field label={t("fields.borderStyle")}>
-            <select value={border.style} onChange={(event) => onChange({ ...border, style: event.target.value as Border["style"] })}>
+            <Select value={border.style} onChange={(event) => onChange({ ...border, style: event.target.value as Border["style"] })}>
               {(["solid", "dashed", "dotted"] as const).map((style) => (
                 <option key={style} value={style}>
                   {t(`fields.lineStyle.${style}`)}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <div className="studio-field-span studio-sides">
             {(["top", "right", "bottom", "left"] as const).map((side) => (
@@ -297,7 +299,7 @@ export function BindingSelect({ value, onChange, types, scope, label, allowEmpty
   }, [catalog.bindings, types]);
   const restricted = (binding: BindingInfo) => (binding.access === "finance" && !capabilities.finance_data) || (binding.access === "writer" && !capabilities.personal_data);
   const select = (
-    <select value={value ?? ""} onChange={(event) => onChange(event.target.value || null)} aria-label={label ?? t("fields.dataSource")}>
+    <Select value={value ?? ""} onChange={(event) => onChange(event.target.value || null)} aria-label={label ?? t("fields.dataSource")}>
       {allowEmpty && <option value="">{t("fields.noBinding")}</option>}
       {scopeBinding && (
         <optgroup label={t("fields.itemFields", { list: bindingLabel(t, scopeBinding.path) })}>
@@ -321,7 +323,7 @@ export function BindingSelect({ value, onChange, types, scope, label, allowEmpty
           ))}
         </optgroup>
       ))}
-    </select>
+    </Select>
   );
   return label ? <Field label={label}>{select}</Field> : select;
 }
@@ -333,30 +335,30 @@ function FormatOptions({ binding, value, onChange }: { binding: BindingInfo | un
   return (
     <div className="studio-inline-format">
       {binding.type === "date" && (
-        <select value={format.date ?? "short"} onChange={(event) => onChange({ ...format, date: event.target.value as FormatSpec["date"] })} aria-label={t("fields.dateFormat")}>
+        <Select value={format.date ?? "short"} onChange={(event) => onChange({ ...format, date: event.target.value as FormatSpec["date"] })} aria-label={t("fields.dateFormat")}>
           {(["short", "long", "weekday", "month_year", "year"] as const).map((item) => (
             <option key={item} value={item}>
               {t(`fields.dateFormatValue.${item}`)}
             </option>
           ))}
-        </select>
+        </Select>
       )}
       {binding.type === "number" && (
-        <select value={format.number ?? "integer"} onChange={(event) => onChange({ ...format, number: event.target.value as FormatSpec["number"] })} aria-label={t("fields.numberFormat")}>
+        <Select value={format.number ?? "integer"} onChange={(event) => onChange({ ...format, number: event.target.value as FormatSpec["number"] })} aria-label={t("fields.numberFormat")}>
           {(["integer", "decimal", "percent", "amount"] as const).map((item) => (
             <option key={item} value={item}>
               {t(`fields.numberFormatValue.${item}`)}
             </option>
           ))}
-        </select>
+        </Select>
       )}
-      <select value={format.transform ?? "none"} onChange={(event) => onChange({ ...format, transform: event.target.value as FormatSpec["transform"] })} aria-label={t("fields.transform")}>
+      <Select value={format.transform ?? "none"} onChange={(event) => onChange({ ...format, transform: event.target.value as FormatSpec["transform"] })} aria-label={t("fields.transform")}>
         {(["none", "upper", "lower"] as const).map((item) => (
           <option key={item} value={item}>
             {t(`fields.transformValue.${item}`)}
           </option>
         ))}
-      </select>
+      </Select>
     </div>
   );
 }
@@ -455,10 +457,10 @@ export function ConditionEditor({ value, onChange, scope }: { value: Condition |
         <p className="field-help">{t("condition.always")}</p>
       ) : (
         <Field label={t("condition.combine")}>
-          <select value={group.op} onChange={(event) => emit(event.target.value as "all" | "any", group.items)}>
+          <Select value={group.op} onChange={(event) => emit(event.target.value as "all" | "any", group.items)}>
             <option value="all">{t("condition.all")}</option>
             <option value="any">{t("condition.any")}</option>
-          </select>
+          </Select>
         </Field>
       )}
       {rules.map((entry, index) => {
@@ -468,7 +470,7 @@ export function ConditionEditor({ value, onChange, scope }: { value: Condition |
         return (
           <div key={index} className="studio-condition-rule">
             <BindingSelect value={rule.path} allowEmpty={false} scope={scope} onChange={(path) => path && setRule(index, { ...rule, path } as Rule, negated)} />
-            <select
+            <Select
               value={negated ? `not_${operator}` : operator}
               aria-label={t("condition.operator")}
               onChange={(event) => {
@@ -486,7 +488,7 @@ export function ConditionEditor({ value, onChange, scope }: { value: Condition |
                 </option>
               ))}
               <option value="not_exists">{t("condition.op.not_exists")}</option>
-            </select>
+            </Select>
             {rule.op !== "exists" && rule.op !== "empty" && rule.op !== "in" && rule.op !== "not_in" && (
               <input
                 aria-label={t("condition.value")}

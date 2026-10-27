@@ -30,6 +30,7 @@ import type {
   TenantChargePage,
   TenantChargeStatus,
 } from "@/types/api";
+import { Select } from "@/components/ui/select";
 
 type TFunc = ReturnType<typeof useTranslations>;
 type TabId = "overview" | "charges" | "costs";
@@ -189,13 +190,13 @@ function OverviewTab({ t, overview, year, onYearChange }: { t: TFunc; overview: 
       <div className="cashflow-toolbar">
         <label className="cashflow-year">
           <span className="field-label">{t("overview.year")}</span>
-          <select value={year} onChange={(event) => onYearChange(Number(event.target.value))}>
+          <Select value={year} onChange={(event) => onYearChange(Number(event.target.value))}>
             {overview.years.map((value) => (
               <option key={value} value={value}>
                 {value}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <button
           type="button"
@@ -809,13 +810,13 @@ function CostModal({ t, cost, onClose, onSaved }: { t: TFunc; cost: CashflowCost
             </label>
             <label className="field-stack">
               <span className="field-label">{t("costForm.interval")}</span>
-              <select value={costInterval} onChange={(event) => setCostInterval(event.target.value as typeof costInterval)}>
+              <Select value={costInterval} onChange={(event) => setCostInterval(event.target.value as typeof costInterval)}>
                 {(["monthly", "yearly", "once"] as const).map((value) => (
                   <option key={value} value={value}>
                     {t(`interval.${value}`)}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
           </div>
         ) : (

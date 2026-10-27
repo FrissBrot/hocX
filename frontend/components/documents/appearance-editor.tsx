@@ -9,6 +9,7 @@ import { useTranslations } from "next-intl";
 import type { AppearanceCatalog } from "@/lib/documents/api";
 import { setAppearance } from "@/lib/documents/appearance";
 import type { AppearanceOverrides } from "@/lib/documents/layout";
+import { Select } from "@/components/ui/select";
 
 type Props = {
   catalog: AppearanceCatalog;
@@ -32,7 +33,7 @@ export function AppearanceEditor({ catalog, kinds, value, inherited, inheritLabe
         return (
           <div key={kind} className="studio-appearance-row">
             <span className="field-label">{kindLabel}</span>
-            <select
+            <Select
               aria-label={kindLabel}
               disabled={disabled}
               value={current?.variant ?? ""}
@@ -44,9 +45,9 @@ export function AppearanceEditor({ catalog, kinds, value, inherited, inheritLabe
                   {t(`appearance.variant.${kind}.${variant}`)}
                 </option>
               ))}
-            </select>
+            </Select>
             {catalog.corner_kinds.includes(kind) ? (
-              <select
+              <Select
                 aria-label={t("appearance.cornersFor", { kind: kindLabel })}
                 disabled={disabled}
                 value={current?.corners ?? ""}
@@ -55,7 +56,7 @@ export function AppearanceEditor({ catalog, kinds, value, inherited, inheritLabe
                 <option value="">{t("appearance.cornersInherit")}</option>
                 <option value="square">{t("appearance.corners.square")}</option>
                 <option value="rounded">{t("appearance.corners.rounded")}</option>
-              </select>
+              </Select>
             ) : (
               <span aria-hidden="true" />
             )}

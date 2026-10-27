@@ -14,6 +14,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { ApiError } from "@/lib/api/client";
 import { apiErrorMessage, Diagnostic, previewDocument, SourceOption } from "@/lib/documents/api";
+import { Select } from "@/components/ui/select";
 
 const DEBOUNCE_MS = 700;
 
@@ -86,10 +87,10 @@ export function PreviewPanel({ brandId, onDiagnostics }: Props) {
     <section className="studio-preview" aria-label={t("preview.title")}>
       <div className="studio-preview-bar">
         <div className="studio-preview-controls">
-          <select value={dataMode} onChange={(event) => setDataMode(event.target.value as "sample" | "data")} aria-label={t("preview.dataMode")}>
+          <Select value={dataMode} onChange={(event) => setDataMode(event.target.value as "sample" | "data")} aria-label={t("preview.dataMode")}>
             <option value="sample">{t("preview.sample")}</option>
             <option value="data">{t("preview.realData")}</option>
-          </select>
+          </Select>
           {dataMode === "data" && (
             <SearchableSelect options={protocols} getId={(item) => item.id} getLabel={(item) => (item.detail ? `${item.label} · ${item.detail}` : item.label)} value={protocolId} onChange={(item) => setProtocolId(item?.id ?? null)} placeholder={t("preview.chooseProtocol")} nullLabel={sessionTemplateId ? t("preview.latestSession") : t("preview.noProtocol")} />
           )}

@@ -20,6 +20,7 @@ import type { CycleConfigSummary, StructuredListEntry } from "@/types/api";
 import { defaultColumn, defaultRow, moveItem, nextColumnId, nextRowId, type BlockForm, type MatrixColumn, type TableRow } from "./block-form";
 import { EventFilterEditor } from "./event-filter-editor";
 import { RowInspector, rowTypeLabel, type RowInspectorData } from "./row-inspector";
+import { Select } from "@/components/ui/select";
 
 type AutoSourceType = "participants" | "events" | "list";
 type Selection = { kind: "row"; id: string } | { kind: "column"; id: string };
@@ -217,12 +218,12 @@ export function RowDesigner({
             {isAuto ? (
               <div className="matrix-designer-strip-group">
                 <label className="field-label" htmlFor="matrix-auto-sort">{t("matrix.sort")}</label>
-                <select id="matrix-auto-sort" value={draft.config.auto_source?.sort ?? "source"} onChange={(event) => setAutoSource({ sort: event.target.value })}>
+                <Select id="matrix-auto-sort" value={draft.config.auto_source?.sort ?? "source"} onChange={(event) => setAutoSource({ sort: event.target.value })}>
                   <option value="source">{t(`matrix.sortSource.${autoSource ?? "participants"}`)}</option>
                   <option value="alpha">{t("matrix.sortAlpha")}</option>
                   <option value="alpha_desc">{t("matrix.sortAlphaDesc")}</option>
                   {autoSource === "participants" ? <option value="last_name">{t("matrix.sortLastName")}</option> : null}
-                </select>
+                </Select>
               </div>
             ) : null}
             <div className="matrix-designer-strip-group matrix-designer-strip-end">

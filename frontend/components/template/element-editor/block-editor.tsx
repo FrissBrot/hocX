@@ -22,6 +22,7 @@ import { type BehaviorField, type BlockForm, repeatEventFilter, repeatSourcesFor
 import { EventFilterEditor } from "./event-filter-editor";
 import { EVENT_LIST_DISPLAY_CHIPS, EventDisplayChips, rowTypeLabel, type RowInspectorData } from "./row-inspector";
 import { BlockTypePreview } from "./type-picker";
+import { Select } from "@/components/ui/select";
 
 export type BlockEditorData = RowInspectorData & {
   accounts: { id: string; name: string; currency_label: string }[];
@@ -235,12 +236,12 @@ export function BlockEditor({
             {code === "text" && repeatSource !== "none" ? (
               <label className="field-stack">
                 <span className="field-label">{t(`repeat.syncLabel.${repeatSource}`)}</span>
-                <select value={String(form.config.sync_target_field ?? "")} onChange={(event) => setConfig({ sync_target_field: event.target.value || null })}>
+                <Select value={String(form.config.sync_target_field ?? "")} onChange={(event) => setConfig({ sync_target_field: event.target.value || null })}>
                   <option value="">{t("repeat.syncNone")}</option>
                   {(repeatSource === "event" ? EVENT_SYNC_FIELD_KEYS : TODO_SYNC_FIELD_KEYS).map((field) => (
                     <option key={field} value={field}>{t(`syncField.${field}`)}</option>
                   ))}
-                </select>
+                </Select>
                 <span className="field-help">{t(`repeat.syncHelp.${repeatSource}`)}</span>
               </label>
             ) : null}
@@ -358,10 +359,10 @@ export function BlockEditor({
               {code === "finance_balance" ? (
                 <label className="field-stack">
                   <span className="field-label">{t("finance.balanceDate")}</span>
-                  <select value={String(form.config.finance_balance_date ?? "today")} onChange={(event) => setConfig({ finance_balance_date: event.target.value })}>
+                  <Select value={String(form.config.finance_balance_date ?? "today")} onChange={(event) => setConfig({ finance_balance_date: event.target.value })}>
                     <option value="today">{t("finance.balanceToday")}</option>
                     <option value="protocol_date">{t("finance.balanceProtocolDate")}</option>
-                  </select>
+                  </Select>
                   <span className="field-help">{t("finance.balanceDateHelp")}</span>
                 </label>
               ) : null}
@@ -369,11 +370,11 @@ export function BlockEditor({
                 <>
                   <label className="field-stack">
                     <span className="field-label">{t("finance.show")}</span>
-                    <select value={String(form.config.finance_filter_type ?? "all")} onChange={(event) => setConfig({ finance_filter_type: event.target.value })}>
+                    <Select value={String(form.config.finance_filter_type ?? "all")} onChange={(event) => setConfig({ finance_filter_type: event.target.value })}>
                       {["all", "since_last_session", "since_date", "this_year", "this_cycle", "last_n"].map((value) => (
                         <option key={value} value={value}>{t(`finance.filter.${value}`)}</option>
                       ))}
-                    </select>
+                    </Select>
                   </label>
                   {form.config.finance_filter_type === "last_n" ? (
                     <label className="field-stack">
@@ -409,9 +410,9 @@ export function BlockEditor({
               </label>
               <label className="field-stack">
                 <span className="field-label">{t("fineList.range")}</span>
-                <select value={String(form.config.fine_list_range ?? "all")} onChange={(event) => setConfig({ fine_list_range: event.target.value })}>
+                <Select value={String(form.config.fine_list_range ?? "all")} onChange={(event) => setConfig({ fine_list_range: event.target.value })}>
                   {["all", "this_cycle", "this_protocol"].map((value) => <option key={value} value={value}>{t(`fineList.rangeOption.${value}`)}</option>)}
-                </select>
+                </Select>
                 <span className="field-help">{t("fineList.rangeHelp")}</span>
               </label>
             </div>
@@ -459,39 +460,39 @@ export function BlockEditor({
                 <div className="three-col">
                   <label className="field-stack">
                     <span className="field-label">{t("table.groupBy")}</span>
-                    <select value={String(form.config.linked_list_group_by ?? "")} onChange={(event) => setConfig({ linked_list_group_by: event.target.value || null })}>
+                    <Select value={String(form.config.linked_list_group_by ?? "")} onChange={(event) => setConfig({ linked_list_group_by: event.target.value || null })}>
                       <option value="">{t("table.noGrouping")}</option>
                       <option value="column_one">{linkedList.column_one_title}</option>
                       <option value="column_two">{linkedList.column_two_title}</option>
-                    </select>
+                    </Select>
                   </label>
                   <label className="field-stack">
                     <span className="field-label">{t("table.sortBy")}</span>
-                    <select
+                    <Select
                       value={String(form.config.linked_list_sort_by ?? "")}
                       onChange={(event) => setConfig({ linked_list_sort_by: event.target.value || null, linked_list_sort_direction: event.target.value ? form.config.linked_list_sort_direction ?? "asc" : null })}
                     >
                       <option value="">{t("table.manualOrder")}</option>
                       <option value="column_one">{linkedList.column_one_title}</option>
                       <option value="column_two">{linkedList.column_two_title}</option>
-                    </select>
+                    </Select>
                   </label>
                   <label className="field-stack">
                     <span className="field-label">{t("table.sortDirection")}</span>
-                    <select value={String(form.config.linked_list_sort_direction ?? "asc")} disabled={!form.config.linked_list_sort_by} onChange={(event) => setConfig({ linked_list_sort_direction: event.target.value })}>
+                    <Select value={String(form.config.linked_list_sort_direction ?? "asc")} disabled={!form.config.linked_list_sort_by} onChange={(event) => setConfig({ linked_list_sort_direction: event.target.value })}>
                       <option value="asc">{t("table.sortAsc")}</option>
                       <option value="desc">{t("table.sortDesc")}</option>
-                    </select>
+                    </Select>
                   </label>
                 </div>
                 <div className="two-col">
                   <label className="field-stack">
                     <span className="field-label">{t("table.filterColumn")}</span>
-                    <select value={String(form.config.linked_list_filter_column ?? "")} onChange={(event) => setConfig({ linked_list_filter_column: event.target.value || null })}>
+                    <Select value={String(form.config.linked_list_filter_column ?? "")} onChange={(event) => setConfig({ linked_list_filter_column: event.target.value || null })}>
                       <option value="">{t("table.noFilter")}</option>
                       <option value="column_one">{linkedList.column_one_title}</option>
                       <option value="column_two">{linkedList.column_two_title}</option>
-                    </select>
+                    </Select>
                   </label>
                   {form.config.linked_list_filter_column ? (
                     <label className="field-stack">
@@ -595,10 +596,10 @@ export function BlockEditor({
           <SettingsSection title={t("chart.title")} description={t("chart.description")}>
             <label className="field-stack">
               <span className="field-label">{t("chart.type")}</span>
-              <select value={String(form.config.chart_type ?? "")} onChange={(event) => setConfig({ chart_type: event.target.value || null })}>
+              <Select value={String(form.config.chart_type ?? "")} onChange={(event) => setConfig({ chart_type: event.target.value || null })}>
                 <option value="">{t("chart.choose")}</option>
                 {CHART_TYPES.map((type) => <option key={type} value={type}>{t(`chart.types.${type}`)}</option>)}
-              </select>
+              </Select>
             </label>
             <ChartCycleSelection
               config={{ cycle_config_id: (form.config.cycle_config_id as string | null) ?? null, cycle_offset: Number(form.config.cycle_offset ?? 0) }}
@@ -612,10 +613,10 @@ export function BlockEditor({
             <div className="two-col">
               <label className="field-stack">
                 <span className="field-label">{t("entryExit.firstUse")}</span>
-                <select value={String(form.config.entry_exit_first_use_mode ?? "all")} onChange={(event) => setConfig({ entry_exit_first_use_mode: event.target.value })}>
+                <Select value={String(form.config.entry_exit_first_use_mode ?? "all")} onChange={(event) => setConfig({ entry_exit_first_use_mode: event.target.value })}>
                   <option value="all">{t("entryExit.all")}</option>
                   <option value="since_date">{t("entryExit.sinceDate")}</option>
-                </select>
+                </Select>
               </label>
               {form.config.entry_exit_first_use_mode === "since_date" ? (
                 <label className="field-stack">

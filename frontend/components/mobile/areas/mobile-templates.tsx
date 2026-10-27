@@ -24,6 +24,7 @@ import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import type { CycleConfigSummary, ParticipantSummary, TemplateElement, TemplateSummary } from "@/types/api";
+import { Select } from "@/components/ui/select";
 
 type Settings = {
   name: string;
@@ -133,14 +134,14 @@ function TemplateSettingsSheet({
         </label>
         <label className="field-stack">
           <span className="field-label">{t("cycleLabel")}</span>
-          <select value={form.cycle_config_id} onChange={(event) => update({ cycle_config_id: event.target.value })}>
+          <Select value={form.cycle_config_id} onChange={(event) => update({ cycle_config_id: event.target.value })}>
             <option value="">{t("noCycle")}</option>
             {cycleConfigs.map((config) => (
               <option key={config.id} value={config.id}>
                 {config.name}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <div className="mobile-card mobile-group-card">
           <button type="button" className="mobile-list-row" aria-pressed={form.auto_create_next_protocol} onClick={() => update({ auto_create_next_protocol: !form.auto_create_next_protocol })}>

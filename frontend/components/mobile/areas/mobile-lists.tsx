@@ -23,6 +23,7 @@ import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import type { EventSummary, ParticipantSummary, StructuredListDefinition, StructuredListEntry, StructuredListValueType } from "@/types/api";
+import { Select } from "@/components/ui/select";
 
 type Value = Record<string, unknown>;
 const VALUE_TYPES: StructuredListValueType[] = ["text", "participant", "participants", "event"];
@@ -273,13 +274,13 @@ function ListFormSheet({ list, onClose, onSaved }: { list: StructuredListDefinit
   }
 
   const typeSelect = (value: StructuredListValueType, onChange: (type: StructuredListValueType) => void) => (
-    <select value={value} onChange={(event) => onChange(event.target.value as StructuredListValueType)}>
+    <Select value={value} onChange={(event) => onChange(event.target.value as StructuredListValueType)}>
       {VALUE_TYPES.map((type) => (
         <option key={type} value={type}>
           {t(`valueTypes.${type}`)}
         </option>
       ))}
-    </select>
+    </Select>
   );
 
   return (

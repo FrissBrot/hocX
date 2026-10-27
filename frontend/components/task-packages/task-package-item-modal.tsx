@@ -21,6 +21,7 @@ import {
   TaskPackageResponsible,
 } from "@/types/api";
 import { ResponsibleContext, entryLabel, responsibleLabel } from "@/components/task-packages/task-package-labels";
+import { Select } from "@/components/ui/select";
 
 export type TaskPackageItemPayload = {
   task: string;
@@ -283,13 +284,13 @@ export function TaskPackageItemModal({
           {form.recurrenceType === "weekly" ? (
             <label className="field-stack task-package-subfield">
               <span className="field-label">{t("weekdayLabel")}</span>
-              <select value={form.weekday} onChange={(event) => setForm({ ...form, weekday: event.target.value })}>
+              <Select value={form.weekday} onChange={(event) => setForm({ ...form, weekday: event.target.value })}>
                 {WEEKDAYS.map((weekday) => (
                   <option key={weekday} value={weekday}>
                     {t(`weekdays.${weekday}`)}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
           ) : null}
           {form.recurrenceType === "events" ? (
@@ -333,13 +334,13 @@ export function TaskPackageItemModal({
               </label>
               <label className="field-stack">
                 <span className="field-label">{t("dueMonthLabel")}</span>
-                <select value={form.dueMonth} onChange={(event) => setForm({ ...form, dueMonth: event.target.value })}>
+                <Select value={form.dueMonth} onChange={(event) => setForm({ ...form, dueMonth: event.target.value })}>
                   {MONTHS.map((month) => (
                     <option key={month} value={month}>
                       {t(`months.${month}`)}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
             </div>
           ) : null}
@@ -351,10 +352,10 @@ export function TaskPackageItemModal({
               </label>
               <label className="field-stack">
                 <span className="field-label">{t("offsetDirectionLabel")}</span>
-                <select value={form.offsetDirection} onChange={(event) => setForm({ ...form, offsetDirection: event.target.value as "after" | "before" })}>
+                <Select value={form.offsetDirection} onChange={(event) => setForm({ ...form, offsetDirection: event.target.value as "after" | "before" })}>
                   <option value="after">{t("offsetAfter", { anchor: offsetAnchor })}</option>
                   <option value="before">{t("offsetBefore", { anchor: offsetAnchor })}</option>
-                </select>
+                </Select>
               </label>
             </div>
           ) : null}

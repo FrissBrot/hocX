@@ -14,6 +14,8 @@ import { CheckField, ColorField, ConditionEditor, Field, NumberField, SpacingFie
 import { locales } from "@/i18n/locale-config.generated";
 import { bindingLabel } from "@/components/documents/studio-labels";
 import { BrandOverrides, inlineSummary, moveWithinParent, newNodeId, PageMaster, PageSetup, TemplateContent, TextContent, updateNode } from "@/lib/documents/layout";
+import { Select } from "@/components/ui/select";
+import { ColorInput } from "@/components/ui/color-input";
 
 type Props = {
   brandId: string | null;
@@ -85,21 +87,21 @@ export function DocumentPanel({ brandId, brandMode, onBrandChange, onBrandModeCh
 
         <Section title={t("document.design")} open={mode === "simple"}>
           <Field label={t("document.brand")} help={brandLocked ? t("document.brandLocked") : t("document.brandHelp")}>
-            <select value={brandId ?? ""} disabled={brandLocked} onChange={(event) => onBrandChange(event.target.value || null)}>
+            <Select value={brandId ?? ""} disabled={brandLocked} onChange={(event) => onBrandChange(event.target.value || null)}>
               <option value="">{t("document.brandDefault")}</option>
               {brands.map((brand) => (
                 <option key={brand.id} value={brand.id}>
                   {brand.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           {modeAllows(mode, "advanced") && (
             <Field label={t("document.brandMode")} help={t("document.brandModeHelp")}>
-              <select value={brandMode} onChange={(event) => onBrandModeChange(event.target.value as "follow" | "pinned")}>
+              <Select value={brandMode} onChange={(event) => onBrandModeChange(event.target.value as "follow" | "pinned")}>
                 <option value="follow">{t("document.brandFollow")}</option>
                 <option value="pinned">{t("document.brandPinned")}</option>
-              </select>
+              </Select>
             </Field>
           )}
           <div className="field-stack">
@@ -119,37 +121,37 @@ export function DocumentPanel({ brandId, brandMode, onBrandChange, onBrandModeCh
           <ColorOverride label={t("document.secondary")} value={overrides.secondary} onChange={(secondary) => setOverrides({ secondary }, "secondary")} />
           <ColorOverride label={t("document.headingColor")} value={overrides.heading} onChange={(heading) => setOverrides({ heading }, "heading")} />
           <Field label={t("document.bodyFont")}>
-            <select value={overrides.body_font ?? ""} onChange={(event) => setOverrides({ body_font: event.target.value || null }, "bodyFont")}>
+            <Select value={overrides.body_font ?? ""} onChange={(event) => setOverrides({ body_font: event.target.value || null }, "bodyFont")}>
               <option value="">{t("document.fromBrand")}</option>
               {FONT_KEYS.map((key) => (
                 <option key={key} value={key}>
                   {t(`font.${key}`)}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label={t("document.headingFont")}>
-            <select value={overrides.heading_font ?? ""} onChange={(event) => setOverrides({ heading_font: event.target.value || null }, "headingFont")}>
+            <Select value={overrides.heading_font ?? ""} onChange={(event) => setOverrides({ heading_font: event.target.value || null }, "headingFont")}>
               <option value="">{t("document.fromBrand")}</option>
               {FONT_KEYS.map((key) => (
                 <option key={key} value={key}>
                   {t(`font.${key}`)}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <AssetPicker open={logoPicker} onClose={() => setLogoPicker(false)} assets={assets} onAssetsChange={setAssets} canUpload={capabilities.manage_brand} defaultCategory="logo" onPick={(asset) => setOverrides({ logo_asset_id: asset.id }, "logo")} />
         </Section>
 
         <Section title={t("document.page")} open={mode !== "simple"}>
           <Field label={t("document.size")}>
-            <select value={page.size} onChange={(event) => setPage({ size: event.target.value as PageSetup["size"] }, "size")}>
+            <Select value={page.size} onChange={(event) => setPage({ size: event.target.value as PageSetup["size"] }, "size")}>
               {["A4", "A5", "A3", "Letter", "Legal", ...(modeAllows(mode, "expert") ? ["custom"] : [])].map((size) => (
                 <option key={size} value={size}>
                   {t(`document.sizeValue.${size}`)}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           {page.size === "custom" && (
             <div className="studio-field-grid">
@@ -158,10 +160,10 @@ export function DocumentPanel({ brandId, brandMode, onBrandChange, onBrandModeCh
             </div>
           )}
           <Field label={t("document.orientation")}>
-            <select value={page.orientation} onChange={(event) => setPage({ orientation: event.target.value as PageSetup["orientation"] }, "orientation")}>
+            <Select value={page.orientation} onChange={(event) => setPage({ orientation: event.target.value as PageSetup["orientation"] }, "orientation")}>
               <option value="portrait">{t("document.portrait")}</option>
               <option value="landscape">{t("document.landscape")}</option>
-            </select>
+            </Select>
           </Field>
           {modeAllows(mode, "advanced") && <SpacingField label={t("document.margins")} value={page.margins} onChange={(margins) => setPage({ margins }, "margins")} />}
           {modeAllows(mode, "advanced") && (
@@ -194,11 +196,11 @@ export function DocumentPanel({ brandId, brandMode, onBrandChange, onBrandModeCh
                       <input value={master.name ?? ""} maxLength={120} onChange={(event) => setMaster(master.id, { name: event.target.value })} />
                     </Field>
                     <Field label={t("document.orientation")}>
-                      <select value={master.orientation ?? ""} onChange={(event) => setMaster(master.id, { orientation: (event.target.value || null) as PageMaster["orientation"] })}>
+                      <Select value={master.orientation ?? ""} onChange={(event) => setMaster(master.id, { orientation: (event.target.value || null) as PageMaster["orientation"] })}>
                         <option value="">{t("document.asPage")}</option>
                         <option value="portrait">{t("document.portrait")}</option>
                         <option value="landscape">{t("document.landscape")}</option>
-                      </select>
+                      </Select>
                     </Field>
                   </>
                 )}
@@ -212,14 +214,14 @@ export function DocumentPanel({ brandId, brandMode, onBrandChange, onBrandModeCh
                   {t("document.addMaster")}
                 </button>
                 <Field label={t("document.firstPageMaster")} help={t("document.firstPageMasterHelp")}>
-                  <select value={settings.first_page_master ?? ""} onChange={(event) => setSettings({ first_page_master: event.target.value || null }, "firstPage")}>
+                  <Select value={settings.first_page_master ?? ""} onChange={(event) => setSettings({ first_page_master: event.target.value || null }, "firstPage")}>
                     <option value="">{t("document.sameAsOthers")}</option>
                     {content.masters.map((master) => (
                       <option key={master.id} value={master.id}>
                         {master.name || master.id}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </Field>
               </>
             )}
@@ -228,21 +230,21 @@ export function DocumentPanel({ brandId, brandMode, onBrandChange, onBrandModeCh
 
         <Section title={t("document.settings")}>
           <Field label={t("document.numbering")}>
-            <select value={settings.heading_numbering === null || settings.heading_numbering === undefined ? "" : settings.heading_numbering ? "on" : "off"} onChange={(event) => setSettings({ heading_numbering: event.target.value === "" ? null : event.target.value === "on" }, "numbering")}>
+            <Select value={settings.heading_numbering === null || settings.heading_numbering === undefined ? "" : settings.heading_numbering ? "on" : "off"} onChange={(event) => setSettings({ heading_numbering: event.target.value === "" ? null : event.target.value === "on" }, "numbering")}>
               <option value="">{t("document.fromBrand")}</option>
               <option value="on">{t("document.on")}</option>
               <option value="off">{t("document.off")}</option>
-            </select>
+            </Select>
           </Field>
           <Field label={t("document.language")} help={t("document.languageHelp")}>
-            <select value={settings.language ?? ""} onChange={(event) => setSettings({ language: event.target.value || null }, "language")}>
+            <Select value={settings.language ?? ""} onChange={(event) => setSettings({ language: event.target.value || null }, "language")}>
               <option value="">{t("document.languageExport")}</option>
               {locales.map((code) => (
                 <option key={code} value={code}>
                   {t(`language.${code}`)}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <CheckField label={t("document.autoVerify")} help={t("document.autoVerifyHelp")} checked={settings.auto_verify_note} onChange={(auto_verify_note) => setSettings({ auto_verify_note }, "autoVerify")} />
           {modeAllows(mode, "advanced") && (
@@ -263,7 +265,7 @@ function ColorOverride({ label, value, onChange }: { label: string; value: strin
     <div className="field-stack">
       <span className="field-label">{label}</span>
       <div className="studio-color-custom">
-        <input type="color" aria-label={label} value={value ?? "#000000"} /* design-ok: Dokumentfarbe (Daten) */ onChange={(event) => onChange(event.target.value.toUpperCase())} />
+        <ColorInput aria-label={label} value={value} onChange={onChange} />
         <span className="field-help">{value ?? t("document.fromBrand")}</span>
         {value && (
           <button type="button" className="button-ghost" onClick={() => onChange(null)}>

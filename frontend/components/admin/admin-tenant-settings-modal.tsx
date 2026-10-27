@@ -39,6 +39,7 @@ import {
   TenantCleanupCategory,
   TenantCleanupCounts,
 } from "@/types/api";
+import { Select } from "@/components/ui/select";
 
 type Props = {
   open: boolean;
@@ -834,13 +835,13 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                           </td>
                           <td className="muted">{u.email}</td>
                           <td>
-                            <select value={primarySystemRole(u.roles)} onChange={(event) => changeUserRole(u.user_id, event.target.value)} aria-label={t("tenantModal.table.roleAria", { name: u.display_name })}>
+                            <Select value={primarySystemRole(u.roles)} onChange={(event) => changeUserRole(u.user_id, event.target.value)} aria-label={t("tenantModal.table.roleAria", { name: u.display_name })}>
                               {roleOptions.map((r) => (
                                 <option key={r.code} value={r.code}>
                                   {r.label}
                                 </option>
                               ))}
-                            </select>
+                            </Select>
                             <div className="muted admin-cell-sub">{rolesLabel(u.roles, tNav)}</div>
                           </td>
                           <td>
@@ -1008,13 +1009,13 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                     <div className="muted">{t("tenantModal.storage.noPackagesInCatalog")}</div>
                   ) : (
                     <div className="table-actions table-actions-start">
-                      <select value={packageToAdd} onChange={(event) => setPackageToAdd(event.target.value)} aria-label={t("tenantModal.storage.packageAria")}>
+                      <Select value={packageToAdd} onChange={(event) => setPackageToAdd(event.target.value)} aria-label={t("tenantModal.storage.packageAria")}>
                         {storagePackageCatalog.map((pkg) => (
                           <option key={pkg.code} value={pkg.code}>
                             {pkg.name} ({formatFileSize(pkg.bytes)})
                           </option>
                         ))}
-                      </select>
+                      </Select>
                       <button
                         type="button"
                         className="button-secondary"

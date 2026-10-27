@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 
 import { isLocale, localeCookieName, localeConfig, locales } from "@/i18n/locale-config.generated";
+import { Select } from "@/components/ui/select";
 
 const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
 
@@ -25,13 +26,13 @@ export function WebsiteLanguageSwitcher() {
 
   return (
     <span className="ws-language">
-      <select aria-label={t("language")} value={locale} onChange={(event) => onChange(event.target.value)}>
+      <Select aria-label={t("language")} value={locale} onChange={(event) => onChange(event.target.value)}>
         {locales.map((code) => (
           <option key={code} value={code}>
             {localeConfig[code].nativeLabel}
           </option>
         ))}
-      </select>
+      </Select>
     </span>
   );
 }

@@ -58,7 +58,11 @@
   },
   "dateField": {
     "invalidFormat": "Please enter the date as DD.MM.YYYY",
-    "chooseDate": "Choose date"
+    "chooseDate": "Choose date",
+    "calendar": "Calendar",
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month",
+    "today": "Today"
   },
   "copyField": {
     "copy": "Copy",
@@ -196,5 +200,17 @@
   "featureNotice": {
     "readOnly": "“{name}” is no longer part of your plan. Existing data stays visible, changes are locked.",
     "notBooked": "“{name}” is not included in your plan. Your administrators can upgrade the plan."
+  },
+  "timeField": {
+    "chooseTime": "Choose time",
+    "invalidFormat": "Please enter the time as HH:MM."
+  },
+  "colorField": {
+    "choose": "Choose colour",
+    "saturationBrightness": "Saturation and brightness",
+    "saturationBrightnessValue": "Saturation {saturation} %, brightness {brightness} %",
+    "hue": "Hue",
+    "hex": "Hex value",
+    "swatches": "Colour suggestions"
   }
 }

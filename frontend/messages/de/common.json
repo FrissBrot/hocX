@@ -58,7 +58,11 @@
   },
   "dateField": {
     "invalidFormat": "Bitte Datum als TT.MM.JJJJ eingeben",
-    "chooseDate": "Datum wählen"
+    "chooseDate": "Datum wählen",
+    "calendar": "Kalender",
+    "previousMonth": "Vorheriger Monat",
+    "nextMonth": "Nächster Monat",
+    "today": "Heute"
   },
   "copyField": {
     "copy": "Kopieren",
@@ -196,5 +200,17 @@
   "featureNotice": {
     "readOnly": "«{name}» ist nicht mehr in Ihrem Abo. Bestehende Daten bleiben sichtbar, Änderungen sind gesperrt.",
     "notBooked": "«{name}» ist in Ihrem Abo nicht enthalten. Ihre Administration kann das Abo erweitern."
+  },
+  "timeField": {
+    "chooseTime": "Uhrzeit wählen",
+    "invalidFormat": "Bitte die Uhrzeit als HH:MM eingeben."
+  },
+  "colorField": {
+    "choose": "Farbe wählen",
+    "saturationBrightness": "Sättigung und Helligkeit",
+    "saturationBrightnessValue": "Sättigung {saturation} %, Helligkeit {brightness} %",
+    "hue": "Farbton",
+    "hex": "Hex-Wert",
+    "swatches": "Farbvorschläge"
   }
 }

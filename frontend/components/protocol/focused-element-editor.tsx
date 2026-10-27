@@ -15,6 +15,7 @@ import { TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
 import { StructuredListTable, TrackedEntryInfo } from "@/components/lists/structured-list-table";
 import { TODO_DUE_PRESETS, todoDuePresetDate } from "@/lib/utils/todo-due";
 import { DateInput } from "@/components/ui/date-input";
+import { TimeInput } from "@/components/ui/time-input";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { TrackedChangeHideButton } from "@/components/ui/tracked-change-hide-button";
 import { Modal } from "@/components/ui/modal";
@@ -3091,11 +3092,10 @@ export function FocusedElementEditor({
                   </div>
                   <label className="session-date-main session-date-time">
                     <span className="session-date-label">{t("timeLabel")}</span>
-                    <input
-                      type="time"
+                    <TimeInput
                       value={String(blockConfig.selected_time ?? "")}
                       readOnly={!blockEditable}
-                      onChange={(event) => { if (blockEditable) patchBlockConfigValue(block.id, "selected_time", event.target.value || null, blockConfig); }}
+                      onChange={(value) => { if (blockEditable) patchBlockConfigValue(block.id, "selected_time", value || null, blockConfig); }}
                     />
                   </label>
                   {sessionDatePicker?.blockId === block.id && (() => {

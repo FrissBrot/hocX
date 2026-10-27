@@ -24,6 +24,8 @@ import { baseVariant, DEFAULT_APPEARANCE_BASE } from "@/lib/documents/appearance
 import { DERIVED_COLOR_KEYS, deriveBrandColors } from "@/lib/documents/brand-colors";
 import { BrandTokens } from "@/lib/documents/layout";
 import { formatDateTime } from "@/lib/utils/format";
+import { Select } from "@/components/ui/select";
+import { ColorInput, normalizeHex } from "@/components/ui/color-input";
 
 const PREVIEW_DEBOUNCE_MS = 500;
 // Einfache Ansicht: nur Haupt- und Zweitfarbe, alles andere unter «Erweiterte Optionen»
@@ -62,6 +64,15 @@ export function BrandStudio({ capabilities }: Props) {
   const [brands, setBrands] = useState<Brand[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<BrandTokens | null>(null);
+  // Farben des Profils als Vorschläge im Farbwähler
+  const brandSwatches = draft
+    ? [...BASE_COLOR_KEYS, ...COLOR_KEYS, ...draft.colors.custom.map((item) => item.key)]
+        .map((key) => {
+          const custom = draft.colors.custom.find((item) => item.key === key);
+          return custom ? { value: custom.value, label: custom.label || custom.key } : { value: draft.colors[key], label: t(`colorRef.${key}`) };
+        })
+        .filter((item, index, all) => normalizeHex(item.value) && all.findIndex((other) => normalizeHex(other.value) === normalizeHex(item.value)) === index)
+    : [];
   const [name, setName] = useState("");
   const [assets, setAssets] = useState<DocumentAsset[]>([]);
   const [previewTemplates, setPreviewTemplates] = useState<DocumentTemplateInfo[]>([]);
@@ -234,7 +245,7 @@ export function BrandStudio({ capabilities }: Props) {
     return (
       <label className="field-stack">
         <span className="field-label">{label}</span>
-        <select
+        <Select
           value={source.asset_ids.length ? "custom" : source.builtin ?? "inter"}
           onChange={(event) =>
             event.target.value === "custom"
@@ -248,7 +259,7 @@ export function BrandStudio({ capabilities }: Props) {
             </option>
           ))}
           <option value="custom">{source.asset_ids.length ? fontName(source.asset_ids) : t("brand.customFont")}</option>
-        </select>
+        </Select>
       </label>
     );
   };
@@ -336,13 +347,13 @@ export function BrandStudio({ capabilities }: Props) {
           </label>
           <label className="field-stack studio-brand-language">
             <span className="field-label">{t("brand.documentLanguage")}</span>
-            <select value={documentLanguage ?? ""} disabled={!canEdit || documentLanguage === null} onChange={(event) => void saveDocumentLanguage(event.target.value)}>
+            <Select value={documentLanguage ?? ""} disabled={!canEdit || documentLanguage === null} onChange={(event) => void saveDocumentLanguage(event.target.value)}>
               {locales.map((code) => (
                 <option key={code} value={code}>
                   {t(`language.${code}`)}
                 </option>
               ))}
-            </select>
+            </Select>
             <span className="field-help">{t("brand.documentLanguageHelp")}</span>
           </label>
         </aside>
@@ -359,7 +370,7 @@ export function BrandStudio({ capabilities }: Props) {
                 <div className="studio-color-grid">
                   {BASE_COLOR_KEYS.map((key) => (
                     <label key={key} className="studio-color-cell">
-                      <input type="color" value={draft.colors[key]} /* design-ok: Brand-Farbe (Daten) */ onChange={(event) => setBaseColor(key, event.target.value)} />
+                      <ColorInput value={draft.colors[key]} swatches={brandSwatches} aria-label={t(`colorRef.${key}`)} onChange={(value) => setBaseColor(key, value)} />
                       <span>{t(`colorRef.${key}`)}</span>
                     </label>
                   ))}
@@ -423,12 +434,13 @@ export function BrandStudio({ capabilities }: Props) {
                   <div className="studio-color-grid">
                     {COLOR_KEYS.map((key) => (
                       <label key={key} className="studio-color-cell">
-                        <input
-                          type="color"
-                          value={draft.colors[key]} /* design-ok: Brand-Farbe (Daten) */
-                          onChange={(event) =>
+                        <ColorInput
+                          value={draft.colors[key]}
+                          swatches={brandSwatches}
+                          aria-label={t(`colorRef.${key}`)}
+                          onChange={(value) =>
                             update((tokens) => {
-                              tokens.colors[key] = event.target.value.toUpperCase();
+                              tokens.colors[key] = value;
                               if (DERIVED_COLOR_KEYS.includes(key)) tokens.derive_colors = false;
                             })
                           }
@@ -440,7 +452,7 @@ export function BrandStudio({ capabilities }: Props) {
                   <h4 className="studio-subtitle">{t("brand.customColors")}</h4>
                   {draft.colors.custom.map((item, index) => (
                     <div key={index} className="studio-custom-color">
-                      <input type="color" value={item.value} /* design-ok: Brand-Farbe (Daten) */ aria-label={t("brand.customColorValue")} onChange={(event) => update((tokens) => { tokens.colors.custom[index].value = event.target.value.toUpperCase(); })} />
+                      <ColorInput value={item.value} swatches={brandSwatches} aria-label={t("brand.customColorValue")} onChange={(value) => update((tokens) => { tokens.colors.custom[index].value = value; })} />
                       <input value={item.label} placeholder={t("brand.customColorLabel")} aria-label={t("brand.customColorLabel")} onChange={(event) => update((tokens) => { tokens.colors.custom[index].label = event.target.value; })} />
                       <input value={item.key} placeholder={t("brand.customColorKey")} aria-label={t("brand.customColorKey")} pattern="[a-z0-9_]+" onChange={(event) => update((tokens) => { tokens.colors.custom[index].key = event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_"); })} />
                       <button type="button" className="button-icon-soft button-icon-soft-danger" aria-label={t("brand.removeColor")} onClick={() => update((tokens) => { tokens.colors.custom.splice(index, 1); })}>
@@ -486,10 +498,10 @@ export function BrandStudio({ capabilities }: Props) {
                     </label>
                     <label className="field-stack">
                       <span className="field-label">{t("brand.headingWeight")}</span>
-                      <select value={draft.typography.weight_heading} onChange={(event) => update((tokens) => { tokens.typography.weight_heading = event.target.value as "bold"; })}>
+                      <Select value={draft.typography.weight_heading} onChange={(event) => update((tokens) => { tokens.typography.weight_heading = event.target.value as "bold"; })}>
                         <option value="medium">{t("fields.weightValue.medium")}</option>
                         <option value="bold">{t("fields.weightValue.bold")}</option>
-                      </select>
+                      </Select>
                     </label>
                     <label className="field-stack">
                       <span className="field-label">{t("brand.letterSpacing")}</span>
@@ -497,10 +509,10 @@ export function BrandStudio({ capabilities }: Props) {
                     </label>
                     <label className="field-stack">
                       <span className="field-label">{t("brand.headingTransform")}</span>
-                      <select value={draft.typography.heading_transform} onChange={(event) => update((tokens) => { tokens.typography.heading_transform = event.target.value as "none"; })}>
+                      <Select value={draft.typography.heading_transform} onChange={(event) => update((tokens) => { tokens.typography.heading_transform = event.target.value as "none"; })}>
                         <option value="none">{t("fields.transformValue.none")}</option>
                         <option value="upper">{t("fields.transformValue.upper")}</option>
-                      </select>
+                      </Select>
                     </label>
                   </div>
                   <fieldset className="studio-fieldset">
@@ -538,20 +550,20 @@ export function BrandStudio({ capabilities }: Props) {
                   <div className="studio-field-grid">
                     <label className="field-stack">
                       <span className="field-label">{t("brand.pageSize")}</span>
-                      <select value={draft.layout.page_size} onChange={(event) => update((tokens) => { tokens.layout.page_size = event.target.value as "A4"; })}>
+                      <Select value={draft.layout.page_size} onChange={(event) => update((tokens) => { tokens.layout.page_size = event.target.value as "A4"; })}>
                         {["A4", "A5", "Letter"].map((size) => (
                           <option key={size} value={size}>
                             {t(`document.sizeValue.${size}`)}
                           </option>
                         ))}
-                      </select>
+                      </Select>
                     </label>
                     <label className="field-stack">
                       <span className="field-label">{t("document.orientation")}</span>
-                      <select value={draft.layout.orientation} onChange={(event) => update((tokens) => { tokens.layout.orientation = event.target.value as "portrait"; })}>
+                      <Select value={draft.layout.orientation} onChange={(event) => update((tokens) => { tokens.layout.orientation = event.target.value as "portrait"; })}>
                         <option value="portrait">{t("document.portrait")}</option>
                         <option value="landscape">{t("document.landscape")}</option>
-                      </select>
+                      </Select>
                     </label>
                     {(["top", "right", "bottom", "left"] as const).map((side) => (
                       <label key={side} className="field-stack">
@@ -592,11 +604,11 @@ export function BrandStudio({ capabilities }: Props) {
                   {(Object.keys(LAYOUT_CHOICES) as LayoutChoice[]).map((key) => (
                     <label key={key} className="field-stack">
                       <span className="field-label">{t(`brand.choice.${key}.label`)}</span>
-                      <select value={draft.layout[key]} onChange={(event) => update((tokens) => { (tokens.layout as Record<LayoutChoice, string>)[key] = event.target.value; })}>
+                      <Select value={draft.layout[key]} onChange={(event) => update((tokens) => { (tokens.layout as Record<LayoutChoice, string>)[key] = event.target.value; })}>
                         {LAYOUT_CHOICES[key].map((value) => (
                           <option key={value} value={value}>{t(`brand.choice.${key}.${value}`)}</option>
                         ))}
-                      </select>
+                      </Select>
                       <span className="field-help">{t(`brand.choice.${key}.help`)}</span>
                     </label>
                   ))}
@@ -644,13 +656,13 @@ export function BrandStudio({ capabilities }: Props) {
         <section className="studio-brand-preview" aria-label={t("preview.title")}>
           <div className="studio-preview-bar">
             <span className="field-label">{t("preview.title")}</span>
-            <select value={previewTemplateId ?? ""} onChange={(event) => setPreviewTemplateId(event.target.value || null)} aria-label={t("brand.previewTemplate")}>
+            <Select value={previewTemplateId ?? ""} onChange={(event) => setPreviewTemplateId(event.target.value || null)} aria-label={t("brand.previewTemplate")}>
               {previewTemplates.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.origin === "system" && item.system_key ? t(`system.${item.system_key}.name`) : item.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           {previewError && <StatusBanner tone="error" message={previewError} />}
           <div className="studio-preview-pages">

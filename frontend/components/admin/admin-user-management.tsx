@@ -16,6 +16,7 @@ import { useToast } from "@/contexts/toast-context";
 import { AdminTenantSummary, AdminUserPage, UserSummary } from "@/types/api";
 import { emptyUserForm, isUserFormValid, primarySystemRole, userFormToPayload, UserFormState } from "@/components/users/user-form-shared";
 import { rolesLabel } from "@/lib/permissions";
+import { Select } from "@/components/ui/select";
 
 type Props = {
   initialPage: AdminUserPage;
@@ -234,13 +235,13 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
             </label>
             <label className="field-stack">
               <span className="field-label">{tUm("language")}</span>
-              <select value={userForm.preferred_language} onChange={(event) => setUserForm((current) => ({ ...current, preferred_language: event.target.value }))}>
+              <Select value={userForm.preferred_language} onChange={(event) => setUserForm((current) => ({ ...current, preferred_language: event.target.value }))}>
                 {locales.map((code) => (
                   <option key={code} value={code}>
                     {localeConfig[code].nativeLabel}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
             <label className="checkbox-line">
               <input type="checkbox" checked={userForm.is_active} onChange={(event) => setUserForm((current) => ({ ...current, is_active: event.target.checked }))} />
@@ -276,13 +277,13 @@ export function AdminUserManagement({ initialPage, allTenants }: Props) {
             )}
             <label className="field-stack">
               <span className="field-label">{tUm("role")}</span>
-              <select value={userForm.system_role} onChange={(event) => setUserForm((current) => ({ ...current, system_role: event.target.value as UserFormState["system_role"] }))}>
+              <Select value={userForm.system_role} onChange={(event) => setUserForm((current) => ({ ...current, system_role: event.target.value as UserFormState["system_role"] }))}>
                 {roleOptions.map((role) => (
                   <option key={role.code} value={role.code}>
                     {role.label}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
           </div>
 

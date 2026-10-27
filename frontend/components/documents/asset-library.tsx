@@ -14,6 +14,7 @@ import { Modal } from "@/components/ui/modal";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { apiErrorMessage, AssetReference, Capabilities, DocumentAsset, studioApi } from "@/lib/documents/api";
+import { Select } from "@/components/ui/select";
 
 const CATEGORIES = ["logo", "letterhead", "background", "watermark", "graphic", "image", "font"];
 
@@ -126,13 +127,13 @@ export function AssetLibrary({ capabilities }: { capabilities: Capabilities }) {
             {editing.kind === "image" && (
               <label className="field-stack">
                 <span className="field-label">{t("assets.categoryLabel")}</span>
-                <select value={editing.category} onChange={(event) => setEditing({ ...editing, category: event.target.value as DocumentAsset["category"] })}>
+                <Select value={editing.category} onChange={(event) => setEditing({ ...editing, category: event.target.value as DocumentAsset["category"] })}>
                   {CATEGORIES.filter((value) => value !== "font").map((value) => (
                     <option key={value} value={value}>
                       {t(`assets.category.${value}`)}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
             )}
             <div className="modal-actions">

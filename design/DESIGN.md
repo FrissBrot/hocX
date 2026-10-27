@@ -50,6 +50,7 @@ Bewusst feste Ausnahmen (mit `design-ok`-Kommentar in derselben Zeile): QR-Code-
 - `window.confirm/alert/prompt`. Stattdessen `useConfirm()` / `useToast()`
 - Eigene Overlays/Modals mit `position: fixed`. Stattdessen `Modal`
 - Handgebaute Dropdowns mit Inline-Styles (Abschnitt 5)
+- Rohes `<select>`, `<input type="date|time|color">` in `frontend/`: `Select`, `DateInput`, `TimeInput`, `ColorInput` (der Checker meldet es)
 - Neue `@media`-Breakpoints außer 640/900
 
 ## 4. Standardbausteine
@@ -66,7 +67,9 @@ Alle in `frontend/components/ui/` (Import: `@/components/ui/<name>`). Erst hier 
 | Status direkt ändern | `PillMenu` | Badge, das ein Menü öffnet |
 | Auswahl aus Liste (Einzel) | `SearchableSelect` | Standard für Auswahl mit Suche, 73 Verwendungen |
 | Auswahl aus Liste (Mehrfach) | `SearchableMultiSelect` | |
-| Kurze feste Auswahl (<7 Optionen, ohne Suche) | natives `<select>` | Kein Nachbau |
+| Kurze feste Auswahl (<7 Optionen, ohne Suche) | `Select` | Echtes `<select>` mit hocX-Liste statt OS-Liste; API wie natives Select (`value`, `onChange`, `<option>`/`<optgroup>`). Auf Touch-Geräten bleibt die native Auswahl |
+| Uhrzeit | `TimeInput` | Wert `HH:MM`, Eingabe per Tastatur, Liste im Viertelstunden-Takt |
+| Farbe (Daten, z. B. Brand-Farben) | `ColorInput` | Popover mit Fläche, Farbton, Hex und `swatches`; nie `<input type="color">` |
 | Aktionen einer Zeile/Karte | `ActionMenu` (`items: {label, onClick, danger?}[]`) | Kebab-Menü statt vieler Buttons |
 | Filter-/Options-Menü mit Checkboxen (Ansicht, Spalten, Fälligkeit) | CSS-Klassen `.mini-menu-*` aus `globals.css` | Eingebetteter Trigger + Popover mit Sections/Checkboxen, kein Klick-Aktionsmenü für ein Objekt — dafür `ActionMenu` |
 | Tags | `TagInput` | Farben aus `TAG_COLORS` |
@@ -87,7 +90,7 @@ Entscheidungsbaum, von oben nach unten:
 2. **Aktionen zu einem Objekt** → `ActionMenu`.
 3. **Status eines Objekts ändern** → `PillMenu`.
 4. **Checkbox-/Options-Menü** (Filter, Spalten-Auswahl, Ansicht-Einstellungen, Fälligkeit) → CSS-Klassen `.mini-menu-*` aus `globals.css` (Trigger + Popover mit Sections).
-5. **Wenige feste Werte** → natives `<select>`.
+5. **Wenige feste Werte** → `Select` (`@/components/ui/select`).
 6. **Autocomplete unter einem Textfeld** (Vorschläge erscheinen beim Tippen) oder eine Liste, die keiner der Bausteine abdeckt → CSS-Klassen `.dropdown-*` aus `globals.css`:
 
 ```tsx
@@ -126,8 +129,8 @@ Für **jedes** Datumsfeld: `DateInput` aus `@/components/ui/date-input`. Nie `<i
 ```
 
 - **Anzeige/Eingabe** `TT.MM.JJJJ` per Tastatur, **Wert** immer ISO (`JJJJ-MM-TT`) über `onChange`. Kein eigenes Parsen/Formatieren von Daten in Komponenten, das übernehmen `formatDateInputValue`/`parseDateInputValue` aus `lib/utils/format.ts`.
-- Der runde Kalender-Button rechts öffnet den nativen Picker über `showPicker()`. Er ist Teil von `DateInput` selbst (`.date-input-picker`) und bekommt **keine** eigene Klasse oder Nachbau.
-- Soll der Button statt des nativen Pickers etwas Eigenes öffnen (z. B. „Nächster Hock": Kalenderansicht mit Terminen via `EventCalendarModal` mit `pick`), über `onPickerClick` — nicht durch einen zusätzlichen Button daneben.
+- Der runde Kalender-Button rechts öffnet den Kalender im hocX-Look (`DatePicker`, Monatsansicht, Woche ab Montag, Namen in der UI-Sprache, Tastatur: Pfeile, Bild auf/ab, Pos1/Ende). Er ist Teil von `DateInput` selbst (`.date-input-picker`) und bekommt **keine** eigene Klasse oder Nachbau.
+- Soll der Button statt des Kalenders etwas Eigenes öffnen (z. B. „Nächster Hock": Kalenderansicht mit Terminen via `EventCalendarModal` mit `pick`), über `onPickerClick` — nicht durch einen zusätzlichen Button daneben.
 - Einschränkungen (kein Datum vor/nach X) über `min`/`max` (ISO-Strings), nicht per Validierung nach dem Speichern.
 - **Zeitraum (von/bis):** zwei eigenständige `DateInput`-Felder nebeneinander in `.two-col`, je mit eigenem `field-label` ("Datum" / "Enddatum" o. ä.). Kein kombiniertes Range-Picker-Widget.
 - **Tabellenzeile/kompakter Kontext:** `DateInput` bleibt gleich, nur der Picker-Button darf über eine Feature-Klasse verschmälert werden (z. B. `.event-field-date .date-input-picker { width: 40px; }`), niemals Inline-Style.

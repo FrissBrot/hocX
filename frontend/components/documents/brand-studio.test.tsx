@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/lib/api/client";
@@ -36,6 +36,14 @@ async function advance(ms: number) {
   await act(async () => {
     await vi.advanceTimersByTimeAsync(ms);
   });
+}
+
+/** Farbfeld öffnen, Hex-Wert eingeben und den Farbwähler wieder schliessen. */
+async function setColor(label: string, hex: string) {
+  fireEvent.click(await screen.findByRole("button", { name: label }));
+  const dialog = screen.getByRole("dialog", { name: label });
+  fireEvent.change(within(dialog).getByLabelText("Hex-Wert"), { target: { value: hex } });
+  fireEvent.keyDown(window, { key: "Escape" });
 }
 
 describe("BrandStudio", () => {
@@ -76,13 +84,13 @@ describe("BrandStudio", () => {
 
   it("derives the remaining colors from the two main colors until one is changed by hand", async () => {
     render(<BrandStudio capabilities={capabilities} />);
-    fireEvent.change(await screen.findByLabelText("Hauptfarbe"), { target: { value: "#aa0000" } });
+    await setColor("Hauptfarbe", "#aa0000");
     await advance(800);
     await waitFor(() => expect(api.previewDocument.mock.calls.at(-1)![0].brand_tokens.colors).toMatchObject({ primary: "#AA0000", heading: "#AA0000", table_header_background: "#F7E6E6" }));
 
-    fireEvent.change(screen.getByLabelText("Linien"), { target: { value: "#123456" } });
+    await setColor("Linien", "#123456");
     expect(screen.getByLabelText("Übrige Farben automatisch ableiten")).not.toBeChecked();
-    fireEvent.change(screen.getByLabelText("Hauptfarbe"), { target: { value: "#00aa00" } });
+    await setColor("Hauptfarbe", "#00aa00");
     await advance(800);
     await waitFor(() => expect(api.previewDocument.mock.calls.at(-1)![0].brand_tokens.colors).toMatchObject({ primary: "#00AA00", heading: "#AA0000", border: "#123456" }));
   });

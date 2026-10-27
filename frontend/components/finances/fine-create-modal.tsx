@@ -10,6 +10,7 @@ import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { fineTypeLabels } from "@/lib/constants/fine-types";
 import { AttendanceFine, FinanceAccount, ParticipantSummary, ProtocolSummary } from "@/types/api";
+import { Select } from "@/components/ui/select";
 
 type Props = {
   open: boolean;
@@ -125,11 +126,11 @@ export function FineCreateModal({ open, accounts, onClose, onCreated }: Props) {
         </div>
         <label className="field-stack">
           <span className="field-label">{t("reasonLabel")}</span>
-          <select value={fineType} onChange={(event) => setFineType(event.target.value as "late" | "absent")}>
+          <Select value={fineType} onChange={(event) => setFineType(event.target.value as "late" | "absent")}>
             {Object.entries(fineTypeLabel).map(([value, label]) => (
               <option key={value} value={value}>{label}</option>
             ))}
-          </select>
+          </Select>
         </label>
         <div className="field-stack">
           <span className="field-label">{t("accountLabel")}</span>

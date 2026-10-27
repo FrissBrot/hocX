@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { Popover } from "@/components/ui/popover";
 import { SearchInput } from "@/components/ui/search-input";
+import { Select } from "@/components/ui/select";
 
 type BaseProps<T> = {
   options: T[];
@@ -16,7 +17,7 @@ type BaseProps<T> = {
   disabled?: boolean;
   className?: string;
   /** Extra attributes spread onto the trigger button - e.g. data-form-input/onKeyDown
-   * for a form's custom Tab-order handling, matching what a native <select> replaced
+   * for a form's custom Tab-order handling, matching what a native <Select> replaced
    * by this component could carry directly. */
   triggerProps?: Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type" | "onClick" | "className" | "disabled"> &
     Record<`data-${string}`, unknown>;
@@ -30,14 +31,14 @@ type SingleProps<T, Id extends string | number> = BaseProps<T> & { // i18n-ok: T
   nullLabel?: string;
 };
 
-// Generic searchable dropdown replacing a native <select> whose options are loaded
+// Generic searchable dropdown replacing a native <Select> whose options are loaded
 // dynamically (from an API/DB), so those pickers get the same Popover + search-filter
 // pattern as TodoAssigneeMenu instead of an unsearchable native list. Single-select;
 // see SearchableMultiSelect for the multi-value variant.
 //
 // Id is inferred from getId's return type and pins `value`/onChange's option ids to
 // that same type, so passing e.g. a string filter-state against numeric option ids
-// (an easy mistake - native <select> values are always strings, these aren't) is a
+// (an easy mistake - native <Select> values are always strings, these aren't) is a
 // compile error instead of a silently-never-matching runtime comparison.
 export function SearchableSelect<T, Id extends string | number>({
   options,

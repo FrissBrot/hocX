@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
 import type { EditorMode, PageSetup } from "@/components/documents/designer/toolbar-types";
+import { Select } from "@/components/ui/select";
 
 export type SaveState = "saved" | "dirty" | "saving" | "conflict" | "error";
 export type ViewMode = "design" | "split" | "preview";
@@ -65,13 +66,13 @@ export function Toolbar(props: Props) {
         <button type="button" className="button-ghost button-icon" aria-label={t("toolbar.redo")} title={t("toolbar.redoShortcut")} disabled={!props.canRedo || !editable} onClick={props.onRedo}>
           ↷
         </button>
-        <select value={props.mode} onChange={(event) => props.onModeChange(event.target.value as EditorMode)} aria-label={t("toolbar.mode")}>
+        <Select value={props.mode} onChange={(event) => props.onModeChange(event.target.value as EditorMode)} aria-label={t("toolbar.mode")}>
           {(["simple", "advanced", "expert"] as const).map((mode) => (
             <option key={mode} value={mode}>
               {t(`mode.${mode}`)}
             </option>
           ))}
-        </select>
+        </Select>
         <div className="studio-segmented" role="radiogroup" aria-label={t("toolbar.view")}>
           {(["design", "split", "preview"] as const).map((view) => (
             <button key={view} type="button" role="radio" aria-checked={props.view === view} className={props.view === view ? "button-toggle button-toggle-active" : "button-toggle"} onClick={() => props.onViewChange(view)}>
@@ -79,13 +80,13 @@ export function Toolbar(props: Props) {
             </button>
           ))}
         </div>
-        <select value={props.page.size} disabled={!editable} onChange={(event) => props.onPageSize(event.target.value as PageSetup["size"])} aria-label={t("toolbar.pageSize")}>
+        <Select value={props.page.size} disabled={!editable} onChange={(event) => props.onPageSize(event.target.value as PageSetup["size"])} aria-label={t("toolbar.pageSize")}>
           {["A4", "A5", "A3", "Letter", "Legal", ...(props.page.size === "custom" ? ["custom"] : [])].map((size) => (
             <option key={size} value={size}>
               {t(`document.sizeValue.${size}`)}
             </option>
           ))}
-        </select>
+        </Select>
         <button type="button" className="button-ghost button-icon" disabled={!editable} aria-label={props.page.orientation === "portrait" ? t("toolbar.toLandscape") : t("toolbar.toPortrait")} title={props.page.orientation === "portrait" ? t("toolbar.toLandscape") : t("toolbar.toPortrait")} onClick={() => props.onOrientation(props.page.orientation === "portrait" ? "landscape" : "portrait")}>
           {props.page.orientation === "portrait" ? "▯" : "▭"}
         </button>

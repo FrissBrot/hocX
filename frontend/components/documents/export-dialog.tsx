@@ -29,6 +29,7 @@ import {
   saveBlob,
   studioApi,
 } from "@/lib/documents/api";
+import { Select } from "@/components/ui/select";
 
 export type DocumentExportContext = {
   /** Dokumenttyp (protocol, invitation, todos, events, statistics, list, …). */
@@ -195,13 +196,13 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
           {selectableTypes.length > 1 && (
             <label className="field-stack">
               <span className="field-label">{t("export.documentType")}</span>
-              <select value={documentType} onChange={(event) => setDocumentType(event.target.value)}>
+              <Select value={documentType} onChange={(event) => setDocumentType(event.target.value)}>
                 {selectableTypes.map((item) => (
                   <option key={item.key} value={item.key}>
                     {t(`docType.${item.key}`)}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
           )}
 
@@ -249,26 +250,26 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
             </h3>
             <label className="field-stack">
               <span className="field-label">{t("export.language")}</span>
-              <select value={language} onChange={(event) => setLanguage(event.target.value)}>
+              <Select value={language} onChange={(event) => setLanguage(event.target.value)}>
                 <option value="">{t("export.languageDefault")}</option>
                 {locales.map((code) => (
                   <option key={code} value={code}>
                     {t(`language.${code}`)}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
             {brands.length > 1 && (
               <label className="field-stack">
                 <span className="field-label">{t("export.brand")}</span>
-                <select value={brandId} onChange={(event) => setBrandId(event.target.value)}>
+                <Select value={brandId} onChange={(event) => setBrandId(event.target.value)}>
                   <option value="">{t("export.brandDefault")}</option>
                   {brands.map((brand) => (
                     <option key={brand.id} value={brand.id}>
                       {brand.name}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
             )}
             <label className="field-stack">
@@ -277,12 +278,12 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
             </label>
             <label className="field-stack">
               <span className="field-label">{t("export.watermark")}</span>
-              <select value={options.watermark ?? "auto"} onChange={(event) => setOptions({ ...options, watermark: event.target.value as ExportOptions["watermark"] })}>
+              <Select value={options.watermark ?? "auto"} onChange={(event) => setOptions({ ...options, watermark: event.target.value as ExportOptions["watermark"] })}>
                 <option value="auto">{t("export.watermarkAuto")}</option>
                 <option value="on">{t("export.watermarkOn")}</option>
                 {/* Entwürfe ohne Kennzeichnung nur mit Schreibrecht (STUDIO-007, serverseitig erzwungen) */}
                 {capabilities?.unmark_drafts && <option value="off">{t("export.watermarkOff")}</option>}
-              </select>
+              </Select>
             </label>
           </section>
 

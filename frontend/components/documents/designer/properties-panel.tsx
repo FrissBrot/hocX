@@ -19,6 +19,7 @@ import { useToast } from "@/contexts/toast-context";
 import { apiErrorMessage, EditorMode, studioApi } from "@/lib/documents/api";
 import { brandVariant } from "@/lib/documents/appearance";
 import { AppearanceOverrides, BoxStyle, duplicateNode, locate, newNodeId, removeNode, repeatScope, TemplateContent, TemplateNode, TextContent } from "@/lib/documents/layout";
+import { Select } from "@/components/ui/select";
 
 // Mindestmodus je Eigenschaftsgruppe (Gruppen aus components.py)
 const GROUP_MODE: Record<string, EditorMode> = {
@@ -102,13 +103,13 @@ export function PropertiesPanel() {
         return (
           <>
             <Field label={t("props.role")}>
-              <select value={(node.role as string) ?? "paragraph"} onChange={(event) => change({ role: event.target.value })}>
+              <Select value={(node.role as string) ?? "paragraph"} onChange={(event) => change({ role: event.target.value })}>
                 {["paragraph", "title", "subtitle", "heading", "caption", "label", "small"].map((role) => (
                   <option key={role} value={role}>
                     {t(`props.roleValue.${role}`)}
                   </option>
                 ))}
-              </select>
+              </Select>
             </Field>
             {node.role === "heading" && <NumberField label={t("props.level")} value={(node.level as number) ?? 1} min={1} max={4} onChange={(level) => change({ level })} />}
             <TextContentEditor label={t("props.text")} value={node.content as TextContent} scope={scope} mergeKey="content" onChange={(value, key) => change({ content: value }, key)} />
@@ -119,10 +120,10 @@ export function PropertiesPanel() {
         return (
           <>
             <Field label={t("props.imageSource")}>
-              <select value={source.kind} onChange={(event) => change({ source: event.target.value === "asset" ? { kind: "asset", asset_id: null } : { kind: "binding", path: "brand.logo" } })}>
+              <Select value={source.kind} onChange={(event) => change({ source: event.target.value === "asset" ? { kind: "asset", asset_id: null } : { kind: "binding", path: "brand.logo" } })}>
                 <option value="binding">{t("props.imageFromBrand")}</option>
                 <option value="asset">{t("props.imageFromAssets")}</option>
-              </select>
+              </Select>
             </Field>
             {source.kind === "binding" ? (
               <BindingSelect label={t("props.brandImage")} value={source.path} allowEmpty={false} types={["image"]} scope={scope} onChange={(path) => path && change({ source: { kind: "binding", path } })} />
@@ -135,13 +136,13 @@ export function PropertiesPanel() {
               </div>
             )}
             <Field label={t("props.fit")}>
-              <select value={(node.fit as string) ?? "contain"} onChange={(event) => change({ fit: event.target.value })}>
+              <Select value={(node.fit as string) ?? "contain"} onChange={(event) => change({ fit: event.target.value })}>
                 {["contain", "cover", "stretch"].map((fit) => (
                   <option key={fit} value={fit}>
                     {t(`props.fitValue.${fit}`)}
                   </option>
                 ))}
-              </select>
+              </Select>
             </Field>
             <TextContentEditor label={t("props.caption")} value={node.caption as TextContent} scope={scope} mergeKey="caption" onChange={(value, key) => change({ caption: value }, key)} />
             <AssetPicker open={assetPickerOpen} onClose={() => setAssetPickerOpen(false)} assets={assets} onAssetsChange={setAssets} canUpload={capabilities.manage_brand} onPick={(asset) => change({ source: { kind: "asset", asset_id: asset.id } })} />
@@ -157,13 +158,13 @@ export function PropertiesPanel() {
             {component?.access === "finance" && !capabilities.finance_data && <StatusBanner tone="neutral" message={t("props.financeRestricted")} />}
             {component?.access === "writer" && !capabilities.personal_data && <StatusBanner tone="neutral" message={t("props.personalRestricted")} />}
             <Field label={t("props.titleMode")}>
-              <select value={(node.title_mode as string) ?? "none"} onChange={(event) => change({ title_mode: event.target.value, title: event.target.value === "custom" ? node.title ?? { default: [{ t: "text", v: "" }] } : node.title })}>
+              <Select value={(node.title_mode as string) ?? "none"} onChange={(event) => change({ title_mode: event.target.value, title: event.target.value === "custom" ? node.title ?? { default: [{ t: "text", v: "" }] } : node.title })}>
                 {["none", "auto", "custom"].map((value) => (
                   <option key={value} value={value}>
                     {t(`props.titleModeValue.${value}`)}
                   </option>
                 ))}
-              </select>
+              </Select>
             </Field>
             {node.title_mode === "custom" && <TextContentEditor label={t("props.customTitle")} value={node.title as TextContent} scope={scope} mergeKey="title" onChange={(value, key) => change({ title: value }, key)} />}
             <CheckField label={t("props.hideIfEmpty")} checked={node.hide_if_empty !== false} onChange={(value) => change({ hide_if_empty: value })} />
@@ -199,13 +200,13 @@ export function PropertiesPanel() {
         return (
           <>
             <Field label={t("props.marker")}>
-              <select value={(node.marker as string) ?? "bullet"} onChange={(event) => change({ marker: event.target.value })}>
+              <Select value={(node.marker as string) ?? "bullet"} onChange={(event) => change({ marker: event.target.value })}>
                 {["bullet", "number", "none"].map((value) => (
                   <option key={value} value={value}>
                     {t(`props.markerValue.${value}`)}
                   </option>
                 ))}
-              </select>
+              </Select>
             </Field>
             <BindingSelect label={t("props.listSource")} value={(node.source as string) ?? null} types={["list"]} onChange={(source) => change({ source, item: source ? { default: [{ t: "bind", path: `item.${catalog.bindings.find((item) => item.path === source)?.item_fields[0]?.key ?? "title"}` }] } : node.item })} />
             {node.source ? (
@@ -224,13 +225,13 @@ export function PropertiesPanel() {
           <>
             <NumberField label={t("props.thickness")} value={(node.thickness as number) ?? 0.6} min={0.1} max={10} step={0.1} suffix={t("brand.unitPt")} onChange={(thickness) => change({ thickness }, "thickness")} />
             <Field label={t("fields.borderStyle")}>
-              <select value={(node.line_style as string) ?? "solid"} onChange={(event) => change({ line_style: event.target.value })}>
+              <Select value={(node.line_style as string) ?? "solid"} onChange={(event) => change({ line_style: event.target.value })}>
                 {["solid", "dashed", "dotted"].map((value) => (
                   <option key={value} value={value}>
                     {t(`fields.lineStyle.${value}`)}
                   </option>
                 ))}
-              </select>
+              </Select>
             </Field>
             <LengthField label={t("props.length")} value={(node.length as string) ?? "fill"} onChange={(length) => change({ length: length ?? "fill" })} />
             <ColorField label={t("props.lineColor")} value={(node.color as string) ?? "$brand.border"} allowEmpty={false} onChange={(color) => change({ color: color ?? "$brand.border" })} />
@@ -257,13 +258,13 @@ export function PropertiesPanel() {
             <NumberField label={t("props.tocDepth")} value={(node.depth as number) ?? 2} min={1} max={4} onChange={(depth) => change({ depth })} />
             <CheckField label={t("props.tocTitle")} checked={node.show_title !== false} onChange={(show_title) => change({ show_title })} />
             <Field label={t("props.density")}>
-              <select value={(node.density as string) ?? "normal"} onChange={(event) => change({ density: event.target.value })}>
+              <Select value={(node.density as string) ?? "normal"} onChange={(event) => change({ density: event.target.value })}>
                 {["normal", "compact", "very_compact"].map((value) => (
                   <option key={value} value={value}>
                     {t(`props.densityValue.${value}`)}
                   </option>
                 ))}
-              </select>
+              </Select>
             </Field>
           </>
         );
@@ -275,10 +276,10 @@ export function PropertiesPanel() {
               <CheckField key={field} label={t(`metadataField.${field}`)} checked={fields.includes(field)} onChange={(checked) => change({ fields: checked ? [...fields, field] : fields.filter((item) => item !== field) })} />
             ))}
             <Field label={t("props.metadataLayout")}>
-              <select value={(node.layout as string) ?? "list"} onChange={(event) => change({ layout: event.target.value })}>
+              <Select value={(node.layout as string) ?? "list"} onChange={(event) => change({ layout: event.target.value })}>
                 <option value="list">{t("props.metadataList")}</option>
                 <option value="inline">{t("props.metadataInline")}</option>
-              </select>
+              </Select>
             </Field>
           </>
         );
@@ -286,23 +287,23 @@ export function PropertiesPanel() {
       case "pagenumber":
         return (
           <Field label={t("props.pageNumberFormat")}>
-            <select value={(node.format as string) ?? "page_of"} onChange={(event) => change({ format: event.target.value })}>
+            <Select value={(node.format as string) ?? "page_of"} onChange={(event) => change({ format: event.target.value })}>
               <option value="page_of">{t("props.pageOf")}</option>
               <option value="page">{t("props.pageOnly")}</option>
-            </select>
+            </Select>
           </Field>
         );
       case "pagebreak":
         return modeAllows(mode, "expert") ? (
           <Field label={t("props.nextMaster")} help={t("props.nextMasterHelp")}>
-            <select value={(node.master as string) ?? ""} onChange={(event) => change({ master: event.target.value || null })}>
+            <Select value={(node.master as string) ?? ""} onChange={(event) => change({ master: event.target.value || null })}>
               <option value="">{t("props.sameMaster")}</option>
               {content.masters.map((master) => (
                 <option key={master.id} value={master.id}>
                   {master.name || master.id}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
         ) : (
           <p className="field-help">{t("props.pageBreakHelp")}</p>
@@ -311,13 +312,13 @@ export function PropertiesPanel() {
         return (
           <>
             <Field label={t("props.qrTarget")}>
-              <select value={(node.target as string) ?? "verify"} onChange={(event) => change({ target: event.target.value })}>
+              <Select value={(node.target as string) ?? "verify"} onChange={(event) => change({ target: event.target.value })}>
                 {["verify", "protocol", "url"].map((value) => (
                   <option key={value} value={value}>
                     {t(`props.qrTargetValue.${value}`)}
                   </option>
                 ))}
-              </select>
+              </Select>
             </Field>
             {node.target === "url" && (
               <Field label={t("props.url")}>
@@ -339,10 +340,10 @@ export function PropertiesPanel() {
         return (
           <>
             <Field label={t("props.watermarkWhen")}>
-              <select value={(node.when as string) ?? "draft"} onChange={(event) => change({ when: event.target.value })}>
+              <Select value={(node.when as string) ?? "draft"} onChange={(event) => change({ when: event.target.value })}>
                 <option value="draft">{t("props.watermarkDraft")}</option>
                 <option value="always">{t("props.watermarkAlways")}</option>
-              </select>
+              </Select>
             </Field>
             <TextContentEditor label={t("props.watermarkText")} value={node.text as TextContent} mergeKey="text" onChange={(value, key) => change({ text: value }, key)} />
             <NumberField label={t("props.watermarkSize")} value={(node.size as number) ?? 96} min={8} max={300} suffix={t("brand.unitPt")} onChange={(size) => change({ size }, "size")} />
@@ -363,13 +364,13 @@ export function PropertiesPanel() {
           <>
             <NumberField label={t("props.gap")} value={(node.gap as number) ?? 5} min={0} max={100} step={0.5} suffix={t("brand.unitMm")} onChange={(gap) => change({ gap }, "gap")} />
             <Field label={t("props.valign")}>
-              <select value={(node.valign as string) ?? "top"} onChange={(event) => change({ valign: event.target.value })}>
+              <Select value={(node.valign as string) ?? "top"} onChange={(event) => change({ valign: event.target.value })}>
                 {["top", "middle", "bottom"].map((value) => (
                   <option key={value} value={value}>
                     {t(`props.valignValue.${value}`)}
                   </option>
                 ))}
-              </select>
+              </Select>
             </Field>
             <button type="button" className="button-secondary button-ghost" onClick={() => change({ children: [...(node.children ?? []), { id: newNodeId(), type: "column", style: { width: "1fr" }, children: [] }] })}>
               {t("props.addColumn")}
@@ -389,10 +390,10 @@ export function PropertiesPanel() {
         return (
           <>
             <Field label={t("props.anchor")} help={t("props.anchorHelp")}>
-              <select value={(node.anchor as string) ?? "flow"} onChange={(event) => change({ anchor: event.target.value })}>
+              <Select value={(node.anchor as string) ?? "flow"} onChange={(event) => change({ anchor: event.target.value })}>
                 <option value="flow">{t("props.anchorFlow")}</option>
                 <option value="page">{t("props.anchorPage")}</option>
-              </select>
+              </Select>
             </Field>
             {node.anchor !== "page" && <NumberField label={t("props.layerHeight")} value={(node.height as number) ?? 60} min={5} max={1000} suffix={t("brand.unitMm")} onChange={(height) => change({ height }, "height")} />}
           </>
@@ -400,13 +401,13 @@ export function PropertiesPanel() {
       case "component":
         return (
           <Field label={t("props.reusable")}>
-            <select value={(node.component_id as string) ?? ""} onChange={(event) => change({ component_id: event.target.value })}>
+            <Select value={(node.component_id as string) ?? ""} onChange={(event) => change({ component_id: event.target.value })}>
               {components.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
         );
       case "size":
@@ -433,13 +434,13 @@ export function PropertiesPanel() {
       case "align":
         return (
           <Field label={t("fields.blockAlign")}>
-            <select value={style.align ?? "left"} onChange={(event) => setStyle({ align: event.target.value as BoxStyle["align"] }, "align")}>
+            <Select value={style.align ?? "left"} onChange={(event) => setStyle({ align: event.target.value as BoxStyle["align"] }, "align")}>
               {["left", "center", "right"].map((value) => (
                 <option key={value} value={value}>
                   {t(`fields.alignValue.${value}`)}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
         );
       case "typography":
@@ -486,13 +487,13 @@ export function PropertiesPanel() {
         ))}
         <NumberField label={t("props.frame.rotate")} value={node.frame.rotate ?? 0} min={-180} max={180} suffix="°" onChange={(rotate) => change({ frame: { ...node.frame!, rotate } }, "frame:rotate")} />
         <Field label={t("props.valign")}>
-          <select value={node.frame.valign ?? "top"} onChange={(event) => change({ frame: { ...node.frame!, valign: event.target.value as "top" | "middle" | "bottom" } })}>
+          <Select value={node.frame.valign ?? "top"} onChange={(event) => change({ frame: { ...node.frame!, valign: event.target.value as "top" | "middle" | "bottom" } })}>
             {(["top", "middle", "bottom"] as const).map((value) => (
               <option key={value} value={value}>
                 {t(`props.valignValue.${value}`)}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
       </div>
     </Group>
@@ -595,13 +596,13 @@ function TableEditor({ node, change }: { node: TemplateNode; change: (patch: Par
           <div className="studio-field-grid">
             <LengthField label={t("fields.width")} value={column.width ?? "auto"} allowFr onChange={(width) => setColumn(index, { width: width ?? "auto" }, "width")} />
             <Field label={t("fields.align")}>
-              <select value={column.align ?? "left"} onChange={(event) => setColumn(index, { align: event.target.value }, "align")}>
+              <Select value={column.align ?? "left"} onChange={(event) => setColumn(index, { align: event.target.value }, "align")}>
                 {["left", "center", "right"].map((value) => (
                   <option key={value} value={value}>
                     {t(`fields.alignValue.${value}`)}
                   </option>
                 ))}
-              </select>
+              </Select>
             </Field>
           </div>
           <button type="button" className="button-secondary button-ghost" onClick={() => change({ columns: columns.filter((_, columnIndex) => columnIndex !== index), rows: rows.map((row) => row.filter((_, cellIndex) => cellIndex !== index)) })}>
@@ -624,11 +625,11 @@ function TableEditor({ node, change }: { node: TemplateNode; change: (patch: Par
       <CheckField label={t("props.showHeader")} checked={node.show_header !== false} onChange={(show_header) => change({ show_header })} />
       {modeAllows(mode, "advanced") && <CheckField label={t("props.repeatHeader")} help={t("props.repeatHeaderHelp")} checked={node.repeat_header !== false} onChange={(repeat_header) => change({ repeat_header })} />}
       <Field label={t("props.zebra")}>
-        <select value={node.zebra === true ? "on" : node.zebra === false ? "off" : ""} onChange={(event) => change({ zebra: event.target.value === "" ? null : event.target.value === "on" })}>
+        <Select value={node.zebra === true ? "on" : node.zebra === false ? "off" : ""} onChange={(event) => change({ zebra: event.target.value === "" ? null : event.target.value === "on" })}>
           <option value="">{t("props.zebraBrand")}</option>
           <option value="on">{t("props.zebraOn")}</option>
           <option value="off">{t("props.zebraOff")}</option>
-        </select>
+        </Select>
       </Field>
       {source && <NumberField label={t("props.rowLimit")} value={(node.limit as number) ?? 500} min={1} max={2000} onChange={(limit) => change({ limit }, "limit")} />}
       <Field label={t("props.emptyText")}>

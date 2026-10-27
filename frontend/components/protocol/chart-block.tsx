@@ -12,6 +12,7 @@ import { browserApiFetch } from "@/lib/api/client";
 import { ChartCycleSelection } from "@/components/protocol/chart-cycle-selection";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { fineCountsByType, fineTotalsByCurrency } from "@/lib/utils/fine-stats";
+import { Select } from "@/components/ui/select";
 
 const STATS_BUMP_EVENT = "hocx:stats-refresh";
 // Hintergrund-Aktualisierung offener Diagramme: nur bei sichtbarem Tab und höchstens einmal pro
@@ -171,7 +172,7 @@ export function ChartBlock({ config, editable, onSave }: Props) {
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
       {editable && (
         <div style={{ display: "flex", gap: "var(--space-3)", flexWrap: "wrap", alignItems: "center" }}>
-          <select
+          <Select
             className="stats-cycle-select"
             value={chartType}
             onChange={(e) => save({ chart_type: e.target.value })}
@@ -181,7 +182,7 @@ export function ChartBlock({ config, editable, onSave }: Props) {
             {chartOptions(t).map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
-          </select>
+          </Select>
           {!config.cycle_config_id && hasCycles && (chartType === "groups_sessions" || chartType === "groups_avg") && (
             <SearchableSelect
               className="stats-cycle-select"

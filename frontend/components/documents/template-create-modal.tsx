@@ -13,6 +13,7 @@ import { Modal } from "@/components/ui/modal";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useToast } from "@/contexts/toast-context";
 import { apiErrorMessage, DesignExample, DocumentTemplateDetail, DocumentTemplateInfo, DocumentTypeInfo, studioApi } from "@/lib/documents/api";
+import { Select } from "@/components/ui/select";
 
 type Props = {
   open: boolean;
@@ -71,7 +72,7 @@ export function TemplateCreateModal({ open, onClose, types, templates, canUseDes
       <div className="grid">
         <label className="field-stack">
           <span className="field-label">{t("create.documentType")}</span>
-          <select
+          <Select
             value={documentType}
             onChange={(event) => {
               setDocumentType(event.target.value);
@@ -84,7 +85,7 @@ export function TemplateCreateModal({ open, onClose, types, templates, canUseDes
                 {t(`docType.${type.key}`)}
               </option>
             ))}
-          </select>
+          </Select>
           <span className="field-help">{t(`docTypeHelp.${documentType}`)}</span>
         </label>
         {typeDesigns.length > 0 && (

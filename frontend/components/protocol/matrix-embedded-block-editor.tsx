@@ -9,6 +9,7 @@ import { useTranslations } from "next-intl";
 import { useConfirm } from "@/contexts/confirm-context";
 import { Badge } from "@/components/ui/badge";
 import { DateInput } from "@/components/ui/date-input";
+import { TimeInput } from "@/components/ui/time-input";
 import { LightboxImage } from "@/components/ui/lightbox-image";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { EventOverviewModal } from "@/components/protocol/planning/event-overview-modal";
@@ -31,6 +32,7 @@ import {
   formatShortDate,
   nextEmbeddedItemId,
 } from "@/components/protocol/protocol-editor-shared";
+import { Select } from "@/components/ui/select";
 
 export function MatrixEmbeddedBlockEditor({
   embeddedBlock,
@@ -533,7 +535,7 @@ export function MatrixEmbeddedBlockEditor({
                 placeholder={t("rowLabelPlaceholder")}
               />
               <div className="grid">
-                <select
+                <Select
                   value={String(row.value_type ?? "text")}
                   onChange={(event) =>
                     updateEmbeddedConfig((current) => ({
@@ -558,7 +560,7 @@ export function MatrixEmbeddedBlockEditor({
                       {option.label}
                     </option>
                   ))}
-                </select>
+                </Select>
                 {String(row.value_type ?? "text") === "participant" ? (
                   <SearchableSelect
                     options={participantNames}
@@ -1217,13 +1219,12 @@ export function MatrixEmbeddedBlockEditor({
           </label>
           <label className="field-stack">
             <span className="field-label">{t("timeLabel")}</span>
-            <input
-              type="time"
+            <TimeInput
               value={String(embeddedConfig.selected_time ?? "")}
-              onChange={(event) =>
+              onChange={(value) =>
                 updateEmbeddedConfig((current) => ({
                   ...current,
-                  selected_time: event.target.value || null,
+                  selected_time: value || null,
                 }), true)
               }
             />

@@ -29,6 +29,7 @@ import { browserApiFetch } from "@/lib/api/client";
 import { formatCycleName, getCycleYear } from "@/lib/utils/cycle";
 import { rolesLabel } from "@/lib/permissions";
 import type { CycleConfigSummary, RoleRead, ShareLink, UserSummary } from "@/types/api";
+import { Select } from "@/components/ui/select";
 
 // ── Zyklen ──────────────────────────────────────────────────────────────
 
@@ -173,13 +174,13 @@ function CycleSheet({
         <div className="two-col">
           <label className="field-stack">
             <span className="field-label">{t("resetMonthLabel")}</span>
-            <select value={month} onChange={(event) => setMonth(Number(event.target.value))}>
+            <Select value={month} onChange={(event) => setMonth(Number(event.target.value))}>
               {months.map((label, index) => (
                 <option key={label} value={index + 1}>
                   {label}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label className="field-stack">
             <span className="field-label">{t("resetDayLabel")}</span>

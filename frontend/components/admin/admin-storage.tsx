@@ -22,6 +22,7 @@ import {
   StorageProfile,
   StorageProvider,
 } from "@/types/api";
+import { Select } from "@/components/ui/select";
 
 type TFunc = ReturnType<typeof useTranslations>;
 
@@ -638,9 +639,9 @@ function ProfileModal({ t, profile, onClose, onSaved }: { t: TFunc; profile: Sto
           <label className="field-stack"><span className="field-label">{t("profileForm.name")}</span>
             <input className="input" value={form.name} maxLength={120} required onChange={(e) => update("name", e.target.value)} /></label>
           <label className="field-stack"><span className="field-label">{t("profileForm.provider")}</span>
-            <select className="input" value={form.provider} disabled={locked} onChange={(e) => update("provider", e.target.value as StorageProvider)}>
+            <Select className="input" value={form.provider} disabled={locked} onChange={(e) => update("provider", e.target.value as StorageProvider)}>
               {(PROVIDERS.includes(form.provider) ? PROVIDERS : [...PROVIDERS, form.provider]).map((provider) => <option key={provider} value={provider}>{t(`provider.${provider}`)}</option>)}
-            </select></label>
+            </Select></label>
         </div>
         <div className="two-col">
           <label className="field-stack"><span className="field-label">{t("profileForm.endpoint")}</span>
@@ -661,9 +662,9 @@ function ProfileModal({ t, profile, onClose, onSaved }: { t: TFunc; profile: Sto
             <input className="input" value={form.prefix} disabled={locked} onChange={(e) => update("prefix", e.target.value)} />
             <span className="field-help">{t("profileForm.prefixHelp")}</span></label>
           <label className="field-stack"><span className="field-label">{t("profileForm.addressing")}</span>
-            <select className="input" value={form.addressing_style} disabled={locked} onChange={(e) => update("addressing_style", e.target.value as ProfileForm["addressing_style"])}>
+            <Select className="input" value={form.addressing_style} disabled={locked} onChange={(e) => update("addressing_style", e.target.value as ProfileForm["addressing_style"])}>
               <option value="auto">{t("addressing.auto")}</option><option value="path">{t("addressing.path")}</option><option value="virtual">{t("addressing.virtual")}</option>
-            </select></label>
+            </Select></label>
         </div>
         <div className="two-col">
           <label className="field-stack"><span className="field-label">{t("profileForm.accessKey")}</span>
@@ -687,10 +688,10 @@ function ProfileModal({ t, profile, onClose, onSaved }: { t: TFunc; profile: Sto
         {/* Datenstandort (Datenschutz-Audit E3): bei AWS/Hetzner aus der Region abgeleitet */}
         <label className="field-stack"><span className="field-label">{t("profileForm.dataLocation")}</span>
           {form.provider === "s3_compatible" ? (
-            <select className="input" value={form.data_location} onChange={(e) => update("data_location", e.target.value as ProfileForm["data_location"])}>
+            <Select className="input" value={form.data_location} onChange={(e) => update("data_location", e.target.value as ProfileForm["data_location"])}>
               <option value="">{t("profileForm.dataLocationChoose")}</option>
               {DATA_LOCATIONS.map((value) => <option key={value} value={value}>{t(`location.${value}`)}</option>)}
-            </select>
+            </Select>
           ) : (
             <input className="input" value={location ? t(`location.${location}`) : ""} readOnly />
           )}
@@ -772,9 +773,9 @@ function StartMigrationModal({ t, overview, activeGeneration, busy, onTest, onCl
           <div className="storage-route-card storage-route-target">
             <span className="storage-eyebrow">{t("startForm.to")}</span>
             {candidates.length > 1 ? (
-              <select className="input" aria-label={t("startForm.target")} value={target} onChange={(e) => setTarget(e.target.value)}>
+              <Select className="input" aria-label={t("startForm.target")} value={target} onChange={(e) => setTarget(e.target.value)}>
                 {candidates.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
+              </Select>
             ) : (
               <strong>{selected?.name ?? t("hero.noTarget")}</strong>
             )}
@@ -826,9 +827,9 @@ function StartMigrationModal({ t, overview, activeGeneration, busy, onTest, onCl
                 <span className="field-help">{t("startForm.bandwidthHelp")}</span></label>
             </div>
             <label className="field-stack"><span className="field-label">{t("startForm.verifyMode")}</span>
-              <select className="input" value={verifyMode} onChange={(e) => setVerifyMode(e.target.value as "full" | "head")}>
+              <Select className="input" value={verifyMode} onChange={(e) => setVerifyMode(e.target.value as "full" | "head")}>
                 <option value="full">{t("verifyMode.full")}</option><option value="head">{t("verifyMode.head")}</option>
-              </select></label>
+              </Select></label>
             {!initial ? (
               <label className="checkbox-row"><input type="checkbox" checked={autoCutover} onChange={(e) => setAutoCutover(e.target.checked)} /><span>{t("startForm.autoCutover")}</span></label>
             ) : null}

@@ -8,6 +8,7 @@ import { Modal } from "@/components/ui/modal";
 import { ProtectedExportForm } from "@/components/ui/protected-export-modal";
 import { Tabs } from "@/components/ui/tabs";
 import { locales, localeConfig } from "@/i18n/locale-config.generated";
+import { Select } from "@/components/ui/select";
 
 type Props = {
   open: boolean;
@@ -60,13 +61,13 @@ export function ProfileModal({
                 <label className="field-stack">
                   <span className="field-label">{t("languageLabel")}</span>
                   <span className="profile-select">
-                    <select value={language} onChange={(event) => onLanguageChange(event.target.value)}>
+                    <Select value={language} onChange={(event) => onLanguageChange(event.target.value)}>
                       {locales.map((code) => (
                         <option key={code} value={code}>
                           {localeConfig[code].nativeLabel}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </span>
                 </label>
                 <label className="profile-toggle">

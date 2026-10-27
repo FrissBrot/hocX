@@ -13,6 +13,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { apiErrorMessage, Assignment, Brand, DocumentTemplateInfo, DocumentTypeInfo, studioApi } from "@/lib/documents/api";
+import { Select } from "@/components/ui/select";
 
 type ProtocolTemplate = { id: string; name: string };
 type Props = { open: boolean; onClose: () => void; types: DocumentTypeInfo[]; templates: DocumentTemplateInfo[] };
@@ -83,14 +84,14 @@ export function AssignmentsModal({ open, onClose, types, templates }: Props) {
                       />
                     </td>
                     <td>
-                      <select value={current?.brand_id ?? ""} onChange={(event) => void save({ document_type: type.key, template_id: current?.template_id ?? null, brand_id: event.target.value || null })}>
+                      <Select value={current?.brand_id ?? ""} onChange={(event) => void save({ document_type: type.key, template_id: current?.template_id ?? null, brand_id: event.target.value || null })}>
                         <option value="">{t("assignments.brandDefault")}</option>
                         {brands.map((brand) => (
                           <option key={brand.id} value={brand.id}>
                             {brand.name}
                           </option>
                         ))}
-                      </select>
+                      </Select>
                     </td>
                   </tr>
                 );
@@ -139,14 +140,14 @@ export function AssignmentsModal({ open, onClose, types, templates }: Props) {
                     />
                   </td>
                   <td>
-                    <select value={item.brand_id ?? ""} onChange={(event) => void save({ document_type: item.document_type, protocol_template_id: item.protocol_template_id, template_id: item.template_id, brand_id: event.target.value || null })}>
+                    <Select value={item.brand_id ?? ""} onChange={(event) => void save({ document_type: item.document_type, protocol_template_id: item.protocol_template_id, template_id: item.template_id, brand_id: event.target.value || null })}>
                       <option value="">{t("assignments.inherit")}</option>
                       {brands.map((brand) => (
                         <option key={brand.id} value={brand.id}>
                           {brand.name}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </td>
                   <td>
                     <button type="button" className="button-danger" onClick={() => void save({ document_type: item.document_type, protocol_template_id: item.protocol_template_id })}>

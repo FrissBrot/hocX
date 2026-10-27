@@ -31,6 +31,7 @@ import {
   TemplateElement,
   TemplateSummary,
 } from "@/types/api";
+import { Select } from "@/components/ui/select";
 
 type TemplateBuilderProps = {
   initialTemplates: TemplateSummary[];
@@ -1328,7 +1329,7 @@ export function TemplateEditor({
           <div className="three-col">
             <label className="field-stack">
               <span className="field-label">{t("nameDisplayLabel")}</span>
-              <select
+              <Select
                 value={responsibilityNameMode}
                 disabled={bulkAssignBusy}
                 onChange={(event) => void applyResponsibilityNameMode(event.target.value as ResponsibleNameMode)}
@@ -1336,7 +1337,7 @@ export function TemplateEditor({
                 <option value="display_name">{t("displayNameOption")}</option>
                 <option value="first_name">{t("firstNameOption")}</option>
                 <option value="last_name">{t("lastNameOption")}</option>
-              </select>
+              </Select>
               <span className="field-help">{t("nameDisplayHelp")}</span>
             </label>
             <label className="field-stack">

@@ -33,6 +33,7 @@ import {
   recurrenceLabel,
   responsibleLabel,
 } from "@/components/task-packages/task-package-labels";
+import { Select } from "@/components/ui/select";
 
 type Props = {
   initialPackages: TaskPackage[];
@@ -449,10 +450,10 @@ export function TaskPackageManager({ initialPackages, cycleConfigs, responsibleL
               {cycleModalConfig && cycleModalCurrent !== null ? (
                 <label className="field-stack">
                   <span className="field-label">{t("startLabel")}</span>
-                  <select value={cycleForm.startYear ?? cycleModalCurrent} onChange={(event) => setCycleForm({ ...cycleForm, startYear: Number(event.target.value) })}>
+                  <Select value={cycleForm.startYear ?? cycleModalCurrent} onChange={(event) => setCycleForm({ ...cycleForm, startYear: Number(event.target.value) })}>
                     <option value={cycleModalCurrent}>{t("startCurrent", { label: formatCycleName(cycleModalConfig.name_pattern, cycleModalCurrent) })}</option>
                     <option value={cycleModalCurrent + 1}>{t("startNext", { label: formatCycleName(cycleModalConfig.name_pattern, cycleModalCurrent + 1) })}</option>
-                  </select>
+                  </Select>
                   <span className="field-help">{t("assignHelp")}</span>
                 </label>
               ) : null}
@@ -506,7 +507,7 @@ export function TaskPackageManager({ initialPackages, cycleConfigs, responsibleL
             <div className="two-col">
               <label className="field-stack">
                 <span className="field-label">{t("cycleLabel")}</span>
-                <select
+                <Select
                   value={previewCycleId ?? ""}
                   onChange={(event) => {
                     const cycle = previewTarget.cycles.find((candidate) => candidate.cycle_config_id === event.target.value);
@@ -518,19 +519,19 @@ export function TaskPackageManager({ initialPackages, cycleConfigs, responsibleL
                       {cycle.cycle_config_name}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
               {previewCycle && previewConfig ? (
                 <label className="field-stack">
                   <span className="field-label">{t("previewYearLabel")}</span>
-                  <select value={previewYear ?? previewCycle.current_cycle_year} onChange={(event) => void loadPreview(previewTarget, previewCycle.cycle_config_id, Number(event.target.value))}>
+                  <Select value={previewYear ?? previewCycle.current_cycle_year} onChange={(event) => void loadPreview(previewTarget, previewCycle.cycle_config_id, Number(event.target.value))}>
                     <option value={previewCycle.current_cycle_year}>
                       {t("startCurrentShort", { label: formatCycleName(previewConfig.name_pattern, previewCycle.current_cycle_year) })}
                     </option>
                     <option value={previewCycle.current_cycle_year + 1}>
                       {t("startNext", { label: formatCycleName(previewConfig.name_pattern, previewCycle.current_cycle_year + 1) })}
                     </option>
-                  </select>
+                  </Select>
                 </label>
               ) : null}
             </div>

@@ -12,6 +12,7 @@ import { TagInput } from "@/components/ui/tag-input";
 import { type EventFilter, type EventRangeMode, splitTags } from "@/lib/element-types/event-filter";
 import type { TagConfig } from "@/lib/hooks/use-tag-config";
 import type { CycleConfigSummary } from "@/types/api";
+import { Select } from "@/components/ui/select";
 
 export const CYCLE_OFFSETS = [-2, -1, 0, 1] as const;
 
@@ -101,11 +102,11 @@ export function EventFilterEditor({
       {rangeModes.length ? (
         <div className="field-stack">
           <label className="field-label" htmlFor={`${id}-range`}>{t("filter.range")}</label>
-          <select id={`${id}-range`} value={value.range.mode} onChange={(event) => setRange({ mode: event.target.value as EventRangeMode })}>
+          <Select id={`${id}-range`} value={value.range.mode} onChange={(event) => setRange({ mode: event.target.value as EventRangeMode })}>
             {rangeModes.map((mode) => (
               <option key={mode} value={mode}>{t(`filter.rangeMode.${mode}`)}</option>
             ))}
-          </select>
+          </Select>
           {value.range.mode === "window" ? (
             <div className="event-window-box">
               <div className="event-window-row">
@@ -134,7 +135,7 @@ export function EventFilterEditor({
         <div className={cycleConfigs ? "two-col" : undefined}>
           <label className="field-stack">
             <span className="field-label">{t("filter.cycle")}</span>
-            <select
+            <Select
               value={value.cycle ? String(value.cycle.offset) : ""}
               onChange={(event) =>
                 patch({ cycle: event.target.value === "" ? null : { config_id: value.cycle?.config_id ?? null, offset: Number(event.target.value) } })
@@ -144,7 +145,7 @@ export function EventFilterEditor({
               {CYCLE_OFFSETS.map((offset) => (
                 <option key={offset} value={offset}>{cycleOffsetText(offset, t)}</option>
               ))}
-            </select>
+            </Select>
             <span className="field-help">{t("filter.cycleHelp")}</span>
           </label>
           {cycleConfigs && value.cycle ? (
@@ -192,10 +193,10 @@ export function EventFilterEditor({
                 <>
                   <label className="field-stack">
                     <span className="field-label">{t("filter.sort")}</span>
-                    <select value={value.sort} onChange={(event) => patch({ sort: event.target.value === "desc" ? "desc" : "asc" })}>
+                    <Select value={value.sort} onChange={(event) => patch({ sort: event.target.value === "desc" ? "desc" : "asc" })}>
                       <option value="asc">{t("filter.sortAsc")}</option>
                       <option value="desc">{t("filter.sortDesc")}</option>
-                    </select>
+                    </Select>
                   </label>
                   <label className="field-stack">
                     <span className="field-label">{t("filter.limit")}</span>

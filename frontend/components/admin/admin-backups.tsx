@@ -31,6 +31,7 @@ import {
   RestorePreview,
   StorageOverview,
 } from "@/types/api";
+import { Select } from "@/components/ui/select";
 
 type TFunc = ReturnType<typeof useTranslations>;
 
@@ -329,10 +330,10 @@ function History({ t, locale, isOwner }: { t: TFunc; locale: string; isOwner: bo
             { value: "failed", label: t("state.failed") },
           ]}
         />
-        <select className="input backup-kind-select" value={kind} aria-label={t("history.kind")} onChange={(event) => { setKind(event.target.value as typeof kind); setOffset(0); }}>
+        <Select className="input backup-kind-select" value={kind} aria-label={t("history.kind")} onChange={(event) => { setKind(event.target.value as typeof kind); setOffset(0); }}>
           <option value="">{t("history.allKinds")}</option>
           {(["backup", "verify", "restore_test", "retention"] as const).map((value) => <option key={value} value={value}>{t(`kind.${value}`)}</option>)}
-        </select>
+        </Select>
       </div>
       <DataTable
         columns={[t("columns.time"), t("columns.id"), t("columns.kind"), t("columns.state"), t("columns.duration"), t("columns.database"), t("columns.objects"),
@@ -889,11 +890,11 @@ function Settings({ t, locale, settings, isOwner, onSaved }: { t: TFunc; locale:
             {numberField("restore_test_interval_days", t("settings.restoreTestInterval"), 1, 365)}
             <label className="field-stack">
               <span className="field-label">{t("settings.successNotification")}</span>
-              <select className="input" value={form.success_notification} disabled={!isOwner} onChange={(event) => update("success_notification", event.target.value as SettingsForm["success_notification"])}>
+              <Select className="input" value={form.success_notification} disabled={!isOwner} onChange={(event) => update("success_notification", event.target.value as SettingsForm["success_notification"])}>
                 <option value="off">{t("settings.notifyOff")}</option>
                 <option value="daily">{t("settings.notifyDaily")}</option>
                 <option value="each">{t("settings.notifyEach")}</option>
-              </select>
+              </Select>
             </label>
           </div>
           {settings.updated_by_email ? <p className="muted">{t("settings.updated", { email: settings.updated_by_email, time: formatDateTime(settings.updated_at, locale) })}</p> : null}
