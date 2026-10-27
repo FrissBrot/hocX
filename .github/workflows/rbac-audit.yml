@@ -86,7 +86,7 @@ jobs:
       EXPORT_ROOT: ${{ github.workspace }}/storage/exports
       UPLOAD_ROOT: ${{ github.workspace }}/storage/uploads
       THUMBNAIL_ROOT: ${{ github.workspace }}/storage-local/thumbnails
-      TRAEFIK_DYNAMIC_CONFIG_DIR: ${{ runner.temp }}/traefik_dynamic
+      TRAEFIK_DYNAMIC_CONFIG_DIR: ${{ github.workspace }}/storage-local/traefik_dynamic
       RBAC_TESTS: >-
         tests/test_rbac.py
         tests/test_route_permission_inventory.py
