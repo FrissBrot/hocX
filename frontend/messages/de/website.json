@@ -10,7 +10,8 @@
     "pricing": "Preise",
     "login": "Anmelden",
     "tryFree": "Kostenlos testen",
-    "language": "Sprache"
+    "language": "Sprache",
+    "comparison": "Vergleich"
   },
   "hero": {
     "badgeNew": "Neu",
@@ -158,5 +159,36 @@
   },
   "customers": {
     "label": "Im Einsatz bei"
+  },
+  "comparison": {
+    "eyebrow": "Vergleich",
+    "title": "Alle Funktionen im Vergleich",
+    "lead": "Was in welchem Abo enthalten ist – immer auf dem aktuellen Stand unseres Preiskatalogs.",
+    "caption": "Funktionen und Abos im Vergleich",
+    "featureColumn": "Funktion",
+    "featured": "Beliebteste Wahl",
+    "groupBasics": "Preis und Umfang",
+    "rowPriceMonthly": "Preis pro Monat",
+    "rowPriceYearly": "Preis pro Jahr",
+    "rowUsers": "Benutzer",
+    "rowStorage": "Speicher",
+    "usersUpTo": "{count, plural, one {# Benutzer} other {Bis #}}",
+    "storageGb": "{gb} GB",
+    "unlimited": "Unbegrenzt",
+    "onRequest": "Auf Anfrage",
+    "included": "Enthalten",
+    "notIncluded": "Nicht enthalten",
+    "addon": "Zubuchbar",
+    "addonPrice": "{price} / Monat",
+    "module": {
+      "meetings": "Sitzungen und Protokolle",
+      "people": "Personen und Rollen",
+      "documents": "Dokumente",
+      "finance": "Finanzen",
+      "media": "Fotos und Dateien",
+      "submissions": "Abgaben",
+      "administration": "Verwaltung",
+      "other": "Weitere Funktionen"
+    }
   }
 }

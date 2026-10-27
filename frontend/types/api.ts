@@ -844,6 +844,18 @@ export type PublicPlan = {
   features: { code: string; name: string }[];
 };
 
+/** Zeile der Funktionsvergleichs-Tabelle der Website (GET /api/public/plan-comparison). */
+export type PublicFeature = {
+  code: string;
+  name: string;
+  description: string | null;
+  // Produktmodul (permissions/features.json), "other" für Features nur aus der Datenbank
+  module: string;
+  standalone_price_monthly_rp: number | null;
+};
+
+export type PublicPlanComparison = { plans: PublicPlan[]; features: PublicFeature[] };
+
 /** Kunde fuer "Im Einsatz bei" auf der oeffentlichen Website (GET /api/public/customers). */
 export type PublicCustomer = {
   name: string;

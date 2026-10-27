@@ -29,3 +29,24 @@ class PublicPlanRead(BaseModel):
     included_storage_bytes: int | None = None
     is_featured: bool = False
     features: list[PublicPlanFeature] = []
+
+
+class PublicFeatureRead(BaseModel):
+    """Zeile der Funktionsvergleichs-Tabelle auf der Website: buchbares Feature aus dem
+    Katalog (Name/Beschreibung wie im Adminportal gepflegt)."""
+
+    code: str
+    name: str
+    description: str | None = None
+    # Produktmodul aus permissions/features.json (Gruppierung der Tabelle); "other" für
+    # Features, die nur in der Datenbank stehen
+    module: str
+    # Einzeln zubuchbar zu diesem Monatspreis (Rappen); None = nur über ein Abo
+    standalone_price_monthly_rp: int | None = None
+
+
+class PublicPlanComparisonRead(BaseModel):
+    """Abos und Features für die Vergleichstabelle der Website, bei jedem Abruf aus der DB."""
+
+    plans: list[PublicPlanRead]
+    features: list[PublicFeatureRead]

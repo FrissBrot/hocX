@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.schemas.public_catalog import PublicCustomerRead, PublicPlanRead
+from app.schemas.public_catalog import PublicCustomerRead, PublicPlanComparisonRead, PublicPlanRead
 from app.services.admin_tenant_service import AdminTenantService
 
 router = APIRouter()
@@ -21,6 +21,12 @@ service = AdminTenantService()
 @router.get("/public/plans", response_model=list[PublicPlanRead])
 def list_public_plans(db: Session = Depends(get_db)):
     return service.list_public_plans(db)
+
+
+@router.get("/public/plan-comparison", response_model=PublicPlanComparisonRead)
+def get_public_plan_comparison(db: Session = Depends(get_db)):
+    """Abos und Features für die Vergleichstabelle der Website (gleiche Regeln wie /public/plans)."""
+    return service.public_plan_comparison(db)
 
 
 @router.get("/public/customers", response_model=list[PublicCustomerRead])

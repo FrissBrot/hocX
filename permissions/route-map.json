@@ -1908,6 +1908,10 @@
       "handler": "maintenance_public.maintenance_status",
       "note": "öffentlicher Wartungsstatus"
     },
+    "GET /api/public/plan-comparison": {
+      "handler": "public_catalog.get_public_plan_comparison",
+      "note": "öffentlicher Preis-/Kundenkatalog der Website"
+    },
     "GET /api/public/plans": {
       "handler": "public_catalog.list_public_plans",
       "note": "öffentlicher Preis-/Kundenkatalog der Website"

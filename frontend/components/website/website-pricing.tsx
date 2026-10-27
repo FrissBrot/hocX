@@ -3,10 +3,9 @@
 import { type ReactNode, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
-import { toIntlLocale } from "@/lib/utils/format";
 import type { PublicPlan } from "@/types/api";
 
-import { planFeatureLines, yearlySavings } from "./website-plan-features";
+import { formatPlanPrice, planFeatureLines, yearlySavings } from "./website-plan-features";
 
 type Interval = "month" | "year";
 
@@ -18,16 +17,6 @@ type Props = {
   contactEmail: string | null;
   appLoginUrl: string;
 };
-
-// Ganze Franken im Schweizer Stil ("CHF 19.–"), sonst mit Rappen.
-function formatPlanPrice(rp: number, locale: string): string {
-  const whole = rp % 100 === 0;
-  const amount = new Intl.NumberFormat(toIntlLocale(locale), {
-    minimumFractionDigits: whole ? 0 : 2,
-    maximumFractionDigits: whole ? 0 : 2,
-  }).format(rp / 100);
-  return whole ? `CHF ${amount}.–` : `CHF ${amount}`; // i18n-ok: Waehrungsformat, kein UI-Text
-}
 
 export function WebsitePricing({ heading, plans, contactEmail, appLoginUrl }: Props) {
   const t = useTranslations("website.pricing");

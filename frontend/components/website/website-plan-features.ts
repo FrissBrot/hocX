@@ -1,3 +1,4 @@
+import { toIntlLocale } from "@/lib/utils/format";
 import type { PublicPlan } from "@/types/api";
 
 type TFunc = (key: string, values?: Record<string, string | number>) => string;
@@ -39,4 +40,14 @@ export function yearlySavings(plans: PublicPlan[]): { months: number } | { perce
   if (months >= 1 && ratios.every((r) => Math.abs(r - months) < 0.01)) return { months };
   const percent = Math.round(Math.max(...ratios.map((r) => (r / 12) * 100)));
   return percent > 0 ? { percent } : null;
+}
+
+// Ganze Franken im Schweizer Stil ("CHF 19.–"), sonst mit Rappen.
+export function formatPlanPrice(rp: number, locale: string): string {
+  const whole = rp % 100 === 0;
+  const amount = new Intl.NumberFormat(toIntlLocale(locale), {
+    minimumFractionDigits: whole ? 0 : 2,
+    maximumFractionDigits: whole ? 0 : 2,
+  }).format(rp / 100);
+  return whole ? `CHF ${amount}.–` : `CHF ${amount}`; // i18n-ok: Waehrungsformat, kein UI-Text
 }

@@ -7,6 +7,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from app.core.features_generated import MODULES
 from app.core.security import CurrentUser
 from app.models.entities import Feature, PlatformAdmin, TenantFeature
 from app.schemas.admin import AdminFeatureUpdate, AdminPlanWrite, AdminTenantCreate, AdminTenantSubscriptionUpdate
@@ -370,6 +371,32 @@ def test_public_plans_lists_only_bookable_plans_with_feature_names(db):
     assert visible.price_monthly_rp == 1000
     assert [f.code for f in visible.features] == ["finance"]
     assert visible.features[0].name == db.get(Feature, "finance").name
+
+
+def test_public_plan_comparison_lists_sellable_features_by_module(db):
+    """Vergleichstabelle der Website: Abos wie die Preiskarten, dazu jedes Feature, das in einem
+    buchbaren Abo steckt oder einzeln zubuchbar ist - nach Produktmodul, ohne interne Felder."""
+    service = AdminTenantService()
+    service.upsert_plan(db, "test_cmp_plan", _named_plan_write("Cmp Plan", feature_codes=["finance", "document_designer"]))
+    service.upsert_plan(db, "test_cmp_hidden", _named_plan_write("Cmp Hidden", feature_codes=["custom_roles"], is_bookable=False))
+    db.add(Feature(code="test_cmp_addon", name="Zusatz", description="Einzeln buchbar", standalone_price_monthly_rp=500))
+    db.add(Feature(code="test_cmp_unsold", name="Nicht verkauft"))
+    db.flush()
+
+    comparison = service.public_plan_comparison(db)
+    assert [plan.code for plan in comparison.plans] == [plan.code for plan in service.list_public_plans(db)]
+    features = {feature.code: feature for feature in comparison.features}
+    assert {"finance", "document_designer", "test_cmp_addon"} <= set(features)
+    assert "test_cmp_unsold" not in features
+    if not any("custom_roles" in [f.code for f in plan.features] for plan in comparison.plans):
+        assert "custom_roles" not in features
+    assert features["finance"].module == "finance" and features["document_designer"].module == "documents"
+    assert features["test_cmp_addon"].module == "other" and features["test_cmp_addon"].standalone_price_monthly_rp == 500
+    modules = [feature.module for feature in comparison.features]
+    order = [*MODULES, "other"]
+    assert modules == sorted(modules, key=order.index)
+    payload = comparison.model_dump()
+    assert set(payload["plans"][0]) == {"code", "name", "description", "price_monthly_rp", "price_yearly_rp", "included_user_limit", "included_storage_bytes", "is_featured", "features"}
 
 
 def test_public_customers_lists_only_tenants_marked_for_website(db):

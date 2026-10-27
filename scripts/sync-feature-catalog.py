@@ -86,6 +86,9 @@ def render_py(data: dict) -> str:
         "    requires: tuple[str, ...]",
         "",
         "",
+        "# Produktmodule in fester Reihenfolge (docs/PRODUCT_MODULE_ARCHITECTURE.md)",
+        f"MODULES: tuple[str, ...] = ({''.join(f'{chr(34)}{module}{chr(34)}, ' for module in data['modules'])})",
+        "",
         "FEATURES: dict[F, FeatureDef] = {",
     ]
     for entry in data["features"]:

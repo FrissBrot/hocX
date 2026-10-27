@@ -10,7 +10,8 @@
     "pricing": "Tarifs",
     "login": "Se connecter",
     "tryFree": "Essai gratuit",
-    "language": "Langue"
+    "language": "Langue",
+    "comparison": "Comparaison"
   },
   "hero": {
     "badgeNew": "Nouveau",
@@ -158,5 +159,36 @@
   },
   "customers": {
     "label": "Ils nous font confiance"
+  },
+  "comparison": {
+    "eyebrow": "Comparaison",
+    "title": "Toutes les fonctions en comparaison",
+    "lead": "Ce que contient chaque abonnement – toujours à jour selon notre catalogue de prix.",
+    "caption": "Fonctions et abonnements en comparaison",
+    "featureColumn": "Fonction",
+    "featured": "Le plus choisi",
+    "groupBasics": "Prix et étendue",
+    "rowPriceMonthly": "Prix par mois",
+    "rowPriceYearly": "Prix par année",
+    "rowUsers": "Utilisateurs",
+    "rowStorage": "Stockage",
+    "usersUpTo": "{count, plural, one {# utilisateur} other {Jusqu'à #}}",
+    "storageGb": "{gb} Go",
+    "unlimited": "Illimité",
+    "onRequest": "Sur demande",
+    "included": "Inclus",
+    "notIncluded": "Non inclus",
+    "addon": "En option",
+    "addonPrice": "{price} / mois",
+    "module": {
+      "meetings": "Séances et procès-verbaux",
+      "people": "Personnes et rôles",
+      "documents": "Documents",
+      "finance": "Finances",
+      "media": "Photos et fichiers",
+      "submissions": "Remises",
+      "administration": "Administration",
+      "other": "Autres fonctions"
+    }
   }
 }

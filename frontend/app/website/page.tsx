@@ -2,14 +2,15 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
 import { WebsiteLanguageSwitcher } from "@/components/website/website-language-switcher";
+import { WebsitePlanComparison } from "@/components/website/website-plan-comparison";
 import { WebsitePricing } from "@/components/website/website-pricing";
 import { backendFetch } from "@/lib/api/client";
 import { getMainAppUrl } from "@/lib/site-config";
-import type { PublicCustomer, PublicPlan } from "@/types/api";
+import type { PublicCustomer, PublicPlanComparison } from "@/types/api";
 
 // Oeffentliche Landing Page (Hauptdomain, siehe TRAEFIK_WEBSITE_DOMAIN in proxy.ts). Texte kommen
-// aus messages/<locale>/website.json, Preise und Abos bei jedem Request frisch aus dem
-// Preiskatalog (GET /api/public/plans), die Kundenliste aus den im Adminportal freigegebenen
+// aus messages/<locale>/website.json, Preise, Abos und Funktionsvergleich bei jedem Request frisch
+// aus dem Preiskatalog (GET /api/public/plan-comparison), die Kundenliste aus den im Adminportal freigegebenen
 // Mandanten (GET /api/public/customers) - Aenderungen dort sind sofort sichtbar.
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -33,10 +34,11 @@ const AVATARS = [
 
 export default async function WebsitePage() {
   const t = await getTranslations("website");
-  const [plans, customers] = await Promise.all([
-    backendFetch<PublicPlan[]>("/api/public/plans").then((result) => result ?? []),
+  const [comparison, customers] = await Promise.all([
+    backendFetch<PublicPlanComparison>("/api/public/plan-comparison").then((result) => result ?? { plans: [], features: [] }),
     backendFetch<PublicCustomer[]>("/api/public/customers").then((result) => result ?? []),
   ]);
+  const plans = comparison.plans;
   const appUrl = getMainAppUrl() ?? "";
   const appLoginUrl = `${appUrl}/login`;
   const contactEmail = process.env.WEBSITE_CONTACT_EMAIL?.trim() || null;
@@ -57,6 +59,7 @@ export default async function WebsitePage() {
             <a href="#ablauf">{t("nav.howItWorks")}</a>
             <a href="#funktionen">{t("nav.features")}</a>
             <a href="#preise">{t("nav.pricing")}</a>
+            {plans.length > 0 ? <a href="#vergleich">{t("nav.comparison")}</a> : null}
           </nav>
           <div className="ws-header-actions">
             <WebsiteLanguageSwitcher />
@@ -330,6 +333,17 @@ export default async function WebsitePage() {
             }
           />
         </section>
+
+        {plans.length > 0 ? (
+          <section id="vergleich" className="ws-container ws-section ws-compare-section">
+            <div className="ws-section-intro">
+              <div className="ws-eyebrow">{t("comparison.eyebrow")}</div>
+              <h2 className="ws-h2">{t("comparison.title")}</h2>
+              <p className="ws-section-lead">{t("comparison.lead")}</p>
+            </div>
+            <WebsitePlanComparison plans={plans} features={comparison.features} />
+          </section>
+        ) : null}
 
         <section className="ws-container ws-section ws-final">
           <h2 className="ws-display ws-display-final">

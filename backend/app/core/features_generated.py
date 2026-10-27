@@ -25,6 +25,9 @@ class FeatureDef:
     requires: tuple[str, ...]
 
 
+# Produktmodule in fester Reihenfolge (docs/PRODUCT_MODULE_ARCHITECTURE.md)
+MODULES: tuple[str, ...] = ("meetings", "people", "documents", "finance", "media", "submissions", "administration", )
+
 FEATURES: dict[F, FeatureDef] = {
     F.FINANCE: FeatureDef(module="finance", downgrade="read_only", read_permissions=frozenset({"finances.read"}), requires=()),
     F.ABGABEBOX: FeatureDef(module="submissions", downgrade="read_only", read_permissions=frozenset({"submissions.read"}), requires=()),

@@ -204,6 +204,16 @@ Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116_document_reg
   gehört zur Gestaltung (Entwurf, Vorschau, Veröffentlichen). Die Darstellungs-Auswahl im
   Sitzungsvorlagen-Editor entfällt; dort führt ein Link in die PDF-Gestaltung.
 
+### Neu: Funktionsvergleich auf der Landing Page (Nachtrag vom 2026-10-27)
+
+- Unter den Preiskarten zeigt «Alle Funktionen im Vergleich» alle buchbaren Abos als Spalten:
+  Preis pro Monat und Jahr, Benutzer, Speicher und jedes verkäufliche Feature, nach
+  Produktmodul gruppiert (✓ enthalten, «zubuchbar» mit Monatspreis oder –).
+- Die Daten kommen bei jedem Aufruf aus der Datenbank (`GET /api/public/plan-comparison`,
+  öffentlich, ohne interne Felder): Änderungen an Abos, Preisen und Features im Adminportal
+  sind sofort sichtbar. Preiskarten und Tabelle nutzen denselben Abruf.
+- `features_generated.py` enthält jetzt die Produktmodule (`MODULES`) in fester Reihenfolge.
+
 ### Neu: Modus «Einfach» im Dokument-Designer (Nachtrag vom 2026-10-27)
 
 - Der Designer startet im Modus **Einfach**: drei Schritte (Aussehen, Inhalt, Seite), die

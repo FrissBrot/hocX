@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.storage import ABGABEBOX, MAIN, StorageError, delete_prefix, get_object_store
-from app.core.features_generated import FEATURES
+from app.core.features_generated import FEATURES, MODULES, F
 from app.core.error_log import record_system_error
 from app.models import (
     AppUser,
@@ -48,7 +48,7 @@ from app.schemas.admin import (
     AdminTenantStoragePackageRead,
     AdminTenantSubscriptionUpdate,
 )
-from app.schemas.public_catalog import PublicCustomerRead, PublicPlanFeature, PublicPlanRead
+from app.schemas.public_catalog import PublicCustomerRead, PublicFeatureRead, PublicPlanComparisonRead, PublicPlanFeature, PublicPlanRead
 from app.schemas.user import TenantUpdate
 from app.services.file_service import _safe_storage_path
 from app.services import cashflow_service, identity_verification_service, photo_album_service, submission_link_service, traefik_config_service, user_limit_service
@@ -343,6 +343,27 @@ class AdminTenantService:
             )
             for plan in plans
         ]
+
+    def public_plan_comparison(self, db: Session) -> PublicPlanComparisonRead:
+        """Vergleichstabelle der Website: buchbare Abos (wie die Preiskarten) und alle Features,
+        die in einem davon stecken oder einzeln zubuchbar sind - nach Produktmodul, dann Name.
+        Features, die weder enthalten noch zubuchbar sind, kann man nicht kaufen und fehlen."""
+        plans = self.list_public_plans(db)
+        in_plans = {feature.code for plan in plans for feature in plan.features}
+        module_order = {module: index for index, module in enumerate(MODULES)}
+        features = [
+            PublicFeatureRead(
+                code=feature.code,
+                name=feature.name,
+                description=feature.description,
+                module=FEATURES[F(feature.code)].module if feature.code in FEATURES else "other",
+                standalone_price_monthly_rp=feature.standalone_price_monthly_rp,
+            )
+            for feature in db.query(Feature).all()
+            if feature.code in in_plans or feature.standalone_price_monthly_rp is not None
+        ]
+        features.sort(key=lambda item: (module_order.get(item.module, len(module_order)), item.name.lower()))
+        return PublicPlanComparisonRead(plans=plans, features=features)
 
     @staticmethod
     def _generate_code(db: Session, model: type, name: str) -> str:

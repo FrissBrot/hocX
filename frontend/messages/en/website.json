@@ -10,7 +10,8 @@
     "pricing": "Pricing",
     "login": "Sign in",
     "tryFree": "Try for free",
-    "language": "Language"
+    "language": "Language",
+    "comparison": "Comparison"
   },
   "hero": {
     "badgeNew": "New",
@@ -158,5 +159,36 @@
   },
   "customers": {
     "label": "Used by"
+  },
+  "comparison": {
+    "eyebrow": "Comparison",
+    "title": "All features compared",
+    "lead": "What each plan includes – always up to date with our price list.",
+    "caption": "Features and plans compared",
+    "featureColumn": "Feature",
+    "featured": "Most popular",
+    "groupBasics": "Price and scope",
+    "rowPriceMonthly": "Price per month",
+    "rowPriceYearly": "Price per year",
+    "rowUsers": "Users",
+    "rowStorage": "Storage",
+    "usersUpTo": "{count, plural, one {# user} other {Up to #}}",
+    "storageGb": "{gb} GB",
+    "unlimited": "Unlimited",
+    "onRequest": "On request",
+    "included": "Included",
+    "notIncluded": "Not included",
+    "addon": "Add-on",
+    "addonPrice": "{price} / month",
+    "module": {
+      "meetings": "Meetings and minutes",
+      "people": "People and roles",
+      "documents": "Documents",
+      "finance": "Finances",
+      "media": "Photos and files",
+      "submissions": "Submissions",
+      "administration": "Administration",
+      "other": "More features"
+    }
   }
 }

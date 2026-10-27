@@ -67,6 +67,17 @@ Bestehende Tabellen, erweitert statt ersetzt:
   Nicht aufgeführte Zeilen werden gelöscht. `read_only` für ein `blocked`-Feature → 400.
 - Neue Mandanten mit Plan durchlaufen denselben Weg (`create_tenant`).
 
+### Öffentliche Website
+
+Die Landing Page liest Abos und Features bei jedem Aufruf aus der Datenbank:
+`GET /api/public/plan-comparison` (`routes/public_catalog.py`,
+`AdminTenantService.public_plan_comparison`) liefert die buchbaren Abos wie die Preiskarten
+und jedes Feature, das in einem davon steckt oder einzeln zubuchbar ist
+(`standalone_price_monthly_rp`), mit Name und Beschreibung aus der Tabelle `feature` und dem
+Produktmodul aus `features.json` (`MODULES`, Reihenfolge der Gruppen). Daraus entstehen
+Preiskarten und Vergleichstabelle (`frontend/components/website/`). Keine internen Felder
+(Mandantenzahl, Lastpriorität, nicht buchbare Abos).
+
 ## 5. Feature-Prüfung
 
 ### Backend (`backend/app/core/security.py`)
