@@ -41,6 +41,9 @@ storage/document_template_parts/
 storage/document_templates/
 
 storage/document_template_snapshots/
+# Zwischengespeicherte Vorschaubilder der Vorlagenbibliothek je Mandant (document_studio.py,
+# THUMBNAIL_DIR) - werden bei Bedarf neu erzeugt
+storage/document_thumbnails/
 
 # Keep placeholder files so directories exist after clone
 !storage/uploads/.gitkeep
