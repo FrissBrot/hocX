@@ -53,15 +53,18 @@ function element(overrides: Partial<TemplateElement> = {}): TemplateElement {
 
 const data = { participants: [], events: [], lists: [], listEntries: {}, ensureListEntries: () => undefined, knownEventTags: [], tagConfig: {}, accounts: [], cycleConfigs: [] } as never;
 
+const onReorder = vi.fn(async () => true);
+const onOpenResponsibility = vi.fn();
+
 function renderWorkspace(elements: TemplateElement[], onElementsChange = vi.fn()) {
   render(
     <SessionTemplateWorkspace
       templateId="tpl"
       elements={elements}
       onElementsChange={onElementsChange}
-      onReorder={vi.fn(async () => true)}
-      onOpenResponsibility={vi.fn()}
-      responsibilityTitle={(item) => item.title}
+      onReorder={onReorder}
+      onOpenResponsibility={onOpenResponsibility}
+      responsibleFor={(item) => (item.id === "te-1" ? [{ id: "p1", name: "Anna Keller", initials: "AK" }] : [])}
       blockEditorData={data}
       cycleConfigs={[]}
     />
@@ -73,6 +76,8 @@ describe("SessionTemplateWorkspace", () => {
   beforeEach(() => {
     fetchMock.mockReset();
     toast.mockReset();
+    onReorder.mockClear();
+    onOpenResponsibility.mockClear();
     fetchMock.mockImplementation(async (url: string) => (url.startsWith("/api/element-definitions?library") ? [] : element()));
   });
 
@@ -98,4 +103,38 @@ describe("SessionTemplateWorkspace", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/template-elements/te-1/detach", { method: "POST" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/element-definitions/def-1", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ title: "Willkommen" }) })));
   });
+
+  it("shows the saved blocks next to the agenda items until one is selected", async () => {
+    fetchMock.mockImplementation(async (url: string) =>
+      url.startsWith("/api/element-definitions?library") ? [{ id: "def-9", title: "Kassabericht", usage_count: 3, blocks: [{ id: 1, element_type_id: 12 }, { id: 2, element_type_id: 13 }] }] : element()
+    );
+    renderWorkspace([element(), element({ id: "te-2", sort_index: 20, title: "Varia", definition_usage_count: 1 })]);
+    expect(screen.getByText("2 Traktanden · 2 Bausteine")).toBeInTheDocument();
+    const panel = screen.getByRole("complementary", { name: "Eigenschaften" });
+    expect(await screen.findByRole("button", { name: /Kassabericht/ })).toHaveTextContent("3×");
+    expect(panel).toHaveTextContent("Meine Bausteine");
+    // «Aus Meine Bausteine einfügen» führt in die Suche
+    fireEvent.click(screen.getByRole("button", { name: "Aus «Meine Bausteine» einfügen" }));
+    await waitFor(() => expect(screen.getByPlaceholderText("Bausteine suchen")).toHaveFocus());
+  });
+
+  it("shows the responsible people and moves agenda items from the card", async () => {
+    renderWorkspace([element(), element({ id: "te-2", sort_index: 20, title: "Varia", definition_usage_count: 1 })]);
+    expect(screen.getByLabelText("Verantwortlich: Anna Keller")).toHaveTextContent("AK");
+    fireEvent.click(screen.getByRole("button", { name: "«Varia» nach oben" }));
+    await waitFor(() => expect(onReorder).toHaveBeenCalled());
+    expect((onReorder.mock.calls[0] as unknown as [TemplateElement[]])[0].map((item) => item.id)).toEqual(["te-2", "te-1"]);
+    expect(screen.getByRole("button", { name: "«Begrüssung» nach oben" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: /^1\s*Begrüssung/ }));
+    const panel = screen.getByRole("complementary", { name: "Eigenschaften" });
+    expect(panel).toHaveTextContent("Traktandum 1");
+    expect(panel).toHaveTextContent("Anna Keller");
+    fireEvent.click(screen.getByRole("button", { name: "Ändern" }));
+    expect(onOpenResponsibility).toHaveBeenCalledWith("te-1");
+    expect(screen.getByRole("switch", { name: /In Einladung und Traktandenliste zeigen/ })).toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Schliessen" }));
+    expect(panel).toHaveTextContent("Meine Bausteine");
+  });
 });
+

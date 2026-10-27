@@ -38,7 +38,12 @@ test("Designer: einen Baustein des Protokollinhalts anders darstellen", async ({
       await page.goto(`/templates/${copy.id}`);
       await page.evaluate((value) => localStorage.setItem("hocx-theme", value), theme);
       await page.reload();
-      await page.getByRole("tab", { name: "PDF", exact: true }).click();
+      await page.getByRole("tab", { name: /^PDF/ }).click();
+      // Der Designer startet im Modus «Einfach» (danach gemerkt); die Struktur gibt es in der
+      // freien Gestaltung
+      await expect(page.getByRole("textbox", { name: "Name der Vorlage" })).toBeVisible({ timeout: 60_000 });
+      const advanced = page.getByRole("button", { name: "Erweitert öffnen" });
+      if (await advanced.isVisible()) await advanced.click();
       await page.getByRole("tab", { name: "Struktur" }).click();
       const left = page.getByRole("complementary", { name: "Bausteine" });
       const blocks = left.getByRole("group", { name: "Bausteine der Sitzungsvorlage" });

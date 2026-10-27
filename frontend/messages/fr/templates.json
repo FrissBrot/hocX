@@ -941,33 +941,29 @@
       "shared": "Utilisé dans {count} points"
     },
     "catalog": {
-      "title": "Ajouter des blocs",
-      "newTitle": "Nouveau",
-      "newElement": "Nouveau point",
-      "addBlockTo": "Ajouter un bloc à « {title} »",
-      "selectHint": "Choisis un point pour lui ajouter un bloc.",
       "libraryTitle": "Mes blocs",
-      "libraryHelp": "Points enregistrés avec leurs blocs. Un clic les ajoute à la fin.",
       "search": "Rechercher des blocs",
       "libraryEmpty": "Aucun bloc enregistré pour l’instant.",
-      "addFromLibrary": "Insérer « {title} » comme point"
+      "addFromLibrary": "Insérer « {title} » comme point",
+      "libraryHelpPanel": "Points enregistrés avec leurs blocs. Un clic les ajoute à la fin. Choisis un point à gauche pour le régler.",
+      "usage": "{count}×"
     },
     "center": {
       "title": "Points",
       "hint": "Voici comment les points apparaissent dans l’éditeur. Un clic sélectionne, un double-clic modifie un bloc.",
       "emptyTitle": "Pas encore de points",
-      "emptyDescription": "Crée un nouveau point à gauche ou insère un bloc enregistré.",
-      "addBlock": "+ Bloc"
+      "emptyDescription": "Crée un nouveau point ou insère un bloc enregistré.",
+      "addBlock": "+ Bloc",
+      "count": "{elements, plural, one {# point} other {# points}} · {blocks, plural, one {# bloc} other {# blocs}}",
+      "newElement": "+ Nouveau point",
+      "fromLibrary": "Insérer depuis «Mes blocs»"
     },
     "props": {
       "title": "Propriétés",
-      "empty": "Choisis un point ou un bloc pour le régler ici.",
-      "elementTitle": "Point",
       "name": "Titre",
       "inInvitation": "Afficher dans l’invitation et l’ordre du jour",
       "inInvitationHelp": "Permet de garder les points internes (p. ex. la caisse) hors de l’invitation.",
       "responsible": "Responsables",
-      "addBlock": "Ajouter un bloc",
       "moveUp": "Monter",
       "moveDown": "Descendre",
       "reuse": "Réutiliser",
@@ -982,7 +978,16 @@
       "appearance": "Présentation dans le PDF",
       "appearanceHelp": "Ce bloc se met en forme dans la mise en page PDF de ce modèle : dans l'éditeur, sous «Contenu du procès-verbal».",
       "removeBlock": "Retirer le bloc",
-      "openDesign": "Ouvrir la mise en page PDF"
+      "openDesign": "Ouvrir la mise en page PDF",
+      "responsibleList": "Responsables : {names}",
+      "moveUpNamed": "Monter «{title}»",
+      "moveDownNamed": "Descendre «{title}»",
+      "elementEyebrow": "Point {number}",
+      "close": "Fermer",
+      "responsibleChange": "Modifier",
+      "responsibleNone": "Personne n'est attribué",
+      "blocks": "Blocs",
+      "addBlockPlus": "+ Ajouter un bloc"
     },
     "switch": {
       "is_visible": {
@@ -1045,7 +1050,12 @@
       "customized": "Mise en page propre créée.",
       "customizeFailed": "La mise en page n’a pas pu être créée.",
       "loadFailed": "La mise en page n’a pas pu être chargée.",
-      "copyName": "{name} – {type}"
-    }
+      "copyName": "{name} – {type}",
+      "noteOwned": "mise en page propre",
+      "noteShared": "mise en page commune"
+    },
+    "numberPattern": "Modèle de numéro",
+    "fineOwn": "propre",
+    "fineTenant": "organisation"
   }
 }

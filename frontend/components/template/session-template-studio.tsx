@@ -28,6 +28,7 @@ import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { elementTypeLabels } from "@/lib/constants/element-types";
 import { elementType } from "@/lib/element-types/registry";
+import { avatarTone } from "@/lib/utils/avatar";
 import type { CycleConfigSummary, ElementDefinition, ElementDefinitionBlock, TemplateElement, TemplateElementBlock } from "@/types/api";
 
 type Selection = { kind: "element"; id: string } | { kind: "block"; elementId: string; blockId: number } | null;
@@ -40,12 +41,15 @@ type Props = {
   onElementsChange: (elements: TemplateElement[]) => void;
   onReorder: (ordered: TemplateElement[]) => Promise<boolean>;
   onOpenResponsibility: (elementId: string) => void;
-  responsibilityTitle: (element: TemplateElement) => string;
   blockEditorData: BlockEditorData;
   cycleConfigs: CycleConfigSummary[];
   /** Darstellung im PDF: im Designer der eigenen Gestaltung (Knoten «Protokollinhalt») */
   onOpenDesign?: () => void;
+  /** Verantwortliche eines Traktandums (aufgelöst wie im Backend), für Avatare und Liste */
+  responsibleFor?: (element: TemplateElement) => ResponsiblePerson[];
 };
+
+export type ResponsiblePerson = { id: string; name: string; initials: string };
 
 function invitationVisible(config: Record<string, unknown>) {
   return config.invitation_visible !== false;
@@ -79,7 +83,7 @@ function resequence(blocks: ElementDefinitionBlock[]) {
   return blocks.map((block, index) => ({ ...block, sort_index: (index + 1) * 10, render_order: (index + 1) * 10 }));
 }
 
-export function SessionTemplateWorkspace({ templateId, elements, onElementsChange, onReorder, onOpenResponsibility, responsibilityTitle, blockEditorData, cycleConfigs, onOpenDesign }: Props) {
+export function SessionTemplateWorkspace({ templateId, elements, onElementsChange, onReorder, onOpenResponsibility, blockEditorData, cycleConfigs, onOpenDesign, responsibleFor = () => [] }: Props) {
   const t = useTranslations("templates.studio");
   const tTypes = useTranslations("templates");
   const tEditor = useTranslations("templates.elementEditor");
@@ -330,6 +334,8 @@ export function SessionTemplateWorkspace({ templateId, elements, onElementsChang
     }
   }
 
+  const blockCount = ordered.reduce((count, element) => count + element.blocks.length, 0);
+  const librarySearchId = `session-library-search-${templateId}`;
   const filteredLibrary = library.filter((definition) => !librarySearch.trim() || definition.title.toLowerCase().includes(librarySearch.trim().toLowerCase()));
   const blockName = (block: TemplateElementBlock) => block.block_title?.trim() || block.title?.trim() || typeLabels[block.element_type_id] || "";
 
@@ -347,65 +353,60 @@ export function SessionTemplateWorkspace({ templateId, elements, onElementsChang
 
   return (
     <div className="session-studio-workspace">
-      <aside className="session-studio-left" aria-label={t("catalog.title")}>
-        <div className="session-studio-panel-scroll">
-          <section className="session-studio-section">
-            <h2 className="studio-palette-title">{t("catalog.newTitle")}</h2>
-            <button type="button" className="button-primary" onClick={startNewElement}>
-              {t("catalog.newElement")}
-            </button>
-            {selectedElement ? (
-              <button type="button" className="button-secondary button-ghost" onClick={() => startNewBlock(selectedElement)}>
-                {t("catalog.addBlockTo", { title: selectedElement.title })}
-              </button>
-            ) : (
-              <p className="field-help">{t("catalog.selectHint")}</p>
-            )}
-          </section>
-          <section className="session-studio-section">
-            <h2 className="studio-palette-title">{t("catalog.libraryTitle")}</h2>
-            <p className="field-help">{t("catalog.libraryHelp")}</p>
-            <SearchInput value={librarySearch} onChange={setLibrarySearch} placeholder={t("catalog.search")} />
-            <div className="session-studio-library-list">
-              {filteredLibrary.length === 0 ? <p className="muted">{t("catalog.libraryEmpty")}</p> : null}
-              {filteredLibrary.map((definition) => (
-                <button key={definition.id} type="button" className="session-studio-library-item" onClick={() => void addFromLibrary(definition)} title={t("catalog.addFromLibrary", { title: definition.title })}>
-                  <strong>{definition.title}</strong>
-                  <span className="muted">{definition.blocks.map((block) => typeLabels[block.element_type_id]).filter(Boolean).join(" · ")}</span>
-                </button>
-              ))}
-            </div>
-          </section>
+      <section className="session-studio-center" aria-label={t("center.title")} onClick={() => setSelection(null)}>
+        <div className="session-studio-center-head">
+          <p className="studio-canvas-hint">{t("center.hint")}</p>
+          <span className="session-studio-count">{t("center.count", { elements: ordered.length, blocks: blockCount })}</span>
         </div>
-      </aside>
-
-      <main className="session-studio-center" aria-label={t("center.title")} onClick={() => setSelection(null)}>
-        <p className="studio-canvas-hint">{t("center.hint")}</p>
         {ordered.length === 0 ? (
           <EmptyState title={t("center.emptyTitle")} description={t("center.emptyDescription")} />
         ) : (
           <ol className="session-studio-elements">
             {ordered.map((element, index) => {
               const selected = selection?.kind === "element" && selection.id === element.id;
+              const within = selectedElement?.id === element.id;
               const blocks = [...element.blocks].sort((left, right) => left.sort_index - right.sort_index);
+              const people = responsibleFor(element);
               return (
-                <li key={element.id} className={selected ? "session-studio-element session-studio-element-selected" : "session-studio-element"}>
-                  <button
-                    type="button"
-                    className="session-studio-element-head"
-                    aria-pressed={selected}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setSelection({ kind: "element", id: element.id });
-                    }}
-                  >
-                    <span className="session-studio-number">{index + 1}</span>
-                    <span className="session-studio-element-title">{responsibilityTitle(element)}</span>
-                    <span className="session-studio-element-badges">
-                      {!invitationVisible(element.configuration_json) && <Badge variant="neutral">{t("badge.notInInvitation")}</Badge>}
-                      {(element.definition_usage_count ?? 1) > 1 && <Badge variant="violet">{t("badge.shared", { count: element.definition_usage_count ?? 1 })}</Badge>}
+                <li
+                  key={element.id}
+                  className={["session-studio-element", selected ? "session-studio-element-selected" : "", within && !selected ? "session-studio-element-within" : ""].filter(Boolean).join(" ")}
+                >
+                  <div className="session-studio-element-row">
+                    <button
+                      type="button"
+                      className="session-studio-element-head"
+                      aria-pressed={selected}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setSelection({ kind: "element", id: element.id });
+                      }}
+                    >
+                      <span className="session-studio-number">{index + 1}</span>
+                      <span className="session-studio-element-title">{element.title}</span>
+                      <span className="session-studio-element-badges">
+                        {!invitationVisible(element.configuration_json) && <Badge variant="neutral">{t("badge.notInInvitation")}</Badge>}
+                        {(element.definition_usage_count ?? 1) > 1 && <Badge variant="violet">{t("badge.shared", { count: element.definition_usage_count ?? 1 })}</Badge>}
+                      </span>
+                    </button>
+                    {people.length > 0 ? (
+                      <span className="session-studio-avatars" aria-label={t("props.responsibleList", { names: people.map((person) => person.name).join(", ") })}>
+                        {people.slice(0, 4).map((person) => (
+                          <span key={person.id} className={`participant-avatar participant-avatar-sm participant-avatar-tone-${avatarTone(person.id)}`} title={person.name} aria-hidden="true">
+                            {person.initials}
+                          </span>
+                        ))}
+                      </span>
+                    ) : null}
+                    <span className="session-studio-element-move">
+                      <button type="button" className="button-icon-soft button-icon-soft-sm" aria-label={t("props.moveUpNamed", { title: element.title })} disabled={busy || index === 0} onClick={(event) => { event.stopPropagation(); void moveElement(element, -1); }}>
+                        ↑
+                      </button>
+                      <button type="button" className="button-icon-soft button-icon-soft-sm" aria-label={t("props.moveDownNamed", { title: element.title })} disabled={busy || index === ordered.length - 1} onClick={(event) => { event.stopPropagation(); void moveElement(element, 1); }}>
+                        ↓
+                      </button>
                     </span>
-                  </button>
+                  </div>
                   <ul className="session-studio-blocks">
                     {blocks.map((block) => {
                       const blockSelected = selection?.kind === "block" && selection.blockId === block.id && selection.elementId === element.id;
@@ -455,20 +456,53 @@ export function SessionTemplateWorkspace({ templateId, elements, onElementsChang
             })}
           </ol>
         )}
-      </main>
+        <div className="session-studio-center-actions">
+          <button type="button" className="button-primary" onClick={(event) => { event.stopPropagation(); startNewElement(); }}>
+            {t("center.newElement")}
+          </button>
+          <button
+            type="button"
+            className="button-secondary"
+            onClick={(event) => {
+              event.stopPropagation();
+              setSelection(null);
+              window.setTimeout(() => document.getElementById(librarySearchId)?.focus(), 0);
+            }}
+          >
+            {t("center.fromLibrary")}
+          </button>
+        </div>
+      </section>
 
       <aside className="session-studio-right" aria-label={t("props.title")}>
         <div className="session-studio-panel-scroll">
           {!selectedElement ? (
-            <div className="session-studio-section">
-              <h2 className="studio-palette-title">{t("props.title")}</h2>
-              <p className="muted">{t("props.empty")}</p>
-            </div>
+            <section className="session-studio-section">
+              <div className="session-studio-panel-head">
+                <span className="session-studio-eyebrow">{t("catalog.libraryTitle")}</span>
+                <p className="field-help">{t("catalog.libraryHelpPanel")}</p>
+              </div>
+              <SearchInput id={librarySearchId} value={librarySearch} onChange={setLibrarySearch} placeholder={t("catalog.search")} />
+              <div className="session-studio-library-list">
+                {filteredLibrary.length === 0 ? <p className="muted">{t("catalog.libraryEmpty")}</p> : null}
+                {filteredLibrary.map((definition) => (
+                  <button key={definition.id} type="button" className="session-studio-library-item" onClick={() => void addFromLibrary(definition)} title={t("catalog.addFromLibrary", { title: definition.title })}>
+                    <span className="session-studio-library-text">
+                      <strong>{definition.title}</strong>
+                      <span className="muted">{definition.blocks.map((block) => typeLabels[block.element_type_id]).filter(Boolean).join(" · ")}</span>
+                    </span>
+                    {definition.usage_count ? <span className="session-studio-library-usage">{t("catalog.usage", { count: definition.usage_count })}</span> : null}
+                    <span className="session-studio-library-add" aria-hidden="true">+</span>
+                  </button>
+                ))}
+              </div>
+            </section>
           ) : selectedBlock ? (
             <BlockProperties
               element={selectedElement}
               block={selectedBlock}
               typeLabel={typeLabels[selectedBlock.element_type_id] ?? ""}
+              typeHelp={tTypes.has(`elementTypes.${selectedBlock.element_type_id}.description`) ? tTypes(`elementTypes.${selectedBlock.element_type_id}.description`) : ""}
               name={blockName(selectedBlock)}
               onEdit={() => startEditBlock(selectedElement, selectedBlock)}
               onBehavior={(field, value) => void setBehavior(selectedElement, selectedBlock, field, value)}
@@ -476,33 +510,71 @@ export function SessionTemplateWorkspace({ templateId, elements, onElementsChang
               onMove={(delta) => void moveBlock(selectedElement, selectedBlock, delta)}
               onRemove={() => void removeBlock(selectedElement, selectedBlock)}
               onBack={() => setSelection({ kind: "element", id: selectedElement.id })}
+              onClose={() => setSelection(null)}
             />
           ) : (
-            <div className="session-studio-section">
-              <h2 className="studio-palette-title">{t("props.elementTitle")}</h2>
-              <label className="field-stack">
-                <span className="field-label">{t("props.name")}</span>
-                <input value={renameDraft} onChange={(event) => setRenameDraft(event.target.value)} onBlur={() => void renameElement(selectedElement)} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} />
-                <span className="field-help">{tEditor("cycleTokens.inline", { tokens: "{cycle_name}, {cycle_year_start}, {cycle_year_end}" })}</span>
-              </label>
-              <label className="studio-inline-check">
-                <input type="checkbox" checked={invitationVisible(selectedElement.configuration_json)} onChange={(event) => void patchElementConfig(selectedElement, { ...selectedElement.configuration_json, invitation_visible: event.target.checked })} />
-                <span>{t("props.inInvitation")}</span>
-              </label>
-              <span className="field-help">{t("props.inInvitationHelp")}</span>
-              <div className="session-studio-actions">
-                <button type="button" className="button-secondary" onClick={() => onOpenResponsibility(selectedElement.id)}>
-                  {t("props.responsible")}
-                </button>
-                <button type="button" className="button-secondary" onClick={() => startNewBlock(selectedElement)}>
-                  {t("props.addBlock")}
+            <div className="session-studio-props">
+              <div className="session-studio-props-part">
+                <div className="session-studio-panel-head session-studio-panel-head-row">
+                  <span className="session-studio-eyebrow">{t("props.elementEyebrow", { number: ordered.indexOf(selectedElement) + 1 })}</span>
+                  <button type="button" className="button-icon-soft button-icon-soft-sm" aria-label={t("props.close")} title={t("props.close")} onClick={() => setSelection(null)}>
+                    ✕
+                  </button>
+                </div>
+                <label className="field-stack">
+                  <span className="field-label">{t("props.name")}</span>
+                  <input value={renameDraft} onChange={(event) => setRenameDraft(event.target.value)} onBlur={() => void renameElement(selectedElement)} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} />
+                  <span className="field-help">{tEditor("cycleTokens.inline", { tokens: "{cycle_name}, {cycle_year_start}, {cycle_year_end}" })}</span>
+                </label>
+              </div>
+              <div className="session-studio-props-part">
+                <SwitchField
+                  label={t("props.inInvitation")}
+                  help={t("props.inInvitationHelp")}
+                  checked={invitationVisible(selectedElement.configuration_json)}
+                  onChange={(checked) => void patchElementConfig(selectedElement, { ...selectedElement.configuration_json, invitation_visible: checked })}
+                />
+              </div>
+              <div className="session-studio-props-part">
+                <div className="session-studio-part-head">
+                  <span className="field-label">{t("props.responsible")}</span>
+                  <button type="button" className="button-ghost session-studio-link" onClick={() => onOpenResponsibility(selectedElement.id)}>
+                    {t("props.responsibleChange")}
+                  </button>
+                </div>
+                {responsibleFor(selectedElement).length > 0 ? (
+                  <ul className="session-studio-people">
+                    {responsibleFor(selectedElement).map((person) => (
+                      <li key={person.id} className="session-studio-person">
+                        <span className={`participant-avatar participant-avatar-sm participant-avatar-tone-${avatarTone(person.id)}`} aria-hidden="true">
+                          {person.initials}
+                        </span>
+                        {person.name}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <span className="field-help">{t("props.responsibleNone")}</span>
+                )}
+              </div>
+              <div className="session-studio-props-part">
+                <span className="field-label">{t("props.blocks")}</span>
+                <div className="session-studio-block-list">
+                  {[...selectedElement.blocks]
+                    .sort((left, right) => left.sort_index - right.sort_index)
+                    .map((block) => (
+                      <button key={block.id} type="button" className="session-studio-block-link" onClick={() => setSelection({ kind: "block", elementId: selectedElement.id, blockId: block.id })}>
+                        <span className="session-studio-block-type">{typeLabels[block.element_type_id]}</span>
+                        <span className="session-studio-block-title">{blockName(block)}</span>
+                        <span aria-hidden="true">›</span>
+                      </button>
+                    ))}
+                </div>
+                <button type="button" className="button-ghost session-studio-link" onClick={() => startNewBlock(selectedElement)}>
+                  {t("props.addBlockPlus")}
                 </button>
               </div>
-              <div className="session-studio-actions">
-                <button type="button" className="button-icon-soft" aria-label={t("props.moveUp")} onClick={() => void moveElement(selectedElement, -1)}>↑</button>
-                <button type="button" className="button-icon-soft" aria-label={t("props.moveDown")} onClick={() => void moveElement(selectedElement, 1)}>↓</button>
-              </div>
-              <div className="session-studio-section">
+              <div className="session-studio-props-part">
                 <span className="field-label">{t("props.reuse")}</span>
                 {selectedElement.definition_is_library ? (
                   <>
@@ -522,9 +594,11 @@ export function SessionTemplateWorkspace({ templateId, elements, onElementsChang
                   </>
                 )}
               </div>
-              <button type="button" className="button-danger" onClick={() => void removeElement(selectedElement)}>
-                {t("props.removeElement")}
-              </button>
+              <div className="session-studio-props-part">
+                <button type="button" className="button-ghost session-studio-danger-link" onClick={() => void removeElement(selectedElement)}>
+                  {t("props.removeElement")}
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -607,10 +681,25 @@ export function SessionTemplateWorkspace({ templateId, elements, onElementsChang
   );
 }
 
+/** Schalter mit Beschriftung und Hilfetext (Muster wie Datenschutz-Einstellungen). */
+function SwitchField({ label, help, checked, onChange }: { label: string; help?: string; checked: boolean; onChange: (checked: boolean) => void }) {
+  return (
+    <label className="session-studio-switch">
+      <span className="session-studio-switch-text">
+        <span className="session-studio-switch-label">{label}</span>
+        {help ? <span className="field-help">{help}</span> : null}
+      </span>
+      <input type="checkbox" role="switch" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+      <span className="album-picker-switch-track" aria-hidden="true" />
+    </label>
+  );
+}
+
 function BlockProperties({
   element,
   block,
   typeLabel,
+  typeHelp,
   name,
   onEdit,
   onBehavior,
@@ -618,10 +707,12 @@ function BlockProperties({
   onMove,
   onRemove,
   onBack,
+  onClose,
 }: {
   element: TemplateElement;
   block: TemplateElementBlock;
   typeLabel: string;
+  typeHelp: string;
   name: string;
   onEdit: () => void;
   onBehavior: (field: BehaviorField, value: boolean) => void;
@@ -629,6 +720,7 @@ function BlockProperties({
   onMove: (delta: -1 | 1) => void;
   onRemove: () => void;
   onBack: () => void;
+  onClose: () => void;
 }) {
   const t = useTranslations("templates.studio");
   const info = elementType(block.element_type_id);
@@ -639,40 +731,48 @@ function BlockProperties({
     { field: "copy_from_last_protocol", shown: info.carryOver },
   ];
   return (
-    <div className="session-studio-section">
-      <button type="button" className="button-ghost session-studio-back" onClick={onBack}>
-        {t("props.backTo", { title: element.title })}
-      </button>
-      <h2 className="studio-palette-title">{typeLabel}</h2>
-      <p className="session-studio-block-name">{name}</p>
-      <button type="button" className="button-primary" onClick={onEdit}>
-        {t("props.editContent")}
-      </button>
-      <fieldset className="studio-fieldset">
-        <legend>{t("props.visibility")}</legend>
-        {switches.filter((entry) => entry.shown).map(({ field }) => (
-          <label key={field} className="studio-inline-check">
-            <input type="checkbox" checked={Boolean(block[field])} onChange={(event) => onBehavior(field, event.target.checked)} />
-            <span>
-              {t(`switch.${field}.label`)}
-              <span className="field-help">{t(`switch.${field}.help`)}</span>
-            </span>
-          </label>
-        ))}
-      </fieldset>
+    <div className="session-studio-props">
+      <div className="session-studio-props-part">
+        <div className="session-studio-panel-head-row">
+          <button type="button" className="session-studio-back" onClick={onBack}>
+            {t("props.backTo", { title: element.title })}
+          </button>
+          <button type="button" className="button-icon-soft button-icon-soft-sm" aria-label={t("props.close")} title={t("props.close")} onClick={onClose}>
+            ✕
+          </button>
+        </div>
+        <span className="session-studio-block-type">{typeLabel}</span>
+        <h2 className="session-studio-block-heading">{name}</h2>
+        {typeHelp ? <p className="field-help">{typeHelp}</p> : null}
+        <button type="button" className="button-primary" onClick={onEdit}>
+          {t("props.editContent")}
+        </button>
+      </div>
+      <div className="session-studio-props-part">
+        <span className="field-label">{t("props.visibility")}</span>
+        {switches
+          .filter((entry) => entry.shown)
+          .map(({ field }) => (
+            <SwitchField key={field} label={t(`switch.${field}.label`)} help={t(`switch.${field}.help`)} checked={Boolean(block[field])} onChange={(checked) => onBehavior(field, checked)} />
+          ))}
+      </div>
       {onOpenDesign ? (
-        <fieldset className="studio-fieldset">
-          <legend>{t("props.appearance")}</legend>
+        <div className="session-studio-props-part">
+          <span className="field-label">{t("props.appearance")}</span>
           <span className="field-help">{t("props.appearanceHelp")}</span>
           <button type="button" className="button-secondary" onClick={onOpenDesign}>
             {t("props.openDesign")}
           </button>
-        </fieldset>
+        </div>
       ) : null}
-      <div className="session-studio-actions">
-        <button type="button" className="button-icon-soft" aria-label={t("props.moveUp")} onClick={() => onMove(-1)}>↑</button>
-        <button type="button" className="button-icon-soft" aria-label={t("props.moveDown")} onClick={() => onMove(1)}>↓</button>
-        <button type="button" className="button-danger" onClick={onRemove}>
+      <div className="session-studio-props-part session-studio-props-foot">
+        <button type="button" className="button-icon-soft" aria-label={t("props.moveUp")} onClick={() => onMove(-1)}>
+          ↑
+        </button>
+        <button type="button" className="button-icon-soft" aria-label={t("props.moveDown")} onClick={() => onMove(1)}>
+          ↓
+        </button>
+        <button type="button" className="button-ghost session-studio-danger-link" onClick={onRemove}>
           {t("props.removeBlock")}
         </button>
       </div>

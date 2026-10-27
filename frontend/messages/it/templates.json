@@ -941,33 +941,29 @@
       "shared": "Usato in {count} punti"
     },
     "catalog": {
-      "title": "Aggiungi blocchi",
-      "newTitle": "Nuovo",
-      "newElement": "Nuovo punto",
-      "addBlockTo": "Aggiungi blocco a «{title}»",
-      "selectHint": "Scegli un punto per aggiungergli un blocco.",
       "libraryTitle": "I miei blocchi",
-      "libraryHelp": "Punti salvati con i loro blocchi. Un clic li aggiunge alla fine.",
       "search": "Cerca blocchi",
       "libraryEmpty": "Ancora nessun blocco salvato.",
-      "addFromLibrary": "Inserisci «{title}» come punto"
+      "addFromLibrary": "Inserisci «{title}» come punto",
+      "libraryHelpPanel": "Trattande salvate con i loro blocchi. Un clic le aggiunge alla fine. Scegli una trattanda a sinistra per regolarla.",
+      "usage": "{count}×"
     },
     "center": {
       "title": "Punti",
       "hint": "Così appaiono i punti nell’editor del verbale. Un clic seleziona, un doppio clic modifica un blocco.",
       "emptyTitle": "Ancora nessun punto",
-      "emptyDescription": "Crea un nuovo punto a sinistra o inserisci un blocco salvato.",
-      "addBlock": "+ Blocco"
+      "emptyDescription": "Crea una nuova trattanda o inserisci un blocco salvato.",
+      "addBlock": "+ Blocco",
+      "count": "{elements, plural, one {# trattanda} other {# trattande}} · {blocks, plural, one {# blocco} other {# blocchi}}",
+      "newElement": "+ Nuova trattanda",
+      "fromLibrary": "Inserisci da «I miei blocchi»"
     },
     "props": {
       "title": "Proprietà",
-      "empty": "Scegli un punto o un blocco per impostarlo qui.",
-      "elementTitle": "Punto",
       "name": "Titolo",
       "inInvitation": "Mostra nell’invito e nell’ordine del giorno",
       "inInvitationHelp": "Così i punti interni (p. es. la cassa) restano fuori dall’invito.",
       "responsible": "Responsabili",
-      "addBlock": "Aggiungi blocco",
       "moveUp": "Sposta su",
       "moveDown": "Sposta giù",
       "reuse": "Riutilizza",
@@ -982,7 +978,16 @@
       "appearance": "Aspetto nel PDF",
       "appearanceHelp": "Questo blocco si impagina nell'impaginazione PDF di questo modello: nell'editor, sotto «Contenuto del verbale».",
       "removeBlock": "Rimuovi blocco",
-      "openDesign": "Apri l'impaginazione PDF"
+      "openDesign": "Apri l'impaginazione PDF",
+      "responsibleList": "Responsabili: {names}",
+      "moveUpNamed": "Sposta su «{title}»",
+      "moveDownNamed": "Sposta giù «{title}»",
+      "elementEyebrow": "Trattanda {number}",
+      "close": "Chiudi",
+      "responsibleChange": "Modifica",
+      "responsibleNone": "Nessuno assegnato",
+      "blocks": "Blocchi",
+      "addBlockPlus": "+ Aggiungi blocco"
     },
     "switch": {
       "is_visible": {
@@ -1045,7 +1050,12 @@
       "customized": "Impaginazione propria creata.",
       "customizeFailed": "Non è stato possibile creare l’impaginazione.",
       "loadFailed": "Non è stato possibile caricare l’impaginazione.",
-      "copyName": "{name} – {type}"
-    }
+      "copyName": "{name} – {type}",
+      "noteOwned": "impaginazione propria",
+      "noteShared": "impaginazione comune"
+    },
+    "numberPattern": "Modello di numero",
+    "fineOwn": "proprio",
+    "fineTenant": "organizzazione"
   }
 }

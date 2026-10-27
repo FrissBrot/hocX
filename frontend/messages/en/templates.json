@@ -941,33 +941,29 @@
       "shared": "Used in {count} agenda items"
     },
     "catalog": {
-      "title": "Add building blocks",
-      "newTitle": "New",
-      "newElement": "New agenda item",
-      "addBlockTo": "Add building block to “{title}”",
-      "selectHint": "Select an agenda item to add a building block to it.",
       "libraryTitle": "My building blocks",
-      "libraryHelp": "Saved agenda items with their building blocks. One click adds them at the end.",
       "search": "Search building blocks",
       "libraryEmpty": "No saved building blocks yet.",
-      "addFromLibrary": "Insert “{title}” as agenda item"
+      "addFromLibrary": "Insert “{title}” as agenda item",
+      "libraryHelpPanel": "Saved agenda items with their blocks. A click adds them at the end. Select an agenda item on the left to adjust it.",
+      "usage": "{count}×"
     },
     "center": {
       "title": "Agenda items",
       "hint": "This is how the agenda items appear in the protocol editor. Click to select, double-click to edit a building block.",
       "emptyTitle": "No agenda items yet",
-      "emptyDescription": "Create a new agenda item on the left or insert a saved building block.",
-      "addBlock": "+ Building block"
+      "emptyDescription": "Create a new agenda item or insert a saved block.",
+      "addBlock": "+ Building block",
+      "count": "{elements, plural, one {# agenda item} other {# agenda items}} · {blocks, plural, one {# block} other {# blocks}}",
+      "newElement": "+ New agenda item",
+      "fromLibrary": "Insert from «My blocks»"
     },
     "props": {
       "title": "Properties",
-      "empty": "Select an agenda item or building block to configure it here.",
-      "elementTitle": "Agenda item",
       "name": "Title",
       "inInvitation": "Show in invitation and agenda",
       "inInvitationHelp": "Keeps internal items (e.g. treasury) out of the invitation.",
       "responsible": "Responsible",
-      "addBlock": "Add building block",
       "moveUp": "Move up",
       "moveDown": "Move down",
       "reuse": "Reuse",
@@ -982,7 +978,16 @@
       "appearance": "Appearance in the PDF",
       "appearanceHelp": "This building block is styled in the PDF design of this template: in the designer under «Minutes content».",
       "removeBlock": "Remove building block",
-      "openDesign": "Open PDF design"
+      "openDesign": "Open PDF design",
+      "responsibleList": "Responsible: {names}",
+      "moveUpNamed": "Move «{title}» up",
+      "moveDownNamed": "Move «{title}» down",
+      "elementEyebrow": "Agenda item {number}",
+      "close": "Close",
+      "responsibleChange": "Change",
+      "responsibleNone": "Nobody assigned",
+      "blocks": "Blocks",
+      "addBlockPlus": "+ Add block"
     },
     "switch": {
       "is_visible": {
@@ -1045,7 +1050,12 @@
       "customized": "Own design created.",
       "customizeFailed": "The design could not be created.",
       "loadFailed": "The design could not be loaded.",
-      "copyName": "{name} – {type}"
-    }
+      "copyName": "{name} – {type}",
+      "noteOwned": "own design",
+      "noteShared": "shared design"
+    },
+    "numberPattern": "Number pattern",
+    "fineOwn": "own",
+    "fineTenant": "organisation"
   }
 }

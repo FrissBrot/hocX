@@ -19,6 +19,7 @@ import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { formatDate } from "@/lib/utils/format";
 import { ParticipantSummary, TemplateSummary } from "@/types/api";
+import { avatarTone, participantInitials } from "@/lib/utils/avatar";
 
 const PAGE_SIZE = 50;
 
@@ -116,24 +117,6 @@ function membershipInfo(participant: ParticipantSummary, today: string, t: TFunc
     return { label: t("membership.memberSince", { year: participant.joined_at.slice(0, 4) }), tone: "success" };
   }
   return { label: t("membership.noJoinDate"), tone: "neutral" };
-}
-
-/** Initialen bevorzugt aus Vor-/Nachname (Übernamen wie "Kiwi" sagen wenig), sonst aus dem Anzeigenamen. */
-function participantInitials(participant: ParticipantSummary): string {
-  if (participant.first_name && participant.last_name) {
-    return (participant.first_name[0] + participant.last_name[0]).toUpperCase();
-  }
-  const parts = participant.display_name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
-/** Stabiler Farbton (0-4) aus der ID, damit ein Avatar beim Umbenennen seine Farbe behält. */
-function avatarTone(key: string): number {
-  let hash = 0;
-  for (let i = 0; i < key.length; i += 1) hash = (hash * 31 + key.charCodeAt(i)) | 0;
-  return Math.abs(hash) % 5;
 }
 
 export function ParticipantManager({ initialParticipants, templates, tenantId, canAdmin = false }: ParticipantManagerProps) {

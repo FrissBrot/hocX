@@ -18,7 +18,10 @@ import { TemplateFineTariffModal } from "@/components/template/template-fine-tar
 import { SessionDesignView } from "@/components/template/session-design-view";
 import { SessionTemplateWorkspace } from "@/components/template/session-template-studio";
 import type { BlockEditorData } from "@/components/template/element-editor/block-editor";
+import { Badge } from "@/components/ui/badge";
 import { Tabs } from "@/components/ui/tabs";
+import { SessionDesign, studioApi } from "@/lib/documents/api";
+import { participantInitials } from "@/lib/utils/avatar";
 import { useTagConfig } from "@/lib/hooks/use-tag-config";
 import { EligibleResponsibleList, eligibleResponsibleList, listParticipantIds, listTextValue } from "@/lib/utils/responsible-lists";
 import {
@@ -29,6 +32,7 @@ import {
   StructuredListDefinition,
   StructuredListEntry,
   TemplateElement,
+  TemplateFineTariff,
   TemplateSummary,
 } from "@/types/api";
 import { Select } from "@/components/ui/select";
@@ -535,6 +539,23 @@ export function TemplateEditor({
   const [participantPickerSearch, setParticipantPickerSearch] = useState("");
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showFineTariffModal, setShowFineTariffModal] = useState(false);
+  // Kopf: eigener Bussentarif ja/nein (null = unbekannt bzw. keine Finanzen)
+  const [fineOverride, setFineOverride] = useState<boolean | null>(null);
+  const [sessionDesigns, setSessionDesigns] = useState<SessionDesign[] | null>(null);
+  useEffect(() => {
+    if (!canManage || !financeAccounts) return;
+    browserApiFetch<TemplateFineTariff>(`/api/templates/${template.id}/fine-tariff`)
+      .then((tariff) => setFineOverride(tariff.override))
+      // Ohne Antwort zeigt der Knopf keinen Zusatz
+      .catch(() => setFineOverride(null));
+  }, [canManage, financeAccounts, template.id]);
+  useEffect(() => {
+    studioApi
+      .sessionDesigns(template.id)
+      .then((designs) => setSessionDesigns(designs ?? null))
+      // Ohne Zugriff auf das Dokument-Studio keine Hinweise an den Tabs
+      .catch(() => setSessionDesigns(null));
+  }, [template.id]);
   const [showAutoAssignModal, setShowAutoAssignModal] = useState(false);
   const [showResponsibilityModalFor, setShowResponsibilityModalFor] = useState<string | null>(null);
   const [responsibilityAutoListId, setResponsibilityAutoListId] = useState("");
@@ -788,6 +809,16 @@ export function TemplateEditor({
       templateElementId,
       buildResponsibilityConfig(templateElement.configuration_json, nextResponsibility)
     );
+  }
+
+  /** Verantwortliche eines Traktandums für Avatare und Liste im Editor (gleiche Auflösung wie
+   * der Titel mit Namen, siehe liveResponsibleParticipantIds). */
+  function responsiblePeople(item: TemplateElement) {
+    const responsibility = parseResponsibilityConfig(item.configuration_json);
+    return liveResponsibleParticipantIds(responsibility.assignments, eligibleResponsibleLists, listEntriesByListId)
+      .map((participantId) => participantsById.get(participantId))
+      .filter((participant): participant is ParticipantSummary => Boolean(participant))
+      .map((participant) => ({ id: participant.id, name: participant.display_name, initials: participantInitials(participant) }));
   }
 
   function currentResponsibilityTitle(item: TemplateElement) {
@@ -1095,31 +1126,46 @@ export function TemplateEditor({
     }
   }
 
+  // Gemeinsame oder eigene Gestaltung je Sitzungsdokument (Hinweis an den Tabs PDF/Einladung)
+  const designNote = (documentType: string) => {
+    const owned = sessionDesigns?.find((item) => item.document_type === documentType)?.owned;
+    return owned === undefined ? null : owned ? tStudio("design.noteOwned") : tStudio("design.noteShared");
+  };
+
   return (
     <div className="session-studio">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">{template.name}</h1>
+      <div className="page-header session-studio-header">
+        <div className="session-studio-header-text">
+          <div className="session-studio-title-row">
+            <h1 className="page-title">{template.name}</h1>
+            {templateMeta.protocol_number_pattern ? (
+              <span className="session-studio-pattern" title={tStudio("numberPattern")}>
+                {templateMeta.protocol_number_pattern}
+              </span>
+            ) : null}
+          </div>
           <p className="muted">{tStudio("intro")}</p>
         </div>
-        <div className="table-toolbar-actions">
-          <button type="button" className="button-ghost button-secondary" onClick={() => setShowAutoAssignModal(true)}>
+        <div className="session-studio-header-actions">
+          {canManage ? (
+            <button type="button" className="button-secondary" onClick={() => setShowParticipantModal(true)}>
+              {tStudio("participants")}
+              <Badge variant="neutral">{assignedParticipantIds.length}</Badge>
+            </button>
+          ) : null}
+          <button type="button" className="button-secondary" onClick={() => setShowAutoAssignModal(true)}>
             {tStudio("responsibleMapping")}
           </button>
+          {canManage && financeAccounts ? (
+            <button type="button" className="button-secondary" onClick={() => setShowFineTariffModal(true)}>
+              {t("fineTariff.button")}
+              {fineOverride !== null ? <Badge variant="neutral">{fineOverride ? tStudio("fineOwn") : tStudio("fineTenant")}</Badge> : null}
+            </button>
+          ) : null}
           {canManage ? (
-            <>
-              <button type="button" className="button-ghost button-secondary" onClick={() => setShowSettingsModal(true)}>
-                {tStudio("settings")}
-              </button>
-              <button type="button" className="button-ghost button-secondary" onClick={() => setShowParticipantModal(true)}>
-                {tStudio("participants")}
-              </button>
-              {financeAccounts ? (
-                <button type="button" className="button-ghost button-secondary" onClick={() => setShowFineTariffModal(true)}>
-                  {t("fineTariff.button")}
-                </button>
-              ) : null}
-            </>
+            <button type="button" className="button-secondary" onClick={() => setShowSettingsModal(true)}>
+              {tStudio("settings")}
+            </button>
           ) : null}
         </div>
       </div>
@@ -1137,15 +1183,15 @@ export function TemplateEditor({
                 onElementsChange={setElements}
                 onReorder={(next) => persistTemplateOrder(next, t("orderSavedToast"))}
                 onOpenResponsibility={(elementId) => setShowResponsibilityModalFor(elementId)}
-                responsibilityTitle={currentResponsibilityTitle}
+                responsibleFor={responsiblePeople}
                 blockEditorData={blockEditorData}
                 cycleConfigs={availableCycleConfigs}
                 onOpenDesign={() => setView("pdf")}
               />
             ),
           },
-          { id: "pdf", label: tStudio("view.pdf"), content: view === "pdf" ? <SessionDesignView sessionTemplate={template} documentType="protocol" /> : null },
-          { id: "invitation", label: tStudio("view.invitation"), content: view === "invitation" ? <SessionDesignView sessionTemplate={template} documentType="invitation" /> : null },
+          { id: "pdf", label: tStudio("view.pdf"), note: designNote("protocol"), content: view === "pdf" ? <SessionDesignView sessionTemplate={template} documentType="protocol" /> : null },
+          { id: "invitation", label: tStudio("view.invitation"), note: designNote("invitation"), content: view === "invitation" ? <SessionDesignView sessionTemplate={template} documentType="invitation" /> : null },
         ]}
       />
 
@@ -1155,6 +1201,7 @@ export function TemplateEditor({
           templateId={template.id}
           accounts={financeAccounts}
           onClose={() => setShowFineTariffModal(false)}
+          onSaved={(tariff) => setFineOverride(tariff.override)}
         />
       ) : null}
 

@@ -941,33 +941,29 @@
       "shared": "In {count} Traktanden verwendet"
     },
     "catalog": {
-      "title": "Bausteine hinzufügen",
-      "newTitle": "Neu",
-      "newElement": "Neues Traktandum",
-      "addBlockTo": "Baustein zu «{title}» hinzufügen",
-      "selectHint": "Wähle ein Traktandum, um ihm einen Baustein hinzuzufügen.",
       "libraryTitle": "Meine Bausteine",
-      "libraryHelp": "Gespeicherte Traktanden mit ihren Bausteinen. Ein Klick fügt sie am Ende ein.",
       "search": "Bausteine suchen",
       "libraryEmpty": "Noch keine gespeicherten Bausteine.",
-      "addFromLibrary": "«{title}» als Traktandum einfügen"
+      "addFromLibrary": "«{title}» als Traktandum einfügen",
+      "libraryHelpPanel": "Gespeicherte Traktanden mit ihren Bausteinen. Ein Klick fügt sie am Ende ein. Wähle links ein Traktandum, um es einzustellen.",
+      "usage": "{count}×"
     },
     "center": {
       "title": "Traktanden",
       "hint": "So erscheinen die Traktanden im Protokoll-Editor. Ein Klick wählt aus, ein Doppelklick bearbeitet einen Baustein.",
       "emptyTitle": "Noch keine Traktanden",
-      "emptyDescription": "Lege links ein neues Traktandum an oder füge einen gespeicherten Baustein ein.",
-      "addBlock": "+ Baustein"
+      "emptyDescription": "Lege ein neues Traktandum an oder füge einen gespeicherten Baustein ein.",
+      "addBlock": "+ Baustein",
+      "count": "{elements, plural, one {# Traktandum} other {# Traktanden}} · {blocks, plural, one {# Baustein} other {# Bausteine}}",
+      "newElement": "+ Neues Traktandum",
+      "fromLibrary": "Aus «Meine Bausteine» einfügen"
     },
     "props": {
       "title": "Eigenschaften",
-      "empty": "Wähle ein Traktandum oder einen Baustein, um es hier einzustellen.",
-      "elementTitle": "Traktandum",
       "name": "Titel",
       "inInvitation": "In Einladung und Traktandenliste zeigen",
       "inInvitationHelp": "Interne Punkte (z. B. Kasse) lassen sich so aus der Einladung heraushalten.",
       "responsible": "Verantwortliche",
-      "addBlock": "Baustein hinzufügen",
       "moveUp": "Nach oben",
       "moveDown": "Nach unten",
       "reuse": "Wiederverwenden",
@@ -982,7 +978,16 @@
       "appearance": "Darstellung im PDF",
       "appearanceHelp": "Gestaltet wird der Baustein in der PDF-Gestaltung dieser Vorlage: im Designer unter «Protokollinhalt».",
       "removeBlock": "Baustein entfernen",
-      "openDesign": "PDF-Gestaltung öffnen"
+      "openDesign": "PDF-Gestaltung öffnen",
+      "responsibleList": "Verantwortlich: {names}",
+      "moveUpNamed": "«{title}» nach oben",
+      "moveDownNamed": "«{title}» nach unten",
+      "elementEyebrow": "Traktandum {number}",
+      "close": "Schliessen",
+      "responsibleChange": "Ändern",
+      "responsibleNone": "Niemand zugeordnet",
+      "blocks": "Bausteine",
+      "addBlockPlus": "+ Baustein hinzufügen"
     },
     "switch": {
       "is_visible": {
@@ -1045,7 +1050,12 @@
       "customized": "Eigene Gestaltung angelegt.",
       "customizeFailed": "Gestaltung konnte nicht angelegt werden.",
       "loadFailed": "Gestaltung konnte nicht geladen werden.",
-      "copyName": "{name} – {type}"
-    }
+      "copyName": "{name} – {type}",
+      "noteOwned": "eigene Gestaltung",
+      "noteShared": "gemeinsame Gestaltung"
+    },
+    "numberPattern": "Nummer-Muster",
+    "fineOwn": "eigener",
+    "fineTenant": "Mandant"
   }
 }

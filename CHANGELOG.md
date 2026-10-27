@@ -204,6 +204,16 @@ Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116_document_reg
   gehört zur Gestaltung (Entwurf, Vorschau, Veröffentlichen). Die Darstellungs-Auswahl im
   Sitzungsvorlagen-Editor entfällt; dort führt ein Link in die PDF-Gestaltung.
 
+### Geändert: Vorlagen-Editor einer Protokollvorlage (Nachtrag vom 2026-10-27)
+
+- Zwei Spalten statt drei: links die Traktanden mit ihren Bausteinen, Verantwortlichen als
+  Avatare und Pfeilen zum Umsortieren, darunter «+ Neues Traktandum» und «Aus «Meine
+  Bausteine» einfügen»; rechts ein Panel mit «Meine Bausteine» (inkl. Verwendungen), dem
+  gewählten Traktandum (Titel, Einladung, Verantwortliche, Bausteine, Wiederverwenden) oder
+  dem gewählten Baustein (Inhalt bearbeiten, «Wo und wie» als Schalter, Darstellung im PDF).
+- Kopf mit Nummer-Muster, Teilnehmenden-Zähler und Bussentarif («eigener»/«Mandant»); die
+  Tabs PDF und Einladung zeigen, ob die Gestaltung gemeinsam oder eigen ist.
+
 ### Neu: Funktionsvergleich auf der Landing Page (Nachtrag vom 2026-10-27)
 
 - Unter den Preiskarten zeigt «Alle Funktionen im Vergleich» alle buchbaren Abos als Spalten:

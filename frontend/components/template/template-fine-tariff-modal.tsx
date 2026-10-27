@@ -15,12 +15,14 @@ type Props = {
   templateId: string;
   accounts: FinanceAccount[];
   onClose: () => void;
+  /** Nach dem Speichern (z. B. Anzeige «eigener Tarif» im Kopf des Vorlagen-Editors) */
+  onSaved?: (tariff: TemplateFineTariff) => void;
 };
 
 // Bussentarif je Vorlage (0137, FAR-002): standardmässig gilt der Mandantentarif aus
 // Finanzen > Bussen, eine Vorlage kann ihn übersteuern. Gilt sofort für alle offenen Protokolle
 // der Vorlage; bereits erfasste Bussen behalten ihren Betrag.
-export function TemplateFineTariffModal({ open, templateId, accounts, onClose }: Props) {
+export function TemplateFineTariffModal({ open, templateId, accounts, onClose, onSaved }: Props) {
   const t = useTranslations("templates.editor.fineTariff");
   const tFinances = useTranslations("finances");
   const tCommon = useTranslations("common");
@@ -76,6 +78,7 @@ export function TemplateFineTariffModal({ open, templateId, accounts, onClose }:
         ),
       });
       setLoaded(saved);
+      onSaved?.(saved);
       showToast(t("saved"), "success");
       onClose();
     } catch (error) {
