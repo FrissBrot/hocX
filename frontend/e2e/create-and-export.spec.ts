@@ -66,6 +66,10 @@ test("export dialog, template library, brand studio and designer render (light/d
         await page.goto(`/documents/templates/${system.id}`);
         await expect(page.getByRole("main", { name: "Arbeitsfläche" })).toBeVisible({ timeout: 60_000 });
         await page.screenshot({ path: `test-results/document-designer-${theme}-${width}.png` });
+        // Der Designer startet im Modus «Einfach» (Designer v2); die Ansichten Gestalten/Geteilt/
+        // PDF-Vorschau gibt es in «Erweitert»
+        const advanced = page.getByRole("button", { name: "Erweitert öffnen" });
+        if (await advanced.isVisible()) await advanced.click();
         await page.getByRole("radio", { name: "Geteilt" }).click();
         await expect(page.getByRole("region", { name: "Vorschau" }).getByRole("img", { name: "Seite 1" })).toBeVisible({ timeout: 60_000 });
         await page.screenshot({ path: `test-results/document-designer-split-${theme}-${width}.png` });

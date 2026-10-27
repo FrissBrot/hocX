@@ -14,7 +14,7 @@ test("agenda item is created in the popup and listed in the next protocol", asyn
   const suffix = Date.now();
   const templates = await (await request.get("/api/templates")).json();
   expect(templates.length).toBeGreaterThan(0);
-  const template = await json(request, "post", `/api/templates/${templates[0].id}/duplicate`, { name: `E2E Anliegen ${suffix}` });
+  const template = await json(request, "post", `/api/templates/${(templates.find((item: { name: string }) => !item.name.startsWith("E2E")) ?? templates[0]).id}/duplicate`, { name: `E2E Anliegen ${suffix}` });
   let protocolId: string | null = null;
   try {
     const protocol = await json(request, "post", "/api/protocols/from-template", {

@@ -217,13 +217,15 @@ export function TemplateLibrary({ capabilities, scope = "documents" }: Props) {
                   ) : null}
                   {scope === "session" ? (
                     <div className="studio-card-usage">
-                      <span className="studio-card-usage-label">{t("library.usedIn")}</span>
                       {(item.used_in ?? []).length > 0 ? (
-                        (item.used_in ?? []).map((ref) => (
-                          <Link key={ref.id} href={`/templates/${ref.id}` as Route} className="studio-card-usage-chip">
-                            {ref.name}
-                          </Link>
-                        ))
+                        <>
+                          <span className="studio-card-usage-label">{t("library.usedIn")}</span>
+                          {(item.used_in ?? []).map((ref) => (
+                            <Link key={ref.id} href={`/templates/${ref.id}` as Route} className="studio-card-usage-chip">
+                              {ref.name}
+                            </Link>
+                          ))}
+                        </>
                       ) : (
                         <span className="studio-card-usage-none">{t("library.unused")}</span>
                       )}

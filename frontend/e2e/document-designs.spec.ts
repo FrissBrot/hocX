@@ -1,5 +1,11 @@
 import { test, expect } from "@playwright/test";
 
+// Kopien anderer, parallel laufender Tests nie als Ausgangspunkt nehmen: eine kopierte
+// Sitzungsvorlage übernimmt deren Gestaltungs-Zuweisung, die Gestaltung wäre dann geteilt.
+function sourceTemplate(templates: { id: string; name: string }[]) {
+  return templates.find((item) => !item.name.startsWith("E2E")) ?? templates[0];
+}
+
 // Designs (Alpin, Kreide …) im Dialog «Neue Vorlage» und Darstellung einzelner Bausteine im
 // Designer einer Sitzungsvorlage. Legt Screenshots (Light/Dark) ab. Auf dem Handy zeigen
 // Dokument-Studio und Vorlagen-Editor nur den Hinweis, sie am Computer zu öffnen - daher nur
@@ -19,7 +25,9 @@ test("Neue Vorlage: Design-Galerie für Protokolle", async ({ page }) => {
       await expect(dialog.getByRole("textbox", { name: "Name" })).toHaveValue("Alpin");
       // Vorschaubilder laden lazy: erst fotografieren, wenn alle da sind
       await expect.poll(() => dialog.locator("img").evaluateAll((images) => images.every((image) => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0))).toBe(true);
-      await page.screenshot({ path: `test-results/document-designs-create-${theme}-${width}.png`, fullPage: true });
+      // Ohne fullPage: Chromium setzt dafür kurz andere Gerätemasse, die Seite schaltet dabei auf
+      // die Mobile-Ansicht und hängt den Dialog aus (der Dialog passt ohnehin ins Fenster)
+      await page.screenshot({ path: `test-results/document-designs-create-${theme}-${width}.png` });
       await dialog.getByRole("button", { name: "Abbrechen" }).click();
       await expect(dialog).toBeHidden();
     }
@@ -29,7 +37,7 @@ test("Neue Vorlage: Design-Galerie für Protokolle", async ({ page }) => {
 test("Designer: einen Baustein des Protokollinhalts anders darstellen", async ({ page }) => {
   test.setTimeout(240_000);
   const templates = await (await page.request.get("/api/templates")).json();
-  const copy = await (await page.request.post(`/api/templates/${templates[0].id}/duplicate`, { data: { name: `E2E Designs ${Date.now()}` } })).json();
+  const copy = await (await page.request.post(`/api/templates/${sourceTemplate(templates).id}/duplicate`, { data: { name: `E2E Designs ${Date.now()}` } })).json();
   try {
     const own = await page.request.post(`/api/document-studio/session-templates/${copy.id}/designs/protocol`, { data: { name: `E2E Designs ${Date.now()}` } });
     expect(own.ok()).toBeTruthy();
