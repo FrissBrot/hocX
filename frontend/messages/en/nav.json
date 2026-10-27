@@ -25,7 +25,7 @@
   "statistics": "Statistics",
   "financeAccounts": "Accounts",
   "fines": "Fines",
-  "protocolTemplates": "Meeting templates",
+  "protocolTemplates": "Protocol templates",
   "elements": "Building blocks",
   "general": "General",
   "domains": "Domains",
@@ -53,7 +53,7 @@
   "taskPackages": "Task packages",
   "documentVerification": "Authenticity check",
   "documentStudio": "Templates",
-  "documentTemplates": "Documents",
+  "documentTemplates": "Document templates",
   "documentBrand": "Appearance",
   "documentAssets": "Images and fonts",
   "documentComponents": "Components",
@@ -61,5 +61,8 @@
   "privacy": "Privacy",
   "activity": "Activity",
   "retention": "Retention",
-  "roleManagement": "Roles"
+  "roleManagement": "Roles",
+  "protocolDesign": "Protocol design",
+  "workflows": "Workflows",
+  "design": "Design"
 }

@@ -7,7 +7,7 @@ import { ComponentsLibrary } from "@/components/documents/components-library";
 import { ElementDefinitionManager } from "@/components/template/element-definition-manager";
 import { AppShell } from "@/components/ui/app-shell";
 import { RouteTabs } from "@/components/ui/route-tabs";
-import { templateAreaTabs } from "@/components/ui/section-tabs";
+import { protocolTemplateTabs } from "@/components/ui/section-tabs";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import type { Capabilities } from "@/lib/documents/api";
 import { ElementDefinition, EventSummary, FinanceAccount, ParticipantSummary, StructuredListDefinition } from "@/types/api";
@@ -35,10 +35,10 @@ export default async function ElementsPage({ searchParams }: { searchParams: Pro
   return (
     <AppShell initialSession={session}>
       <ResponsiveView
-        mobile={<MobileDesktopOnly navKey="elements" backHref="/templates" backNavKey="templates" />}
+        mobile={<MobileDesktopOnly navKey="elements" backHref="/templates" backNavKey="protocolTemplates" />}
         desktop={
           <>
-          <RouteTabs tabs={templateAreaTabs(t, canAdmin)} activeHref="/elements" />
+          <RouteTabs tabs={protocolTemplateTabs(t)} activeHref="/elements" />
           <section className="panel">
             <ElementDefinitionManager
               initialDefinitions={definitions ?? []}

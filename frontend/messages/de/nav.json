@@ -25,7 +25,7 @@
   "statistics": "Statistiken",
   "financeAccounts": "Konten",
   "fines": "Bussen",
-  "protocolTemplates": "Sitzungsvorlagen",
+  "protocolTemplates": "Protokollvorlagen",
   "elements": "Bausteine",
   "general": "Allgemein",
   "domains": "Domains",
@@ -53,7 +53,7 @@
   "taskPackages": "Aufgabenpakete",
   "documentVerification": "Echtheitsprüfung",
   "documentStudio": "Vorlagen",
-  "documentTemplates": "Dokumente",
+  "documentTemplates": "Dokumentvorlagen",
   "documentBrand": "Erscheinungsbild",
   "documentAssets": "Bilder und Schriften",
   "documentComponents": "Komponenten",
@@ -61,5 +61,8 @@
   "privacy": "Datenschutz",
   "activity": "Verlauf",
   "retention": "Aufbewahrung",
-  "roleManagement": "Rollen"
+  "roleManagement": "Rollen",
+  "protocolDesign": "Protokollgestaltung",
+  "workflows": "Abläufe",
+  "design": "Gestaltung"
 }

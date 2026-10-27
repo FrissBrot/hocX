@@ -153,7 +153,7 @@
     "orderSaveFailed": "L'ordre du modèle n'a pas pu être enregistré",
     "orderSavedToast": "Ordre du modèle enregistré",
     "pageIntro": "Un modèle définit les points, les blocs et la mise en page d’une série de séances – pour l’éditeur, le PDF et l’invitation.",
-    "pageTitle": "Modèles de séance",
+    "pageTitle": "Modèles de procès-verbal",
     "participantAssignmentsSaveFailed": "Les attributions de participants n'ont pas pu être enregistrées",
     "participantFallback": "Participant",
     "patternTokensHelp": "Jetons : '{n}' = tous les procès-verbaux, '{n_year}' = cette année, '{n_month}' = ce mois, '{n_cycle}' = dans le cycle propre. Jetons de date : '{date}', '{date:DD.MM.YYYY}', '{dd}', '{mm}', '{yyyy}'.",
@@ -392,7 +392,7 @@
     "stepperIncrease": "Augmenter {label}",
     "page": {
       "title": "Blocs",
-      "intro1": "Points enregistrés avec leurs blocs (texte, tâches, tableaux, listes de rendez-vous …). Insère-les d’un clic dans l’éditeur d’un modèle de séance.",
+      "intro1": "Points enregistrés avec leurs blocs (texte, tâches, tableaux, listes de rendez-vous …). Insère-les d’un clic dans l’éditeur d’un modèle de procès-verbal.",
       "intro2": "Dans l’éditeur, les modifications d’un bloc enregistré demandent si elles valent partout ou dans un seul modèle.",
       "newElement": "Nouveau bloc",
       "search": "Rechercher des blocs",
@@ -921,7 +921,7 @@
     }
   },
   "studio": {
-    "intro": "Points et blocs de ce modèle de séance. Ce que tu règles ici vaut pour l’éditeur de procès-verbal, le PDF et l’invitation.",
+    "intro": "Points et blocs de ce modèle de procès-verbal. Ce que tu règles ici vaut pour l’éditeur de procès-verbal, le PDF et l’invitation.",
     "responsibleMapping": "Attribuer les responsables",
     "settings": "Paramètres",
     "participants": "Participants",

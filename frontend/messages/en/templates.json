@@ -153,7 +153,7 @@
     "orderSaveFailed": "Template order could not be saved",
     "orderSavedToast": "Template order saved",
     "pageIntro": "A template defines the agenda items, building blocks and design of a meeting series – for the protocol editor, the PDF and the invitation.",
-    "pageTitle": "Meeting templates",
+    "pageTitle": "Protocol templates",
     "participantAssignmentsSaveFailed": "Participant assignments could not be saved",
     "participantFallback": "Participant",
     "patternTokensHelp": "Tokens: '{n}' = all protocols, '{n_year}' = this year, '{n_month}' = this month, '{n_cycle}' = within the own cycle. Date tokens: '{date}', '{date:DD.MM.YYYY}', '{dd}', '{mm}', '{yyyy}'.",
@@ -392,7 +392,7 @@
     "stepperIncrease": "Increase {label}",
     "page": {
       "title": "Building blocks",
-      "intro1": "Saved agenda items with their building blocks (text, tasks, tables, event lists …). Insert them with one click in the editor of a meeting template.",
+      "intro1": "Saved agenda items with their building blocks (text, tasks, tables, event lists …). Insert them with one click in the editor of a protocol template.",
       "intro2": "In the editor, changes to a saved building block ask whether they should apply everywhere or only in one template.",
       "newElement": "New building block",
       "search": "Search building blocks",
@@ -921,7 +921,7 @@
     }
   },
   "studio": {
-    "intro": "Agenda items and building blocks of this meeting template. What you set here applies to the protocol editor, the PDF and the invitation.",
+    "intro": "Agenda items and building blocks of this protocol template. What you set here applies to the protocol editor, the PDF and the invitation.",
     "responsibleMapping": "Assign responsible persons",
     "settings": "Settings",
     "participants": "Participants",

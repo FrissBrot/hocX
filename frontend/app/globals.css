@@ -15082,14 +15082,14 @@ input[type="color"]::-moz-color-swatch {
 
 /* Nebenaktionen als weisse Umriss-Buttons wie im Design (global ist button-secondary als
    <button> dunkel, siehe a.button-secondary). */
-:is(.files-table-actions, .storage-page, .maintenance-page) button.button-secondary {
+:is(.files-table-actions, .storage-page, .maintenance-page, .studio-header-actions) button.button-secondary {
   --button-bg: var(--panel-solid);
   --button-hover-bg: var(--neutral-bg);
   border: 1px solid var(--border-strong);
   background: var(--button-bg);
   color: var(--text);
 }
-:is(.files-table-actions, .storage-page, .maintenance-page) button.button-secondary:hover:not(:disabled) { background: var(--button-hover-bg); }
+:is(.files-table-actions, .storage-page, .maintenance-page, .studio-header-actions) button.button-secondary:hover:not(:disabled) { background: var(--button-hover-bg); }
 
 /* Dateien-Seite wie Fotos: Kopf auf dem Seitenhintergrund, Filterleiste und Tabelle in einer
    gemeinsamen Karte. */

@@ -1105,10 +1105,11 @@
     "unarchive": "Restore",
     "unarchived": "Template restored.",
     "unpublished": "Not published",
-    "sessionTitle": "Shared design of meeting documents",
-    "sessionDescription": "Applies to all meeting templates without their own design. Create an own design in the template editor under “PDF”.",
-    "documentsTitle": "Documents",
-    "documentsDescription": "Further documents such as to-do lists, event lists, member lists and letters."
+    "sessionTitle": "Protocol design",
+    "sessionDescription": "Applies to all protocol templates without their own design. Create an own design in the template editor under “PDF”.",
+    "documentsTitle": "Document templates",
+    "documentsDescription": "Further documents such as to-do lists, event lists, member lists and letters.",
+    "exportHistory": "Export history"
   },
   "libraryGroup": {
     "data_events": "Events",

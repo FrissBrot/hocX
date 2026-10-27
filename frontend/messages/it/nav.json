@@ -25,7 +25,7 @@
   "statistics": "Statistiche",
   "financeAccounts": "Conti",
   "fines": "Multe",
-  "protocolTemplates": "Modelli di seduta",
+  "protocolTemplates": "Modelli di verbale",
   "elements": "Blocchi",
   "general": "Generale",
   "domains": "Domini",
@@ -53,7 +53,7 @@
   "taskPackages": "Pacchetti di attività",
   "documentVerification": "Verifica di autenticità",
   "documentStudio": "Modelli",
-  "documentTemplates": "Documenti",
+  "documentTemplates": "Modelli di documento",
   "documentBrand": "Aspetto",
   "documentAssets": "Immagini e caratteri",
   "documentComponents": "Componenti",
@@ -61,5 +61,8 @@
   "privacy": "Protezione dei dati",
   "activity": "Cronologia",
   "retention": "Conservazione",
-  "roleManagement": "Ruoli"
+  "roleManagement": "Ruoli",
+  "protocolDesign": "Impaginazione dei verbali",
+  "workflows": "Flussi di lavoro",
+  "design": "Impaginazione"
 }

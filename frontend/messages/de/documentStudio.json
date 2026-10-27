@@ -1105,10 +1105,11 @@
     "unarchive": "Wiederherstellen",
     "unarchived": "Vorlage wiederhergestellt.",
     "unpublished": "Nicht veröffentlicht",
-    "sessionTitle": "Gemeinsame Gestaltung der Sitzungsdokumente",
-    "sessionDescription": "Gilt für alle Sitzungsvorlagen ohne eigene Gestaltung. Eine eigene Gestaltung legst du im Editor der Vorlage unter «PDF» an.",
-    "documentsTitle": "Dokumente",
-    "documentsDescription": "Weitere Dokumente wie Todo-Listen, Terminlisten, Mitgliederlisten und Briefe."
+    "sessionTitle": "Protokollgestaltung",
+    "sessionDescription": "Gilt für alle Protokollvorlagen ohne eigene Gestaltung. Eine eigene Gestaltung legst du im Editor der Vorlage unter «PDF» an.",
+    "documentsTitle": "Dokumentvorlagen",
+    "documentsDescription": "Weitere Dokumente wie Todo-Listen, Terminlisten, Mitgliederlisten und Briefe.",
+    "exportHistory": "Export-Verlauf"
   },
   "libraryGroup": {
     "data_events": "Termine",

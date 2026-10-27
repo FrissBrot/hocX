@@ -153,7 +153,7 @@
     "orderSaveFailed": "Template-Reihenfolge konnte nicht gespeichert werden",
     "orderSavedToast": "Template-Reihenfolge gespeichert",
     "pageIntro": "Eine Vorlage legt Traktanden, Bausteine und Gestaltung einer Sitzungsreihe fest – für den Protokoll-Editor, das PDF und die Einladung.",
-    "pageTitle": "Sitzungsvorlagen",
+    "pageTitle": "Protokollvorlagen",
     "participantAssignmentsSaveFailed": "Teilnehmerzuordnungen konnten nicht gespeichert werden",
     "participantFallback": "Teilnehmer",
     "patternTokensHelp": "Tokens: '{n}' = alle Protokolle, '{n_year}' = in diesem Jahr, '{n_month}' = in diesem Monat, '{n_cycle}' = im eigenen Zyklus. Datums-Tokens: '{date}', '{date:DD.MM.YYYY}', '{dd}', '{mm}', '{yyyy}'.",
@@ -392,7 +392,7 @@
     "stepperIncrease": "{label} erhöhen",
     "page": {
       "title": "Bausteine",
-      "intro1": "Gespeicherte Traktanden mit ihren Bausteinen (Text, Aufgaben, Tabellen, Terminlisten …). Im Editor einer Sitzungsvorlage fügst du sie mit einem Klick ein.",
+      "intro1": "Gespeicherte Traktanden mit ihren Bausteinen (Text, Aufgaben, Tabellen, Terminlisten …). Im Editor einer Protokollvorlage fügst du sie mit einem Klick ein.",
       "intro2": "Änderungen an einem gespeicherten Baustein fragen im Editor, ob sie überall oder nur in einer Vorlage gelten sollen.",
       "newElement": "Neuer Baustein",
       "search": "Bausteine durchsuchen",
@@ -921,7 +921,7 @@
     }
   },
   "studio": {
-    "intro": "Traktanden und Bausteine dieser Sitzungsvorlage. Was du hier einstellst, gilt für den Protokoll-Editor, das PDF und die Einladung.",
+    "intro": "Traktanden und Bausteine dieser Protokollvorlage. Was du hier einstellst, gilt für den Protokoll-Editor, das PDF und die Einladung.",
     "responsibleMapping": "Verantwortliche zuordnen",
     "settings": "Einstellungen",
     "participants": "Teilnehmende",

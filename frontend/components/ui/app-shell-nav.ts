@@ -53,14 +53,18 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
     groups.push({ titleKey: "groups.masterData", links: masterData });
   }
 
-  // Ein Ort für alles, woraus Dokumente entstehen: Sitzungsvorlagen, weitere Dokumente,
-  // Bausteine, Erscheinungsbild (Bereichs-Tabs siehe section-tabs.ts::templateAreaTabs).
-  // templates.edit passt Vorlagen an; Aufgabenpakete und Zyklen brauchen templates.manage.
+  // Konfiguration in drei Bereichen (Bereichs-Tabs siehe section-tabs.ts): Protokollvorlagen mit
+  // Bausteinen, Abläufe (Zyklen, Aufgabenpakete) und Gestaltung der PDFs. templates.edit passt
+  // Vorlagen und Gestaltung an; Abläufe brauchen templates.manage.
   if (can(session, "templates.edit")) {
     groups.push({
       titleKey: "groups.configuration",
       links: [
-        { href: "/templates", labelKey: "templates", icon: "templates", match: ["/elements", "/task-packages", "/cycles", "/documents"] },
+        { href: "/templates", labelKey: "protocolTemplates", icon: "templates", match: ["/elements"] },
+        ...(can(session, "templates.manage")
+          ? [{ href: "/cycles", labelKey: "workflows", icon: "cycles" as const, match: ["/task-packages"] }]
+          : []),
+        { href: "/documents/protocols", labelKey: "design", icon: "documents", match: ["/documents"] },
       ],
     });
   }

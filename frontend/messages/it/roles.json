@@ -82,11 +82,11 @@
     "templates": {
       "edit": {
         "label": "Progettare i modelli",
-        "description": "Modificare blocchi, libreria e impaginazione di modelli di seduta e documenti esistenti."
+        "description": "Modificare blocchi, libreria e impaginazione di modelli di verbale e di documento esistenti."
       },
       "manage": {
         "label": "Gestire i modelli",
-        "description": "Creare ed eliminare modelli di seduta, gestire cicli, pacchetti di compiti, tag e stati storici delle liste."
+        "description": "Creare ed eliminare modelli di verbale, gestire cicli, pacchetti di compiti, tag e stati storici delle liste."
       }
     },
     "participants": {

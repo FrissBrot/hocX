@@ -82,11 +82,11 @@
     "templates": {
       "edit": {
         "label": "Concevoir les modèles",
-        "description": "Modifier les blocs, la bibliothèque et la mise en page des modèles de séance et documents existants."
+        "description": "Modifier les blocs, la bibliothèque et la mise en page des modèles de procès-verbal et de documents existants."
       },
       "manage": {
         "label": "Gérer les modèles",
-        "description": "Créer et supprimer des modèles de séance, gérer cycles, paquets de tâches, tags et états historiques des listes."
+        "description": "Créer et supprimer des modèles de procès-verbal, gérer cycles, paquets de tâches, tags et états historiques des listes."
       }
     },
     "participants": {

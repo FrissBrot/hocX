@@ -82,11 +82,11 @@
     "templates": {
       "edit": {
         "label": "Vorlagen gestalten",
-        "description": "Bausteine, Bibliothek und Gestaltung bestehender Sitzungsvorlagen und Dokumente bearbeiten."
+        "description": "Bausteine, Bibliothek und Gestaltung bestehender Protokoll- und Dokumentvorlagen bearbeiten."
       },
       "manage": {
         "label": "Vorlagen verwalten",
-        "description": "Sitzungsvorlagen anlegen und löschen, Zyklen, Aufgabenpakete, Tags und historische Listenstände verwalten."
+        "description": "Protokollvorlagen anlegen und löschen, Zyklen, Aufgabenpakete, Tags und historische Listenstände verwalten."
       }
     },
     "participants": {

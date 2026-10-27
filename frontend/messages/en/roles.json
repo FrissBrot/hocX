@@ -82,11 +82,11 @@
     "templates": {
       "edit": {
         "label": "Design templates",
-        "description": "Edit building blocks, library and design of existing meeting templates and documents."
+        "description": "Edit building blocks, library and design of existing protocol and document templates."
       },
       "manage": {
         "label": "Manage templates",
-        "description": "Create and delete meeting templates, manage cycles, task packages, tags and historical list states."
+        "description": "Create and delete protocol templates, manage cycles, task packages, tags and historical list states."
       }
     },
     "participants": {

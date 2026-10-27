@@ -66,16 +66,18 @@ describe("formatRoleLabel", () => {
 });
 
 describe("buildNav", () => {
-  it("fuehrt einen Bereich «Vorlagen» unter Konfiguration, auch fuer Schreibende", () => {
+  it("teilt Konfiguration in Protokollvorlagen, Abläufe (nur mit templates.manage) und Gestaltung", () => {
     const hrefsOf = (groups: ReturnType<typeof buildNav>, titleKey: string) =>
       groups.find((group) => group.titleKey === titleKey)?.links.map((link) => link.href) ?? [];
     const admin = buildNav(adminSession());
-    expect(hrefsOf(admin, "groups.configuration")).toEqual(["/templates"]);
+    expect(hrefsOf(admin, "groups.configuration")).toEqual(["/templates", "/cycles", "/documents/protocols"]);
     expect(hrefsOf(admin, "groups.work")).not.toContain("/documents");
     const writer = buildNav(sessionFor("writer"));
-    expect(hrefsOf(writer, "groups.configuration")).toEqual(["/templates"]);
-    const link = admin.find((group) => group.titleKey === "groups.configuration")?.links[0];
-    expect(link?.match).toEqual(expect.arrayContaining(["/documents", "/elements", "/cycles", "/task-packages"]));
+    expect(hrefsOf(writer, "groups.configuration")).toEqual(["/templates", "/documents/protocols"]);
+    const links = admin.find((group) => group.titleKey === "groups.configuration")?.links ?? [];
+    expect(links[0]?.match).toEqual(["/elements"]);
+    expect(links[1]?.match).toEqual(["/task-packages"]);
+    expect(links[2]?.match).toEqual(["/documents"]);
   });
 
   it("liefert fuer eine Admin-Session alle Gruppen mit uebersetzbaren labelKey/titleKey (keine fertigen Texte)", () => {

@@ -439,13 +439,16 @@ function DesignerWorkspace({ initial, sessionTemplateId }: { initial: Loaded; se
     return () => window.removeEventListener("keydown", onKey);
   }, [save, history, editable, selectedId, content]);
 
+  // Sitzungsdokumente (Protokoll, Einladung …) liegen unter «Protokollgestaltung», alle anderen
+  // unter «Dokumentvorlagen» - dorthin führt auch «Zurück».
+  const isSessionDocument = initial.catalog.document_types.find((item) => item.key === template.document_type)?.needs_protocol ?? false;
   const canvasData = useCanvasData({
     content,
     documentType: template.document_type,
     dataMode,
     protocolId,
     brandId: template.brand_id,
-    needsProtocol: !sessionTemplateId && (initial.catalog.document_types.find((item) => item.key === template.document_type)?.needs_protocol ?? false),
+    needsProtocol: !sessionTemplateId && isSessionDocument,
     sessionTemplateId,
   });
 
@@ -518,7 +521,7 @@ function DesignerWorkspace({ initial, sessionTemplateId }: { initial: Loaded; se
             canPublish={(initial.capabilities.publish_templates || (initial.capabilities.edit_templates && !!template.session_template_id)) && editable}
             onPublish={() => void publish()}
             onDiscard={editable && template.draft_revision && template.published_revision ? () => void discard() : null}
-            onBack={sessionTemplateId ? undefined : () => void leave("/documents")}
+            onBack={sessionTemplateId ? undefined : () => void leave(isSessionDocument ? "/documents/protocols" : "/documents")}
             errorCount={errorCount}
           />
           {!editable && (

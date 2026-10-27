@@ -153,7 +153,7 @@
     "orderSaveFailed": "L'ordine del modello non ha potuto essere salvato",
     "orderSavedToast": "Ordine del modello salvato",
     "pageIntro": "Un modello definisce punti, blocchi e impaginazione di una serie di sedute – per l’editor del verbale, il PDF e l’invito.",
-    "pageTitle": "Modelli di seduta",
+    "pageTitle": "Modelli di verbale",
     "participantAssignmentsSaveFailed": "Le assegnazioni dei partecipanti non hanno potuto essere salvate",
     "participantFallback": "Partecipante",
     "patternTokensHelp": "Token: '{n}' = tutti i verbali, '{n_year}' = quest'anno, '{n_month}' = questo mese, '{n_cycle}' = nel proprio ciclo. Token di data: '{date}', '{date:DD.MM.YYYY}', '{dd}', '{mm}', '{yyyy}'.",
@@ -392,7 +392,7 @@
     "stepperIncrease": "Aumenta {label}",
     "page": {
       "title": "Blocchi",
-      "intro1": "Punti salvati con i loro blocchi (testo, attività, tabelle, elenchi di appuntamenti …). Inseriscili con un clic nell’editor di un modello di seduta.",
+      "intro1": "Punti salvati con i loro blocchi (testo, attività, tabelle, elenchi di appuntamenti …). Inseriscili con un clic nell’editor di un modello di verbale.",
       "intro2": "Nell’editor, le modifiche a un blocco salvato chiedono se devono valere ovunque o solo in un modello.",
       "newElement": "Nuovo blocco",
       "search": "Cerca blocchi",
@@ -921,7 +921,7 @@
     }
   },
   "studio": {
-    "intro": "Punti e blocchi di questo modello di seduta. Quello che imposti qui vale per l’editor del verbale, il PDF e l’invito.",
+    "intro": "Punti e blocchi di questo modello di verbale. Quello che imposti qui vale per l’editor del verbale, il PDF e l’invito.",
     "responsibleMapping": "Assegna responsabili",
     "settings": "Impostazioni",
     "participants": "Partecipanti",

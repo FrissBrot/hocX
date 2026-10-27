@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { AssignmentsModal } from "@/components/documents/assignments-modal";
@@ -151,7 +152,7 @@ export function TemplateLibrary({ capabilities, scope = "documents" }: Props) {
       <div className="page-header">
         {scope === "session" ? (
           <div>
-            <h2 className="page-title">{t("library.sessionTitle")}</h2>
+            <h1 className="page-title">{t("library.sessionTitle")}</h1>
             <p className="muted">{t("library.sessionDescription")}</p>
           </div>
         ) : (
@@ -161,6 +162,9 @@ export function TemplateLibrary({ capabilities, scope = "documents" }: Props) {
           </div>
         )}
         <div className="studio-header-actions">
+          <Link href="/documents/exports" className="button-secondary">
+            {t("library.exportHistory")}
+          </Link>
           {capabilities.publish_templates && (
             <button type="button" className="button-secondary" onClick={() => setAssignmentsOpen(true)}>
               {t("assignments.open")}

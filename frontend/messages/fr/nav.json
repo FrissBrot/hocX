@@ -25,7 +25,7 @@
   "statistics": "Statistiques",
   "financeAccounts": "Comptes",
   "fines": "Amendes",
-  "protocolTemplates": "Modèles de séance",
+  "protocolTemplates": "Modèles de procès-verbal",
   "elements": "Blocs",
   "general": "Général",
   "domains": "Domaines",
@@ -53,7 +53,7 @@
   "taskPackages": "Paquets de tâches",
   "documentVerification": "Vérification d’authenticité",
   "documentStudio": "Modèles",
-  "documentTemplates": "Documents",
+  "documentTemplates": "Modèles de documents",
   "documentBrand": "Apparence",
   "documentAssets": "Images et polices",
   "documentComponents": "Composants",
@@ -61,5 +61,8 @@
   "privacy": "Protection des données",
   "activity": "Historique",
   "retention": "Conservation",
-  "roleManagement": "Rôles"
+  "roleManagement": "Rôles",
+  "protocolDesign": "Mise en page des procès-verbaux",
+  "workflows": "Déroulements",
+  "design": "Mise en page"
 }

@@ -22,23 +22,30 @@ export function financeTabs(t: TFunc): RouteTab[] {
   ];
 }
 
-// Bereich «Vorlagen»: Sitzungsvorlagen, weitere Dokumente, Bausteine, Erscheinungsbild, Bilder
-// und Schriften, Export-Verlauf; Aufgabenpakete und Zyklen nur für Admins (die Routen leiten
-// alle anderen selbst um). Die Echtheitsprüfung liegt in den Mandanten-Einstellungen.
-export function templateAreaTabs(t: TFunc, isAdmin: boolean): RouteTab[] {
+// Konfiguration ist in drei Bereiche geteilt, je mit eigenem Eintrag in der Seitenleiste
+// (app-shell-nav.ts): was in einer Sitzung vorkommt, wie Sitzungen ablaufen (nur mit
+// templates.manage, die Routen leiten alle anderen selbst um) und wie die PDFs aussehen. Der
+// Export-Verlauf ist kein Tab, sondern über die Dokumentvorlagen erreichbar.
+export function protocolTemplateTabs(t: TFunc): RouteTab[] {
   return [
-    { href: "/templates", label: t("protocolTemplates") },
-    { href: "/documents", label: t("documentTemplates") },
+    { href: "/templates", label: t("templates") },
     { href: "/elements", label: t("elements") },
+  ];
+}
+
+export function workflowTabs(t: TFunc): RouteTab[] {
+  return [
+    { href: "/cycles", label: t("cycles") },
+    { href: "/task-packages", label: t("taskPackages") },
+  ];
+}
+
+export function designAreaTabs(t: TFunc): RouteTab[] {
+  return [
+    { href: "/documents/protocols", label: t("protocolDesign") },
+    { href: "/documents", label: t("documentTemplates") },
     { href: "/documents/brand", label: t("documentBrand") },
     { href: "/documents/assets", label: t("documentAssets") },
-    ...(isAdmin
-      ? [
-          { href: "/task-packages", label: t("taskPackages") },
-          { href: "/cycles", label: t("cycles") },
-        ]
-      : []),
-    { href: "/documents/exports", label: t("documentExports") },
   ];
 }
 

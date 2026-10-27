@@ -1105,10 +1105,11 @@
     "unarchive": "Restaurer",
     "unarchived": "Modèle restauré.",
     "unpublished": "Non publié",
-    "sessionTitle": "Mise en page commune des documents de séance",
-    "sessionDescription": "S’applique à tous les modèles de séance sans mise en page propre. Crée une mise en page propre dans l’éditeur du modèle sous « PDF ».",
-    "documentsTitle": "Documents",
-    "documentsDescription": "Autres documents comme listes de tâches, listes de rendez-vous, listes de membres et lettres."
+    "sessionTitle": "Mise en page des procès-verbaux",
+    "sessionDescription": "S’applique à tous les modèles de procès-verbal sans mise en page propre. Crée une mise en page propre dans l’éditeur du modèle sous « PDF ».",
+    "documentsTitle": "Modèles de documents",
+    "documentsDescription": "Autres documents comme listes de tâches, listes de rendez-vous, listes de membres et lettres.",
+    "exportHistory": "Historique des exports"
   },
   "libraryGroup": {
     "data_events": "Événements",

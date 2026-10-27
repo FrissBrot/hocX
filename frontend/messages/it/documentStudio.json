@@ -1105,10 +1105,11 @@
     "unarchive": "Ripristina",
     "unarchived": "Modello ripristinato.",
     "unpublished": "Non pubblicato",
-    "sessionTitle": "Impaginazione comune dei documenti di seduta",
-    "sessionDescription": "Vale per tutti i modelli di seduta senza impaginazione propria. Crea un’impaginazione propria nell’editor del modello sotto «PDF».",
-    "documentsTitle": "Documenti",
-    "documentsDescription": "Altri documenti come elenchi di attività, elenchi di appuntamenti, elenchi di membri e lettere."
+    "sessionTitle": "Impaginazione dei verbali",
+    "sessionDescription": "Vale per tutti i modelli di verbale senza impaginazione propria. Crea un’impaginazione propria nell’editor del modello sotto «PDF».",
+    "documentsTitle": "Modelli di documento",
+    "documentsDescription": "Altri documenti come elenchi di attività, elenchi di appuntamenti, elenchi di membri e lettere.",
+    "exportHistory": "Cronologia esportazioni"
   },
   "libraryGroup": {
     "data_events": "Appuntamenti",
