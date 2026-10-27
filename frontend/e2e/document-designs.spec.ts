@@ -52,3 +52,20 @@ test("Designer: einen Baustein des Protokollinhalts anders darstellen", async ({
     await page.request.delete(`/api/templates/${copy.id}`);
   }
 });
+
+test("Aktionsmenü einer Karte am unteren Fensterrand klappt sichtbar nach oben auf", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 700 });
+  await page.goto("/documents/protocols");
+  const trigger = page.getByRole("button", { name: /^Aktionen für/ }).first();
+  await expect(trigger).toBeVisible({ timeout: 60_000 });
+  // Karte so scrollen, dass ihr Menü-Knopf knapp über dem unteren Fensterrand steht
+  await trigger.evaluate((element) => window.scrollBy(0, element.getBoundingClientRect().bottom - window.innerHeight + 24));
+  await trigger.click();
+  const menu = page.getByRole("menu");
+  await expect(menu).toBeVisible();
+  const box = await menu.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.y).toBeGreaterThanOrEqual(0);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(700);
+  await expect(menu.getByRole("menuitem").first()).toBeInViewport();
+});

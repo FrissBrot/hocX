@@ -1350,11 +1350,10 @@ a.button-secondary:hover { border-color: var(--border-strong); }
   display: inline-block;
 }
 
+/* Nur Optik: Position (fixed, oben/unten je nach Platz) und Ebene setzt Popover per Inline-Style.
+   Ein eigenes `top` hier würde beim Aufklappen nach oben (`bottom`) mitwirken und das Menü
+   unter den Fensterrand schieben. */
 .action-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: var(--z-dropdown);
   display: grid;
   gap: 2px;
   padding: var(--space-2);
