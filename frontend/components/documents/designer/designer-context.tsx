@@ -74,9 +74,12 @@ export function useSelectedNode() {
   return useMemo(() => ({ node: location?.node ?? null, location, change }), [location, change]);
 }
 
+/** Zwei Modi (Designer v2): «Einfach» und «Erweitert». Was der Katalog noch als «expert»
+ * kennzeichnet (Position in freien Ebenen, Raster, eigene Masse …), gehört zu «Erweitert» -
+ * sonst liessen sich z. B. frei platzierte Elemente nur ohne ihre Position bearbeiten. */
 export function modeAllows(current: EditorMode, required: EditorMode): boolean {
-  const order: EditorMode[] = ["simple", "advanced", "expert"];
-  return order.indexOf(current) >= order.indexOf(required);
+  const level = (mode: EditorMode) => (mode === "simple" ? 0 : 1);
+  return level(current) >= level(required);
 }
 
 export function diagnosticsFor(diagnostics: Diagnostic[], nodeId: string): Diagnostic[] {

@@ -57,6 +57,12 @@ class AccessService:
             return lambda protocol: protocol.id in allowed
         return lambda protocol: protocol.status == FINAL_PROTOCOL_STATUS
 
+    def readable_template_ids(self, db: Session, user: CurrentUser) -> set[int] | None:
+        """Sitzungsvorlagen, die ein eingeschränkter Leser sehen darf; ``None`` = alle des Mandanten."""
+        if not self._is_restricted_reader(db, user):
+            return None
+        return set(self.repository.list_template_ids(db, user_id=user.user_id, tenant_id=user.current_tenant_id))
+
     def can_read_template(self, db: Session, user: CurrentUser, template_id: int) -> bool:
         if not user.can(P.MEETINGS_READ) or user.current_tenant_id is None:
             return False

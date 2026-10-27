@@ -4,12 +4,13 @@
 // Kategorie filtern, Vorschau öffnen, erstellen, duplizieren, umbenennen, bearbeiten,
 // veröffentlichen, archivieren, als Standard festlegen, Revisionen vergleichen/wiederherstellen.
 // ``scope``: «documents» = weitere Dokumente (Todo-Liste, Termine, Briefe …), «session» =
-// Standardgestaltung der Sitzungsdokumente (Protokoll, Einladung, Traktandenliste); Gestaltungen,
-// die allein einer Sitzungsvorlage gehören, erscheinen nur in deren Editor.
+// Gestaltungen der Sitzungsdokumente (Protokoll, Einladung, Traktandenliste), je mit den
+// Sitzungsvorlagen, die sie verwenden, und bei Kopien der Gestaltung, von der sie abstammen.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
+import type { Route } from "next";
 import { useRouter } from "next/navigation";
 
 import { AssignmentsModal } from "@/components/documents/assignments-modal";
@@ -75,7 +76,6 @@ export function TemplateLibrary({ capabilities, scope = "documents" }: Props) {
     const needle = query.trim().toLowerCase();
     return (templates ?? []).filter((item) => {
       if ((scope === "session") !== sessionTypes.has(item.document_type)) return false;
-      if (item.session_template_id) return false;
       if (category !== "all" && item.category !== category) return false;
       if (!needle) return true;
       const haystack = `${templateDisplayName(t, item)} ${templateDescription(t, item)} ${t(`docType.${item.document_type}`)}`.toLowerCase();
@@ -212,6 +212,23 @@ export function TemplateLibrary({ capabilities, scope = "documents" }: Props) {
                     <ActionMenu items={actions(item)} ariaLabel={t("library.actionsFor", { name: templateDisplayName(t, item) })} />
                   </div>
                   <p className="studio-card-description">{templateDescription(t, item) || t("library.noDescription")}</p>
+                  {item.origin === "copy" && item.source_template_name ? (
+                    <p className="studio-card-lineage">{t("library.copyOf", { name: templateDisplayName(t, { name: item.source_template_name, origin: item.source_system_key ? "system" : "tenant", system_key: item.source_system_key }) })}</p>
+                  ) : null}
+                  {scope === "session" ? (
+                    <div className="studio-card-usage">
+                      <span className="studio-card-usage-label">{t("library.usedIn")}</span>
+                      {(item.used_in ?? []).length > 0 ? (
+                        (item.used_in ?? []).map((ref) => (
+                          <Link key={ref.id} href={`/templates/${ref.id}` as Route} className="studio-card-usage-chip">
+                            {ref.name}
+                          </Link>
+                        ))
+                      ) : (
+                        <span className="studio-card-usage-none">{t("library.unused")}</span>
+                      )}
+                    </div>
+                  ) : null}
                   <div className="studio-card-badges">
                     <Badge variant={item.origin === "system" ? "neutral" : item.origin === "copy" ? "violet" : "info"}>{t(`origin.${item.origin}`)}</Badge>
                     {item.is_default && <Badge variant="success" dot>{t("library.default")}</Badge>}

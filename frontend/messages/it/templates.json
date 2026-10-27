@@ -1044,15 +1044,44 @@
         "protocol": "Impaginazione del verbale",
         "invitation": "Impaginazione dell’invito"
       },
-      "sharedInfo": "Questo modello usa l’impaginazione comune «{name}». L’anteprima mostra i tuoi punti con i contenuti dell’ultima seduta.",
       "noneInfo": "Per questo documento non c’è ancora un’impaginazione.",
-      "customize": "Impagina per questo modello",
-      "customized": "Impaginazione propria creata.",
+      "customized": "Copia «{copy}» creata. Le modifiche a «{source}» non valgono più per questo modello.",
       "customizeFailed": "Non è stato possibile creare l’impaginazione.",
       "loadFailed": "Non è stato possibile caricare l’impaginazione.",
       "copyName": "{name} – {type}",
-      "noteOwned": "impaginazione propria",
-      "noteShared": "impaginazione comune"
+      "uses": {
+        "protocol": "Il PDF del verbale usa l’impaginazione",
+        "invitation": "L’invito usa l’impaginazione"
+      },
+      "defaultBadge": "Standard della società",
+      "usage": {
+        "only": "Usata solo in questo modello.",
+        "alsoIn": "Usata anche in",
+        "onlyFallback": "Attualmente usata solo in questo modello.",
+        "default": "Vale per tutti i modelli senza assegnazione propria."
+      },
+      "assigned": "Impaginazione assegnata.",
+      "assignFailed": "Non è stato possibile assegnare l’impaginazione.",
+      "action": {
+        "choose": "Sceglierne un’altra",
+        "chooseHint": "{count, plural, one {tra # impaginazione} other {tra # impaginazioni}}",
+        "edit": "Modifica",
+        "editHint": "{count, plural, one {riguarda # modello} other {riguarda # modelli}}",
+        "stopEditing": "Termina modifica",
+        "stopEditingHint": "torna all’anteprima",
+        "customize": "Adatta solo qui",
+        "customizeHint": "crea una copia per «{name}»",
+        "customizeFor": "Modifica solo per «{name}»"
+      },
+      "choose": {
+        "title": "Scegli impaginazione",
+        "description": "Quale impaginazione deve usare «{name}»? La scelta vale subito.",
+        "default": "Standard della società",
+        "defaultHint": "attualmente «{name}»",
+        "defaultHintNone": "Standard hocX",
+        "usedIn": "usata in {names}",
+        "unused": "non usata in nessun modello"
+      }
     },
     "numberPattern": "Modello di numero",
     "fineOwn": "proprio",

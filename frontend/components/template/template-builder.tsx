@@ -2,7 +2,7 @@
 
 import { useParticipantSelectable } from "@/contexts/participant-date-context";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -16,6 +16,7 @@ import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { TemplateFineTariffModal } from "@/components/template/template-fine-tariff-modal";
 import { SessionDesignView } from "@/components/template/session-design-view";
+import { templateDisplayName } from "@/components/documents/studio-labels";
 import { SessionTemplateWorkspace } from "@/components/template/session-template-studio";
 import type { BlockEditorData } from "@/components/template/element-editor/block-editor";
 import { Badge } from "@/components/ui/badge";
@@ -518,6 +519,7 @@ export function TemplateEditor({
   const isParticipantSelectable = useParticipantSelectable();
   const t = useTranslations("templates.editor");
   const tStudio = useTranslations("templates.studio");
+  const tDocuments = useTranslations("documentStudio");
   const showToast = useToast();
   const { tagConfig } = useTagConfig();
   const [view, setView] = useState<StudioView>("editor");
@@ -549,13 +551,14 @@ export function TemplateEditor({
       // Ohne Antwort zeigt der Knopf keinen Zusatz
       .catch(() => setFineOverride(null));
   }, [canManage, financeAccounts, template.id]);
-  useEffect(() => {
+  const loadSessionDesigns = useCallback(() => {
     studioApi
       .sessionDesigns(template.id)
       .then((designs) => setSessionDesigns(designs ?? null))
       // Ohne Zugriff auf das Dokument-Studio keine Hinweise an den Tabs
       .catch(() => setSessionDesigns(null));
   }, [template.id]);
+  useEffect(() => loadSessionDesigns(), [loadSessionDesigns]);
   const [showAutoAssignModal, setShowAutoAssignModal] = useState(false);
   const [showResponsibilityModalFor, setShowResponsibilityModalFor] = useState<string | null>(null);
   const [responsibilityAutoListId, setResponsibilityAutoListId] = useState("");
@@ -1126,10 +1129,10 @@ export function TemplateEditor({
     }
   }
 
-  // Gemeinsame oder eigene Gestaltung je Sitzungsdokument (Hinweis an den Tabs PDF/Einladung)
+  // Name der verwendeten Gestaltung je Sitzungsdokument (Hinweis an den Tabs PDF/Einladung)
   const designNote = (documentType: string) => {
-    const owned = sessionDesigns?.find((item) => item.document_type === documentType)?.owned;
-    return owned === undefined ? null : owned ? tStudio("design.noteOwned") : tStudio("design.noteShared");
+    const design = sessionDesigns?.find((item) => item.document_type === documentType);
+    return design ? templateDisplayName(tDocuments, { name: design.template_name, origin: design.template_origin, system_key: design.template_system_key }) : null;
   };
 
   return (
@@ -1190,8 +1193,8 @@ export function TemplateEditor({
               />
             ),
           },
-          { id: "pdf", label: tStudio("view.pdf"), note: designNote("protocol"), content: view === "pdf" ? <SessionDesignView sessionTemplate={template} documentType="protocol" /> : null },
-          { id: "invitation", label: tStudio("view.invitation"), note: designNote("invitation"), content: view === "invitation" ? <SessionDesignView sessionTemplate={template} documentType="invitation" /> : null },
+          { id: "pdf", label: tStudio("view.pdf"), note: designNote("protocol"), content: view === "pdf" ? <SessionDesignView sessionTemplate={template} documentType="protocol" onChanged={loadSessionDesigns} /> : null },
+          { id: "invitation", label: tStudio("view.invitation"), note: designNote("invitation"), content: view === "invitation" ? <SessionDesignView sessionTemplate={template} documentType="invitation" onChanged={loadSessionDesigns} /> : null },
         ]}
       />
 

@@ -871,6 +871,9 @@
       "handler": "document_studio.list_session_designs",
       "requires": [
         "meetings.read"
+      ],
+      "branches": [
+        "templates.edit"
       ]
     },
     "POST /api/document-studio/session-templates/{template_id}/designs/{document_type}": {

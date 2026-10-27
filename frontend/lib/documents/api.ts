@@ -167,7 +167,13 @@ export type DocumentTemplateInfo = {
   // Gestaltung, die allein zu einer Sitzungsvorlage gehört
   session_template_id?: string | null;
   session_template_name?: string | null;
+  // Sitzungsvorlagen, die diese Gestaltung verwenden (eigene Zuweisung oder Standard)
+  used_in?: SessionTemplateRef[];
+  // Bei Kopien: Name der Gestaltung, von der sie abstammt
+  source_template_name?: string | null;
 };
+
+export type SessionTemplateRef = { id: string; name: string };
 
 /** Geltende Seitengestaltung eines Sitzungsdokuments einer Sitzungsvorlage. */
 export type SessionDesign = {
@@ -178,6 +184,10 @@ export type SessionDesign = {
   template_system_key: string | null;
   source: "protocol_template" | "tenant_default" | "platform_default" | "fallback";
   owned: boolean;
+  // Alle Sitzungsvorlagen, die diese Gestaltung verwenden (inkl. der aktuellen)
+  used_in: SessionTemplateRef[];
+  // Gestaltung des Mandanten, die der Benutzer bearbeiten darf (keine hocX-Vorlage)
+  editable: boolean;
 };
 
 /** Gestaltungsbeispiel (backend/app/documents/examples.py), Namen über documentStudio.examples.items. */

@@ -526,6 +526,34 @@ def test_session_template_gets_its_own_design_and_writers_publish_it(db, world):
     assert excinfo.value.status_code == 403
 
 
+def test_session_designs_list_every_session_template_that_uses_them(db, world):
+    """Gestaltungs-Übersicht: «Verwendet in» folgt der tatsächlichen Auflösung (eigene Zuweisung,
+    sonst Standard) und nennt nur Sitzungsvorlagen des eigenen Mandanten."""
+    vorstand = world["protocol_template"]
+    tk = make_template(db, world["tenant"].id, name="TK-Sitzung")
+    make_template(db, make_tenant(db, "Dritter Verein").id, name="Fremd")
+
+    def protocol_design(session_template):
+        return next(item for item in studio.list_session_designs(session_template.public_id, db=db, user=world["reader"]) if item.document_type == "protocol")
+
+    shared = protocol_design(vorstand)
+    assert {ref.name for ref in shared.used_in} == {"Vorstand", "TK-Sitzung"}
+    assert shared.editable is False  # hocX-Vorlage
+
+    own = studio.customize_session_design(vorstand.public_id, "protocol", studio.SessionDesignCustomize(name="Vorstand – Protokoll"), db=db, user=world["writer"])
+    assert [ref.name for ref in own.used_in] == ["Vorstand"]
+    assert own.source_template_name is not None
+    assert [ref.name for ref in protocol_design(tk).used_in] == ["TK-Sitzung"]
+    assert protocol_design(vorstand).editable is False  # Lesende bearbeiten nie
+    assert next(item for item in studio.list_session_designs(vorstand.public_id, db=db, user=world["writer"]) if item.document_type == "protocol").editable is True
+
+    # TK übernimmt die Kopie: geteilt, gehört keiner Vorlage mehr allein
+    studio.set_document_template_assignment(studio.AssignmentWrite(document_type="protocol", protocol_template_id=tk.public_id, template_id=own.id), db=db, user=world["admin"])
+    listed = next(item for item in studio.list_document_templates(document_type=None, include_archived=False, db=db, user=world["reader"]) if item.id == own.id)
+    assert {ref.name for ref in listed.used_in} == {"Vorstand", "TK-Sitzung"}
+    assert listed.session_template_id is None and protocol_design(vorstand).owned is False
+
+
 def test_protocol_structure_lists_the_building_blocks_of_the_owning_session_template(db, world):
     """Designer: Bausteine einzeln gestalten geht nur in einer Gestaltung, die allein einer
     Sitzungsvorlage gehört; ausgeblendete Bausteine und Sitzungsnotizen fehlen."""

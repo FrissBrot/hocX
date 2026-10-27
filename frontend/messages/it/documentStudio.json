@@ -1103,10 +1103,13 @@
     "unarchived": "Modello ripristinato.",
     "unpublished": "Non pubblicato",
     "sessionTitle": "Impaginazione dei verbali",
-    "sessionDescription": "Vale per tutti i modelli di verbale senza impaginazione propria. Crea un’impaginazione propria nell’editor del modello sotto «PDF».",
+    "sessionDescription": "Le impaginazioni definiscono l’aspetto di verbale, invito e ordine del giorno. Ogni modello di verbale ne usa una, lo standard senza assegnazione propria.",
     "documentsTitle": "Modelli di documento",
     "documentsDescription": "Altri documenti come elenchi di attività, elenchi di appuntamenti, elenchi di membri e lettere.",
-    "exportHistory": "Cronologia esportazioni"
+    "exportHistory": "Cronologia esportazioni",
+    "copyOf": "Copia di «{name}»",
+    "usedIn": "Usata in",
+    "unused": "Non usata"
   },
   "libraryGroup": {
     "data_events": "Appuntamenti",
@@ -1131,7 +1134,6 @@
   },
   "mode": {
     "advanced": "Avanzata",
-    "expert": "Esperto",
     "simple": "Semplice"
   },
   "nodeType": {
@@ -1874,7 +1876,7 @@
     "listTitle": "Impaginare i blocchi singolarmente",
     "listHelp": "Un blocco riprende la presentazione di questo elemento. Scegli un blocco per presentarlo diversamente.",
     "listLabel": "Blocchi del modello di seduta",
-    "notOwned": "I blocchi possono essere impaginati singolarmente non appena il modello di seduta ha una propria impaginazione (nell'editor del modello, sotto «PDF»).",
+    "notOwned": "I blocchi si possono formattare singolarmente non appena l’impaginazione è usata da un solo modello di seduta (nell’editor del modello sotto «PDF» → «Adatta solo qui»).",
     "empty": "Il modello di seduta non ha ancora blocchi che compaiono nel PDF.",
     "overridden": "Presentazione propria",
     "inElement": "Trattanda: {element}",
@@ -2169,5 +2171,11 @@
         }
       }
     }
+  },
+  "usage": {
+    "shared": "Riguarda {count, plural, one {# modello} other {# modelli}} ({names}) e i loro prossimi documenti. I PDF già creati restano invariati.",
+    "default": "Vale anche per i nuovi modelli senza assegnazione propria.",
+    "single": "Usata solo in «{name}».",
+    "unused": "Attualmente non usata in nessun modello."
   }
 }

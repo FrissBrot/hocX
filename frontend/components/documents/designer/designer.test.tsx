@@ -367,7 +367,7 @@ describe("TemplateDesigner", () => {
     api.studioApi.getTemplate.mockResolvedValue(detail({ document_type: "protocol", content: { ...contentFixture(), body: [{ id: "proto", type: "data_block", component: "protocol_element", params: {}, title_mode: "none", level: 1, hide_if_empty: true, appearance: {} }] } }));
     await renderDesigner();
     fireEvent.click(screen.getByRole("tab", { name: "Struktur" }));
-    expect(await screen.findAllByText(/eigene Gestaltung hat/)).not.toHaveLength(0);
+    expect(await screen.findAllByText(/nur von einer Sitzungsvorlage verwendet/)).not.toHaveLength(0);
   });
 
   it("edits the text of the selected element in the properties panel", async () => {

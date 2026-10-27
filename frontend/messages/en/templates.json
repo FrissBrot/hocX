@@ -1044,15 +1044,44 @@
         "protocol": "Protocol design",
         "invitation": "Invitation design"
       },
-      "sharedInfo": "This template uses the shared design “{name}”. The preview shows your agenda items with the content of the last meeting.",
       "noneInfo": "There is no design for this document yet.",
-      "customize": "Design for this template",
-      "customized": "Own design created.",
+      "customized": "Copy “{copy}” created. Changes to “{source}” no longer apply to this template.",
       "customizeFailed": "The design could not be created.",
       "loadFailed": "The design could not be loaded.",
       "copyName": "{name} – {type}",
-      "noteOwned": "own design",
-      "noteShared": "shared design"
+      "uses": {
+        "protocol": "The protocol PDF uses the design",
+        "invitation": "The invitation uses the design"
+      },
+      "defaultBadge": "Club default",
+      "usage": {
+        "only": "Used only in this template.",
+        "alsoIn": "Also used in",
+        "onlyFallback": "Currently used only in this template.",
+        "default": "Applies to all templates without their own assignment."
+      },
+      "assigned": "Design assigned.",
+      "assignFailed": "The design could not be assigned.",
+      "action": {
+        "choose": "Choose another",
+        "chooseHint": "{count, plural, one {from # design} other {from # designs}}",
+        "edit": "Edit",
+        "editHint": "{count, plural, one {affects # template} other {affects # templates}}",
+        "stopEditing": "Stop editing",
+        "stopEditingHint": "back to the preview",
+        "customize": "Adjust only here",
+        "customizeHint": "creates a copy for “{name}”",
+        "customizeFor": "Change only for “{name}”"
+      },
+      "choose": {
+        "title": "Choose design",
+        "description": "Which design should “{name}” use? The choice applies immediately.",
+        "default": "Club default",
+        "defaultHint": "currently “{name}”",
+        "defaultHintNone": "hocX default",
+        "usedIn": "used in {names}",
+        "unused": "not used in any template"
+      }
     },
     "numberPattern": "Number pattern",
     "fineOwn": "own",

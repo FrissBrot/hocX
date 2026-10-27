@@ -176,6 +176,11 @@ def _revision_read(db: Session, revision: DocumentTemplateRevision | None, names
     )
 
 
+class SessionTemplateRef(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
 class TemplateRead(BaseModel):
     id: uuid.UUID
     name: str
@@ -197,6 +202,10 @@ class TemplateRead(BaseModel):
     # Gestaltung, die allein zu einer Sitzungsvorlage gehört (Vorlagen-Editor)
     session_template_id: uuid.UUID | None = None
     session_template_name: str | None = None
+    # Sitzungsvorlagen, deren Protokoll/Einladung/Traktandenliste diese Gestaltung verwenden
+    # (eigene Zuweisung oder Standard); bei Kopien die Gestaltung, von der sie abstammen
+    used_in: list[SessionTemplateRef] = Field(default_factory=list)
+    source_template_name: str | None = None
 
 
 class TemplateDetail(TemplateRead):
@@ -215,9 +224,10 @@ class _Prefetched:
     owners: dict[int, Template]
     drafts: dict[int, DocumentTemplateRevision]
     names: dict[int, str]
+    usage: dict[int, list[Template]]
 
 
-def _prefetch(db: Session, templates: list[DocumentTemplate]) -> _Prefetched:
+def _prefetch(db: Session, user: CurrentUser, templates: list[DocumentTemplate]) -> _Prefetched:
     def by_id(model, ids):
         ids = {item for item in ids if item}
         return {row.id: row for row in db.scalars(select(model).where(model.id.in_(ids)))} if ids else {}
@@ -233,6 +243,10 @@ def _prefetch(db: Session, templates: list[DocumentTemplate]) -> _Prefetched:
     user_ids = {user_id for revision in (*published.values(), *drafts.values()) for user_id in (revision.created_by, revision.published_by) if user_id}
     names = dict(db.execute(select(AppUser.id, AppUser.display_name).where(AppUser.id.in_(user_ids))).all()) if user_ids else {}
     owner_ids = template_service.session_owners(db, template_ids)
+    # Eingeschränkte Leser sehen nur Namen ihrer eigenen Sitzungsvorlagen (wie bei ``used_in``)
+    readable = AccessService().readable_template_ids(db, user)
+    if readable is not None:
+        owner_ids = {template_id: owner_id for template_id, owner_id in owner_ids.items() if owner_id in readable}
     owner_templates = by_id(Template, owner_ids.values())
     return _Prefetched(
         brands=by_id(DocumentBrand, (template.brand_id for template in templates)),
@@ -241,7 +255,13 @@ def _prefetch(db: Session, templates: list[DocumentTemplate]) -> _Prefetched:
         owners={template_id: owner_templates[owner_id] for template_id, owner_id in owner_ids.items() if owner_id in owner_templates},
         drafts=drafts,
         names=names,
+        usage=template_service.design_usage(db, user.current_tenant_id, visible_session_ids=readable) if any(template.document_type in template_service.SESSION_DOCUMENT_TYPES for template in templates) else {},
     )
+
+
+def _design_usage(db: Session, user: CurrentUser) -> dict[int, list[Template]]:
+    """Verwendung der Sitzungsgestaltungen; eingeschränkte Leser sehen nur ihre Sitzungsvorlagen."""
+    return template_service.design_usage(db, user.current_tenant_id, visible_session_ids=AccessService().readable_template_ids(db, user))
 
 
 def _template_read(
@@ -249,7 +269,7 @@ def _template_read(
 ) -> TemplateRead:
     defaults = defaults if defaults is not None else template_service.default_template_ids(db, user.current_tenant_id)
     if prefetched is None:
-        prefetched = _prefetch(db, [template])
+        prefetched = _prefetch(db, user, [template])
     brand = prefetched.brands.get(template.brand_id) if template.brand_id else None
     source = prefetched.sources.get(template.source_template_id) if template.source_template_id else None
     owner = prefetched.owners.get(template.id)
@@ -273,6 +293,8 @@ def _template_read(
         updated_at=template.updated_at,
         session_template_id=owner.public_id if owner is not None else None,
         session_template_name=owner.name if owner is not None else None,
+        used_in=[SessionTemplateRef(id=session.public_id, name=session.name) for session in prefetched.usage.get(template.id, [])],
+        source_template_name=source.name if source is not None else None,
     )
 
 
@@ -332,7 +354,7 @@ def list_document_templates(
     permissions.require_view(user)
     defaults = template_service.default_template_ids(db, user.current_tenant_id)
     templates = template_service.list_templates(db, user.current_tenant_id, document_type=document_type, include_archived=include_archived)
-    prefetched = _prefetch(db, templates)
+    prefetched = _prefetch(db, user, templates)
     return [_template_read(db, user, template, defaults, prefetched) for template in templates]
 
 
@@ -793,6 +815,10 @@ class SessionDesignRead(BaseModel):
     source: str
     # Gehört allein dieser Sitzungsvorlage (direkt bearbeitbar)
     owned: bool
+    # Alle Sitzungsvorlagen, die diese Gestaltung verwenden (inkl. dieser)
+    used_in: list[SessionTemplateRef] = Field(default_factory=list)
+    # Tenant-Gestaltung (bearbeitbar), keine hocX-Vorlage
+    editable: bool = False
 
 
 def _session_template_or_404(db: Session, user: CurrentUser, template_id: uuid.UUID) -> Template:
@@ -809,6 +835,7 @@ def list_session_designs(template_id: uuid.UUID, db: Session = Depends(get_db), 
     permissions.require_view(user)
     session_template = _session_template_or_404(db, user, template_id)
     result: list[SessionDesignRead] = []
+    usage = _design_usage(db, user)
     for document_type in template_service.SESSION_DOCUMENT_TYPES:
         try:
             resolved = template_service.resolve_template(db, user.current_tenant_id, document_type, protocol_template_id=session_template.id)
@@ -823,6 +850,8 @@ def list_session_designs(template_id: uuid.UUID, db: Session = Depends(get_db), 
             template_system_key=resolved.template.system_key,
             source=resolved.source,
             owned=resolved.source == "protocol_template" and owner == session_template.id,
+            used_in=[SessionTemplateRef(id=session.public_id, name=session.name) for session in usage.get(resolved.template.id, [])],
+            editable=resolved.template.tenant_id == user.current_tenant_id and user.can(P.TEMPLATES_EDIT),
         ))
     return result
 

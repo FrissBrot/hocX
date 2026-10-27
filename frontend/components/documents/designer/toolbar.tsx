@@ -78,7 +78,7 @@ export function Toolbar(props: Props) {
         {simple ? null : (
           <>
         <Select value={props.mode} onChange={(event) => props.onModeChange(event.target.value as EditorMode)} aria-label={t("toolbar.mode")}>
-          {(["simple", "advanced", "expert"] as const).map((mode) => (
+          {(["simple", "advanced"] as const).map((mode) => (
             <option key={mode} value={mode}>
               {t(`mode.${mode}`)}
             </option>

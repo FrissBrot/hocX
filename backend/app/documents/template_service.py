@@ -546,6 +546,45 @@ def customize_session_design(
     return copy
 
 
+def design_usage(db: Session, tenant_id: int, *, visible_session_ids: set[int] | None = None) -> dict[int, list[Template]]:
+    """Dokumentvorlage → Sitzungsvorlagen, deren Sitzungsdokumente sie tatsächlich verwenden
+    (eigene Zuweisung der Sitzungsvorlage, sonst Standard des Mandanten bzw. von hocX) - dieselbe
+    Auflösung wie ``resolve_template``, gebündelt für alle aktiven Sitzungsvorlagen.
+    ``visible_session_ids``: nur diese Sitzungsvorlagen nennen (eingeschränkte Leser)."""
+    defaults = default_template_ids(db, tenant_id)
+    sessions = [
+        session
+        for session in db.scalars(select(Template).where(Template.tenant_id == tenant_id, Template.status == "active").order_by(Template.name, Template.id))
+        if visible_session_ids is None or session.id in visible_session_ids
+    ]
+    if not sessions:
+        return {}
+    scoped_rows = list(
+        db.scalars(
+            select(DocumentTemplateAssignment).where(
+                DocumentTemplateAssignment.tenant_id == tenant_id,
+                DocumentTemplateAssignment.protocol_template_id.is_not(None),
+                DocumentTemplateAssignment.document_template_id.is_not(None),
+                DocumentTemplateAssignment.document_type.in_(SESSION_DOCUMENT_TYPES),
+            )
+        )
+    )
+    referenced = {row.document_template_id for row in scoped_rows}
+    templates = {template.id: template for template in db.scalars(select(DocumentTemplate).where(DocumentTemplate.id.in_(referenced)))} if referenced else {}
+    scoped = {
+        (row.protocol_template_id, row.document_type): row.document_template_id
+        for row in scoped_rows
+        if _usable(templates.get(row.document_template_id), tenant_id, row.document_type)
+    }
+    usage: dict[int, list[Template]] = {}
+    for document_type in SESSION_DOCUMENT_TYPES:
+        for session in sessions:
+            template_id = scoped.get((session.id, document_type)) or defaults.get(document_type)
+            if template_id is not None:
+                usage.setdefault(template_id, []).append(session)
+    return usage
+
+
 @dataclass
 class ResolvedTemplate:
     template: DocumentTemplate

@@ -1103,10 +1103,13 @@
     "unarchived": "Vorlage wiederhergestellt.",
     "unpublished": "Nicht veröffentlicht",
     "sessionTitle": "Protokollgestaltung",
-    "sessionDescription": "Gilt für alle Protokollvorlagen ohne eigene Gestaltung. Eine eigene Gestaltung legst du im Editor der Vorlage unter «PDF» an.",
+    "sessionDescription": "Gestaltungen bestimmen, wie Protokoll, Einladung und Traktandenliste aussehen. Jede Protokollvorlage verwendet eine davon, ohne eigene Zuweisung den Standard.",
     "documentsTitle": "Dokumentvorlagen",
     "documentsDescription": "Weitere Dokumente wie Todo-Listen, Terminlisten, Mitgliederlisten und Briefe.",
-    "exportHistory": "Export-Verlauf"
+    "exportHistory": "Export-Verlauf",
+    "copyOf": "Kopie von «{name}»",
+    "usedIn": "Verwendet in",
+    "unused": "Nicht verwendet"
   },
   "libraryGroup": {
     "data_events": "Termine",
@@ -1131,7 +1134,6 @@
   },
   "mode": {
     "advanced": "Erweitert",
-    "expert": "Experte",
     "simple": "Einfach"
   },
   "nodeType": {
@@ -1874,7 +1876,7 @@
     "listTitle": "Bausteine einzeln gestalten",
     "listHelp": "Ein Baustein übernimmt die Darstellung dieses Blocks. Wähle einen Baustein, um ihn anders darzustellen.",
     "listLabel": "Bausteine der Sitzungsvorlage",
-    "notOwned": "Bausteine lassen sich einzeln gestalten, sobald die Sitzungsvorlage eine eigene Gestaltung hat (im Vorlagen-Editor unter «PDF»).",
+    "notOwned": "Bausteine lassen sich einzeln gestalten, sobald die Gestaltung nur von einer Sitzungsvorlage verwendet wird (im Vorlagen-Editor unter «PDF» → «Nur hier anpassen»).",
     "empty": "Die Sitzungsvorlage hat noch keine Bausteine, die im PDF erscheinen.",
     "overridden": "Eigene Darstellung",
     "inElement": "Traktandum: {element}",
@@ -2169,5 +2171,11 @@
         }
       }
     }
+  },
+  "usage": {
+    "shared": "Wirkt auf {count, plural, one {# Vorlage} other {# Vorlagen}} ({names}) und deren nächste Dokumente. Bereits erstellte PDFs bleiben unverändert.",
+    "default": "Gilt auch für neue Vorlagen ohne eigene Zuweisung.",
+    "single": "Nur in «{name}» verwendet.",
+    "unused": "Zurzeit in keiner Vorlage verwendet."
   }
 }

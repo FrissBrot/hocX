@@ -1044,15 +1044,44 @@
         "protocol": "Gestaltung des Protokolls",
         "invitation": "Gestaltung der Einladung"
       },
-      "sharedInfo": "Diese Vorlage verwendet die gemeinsame Gestaltung «{name}». Die Vorschau zeigt deine Traktanden mit den Inhalten der letzten Sitzung.",
       "noneInfo": "Für dieses Dokument gibt es noch keine Gestaltung.",
-      "customize": "Für diese Vorlage gestalten",
-      "customized": "Eigene Gestaltung angelegt.",
+      "customized": "Kopie «{copy}» erstellt. Änderungen an «{source}» gelten für diese Vorlage nicht mehr.",
       "customizeFailed": "Gestaltung konnte nicht angelegt werden.",
       "loadFailed": "Gestaltung konnte nicht geladen werden.",
       "copyName": "{name} – {type}",
-      "noteOwned": "eigene Gestaltung",
-      "noteShared": "gemeinsame Gestaltung"
+      "uses": {
+        "protocol": "Das Protokoll-PDF verwendet die Gestaltung",
+        "invitation": "Die Einladung verwendet die Gestaltung"
+      },
+      "defaultBadge": "Vereins-Standard",
+      "usage": {
+        "only": "Nur in dieser Vorlage verwendet.",
+        "alsoIn": "Auch verwendet in",
+        "onlyFallback": "Zurzeit nur in dieser Vorlage verwendet.",
+        "default": "Gilt für alle Vorlagen ohne eigene Zuweisung."
+      },
+      "assigned": "Gestaltung zugewiesen.",
+      "assignFailed": "Gestaltung konnte nicht zugewiesen werden.",
+      "action": {
+        "choose": "Andere wählen",
+        "chooseHint": "{count, plural, one {aus # Gestaltung} other {aus # Gestaltungen}}",
+        "edit": "Bearbeiten",
+        "editHint": "{count, plural, one {wirkt auf # Vorlage} other {wirkt auf # Vorlagen}}",
+        "stopEditing": "Bearbeiten beenden",
+        "stopEditingHint": "zurück zur Vorschau",
+        "customize": "Nur hier anpassen",
+        "customizeHint": "erstellt eine Kopie für «{name}»",
+        "customizeFor": "Nur für «{name}» ändern"
+      },
+      "choose": {
+        "title": "Gestaltung wählen",
+        "description": "Welche Gestaltung soll «{name}» verwenden? Die Auswahl gilt sofort.",
+        "default": "Standard des Vereins",
+        "defaultHint": "zurzeit «{name}»",
+        "defaultHintNone": "hocX-Standard",
+        "usedIn": "verwendet in {names}",
+        "unused": "in keiner Vorlage verwendet"
+      }
     },
     "numberPattern": "Nummer-Muster",
     "fineOwn": "eigener",

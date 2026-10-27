@@ -1044,15 +1044,44 @@
         "protocol": "Mise en page du procès-verbal",
         "invitation": "Mise en page de l’invitation"
       },
-      "sharedInfo": "Ce modèle utilise la mise en page commune « {name} ». L’aperçu montre tes points avec le contenu de la dernière séance.",
       "noneInfo": "Il n’y a pas encore de mise en page pour ce document.",
-      "customize": "Mettre en page pour ce modèle",
-      "customized": "Mise en page propre créée.",
+      "customized": "Copie « {copy} » créée. Les modifications de « {source} » ne s’appliquent plus à ce modèle.",
       "customizeFailed": "La mise en page n’a pas pu être créée.",
       "loadFailed": "La mise en page n’a pas pu être chargée.",
       "copyName": "{name} – {type}",
-      "noteOwned": "mise en page propre",
-      "noteShared": "mise en page commune"
+      "uses": {
+        "protocol": "Le PDF du procès-verbal utilise la mise en page",
+        "invitation": "L’invitation utilise la mise en page"
+      },
+      "defaultBadge": "Standard de la société",
+      "usage": {
+        "only": "Utilisée uniquement dans ce modèle.",
+        "alsoIn": "Aussi utilisée dans",
+        "onlyFallback": "Actuellement utilisée uniquement dans ce modèle.",
+        "default": "S’applique à tous les modèles sans attribution propre."
+      },
+      "assigned": "Mise en page attribuée.",
+      "assignFailed": "La mise en page n’a pas pu être attribuée.",
+      "action": {
+        "choose": "En choisir une autre",
+        "chooseHint": "{count, plural, one {parmi # mise en page} other {parmi # mises en page}}",
+        "edit": "Modifier",
+        "editHint": "{count, plural, one {concerne # modèle} other {concerne # modèles}}",
+        "stopEditing": "Terminer la modification",
+        "stopEditingHint": "retour à l’aperçu",
+        "customize": "Adapter seulement ici",
+        "customizeHint": "crée une copie pour « {name} »",
+        "customizeFor": "Modifier seulement pour « {name} »"
+      },
+      "choose": {
+        "title": "Choisir la mise en page",
+        "description": "Quelle mise en page « {name} » doit-il utiliser ? Le choix s’applique immédiatement.",
+        "default": "Standard de la société",
+        "defaultHint": "actuellement « {name} »",
+        "defaultHintNone": "Standard hocX",
+        "usedIn": "utilisée dans {names}",
+        "unused": "utilisée dans aucun modèle"
+      }
     },
     "numberPattern": "Modèle de numéro",
     "fineOwn": "propre",

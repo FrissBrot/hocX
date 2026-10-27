@@ -1103,10 +1103,13 @@
     "unarchived": "Modèle restauré.",
     "unpublished": "Non publié",
     "sessionTitle": "Mise en page des procès-verbaux",
-    "sessionDescription": "S’applique à tous les modèles de procès-verbal sans mise en page propre. Crée une mise en page propre dans l’éditeur du modèle sous « PDF ».",
+    "sessionDescription": "Les mises en page définissent l’apparence du procès-verbal, de l’invitation et de l’ordre du jour. Chaque modèle de procès-verbal en utilise une, le standard sans attribution propre.",
     "documentsTitle": "Modèles de documents",
     "documentsDescription": "Autres documents comme listes de tâches, listes de rendez-vous, listes de membres et lettres.",
-    "exportHistory": "Historique des exports"
+    "exportHistory": "Historique des exports",
+    "copyOf": "Copie de « {name} »",
+    "usedIn": "Utilisée dans",
+    "unused": "Non utilisée"
   },
   "libraryGroup": {
     "data_events": "Événements",
@@ -1131,7 +1134,6 @@
   },
   "mode": {
     "advanced": "Avancé",
-    "expert": "Expert",
     "simple": "Simple"
   },
   "nodeType": {
@@ -1874,7 +1876,7 @@
     "listTitle": "Mettre en forme les blocs individuellement",
     "listHelp": "Un bloc reprend la présentation de cet élément. Choisis un bloc pour le présenter autrement.",
     "listLabel": "Blocs du modèle de séance",
-    "notOwned": "Les blocs peuvent être mis en forme individuellement dès que le modèle de séance a sa propre mise en page (dans l'éditeur de modèle, sous «PDF»).",
+    "notOwned": "Les éléments peuvent être mis en forme individuellement dès que la mise en page n’est utilisée que par un seul modèle de séance (dans l’éditeur de modèle sous « PDF » → « Adapter seulement ici »).",
     "empty": "Le modèle de séance n'a pas encore de blocs qui apparaissent dans le PDF.",
     "overridden": "Présentation propre",
     "inElement": "Point de l'ordre du jour : {element}",
@@ -2169,5 +2171,11 @@
         }
       }
     }
+  },
+  "usage": {
+    "shared": "Concerne {count, plural, one {# modèle} other {# modèles}} ({names}) et leurs prochains documents. Les PDF déjà créés restent inchangés.",
+    "default": "S’applique aussi aux nouveaux modèles sans attribution propre.",
+    "single": "Utilisée uniquement dans « {name} ».",
+    "unused": "Actuellement utilisée dans aucun modèle."
   }
 }

@@ -15,6 +15,7 @@ import { BlockAppearancePanel } from "@/components/documents/designer/block-appe
 import { brandView, mm } from "@/components/documents/designer/brand-preview";
 import { Canvas, parseDropId } from "@/components/documents/designer/canvas";
 import { useCanvasData } from "@/components/documents/designer/canvas-data";
+import { DesignUsageBanner, DetachAction } from "@/components/documents/designer/design-usage-banner";
 import { DesignerProvider, DesignerState, SelectedBlock } from "@/components/documents/designer/designer-context";
 import { DocumentPanel } from "@/components/documents/designer/document-panel";
 import { InsertSource, LeftPanel } from "@/components/documents/designer/left-panel";
@@ -42,8 +43,9 @@ const MODE_STORAGE_KEY = "hocx.documentStudio.mode";
 type Loaded = { template: DocumentTemplateDetail; catalog: StudioCatalog; capabilities: Capabilities; brands: Brand[]; assets: DocumentAsset[]; components: ReusableComponent[] };
 
 /** ``sessionTemplateId``: eingebettet im Vorlagen-Editor einer Sitzungsvorlage; die Vorschau zeigt
- * deren Traktanden mit den Inhalten der letzten Sitzung. */
-export function TemplateDesigner({ templateId, sessionTemplateId = null }: { templateId: string; sessionTemplateId?: string | null }) {
+ * deren Traktanden mit den Inhalten der letzten Sitzung. ``onDetach``: Weg «nur für diese Vorlage
+ * ändern» im Hinweis, wenn die Gestaltung auch anderswo verwendet wird. */
+export function TemplateDesigner({ templateId, sessionTemplateId = null, onDetach = null }: { templateId: string; sessionTemplateId?: string | null; onDetach?: DetachAction | null }) {
   const t = useTranslations("documentStudio");
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [error, setError] = useState("");
@@ -56,7 +58,7 @@ export function TemplateDesigner({ templateId, sessionTemplateId = null }: { tem
   }, [templateId]);
   if (error) return <StatusBanner tone="error" message={error} />;
   if (!loaded) return <p className="muted">{t("common.loading")}</p>;
-  return <DesignerWorkspace key={loaded.template.working_revision_id ?? loaded.template.id} initial={loaded} sessionTemplateId={sessionTemplateId} />;
+  return <DesignerWorkspace key={loaded.template.working_revision_id ?? loaded.template.id} initial={loaded} sessionTemplateId={sessionTemplateId} onDetach={onDetach} />;
 }
 
 /** Gemerkter Modus; wer kein Corporate Design verwaltet (keine Admin-Rechte), startet immer im
@@ -65,13 +67,14 @@ function readMode(capabilities: Capabilities): EditorMode {
   if (!capabilities.manage_brand) return "simple";
   try {
     const value = window.localStorage.getItem(MODE_STORAGE_KEY);
-    return value === "advanced" || value === "expert" ? value : "simple";
+    // Früherer Modus «Experte» ist in «Erweitert» aufgegangen
+    return value === "advanced" || value === "expert" ? "advanced" : "simple";
   } catch {
     return "simple";
   }
 }
 
-function DesignerWorkspace({ initial, sessionTemplateId }: { initial: Loaded; sessionTemplateId: string | null }) {
+function DesignerWorkspace({ initial, sessionTemplateId, onDetach }: { initial: Loaded; sessionTemplateId: string | null; onDetach: DetachAction | null }) {
   const t = useTranslations("documentStudio");
   const router = useRouter();
   const toast = useToast();
@@ -551,6 +554,7 @@ function DesignerWorkspace({ initial, sessionTemplateId }: { initial: Loaded; se
             errorCount={errorCount}
             onOpenAdvanced={mode === "simple" ? () => setMode("advanced") : undefined}
           />
+          {isSessionDocument && editable && <DesignUsageBanner template={template} embedded={!!sessionTemplateId} onDetach={onDetach} />}
           {!editable && (
             <div className="studio-readonly">
               <StatusBanner tone="neutral" message={template.origin === "system" ? t("designer.systemReadOnly") : t("designer.readOnly")} />

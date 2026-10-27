@@ -8,6 +8,22 @@ Installationen aktualisieren können.
 
 ## [Unveröffentlicht]
 
+### Geändert
+
+- **Gestaltungen: wer sie verwendet, was beim Anpassen passiert.** Im Vorlagen-Editor (PDF,
+  Einladung) zeigt eine Zuweisungs-Leiste die verwendete Gestaltung, die anderen Vorlagen, die
+  sie auch verwenden, und drei Wege: «Andere wählen» (sofort gespeichert, inkl. Standard des
+  Vereins), «Bearbeiten» (wirkt auf alle Vorlagen, die sie verwenden) und «Nur hier anpassen»
+  (Kopie; der Hinweis sagt, dass Änderungen an der Ausgangsgestaltung hier nicht mehr gelten).
+  «Eigene/Gemeinsame Gestaltung» entfällt, die Tabs zeigen den Namen der Gestaltung.
+- Designer: Hinweis, auf wie viele Vorlagen eine Änderung wirkt, mit «Nur für … ändern».
+- Bibliothek der Protokollgestaltung: jede Gestaltung zeigt «Verwendet in» und bei Kopien
+  «Kopie von …»; Kopien einzelner Vorlagen erscheinen jetzt ebenfalls.
+- Dokument-Designer mit zwei Modi wie im Entwurf v2: «Einfach» und «Erweitert». Der bisherige
+  Modus «Experte» ist in «Erweitert» aufgegangen, damit u. a. die Position frei platzierter
+  Elemente (z. B. Adresse in einer freien Ebene) wieder bearbeitbar ist; für solche Elemente
+  entfallen die wirkungslosen Felder «Abstand oben/unten».
+
 ## [1.2.0] - 2026-10-23
 
 Feature-Release auf 1.1.13. Fünf Entwicklungszweige sind zusammengeführt und aufeinander

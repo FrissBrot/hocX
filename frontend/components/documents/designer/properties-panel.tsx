@@ -421,10 +421,11 @@ export function PropertiesPanel() {
         return (
           <>
             <SpacingField label={t("fields.padding")} value={style.padding} onChange={(padding) => setStyle({ padding }, "padding")} />
-            <div className="studio-field-grid">
+            {/* Frei platzierte Elemente (Freie Ebene) stehen über ihre Position, Abstand oben/unten wirkt dort nicht */}
+            {node.frame ? null : <div className="studio-field-grid">
               <NumberField label={t("fields.marginTop")} value={style.margin_top ?? 0} min={0} max={200} step={0.5} suffix={t("brand.unitMm")} onChange={(margin_top) => setStyle({ margin_top }, "marginTop")} />
               <NumberField label={t("fields.marginBottom")} value={style.margin_bottom ?? 0} min={0} max={200} step={0.5} suffix={t("brand.unitMm")} onChange={(margin_bottom) => setStyle({ margin_bottom }, "marginBottom")} />
-            </div>
+            </div>}
           </>
         );
       case "background":

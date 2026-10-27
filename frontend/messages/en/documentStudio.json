@@ -1103,10 +1103,13 @@
     "unarchived": "Template restored.",
     "unpublished": "Not published",
     "sessionTitle": "Protocol design",
-    "sessionDescription": "Applies to all protocol templates without their own design. Create an own design in the template editor under “PDF”.",
+    "sessionDescription": "Designs define how protocol, invitation and agenda look. Every protocol template uses one of them, the default if nothing else is assigned.",
     "documentsTitle": "Document templates",
     "documentsDescription": "Further documents such as to-do lists, event lists, member lists and letters.",
-    "exportHistory": "Export history"
+    "exportHistory": "Export history",
+    "copyOf": "Copy of “{name}”",
+    "usedIn": "Used in",
+    "unused": "Not used"
   },
   "libraryGroup": {
     "data_events": "Events",
@@ -1131,7 +1134,6 @@
   },
   "mode": {
     "advanced": "Advanced",
-    "expert": "Expert",
     "simple": "Simple"
   },
   "nodeType": {
@@ -1874,7 +1876,7 @@
     "listTitle": "Style building blocks individually",
     "listHelp": "A building block takes over the appearance of this block. Choose a building block to display it differently.",
     "listLabel": "Building blocks of the meeting template",
-    "notOwned": "Building blocks can be styled individually once the meeting template has its own design (in the template editor under «PDF»).",
+    "notOwned": "Building blocks can be styled individually once the design is used by only one meeting template (in the template editor under «PDF» → «Adjust only here»).",
     "empty": "The meeting template has no building blocks that appear in the PDF yet.",
     "overridden": "Own appearance",
     "inElement": "Agenda item: {element}",
@@ -2169,5 +2171,11 @@
         }
       }
     }
+  },
+  "usage": {
+    "shared": "Affects {count, plural, one {# template} other {# templates}} ({names}) and their next documents. PDFs already created stay unchanged.",
+    "default": "Also applies to new templates without their own assignment.",
+    "single": "Used only in “{name}”.",
+    "unused": "Currently not used in any template."
   }
 }
