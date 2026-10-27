@@ -171,7 +171,8 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
 
     void loadStorageUsage(tenant.id);
 
-    setSelectedFeatures(new Set(tenant.enabled_features));
+    // Angehakt = Zusatzmodule; Plan-Module kommen aus dem Plan (Planwechsel führt sie nach)
+    setSelectedFeatures(new Set(tenant.addon_features));
     void loadFeatureCatalog();
 
     setSubscriptionForm({
@@ -263,18 +264,20 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     if (!tenant) return;
     setSubscriptionBusy(true);
     try {
-      await browserApiFetch<AdminTenantSummary>(`/api/admin/tenants/${tenant.id}/subscription`, {
+      const subscribed = await browserApiFetch<AdminTenantSummary>(`/api/admin/tenants/${tenant.id}/subscription`, {
         method: "PATCH",
         body: JSON.stringify(subscriptionForm),
       });
       // Module als Full-Replace: Plan-Module sind immer dabei, Zusatzmodule nur wenn angehakt.
+      // Was der Planwechsel auf «nur lesen» gesetzt hat, bleibt so (Daten bleiben lesbar).
       const enabledCodes = Array.from(new Set([...selectedFeatures, ...planFeatureCodes]));
+      const readOnlyCodes = (subscribed?.read_only_features ?? tenant.read_only_features).filter((code) => !enabledCodes.includes(code));
       const updated = await browserApiFetch<AdminTenantSummary>(`/api/admin/tenants/${tenant.id}/features`, {
         method: "PUT",
-        body: JSON.stringify({ enabled_codes: enabledCodes }),
+        body: JSON.stringify({ enabled_codes: enabledCodes, read_only_codes: readOnlyCodes }),
       });
       onSaved(updated);
-      setSelectedFeatures(new Set(updated.enabled_features));
+      setSelectedFeatures(new Set(updated.addon_features));
       showToast(t("tenantModal.toasts.subscriptionSaved"), "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("tenantModal.toasts.subscriptionSaveFailed"), "error");
@@ -660,7 +663,9 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                               <span>
                                 <strong>{feature.name}</strong>
                                 <span className="muted">
-                                  {inPlan
+                                  {!inPlan && !booked && tenant?.read_only_features.includes(feature.code)
+                                    ? t("tenantModal.modules.readOnly")
+                                    : inPlan
                                     ? t("tenantModal.modules.includedInPlan")
                                     : feature.standalone_price_monthly_rp !== null
                                       ? t("tenantModal.modules.addon", { price: formatChfShort(feature.standalone_price_monthly_rp) })

@@ -20,7 +20,8 @@ from app.core.db import get_db, release_for_stream
 from app.core.config import settings
 from app.core.rate_limit import enforce_rate_limit
 from app.core.permissions import P
-from app.core.security import CurrentUser, get_current_user, require_permission
+from app.core.features_generated import F
+from app.core.security import CurrentUser, get_current_user, require_feature, require_permission
 from app.models import GalleryImage, Protocol, ProtocolElementBlock, ProtocolImage, StoredFile, Tenant
 from app.schemas.files import (
     AlbumPendingReleaseRead,
@@ -1314,6 +1315,7 @@ def create_album_share(
     Besitzer-Mandant darf einladen, daher hier bewusst PhotoAlbum.tenant_id statt _get_album
     (die eingeladene Seite soll das Album ja gerade noch NICHT sehen können)."""
     require_permission(user, P.FILES_MANAGE)
+    require_feature(user, F.PHOTO_SHARING, write=True)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     album = db.scalar(select(PhotoAlbum).where(PhotoAlbum.id == album_id, PhotoAlbum.tenant_id == user.current_tenant_id))
@@ -1343,6 +1345,7 @@ def update_album_share(
     """Für einen Partner Standort (GPS) teilen und/oder öffentliche Links auf dieses Album erlauben
     - nur der Besitzer-Mandant (SEC-002)."""
     require_permission(user, P.FILES_MANAGE)
+    require_feature(user, F.PHOTO_SHARING, write=True)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     album = db.scalar(select(PhotoAlbum).where(PhotoAlbum.id == album_id, PhotoAlbum.tenant_id == user.current_tenant_id))

@@ -15,6 +15,7 @@ python3 "$REPO_ROOT/scripts/check-security-rules.py" --staged
 # permissions/route-map.json aktuell, sobald Routen, Berechtigungen oder der Katalog gestagt sind.
 if git diff --cached --name-only | grep -qE '^(backend/app/api/routes/|backend/app/documents/permissions\.py|backend/app/main\.py|backend/tests/test_route_permission_inventory\.py|permissions/|backend/alembic/versions/|frontend/messages/[^/]+/roles\.json)'; then
   python3 "$REPO_ROOT/scripts/sync-permission-catalog.py" --check
+  python3 "$REPO_ROOT/scripts/sync-feature-catalog.py" --check
   python3 "$REPO_ROOT/scripts/sync-route-permissions.py" --check
 fi
 

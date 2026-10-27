@@ -12,7 +12,7 @@ from app.core.permissions import P
 from app.core.security import CurrentUser, hash_password, require_permission, verify_password
 from app.core.tenant_scope import tenant_scope_suspended
 from app.models import AppUser, Tenant
-from app.services import public_id_service
+from app.services import public_id_service, user_limit_service
 from app.services import role_service
 from app.services.access_service import AccessService
 from app.repositories.user_repository import UserRepository
@@ -140,6 +140,8 @@ class UserService:
         require_permission(actor, P.ACCESS_MANAGE)
         if payload.tenant_id is not None and payload.tenant_id != actor.current_tenant_public_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Users can only be created in the own tenant")
+        if payload.login_enabled and payload.is_active:
+            user_limit_service.ensure_login_capacity(db, actor.current_tenant_id)
         user = self._new_app_user(db, payload, tenant_id=actor.current_tenant_id)
         self.repository.create(db, user)
         self._assign_initial_roles(db, actor, user, payload)
@@ -212,6 +214,11 @@ class UserService:
         left_at = values.get("left_at", user.left_at)
         if joined_at and left_at and left_at < joined_at:
             raise ValueError("left_at must not be before joined_at")
+        # Benutzerlimit (Abo): nur wenn ein weiteres Konto mit Login aktiv wird; das
+        # Plattform-Admin-Panel (actor None) darf darüber hinaus gehen.
+        will_count = login_enabled and values.get("is_active", user.is_active)
+        if actor is not None and will_count and not (user.login_enabled and user.is_active):
+            user_limit_service.ensure_login_capacity(db, user.tenant_id)
         if payload.password:
             values["password_hash"] = hash_password(payload.password)
             # Password change invalidates all existing sessions

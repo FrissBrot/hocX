@@ -182,5 +182,19 @@
     "working": "Creating …",
     "done": "Export downloaded.",
     "failed": "Export failed."
+  },
+  "features": {
+    "finance": "Finances",
+    "abgabebox": "Submission box",
+    "custom_domain": "Custom domain",
+    "verify_domain": "Custom verification domain",
+    "task_packages": "Task packages",
+    "custom_roles": "Custom roles",
+    "photo_sharing": "Photo sharing",
+    "document_designer": "Document designer"
+  },
+  "featureNotice": {
+    "readOnly": "“{name}” is no longer part of your plan. Existing data stays visible, changes are locked.",
+    "notBooked": "“{name}” is not included in your plan. Your administrators can upgrade the plan."
   }
 }

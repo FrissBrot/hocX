@@ -182,5 +182,19 @@
     "working": "Wird erstellt …",
     "done": "Export heruntergeladen.",
     "failed": "Export fehlgeschlagen."
+  },
+  "features": {
+    "finance": "Finanzen",
+    "abgabebox": "Abgabebox",
+    "custom_domain": "Eigene Domain",
+    "verify_domain": "Eigene Prüf-Domain",
+    "task_packages": "Aufgabenpakete",
+    "custom_roles": "Eigene Rollen",
+    "photo_sharing": "Teilen von Fotos",
+    "document_designer": "Dokument-Designer"
+  },
+  "featureNotice": {
+    "readOnly": "«{name}» ist nicht mehr in Ihrem Abo. Bestehende Daten bleiben sichtbar, Änderungen sind gesperrt.",
+    "notBooked": "«{name}» ist in Ihrem Abo nicht enthalten. Ihre Administration kann das Abo erweitern."
   }
 }

@@ -104,6 +104,7 @@ export type TenantSummary = {
   created_at?: string | null;
   updated_at?: string | null;
   enabled_features: string[];
+  read_only_features?: string[];
   // Nur in der Antwort auf eine Änderung: die Namensänderung hat die Verifizierung durch hocX aufgehoben
   identity_verification_revoked?: boolean;
 };
@@ -697,6 +698,8 @@ export type AdminTenantSummary = {
   storage_used_bytes: number;
   storage_quota_bytes: number | null;
   enabled_features: string[];
+  read_only_features: string[];
+  addon_features: string[];
   plan_code: string | null;
   plan_name: string | null;
   billing_cycle: "monthly" | "yearly";

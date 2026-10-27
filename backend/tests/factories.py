@@ -40,10 +40,20 @@ from app.models.entities import (
 )
 
 
-def make_tenant(db, name="Test Tenant") -> Tenant:
+# Bis 0158 frei verfügbar, seither buchbar - Bestandsmandanten haben sie per Backfill
+GRANDFATHERED_FEATURES = ("task_packages", "custom_roles", "photo_sharing", "document_designer")
+
+
+def make_tenant(db, name="Test Tenant", *, features: tuple[str, ...] = GRANDFATHERED_FEATURES) -> Tenant:
+    """Mandant wie ein Bestandsmandant: mit den seit 0158 buchbaren Features (Bestandsschutz).
+    finance/abgabebox/custom_domain bleiben wie bisher ungebucht (grant_tenant_feature)."""
     tenant = Tenant(name=name)
     db.add(tenant)
     db.flush()
+    for code in features:
+        db.add(TenantFeature(tenant_id=tenant.id, feature_code=code))
+    if features:
+        db.flush()
     return tenant
 
 
@@ -263,6 +273,10 @@ def make_mfa_enrolled_user(
     return user, secret
 
 
+# Bestehende Mandanten haben per Backfill alle Features ausser verify_domain (0084-0086, 0158)
+DEFAULT_TEST_FEATURES = frozenset({"finance", "abgabebox", "custom_domain", "task_packages", "custom_roles", "photo_sharing", "document_designer"})
+
+
 def make_current_user(
     tenant_id: int,
     role: str = "writer",
@@ -282,9 +296,9 @@ def make_current_user(
     that need a public_id to line up with a real row already fetch it themselves from the
     ORM object made via make_tenant/make_app_user.
 
-    features defaults to {"finance", "abgabebox", "custom_domain"} rather than empty - every
-    existing tenant is backfilled with all three (see migrations
-    0084_tenant_feature/0085_plan_pricing/0086_custom_domain_enforcement), so this default keeps
+    features defaults to DEFAULT_TEST_FEATURES rather than empty - every existing tenant is
+    backfilled with these (see migrations 0084_tenant_feature/0085_plan_pricing/
+    0086_custom_domain_enforcement/0158_feature_entitlements), so this default keeps
     every pre-existing role/permission test green without needing to know about feature-gating.
     Tests for feature-gating itself pass an explicit `features` set."""
     return CurrentUser(
@@ -299,7 +313,7 @@ def make_current_user(
         current_tenant_public_id=uuid.uuid4(),
         current_tenant_name="Test Tenant",
         current_tenant_profile_image_path=None,
-        current_tenant_features=features if features is not None else frozenset({"finance", "abgabebox", "custom_domain"}),
+        current_tenant_features=features if features is not None else DEFAULT_TEST_FEATURES,
         # role: eine Standardrolle (admin/writer/kassier/reader) als Abkürzung für ihre
         # Berechtigungen; permissions überschreibt das für eigene Rollen (RBAC-Tests).
         permissions=permissions if permissions is not None else system_role_permissions(role),

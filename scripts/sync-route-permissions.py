@@ -17,7 +17,7 @@ Felder je Route ("METHODE /pfad"):
   handler       Modul.Funktion
   requires      require_permission(user, P.X) - alle müssen erfüllt sein
   requires_any  require_any_permission(user, P.X, P.Y) - je Gruppe eine
-  features      require_feature(user, "...")
+  features      require_feature(user, "...") bzw. F.X; «(lesen)» = auch im Nur-Lesen-Zustand
   branches      user.can(P.X) - verzweigt nur (z. B. mehr Daten), ist kein Zugangstor
   platform      Plattform-Admin-Route (Dependency aus core/admin_security.py)
   note          begründete Ausnahme aus dem Inventar-Test
@@ -82,6 +82,9 @@ def _permission(node: ast.AST) -> str:
         return PERMISSIONS[node.attr]
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         return node.value
+    # Feature-Konstanten (core/features_generated.py: F.TASK_PACKAGES = "task_packages")
+    if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "F":
+        return node.attr.lower()
     return f"<{ast.unparse(node)}>"  # dynamisch - im Diff sichtbar, im Zweifel genauer hinsehen
 
 
@@ -110,7 +113,9 @@ def _direct_checks(node: ast.AST, external: dict[str, dict[str, set]]) -> tuple[
         elif name == "require_any_permission":
             checks["requires_any"].add(tuple(sorted(_permission(arg) for arg in args)))
         elif name == "require_feature":
-            checks["features"].update(_permission(arg) for arg in args)
+            # write=False: auch im Nur-Lesen-Zustand nach einem Downgrade erlaubt
+            read_only = any(keyword.arg == "write" and isinstance(keyword.value, ast.Constant) and keyword.value.value is False for keyword in call.keywords)
+            checks["features"].update(_permission(arg) + (" (lesen)" if read_only else "") for arg in args)
         elif name == "can" and isinstance(call.func, ast.Attribute):
             checks["branches"].update(_permission(arg) for arg in call.args)
         if name in external:

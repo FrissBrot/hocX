@@ -32,7 +32,7 @@ from app.services.statistics_common import own_person_key
 from tests.factories import assign_roles, make_app_user, make_current_user, make_protocol, make_template, make_tenant, system_role
 
 ROLES = ("admin", "writer", "kassier", "reader")
-ALL_FEATURES = frozenset({"finance", "abgabebox", "custom_domain"})
+ALL_FEATURES = frozenset({"finance", "abgabebox", "custom_domain", "document_designer"})
 
 
 # ── 1. Äquivalenz mit dem alten Rollenmodell ───────────────────────────────────────────────
@@ -50,7 +50,8 @@ LEGACY = {
     "require_all_fines_read": ({"writer", "kassier", "admin"}, None),
     "sees_all_protocols": ({"admin", "writer", "kassier"}, None),
     "per_person_statistics": ({"writer", "kassier", "admin"}, None),
-    "document_edit_templates": ({"writer", "admin"}, None),
+    # Seit 0158 zusätzlich an das Abo-Feature document_designer gebunden (Dokument-Designer)
+    "document_edit_templates": ({"writer", "admin"}, "document_designer"),
     "document_publish": ({"admin"}, None),
     "document_personal_data": ({"writer", "admin"}, None),
     "document_unmark_drafts": ({"writer", "admin"}, None),

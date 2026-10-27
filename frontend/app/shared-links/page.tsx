@@ -6,7 +6,8 @@ import { SharedLinksView } from "@/components/shared-links/shared-links-view";
 import { AppShell } from "@/components/ui/app-shell";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { ShareLink } from "@/types/api";
-import { can } from "@/lib/permissions";
+import { FeatureNotice } from "@/components/ui/feature-notice";
+import { can, featureAccess } from "@/lib/permissions";
 
 export default async function SharedLinksPage() {
   const session = await requireSession();
@@ -24,6 +25,7 @@ export default async function SharedLinksPage() {
         mobile={<MobileSharedLinks initialLinks={links ?? []} />}
         desktop={
           <>
+          <FeatureNotice feature="photo_sharing" access={featureAccess(session, "photo_sharing")} />
           <section className="panel">
             <SharedLinksView initialLinks={links ?? []} />
           </section>

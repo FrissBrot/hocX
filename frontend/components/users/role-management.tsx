@@ -20,6 +20,8 @@ type Props = {
   // Eigene effektive Berechtigungen: nur diese lassen sich vergeben (keine Rechteausweitung).
   actorPermissions: string[];
   enabledFeatures: string[];
+  // Eigene Rollen anlegen/ändern (Abo-Feature custom_roles); sonst nur ansehen und zuweisen
+  canCustomize: boolean;
 };
 
 type RoleForm = {
@@ -52,7 +54,7 @@ function emptyForm(): RoleForm {
 
 /** Rollen des Mandanten: anlegen, benennen, Berechtigungen zuordnen, löschen. Die Bereiche sind
  * nur Anzeige-Kategorien (permissions/catalog.json), keine eigenen Objekte. */
-export function RoleManagement({ initialRoles, actorPermissions, enabledFeatures }: Props) {
+export function RoleManagement({ initialRoles, actorPermissions, enabledFeatures, canCustomize }: Props) {
   const t = useTranslations("roles");
   const tNav = useTranslations("nav");
   const tUsers = useTranslations("users");
@@ -74,7 +76,7 @@ export function RoleManagement({ initialRoles, actorPermissions, enabledFeatures
       description: role.description ?? "",
       selected: minimalPermissions(role.permissions),
       systemKey: role.system_key,
-      locked: role.locked,
+      locked: role.locked || !canCustomize,
     });
   }
 
@@ -130,9 +132,11 @@ export function RoleManagement({ initialRoles, actorPermissions, enabledFeatures
           <h1 className="page-title">{t("pageTitle")}</h1>
           <p className="muted">{t("pageHint")}</p>
         </div>
-        <button type="button" className="button-primary" onClick={() => setForm(emptyForm())}>
-          {t("newRole")}
-        </button>
+        {canCustomize ? (
+          <button type="button" className="button-primary" onClick={() => setForm(emptyForm())}>
+            {t("newRole")}
+          </button>
+        ) : null}
       </div>
 
       <DataTable
@@ -154,7 +158,7 @@ export function RoleManagement({ initialRoles, actorPermissions, enabledFeatures
             <td onClick={(event) => event.stopPropagation()}>
               <ActionMenu
                 items={[
-                  { label: role.locked ? t("view") : t("edit"), onClick: () => openRole(role) },
+                  { label: role.locked || !canCustomize ? t("view") : t("edit"), onClick: () => openRole(role) },
                   ...(role.system_key ? [] : [{ label: t("delete"), onClick: () => void remove(role), danger: true }]),
                 ]}
               />

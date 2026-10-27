@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.storage import ABGABEBOX, MAIN, StorageError, delete_prefix, get_object_store
+from app.core.features_generated import FEATURES
 from app.core.error_log import record_system_error
 from app.models import (
     AppUser,
@@ -50,7 +51,7 @@ from app.schemas.admin import (
 from app.schemas.public_catalog import PublicCustomerRead, PublicPlanFeature, PublicPlanRead
 from app.schemas.user import TenantUpdate
 from app.services.file_service import _safe_storage_path
-from app.services import cashflow_service, identity_verification_service, photo_album_service, submission_link_service, traefik_config_service
+from app.services import cashflow_service, identity_verification_service, photo_album_service, submission_link_service, traefik_config_service, user_limit_service
 from app.services.storage_service import StorageService
 from app.services.tenant_service import apply_tenant_profile_image
 
@@ -83,23 +84,25 @@ class AdminTenantService:
         *,
         storage_used_bytes: int | None = None,
         enabled_features: list[str] | None = None,
+        read_only_features: list[str] | None = None,
+        addon_features: list[str] | None = None,
         plans_by_code: dict[str, Plan] | None = None,
         assigned_storage_packages: list[AdminTenantStoragePackageRead] | None = None,
     ) -> AdminTenantRead:
         participant_count = int(
             db.scalar(select(func.count(Participant.id)).where(Participant.tenant_id == tenant.id)) or 0
         )
-        user_count = int(
-            db.scalar(select(func.count(AppUser.id)).where(AppUser.tenant_id == tenant.id, AppUser.is_active.is_(True))) or 0
-        )
+        # Benutzer im Sinn des Abos: aktive Konten mit Login (user_limit_service)
+        user_count = user_limit_service.login_account_count(db, tenant.id)
         # Single-tenant callers (get_tenant, create/update/clone/import) don't have a
         # prefetched totals dict - fall back to one query for just this tenant.
         if storage_used_bytes is None:
             storage_used_bytes = self.storage_service.total_bytes_by_tenant(db).get(tenant.id, 0)
-        if enabled_features is None:
-            enabled_features = sorted(
-                db.scalars(select(TenantFeature.feature_code).where(TenantFeature.tenant_id == tenant.id))
-            )
+        if enabled_features is None or read_only_features is None or addon_features is None:
+            rows = db.execute(select(TenantFeature.feature_code, TenantFeature.access, TenantFeature.source).where(TenantFeature.tenant_id == tenant.id)).all()
+            enabled_features = sorted(row.feature_code for row in rows if row.access == "full")
+            read_only_features = sorted(row.feature_code for row in rows if row.access == "read_only")
+            addon_features = sorted(row.feature_code for row in rows if row.access == "full" and row.source == "addon")
         if assigned_storage_packages is None:
             assigned_storage_packages = self._assigned_storage_packages(db, tenant.id)
         plan: Plan | None = None
@@ -121,6 +124,8 @@ class AdminTenantService:
             storage_used_bytes=storage_used_bytes,
             storage_quota_bytes=tenant.storage_quota_bytes,
             enabled_features=enabled_features,
+            read_only_features=read_only_features,
+            addon_features=addon_features,
             plan_code=tenant.plan_code,
             plan_name=plan.name if plan is not None else None,
             billing_cycle=tenant.billing_cycle,
@@ -190,8 +195,12 @@ class AdminTenantService:
         # `le=500` cap).
         storage_totals = self.storage_service.total_bytes_by_tenant(db)
         features_by_tenant: dict[int, list[str]] = {}
-        for tenant_id, feature_code in db.execute(select(TenantFeature.tenant_id, TenantFeature.feature_code)).all():
-            features_by_tenant.setdefault(tenant_id, []).append(feature_code)
+        read_only_by_tenant: dict[int, list[str]] = {}
+        addons_by_tenant: dict[int, list[str]] = {}
+        for tenant_id, feature_code, access, source in db.execute(select(TenantFeature.tenant_id, TenantFeature.feature_code, TenantFeature.access, TenantFeature.source)).all():
+            (features_by_tenant if access == "full" else read_only_by_tenant).setdefault(tenant_id, []).append(feature_code)
+            if access == "full" and source == "addon":
+                addons_by_tenant.setdefault(tenant_id, []).append(feature_code)
         plans_by_code = {plan.code: plan for plan in db.query(Plan).all()}
         packages_by_tenant: dict[int, list[AdminTenantStoragePackageRead]] = {}
         package_rows = db.execute(
@@ -216,6 +225,8 @@ class AdminTenantService:
                     tenant,
                     storage_used_bytes=storage_totals.get(tenant.id, 0),
                     enabled_features=sorted(features_by_tenant.get(tenant.id, [])),
+                    read_only_features=sorted(read_only_by_tenant.get(tenant.id, [])),
+                    addon_features=sorted(addons_by_tenant.get(tenant.id, [])),
                     plans_by_code=plans_by_code,
                     assigned_storage_packages=packages_by_tenant.get(tenant.id, []),
                 )
@@ -429,26 +440,46 @@ class AdminTenantService:
         db.add(tenant)
         db.flush()
 
-        # Ein Plan-Wechsel traegt nur eine Baseline ein - bereits gebuchte Zusatzmodule, die
-        # nicht Teil des neuen Plans sind, bleiben unangetastet (siehe Tenant.plan_code-Kommentar
-        # in entities.py). Kein Feature wird hier je entfernt.
+        # Planwechsel (docs/FEATURE_ENTITLEMENT_ARCHITECTURE.md, Abschnitt Up-/Downgrade):
+        # Features des neuen Plans werden voll gebucht. Features, die aus dem bisherigen Plan
+        # kamen und im neuen fehlen, wechseln je permissions/features.json in «nur lesen» (Daten
+        # bleiben lesbar) oder fallen weg (Domains). Einzeln gebuchte Zusatzmodule und
+        # Bestandsschutz (source 'addon') bleiben unangetastet.
+        changed: set[str] = set()
         if payload.plan_code is not None:
-            plan_feature_codes = set(
-                db.scalars(select(PlanFeature.feature_code).where(PlanFeature.plan_code == payload.plan_code))
-            )
-            already_booked = set(
-                db.scalars(select(TenantFeature.feature_code).where(TenantFeature.tenant_id == tenant_id))
-            )
-            added = plan_feature_codes - already_booked
-            for feature_code in added:
-                db.add(TenantFeature(tenant_id=tenant_id, feature_code=feature_code, enabled_by_admin_id=admin_id))
-        else:
-            added = set()
+            changed = self._apply_plan_features(db, tenant_id, payload.plan_code, admin_id=admin_id)
         db.commit()
-        if _DOMAIN_FEATURES & added:
+        if _DOMAIN_FEATURES & changed:
             traefik_config_service.regenerate(db)
         self.recompute_effective_storage_quota(db, tenant_id)
         return self._read_model(db, tenant)
+
+    def _apply_plan_features(self, db: Session, tenant_id: int, plan_code: str, *, admin_id: int | None) -> set[str]:
+        """Feature-Stand eines Mandanten an seinen Plan angleichen; Rückgabe: geänderte Codes."""
+        plan_codes = set(db.scalars(select(PlanFeature.feature_code).where(PlanFeature.plan_code == plan_code)))
+        rows = {row.feature_code: row for row in db.scalars(select(TenantFeature).where(TenantFeature.tenant_id == tenant_id))}
+        changed: set[str] = set()
+        for code in plan_codes:
+            row = rows.get(code)
+            if row is None:
+                db.add(TenantFeature(tenant_id=tenant_id, feature_code=code, enabled_by_admin_id=admin_id, access="full", source="plan"))
+                changed.add(code)
+            elif row.access != "full" or row.source != "plan":
+                row.access, row.source = "full", "plan"
+                changed.add(code)
+        for code, row in rows.items():
+            if code in plan_codes or row.source != "plan":
+                continue
+            definition = FEATURES.get(code)
+            if definition is not None and definition.downgrade == "read_only":
+                if row.access != "read_only":
+                    row.access = "read_only"
+                    changed.add(code)
+            else:
+                db.delete(row)
+                changed.add(code)
+        db.flush()
+        return changed
 
     def recompute_effective_storage_quota(self, db: Session, tenant_id: int) -> None:
         """effective = plan.included_storage_bytes + sum(package.bytes * quantity) - called
@@ -564,23 +595,36 @@ class AdminTenantService:
         return self._read_model(db, tenant)
 
     def update_tenant_features(
-        self, db: Session, tenant_id: int, enabled_codes: list[str], *, admin_id: int
+        self, db: Session, tenant_id: int, enabled_codes: list[str], *, admin_id: int, read_only_codes: list[str] | None = None
     ) -> AdminTenantRead | None:
         tenant = db.get(Tenant, tenant_id)
         if tenant is None:
             return None
         wanted = set(enabled_codes)
+        read_only = set(read_only_codes or ()) - wanted
+        blocked = sorted(code for code in read_only if (definition := FEATURES.get(code)) is None or definition.downgrade != "read_only")
+        if blocked:
+            raise ValueError(f"Kein Nur-Lesen-Zustand für: {', '.join(blocked)}")
+        plan_codes = set(db.scalars(select(PlanFeature.feature_code).where(PlanFeature.plan_code == tenant.plan_code))) if tenant.plan_code else set()
         current = {
             row.feature_code: row
             for row in db.query(TenantFeature).filter(TenantFeature.tenant_id == tenant_id).all()
         }
+        before = {code for code, row in current.items() if row.access == "full"}
         for code, row in current.items():
-            if code not in wanted:
+            if code in wanted:
+                row.access = "full"
+            elif code in read_only:
+                row.access = "read_only"
+            else:
                 db.delete(row)
-        for code in wanted - current.keys():
-            db.add(TenantFeature(tenant_id=tenant_id, feature_code=code, enabled_by_admin_id=admin_id))
+        for code in (wanted | read_only) - current.keys():
+            db.add(TenantFeature(
+                tenant_id=tenant_id, feature_code=code, enabled_by_admin_id=admin_id,
+                access="full" if code in wanted else "read_only", source="plan" if code in plan_codes else "addon",
+            ))
         db.commit()
-        if _DOMAIN_FEATURES & (current.keys() ^ wanted):
+        if _DOMAIN_FEATURES & (before ^ wanted):
             # security-audit FEAT-01: regenerate() only runs at startup and after domain
             # create/verify/delete - without this call, revoking the feature here would leave
             # an already-active domain routed until one of those unrelated events happens to

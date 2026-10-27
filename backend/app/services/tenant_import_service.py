@@ -155,6 +155,10 @@ MAX_IMPORT_ZIP_ENTRIES = 20_000
 MAX_IMPORT_ZIP_TOTAL_BYTES = 2 * 1024 * 1024 * 1024  # 2 GB combined uncompressed size
 
 
+# Seit 0158 buchbar, vorher für alle Mandanten verfügbar
+FEATURES_GRANDFATHERED_0158 = ("task_packages", "custom_roles", "photo_sharing", "document_designer")
+
+
 class TenantImportService:
     def import_zip(self, db: Session, zip_path: Path, new_name: str) -> tuple[Tenant, list[str]]:
         with tempfile.TemporaryDirectory(prefix="hocx-import-") as extract_dir_str:
@@ -1902,13 +1906,22 @@ class TenantImportService:
         self.db.commit()
 
     def _import_tenant_settings(self, new_tenant_id: int) -> None:
-        for row in self._t("tenant_feature"):
+        feature_rows = list(self._t("tenant_feature"))
+        imported: set[str] = set()
+        for row in feature_rows:
             if self.db.get(Feature, row.get("feature_code")) is None:
                 self.warnings.append(f"Feature '{row.get('feature_code')}' existiert auf dieser Installation nicht - übersprungen.")
                 continue
             self.db.add(self._build(TenantFeature, row, {
                 "tenant_id": new_tenant_id, "enabled_by_admin_id": self._admin_id_for(row.get("enabled_by_admin_id")),
             }))
+            imported.add(row.get("feature_code"))
+        # Archive von vor 0158_feature_entitlements kennen die damals frei verfügbaren Features
+        # noch nicht als buchbar: wie beim Backfill als Zusatzmodul übernehmen (Bestandsschutz).
+        if feature_rows and not any("access" in row for row in feature_rows):
+            for code in FEATURES_GRANDFATHERED_0158:
+                if code not in imported and self.db.get(Feature, code) is not None:
+                    self.db.add(TenantFeature(tenant_id=new_tenant_id, feature_code=code, access="full", source="addon"))
         for row in self._t("tenant_storage_package"):
             if self.db.get(StoragePackage, row.get("package_code")) is None:
                 self.warnings.append(f"Speicherpaket '{row.get('package_code')}' existiert auf dieser Installation nicht - übersprungen.")

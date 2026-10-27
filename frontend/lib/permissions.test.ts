@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { can, canAny, expandPermissions, minimalPermissions, roleName, rolesLabel } from "@/lib/permissions";
+import { can, canAny, expandPermissions, featureAccess, minimalPermissions, roleName, rolesLabel } from "@/lib/permissions";
 import { PERMISSION_KEYS, SYSTEM_ROLE_PERMISSIONS } from "@/lib/permissions.generated";
 
 const session = (permissions: string[], features: string[] = []) => ({
@@ -44,5 +44,21 @@ describe("Rollennamen", () => {
     expect(roleName({ name: "Revisor", system_key: null }, t)).toBe("Revisor");
     expect(roleName({ name: null, system_key: "reader" }, t)).toBe("[roles.reader]");
     expect(rolesLabel([{ name: "Zeta", system_key: null }, { name: "Alpha", system_key: "writer" }], t)).toBe("Alpha, Zeta");
+  });
+});
+
+describe("Nur-Lesen-Zustand nach Downgrade", () => {
+  const downgraded = {
+    permissions: ["finances.read", "finances.manage"],
+    current_tenant: { id: "t", name: "T", profile_image_path: null, profile_image_url: null, enabled_features: [], read_only_features: ["finance"] },
+  };
+  it("Lesen bleibt erlaubt, Schreiben nicht", () => {
+    expect(can(downgraded, "finances.read")).toBe(true);
+    expect(can(downgraded, "finances.manage")).toBe(false);
+  });
+  it("featureAccess unterscheidet voll, nur lesen und nicht gebucht", () => {
+    expect(featureAccess(downgraded, "finance")).toBe("read_only");
+    expect(featureAccess(session([], ["finance"]), "finance")).toBe("full");
+    expect(featureAccess(session([]), "task_packages")).toBe("none");
   });
 });

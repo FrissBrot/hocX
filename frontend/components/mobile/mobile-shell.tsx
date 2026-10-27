@@ -15,7 +15,7 @@ import { ConnectivityStatus } from "@/components/ui/connectivity-status";
 import { browserApiFetch } from "@/lib/api/client";
 import { CONNECTIONS_HREF } from "@/lib/calendar-feeds";
 import type { SessionInfo, TodoListItem } from "@/types/api";
-import { can } from "@/lib/permissions";
+import { can, featureAccess } from "@/lib/permissions";
 
 type ThemePreference = "light" | "dark" | "auto";
 
@@ -38,7 +38,7 @@ export function useOpenMore(): () => void {
 const TAB_ROUTES = new Set(["/", "/events", "/todos", "/tools/import"]);
 
 export function mobileMoreGroups(session: SessionInfo | null) {
-  const hasFinance = session?.current_tenant?.enabled_features?.includes("finance") ?? false;
+  const hasFinance = featureAccess(session, "finance") !== "none";
   return buildNav(session)
     .filter((group) => group.titleKey !== null)
     .map((group) => ({

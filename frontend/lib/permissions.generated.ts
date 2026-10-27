@@ -3,7 +3,7 @@
 
 export type PermissionKey = "meetings.read" | "meetings.read_drafts" | "meetings.edit" | "templates.edit" | "templates.manage" | "participants.manage" | "finances.read" | "finances.manage" | "reports.personal" | "files.manage" | "submissions.read" | "submissions.manage" | "settings.manage" | "access.manage" | "data.export";
 export type PermissionArea = "meetings" | "templates" | "participants" | "finances" | "reports" | "files" | "submissions" | "administration";
-export type PermissionFeature = "finance" | "abgabebox";
+export type PermissionFeature = "finance" | "abgabebox" | "custom_domain" | "verify_domain" | "task_packages" | "custom_roles" | "photo_sharing" | "document_designer";
 export type SystemRoleKey = "admin" | "writer" | "kassier" | "reader";
 
 export type PermissionInfo = {

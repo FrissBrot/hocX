@@ -59,6 +59,8 @@ def is_feature_enabled(db: Session, *, tenant_id: int, feature_code: str) -> boo
         select(tenant_feature_table.c.tenant_id).where(
             tenant_feature_table.c.tenant_id == tenant_id,
             tenant_feature_table.c.feature_code == feature_code,
+            # Nach einem Downgrade (nur lesen) keine neuen Uploads mehr
+            tenant_feature_table.c.access == "full",
         )
     ).first()
     return row is not None

@@ -6,6 +6,7 @@ core/permissions.py), keine eigene Berechtigungsarchitektur.
 | Dokumente exportieren  | meetings.read           | ``require_export``      |
 | Vorlagen ansehen       | meetings.read           | ``require_view``        |
 | Vorlagen bearbeiten    | templates.edit          | ``require_edit``        |
+| Eigene Vorlagen/Bausteine gestalten | templates.edit + Feature document_designer | ``require_design`` |
 | Vorlagen veröffentlichen, archivieren, zuweisen | settings.manage | ``require_publish`` |
 | Corporate Design (Brand Studio, Assets) verwalten | settings.manage | ``require_brand`` |
 | Systemvorlagen verwalten | Plattform-Admin (Adminportal) | admin_security    |
@@ -15,8 +16,9 @@ Compiler und Bindungen beim Export mit dem exportierenden Benutzer (context.Buil
 """
 from __future__ import annotations
 
+from app.core.features_generated import F
 from app.core.permissions import P
-from app.core.security import CurrentUser, require_permission
+from app.core.security import CurrentUser, require_feature, require_permission
 
 
 def require_export(user: CurrentUser) -> CurrentUser:
@@ -29,6 +31,13 @@ def require_view(user: CurrentUser) -> CurrentUser:
 
 def require_edit(user: CurrentUser) -> CurrentUser:
     return require_permission(user, P.TEMPLATES_EDIT)
+
+
+def require_design(user: CurrentUser) -> CurrentUser:
+    """Eigene Vorlagen und Bausteine anlegen, gestalten, veröffentlichen (Abo-Feature; nach einem
+    Downgrade bleiben bestehende Vorlagen nutzbar, nur Änderungen sind gesperrt)."""
+    require_edit(user)
+    return require_feature(user, F.DOCUMENT_DESIGNER, write=True)
 
 
 def require_publish(user: CurrentUser) -> CurrentUser:
@@ -50,7 +59,9 @@ def capabilities(user: CurrentUser) -> dict[str, bool]:
     return {
         "export": reads,
         "view_templates": reads,
-        "edit_templates": user.can(P.TEMPLATES_EDIT),
+        # Eigene Vorlagen gestalten: Berechtigung und Abo-Feature document_designer
+        # (permissions/features.json); ohne Feature ist das Studio nur zum Ansehen und Exportieren
+        "edit_templates": user.can(P.TEMPLATES_EDIT) and user.has_feature(F.DOCUMENT_DESIGNER),
         "publish_templates": user.can(P.SETTINGS_MANAGE),
         "manage_brand": user.can(P.SETTINGS_MANAGE),
         "finance_data": user.can(P.FINANCES_READ),

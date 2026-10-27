@@ -104,7 +104,8 @@ def compute_tenant_charge(db: Session, tenant: Tenant) -> tuple[int | None, list
         lines.append({"kind": "plan", "label": plan.name, "amount_rp": plan_rp})
 
     plan_codes = set(db.scalars(select(PlanFeature.feature_code).where(PlanFeature.plan_code == plan.code)))
-    booked = set(db.scalars(select(TenantFeature.feature_code).where(TenantFeature.tenant_id == tenant.id)))
+    # Nur voll gebuchte Features kosten; nach einem Downgrade (nur lesen) nicht mehr
+    booked = set(db.scalars(select(TenantFeature.feature_code).where(TenantFeature.tenant_id == tenant.id, TenantFeature.access == "full")))
     add_on_codes = booked - plan_codes
     if add_on_codes:
         features = db.scalars(

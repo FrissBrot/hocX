@@ -219,6 +219,10 @@ class TenantFeature(Base, TimestampMixin):
     feature_code: Mapped[str] = mapped_column(Text, ForeignKey("feature.code", ondelete="CASCADE"), nullable=False)
     enabled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
     enabled_by_admin_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("platform_admin.id", ondelete="SET NULL"))
+    # 'full' = gebucht, 'read_only' = nach Downgrade nur lesend (0158_feature_entitlements)
+    access: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'full'"), default="full")
+    # 'plan' = folgt dem Plan des Mandanten, 'addon' = einzeln gebucht/Bestandsschutz
+    source: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'addon'"), default="addon")
 
 
 class StoragePackage(Base):

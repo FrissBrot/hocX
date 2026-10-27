@@ -730,7 +730,8 @@
       "includedInPlan": "Inclus dans le plan",
       "addon": "Option · +{price} / mois",
       "planOnly": "Disponible uniquement dans des plans",
-      "individuallyBooked": "Réservé individuellement"
+      "individuallyBooked": "Réservé individuellement",
+      "readOnly": "Lecture seule (après rétrogradation)"
     },
     "cost": {
       "sectionTitle": "Coûts",

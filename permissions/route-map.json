@@ -795,6 +795,9 @@
       "handler": "document_studio.create_document_component",
       "requires": [
         "templates.edit"
+      ],
+      "features": [
+        "document_designer"
       ]
     },
     "DELETE /api/document-components/{component_id}": {
@@ -807,6 +810,9 @@
       "handler": "document_studio.update_document_component",
       "requires": [
         "templates.edit"
+      ],
+      "features": [
+        "document_designer"
       ]
     },
     "GET /api/document-settings": {
@@ -842,10 +848,11 @@
     "POST /api/document-studio/examples/{example_key}/import": {
       "handler": "document_studio.import_design_example",
       "requires": [
-        "settings.manage"
-      ],
-      "branches": [
+        "settings.manage",
         "templates.edit"
+      ],
+      "features": [
+        "document_designer"
       ]
     },
     "GET /api/document-studio/examples/{example_key}/thumbnail": {
@@ -870,6 +877,9 @@
       "handler": "document_studio.customize_session_design",
       "requires": [
         "templates.edit"
+      ],
+      "features": [
+        "document_designer"
       ]
     },
     "GET /api/document-template-assignments": {
@@ -897,6 +907,9 @@
       "handler": "document_studio.create_document_template",
       "requires": [
         "templates.edit"
+      ],
+      "features": [
+        "document_designer"
       ]
     },
     "POST /api/document-templates/validate": {
@@ -926,6 +939,9 @@
       "requires": [
         "settings.manage",
         "templates.edit"
+      ],
+      "features": [
+        "document_designer"
       ]
     },
     "POST /api/document-templates/{template_id}/archive": {
@@ -951,12 +967,18 @@
       "handler": "document_studio.save_document_template_draft",
       "requires": [
         "templates.edit"
+      ],
+      "features": [
+        "document_designer"
       ]
     },
     "POST /api/document-templates/{template_id}/duplicate": {
       "handler": "document_studio.duplicate_document_template",
       "requires": [
         "templates.edit"
+      ],
+      "features": [
+        "document_designer"
       ]
     },
     "POST /api/document-templates/{template_id}/publish": {
@@ -964,6 +986,9 @@
       "requires": [
         "settings.manage",
         "templates.edit"
+      ],
+      "features": [
+        "document_designer"
       ]
     },
     "GET /api/document-templates/{template_id}/revisions": {
@@ -982,6 +1007,9 @@
       "handler": "document_studio.restore_document_template_revision",
       "requires": [
         "templates.edit"
+      ],
+      "features": [
+        "document_designer"
       ]
     },
     "GET /api/document-templates/{template_id}/thumbnail": {
@@ -1231,6 +1259,9 @@
       "handler": "files.create_album_share",
       "requires": [
         "files.manage"
+      ],
+      "features": [
+        "photo_sharing"
       ]
     },
     "DELETE /api/files/albums/{album_id}/shares/{tenant_public_id}": {
@@ -1243,6 +1274,9 @@
       "handler": "files.update_album_share",
       "requires": [
         "files.manage"
+      ],
+      "features": [
+        "photo_sharing"
       ]
     },
     "GET /api/files/analysis-progress": {
@@ -1932,6 +1966,9 @@
       "handler": "roles.create_role",
       "requires": [
         "access.manage"
+      ],
+      "features": [
+        "custom_roles"
       ]
     },
     "GET /api/roles/catalog": {
@@ -1950,6 +1987,9 @@
       "handler": "roles.update_role",
       "requires": [
         "access.manage"
+      ],
+      "features": [
+        "custom_roles"
       ]
     },
     "GET /api/share-links": {
@@ -1962,6 +2002,9 @@
       "handler": "share_links.create_share_link",
       "requires": [
         "files.manage"
+      ],
+      "features": [
+        "photo_sharing"
       ]
     },
     "DELETE /api/share-links/{share_link_id}": {
@@ -2237,84 +2280,126 @@
       "handler": "task_packages.list_task_packages",
       "requires": [
         "templates.manage"
+      ],
+      "features": [
+        "task_packages (lesen)"
       ]
     },
     "POST /api/task-packages": {
       "handler": "task_packages.create_task_package",
       "requires": [
         "templates.manage"
+      ],
+      "features": [
+        "task_packages"
       ]
     },
     "DELETE /api/task-packages/{package_id}": {
       "handler": "task_packages.delete_task_package",
       "requires": [
         "templates.manage"
+      ],
+      "features": [
+        "task_packages"
       ]
     },
     "GET /api/task-packages/{package_id}": {
       "handler": "task_packages.get_task_package",
       "requires": [
         "templates.manage"
+      ],
+      "features": [
+        "task_packages (lesen)"
       ]
     },
     "PUT /api/task-packages/{package_id}": {
       "handler": "task_packages.update_task_package",
       "requires": [
         "templates.manage"
+      ],
+      "features": [
+        "task_packages"
       ]
     },
     "POST /api/task-packages/{package_id}/cycles": {
       "handler": "task_packages.assign_task_package_cycle",
       "requires": [
         "templates.manage"
+      ],
+      "features": [
+        "task_packages"
       ]
     },
     "DELETE /api/task-packages/{package_id}/cycles/{package_cycle_id}": {
       "handler": "task_packages.unassign_task_package_cycle",
       "requires": [
         "templates.manage"
+      ],
+      "features": [
+        "task_packages"
       ]
     },
     "PATCH /api/task-packages/{package_id}/cycles/{package_cycle_id}": {
       "handler": "task_packages.update_task_package_cycle",
       "requires": [
         "templates.manage"
+      ],
+      "features": [
+        "task_packages"
       ]
     },
     "POST /api/task-packages/{package_id}/items": {
       "handler": "task_packages.create_task_package_item",
       "requires": [
         "templates.manage"
+      ],
+      "features": [
+        "task_packages"
       ]
     },
     "POST /api/task-packages/{package_id}/items/reorder": {
       "handler": "task_packages.reorder_task_package_items",
       "requires": [
         "templates.manage"
+      ],
+      "features": [
+        "task_packages"
       ]
     },
     "DELETE /api/task-packages/{package_id}/items/{item_id}": {
       "handler": "task_packages.delete_task_package_item",
       "requires": [
         "templates.manage"
+      ],
+      "features": [
+        "task_packages"
       ]
     },
     "PUT /api/task-packages/{package_id}/items/{item_id}": {
       "handler": "task_packages.update_task_package_item",
       "requires": [
         "templates.manage"
+      ],
+      "features": [
+        "task_packages"
       ]
     },
     "GET /api/task-packages/{package_id}/preview": {
       "handler": "task_packages.preview_task_package",
       "requires": [
         "templates.manage"
+      ],
+      "features": [
+        "task_packages (lesen)"
       ]
     },
     "POST /api/task-packages/{package_id}/sync": {
       "handler": "task_packages.sync_task_package",
       "requires": [
         "templates.manage"
+      ],
+      "features": [
+        "task_packages"
       ]
     },
     "DELETE /api/template-elements/{template_element_id}": {

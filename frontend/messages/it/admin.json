@@ -730,7 +730,8 @@
       "includedInPlan": "Incluso nel piano",
       "addon": "Componente aggiuntivo · +{price} / mese",
       "planOnly": "Disponibile solo nei piani",
-      "individuallyBooked": "Prenotato singolarmente"
+      "individuallyBooked": "Prenotato singolarmente",
+      "readOnly": "Solo lettura (dopo il downgrade)"
     },
     "cost": {
       "sectionTitle": "Costi",

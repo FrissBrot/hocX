@@ -27,7 +27,7 @@ from app.schemas.user import (
     TenantUpdate,
 )
 from app.schemas.cashflow import TenantPortalCharges
-from app.services import cashflow_service
+from app.services import cashflow_service, user_limit_service
 from app.services import domain_verification_service, identity_verification_service, traefik_config_service
 from app.services.audit_service import AuditService
 from app.services.storage_service import StorageService
@@ -211,9 +211,8 @@ class TenantService:
             if estimated_yearly_cost_rp is not None:
                 estimated_yearly_cost_rp = round(estimated_yearly_cost_rp * factor)
 
-        user_count = int(
-            db.scalar(select(func.count(AppUser.id)).where(AppUser.tenant_id == tenant_id, AppUser.is_active.is_(True))) or 0
-        )
+        # Benutzer im Sinn des Abos: aktive Konten mit Login (user_limit_service)
+        user_count = user_limit_service.login_account_count(db, tenant_id)
         effective_user_limit = tenant.user_limit_override if tenant.user_limit_override is not None else (
             plan.included_user_limit if plan is not None else None
         )

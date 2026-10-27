@@ -95,7 +95,7 @@ def test_update_feature_sets_standalone_price(db):
 def test_update_tenant_subscription_baselines_plan_features_without_removing_extras(db):
     admin_service = AdminTenantService()
     admin = make_platform_admin(db)
-    tenant = make_tenant(db)
+    tenant = make_tenant(db, features=())
 
     admin_service.upsert_plan(
         db,

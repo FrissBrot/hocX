@@ -3,6 +3,7 @@
 // kommen aus permissions/catalog.json (generiert nach permissions.generated.ts). Bewusst ohne
 // "use client": Server Components (page.tsx) entscheiden damit, was sie laden und zeigen.
 
+import { FEATURES, type FeatureCode } from "@/lib/features.generated";
 import { PERMISSIONS, type PermissionKey, type SystemRoleKey } from "@/lib/permissions.generated";
 import type { RoleRef, SessionInfo } from "@/types/api";
 
@@ -13,12 +14,26 @@ const IMPLIES = new Map(PERMISSIONS.map((permission) => [permission.key, permiss
 
 type PermissionSource = Pick<SessionInfo, "permissions" | "current_tenant"> | null | undefined;
 
-/** Permission vorhanden und - falls an ein Modul gebunden - das Modul für den Mandanten gebucht
- * (dieselbe Regel wie CurrentUser.can im Backend). */
+const READ_PERMISSIONS = new Map(FEATURES.map((feature) => [feature.code, feature.readPermissions]));
+
+export type FeatureAccess = "full" | "read_only" | "none";
+
+/** Buchungsstand eines Features (permissions/features.json): voll, nach Downgrade nur lesend, nicht gebucht. */
+export function featureAccess(session: Pick<SessionInfo, "current_tenant"> | null | undefined, code: FeatureCode): FeatureAccess {
+  if (session?.current_tenant?.enabled_features?.includes(code)) return "full";
+  if (session?.current_tenant?.read_only_features?.includes(code)) return "read_only";
+  return "none";
+}
+
+/** Permission vorhanden und - falls an ein Modul gebunden - das Modul für den Mandanten gebucht;
+ * Lese-Berechtigungen gelten auch im Nur-Lesen-Zustand nach einem Downgrade (dieselbe Regel wie
+ * CurrentUser.can im Backend). */
 export function can(session: PermissionSource, permission: PermissionKey): boolean {
   if (!session?.permissions?.includes(permission)) return false;
-  const feature = FEATURE_BY_PERMISSION.get(permission);
-  return !feature || (session.current_tenant?.enabled_features?.includes(feature) ?? false);
+  const feature = FEATURE_BY_PERMISSION.get(permission) as FeatureCode | null | undefined;
+  if (!feature) return true;
+  const access = featureAccess(session, feature);
+  return access === "full" || (access === "read_only" && (READ_PERMISSIONS.get(feature) ?? []).includes(permission));
 }
 
 /** Mindestens eine der Permissions. */

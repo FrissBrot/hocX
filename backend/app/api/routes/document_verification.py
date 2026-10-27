@@ -91,7 +91,7 @@ def _read(db: Session, tenant: Tenant) -> DocumentVerificationRead:
         request=VerificationRequestRead.model_validate(latest, from_attributes=True) if latest is not None else None,
         verify_base_url=verify_domain_service.tenant_verify_base_url(db, tenant.id),
         has_verify_domain_feature=db.scalar(
-            select(TenantFeature.id).where(TenantFeature.tenant_id == tenant.id, TenantFeature.feature_code == "verify_domain")
+            select(TenantFeature.id).where(TenantFeature.tenant_id == tenant.id, TenantFeature.feature_code == "verify_domain", TenantFeature.access == "full")
         ) is not None,
         verify_domain=(
             VerifyDomainRead(

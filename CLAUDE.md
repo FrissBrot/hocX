@@ -122,6 +122,21 @@ alle Berechtigungen. Details: `docs/RBAC_ARCHITECTURE_PROPOSAL.md`.
 - Wöchentlich prüft `.github/workflows/rbac-audit.yml` den Stand von `main` erneut (RBAC-, RLS- und
   Inventar-Tests, E2E `rbac-roles`, Übersicht und Katalog).
 
+## Abo-Features / Entitlements (verbindlich)
+
+Buchbare Produkt-Features (was ein Mandant im Abo hat) sind von Berechtigungen (was ein Benutzer darf)
+getrennt. Details: `docs/FEATURE_ENTITLEMENT_ARCHITECTURE.md`, Produktstruktur: `docs/PRODUCT_MODULE_ARCHITECTURE.md`.
+
+- Einzige Quelle ist `permissions/features.json` → `python3 scripts/sync-feature-catalog.py` (generiert
+  `backend/app/core/features_generated.py` und `frontend/lib/features.generated.ts`; CI und Pre-Commit prüfen mit `--check`).
+- Backend: nach `require_permission` zusätzlich `require_feature(user, F.X, write=...)`; `write=False` nur für reine
+  Lese-Endpunkte (gilt dann auch im Nur-Lesen-Zustand nach einem Downgrade). Hintergrundjobs prüfen
+  `tenant_feature.access == 'full'` selbst. Frontend nur zur Benutzerführung: `featureAccess(session, "x")`.
+- Neues Feature: Eintrag in `features.json`, Sync, Migration (Tabelle `feature`, Bestandsschutz-Backfill für bestehende
+  Mandanten, `plan_feature`), Prüfungen, Übersetzung `common.features.<code>` in allen Locales.
+- Downgrade löscht nie Daten: `downgrade: read_only` (lesen ja, ändern nein) oder `blocked` (nur für Dienste wie Domains).
+- Keine Feature-Flags für einzelne Buttons oder Einstellungen; Grundfunktionen (Datenschutz, Export, Standardrollen) nie an ein Abo binden.
+
 ## Zentrale Fehlererfassung (verbindlich)
 
 Unerwartete Backend-Fehler laufen in `system_error_log` zusammen und werden ausschliesslich im Platform-Admin-Panel angezeigt (`backend/app/core/error_log.py`, Tabelle `system_error_log`; für `abgabebox-backend` analog über `insert_error_log` in `abgabebox-backend/app/repository.py`). Das passiert **automatisch**, aber nur solange der folgende Kettenmechanismus nicht unterbrochen wird:

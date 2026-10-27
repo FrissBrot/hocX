@@ -49,6 +49,8 @@ tenant_feature_table = Table(
     metadata,
     Column("tenant_id", BigInteger),
     Column("feature_code", Text),
+    # 'full' oder 'read_only' (0158_feature_entitlements): nur volle Buchung nimmt Uploads an
+    Column("access", Text),
 )
 
 # tenant: die restricted Rolle darf nur (id, storage_quota_bytes) lesen (Migration

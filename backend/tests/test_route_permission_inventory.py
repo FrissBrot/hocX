@@ -21,6 +21,8 @@ CHECKS = {
     "require_edit",
     "require_publish",
     "require_brand",
+    # documents/permissions.py: templates.edit + Feature document_designer
+    "require_design",
 }
 ADMIN_DEPENDENCIES = ("get_current_admin", "require_admin_write", "require_admin_owner")
 

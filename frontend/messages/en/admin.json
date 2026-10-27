@@ -730,7 +730,8 @@
       "includedInPlan": "Included in plan",
       "addon": "Add-on · +{price} / month",
       "planOnly": "Only available in plans",
-      "individuallyBooked": "Booked individually"
+      "individuallyBooked": "Booked individually",
+      "readOnly": "Read-only (after downgrade)"
     },
     "cost": {
       "sectionTitle": "Cost",

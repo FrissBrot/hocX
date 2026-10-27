@@ -25,7 +25,8 @@ HEADER = "GENERATED FILE - do not edit by hand. Source of truth: permissions/cat
 REGEN = "Regenerate with: python3 scripts/sync-permission-catalog.py"
 
 KEY_PATTERN = re.compile(r"^[a-z_]+\.[a-z_]+$")
-FEATURES = ("finance", "abgabebox")
+# Buchbare Features: einzige Quelle permissions/features.json (sync-feature-catalog.py)
+FEATURES = tuple(entry["code"] for entry in json.loads((ROOT / "permissions/features.json").read_text(encoding="utf-8"))["features"])
 SYSTEM_ROLE_KEYS = ("admin", "writer", "kassier", "reader")
 
 

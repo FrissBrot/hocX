@@ -743,12 +743,17 @@ def update_tenant_features(
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
     internal_tenant_id = _resolve_tenant_id(db, tenant_id)
-    result = tenant_service.update_tenant_features(db, internal_tenant_id, payload.enabled_codes, admin_id=current_admin.admin_id)
+    try:
+        result = tenant_service.update_tenant_features(
+            db, internal_tenant_id, payload.enabled_codes, admin_id=current_admin.admin_id, read_only_codes=payload.read_only_codes
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if result is None:
         raise HTTPException(status_code=404, detail="Tenant not found")
     audit.log(
         db, action="admin.tenant_features_updated", actor_email=current_admin.email, tenant_id=internal_tenant_id,
-        entity_type="tenant", entity_id=internal_tenant_id, details={"enabled_codes": payload.enabled_codes},
+        entity_type="tenant", entity_id=internal_tenant_id, details={"enabled_codes": payload.enabled_codes, "read_only_codes": payload.read_only_codes},
     )
     return result
 

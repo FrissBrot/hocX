@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 
 from app.core.error_log import record_system_error
 from app.core.cycle_utils import cycle_bounds, format_cycle_name, get_cycle_year
+from app.core.features_generated import F
 from app.models import (
     CycleConfig,
     Event,
@@ -42,6 +43,7 @@ from app.models import (
     TaskPackage,
     TaskPackageCycle,
     TaskPackageItem,
+    TenantFeature,
     TodoStatus,
 )
 from app.services.responsible_label_service import _resolve_ids_for_assignments
@@ -360,7 +362,14 @@ def run_due_task_packages(db: Session, *, today: date | None = None) -> dict[str
     """Täglicher Job task_package_rollover: legt beim Zykluswechsel die Instanzen des neuen
     Zyklus an und ergänzt neue Wiederholungen (z. B. neu erfasste Termine). Idempotent."""
     created = updated = packages = failed = 0
-    package_ids = list(db.execute(select(TaskPackage.id, TaskPackage.tenant_id).where(TaskPackage.is_active.is_(True)).order_by(TaskPackage.id)))
+    # Nur Mandanten mit gebuchtem Feature; nach einem Downgrade (nur lesen) bleiben die
+    # bestehenden Pendenzen, es entstehen aber keine neuen (permissions/features.json).
+    booked = select(TenantFeature.tenant_id).where(TenantFeature.feature_code == F.TASK_PACKAGES, TenantFeature.access == "full")
+    package_ids = list(db.execute(
+        select(TaskPackage.id, TaskPackage.tenant_id)
+        .where(TaskPackage.is_active.is_(True), TaskPackage.tenant_id.in_(booked))
+        .order_by(TaskPackage.id)
+    ))
     for package_id, tenant_id in package_ids:
         # Ein fehlerhaftes Paket darf die übrigen nicht blockieren - Fehler landet trotzdem
         # in system_error_log (der Loop selbst sähe ihn nicht mehr).

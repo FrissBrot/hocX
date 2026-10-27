@@ -17,7 +17,8 @@ import {
   StructuredListEntry,
   TaskPackage,
 } from "@/types/api";
-import { can } from "@/lib/permissions";
+import { FeatureNotice } from "@/components/ui/feature-notice";
+import { can, featureAccess } from "@/lib/permissions";
 
 export default async function TaskPackagesPage() {
   const session = await requireSession();
@@ -25,6 +26,15 @@ export default async function TaskPackagesPage() {
     redirect("/");
   }
   const t = await getTranslations("nav");
+  const access = featureAccess(session, "task_packages");
+  if (access === "none") {
+    return (
+      <AppShell initialSession={session}>
+        <RouteTabs tabs={templateAreaTabs(t, true)} activeHref="/task-packages" />
+        <FeatureNotice feature="task_packages" access={access} />
+      </AppShell>
+    );
+  }
   const [taskPackages, cycleConfigs, lists, participants, events] = await Promise.all([
     backendFetchWithSession<TaskPackage[]>("/api/task-packages"),
     backendFetchWithSession<CycleConfigSummary[]>("/api/cycle-configs"),
@@ -51,6 +61,7 @@ export default async function TaskPackagesPage() {
         desktop={
           <>
             <RouteTabs tabs={templateAreaTabs(t, can(session, "templates.manage"))} activeHref="/task-packages" />
+            <FeatureNotice feature="task_packages" access={access} />
             <section className="panel">
               <TaskPackageManager
                 initialPackages={taskPackages ?? []}

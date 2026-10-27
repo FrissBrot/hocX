@@ -90,12 +90,16 @@ class AdminTenantRead(BaseModel):
     storage_used_bytes: int = 0
     storage_quota_bytes: int | None = None
     enabled_features: list[str] = []
+    # Nach Downgrade nur noch lesend (tenant_feature.access = 'read_only')
+    read_only_features: list[str] = []
+    # Voll gebuchte Features, die nicht aus dem Plan kommen (Zusatzmodule, Bestandsschutz)
+    addon_features: list[str] = []
     plan_code: str | None = None
     plan_name: str | None = None
     billing_cycle: Literal["monthly", "yearly"] = "monthly"
     user_limit_override: int | None = None
-    # override ?? plan.included_user_limit - None bedeutet "kein Limit". Rein informativ fuers
-    # Adminportal (Phase-0-Entscheidung: erst Anzeige/Warnung, keine harte Sperre).
+    # override ?? plan.included_user_limit - None bedeutet "kein Limit". Durchgesetzt beim
+    # Aktivieren von Logins (user_limit_service).
     effective_user_limit: int | None = None
     # Aufschluesselung des Speicherkontingents (0087_storage_packages): plan_storage_bytes ist
     # das Plan-Kontingent, package_storage_bytes die Summe der zugewiesenen Zusatzpakete
@@ -141,6 +145,9 @@ class AdminTenantFeaturesUpdate(BaseModel):
     # Full-Replace wie bei AdminTenantSubscriptionUpdate: der gesamte gebuchte Featureumfang,
     # kein Teil-Patch.
     enabled_codes: list[str]
+    # Features im Zustand «nur lesen» (Daten lesbar, Änderungen gesperrt); ein Code in beiden
+    # Listen gilt als voll gebucht.
+    read_only_codes: list[str] = []
 
 
 class AdminPlanRead(BaseModel):

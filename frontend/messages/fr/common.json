@@ -182,5 +182,19 @@
     "working": "Création …",
     "done": "Export téléchargé.",
     "failed": "L’export a échoué."
+  },
+  "features": {
+    "finance": "Finances",
+    "abgabebox": "Boîte de dépôt",
+    "custom_domain": "Domaine propre",
+    "verify_domain": "Domaine de vérification propre",
+    "task_packages": "Paquets de tâches",
+    "custom_roles": "Rôles personnalisés",
+    "photo_sharing": "Partage de photos",
+    "document_designer": "Concepteur de documents"
+  },
+  "featureNotice": {
+    "readOnly": "« {name} » ne fait plus partie de votre abonnement. Les données existantes restent visibles, les modifications sont bloquées.",
+    "notBooked": "« {name} » n’est pas inclus dans votre abonnement. Votre administration peut étendre l’abonnement."
   }
 }

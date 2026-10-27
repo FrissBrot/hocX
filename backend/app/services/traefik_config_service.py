@@ -22,7 +22,7 @@ def tenant_ids_with_custom_domain_feature(db: Session):
     a feature revoke (manual downgrade or a tenant import/restore that never assigns the
     feature) would leave an already-provisioned domain served indefinitely
     (security-audit FEAT-01/FEAT-02)."""
-    return select(TenantFeature.tenant_id).where(TenantFeature.feature_code == "custom_domain")
+    return select(TenantFeature.tenant_id).where(TenantFeature.feature_code == "custom_domain", TenantFeature.access == "full")
 
 
 # Welches Feature ein Domain-Zweck braucht. Die Prüf-Domain ('verify') ist bewusst ein eigenes
@@ -31,7 +31,8 @@ FEATURE_BY_PURPOSE = {"app": "custom_domain", "abgabebox": "custom_domain", "ver
 
 
 def tenant_ids_with_feature(feature_code: str):
-    return select(TenantFeature.tenant_id).where(TenantFeature.feature_code == feature_code)
+    # Nur volle Buchung bedient eine Domain (nie im Nur-Lesen-Zustand, etwa aus einem Import)
+    return select(TenantFeature.tenant_id).where(TenantFeature.feature_code == feature_code, TenantFeature.access == "full")
 
 
 def domain_feature_booked():

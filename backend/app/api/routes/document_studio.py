@@ -349,6 +349,7 @@ class TemplateCreate(BaseModel):
 
 @router.post("/document-templates", response_model=TemplateDetail, status_code=201)
 def create_document_template(body: TemplateCreate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    permissions.require_design(user)
     permissions.require_edit(user)
     try:
         if body.from_template_id is not None:
@@ -388,6 +389,7 @@ class TemplateMetaUpdate(BaseModel):
 
 @router.patch("/document-templates/{template_id}", response_model=TemplateRead)
 def update_document_template(template_id: uuid.UUID, body: TemplateMetaUpdate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    permissions.require_design(user)
     template = _editable_template(db, user, template_id)
     brand: uuid.UUID | None | Literal["unset"] = None if body.clear_brand else (body.brand_id if body.brand_id is not None else "unset")
     if brand != "unset" and template.published_revision_id is not None:
@@ -425,6 +427,7 @@ class DuplicateBody(BaseModel):
 
 @router.post("/document-templates/{template_id}/duplicate", response_model=TemplateDetail, status_code=201)
 def duplicate_document_template(template_id: uuid.UUID, body: DuplicateBody, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    permissions.require_design(user)
     permissions.require_edit(user)
     source = _template_or_404(db, user, template_id)
     try:
@@ -454,6 +457,7 @@ class DraftSaved(BaseModel):
 
 @router.put("/document-templates/{template_id}/draft", response_model=DraftSaved)
 def save_document_template_draft(template_id: uuid.UUID, body: DraftSave, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    permissions.require_design(user)
     """Autosave des Designers. Ungültiges JSON wird nie gespeichert (Schemaprüfung);
     fachliche Hinweise (unbekannte Bindung, fehlendes Asset …) kommen als Diagnosen zurück."""
     template = _editable_template(db, user, template_id)
@@ -512,6 +516,7 @@ class PublishBody(BaseModel):
 
 @router.post("/document-templates/{template_id}/publish", response_model=TemplateDetail)
 def publish_document_template(template_id: uuid.UUID, body: PublishBody, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    permissions.require_design(user)
     template = _editable_template(db, user, template_id)
     # Gestaltungen, die allein einer Sitzungsvorlage gehören, veröffentlichen auch Schreibende
     # (sie passen ihre Vorlage selbst an); alle übrigen nur Admins.
@@ -566,6 +571,7 @@ def get_document_template_revision(template_id: uuid.UUID, revision_id: uuid.UUI
 
 @router.post("/document-templates/{template_id}/revisions/{revision_id}/restore", response_model=TemplateDetail)
 def restore_document_template_revision(template_id: uuid.UUID, revision_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    permissions.require_design(user)
     template = _editable_template(db, user, template_id)
     revision = template_service.get_revision(db, template, revision_id)
     if revision is None:
@@ -716,6 +722,8 @@ async def import_design_example(example_key: str, body: ExampleImport, db: Sessi
 async def _import_design_example_impl(example_key: str, body: ExampleImport, db: Session, user: CurrentUser):  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
     # Legt ein Brand-Profil an: wie das Brand Studio nur für Admins
     permissions.require_brand(user)
+    # und eine eigene Vorlage (Dokument-Designer)
+    permissions.require_design(user)
     example = examples.get_example(example_key)
     if example is None:
         raise _not_found(user)
@@ -793,7 +801,7 @@ def customize_session_design(
     template_id: uuid.UUID, document_type: str, body: SessionDesignCustomize, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user),
 ):
     """Eigene Gestaltung für diese Sitzungsvorlage anlegen (Kopie der geltenden)."""
-    permissions.require_edit(user)
+    permissions.require_design(user)
     session_template = _session_template_or_404(db, user, template_id)
     try:
         template = template_service.customize_session_design(db, user.current_tenant_id, session_template, document_type, name=body.name, user_id=user.user_id)
@@ -1210,6 +1218,7 @@ def list_document_components(db: Session = Depends(get_db), user: CurrentUser = 
 
 @router.post("/document-components", response_model=ComponentRead, status_code=201)
 def create_document_component(body: ComponentWrite, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    permissions.require_design(user)
     permissions.require_edit(user)
     try:
         component = template_service.save_component(db, user.current_tenant_id, component=None, name=body.name, node=body.node, description=body.description, category=body.category, user_id=user.user_id)
@@ -1222,6 +1231,7 @@ def create_document_component(body: ComponentWrite, db: Session = Depends(get_db
 
 @router.patch("/document-components/{component_id}", response_model=ComponentRead)
 def update_document_component(component_id: uuid.UUID, body: ComponentWrite, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    permissions.require_design(user)
     permissions.require_edit(user)
     component = template_service.get_component(db, user.current_tenant_id, component_id)
     if component is None:

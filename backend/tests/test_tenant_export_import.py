@@ -1600,7 +1600,7 @@ def test_full_backup_restores_features_storage_packages_and_only_reinvites_partn
     db.add_all([admin, package])
     db.flush()
     feature_code = db.scalar(select(Feature.code).limit(1))
-    tenant = make_tenant(db, "Verein")
+    tenant = make_tenant(db, "Verein", features=())
     partner = make_tenant(db, "Partnerverein")
     db.add_all([
         TenantFeature(tenant_id=tenant.id, feature_code=feature_code, enabled_by_admin_id=admin.id),

@@ -9,7 +9,7 @@ from app.core.locale_config_generated import DEFAULT_LOCALE
 from app.models import ListDefinition, ListEntry, Participant, Template
 from app.repositories.participant_repository import ParticipantRepository
 from app.schemas.participant import ParticipantCreate, ParticipantImportResult, ParticipantUpdate
-from app.services import role_service
+from app.services import role_service, user_limit_service
 from app.services.access_service import AccessService
 
 
@@ -75,6 +75,9 @@ class ParticipantService:
         left_at = values.get("left_at", participant.left_at)
         if joined_at and left_at and left_at < joined_at:
             raise ValueError("left_at must not be before joined_at")
+        if participant.login_enabled and not participant.is_active and values.get("is_active") is True:
+            # Reaktivieren eines Kontos mit Login zählt zum Benutzerlimit des Abos
+            user_limit_service.ensure_login_capacity(db, tenant_id)
         try:
             # Deaktivieren darf den letzten Administrator nicht treffen (role_service.admin_guard).
             with role_service.admin_guard(db, tenant_id, None):

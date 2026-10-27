@@ -17,6 +17,7 @@ from app.core.config import settings
 from app.core.db import get_db
 from app.core.locale_config_generated import LOCALE_COOKIE_NAME, normalize_locale
 from app.core.permissions import CATALOG, P, effective_permissions, requires_mfa
+from app.core.features_generated import FEATURES
 from app.core.tenant_scope import bind_tenant_scope
 from app.models import AppUser, Tenant, TenantFeature, TenantRole, TenantRolePermission, UserMfaFactor, UserRole
 
@@ -46,6 +47,9 @@ class CurrentUser:
     # current_tenant_id gebucht sind. Leer per Default (deny-by-default) - build_current_user
     # laedt den echten Stand aus tenant_feature.
     current_tenant_features: frozenset[str] = frozenset()
+    # Features nach einem Downgrade im Zustand «nur lesen» (tenant_feature.access = 'read_only'):
+    # bestehende Daten bleiben lesbar, Änderungen sind gesperrt (permissions/features.json).
+    current_tenant_read_only_features: frozenset[str] = frozenset()
     # Effektive Berechtigungen (RBAC): Vereinigungsmenge aller Rollen des Kontos inkl. der festen
     # Implikationen, bei jedem Request frisch aus user_role/tenant_role geladen - Rollenänderungen
     # wirken damit sofort, auch in laufenden Sessions. Leer = default deny.
@@ -60,9 +64,13 @@ class CurrentUser:
         Modul für den Mandanten gebucht. Ressourcenregeln (welcher Datensatz) prüft
         services/access_service.py zusätzlich."""
         definition = CATALOG[permission]
-        if definition.feature is not None and definition.feature not in self.current_tenant_features:
+        if definition.feature is not None and not self.has_feature(definition.feature, write=permission not in FEATURES[definition.feature].read_permissions):
             return False
         return permission in self.permissions
+
+    def has_feature(self, code: str, *, write: bool = True) -> bool:
+        """Feature gebucht; ``write=False`` lässt auch den Nur-Lesen-Zustand nach einem Downgrade zu."""
+        return code in self.current_tenant_features or (not write and code in self.current_tenant_read_only_features)
 
 
 @dataclass(frozen=True)
@@ -207,9 +215,9 @@ def build_current_user(db: Session, user: AppUser, *, mfa_verified: bool = False
     tenant = db.execute(select(Tenant).where(Tenant.id == user.tenant_id)).scalar_one()
     rows = _load_role_rows(db, user.id)
     summaries = {row.id: RoleSummary(public_id=row.public_id, name=row.name, system_key=row.system_key) for row in rows}
-    tenant_features = frozenset(
-        db.scalars(select(TenantFeature.feature_code).where(TenantFeature.tenant_id == tenant.id))
-    )
+    feature_rows = db.execute(select(TenantFeature.feature_code, TenantFeature.access).where(TenantFeature.tenant_id == tenant.id)).all()
+    tenant_features = frozenset(row.feature_code for row in feature_rows if row.access == "full")
+    read_only_features = frozenset(row.feature_code for row in feature_rows if row.access == "read_only")
     return CurrentUser(
         user_id=user.id,
         user_public_id=user.public_id,
@@ -225,6 +233,7 @@ def build_current_user(db: Session, user: AppUser, *, mfa_verified: bool = False
         current_tenant_profile_image_path=tenant.profile_image_path,
         mfa_verified=mfa_verified,
         current_tenant_features=tenant_features,
+        current_tenant_read_only_features=read_only_features,
         permissions=_effective(rows),
         role_ids=tuple(sorted(summaries)),
         roles=tuple(summaries[role_id] for role_id in sorted(summaries)),
@@ -278,12 +287,15 @@ def get_current_user(user: CurrentUser | None = Depends(get_optional_current_use
     return user
 
 
-def require_feature(user: CurrentUser, code: str) -> CurrentUser:
+def require_feature(user: CurrentUser, code: str, *, write: bool = True) -> CurrentUser:
     """Feature-Gating pro Mandant - orthogonal zur Berechtigung. Ein 403 hier bedeutet "fuer
-    diesen Mandanten nicht gebucht", nicht "darf das nicht"."""
-    if code not in user.current_tenant_features:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Feature '{code}' nicht gebucht")
-    return user
+    diesen Mandanten nicht gebucht", nicht "darf das nicht". ``write=False`` (nur lesen) lässt
+    den Nur-Lesen-Zustand nach einem Downgrade zu (permissions/features.json)."""
+    if user.has_feature(code, write=write):
+        return user
+    if code in user.current_tenant_read_only_features:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Feature '{code}' nur noch lesend (nicht mehr im Abo)")
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Feature '{code}' nicht gebucht")
 
 
 def require_permission(user: CurrentUser, permission: P) -> CurrentUser:
@@ -292,7 +304,7 @@ def require_permission(user: CurrentUser, permission: P) -> CurrentUser:
     require_feature."""
     feature = CATALOG[permission].feature
     if feature is not None:
-        require_feature(user, feature)
+        require_feature(user, feature, write=permission not in FEATURES[feature].read_permissions)
     if permission not in user.permissions:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission required")
     return user

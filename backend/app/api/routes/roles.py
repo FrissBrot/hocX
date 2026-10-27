@@ -14,7 +14,8 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.permissions import CATALOG, P
-from app.core.security import CurrentUser, get_current_user, require_permission
+from app.core.features_generated import F
+from app.core.security import CurrentUser, get_current_user, require_feature, require_permission
 from app.models import AppUser
 from app.schemas.role import PermissionInfo, RoleCreate, RoleRead, RoleRef, RoleUpdate, UserRolesUpdate
 from app.services import public_id_service, role_service
@@ -49,6 +50,7 @@ def get_permission_catalog(user: CurrentUser = Depends(get_current_user)):
 @router.post("/roles", response_model=RoleRead, status_code=status.HTTP_201_CREATED)
 def create_role(payload: RoleCreate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     require_permission(user, P.ACCESS_MANAGE)
+    require_feature(user, F.CUSTOM_ROLES, write=True)
     try:
         role = role_service.create_role(db, user, payload)
         db.commit()
@@ -64,6 +66,7 @@ def create_role(payload: RoleCreate, db: Session = Depends(get_db), user: Curren
 @router.patch("/roles/{role_id}", response_model=RoleRead)
 def update_role(role_id: uuid.UUID, payload: RoleUpdate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     require_permission(user, P.ACCESS_MANAGE)
+    require_feature(user, F.CUSTOM_ROLES, write=True)
     role = role_service.get_role(db, user.current_tenant_id, role_id)
     try:
         before, after = role_service.update_role(db, user, role, payload)
