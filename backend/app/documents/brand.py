@@ -134,7 +134,7 @@ class BrandLayout(_Strict):
     orientation: Literal["portrait", "landscape"] = "portrait"
     margins: Spacing = Field(default_factory=lambda: Spacing(top=22, right=20, bottom=22, left=20))
     paragraph_gap: float = Field(2.5, ge=0, le=20)
-    section_gap: float = Field(6, ge=0, le=40)
+    section_gap: float = Field(8, ge=0, le=40)
     heading_style: Literal["plain", "underline", "bar", "boxed"] = "underline"
     table_style: Literal["lines", "grid", "zebra", "minimal"] = "lines"
     border_width: float = Field(0.5, ge=0.1, le=4)
@@ -239,7 +239,7 @@ BRAND_PRESETS: dict[str, dict[str, Any]] = {
     },
     "compact": {
         "typography": {"base_size": 9.5, "size_h1": 14, "size_h2": 12, "size_h3": 10.5, "line_height": 1.25},
-        "layout": {"margins": {"top": 15, "right": 15, "bottom": 15, "left": 15}, "paragraph_gap": 1.5, "section_gap": 4, "table_style": "minimal"},
+        "layout": {"margins": {"top": 15, "right": 15, "bottom": 15, "left": 15}, "paragraph_gap": 1.5, "section_gap": 5, "table_style": "minimal"},
     },
 }
 

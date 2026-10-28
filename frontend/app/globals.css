@@ -27805,6 +27805,10 @@ a.mobile-list-row { color: var(--text); }
   background: var(--warning-bg);
   color: var(--warning-fg);
 }
+.studio-usage-banner-dismiss {
+  flex-shrink: 0;
+  color: inherit;
+}
 /* Bibliothek: Abstammung und Verwendung einer Gestaltung */
 .studio-card-lineage {
   margin: 0;

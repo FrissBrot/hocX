@@ -2176,6 +2176,7 @@
     "shared": "Affects {count, plural, one {# template} other {# templates}} ({names}) and their next documents. PDFs already created stay unchanged.",
     "default": "Also applies to new templates without their own assignment.",
     "single": "Used only in “{name}”.",
-    "unused": "Currently not used in any template."
+    "unused": "Currently not used in any template.",
+    "dismiss": "Hide notice"
   }
 }

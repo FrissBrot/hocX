@@ -2176,6 +2176,7 @@
     "shared": "Riguarda {count, plural, one {# modello} other {# modelli}} ({names}) e i loro prossimi documenti. I PDF già creati restano invariati.",
     "default": "Vale anche per i nuovi modelli senza assegnazione propria.",
     "single": "Usata solo in «{name}».",
-    "unused": "Attualmente non usata in nessun modello."
+    "unused": "Attualmente non usata in nessun modello.",
+    "dismiss": "Nascondi avviso"
   }
 }

@@ -2176,6 +2176,7 @@
     "shared": "Wirkt auf {count, plural, one {# Vorlage} other {# Vorlagen}} ({names}) und deren nächste Dokumente. Bereits erstellte PDFs bleiben unverändert.",
     "default": "Gilt auch für neue Vorlagen ohne eigene Zuweisung.",
     "single": "Nur in «{name}» verwendet.",
-    "unused": "Zurzeit in keiner Vorlage verwendet."
+    "unused": "Zurzeit in keiner Vorlage verwendet.",
+    "dismiss": "Hinweis ausblenden"
   }
 }

@@ -16,7 +16,8 @@ Installationen aktualisieren können.
   Vereins), «Bearbeiten» (wirkt auf alle Vorlagen, die sie verwenden) und «Nur hier anpassen»
   (Kopie; der Hinweis sagt, dass Änderungen an der Ausgangsgestaltung hier nicht mehr gelten).
   «Eigene/Gemeinsame Gestaltung» entfällt, die Tabs zeigen den Namen der Gestaltung.
-- Designer: Hinweis, auf wie viele Vorlagen eine Änderung wirkt, mit «Nur für … ändern».
+- Designer: Hinweis, auf wie viele Vorlagen eine Änderung wirkt, mit «Nur für … ändern». Der
+  Hinweis lässt sich wegklicken und erscheint wieder, wenn sich die Verwendung ändert.
 - Bibliothek der Protokollgestaltung: jede Gestaltung zeigt «Verwendet in» und bei Kopien
   «Kopie von …»; Kopien einzelner Vorlagen erscheinen jetzt ebenfalls.
 - Dokument-Designer mit zwei Modi wie im Entwurf v2: «Einfach» und «Erweitert». Der bisherige
@@ -31,6 +32,10 @@ Installationen aktualisieren können.
   die aktuellen Hauptversionen (Node-24-Laufzeit). PostgreSQL bleibt bewusst bei 16: der
   Sprung auf 18 braucht ein Upgrade der Datenbank (`pg_upgrade` bzw. Dump/Restore) und ein
   anderes Volume-Layout und wird separat geplant.
+- PDF: grösserer Abstand zwischen den Traktanden. «Abstand vor Abschnitten» (Corporate Design →
+  Seitenaufbau) hat neu 8 statt 6 mm als Standard (Vorlage «Kompakt»: 5 statt 4 mm). Profile mit
+  dem bisherigen Standardwert bekommen per Migration `0159_brand_section_gap` eine neue Revision
+  mit dem neuen Wert; eigene Werte bleiben, die vorherige Revision lässt sich wiederherstellen.
 
 ## [1.2.0] - 2026-10-23
 
