@@ -1380,6 +1380,9 @@ a.button-secondary:hover { border-color: var(--border-strong); }
   --button-bg: transparent;
   background: var(--button-bg);
   border: 1.5px solid var(--border-strong, var(--border));
+  /* Ohne eigene Farbe erbte der Umschalter die helle Schrift des globalen Primärbuttons und
+     war auf transparentem Grund im hellen Theme unlesbar. */
+  color: var(--text);
 }
 
 .button-toggle-active {
@@ -9431,27 +9434,297 @@ input[type="color"]::-moz-color-swatch {
   border-bottom-right-radius: 0;
 }
 
-.editor-block-auto-generated-label {
-  position: absolute;
-  top: -10px;
-  left: 20px;
-  background: var(--panel-solid);
-  padding: 0 var(--space-2);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  color: var(--danger);
-  border-radius: var(--radius-xs);
-  z-index: 1;
+/* ── Termin-Blöcke als Gruppe (automatisch pro Termin erzeugt) ───────── */
+
+.event-series {
+  display: grid;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent 72%);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--accent) 4%, transparent 96%);
 }
 
-.editor-block-auto-generated-icon {
-  position: absolute;
-  top: -18px;
-  right: 16px;
-  background: var(--panel-solid);
+.event-series-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 20%, transparent 80%);
+}
+
+.event-series-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.event-series-summary {
+  flex: 1;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.event-series-rule {
+  font-weight: 600;
+}
+
+.event-series-meta {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.event-series-list {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3);
+}
+
+.event-series-empty {
+  padding: var(--space-5);
+  text-align: center;
+  color: var(--muted);
+  border: 1px dashed var(--border-strong);
   border-radius: var(--radius-md);
-  padding: 2px;
-  z-index: 1;
+}
+
+.event-series-hidden-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.event-series-hidden-date {
+  font-variant-numeric: tabular-nums;
+}
+
+.event-series-hidden-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.event-series-card {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5) var(--space-5);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+}
+
+.event-series-card-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.event-series-tile,
+.event-pick-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: none;
+  line-height: 1.1;
+}
+
+.event-series-tile {
+  width: 46px;
+  padding: var(--space-1) 0;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.event-series-tile-day {
+  font-weight: 700;
+  font-size: var(--text-lg);
+}
+
+.event-series-tile-month {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.event-series-card-title {
+  flex: 1;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.event-series-title {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-weight: 600;
+}
+
+.event-series-title-cancelled {
+  text-decoration: line-through;
+}
+
+.event-series-actions {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.event-series-card-body {
+  display: grid;
+  gap: var(--space-3);
+}
+
+/* Blöcke innerhalb einer Termin-Karte: die Karte rahmt bereits, der Block selbst nicht. */
+.event-series-card-body .editor-block-card-in-series {
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.event-series-linked {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: var(--space-2);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--accent);
+}
+
+/* ── Popup «Termine wählen» ─────────────────────────────────────────── */
+
+.event-picker {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.event-picker-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.event-picker-spacer {
+  flex: 1;
+}
+
+.event-picker-groups {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.event-picker-group {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.event-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: var(--space-2);
+}
+
+.event-picker-other-toggle {
+  justify-self: start;
+}
+
+.event-pick-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--panel-solid);
+  cursor: pointer;
+  transition: background var(--dur-fast) ease, border-color var(--dur-fast) ease;
+}
+
+.event-pick-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border) 55%);
+}
+
+.event-pick-card:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
+.event-pick-card-checked {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent 88%);
+}
+
+.event-pick-tile {
+  width: 40px;
+}
+
+.event-pick-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.event-pick-title,
+.event-pick-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-pick-title {
+  font-weight: 600;
+}
+
+.event-pick-meta {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.event-pick-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  color: transparent;
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.event-pick-card-checked .event-pick-check {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-solid);
+}
+
+.event-picker-result {
+  margin: 0;
 }
 
 .editor-planning-toolbar {
@@ -26931,7 +27204,6 @@ a.mobile-list-row { color: var(--text); }
 .cashflow-status-cell { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .cashflow-overdue { color: var(--danger-fg); font-weight: 500; }
 .cashflow-kind-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
-.cashflow-toolbar .button-toggle { color: var(--text); }
 .cashflow-link {
   --button-bg: transparent;
   --button-hover-bg: transparent;

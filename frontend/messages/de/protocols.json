@@ -135,7 +135,6 @@
   "chooseEvent": "Termin wählen",
   "chooseEventAlt": "Termin waehlen",
   "chooseEvents": "Termine auswählen",
-  "chooseEventsDescription": "Auf einen Termin klicken, um ihn an-/abzuwählen. Passend zum Filter stehen oben, weitere Termine unten.",
   "chooseParticipant": "Teilnehmer wählen",
   "chooseParticipantDescriptionMulti": "Suche nach Teilnehmern und markiere mehrere Einträge mit Haken.",
   "chooseParticipantDescriptionSingle": "Teilnehmer auswählen.",
@@ -242,7 +241,8 @@
     "imageAlreadyExists": "Dieses Bild ist bereits vorhanden und wurde nicht erneut hochgeladen.",
     "statusChangedByOtherToast": "Status wurde von {name} zu „{status}“ geändert.",
     "draftsRestoredToast": "{count, plural, one {# lokaler Textentwurf wurde} other {# lokale Textentwürfe wurden}} wiederhergestellt.",
-    "conflictToast": "Konflikt: Diese Stelle wurde inzwischen von jemand anderem gespeichert. Die aktuelle Version wurde geladen – Ihre letzte Änderung wurde nicht übernommen, ist aber als lokaler Entwurf gesichert."
+    "conflictToast": "Konflikt: Diese Stelle wurde inzwischen von jemand anderem gespeichert. Die aktuelle Version wurde geladen – Ihre letzte Änderung wurde nicht übernommen, ist aber als lokaler Entwurf gesichert.",
+    "eventHideFailed": "Termin konnte nicht ausgeblendet werden"
   },
   "embeddedBlock": {
     "attendance": "Anwesenheit",
@@ -299,7 +299,6 @@
   "linkedListEntryDeleted": "Verknüpfter Listeneintrag wurde gelöscht",
   "manualLabel": "Manuell",
   "markTodoDone": "Todo als erledigt markieren",
-  "matchingFilterGroup": "Passend zum Filter",
   "matrixColumnsToggleDescription": "Spalten dieser Matrix an-/abwählen. Werte bleiben beim Abwählen erhalten.",
   "matrixEditor": {
     "addBulletPlaceholder": "Neuen Punkt hinzufügen",
@@ -360,7 +359,6 @@
   "nobody": "Niemand",
   "openEventOverview": "Terminübersicht öffnen",
   "openFinesFromEarlierProtocols": "Offene Bussen aus früheren Protokollen",
-  "otherEventsGroup": "Weitere Termine",
   "participantCountAbbr": "TN",
   "participantFallback": "Teilnehmer",
   "pendingLabel": "Ausstehend",
@@ -376,7 +374,6 @@
   "refreshDataAction": "⟳ Daten aktualisieren",
   "removeColumn": "Spalte entfernen",
   "reopenTodo": "Todo wieder öffnen",
-  "repeatsPerEvent": "Wiederholt sich pro Termin",
   "richTextEditor": {
     "bold": "Fett (Ctrl+B)",
     "bulletList": "Aufzählung",
@@ -486,5 +483,34 @@
   "balanceAsOf": "Stand {date}",
   "includeImageGps": "GPS-Daten des Bildes mitsenden",
   "timeLabel": "Uhrzeit",
-  "sessionDateTime": "{date}, {time} Uhr"
+  "sessionDateTime": "{date}, {time} Uhr",
+  "eventSeries": {
+    "ruleTag": "Pro Termin · Tag «{tag}»",
+    "ruleAny": "Pro Termin",
+    "count": "{visible} von {total, plural, one {# Termin} other {# Terminen}}",
+    "choose": "Termine wählen",
+    "edit": "Termin bearbeiten",
+    "hide": "Im Protokoll ausblenden",
+    "unhide": "Einblenden",
+    "hiddenRow": "{title} · ausgeblendet",
+    "remove": "Block entfernen (Termin bleibt)",
+    "removed": "Block für {date} entfernt – der Termin bleibt bestehen",
+    "empty": "Keine Termine ausgewählt.",
+    "linked": "aus Termin",
+    "linkedTitle": "Mit dem Termin verknüpft: Änderungen gelten auch im Termin.",
+    "pickerTitle": "Termine wählen",
+    "pickerDescription": "Pro angehaktem Termin entsteht ein Block.",
+    "pickerDescriptionTag": "Pro angehaktem Termin entsteht ein Block. Gefiltert nach Tag «{tag}».",
+    "tabUpcoming": "Kommend",
+    "tabPast": "Vergangen",
+    "tabAll": "Alle",
+    "allUpcoming": "Alle kommenden",
+    "none": "Keine",
+    "noneConfirm": "Alle Termin-Blöcke dieses Punkts entfernen? Eingegebene Inhalte gehen verloren, die Termine selbst bleiben bestehen.",
+    "noneConfirmAction": "Alle entfernen",
+    "result": "ergibt {count, plural, one {# Block} other {# Blöcke}}",
+    "showOther": "Weitere Termine anzeigen ({count})",
+    "hideOther": "Weitere Termine ausblenden",
+    "emptyRange": "Keine Termine in diesem Zeitraum."
+  }
 }

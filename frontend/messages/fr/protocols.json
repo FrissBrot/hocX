@@ -135,7 +135,6 @@
   "chooseEvent": "Choisir un événement",
   "chooseEventAlt": "Choisir un événement",
   "chooseEvents": "Choisir des événements",
-  "chooseEventsDescription": "Cliquez sur un événement pour le sélectionner ou le désélectionner. Les événements correspondant au filtre sont en haut, les autres en dessous.",
   "chooseParticipant": "Choisir un participant",
   "chooseParticipantDescriptionMulti": "Recherchez des participants et cochez plusieurs entrées.",
   "chooseParticipantDescriptionSingle": "Choisir un participant.",
@@ -242,7 +241,8 @@
     "imageAlreadyExists": "Cette image existe déjà et n'a pas été envoyée une nouvelle fois.",
     "statusChangedByOtherToast": "{name} a changé le statut en « {status} ».",
     "draftsRestoredToast": "{count, plural, one {# brouillon local a été restauré} other {# brouillons locaux ont été restaurés}}.",
-    "conflictToast": "Conflit : quelqu'un d'autre a enregistré cette section entre-temps. La version actuelle a été chargée – votre dernière modification n'a pas été appliquée, mais elle est conservée comme brouillon local."
+    "conflictToast": "Conflit : quelqu'un d'autre a enregistré cette section entre-temps. La version actuelle a été chargée – votre dernière modification n'a pas été appliquée, mais elle est conservée comme brouillon local.",
+    "eventHideFailed": "L'événement n'a pas pu être masqué"
   },
   "embeddedBlock": {
     "attendance": "Présence",
@@ -299,7 +299,6 @@
   "linkedListEntryDeleted": "L'entrée de liste liée a été supprimée",
   "manualLabel": "Manuel",
   "markTodoDone": "Marquer la tâche comme terminée",
-  "matchingFilterGroup": "Correspond au filtre",
   "matrixColumnsToggleDescription": "Activer/désactiver les colonnes de cette matrice. Les valeurs sont conservées lors de la désactivation.",
   "matrixEditor": {
     "addBulletPlaceholder": "Ajouter un nouveau point",
@@ -360,7 +359,6 @@
   "nobody": "Personne",
   "openEventOverview": "Ouvrir l'aperçu des événements",
   "openFinesFromEarlierProtocols": "Amendes ouvertes de procès-verbaux précédents",
-  "otherEventsGroup": "Autres événements",
   "participantCountAbbr": "Part.",
   "participantFallback": "Participant",
   "pendingLabel": "En attente",
@@ -376,7 +374,6 @@
   "refreshDataAction": "⟳ Actualiser les données",
   "removeColumn": "Supprimer la colonne",
   "reopenTodo": "Rouvrir la tâche",
-  "repeatsPerEvent": "Se répète par événement",
   "richTextEditor": {
     "bold": "Gras (Ctrl+B)",
     "bulletList": "Liste à puces",
@@ -486,5 +483,34 @@
   "balanceAsOf": "Au {date}",
   "includeImageGps": "Envoyer les données GPS de l’image",
   "timeLabel": "Heure",
-  "sessionDateTime": "{date} à {time}"
+  "sessionDateTime": "{date} à {time}",
+  "eventSeries": {
+    "ruleTag": "Par événement · tag « {tag} »",
+    "ruleAny": "Par événement",
+    "count": "{visible} sur {total, plural, one {# événement} other {# événements}}",
+    "choose": "Choisir des événements",
+    "edit": "Modifier l'événement",
+    "hide": "Masquer dans le procès-verbal",
+    "unhide": "Afficher",
+    "hiddenRow": "{title} · masqué",
+    "remove": "Retirer le bloc (l'événement reste)",
+    "removed": "Bloc du {date} retiré – l'événement est conservé",
+    "empty": "Aucun événement sélectionné.",
+    "linked": "de l'événement",
+    "linkedTitle": "Lié à l'événement : les modifications s'appliquent aussi à l'événement.",
+    "pickerTitle": "Choisir des événements",
+    "pickerDescription": "Chaque événement coché crée un bloc.",
+    "pickerDescriptionTag": "Chaque événement coché crée un bloc. Filtré par le tag « {tag} ».",
+    "tabUpcoming": "À venir",
+    "tabPast": "Passés",
+    "tabAll": "Tous",
+    "allUpcoming": "Tous ceux à venir",
+    "none": "Aucun",
+    "noneConfirm": "Retirer tous les blocs d'événement de ce point ? Le contenu saisi est perdu, les événements eux-mêmes sont conservés.",
+    "noneConfirmAction": "Tout retirer",
+    "result": "donne {count, plural, one {# bloc} other {# blocs}}",
+    "showOther": "Afficher d'autres événements ({count})",
+    "hideOther": "Masquer les autres événements",
+    "emptyRange": "Aucun événement sur cette période."
+  }
 }

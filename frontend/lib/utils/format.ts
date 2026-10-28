@@ -213,6 +213,19 @@ export function formatMonthYear(input: string | null | undefined, locale?: strin
   return new Intl.DateTimeFormat(toIntlLocale(locale), { month: "long", year: "numeric", timeZone: "UTC" }).format(parsed);
 }
 
+// Teile einer Datums-Kachel ("18" / "Mi" / "Nov.") für ein ISO-Datum, ohne Zeitzone gerechnet.
+export function formatDateTileParts(input: string | null | undefined, locale?: string): { day: string; weekday: string; month: string } {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(input ?? ""));
+  if (!match) return { day: "", weekday: "", month: "" };
+  const parsed = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  const intlLocale = toIntlLocale(locale);
+  return {
+    day: match[3],
+    weekday: new Intl.DateTimeFormat(intlLocale, { weekday: "short", timeZone: "UTC" }).format(parsed),
+    month: new Intl.DateTimeFormat(intlLocale, { month: "short", timeZone: "UTC" }).format(parsed),
+  };
+}
+
 export function formatFileSize(bytes: number | null | undefined) {
   if (bytes === null || bytes === undefined || Number.isNaN(bytes)) {
     return "";

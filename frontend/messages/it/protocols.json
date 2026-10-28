@@ -135,7 +135,6 @@
   "chooseEvent": "Scegli evento",
   "chooseEventAlt": "Scegli evento",
   "chooseEvents": "Scegli eventi",
-  "chooseEventsDescription": "Clicca su un evento per selezionarlo o deselezionarlo. Gli eventi corrispondenti al filtro sono in alto, gli altri sotto.",
   "chooseParticipant": "Scegli partecipante",
   "chooseParticipantDescriptionMulti": "Cerca i partecipanti e seleziona più voci con il segno di spunta.",
   "chooseParticipantDescriptionSingle": "Scegli un partecipante.",
@@ -242,7 +241,8 @@
     "imageAlreadyExists": "Questa immagine esiste già e non è stata caricata di nuovo.",
     "statusChangedByOtherToast": "{name} ha cambiato lo stato in «{status}».",
     "draftsRestoredToast": "{count, plural, one {# bozza locale è stata ripristinata} other {# bozze locali sono state ripristinate}}.",
-    "conflictToast": "Conflitto: qualcun altro ha salvato questa sezione nel frattempo. È stata caricata la versione attuale – la tua ultima modifica non è stata applicata, ma è conservata come bozza locale."
+    "conflictToast": "Conflitto: qualcun altro ha salvato questa sezione nel frattempo. È stata caricata la versione attuale – la tua ultima modifica non è stata applicata, ma è conservata come bozza locale.",
+    "eventHideFailed": "L'evento non può essere nascosto"
   },
   "embeddedBlock": {
     "attendance": "Presenza",
@@ -299,7 +299,6 @@
   "linkedListEntryDeleted": "La voce di lista collegata è stata eliminata",
   "manualLabel": "Manuale",
   "markTodoDone": "Segna attività come completata",
-  "matchingFilterGroup": "Corrisponde al filtro",
   "matrixColumnsToggleDescription": "Attiva/disattiva le colonne di questa matrice. I valori vengono mantenuti alla deselezione.",
   "matrixEditor": {
     "addBulletPlaceholder": "Aggiungi nuovo punto",
@@ -360,7 +359,6 @@
   "nobody": "Nessuno",
   "openEventOverview": "Apri panoramica eventi",
   "openFinesFromEarlierProtocols": "Multe aperte da verbali precedenti",
-  "otherEventsGroup": "Altri eventi",
   "participantCountAbbr": "Part.",
   "participantFallback": "Partecipante",
   "pendingLabel": "In sospeso",
@@ -376,7 +374,6 @@
   "refreshDataAction": "⟳ Aggiorna dati",
   "removeColumn": "Rimuovi colonna",
   "reopenTodo": "Riapri attività",
-  "repeatsPerEvent": "Si ripete per evento",
   "richTextEditor": {
     "bold": "Grassetto (Ctrl+B)",
     "bulletList": "Elenco puntato",
@@ -486,5 +483,34 @@
   "balanceAsOf": "Al {date}",
   "includeImageGps": "Invia i dati GPS dell’immagine",
   "timeLabel": "Ora",
-  "sessionDateTime": "{date}, ore {time}"
+  "sessionDateTime": "{date}, ore {time}",
+  "eventSeries": {
+    "ruleTag": "Per evento · tag «{tag}»",
+    "ruleAny": "Per evento",
+    "count": "{visible} di {total, plural, one {# evento} other {# eventi}}",
+    "choose": "Scegli eventi",
+    "edit": "Modifica evento",
+    "hide": "Nascondi nel verbale",
+    "unhide": "Mostra",
+    "hiddenRow": "{title} · nascosto",
+    "remove": "Rimuovi blocco (l'evento resta)",
+    "removed": "Blocco del {date} rimosso – l'evento resta",
+    "empty": "Nessun evento selezionato.",
+    "linked": "dall'evento",
+    "linkedTitle": "Collegato all'evento: le modifiche valgono anche per l'evento.",
+    "pickerTitle": "Scegli eventi",
+    "pickerDescription": "Per ogni evento spuntato viene creato un blocco.",
+    "pickerDescriptionTag": "Per ogni evento spuntato viene creato un blocco. Filtrato per tag «{tag}».",
+    "tabUpcoming": "Prossimi",
+    "tabPast": "Passati",
+    "tabAll": "Tutti",
+    "allUpcoming": "Tutti i prossimi",
+    "none": "Nessuno",
+    "noneConfirm": "Rimuovere tutti i blocchi evento di questo punto? Il contenuto inserito va perso, gli eventi stessi restano.",
+    "noneConfirmAction": "Rimuovi tutti",
+    "result": "dà {count, plural, one {# blocco} other {# blocchi}}",
+    "showOther": "Mostra altri eventi ({count})",
+    "hideOther": "Nascondi altri eventi",
+    "emptyRange": "Nessun evento in questo periodo."
+  }
 }

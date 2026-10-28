@@ -135,7 +135,6 @@
   "chooseEvent": "Choose event",
   "chooseEventAlt": "Choose event",
   "chooseEvents": "Choose events",
-  "chooseEventsDescription": "Click an event to select or deselect it. Events matching the filter are at the top, others below.",
   "chooseParticipant": "Choose participant",
   "chooseParticipantDescriptionMulti": "Search for participants and check off multiple entries.",
   "chooseParticipantDescriptionSingle": "Choose a participant.",
@@ -242,7 +241,8 @@
     "imageAlreadyExists": "This image already exists and was not uploaded again.",
     "statusChangedByOtherToast": "{name} changed the status to “{status}”.",
     "draftsRestoredToast": "{count, plural, one {# local text draft was} other {# local text drafts were}} restored.",
-    "conflictToast": "Conflict: someone else saved this section in the meantime. The current version has been loaded – your last change was not applied, but it is kept as a local draft."
+    "conflictToast": "Conflict: someone else saved this section in the meantime. The current version has been loaded – your last change was not applied, but it is kept as a local draft.",
+    "eventHideFailed": "Event could not be hidden"
   },
   "embeddedBlock": {
     "attendance": "Attendance",
@@ -299,7 +299,6 @@
   "linkedListEntryDeleted": "The linked list entry was deleted",
   "manualLabel": "Manual",
   "markTodoDone": "Mark todo done",
-  "matchingFilterGroup": "Matching the filter",
   "matrixColumnsToggleDescription": "Toggle this matrix's columns on/off. Values are kept when deselected.",
   "matrixEditor": {
     "addBulletPlaceholder": "Add new bullet",
@@ -360,7 +359,6 @@
   "nobody": "Nobody",
   "openEventOverview": "Open event overview",
   "openFinesFromEarlierProtocols": "Open fines from earlier protocols",
-  "otherEventsGroup": "Other events",
   "participantCountAbbr": "P",
   "participantFallback": "Participant",
   "pendingLabel": "Pending",
@@ -376,7 +374,6 @@
   "refreshDataAction": "⟳ Refresh data",
   "removeColumn": "Remove column",
   "reopenTodo": "Reopen todo",
-  "repeatsPerEvent": "Repeats per event",
   "richTextEditor": {
     "bold": "Bold (Ctrl+B)",
     "bulletList": "Bullet list",
@@ -486,5 +483,34 @@
   "balanceAsOf": "As of {date}",
   "includeImageGps": "Include the image’s GPS data",
   "timeLabel": "Time",
-  "sessionDateTime": "{date}, {time}"
+  "sessionDateTime": "{date}, {time}",
+  "eventSeries": {
+    "ruleTag": "Per event · tag “{tag}”",
+    "ruleAny": "Per event",
+    "count": "{visible} of {total, plural, one {# event} other {# events}}",
+    "choose": "Choose events",
+    "edit": "Edit event",
+    "hide": "Hide in minutes",
+    "unhide": "Show",
+    "hiddenRow": "{title} · hidden",
+    "remove": "Remove block (event stays)",
+    "removed": "Block for {date} removed – the event remains",
+    "empty": "No events selected.",
+    "linked": "from event",
+    "linkedTitle": "Linked to the event: changes also apply to the event.",
+    "pickerTitle": "Choose events",
+    "pickerDescription": "Each ticked event creates one block.",
+    "pickerDescriptionTag": "Each ticked event creates one block. Filtered by tag “{tag}”.",
+    "tabUpcoming": "Upcoming",
+    "tabPast": "Past",
+    "tabAll": "All",
+    "allUpcoming": "All upcoming",
+    "none": "None",
+    "noneConfirm": "Remove all event blocks of this item? Entered content is lost; the events themselves remain.",
+    "noneConfirmAction": "Remove all",
+    "result": "gives {count, plural, one {# block} other {# blocks}}",
+    "showOther": "Show other events ({count})",
+    "hideOther": "Hide other events",
+    "emptyRange": "No events in this period."
+  }
 }

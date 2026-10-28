@@ -1658,22 +1658,33 @@ export function ProtocolEditor({
     }
   }
 
-  async function unhideEventBlock(blockId: string) {
+  // Termin-Block im Protokoll ein- bzw. ausblenden. ``manually_hidden`` merkt sich die Wahl:
+  // ein ausgeblendeter Termin wird in Folgeprotokollen derselben Vorlage nicht neu erzeugt
+  // (protocol_service._manually_hidden_event_ids), ein wieder eingeblendeter schon.
+  async function setEventBlockVisible(blockId: string, visible: boolean) {
     const block = elements.flatMap((e) => e.blocks).find((b) => b.id === blockId);
     if (!block) return;
-    const newConfig = { ...(block.configuration_snapshot_json ?? {}), manually_hidden: false };
-    updateBlockInState(blockId, (b) => ({ ...b, is_visible_snapshot: true, configuration_snapshot_json: newConfig }));
+    const newConfig = { ...(block.configuration_snapshot_json ?? {}), manually_hidden: !visible };
+    updateBlockInState(blockId, (b) => ({ ...b, is_visible_snapshot: visible, configuration_snapshot_json: newConfig }));
     try {
       const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(`/api/protocol-element-blocks/${blockId}`, {
         method: "PATCH",
-        body: JSON.stringify({ is_visible_snapshot: true, configuration_snapshot_json: newConfig, expected_config_version: block.config_version }),
+        body: JSON.stringify({ is_visible_snapshot: visible, configuration_snapshot_json: newConfig, expected_config_version: block.config_version }),
       });
       updateBlockInState(blockId, (b) => ({ ...b, config_version: updated.config_version }));
     } catch (err: unknown) {
       if (applyConfigConflict(blockId, err)) return;
-      updateBlockInState(blockId, (b) => ({ ...b, is_visible_snapshot: false, configuration_snapshot_json: block.configuration_snapshot_json }));
-      showToast(err instanceof Error ? err.message : t("eventShowFailed"), "error");
+      updateBlockInState(blockId, (b) => ({ ...b, is_visible_snapshot: block.is_visible_snapshot, configuration_snapshot_json: block.configuration_snapshot_json }));
+      showToast(err instanceof Error ? err.message : t(visible ? "eventShowFailed" : "eventHideFailed"), "error");
     }
+  }
+
+  function unhideEventBlock(blockId: string) {
+    return setEventBlockVisible(blockId, true);
+  }
+
+  function hideEventBlock(blockId: string) {
+    return setEventBlockVisible(blockId, false);
   }
 
   async function removeEventBlock(blockId: string) {
@@ -1932,6 +1943,7 @@ export function ProtocolEditor({
               setNewTodoTags={setNewTodoTags}
               isPlanningMode={isPlanningMode}
               unhideEventBlock={unhideEventBlock}
+              hideEventBlock={hideEventBlock}
               removeEventBlock={removeEventBlock}
               addEventBlockToElement={addEventBlockToElement}
               onQuickTodoCreated={handleQuickTodoCreated}

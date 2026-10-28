@@ -27,6 +27,8 @@ import { fallbackTagColor } from "@/components/events/event-utils";
 import { CheckboxCandidateModal, CandidateItem } from "@/components/protocol/planning/checkbox-candidate-modal";
 import { EventDetailForm } from "@/components/protocol/planning/event-detail-form";
 import { PlanningIconTrigger } from "@/components/protocol/planning/planning-icon-trigger";
+import { EventSeriesEntry, EventSeriesGroup } from "@/components/protocol/planning/event-series-group";
+import { EventBlockPickerModal } from "@/components/protocol/planning/event-block-picker-modal";
 import { TrackedWordDiff } from "@/components/protocol/tracked-word-diff";
 import { fetchCycleEvents } from "@/lib/api/cycle-events";
 import { TagInput } from "@/components/ui/tag-input";
@@ -146,6 +148,7 @@ export function FocusedElementEditor({
   setNewTodoTags,
   isPlanningMode,
   unhideEventBlock,
+  hideEventBlock,
   removeEventBlock,
   addEventBlockToElement,
   onQuickTodoCreated,
@@ -222,6 +225,7 @@ export function FocusedElementEditor({
   setNewTodoTags: Dispatch<SetStateAction<Record<string, string>>>;
   isPlanningMode: boolean;
   unhideEventBlock: (blockId: string) => Promise<void>;
+  hideEventBlock: (blockId: string) => Promise<void>;
   removeEventBlock: (blockId: string) => Promise<void>;
   addEventBlockToElement: (elementId: string, eventId: string) => Promise<ProtocolElement["blocks"][number] | null>;
   onQuickTodoCreated: (blockId: string, todoId: string, elementId: string) => void | Promise<void>;
@@ -267,6 +271,8 @@ export function FocusedElementEditor({
   const [matrixPickerBlockId, setMatrixPickerBlockId] = useState<string | null>(null);
   // Planning-mode consolidated checkbox popup for "Termine pro Element".
   const [showEventBlockPicker, setShowEventBlockPicker] = useState(false);
+  // «Termin bearbeiten» aus einer Termin-Karte bzw. aus dem Popup «Termine wählen»
+  const [editingSeriesEvent, setEditingSeriesEvent] = useState<{ eventId: string; blockId: string } | null>(null);
   // „Nächster Hock": Kalenderansicht als Date-Picker (Block-ID + heutiges Datum beim Öffnen).
   const [sessionDatePicker, setSessionDatePicker] = useState<{ blockId: string; todayIso: string } | null>(null);
   const [eventBlockScope, setEventBlockScope] = useState<"current" | "all">("current");
@@ -1315,6 +1321,77 @@ export function FocusedElementEditor({
     });
   }, [element.id]);
 
+  // Automatisch pro Termin erzeugte Blöcke (repeat_source_type=event) laufen als eine Gruppe
+  // (EventSeriesGroup): je Termin eine Karte mit den Blöcken dieses Termins. Alle anderen
+  // Blöcke rendern unverändert über ``renderBlock``.
+  function isAutoEventBlock(block: ProtocolElement["blocks"][number]) {
+    const config = asObject(block.configuration_snapshot_json);
+    return config.repeat_source_type === "event" && config.repeat_source_id != null;
+  }
+  function renderBlocksWithSeries(renderBlock: (block: ProtocolElement["blocks"][number], blockIndex: number) => ReactNode): ReactNode[] {
+    const out: ReactNode[] = [];
+    let index = 0;
+    while (index < element.blocks.length) {
+      const first = element.blocks[index];
+      if (!isAutoEventBlock(first)) {
+        out.push(renderBlock(first, index));
+        index += 1;
+        continue;
+      }
+      const groups = new Map<string, { blocks: ProtocolElement["blocks"]; nodes: ReactNode[] }>();
+      while (index < element.blocks.length && isAutoEventBlock(element.blocks[index])) {
+        const block = element.blocks[index];
+        const key = blockEventPublicId(block) ?? `block-${block.id}`;
+        const group = groups.get(key) ?? { blocks: [], nodes: [] };
+        group.blocks.push(block);
+        if (block.is_visible_snapshot) group.nodes.push(renderBlock(block, index));
+        groups.set(key, group);
+        index += 1;
+      }
+      const entries: EventSeriesEntry[] = [...groups.entries()].map(([key, group]) => ({
+        key,
+        event: availableEvents.find((e) => e.id === key) ?? null,
+        label: String(asObject(group.blocks[0].configuration_snapshot_json).repeat_source_label ?? t("unknownEvent")),
+        hidden: group.blocks.every((b) => !b.is_visible_snapshot),
+        content: group.nodes,
+      }));
+      const blocksOf = (entry: EventSeriesEntry) => groups.get(entry.key)?.blocks ?? [];
+      const seriesTag = eventFilterTagText(normalizeEventFilter(asObject(first.configuration_snapshot_json).repeat_event_filter));
+      out.push(
+        <EventSeriesGroup
+          key={`series-${first.id}`}
+          entries={entries}
+          tag={seriesTag}
+          canChoose={isPlanningMode && !isReadOnly}
+          canEdit={!isReadOnly}
+          onChoose={() => setShowEventBlockPicker(true)}
+          onEditEvent={(entry) => setEditingSeriesEvent({ eventId: entry.key, blockId: blocksOf(entry)[0]?.id ?? "" })}
+          onHide={(entry) => {
+            void (async () => {
+              for (const b of blocksOf(entry)) await hideEventBlock(b.id);
+            })();
+          }}
+          onUnhide={(entry) => {
+            void (async () => {
+              for (const b of blocksOf(entry)) await unhideEventBlock(b.id);
+            })();
+          }}
+          onRemove={(entry) => {
+            void (async () => {
+              const ok = await confirm({ message: t("uncheckEventConfirm"), tone: "danger", confirmLabel: t("uncheckAction") });
+              if (!ok) return;
+              for (const b of blocksOf(entry)) await removeEventBlock(b.id);
+              showToast(t("eventSeries.removed", { date: entry.event ? formatDate(entry.event.event_date) : entry.label }), "success");
+            })();
+          }}
+        />
+      );
+    }
+    return out;
+  }
+  const editingEvent = editingSeriesEvent ? availableEvents.find((e) => e.id === editingSeriesEvent.eventId) ?? eventBlockCandidates.find((e) => e.id === editingSeriesEvent.eventId) ?? null : null;
+  const editingEventConfig = asObject(element.blocks.find((b) => b.id === editingSeriesEvent?.blockId)?.configuration_snapshot_json);
+
   return (
     <>
     {fineDeleteDialog}
@@ -1345,7 +1422,7 @@ export function FocusedElementEditor({
             <div className="element-block-empty-hint">{t("noEventsInRange")}</div>
           )
         )}
-        {element.blocks.map((block, blockIndex) => {
+        {renderBlocksWithSeries((block, blockIndex) => {
           const blockTitle = visibleBlockTitle(block);
           const elementType = block.element_type_code ?? "unknown";
           const elementTypeLabel: Record<string, string> = {
@@ -1401,14 +1478,11 @@ export function FocusedElementEditor({
             : [];
           const isAutoEventBlock = blockConfig.repeat_source_type === "event" && blockConfig.repeat_source_id != null;
           const isHidden = !block.is_visible_snapshot;
-          const previousBlock = blockIndex > 0 ? element.blocks[blockIndex - 1] : null;
-          const isFirstInAutoGroup =
-            isPlanningMode &&
-            isAutoEventBlock &&
-            (!previousBlock || asObject(previousBlock.configuration_snapshot_json).repeat_source_type !== "event");
+          // Textblock mit DB-Speicherziel: schreibt jede Änderung in das Feld des Termins
+          const syncsToEvent = isAutoEventBlock && Boolean(String(blockConfig.sync_target_field ?? ""));
           return (
             <section
-              className={`card editor-block-card${elementType === "event_list" ? " editor-block-card-event-list" : ""}${isHidden ? " editor-block-card-hidden" : ""}${blockLockHolder ? " editor-block-card-locked" : ""}${(isPlanningMode && isAutoEventBlock) || matrixPlanningManageable ? " editor-block-card-auto-generated" : ""}`}
+              className={`card editor-block-card${elementType === "event_list" ? " editor-block-card-event-list" : ""}${isHidden ? " editor-block-card-hidden" : ""}${blockLockHolder ? " editor-block-card-locked" : ""}${isAutoEventBlock ? " editor-block-card-in-series" : ""}${matrixPlanningManageable ? " editor-block-card-auto-generated" : ""}`}
               key={block.id}
               onFocusCapture={elementType === "matrix" ? undefined : () => collab.lockField(blockFieldKey)}
               onBlurCapture={
@@ -1421,22 +1495,23 @@ export function FocusedElementEditor({
                     }
               }
             >
-              {isFirstInAutoGroup ? (
-                <>
-                  <span className="editor-block-auto-generated-label">{t("repeatsPerEvent")}</span>
-                  <div className="editor-block-auto-generated-icon">
-                    <PlanningIconTrigger
-                      title={t("chooseEvents")}
-                      icon="☑"
-                      onClick={() => setShowEventBlockPicker(true)}
-                    />
-                  </div>
-                </>
-              ) : null}
               <div className="editor-panel-header">
                 <div>
-                  <div className="eyebrow">{elementTypeLabel[elementType] ?? elementType}{isHidden ? ` · ${t("hiddenSuffix")}` : ""}</div>
-                  {blockTitle ? <h3>{blockTitle}</h3> : null}
+                  {/* In einer Termin-Karte ist der Blocktitel nur noch das Feldlabel: Termin und
+                      Typ stehen bereits im Kartenkopf. */}
+                  {isAutoEventBlock ? (
+                    <div className="field-label">
+                      {blockTitle || (elementTypeLabel[elementType] ?? elementType)}
+                      {syncsToEvent ? (
+                        <span className="event-series-linked" title={t("eventSeries.linkedTitle")}>
+                          <ActionIcon name="link" /> {t("eventSeries.linked")}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="eyebrow">{elementTypeLabel[elementType] ?? elementType}{isHidden ? ` · ${t("hiddenSuffix")}` : ""}</div>
+                  )}
+                  {blockTitle && !isAutoEventBlock ? <h3>{blockTitle}</h3> : null}
                   {block.description_snapshot ? <p className="muted">{block.description_snapshot}</p> : null}
                   {blockLockHolder ? <LockBadge holder={blockLockHolder} /> : null}
                 </div>
@@ -1945,7 +2020,12 @@ export function FocusedElementEditor({
                               : "";
                             return (
                               <div className="form-block-row" key={`${block.id}-ef-${ef.field}`} style={{ borderLeft: "2px solid var(--accent-soft)" }}>
-                                <div className="field-label-inline">{ef.label}</div>
+                                <div className="field-label-inline">
+                                  {ef.label}
+                                  <span className="event-series-linked" title={t("eventSeries.linkedTitle")}>
+                                    <ActionIcon name="link" /> {t("eventSeries.linked")}
+                                  </span>
+                                </div>
                                 {isParticipantsField ? (
                                   <button
                                     type="button"
@@ -3487,77 +3567,58 @@ export function FocusedElementEditor({
       const referenceBlock = element.blocks.find((b) => asObject(b.configuration_snapshot_json).repeat_source_type === "event");
       const referenceConfig = referenceBlock ? asObject(referenceBlock.configuration_snapshot_json) : {};
       const repeatFilter = normalizeEventFilter(referenceConfig.repeat_event_filter);
-      const usedEventIds = new Set(
-        element.blocks
-          .map(blockEventPublicId)
-          .filter((id): id is string => id != null)
-      );
-      const existingItems: CandidateItem[] = element.blocks
-        .filter((b) => asObject(b.configuration_snapshot_json).repeat_source_type === "event")
-        .map((b) => {
-          const config = asObject(b.configuration_snapshot_json);
-          const eventId = blockEventPublicId(b);
-          const evt = eventId ? availableEvents.find((e) => e.id === eventId) : undefined;
-          return {
-            id: `block-${b.id}`,
-            label: String(config.repeat_source_label ?? evt?.title ?? t("unknownEvent")),
-            sublabel: evt ? `${formatDate(evt.event_date)}${evt.tag ? ` · ${evt.tag}` : ""}` : undefined,
-            checked: b.is_visible_snapshot,
-            groupLabel: t("alreadyPresentGroup"),
-          };
-        });
-      function toCandidateItem(evt: EventSummary, groupLabel: string): CandidateItem {
-        return {
-          id: `event-${evt.id}`,
-          label: evt.title,
-          sublabel: `${formatDate(evt.event_date)}${evt.tag ? ` · ${evt.tag}` : ""}`,
-          checked: false,
-          groupLabel,
-        };
+      const eventBlocks = element.blocks.filter((b) => asObject(b.configuration_snapshot_json).repeat_source_type === "event");
+      const blocksByEvent = new Map<string, typeof eventBlocks>();
+      for (const b of eventBlocks) {
+        const key = blockEventPublicId(b) ?? `block-${b.id}`;
+        blocksByEvent.set(key, [...(blocksByEvent.get(key) ?? []), b]);
       }
-      const availableCandidates = eventBlockCandidates
-        .filter((evt) => !usedEventIds.has(evt.id))
-        .sort((a, b) => a.event_date.localeCompare(b.event_date));
+      const selectedIds = new Set([...blocksByEvent.entries()].filter(([, blocks]) => blocks.some((b) => b.is_visible_snapshot)).map(([key]) => key));
+      // Termine des Popups: geladene Kandidaten plus die Termine bereits vorhandener Blöcke
+      const pickerEvents = [...eventBlockCandidates];
+      for (const key of blocksByEvent.keys()) {
+        if (pickerEvents.some((e) => e.id === key)) continue;
+        const known = availableEvents.find((e) => e.id === key);
+        if (known) pickerEvents.push(known);
+      }
+      const unknownSelected = [...blocksByEvent.entries()]
+        .filter(([key, blocks]) => selectedIds.has(key) && !pickerEvents.some((e) => e.id === key) && blocks.length > 0)
+        .map(([key, blocks]) => ({ key, label: String(asObject(blocks[0].configuration_snapshot_json).repeat_source_label ?? t("unknownEvent")) }));
       // «Passt zum Filter»: Tag/Titel/Beschreibung der Wiederholung, unabhängig vom Zeitraum.
       const candidateFilter: EventFilter = { ...repeatFilter, range: { ...repeatFilter.range, mode: "all" }, cycle: null };
-      const matchingCandidates = availableCandidates.filter((evt) => eventMatchesFilter(evt, candidateFilter));
-      const otherCandidates = availableCandidates.filter((evt) => !eventMatchesFilter(evt, candidateFilter));
-      const candidateItems: CandidateItem[] = [
-        ...matchingCandidates.map((evt) => toCandidateItem(evt, t("matchingFilterGroup"))),
-        ...otherCandidates.map((evt) => toCandidateItem(evt, t("otherEventsGroup"))),
-      ];
-      function findCandidateEvent(item: CandidateItem): EventSummary | undefined {
-        if (item.id.startsWith("block-")) {
-          const b = element.blocks.find((blk) => `block-${blk.id}` === item.id);
-          const eventId = b ? blockEventPublicId(b) : undefined;
-          return eventId ? availableEvents.find((e) => e.id === eventId) : undefined;
-        }
-        const eventId = item.id.slice("event-".length);
-        return eventBlockCandidates.find((e) => e.id === eventId);
-      }
-      // Unchecking a "Bereits vorhanden" Termin removes its block outright (not just hides it) so
-      // it visibly leaves this group and becomes an available candidate again — hiding it here left
-      // a confusing unchecked "ghost" entry stuck in "Bereits vorhanden". Note: this deletes the
-      // block's own content (e.g. typed text) — re-checking creates a fresh block, it does not
-      // restore prior text.
-      async function handleToggle(item: CandidateItem, nextChecked: boolean) {
-        if (item.id.startsWith("block-")) {
-          const blockId = item.id.slice("block-".length);
-          if (nextChecked) {
-            await unhideEventBlock(blockId);
-          } else {
-            const ok = await confirm({
-              message: t("uncheckEventConfirm"),
-              tone: "danger",
-              confirmLabel: t("uncheckAction")
-            });
-            if (!ok) return;
-            await removeEventBlock(blockId);
-          }
-        } else if (item.id.startsWith("event-") && nextChecked) {
-          const eventId = item.id.slice("event-".length);
+      async function selectEvent(eventId: string) {
+        const existing = blocksByEvent.get(eventId);
+        if (existing?.length) {
+          for (const b of existing) await unhideEventBlock(b.id);
+        } else {
           await addEventBlockToElement(element.id, eventId);
         }
+      }
+      async function removeEventBlocks(key: string) {
+        for (const b of blocksByEvent.get(key) ?? []) await removeEventBlock(b.id);
+      }
+      // Abwählen entfernt die Blöcke des Termins (nicht nur ausblenden): der eingegebene Inhalt
+      // geht dabei verloren, deshalb mit Rückfrage. Der Termin selbst bleibt bestehen.
+      async function handleToggle(eventId: string, nextChecked: boolean) {
+        if (nextChecked) {
+          await selectEvent(eventId);
+          return;
+        }
+        const ok = await confirm({ message: t("uncheckEventConfirm"), tone: "danger", confirmLabel: t("uncheckAction") });
+        if (ok) await removeEventBlocks(eventId);
+      }
+      async function handleSelectAllUpcoming() {
+        const upcoming = pickerEvents
+          .filter((evt) => eventMatchesFilter(evt, candidateFilter))
+          .filter((evt) => !protocol.protocol_date || (evt.event_end_date ?? evt.event_date) >= protocol.protocol_date)
+          .filter((evt) => !selectedIds.has(evt.id))
+          .sort((a, b) => a.event_date.localeCompare(b.event_date));
+        for (const evt of upcoming) await selectEvent(evt.id);
+      }
+      async function handleSelectNone() {
+        const ok = await confirm({ message: t("eventSeries.noneConfirm"), tone: "danger", confirmLabel: t("eventSeries.noneConfirmAction") });
+        if (!ok) return;
+        for (const key of blocksByEvent.keys()) await removeEventBlocks(key);
       }
       async function handleCreateNew() {
         if (!eventBlockNewDraft.event_date.trim() || !eventBlockNewDraft.title.trim()) return;
@@ -3572,32 +3633,24 @@ export function FocusedElementEditor({
       }
       const forcedTagForNew = eventFilterTagText(repeatFilter);
       return (
-        <CheckboxCandidateModal
+        <EventBlockPickerModal
           open={showEventBlockPicker}
           onClose={() => setShowEventBlockPicker(false)}
-          title={t("chooseEvents")}
-          description={t("chooseEventsDescription")}
-          items={[...existingItems, ...candidateItems]}
+          tag={forcedTagForNew}
+          events={pickerEvents}
+          selectedIds={selectedIds}
+          unknownSelected={unknownSelected}
+          matchesFilter={(evt) => eventMatchesFilter(evt, candidateFilter)}
+          protocolDate={protocol.protocol_date ?? null}
           loading={eventBlockCandidatesLoading}
           onToggle={handleToggle}
-          renderEditForm={(item) => {
-            const evt = findCandidateEvent(item);
-            if (!evt) return null;
-            return (
-              <EventDetailForm
-                event={evt}
-                allowEndDate={referenceConfig.event_allow_end_date === true}
-                availableParticipants={availableParticipants}
-                knownEventTags={knownEventTags}
-                tagConfig={tagConfig}
-                onTagColorChange={updateTagColor}
-                onTagRename={renameTag}
-                onUpdate={(patch) =>
-                  updateEventFromBlock(referenceBlock?.id ?? "", evt.id, patch).then(refreshEventBlockCandidates)
-                }
-              />
-            );
+          onRemoveUnknown={async (key) => {
+            const ok = await confirm({ message: t("uncheckEventConfirm"), tone: "danger", confirmLabel: t("uncheckAction") });
+            if (ok) await removeEventBlocks(key);
           }}
+          onSelectAllUpcoming={handleSelectAllUpcoming}
+          onSelectNone={handleSelectNone}
+          onEditEvent={(evt) => setEditingSeriesEvent({ eventId: evt.id, blockId: referenceBlock?.id ?? "" })}
           topActions={
             <div style={{ display: "grid", gap: "var(--space-3)", width: "100%" }}>
               <div className="list-block-config-bar">
@@ -3668,6 +3721,20 @@ export function FocusedElementEditor({
         />
       );
     })()}
+    <Modal open={Boolean(editingSeriesEvent && editingEvent)} onClose={() => setEditingSeriesEvent(null)} title={t("eventSeries.edit")} size="wide">
+      {editingSeriesEvent && editingEvent ? (
+        <EventDetailForm
+          event={editingEvent}
+          allowEndDate={editingEventConfig.event_allow_end_date === true}
+          availableParticipants={availableParticipants}
+          knownEventTags={knownEventTags}
+          tagConfig={tagConfig}
+          onTagColorChange={updateTagColor}
+          onTagRename={renameTag}
+          onUpdate={(patch) => updateEventFromBlock(editingSeriesEvent.blockId, editingEvent.id, patch).then(refreshEventBlockCandidates)}
+        />
+      ) : null}
+    </Modal>
     <Modal
       open={Boolean(multiParticipantPicker)}
       onClose={() => closeParticipantPicker()}
