@@ -62,7 +62,7 @@
    "paragraph_gap": 2.5,
    "radius": 1.5,
    "responsible_display": "title",
-   "section_gap": 6.0,
+   "section_gap": 8.0,
    "show_metadata": false,
    "table_style": "lines",
    "title_page": false,
@@ -238,7 +238,7 @@
     "kreide": {
      "elements": {
       "attendance": "grid",
-      "bullet_list": "dashes",
+      "bullet_list": "bullets",
       "chart": "plain",
       "entry_exit": "list",
       "finance_balance": "list",

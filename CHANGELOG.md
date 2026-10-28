@@ -24,6 +24,15 @@ Installationen aktualisieren können.
   Modus «Experte» ist in «Erweitert» aufgegangen, damit u. a. die Position frei platzierter
   Elemente (z. B. Adresse in einer freien Ebene) wieder bearbeitbar ist; für solche Elemente
   entfallen die wirkungslosen Felder «Abstand oben/unten».
+- PDF: grösserer Abstand zwischen den Traktanden. «Abstand vor Abschnitten» (Corporate Design →
+  Seitenaufbau) hat neu 8 statt 6 mm als Standard (Vorlage «Kompakt»: 5 statt 4 mm). Profile mit
+  dem bisherigen Standardwert bekommen per Migration `0159_brand_section_gap` eine neue Revision
+  mit dem neuen Wert; eigene Werte bleiben, die vorherige Revision lässt sich wiederherstellen.
+- Design «Kreide» näher am Mockup «Protokoll Template v2»: Aufzählungen mit Punkten statt
+  Strichen (Grundstil). Beispiel-Vorlage und -CD: Traktandentitel in Textfarbe mit grüner Nummer,
+  14/10.5 pt bei 9.5 pt Grundschrift; im Seitenkopf der Vereinsname klein geschrieben und
+  «Titel · Datum»; Metadaten, Kennzahlen-Beschriftungen und Adresszeile in der Zweitfarbe;
+  Inhaltsverzeichnis mit normalem Zeilenabstand; neues Vorschaubild.
 - Abhängigkeiten aktualisiert (Dependabot und npm/PyPI): Node 24 LTS in den Frontend-Images und
   der CI (statt 22; das vorgeschlagene Node 26 ist noch kein LTS), Next.js 16.4.3, React 19.3.1,
   TypeScript 6.0, Vitest 5, Recharts 3, Playwright 1.64.1; FastAPI 0.162, SQLAlchemy 2.1,
@@ -32,10 +41,6 @@ Installationen aktualisieren können.
   die aktuellen Hauptversionen (Node-24-Laufzeit). PostgreSQL bleibt bewusst bei 16: der
   Sprung auf 18 braucht ein Upgrade der Datenbank (`pg_upgrade` bzw. Dump/Restore) und ein
   anderes Volume-Layout und wird separat geplant.
-- PDF: grösserer Abstand zwischen den Traktanden. «Abstand vor Abschnitten» (Corporate Design →
-  Seitenaufbau) hat neu 8 statt 6 mm als Standard (Vorlage «Kompakt»: 5 statt 4 mm). Profile mit
-  dem bisherigen Standardwert bekommen per Migration `0159_brand_section_gap` eine neue Revision
-  mit dem neuen Wert; eigene Werte bleiben, die vorherige Revision lässt sich wiederherstellen.
 
 ## [1.2.0] - 2026-10-23
 

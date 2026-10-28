@@ -89,18 +89,22 @@ def _kpi_row(prefix: str, *, box: dict[str, Any], **kwargs: Any) -> dict[str, An
     )
 
 
-def _running_master(prefix: str, *, brand_color: str, line_color: str = "$brand.border", line: float = 0.5, dot: bool = False, page_color: str = "$brand.primary", page_bold: bool = True, background: list[dict[str, Any]] | None = None, upper_name: bool = False) -> dict[str, Any]:
+def _running_master(prefix: str, *, brand_color: str, line_color: str = "$brand.border", line: float = 0.5, dot: bool = False, page_color: str = "$brand.primary", page_bold: bool = True, background: list[dict[str, Any]] | None = None, upper_name: bool = False, lower_name: bool = False, meta_color: str = "$brand.muted", meta_separator: bool = False) -> dict[str, Any]:
     """Kopf «Organisation · Titel · Datum» und Fuss «Nummer · Seite x von y» der Inhaltsseiten.
     Die Teile folgen den Kopf-/Fusszeilen-Schaltern des Brand-Profils bzw. der Vorlage
-    (Organisation = Schalter «Logo», wie das Logo der Standard-Seitenvorlage)."""
+    (Organisation = Schalter «Logo», wie das Logo der Standard-Seitenvorlage). ``meta_separator``:
+    «Titel · Datum» statt zwei Einträgen mit Abstand."""
     name_style: dict[str, Any] = {"size": 8, "weight": "bold", "color": brand_color}
     if upper_name:
         name_style.update(transform="upper", letter_spacing=0.4)
+    elif lower_name:
+        name_style.update(transform="lower", letter_spacing=0.2)
     left: list[dict[str, Any]] = []
     if dot:
         left.append(node("container", f"{prefix}-dot", style={"width": "2.2mm", "height": "2.2mm", **_fill(brand_color, radius=1.1)}, visible_if=when("brand.header_show_logo")))
     left.append(label_text(f"{prefix}-org", bind("organization.name"), role="small", style={"text": name_style}, visible_if=when("brand.header_show_logo")))
-    meta_style = {"size": 8, "align": "right", "color": "$brand.muted"}
+    meta_style = {"size": 8, "align": "right", "color": meta_color}
+    separator = [label_text(f"{prefix}-hdr-sep", lit("·"), role="small", style={"text": meta_style}, visible_if={"op": "all", "items": [when("brand.header_show_title"), when("brand.header_show_date")]})] if meta_separator else []
     header = node(
         "header",
         f"{prefix}-hdr",
@@ -109,10 +113,11 @@ def _running_master(prefix: str, *, brand_color: str, line_color: str = "$brand.
                 "row",
                 f"{prefix}-hdr-row",
                 valign="middle",
-                gap=2,
+                gap=1.5 if meta_separator else 2,
                 children=[
                     *left,
                     label_text(f"{prefix}-hdr-title", bind("document.title"), role="small", style={"width": "fill", "text": meta_style}, visible_if=when("brand.header_show_title")),
+                    *separator,
                     label_text(f"{prefix}-hdr-date", bind("document.date"), role="small", style={"text": meta_style}, visible_if=when("brand.header_show_date")),
                 ],
             ),
@@ -129,7 +134,7 @@ def _running_master(prefix: str, *, brand_color: str, line_color: str = "$brand.
                 f"{prefix}-ftr-row",
                 gap=4,
                 children=[
-                    label_text(f"{prefix}-ftr-number", bind("document.number"), role="small", style={"width": "fill", "text": {"size": 8, "color": "$brand.muted"}}, visible_if=when("brand.footer_show_number")),
+                    label_text(f"{prefix}-ftr-number", bind("document.number"), role="small", style={"width": "fill", "text": {"size": 8, "color": meta_color}}, visible_if=when("brand.footer_show_number")),
                     label_text(f"{prefix}-ftr-text", bind("brand.footer_text"), role="small", style={"width": "fill", "text": {"size": 8, "align": "center", "color": "$brand.muted"}}),
                     node("page_number", f"{prefix}-ftr-page", style={"text": {"size": 8, "color": page_color, **({"weight": "bold"} if page_bold else {})}}, visible_if=when("brand.footer_show_pages")),
                 ],
@@ -154,13 +159,14 @@ def _area(node_id: str, color: str, *, x: float = 0, y: float = 0, width: float 
     return node("container", node_id, style={"width": f"{width:g}mm", "height": f"{height:g}mm", **_fill(color)}, frame={"x": x, "y": y, "width": width, "height": height})
 
 
-def _footer_image(prefix: str) -> dict[str, Any]:
+def _footer_image(prefix: str, *, color: str = "$brand.muted", size: float | None = None) -> dict[str, Any]:
     """Adresszeile und Fussbild (Brand-Profil: Bild «Fusszeile») über die ganze Seitenbreite am
     Seitenende; ohne Fussbild steht die Adresse am unteren Rand."""
+    address_style: dict[str, Any] = {"align": "center", "color": color, **({"size": size} if size else {})}
     return _page_layer(
         f"{prefix}-footer-art",
-        label_text(f"{prefix}-address", bind("organization.address"), role="small", style={"text": {"align": "center", "color": "$brand.muted"}}, frame={"x": 0, "y": 256, "width": 210}, visible_if=exists("brand.footer_image")),
-        label_text(f"{prefix}-address-plain", bind("organization.address"), role="small", style={"text": {"align": "center", "color": "$brand.muted"}}, frame={"x": 0, "y": 280, "width": 210}, visible_if={"op": "not", "item": exists("brand.footer_image")}),
+        label_text(f"{prefix}-address", bind("organization.address"), role="small", style={"text": address_style}, frame={"x": 0, "y": 256, "width": 210}, visible_if=exists("brand.footer_image")),
+        label_text(f"{prefix}-address-plain", bind("organization.address"), role="small", style={"text": address_style}, frame={"x": 0, "y": 280, "width": 210}, visible_if={"op": "not", "item": exists("brand.footer_image")}),
         node("image", f"{prefix}-footer-img", source={"kind": "binding", "path": "brand.footer_image"}, fit="contain", style={"width": "210mm"}, frame={"x": 0, "y": 262, "width": 210, "height": 35, "valign": "bottom"}, visible_if=exists("brand.footer_image")),
     )
 
@@ -238,30 +244,31 @@ def _protocol_band() -> dict[str, Any]:
 
 def _protocol_light() -> dict[str, Any]:
     """Hell: dieselbe Gliederung wie «Farbband», aber weiss mit feinen Linien, Akzent nur in
-    Schrift (Vorlage «Protokoll Template v2»)."""
+    Schrift (Vorlage «Protokoll Template v2»): Name klein geschrieben, Metadaten in der
+    Zweitfarbe, Inhaltsverzeichnis mit Führungspunkten."""
     title_page = {
         "enabled": True,
         "children": [
-            node("row", "tp-head", valign="middle", gap=6, style={"margin_bottom": 10}, children=[
+            node("row", "tp-head", valign="middle", gap=6, style={"margin_bottom": 12}, children=[
                 node("image", "tp-logo", source={"kind": "binding", "path": "brand.logo"}, style={"width": "auto", "height": "18mm"}, visible_if=exists("brand.logo")),
                 text("tp-org", bind("organization.name"), role="small", style={"width": "fill", "text": {"size": 9, "weight": "bold", "color": "$brand.primary", "align": "right", "letter_spacing": 0.4, "transform": "lower"}}),
             ]),
             node("row", "tp-kicker", gap=2, children=[
                 _small("tp-kind", key("docType.protocol"), color="$brand.accent", bold=True, spacing=1),
-                _small("tp-number", bind("document.number"), upper=False),
+                _small("tp-number", bind("document.number"), upper=False, spacing=0.5),
             ]),
-            text("tp-title", bind("document.title"), role="title", style={"text": {"size": 30, "line_height": 1.05, "letter_spacing": -0.4, "color": "$brand.text"}, "margin_top": 2}),
-            text("tp-place-date", bind("organization.place"), lit(", "), bind("document.date"), style={"text": {"size": 10.5, "color": "$brand.muted"}}),
-            node("divider", "tp-line", thickness=0.5, color="$brand.border", style={"margin_top": 6, "margin_bottom": 6}),
-            _kpi_row("tp", box={}, value_color="$brand.text", value_weight="regular"),
+            text("tp-title", bind("document.title"), role="title", style={"text": {"size": 30, "line_height": 1.05, "letter_spacing": -0.6, "color": "$brand.text"}, "margin_top": 2}),
+            text("tp-place-date", bind("organization.place"), lit(", "), bind("document.date"), style={"text": {"size": 10.5, "color": "$brand.muted"}, "margin_top": 4}),
+            node("divider", "tp-line", thickness=0.5, color="$brand.border", style={"margin_top": 9, "margin_bottom": 7}),
+            _kpi_row("tp", box={}, label_color="$brand.secondary", value_color="$brand.text", value_weight="regular"),
             node("spacer", "tp-toc-space", size=4),
-            node("toc", "tp-toc", depth=1, density="compact"),
-            _footer_image("tp"),
+            node("toc", "tp-toc", depth=1, density="normal"),
+            _footer_image("tp", color="$brand.secondary", size=8.5),
         ],
     }
     return content(
         [data("protocol", "protocol_element")],
-        masters=[_running_master("run", brand_color="$brand.primary", page_color="$brand.muted", page_bold=False)],
+        masters=[_running_master("run", brand_color="$brand.primary", page_color="$brand.muted", page_bold=False, lower_name=True, meta_color="$brand.secondary", meta_separator=True)],
         title_page=title_page,
         heading_numbering=True
     )
@@ -500,9 +507,10 @@ EXAMPLES: tuple[DesignExample, ...] = (
     DesignExample(
         "kreide", "protocol", _protocol_light,
         {
-            "colors": _colors("#0A600B", "#4A5D4C", "#E2001A", "#0A600B", text="#1A1D21", muted="#6B7A6D", surface="#F4F6F3", border="#E6EAE4", table_header_background="#FFFFFF", table_header_text="#6B7A6D"),
-            "typography": _typography("liberation_sans"),
-            "layout": {"empty_blocks": "hide"},
+            # Wie im Mockup: Traktandentitel in Textfarbe (nur die Nummer grün), 14/10.5 pt
+            "colors": _colors("#0A600B", "#4A5D4C", "#E2001A", "#1A1D21", text="#1A1D21", muted="#6B7A6D", surface="#F4F6F3", border="#E6EAE4", table_header_background="#FFFFFF", table_header_text="#6B7A6D"),
+            "typography": {**_typography("liberation_sans", base_size=9.5), "size_h1": 14, "size_h2": 10.5, "size_h3": 9.5, "letter_spacing_heading": -0.1},
+            "layout": {"empty_blocks": "hide", "section_gap": 6.5},
             "appearance": {"base": "kreide"},
             "organization": _CLUB_ORGANIZATION,
         },

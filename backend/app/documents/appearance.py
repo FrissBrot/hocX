@@ -62,10 +62,10 @@ APPEARANCE_BASES: dict[str, dict[str, Any]] = {
         "layout": {"heading_style": "underline", "table_style": "lines", "radius": 2, "heading_number_style": "badge", "responsible_display": "right"},
         "elements": {"attendance": "grid", "session_date": "box", "finance_balance": "tiles", "kpi_tiles": "filled", "form": "grid", "matrix": "cards_filled", "todo": "checklist", "toc": "leaders", "quote": "box", "text": "plain", "static_text": "note", "bullet_list": "bullets", "image": "card", "chart": "card", "entry_exit": "columns"},
     },
-    # Weiss mit feinen Linien, Akzent nur in Nummern und Kästchen
+    # Weiss mit feinen Linien, Akzent nur in Nummern und Kästchen (Mockup «Protokoll Template v2»)
     "kreide": {
         "layout": {"heading_style": "plain", "table_style": "minimal", "radius": 1.5, "heading_number_style": "accent", "responsible_display": "right"},
-        "elements": {"attendance": "grid", "session_date": "line", "finance_balance": "list", "kpi_tiles": "plain", "form": "grid", "matrix": "cards", "todo": "checklist", "toc": "leaders", "quote": "framed", "text": "plain", "static_text": "accent", "bullet_list": "dashes", "image": "plain", "chart": "plain", "entry_exit": "list"},
+        "elements": {"attendance": "grid", "session_date": "line", "finance_balance": "list", "kpi_tiles": "plain", "form": "grid", "matrix": "cards", "todo": "checklist", "toc": "leaders", "quote": "framed", "text": "plain", "static_text": "accent", "bullet_list": "bullets", "image": "plain", "chart": "plain", "entry_exit": "list"},
     },
     # Kontrastreich und eckig: Farbflächen, Gitter-Tabellen, Status-Pills
     "signal": {
