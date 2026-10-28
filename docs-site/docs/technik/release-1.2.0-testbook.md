@@ -28,6 +28,18 @@ Nachweis Stand Release-Branch (2026-10-16): Backend 2229 ✓, Abgabebox-Backend 
 Foto-Worker 26 ✓, Frontend 560 ✓ + `tsc` ✓, Abgabebox-Frontend 49 ✓ + `tsc` ✓, Skript-Tests ✓,
 shellcheck ✓, Design/i18n/Katalog ✓. E2E-Suiten nicht ausgeführt.
 
+Nachweis Update-Pfad (2026-10-28, Stand `main` mit Migration `0160`): Datenbank mit dem Code von
+`v1.1.13` aufgebaut (`alembic -x seed_demo=true upgrade head`, Revision `0112`), dazu zwei Vereine
+mit TeX-Vorlage (Logo, Fussbild, eigene Schrift, Slot-Code), Protokollen samt Anwesenheit,
+Texten, Todos und Bussen, Terminen, Listen und Alt-PDF-Exporten. Danach mit dem aktuellen Code
+`upgrade head`: ohne Fehler; Zeilenzahlen der Fachtabellen unverändert; Logo, Fussbild, Schrift
+und Farben je Mandant als Brand-Profil und Assets, Alt-Exporte in `document_export`; Warnung
+zum entfallenen Vorlagen-Code für beide Vereine. `pg_dump --schema-only` des aktualisierten
+Stands ist identisch mit einer Neuinstallation auf `head`, ebenso alle GRANTs.
+`ensure_document_studio` (App-Start) läuft darauf zweimal fehlerfrei: 26 Systemvorlagen, je
+Mandant genau ein Standard-Brand-Profil. Nicht abgedeckt: Dateien auf der Platte bzw. im
+Objektspeicher (nur Datenbankstand).
+
 ## Automatisierte Integrationsfälle
 
 | ID | Zusammenspiel | Erwartung | Testdatei / Test |
@@ -42,7 +54,7 @@ shellcheck ✓, Design/i18n/Katalog ✓. E2E-Suiten nicht ausgeführt.
 | INT-08 | Dokumentverwaltung × Bestand | XLSX-Extraktion mit openpyxl (Abhängigkeit der Engine) | `backend/tests/test_document_extraction.py::test_xlsx_*`, `test_document_processing.py::test_xlsx_gets_pdf_and_extraction_jobs` |
 | INT-09 | Monitoring | Check `document_queue`; Checks und Alarmtexte aller Zweige vorhanden | `backend/tests/test_system_health_document_queue.py`, `test_storage_health.py`, `test_admin_backups.py::test_health_checks_include_backup` |
 | INT-10 | Hintergrund-Loops | alle 16 Loops starten mit dem echten Lifespan; Lock-IDs eindeutig | `backend/tests/test_app_lifespan_smoke.py` |
-| INT-11 | Alembic | eine Head-Revision `0126_verify_domain`; Revisions-IDs ≤ 32 Zeichen | Test-Stack `test-migrations` (`alembic upgrade head`) |
+| INT-11 | Alembic | eine Head-Revision `0160_template_catalog_key`; Revisions-IDs ≤ 32 Zeichen | Test-Stack `test-migrations` (`alembic upgrade head`) |
 | INT-12 | Release-Konfiguration | 12 gehärtete Dienste, document-worker ohne Anmelde-Secrets, Worker mit Backend-Image im Rollback-Manifest | `scripts/tests/test_release_config.sh` |
 
 ## Manuelle Abnahme auf der Testumgebung
@@ -53,7 +65,7 @@ Office-Dokumenten. Ergebnis, Datum und Version je Fall festhalten.
 
 | ID | Durchführung | Erwartung |
 |---|---|---|
-| REL-M1 | Update nach `CHANGELOG.md` (1.2.0) von 1.1.13: `update_deploy_code.sh`, `deploy.sh test` | Pre-Deploy-Dump angelegt, Secrets ergänzt, Migrationen bis `0153`, alle Dienste laufen, Smoke-Checks inkl. document-/storage-/job-worker grün |
+| REL-M1 | Update nach `CHANGELOG.md` (1.2.0) von 1.1.13: `update_deploy_code.sh`, `deploy.sh test` | Pre-Deploy-Dump angelegt, Secrets ergänzt, Migrationen bis `0160`, alle Dienste laufen, Smoke-Checks inkl. document-/storage-/job-worker grün |
 | REL-M2 | `/admin/system` und `/admin/jobs` | Checks «Öffentliche Prüfseite», «Dateispeicher», «Storage-Migration», «Backup», «Dokumentverarbeitung» bewertet; keine nicht registrierten Jobs |
 | REL-M3 | Fachtestbooks DOC-M1/M2, DVW-M1/M2, PRE-M1, DAT-M3 auf dem Dateisystem, dann Erstmigration auf lokales S3 (STO-M1) und dieselben Fälle erneut | identische Ergebnisse vor und nach der Migration; Studio-Logos und -Schriften in PDFs vorhanden |
 | REL-M4 | `cleanup-legacy-document-templates.sh --dry-run`, dann ohne, **vor** REL-M3-Migration | nur TeX-Code entfernt, Logos/Schriften bleiben; Prüfbericht der Migration ohne Altlasten |

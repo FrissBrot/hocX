@@ -6,43 +6,7 @@ Versionierung nach [SemVer](https://semver.org/lang/de/). Die Beta-Historie
 ist der erste offiziell unterstützte Stand und muss keine älteren
 Installationen aktualisieren können.
 
-## [Unveröffentlicht]
-
-### Geändert
-
-- **Gestaltungen: wer sie verwendet, was beim Anpassen passiert.** Im Vorlagen-Editor (PDF,
-  Einladung) zeigt eine Zuweisungs-Leiste die verwendete Gestaltung, die anderen Vorlagen, die
-  sie auch verwenden, und drei Wege: «Andere wählen» (sofort gespeichert, inkl. Standard des
-  Vereins), «Bearbeiten» (wirkt auf alle Vorlagen, die sie verwenden) und «Nur hier anpassen»
-  (Kopie; der Hinweis sagt, dass Änderungen an der Ausgangsgestaltung hier nicht mehr gelten).
-  «Eigene/Gemeinsame Gestaltung» entfällt, die Tabs zeigen den Namen der Gestaltung.
-- Designer: Hinweis, auf wie viele Vorlagen eine Änderung wirkt, mit «Nur für … ändern». Der
-  Hinweis lässt sich wegklicken und erscheint wieder, wenn sich die Verwendung ändert.
-- Bibliothek der Protokollgestaltung: jede Gestaltung zeigt «Verwendet in» und bei Kopien
-  «Kopie von …»; Kopien einzelner Vorlagen erscheinen jetzt ebenfalls.
-- Dokument-Designer mit zwei Modi wie im Entwurf v2: «Einfach» und «Erweitert». Der bisherige
-  Modus «Experte» ist in «Erweitert» aufgegangen, damit u. a. die Position frei platzierter
-  Elemente (z. B. Adresse in einer freien Ebene) wieder bearbeitbar ist; für solche Elemente
-  entfallen die wirkungslosen Felder «Abstand oben/unten».
-- PDF: grösserer Abstand zwischen den Traktanden. «Abstand vor Abschnitten» (Corporate Design →
-  Seitenaufbau) hat neu 8 statt 6 mm als Standard (Vorlage «Kompakt»: 5 statt 4 mm). Profile mit
-  dem bisherigen Standardwert bekommen per Migration `0159_brand_section_gap` eine neue Revision
-  mit dem neuen Wert; eigene Werte bleiben, die vorherige Revision lässt sich wiederherstellen.
-- Design «Kreide» näher am Mockup «Protokoll Template v2»: Aufzählungen mit Punkten statt
-  Strichen (Grundstil). Beispiel-Vorlage und -CD: Traktandentitel in Textfarbe mit grüner Nummer,
-  14/10.5 pt bei 9.5 pt Grundschrift; im Seitenkopf der Vereinsname klein geschrieben und
-  «Titel · Datum»; Metadaten, Kennzahlen-Beschriftungen und Adresszeile in der Zweitfarbe;
-  Inhaltsverzeichnis mit normalem Zeilenabstand; neues Vorschaubild.
-- Abhängigkeiten aktualisiert (Dependabot und npm/PyPI): Node 24 LTS in den Frontend-Images und
-  der CI (statt 22; das vorgeschlagene Node 26 ist noch kein LTS), Next.js 16.4.3, React 19.3.1,
-  TypeScript 6.0, Vitest 5, Recharts 3, Playwright 1.64.1; FastAPI 0.162, SQLAlchemy 2.1,
-  Alembic 1.20, psycopg 3.3, Pydantic 2.14, Uvicorn 0.54, redis-py 8, pytest 9; Traefik 3.7.15,
-  Garage 2.4.1, aktuelle Digests für ClamAV, PostgreSQL 16, Python und nginx; GitHub Actions auf
-  die aktuellen Hauptversionen (Node-24-Laufzeit). PostgreSQL bleibt bewusst bei 16: der
-  Sprung auf 18 braucht ein Upgrade der Datenbank (`pg_upgrade` bzw. Dump/Restore) und ein
-  anderes Volume-Layout und wird separat geplant.
-
-## [1.2.0] - 2026-10-23
+## [1.2.0] - 2026-10-28
 
 Feature-Release auf 1.1.13. Fünf Entwicklungszweige sind zusammengeführt und aufeinander
 abgestimmt: die neue **Dokument-Engine mit Document Studio** (Typst statt TeX, Corporate Design,
@@ -91,8 +55,12 @@ Schritte unten lesen.
    Lastparameter `DB_POOL_*`, `DB_ADMISSION_*`, `OVERLOAD_*` und die Alarmschwellen
    `SECURITY_*` (RUNBOOK Abschnitt 17). `BACKUP_ENABLED=true` erst **nach** dem ersten
    1.2.0-Deploy setzen (vorher läuft kein `backup-worker`, `deploy.sh` bricht sonst ab).
-5. **Migrationen** `0113` bis `0153` laufen automatisch (getestet von 1.1.13 mit Demo- und
-   Testdaten); neue Dienste `storage-init`, `storage-worker`, `local-s3`, `backup-worker`,
+5. **Migrationen** `0113` bis `0160` laufen automatisch. Getestet von 1.1.13 mit Demodaten und
+   einem Vereinsstand mit TeX-Vorlage (Logo, Fussbild, eigene Schrift, eigener Vorlagen-Code),
+   Protokollen, Todos, Bussen und Alt-PDF-Exporten: keine Fachdaten gehen verloren, Logo,
+   Fussbild, Schrift und Farben landen je Mandant im Brand-Profil, die Alt-Exporte in der
+   Export-Historie; Schema und Datenbankrechte sind danach identisch mit einer Neuinstallation.
+   Neue Dienste `storage-init`, `storage-worker`, `local-s3`, `backup-worker`,
    `document-worker` und `job-worker` startet `deploy.sh` mit `up -d`. Die Smoke-Checks prüfen
    zusätzlich `document-worker`, `storage-worker` und `job-worker`.
 6. **Nach dem Deploy:**
@@ -118,6 +86,64 @@ vollständig. Die Variablen `DOCUMENT_SIGNING_*` werden ignoriert und können au
 werden, ebenso das Verzeichnis `.signing/` bzw. `DOCUMENT_SIGNING_DIR` und die Datei
 `.secrets/document_signing_key_password`. Bereits signiert exportierte PDFs bleiben über die
 Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116_document_registry`).
+
+### Gestaltung und Designer (Nachtrag vom 2026-10-28)
+
+- **Gestaltung auf Abruf.** Mitgelieferte Vorlagen und Designs (Alpin, Kreide …) liegen in einem
+  zentralen **Katalog** und landen erst im Verein, wenn jemand sie übernimmt - als genau eine
+  Vorlage, die sich ihre Herkunft merkt («Aus Katalog · Alpin»). Der Katalog zeigt die Vorschau
+  mit dem eigenen Erscheinungsbild.
+  - «Dokumentvorlagen» zeigt nur noch eigene und übernommene Vorlagen, gruppiert in «Sitzung»
+    und «Weitere Dokumente», mit Verwendung (Protokollvorlagen bzw. Exporte der letzten zwölf
+    Monate), «Standard» und «Update vN», wenn die Katalog-Fassung einer übernommenen
+    Systemvorlage neuer ist. Fehlt ein Dokumenttyp, nutzt der Export weiter den Katalog-Standard
+    ohne Kopie; die Karte «Aus Katalog hinzufügen» nennt ihn.
+  - Die bisherige Seite «Protokollgestaltung» ist darin aufgegangen; `/documents/protocols`
+    leitet auf `/documents` um.
+  - «Neue Vorlage»: Dokumenttyp, dann Start aus dem Katalog, als Kopie einer eigenen Vorlage oder
+    leer, dazu die Wahl des Erscheinungsbilds. **Ein Design legt kein eigenes Brand-Profil und
+    keine Beispielbilder mehr an**; es nutzt das Erscheinungsbild des Vereins. Übernehmen
+    braucht deshalb nur noch das Recht, Vorlagen zu gestalten (nicht mehr `settings.manage`).
+  - **Aufräumen**: eigene Vorlagen, die nicht Standard, keiner Protokollvorlage zugewiesen, in
+    zwölf Monaten nicht exportiert und älter als 30 Tage sind, lassen sich gesammelt archivieren
+    (umkehrbar).
+  - «Erscheinungsbild» (bisher «Brand Studio») trennt verwendete und nicht verwendete Profile
+    (gesammelt archivierbar), zeigt «Wirkt auf N Vorlagen» und die Vorschau als Protokoll,
+    Einladung oder Präsenzliste.
+  - «Bilder und Schriften» filtert nach verwendet/nicht verwendet, zeigt, wo eine Datei steckt,
+    und führt gleiche Dateien zusammen (nur unbenutzte Kopien werden entfernt).
+  - Migration `0160_template_catalog_key` (neue Spalte, keine Datenänderung).
+- **Gestaltungen: wer sie verwendet, was beim Anpassen passiert.** Im Vorlagen-Editor (PDF,
+  Einladung) zeigt eine Zuweisungs-Leiste die verwendete Gestaltung, die anderen Vorlagen, die
+  sie auch verwenden, und drei Wege: «Andere wählen» (sofort gespeichert, inkl. Standard des
+  Vereins), «Bearbeiten» (wirkt auf alle Vorlagen, die sie verwenden) und «Nur hier anpassen»
+  (Kopie; der Hinweis sagt, dass Änderungen an der Ausgangsgestaltung hier nicht mehr gelten).
+  «Eigene/Gemeinsame Gestaltung» entfällt, die Tabs zeigen den Namen der Gestaltung.
+- Designer: Hinweis, auf wie viele Vorlagen eine Änderung wirkt, mit «Nur für … ändern». Der
+  Hinweis lässt sich wegklicken und erscheint wieder, wenn sich die Verwendung ändert.
+- Jede Gestaltung zeigt, welche Protokollvorlagen sie verwenden; Kopien einzelner Vorlagen
+  erscheinen in der Liste ebenfalls.
+- Dokument-Designer mit zwei Modi wie im Entwurf v2: «Einfach» und «Erweitert». Der bisherige
+  Modus «Experte» ist in «Erweitert» aufgegangen, damit u. a. die Position frei platzierter
+  Elemente (z. B. Adresse in einer freien Ebene) wieder bearbeitbar ist; für solche Elemente
+  entfallen die wirkungslosen Felder «Abstand oben/unten».
+- PDF: grösserer Abstand zwischen den Traktanden. «Abstand vor Abschnitten» (Corporate Design →
+  Seitenaufbau) hat neu 8 statt 6 mm als Standard (Vorlage «Kompakt»: 5 statt 4 mm). Profile mit
+  dem bisherigen Standardwert bekommen per Migration `0159_brand_section_gap` eine neue Revision
+  mit dem neuen Wert; eigene Werte bleiben, die vorherige Revision lässt sich wiederherstellen.
+- Design «Kreide» näher am Mockup «Protokoll Template v2»: Aufzählungen mit Punkten statt
+  Strichen (Grundstil). Beispiel-Vorlage und -CD: Traktandentitel in Textfarbe mit grüner Nummer,
+  14/10.5 pt bei 9.5 pt Grundschrift; im Seitenkopf der Vereinsname klein geschrieben und
+  «Titel · Datum»; Metadaten, Kennzahlen-Beschriftungen und Adresszeile in der Zweitfarbe;
+  Inhaltsverzeichnis mit normalem Zeilenabstand; neues Vorschaubild.
+- Abhängigkeiten aktualisiert (Dependabot und npm/PyPI): Node 24 LTS in den Frontend-Images und
+  der CI (statt 22; das vorgeschlagene Node 26 ist noch kein LTS), Next.js 16.4.3, React 19.3.1,
+  TypeScript 6.0, Vitest 5, Recharts 3, Playwright 1.64.1; FastAPI 0.162, SQLAlchemy 2.1,
+  Alembic 1.20, psycopg 3.3, Pydantic 2.14, Uvicorn 0.54, redis-py 8, pytest 9; Traefik 3.7.15,
+  Garage 2.4.1, aktuelle Digests für ClamAV, PostgreSQL 16, Python und nginx; GitHub Actions auf
+  die aktuellen Hauptversionen (Node-24-Laufzeit). PostgreSQL bleibt bewusst bei 16: der
+  Sprung auf 18 braucht ein Upgrade der Datenbank (`pg_upgrade` bzw. Dump/Restore) und ein
+  anderes Volume-Layout und wird separat geplant.
 
 ### Update-Werkzeuge (Nachtrag vom 2026-10-24, nach dem ersten Test-Update)
 
@@ -221,11 +247,9 @@ Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116_document_reg
   **Atlas**. Jedes gestaltet das ganze Dokument einheitlich: Titelseite (Farbband, Kennzahlen,
   Inhaltsverzeichnis oder Traktandenliste, Verteiler, Fussbild), Kopf- und Fusszeilen,
   Überschriften, Tabellen und die Darstellung **aller** Elemente.
-- Gewählt wird das Design beim Anlegen: **Neue Vorlage** zeigt für Protokolle eine
-  Design-Galerie (Admins). Das Design legt die Vorlage und ein passendes Brand-Profil (Farben,
-  Schriften, Beispiellogo, Beispieladresse) an. Stellt man die Vorlage im Designer auf das
-  eigene Brand-Profil um, erscheint sie mit den Farben, dem Logo und den Angaben des Vereins.
-  Der frühere Dialog **Beispiele** entfällt.
+- Gewählt wird das Design beim Anlegen über **Neue Vorlage** bzw. den Katalog. Die Vorlage
+  erscheint mit den Farben, dem Logo und den Angaben des Vereins (seit «Gestaltung auf Abruf»
+  ohne eigenes Brand-Profil, siehe oben). Der frühere Dialog **Beispiele** entfällt.
 - Im Brand Studio sind die sechs Designs die Grundstile. Die bisherigen Grundstile
   «Abgerundet», «Kräftig» und «Schlicht» bleiben für Profile erhalten, die sie nutzen, stehen
   aber nicht mehr zur Wahl.
