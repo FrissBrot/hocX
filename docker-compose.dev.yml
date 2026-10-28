@@ -40,6 +40,10 @@ services:
       # this too for the same cross-domain auth bridge check.
       TRAEFIK_DOMAIN: ""
     command: npm run dev
+    # Der Dev-Server (Turbopack) hält alle kompilierten Routen im Speicher. Mit den 1536m aus
+    # docker-compose.yml beendete der Kernel ihn beim Kompilieren von /protocols/[id]
+    # (Cgroup-OOM, nginx meldete 502).
+    mem_limit: 3072m
     ports:
       - "127.0.0.1:3000:3000"
 
