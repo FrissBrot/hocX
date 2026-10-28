@@ -38,15 +38,20 @@ export function TemplateCreateModal({ open, onClose, types, categories, template
   const [documentType, setDocumentType] = useState(initialType ?? types[0]?.key ?? "protocol");
   const typeCatalog = useMemo(() => catalog.filter((item) => item.documentType === documentType), [catalog, documentType]);
   const typeCopies = useMemo(() => templates.filter((item) => item.document_type === documentType && item.status === "active"), [templates, documentType]);
-  const [start, setStart] = useState<Start>(() => (catalog.some((item) => item.documentType === documentType) ? "catalog" : "blank"));
-  const [catalogKey, setCatalogKey] = useState<string | null>(() => catalog.find((item) => item.documentType === documentType)?.key ?? null);
+  // Ohne eigene Wahl gelten Voreinstellungen aus den geladenen Daten: der Katalog kann nach dem
+  // Öffnen des Dialogs eintreffen (null = noch nichts gewählt bzw. eingegeben)
+  const [chosenStart, setStart] = useState<Start | null>(null);
+  const [chosenKey, setCatalogKey] = useState<string | null>(null);
   const [copyId, setCopyId] = useState<string | null>(null);
-  const [name, setName] = useState(() => catalog.find((item) => item.documentType === documentType)?.name ?? t(`docType.${documentType}`));
+  const [chosenName, setName] = useState<string | null>(null);
   const [nameTouched, setNameTouched] = useState(false);
+  const start: Start = chosenStart ?? (typeCatalog.length > 0 ? "catalog" : "blank");
+  const catalogKey = chosenKey ?? typeCatalog[0]?.key ?? null;
   const [brandId, setBrandId] = useState<string | null>(defaultBrand?.id ?? null);
   const [busy, setBusy] = useState(false);
   const chosen = typeCatalog.find((item) => item.key === catalogKey) ?? null;
   const copySource = typeCopies.find((item) => item.id === copyId) ?? null;
+  const name = chosenName ?? (start === "catalog" && chosen ? chosen.name : t(`docType.${documentType}`));
 
   function suggest(value: string) {
     if (!nameTouched) setName(value);
@@ -54,20 +59,18 @@ export function TemplateCreateModal({ open, onClose, types, categories, template
 
   function chooseType(key: string) {
     setDocumentType(key);
-    const first = catalog.find((item) => item.documentType === key) ?? null;
-    setStart(first ? "catalog" : "blank");
-    setCatalogKey(first?.key ?? null);
+    setStart(null);
+    setCatalogKey(null);
     setCopyId(null);
-    suggest(first?.name ?? t(`docType.${key}`));
+    if (!nameTouched) setName(null);
   }
 
   function chooseStart(value: Start) {
     setStart(value);
-    if (value === "catalog") suggest(chosen?.name ?? typeCatalog[0]?.name ?? t(`docType.${documentType}`));
-    else if (value === "copy" && typeCopies[0]) {
+    if (value === "copy" && typeCopies[0]) {
       setCopyId(copyId ?? typeCopies[0].id);
       suggest(t("library.copyName", { name: templateDisplayName(t, copySource ?? typeCopies[0]) }));
-    } else suggest(t(`docType.${documentType}`));
+    } else if (!nameTouched) setName(null);
   }
 
   const ready = !!name.trim() && !busy && (start === "blank" || (start === "catalog" && !!chosen) || (start === "copy" && !!copySource));

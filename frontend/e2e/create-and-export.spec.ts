@@ -53,8 +53,18 @@ test("export dialog, template library, brand studio and designer render (light/d
 
         await page.goto("/documents");
         await expect(page.getByRole("heading", { name: "Dokumentvorlagen", level: 1 })).toBeVisible();
-        await expect(page.getByRole("region", { name: "Pendenzenliste" })).toBeVisible({ timeout: 60_000 });
+        // Gestaltung auf Abruf: eigene Vorlagen nach Sitzung/Weitere, Mitgeliefertes im Katalog
+        await expect(page.getByRole("region", { name: "Sitzung" })).toBeVisible({ timeout: 60_000 });
+        await expect(page.getByRole("region", { name: "Weitere Dokumente" })).toBeVisible();
         await page.screenshot({ path: `test-results/document-library-${theme}-${width}.png`, fullPage: true });
+        await page.getByRole("button", { name: "Katalog durchsuchen" }).click();
+        const catalog = page.getByRole("dialog", { name: "Katalog" });
+        await catalog.getByRole("button", { name: /^Pendenzenliste/ }).click();
+        await expect(catalog.getByRole("heading", { name: "Pendenzenliste", level: 3 })).toBeVisible();
+        await expect(catalog.locator("img").first()).toBeVisible({ timeout: 60_000 });
+        await page.screenshot({ path: `test-results/document-catalog-${theme}-${width}.png` });
+        await page.keyboard.press("Escape");
+        await expect(catalog).toBeHidden();
 
         await page.goto("/documents/brand");
         await expect(page.getByRole("region", { name: "Vorschau" }).getByRole("img", { name: "Seite 1" })).toBeVisible({ timeout: 60_000 });

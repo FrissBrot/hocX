@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import studio from "@/lib/documents/test/studio-catalog.generated.json";
@@ -108,6 +108,18 @@ describe("TemplateLibrary", () => {
     expect(api.studioApi.importExample).toHaveBeenCalledWith("fokus", "Protokoll Fokus");
     // Standard-Erscheinungsbild: kein eigenes Profil, keine Zuweisung nötig
     expect(api.studioApi.updateTemplate).not.toHaveBeenCalled();
+  });
+
+  it("preselects the first catalogue design even if the catalogue arrives after opening", async () => {
+    let resolveDesigns: (value: unknown) => void = () => undefined;
+    api.studioApi.listExamples.mockReturnValue(new Promise((resolve) => { resolveDesigns = resolve; }));
+    render(<TemplateLibrary capabilities={capabilities} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Neue Vorlage" }));
+    const dialog = await screen.findByRole("dialog", { name: "Neue Vorlage" });
+    await act(async () => resolveDesigns([{ key: "fokus", document_type: "protocol" }]));
+    expect(await within(dialog).findByRole("radio", { name: /Protokoll Fokus/ })).toHaveAttribute("aria-checked", "true");
+    expect(within(dialog).getByRole("radio", { name: /^Aus dem Katalog/ })).toHaveAttribute("aria-checked", "true");
+    expect(within(dialog).getByRole("textbox", { name: "Name" })).toHaveValue("Protokoll Fokus");
   });
 
   it("creates a blank template with another brand profile", async () => {
