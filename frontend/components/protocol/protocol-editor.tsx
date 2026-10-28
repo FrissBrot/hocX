@@ -455,6 +455,9 @@ export function ProtocolEditor({
   // The first scroll after opening jumps instantly instead of animating from the top.
   const isInitialScrollRef = useRef(false);
   const passiveScrollTargetRef = useRef<string | null>(null);
+  // Richtung des letzten passiven Abschnittswechsels: beim Zurückscrollen (nach oben) betritt
+  // man den neu geöffneten Abschnitt von unten, also wird dessen Ende verankert statt des Anfangs.
+  const passiveScrollUpRef = useRef(false);
   // True while a programmatic smooth scroll (search, nav click, Ctrl+Enter) is in flight.
   // The scroll-spy must stay passive during that time - otherwise it selects every section
   // the scroll passes, and in accordion mode its instant anchor scroll aborts the smooth
@@ -742,8 +745,15 @@ export function ProtocolEditor({
     const sectionRect = section.getBoundingClientRect();
     const safeInset = 16 * zoom;
     const isTallSection = sectionRect.height >= containerRect.height - safeInset * 2;
+    const scrollingUp = passiveScrollUpRef.current;
+    passiveScrollUpRef.current = false;
+    // Langer Abschnitt: die Kante verankern, über die man ihn betreten hat - nach unten
+    // scrollend der Anfang, nach oben scrollend das Ende. Sonst springt man beim Zurück-
+    // scrollen an den Anfang des Abschnitts statt dorthin, wo man ihn verlassen hat.
     const delta = isTallSection
-      ? sectionRect.top - containerRect.top - safeInset
+      ? scrollingUp
+        ? sectionRect.bottom - containerRect.bottom + safeInset
+        : sectionRect.top - containerRect.top - safeInset
       : sectionRect.top + sectionRect.height / 2 - (containerRect.top + containerRect.height / 2);
 
     container.scrollTo({
@@ -796,6 +806,9 @@ export function ProtocolEditor({
         }
       }
       if (bestId !== null && selectedElementIdRef.current !== bestId) {
+        const sectionIds = sections.map((section) => section.id.replace("protocol-element-", ""));
+        const previousIndex = selectedElementIdRef.current ? sectionIds.indexOf(selectedElementIdRef.current) : -1;
+        passiveScrollUpRef.current = previousIndex > sectionIds.indexOf(bestId);
         passiveScrollTargetRef.current = accordionEnabled ? bestId : null;
         selectedElementIdRef.current = bestId;
         setSelectedElementId(bestId);
