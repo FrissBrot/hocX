@@ -16,6 +16,8 @@ import { useToast } from "@/contexts/toast-context";
 import { apiErrorMessage, Brand, DocumentTemplateDetail, DocumentTemplateInfo, DocumentTypeInfo, studioApi } from "@/lib/documents/api";
 
 type Start = "catalog" | "copy" | "blank";
+// Auswahlwert «Erscheinungsbild des Designs (neu)»: das CD des Designs wird mitgenommen
+const DESIGN_BRAND = "design";
 
 type Props = {
   open: boolean;
@@ -26,11 +28,13 @@ type Props = {
   templates: DocumentTemplateInfo[];
   catalog: CatalogItem[];
   brands: Brand[];
+  // Darf Erscheinungsbilder anlegen (Voraussetzung, um das CD eines Designs mitzunehmen)
+  canBrand: boolean;
   initialType?: string | null;
   onCreated: (template: DocumentTemplateDetail) => void;
 };
 
-export function TemplateCreateModal({ open, onClose, types, categories, templates, catalog, brands, initialType, onCreated }: Props) {
+export function TemplateCreateModal({ open, onClose, types, categories, templates, catalog, brands, canBrand, initialType, onCreated }: Props) {
   const t = useTranslations("documentStudio");
   const toast = useToast();
   const activeBrands = useMemo(() => brands.filter((brand) => !brand.archived), [brands]);
@@ -47,9 +51,14 @@ export function TemplateCreateModal({ open, onClose, types, categories, template
   const [nameTouched, setNameTouched] = useState(false);
   const start: Start = chosenStart ?? (typeCatalog.length > 0 ? "catalog" : "blank");
   const catalogKey = chosenKey ?? typeCatalog[0]?.key ?? null;
-  const [brandId, setBrandId] = useState<string | null>(defaultBrand?.id ?? null);
+  const [chosenBrand, setBrandId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const chosen = typeCatalog.find((item) => item.key === catalogKey) ?? null;
+  // Ein Design bringt standardmässig sein eigenes CD mit; sonst gilt das Standard-Erscheinungsbild
+  const designBrandAvailable = canBrand && start === "catalog" && chosen?.kind === "design";
+  const fallbackBrand = designBrandAvailable ? DESIGN_BRAND : defaultBrand?.id ?? null;
+  const brandId = chosenBrand && (chosenBrand !== DESIGN_BRAND || designBrandAvailable) ? chosenBrand : fallbackBrand;
+  const withDesignBrand = designBrandAvailable && brandId === DESIGN_BRAND;
   const copySource = typeCopies.find((item) => item.id === copyId) ?? null;
   const name = chosenName ?? (start === "catalog" && chosen ? chosen.name : t(`docType.${documentType}`));
 
@@ -81,10 +90,10 @@ export function TemplateCreateModal({ open, onClose, types, categories, template
     setBusy(true);
     try {
       let created: DocumentTemplateDetail;
-      if (start === "catalog" && chosen) created = await adoptCatalogItem(chosen, name.trim());
+      if (start === "catalog" && chosen) created = await adoptCatalogItem(chosen, name.trim(), withDesignBrand);
       else created = await studioApi.createTemplate({ name: name.trim(), document_type: documentType, from_template_id: start === "copy" ? copySource?.id ?? null : null });
       // Ohne Auswahl folgt die Vorlage dem Standard-Erscheinungsbild des Vereins
-      if (brandId && defaultBrand && brandId !== defaultBrand.id) await studioApi.updateTemplate(created.id, { brand_id: brandId });
+      if (!withDesignBrand && brandId && defaultBrand && brandId !== defaultBrand.id) await studioApi.updateTemplate(created.id, { brand_id: brandId });
       onCreated(created);
     } catch (error) {
       toast(apiErrorMessage(error, t("common.actionFailed")), "error");
@@ -215,6 +224,7 @@ export function TemplateCreateModal({ open, onClose, types, categories, template
             <label className="field-stack">
               <span className="field-label">{t("create.brand")}</span>
               <Select value={brandId ?? ""} onChange={(event) => setBrandId(event.target.value || null)}>
+                {designBrandAvailable ? <option value={DESIGN_BRAND}>{t("create.brandDesign")}</option> : null}
                 {activeBrands.map((brand) => (
                   <option key={brand.id} value={brand.id}>
                     {brand.is_default ? t("create.brandDefault", { name: brand.name }) : brand.name}
@@ -222,7 +232,7 @@ export function TemplateCreateModal({ open, onClose, types, categories, template
                 ))}
               </Select>
             </label>
-            <span className="field-help studio-create-fields-help">{t("create.brandHelp")}</span>
+            <span className="field-help studio-create-fields-help">{t(withDesignBrand ? "create.brandDesignHelp" : "create.brandHelp")}</span>
           </div>
         </div>
       </div>

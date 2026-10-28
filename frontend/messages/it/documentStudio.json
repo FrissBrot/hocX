@@ -556,7 +556,9 @@
     "brandHelp": "Colori, logo e carattere provengono dall’immagine. Non viene creato un nuovo profilo.",
     "footCatalog": "Riprende solo «{name}» nella vostra associazione.",
     "footCopy": "Copia il proprio modello selezionato.",
-    "footBlank": "Parte senza design."
+    "footBlank": "Parte senza design.",
+    "brandDesign": "Immagine del design (nuova)",
+    "brandDesignHelp": "Logo, immagini, colori e carattere del design vengono creati come immagine propria e collegati al modello. Potete adattarla, oppure in seguito passare il modello alla vostra immagine ed eliminarla."
   },
   "data": {
     "help": "Inserisci campi dati da hocX. All’esportazione vengono compilati con i diritti di chi esporta."
@@ -2222,7 +2224,7 @@
   "catalog": {
     "open": "Sfoglia il catalogo",
     "title": "Catalogo",
-    "description": "Anteprima con la vostra immagine. Viene ripreso solo ciò che aggiungete.",
+    "description": "I design mostrano la propria immagine e la portano con sé quando vengono aggiunti; i modelli appaiono con la vostra. Viene ripreso solo ciò che aggiungete.",
     "designName": "{type} {design}",
     "fromCatalog": "Dal catalogo · {name}",
     "adopted": "«{name}» ripreso – solo questo modello",
@@ -2230,7 +2232,8 @@
     "addAgain": "Aggiungi di nuovo",
     "addNamed": "Aggiungi «{name}»",
     "alreadyAdopted": "Già ripreso",
-    "back": "Torna al catalogo"
+    "back": "Torna al catalogo",
+    "adoptedWithBrand": "«{name}» ripreso – con la propria immagine, che potete adattare o sostituire con la vostra"
   },
   "cleanup": {
     "bannerTitle": "{count, plural, one {# modello non è utilizzato} other {# modelli non sono utilizzati}}",

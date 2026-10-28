@@ -36,8 +36,7 @@ from app.documents.brand import BRAND_PRESETS, BrandTokens, color_references
 from app.documents.compiler import validate_template
 from app.documents.components import catalog_payload
 from app.documents.context import DocumentNotFoundError, DocumentPermissionError
-from app.documents.hashing import json_hash
-from app.documents.layout import LayoutJson, LayoutValidationError, TemplateContent, content_json, layout_error_of, parse_content
+from app.documents.layout import LayoutJson, LayoutValidationError, TemplateContent, layout_error_of, parse_content
 from app.documents.renderer import FONTS_DIR, PRIORITY_THUMBNAIL, DocumentRenderError, get_renderer
 from app.documents.strings import normalize_language, text
 from app.models import (
@@ -837,55 +836,48 @@ def get_design_example_thumbnail(example_key: str, user: CurrentUser = Depends(g
     return Response(content=examples.thumbnail_path(example).read_bytes(), media_type="image/png", headers={"Cache-Control": "private, max-age=86400"})
 
 
-@router.get("/document-studio/examples/{example_key}/brand-thumbnail")
-async def get_design_example_brand_thumbnail(example_key: str, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    """Vorschau eines Katalog-Designs mit dem Standard-Erscheinungsbild des Vereins (Farben,
-    Logo, Schrift), bevor es übernommen wird. Rendert mit Beispieldaten, legt nichts an."""
-    permissions.require_view(user)
-    example = examples.get_example(example_key)
-    if example is None:
-        raise _not_found(user)
-    content = content_json(examples.example_content(example))
-
-    def resolve() -> tuple[str, Path, bytes | None]:
-        brand = brand_service.default_brand(db, user.current_tenant_id)
-        brand_revision = brand_service.current_revision(db, brand) if brand is not None else None
-        key = hashlib.sha256(f"{user.current_tenant_id}:example:{example.key}:{json_hash(content)}:{brand_revision.id if brand_revision else 0}:{_lang(user)}".encode()).hexdigest()
-        disk_file, cached = _cached_thumbnail(user.current_tenant_id, key)
-        return key, disk_file, cached
-
-    key, disk_file, cached = await run_in_threadpool(resolve)
-    if cached is None:
-        request = document_service.DocumentRequest(document_type=example.document_type, content=content, data_mode="sample", language=user.preferred_language)
-        cached = await _render_thumbnail(db, user, key, disk_file, request)
-    return Response(content=cached, media_type="image/png", headers={"Cache-Control": "private, max-age=300"})
-
-
 class ExampleImport(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    # Name der neuen Vorlage (übersetzter Beispielname aus dem Frontend)
+    # Name der neuen Vorlage und ihres Brand-Profils (übersetzter Beispielname aus dem Frontend)
     name: str = Field(..., min_length=1, max_length=120, pattern=r"\S")
+    # CD des Designs (Bilder, Farben, Schrift) als eigenes, verknüpftes Brand-Profil mitnehmen
+    with_brand: bool = True
 
 
 @router.post("/document-studio/examples/{example_key}/import", response_model=TemplateDetail, status_code=201)
-def import_design_example(example_key: str, body: ExampleImport, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    """Design aus dem Katalog übernehmen: genau eine eigene Vorlage mit dem Erscheinungsbild des
-    Vereins, kein neues Brand-Profil (Gestaltung auf Abruf)."""
+async def import_design_example(example_key: str, body: ExampleImport, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    # Asset-Anlage (Virenscan) mischt awaits mit synchronen DB-Zugriffen: im Worker-Thread (CONC-001).
+    return await run_coroutine_in_thread(_import_design_example_impl, example_key=example_key, body=body, db=db, user=user)
+
+
+async def _import_design_example_impl(example_key: str, body: ExampleImport, db: Session, user: CurrentUser):  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
+    """Design aus dem Katalog übernehmen: eine eigene Vorlage, auf Wunsch mit dem CD des Designs
+    als verknüpftem Brand-Profil."""
+    # Eigene Vorlage (Dokument-Designer)
     permissions.require_design(user)
+    # Ein Brand-Profil anlegen darf wie im Brand Studio nur, wer das Erscheinungsbild verwaltet
+    if body.with_brand:
+        permissions.require_brand(user)
     example = examples.get_example(example_key)
     if example is None:
         raise _not_found(user)
     try:
-        template = examples.import_example(db, user.current_tenant_id, example, name=body.name, user_id=user.user_id)
+        template, brand = await examples.import_example(db, user.current_tenant_id, example, name=body.name, user_id=user.user_id, with_brand=body.with_brand)
         db.commit()
+    except asset_service.AssetValidationError as exc:
+        db.rollback()
+        raise _curated(user, str(exc)) from exc
     except (ValidationError, LayoutValidationError) as exc:
         db.rollback()
         raise _validation_error(user, exc) from exc
     except ValueError as exc:
         db.rollback()
         raise http_error(user, exc) from exc
-    audit.log(db, action="document_template.import_example", actor=user, entity_type="document_template", entity_id=template.id, details={"example": example.key})
+    details = {"example": example.key}
+    if brand is not None:
+        details["brand_id"] = str(brand.public_id)
+    audit.log(db, action="document_template.import_example", actor=user, entity_type="document_template", entity_id=template.id, details=details)
     return _template_detail(db, user, template)
 
 

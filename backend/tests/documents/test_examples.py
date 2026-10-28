@@ -1,7 +1,8 @@
-"""Gestaltungsbeispiele (Katalog-Designs): gültig und ohne Hardcode-Texte. Übernehmen legt genau
-eine Vorlage an, die sich ihre Herkunft merkt und das Erscheinungsbild des Vereins nutzt - kein
-eigenes Brand-Profil, keine Kopie der Beispielbilder (Gestaltung auf Abruf). Nur mit
-Vorlagen-Recht, mandantengebunden, und exportiert mit echten Daten."""
+"""Gestaltungsbeispiele (Katalog-Designs): gültig und ohne Hardcode-Texte. Übernehmen legt eine
+Vorlage an, die sich ihre Herkunft merkt, und bringt das CD des Designs (Bilder, Farben, Schrift)
+als eigenes, verknüpftes Brand-Profil mit (nie Standardprofil, nur mit Recht auf das
+Erscheinungsbild). Ohne CD folgt die Vorlage dem Erscheinungsbild des Vereins. Mandantengebunden,
+umstellbar auf das eigene CI und exportiert mit echten Daten."""
 from __future__ import annotations
 
 import asyncio
@@ -109,8 +110,8 @@ def world(db):
     }
 
 
-def _import(db, user, key="alpin", name="Alpin"):
-    return studio.import_design_example(key, studio.ExampleImport(name=name), db=db, user=user)
+def _import(db, user, key="alpin", name="Alpin", with_brand=True):
+    return asyncio.run(studio._import_design_example_impl(key, studio.ExampleImport(name=name, with_brand=with_brand), db=db, user=user))
 
 
 def test_list_and_thumbnail_for_every_reader(db, world):
@@ -123,54 +124,67 @@ def test_list_and_thumbnail_for_every_reader(db, world):
     assert excinfo.value.status_code == 404
 
 
-def test_import_creates_one_template_with_the_club_brand(db, world):
+def test_import_creates_template_linked_to_the_design_brand(db, world):
     tenant_id = world["tenant"].id
-    brands_before = db.scalars(select(DocumentBrand.id).where(DocumentBrand.tenant_id == tenant_id)).all()
     imported = _import(db, world["admin"])
     template = db.scalar(select(DocumentTemplate).where(DocumentTemplate.public_id == imported.id))
     assert template.tenant_id == tenant_id and template.origin == "tenant" and template.document_type == "protocol"
     assert template.catalog_key == "alpin" and imported.catalog_key == "alpin"
     assert imported.draft_revision is not None and imported.published_revision is None
-    # Kein eigenes Profil, keine Beispielbilder: die Vorlage folgt dem Standard-Erscheinungsbild
-    assert imported.brand_id is None and template.brand_id is None
-    default = brand_service.default_brand(db, tenant_id)
-    assert default is not None
-    assert set(db.scalars(select(DocumentBrand.id).where(DocumentBrand.tenant_id == tenant_id)).all()) == set(brands_before) | {default.id}
-    assert db.scalar(select(DocumentAsset.id).where(DocumentAsset.tenant_id == tenant_id)) is None
-    # Der Aufbau des Designs steckt in der Vorlage (Grundstil als Übersteuerung)
+    # Der Aufbau des Designs steckt in der Vorlage (bleibt beim Umstellen auf das eigene CI)
     assert imported.content["settings"]["brand_overrides"]["appearance_base"] == "alpin"
 
-    # Ein zweites Übernehmen legt genau eine weitere Vorlage an
+    # Das CD des Designs kommt als eigenes, verknüpftes Profil mit, nie als Standardprofil
+    brand = db.scalar(select(DocumentBrand).where(DocumentBrand.public_id == imported.brand_id))
+    assert brand.tenant_id == tenant_id and brand.name == "Alpin" and not brand.is_default
+    default = brand_service.default_brand(db, tenant_id)
+    assert default is not None and default.id != brand.id
+    tokens = brand_service.tokens_of(brand_service.current_revision(db, brand))
+    assert tokens.colors.primary == "#0A600B" and tokens.organization.name
+    logo = db.scalar(select(DocumentAsset).where(DocumentAsset.public_id == tokens.assets.logo))
+    footer = db.scalar(select(DocumentAsset).where(DocumentAsset.public_id == tokens.assets.footer_image))
+    assert logo.tenant_id == tenant_id and footer.tenant_id == tenant_id
+
+    # Ein zweites Übernehmen legt ein weiteres Paar an und ändert nichts am ersten
     again = _import(db, world["admin"])
-    assert again.id != imported.id and again.brand_id is None
+    assert again.id != imported.id and again.brand_id != imported.brand_id
+
+
+def test_import_without_brand_follows_the_club_brand(db, world):
+    tenant_id = world["tenant"].id
+    imported = _import(db, world["writer"], with_brand=False)
+    assert imported.brand_id is None and imported.catalog_key == "alpin"
+    assert [brand.is_default for brand in db.scalars(select(DocumentBrand).where(DocumentBrand.tenant_id == tenant_id))] == [True]
+    assert db.scalar(select(DocumentAsset.id).where(DocumentAsset.tenant_id == tenant_id)) is None
+
+
+def test_design_brand_can_be_replaced_by_the_club_brand_and_deleted(db, world):
+    imported = _import(db, world["admin"])
+    design_brand = imported.brand_id
+    # Solange die Vorlage das Design-CD nutzt, bleibt es geschützt
+    with pytest.raises(HTTPException) as excinfo:
+        studio.delete_document_brand(design_brand, db=db, user=world["admin"])
+    assert excinfo.value.status_code == 422
+    studio.update_document_template(imported.id, studio.TemplateMetaUpdate(clear_brand=True), db=db, user=world["admin"])
+    studio.delete_document_brand(design_brand, db=db, user=world["admin"])
+    assert db.scalar(select(DocumentBrand.id).where(DocumentBrand.public_id == design_brand)) is None
+    template = studio.get_document_template(imported.id, db=db, user=world["admin"])
+    assert template.brand_id is None and template.content["settings"]["brand_overrides"]["appearance_base"] == "alpin"
 
 
 def test_import_needs_template_rights_and_known_example(db, world):
     with pytest.raises(HTTPException) as excinfo:
-        _import(db, world["reader"])
+        _import(db, world["reader"], with_brand=False)
     assert excinfo.value.status_code == 403
+    # Das Design-CD anzulegen verlangt das Recht auf das Erscheinungsbild
+    with pytest.raises(HTTPException) as excinfo:
+        _import(db, world["writer"])
+    assert excinfo.value.status_code == 403
+    assert db.scalar(select(DocumentTemplate.id).where(DocumentTemplate.tenant_id == world["tenant"].id)) is None
     with pytest.raises(ValidationError):
         studio.ExampleImport(name="   ")
     with pytest.raises(HTTPException) as excinfo:
         _import(db, world["admin"], key="protocol_standard")
-    assert excinfo.value.status_code == 404
-
-
-def test_brand_thumbnail_renders_with_club_brand(db, world, monkeypatch):
-    calls = []
-
-    async def fake_render(db_, user, key, disk_file, request):
-        calls.append(request)
-        return b"\x89PNG-fake"
-
-    monkeypatch.setattr(studio, "_render_thumbnail", fake_render)
-    response = asyncio.run(studio.get_design_example_brand_thumbnail("kreide", db=db, user=world["reader"]))
-    assert response.body == b"\x89PNG-fake"
-    request = calls[0]
-    assert request.content["settings"]["brand_overrides"]["appearance_base"] == "kreide"
-    assert request.brand_id is None and request.brand_tokens is None and request.data_mode == "sample"
-    with pytest.raises(HTTPException) as excinfo:
-        asyncio.run(studio.get_design_example_brand_thumbnail("../x", db=db, user=world["reader"]))
     assert excinfo.value.status_code == 404
 
 
@@ -182,7 +196,7 @@ def test_imported_example_stays_in_its_tenant(db, world):
     assert excinfo.value.status_code == 404
 
 
-def test_every_example_compiles_with_the_club_brand(db, world):
+def test_every_example_compiles_with_its_brand_and_images(db, world):
     tenant_id = world["tenant"].id
     template = make_template(db, tenant_id, name="Hock")
     protocol = make_protocol(db, tenant_id, template.id, protocol_number="2026.2", status="durchgeführt")
@@ -199,5 +213,5 @@ def test_every_example_compiles_with_the_club_brand(db, world):
         request = DocumentRequest(document_type="protocol", template_id=imported.id, revision_id=imported.draft_revision.id, protocol_id=protocol.public_id, data_mode="sample")
         prepared = service.prepare(db, world["admin"], tenant_id, request, preview=True)
         assert [item for item in prepared.compiled.diagnostics if item.severity == "error"] == [], example.key
-        club = brand_service.tokens_of(brand_service.current_revision(db, brand_service.default_brand(db, tenant_id)))
-        assert prepared.compiled.data["brand"]["colors"]["primary"] == club.colors.primary, example.key
+        assert prepared.compiled.data["brand"]["colors"]["primary"] == example.tokens["colors"]["primary"], example.key
+        assert len([name for name in prepared.compiled.files if name.endswith(".png")]) >= len(example.images), example.key

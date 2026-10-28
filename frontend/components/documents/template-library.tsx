@@ -293,6 +293,7 @@ export function TemplateLibrary({ capabilities }: Props) {
           categories={categories}
           initialType={dialog.documentType}
           canAdopt={capabilities.edit_templates}
+          canBrand={capabilities.manage_brand}
           onAdopted={load}
         />
       )}
@@ -305,6 +306,7 @@ export function TemplateLibrary({ capabilities }: Props) {
           templates={own}
           catalog={catalog}
           brands={brands}
+          canBrand={capabilities.manage_brand}
           initialType={dialog.documentType}
           onCreated={(created) => router.push(`/documents/templates/${created.id}`)}
         />

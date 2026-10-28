@@ -1,8 +1,9 @@
 "use client";
 
-// Katalog (Gestaltung auf Abruf): alle mitgelieferten Designs und Vorlagen nach Dokumenttyp,
-// in der Vorschau mit dem Erscheinungsbild des Vereins. «Hinzufügen» übernimmt genau diese eine
-// Vorlage; was niemand übernimmt, bleibt im Katalog und taucht im Verein nicht auf.
+// Katalog (Gestaltung auf Abruf): alle mitgelieferten Designs und Vorlagen nach Dokumenttyp.
+// Designs zeigen ihr eigenes CD und bringen es beim «Hinzufügen» als verknüpftes Erscheinungsbild
+// mit (sofern man Erscheinungsbilder verwalten darf), Systemvorlagen erscheinen mit dem des
+// Vereins. Was niemand übernimmt, bleibt im Katalog und taucht im Verein nicht auf.
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
@@ -21,10 +22,12 @@ type Props = {
   categories: string[];
   initialType?: string | null;
   canAdopt: boolean;
+  // Darf Erscheinungsbilder anlegen: ein Design bringt dann sein CD mit
+  canBrand: boolean;
   onAdopted: () => void;
 };
 
-export function CatalogModal({ open, onClose, items, types, categories, initialType, canAdopt, onAdopted }: Props) {
+export function CatalogModal({ open, onClose, items, types, categories, initialType, canAdopt, canBrand, onAdopted }: Props) {
   const t = useTranslations("documentStudio");
   const toast = useToast();
   const withItems = useMemo(() => types.filter((type) => items.some((item) => item.documentType === type.key)), [types, items]);
@@ -36,8 +39,9 @@ export function CatalogModal({ open, onClose, items, types, categories, initialT
   async function adopt(item: CatalogItem) {
     setBusy(item.key);
     try {
-      await adoptCatalogItem(item, item.name);
-      toast(t("catalog.adopted", { name: item.name }), "success");
+      const withBrand = canBrand && item.kind === "design";
+      await adoptCatalogItem(item, item.name, withBrand);
+      toast(t(withBrand ? "catalog.adoptedWithBrand" : "catalog.adopted", { name: item.name }), "success");
       onAdopted();
     } catch (reason) {
       toast(apiErrorMessage(reason, t("common.actionFailed")), "error");

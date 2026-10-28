@@ -556,7 +556,9 @@
     "brandHelp": "Les couleurs, le logo et la police proviennent de l’identité visuelle. Aucun nouveau profil n’est créé.",
     "footCatalog": "Reprend uniquement « {name} » dans votre société.",
     "footCopy": "Copie le modèle propre sélectionné.",
-    "footBlank": "Commence sans design."
+    "footBlank": "Commence sans design.",
+    "brandDesign": "Identité visuelle du design (nouvelle)",
+    "brandDesignHelp": "Le logo, les images, les couleurs et la police du design sont créés comme identité visuelle propre et liés au modèle. Vous pouvez l’adapter, ou plus tard passer le modèle à votre identité visuelle et la supprimer."
   },
   "data": {
     "help": "Insérez des champs de données de hocX. À l’export, ils sont remplis avec les droits de la personne qui exporte."
@@ -2222,7 +2224,7 @@
   "catalog": {
     "open": "Parcourir le catalogue",
     "title": "Catalogue",
-    "description": "Aperçu avec votre identité visuelle. Seul ce que vous ajoutez est repris.",
+    "description": "Les designs montrent leur propre identité visuelle et l’apportent lors de l’ajout ; les modèles apparaissent avec la vôtre. Seul ce que vous ajoutez est repris.",
     "designName": "{type} {design}",
     "fromCatalog": "Du catalogue · {name}",
     "adopted": "« {name} » repris – uniquement ce modèle",
@@ -2230,7 +2232,8 @@
     "addAgain": "Ajouter à nouveau",
     "addNamed": "Ajouter « {name} »",
     "alreadyAdopted": "Déjà repris",
-    "back": "Retour au catalogue"
+    "back": "Retour au catalogue",
+    "adoptedWithBrand": "« {name} » repris – avec sa propre identité visuelle, que vous pouvez adapter ou remplacer par la vôtre"
   },
   "cleanup": {
     "bannerTitle": "{count, plural, one {# modèle n’est pas utilisé} other {# modèles ne sont pas utilisés}}",

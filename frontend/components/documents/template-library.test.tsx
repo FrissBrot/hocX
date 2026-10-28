@@ -21,7 +21,7 @@ const api = vi.hoisted(() => ({
     listExamples: vi.fn(),
     importExample: vi.fn(),
     exampleThumbnailUrl: vi.fn(() => "/example.png"),
-    exampleBrandThumbnailUrl: vi.fn(() => "/example-brand.png"),
+    exampleThumbnailUrl: vi.fn(() => "/example.png"),
   },
 }));
 const { toast, confirm, push } = vi.hoisted(() => ({ toast: vi.fn(), confirm: vi.fn(), push: vi.fn() }));
@@ -44,7 +44,7 @@ describe("TemplateLibrary", () => {
   beforeEach(() => {
     [toast, confirm, push, ...Object.values(api.studioApi)].forEach((fn) => fn.mockReset());
     api.studioApi.thumbnailUrl.mockReturnValue("/thumb.png");
-    api.studioApi.exampleBrandThumbnailUrl.mockReturnValue("/example-brand.png");
+    api.studioApi.exampleThumbnailUrl.mockReturnValue("/example.png");
     api.studioApi.catalog.mockResolvedValue(studio.catalog);
     api.studioApi.brands.mockResolvedValue(brands);
     api.studioApi.listExamples.mockResolvedValue([{ key: "fokus", document_type: "protocol" }]);
@@ -95,19 +95,43 @@ describe("TemplateLibrary", () => {
     expect(toast).toHaveBeenCalledWith("«Pendenzenliste» übernommen – nur diese eine Vorlage", "success");
   });
 
-  it("creates a template from a catalogue design with the club brand", async () => {
+  it("creates a template from a catalogue design together with the design's own brand", async () => {
+    api.studioApi.importExample.mockResolvedValue({ id: "new-template" });
+    render(<TemplateLibrary capabilities={capabilities} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Neue Vorlage" }));
+    const dialog = await screen.findByRole("dialog", { name: "Neue Vorlage" });
+    fireEvent.click(within(dialog).getByRole("radio", { name: /Protokoll Fokus/ }));
+    expect(within(dialog).getByRole("textbox", { name: "Name" })).toHaveValue("Protokoll Fokus");
+    // Voreinstellung: das CD des Designs kommt als eigenes, verknüpftes Erscheinungsbild mit
+    expect(within(dialog).getByLabelText("Erscheinungsbild")).toHaveValue("design");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Erstellen und gestalten" }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/documents/templates/new-template"));
+    expect(api.studioApi.importExample).toHaveBeenCalledWith("fokus", "Protokoll Fokus", true);
+    expect(api.studioApi.updateTemplate).not.toHaveBeenCalled();
+  });
+
+  it("creates a template from a catalogue design with an existing brand instead", async () => {
     api.studioApi.importExample.mockResolvedValue({ id: "new-template" });
     api.studioApi.updateTemplate.mockResolvedValue({});
     render(<TemplateLibrary capabilities={capabilities} />);
     fireEvent.click(await screen.findByRole("button", { name: "Neue Vorlage" }));
     const dialog = await screen.findByRole("dialog", { name: "Neue Vorlage" });
     fireEvent.click(within(dialog).getByRole("radio", { name: /Protokoll Fokus/ }));
-    expect(within(dialog).getByRole("textbox", { name: "Name" })).toHaveValue("Protokoll Fokus");
+    fireEvent.change(within(dialog).getByLabelText("Erscheinungsbild"), { target: { value: "b2" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Erstellen und gestalten" }));
     await waitFor(() => expect(push).toHaveBeenCalledWith("/documents/templates/new-template"));
-    expect(api.studioApi.importExample).toHaveBeenCalledWith("fokus", "Protokoll Fokus");
-    // Standard-Erscheinungsbild: kein eigenes Profil, keine Zuweisung nötig
-    expect(api.studioApi.updateTemplate).not.toHaveBeenCalled();
+    expect(api.studioApi.importExample).toHaveBeenCalledWith("fokus", "Protokoll Fokus", false);
+    expect(api.studioApi.updateTemplate).toHaveBeenCalledWith("new-template", { brand_id: "b2" });
+  });
+
+  it("adopts a catalogue design without its brand for people who may not manage brands", async () => {
+    api.studioApi.importExample.mockResolvedValue({ id: "new-template" });
+    render(<TemplateLibrary capabilities={{ ...capabilities, manage_brand: false }} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Katalog durchsuchen" }));
+    const dialog = await screen.findByRole("dialog", { name: "Katalog" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "«Protokoll Fokus» hinzufügen" }));
+    await waitFor(() => expect(api.studioApi.importExample).toHaveBeenCalledWith("fokus", "Protokoll Fokus", false));
+    expect(toast).toHaveBeenCalledWith("«Protokoll Fokus» übernommen – nur diese eine Vorlage", "success");
   });
 
   it("preselects the first catalogue design even if the catalogue arrives after opening", async () => {

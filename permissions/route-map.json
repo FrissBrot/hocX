@@ -851,15 +851,10 @@
         "meetings.read"
       ]
     },
-    "GET /api/document-studio/examples/{example_key}/brand-thumbnail": {
-      "handler": "document_studio.get_design_example_brand_thumbnail",
-      "requires": [
-        "meetings.read"
-      ]
-    },
     "POST /api/document-studio/examples/{example_key}/import": {
       "handler": "document_studio.import_design_example",
       "requires": [
+        "settings.manage",
         "templates.edit"
       ],
       "features": [

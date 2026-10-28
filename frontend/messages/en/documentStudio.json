@@ -556,7 +556,9 @@
     "brandHelp": "Colours, logo and font come from the branding. No new profile is created.",
     "footCatalog": "Copies only “{name}” to your club.",
     "footCopy": "Copies the selected template of your own.",
-    "footBlank": "Starts without a design."
+    "footBlank": "Starts without a design.",
+    "brandDesign": "Branding of the design (new)",
+    "brandDesignHelp": "The design’s logo, images, colours and font are created as a branding profile of their own and linked to the template. You can adjust it, or later switch the template to your branding and delete it."
   },
   "data": {
     "help": "Insert data fields from hocX. On export they are filled with the permissions of the person exporting."
@@ -2222,7 +2224,7 @@
   "catalog": {
     "open": "Browse catalogue",
     "title": "Catalogue",
-    "description": "Preview with your branding. Only what you add is copied to your club.",
+    "description": "Designs show their own branding and bring it along when added; templates appear with yours. Only what you add is copied to your club.",
     "designName": "{type} {design}",
     "fromCatalog": "From catalogue · {name}",
     "adopted": "“{name}” added – just this one template",
@@ -2230,7 +2232,8 @@
     "addAgain": "Add again",
     "addNamed": "Add “{name}”",
     "alreadyAdopted": "Already added",
-    "back": "Back to catalogue"
+    "back": "Back to catalogue",
+    "adoptedWithBrand": "“{name}” added – with its own branding, which you can adjust or replace with yours"
   },
   "cleanup": {
     "bannerTitle": "{count, plural, one {# template is} other {# templates are}} not in use",

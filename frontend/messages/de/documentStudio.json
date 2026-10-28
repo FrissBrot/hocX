@@ -556,7 +556,9 @@
     "brandHelp": "Farben, Logo und Schrift kommen aus dem Erscheinungsbild. Es wird kein neues Profil angelegt.",
     "footCatalog": "Übernimmt nur «{name}» in euren Verein.",
     "footCopy": "Kopiert die gewählte eigene Vorlage.",
-    "footBlank": "Startet ohne Design."
+    "footBlank": "Startet ohne Design.",
+    "brandDesign": "Erscheinungsbild des Designs (neu)",
+    "brandDesignHelp": "Logo, Bilder, Farben und Schrift des Designs werden als eigenes Erscheinungsbild angelegt und mit der Vorlage verknüpft. Ihr könnt es anpassen oder die Vorlage später auf euer Erscheinungsbild umstellen und es löschen."
   },
   "data": {
     "help": "Datenfelder aus hocX einfügen. Beim Export werden sie mit den Rechten der exportierenden Person gefüllt."
@@ -2222,7 +2224,7 @@
   "catalog": {
     "open": "Katalog durchsuchen",
     "title": "Katalog",
-    "description": "Vorschau mit eurem Erscheinungsbild. Übernommen wird nur, was ihr hinzufügt.",
+    "description": "Designs zeigen ihr eigenes Erscheinungsbild und bringen es beim Hinzufügen mit, Vorlagen erscheinen mit eurem. Übernommen wird nur, was ihr hinzufügt.",
     "designName": "{type} {design}",
     "fromCatalog": "Aus Katalog · {name}",
     "adopted": "«{name}» übernommen – nur diese eine Vorlage",
@@ -2230,7 +2232,8 @@
     "addAgain": "Nochmals hinzufügen",
     "addNamed": "«{name}» hinzufügen",
     "alreadyAdopted": "Bereits übernommen",
-    "back": "Zurück zum Katalog"
+    "back": "Zurück zum Katalog",
+    "adoptedWithBrand": "«{name}» übernommen – mit eigenem Erscheinungsbild, das ihr anpassen oder durch eures ersetzen könnt"
   },
   "cleanup": {
     "bannerTitle": "{count, plural, one {# Vorlage wird} other {# Vorlagen werden}} nicht verwendet",

@@ -587,7 +587,8 @@ def thumbnail_path(example: DesignExample) -> Path:
 def example_content(example: DesignExample) -> TemplateContent:
     """Inhalt einer übernommenen Vorlage: Aufbau des Designs, Grundstil und Grundgrösse als
     Übersteuerung der Vorlage. Farben, Logo, Schrift und Vereinsangaben kommen aus dem
-    Erscheinungsbild des Vereins (Gestaltung auf Abruf)."""
+    verknüpften Erscheinungsbild (mitgebrachtes Design-CD oder das des Vereins), der Aufbau
+    bleibt beim Umstellen erhalten."""
     built = build_example_content(example)
     overrides = built.settings.brand_overrides
     overrides.appearance_base = example.key
@@ -597,16 +598,34 @@ def example_content(example: DesignExample) -> TemplateContent:
     return TemplateContent.model_validate(built.model_dump(mode="json"))
 
 
-def import_example(db: Session, tenant_id: int, example: DesignExample, *, name: str, user_id: int | None):
-    """Design aus dem Katalog übernehmen: genau eine Vorlage mit Entwurf, die sich ihre Herkunft
-    merkt (``catalog_key``). Kein eigenes Brand-Profil, keine Kopie der Beispielbilder - die
-    Vorlage nutzt das Standard-Erscheinungsbild des Vereins. Kein Commit."""
+async def import_example(  # loop-ok: nur im Worker-Thread (core/offload.run_coroutine_in_thread)
+    db: Session, tenant_id: int, example: DesignExample, *, name: str, user_id: int | None, with_brand: bool = True
+):
+    """Design aus dem Katalog übernehmen: eine Vorlage mit Entwurf, die sich ihre Herkunft merkt
+    (``catalog_key``). Mit ``with_brand`` kommt das CD des Designs mit: Beispielbilder als Assets
+    und ein eigenes, mit der Vorlage verknüpftes Brand-Profil (nie Standardprofil). Der Verein
+    kann die Vorlage danach auf sein eigenes Erscheinungsbild umstellen und das Design-CD löschen
+    oder es anpassen. Ohne ``with_brand`` nutzt die Vorlage das Standard-Erscheinungsbild. Gibt
+    Vorlage und (falls angelegt) Brand-Profil zurück. Kein Commit."""
+    from app.documents import assets as asset_service
     from app.documents import brand_service, template_service
 
+    # Ohne Standardprofil würde das Design-CD zum Standard aller Dokumente des Vereins.
     brand_service.ensure_default_brand(db, tenant_id)
+    brand = None
+    if with_brand:
+        images: dict[str, str] = {}
+        for slot, filename in example.images.items():
+            asset = await asset_service.create_asset(
+                db, tenant_id, kind="image", filename=filename, content=(ASSET_DIR / filename).read_bytes(), user_id=user_id,
+                category="logo" if slot == "logo" else "graphic", name=name,
+            )
+            images[slot] = str(asset.public_id)
+        brand = brand_service.create_brand(db, tenant_id, name=name, tokens=example_tokens(example, images), user_id=user_id)
     template, _revision = template_service.create_template(
-        db, tenant_id, name=name, document_type=example.document_type, content=example_content(example), user_id=user_id,
+        db, tenant_id, name=name, document_type=example.document_type, content=example_content(example),
+        brand_id=brand.public_id if brand is not None else None, user_id=user_id,
     )
     template.catalog_key = example.key
     db.flush()
-    return template
+    return template, brand

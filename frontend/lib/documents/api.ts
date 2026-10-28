@@ -372,10 +372,11 @@ export const studioApi = {
 
   protocolStructure: (templateId: string) => browserApiFetch<ProtocolStructure>(`/api/document-templates/${encodeURIComponent(templateId)}/protocol-structure`),
   listExamples: () => browserApiFetch<DesignExample[]>("/api/document-studio/examples"),
-  importExample: (key: string, name: string) => browserApiFetch<DocumentTemplateDetail>(`/api/document-studio/examples/${encodeURIComponent(key)}/import`, json({ name })),
+  // withBrand: CD des Designs als eigenes, mit der Vorlage verknüpftes Erscheinungsbild mitnehmen
+  importExample: (key: string, name: string, withBrand = true) =>
+    browserApiFetch<DocumentTemplateDetail>(`/api/document-studio/examples/${encodeURIComponent(key)}/import`, json({ name, with_brand: withBrand })),
   exampleThumbnailUrl: (key: string) => `/api/document-studio/examples/${encodeURIComponent(key)}/thumbnail`,
   // Katalog-Design mit dem Erscheinungsbild des Vereins; ``version`` macht Änderungen am Profil sichtbar
-  exampleBrandThumbnailUrl: (key: string, version: string) => `/api/document-studio/examples/${encodeURIComponent(key)}/brand-thumbnail?v=${encodeURIComponent(version)}`,
 
   assignments: () => browserApiFetch<Assignment[]>("/api/document-template-assignments"),
   setAssignment: (body: { document_type: string; protocol_template_id?: string | null; template_id?: string | null; brand_id?: string | null }) =>
