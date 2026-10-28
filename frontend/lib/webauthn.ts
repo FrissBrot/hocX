@@ -2,7 +2,7 @@
 
 import { clientMessage } from "@/lib/i18n/client-messages";
 
-function base64urlToUint8Array(value: string): Uint8Array {
+function base64urlToUint8Array(value: string): Uint8Array<ArrayBuffer> {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
   const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
   const binary = window.atob(padded);

@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:16@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
+    image: postgres:16@sha256:d4d4f1579fcfba19c2257326f6a93f4bcf677a430619f084ced704e18eb428ce
     restart: unless-stopped
     # Audit I1, 2026-08-16: this file had NO resource limits at all, unlike
     # docker-compose.yml (dev) after M28 - a runaway container here could take down the
@@ -471,8 +471,8 @@ services:
     depends_on:
       - backend
     healthcheck:
-      # Anders als der dev-Container (der auf der node:22-bookworm "deps"-Stage laeuft) hat das
-      # hier gebaute Release-Image nur die node:22-bookworm-slim "run"-Stage - kein curl/wget
+      # Anders als der dev-Container (der auf der node:24-bookworm "deps"-Stage laeuft) hat das
+      # hier gebaute Release-Image nur die node:24-bookworm-slim "run"-Stage - kein curl/wget
       # (verifiziert gegen ghcr.io/.../hocx-frontend), aber node selbst ist immer da.
       # "/" liefert bei fehlender Session ein 307 nach /login statt eines 200 - als reiner
       # Liveness-Check reicht "hat ueberhaupt geantwortet, kein 5xx/Verbindungsfehler".
@@ -509,7 +509,7 @@ services:
 
   # Lokales S3 (Garage) - siehe docker-compose.yml und docs-site/docs/technik/storage/lokales-s3.md.
   local-s3:
-    image: dxflrs/garage:v2.3.0@sha256:866bd13ed2038ba7e7190e840482bc27234c4afaf77be8cfa439ae088c1e4690
+    image: dxflrs/garage:v2.4.1@sha256:9c96caa2612d3411acc5b0e6701fb238dbfba33e533a6d7d3d811a4b12d0d020
     restart: unless-stopped
     mem_limit: 512m
     cpus: 1.0

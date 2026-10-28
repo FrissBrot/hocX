@@ -23,6 +23,14 @@ Installationen aktualisieren können.
   Modus «Experte» ist in «Erweitert» aufgegangen, damit u. a. die Position frei platzierter
   Elemente (z. B. Adresse in einer freien Ebene) wieder bearbeitbar ist; für solche Elemente
   entfallen die wirkungslosen Felder «Abstand oben/unten».
+- Abhängigkeiten aktualisiert (Dependabot und npm/PyPI): Node 24 LTS in den Frontend-Images und
+  der CI (statt 22; das vorgeschlagene Node 26 ist noch kein LTS), Next.js 16.4.3, React 19.3.1,
+  TypeScript 6.0, Vitest 5, Recharts 3, Playwright 1.64.1; FastAPI 0.162, SQLAlchemy 2.1,
+  Alembic 1.20, psycopg 3.3, Pydantic 2.14, Uvicorn 0.54, redis-py 8, pytest 9; Traefik 3.7.15,
+  Garage 2.4.1, aktuelle Digests für ClamAV, PostgreSQL 16, Python und nginx; GitHub Actions auf
+  die aktuellen Hauptversionen (Node-24-Laufzeit). PostgreSQL bleibt bewusst bei 16: der
+  Sprung auf 18 braucht ein Upgrade der Datenbank (`pg_upgrade` bzw. Dump/Restore) und ein
+  anderes Volume-Layout und wird separat geplant.
 
 ## [1.2.0] - 2026-10-23
 

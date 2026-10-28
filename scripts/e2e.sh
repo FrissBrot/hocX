@@ -74,7 +74,7 @@ run_tests() {
       -e CI="${CI:-}" -e PLAYWRIGHT_BASE_URL=http://127.0.0.1:13000 \
       -e E2E_ABGABEBOX_BASE_URL=http://127.0.0.1:13001 \
       -e E2E_USER_EMAIL=admin@hocx.local -e E2E_USER_PASSWORD='ChangeMe123!' -e E2E_ARGS="${E2E_ARGS:-}" \
-      mcr.microsoft.com/playwright:v1.63.0-noble sh -c 'npm ci && npm run test:e2e -- $E2E_ARGS'
+      mcr.microsoft.com/playwright:v1.64.1-noble sh -c 'npm ci && npm run test:e2e -- $E2E_ARGS'
   fi
 }
 

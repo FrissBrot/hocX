@@ -1,38 +1,38 @@
-fastapi==0.140.0
+fastapi==0.162.0
 starlette>=1.0.1  # CVE-2026-48710 (BadHost) fix, siehe security-audit/FINDINGS.md DEP-02
-uvicorn[standard]==0.34.0
-sqlalchemy==2.0.40
-alembic==1.15.2
-psycopg[binary]==3.2.6
-pydantic==2.11.3
-pydantic-settings==2.8.1
+uvicorn[standard]==0.54.0
+sqlalchemy==2.1.6
+alembic==1.20.1
+psycopg[binary]==3.3.6
+pydantic==2.14.1
+pydantic-settings==2.16.1
 python-multipart==0.0.32
 pyclamd==0.4.0
-redis==5.2.1
+redis==8.1.0
 dnspython==2.9.0
 PyYAML==6.0.3
 PyJWT[crypto]==2.15.1
-cryptography==50.0.0
-python-docx==1.1.2
+cryptography==50.0.2
+python-docx==1.2.0
 pdfplumber==0.11.10
-scipy==1.18.0
+scipy==1.18.1
 Pillow==13.0.0
 # Dokument-Engine (app/documents): Typst-Compiler (QR-Codes über das vendorte Typst-Paket
 # tiaoma), Markdown-Parser, XMP-Ergänzung (pypdf, inkrementell) und XLSX-Export. Versionen
 # fest, damit Dev, CI und Produktion identisch rendern.
 typst==0.15.0
 markdown-it-py==4.2.0
-pypdf==6.21.2
+pypdf==6.21.3
 # Vorschau/Thumbnails: nur die benötigten Seiten aus dem PDF rastern (TYPST-005, STUDIO-015)
 pypdfium2==5.14.0
 openpyxl==3.1.5
 # Zeichenabdeckung der Schriften (PDF/A verbietet fehlende Glyphen, siehe renderer.py)
-fonttools==4.66.1
-pillow-heif==1.7.0
+fonttools==4.68.0
+pillow-heif==1.8.1
 ImageHash==4.3.2
 
 # S3-Objektspeicher (app/core/objstore_client.py, docs-site/docs/technik/storage/architektur.md)
-boto3==1.43.113
+boto3==1.43.120
 
 # Passwortgeschützte ZIP-Dateien (AES-256, WinZip-AE-2) für Datenauskunft und Vereinsexport
 # (app/services/personal_data_export_service.py, Datenschutz-Audit Paket 5/6) - lesbar mit 7-Zip,

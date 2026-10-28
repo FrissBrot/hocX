@@ -1,16 +1,16 @@
-fastapi==0.140.0
+fastapi==0.162.0
 starlette>=1.0.1  # CVE-2026-48710 (BadHost) fix, siehe security-audit/FINDINGS.md DEP-02
-uvicorn[standard]==0.34.0
-sqlalchemy==2.0.40
-psycopg[binary]==3.2.6
-pydantic==2.11.3
-pydantic-settings==2.8.1
+uvicorn[standard]==0.54.0
+sqlalchemy==2.1.6
+psycopg[binary]==3.3.6
+pydantic==2.14.1
+pydantic-settings==2.16.1
 python-multipart==0.0.32
 httpx==0.28.1
 pyclamd==0.4.0
-scipy==1.18.0
+scipy==1.18.1
 Pillow==13.0.0
 ImageHash==4.3.2
 # S3-Objektspeicher (app/core/objstore_client.py, docs-site/docs/technik/storage/architektur.md)
-boto3==1.43.113
-cryptography==50.0.0
+boto3==1.43.120
+cryptography==50.0.2
