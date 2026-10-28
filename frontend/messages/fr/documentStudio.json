@@ -15,7 +15,7 @@
     "delete": "Supprimer",
     "deleteConfirm": "Supprimer « {name} » ?",
     "deleted": "Supprimé.",
-    "description": "Logos, graphiques et fichiers de police pour les modèles et l’identité visuelle.",
+    "description": "Logos, images de pied de page et polices utilisés par vos modèles.",
     "edit": "Modifier",
     "editTitle": "Modifier le fichier",
     "emptyNoUpload": "Les administrateurs peuvent téléverser des fichiers ici.",
@@ -39,7 +39,22 @@
     "uploaded": "Téléversé.",
     "uploading": "Téléversement …",
     "usage": "Afficher l’utilisation",
-    "usageTitle": "Utilisation de « {name} »"
+    "usageTitle": "Utilisation de « {name} »",
+    "filter": {
+      "all": "Tous",
+      "used": "Utilisés",
+      "unused": "Non utilisés"
+    },
+    "group": {
+      "logos": "Logos",
+      "graphics": "Images de pied de page et graphiques",
+      "fonts": "Polices"
+    },
+    "usedIn": "Dans « {name} »{count, plural, =0 {} other { et # autres}}",
+    "notUsed": "Non utilisé",
+    "duplicates": "{count, number}× présent",
+    "mergeDuplicates": "{count, plural, one {Fusionner # doublon} other {Fusionner # doublons}}",
+    "merged": "{count, plural, =0 {Aucun doublon inutilisé trouvé} one {# doublon supprimé} other {# doublons supprimés}}"
   },
   "assignments": {
     "actions": "Actions",
@@ -199,7 +214,7 @@
     "colors": "Couleurs",
     "conflict": "Le profil a été modifié entre-temps. Veuillez recharger.",
     "copyName": "{name} (copie)",
-    "create": "Nouveau profil",
+    "create": "Autre profil",
     "createTitle": "Nouveau profil de marque",
     "created": "Profil créé.",
     "customColorKey": "Clé",
@@ -221,7 +236,7 @@
     "deleted": "Profil supprimé.",
     "deriveColors": "Dériver automatiquement les autres couleurs",
     "deriveColorsHelp": "Les titres, tableaux, lignes et surfaces suivent la couleur principale et la couleur secondaire.",
-    "description": "Identité visuelle de tous les documents : couleurs, polices, logos, mise en page et informations sur l’organisation.",
+    "description": "Qui vous êtes : couleurs, logo, police et informations sur la société. Chaque modèle utilise ce profil – la mise en page est déterminée par le design du modèle.",
     "discardChanges": "Abandonner les modifications non enregistrées ?",
     "documentDefaults": "Valeurs par défaut des documents",
     "documentDefaultsHelp": "S’applique sauf si un modèle en décide autrement.",
@@ -299,7 +314,6 @@
     "removeColor": "Retirer la couleur",
     "reset": "Annuler les modifications",
     "restored": "Version restaurée.",
-    "revisionInfo": "Version {revision}",
     "revisions": "Versions",
     "revisionsTitle": "Versions de « {name} »",
     "save": "Enregistrer",
@@ -317,7 +331,7 @@
       "size_title": "Titre"
     },
     "switch": "Changer",
-    "title": "Brand Studio",
+    "title": "Identité visuelle",
     "typography": "Typographie",
     "typographyAdvanced": "Polices et espacements",
     "unarchive": "Restaurer",
@@ -353,7 +367,12 @@
         "note": "Afficher une remarque",
         "hide": "Omettre"
       }
-    }
+    },
+    "unused": "Non utilisé",
+    "archiveUnused": "Archiver",
+    "unusedArchived": "{count, plural, one {# profil archivé} other {# profils archivés}}",
+    "oneProfileHint": "Un deuxième profil n’est nécessaire que pour des groupes autonomes avec leur propre logo.",
+    "affects": "S’applique à {count, plural, =0 {aucun modèle} one {# modèle} other {# modèles}} · Version {revision}"
   },
   "canvas": {
     "approximateHint": "L’espace de travail est une approximation. L’aperçu PDF fait foi.",
@@ -518,17 +537,26 @@
     "value": "Valeur"
   },
   "create": {
-    "blank": "Modèle vide",
-    "description": "Le plus simple est de partir d’un modèle existant et de l’adapter.",
+    "description": "Choisissez un type de document, puis votre point de départ.",
     "documentType": "Type de document",
     "startFrom": "Point de départ",
-    "startFromHelp": "Le modèle choisi est copié ; sans choix, un modèle vide est créé.",
-    "submit": "Créer et ouvrir",
+    "submit": "Créer et concevoir",
     "title": "Nouveau modèle",
     "design": "Design",
-    "designHelp": "Le design met en forme de manière uniforme la page de titre, l'en-tête, le pied de page et tous les éléments, et crée un profil de marque assorti. Les éléments et blocs peuvent ensuite être présentés autrement dans l'éditeur.",
-    "noDesign": "Sans design",
-    "noDesignHelp": "Vide ou copie d'un modèle existant"
+    "start": {
+      "catalog": "Depuis le catalogue",
+      "copy": "Copie d’un modèle propre",
+      "blank": "Vide"
+    },
+    "startCatalogHelp": "{count, plural, =0 {Rien dans le catalogue} one {# modèle, aperçu avec vos couleurs} other {# modèles, aperçu avec vos couleurs}}",
+    "startCopyHelp": "{count, plural, =0 {Aucun modèle propre} other {# disponibles}}",
+    "startBlankHelp": "Seulement l’en-tête et le pied de page de l’identité visuelle",
+    "brand": "Identité visuelle",
+    "brandDefault": "{name} (standard)",
+    "brandHelp": "Les couleurs, le logo et la police proviennent de l’identité visuelle. Aucun nouveau profil n’est créé.",
+    "footCatalog": "Reprend uniquement « {name} » dans votre société.",
+    "footCopy": "Copie le modèle propre sélectionné.",
+    "footBlank": "Commence sans design."
   },
   "data": {
     "help": "Insérez des champs de données de hocX. À l’export, ils sont remplis avec les droits de la personne qui exporte."
@@ -1102,14 +1130,26 @@
     "unarchive": "Restaurer",
     "unarchived": "Modèle restauré.",
     "unpublished": "Non publié",
-    "sessionTitle": "Mise en page des procès-verbaux",
-    "sessionDescription": "Les mises en page définissent l’apparence du procès-verbal, de l’invitation et de l’ordre du jour. Chaque modèle de procès-verbal en utilise une, le standard sans attribution propre.",
     "documentsTitle": "Modèles de documents",
-    "documentsDescription": "Autres documents comme listes de tâches, listes de rendez-vous, listes de membres et lettres.",
+    "documentsDescription": "L’apparence du procès-verbal, de l’invitation et de tous les autres exports. Seuls vos propres modèles et ceux repris figurent ici – tout le reste se trouve dans le catalogue.",
     "exportHistory": "Historique des exports",
-    "copyOf": "Copie de « {name} »",
-    "usedIn": "Utilisée dans",
-    "unused": "Non utilisée"
+    "group": {
+      "session": {
+        "title": "Séance",
+        "help": "Procès-verbal, invitation, ordre du jour"
+      },
+      "other": {
+        "title": "Autres documents",
+        "help": "Listes et exports"
+      }
+    },
+    "addFromCatalog": "Ajouter depuis le catalogue",
+    "gapNone": "Autres designs et modèles dans le catalogue",
+    "gapOne": "{type} utilise le standard du catalogue « {name} »",
+    "gapMore": "{types} …",
+    "usageSessions": "{type} · {count, plural, =0 {attribué à aucun modèle de séance} one {# modèle de séance} other {# modèles de séance}}",
+    "usageExports": "{type} · {count, plural, =0 {aucun export au cours des 12 derniers mois} one {# export} other {# exports}}",
+    "update": "Mise à jour v{revision}"
   },
   "libraryGroup": {
     "data_events": "Événements",
@@ -2178,5 +2218,28 @@
     "single": "Utilisée uniquement dans « {name} ».",
     "unused": "Actuellement utilisée dans aucun modèle.",
     "dismiss": "Masquer l’avis"
+  },
+  "catalog": {
+    "open": "Parcourir le catalogue",
+    "title": "Catalogue",
+    "description": "Aperçu avec votre identité visuelle. Seul ce que vous ajoutez est repris.",
+    "designName": "{type} {design}",
+    "fromCatalog": "Du catalogue · {name}",
+    "adopted": "« {name} » repris – uniquement ce modèle",
+    "add": "Ajouter",
+    "addAgain": "Ajouter à nouveau",
+    "addNamed": "Ajouter « {name} »",
+    "alreadyAdopted": "Déjà repris",
+    "back": "Retour au catalogue"
+  },
+  "cleanup": {
+    "bannerTitle": "{count, plural, one {# modèle n’est pas utilisé} other {# modèles ne sont pas utilisés}}",
+    "bannerText": "Archiver permet de ranger la liste. Rien n’est perdu : les modèles archivés peuvent être restaurés et tout ce qui est fourni reste dans le catalogue.",
+    "open": "Ranger",
+    "title": "Archiver les modèles inutilisés",
+    "description": "Aucun de ces modèles n’est par défaut, attribué à un modèle de séance ou exporté au cours des 12 derniers mois.",
+    "footnote": "L’archivage peut être annulé à tout moment.",
+    "submit": "{count, plural, one {Archiver #} other {Archiver #}}",
+    "done": "{count, plural, =0 {Aucun modèle archivé} one {# modèle archivé} other {# modèles archivés}}"
   }
 }

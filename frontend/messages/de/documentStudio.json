@@ -15,7 +15,7 @@
     "delete": "Löschen",
     "deleteConfirm": "«{name}» löschen?",
     "deleted": "Gelöscht.",
-    "description": "Logos, Grafiken und Schriftdateien für Vorlagen und Corporate Design.",
+    "description": "Logos, Fussbilder und Schriftdateien, die eure Vorlagen verwenden.",
     "edit": "Bearbeiten",
     "editTitle": "Datei bearbeiten",
     "emptyNoUpload": "Administratoren können hier Dateien hochladen.",
@@ -39,7 +39,22 @@
     "uploaded": "Hochgeladen.",
     "uploading": "Wird hochgeladen …",
     "usage": "Verwendung anzeigen",
-    "usageTitle": "Verwendung von «{name}»"
+    "usageTitle": "Verwendung von «{name}»",
+    "filter": {
+      "all": "Alle",
+      "used": "Verwendet",
+      "unused": "Nicht verwendet"
+    },
+    "group": {
+      "logos": "Logos",
+      "graphics": "Fussbilder und Grafiken",
+      "fonts": "Schriften"
+    },
+    "usedIn": "In «{name}»{count, plural, =0 {} other { und # weiteren}}",
+    "notUsed": "Nicht verwendet",
+    "duplicates": "{count, number}× vorhanden",
+    "mergeDuplicates": "{count, plural, one {# Duplikat zusammenführen} other {# Duplikate zusammenführen}}",
+    "merged": "{count, plural, =0 {Keine unbenutzten Duplikate gefunden} one {# Duplikat entfernt} other {# Duplikate entfernt}}"
   },
   "assignments": {
     "actions": "Aktionen",
@@ -199,7 +214,7 @@
     "colors": "Farben",
     "conflict": "Das Profil wurde inzwischen geändert. Bitte neu laden.",
     "copyName": "{name} (Kopie)",
-    "create": "Neues Profil",
+    "create": "Weiteres Profil",
     "createTitle": "Neues Brand-Profil",
     "created": "Profil erstellt.",
     "customColorKey": "Schlüssel",
@@ -221,7 +236,7 @@
     "deleted": "Profil gelöscht.",
     "deriveColors": "Übrige Farben automatisch ableiten",
     "deriveColorsHelp": "Überschriften, Tabellen, Linien und Flächen passen sich Haupt- und Zweitfarbe an.",
-    "description": "Corporate Design für alle Dokumente: Farben, Schriften, Logos, Seitenaufbau und Angaben zur Organisation.",
+    "description": "Wer ihr seid: Farben, Logo, Schrift und Angaben zum Verein. Jede Vorlage nutzt dieses Profil – das Layout selbst bestimmt das Design der Vorlage.",
     "discardChanges": "Ungespeicherte Änderungen verwerfen?",
     "documentDefaults": "Standard für neue Dokumente",
     "documentDefaultsHelp": "Gilt, solange eine Vorlage nichts anderes festlegt.",
@@ -299,7 +314,6 @@
     "removeColor": "Farbe entfernen",
     "reset": "Änderungen verwerfen",
     "restored": "Version wiederhergestellt.",
-    "revisionInfo": "Version {revision}",
     "revisions": "Versionen",
     "revisionsTitle": "Versionen von «{name}»",
     "save": "Speichern",
@@ -317,7 +331,7 @@
       "size_title": "Titel"
     },
     "switch": "Wechseln",
-    "title": "Brand Studio",
+    "title": "Erscheinungsbild",
     "typography": "Schrift",
     "typographyAdvanced": "Schriften und Abstände",
     "unarchive": "Wiederherstellen",
@@ -353,7 +367,12 @@
         "note": "Hinweis anzeigen",
         "hide": "Weglassen"
       }
-    }
+    },
+    "unused": "Nicht verwendet",
+    "archiveUnused": "Archivieren",
+    "unusedArchived": "{count, plural, one {# Profil archiviert} other {# Profile archiviert}}",
+    "oneProfileHint": "Ein zweites Profil braucht es nur für eigenständige Gruppen mit eigenem Logo.",
+    "affects": "Wirkt auf {count, plural, =0 {keine Vorlage} one {# Vorlage} other {# Vorlagen}} · Version {revision}"
   },
   "canvas": {
     "approximateHint": "Die Arbeitsfläche ist eine angenäherte Darstellung. Verbindlich ist die PDF-Vorschau.",
@@ -518,17 +537,26 @@
     "value": "Wert"
   },
   "create": {
-    "blank": "Leere Vorlage",
-    "description": "Am einfachsten startet man mit einer bestehenden Vorlage und passt sie an.",
+    "description": "Dokumenttyp wählen, dann womit ihr startet.",
     "documentType": "Dokumenttyp",
     "startFrom": "Ausgangspunkt",
-    "startFromHelp": "Die gewählte Vorlage wird kopiert; ohne Auswahl entsteht eine leere Vorlage.",
-    "submit": "Erstellen und öffnen",
+    "submit": "Erstellen und gestalten",
     "title": "Neue Vorlage",
     "design": "Design",
-    "designHelp": "Das Design gestaltet Titelseite, Kopf- und Fusszeile und alle Elemente einheitlich und legt ein passendes Brand-Profil an. Einzelne Elemente und Bausteine lassen sich danach im Designer anders darstellen.",
-    "noDesign": "Ohne Design",
-    "noDesignHelp": "Leer oder Kopie einer bestehenden Vorlage"
+    "start": {
+      "catalog": "Aus dem Katalog",
+      "copy": "Kopie einer eigenen",
+      "blank": "Leer"
+    },
+    "startCatalogHelp": "{count, plural, =0 {Nichts im Katalog} one {# Vorlage, Vorschau mit euren Farben} other {# Vorlagen, Vorschau mit euren Farben}}",
+    "startCopyHelp": "{count, plural, =0 {Noch keine eigene} other {# vorhanden}}",
+    "startBlankHelp": "Nur Kopf- und Fusszeile aus dem Erscheinungsbild",
+    "brand": "Erscheinungsbild",
+    "brandDefault": "{name} (Standard)",
+    "brandHelp": "Farben, Logo und Schrift kommen aus dem Erscheinungsbild. Es wird kein neues Profil angelegt.",
+    "footCatalog": "Übernimmt nur «{name}» in euren Verein.",
+    "footCopy": "Kopiert die gewählte eigene Vorlage.",
+    "footBlank": "Startet ohne Design."
   },
   "data": {
     "help": "Datenfelder aus hocX einfügen. Beim Export werden sie mit den Rechten der exportierenden Person gefüllt."
@@ -1102,14 +1130,26 @@
     "unarchive": "Wiederherstellen",
     "unarchived": "Vorlage wiederhergestellt.",
     "unpublished": "Nicht veröffentlicht",
-    "sessionTitle": "Protokollgestaltung",
-    "sessionDescription": "Gestaltungen bestimmen, wie Protokoll, Einladung und Traktandenliste aussehen. Jede Protokollvorlage verwendet eine davon, ohne eigene Zuweisung den Standard.",
     "documentsTitle": "Dokumentvorlagen",
-    "documentsDescription": "Weitere Dokumente wie Todo-Listen, Terminlisten, Mitgliederlisten und Briefe.",
+    "documentsDescription": "Wie Protokoll, Einladung und alle weiteren Exporte aussehen. Hier stehen nur eure eigenen und übernommenen Vorlagen – alles Weitere liegt im Katalog.",
     "exportHistory": "Export-Verlauf",
-    "copyOf": "Kopie von «{name}»",
-    "usedIn": "Verwendet in",
-    "unused": "Nicht verwendet"
+    "group": {
+      "session": {
+        "title": "Sitzung",
+        "help": "Protokoll, Einladung, Traktandenliste"
+      },
+      "other": {
+        "title": "Weitere Dokumente",
+        "help": "Listen und Exporte"
+      }
+    },
+    "addFromCatalog": "Aus Katalog hinzufügen",
+    "gapNone": "Weitere Designs und Vorlagen aus dem Katalog",
+    "gapOne": "{type} nutzt den Katalog-Standard «{name}»",
+    "gapMore": "{types} …",
+    "usageSessions": "{type} · {count, plural, =0 {keiner Protokollvorlage zugewiesen} one {# Protokollvorlage} other {# Protokollvorlagen}}",
+    "usageExports": "{type} · {count, plural, =0 {kein Export in den letzten 12 Monaten} one {# Export} other {# Exporte}}",
+    "update": "Update v{revision}"
   },
   "libraryGroup": {
     "data_events": "Termine",
@@ -2178,5 +2218,28 @@
     "single": "Nur in «{name}» verwendet.",
     "unused": "Zurzeit in keiner Vorlage verwendet.",
     "dismiss": "Hinweis ausblenden"
+  },
+  "catalog": {
+    "open": "Katalog durchsuchen",
+    "title": "Katalog",
+    "description": "Vorschau mit eurem Erscheinungsbild. Übernommen wird nur, was ihr hinzufügt.",
+    "designName": "{type} {design}",
+    "fromCatalog": "Aus Katalog · {name}",
+    "adopted": "«{name}» übernommen – nur diese eine Vorlage",
+    "add": "Hinzufügen",
+    "addAgain": "Nochmals hinzufügen",
+    "addNamed": "«{name}» hinzufügen",
+    "alreadyAdopted": "Bereits übernommen",
+    "back": "Zurück zum Katalog"
+  },
+  "cleanup": {
+    "bannerTitle": "{count, plural, one {# Vorlage wird} other {# Vorlagen werden}} nicht verwendet",
+    "bannerText": "Archivieren räumt die Liste auf. Nichts geht verloren: Archivierte Vorlagen lassen sich wiederherstellen, und alles Mitgelieferte bleibt im Katalog.",
+    "open": "Aufräumen",
+    "title": "Nicht verwendete Vorlagen archivieren",
+    "description": "Keine dieser Vorlagen ist Standard, einer Protokollvorlage zugewiesen oder wurde in den letzten 12 Monaten exportiert.",
+    "footnote": "Archivieren lässt sich jederzeit rückgängig machen.",
+    "submit": "{count, plural, one {# archivieren} other {# archivieren}}",
+    "done": "{count, plural, =0 {Keine Vorlage archiviert} one {# Vorlage archiviert} other {# Vorlagen archiviert}}"
   }
 }

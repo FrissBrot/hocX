@@ -16,13 +16,13 @@ test("Neue Vorlage: Design-Galerie für Protokolle", async ({ page }) => {
   for (const theme of ["light", "dark"]) {
     for (const width of [1440]) {
       await page.setViewportSize({ width, height: 1000 });
-      await page.goto("/documents/protocols");
+      await page.goto("/documents");
       await page.evaluate((value) => localStorage.setItem("hocx-theme", value), theme);
       await page.reload();
       await page.getByRole("button", { name: "Neue Vorlage" }).click();
       const dialog = page.getByRole("dialog", { name: "Neue Vorlage" });
-      await dialog.getByRole("radio", { name: /Alpin/ }).click();
-      await expect(dialog.getByRole("textbox", { name: "Name" })).toHaveValue("Alpin");
+      await dialog.getByRole("radio", { name: /Protokoll Alpin/ }).click();
+      await expect(dialog.getByRole("textbox", { name: "Name" })).toHaveValue("Protokoll Alpin");
       // Vorschaubilder laden lazy: erst fotografieren, wenn alle da sind
       await expect.poll(() => dialog.locator("img").evaluateAll((images) => images.every((image) => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0))).toBe(true);
       // Ohne fullPage: Chromium setzt dafür kurz andere Gerätemasse, die Seite schaltet dabei auf
@@ -68,7 +68,7 @@ test("Designer: einen Baustein des Protokollinhalts anders darstellen", async ({
 
 test("Aktionsmenü einer Karte am unteren Fensterrand klappt sichtbar nach oben auf", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 700 });
-  await page.goto("/documents/protocols");
+  await page.goto("/documents");
   const trigger = page.getByRole("button", { name: /^Aktionen für/ }).first();
   await expect(trigger).toBeVisible({ timeout: 60_000 });
   // Karte so scrollen, dass ihr Menü-Knopf knapp über dem unteren Fensterrand steht

@@ -10,7 +10,7 @@ import fs from "node:fs/promises";
 
 const ROUTES = [
   "/", "/agenda", "/connections", "/cycles", "/documents", "/documents/assets", "/documents/brand",
-  "/documents/exports", "/documents/protocols", "/elements", "/events", "/files", "/finances", "/fines",
+  "/documents/exports", "/elements", "/events", "/files", "/finances", "/fines",
   "/lists", "/participants", "/photos", "/protocols", "/settings", "/shared-links", "/statistics",
   "/submission-assignments", "/task-packages", "/templates", "/tenant-settings", "/tenant-settings/abo",
   "/tenant-settings/activity", "/tenant-settings/domains", "/tenant-settings/privacy",

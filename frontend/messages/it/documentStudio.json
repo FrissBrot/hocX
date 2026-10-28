@@ -15,7 +15,7 @@
     "delete": "Elimina",
     "deleteConfirm": "Eliminare «{name}»?",
     "deleted": "Eliminato.",
-    "description": "Loghi, grafiche e file di caratteri per modelli e corporate design.",
+    "description": "Loghi, immagini a piè di pagina e caratteri usati dai vostri modelli.",
     "edit": "Modifica",
     "editTitle": "Modifica file",
     "emptyNoUpload": "Gli amministratori possono caricare file qui.",
@@ -39,7 +39,22 @@
     "uploaded": "Caricato.",
     "uploading": "Caricamento …",
     "usage": "Mostra utilizzo",
-    "usageTitle": "Utilizzo di «{name}»"
+    "usageTitle": "Utilizzo di «{name}»",
+    "filter": {
+      "all": "Tutti",
+      "used": "Utilizzati",
+      "unused": "Non utilizzati"
+    },
+    "group": {
+      "logos": "Loghi",
+      "graphics": "Immagini a piè di pagina e grafiche",
+      "fonts": "Caratteri"
+    },
+    "usedIn": "In «{name}»{count, plural, =0 {} other { e altri #}}",
+    "notUsed": "Non utilizzato",
+    "duplicates": "{count, number}× presente",
+    "mergeDuplicates": "{count, plural, one {Unisci # duplicato} other {Unisci # duplicati}}",
+    "merged": "{count, plural, =0 {Nessun duplicato inutilizzato trovato} one {# duplicato rimosso} other {# duplicati rimossi}}"
   },
   "assignments": {
     "actions": "Azioni",
@@ -199,7 +214,7 @@
     "colors": "Colori",
     "conflict": "Il profilo è stato modificato nel frattempo. Ricarica.",
     "copyName": "{name} (copia)",
-    "create": "Nuovo profilo",
+    "create": "Altro profilo",
     "createTitle": "Nuovo profilo brand",
     "created": "Profilo creato.",
     "customColorKey": "Chiave",
@@ -221,7 +236,7 @@
     "deleted": "Profilo eliminato.",
     "deriveColors": "Derivare automaticamente gli altri colori",
     "deriveColorsHelp": "Titoli, tabelle, linee e superfici seguono il colore principale e quello secondario.",
-    "description": "Corporate design per tutti i documenti: colori, caratteri, loghi, impaginazione e dati dell’organizzazione.",
+    "description": "Chi siete: colori, logo, carattere e dati dell’associazione. Ogni modello usa questo profilo – l’impaginazione la determina il design del modello.",
     "discardChanges": "Scartare le modifiche non salvate?",
     "documentDefaults": "Impostazioni predefinite dei documenti",
     "documentDefaultsHelp": "Vale finché un modello non stabilisce altro.",
@@ -299,7 +314,6 @@
     "removeColor": "Rimuovi colore",
     "reset": "Scarta modifiche",
     "restored": "Versione ripristinata.",
-    "revisionInfo": "Versione {revision}",
     "revisions": "Versioni",
     "revisionsTitle": "Versioni di «{name}»",
     "save": "Salva",
@@ -317,7 +331,7 @@
       "size_title": "Titolo"
     },
     "switch": "Cambia",
-    "title": "Brand Studio",
+    "title": "Immagine",
     "typography": "Tipografia",
     "typographyAdvanced": "Caratteri e spaziature",
     "unarchive": "Ripristina",
@@ -353,7 +367,12 @@
         "note": "Mostra una nota",
         "hide": "Ometti"
       }
-    }
+    },
+    "unused": "Non utilizzati",
+    "archiveUnused": "Archivia",
+    "unusedArchived": "{count, plural, one {# profilo archiviato} other {# profili archiviati}}",
+    "oneProfileHint": "Un secondo profilo serve solo per gruppi autonomi con un proprio logo.",
+    "affects": "Vale per {count, plural, =0 {nessun modello} one {# modello} other {# modelli}} · Versione {revision}"
   },
   "canvas": {
     "approximateHint": "L’area di lavoro è un’approssimazione. Fa fede l’anteprima PDF.",
@@ -518,17 +537,26 @@
     "value": "Valore"
   },
   "create": {
-    "blank": "Modello vuoto",
-    "description": "Il modo più semplice è partire da un modello esistente e adattarlo.",
+    "description": "Scegliete il tipo di documento, poi da cosa partire.",
     "documentType": "Tipo di documento",
     "startFrom": "Punto di partenza",
-    "startFromHelp": "Il modello scelto viene copiato; senza scelta si crea un modello vuoto.",
-    "submit": "Crea e apri",
+    "submit": "Crea e progetta",
     "title": "Nuovo modello",
     "design": "Design",
-    "designHelp": "Il design impagina in modo uniforme la pagina del titolo, l'intestazione, il piè di pagina e tutti gli elementi e crea un profilo del marchio abbinato. Singoli elementi e blocchi possono poi essere presentati diversamente nell'editor.",
-    "noDesign": "Senza design",
-    "noDesignHelp": "Vuoto o copia di un modello esistente"
+    "start": {
+      "catalog": "Dal catalogo",
+      "copy": "Copia di un proprio modello",
+      "blank": "Vuoto"
+    },
+    "startCatalogHelp": "{count, plural, =0 {Niente nel catalogo} one {# modello, anteprima con i vostri colori} other {# modelli, anteprima con i vostri colori}}",
+    "startCopyHelp": "{count, plural, =0 {Ancora nessuno proprio} other {# disponibili}}",
+    "startBlankHelp": "Solo intestazione e piè di pagina dall’immagine",
+    "brand": "Immagine",
+    "brandDefault": "{name} (predefinita)",
+    "brandHelp": "Colori, logo e carattere provengono dall’immagine. Non viene creato un nuovo profilo.",
+    "footCatalog": "Riprende solo «{name}» nella vostra associazione.",
+    "footCopy": "Copia il proprio modello selezionato.",
+    "footBlank": "Parte senza design."
   },
   "data": {
     "help": "Inserisci campi dati da hocX. All’esportazione vengono compilati con i diritti di chi esporta."
@@ -1102,14 +1130,26 @@
     "unarchive": "Ripristina",
     "unarchived": "Modello ripristinato.",
     "unpublished": "Non pubblicato",
-    "sessionTitle": "Impaginazione dei verbali",
-    "sessionDescription": "Le impaginazioni definiscono l’aspetto di verbale, invito e ordine del giorno. Ogni modello di verbale ne usa una, lo standard senza assegnazione propria.",
     "documentsTitle": "Modelli di documento",
-    "documentsDescription": "Altri documenti come elenchi di attività, elenchi di appuntamenti, elenchi di membri e lettere.",
+    "documentsDescription": "L’aspetto di verbale, invito e di tutte le altre esportazioni. Qui ci sono solo i vostri modelli e quelli ripresi – tutto il resto è nel catalogo.",
     "exportHistory": "Cronologia esportazioni",
-    "copyOf": "Copia di «{name}»",
-    "usedIn": "Usata in",
-    "unused": "Non usata"
+    "group": {
+      "session": {
+        "title": "Seduta",
+        "help": "Verbale, invito, ordine del giorno"
+      },
+      "other": {
+        "title": "Altri documenti",
+        "help": "Elenchi ed esportazioni"
+      }
+    },
+    "addFromCatalog": "Aggiungi dal catalogo",
+    "gapNone": "Altri design e modelli nel catalogo",
+    "gapOne": "{type} usa lo standard del catalogo «{name}»",
+    "gapMore": "{types} …",
+    "usageSessions": "{type} · {count, plural, =0 {non assegnato a nessun modello di seduta} one {# modello di seduta} other {# modelli di seduta}}",
+    "usageExports": "{type} · {count, plural, =0 {nessuna esportazione negli ultimi 12 mesi} one {# esportazione} other {# esportazioni}}",
+    "update": "Aggiornamento v{revision}"
   },
   "libraryGroup": {
     "data_events": "Appuntamenti",
@@ -2178,5 +2218,28 @@
     "single": "Usata solo in «{name}».",
     "unused": "Attualmente non usata in nessun modello.",
     "dismiss": "Nascondi avviso"
+  },
+  "catalog": {
+    "open": "Sfoglia il catalogo",
+    "title": "Catalogo",
+    "description": "Anteprima con la vostra immagine. Viene ripreso solo ciò che aggiungete.",
+    "designName": "{type} {design}",
+    "fromCatalog": "Dal catalogo · {name}",
+    "adopted": "«{name}» ripreso – solo questo modello",
+    "add": "Aggiungi",
+    "addAgain": "Aggiungi di nuovo",
+    "addNamed": "Aggiungi «{name}»",
+    "alreadyAdopted": "Già ripreso",
+    "back": "Torna al catalogo"
+  },
+  "cleanup": {
+    "bannerTitle": "{count, plural, one {# modello non è utilizzato} other {# modelli non sono utilizzati}}",
+    "bannerText": "Archiviare riordina l’elenco. Non si perde nulla: i modelli archiviati si possono ripristinare e tutto ciò che è fornito resta nel catalogo.",
+    "open": "Riordina",
+    "title": "Archivia i modelli non utilizzati",
+    "description": "Nessuno di questi modelli è predefinito, assegnato a un modello di seduta o è stato esportato negli ultimi 12 mesi.",
+    "footnote": "L’archiviazione si può annullare in qualsiasi momento.",
+    "submit": "{count, plural, one {Archivia #} other {Archivia #}}",
+    "done": "{count, plural, =0 {Nessun modello archiviato} one {# modello archiviato} other {# modelli archiviati}}"
   }
 }

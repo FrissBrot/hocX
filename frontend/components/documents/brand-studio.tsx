@@ -13,13 +13,14 @@ import { AppearanceEditor } from "@/components/documents/appearance-editor";
 import { AssetPicker } from "@/components/documents/asset-picker";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Badge } from "@/components/ui/badge";
+import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { locales } from "@/i18n/locale-config.generated";
 import { ApiError } from "@/lib/api/client";
-import { apiErrorMessage, AppearanceCatalog, Brand, BrandRevision, Capabilities, DocumentAsset, DocumentTemplateInfo, previewDocument, studioApi } from "@/lib/documents/api";
+import { apiErrorMessage, AppearanceCatalog, Brand, BrandRevision, Capabilities, DocumentAsset, previewDocument, studioApi } from "@/lib/documents/api";
 import { baseVariant, DEFAULT_APPEARANCE_BASE } from "@/lib/documents/appearance";
 import { DERIVED_COLOR_KEYS, deriveBrandColors } from "@/lib/documents/brand-colors";
 import { BrandTokens } from "@/lib/documents/layout";
@@ -28,6 +29,9 @@ import { Select } from "@/components/ui/select";
 import { ColorInput, normalizeHex } from "@/components/ui/color-input";
 
 const PREVIEW_DEBOUNCE_MS = 500;
+// Dokumente der Vorschau: jeweils die Vorlage, die der Verein für diesen Typ verwendet
+const PREVIEW_TYPES = ["protocol", "invitation", "attendance"] as const;
+type PreviewType = (typeof PREVIEW_TYPES)[number];
 // Einfache Ansicht: nur Haupt- und Zweitfarbe, alles andere unter «Erweiterte Optionen»
 const BASE_COLOR_KEYS = ["primary", "secondary"] as const;
 const COLOR_KEYS = ["accent", "accent_2", "heading", "text", "muted", "background", "surface", "border", "success", "warning", "danger", "info", "watermark", "table_header_background", "table_header_text", "table_zebra"];
@@ -75,8 +79,8 @@ export function BrandStudio({ capabilities }: Props) {
     : [];
   const [name, setName] = useState("");
   const [assets, setAssets] = useState<DocumentAsset[]>([]);
-  const [previewTemplates, setPreviewTemplates] = useState<DocumentTemplateInfo[]>([]);
-  const [previewTemplateId, setPreviewTemplateId] = useState<string | null>(null);
+  // Vorschau mit der Vorlage, die der Verein für diesen Dokumenttyp verwendet
+  const [previewType, setPreviewType] = useState<PreviewType>("protocol");
   const [pages, setPages] = useState<string[]>([]);
   const [previewError, setPreviewError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -113,23 +117,17 @@ export function BrandStudio({ capabilities }: Props) {
       setPresets(catalog.brand_presets);
       setAppearanceCatalog(catalog.appearance ?? null);
     });
-    void studioApi.listTemplates().then((templates) => {
-      const usable = (templates ?? []).filter((item) => item.published_revision && item.status === "active");
-      setPreviewTemplates(usable);
-      setPreviewTemplateId(usable.find((item) => item.system_key === "protocol_formal")?.id ?? usable[0]?.id ?? null);
-    });
   }, []);
 
   const dirty = useMemo(() => !!selected && !!draft && (JSON.stringify(selected.tokens) !== JSON.stringify(draft) || name !== selected.name), [selected, draft, name]);
 
   // Live-Vorschau mit den ungespeicherten Werten
-  const previewKey = JSON.stringify([draft, previewTemplateId]);
+  const previewKey = JSON.stringify([draft, previewType]);
   useEffect(() => {
-    if (!draft || !previewTemplateId) return;
-    const template = previewTemplates.find((item) => item.id === previewTemplateId);
+    if (!draft) return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      previewDocument({ document_type: template?.document_type, template_id: previewTemplateId, brand_tokens: canEdit ? draft : null, brand_id: canEdit ? null : selectedId, data_mode: "sample" }, 2, controller.signal)
+      previewDocument({ document_type: previewType, brand_tokens: canEdit ? draft : null, brand_id: canEdit ? null : selectedId, data_mode: "sample" }, 2, controller.signal)
         .then((result) => {
           setPages(result.pages);
           setPreviewError("");
@@ -280,6 +278,69 @@ export function BrandStudio({ capabilities }: Props) {
     </div>
   );
 
+  // Nicht verwendet: kein Standard, keine Vorlage, keine Zuweisung (Gestaltung auf Abruf)
+  const isUnused = (brand: Brand) => !brand.is_default && !brand.archived && !brand.assigned && (brand.template_count ?? 0) === 0;
+  const usedBrands = brands.filter((brand) => !isUnused(brand));
+  const unusedBrands = brands.filter(isUnused);
+
+  async function archiveUnused() {
+    try {
+      for (const brand of unusedBrands) await studioApi.archiveBrand(brand.id, true);
+      toast(t("brand.unusedArchived", { count: unusedBrands.length }), "success");
+      load(false);
+    } catch (reason) {
+      toast(apiErrorMessage(reason, t("common.actionFailed")), "error");
+      load(false);
+    }
+  }
+
+  function renderBrand(brand: Brand) {
+    return (
+      <div key={brand.id} className={brand.id === selectedId ? "studio-brand-item studio-brand-item-active" : "studio-brand-item"}>
+        <button
+          type="button"
+          className="studio-brand-select"
+          onClick={async () => {
+            if (dirty && !(await confirm({ message: t("brand.discardChanges"), confirmLabel: t("brand.switch") }))) return;
+            setSelectedId(brand.id);
+            setDraft(structuredClone(brand.tokens));
+            setName(brand.name);
+            setRevisions(null);
+          }}
+        >
+          <span className="studio-brand-swatches" aria-hidden="true">
+            {["primary", "secondary", "accent"].map((key) => (
+              <span key={key} className="studio-brand-dot" style={{ background: brand.tokens.colors[key] }} />
+            ))}
+          </span>
+          <span className="studio-brand-name">{brand.name}</span>
+          {brand.is_default && <Badge variant="success">{t("brand.default")}</Badge>}
+          {brand.archived && <Badge variant="neutral">{t("brand.archived")}</Badge>}
+        </button>
+        {canEdit && (
+          <ActionMenu
+            ariaLabel={t("brand.actionsFor", { name: brand.name })}
+            items={[
+              ...(!brand.is_default && !brand.archived ? [{ label: t("brand.makeDefault"), onClick: () => void act(() => studioApi.updateBrand(brand.id, { lock_version: brand.lock_version, is_default: true }), t("brand.defaultSet")) }] : []),
+              { label: t("brand.duplicate"), onClick: () => void act(() => studioApi.createBrand({ name: t("brand.copyName", { name: brand.name }), from_brand_id: brand.id }), t("brand.created")) },
+              { label: t("brand.revisions"), onClick: () => { setSelectedId(brand.id); void studioApi.brandRevisions(brand.id).then(setRevisions); } },
+              ...(!brand.is_default ? [{ label: brand.archived ? t("brand.unarchive") : t("brand.archive"), onClick: () => void act(() => studioApi.archiveBrand(brand.id, !brand.archived), brand.archived ? t("brand.unarchived") : t("brand.archivedDone"), false) }] : []),
+              ...(!brand.is_default
+                ? [{
+                    label: t("brand.delete"),
+                    danger: true,
+                    onClick: async () => {
+                      if (await confirm({ message: t("brand.deleteConfirm", { name: brand.name }), tone: "danger", confirmLabel: t("brand.delete") })) await act(() => studioApi.deleteBrand(brand.id), t("brand.deleted"), false);
+                    },
+                  }]
+                : []),
+            ]}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="grid">
       <div className="page-header">
@@ -287,60 +348,31 @@ export function BrandStudio({ capabilities }: Props) {
           <h1 className="page-title">{t("brand.title")}</h1>
           <p className="muted">{t("brand.description")}</p>
         </div>
-        {canEdit && (
-          <button type="button" className="button-primary" onClick={() => setCreateOpen(true)}>
-            {t("brand.create")}
-          </button>
-        )}
       </div>
       {!canEdit && <StatusBanner tone="neutral" message={t("brand.readOnly")} />}
 
       <div className="studio-brand-layout">
         <aside className="studio-brand-list" aria-label={t("brand.profiles")}>
-          {brands.map((brand) => (
-            <div key={brand.id} className={brand.id === selectedId ? "studio-brand-item studio-brand-item-active" : "studio-brand-item"}>
-              <button
-                type="button"
-                className="studio-brand-select"
-                onClick={async () => {
-                  if (dirty && !(await confirm({ message: t("brand.discardChanges"), confirmLabel: t("brand.switch") }))) return;
-                  setSelectedId(brand.id);
-                  setDraft(structuredClone(brand.tokens));
-                  setName(brand.name);
-                  setRevisions(null);
-                }}
-              >
-                <span className="studio-brand-swatches" aria-hidden="true">
-                  {["primary", "secondary", "accent"].map((key) => (
-                    <span key={key} className="studio-brand-dot" style={{ background: brand.tokens.colors[key] }} />
-                  ))}
-                </span>
-                <span className="studio-brand-name">{brand.name}</span>
-                {brand.is_default && <Badge variant="success">{t("brand.default")}</Badge>}
-                {brand.archived && <Badge variant="neutral">{t("brand.archived")}</Badge>}
-              </button>
-              {canEdit && (
-                <ActionMenu
-                  ariaLabel={t("brand.actionsFor", { name: brand.name })}
-                  items={[
-                    ...(!brand.is_default && !brand.archived ? [{ label: t("brand.makeDefault"), onClick: () => void act(() => studioApi.updateBrand(brand.id, { lock_version: brand.lock_version, is_default: true }), t("brand.defaultSet")) }] : []),
-                    { label: t("brand.duplicate"), onClick: () => void act(() => studioApi.createBrand({ name: t("brand.copyName", { name: brand.name }), from_brand_id: brand.id }), t("brand.created")) },
-                    { label: t("brand.revisions"), onClick: () => { setSelectedId(brand.id); void studioApi.brandRevisions(brand.id).then(setRevisions); } },
-                    ...(!brand.is_default ? [{ label: brand.archived ? t("brand.unarchive") : t("brand.archive"), onClick: () => void act(() => studioApi.archiveBrand(brand.id, !brand.archived), brand.archived ? t("brand.unarchived") : t("brand.archivedDone"), false) }] : []),
-                    ...(!brand.is_default
-                      ? [{
-                          label: t("brand.delete"),
-                          danger: true,
-                          onClick: async () => {
-                            if (await confirm({ message: t("brand.deleteConfirm", { name: brand.name }), tone: "danger", confirmLabel: t("brand.delete") })) await act(() => studioApi.deleteBrand(brand.id), t("brand.deleted"), false);
-                          },
-                        }]
-                      : []),
-                  ]}
-                />
-              )}
+          {usedBrands.map((brand) => renderBrand(brand))}
+          {unusedBrands.length > 0 && (
+            <div className="studio-brand-unused">
+              <div className="studio-brand-unused-head">
+                <span className="field-label">{t("brand.unused")}</span>
+                {canEdit && (
+                  <button type="button" className="button-secondary button-ghost" onClick={() => void archiveUnused()}>
+                    {t("brand.archiveUnused")}
+                  </button>
+                )}
+              </div>
+              {unusedBrands.map((brand) => renderBrand(brand))}
             </div>
-          ))}
+          )}
+          <p className="field-help">{t("brand.oneProfileHint")}</p>
+          {canEdit && (
+            <button type="button" className="button-secondary" onClick={() => setCreateOpen(true)}>
+              {t("brand.create")}
+            </button>
+          )}
           <label className="studio-inline-check">
             <input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} />
             <span>{t("brand.showArchived")}</span>
@@ -641,7 +673,7 @@ export function BrandStudio({ capabilities }: Props) {
             </fieldset>
             {canEdit && (
               <div className="modal-actions studio-brand-actions">
-                <span className="muted">{t("brand.revisionInfo", { revision: selected.revision })}</span>
+                <span className="muted">{t("brand.affects", { count: selected.template_count ?? 0, revision: selected.revision })}</span>
                 <button type="button" className="button-ghost" disabled={!dirty} onClick={() => { setDraft(structuredClone(selected.tokens)); setName(selected.name); }}>
                   {t("brand.reset")}
                 </button>
@@ -656,13 +688,7 @@ export function BrandStudio({ capabilities }: Props) {
         <section className="studio-brand-preview" aria-label={t("preview.title")}>
           <div className="studio-preview-bar">
             <span className="field-label">{t("preview.title")}</span>
-            <Select value={previewTemplateId ?? ""} onChange={(event) => setPreviewTemplateId(event.target.value || null)} aria-label={t("brand.previewTemplate")}>
-              {previewTemplates.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.origin === "system" && item.system_key ? t(`system.${item.system_key}.name`) : item.name}
-                </option>
-              ))}
-            </Select>
+            <FilterTabs options={PREVIEW_TYPES.map((value) => ({ value, label: t(`docType.${value}`) }))} value={previewType} onChange={setPreviewType} />
           </div>
           {previewError && <StatusBanner tone="error" message={previewError} />}
           <div className="studio-preview-pages">

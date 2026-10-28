@@ -13,14 +13,14 @@ import re
 import threading
 import uuid
 from collections import OrderedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
@@ -36,7 +36,8 @@ from app.documents.brand import BRAND_PRESETS, BrandTokens, color_references
 from app.documents.compiler import validate_template
 from app.documents.components import catalog_payload
 from app.documents.context import DocumentNotFoundError, DocumentPermissionError
-from app.documents.layout import LayoutJson, LayoutValidationError, TemplateContent, layout_error_of, parse_content
+from app.documents.hashing import json_hash
+from app.documents.layout import LayoutJson, LayoutValidationError, TemplateContent, content_json, layout_error_of, parse_content
 from app.documents.renderer import FONTS_DIR, PRIORITY_THUMBNAIL, DocumentRenderError, get_renderer
 from app.documents.strings import normalize_language, text
 from app.models import (
@@ -206,6 +207,15 @@ class TemplateRead(BaseModel):
     # (eigene Zuweisung oder Standard); bei Kopien die Gestaltung, von der sie abstammen
     used_in: list[SessionTemplateRef] = Field(default_factory=list)
     source_template_name: str | None = None
+    # Herkunft aus dem Katalog: übernommenes Design (examples) bzw. Systemvorlage der Kopie
+    catalog_key: str | None = None
+    # Kopie einer Systemvorlage, deren Katalog-Fassung inzwischen neuer ist: deren Nummer
+    update_revision_no: int | None = None
+    # Exporte der letzten zwölf Monate und letzter Export überhaupt
+    export_count: int = 0
+    last_export_at: datetime | None = None
+    # Wird nicht verwendet und lässt sich archivieren («Aufräumen»)
+    cleanup_candidate: bool = False
 
 
 class TemplateDetail(TemplateRead):
@@ -225,6 +235,9 @@ class _Prefetched:
     drafts: dict[int, DocumentTemplateRevision]
     names: dict[int, str]
     usage: dict[int, list[Template]]
+    source_published: dict[int, DocumentTemplateRevision] = field(default_factory=dict)
+    exports: dict[int, tuple[int, datetime | None]] = field(default_factory=dict)
+    cleanup: set[int] = field(default_factory=set)
 
 
 def _prefetch(db: Session, user: CurrentUser, templates: list[DocumentTemplate]) -> _Prefetched:
@@ -248,9 +261,16 @@ def _prefetch(db: Session, user: CurrentUser, templates: list[DocumentTemplate])
     if readable is not None:
         owner_ids = {template_id: owner_id for template_id, owner_id in owner_ids.items() if owner_id in readable}
     owner_templates = by_id(Template, owner_ids.values())
+    sources = by_id(DocumentTemplate, (template.source_template_id for template in templates))
+    tenant_ids = [template.id for template in templates if template.tenant_id == user.current_tenant_id]
+    # Aufräum-Kandidaten nur für Personen, die archivieren dürfen (vollständige Verwendung)
+    cleanup = {item.id for item in template_service.cleanup_candidates(db, user.current_tenant_id)} if tenant_ids and user.can(P.TEMPLATES_EDIT) and permissions.capabilities(user)["publish_templates"] else set()
     return _Prefetched(
         brands=by_id(DocumentBrand, (template.brand_id for template in templates)),
-        sources=by_id(DocumentTemplate, (template.source_template_id for template in templates)),
+        sources=sources,
+        source_published=by_id(DocumentTemplateRevision, (source.published_revision_id for source in sources.values())),
+        exports=template_service.export_stats(db, user.current_tenant_id, tenant_ids),
+        cleanup=cleanup,
         published=published,
         owners={template_id: owner_templates[owner_id] for template_id, owner_id in owner_ids.items() if owner_id in owner_templates},
         drafts=drafts,
@@ -295,7 +315,22 @@ def _template_read(
         session_template_name=owner.name if owner is not None else None,
         used_in=[SessionTemplateRef(id=session.public_id, name=session.name) for session in prefetched.usage.get(template.id, [])],
         source_template_name=source.name if source is not None else None,
+        catalog_key=template.catalog_key,
+        update_revision_no=_update_revision_no(template, source, prefetched),
+        export_count=prefetched.exports.get(template.id, (0, None))[0],
+        last_export_at=prefetched.exports.get(template.id, (0, None))[1],
+        cleanup_candidate=template.id in prefetched.cleanup,
     )
+
+
+def _update_revision_no(template: DocumentTemplate, source: DocumentTemplate | None, prefetched: _Prefetched) -> int | None:
+    """Neuere Katalog-Fassung einer übernommenen Systemvorlage («Update v3»)."""
+    if source is None or source.tenant_id is not None or template.tenant_id is None or source.published_revision_id is None:
+        return None
+    if template.source_revision_id == source.published_revision_id:
+        return None
+    latest = prefetched.source_published.get(source.published_revision_id)
+    return latest.revision_no if latest is not None else None
 
 
 def _sees_drafts(user: CurrentUser) -> bool:
@@ -610,6 +645,32 @@ def archive_document_template(template_id: uuid.UUID, body: ArchiveBody, db: Ses
     return _template_read(db, user, template)
 
 
+class ArchiveUnusedBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    template_ids: list[uuid.UUID] = Field(..., min_length=1, max_length=500)
+
+
+class ArchiveUnusedResult(BaseModel):
+    archived: int
+
+
+@router.post("/document-templates/archive-unused", response_model=ArchiveUnusedResult)
+def archive_unused_document_templates(body: ArchiveUnusedBody, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Aufräumen: gewählte, nicht verwendete Vorlagen archivieren. Die Auswahl wird gegen die
+    aktuellen Kandidaten geprüft - inzwischen verwendete oder fremde Vorlagen bleiben unberührt."""
+    permissions.require_edit(user)
+    permissions.require_publish(user)
+    wanted = set(body.template_ids)
+    targets = [template for template in template_service.cleanup_candidates(db, user.current_tenant_id) if template.public_id in wanted]
+    for template in targets:
+        template_service.set_archived(db, template, True, user_id=user.user_id)
+    db.commit()
+    for template in targets:
+        audit.log(db, action="document_template.archive", actor=user, entity_type="document_template", entity_id=template.id, details={"cleanup": True})
+    return ArchiveUnusedResult(archived=len(targets))
+
+
 @router.get("/document-templates/{template_id}/revisions", response_model=list[RevisionRead])
 def list_document_template_revisions(template_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     permissions.require_view(user)
@@ -685,6 +746,51 @@ def _store_thumbnail_file(path: Path, content: bytes) -> None:
         stale.unlink(missing_ok=True)
 
 
+def _cached_thumbnail(tenant_id: int, key: str) -> tuple[Path, bytes | None]:
+    with _THUMBNAIL_LOCK:
+        cached = _THUMBNAILS.get(key)
+    disk_file = _thumbnail_file(tenant_id, key)
+    if cached is None and disk_file.is_file():
+        cached = disk_file.read_bytes()
+        with _THUMBNAIL_LOCK:
+            _THUMBNAILS[key] = cached
+    return disk_file, cached
+
+
+async def _render_thumbnail(db: Session, user: CurrentUser, key: str, disk_file: Path, request: document_service.DocumentRequest) -> bytes:
+    """Erste Seite als kleines PNG rendern und im Speicher sowie auf der Platte ablegen."""
+
+    def prepare_and_release():
+        # Savepoint sofort zurückrollen und Transaktion beenden: keine Verbindung über den
+        # Compile halten (CONC-003).
+        savepoint = db.begin_nested()
+        try:
+            return document_service.prepare(db, user, user.current_tenant_id, request, preview=True)
+        finally:
+            if savepoint.is_active:
+                savepoint.rollback()
+            db.commit()
+
+    try:
+        prepared = await run_in_threadpool(prepare_and_release)
+        output = await get_renderer().render(
+            prepared.compiled.data, document_service.RenderAssets(files=prepared.compiled.files, fonts=prepared.compiled.fonts),
+            fmt="png", max_pages=1, ppi=40, priority=PRIORITY_THUMBNAIL, tenant_id=user.current_tenant_id,
+        )
+    except DocumentRenderError as exc:
+        raise render_error(user, exc) from exc
+    except (DocumentPermissionError, DocumentNotFoundError, ValueError) as exc:
+        raise http_error(user, exc) from exc
+    content = output.pages[0] if output.pages else b""
+    if content:
+        await run_in_threadpool(_store_thumbnail_file, disk_file, content)
+    with _THUMBNAIL_LOCK:
+        _THUMBNAILS[key] = content
+        while len(_THUMBNAILS) > _THUMBNAIL_LIMIT:
+            _THUMBNAILS.popitem(last=False)
+    return content
+
+
 @router.get("/document-templates/{template_id}/thumbnail")
 async def get_document_template_thumbnail(template_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     permissions.require_view(user)
@@ -697,47 +803,13 @@ async def get_document_template_thumbnail(template_id: uuid.UUID, db: Session = 
             raise _not_found(user)
         brand_revision = template_service.resolve_brand_revision(db, user.current_tenant_id, template_service.ResolvedTemplate(template=template, revision=revision, source="explicit", brand_id=None))
         key = hashlib.sha256(f"{user.current_tenant_id}:{revision.id}:{revision.lock_version}:{brand_revision.id if brand_revision else 0}:{_lang(user)}".encode()).hexdigest()
-        with _THUMBNAIL_LOCK:
-            cached = _THUMBNAILS.get(key)
-        disk_file = _thumbnail_file(user.current_tenant_id, key)
-        if cached is None and disk_file.is_file():
-            cached = disk_file.read_bytes()
-            with _THUMBNAIL_LOCK:
-                _THUMBNAILS[key] = cached
+        disk_file, cached = _cached_thumbnail(user.current_tenant_id, key)
         return key, disk_file, cached, template.document_type, template.public_id, revision.public_id
 
     key, disk_file, cached, document_type, template_public_id, revision_public_id = await run_in_threadpool(resolve)
     if cached is None:
         request = document_service.DocumentRequest(document_type=document_type, template_id=template_public_id, revision_id=revision_public_id, data_mode="sample", language=user.preferred_language)
-
-        def prepare_and_release():
-            # Savepoint sofort zurückrollen und Transaktion beenden: keine Verbindung über den
-            # Compile halten (CONC-003).
-            savepoint = db.begin_nested()
-            try:
-                return document_service.prepare(db, user, user.current_tenant_id, request, preview=True)
-            finally:
-                if savepoint.is_active:
-                    savepoint.rollback()
-                db.commit()
-
-        try:
-            prepared = await run_in_threadpool(prepare_and_release)
-            output = await get_renderer().render(
-                prepared.compiled.data, document_service.RenderAssets(files=prepared.compiled.files, fonts=prepared.compiled.fonts),
-                fmt="png", max_pages=1, ppi=40, priority=PRIORITY_THUMBNAIL, tenant_id=user.current_tenant_id,
-            )
-        except DocumentRenderError as exc:
-            raise render_error(user, exc) from exc
-        except (DocumentPermissionError, DocumentNotFoundError, ValueError) as exc:
-            raise http_error(user, exc) from exc
-        cached = output.pages[0] if output.pages else b""
-        if cached:
-            await run_in_threadpool(_store_thumbnail_file, disk_file, cached)
-        with _THUMBNAIL_LOCK:
-            _THUMBNAILS[key] = cached
-            while len(_THUMBNAILS) > _THUMBNAIL_LIMIT:
-                _THUMBNAILS.popitem(last=False)
+        cached = await _render_thumbnail(db, user, key, disk_file, request)
     return Response(content=cached, media_type="image/png", headers={"Cache-Control": "private, max-age=300"})
 
 
@@ -765,40 +837,55 @@ def get_design_example_thumbnail(example_key: str, user: CurrentUser = Depends(g
     return Response(content=examples.thumbnail_path(example).read_bytes(), media_type="image/png", headers={"Cache-Control": "private, max-age=86400"})
 
 
+@router.get("/document-studio/examples/{example_key}/brand-thumbnail")
+async def get_design_example_brand_thumbnail(example_key: str, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Vorschau eines Katalog-Designs mit dem Standard-Erscheinungsbild des Vereins (Farben,
+    Logo, Schrift), bevor es übernommen wird. Rendert mit Beispieldaten, legt nichts an."""
+    permissions.require_view(user)
+    example = examples.get_example(example_key)
+    if example is None:
+        raise _not_found(user)
+    content = content_json(examples.example_content(example))
+
+    def resolve() -> tuple[str, Path, bytes | None]:
+        brand = brand_service.default_brand(db, user.current_tenant_id)
+        brand_revision = brand_service.current_revision(db, brand) if brand is not None else None
+        key = hashlib.sha256(f"{user.current_tenant_id}:example:{example.key}:{json_hash(content)}:{brand_revision.id if brand_revision else 0}:{_lang(user)}".encode()).hexdigest()
+        disk_file, cached = _cached_thumbnail(user.current_tenant_id, key)
+        return key, disk_file, cached
+
+    key, disk_file, cached = await run_in_threadpool(resolve)
+    if cached is None:
+        request = document_service.DocumentRequest(document_type=example.document_type, content=content, data_mode="sample", language=user.preferred_language)
+        cached = await _render_thumbnail(db, user, key, disk_file, request)
+    return Response(content=cached, media_type="image/png", headers={"Cache-Control": "private, max-age=300"})
+
+
 class ExampleImport(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    # Name der neuen Vorlage und ihres Brand-Profils (übersetzter Beispielname aus dem Frontend)
+    # Name der neuen Vorlage (übersetzter Beispielname aus dem Frontend)
     name: str = Field(..., min_length=1, max_length=120, pattern=r"\S")
 
 
 @router.post("/document-studio/examples/{example_key}/import", response_model=TemplateDetail, status_code=201)
-async def import_design_example(example_key: str, body: ExampleImport, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    # Asset-Anlage (Virenscan) mischt awaits mit synchronen DB-Zugriffen: im Worker-Thread (CONC-001).
-    return await run_coroutine_in_thread(_import_design_example_impl, example_key=example_key, body=body, db=db, user=user)
-
-
-async def _import_design_example_impl(example_key: str, body: ExampleImport, db: Session, user: CurrentUser):  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
-    # Legt ein Brand-Profil an: wie das Brand Studio nur für Admins
-    permissions.require_brand(user)
-    # und eine eigene Vorlage (Dokument-Designer)
+def import_design_example(example_key: str, body: ExampleImport, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Design aus dem Katalog übernehmen: genau eine eigene Vorlage mit dem Erscheinungsbild des
+    Vereins, kein neues Brand-Profil (Gestaltung auf Abruf)."""
     permissions.require_design(user)
     example = examples.get_example(example_key)
     if example is None:
         raise _not_found(user)
     try:
-        template, brand = await examples.import_example(db, user.current_tenant_id, example, name=body.name, user_id=user.user_id)
+        template = examples.import_example(db, user.current_tenant_id, example, name=body.name, user_id=user.user_id)
         db.commit()
-    except asset_service.AssetValidationError as exc:
-        db.rollback()
-        raise _curated(user, str(exc)) from exc
     except (ValidationError, LayoutValidationError) as exc:
         db.rollback()
         raise _validation_error(user, exc) from exc
     except ValueError as exc:
         db.rollback()
         raise http_error(user, exc) from exc
-    audit.log(db, action="document_template.import_example", actor=user, entity_type="document_template", entity_id=template.id, details={"example": example.key, "brand_id": str(brand.public_id)})
+    audit.log(db, action="document_template.import_example", actor=user, entity_type="document_template", entity_id=template.id, details={"example": example.key})
     return _template_detail(db, user, template)
 
 
@@ -959,10 +1046,34 @@ class BrandRead(BaseModel):
     lock_version: int
     tokens: dict[str, Any]
     updated_at: datetime
+    # Aktive eigene Vorlagen, die dieses Erscheinungsbild nutzen (Standard: auch alle ohne
+    # eigenes Profil), und ob eine Zuweisung darauf verweist
+    template_count: int = 0
+    assigned: bool = False
 
 
-def _brand_read(db: Session, brand: DocumentBrand) -> BrandRead:
+def _brand_usage(db: Session, tenant_id: int) -> tuple[dict[int | None, int], set[int]]:
+    """Vorlagen je Brand-Profil (``None`` = ohne eigenes Profil) und zugewiesene Profile."""
+    counts = dict(
+        db.execute(
+            select(DocumentTemplate.brand_id, func.count(DocumentTemplate.id))
+            .where(DocumentTemplate.tenant_id == tenant_id, DocumentTemplate.status == "active")
+            .group_by(DocumentTemplate.brand_id)
+        ).all()
+    )
+    assigned = set(
+        db.scalars(
+            select(DocumentTemplateAssignment.brand_id).where(DocumentTemplateAssignment.tenant_id == tenant_id, DocumentTemplateAssignment.brand_id.is_not(None))
+        )
+    )
+    return counts, assigned
+
+
+def _brand_read(db: Session, brand: DocumentBrand, usage: tuple[dict[int | None, int], set[int]] | None = None) -> BrandRead:
+    counts, assigned = usage if usage is not None else _brand_usage(db, brand.tenant_id)
     return BrandRead(
+        template_count=counts.get(brand.id, 0) + (counts.get(None, 0) if brand.is_default else 0),
+        assigned=brand.id in assigned,
         id=brand.public_id,
         name=brand.name,
         description=brand.description,
@@ -997,7 +1108,8 @@ def list_document_brands(include_archived: bool = False, db: Session = Depends(g
     permissions.require_view(user)
     brand_service.ensure_default_brand(db, user.current_tenant_id)
     db.commit()
-    return [_brand_read(db, brand) for brand in brand_service.list_brands(db, user.current_tenant_id, include_archived=include_archived)]
+    usage = _brand_usage(db, user.current_tenant_id)
+    return [_brand_read(db, brand, usage) for brand in brand_service.list_brands(db, user.current_tenant_id, include_archived=include_archived)]
 
 
 class BrandCreate(BaseModel):
@@ -1137,10 +1249,18 @@ class AssetRead(BaseModel):
     font_family: str | None
     content_url: str
     created_at: datetime
+    # Aktive Brand-Profile, Vorlagen und Komponenten, die es nutzen
+    used_in: list[str] = Field(default_factory=list)
+    # Anzahl gleicher Dateien im Verein (0 = keine Duplikate) und Schlüssel ihrer Gruppe
+    duplicate_count: int = 0
+    duplicate_group: str | None = None
 
 
-def _asset_read(asset: DocumentAsset) -> AssetRead:
+def _asset_read(asset: DocumentAsset, used_in: list[str] | None = None, duplicate: tuple[int, str] | None = None) -> AssetRead:
     return AssetRead(
+        used_in=used_in or [],
+        duplicate_count=duplicate[0] if duplicate else 0,
+        duplicate_group=duplicate[1] if duplicate else None,
         id=asset.public_id,
         kind=asset.kind,
         category=asset.category,
@@ -1166,7 +1286,28 @@ def _asset_or_404(db: Session, user: CurrentUser, asset_id: uuid.UUID) -> Docume
 @router.get("/document-assets", response_model=list[AssetRead])
 def list_document_assets(kind: Literal["image", "font"] | None = None, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     permissions.require_view(user)
-    return [_asset_read(asset) for asset in asset_service.list_assets(db, user.current_tenant_id, kind=kind)]
+    assets = asset_service.list_assets(db, user.current_tenant_id, kind=kind)
+    usage = asset_service.asset_usage(db, user.current_tenant_id, assets, include_drafts=_sees_drafts(user))
+    duplicates = asset_service.duplicate_groups(assets)
+    return [_asset_read(asset, usage.get(asset.id), duplicates.get(asset.id)) for asset in assets]
+
+
+class MergeDuplicatesResult(BaseModel):
+    removed: int
+
+
+@router.post("/document-assets/merge-duplicates", response_model=MergeDuplicatesResult)
+def merge_duplicate_document_assets(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Gleiche Dateien zusammenführen: nicht verwendete Kopien entfernen."""
+    permissions.require_brand(user)
+    try:
+        removed = asset_service.merge_duplicates(db, user.current_tenant_id)
+        db.commit()
+    except asset_service.AssetValidationError as exc:
+        db.rollback()
+        raise _curated(user, str(exc)) from exc
+    audit.log(db, action="document_asset.merge_duplicates", actor=user, details={"removed": removed})
+    return MergeDuplicatesResult(removed=removed)
 
 
 @router.post("/document-assets", response_model=AssetRead, status_code=201)

@@ -14,7 +14,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Iterable
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app import scanner
@@ -220,3 +220,77 @@ def rename_asset(asset: DocumentAsset, *, name: str | None = None, category: str
     if category is not None and asset.kind == "image" and category in IMAGE_CATEGORIES:
         asset.category = category
     return asset
+
+
+def asset_usage(db: Session, tenant_id: int, assets: list[DocumentAsset], *, include_drafts: bool = True) -> dict[int, list[str]]:
+    """Asset → Namen der aktiven Brand-Profile und Vorlagen, die es im aktuellen Stand nutzen
+    (gültige Brand-Revision, veröffentlichte Revision bzw. Entwurf, Komponenten). Für die
+    Anzeige «In …»; ob ein Asset gelöscht werden darf, prüft ``asset_references`` über alle
+    Revisionen. ``include_drafts=False``: nur veröffentlichte Stände (wer keine Entwürfe sieht)."""
+    from app.models import DocumentBrand, DocumentBrandRevision, DocumentComponent, DocumentTemplate, DocumentTemplateRevision
+
+    if not assets:
+        return {}
+    text_type = _text_type()
+    sources: list[tuple[str, str]] = []
+    sources += db.execute(
+        select(DocumentBrand.name, DocumentBrandRevision.tokens_json.cast(text_type))
+        .join(DocumentBrandRevision, (DocumentBrandRevision.brand_id == DocumentBrand.id) & (DocumentBrandRevision.revision == DocumentBrand.current_revision))
+        .where(DocumentBrand.tenant_id == tenant_id, DocumentBrand.archived_at.is_(None))
+    ).all()
+    sources += db.execute(
+        select(DocumentTemplate.name, DocumentTemplateRevision.content_json.cast(text_type))
+        .join(DocumentTemplateRevision, DocumentTemplateRevision.template_id == DocumentTemplate.id)
+        .where(
+            DocumentTemplate.tenant_id == tenant_id,
+            DocumentTemplate.status == "active",
+            or_(DocumentTemplateRevision.id == DocumentTemplate.published_revision_id, *([DocumentTemplateRevision.status == "draft"] if include_drafts else [])),
+        )
+    ).all()
+    sources += db.execute(
+        select(DocumentComponent.name, DocumentComponent.node_json.cast(text_type)).where(DocumentComponent.tenant_id == tenant_id)
+    ).all()
+    usage: dict[int, list[str]] = {}
+    for asset in assets:
+        needle = str(asset.public_id)
+        names = [name for name, payload in sources if payload and needle in payload]
+        usage[asset.id] = list(dict.fromkeys(names))
+    return usage
+
+
+def duplicate_groups(assets: list[DocumentAsset]) -> dict[int, tuple[int, str]]:
+    """Asset → (Anzahl gleicher Dateien, Gruppenschlüssel) für Dateien mit gleicher Prüfsumme und
+    Art im Verein, nur wenn es mehr als eine gibt."""
+    groups: dict[tuple[str, str], list[DocumentAsset]] = {}
+    for asset in assets:
+        if asset.checksum_sha256:
+            groups.setdefault((asset.kind, asset.checksum_sha256), []).append(asset)
+    return {
+        asset.id: (len(items), f"{kind}:{checksum[:16]}")
+        for (kind, checksum), items in groups.items()
+        if len(items) > 1
+        for asset in items
+    }
+
+
+def merge_duplicates(db: Session, tenant_id: int) -> int:
+    """Gleiche Dateien zusammenführen: je Gruppe bleibt die verwendete bzw. älteste Datei, nicht
+    verwendete Kopien werden gelöscht. Verwendete Kopien bleiben (Revisionen und Exporte müssen
+    reproduzierbar bleiben). Gibt die Anzahl entfernter Dateien zurück. Kein Commit."""
+    assets = list_assets(db, tenant_id)
+    groups: dict[tuple[str, str], list[DocumentAsset]] = {}
+    for asset in assets:
+        if asset.checksum_sha256:
+            groups.setdefault((asset.kind, asset.checksum_sha256), []).append(asset)
+    removed = 0
+    for items in groups.values():
+        if len(items) < 2:
+            continue
+        referenced = {asset.id for asset in items if asset_references(db, asset)}
+        ordered = sorted(items, key=lambda asset: (asset.id not in referenced, asset.created_at, asset.id))
+        for asset in ordered[1:]:
+            if asset.id in referenced:
+                continue
+            delete_asset(db, asset)
+            removed += 1
+    return removed

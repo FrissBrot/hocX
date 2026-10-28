@@ -713,6 +713,12 @@
         "settings.manage"
       ]
     },
+    "POST /api/document-assets/merge-duplicates": {
+      "handler": "document_studio.merge_duplicate_document_assets",
+      "requires": [
+        "settings.manage"
+      ]
+    },
     "DELETE /api/document-assets/{asset_id}": {
       "handler": "document_studio.delete_document_asset",
       "requires": [
@@ -845,10 +851,15 @@
         "meetings.read"
       ]
     },
+    "GET /api/document-studio/examples/{example_key}/brand-thumbnail": {
+      "handler": "document_studio.get_design_example_brand_thumbnail",
+      "requires": [
+        "meetings.read"
+      ]
+    },
     "POST /api/document-studio/examples/{example_key}/import": {
       "handler": "document_studio.import_design_example",
       "requires": [
-        "settings.manage",
         "templates.edit"
       ],
       "features": [
@@ -913,6 +924,13 @@
       ],
       "features": [
         "document_designer"
+      ]
+    },
+    "POST /api/document-templates/archive-unused": {
+      "handler": "document_studio.archive_unused_document_templates",
+      "requires": [
+        "settings.manage",
+        "templates.edit"
       ]
     },
     "POST /api/document-templates/validate": {

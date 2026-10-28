@@ -465,8 +465,8 @@ function DesignerWorkspace({ initial, sessionTemplateId, onDetach }: { initial: 
     return () => window.removeEventListener("keydown", onKey);
   }, [save, history, editable, selectedId, content]);
 
-  // Sitzungsdokumente (Protokoll, Einladung …) liegen unter «Protokollgestaltung», alle anderen
-  // unter «Dokumentvorlagen» - dorthin führt auch «Zurück».
+  // Sitzungsdokumente (Protokoll, Einladung …) und alle anderen Vorlagen liegen gemeinsam unter
+  // «Dokumentvorlagen» - dorthin führt auch «Zurück».
   const isSessionDocument = initial.catalog.document_types.find((item) => item.key === template.document_type)?.needs_protocol ?? false;
   const canvasData = useCanvasData({
     content,
@@ -550,7 +550,7 @@ function DesignerWorkspace({ initial, sessionTemplateId, onDetach }: { initial: 
             canPublish={(initial.capabilities.publish_templates || (initial.capabilities.edit_templates && !!template.session_template_id)) && editable}
             onPublish={() => void publish()}
             onDiscard={editable && template.draft_revision && template.published_revision ? () => void discard() : null}
-            onBack={sessionTemplateId ? undefined : () => void leave(isSessionDocument ? "/documents/protocols" : "/documents")}
+            onBack={sessionTemplateId ? undefined : () => void leave("/documents")}
             errorCount={errorCount}
             onOpenAdvanced={mode === "simple" ? () => setMode("advanced") : undefined}
           />

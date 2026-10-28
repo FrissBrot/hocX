@@ -27809,22 +27809,13 @@ a.mobile-list-row { color: var(--text); }
   flex-shrink: 0;
   color: inherit;
 }
-/* Bibliothek: Abstammung und Verwendung einer Gestaltung */
-.studio-card-lineage {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--text-xs);
-}
+/* Bibliothek: Verwendung einer Gestaltung */
 .studio-card-usage {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1);
   font-size: var(--text-xs);
-}
-.studio-card-usage-label {
-  color: var(--muted);
-  font-weight: 600;
 }
 .studio-card-usage-chip {
   padding: 2px var(--space-2);
@@ -27835,8 +27826,317 @@ a.mobile-list-row { color: var(--text); }
 .studio-card-usage-chip:hover {
   text-decoration: underline;
 }
-.studio-card-usage-none {
+
+/* Gestaltung auf Abruf: Gruppen, Standard, Lücke «Aus Katalog hinzufügen» */
+.studio-library-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+}
+.studio-card-default {
+  border-color: var(--success);
+}
+.studio-gap-card {
+  --button-bg: transparent;
+  --button-hover-bg: var(--accent-soft);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 250px;
+  padding: var(--space-4);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-weight: 400;
+  letter-spacing: normal;
+  text-align: center;
+}
+.studio-gap-card:hover {
+  border-color: var(--accent);
+}
+.studio-gap-plus {
+  color: var(--accent);
+  font-size: var(--text-2xl);
+  line-height: 1;
+}
+.studio-gap-title {
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+.studio-cleanup-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-md);
+  background: var(--warning-bg);
+  color: var(--warning-fg);
+}
+.studio-cleanup-banner-text {
+  display: grid;
+  gap: var(--space-1);
+  max-width: 720px;
+  font-size: var(--text-sm);
+}
+.studio-cleanup-banner-text strong {
+  font-size: var(--text-base);
+}
+.studio-cleanup-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.studio-cleanup-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 2px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+.studio-cleanup-name {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Katalog und «Neue Vorlage»: Dokumenttypen links, Inhalt rechts */
+.studio-catalog-modal.modal-wide {
+  width: min(1180px, 100%);
+}
+.studio-catalog {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: var(--space-5);
+  min-height: 0;
+}
+.studio-catalog-types {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  padding-right: var(--space-4);
+  border-right: 1px solid var(--border);
+}
+.studio-catalog-type-group {
+  display: grid;
+  gap: 2px;
+}
+.studio-catalog-type-head {
+  padding: 0 var(--space-2) var(--space-1);
   color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.studio-catalog-type {
+  --button-bg: transparent;
+  --button-hover-bg: var(--accent-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 32px;
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-weight: 500;
+  letter-spacing: normal;
+  text-align: left;
+}
+.studio-catalog-type-active {
+  --button-bg: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+.studio-catalog-type-count {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.studio-catalog-main {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+  min-width: 0;
+}
+.studio-catalog-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+}
+.studio-catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-3);
+}
+.studio-catalog-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+}
+.studio-catalog-thumb {
+  height: 200px;
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+.studio-catalog-thumb img {
+  display: block;
+  height: 100%;
+  aspect-ratio: 210 / 297;
+  margin: 0 auto;
+  object-fit: contain;
+  object-position: top;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--panel-solid);
+  box-shadow: var(--shadow-soft);
+}
+.studio-catalog-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+.studio-catalog-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding-top: var(--space-1);
+}
+.studio-catalog-actions > button {
+  flex: 1;
+}
+.studio-catalog-adopted {
+  color: var(--success-fg);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+.studio-catalog-preview {
+  display: grid;
+  gap: var(--space-3);
+}
+.studio-start-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-2);
+}
+.studio-start {
+  --button-bg: var(--panel-solid);
+  --button-hover-bg: var(--accent-soft);
+  display: grid;
+  align-content: start;
+  gap: var(--space-1);
+  min-height: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-weight: 400;
+  letter-spacing: normal;
+  text-align: left;
+}
+.studio-start-active {
+  --button-bg: var(--accent-soft);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.studio-start-name {
+  font-weight: 600;
+}
+.studio-copy-list {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.studio-copy {
+  --button-bg: var(--panel-solid);
+  --button-hover-bg: var(--accent-soft);
+  display: flex;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  color: var(--text);
+  font-weight: 400;
+  letter-spacing: normal;
+  text-align: left;
+}
+.studio-copy:last-child {
+  border-bottom: none;
+}
+.studio-copy-active {
+  --button-bg: var(--accent-soft);
+}
+.studio-copy-name {
+  font-weight: 600;
+}
+.studio-create-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-3) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+}
+.studio-create-fields-help {
+  grid-column: 1 / -1;
+}
+
+/* Erscheinungsbild: nicht verwendete Profile */
+.studio-brand-unused {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+}
+.studio-brand-unused-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.studio-brand-unused .studio-brand-item {
+  opacity: 0.8;
+}
+
+/* Bilder und Schriften: Filter, Verwendung */
+.studio-asset-toolbar {
+  justify-content: space-between;
+}
+.studio-asset-unused {
+  opacity: 0.85;
+}
+@media (max-width: 900px) {
+  .studio-catalog {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .studio-catalog-types {
+    padding-right: 0;
+    padding-bottom: var(--space-3);
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
 }
 @media (max-width: 900px) {
   .session-studio-workspace {

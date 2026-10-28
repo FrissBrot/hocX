@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 from pydantic import TypeAdapter, ValidationError
@@ -583,6 +583,63 @@ def design_usage(db: Session, tenant_id: int, *, visible_session_ids: set[int] |
             if template_id is not None:
                 usage.setdefault(template_id, []).append(session)
     return usage
+
+
+# ── Aufräumen (Gestaltung auf Abruf) ─────────────────────────────────────────
+
+# Wie lange ein Export eine Vorlage als «verwendet» gelten lässt
+CLEANUP_EXPORT_WINDOW = timedelta(days=365)
+# Frisch angelegte oder übernommene Vorlagen sind nie Aufräum-Kandidaten
+CLEANUP_MIN_AGE = timedelta(days=30)
+
+
+def export_stats(db: Session, tenant_id: int, template_ids: list[int], *, since: datetime | None = None) -> dict[int, tuple[int, datetime | None]]:
+    """Vorlage → (Anzahl Exporte seit ``since``, letzter Export überhaupt)."""
+    if not template_ids:
+        return {}
+    since = since or datetime.now(UTC) - CLEANUP_EXPORT_WINDOW
+    rows = db.execute(
+        select(
+            DocumentExport.template_id,
+            func.count(DocumentExport.id).filter(DocumentExport.created_at >= since),
+            func.max(DocumentExport.created_at),
+        )
+        .where(DocumentExport.tenant_id == tenant_id, DocumentExport.template_id.in_(template_ids))
+        .group_by(DocumentExport.template_id)
+    ).all()
+    return {row[0]: (int(row[1] or 0), row[2]) for row in rows}
+
+
+def cleanup_candidates(db: Session, tenant_id: int, *, now: datetime | None = None) -> list[DocumentTemplate]:
+    """Eigene, aktive Vorlagen, die niemand braucht: nicht Standard, keiner Sitzungsvorlage
+    zugewiesen (auch nicht über den Standard), keiner allein gehörend und in den letzten zwölf
+    Monaten nicht exportiert. Archivieren ist umkehrbar; der Katalog bleibt unberührt."""
+    now = now or datetime.now(UTC)
+    templates = list(
+        db.scalars(
+            select(DocumentTemplate).where(
+                DocumentTemplate.tenant_id == tenant_id,
+                DocumentTemplate.status == "active",
+                DocumentTemplate.created_at <= now - CLEANUP_MIN_AGE,
+            )
+        )
+    )
+    if not templates:
+        return []
+    ids = [template.id for template in templates]
+    defaults = set(default_template_ids(db, tenant_id).values())
+    assigned = set(
+        db.scalars(
+            select(DocumentTemplateAssignment.document_template_id).where(
+                DocumentTemplateAssignment.tenant_id == tenant_id, DocumentTemplateAssignment.document_template_id.in_(ids)
+            )
+        )
+    )
+    used = set(design_usage(db, tenant_id))
+    owned = set(session_owners(db, ids))
+    exported = {template_id for template_id, (count, _last) in export_stats(db, tenant_id, ids, since=now - CLEANUP_EXPORT_WINDOW).items() if count}
+    blocked = defaults | assigned | used | owned | exported
+    return [template for template in templates if template.id not in blocked]
 
 
 @dataclass

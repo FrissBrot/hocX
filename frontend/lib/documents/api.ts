@@ -171,6 +171,15 @@ export type DocumentTemplateInfo = {
   used_in?: SessionTemplateRef[];
   // Bei Kopien: Name der Gestaltung, von der sie abstammt
   source_template_name?: string | null;
+  // Übernommenes Katalog-Design (Alpin, Kreide …)
+  catalog_key?: string | null;
+  // Neuere Katalog-Fassung der Systemvorlage, von der diese Kopie stammt
+  update_revision_no?: number | null;
+  // Exporte der letzten zwölf Monate, letzter Export
+  export_count?: number;
+  last_export_at?: string | null;
+  // Nicht verwendet, lässt sich beim Aufräumen archivieren
+  cleanup_candidate?: boolean;
 };
 
 export type SessionTemplateRef = { id: string; name: string };
@@ -237,6 +246,9 @@ export type Brand = {
   lock_version: number;
   tokens: BrandTokens;
   updated_at: string;
+  // Aktive Vorlagen, die dieses Erscheinungsbild nutzen; Verweis aus einer Zuweisung
+  template_count?: number;
+  assigned?: boolean;
 };
 
 export type BrandRevision = { id: string; revision: number; note: string | null; created_at: string; created_by_name: string | null };
@@ -254,6 +266,11 @@ export type DocumentAsset = {
   font_family: string | null;
   content_url: string;
   created_at: string;
+  // Aktive Brand-Profile, Vorlagen und Komponenten, die es nutzen
+  used_in?: string[];
+  // Anzahl gleicher Dateien im Verein (0 = keine Duplikate) und Schlüssel ihrer Gruppe
+  duplicate_count?: number;
+  duplicate_group?: string | null;
 };
 
 export type AssetReference = { kind: "brand" | "template" | "component"; id: string; name: string };
@@ -346,6 +363,7 @@ export const studioApi = {
   validate: (content: TemplateContent, documentType: string) => browserApiFetch<{ diagnostics: Diagnostic[] }>("/api/document-templates/validate", json({ content, document_type: documentType })),
   publish: (id: string, note?: string | null) => browserApiFetch<DocumentTemplateDetail>(`/api/document-templates/${id}/publish`, json({ note: note ?? null })),
   archive: (id: string, archived: boolean) => browserApiFetch<DocumentTemplateInfo>(`/api/document-templates/${id}/archive`, json({ archived })),
+  archiveUnused: (templateIds: string[]) => browserApiFetch<{ archived: number }>("/api/document-templates/archive-unused", json({ template_ids: templateIds })),
   revisions: (id: string) => browserApiFetch<RevisionInfo[]>(`/api/document-templates/${id}/revisions`),
   revision: (id: string, revisionId: string) => browserApiFetch<{ revision: RevisionInfo; content: TemplateContent }>(`/api/document-templates/${id}/revisions/${revisionId}`),
   restoreRevision: (id: string, revisionId: string) => browserApiFetch<DocumentTemplateDetail>(`/api/document-templates/${id}/revisions/${revisionId}/restore`, { method: "POST" }),
@@ -356,6 +374,8 @@ export const studioApi = {
   listExamples: () => browserApiFetch<DesignExample[]>("/api/document-studio/examples"),
   importExample: (key: string, name: string) => browserApiFetch<DocumentTemplateDetail>(`/api/document-studio/examples/${encodeURIComponent(key)}/import`, json({ name })),
   exampleThumbnailUrl: (key: string) => `/api/document-studio/examples/${encodeURIComponent(key)}/thumbnail`,
+  // Katalog-Design mit dem Erscheinungsbild des Vereins; ``version`` macht Änderungen am Profil sichtbar
+  exampleBrandThumbnailUrl: (key: string, version: string) => `/api/document-studio/examples/${encodeURIComponent(key)}/brand-thumbnail?v=${encodeURIComponent(version)}`,
 
   assignments: () => browserApiFetch<Assignment[]>("/api/document-template-assignments"),
   setAssignment: (body: { document_type: string; protocol_template_id?: string | null; template_id?: string | null; brand_id?: string | null }) =>
@@ -383,6 +403,7 @@ export const studioApi = {
   updateAsset: (id: string, body: { name?: string; category?: string }) => browserApiFetch<DocumentAsset>(`/api/document-assets/${id}`, json(body, "PATCH")),
   deleteAsset: (id: string) => browserApiFetch<null>(`/api/document-assets/${id}`, { method: "DELETE" }),
   assetReferences: (id: string) => browserApiFetch<AssetReference[]>(`/api/document-assets/${id}/references`),
+  mergeDuplicateAssets: () => browserApiFetch<{ removed: number }>("/api/document-assets/merge-duplicates", { method: "POST" }),
 
   documentSettings: () => browserApiFetch<{ language: string | null }>("/api/document-settings"),
   updateDocumentSettings: (language: string | null) => browserApiFetch<{ language: string | null }>("/api/document-settings", json({ language }, "PATCH")),

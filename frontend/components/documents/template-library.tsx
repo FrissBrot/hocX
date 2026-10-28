@@ -1,11 +1,10 @@
 "use client";
 
-// Template Library: alle Vorlagen des Mandanten und von hocX als Galerie. Suchen, nach
-// Kategorie filtern, Vorschau öffnen, erstellen, duplizieren, umbenennen, bearbeiten,
-// veröffentlichen, archivieren, als Standard festlegen, Revisionen vergleichen/wiederherstellen.
-// ``scope``: «documents» = weitere Dokumente (Todo-Liste, Termine, Briefe …), «session» =
-// Gestaltungen der Sitzungsdokumente (Protokoll, Einladung, Traktandenliste), je mit den
-// Sitzungsvorlagen, die sie verwenden, und bei Kopien der Gestaltung, von der sie abstammen.
+// Dokumentvorlagen (Gestaltung auf Abruf): nur die eigenen und übernommenen Vorlagen des Vereins,
+// gruppiert in Sitzungsdokumente (Protokoll, Einladung, Traktandenliste) und weitere Dokumente.
+// Alles Mitgelieferte liegt im Katalog und wird erst beim Hinzufügen als genau eine Vorlage
+// übernommen; fehlt ein Dokumenttyp, nutzt der Export den Katalog-Standard ohne Kopie. Nicht
+// verwendete Vorlagen lassen sich gesammelt archivieren («Aufräumen»).
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
@@ -14,36 +13,40 @@ import type { Route } from "next";
 import { useRouter } from "next/navigation";
 
 import { AssignmentsModal } from "@/components/documents/assignments-modal";
+import { catalogItems, originLabel, ownTemplates, SESSION_CATEGORY } from "@/components/documents/catalog";
+import { CatalogModal } from "@/components/documents/catalog-modal";
+import { CleanupModal } from "@/components/documents/cleanup-modal";
 import { RevisionsModal } from "@/components/documents/revisions-modal";
 import { templateDescription, templateDisplayName } from "@/components/documents/studio-labels";
 import { TemplateCreateModal } from "@/components/documents/template-create-modal";
 import { TemplatePreviewModal } from "@/components/documents/template-preview-modal";
 import { ActionMenu, ActionMenuItem } from "@/components/ui/action-menu";
 import { Badge } from "@/components/ui/badge";
-import { EmptyState } from "@/components/ui/empty-state";
-import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
-import { apiErrorMessage, Capabilities, DocumentTemplateInfo, DocumentTypeInfo, studioApi } from "@/lib/documents/api";
+import { apiErrorMessage, Brand, Capabilities, DesignExample, DocumentTemplateInfo, DocumentTypeInfo, studioApi } from "@/lib/documents/api";
 
-type Props = { capabilities: Capabilities; scope?: "documents" | "session" };
+type Props = { capabilities: Capabilities };
+type Dialog = { kind: "catalog" | "create"; documentType?: string | null } | { kind: "cleanup" } | null;
 
-export function TemplateLibrary({ capabilities, scope = "documents" }: Props) {
+export function TemplateLibrary({ capabilities }: Props) {
   const t = useTranslations("documentStudio");
   const router = useRouter();
   const toast = useToast();
   const confirm = useConfirm();
+  // Alle sichtbaren Vorlagen inkl. Katalog (Systemvorlagen); angezeigt werden nur die eigenen
   const [templates, setTemplates] = useState<DocumentTemplateInfo[] | null>(null);
   const [types, setTypes] = useState<DocumentTypeInfo[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
-  const [category, setCategory] = useState("all");
+  const [designs, setDesigns] = useState<DesignExample[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
   const [query, setQuery] = useState("");
   const [showArchived, setShowArchived] = useState(false);
   const [error, setError] = useState("");
-  const [createOpen, setCreateOpen] = useState(false);
+  const [dialog, setDialog] = useState<Dialog>(null);
   const [assignmentsOpen, setAssignmentsOpen] = useState(false);
   const [preview, setPreview] = useState<DocumentTemplateInfo | null>(null);
   const [revisionsOf, setRevisionsOf] = useState<DocumentTemplateInfo | null>(null);
@@ -68,29 +71,55 @@ export function TemplateLibrary({ capabilities, scope = "documents" }: Props) {
       setTypes(catalog.document_types);
       setCategories(catalog.categories);
     });
+    void studioApi.listExamples().then((loaded) => setDesigns(loaded ?? [])).catch(() => setDesigns([]));
+    void studioApi.brands().then((loaded) => setBrands(loaded ?? [])).catch(() => setBrands([]));
   }, []);
 
-  const sessionTypes = useMemo(() => new Set(types.filter((type) => type.needs_protocol).map((type) => type.key)), [types]);
-  const scopeTypes = useMemo(() => types.filter((type) => (scope === "session") === sessionTypes.has(type.key)), [types, scope, sessionTypes]);
-  const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return (templates ?? []).filter((item) => {
-      if ((scope === "session") !== sessionTypes.has(item.document_type)) return false;
-      if (category !== "all" && item.category !== category) return false;
-      if (!needle) return true;
-      const haystack = `${templateDisplayName(t, item)} ${templateDescription(t, item)} ${t(`docType.${item.document_type}`)}`.toLowerCase();
-      return haystack.includes(needle);
-    });
-    // t/toast sind während der Lebensdauer der Komponente unveränderlich
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templates, category, query, scope, sessionTypes]);
+  const defaultBrand = brands.find((brand) => brand.is_default) ?? null;
+  const brandVersion = defaultBrand ? `${defaultBrand.id}:${defaultBrand.revision}` : "none";
+  const own = useMemo(() => ownTemplates(templates ?? []), [templates]);
+  const catalog = useMemo(() => catalogItems(t, templates ?? [], designs, brandVersion), [t, templates, designs, brandVersion]);
+  const cleanup = useMemo(() => own.filter((item) => item.cleanup_candidate), [own]);
+  const sessionTypes = useMemo(() => types.filter((type) => type.category === SESSION_CATEGORY), [types]);
+  const otherTypes = useMemo(() => types.filter((type) => type.category !== SESSION_CATEGORY), [types]);
 
-  const byType = useMemo(() => {
-    const groups = new Map<string, DocumentTemplateInfo[]>();
-    for (const item of filtered) groups.set(item.document_type, [...(groups.get(item.document_type) ?? []), item]);
-    return scopeTypes.filter((type) => groups.has(type.key)).map((type) => ({ type, items: groups.get(type.key) ?? [] }));
-  }, [filtered, scopeTypes]);
-  const scopeCategories = useMemo(() => categories.filter((key) => scopeTypes.some((type) => type.category === key)), [categories, scopeTypes]);
+  const groups = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    const matches = (item: DocumentTemplateInfo) =>
+      !needle || `${templateDisplayName(t, item)} ${templateDescription(t, item)} ${t(`docType.${item.document_type}`)}`.toLowerCase().includes(needle);
+    return [
+      { key: "session", groupTypes: sessionTypes },
+      { key: "other", groupTypes: otherTypes },
+    ].map(({ key, groupTypes }) => {
+      const keys = new Set(groupTypes.map((type) => type.key));
+      const items = own.filter((item) => keys.has(item.document_type) && matches(item));
+      const covered = new Set(own.filter((item) => item.status === "active").map((item) => item.document_type));
+      const missing = groupTypes.filter((type) => !covered.has(type.key) && catalog.some((entry) => entry.documentType === type.key));
+      return { key, groupTypes, items, missing };
+    });
+  }, [own, query, sessionTypes, otherTypes, catalog, t]);
+
+  // Katalog-Standard eines Dokumenttyps, solange der Verein keine eigene Vorlage hat
+  function catalogDefaultName(documentType: string): string | null {
+    const fallback = (templates ?? []).find((item) => item.origin === "system" && item.document_type === documentType && item.is_default);
+    return fallback ? templateDisplayName(t, fallback) : null;
+  }
+
+  function gapHint(missing: DocumentTypeInfo[]): string {
+    if (missing.length === 0) return t("library.gapNone");
+    if (missing.length === 1) {
+      const fallback = catalogDefaultName(missing[0].key);
+      if (fallback) return t("library.gapOne", { type: t(`docType.${missing[0].key}`), name: fallback });
+    }
+    const names = missing.slice(0, 4).map((type) => t(`docType.${type.key}`));
+    return missing.length > 4 ? t("library.gapMore", { types: names.join(", ") }) : names.join(", ");
+  }
+
+  function usageText(item: DocumentTemplateInfo): string {
+    const type = t(`docType.${item.document_type}`);
+    if (sessionTypes.some((entry) => entry.key === item.document_type)) return t("library.usageSessions", { type, count: (item.used_in ?? []).length });
+    return t("library.usageExports", { type, count: item.export_count ?? 0 });
+  }
 
   async function run(action: () => Promise<unknown>, success: string) {
     try {
@@ -115,7 +144,7 @@ export function TemplateLibrary({ capabilities, scope = "documents" }: Props) {
   function actions(item: DocumentTemplateInfo): ActionMenuItem[] {
     const items: ActionMenuItem[] = [{ label: t("library.preview"), onClick: () => setPreview(item) }];
     if (item.editable) items.push({ label: t("library.edit"), onClick: () => router.push(`/documents/templates/${item.id}`) });
-    if (capabilities.edit_templates) items.push({ label: item.origin === "system" ? t("library.customize") : t("library.duplicate"), onClick: () => void duplicate(item) });
+    if (capabilities.edit_templates) items.push({ label: t("library.duplicate"), onClick: () => void duplicate(item) });
     if (item.editable) {
       items.push({ label: t("library.rename"), onClick: () => { setRenaming(item); setNewName(item.name); } });
       items.push({ label: t("library.revisions"), onClick: () => setRevisionsOf(item) });
@@ -148,17 +177,10 @@ export function TemplateLibrary({ capabilities, scope = "documents" }: Props) {
   return (
     <div className="grid">
       <div className="page-header">
-        {scope === "session" ? (
-          <div>
-            <h1 className="page-title">{t("library.sessionTitle")}</h1>
-            <p className="muted">{t("library.sessionDescription")}</p>
-          </div>
-        ) : (
-          <div>
-            <h1 className="page-title">{t("library.documentsTitle")}</h1>
-            <p className="muted">{t("library.documentsDescription")}</p>
-          </div>
-        )}
+        <div>
+          <h1 className="page-title">{t("library.documentsTitle")}</h1>
+          <p className="muted">{t("library.documentsDescription")}</p>
+        </div>
         <div className="studio-header-actions">
           <Link href="/documents/exports" className="button-secondary">
             {t("library.exportHistory")}
@@ -168,21 +190,30 @@ export function TemplateLibrary({ capabilities, scope = "documents" }: Props) {
               {t("assignments.open")}
             </button>
           )}
+          <button type="button" className="button-secondary" onClick={() => setDialog({ kind: "catalog" })}>
+            {t("catalog.open")}
+          </button>
           {capabilities.edit_templates && (
-            <button type="button" className="button-primary" onClick={() => setCreateOpen(true)}>
+            <button type="button" className="button-primary" onClick={() => setDialog({ kind: "create" })}>
               {t("library.create")}
             </button>
           )}
         </div>
       </div>
 
+      {cleanup.length > 0 && (
+        <div className="studio-cleanup-banner" role="status">
+          <div className="studio-cleanup-banner-text">
+            <strong>{t("cleanup.bannerTitle", { count: cleanup.length })}</strong>
+            <span>{t("cleanup.bannerText")}</span>
+          </div>
+          <button type="button" className="button-secondary" onClick={() => setDialog({ kind: "cleanup" })}>
+            {t("cleanup.open")}
+          </button>
+        </div>
+      )}
+
       <div className="list-filter-row">
-        <FilterTabs
-          variant="chips"
-          options={[{ value: "all", label: t("category.all") }, ...scopeCategories.map((key) => ({ value: key, label: t(`category.${key}`) }))]}
-          value={category}
-          onChange={setCategory}
-        />
         <SearchInput value={query} onChange={setQuery} placeholder={t("library.search")} />
         <label className="studio-inline-check">
           <input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} />
@@ -192,70 +223,104 @@ export function TemplateLibrary({ capabilities, scope = "documents" }: Props) {
 
       {error && <StatusBanner tone="error" message={error} />}
       {templates === null && !error && <p className="muted">{t("common.loading")}</p>}
-      {templates !== null && byType.length === 0 && <EmptyState title={t("library.emptyTitle")} description={t("library.emptyDescription")} />}
 
-      {byType.map(({ type, items }) => (
-        <section key={type.key} className="studio-library-section" aria-labelledby={`studio-type-${type.key}`}>
-          <h2 id={`studio-type-${type.key}`} className="studio-section-title">
-            {t(`docType.${type.key}`)}
-          </h2>
-          <div className="studio-gallery">
-            {items.map((item) => (
-              <article key={item.id} className={item.status === "archived" ? "studio-card studio-card-archived" : "studio-card"}>
-                <button type="button" className="studio-card-preview" onClick={() => setPreview(item)} aria-label={t("library.previewOf", { name: templateDisplayName(t, item) })}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={studioApi.thumbnailUrl(item.id, (item.draft_revision ?? item.published_revision)?.id ?? item.updated_at)} alt="" loading="lazy" />
-                </button>
-                <div className="studio-card-body">
-                  <div className="studio-card-title-row">
-                    <h3 className="studio-card-title">{templateDisplayName(t, item)}</h3>
-                    <ActionMenu items={actions(item)} ariaLabel={t("library.actionsFor", { name: templateDisplayName(t, item) })} />
-                  </div>
-                  <p className="studio-card-description">{templateDescription(t, item) || t("library.noDescription")}</p>
-                  {item.origin === "copy" && item.source_template_name ? (
-                    <p className="studio-card-lineage">{t("library.copyOf", { name: templateDisplayName(t, { name: item.source_template_name, origin: item.source_system_key ? "system" : "tenant", system_key: item.source_system_key }) })}</p>
-                  ) : null}
-                  {scope === "session" ? (
-                    <div className="studio-card-usage">
+      {templates !== null &&
+        groups.map((group) => (
+          <section key={group.key} className="studio-library-section" aria-labelledby={`studio-group-${group.key}`}>
+            <div className="studio-library-heading">
+              <h2 id={`studio-group-${group.key}`} className="studio-section-title">
+                {t(`library.group.${group.key}.title`)}
+              </h2>
+              <span className="field-help">{t(`library.group.${group.key}.help`)}</span>
+            </div>
+            <div className="studio-gallery">
+              {group.items.map((item) => {
+                const origin = originLabel(t, item);
+                return (
+                  <article key={item.id} className={`studio-card${item.status === "archived" ? " studio-card-archived" : ""}${item.is_default ? " studio-card-default" : ""}`}>
+                    <button type="button" className="studio-card-preview" onClick={() => setPreview(item)} aria-label={t("library.previewOf", { name: templateDisplayName(t, item) })}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={studioApi.thumbnailUrl(item.id, `${(item.draft_revision ?? item.published_revision)?.id ?? item.updated_at}:${brandVersion}`)} alt="" loading="lazy" />
+                    </button>
+                    <div className="studio-card-body">
+                      <div className="studio-card-title-row">
+                        <h3 className="studio-card-title">{templateDisplayName(t, item)}</h3>
+                        <ActionMenu items={actions(item)} ariaLabel={t("library.actionsFor", { name: templateDisplayName(t, item) })} />
+                      </div>
+                      <p className="studio-card-description">{usageText(item)}</p>
                       {(item.used_in ?? []).length > 0 ? (
-                        <>
-                          <span className="studio-card-usage-label">{t("library.usedIn")}</span>
+                        <div className="studio-card-usage">
                           {(item.used_in ?? []).map((ref) => (
                             <Link key={ref.id} href={`/templates/${ref.id}` as Route} className="studio-card-usage-chip">
                               {ref.name}
                             </Link>
                           ))}
-                        </>
-                      ) : (
-                        <span className="studio-card-usage-none">{t("library.unused")}</span>
-                      )}
+                        </div>
+                      ) : null}
+                      <div className="studio-card-badges">
+                        <Badge variant={origin.fromCatalog ? "neutral" : "info"}>{origin.label}</Badge>
+                        {item.is_default && <Badge variant="success" dot>{t("library.default")}</Badge>}
+                        {item.update_revision_no ? <Badge variant="info">{t("library.update", { revision: item.update_revision_no })}</Badge> : null}
+                        {item.draft_revision && item.editable && <Badge variant="warning">{t("library.draft")}</Badge>}
+                        {!item.published_revision && <Badge variant="warning">{t("library.unpublished")}</Badge>}
+                        {item.status === "archived" && <Badge variant="neutral">{t("library.archivedBadge")}</Badge>}
+                      </div>
                     </div>
-                  ) : null}
-                  <div className="studio-card-badges">
-                    <Badge variant={item.origin === "system" ? "neutral" : item.origin === "copy" ? "violet" : "info"}>{t(`origin.${item.origin}`)}</Badge>
-                    {item.is_default && <Badge variant="success" dot>{t("library.default")}</Badge>}
-                    {item.draft_revision && item.editable && <Badge variant="warning">{t("library.draft")}</Badge>}
-                    {!item.published_revision && <Badge variant="warning">{t("library.unpublished")}</Badge>}
-                    {item.status === "archived" && <Badge variant="neutral">{t("library.archivedBadge")}</Badge>}
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-      ))}
+                  </article>
+                );
+              })}
+              {!query.trim() && (
+                <button
+                  type="button"
+                  className="studio-gap-card"
+                  onClick={() => setDialog({ kind: "catalog", documentType: group.missing[0]?.key ?? group.groupTypes[0]?.key ?? null })}
+                >
+                  <span className="studio-gap-plus" aria-hidden="true">+{/* i18n-ok: Symbol */}</span>
+                  <span className="studio-gap-title">{t("library.addFromCatalog")}</span>
+                  <span className="field-help">{gapHint(group.missing)}</span>
+                </button>
+              )}
+            </div>
+          </section>
+        ))}
 
-      {createOpen && (
+      {dialog?.kind === "catalog" && (
+        <CatalogModal
+          open
+          onClose={() => setDialog(null)}
+          items={catalog}
+          types={types}
+          categories={categories}
+          initialType={dialog.documentType}
+          canAdopt={capabilities.edit_templates}
+          onAdopted={load}
+        />
+      )}
+      {dialog?.kind === "create" && (
         <TemplateCreateModal
-          open={createOpen}
-          onClose={() => setCreateOpen(false)}
-          types={scopeTypes}
-          templates={templates ?? []}
-          canUseDesigns={capabilities.manage_brand}
+          open
+          onClose={() => setDialog(null)}
+          types={types}
+          categories={categories}
+          templates={own}
+          catalog={catalog}
+          brands={brands}
+          initialType={dialog.documentType}
           onCreated={(created) => router.push(`/documents/templates/${created.id}`)}
         />
       )}
-      {assignmentsOpen && <AssignmentsModal open={assignmentsOpen} onClose={() => { setAssignmentsOpen(false); load(); }} types={scopeTypes} templates={templates ?? []} />}
+      {dialog?.kind === "cleanup" && (
+        <CleanupModal
+          open
+          onClose={() => setDialog(null)}
+          candidates={cleanup}
+          onDone={() => {
+            setDialog(null);
+            load();
+          }}
+        />
+      )}
+      {assignmentsOpen && <AssignmentsModal open={assignmentsOpen} onClose={() => { setAssignmentsOpen(false); load(); }} types={types} templates={templates ?? []} />}
       {preview && <TemplatePreviewModal template={preview} onClose={() => setPreview(null)} />}
       {revisionsOf && <RevisionsModal template={revisionsOf} onClose={() => setRevisionsOf(null)} onRestored={() => router.push(`/documents/templates/${revisionsOf.id}`)} />}
       <Modal className="studio-modal" open={!!renaming} onClose={() => setRenaming(null)} title={t("library.renameTitle")}>

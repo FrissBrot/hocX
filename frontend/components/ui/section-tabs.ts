@@ -42,7 +42,6 @@ export function workflowTabs(t: TFunc): RouteTab[] {
 
 export function designAreaTabs(t: TFunc): RouteTab[] {
   return [
-    { href: "/documents/protocols", label: t("protocolDesign") },
     { href: "/documents", label: t("documentTemplates") },
     { href: "/documents/brand", label: t("documentBrand") },
     { href: "/documents/assets", label: t("documentAssets") },

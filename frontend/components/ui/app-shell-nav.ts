@@ -64,7 +64,7 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
         ...(can(session, "templates.manage")
           ? [{ href: "/cycles", labelKey: "workflows", icon: "cycles" as const, match: ["/task-packages"] }]
           : []),
-        { href: "/documents/protocols", labelKey: "design", icon: "documents", match: ["/documents"] },
+        { href: "/documents", labelKey: "design", icon: "documents", match: ["/documents"] },
       ],
     });
   }

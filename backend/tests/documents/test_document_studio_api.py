@@ -579,3 +579,113 @@ def test_protocol_structure_lists_the_building_blocks_of_the_owning_session_temp
     with pytest.raises(HTTPException) as excinfo:
         studio.get_protocol_structure(own.id, db=db, user=world["foreign"])
     assert excinfo.value.status_code == 404
+
+
+# ── Gestaltung auf Abruf: Aufräumen, Nutzung, Duplikate ─────────────────────
+
+
+def _age(db, public_id, days):
+    from datetime import UTC, datetime, timedelta
+
+    template = db.scalar(select(DocumentTemplate).where(DocumentTemplate.public_id == public_id))
+    template.created_at = datetime.now(UTC) - timedelta(days=days)
+    db.flush()
+    return template
+
+
+def test_cleanup_archives_only_unused_older_templates(db, world):
+    from datetime import UTC, datetime, timedelta
+
+    from app.models import DocumentExport
+
+    unused = _create(db, world, description=None)
+    exported = _create(db, world)
+    recent = _create(db, world)
+    _age(db, unused.id, 90)
+    exported_row = _age(db, exported.id, 90)
+    db.add(DocumentExport(tenant_id=world["tenant"].id, document_type="protocol", template_id=exported_row.id, created_at=datetime.now(UTC) - timedelta(days=20)))
+    db.flush()
+
+    listed = {item.id: item for item in studio.list_document_templates(document_type=None, include_archived=False, db=db, user=world["admin"])}
+    assert listed[unused.id].cleanup_candidate
+    assert not listed[exported.id].cleanup_candidate and listed[exported.id].export_count == 1
+    assert not listed[recent.id].cleanup_candidate
+    # Ohne Recht zum Archivieren keine Kandidaten
+    assert not any(item.cleanup_candidate for item in studio.list_document_templates(document_type=None, include_archived=False, db=db, user=world["writer"]))
+
+    with pytest.raises(HTTPException) as excinfo:
+        studio.archive_unused_document_templates(studio.ArchiveUnusedBody(template_ids=[unused.id]), db=db, user=world["writer"])
+    assert excinfo.value.status_code == 403
+    # Fremde Mandanten archivieren nichts; nicht kandidierende IDs werden übergangen
+    assert studio.archive_unused_document_templates(studio.ArchiveUnusedBody(template_ids=[unused.id]), db=db, user=world["foreign"]).archived == 0
+    result = studio.archive_unused_document_templates(studio.ArchiveUnusedBody(template_ids=[unused.id, exported.id, recent.id]), db=db, user=world["admin"])
+    assert result.archived == 1
+    statuses = {item.id: item.status for item in studio.list_document_templates(document_type=None, include_archived=True, db=db, user=world["admin"])}
+    assert statuses[unused.id] == "archived" and statuses[exported.id] == "active" and statuses[recent.id] == "active"
+
+
+def test_default_template_is_never_a_cleanup_candidate(db, world):
+    created = _create(db, world)
+    studio.publish_document_template(created.id, studio.PublishBody(), db=db, user=world["admin"])
+    studio.set_document_template_assignment(studio.AssignmentWrite(document_type="protocol", template_id=created.id), db=db, user=world["admin"])
+    _age(db, created.id, 400)
+    assert all(item.id != created.id for item in template_service.cleanup_candidates(db, world["tenant"].id))
+
+
+def test_copy_of_system_template_shows_catalog_update(db, world):
+    system = db.scalar(select(DocumentTemplate).where(DocumentTemplate.system_key == "protocol_standard"))
+    copy = studio.create_document_template(studio.TemplateCreate(name="Kopie", document_type="protocol", from_template_id=system.public_id), db=db, user=world["writer"])
+    assert copy.origin == "copy" and copy.update_revision_no is None
+    # Neue Katalog-Fassung der Systemvorlage
+    current = db.get(DocumentTemplateRevision, system.published_revision_id)
+    newer = DocumentTemplateRevision(template_id=system.id, revision_no=current.revision_no + 1, status="published", schema_version=current.schema_version, content_json=current.content_json, content_hash=current.content_hash + "x", brand_mode="follow")
+    current.status = "superseded"
+    db.add(newer)
+    db.flush()
+    system.published_revision_id = newer.id
+    db.flush()
+    refreshed = studio.get_document_template(copy.id, db=db, user=world["writer"])
+    assert refreshed.update_revision_no == newer.revision_no
+
+
+def test_brand_usage_counts_templates(db, world):
+    brands = studio.list_document_brands(include_archived=False, db=db, user=world["admin"])
+    default = next(item for item in brands if item.is_default)
+    before = default.template_count
+    _create(db, world)
+    extra = studio.create_document_brand(studio.BrandCreate(name="Zweites Profil"), db=db, user=world["admin"])
+    listed = {item.id: item for item in studio.list_document_brands(include_archived=False, db=db, user=world["admin"])}
+    assert listed[default.id].template_count == before + 1
+    assert listed[extra.id].template_count == 0 and not listed[extra.id].assigned
+
+
+def test_asset_duplicates_are_listed_and_merged(db, world):
+    from app.models import DocumentAsset
+
+    tenant_id = world["tenant"].id
+
+    def asset(name, checksum):
+        row = DocumentAsset(tenant_id=tenant_id, kind="image", category="logo", name=name, storage_path=f"document_assets/tenant-{tenant_id}/{name}.png", mime_type="image/png", checksum_sha256=checksum)
+        db.add(row)
+        db.flush()
+        return row
+
+    used = asset("a", "same")
+    spare = asset("b", "same")
+    other = asset("c", "different")
+    brand = studio.list_document_brands(include_archived=False, db=db, user=world["admin"])[0]
+    studio.update_document_brand(brand.id, studio.BrandUpdate(lock_version=brand.lock_version, tokens={**brand.tokens, "assets": {**brand.tokens["assets"], "logo": str(spare.public_id)}}), db=db, user=world["admin"])
+
+    listed = {item.id: item for item in studio.list_document_assets(kind=None, db=db, user=world["admin"])}
+    assert listed[used.public_id].duplicate_count == 2 and listed[spare.public_id].duplicate_count == 2
+    assert listed[other.public_id].duplicate_count == 0
+    assert listed[spare.public_id].used_in == [brand.name] and listed[used.public_id].used_in == []
+
+    with pytest.raises(HTTPException) as excinfo:
+        studio.merge_duplicate_document_assets(db=db, user=world["writer"])
+    assert excinfo.value.status_code == 403
+    assert studio.merge_duplicate_document_assets(db=db, user=world["foreign"]).removed == 0
+    assert studio.merge_duplicate_document_assets(db=db, user=world["admin"]).removed == 1
+    # Die verwendete Datei bleibt, die unbenutzte Kopie ist weg
+    assert db.get(DocumentAsset, spare.id) is not None and db.get(DocumentAsset, used.id) is None
+    assert db.get(DocumentAsset, other.id) is not None

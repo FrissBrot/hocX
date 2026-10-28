@@ -584,25 +584,29 @@ def thumbnail_path(example: DesignExample) -> Path:
     return ASSET_DIR / "thumbnails" / f"{example.key}.png"
 
 
-async def import_example(  # loop-ok: nur im Worker-Thread (core/offload.run_coroutine_in_thread)
-    db: Session, tenant_id: int, example: DesignExample, *, name: str, user_id: int | None
-):
-    """Beispiel in den Mandanten holen: Beispielbilder als Assets, eigenes Brand-Profil (nie
-    Standardprofil) und eine damit verknüpfte Vorlage mit Entwurf. Kein Commit."""
-    from app.documents import assets as asset_service
+def example_content(example: DesignExample) -> TemplateContent:
+    """Inhalt einer übernommenen Vorlage: Aufbau des Designs, Grundstil und Grundgrösse als
+    Übersteuerung der Vorlage. Farben, Logo, Schrift und Vereinsangaben kommen aus dem
+    Erscheinungsbild des Vereins (Gestaltung auf Abruf)."""
+    built = build_example_content(example)
+    overrides = built.settings.brand_overrides
+    overrides.appearance_base = example.key
+    base_size = example.tokens.get("typography", {}).get("base_size")
+    if base_size is not None and overrides.base_size is None:
+        overrides.base_size = base_size
+    return TemplateContent.model_validate(built.model_dump(mode="json"))
+
+
+def import_example(db: Session, tenant_id: int, example: DesignExample, *, name: str, user_id: int | None):
+    """Design aus dem Katalog übernehmen: genau eine Vorlage mit Entwurf, die sich ihre Herkunft
+    merkt (``catalog_key``). Kein eigenes Brand-Profil, keine Kopie der Beispielbilder - die
+    Vorlage nutzt das Standard-Erscheinungsbild des Vereins. Kein Commit."""
     from app.documents import brand_service, template_service
 
-    images: dict[str, str] = {}
-    for slot, filename in example.images.items():
-        asset = await asset_service.create_asset(
-            db, tenant_id, kind="image", filename=filename, content=(ASSET_DIR / filename).read_bytes(), user_id=user_id,
-            category="logo" if slot == "logo" else "graphic", name=name,
-        )
-        images[slot] = str(asset.public_id)
-    # Ohne Standardprofil würde das Beispiel-CD zum Standard aller Dokumente des Vereins.
     brand_service.ensure_default_brand(db, tenant_id)
-    brand = brand_service.create_brand(db, tenant_id, name=name, tokens=example_tokens(example, images), user_id=user_id)
-    template, revision = template_service.create_template(
-        db, tenant_id, name=name, document_type=example.document_type, content=build_example_content(example), brand_id=brand.public_id, user_id=user_id,
+    template, _revision = template_service.create_template(
+        db, tenant_id, name=name, document_type=example.document_type, content=example_content(example), user_id=user_id,
     )
-    return template, brand
+    template.catalog_key = example.key
+    db.flush()
+    return template

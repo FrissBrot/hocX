@@ -1,65 +1,87 @@
 "use client";
 
-// Neue Vorlage: Name, Dokumenttyp und Ausgangspunkt. Für Dokumenttypen mit Designs (Alpin,
-// Kreide …, backend/app/documents/examples.py) zuerst die Design-Galerie: ein Design legt
-// Titelseite, Seitenvorlagen und ein eigenes Brand-Profil an, dessen Grundstil allen Elementen
-// die Darstellung vorgibt. Ohne Design: leer oder Kopie einer bestehenden Vorlage.
+// Neue Vorlage (Gestaltung auf Abruf): Dokumenttyp wählen, dann womit man startet - ein Design
+// bzw. eine Vorlage aus dem Katalog (Vorschau mit dem eigenen Erscheinungsbild), eine Kopie
+// einer eigenen Vorlage oder leer. Übernommen wird nur genau diese eine Vorlage; sie nutzt das
+// gewählte Erscheinungsbild, es entsteht kein neues Brand-Profil.
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 
+import { adoptCatalogItem, CatalogItem, typesByCategory } from "@/components/documents/catalog";
 import { templateDisplayName } from "@/components/documents/studio-labels";
 import { Modal } from "@/components/ui/modal";
-import { SearchableSelect } from "@/components/ui/searchable-select";
-import { useToast } from "@/contexts/toast-context";
-import { apiErrorMessage, DesignExample, DocumentTemplateDetail, DocumentTemplateInfo, DocumentTypeInfo, studioApi } from "@/lib/documents/api";
 import { Select } from "@/components/ui/select";
+import { useToast } from "@/contexts/toast-context";
+import { apiErrorMessage, Brand, DocumentTemplateDetail, DocumentTemplateInfo, DocumentTypeInfo, studioApi } from "@/lib/documents/api";
+
+type Start = "catalog" | "copy" | "blank";
 
 type Props = {
   open: boolean;
   onClose: () => void;
   types: DocumentTypeInfo[];
+  categories: string[];
+  // Eigene Vorlagen (Ausgangspunkt «Kopie»)
   templates: DocumentTemplateInfo[];
-  /** Designs legen ein Brand-Profil an: nur mit Brand-Recht anbieten */
-  canUseDesigns?: boolean;
+  catalog: CatalogItem[];
+  brands: Brand[];
+  initialType?: string | null;
   onCreated: (template: DocumentTemplateDetail) => void;
 };
 
-export function TemplateCreateModal({ open, onClose, types, templates, canUseDesigns = false, onCreated }: Props) {
+export function TemplateCreateModal({ open, onClose, types, categories, templates, catalog, brands, initialType, onCreated }: Props) {
   const t = useTranslations("documentStudio");
   const toast = useToast();
-  const [name, setName] = useState("");
+  const activeBrands = useMemo(() => brands.filter((brand) => !brand.archived), [brands]);
+  const defaultBrand = activeBrands.find((brand) => brand.is_default) ?? activeBrands[0] ?? null;
+  const [documentType, setDocumentType] = useState(initialType ?? types[0]?.key ?? "protocol");
+  const typeCatalog = useMemo(() => catalog.filter((item) => item.documentType === documentType), [catalog, documentType]);
+  const typeCopies = useMemo(() => templates.filter((item) => item.document_type === documentType && item.status === "active"), [templates, documentType]);
+  const [start, setStart] = useState<Start>(() => (catalog.some((item) => item.documentType === documentType) ? "catalog" : "blank"));
+  const [catalogKey, setCatalogKey] = useState<string | null>(() => catalog.find((item) => item.documentType === documentType)?.key ?? null);
+  const [copyId, setCopyId] = useState<string | null>(null);
+  const [name, setName] = useState(() => catalog.find((item) => item.documentType === documentType)?.name ?? t(`docType.${documentType}`));
   const [nameTouched, setNameTouched] = useState(false);
-  const [documentType, setDocumentType] = useState(types[0]?.key ?? "protocol");
-  const [sourceId, setSourceId] = useState<string | null>(null);
-  const [designs, setDesigns] = useState<DesignExample[]>([]);
-  const [design, setDesign] = useState<string | null>(null);
+  const [brandId, setBrandId] = useState<string | null>(defaultBrand?.id ?? null);
   const [busy, setBusy] = useState(false);
-  const sources = useMemo(() => templates.filter((item) => item.document_type === documentType && item.status === "active"), [templates, documentType]);
-  const typeDesigns = useMemo(() => designs.filter((item) => item.document_type === documentType), [designs, documentType]);
+  const chosen = typeCatalog.find((item) => item.key === catalogKey) ?? null;
+  const copySource = typeCopies.find((item) => item.id === copyId) ?? null;
 
-  useEffect(() => {
-    if (!canUseDesigns) return;
-    studioApi
-      .listExamples()
-      .then((loaded) => setDesigns(loaded ?? []))
-      // Ohne Designs bleibt der Dialog wie bisher (leer oder Kopie)
-      .catch(() => setDesigns([]));
-  }, [canUseDesigns]);
-
-  function chooseDesign(key: string | null) {
-    setDesign(key);
-    if (key) setSourceId(null);
-    // Vorschlag für den Namen, solange noch nichts Eigenes eingegeben ist
-    if (!nameTouched) setName(key ? t(`examples.items.${key}.name`) : "");
+  function suggest(value: string) {
+    if (!nameTouched) setName(value);
   }
+
+  function chooseType(key: string) {
+    setDocumentType(key);
+    const first = catalog.find((item) => item.documentType === key) ?? null;
+    setStart(first ? "catalog" : "blank");
+    setCatalogKey(first?.key ?? null);
+    setCopyId(null);
+    suggest(first?.name ?? t(`docType.${key}`));
+  }
+
+  function chooseStart(value: Start) {
+    setStart(value);
+    if (value === "catalog") suggest(chosen?.name ?? typeCatalog[0]?.name ?? t(`docType.${documentType}`));
+    else if (value === "copy" && typeCopies[0]) {
+      setCopyId(copyId ?? typeCopies[0].id);
+      suggest(t("library.copyName", { name: templateDisplayName(t, copySource ?? typeCopies[0]) }));
+    } else suggest(t(`docType.${documentType}`));
+  }
+
+  const ready = !!name.trim() && !busy && (start === "blank" || (start === "catalog" && !!chosen) || (start === "copy" && !!copySource));
+  const footnote =
+    start === "catalog" && chosen ? t("create.footCatalog", { name: chosen.name }) : start === "copy" ? t("create.footCopy") : t("create.footBlank");
 
   async function create() {
     setBusy(true);
     try {
-      const created = design
-        ? await studioApi.importExample(design, name.trim())
-        : await studioApi.createTemplate({ name: name.trim(), document_type: documentType, from_template_id: sourceId });
+      let created: DocumentTemplateDetail;
+      if (start === "catalog" && chosen) created = await adoptCatalogItem(chosen, name.trim());
+      else created = await studioApi.createTemplate({ name: name.trim(), document_type: documentType, from_template_id: start === "copy" ? copySource?.id ?? null : null });
+      // Ohne Auswahl folgt die Vorlage dem Standard-Erscheinungsbild des Vereins
+      if (brandId && defaultBrand && brandId !== defaultBrand.id) await studioApi.updateTemplate(created.id, { brand_id: brandId });
       onCreated(created);
     } catch (error) {
       toast(apiErrorMessage(error, t("common.actionFailed")), "error");
@@ -68,87 +90,138 @@ export function TemplateCreateModal({ open, onClose, types, templates, canUseDes
   }
 
   return (
-    <Modal className="studio-modal" size={typeDesigns.length > 0 ? "wide" : "default"} open={open} onClose={onClose} title={t("create.title")} description={t("create.description")}>
-      <div className="grid">
-        <label className="field-stack">
-          <span className="field-label">{t("create.documentType")}</span>
-          <Select
-            value={documentType}
-            onChange={(event) => {
-              setDocumentType(event.target.value);
-              setSourceId(null);
-              chooseDesign(null);
-            }}
-          >
-            {types.map((type) => (
-              <option key={type.key} value={type.key}>
-                {t(`docType.${type.key}`)}
-              </option>
-            ))}
-          </Select>
-          <span className="field-help">{t(`docTypeHelp.${documentType}`)}</span>
-        </label>
-        {typeDesigns.length > 0 && (
-          <div className="field-stack">
-            <span className="field-label">{t("create.design")}</span>
-            <div className="studio-variant-list studio-design-list" role="radiogroup" aria-label={t("create.design")}>
-              <button type="button" role="radio" aria-checked={design === null} className={design === null ? "studio-variant studio-variant-active" : "studio-variant"} onClick={() => chooseDesign(null)}>
-                <span className="studio-variant-name">{t("create.noDesign")}</span>
-                <span className="field-help">{t("create.noDesignHelp")}</span>
+    <Modal
+      className="studio-modal studio-catalog-modal"
+      size="wide"
+      open={open}
+      onClose={onClose}
+      title={t("create.title")}
+      description={t("create.description")}
+      footer={
+        <>
+          <span className="field-help">{footnote}</span>
+          <div className="modal-footer-actions">
+            <button type="button" className="button-ghost" onClick={onClose}>
+              {t("common.cancel")}
+            </button>
+            <button type="button" className="button-primary" disabled={!ready} onClick={() => void create()}>
+              {t("create.submit")}
+            </button>
+          </div>
+        </>
+      }
+    >
+      <div className="studio-catalog">
+        <nav className="studio-catalog-types" aria-label={t("create.documentType")}>
+          {typesByCategory(types, categories).map((group) => (
+            <div key={group.category} className="studio-catalog-type-group">
+              <span className="studio-catalog-type-head">{t(`category.${group.category}`)}</span>
+              {group.types.map((type) => (
+                <button
+                  key={type.key}
+                  type="button"
+                  aria-current={documentType === type.key ? "true" : undefined}
+                  className={documentType === type.key ? "studio-catalog-type studio-catalog-type-active" : "studio-catalog-type"}
+                  onClick={() => chooseType(type.key)}
+                >
+                  <span>{t(`docType.${type.key}`)}</span>
+                </button>
+              ))}
+            </div>
+          ))}
+        </nav>
+        <div className="studio-catalog-main">
+          <p className="muted">{t(`docTypeHelp.${documentType}`)}</p>
+          <div className="studio-start-list" role="radiogroup" aria-label={t("create.startFrom")}>
+            {(["catalog", "copy", "blank"] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={start === value}
+                disabled={(value === "catalog" && typeCatalog.length === 0) || (value === "copy" && typeCopies.length === 0)}
+                className={start === value ? "studio-start studio-start-active" : "studio-start"}
+                onClick={() => chooseStart(value)}
+              >
+                <span className="studio-start-name">{t(`create.start.${value}`)}</span>
+                <span className="field-help">
+                  {value === "catalog"
+                    ? t("create.startCatalogHelp", { count: typeCatalog.length })
+                    : value === "copy"
+                      ? t("create.startCopyHelp", { count: typeCopies.length })
+                      : t("create.startBlankHelp")}
+                </span>
               </button>
-              {typeDesigns.map((item) => (
+            ))}
+          </div>
+
+          {start === "catalog" && (
+            <div className="studio-variant-list studio-design-list" role="radiogroup" aria-label={t("create.design")}>
+              {typeCatalog.map((item) => (
                 <button
                   key={item.key}
                   type="button"
                   role="radio"
-                  aria-checked={design === item.key}
-                  className={design === item.key ? "studio-variant studio-variant-active" : "studio-variant"}
-                  onClick={() => chooseDesign(item.key)}
+                  aria-checked={catalogKey === item.key}
+                  className={catalogKey === item.key ? "studio-variant studio-variant-active" : "studio-variant"}
+                  onClick={() => {
+                    setCatalogKey(item.key);
+                    suggest(item.name);
+                  }}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img className="studio-variant-thumb" src={studioApi.exampleThumbnailUrl(item.key)} alt="" loading="lazy" />
-                  <span className="studio-variant-name">{t(`examples.items.${item.key}.name`)}</span>
-                  <span className="field-help">{t(`examples.items.${item.key}.description`)}</span>
+                  <img className="studio-variant-thumb" src={item.thumbnail} alt="" loading="lazy" />
+                  <span className="studio-variant-name">{item.name}</span>
+                  <span className="field-help">{item.description}</span>
                 </button>
               ))}
             </div>
-            <span className="field-help">{t("create.designHelp")}</span>
+          )}
+          {start === "copy" && (
+            <div className="studio-copy-list" role="radiogroup" aria-label={t("create.start.copy")}>
+              {typeCopies.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={copyId === item.id}
+                  className={copyId === item.id ? "studio-copy studio-copy-active" : "studio-copy"}
+                  onClick={() => {
+                    setCopyId(item.id);
+                    suggest(t("library.copyName", { name: templateDisplayName(t, item) }));
+                  }}
+                >
+                  <span className="studio-copy-name">{templateDisplayName(t, item)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="studio-create-fields">
+            <label className="field-stack">
+              <span className="field-label">{t("library.name")}</span>
+              <input
+                value={name}
+                maxLength={start === "catalog" ? 120 : 160}
+                onChange={(event) => {
+                  setName(event.target.value);
+                  setNameTouched(true);
+                }}
+              />
+            </label>
+            <label className="field-stack">
+              <span className="field-label">{t("create.brand")}</span>
+              <Select value={brandId ?? ""} onChange={(event) => setBrandId(event.target.value || null)}>
+                {activeBrands.map((brand) => (
+                  <option key={brand.id} value={brand.id}>
+                    {brand.is_default ? t("create.brandDefault", { name: brand.name }) : brand.name}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <span className="field-help studio-create-fields-help">{t("create.brandHelp")}</span>
           </div>
-        )}
-        <label className="field-stack">
-          <span className="field-label">{t("library.name")}</span>
-          <input
-            value={name}
-            maxLength={design ? 120 : 160}
-            onChange={(event) => {
-              setName(event.target.value);
-              setNameTouched(true);
-            }}
-            autoFocus
-          />
-        </label>
-        {!design && (
-          <div className="field-stack">
-            <span className="field-label">{t("create.startFrom")}</span>
-            <SearchableSelect
-              options={sources}
-              getId={(item) => item.id}
-              getLabel={(item) => `${templateDisplayName(t, item)} · ${t(`origin.${item.origin}`)}`}
-              value={sourceId}
-              onChange={(item) => setSourceId(item ? item.id : null)}
-              nullLabel={t("create.blank")}
-            />
-            <span className="field-help">{t("create.startFromHelp")}</span>
-          </div>
-        )}
-      </div>
-      <div className="modal-actions">
-        <button type="button" className="button-ghost" onClick={onClose}>
-          {t("common.cancel")}
-        </button>
-        <button type="button" className="button-primary" disabled={!name.trim() || busy} onClick={() => void create()}>
-          {t("create.submit")}
-        </button>
+        </div>
       </div>
     </Modal>
   );

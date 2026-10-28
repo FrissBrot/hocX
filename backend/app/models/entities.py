@@ -817,6 +817,8 @@ class DocumentTemplate(Base, TimestampMixin, UpdatedAtMixin):
     origin: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'tenant'"), default="tenant")
     source_template_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_template.id", ondelete="SET NULL"))
     source_revision_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_template_revision.id", ondelete="SET NULL", use_alter=True))
+    # Übernommenes Katalog-Design (app.documents.examples), z. B. «alpin»
+    catalog_key: Mapped[str | None] = mapped_column(Text)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     document_type: Mapped[str] = mapped_column(Text, nullable=False)

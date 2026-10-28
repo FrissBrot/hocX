@@ -12,9 +12,9 @@ const api = vi.hoisted(() => ({
     brands: vi.fn(),
     assets: vi.fn(),
     catalog: vi.fn(),
-    listTemplates: vi.fn(),
     updateBrand: vi.fn(),
     createBrand: vi.fn(),
+    archiveBrand: vi.fn(),
     documentSettings: vi.fn(),
     updateDocumentSettings: vi.fn(),
   },
@@ -26,7 +26,6 @@ vi.mock("@/contexts/toast-context", () => ({ useToast: () => toast }));
 vi.mock("@/contexts/confirm-context", () => ({ useConfirm: () => confirm }));
 
 const capabilities = { export: true, view_templates: true, edit_templates: true, publish_templates: true, manage_brand: true, finance_data: true, personal_data: true };
-const published = { id: "rev", revision_no: 1, status: "published", lock_version: 1, brand_mode: "follow", schema_version: 1, note: null, created_at: "", updated_at: "", published_at: "", created_by_name: null, template_id: null, brand_id: null };
 
 function brand(id: string, overrides: Record<string, unknown> = {}) {
   return { id, name: id === "b1" ? "Verein" : "Jubiläum", description: null, is_default: id === "b1", archived: false, revision: 3, lock_version: 5, tokens: structuredClone(studio.brand_tokens), updated_at: "", ...overrides };
@@ -53,9 +52,6 @@ describe("BrandStudio", () => {
     api.studioApi.brands.mockResolvedValue([brand("b1"), brand("b2")]);
     api.studioApi.assets.mockResolvedValue([]);
     api.studioApi.catalog.mockResolvedValue(studio.catalog);
-    api.studioApi.listTemplates.mockResolvedValue([
-      { id: "tpl-formal", system_key: "protocol_formal", document_type: "protocol", status: "active", published_revision: published, origin: "system", name: "x" },
-    ]);
     api.previewDocument.mockResolvedValue({ pages: ["data:image/png;base64,AAA"], page_count: 1, diagnostics: [] });
     api.studioApi.documentSettings.mockResolvedValue({ language: "de" });
   });
@@ -71,7 +67,7 @@ describe("BrandStudio", () => {
     fireEvent.change(screen.getByLabelText(/^Grundgrösse/), { target: { value: "11" } });
     await advance(800);
     await waitFor(() => expect(api.previewDocument.mock.calls.at(-1)![0].brand_tokens.typography.base_size).toBe(11));
-    expect(api.previewDocument.mock.calls.at(-1)![0]).toMatchObject({ template_id: "tpl-formal", data_mode: "sample", brand_id: null });
+    expect(api.previewDocument.mock.calls.at(-1)![0]).toMatchObject({ document_type: "protocol", data_mode: "sample", brand_id: null });
 
     fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
     await waitFor(() => expect(api.studioApi.updateBrand).toHaveBeenCalled());
@@ -133,7 +129,7 @@ describe("BrandStudio", () => {
   it("creates a profile from a preset", async () => {
     api.studioApi.createBrand.mockResolvedValue(brand("b3", { name: "Sommerfest", is_default: false }));
     render(<BrandStudio capabilities={capabilities} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Neues Profil" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Weiteres Profil" }));
     fireEvent.change(screen.getAllByLabelText("Name").at(-1)!, { target: { value: "Sommerfest" } });
     fireEvent.click(screen.getByRole("radio", { name: /Wald/ }));
     fireEvent.click(screen.getByRole("button", { name: "Erstellen" }));
@@ -145,11 +141,32 @@ describe("BrandStudio", () => {
     render(<BrandStudio capabilities={{ ...capabilities, manage_brand: false }} />);
     expect(await screen.findByText("Nur Administratoren können das Corporate Design ändern.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Speichern" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Neues Profil" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Weiteres Profil" })).not.toBeInTheDocument();
     await advance(800);
     await waitFor(() => expect(api.previewDocument).toHaveBeenCalled());
     expect(api.previewDocument.mock.calls.at(-1)![0]).toMatchObject({ brand_tokens: null, brand_id: "b1" });
   });
+  it("lists unused profiles separately and archives them together", async () => {
+    api.studioApi.brands.mockResolvedValue([brand("b1", { template_count: 4 }), brand("b2", { template_count: 0 }), brand("b3", { name: "Gruppe", template_count: 2 })]);
+    api.studioApi.archiveBrand.mockResolvedValue(brand("b2", { archived: true }));
+    render(<BrandStudio capabilities={capabilities} />);
+    expect(await screen.findByText("Wirkt auf 4 Vorlagen · Version 3")).toBeInTheDocument();
+    expect(screen.getByText("Nicht verwendet")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Archivieren" }));
+    await waitFor(() => expect(api.studioApi.archiveBrand).toHaveBeenCalledWith("b2", true));
+    expect(api.studioApi.archiveBrand).toHaveBeenCalledTimes(1);
+    expect(toast).toHaveBeenCalledWith("1 Profil archiviert", "success");
+  });
+
+  it("previews the club's template of the chosen document type", async () => {
+    render(<BrandStudio capabilities={capabilities} />);
+    await screen.findByLabelText("Name");
+    fireEvent.click(screen.getByRole("tab", { name: "Einladung" }));
+    await advance(800);
+    await waitFor(() => expect(api.previewDocument.mock.calls.at(-1)![0]).toMatchObject({ document_type: "invitation", data_mode: "sample" }));
+    expect(api.previewDocument.mock.calls.at(-1)![0].template_id).toBeUndefined();
+  });
+
   it("saves the document language of the organisation", async () => {
     api.studioApi.updateDocumentSettings.mockResolvedValue({ language: "fr" });
     render(<BrandStudio capabilities={capabilities} />);
