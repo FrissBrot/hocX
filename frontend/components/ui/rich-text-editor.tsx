@@ -66,6 +66,10 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
     editable: !readOnly,
     onUpdate({ editor }) {
       const markdown = (editor.storage as unknown as MarkdownStorage).markdown.getMarkdown();
+      // «update» feuert auch ohne Textänderung (z. B. setEditable, Fokus-Transaktionen).
+      // Unveränderter Inhalt löste sonst beim Öffnen ein Speichern aus, das als «Änderungen
+      // noch nicht gespeichert» aufblitzte.
+      if (markdown === lastEmittedRef.current) return;
       lastEmittedRef.current = markdown;
       onChange(markdown);
     },
@@ -129,7 +133,8 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
 
   // Sync readOnly changes
   useEffect(() => {
-    if (editor) editor.setEditable(!readOnly);
+    // emitUpdate=false: Tiptap meldet sonst ein «update» ohne Textänderung (Default true).
+    if (editor) editor.setEditable(!readOnly, false);
   }, [readOnly, editor]);
 
   // Sync tracked-changes baseline; the ref is read lazily by the plugin, but
