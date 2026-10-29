@@ -282,3 +282,62 @@ def test_gallery_tabs_separate_copies_from_different_photos(tmp_path, monkeypatc
     # Reine Kopien gehören nur unter Duplikate, nicht zusätzlich unter Ähnliche.
     groups, _ = service._compute_similarity_groups(rows[:2], [_groupable(row) for row in rows[:2]], file_paths)
     assert groups == {"duplicate": [[1, 2]], "series": []}
+
+
+def test_series_links_need_matching_capture_time_and_colors():
+    from datetime import datetime, timedelta
+
+    import numpy as np
+
+    from app.services.photo_similarity import (
+        SERIES_MAX_CAPTURE_GAP,
+        capture_times_compatible,
+        series_colors_match,
+    )
+
+    start = datetime(2026, 7, 10, 11, 48)
+    burst = GroupableImage(1, "123456789abcdef0", 1, 1, taken_at=start)
+    later = GroupableImage(2, "123456789abcdef0", 1, 1, taken_at=start + timedelta(minutes=2))
+    evening = GroupableImage(3, "123456789abcdef0", 1, 1, taken_at=start + timedelta(hours=9))
+    undated = GroupableImage(4, "123456789abcdef0", 1, 1)
+    assert capture_times_compatible(burst, later, SERIES_MAX_CAPTURE_GAP)
+    assert not capture_times_compatible(burst, evening, SERIES_MAX_CAPTURE_GAP)
+    assert capture_times_compatible(burst, undated, SERIES_MAX_CAPTURE_GAP)
+
+    day = (1.0, np.full((128, 128, 3), 150, dtype=np.float32))
+    moved = day[1].copy()
+    moved[40:80, 40:70] = 30  # Person bewegt sich durchs Bild
+    night = (1.0, np.full((128, 128, 3), 20, dtype=np.float32))
+    assert series_colors_match(day, (1.0, moved))
+    assert not series_colors_match(day, night)
+    assert series_colors_match(day, None)
+
+
+def test_series_grouping_skips_hash_collisions_rejected_by_linked():
+    images = [GroupableImage(i, "123456789abcdef0", 1, 1) for i in (1, 2, 3)]
+    groups = group_similar_images(images, threshold=SERIES_HAMMING_THRESHOLD, linked=lambda a, b: {a.id, b.id} != {1, 3} and 2 not in {a.id, b.id})
+    assert sorted(sorted(image.id for image in group) for group in groups) == [[1], [2], [3]]
+    groups = group_similar_images(images, threshold=SERIES_HAMMING_THRESHOLD, linked=lambda a, b: 3 not in {a.id, b.id})
+    assert sorted(sorted(image.id for image in group) for group in groups) == [[1, 2], [3]]
+
+
+def test_burst_frames_with_different_capture_times_are_no_duplicates(tmp_path, monkeypatch):
+    from datetime import datetime, timedelta
+    from types import SimpleNamespace
+
+    from app.core.config import settings
+    from app.services.file_service import FileService, _groupable
+
+    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
+    photo = _photo_like_image()
+    photo.save(tmp_path / "1.png")
+    photo.save(tmp_path / "2.png")
+    start = datetime(2026, 7, 10, 11, 48, 5)
+    rows = [SimpleNamespace(id=i, public_id=i, perceptual_hash="123456789abcdef0",
+                            sharpness_score=1, exposure_score=1, face_quality_score=None,
+                            exif_taken_at=start + timedelta(seconds=3 * i),
+                            checksum_sha256=str(i), source="gallery_upload", storage_path=f"{i}.png")
+            for i in (1, 2)]
+    file_paths = {row.id: (row.checksum_sha256, row.storage_path) for row in rows}
+    groups, _ = FileService()._compute_similarity_groups(rows, [_groupable(row) for row in rows], file_paths)
+    assert groups == {"duplicate": [], "series": [[1, 2]]}

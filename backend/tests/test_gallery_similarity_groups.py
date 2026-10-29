@@ -50,6 +50,15 @@ def _blurred(content: bytes, radius: float) -> bytes:
         return buffer.getvalue()
 
 
+def _reencoded(content: bytes) -> bytes:
+    """Dieselbe Aufnahme als verkleinerte JPEG-Kopie - ein echtes Duplikat."""
+    with Image.open(io.BytesIO(content)) as image:
+        copy = image.convert("RGB").resize((160, 120), Image.Resampling.LANCZOS)
+        buffer = io.BytesIO()
+        copy.save(buffer, format="JPEG", quality=80)
+        return buffer.getvalue()
+
+
 service = FileService()
 
 
@@ -71,7 +80,7 @@ def _names(result):
 def test_tabs_report_pending_until_the_background_job_has_grouped_the_tenant(db):
     tenant = make_tenant(db)
     sharp = _circle_png_bytes(100, 75, 50)
-    _upload(db, tenant.id, [("sharp.png", sharp), ("blurred.png", _blurred(sharp, radius=6))])
+    _upload(db, tenant.id, [("sharp.png", sharp), ("blurred.png", _reencoded(sharp))])
 
     pending = service.list_similarity_groups(db, tenant.id, kind="duplicate")
     assert pending.status == "pending"
@@ -84,7 +93,9 @@ def test_tabs_report_pending_until_the_background_job_has_grouped_the_tenant(db)
     assert len(ready.groups) == 1
 
 
-def test_sharp_and_blurred_burst_shot_group_together_with_the_sharp_one_ranked_first(db):
+def test_sharp_and_blurred_burst_shot_are_a_series_not_a_duplicate(db):
+    """Ein unscharfes Serienbild ist eine andere Aufnahme: es erscheint unter «Ähnliche»
+    (schärferes zuerst), nicht unter «Duplikate»."""
     tenant = make_tenant(db)
     sharp = _circle_png_bytes(100, 75, 50)
     _upload(
@@ -94,8 +105,8 @@ def test_sharp_and_blurred_burst_shot_group_together_with_the_sharp_one_ranked_f
     )
     service._refresh_tenant_similarity(db, tenant.id)
 
-    result = service.list_similarity_groups(db, tenant.id, kind="duplicate")
-
+    assert service.list_similarity_groups(db, tenant.id, kind="duplicate").groups == []
+    result = service.list_similarity_groups(db, tenant.id, kind="series")
     # Einzelbilder ohne Gegenstück erscheinen in keinem Tab.
     assert len(result.groups) == 1
     burst_group = result.groups[0]
@@ -103,12 +114,22 @@ def test_sharp_and_blurred_burst_shot_group_together_with_the_sharp_one_ranked_f
     assert burst_group.best_id == burst_group.images[0].id
 
 
+def test_reencoded_copy_is_a_duplicate(db):
+    tenant = make_tenant(db)
+    sharp = _circle_png_bytes(100, 75, 50)
+    _upload(db, tenant.id, [("original.png", sharp), ("copy.jpg", _reencoded(sharp))])
+    service._refresh_tenant_similarity(db, tenant.id)
+
+    assert _names(service.list_similarity_groups(db, tenant.id, kind="duplicate")) == [["copy.jpg", "original.png"]]
+    assert service.list_similarity_groups(db, tenant.id, kind="series").groups == []
+
+
 def test_grouping_scopes_to_the_given_tenant_only(db):
     tenant_a = make_tenant(db)
     tenant_b = make_tenant(db)
     content = _circle_png_bytes(100, 75, 50)
-    _upload(db, tenant_a.id, [("a.png", content), ("a-blurred.png", _blurred(content, radius=6))])
-    _upload(db, tenant_b.id, [("b.png", content), ("b-blurred.png", _blurred(content, radius=6))])
+    _upload(db, tenant_a.id, [("a.png", content), ("a-blurred.png", _reencoded(content))])
+    _upload(db, tenant_b.id, [("b.png", content), ("b-blurred.png", _reencoded(content))])
 
     service._refresh_tenant_similarity(db, tenant_a.id)
 
@@ -145,7 +166,7 @@ def test_kind_series_groups_more_loosely_than_kind_duplicate(db):
 def test_deleted_photos_drop_out_immediately_without_waiting_for_the_job(db):
     tenant = make_tenant(db)
     sharp = _circle_png_bytes(100, 75, 50)
-    items = _upload(db, tenant.id, [("sharp.png", sharp), ("blurred.png", _blurred(sharp, radius=6))])
+    items = _upload(db, tenant.id, [("sharp.png", sharp), ("blurred.png", _reencoded(sharp))])
     service._refresh_tenant_similarity(db, tenant.id)
     blurred = next(item for item in items if item.original_name == "blurred.png")
 
@@ -160,7 +181,7 @@ def test_deleted_photos_drop_out_immediately_without_waiting_for_the_job(db):
 def test_filters_narrow_the_stored_groups(db):
     tenant = make_tenant(db)
     sharp = _circle_png_bytes(100, 75, 50)
-    _upload(db, tenant.id, [("sommerlager.png", sharp), ("sommerlager-2.png", _blurred(sharp, radius=6))])
+    _upload(db, tenant.id, [("sommerlager.png", sharp), ("sommerlager-2.png", _reencoded(sharp))])
     service._refresh_tenant_similarity(db, tenant.id)
 
     assert len(service.list_similarity_groups(db, tenant.id, kind="duplicate", search="sommerlager").groups) == 1
@@ -174,7 +195,7 @@ def test_unchanged_photos_are_not_regrouped_and_changes_trigger_a_new_run(db, mo
 
     tenant = make_tenant(db)
     sharp = _circle_png_bytes(100, 75, 50)
-    _upload(db, tenant.id, [("sharp.png", sharp), ("copy.png", _blurred(sharp, radius=6))])
+    _upload(db, tenant.id, [("sharp.png", sharp), ("copy.png", _reencoded(sharp))])
     service._refresh_tenant_similarity(db, tenant.id)
     computed = []
     original_compute = FileService._compute_similarity_groups
@@ -200,7 +221,7 @@ def test_too_many_photos_are_reported_instead_of_grouped(db, monkeypatch):
 
     tenant = make_tenant(db)
     sharp = _circle_png_bytes(100, 75, 50)
-    _upload(db, tenant.id, [("sharp.png", sharp), ("copy.png", _blurred(sharp, radius=6))])
+    _upload(db, tenant.id, [("sharp.png", sharp), ("copy.png", _reencoded(sharp))])
     monkeypatch.setattr(module, "MAX_BACKGROUND_GROUPING_IMAGES", 1)
 
     service._refresh_tenant_similarity(db, tenant.id)
@@ -215,7 +236,7 @@ def test_route_returns_the_stored_groups_for_writers_only(db):
 
     tenant = make_tenant(db)
     sharp = _circle_png_bytes(100, 75, 50)
-    _upload(db, tenant.id, [("sharp.png", sharp), ("blurred.png", _blurred(sharp, radius=6))])
+    _upload(db, tenant.id, [("sharp.png", sharp), ("blurred.png", _reencoded(sharp))])
     service._refresh_tenant_similarity(db, tenant.id)
 
     result = files_routes.list_similarity_groups(

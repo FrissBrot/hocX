@@ -14,6 +14,7 @@ tests/test_photo_similarity.py for the benchmark MAX_GROUPING_IMAGES is based on
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable
 
@@ -42,6 +43,21 @@ SIMILARITY_HAMMING_THRESHOLD = PERCEPTUAL_DUPLICATE_THRESHOLD
 # revisit if real-world galleries turn out to need a different band.
 SERIES_HAMMING_THRESHOLD = 14
 
+# Der 64-Bit-pHash allein trennt Serien nicht zuverlässig: bei Tausenden Bildern liegen immer
+# wieder zwei fremde Aufnahmen (z. B. ein Tag- und ein Nachtbild) zufällig innerhalb der
+# Schwelle, und die Union-Find-Verkettung zieht dann ganze Gruppen zusammen. Jede Verbindung
+# einer Serie muss darum zusätzlich zeitlich (EXIF) und farblich passen.
+SERIES_MAX_CAPTURE_GAP = timedelta(minutes=10)
+# Höchster RMS-Abstand (0–255) der mittleren Farben eines 4×4-Rasters (series_colors_match)
+SERIES_MAX_COLOR_DISTANCE = 30.0
+# Duplikat = dieselbe Aufnahme. Tragen beide Bilder eine EXIF-Aufnahmezeit, muss sie
+# übereinstimmen (Serienbilder liegen Sekunden auseinander, Kopien behalten die Zeit).
+DUPLICATE_MAX_CAPTURE_GAP = timedelta(seconds=1)
+
+# Teil des gespeicherten Fingerabdrucks (file_service._similarity_fingerprint): eine Änderung
+# der Gruppierungsregeln erzwingt eine Neuberechnung bestehender Ergebnisse.
+SIMILARITY_RULES_VERSION = 2
+
 # Safety cap for the synchronous grouping endpoint/service method - protects the shared,
 # memory-constrained backend container from an unbounded O(n^2) computation blocking one of
 # its two worker processes. Larger batches need the async worker Phase 3 introduces.
@@ -60,6 +76,20 @@ class GroupableImage:
     sharpness_score: float | None
     exposure_score: float | None
     face_quality_score: float | None = None
+    # EXIF-Aufnahmezeit; fehlt sie bei einem der Bilder, entfällt die Zeitprüfung
+    taken_at: datetime | None = None
+
+
+def capture_times_compatible(a: GroupableImage, b: GroupableImage, max_gap: timedelta) -> bool:
+    """False nur, wenn beide Bilder eine Aufnahmezeit haben und diese weiter als max_gap
+    auseinanderliegen."""
+    if a.taken_at is None or b.taken_at is None:
+        return True
+    try:
+        return abs(a.taken_at - b.taken_at) <= max_gap
+    except TypeError:
+        # Mischung aus naiven und zeitzonenbehafteten Werten: Wanduhrzeit vergleichen
+        return abs(a.taken_at.replace(tzinfo=None) - b.taken_at.replace(tzinfo=None)) <= max_gap
 
 
 def _quality_rank(image: GroupableImage) -> float:
@@ -86,7 +116,11 @@ def _hash_as_int(perceptual_hash: imagehash.ImageHash) -> int:
 
 
 def group_similar_images(
-    images: list[GroupableImage], *, threshold: int = SIMILARITY_HAMMING_THRESHOLD, max_images: int = MAX_GROUPING_IMAGES
+    images: list[GroupableImage],
+    *,
+    threshold: int = SIMILARITY_HAMMING_THRESHOLD,
+    max_images: int = MAX_GROUPING_IMAGES,
+    linked: Callable[[GroupableImage, GroupableImage], bool] | None = None,
 ) -> list[list[GroupableImage]]:
     """Union-find clustering by perceptual-hash Hamming distance. Images without a
     perceptual_hash (a decode failure at upload time - see _compute_perceptual_hash) never
@@ -96,7 +130,10 @@ def group_similar_images(
     passes MAX_BACKGROUND_GROUPING_IMAGES) rather than letting it silently run long.
 
     `threshold` picks which "closeness" band this call groups by - SIMILARITY_HAMMING_THRESHOLD
-    (default, "Duplikate" tab) or the looser SERIES_HAMMING_THRESHOLD ("Ähnliche" tab)."""
+    (default, "Duplikate" tab) or the looser SERIES_HAMMING_THRESHOLD ("Ähnliche" tab).
+
+    `linked` bestätigt jedes Paar innerhalb der Schwelle zusätzlich (Serien: Aufnahmezeit und
+    Farben); Paare, die schon in derselben Gruppe sind, werden nicht mehr geprüft."""
     if len(images) > max_images:
         raise ValueError(f"too many images to group (max {max_images}, got {len(images)})")
 
@@ -126,8 +163,11 @@ def group_similar_images(
     hashed = [(image, _hash_as_int(imagehash.hex_to_hash(image.perceptual_hash))) for image in images if image.perceptual_hash]
     for i, (image_a, bits_a) in enumerate(hashed):
         for image_b, bits_b in hashed[i + 1 :]:
-            if (bits_a ^ bits_b).bit_count() <= threshold:
-                union(image_a.id, image_b.id)
+            if (bits_a ^ bits_b).bit_count() > threshold:
+                continue
+            if linked is not None and (find(image_a.id) == find(image_b.id) or not linked(image_a, image_b)):
+                continue
+            union(image_a.id, image_b.id)
 
     groups: dict[int, list[GroupableImage]] = {}
     for image in images:
@@ -140,17 +180,15 @@ def duplicate_signature(path: "Path | BinaryIO") -> tuple[float, np.ndarray] | N
     """Bildinhalt normalisieren; Auflösung, JPEG-Qualität, EXIF-Rotation und - wie der
     pHash-Kandidatenfilter selbst (siehe group_similar_images) - auch Schärfe/Blur
     tolerieren: ein unscharfes Serienbild derselben Aufnahme ist kein anderes Foto. Der
-    Blur-Radius 6 ist bewusst so gewählt, dass ein kräftig geweichzeichnetes Serienbild
-    (radius=6, siehe tests/test_gallery_similarity_groups.py) innerhalb der Toleranz von
-    same_photo bleibt, eine echte lokale Inhaltsänderung (ein anderer Bildausschnitt,
-    siehe tests/test_photo_similarity.py) aber weiterhin klar darüber liegt - ein
-    niedrigerer Radius (1) liess genau diese Serienbilder an same_photo scheitern."""
+    Blur-Radius 2 glättet nur Kompressions- und Skalierungsrauschen. Ein Serienbild mit
+    anderer Pose oder Schärfe ist kein Duplikat, sondern gehört unter «Ähnliche» (der
+    frühere Radius 6 liess genau solche Serienbilder als Duplikate durch)."""
     try:
         with Image.open(path) as original:
             image = ImageOps.exif_transpose(original).convert("RGB")
             ratio = image.width / image.height
             image = image.resize((128, 128), Image.Resampling.LANCZOS)
-            image = image.filter(ImageFilter.GaussianBlur(radius=6))
+            image = image.filter(ImageFilter.GaussianBlur(radius=2))
             return ratio, np.asarray(image, dtype=np.float32)
     except (OSError, UnidentifiedImageError, Image.DecompressionBombError):
         # Fehlende/unlesbare Originale sind kein Beleg für ein Duplikat.
@@ -170,6 +208,18 @@ def same_photo(a: tuple[float, np.ndarray] | None, b: tuple[float, np.ndarray] |
     # verschwinden. Jede der 64 Bildkacheln muss dieselben Inhalte zeigen.
     tiles = squared.reshape(8, 16, 8, 16, 3).mean(axis=(1, 3, 4))
     return bool(np.sqrt(squared.mean()) <= 5 and np.sqrt(tiles.max()) <= 10)
+
+
+def series_colors_match(a: tuple[float, np.ndarray] | None, b: tuple[float, np.ndarray] | None) -> bool:
+    """Grober Farbvergleich für Serien: mittlere Farbe je Feld eines 4×4-Rasters. Trennt
+    Aufnahmen, deren pHash zufällig nah liegt (Tag/Nacht, drinnen/draussen), toleriert aber
+    Bewegung und andere Posen innerhalb einer Szene. Ohne Signatur (Original fehlt) nicht
+    trennen - das bisherige Verhalten der reinen Hash-Gruppierung."""
+    if a is None or b is None:
+        return True
+    grid_a = a[1].reshape(4, 32, 4, 32, 3).mean(axis=(1, 3))
+    grid_b = b[1].reshape(4, 32, 4, 32, 3).mean(axis=(1, 3))
+    return bool(np.sqrt(((grid_a - grid_b) ** 2).mean()) <= SERIES_MAX_COLOR_DISTANCE)
 
 
 def verified_duplicate_groups(

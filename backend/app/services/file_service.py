@@ -66,11 +66,16 @@ from app.services.photo_quality import compute_quality_scores
 from app.services.photo_similarity import (
     MAX_BACKGROUND_GROUPING_IMAGES,
     MAX_GROUPING_IMAGES,
+    DUPLICATE_MAX_CAPTURE_GAP,
     SERIES_HAMMING_THRESHOLD,
+    SERIES_MAX_CAPTURE_GAP,
+    SIMILARITY_RULES_VERSION,
     GroupableImage,
+    capture_times_compatible,
     group_similar_images,
     duplicate_signature,
     same_photo,
+    series_colors_match,
     sort_best_first,
     verified_duplicate_groups,
 )
@@ -318,11 +323,12 @@ def _groupable(row) -> GroupableImage:
         sharpness_score=row.sharpness_score,
         exposure_score=row.exposure_score,
         face_quality_score=row.face_quality_score,
+        taken_at=getattr(row, "exif_taken_at", None),
     )
 
 
 def _similarity_fingerprint(images: list[GroupableImage], file_paths: dict) -> str:
-    digest = hashlib.sha256()
+    digest = hashlib.sha256(f"rules:{SIMILARITY_RULES_VERSION}".encode())
     for image in sorted(images, key=lambda item: item.id):
         checksum = file_paths.get(image.id, (None, None))[0]
         digest.update(repr((image.id, checksum, image.perceptual_hash)).encode())
@@ -807,14 +813,23 @@ class FileService:
                 signatures.popitem(last=False)
             return value
 
+        groupable_by_id = {image.id: image for image in groupable}
+
         def matches(a: int, b: int) -> bool:
             checksum_a = file_paths[a][0]
             if checksum_a and checksum_a == file_paths[b][0]:
                 return True
+            if not capture_times_compatible(groupable_by_id[a], groupable_by_id[b], DUPLICATE_MAX_CAPTURE_GAP):
+                return False
             return same_photo(signature(a), signature(b))
 
+        def series_linked(a: GroupableImage, b: GroupableImage) -> bool:
+            return capture_times_compatible(a, b, SERIES_MAX_CAPTURE_GAP) and series_colors_match(signature(a.id), signature(b.id))
+
         duplicates = verified_duplicate_groups(groupable, matches, max_images=MAX_BACKGROUND_GROUPING_IMAGES)
-        series = group_similar_images(groupable, threshold=SERIES_HAMMING_THRESHOLD, max_images=MAX_BACKGROUND_GROUPING_IMAGES)
+        series = group_similar_images(
+            groupable, threshold=SERIES_HAMMING_THRESHOLD, max_images=MAX_BACKGROUND_GROUPING_IMAGES, linked=series_linked
+        )
         # Reine Kopien gehören ausschliesslich unter Duplikate; gemischte Serien mit tatsächlich
         # unterschiedlichen Aufnahmen unter Ähnliche.
         series = [group for group in series if len(group) > 1 and any(not matches(group[0].id, image.id) for image in group[1:])]
