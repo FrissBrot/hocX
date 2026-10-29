@@ -534,5 +534,26 @@
     "emptyFilter": "Niemand mit diesem Status",
     "fine": "CHF {amount, number}",
     "fineTitle": "Busse wird automatisch erstellt"
+  },
+  "matrixBoard": {
+    "title": "Matrix",
+    "sourceList": "Spalten aus «{name}»",
+    "sourceListFallback": "Liste",
+    "sourceParticipants": "Spalten aus Teilnehmenden",
+    "sourceEvents": "Spalten aus Terminen",
+    "sourceTitle": "Eine Spalte pro Eintrag der Quelle. Die Zeilen kommen aus der Vorlage.",
+    "viewLabel": "Ansicht",
+    "viewCards": "Karten",
+    "viewTable": "Tabelle",
+    "locked": "gesperrt",
+    "lockedTitle": "Aus Vorlage gesperrt",
+    "addPerson": "Person",
+    "addPersonTitle": "Person hinzufügen",
+    "changeEvent": "Termin ändern",
+    "addColumn": "Spalte hinzufügen",
+    "rowHeader": "Zeile",
+    "columnFallback": "Spalte {index}",
+    "columnNameLabel": "Spaltenname",
+    "notePlaceholder": "Notiz …"
   }
 }

@@ -534,5 +534,26 @@
     "emptyFilter": "Nobody with this status",
     "fine": "CHF {amount, number}",
     "fineTitle": "Fine is created automatically"
+  },
+  "matrixBoard": {
+    "title": "Matrix",
+    "sourceList": "Columns from “{name}”",
+    "sourceListFallback": "list",
+    "sourceParticipants": "Columns from participants",
+    "sourceEvents": "Columns from events",
+    "sourceTitle": "One column per source entry. The rows come from the template.",
+    "viewLabel": "View",
+    "viewCards": "Cards",
+    "viewTable": "Table",
+    "locked": "locked",
+    "lockedTitle": "Locked by the template",
+    "addPerson": "Person",
+    "addPersonTitle": "Add person",
+    "changeEvent": "Change event",
+    "addColumn": "Add column",
+    "rowHeader": "Row",
+    "columnFallback": "Column {index}",
+    "columnNameLabel": "Column name",
+    "notePlaceholder": "Note …"
   }
 }

@@ -534,5 +534,26 @@
     "emptyFilter": "Nessuno con questo stato",
     "fine": "CHF {amount, number}",
     "fineTitle": "La multa viene creata automaticamente"
+  },
+  "matrixBoard": {
+    "title": "Matrice",
+    "sourceList": "Colonne da «{name}»",
+    "sourceListFallback": "elenco",
+    "sourceParticipants": "Colonne dai partecipanti",
+    "sourceEvents": "Colonne dagli appuntamenti",
+    "sourceTitle": "Una colonna per ogni voce della fonte. Le righe provengono dal modello.",
+    "viewLabel": "Vista",
+    "viewCards": "Schede",
+    "viewTable": "Tabella",
+    "locked": "bloccato",
+    "lockedTitle": "Bloccato dal modello",
+    "addPerson": "Persona",
+    "addPersonTitle": "Aggiungi persona",
+    "changeEvent": "Cambia appuntamento",
+    "addColumn": "Aggiungi colonna",
+    "rowHeader": "Riga",
+    "columnFallback": "Colonna {index}",
+    "columnNameLabel": "Nome della colonna",
+    "notePlaceholder": "Nota …"
   }
 }

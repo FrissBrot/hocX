@@ -534,5 +534,26 @@
     "emptyFilter": "Personne avec ce statut",
     "fine": "CHF {amount, number}",
     "fineTitle": "L'amende est créée automatiquement"
+  },
+  "matrixBoard": {
+    "title": "Matrice",
+    "sourceList": "Colonnes de « {name} »",
+    "sourceListFallback": "liste",
+    "sourceParticipants": "Colonnes des participants",
+    "sourceEvents": "Colonnes des événements",
+    "sourceTitle": "Une colonne par entrée de la source. Les lignes viennent du modèle.",
+    "viewLabel": "Affichage",
+    "viewCards": "Cartes",
+    "viewTable": "Tableau",
+    "locked": "verrouillé",
+    "lockedTitle": "Verrouillé par le modèle",
+    "addPerson": "Personne",
+    "addPersonTitle": "Ajouter une personne",
+    "changeEvent": "Changer l’événement",
+    "addColumn": "Ajouter une colonne",
+    "rowHeader": "Ligne",
+    "columnFallback": "Colonne {index}",
+    "columnNameLabel": "Nom de la colonne",
+    "notePlaceholder": "Note …"
   }
 }

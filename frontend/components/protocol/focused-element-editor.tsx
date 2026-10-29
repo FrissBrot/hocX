@@ -86,6 +86,20 @@ import {
 } from "@/components/protocol/protocol-editor-shared";
 import { attendanceFineConfig, syncAttendanceFine } from "@/components/protocol/attendance-fines";
 import { MatrixEmbeddedBlockEditor } from "@/components/protocol/matrix-embedded-block-editor";
+import {
+  MatrixAddColumnCard,
+  MatrixBoardHeader,
+  MatrixEmptyValue,
+  MatrixEventChips,
+  MatrixEventValue,
+  MatrixPeopleChips,
+  MatrixRowLabel,
+  MatrixTableView,
+  MatrixView,
+  matrixColumnColorClass,
+  readStoredMatrixView,
+  storeMatrixView,
+} from "@/components/protocol/matrix-board";
 import { ChartBlockRenderer } from "@/components/protocol/chart-block-renderer";
 import { SessionTodosSection } from "@/components/protocol/session-todos-section";
 
@@ -270,6 +284,13 @@ export function FocusedElementEditor({
   const [imageGpsOff, setImageGpsOff] = useState<Record<string, boolean>>({});
   const [eventOverviewBlockId, setEventOverviewBlockId] = useState<string | null>(null);
   const [matrixPickerBlockId, setMatrixPickerBlockId] = useState<string | null>(null);
+  // Karten oder Tabelle, gilt für alle Matrizen (pro Browser gemerkt)
+  const [matrixView, setMatrixView] = useState<MatrixView>("cards");
+  useEffect(() => setMatrixView(readStoredMatrixView()), []);
+  function changeMatrixView(view: MatrixView) {
+    setMatrixView(view);
+    storeMatrixView(view);
+  }
   // Planning-mode consolidated checkbox popup for "Termine pro Element".
   const [showEventBlockPicker, setShowEventBlockPicker] = useState(false);
   // «Termin bearbeiten» aus einer Termin-Karte bzw. aus dem Popup «Termine wählen»
@@ -1018,20 +1039,31 @@ export function FocusedElementEditor({
     updateMatrixCell(blockId, blockConfig, columnId, rowId, { embedded_block: updater(currentEmbeddedBlock) }, persist);
   }
 
-  function matrixValueSummary(row: Record<string, any>, value: Record<string, any>) {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
+  // Kurzfassung einer Zelle für die Tabellenansicht; leer = noch nichts erfasst.
+  function matrixCellText(row: Record<string, any>, rowId: string, column: Record<string, any>): string {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
+    const value = matrixCellValue(column, row, rowId);
+    const embeddedBlock = matrixEmbeddedBlockForRow(row, value);
+    if (embeddedBlock) {
+      return String(embeddedBlockSummary(embeddedBlock, participantNames, availableEvents, protocol, t, column, availableTemplates) ?? "");
+    }
     const rowType = matrixRowType(row);
+    if (rowType === "events") {
+      return matrixEventsForRow(row, column)
+        .map((eventRow) => `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} ${eventRow.title}`)
+        .join(" · ");
+    }
     if (rowType === "participants") {
-      return multiParticipantSummary(value);
+      const ids = Array.isArray(value.participant_ids) ? value.participant_ids.map(String) : [];
+      return participantNames.filter((entry) => ids.includes(entry.id)).map((entry) => entry.display_name).join(", ");
     }
     if (rowType === "participant") {
-      const participant = participantNames.find((entry) => entry.id === String(value.participant_id ?? ""));
-      return participant?.display_name ?? t("chooseParticipant");
+      return participantNames.find((entry) => entry.id === String(value.participant_id ?? ""))?.display_name ?? "";
     }
     if (rowType === "event") {
       const eventRow = sortedAvailableEvents.find((entry) => entry.id === String(value.event_id ?? ""));
-      return eventRow ? `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}` : t("chooseEvent");
+      return eventRow ? `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}` : "";
     }
-    return String(value.text_value ?? row.template_value ?? "").trim() || t("noContent");
+    return String(value.text_value ?? row.template_value ?? "").trim();
   }
 
   function nextMatrixColumnId(currentColumns: Array<Record<string, any>>) {
@@ -2394,269 +2426,271 @@ export function FocusedElementEditor({
                 })()
               )}
 
-              {elementType === "matrix" && (
-                <div className="grid">
-                  {matrixPlanningManageable ? (
-                    <div className="editor-planning-toolbar">
-                      <PlanningIconTrigger
-                        title={t("chooseColumns")}
-                        icon="☑"
-                        onClick={() => setMatrixPickerBlockId(block.id)}
-                      />
-                    </div>
-                  ) : matrixInlineColumnManagement ? (
-                    <div className="matrix-block-toolbar">
-                      <button
-                        type="button"
-                        className="button-secondary"
-                        onClick={() => {
-                          const nextColumns = [
-                            ...matrixColumns(blockConfig),
-                            {
-                              id: nextMatrixColumnId(matrixColumns(blockConfig)),
-                              title: "",
-                              row_values: Object.fromEntries(
-                                matrixRows(blockConfig).map((row, rowIndex) => [
-                                  String(row.id ?? rowIndex),
-                                  matrixDefaultCellValue(row),
-                                ])
-                              ),
-                            },
-                          ];
-                          saveMatrixColumns(block.id, blockConfig, nextColumns);
-                        }}
-                      >
-                        {t("newColumnPlus")}
-                      </button>
-                      {blockConfig.auto_source?.type ? (
-                        <button
-                          type="button"
-                          className="button-secondary"
-                          onClick={() => generateMatrixColumns(block.id, blockConfig)}
-                        >
-                          {t("generateAction")}
-                        </button>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  {/* Wrapping card layout: one card per column, rows stacked inside */}
-                  {(() => {
-                    const cols = matrixColumns(blockConfig).filter((c) => !c?.hidden);
-                    const rows = matrixRows(blockConfig);
-                    if (matrixPlanningManageable && cols.length === 0) {
-                      return (
-                        <div className="editor-block-empty-placeholder-auto">
-                          <span>{t("noElementsShown")}</span>
-                          <PlanningIconTrigger
-                            title={t("chooseColumns")}
-                            icon="☑"
-                            onClick={() => setMatrixPickerBlockId(block.id)}
-                          />
-                        </div>
-                      );
-                    }
-                    const displayCols = cols.length ? cols : [null, null, null]; // 3 placeholders
+              {elementType === "matrix" && (() => {
+                const cols = matrixColumns(blockConfig).filter((c) => !c?.hidden);
+                const rows = matrixRows(blockConfig);
+                const autoSource = matrixAutoSourceInfo(blockConfig);
+                const sourceLabel =
+                  autoSource.source === "list"
+                    ? t("matrixBoard.sourceList", { name: listDefinitionsById.get(autoSource.listId ?? "")?.name ?? t("matrixBoard.sourceListFallback") })
+                    : autoSource.source === "participants"
+                      ? t("matrixBoard.sourceParticipants")
+                      : autoSource.source === "events"
+                        ? t("matrixBoard.sourceEvents")
+                        : null;
+                const columnName = (column: Record<string, any>, columnIndex: number) =>
+                  String(column.title ?? "").trim() || t("matrixBoard.columnFallback", { index: columnIndex + 1 });
+                const addColumn = () =>
+                  saveMatrixColumns(block.id, blockConfig, [
+                    ...matrixColumns(blockConfig),
+                    {
+                      id: nextMatrixColumnId(matrixColumns(blockConfig)),
+                      title: "",
+                      row_values: Object.fromEntries(
+                        rows.map((row, rowIndex) => [String(row.id ?? rowIndex), matrixDefaultCellValue(row)])
+                      ),
+                    },
+                  ]);
+                const headerActions = matrixPlanningManageable ? (
+                  <PlanningIconTrigger title={t("chooseColumns")} icon="☑" onClick={() => setMatrixPickerBlockId(block.id)} />
+                ) : matrixInlineColumnManagement && blockConfig.auto_source?.type ? (
+                  <button type="button" className="button-secondary button-ghost" onClick={() => generateMatrixColumns(block.id, blockConfig)}>
+                    {t("generateAction")}
+                  </button>
+                ) : null;
+
+                const renderCell = (row: Record<string, any>, rowId: string, column: Record<string, any>, columnId: string, cellEditable: boolean) => {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
+                  const value = matrixCellValue(column, row, rowId);
+                  const embeddedBlock = matrixEmbeddedBlockForRow(row, value);
+                  const rowLabel = String(row.label ?? t("matrixEditor.defaultRowLabel"));
+                  if (embeddedBlock) {
                     return (
-                      <div className="matrix-cards">
-                        {displayCols.map((column, columnIndex) => {
-                          const isPlaceholder = column === null;
-                          const columnId = isPlaceholder ? null : String(column!.id ?? columnIndex);
+                      <MatrixEmbeddedBlockEditor
+                        embeddedBlock={embeddedBlock}
+                        protocol={protocol}
+                        availableParticipants={availableParticipants}
+                        availableEvents={availableEvents}
+                        matrixColumn={column}
+                        editable={cellEditable}
+                        updateEmbeddedBlock={(updater, persist = false) =>
+                          updateMatrixEmbeddedBlock(block.id, blockConfig, columnId, row, rowId, updater, persist)}
+                        openMultiParticipantPicker={(embeddedRow) =>
+                          openEmbeddedFormParticipantPicker(block.id, columnId, rowId, rowLabel, embeddedRow)}
+                        createEvent={(forcedTag, draft) =>
+                          createEventFromBlock(block.id, {
+                            event_filter: { tags: splitTags(forcedTag) },
+                            event_allow_end_date:
+                              asObject(embeddedBlock.configuration_snapshot_json).event_allow_end_date === true,
+                          }, draft)}
+                        updateEvent={(eventId, patch) => updateEventFromBlock(block.id, eventId, patch)}
+                        deleteEvent={(eventId) => deleteEventFromBlock(block.id, eventId)}
+                        filterEvents={filteredEvents}
+                        onEventContextMenu={(nativeEvent, eventRow) => onEventContextMenu(nativeEvent, eventRow, block.id)}
+                        isPlanningMode={isPlanningMode}
+                        knownEventTags={knownEventTags}
+                        tagConfig={tagConfig}
+                        onTagColorChange={updateTagColor}
+                        onTagRename={renameTag}
+                      />
+                    );
+                  }
+                  const rowType = matrixRowType(row);
+                  if (rowType === "events") {
+                    const autoEvents = matrixEventsForRow(row, column);
+                    if (!autoEvents.length) return <span className="matrix-board-dash">{t("noMatchingEvents")}</span>;
+                    return (
+                      <MatrixEventChips
+                        events={autoEvents.map((eventRow) => {
+                          const muted = [
+                            rowConfigFlag(row, "event_show_location", false) ? eventRow.location : null,
+                            rowConfigFlag(row, "event_show_description", true) ? eventRow.description : null,
+                          ].filter(Boolean).join(" · ");
+                          return {
+                            id: eventRow.id,
+                            date: rowConfigFlag(row, "event_show_date", true) ? formatDateRange(eventRow.event_date, eventRow.event_end_date) : null,
+                            label: rowConfigFlag(row, "event_show_title", false) ? eventRow.title : "",
+                            muted: muted || undefined,
+                            past: !!protocol.protocol_date && (eventRow.event_end_date || eventRow.event_date) < protocol.protocol_date,
+                          };
+                        })}
+                      />
+                    );
+                  }
+                  if (rowType === "participant") {
+                    const participantId = value.participant_id ? String(value.participant_id) : null;
+                    const name = participantId ? participantNames.find((entry) => entry.id === participantId)?.display_name : null;
+                    const open = () => {
+                      pickerTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+                      setMultiParticipantSearch("");
+                      setMultiParticipantPicker({
+                        kind: "matrix",
+                        blockId: block.id,
+                        rowId,
+                        rowLabel: String(row.label ?? t("participantFallback")),
+                        selectedIds: participantId ? [participantId] : [],
+                        columnId,
+                        singleSelect: true,
+                      });
+                    };
+                    if (!name) return <MatrixEmptyValue addLabel={cellEditable ? t("matrixBoard.addPerson") : undefined} onAdd={cellEditable ? open : undefined} />;
+                    return <MatrixPeopleChips names={[name]} onEdit={cellEditable ? open : undefined} />;
+                  }
+                  if (rowType === "participants") {
+                    const ids = Array.isArray(value.participant_ids) ? value.participant_ids.map(String) : [];
+                    const names = participantNames.filter((entry) => ids.includes(entry.id)).map((entry) => entry.display_name);
+                    const open = () => openMatrixParticipantPicker(block.id, columnId, { row_id: rowId, label: row.label, ...value });
+                    if (!names.length) return <MatrixEmptyValue addLabel={cellEditable ? t("matrixBoard.addPerson") : undefined} onAdd={cellEditable ? open : undefined} />;
+                    return <MatrixPeopleChips names={names} onEdit={cellEditable ? open : undefined} onAdd={cellEditable ? open : undefined} />;
+                  }
+                  if (rowType === "event") {
+                    const eventRow = sortedAvailableEvents.find((entry) => entry.id === String(value.event_id ?? ""));
+                    const picker = (close: () => void) => (
+                      <SearchableSelect
+                        options={sortedAvailableEvents}
+                        getId={(ev) => ev.id}
+                        getLabel={(ev) => `${formatDateRange(ev.event_date, ev.event_end_date)} · ${ev.title}`}
+                        value={value.event_id ?? null}
+                        onChange={(ev) => {
+                          updateMatrixCell(block.id, blockConfig, columnId, rowId, { event_id: ev ? ev.id : null }, true);
+                          close();
+                        }}
+                        nullLabel={t("chooseEventAlt")}
+                      />
+                    );
+                    if (!eventRow) return cellEditable ? picker(() => undefined) : <MatrixEmptyValue />;
+                    return (
+                      <MatrixEventValue
+                        title={eventRow.title}
+                        date={formatDateRange(eventRow.event_date, eventRow.event_end_date)}
+                        renderPicker={cellEditable ? picker : undefined}
+                      />
+                    );
+                  }
+                  const text = String(value.text_value ?? row.template_value ?? "");
+                  if (!cellEditable) {
+                    return text.trim() ? <div className="matrix-board-text">{text}</div> : <MatrixEmptyValue />;
+                  }
+                  return (
+                    <textarea
+                      rows={1}
+                      className="matrix-board-textarea"
+                      aria-label={rowLabel}
+                      placeholder={t("matrixBoard.notePlaceholder")}
+                      value={text}
+                      onInput={(e) => autoResizeTodoField(e.currentTarget)}
+                      onChange={(e) => updateMatrixCell(block.id, blockConfig, columnId, rowId, { text_value: e.target.value })}
+                      onBlur={() => updateMatrixCell(block.id, blockConfig, columnId, rowId, {}, true)}
+                    />
+                  );
+                };
+
+                return (
+                  <div className="matrix-board">
+                    <MatrixBoardHeader source={sourceLabel} view={matrixView} onViewChange={changeMatrixView} actions={headerActions} />
+                    {!rows.length ? (
+                      <div className="matrix-board-empty">{t("noRowsConfigured")}</div>
+                    ) : !cols.length && !matrixInlineColumnManagement ? (
+                      <div className="matrix-board-empty">
+                        <span>{t("noElementsShown")}</span>
+                        {matrixPlanningManageable ? (
+                          <PlanningIconTrigger title={t("chooseColumns")} icon="☑" onClick={() => setMatrixPickerBlockId(block.id)} />
+                        ) : null}
+                      </div>
+                    ) : matrixView === "table" ? (
+                      <MatrixTableView
+                        columns={cols.map((column, columnIndex) => ({
+                          id: String(column.id ?? columnIndex),
+                          name: columnName(column, columnIndex),
+                          colorIndex: columnIndex,
+                        }))}
+                        rows={rows.map((row, rowIndex) => {
+                          const rowId = String(row.id ?? rowIndex);
+                          return {
+                            id: rowId,
+                            label: String(row.label ?? t("matrixEditor.defaultRowLabel")),
+                            locked: !forceEditable && !matrixRowEditable(row),
+                            cells: cols.map((column) => matrixCellText(row, rowId, column)),
+                          };
+                        })}
+                      />
+                    ) : (
+                      <div className="matrix-board-cards">
+                        {cols.map((column, columnIndex) => {
+                          const columnId = String(column.id ?? columnIndex);
                           return (
-                            <div key={isPlaceholder ? `ph-${columnIndex}` : String(column!.id ?? columnIndex)}
-                              className={`matrix-card${isPlaceholder ? " matrix-card-placeholder" : ""}`}>
-                              {/* Column header */}
-                              <div className="matrix-card-header">
-                                {isPlaceholder ? (
-                                  <span className="muted">Spalte {columnIndex + 1}</span>
-                                ) : matrixInlineColumnManagement ? (
+                            <article key={columnId} className="matrix-board-card">
+                              <header className="matrix-board-card-head">
+                                <span className={`matrix-board-swatch ${matrixColumnColorClass(columnIndex)}`} aria-hidden="true" />
+                                {matrixInlineColumnManagement ? (
                                   <>
                                     <input
-                                      className="matrix-col-title-input"
-                                      value={String(column!.title ?? "")}
-                                      onChange={(e) => updateMatrixColumn(block.id, blockConfig, columnId!,
+                                      className="matrix-board-card-title-input"
+                                      value={String(column.title ?? "")}
+                                      aria-label={t("matrixBoard.columnNameLabel")}
+                                      onChange={(e) => updateMatrixColumn(block.id, blockConfig, columnId,
                                         (cur) => ({ ...cur, title: e.target.value }))}
-                                      onBlur={() => updateMatrixColumn(block.id, blockConfig, columnId!,
-                                        (cur) => cur, true)}
-                                      placeholder={String(column!.title_placeholder ?? `Spalte ${columnIndex + 1}`)}
+                                      onBlur={() => updateMatrixColumn(block.id, blockConfig, columnId, (cur) => cur, true)}
+                                      placeholder={String(column.title_placeholder ?? t("matrixBoard.columnFallback", { index: columnIndex + 1 }))}
                                     />
-                                    <button type="button" className="matrix-col-remove" title={t("removeColumn")} aria-label={t("removeColumn")}
+                                    <button type="button" className="button-icon-soft button-icon-soft-sm button-icon-soft-danger" title={t("removeColumn")} aria-label={t("removeColumn")}
                                       onClick={() => saveMatrixColumns(block.id, blockConfig,
-                                        matrixColumns(blockConfig).filter(e => String(e.id ?? "") !== columnId!))}>
+                                        matrixColumns(blockConfig).filter((entry) => String(entry.id ?? "") !== columnId))}>
                                       <ActionIcon name="delete" />
                                     </button>
                                   </>
                                 ) : (
-                                  <span className="matrix-card-title">
-                                    {String(column!.title ?? "").trim() || `Spalte ${columnIndex + 1}`}
-                                  </span>
+                                  <span className="matrix-board-card-title">{columnName(column, columnIndex)}</span>
                                 )}
-                              </div>
-
-                              {/* Row sections */}
-                              {rows.map((row, rowIndex) => {
-                                const rowId = String(row.id ?? rowIndex);
-                                const value = isPlaceholder ? {} : matrixCellValue(column!, row, rowId);
-                                const embeddedBlock = isPlaceholder ? null : matrixEmbeddedBlockForRow(row, value);
-                                const cellFieldKey = `block-${block.id}-cell-${rowId}-${columnId ?? columnIndex}`;
-                                const cellLockHolder = isPlaceholder ? null : collab.isLockedByOther(cellFieldKey);
-                                const cellEditable = !isPlaceholder && blockEditable && !cellLockHolder && (forceEditable || matrixRowEditable(row));
-                                const autoEvents = (!isPlaceholder && !embeddedBlock && matrixRowType(row) === "events")
-                                  ? matrixEventsForRow(row, column!) : [];
-                                return (
-                                  <div key={`${rowId}-${columnIndex}`} className="matrix-card-row">
-                                    <div className={`matrix-card-row-label${(!forceEditable && !matrixRowEditable(row)) ? " matrix-row-locked" : ""}`}>
-                                      {row.label ?? `Zeile ${rowIndex + 1}`}
-                                      {(!forceEditable && !matrixRowEditable(row)) ? <span className="matrix-lock-icon"> 🔒</span> : null}
-                                      {cellLockHolder ? <LockBadge holder={cellLockHolder} /> : null}
-                                    </div>
+                              </header>
+                              <div className="matrix-board-card-rows">
+                                {rows.map((row, rowIndex) => {
+                                  const rowId = String(row.id ?? rowIndex);
+                                  const cellFieldKey = `block-${block.id}-cell-${rowId}-${columnId}`;
+                                  const cellLockHolder = collab.isLockedByOther(cellFieldKey);
+                                  const rowLocked = !forceEditable && !matrixRowEditable(row);
+                                  const cellEditable = blockEditable && !cellLockHolder && !rowLocked;
+                                  return (
                                     <div
-                                      className="matrix-card-row-cell"
-                                      onFocusCapture={isPlaceholder ? undefined : () => collab.lockField(cellFieldKey)}
-                                      onBlurCapture={
-                                        isPlaceholder
-                                          ? undefined
-                                          : (event) => {
-                                              if (!event.currentTarget.contains(event.relatedTarget as Node)) {
-                                                collab.unlockField(cellFieldKey);
-                                              }
-                                            }
-                                      }
+                                      key={rowId}
+                                      className="matrix-board-row"
+                                      onFocusCapture={() => collab.lockField(cellFieldKey)}
+                                      onBlurCapture={(event) => {
+                                        if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+                                          collab.unlockField(cellFieldKey);
+                                        }
+                                      }}
                                     >
-                                      {isPlaceholder ? (
-                                        <div className="matrix-table-placeholder" style={{ height: 40, borderRadius: "var(--radius-sm)" }} />
-                                      ) : embeddedBlock ? (
-                                        <>
-                                          <MatrixEmbeddedBlockEditor
-                                            embeddedBlock={embeddedBlock}
-                                            protocol={protocol}
-                                            availableParticipants={availableParticipants}
-                                            availableEvents={availableEvents}
-                                            matrixColumn={column!}
-                                            editable={cellEditable}
-                                            updateEmbeddedBlock={(updater, persist = false) =>
-                                              updateMatrixEmbeddedBlock(block.id, blockConfig, columnId!, row, rowId, updater, persist)}
-                                            openMultiParticipantPicker={(embeddedRow) =>
-                                              openEmbeddedFormParticipantPicker(block.id, columnId!, rowId,
-                                                String(row.label ?? `Zeile ${rowIndex + 1}`), embeddedRow)}
-                                            createEvent={(forcedTag, draft) =>
-                                              createEventFromBlock(block.id, {
-                                                event_filter: { tags: splitTags(forcedTag) },
-                                                event_allow_end_date:
-                                                  asObject(embeddedBlock.configuration_snapshot_json).event_allow_end_date === true,
-                                              }, draft)}
-                                            updateEvent={(eventId, patch) => updateEventFromBlock(block.id, eventId, patch)}
-                                            deleteEvent={(eventId) => deleteEventFromBlock(block.id, eventId)}
-                                            filterEvents={filteredEvents}
-                                            onEventContextMenu={(nativeEvent, eventRow) => onEventContextMenu(nativeEvent, eventRow, block.id)}
-                                            isPlanningMode={isPlanningMode}
-                                            knownEventTags={knownEventTags}
-                                            tagConfig={tagConfig}
-                                            onTagColorChange={updateTagColor}
-                                            onTagRename={renameTag}
-                                          />
-                                          {cellEditable ? (
-                                            <div className="matrix-row-summary muted">
-                                              {embeddedBlockSummary(embeddedBlock, participantNames, availableEvents, protocol, t, column!, availableTemplates)}
-                                            </div>
-                                          ) : null}
-                                        </>
-                                      ) : matrixRowType(row) === "events" ? (
-                                        autoEvents.length ? (
-                                          <div className="matrix-event-list">
-                                            {autoEvents.map((eventRow) => {
-                                              const isPast = !!protocol.protocol_date &&
-                                                (eventRow.event_end_date || eventRow.event_date) < protocol.protocol_date;
-                                              return (
-                                                <div className={`matrix-event-item${isPast ? " matrix-event-item-past" : ""}`}
-                                                  key={`${columnIndex}-${rowId}-${eventRow.id}`}>
-                                                  {rowConfigFlag(row, "event_show_date", true) ? <span>{formatDateRange(eventRow.event_date, eventRow.event_end_date)}</span> : null}
-                                                  {rowConfigFlag(row, "event_show_title", false) ? <span>{eventRow.title}</span> : null}
-                                                  {rowConfigFlag(row, "event_show_location", false) && eventRow.location ? <span className="muted">{eventRow.location}</span> : null}
-                                                  {rowConfigFlag(row, "event_show_description", true) && eventRow.description ? <span className="muted">({eventRow.description})</span> : null}
-                                                </div>
-                                              );
-                                            })}
-                                          </div>
-                                        ) : <span className="muted">{t("noMatchingEvents")}</span>
-                                      ) : (
-                                        <div className="matrix-cell-value">
-                                          {!cellEditable ? (
-                                            <div className="matrix-static-value">{matrixValueSummary(row, value)}</div>
-                                          ) : matrixRowType(row) === "participant" ? (
-                                            <button
-                                              type="button"
-                                              className="button-ghost form-participant-picker-button"
-                                              onClick={(e) => {
-                                                pickerTriggerRef.current = e.currentTarget;
-                                                setMultiParticipantSearch("");
-                                                setMultiParticipantPicker({
-                                                  kind: "matrix",
-                                                  blockId: block.id,
-                                                  rowId: rowId!,
-                                                  rowLabel: String(row.label ?? t("participantFallback")),
-                                                  selectedIds: value.participant_id ? [String(value.participant_id)] : [],
-                                                  columnId: columnId!,
-                                                  singleSelect: true,
-                                                });
-                                              }}
-                                            >
-                                              {singleParticipantSummary(value.participant_id)}
-                                            </button>
-                                          ) : matrixRowType(row) === "participants" ? (
-                                            <button type="button" className="button-ghost form-participant-picker-button"
-                                              onClick={() => openMatrixParticipantPicker(block.id, columnId!, {
-                                                row_id: rowId, label: row.label, ...value })}>
-                                              <span className="participant-summary-text" title={multiParticipantSummary(value)}>{multiParticipantSummary(value)}</span>
-                                            </button>
-                                          ) : matrixRowType(row) === "event" ? (
-                                            <SearchableSelect
-                                              options={sortedAvailableEvents}
-                                              getId={(ev) => ev.id}
-                                              getLabel={(ev) => `${formatDateRange(ev.event_date, ev.event_end_date)} · ${ev.title}`}
-                                              value={value.event_id ?? null}
-                                              onChange={(ev) => updateMatrixCell(block.id, blockConfig, columnId!, rowId,
-                                                { event_id: ev ? ev.id : null }, true)}
-                                              nullLabel={t("chooseEventAlt")}
-                                            />
-                                          ) : (
-                                            <textarea rows={1} className="todo-input"
-                                              value={String(value.text_value ?? row.template_value ?? "")}
-                                              onInput={(e) => autoResizeTodoField(e.currentTarget)}
-                                              onChange={(e) => updateMatrixCell(block.id, blockConfig, columnId!, rowId,
-                                                { text_value: e.target.value })}
-                                              onBlur={() => updateMatrixCell(block.id, blockConfig, columnId!, rowId, {}, true)}
-                                            />
-                                          )}
-                                          {cellEditable ? (
-                                            <div className="matrix-row-summary muted">{matrixValueSummary(row, value)}</div>
-                                          ) : null}
-                                        </div>
-                                      )}
+                                      <MatrixRowLabel
+                                        label={String(row.label ?? t("matrixEditor.defaultRowLabel"))}
+                                        locked={rowLocked}
+                                        extra={cellLockHolder ? <LockBadge holder={cellLockHolder} /> : null}
+                                      />
+                                      <div className="matrix-board-row-value">
+                                        {renderCell(row, rowId, column, columnId, cellEditable)}
+                                      </div>
                                     </div>
-                                  </div>
-                                );
-                              })}
-                              {!rows.length ? (
-                                <div className="matrix-table-empty">{t("noRowsConfigured")}</div>
-                              ) : null}
-                            </div>
+                                  );
+                                })}
+                              </div>
+                            </article>
                           );
                         })}
+                        {matrixInlineColumnManagement ? <MatrixAddColumnCard onClick={addColumn} /> : null}
                       </div>
-                    );
-                  })()}
-                  {matrixPlanningManageable && (
-                    <CheckboxCandidateModal
-                      open={matrixPickerBlockId === block.id}
-                      onClose={() => setMatrixPickerBlockId(null)}
-                      title={t("chooseColumns")}
-                      description={t("matrixColumnsToggleDescription")}
-                      items={matrixCandidateItems(blockConfig)}
-                      onToggle={(item, nextChecked) => toggleMatrixColumn(block.id, blockConfig, item.id, nextChecked)}
-                    />
-                  )}
-                </div>
-              )}
+                    )}
+                    {matrixPlanningManageable && (
+                      <CheckboxCandidateModal
+                        open={matrixPickerBlockId === block.id}
+                        onClose={() => setMatrixPickerBlockId(null)}
+                        title={t("chooseColumns")}
+                        description={t("matrixColumnsToggleDescription")}
+                        items={matrixCandidateItems(blockConfig)}
+                        onToggle={(item, nextChecked) => toggleMatrixColumn(block.id, blockConfig, item.id, nextChecked)}
+                      />
+                    )}
+                  </div>
+                );
+              })()}
 
               {elementType === "event_list" && (
                 <div className="grid event-list-grid">
