@@ -156,6 +156,7 @@
       "shortcutNextSection": "Next section",
       "shortcutNotes": "Open session notes",
       "shortcutPrevSection": "Previous section",
+      "shortcutSearch": "Search – in attendance, person search first",
       "shortcutTodo": "Open quick todo",
       "shortcuts": "Keyboard shortcuts",
       "title": "Status & collaboration"
@@ -518,5 +519,20 @@
     "removeTagHint": "Optional: remove the tag from the event that caused it to be shown here.",
     "removeTagLabel": "Remove tag “{tag}” from the event",
     "removeAction": "Remove"
+  },
+  "attendanceBoard": {
+    "summary": "{total, plural, one {# participant} other {# participants}} · {deviations, plural, one {# deviation} other {# deviations}}",
+    "openCount": "{count} open",
+    "markOpenPresent": "Mark remaining present",
+    "markedOpenPresent": "{count, plural, one {# person} other {# people}} marked present",
+    "filterLabel": "Filter by status",
+    "filterAll": "All",
+    "statusOpen": "Open",
+    "searchPlaceholder": "Search person …",
+    "keyHint": "Hover a person + <key>1–4</key>",
+    "emptySearch": "No person found for “{query}”",
+    "emptyFilter": "Nobody with this status",
+    "fine": "CHF {amount, number}",
+    "fineTitle": "Fine is created automatically"
   }
 }

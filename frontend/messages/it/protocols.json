@@ -156,6 +156,7 @@
       "shortcutNextSection": "Sezione successiva",
       "shortcutNotes": "Apri note della seduta",
       "shortcutPrevSection": "Sezione precedente",
+      "shortcutSearch": "Cerca – nelle presenze prima la ricerca persona",
       "shortcutTodo": "Apri attività rapida",
       "shortcuts": "Scorciatoie da tastiera",
       "title": "Stato e collaborazione"
@@ -518,5 +519,20 @@
     "removeTagHint": "Facoltativo: rimuovere dall'evento il tag per cui viene mostrato qui.",
     "removeTagLabel": "Rimuovi il tag «{tag}» dall'evento",
     "removeAction": "Rimuovi"
+  },
+  "attendanceBoard": {
+    "summary": "{total, plural, one {# partecipante} other {# partecipanti}} · {deviations, plural, one {# eccezione} other {# eccezioni}}",
+    "openCount": "{count} da registrare",
+    "markOpenPresent": "Segna gli altri presenti",
+    "markedOpenPresent": "{count, plural, one {# persona segnata presente} other {# persone segnate presenti}}",
+    "filterLabel": "Filtra per stato",
+    "filterAll": "Tutti",
+    "statusOpen": "Da registrare",
+    "searchPlaceholder": "Cerca persona …",
+    "keyHint": "Passa sopra una persona + <key>1–4</key>",
+    "emptySearch": "Nessuna persona trovata per «{query}»",
+    "emptyFilter": "Nessuno con questo stato",
+    "fine": "CHF {amount, number}",
+    "fineTitle": "La multa viene creata automaticamente"
   }
 }

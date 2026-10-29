@@ -156,6 +156,7 @@
       "shortcutNextSection": "Section suivante",
       "shortcutNotes": "Ouvrir les notes de séance",
       "shortcutPrevSection": "Section précédente",
+      "shortcutSearch": "Rechercher – dans les présences, d'abord la recherche de personne",
       "shortcutTodo": "Ouvrir une tâche rapide",
       "shortcuts": "Raccourcis clavier",
       "title": "Statut et collaboration"
@@ -518,5 +519,20 @@
     "removeTagHint": "Facultatif : retirer de l'événement le tag pour lequel il est affiché ici.",
     "removeTagLabel": "Retirer le tag « {tag} » de l'événement",
     "removeAction": "Retirer"
+  },
+  "attendanceBoard": {
+    "summary": "{total, plural, one {# participant} other {# participants}} · {deviations, plural, one {# écart} other {# écarts}}",
+    "openCount": "{count} en attente",
+    "markOpenPresent": "Marquer les autres présents",
+    "markedOpenPresent": "{count, plural, one {# personne marquée présente} other {# personnes marquées présentes}}",
+    "filterLabel": "Filtrer par statut",
+    "filterAll": "Tous",
+    "statusOpen": "En attente",
+    "searchPlaceholder": "Rechercher une personne …",
+    "keyHint": "Survoler une personne + <key>1–4</key>",
+    "emptySearch": "Aucune personne trouvée pour « {query} »",
+    "emptyFilter": "Personne avec ce statut",
+    "fine": "CHF {amount, number}",
+    "fineTitle": "L'amende est créée automatiquement"
   }
 }

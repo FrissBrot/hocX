@@ -27,6 +27,7 @@ import { fallbackTagColor } from "@/components/events/event-utils";
 import { CheckboxCandidateModal, CandidateItem } from "@/components/protocol/planning/checkbox-candidate-modal";
 import { EventDetailForm } from "@/components/protocol/planning/event-detail-form";
 import { PlanningIconTrigger } from "@/components/protocol/planning/planning-icon-trigger";
+import { AttendanceBoard } from "@/components/protocol/attendance-board";
 import { EventRemoveDialog, eventTagWithout, matchingEventTags } from "@/components/protocol/planning/event-remove-dialog";
 import { EventSeriesEntry, EventSeriesGroup } from "@/components/protocol/planning/event-series-group";
 import { EventBlockPickerModal } from "@/components/protocol/planning/event-block-picker-modal";
@@ -62,7 +63,6 @@ import {
   WholeListSnapshot,
 } from "@/types/api";
 import {
-  ATTENDANCE_OPTIONS,
   MatrixEmbeddedBlock,
   ProtocolEventDraft,
   TODO_STATUS,
@@ -72,7 +72,6 @@ import {
   asObject,
   blockEventPublicId,
   protocolAttendanceParticipants,
-  tallyAttendance,
   canCreateProtocolEventDraft,
   compareIsoDate,
   createInlineProtocolEventDraft,
@@ -244,6 +243,7 @@ export function FocusedElementEditor({
   const isParticipantSelectable = useParticipantSelectable();
   const participantNames = useParticipantNameSource(availableParticipants);
   const t = useTranslations("protocols");
+  const tBoard = useTranslations("protocols.attendanceBoard");
   const tTodos = useTranslations("todos");
   const confirm = useConfirm();
   const showToast = useToast();
@@ -3083,48 +3083,30 @@ export function FocusedElementEditor({
                   }
                 }
 
-                const { present: nPresent, late: nLate, excused: nExcused, absent: nAbsent } =
-                  tallyAttendance(eligibleAttendanceParticipants, attendanceEntries);
+                const statusById = new Map(
+                  attendanceEntries
+                    .filter((entry) => entry.participant_id != null && entry.status)
+                    .map((entry) => [String(entry.participant_id), String(entry.status)])
+                );
+                const fineAmountById = new Map<string, number>();
+                if (hasFineConfig) {
+                  for (const fine of protocolFines) {
+                    if (fine.status === "pending" && fine.participant_id) fineAmountById.set(fine.participant_id, fine.amount);
+                  }
+                }
                 return (
-                  <>
-                    <div className="attendance-list">
-                      {eligibleAttendanceParticipants.map((participant) => {
-                        const currentEntry = attendanceEntries.find((entry) => String(entry.participant_id) === participant.id);
-                        const selectedStatus = currentEntry?.status ?? null;
-                        const pendingFine = hasFineConfig ? protocolFines.find((f) => f.participant_id === participant.id && f.status === "pending") : null;
-                        return (
-                          <div className="attendance-row" key={`${block.id}-${participant.id}`}>
-                            <span className="attendance-name">
-                              {participant.display_name}
-                              {pendingFine ? <span className="fine-badge" title={t("fineBadgeTitle", { amount: pendingFine.amount, type: pendingFine.fine_type === "late" ? t("fineTypeLate") : t("fineTypeAbsent") })}> 💰</span> : null}
-                            </span>
-                            <div className="segment-control attendance-segment-control">
-                              {ATTENDANCE_OPTIONS.map((option) => (
-                                <button
-                                  key={option.value}
-                                  type="button"
-                                  className={`segment-button attendance-segment-button${selectedStatus === option.value ? " segment-button-active" : ""}`}
-                                  disabled={!blockEditable}
-                                  onClick={() => blockEditable && void handleAttendanceChange(participant, option.value)}
-                                >
-                                  {option.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="attendance-summary">
-                      <span>{t("countPresent", { count: nPresent })}</span>
-                      <span>·</span>
-                      <span>{t("countLate", { count: nLate })}</span>
-                      <span>·</span>
-                      <span>{t("countExcused", { count: nExcused })}</span>
-                      <span>·</span>
-                      <span>{t("countAbsent", { count: nAbsent })}</span>
-                    </div>
-                  </>
+                  <AttendanceBoard
+                    participants={eligibleAttendanceParticipants}
+                    statusById={statusById}
+                    editable={blockEditable}
+                    fineAmountById={fineAmountById}
+                    onChange={(participant, status) => (blockEditable ? handleAttendanceChange(participant, status) : undefined)}
+                    onMarkOpenPresent={async (open) => {
+                      if (!blockEditable) return;
+                      for (const participant of open) await handleAttendanceChange(participant, "present");
+                      showToast(tBoard("markedOpenPresent", { count: open.length }), "success");
+                    }}
+                  />
                 );
               })()}
 

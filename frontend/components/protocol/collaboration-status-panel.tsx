@@ -116,6 +116,7 @@ export function CollaborationStatusPanel({
 
         <div className="eyebrow collab-status-section-label">{t("shortcuts")}</div>
         <div className="collab-status-shortcuts">
+          <div className="collab-status-shortcut-row"><kbd>⌃F</kbd><span>{t("shortcutSearch")}</span></div>
           <div className="collab-status-shortcut-row"><kbd>⌃⌥N</kbd><span>{t("shortcutNotes")}</span></div>
           <div className="collab-status-shortcut-row"><kbd>⌃⌥T</kbd><span>{t("shortcutTodo")}</span></div>
           <div className="collab-status-shortcut-row"><kbd>⌃⏎</kbd><span>{t("shortcutNextSection")}</span></div>

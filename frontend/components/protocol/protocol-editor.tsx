@@ -16,6 +16,7 @@ import { Modal } from "@/components/ui/modal";
 import { Badge } from "@/components/ui/badge";
 import { NavIcon } from "@/components/ui/nav-icons";
 import { QuickActionsPill } from "@/components/protocol/quick-actions-pill";
+import { ATTENDANCE_SEARCH_ATTR } from "@/components/protocol/attendance-board";
 import { bumpStatsCharts } from "@/components/protocol/chart-block";
 import { CollaborationPresenceBar } from "@/components/protocol/collaboration-presence";
 import { computePopoverPosition, usePopoverDismiss } from "@/components/ui/popover";
@@ -836,9 +837,18 @@ export function ProtocolEditor({
       const inFormField = target && (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) || target.isContentEditable);
 
       // Ctrl+F → Kapitel-/Volltextsuche öffnen (statt der nativen Browsersuche), auch
-      // während in einem Textfeld getippt wird.
+      // während in einem Textfeld getippt wird. Ist eine Anwesenheitskontrolle im aktiven
+      // Punkt, fokussiert das erste Ctrl+F deren Personensuche, ein weiteres (Fokus schon dort)
+      // öffnet die globale Suche.
       if (event.key.toLowerCase() === "f" && (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey) {
         event.preventDefault();
+        const activeSection = selectedElementId ? document.getElementById(`protocol-element-${selectedElementId}`) : null;
+        const attendanceSearch = activeSection?.querySelector<HTMLInputElement>(`[${ATTENDANCE_SEARCH_ATTR}]`);
+        if (attendanceSearch && document.activeElement !== attendanceSearch) {
+          attendanceSearch.focus();
+          attendanceSearch.select();
+          return;
+        }
         setSearchOpen(true);
         return;
       }
@@ -1101,17 +1111,27 @@ export function ProtocolEditor({
   // focused-element-editor.tsx) don't keep going as though the save had succeeded.
   async function saveAttendanceStatus(blockId: string, participantId: string, participantName: string, status: string) {
     const block = elements.flatMap((element) => element.blocks).find((b) => b.id === blockId);
-    const previousEntries = Array.isArray(block?.configuration_snapshot_json?.attendance_entries)
+    const previousEntry = (Array.isArray(block?.configuration_snapshot_json?.attendance_entries)
       ? (block!.configuration_snapshot_json.attendance_entries as Array<Record<string, unknown>>)
-      : [];
-    const optimisticEntries = [
-      ...previousEntries.filter((entry) => String(entry.participant_id) !== participantId),
-      { participant_id: participantId, participant_name: participantName, status },
-    ];
-    updateBlockInState(blockId, (b) => ({
-      ...b,
-      configuration_snapshot_json: { ...b.configuration_snapshot_json, attendance_entries: optimisticEntries },
-    }));
+      : []
+    ).find((entry) => String(entry.participant_id) === participantId);
+    // Optimistisch auf dem aktuellen State aufbauen (nicht auf ``elements`` dieses Renders):
+    // «Übrige auf anwesend» speichert mehrere Personen nacheinander mit derselben Closure.
+    updateBlockInState(blockId, (b) => {
+      const current = Array.isArray(b.configuration_snapshot_json?.attendance_entries)
+        ? (b.configuration_snapshot_json.attendance_entries as Array<Record<string, unknown>>)
+        : [];
+      return {
+        ...b,
+        configuration_snapshot_json: {
+          ...b.configuration_snapshot_json,
+          attendance_entries: [
+            ...current.filter((entry) => String(entry.participant_id) !== participantId),
+            { participant_id: participantId, participant_name: participantName, status },
+          ],
+        },
+      };
+    });
     try {
       const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(
         `/api/protocol-element-blocks/${blockId}/attendance/${participantId}`,
@@ -1120,10 +1140,17 @@ export function ProtocolEditor({
       updateBlockInState(blockId, (b) => ({ ...b, configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version }));
       collab.sendFieldUpdate(`block-${blockId}`, { configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version });
     } catch (err: unknown) {
-      updateBlockInState(blockId, (b) => ({
-        ...b,
-        configuration_snapshot_json: { ...b.configuration_snapshot_json, attendance_entries: previousEntries },
-      }));
+      // Nur den Eintrag dieser Person zurücksetzen, gleichzeitige Änderungen anderer bleiben.
+      updateBlockInState(blockId, (b) => {
+        const current = Array.isArray(b.configuration_snapshot_json?.attendance_entries)
+          ? (b.configuration_snapshot_json.attendance_entries as Array<Record<string, unknown>>)
+          : [];
+        const others = current.filter((entry) => String(entry.participant_id) !== participantId);
+        return {
+          ...b,
+          configuration_snapshot_json: { ...b.configuration_snapshot_json, attendance_entries: previousEntry ? [...others, previousEntry] : others },
+        };
+      });
       throw err;
     }
   }

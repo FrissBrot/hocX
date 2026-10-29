@@ -156,6 +156,7 @@
       "shortcutNextSection": "Nächster Abschnitt",
       "shortcutNotes": "Sitzungsnotizen öffnen",
       "shortcutPrevSection": "Vorheriger Abschnitt",
+      "shortcutSearch": "Suchen – in der Anwesenheit zuerst Personensuche",
       "shortcutTodo": "Schnelles Todo öffnen",
       "shortcuts": "Tastenkürzel",
       "title": "Status & Zusammenarbeit"
@@ -518,5 +519,20 @@
     "removeTagHint": "Optional: den Tag vom Termin entfernen, wegen dem er hier angezeigt wird.",
     "removeTagLabel": "Tag «{tag}» vom Termin entfernen",
     "removeAction": "Entfernen"
+  },
+  "attendanceBoard": {
+    "summary": "{total, plural, one {# Teilnehmende Person} other {# Teilnehmende}} · {deviations, plural, one {# Abweichung} other {# Abweichungen}}",
+    "openCount": "{count} offen",
+    "markOpenPresent": "Übrige auf anwesend",
+    "markedOpenPresent": "{count, plural, one {# Person} other {# Personen}} auf anwesend gesetzt",
+    "filterLabel": "Nach Status filtern",
+    "filterAll": "Alle",
+    "statusOpen": "Offen",
+    "searchPlaceholder": "Person suchen …",
+    "keyHint": "Über Person fahren + <key>1–4</key>",
+    "emptySearch": "Keine Person gefunden für «{query}»",
+    "emptyFilter": "Niemand mit diesem Status",
+    "fine": "CHF {amount, number}",
+    "fineTitle": "Busse wird automatisch erstellt"
   }
 }
