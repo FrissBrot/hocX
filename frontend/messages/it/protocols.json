@@ -242,7 +242,7 @@
     "statusChangedByOtherToast": "{name} ha cambiato lo stato in «{status}».",
     "draftsRestoredToast": "{count, plural, one {# bozza locale è stata ripristinata} other {# bozze locali sono state ripristinate}}.",
     "conflictToast": "Conflitto: qualcun altro ha salvato questa sezione nel frattempo. È stata caricata la versione attuale – la tua ultima modifica non è stata applicata, ma è conservata come bozza locale.",
-    "eventHideFailed": "L'evento non può essere nascosto"
+    "eventHideFailed": "Non è stato possibile rimuovere l'evento"
   },
   "embeddedBlock": {
     "attendance": "Presenza",
@@ -487,14 +487,11 @@
   "eventSeries": {
     "ruleTag": "Per evento · tag «{tag}»",
     "ruleAny": "Per evento",
-    "count": "{visible} di {total, plural, one {# evento} other {# eventi}}",
+    "count": "{count, plural, one {# evento} other {# eventi}}",
     "choose": "Scegli eventi",
     "edit": "Modifica evento",
-    "hide": "Nascondi nel verbale",
-    "unhide": "Mostra",
-    "hiddenRow": "{title} · nascosto",
-    "remove": "Rimuovi blocco (l'evento resta)",
-    "removed": "Blocco del {date} rimosso – l'evento resta",
+    "remove": "Rimuovi – non mostrare mai più in questo punto",
+    "removed": "«{title}» rimosso",
     "empty": "Nessun evento selezionato.",
     "linked": "dall'evento",
     "linkedTitle": "Collegato all'evento: le modifiche valgono anche per l'evento.",
@@ -511,6 +508,15 @@
     "result": "dà {count, plural, one {# blocco} other {# blocchi}}",
     "showOther": "Mostra altri eventi ({count})",
     "hideOther": "Nascondi altri eventi",
-    "emptyRange": "Nessun evento in questo periodo."
+    "emptyRange": "Nessun evento in questo periodo.",
+    "postpone": "Rinvia – riappare nel prossimo verbale",
+    "postponeConfirm": "Rinviare «{title}»? L'evento viene rimosso da questo verbale e riappare nel prossimo. Il contenuto inserito qui andrà perso.",
+    "postponeAction": "Rinvia",
+    "postponed": "«{title}» rinviato – riappare nel prossimo verbale",
+    "removeTitle": "Rimuovi evento",
+    "removeDescription": "«{title}» viene rimosso da questo verbale e non sarà mai più mostrato in questo punto dei verbali successivi. L'evento stesso resta.",
+    "removeTagHint": "Facoltativo: rimuovere dall'evento il tag per cui viene mostrato qui.",
+    "removeTagLabel": "Rimuovi il tag «{tag}» dall'evento",
+    "removeAction": "Rimuovi"
   }
 }

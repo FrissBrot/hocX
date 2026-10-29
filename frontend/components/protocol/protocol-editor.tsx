@@ -1658,9 +1658,10 @@ export function ProtocolEditor({
     }
   }
 
-  // Termin-Block im Protokoll ein- bzw. ausblenden. ``manually_hidden`` merkt sich die Wahl:
-  // ein ausgeblendeter Termin wird in Folgeprotokollen derselben Vorlage nicht neu erzeugt
-  // (protocol_service._manually_hidden_event_ids), ein wieder eingeblendeter schon.
+  // Termin einer Serie entfernen bzw. wieder anhaken. ``manually_hidden`` merkt sich die Wahl:
+  // ein entfernter Termin bleibt als unsichtbarer Block stehen und wird in Folgeprotokollen
+  // derselben Vorlage für diesen Punkt nicht neu erzeugt (protocol_service._manually_hidden_event_ids),
+  // ein wieder angehakter schon. Vertagen löscht die Blöcke dagegen (removeEventBlock).
   async function setEventBlockVisible(blockId: string, visible: boolean) {
     const block = elements.flatMap((e) => e.blocks).find((b) => b.id === blockId);
     if (!block) return;

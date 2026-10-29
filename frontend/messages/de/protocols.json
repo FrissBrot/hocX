@@ -242,7 +242,7 @@
     "statusChangedByOtherToast": "Status wurde von {name} zu „{status}“ geändert.",
     "draftsRestoredToast": "{count, plural, one {# lokaler Textentwurf wurde} other {# lokale Textentwürfe wurden}} wiederhergestellt.",
     "conflictToast": "Konflikt: Diese Stelle wurde inzwischen von jemand anderem gespeichert. Die aktuelle Version wurde geladen – Ihre letzte Änderung wurde nicht übernommen, ist aber als lokaler Entwurf gesichert.",
-    "eventHideFailed": "Termin konnte nicht ausgeblendet werden"
+    "eventHideFailed": "Termin konnte nicht entfernt werden"
   },
   "embeddedBlock": {
     "attendance": "Anwesenheit",
@@ -487,14 +487,11 @@
   "eventSeries": {
     "ruleTag": "Pro Termin · Tag «{tag}»",
     "ruleAny": "Pro Termin",
-    "count": "{visible} von {total, plural, one {# Termin} other {# Terminen}}",
+    "count": "{count, plural, one {# Termin} other {# Termine}}",
     "choose": "Termine wählen",
     "edit": "Termin bearbeiten",
-    "hide": "Im Protokoll ausblenden",
-    "unhide": "Einblenden",
-    "hiddenRow": "{title} · ausgeblendet",
-    "remove": "Block entfernen (Termin bleibt)",
-    "removed": "Block für {date} entfernt – der Termin bleibt bestehen",
+    "remove": "Entfernen – nie mehr in diesem Punkt anzeigen",
+    "removed": "«{title}» entfernt",
     "empty": "Keine Termine ausgewählt.",
     "linked": "aus Termin",
     "linkedTitle": "Mit dem Termin verknüpft: Änderungen gelten auch im Termin.",
@@ -511,6 +508,15 @@
     "result": "ergibt {count, plural, one {# Block} other {# Blöcke}}",
     "showOther": "Weitere Termine anzeigen ({count})",
     "hideOther": "Weitere Termine ausblenden",
-    "emptyRange": "Keine Termine in diesem Zeitraum."
+    "emptyRange": "Keine Termine in diesem Zeitraum.",
+    "postpone": "Vertagen – erscheint im nächsten Protokoll wieder",
+    "postponeConfirm": "«{title}» vertagen? Der Termin wird aus diesem Protokoll entfernt und erscheint im nächsten wieder. Hier eingegebener Inhalt geht dabei verloren.",
+    "postponeAction": "Vertagen",
+    "postponed": "«{title}» vertagt – erscheint im nächsten Protokoll wieder",
+    "removeTitle": "Termin entfernen",
+    "removeDescription": "«{title}» wird aus diesem Protokoll entfernt und in Folgeprotokollen dieses Punkts nie mehr angezeigt. Der Termin selbst bleibt bestehen.",
+    "removeTagHint": "Optional: den Tag vom Termin entfernen, wegen dem er hier angezeigt wird.",
+    "removeTagLabel": "Tag «{tag}» vom Termin entfernen",
+    "removeAction": "Entfernen"
   }
 }

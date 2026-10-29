@@ -27,6 +27,7 @@ import { fallbackTagColor } from "@/components/events/event-utils";
 import { CheckboxCandidateModal, CandidateItem } from "@/components/protocol/planning/checkbox-candidate-modal";
 import { EventDetailForm } from "@/components/protocol/planning/event-detail-form";
 import { PlanningIconTrigger } from "@/components/protocol/planning/planning-icon-trigger";
+import { EventRemoveDialog, eventTagWithout, matchingEventTags } from "@/components/protocol/planning/event-remove-dialog";
 import { EventSeriesEntry, EventSeriesGroup } from "@/components/protocol/planning/event-series-group";
 import { EventBlockPickerModal } from "@/components/protocol/planning/event-block-picker-modal";
 import { TrackedWordDiff } from "@/components/protocol/tracked-word-diff";
@@ -273,6 +274,9 @@ export function FocusedElementEditor({
   const [showEventBlockPicker, setShowEventBlockPicker] = useState(false);
   // «Termin bearbeiten» aus einer Termin-Karte bzw. aus dem Popup «Termine wählen»
   const [editingSeriesEvent, setEditingSeriesEvent] = useState<{ eventId: string; blockId: string } | null>(null);
+  // «Entfernen» einer Termin-Serie: Rückfrage mit optionalem Entfernen der passenden Tags
+  const [removingSeriesEvent, setRemovingSeriesEvent] = useState<{ title: string; event: EventSummary | null; blockIds: string[]; tags: string[] } | null>(null);
+  const [removingSeriesBusy, setRemovingSeriesBusy] = useState(false);
   // „Nächster Hock": Kalenderansicht als Date-Picker (Block-ID + heutiges Datum beim Öffnen).
   const [sessionDatePicker, setSessionDatePicker] = useState<{ blockId: string; todayIso: string } | null>(null);
   const [eventBlockScope, setEventBlockScope] = useState<"current" | "all">("current");
@@ -1321,6 +1325,27 @@ export function FocusedElementEditor({
     });
   }, [element.id]);
 
+  // Entfernen: Blöcke bleiben unsichtbar mit manually_hidden stehen, daran erkennen
+  // Folgeprotokolle derselben Vorlage den Termin und erzeugen ihn für diesen Punkt nie mehr
+  // (protocol_service._manually_hidden_event_ids). Optional zuerst die Tags vom Termin entfernen.
+  async function confirmRemoveSeriesEvent(removeTags: string[]) {
+    if (!removingSeriesEvent) return;
+    const { title, event, blockIds } = removingSeriesEvent;
+    setRemovingSeriesBusy(true);
+    try {
+      if (event && removeTags.length && blockIds[0]) {
+        const saved = await updateEventFromBlock(blockIds[0], event.id, { tag: eventTagWithout(event.tag, removeTags) });
+        if (!saved) return;
+        refreshEventBlockCandidates();
+      }
+      for (const blockId of blockIds) await hideEventBlock(blockId);
+      setRemovingSeriesEvent(null);
+      showToast(t("eventSeries.removed", { title }), "success");
+    } finally {
+      setRemovingSeriesBusy(false);
+    }
+  }
+
   // Automatisch pro Termin erzeugte Blöcke (repeat_source_type=event) laufen als eine Gruppe
   // (EventSeriesGroup): je Termin eine Karte mit den Blöcken dieses Termins. Alle anderen
   // Blöcke rendern unverändert über ``renderBlock``.
@@ -1348,15 +1373,19 @@ export function FocusedElementEditor({
         groups.set(key, group);
         index += 1;
       }
-      const entries: EventSeriesEntry[] = [...groups.entries()].map(([key, group]) => ({
-        key,
-        event: availableEvents.find((e) => e.id === key) ?? null,
-        label: String(asObject(group.blocks[0].configuration_snapshot_json).repeat_source_label ?? t("unknownEvent")),
-        hidden: group.blocks.every((b) => !b.is_visible_snapshot),
-        content: group.nodes,
-      }));
+      // Entfernte Termine (alle Blöcke manually_hidden/unsichtbar) erscheinen nicht mehr.
+      const entries: EventSeriesEntry[] = [...groups.entries()]
+        .filter(([, group]) => group.blocks.some((b) => b.is_visible_snapshot))
+        .map(([key, group]) => ({
+          key,
+          event: availableEvents.find((e) => e.id === key) ?? null,
+          label: String(asObject(group.blocks[0].configuration_snapshot_json).repeat_source_label ?? t("unknownEvent")),
+          content: group.nodes,
+        }));
       const blocksOf = (entry: EventSeriesEntry) => groups.get(entry.key)?.blocks ?? [];
-      const seriesTag = eventFilterTagText(normalizeEventFilter(asObject(first.configuration_snapshot_json).repeat_event_filter));
+      const seriesFilter = normalizeEventFilter(asObject(first.configuration_snapshot_json).repeat_event_filter);
+      const seriesTag = eventFilterTagText(seriesFilter);
+      const entryTitle = (entry: EventSeriesEntry) => entry.event?.title || entry.label;
       out.push(
         <EventSeriesGroup
           key={`series-${first.id}`}
@@ -1366,23 +1395,23 @@ export function FocusedElementEditor({
           canEdit={!isReadOnly}
           onChoose={() => setShowEventBlockPicker(true)}
           onEditEvent={(entry) => setEditingSeriesEvent({ eventId: entry.key, blockId: blocksOf(entry)[0]?.id ?? "" })}
-          onHide={(entry) => {
+          // Vertagen: Blöcke löschen - ohne manually_hidden erzeugt das nächste Protokoll sie neu.
+          onPostpone={(entry) => {
             void (async () => {
-              for (const b of blocksOf(entry)) await hideEventBlock(b.id);
-            })();
-          }}
-          onUnhide={(entry) => {
-            void (async () => {
-              for (const b of blocksOf(entry)) await unhideEventBlock(b.id);
+              const title = entryTitle(entry);
+              const ok = await confirm({ message: t("eventSeries.postponeConfirm", { title }), tone: "danger", confirmLabel: t("eventSeries.postponeAction") });
+              if (!ok) return;
+              for (const b of blocksOf(entry)) await removeEventBlock(b.id);
+              showToast(t("eventSeries.postponed", { title }), "success");
             })();
           }}
           onRemove={(entry) => {
-            void (async () => {
-              const ok = await confirm({ message: t("uncheckEventConfirm"), tone: "danger", confirmLabel: t("uncheckAction") });
-              if (!ok) return;
-              for (const b of blocksOf(entry)) await removeEventBlock(b.id);
-              showToast(t("eventSeries.removed", { date: entry.event ? formatDate(entry.event.event_date) : entry.label }), "success");
-            })();
+            setRemovingSeriesEvent({
+              title: entryTitle(entry),
+              event: entry.event,
+              blockIds: blocksOf(entry).map((b) => b.id),
+              tags: entry.event ? matchingEventTags(entry.event.tag, seriesFilter.tags) : [],
+            });
           }}
         />
       );
@@ -3721,6 +3750,14 @@ export function FocusedElementEditor({
         />
       );
     })()}
+    <EventRemoveDialog
+      open={Boolean(removingSeriesEvent)}
+      title={removingSeriesEvent?.title ?? ""}
+      tags={removingSeriesEvent?.tags ?? []}
+      busy={removingSeriesBusy}
+      onClose={() => setRemovingSeriesEvent(null)}
+      onConfirm={(removeTags) => void confirmRemoveSeriesEvent(removeTags)}
+    />
     <Modal open={Boolean(editingSeriesEvent && editingEvent)} onClose={() => setEditingSeriesEvent(null)} title={t("eventSeries.edit")} size="wide">
       {editingSeriesEvent && editingEvent ? (
         <EventDetailForm

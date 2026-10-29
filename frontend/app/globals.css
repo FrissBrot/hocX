@@ -9496,26 +9496,6 @@ input[type="color"]::-moz-color-swatch {
   border-radius: var(--radius-md);
 }
 
-.event-series-hidden-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-md);
-  color: var(--muted);
-  font-size: var(--text-sm);
-}
-
-.event-series-hidden-date {
-  font-variant-numeric: tabular-nums;
-}
-
-.event-series-hidden-title {
-  flex: 1;
-  min-width: 0;
-}
-
 .event-series-card {
   display: grid;
   gap: var(--space-3);

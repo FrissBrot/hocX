@@ -242,7 +242,7 @@
     "statusChangedByOtherToast": "{name} a changé le statut en « {status} ».",
     "draftsRestoredToast": "{count, plural, one {# brouillon local a été restauré} other {# brouillons locaux ont été restaurés}}.",
     "conflictToast": "Conflit : quelqu'un d'autre a enregistré cette section entre-temps. La version actuelle a été chargée – votre dernière modification n'a pas été appliquée, mais elle est conservée comme brouillon local.",
-    "eventHideFailed": "L'événement n'a pas pu être masqué"
+    "eventHideFailed": "L'événement n'a pas pu être retiré"
   },
   "embeddedBlock": {
     "attendance": "Présence",
@@ -487,14 +487,11 @@
   "eventSeries": {
     "ruleTag": "Par événement · tag « {tag} »",
     "ruleAny": "Par événement",
-    "count": "{visible} sur {total, plural, one {# événement} other {# événements}}",
+    "count": "{count, plural, one {# événement} other {# événements}}",
     "choose": "Choisir des événements",
     "edit": "Modifier l'événement",
-    "hide": "Masquer dans le procès-verbal",
-    "unhide": "Afficher",
-    "hiddenRow": "{title} · masqué",
-    "remove": "Retirer le bloc (l'événement reste)",
-    "removed": "Bloc du {date} retiré – l'événement est conservé",
+    "remove": "Retirer – ne plus jamais afficher dans ce point",
+    "removed": "« {title} » retiré",
     "empty": "Aucun événement sélectionné.",
     "linked": "de l'événement",
     "linkedTitle": "Lié à l'événement : les modifications s'appliquent aussi à l'événement.",
@@ -511,6 +508,15 @@
     "result": "donne {count, plural, one {# bloc} other {# blocs}}",
     "showOther": "Afficher d'autres événements ({count})",
     "hideOther": "Masquer les autres événements",
-    "emptyRange": "Aucun événement sur cette période."
+    "emptyRange": "Aucun événement sur cette période.",
+    "postpone": "Reporter – réapparaît dans le prochain procès-verbal",
+    "postponeConfirm": "Reporter « {title} » ? L'événement est retiré de ce procès-verbal et réapparaît dans le suivant. Le contenu saisi ici sera perdu.",
+    "postponeAction": "Reporter",
+    "postponed": "« {title} » reporté – réapparaît dans le prochain procès-verbal",
+    "removeTitle": "Retirer l'événement",
+    "removeDescription": "« {title} » est retiré de ce procès-verbal et ne sera plus jamais affiché dans ce point des procès-verbaux suivants. L'événement lui-même est conservé.",
+    "removeTagHint": "Facultatif : retirer de l'événement le tag pour lequel il est affiché ici.",
+    "removeTagLabel": "Retirer le tag « {tag} » de l'événement",
+    "removeAction": "Retirer"
   }
 }

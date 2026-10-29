@@ -242,7 +242,7 @@
     "statusChangedByOtherToast": "{name} changed the status to “{status}”.",
     "draftsRestoredToast": "{count, plural, one {# local text draft was} other {# local text drafts were}} restored.",
     "conflictToast": "Conflict: someone else saved this section in the meantime. The current version has been loaded – your last change was not applied, but it is kept as a local draft.",
-    "eventHideFailed": "Event could not be hidden"
+    "eventHideFailed": "Event could not be removed"
   },
   "embeddedBlock": {
     "attendance": "Attendance",
@@ -487,14 +487,11 @@
   "eventSeries": {
     "ruleTag": "Per event · tag “{tag}”",
     "ruleAny": "Per event",
-    "count": "{visible} of {total, plural, one {# event} other {# events}}",
+    "count": "{count, plural, one {# event} other {# events}}",
     "choose": "Choose events",
     "edit": "Edit event",
-    "hide": "Hide in minutes",
-    "unhide": "Show",
-    "hiddenRow": "{title} · hidden",
-    "remove": "Remove block (event stays)",
-    "removed": "Block for {date} removed – the event remains",
+    "remove": "Remove – never show in this item again",
+    "removed": "“{title}” removed",
     "empty": "No events selected.",
     "linked": "from event",
     "linkedTitle": "Linked to the event: changes also apply to the event.",
@@ -511,6 +508,15 @@
     "result": "gives {count, plural, one {# block} other {# blocks}}",
     "showOther": "Show other events ({count})",
     "hideOther": "Hide other events",
-    "emptyRange": "No events in this period."
+    "emptyRange": "No events in this period.",
+    "postpone": "Postpone – shows up again in the next minutes",
+    "postponeConfirm": "Postpone “{title}”? The event is removed from these minutes and shows up again in the next ones. Content entered here will be lost.",
+    "postponeAction": "Postpone",
+    "postponed": "“{title}” postponed – shows up again in the next minutes",
+    "removeTitle": "Remove event",
+    "removeDescription": "“{title}” is removed from these minutes and will never be shown in this item of future minutes again. The event itself remains.",
+    "removeTagHint": "Optional: remove the tag from the event that caused it to be shown here.",
+    "removeTagLabel": "Remove tag “{tag}” from the event",
+    "removeAction": "Remove"
   }
 }

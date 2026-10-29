@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { EventSummary } from "@/types/api";
 import { EventBlockPickerModal } from "./event-block-picker-modal";
+import { EventRemoveDialog, eventTagWithout, matchingEventTags } from "./event-remove-dialog";
 import { EventSeriesEntry, EventSeriesGroup } from "./event-series-group";
 
 function event(id: string, date: string, overrides: Partial<EventSummary> = {}): EventSummary {
@@ -15,52 +16,70 @@ function event(id: string, date: string, overrides: Partial<EventSummary> = {}):
 }
 
 const entries: EventSeriesEntry[] = [
-  { key: "e1", event: event("e1", "2026-11-18"), label: "", hidden: false, content: <p>Rückblick 18.</p> },
-  { key: "e2", event: event("e2", "2026-11-25", { title: "Techniktraining", is_cancelled: true }), label: "", hidden: false, content: <p>Rückblick 25.</p> },
-  { key: "e3", event: event("e3", "2026-12-09"), label: "", hidden: true, content: null },
+  { key: "e1", event: event("e1", "2026-11-18"), label: "", content: <p>Rückblick 18.</p> },
+  { key: "e2", event: event("e2", "2026-11-25", { title: "Techniktraining", is_cancelled: true }), label: "", content: <p>Rückblick 25.</p> },
 ];
 
 function renderGroup(overrides: Partial<Parameters<typeof EventSeriesGroup>[0]> = {}) {
-  const handlers = { onChoose: vi.fn(), onEditEvent: vi.fn(), onHide: vi.fn(), onUnhide: vi.fn(), onRemove: vi.fn() };
+  const handlers = { onChoose: vi.fn(), onEditEvent: vi.fn(), onPostpone: vi.fn(), onRemove: vi.fn() };
   render(<EventSeriesGroup entries={entries} tag="Training" canChoose canEdit {...handlers} {...overrides} />);
   return handlers;
 }
 
 describe("EventSeriesGroup", () => {
-  it("shows rule, period and counter and one card per visible event", () => {
+  it("shows rule, period and counter and one card per event", () => {
     renderGroup();
     expect(screen.getByText("Pro Termin · Tag «Training»")).toBeInTheDocument();
-    expect(screen.getByText("18.11.2026 – 09.12.2026 · 2 von 3 Terminen")).toBeInTheDocument();
+    expect(screen.getByText("18.11.2026 – 25.11.2026 · 2 Termine")).toBeInTheDocument();
     expect(screen.getByText("Rückblick 18.")).toBeInTheDocument();
     expect(screen.getByText("Abgesagt")).toBeInTheDocument();
-    // Ausgeblendet: schmale Zeile ohne Inhalt
-    expect(screen.getByText("Hallentraining · ausgeblendet")).toBeInTheDocument();
   });
 
-  it("hides, shows, edits and removes per event", () => {
+  it("edits, postpones and removes per event", () => {
     const handlers = renderGroup();
-    fireEvent.click(screen.getAllByRole("button", { name: "Im Protokoll ausblenden" })[0]);
-    expect(handlers.onHide).toHaveBeenCalledWith(entries[0]);
-    fireEvent.click(screen.getByRole("button", { name: "Einblenden" }));
-    expect(handlers.onUnhide).toHaveBeenCalledWith(entries[2]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Vertagen – erscheint im nächsten Protokoll wieder" })[0]);
+    expect(handlers.onPostpone).toHaveBeenCalledWith(entries[0]);
     fireEvent.click(screen.getAllByRole("button", { name: "Termin bearbeiten" })[1]);
     expect(handlers.onEditEvent).toHaveBeenCalledWith(entries[1]);
-    fireEvent.click(screen.getAllByRole("button", { name: "Block entfernen (Termin bleibt)" })[0]);
-    expect(handlers.onRemove).toHaveBeenCalledWith(entries[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Entfernen – nie mehr in diesem Punkt anzeigen" })[1]);
+    expect(handlers.onRemove).toHaveBeenCalledWith(entries[1]);
     fireEvent.click(screen.getByRole("button", { name: "Termine wählen" }));
     expect(handlers.onChoose).toHaveBeenCalled();
   });
 
-  it("offers choosing and removing only while planning", () => {
+  it("offers choosing only while planning, postponing and removing whenever editable", () => {
     renderGroup({ canChoose: false });
     expect(screen.queryByRole("button", { name: "Termine wählen" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Block entfernen (Termin bleibt)" })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Im Protokoll ausblenden" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Vertagen – erscheint im nächsten Protokoll wieder" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Entfernen – nie mehr in diesem Punkt anzeigen" })).toHaveLength(2);
   });
 
   it("is read-only without any actions", () => {
     renderGroup({ canChoose: false, canEdit: false });
     expect(screen.queryAllByRole("button")).toHaveLength(0);
+  });
+});
+
+describe("EventRemoveDialog", () => {
+  it("finds the event tags matching the series filter and strips them", () => {
+    expect(matchingEventTags("Weihnachtsmärt,Anlass", ["weihnacht"])).toEqual(["Weihnachtsmärt"]);
+    expect(matchingEventTags("Anlass", ["weihnacht"])).toEqual([]);
+    expect(matchingEventTags("Anlass", [])).toEqual([]);
+    expect(eventTagWithout("Weihnachtsmärt,Anlass", ["Weihnachtsmärt"])).toBe("Anlass");
+    expect(eventTagWithout("Weihnachtsmärt", ["Weihnachtsmärt"])).toBeNull();
+  });
+
+  it("removes without tags by default and with the ticked tag on request", () => {
+    const onConfirm = vi.fn();
+    const { rerender } = render(<EventRemoveDialog open title="Weinachtsmärt" tags={["Weihnachtsmärt"]} busy={false} onClose={vi.fn()} onConfirm={onConfirm} />);
+    const dialog = screen.getByRole("dialog", { name: "Termin entfernen" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Entfernen" }));
+    expect(onConfirm).toHaveBeenLastCalledWith([]);
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Tag «Weihnachtsmärt» vom Termin entfernen" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Entfernen" }));
+    expect(onConfirm).toHaveBeenLastCalledWith(["Weihnachtsmärt"]);
+    rerender(<EventRemoveDialog open title="Weinachtsmärt" tags={[]} busy={false} onClose={vi.fn()} onConfirm={onConfirm} />);
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 });
 
