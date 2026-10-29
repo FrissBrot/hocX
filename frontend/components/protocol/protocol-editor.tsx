@@ -675,7 +675,10 @@ export function ProtocolEditor({
           const sectionRect = section.getBoundingClientRect();
           const safeInset = 16 * zoom;
           const isTallSection = sectionRect.height >= containerRect.height - safeInset * 2;
-          const delta = isTallSection
+          // Der erste Punkt steht oben statt mittig - sonst zeigt das Öffnen eines Protokolls
+          // zuerst den leeren Scrollraum (.protocol-document-accordion::before) darüber.
+          const isFirstSection = container.querySelector(".protocol-doc-section") === section;
+          const delta = isTallSection || isFirstSection
             ? (sectionRect.top - containerRect.top - safeInset) / zoom
             : (
                 sectionRect.top + sectionRect.height / 2
@@ -790,9 +793,12 @@ export function ProtocolEditor({
         .filter((section): section is HTMLElement => Boolean(section));
       if (!sections.length) return;
 
-      let bestId: string | null = null;
+      // Steht der erste Punkt noch ganz im Bild (Anfang des Dokuments, z. B. nach dem Öffnen),
+      // ist er aktiv, auch wenn die Mittellinie schon auf einen kurzen Folgepunkt fällt.
+      const atDocumentStart = sections[0].getBoundingClientRect().top >= containerRect.top;
+      let bestId: string | null = atDocumentStart ? sections[0].id.replace("protocol-element-", "") : null;
       let bestDistance = Infinity;
-      for (const section of sections) {
+      for (const section of atDocumentStart ? [] : sections) {
         const rect = section.getBoundingClientRect();
         const id = section.id.replace("protocol-element-", "");
         if (rect.top <= centerY && rect.bottom >= centerY) {
@@ -810,7 +816,8 @@ export function ProtocolEditor({
         const sectionIds = sections.map((section) => section.id.replace("protocol-element-", ""));
         const previousIndex = selectedElementIdRef.current ? sectionIds.indexOf(selectedElementIdRef.current) : -1;
         passiveScrollUpRef.current = previousIndex > sectionIds.indexOf(bestId);
-        passiveScrollTargetRef.current = accordionEnabled ? bestId : null;
+        // Am Dokumentanfang nicht mittig verankern: der erste Punkt bleibt oben stehen
+        passiveScrollTargetRef.current = accordionEnabled && !atDocumentStart ? bestId : null;
         selectedElementIdRef.current = bestId;
         setSelectedElementId(bestId);
       }
