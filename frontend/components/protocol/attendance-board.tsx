@@ -1,9 +1,11 @@
 "use client";
 
 // Anwesenheitskontrolle im Protokoll-Editor (Design «Protokoll-Editor v2», ohne Gruppen):
-// Statusbalken, Zähl-Kacheln als Filter, Personensuche und je Person eine Karte, die ein
-// Statusmenü öffnet. Tastatur: Über eine Person fahren (oder ihr Menü offen) + 1–4 setzt den
-// Status; Enter in der Suche öffnet bei genau einem Treffer dessen Menü, Escape leert die Suche.
+// Statusbalken, Zähl-Kacheln als Filter, Personensuche und je Person eine Karte. Ein Klick
+// schaltet den Status eine Stufe weiter (offen → anwesend → … → unentschuldigt → anwesend),
+// langes Drücken oder Rechtsklick öffnet das Statusmenü. Tastatur: Person fokussiert (Tab),
+// unter der Maus oder ihr Menü offen + 1–4 setzt den Status direkt; Enter in der Suche öffnet
+// bei genau einem Treffer dessen Menü, Escape leert die Suche.
 // Strg+F fokussiert die Suche, solange der Punkt aktiv ist (protocol-editor.tsx).
 
 import { useEffect, useRef, useState } from "react";
@@ -32,6 +34,15 @@ type Props = {
   onMarkOpenPresent: (participants: ParticipantSummary[]) => Promise<void> | void;
 };
 
+/** Dauer, ab der ein Drücken als «lang» gilt und das Menü statt des Weiterschaltens öffnet. */
+const LONG_PRESS_MS = 450;
+
+/** Nächster Status beim Klick: offen beginnt bei «anwesend», nach dem letzten wieder von vorn. */
+export function nextAttendanceStatus(status: AttendanceStatus | "open"): AttendanceStatus {
+  const index = status === "open" ? -1 : ATTENDANCE_STATUSES.indexOf(status);
+  return ATTENDANCE_STATUSES[(index + 1) % ATTENDANCE_STATUSES.length];
+}
+
 function initials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
@@ -50,7 +61,10 @@ export function AttendanceBoard({ participants, statusById, editable, fineAmount
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [menuFor, setMenuFor] = useState<string | null>(null);
-  const hoveredRef = useRef<string | null>(null);
+  // Zuletzt per Maus oder Tab angesteuerte Person, Ziel der Zifferntasten
+  const targetRef = useRef<string | null>(null);
+  const longPressTimerRef = useRef<number | undefined>(undefined);
+  const longPressedRef = useRef(false);
   const cardRefs = useRef(new Map<string, HTMLButtonElement>());
   const menuAnchorRef = useRef<HTMLButtonElement | null>(null);
 
@@ -75,7 +89,7 @@ export function AttendanceBoard({ participants, statusById, editable, fineAmount
     if (!editable) return;
     function onKeyDown(event: KeyboardEvent) {
       if (event.ctrlKey || event.metaKey || event.altKey || !/^[1-4]$/.test(event.key) || isFormField(event.target)) return;
-      const id = menuFor ?? hoveredRef.current;
+      const id = menuFor ?? targetRef.current;
       const participant = id ? participants.find((p) => p.id === id) : null;
       if (!participant) return;
       event.preventDefault();
@@ -86,9 +100,15 @@ export function AttendanceBoard({ participants, statusById, editable, fineAmount
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [editable, menuFor, participants, onChange]);
 
+  useEffect(() => () => window.clearTimeout(longPressTimerRef.current), []);
+
   function openMenu(participantId: string) {
     menuAnchorRef.current = cardRefs.current.get(participantId) ?? null;
-    setMenuFor((current) => (current === participantId ? null : participantId));
+    setMenuFor(participantId);
+  }
+
+  function cancelLongPress() {
+    window.clearTimeout(longPressTimerRef.current);
   }
 
   const filters: { value: Filter; count: number }[] = [
@@ -184,12 +204,42 @@ export function AttendanceBoard({ participants, statusById, editable, fineAmount
                 aria-haspopup="menu"
                 aria-expanded={menuFor === participant.id}
                 title={`${participant.display_name} · ${statusLabel}`}
-                onClick={() => openMenu(participant.id)}
+                onPointerDown={(event) => {
+                  if (event.button !== 0) return;
+                  longPressedRef.current = false;
+                  cancelLongPress();
+                  longPressTimerRef.current = window.setTimeout(() => {
+                    longPressedRef.current = true;
+                    openMenu(participant.id);
+                  }, LONG_PRESS_MS);
+                }}
+                onPointerUp={cancelLongPress}
+                onPointerCancel={cancelLongPress}
+                onClick={() => {
+                  // Nach langem Drücken ist das Menü schon offen, der Klick schaltet nicht weiter
+                  if (longPressedRef.current) {
+                    longPressedRef.current = false;
+                    return;
+                  }
+                  void onChange(participant, nextAttendanceStatus(status));
+                }}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  cancelLongPress();
+                  openMenu(participant.id);
+                }}
                 onMouseEnter={() => {
-                  hoveredRef.current = participant.id;
+                  targetRef.current = participant.id;
                 }}
                 onMouseLeave={() => {
-                  if (hoveredRef.current === participant.id) hoveredRef.current = null;
+                  cancelLongPress();
+                  if (targetRef.current === participant.id && document.activeElement !== cardRefs.current.get(participant.id)) targetRef.current = null;
+                }}
+                onFocus={() => {
+                  targetRef.current = participant.id;
+                }}
+                onBlur={() => {
+                  if (targetRef.current === participant.id) targetRef.current = null;
                 }}
               >
                 <span className="attendance-card-avatar" aria-hidden="true">{initials(participant.display_name)}</span>

@@ -1,8 +1,8 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ParticipantSummary } from "@/types/api";
-import { AttendanceBoard } from "./attendance-board";
+import { AttendanceBoard, nextAttendanceStatus } from "./attendance-board";
 
 function person(id: string, name: string): ParticipantSummary {
   return {
@@ -49,14 +49,44 @@ describe("AttendanceBoard", () => {
     expect(screen.getByText("Keine Person gefunden für «xyz»")).toBeInTheDocument();
   });
 
-  it("sets a status from the menu and with hover + number keys", () => {
+  it("cycles the status on click", () => {
     const handlers = renderBoard();
     fireEvent.click(screen.getByRole("button", { name: /Sara Keller/ }));
-    fireEvent.click(screen.getByRole("menuitem", { name: /Entschuldigt/ }));
-    expect(handlers.onChange).toHaveBeenLastCalledWith(people[2], "excused");
+    expect(handlers.onChange).toHaveBeenLastCalledWith(people[2], "present");
+    fireEvent.click(screen.getByRole("button", { name: /Luca Meier/ }));
+    expect(handlers.onChange).toHaveBeenLastCalledWith(people[1], "excused");
+    fireEvent.click(screen.getByRole("button", { name: /Marco Rossi/ }));
+    expect(handlers.onChange).toHaveBeenLastCalledWith(people[3], "present");
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("opens the menu on long press without cycling", () => {
+    vi.useFakeTimers();
+    try {
+      const handlers = renderBoard();
+      const card = screen.getByRole("button", { name: /Sara Keller/ });
+      fireEvent.pointerDown(card, { button: 0 });
+      act(() => vi.advanceTimersByTime(500));
+      fireEvent.pointerUp(card);
+      fireEvent.click(card);
+      expect(handlers.onChange).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole("menuitem", { name: /Entschuldigt/ }));
+      expect(handlers.onChange).toHaveBeenLastCalledWith(people[2], "excused");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("sets a status with number keys on the focused or hovered person", () => {
+    const handlers = renderBoard();
+    fireEvent.focus(screen.getByRole("button", { name: /Luca Meier/ }));
+    fireEvent.keyDown(window, { key: "3" });
+    expect(handlers.onChange).toHaveBeenLastCalledWith(people[1], "excused");
     fireEvent.mouseEnter(screen.getByRole("button", { name: /Anna Berger/ }));
     fireEvent.keyDown(window, { key: "4" });
     expect(handlers.onChange).toHaveBeenLastCalledWith(people[0], "absent");
+    expect(nextAttendanceStatus("open")).toBe("present");
+    expect(nextAttendanceStatus("absent")).toBe("present");
   });
 
   it("opens the menu of the only search hit with Enter", () => {

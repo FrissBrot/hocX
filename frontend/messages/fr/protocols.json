@@ -529,7 +529,7 @@
     "filterAll": "Tous",
     "statusOpen": "En attente",
     "searchPlaceholder": "Rechercher une personne …",
-    "keyHint": "Survoler une personne + <key>1–4</key>",
+    "keyHint": "Clic : statut suivant · appui long : choisir · Tab/survol + <key>1–4</key>",
     "emptySearch": "Aucune personne trouvée pour « {query} »",
     "emptyFilter": "Personne avec ce statut",
     "fine": "CHF {amount, number}",

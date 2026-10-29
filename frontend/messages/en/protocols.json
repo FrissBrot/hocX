@@ -529,7 +529,7 @@
     "filterAll": "All",
     "statusOpen": "Open",
     "searchPlaceholder": "Search person …",
-    "keyHint": "Hover a person + <key>1–4</key>",
+    "keyHint": "Click: next status · long press: choose · Tab/hover + <key>1–4</key>",
     "emptySearch": "No person found for “{query}”",
     "emptyFilter": "Nobody with this status",
     "fine": "CHF {amount, number}",

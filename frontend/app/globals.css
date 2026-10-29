@@ -5724,6 +5724,10 @@ input[type="color"]::-moz-color-swatch {
   text-align: left;
   font-weight: 400;
   box-shadow: none;
+  /* Langes Drücken öffnet das Statusmenü: keine Textauswahl/Callouts auf Touch */
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
 }
 
 .attendance-card:hover:not(:disabled) {

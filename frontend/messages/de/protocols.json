@@ -529,7 +529,7 @@
     "filterAll": "Alle",
     "statusOpen": "Offen",
     "searchPlaceholder": "Person suchen …",
-    "keyHint": "Über Person fahren + <key>1–4</key>",
+    "keyHint": "Klick: nächster Status · lang drücken: Auswahl · Tab/Maus + <key>1–4</key>",
     "emptySearch": "Keine Person gefunden für «{query}»",
     "emptyFilter": "Niemand mit diesem Status",
     "fine": "CHF {amount, number}",

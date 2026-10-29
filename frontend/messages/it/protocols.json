@@ -529,7 +529,7 @@
     "filterAll": "Tutti",
     "statusOpen": "Da registrare",
     "searchPlaceholder": "Cerca persona …",
-    "keyHint": "Passa sopra una persona + <key>1–4</key>",
+    "keyHint": "Clic: stato successivo · pressione lunga: scegli · Tab/passaggio + <key>1–4</key>",
     "emptySearch": "Nessuna persona trovata per «{query}»",
     "emptyFilter": "Nessuno con questo stato",
     "fine": "CHF {amount, number}",
