@@ -17,6 +17,8 @@ type Props = {
   onLanguageChange: (lang: string) => void;
   protocolAccordionEnabled: boolean;
   onProtocolAccordionChange: (enabled: boolean) => void;
+  protocolWheelEnabled: boolean;
+  onProtocolWheelChange: (enabled: boolean) => void;
   onSave: () => void | Promise<void>;
   onLogout: () => void;
 };
@@ -28,6 +30,8 @@ export function ProfileModal({
   onLanguageChange,
   protocolAccordionEnabled,
   onProtocolAccordionChange,
+  protocolWheelEnabled,
+  onProtocolWheelChange,
   onSave,
   onLogout,
 }: Props) {
@@ -72,13 +76,27 @@ export function ProfileModal({
                 </label>
                 <label className="profile-toggle">
                   <span className="profile-toggle-text">
-                    <span>{t("accordionLabel")}</span>
-                    <span className="field-help">{t("accordionHint")}</span>
+                    <span>{t("wheelLabel")}</span>
+                    <span className="field-help">{t("wheelHint")}</span>
                   </span>
                   <input
                     type="checkbox"
                     role="switch"
-                    checked={protocolAccordionEnabled}
+                    checked={protocolWheelEnabled}
+                    onChange={(event) => onProtocolWheelChange(event.target.checked)}
+                  />
+                  <span className="album-picker-switch-track" aria-hidden="true" />
+                </label>
+                <label className="profile-toggle">
+                  <span className="profile-toggle-text">
+                    <span>{t("accordionLabel")}</span>
+                    <span className="field-help">{protocolWheelEnabled ? t("accordionWheelHint") : t("accordionHint")}</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    role="switch"
+                    checked={protocolAccordionEnabled && !protocolWheelEnabled}
+                    disabled={protocolWheelEnabled}
                     onChange={(event) => onProtocolAccordionChange(event.target.checked)}
                   />
                   <span className="album-picker-switch-track" aria-hidden="true" />

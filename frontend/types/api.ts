@@ -12,6 +12,7 @@ export type SessionInfo = {
     email: string;
     preferred_language: string;
     protocol_accordion_enabled: boolean;
+    protocol_wheel_enabled: boolean;
   } | null;
   current_tenant: TenantSummary | null;
   // Effektive Berechtigungen (inkl. Implikationen) und Rollen des Kontos (RBAC) - Prüfung im

@@ -8,8 +8,11 @@
       "data": "My data"
     },
     "languageLabel": "Language",
+    "wheelLabel": "Wheel effect while scrolling",
+    "wheelHint": "Items tilt away while scrolling and come forward towards the centre. All items stay expanded.",
     "accordionLabel": "Collapse protocol items automatically",
     "accordionHint": "Only show the active item expanded.",
+    "accordionWheelHint": "Not available while the wheel effect is on.",
     "save": "Save profile",
     "logout": "Log out",
     "saveFailed": "Profile could not be saved.",

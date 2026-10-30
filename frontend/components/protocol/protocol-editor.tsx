@@ -65,6 +65,17 @@ import { AgendaItemsSection } from "@/components/protocol/agenda-items-section";
 import { AgendaQuickCreateModal } from "@/components/protocol/agenda-quick-create-modal";
 import { AgendaPostponeModal } from "@/components/agenda/agenda-item-modal";
 import { ProtocolSearchModal } from "@/components/protocol/protocol-search";
+import {
+  animateScroll,
+  applyWheelFrame,
+  offsetTopWithin,
+  prefersReducedMotion,
+  revealSection,
+  SCROLL_INSET,
+  sectionScrollTarget,
+  SPY_HYSTERESIS,
+  WHEEL_HOLD_MS,
+} from "@/components/protocol/document-scroll";
 
 type ProtocolEditorProps = {
   protocol: ProtocolSummary;
@@ -83,6 +94,8 @@ type ProtocolEditorProps = {
   forceReadOnly?: boolean;
   canViewFines?: boolean;
   accordionEnabled?: boolean;
+  /** Rad-Effekt beim Scrollen (Profileinstellung); an = Akkordeon aus */
+  wheelEnabled?: boolean;
 };
 
 export function ProtocolEditor({
@@ -101,8 +114,11 @@ export function ProtocolEditor({
   initialPendingTodos = [],
   forceReadOnly = false,
   canViewFines = true,
-  accordionEnabled = true,
+  accordionEnabled: accordionPreference = true,
+  wheelEnabled = true,
 }: ProtocolEditorProps) {
+  // Design «Protokoll-Editor v2»: mit Rad-Effekt bleiben alle Punkte offen (kein Akkordeon)
+  const accordionEnabled = accordionPreference && !wheelEnabled;
   const t = useTranslations("protocols.editor");
   const tRoot = useTranslations("protocols");
   const tAgenda = useTranslations("agenda");
@@ -455,10 +471,13 @@ export function ProtocolEditor({
   const shouldAutoFocusRef = useRef(false);
   // The first scroll after opening jumps instantly instead of animating from the top.
   const isInitialScrollRef = useRef(false);
-  const passiveScrollTargetRef = useRef<string | null>(null);
-  // Richtung des letzten passiven Abschnittswechsels: beim Zurückscrollen (nach oben) betritt
-  // man den neu geöffneten Abschnitt von unten, also wird dessen Ende verankert statt des Anfangs.
-  const passiveScrollUpRef = useRef(false);
+  // Akkordeon: Lage des neu aktiven Abschnitts VOR dem Auf-/Zuklappen (relativ zum sichtbaren
+  // Bereich). Nach dem Umbau des Layouts wird er genau dort gehalten - nach unten scrollend die
+  // Oberkante, nach oben scrollend die Unterkante. Dadurch springt beim passiven Wechsel nichts.
+  const passiveSnapRef = useRef<{ id: string; top: number; bottom: number; up: boolean } | null>(null);
+  // Bis hierhin wird Mausrad nach unten abgefangen (Rest-Schwung nach dem Betreten eines Punkts)
+  const holdWheelUntilRef = useRef(0);
+  const cancelScrollAnimationRef = useRef<(() => void) | null>(null);
   // True while a programmatic smooth scroll (search, nav click, Ctrl+Enter) is in flight.
   // The scroll-spy must stay passive during that time - otherwise it selects every section
   // the scroll passes, and in accordion mode its instant anchor scroll aborts the smooth
@@ -627,6 +646,45 @@ export function ProtocolEditor({
     setBlockStatus((current) => ({ ...current, [protocolElementBlockId]: status }));
   }
 
+  // Programmatisches Scrollen des Dokuments (Sprung, Verankerung). Solange es läuft, bleibt der
+  // Scroll-Spy passiv - sonst wählt er jeden überflogenen Punkt aus und bricht im Akkordeon den
+  // Sprung mit seiner eigenen Verankerung ab.
+  const scrollDocumentTo = useCallback(
+    (
+      container: HTMLElement,
+      target: number,
+      behavior: "smooth" | "instant",
+      options: { duration?: number; cancelOnWheel?: boolean } = {}
+    ) => {
+      cancelScrollAnimationRef.current?.();
+      cancelScrollAnimationRef.current = null;
+      programmaticScrollRef.current = true;
+      window.clearTimeout(programmaticScrollTimerRef.current);
+      const release = () => {
+        window.clearTimeout(programmaticScrollTimerRef.current);
+        programmaticScrollRef.current = false;
+      };
+      if (behavior === "instant" || Math.abs(target - container.scrollTop) < 1) {
+        container.scrollTop = target;
+        // Das scroll-Event dieses Sprungs kommt asynchron - erst danach wieder mitlesen
+        programmaticScrollTimerRef.current = window.setTimeout(release, 80);
+        return;
+      }
+      // Sicherheitsnetz, falls die Animation nie endet (Tab im Hintergrund)
+      programmaticScrollTimerRef.current = window.setTimeout(release, 1500);
+      cancelScrollAnimationRef.current = animateScroll(container, target, {
+        ...options,
+        onDone: () => {
+          cancelScrollAnimationRef.current = null;
+          release();
+        },
+      });
+    },
+    []
+  );
+
+  useEffect(() => () => cancelScrollAnimationRef.current?.(), []);
+
   function focusElement(protocolElementId: string) {
     shouldScrollToElementRef.current = true;
     shouldAutoFocusRef.current = true;
@@ -656,45 +714,24 @@ export function ProtocolEditor({
     isInitialScrollRef.current = false;
 
     window.requestAnimationFrame(() => {
-        // Scroll only .protocol-document itself (never section.
-        // scrollIntoView() - that walks up and re-scrolls every clipping ancestor it
-        // passes on the way, including the outer .app-frame-writing shell that's
-        // deliberately pinned to the viewport via overflow:hidden - overflow:hidden
-        // still counts as a "scrolling box" for scrollIntoView purposes even though it
-        // never shows a scrollbar or responds to wheel input, so it silently absorbed
-        // part of the scroll too, leaving the pinned shell offset from the viewport
-        // with a matching dead strip of blank space at its bottom edge). The division
-        // below undoes .protocol-document-shell's zoom, which scales visual
-        // pixels (getBoundingClientRect) relative to scrollTop's own unscaled space.
+        // Scroll only .protocol-document itself (never section.scrollIntoView() - that walks
+        // up and re-scrolls every clipping ancestor, including the outer .app-frame-writing
+        // shell pinned via overflow:hidden, leaving it offset from the viewport). Positions
+        // come from offsetTop (scrollTop's own unzoomed space, unaffected by the wheel
+        // effect's transforms), see document-scroll.ts.
         const container = documentRef.current;
         const section = document.getElementById(`protocol-element-${selectedElementId}`);
         if (container && section) {
-          const zoomHost = container.closest<HTMLElement>(".protocol-document-shell");
-          const zoom = zoomHost ? parseFloat(getComputedStyle(zoomHost).zoom) || 1 : 1;
-          const containerRect = container.getBoundingClientRect();
-          const sectionRect = section.getBoundingClientRect();
-          const safeInset = 16 * zoom;
-          const isTallSection = sectionRect.height >= containerRect.height - safeInset * 2;
-          // Der erste Punkt steht oben statt mittig - sonst zeigt das Öffnen eines Protokolls
-          // zuerst den leeren Scrollraum (.protocol-document-accordion::before) darüber.
-          const isFirstSection = container.querySelector(".protocol-doc-section") === section;
-          const delta = isTallSection || isFirstSection
-            ? (sectionRect.top - containerRect.top - safeInset) / zoom
-            : (
-                sectionRect.top + sectionRect.height / 2
-                - (containerRect.top + containerRect.height / 2)
-              ) / zoom;
-          programmaticScrollRef.current = true;
-          window.clearTimeout(programmaticScrollTimerRef.current);
-          const release = () => {
-            container.removeEventListener("scrollend", release);
-            window.clearTimeout(programmaticScrollTimerRef.current);
-            programmaticScrollRef.current = false;
-          };
-          container.addEventListener("scrollend", release);
-          // Fallback for browsers without `scrollend` and for no-op scrolls (delta ~ 0).
-          programmaticScrollTimerRef.current = window.setTimeout(release, 1200);
-          container.scrollTo({ top: container.scrollTop + delta, behavior: scrollBehavior });
+          const target = sectionScrollTarget({
+            top: offsetTopWithin(section, container),
+            height: section.offsetHeight,
+            viewport: container.clientHeight,
+            scrollHeight: container.scrollHeight,
+            // Der erste Punkt steht oben statt mittig - sonst zeigt das Öffnen eines Protokolls
+            // zuerst den leeren Scrollraum (.protocol-document-spaced::before) darüber.
+            first: container.querySelector(".protocol-doc-section") === section,
+          });
+          scrollDocumentTo(container, target, scrollBehavior === "smooth" && !prefersReducedMotion() ? "smooth" : "instant");
         }
 
       // Safety net: on the locked document-mode desktop layout the outer page must
@@ -726,45 +763,57 @@ export function ProtocolEditor({
 
   const visibleElementIdsKey = visibleElements.map((element) => element.id).join(",");
 
-  // Collapsing the previously active accordion section can remove hundreds of pixels above
-  // the viewport. Preserve the newly selected section as the visual anchor so that moving
-  // past a long section lands on its immediate neighbour instead of skipping several points.
-  // useLayoutEffect runs after React changed the open section but before the browser paints
-  // that layout, avoiding a visible jump. This is only used for passive scroll-spy changes;
-  // clicks and keyboard navigation already have their own smooth-scroll path above.
+  // Akkordeon, passiver Wechsel (Scroll-Spy): der neu aktive Abschnitt wird dort gehalten, wo
+  // er vor dem Auf-/Zuklappen stand (passiveSnapRef). Nach unten scrollend holt eine kurze
+  // Animation seinen Anfang an den oberen Rand und der Rest-Schwung des Mausrads wird kurz
+  // abgefangen, damit man nicht über den Anfang hinausrutscht. useLayoutEffect: läuft nach dem
+  // Umbau des Layouts, aber bevor der Browser zeichnet - kein sichtbarer Sprung. Klicks und
+  // Tastatur haben ihren eigenen Weg (Effekt oben).
   useLayoutEffect(() => {
+    const snap = passiveSnapRef.current;
+    if (!snap || snap.id !== selectedElementId) return;
+    passiveSnapRef.current = null;
     if (!accordionEnabled) return;
-    if (passiveScrollTargetRef.current !== selectedElementId) return;
-    passiveScrollTargetRef.current = null;
 
     const container = documentRef.current;
-    const section = selectedElementId
-      ? document.getElementById(`protocol-element-${selectedElementId}`)
-      : null;
+    const section = document.getElementById(`protocol-element-${selectedElementId}`);
     if (!container || !section) return;
 
-    const zoomHost = container.closest<HTMLElement>(".protocol-document-shell");
-    const zoom = zoomHost ? parseFloat(getComputedStyle(zoomHost).zoom) || 1 : 1;
-    const containerRect = container.getBoundingClientRect();
-    const sectionRect = section.getBoundingClientRect();
-    const safeInset = 16 * zoom;
-    const isTallSection = sectionRect.height >= containerRect.height - safeInset * 2;
-    const scrollingUp = passiveScrollUpRef.current;
-    passiveScrollUpRef.current = false;
-    // Langer Abschnitt: die Kante verankern, über die man ihn betreten hat - nach unten
-    // scrollend der Anfang, nach oben scrollend das Ende. Sonst springt man beim Zurück-
-    // scrollen an den Anfang des Abschnitts statt dorthin, wo man ihn verlassen hat.
-    const delta = isTallSection
-      ? scrollingUp
-        ? sectionRect.bottom - containerRect.bottom + safeInset
-        : sectionRect.top - containerRect.top - safeInset
-      : sectionRect.top + sectionRect.height / 2 - (containerRect.top + containerRect.height / 2);
+    const top = offsetTopWithin(section, container);
+    const height = section.offsetHeight;
+    const viewport = container.clientHeight;
+    const max = container.scrollHeight - viewport;
+    const anchored = snap.up ? top + height - snap.bottom : top - snap.top;
+    scrollDocumentTo(container, Math.max(0, Math.min(anchored, max)), "instant");
+    revealSection(section, snap.up);
 
-    container.scrollTo({
-      top: container.scrollTop + delta / zoom,
-      behavior: "instant" as ScrollBehavior,
-    });
-  }, [accordionEnabled, selectedElementId]);
+    if (!snap.up) {
+      const tall = height >= viewport - SCROLL_INSET * 2;
+      const want = tall ? top - SCROLL_INSET : Math.min(container.scrollTop, top - SCROLL_INSET);
+      const target = Math.max(0, Math.min(want, max));
+      holdWheelUntilRef.current = performance.now() + WHEEL_HOLD_MS;
+      if (Math.abs(target - container.scrollTop) > 1 && !prefersReducedMotion()) {
+        scrollDocumentTo(container, target, "smooth", { duration: 300, cancelOnWheel: false });
+      }
+    }
+  }, [accordionEnabled, selectedElementId, scrollDocumentTo]);
+
+  // Rest-Schwung abfangen (siehe oben): nur Mausrad nach unten, nur kurz nach dem Betreten.
+  useEffect(() => {
+    const container = documentRef.current;
+    if (!container) return;
+    function onWheel(event: WheelEvent) {
+      if (event.deltaY > 0 && performance.now() < holdWheelUntilRef.current) event.preventDefault(); // i18n-ok: Vergleich, kein UI-Text
+    }
+    container.addEventListener("wheel", onWheel, { passive: false });
+    return () => container.removeEventListener("wheel", onWheel);
+  }, []);
+
+  // Rad-Effekt nach jeder Änderung von Auswahl oder Punkten neu anwenden (bzw. entfernen)
+  useLayoutEffect(() => {
+    const container = documentRef.current;
+    if (container) applyWheelFrame(container, wheelEnabled && !prefersReducedMotion());
+  }, [wheelEnabled, selectedElementId, visibleElements]);
 
   // Scroll-spy for the continuous document layout: tracks whichever section is closest to
   // the visual centre of .protocol-document. Uses plain
@@ -780,12 +829,13 @@ export function ProtocolEditor({
     if (!container) return;
 
     let rafId: number | null = null;
+    const wheel = wheelEnabled && !prefersReducedMotion();
 
     function computeActiveSection() {
       rafId = null;
+      const root = container!;
+      applyWheelFrame(root, wheel);
       if (programmaticScrollRef.current) return;
-      const containerRect = container!.getBoundingClientRect();
-      const centerY = containerRect.top + containerRect.height / 2;
       const sections = visibleElementIdsKey
         .split(",")
         .filter(Boolean)
@@ -793,34 +843,54 @@ export function ProtocolEditor({
         .filter((section): section is HTMLElement => Boolean(section));
       if (!sections.length) return;
 
+      const scrollTop = root.scrollTop;
+      const centerY = scrollTop + root.clientHeight / 2;
+      const ids = sections.map((section) => section.id.replace("protocol-element-", ""));
+      const tops = sections.map((section) => offsetTopWithin(section, root));
+      const heights = sections.map((section) => section.offsetHeight);
+
       // Steht der erste Punkt noch ganz im Bild (Anfang des Dokuments, z. B. nach dem Öffnen),
       // ist er aktiv, auch wenn die Mittellinie schon auf einen kurzen Folgepunkt fällt.
-      const atDocumentStart = sections[0].getBoundingClientRect().top >= containerRect.top;
-      let bestId: string | null = atDocumentStart ? sections[0].id.replace("protocol-element-", "") : null;
-      let bestDistance = Infinity;
-      for (const section of atDocumentStart ? [] : sections) {
-        const rect = section.getBoundingClientRect();
-        const id = section.id.replace("protocol-element-", "");
-        if (rect.top <= centerY && rect.bottom >= centerY) {
-          bestId = id;
-          break;
+      const atDocumentStart = tops[0] >= scrollTop;
+      const currentIndex = selectedElementIdRef.current ? ids.indexOf(selectedElementIdRef.current) : -1;
+      let bestIndex = atDocumentStart ? 0 : -1;
+      if (!atDocumentStart) {
+        // Hysterese: der aktive Punkt bleibt, bis die Mittellinie 32px über seine Kante hinaus
+        // ist - kein Flackern an der Grenze zweier Punkte.
+        if (
+          currentIndex >= 0 &&
+          tops[currentIndex] - SPY_HYSTERESIS <= centerY &&
+          tops[currentIndex] + heights[currentIndex] + SPY_HYSTERESIS >= centerY
+        ) {
+          return;
         }
-        const sectionCenter = rect.top + rect.height / 2;
-        const distance = Math.abs(sectionCenter - centerY);
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          bestId = id;
+        let bestDistance = Infinity;
+        for (let index = 0; index < sections.length; index += 1) {
+          if (tops[index] <= centerY && tops[index] + heights[index] >= centerY) {
+            bestIndex = index;
+            break;
+          }
+          const distance = Math.abs(tops[index] + heights[index] / 2 - centerY);
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            bestIndex = index;
+          }
         }
       }
-      if (bestId !== null && selectedElementIdRef.current !== bestId) {
-        const sectionIds = sections.map((section) => section.id.replace("protocol-element-", ""));
-        const previousIndex = selectedElementIdRef.current ? sectionIds.indexOf(selectedElementIdRef.current) : -1;
-        passiveScrollUpRef.current = previousIndex > sectionIds.indexOf(bestId);
-        // Am Dokumentanfang nicht mittig verankern: der erste Punkt bleibt oben stehen
-        passiveScrollTargetRef.current = accordionEnabled && !atDocumentStart ? bestId : null;
-        selectedElementIdRef.current = bestId;
-        setSelectedElementId(bestId);
-      }
+      if (bestIndex < 0) return;
+      const bestId = ids[bestIndex];
+      if (selectedElementIdRef.current === bestId) return;
+      // Am Dokumentanfang nicht verankern: der erste Punkt bleibt oben stehen
+      passiveSnapRef.current = accordionEnabled && !atDocumentStart
+        ? {
+            id: bestId,
+            top: tops[bestIndex] - scrollTop,
+            bottom: tops[bestIndex] - scrollTop + heights[bestIndex],
+            up: currentIndex > bestIndex,
+          }
+        : null;
+      selectedElementIdRef.current = bestId;
+      setSelectedElementId(bestId);
     }
 
     function scheduleCompute() {
@@ -831,12 +901,16 @@ export function ProtocolEditor({
     computeActiveSection();
     container.addEventListener("scroll", scheduleCompute, { passive: true });
     window.addEventListener("resize", scheduleCompute);
+    // Inhalte ändern ihre Höhe (Tippen, Laden von Bildern): Rad-Effekt und Spy nachführen
+    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(scheduleCompute);
+    container.querySelectorAll(".protocol-doc-section").forEach((section) => resizeObserver?.observe(section));
     return () => {
       container.removeEventListener("scroll", scheduleCompute);
       window.removeEventListener("resize", scheduleCompute);
+      resizeObserver?.disconnect();
       if (rafId !== null) window.cancelAnimationFrame(rafId);
     };
-  }, [accordionEnabled, visibleElementIdsKey]);
+  }, [accordionEnabled, wheelEnabled, visibleElementIdsKey]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -1897,7 +1971,7 @@ export function ProtocolEditor({
 
       <div className="protocol-document-shell">
         <article
-          className={`protocol-document${accordionEnabled ? " protocol-document-accordion" : ""}`}
+          className={`protocol-document${accordionEnabled ? " protocol-document-accordion" : ""}${accordionEnabled || wheelEnabled ? " protocol-document-spaced" : ""}`}
           ref={documentRef}
         >
           {visibleElements.length === 0 && (

@@ -128,6 +128,7 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
               forceReadOnly={isRestricted}
               canViewFines={canViewFines}
               accordionEnabled={session.user?.protocol_accordion_enabled ?? true}
+              wheelEnabled={session.user?.protocol_wheel_enabled ?? true}
             />
           </section>
         }

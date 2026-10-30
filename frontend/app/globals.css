@@ -4285,11 +4285,11 @@ input[type="color"]::-moz-color-swatch {
   overscroll-behavior: contain;
 }
 
-/* The accordion scroll-spy activates the heading nearest the pane's centre. Reserve half
-   a pane of scroll space at both ends so the first and final headings can reach that
-   activation line when approaching them in either direction. */
-.protocol-document-accordion::before,
-.protocol-document-accordion::after {
+/* The scroll-spy activates the heading nearest the pane's centre (accordion and wheel
+   effect). Reserve half a pane of scroll space at both ends so the first and final headings
+   can reach that activation line when approaching them in either direction. */
+.protocol-document-spaced::before,
+.protocol-document-spaced::after {
   content: "";
   flex: 0 0 50%;
   pointer-events: none;
@@ -7550,6 +7550,43 @@ input[type="color"]::-moz-color-swatch {
 
 .matrix-board-row-value {
   min-width: 0;
+}
+
+/* Eingebettete Terminliste in einer Matrix-Karte: füllt die Karte statt nur ihren Inhalt
+   (event-table-wrap ist sonst fit-content). Datum/Titel nehmen den Platz, TN bleibt rechts. */
+.matrix-board-row-value .matrix-embedded-block {
+  gap: var(--space-2);
+}
+
+.matrix-board-row-value .editor-planning-toolbar {
+  margin-bottom: 0;
+}
+
+.matrix-board-row-value .event-table-wrap {
+  width: 100%;
+  border-radius: var(--radius-md);
+}
+
+.matrix-board-row-value .event-table {
+  width: 100%;
+}
+
+.matrix-board-row-value .event-table thead th {
+  font-size: var(--text-xs);
+}
+
+.matrix-board-row-value .event-table td,
+.matrix-board-row-value .event-table th {
+  padding: var(--space-2) var(--space-3);
+}
+
+.matrix-board-row-value .event-table .event-column-count {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.matrix-board-row-value .event-table tbody td {
+  font-variant-numeric: tabular-nums;
 }
 
 .matrix-board-dash {

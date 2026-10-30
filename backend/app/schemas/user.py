@@ -151,6 +151,7 @@ class UserUpdate(BaseModel):
 class UserSelfUpdate(BaseModel):
     preferred_language: str | None = None
     protocol_accordion_enabled: bool | None = None
+    protocol_wheel_enabled: bool | None = None
 
     _validate_preferred_language = field_validator("preferred_language")(_validate_preferred_language)
 
@@ -195,6 +196,7 @@ class SessionUserRead(BaseModel):
     email: str
     preferred_language: str
     protocol_accordion_enabled: bool = True
+    protocol_wheel_enabled: bool = True
 
 
 class SessionRead(BaseModel):

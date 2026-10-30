@@ -31,7 +31,7 @@ function translatorFor(locale: string) {
 function sessionFor(role: SystemRoleKey): SessionInfo {
   return {
     authenticated: true,
-    user: { id: "u1", first_name: "A", last_name: "B", display_name: "A B", email: "a@b.ch", preferred_language: "de", protocol_accordion_enabled: true },
+    user: { id: "u1", first_name: "A", last_name: "B", display_name: "A B", email: "a@b.ch", preferred_language: "de", protocol_accordion_enabled: true, protocol_wheel_enabled: true },
     current_tenant: { id: "t1", name: "Tenant", profile_image_path: null, profile_image_url: null, enabled_features: ["finance", "abgabebox"] },
     permissions: [...SYSTEM_ROLE_PERMISSIONS[role]],
     roles: [{ id: `r-${role}`, name: null, system_key: role }],

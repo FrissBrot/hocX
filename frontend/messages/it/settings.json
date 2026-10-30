@@ -8,8 +8,11 @@
       "data": "I miei dati"
     },
     "languageLabel": "Lingua",
+    "wheelLabel": "Effetto ruota durante lo scorrimento",
+    "wheelHint": "I punti si inclinano scorrendo e avanzano verso il centro. Tutti i punti restano aperti.",
     "accordionLabel": "Comprimi automaticamente i punti del verbale",
     "accordionHint": "Mostra espanso solo il punto attivo.",
+    "accordionWheelHint": "Non disponibile finché l’effetto ruota è attivo.",
     "save": "Salva profilo",
     "logout": "Disconnetti",
     "saveFailed": "Impossibile salvare il profilo.",

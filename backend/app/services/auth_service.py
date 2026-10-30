@@ -272,6 +272,7 @@ class AuthService:
                 email=user.email,
                 preferred_language=user.preferred_language,
                 protocol_accordion_enabled=user.protocol_accordion_enabled,
+                protocol_wheel_enabled=user.protocol_wheel_enabled,
             ),
             current_tenant=current_tenant,
             permissions=sorted(user.permissions),

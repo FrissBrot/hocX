@@ -8,8 +8,11 @@
       "data": "Mes données"
     },
     "languageLabel": "Langue",
+    "wheelLabel": "Effet de roue au défilement",
+    "wheelHint": "Les points s’inclinent en défilant et avancent vers le centre. Tous les points restent ouverts.",
     "accordionLabel": "Réduire automatiquement les points du procès-verbal",
     "accordionHint": "N'afficher développé que le point actif.",
+    "accordionWheelHint": "Indisponible tant que l’effet de roue est actif.",
     "save": "Enregistrer le profil",
     "logout": "Se déconnecter",
     "saveFailed": "Le profil n'a pas pu être enregistré.",
