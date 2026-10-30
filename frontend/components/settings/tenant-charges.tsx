@@ -8,7 +8,7 @@ import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { browserApiFetch } from "@/lib/api/client";
-import { formatDate, formatRappen, toIntlLocale } from "@/lib/utils/format";
+import { formatDate, formatPercentNumber, formatRappen, toIntlLocale } from "@/lib/utils/format";
 import type { TenantPortalCharge, TenantPortalChargeStatus, TenantPortalCharges } from "@/types/api";
 
 // Zuerst die jüngsten Perioden; ältere erst auf Wunsch.
@@ -38,6 +38,25 @@ export function useTenantCharges(tenantId: string) {
     };
   }, [tenantId]);
   return charges;
+}
+
+/** Rabattzeile einer Forderung (Prozent und abgezogener Betrag), falls vorhanden. */
+export function chargeDiscount(charge: TenantPortalCharge): { percent: number; amountRp: number } | null {
+  const line = charge.lines?.find((entry) => entry.kind === "discount");
+  if (!line || !line.percent) return null;
+  return { percent: line.percent, amountRp: Math.abs(line.amount_rp) };
+}
+
+function ChargeDiscountHint({ charge }: { charge: TenantPortalCharge }) {
+  const t = useTranslations("tenantSettings");
+  const locale = useLocale();
+  const discount = chargeDiscount(charge);
+  if (!discount) return null;
+  return (
+    <span className="tenant-charges-discount">
+      {t("charges.discountIncluded", { percent: formatPercentNumber(discount.percent, locale), amount: formatRappen(discount.amountRp, locale) })}
+    </span>
+  );
 }
 
 /** Letzter Tag einer Periode (period_end ist exklusiv). */
@@ -179,7 +198,10 @@ export function TenantBillingCard({
               <span className="tenant-charges-period">{periodText(charge)}</span>
               <span className="muted tenant-charges-meta">{t(charge.billing_cycle === "monthly" ? "billingMonthly" : "billingYearly")}</span>
             </td>
-            <td className="tenant-charges-amount">{formatRappen(charge.amount_rp, locale)}</td>
+            <td className="tenant-charges-amount">
+              {formatRappen(charge.amount_rp, locale)}
+              <ChargeDiscountHint charge={charge} />
+            </td>
             <td>
               <span className="tenant-charges-date">{formatDate(charge.due_on)}</span>
               <DueHint charge={charge} />
@@ -228,6 +250,7 @@ export function MobileTenantCharges({ tenantId }: { tenantId: string }) {
             <span className="mobile-row-stack">
               <span className="mobile-row-title">{formatRappen(charge.amount_rp, locale)}</span>
               <span className="mobile-row-meta mobile-row-meta-wrap">{periodText(charge)}</span>
+              <ChargeDiscountHint charge={charge} />
               <span className="mobile-row-meta">
                 {charge.paid_on ? t("charges.paidOn", { date: formatDate(charge.paid_on) }) : t("charges.dueOn", { date: formatDate(charge.due_on) })}
               </span>

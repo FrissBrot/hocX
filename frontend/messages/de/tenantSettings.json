@@ -67,6 +67,7 @@
   "legacyPlanNote": "Übernommen aus dem bisherigen System — ohne Limits bei Nutzern und Speicher.",
   "billingLabel": "Abrechnung",
   "costLabel": "Kosten",
+  "discountBadge": "{percent} % Rabatt",
   "costNotSet": "Noch nicht festgelegt",
   "usersEyebrow": "Nutzer",
   "ofLimit": "von {limit}",
@@ -127,7 +128,8 @@
     "dueIn": "{count, plural, =0 {heute fällig} one {in # Tag} other {in # Tagen}}",
     "overdueSince": "{count, plural, one {seit # Tag} other {seit # Tagen}}",
     "paidAt": "am {date}",
-    "empty": "Keine Perioden in dieser Ansicht."
+    "empty": "Keine Perioden in dieser Ansicht.",
+    "discountIncluded": "inkl. {percent} % Rabatt (−{amount})"
   },
   "perMonthUnit": "/ Monat",
   "perYearUnit": "/ Jahr",

@@ -73,7 +73,7 @@ class TenantChargeLine(BaseModel):
     label: str
     amount_rp: int
     quantity: int | None = None
-    percent: int | None = None
+    percent: float | None = None
 
 
 class TenantChargeRead(BaseModel):

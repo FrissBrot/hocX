@@ -17215,6 +17215,20 @@ input[type="color"]::-moz-color-swatch {
   pointer-events: none;
 }
 
+.admin-input-suffix-wide input {
+  padding-right: 48px;
+}
+
+.admin-cost-row-discount span:last-child {
+  color: var(--success);
+  font-weight: 500;
+}
+
+.admin-tenant-discount {
+  display: inline-flex;
+  margin-top: var(--space-1);
+}
+
 .admin-cost-card {
   display: grid;
   gap: var(--space-2);
@@ -27982,6 +27996,8 @@ a.mobile-list-row { color: var(--text); }
 .tenant-usage-summary-inline { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--space-1) var(--space-2); }
 .tenant-usage-summary-unit { font-size: var(--text-sm); }
 .tenant-usage-legacy { margin: 0; font-size: var(--text-sm); }
+.tenant-discount-note { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-1) var(--space-2); font-size: var(--text-sm); }
+.tenant-charges-discount { display: block; font-size: var(--text-xs); color: var(--success); font-weight: 500; }
 .tenant-usage-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: var(--space-5); }
 .tenant-usage-note { font-size: var(--text-sm); }
 .tenant-usage-inline-note > div { display: inline; }

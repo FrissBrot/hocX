@@ -44,6 +44,19 @@ describe("TenantBillingCard", () => {
     expect(screen.getByText("01.10.2026 – 31.10.2026")).toBeInTheDocument();
     expect(screen.queryByText("01.07.2026 – 31.07.2026")).not.toBeInTheDocument();
   });
+
+  it("nennt den Rabatt einer Periode", () => {
+    const discounted: TenantPortalCharge = {
+      ...charge("d1", "open", "2026-10-01", "2026-11-01", "2099-10-31"),
+      amount_rp: 19900,
+      lines: [
+        { kind: "plan", label: "Verein", amount_rp: 24990 },
+        { kind: "discount", label: "discount", amount_rp: -5090, percent: 20.3681 },
+      ],
+    };
+    render(<TenantBillingCard charges={{ ...data, items: [discounted] }} filter="all" onFilterChange={() => undefined} />);
+    expect(screen.getByText(/inkl\. 20\.37 % Rabatt \(−CHF 50\.90\)/)).toBeInTheDocument();
+  });
 });
 
 describe("TenantOverdueBanner", () => {

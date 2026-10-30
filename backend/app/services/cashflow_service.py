@@ -22,6 +22,7 @@ import calendar
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
+from decimal import ROUND_HALF_UP, Decimal
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, delete, func, select, text
@@ -85,6 +86,13 @@ def _cycle_months(cycle: str) -> int:
 # --------------------------------------------------------------------------- Forderungen
 
 
+def discounted_rp(subtotal_rp: int, discount_percent: Decimal | float | int) -> int:
+    """Betrag nach Rabatt, kaufmännisch auf den Rappen gerundet - dieselbe Rechnung wie
+    estimateSubscriptionCost im Adminportal (Math.round)."""
+    factor = (Decimal(100) - Decimal(str(discount_percent))) / Decimal(100)
+    return int((Decimal(subtotal_rp) * factor).quantize(Decimal(1), rounding=ROUND_HALF_UP))
+
+
 def compute_tenant_charge(db: Session, tenant: Tenant) -> tuple[int | None, list[dict]]:
     """Betrag einer Periode nach dem aktuellen Abo. Gleiche Regel wie die Kostenvorschau im
     Admin-Tab «Plan & Abo» (Plan + Zusatzmodule, bei jährlicher Abrechnung Monatspreis x 12,
@@ -118,8 +126,8 @@ def compute_tenant_charge(db: Session, tenant: Tenant) -> tuple[int | None, list
         return None, []
     subtotal = sum(line["amount_rp"] for line in lines)
     if tenant.discount_percent:
-        discounted = round(subtotal * ((100 - tenant.discount_percent) / 100))
-        lines.append({"kind": "discount", "label": "discount", "percent": tenant.discount_percent, "amount_rp": discounted - subtotal})
+        discounted = discounted_rp(subtotal, tenant.discount_percent)
+        lines.append({"kind": "discount", "label": "discount", "percent": float(tenant.discount_percent), "amount_rp": discounted - subtotal})
 
     packages = db.execute(
         select(StoragePackage, TenantStoragePackage.quantity)

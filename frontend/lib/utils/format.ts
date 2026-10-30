@@ -252,3 +252,8 @@ export function formatRappen(rp: number | null | undefined, locale?: string): st
   }
   return new Intl.NumberFormat(toIntlLocale(locale), { style: "currency", currency: "CHF" }).format(rp / 100);
 }
+
+/** Prozentzahl (z.B. Rabatt) mit höchstens zwei Nachkommastellen, ohne Prozentzeichen. */
+export function formatPercentNumber(value: number, locale?: string): string {
+  return new Intl.NumberFormat(toIntlLocale(locale), { maximumFractionDigits: 2 }).format(value);
+}

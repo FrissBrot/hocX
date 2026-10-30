@@ -1,10 +1,12 @@
 "use client";
 
 import { DragEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import {
   AdminAvatar,
+  clampDiscountPercent,
+  discountPercentForPrice,
   estimateSubscriptionCost,
   formatChfShort,
   hasPlanPrice,
@@ -22,7 +24,7 @@ import { AdminTenantVerificationPanel } from "@/components/admin/admin-identity-
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
-import { formatDate, formatFileSize } from "@/lib/utils/format";
+import { formatDate, formatFileSize, formatPercentNumber } from "@/lib/utils/format";
 import { CATEGORY_COLORS, categoryHints, formatPercent, StorageQuotaComposition } from "@/components/storage/storage-usage-view";
 import { PROFILE_IMAGE_ACCEPT, profileImageProblem } from "@/lib/utils/profile-image";
 import { primarySystemRole } from "@/components/users/user-form-shared";
@@ -87,6 +89,7 @@ type SettingsTab = "stammdaten" | "abo" | "benutzer" | "aufraeumen" | "speicher"
 
 export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Props) {
   const t = useTranslations("admin");
+  const locale = useLocale();
   const tNav = useTranslations("nav");
   const tCommon = useTranslations("common");
   const storageHints = categoryHints(useTranslations("storage"));
@@ -129,6 +132,8 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     contract_ends_on: null,
   });
   const [subscriptionBusy, setSubscriptionBusy] = useState(false);
+  // Eingabe während des Tippens; ohne Fokus zeigen beide Felder den gespeicherten Rabatt.
+  const [discountDraft, setDiscountDraft] = useState<{ field: "percent" | "price"; value: string } | null>(null);
 
   const [storagePackageCatalog, setStoragePackageCatalog] = useState<AdminStoragePackage[]>([]);
   const [packageToAdd, setPackageToAdd] = useState("");
@@ -687,29 +692,67 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                       <span className="field-label">{t("tenantModal.fields.discount")}</span>
                       <span className="admin-input-suffix">
                         <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          value={subscriptionForm.discount_percent}
-                          onChange={(event) =>
-                            setSubscriptionForm((current) => ({
-                              ...current,
-                              discount_percent: Math.min(100, Math.max(0, Math.round(Number(event.target.value) || 0))),
-                            }))
+                          inputMode="decimal"
+                          value={
+                            discountDraft?.field === "percent"
+                              ? discountDraft.value
+                              : String(subscriptionForm.discount_percent)
                           }
+                          onFocus={() => setDiscountDraft({ field: "percent", value: String(subscriptionForm.discount_percent) })}
+                          onBlur={() => setDiscountDraft(null)}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setDiscountDraft({ field: "percent", value });
+                            const parsed = Number(value.replace(",", "."));
+                            if (value.trim() === "" || Number.isFinite(parsed)) {
+                              setSubscriptionForm((current) => ({ ...current, discount_percent: clampDiscountPercent(parsed || 0) }));
+                            }
+                          }}
                         />
                         <span aria-hidden="true">%</span>
                       </span>
                     </label>
                     <label className="field-stack">
-                      <span className="field-label">{t("tenantModal.fields.internalNote")}</span>
-                      <input
-                        value={subscriptionForm.billing_note ?? ""}
-                        onChange={(event) => setSubscriptionForm((current) => ({ ...current, billing_note: event.target.value }))}
-                        placeholder={t("tenantModal.fields.internalNotePlaceholder")}
-                      />
+                      <span className="field-label">{t("tenantModal.fields.discountPrice")}</span>
+                      <span className="admin-input-suffix admin-input-suffix-wide">
+                        <input
+                          inputMode="decimal"
+                          disabled={!cost.subtotalRp}
+                          value={
+                            discountDraft?.field === "price"
+                              ? discountDraft.value
+                              : cost.totalRp === null
+                                ? ""
+                                : (cost.totalRp / 100).toFixed(2)
+                          }
+                          onFocus={() => setDiscountDraft({ field: "price", value: cost.totalRp === null ? "" : (cost.totalRp / 100).toFixed(2) })}
+                          onBlur={() => setDiscountDraft(null)}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setDiscountDraft({ field: "price", value });
+                            const parsed = Number(value.replace(",", ".").replace(/['’\s]/g, ""));
+                            if (!cost.subtotalRp || value.trim() === "" || !Number.isFinite(parsed)) return;
+                            const percent = discountPercentForPrice(cost.subtotalRp, Math.round(parsed * 100));
+                            setSubscriptionForm((current) => ({ ...current, discount_percent: percent }));
+                          }}
+                        />
+                        <span aria-hidden="true">CHF</span>
+                      </span>
+                      <span className="field-help">
+                        {cost.subtotalRp
+                          ? t("tenantModal.fields.discountPriceHelp", { price: formatChfShort(cost.subtotalRp), unit: cycleUnit })
+                          : t("tenantModal.fields.discountPriceUnavailable")}
+                      </span>
                     </label>
                   </div>
+                  <label className="field-stack">
+                    <span className="field-label">{t("tenantModal.fields.internalNote")}</span>
+                    <input
+                      value={subscriptionForm.billing_note ?? ""}
+                      onChange={(event) => setSubscriptionForm((current) => ({ ...current, billing_note: event.target.value }))}
+                      placeholder={t("tenantModal.fields.internalNotePlaceholder")}
+                    />
+                  </label>
                   <label className="field-stack">
                     <span className="field-label">{t("tenantModal.fields.billingStart")}</span>
                     <DateInput
@@ -768,10 +811,10 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
                         </span>
                       </div>
                     ))}
-                    {subscriptionForm.discount_percent > 0 ? (
-                      <div className="admin-cost-row">
-                        <span>{t("tenantModal.cost.discount")}</span>
-                        <span>– {subscriptionForm.discount_percent}%</span>
+                    {subscriptionForm.discount_percent > 0 && cost.subtotalRp !== null && cost.totalRp !== null ? (
+                      <div className="admin-cost-row admin-cost-row-discount">
+                        <span>{t("tenantModal.cost.discountPercent", { percent: formatPercentNumber(subscriptionForm.discount_percent, locale) })}</span>
+                        <span>– {formatChfShort(cost.subtotalRp - cost.totalRp)}</span>
                       </div>
                     ) : null}
                     <div className="admin-cost-total">

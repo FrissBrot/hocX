@@ -782,7 +782,7 @@ def update_tenant_subscription(
             "plan_code": payload.plan_code,
             "billing_cycle": payload.billing_cycle,
             "user_limit_override": payload.user_limit_override,
-            "discount_percent": payload.discount_percent,
+            "discount_percent": float(payload.discount_percent),
             "billing_start_date": payload.billing_start_date.isoformat() if payload.billing_start_date else None,
         },
     )

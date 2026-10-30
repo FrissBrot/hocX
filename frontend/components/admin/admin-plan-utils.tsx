@@ -100,13 +100,31 @@ export function estimateSubscriptionCost({
   cycle: "monthly" | "yearly";
   addOns: AdminFeature[];
   discountPercent: number;
-}): { planRp: number | null; addOnRp: number; totalRp: number | null } {
+}): { planRp: number | null; addOnRp: number; subtotalRp: number | null; totalRp: number | null } {
   const planRp = plan ? (cycle === "monthly" ? plan.price_monthly_rp : plan.price_yearly_rp) : null;
   const perMonth = addOns.reduce((sum, f) => sum + (f.standalone_price_monthly_rp ?? 0), 0);
   const addOnRp = cycle === "monthly" ? perMonth : perMonth * 12;
-  if (planRp === null && addOnRp === 0) return { planRp, addOnRp, totalRp: null };
+  if (planRp === null && addOnRp === 0) return { planRp, addOnRp, subtotalRp: null, totalRp: null };
   const subtotal = (planRp ?? 0) + addOnRp;
-  return { planRp, addOnRp, totalRp: Math.round(subtotal * ((100 - discountPercent) / 100)) };
+  return { planRp, addOnRp, subtotalRp: subtotal, totalRp: discountedRp(subtotal, discountPercent) };
+}
+
+/** Betrag nach Rabatt, kaufmännisch gerundet - wie cashflow_service.discounted_rp. */
+export function discountedRp(subtotalRp: number, discountPercent: number): number {
+  return Math.round((subtotalRp * (100 - discountPercent)) / 100);
+}
+
+/** Rabatt auf 0–100 % mit höchstens 4 Nachkommastellen begrenzen (Genauigkeit der Datenbank). */
+export function clampDiscountPercent(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(100, Math.max(0, Math.round(value * 10_000) / 10_000));
+}
+
+/** Rabatt in Prozent, der aus dem Preis ohne Rabatt den gewünschten Preis macht. Vier
+ * Nachkommastellen reichen, damit der Preis auf den Rappen genau herauskommt. */
+export function discountPercentForPrice(subtotalRp: number, targetRp: number): number {
+  if (subtotalRp <= 0) return 0;
+  return clampDiscountPercent((1 - targetRp / subtotalRp) * 100);
 }
 
 /** Auswahlkarte eines Plans (Name, Limits, Preis) - "Neuer Mandant" und Tab "Plan & Abo". */

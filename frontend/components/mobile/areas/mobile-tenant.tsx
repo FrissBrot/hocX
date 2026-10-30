@@ -9,7 +9,7 @@ import { initials } from "@/components/protocol/collaboration-presence";
 import { bookablePurposes, domainPurposeLabel, domainStatus } from "@/components/settings/tenant-domain-row";
 import { useTenantDomains } from "@/components/settings/tenant-domains-manager";
 import { useTenantGeneralForm } from "@/components/settings/tenant-general-settings";
-import { FEATURE_ICONS, subscriptionCostRp, useTenantSubscriptionData } from "@/components/settings/tenant-subscription-view";
+import { FEATURE_ICONS, subscriptionCostRp, SubscriptionDiscountNote, useTenantSubscriptionData } from "@/components/settings/tenant-subscription-view";
 import { MobileTenantCharges } from "@/components/settings/tenant-charges";
 import { CATEGORY_COLORS, categoryHints, StorageQuotaComposition } from "@/components/storage/storage-usage-view";
 import { Badge } from "@/components/ui/badge";
@@ -203,6 +203,7 @@ export function MobileTenantSubscription({ initialTenant }: { initialTenant: Ten
           <div className="mobile-muted-sm">
             {t("costLabel")}: {cost === null ? t("costNotSet") : `${formatRappen(cost, locale)} · ${billingLabel}`}
           </div>
+          <SubscriptionDiscountNote subscription={subscription} />
           {subscription.plan_code === "legacy" ? <p className="mobile-hint-box">{t("legacyPlanNote")}</p> : null}
         </div>
       </MobileCard>

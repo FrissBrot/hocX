@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime, time
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
@@ -77,7 +78,8 @@ class Tenant(Base, TimestampMixin):
     user_limit_override: Mapped[int | None] = mapped_column(Integer)
     # Abo-Konditionen aus dem Adminportal (0089_plan_catalog_details): Rabatt in Prozent auf Plan
     # + Zusatzmodule und eine nur intern sichtbare Notiz (z.B. "Vereinsrabatt bis 2027").
-    discount_percent: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("0"))
+    # Vier Nachkommastellen (0161), damit ein über den Preis gesetzter Rabatt rappengenau aufgeht.
+    discount_percent: Mapped[Decimal] = mapped_column(Numeric(7, 4), nullable=False, server_default=text("0"))
     billing_note: Mapped[str | None] = mapped_column(Text)
     # Auf der oeffentlichen Website unter "Im Einsatz bei" gelistet (0104_tenant_show_on_website).
     show_on_website: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))

@@ -134,6 +134,10 @@ export type TenantSubscription = {
   features: TenantSubscriptionFeature[];
   estimated_monthly_cost_rp: number | null;
   estimated_yearly_cost_rp: number | null;
+  /** Rabatt in Prozent (bis 4 Nachkommastellen); estimated_* sind bereits rabattiert */
+  discount_percent: number;
+  list_monthly_cost_rp: number | null;
+  list_yearly_cost_rp: number | null;
 };
 
 export type TenantDomainPurpose = "app" | "abgabebox" | "verify";

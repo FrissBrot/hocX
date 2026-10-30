@@ -10,7 +10,7 @@ import { NavIcon, NavIconKey } from "@/components/ui/nav-icons";
 import { colorForUser, initials } from "@/components/protocol/collaboration-presence";
 import { CATEGORY_COLORS, categoryHints, StorageQuotaComposition } from "@/components/storage/storage-usage-view";
 import { browserApiFetch } from "@/lib/api/client";
-import { formatFileSize, formatRappen } from "@/lib/utils/format";
+import { formatFileSize, formatPercentNumber, formatRappen } from "@/lib/utils/format";
 import type { Locale } from "@/i18n/locale-config.generated";
 import { StorageUsageRead, TenantSubscription, TenantSummary, UserSummary } from "@/types/api";
 
@@ -75,6 +75,28 @@ export function subscriptionCostRp(subscription: TenantSubscription): number | n
   return subscription.billing_cycle === "monthly" ? subscription.estimated_monthly_cost_rp : subscription.estimated_yearly_cost_rp;
 }
 
+/** Rabatt des Abos mit dem Preis davor, oder null ohne Rabatt bzw. ohne Preis. */
+export function subscriptionDiscount(subscription: TenantSubscription): { percent: number; listRp: number; savedRp: number } | null {
+  const cost = subscriptionCostRp(subscription);
+  const listRp = subscription.billing_cycle === "monthly" ? subscription.list_monthly_cost_rp : subscription.list_yearly_cost_rp;
+  if (!subscription.discount_percent || cost === null || listRp === null) return null;
+  return { percent: subscription.discount_percent, listRp, savedRp: listRp - cost };
+}
+
+/** Rabatt-Hinweis unter den Abo-Kosten: Preis ohne Rabatt durchgestrichen und die Prozente. */
+export function SubscriptionDiscountNote({ subscription, className }: { subscription: TenantSubscription; className?: string }) {
+  const t = useTranslations("tenantSettings");
+  const locale = useLocale();
+  const discount = subscriptionDiscount(subscription);
+  if (!discount) return null;
+  return (
+    <span className={`tenant-discount-note${className ? ` ${className}` : ""}`}>
+      <s className="muted">{formatRappen(discount.listRp, locale)}</s>
+      <Badge variant="success">{t("discountBadge", { percent: formatPercentNumber(discount.percent, locale) })}</Badge>
+    </span>
+  );
+}
+
 export function TenantSubscriptionView({ initialTenant }: Props) {
   const t = useTranslations("tenantSettings");
   const storageHints = categoryHints(useTranslations("storage"));
@@ -130,6 +152,7 @@ export function TenantSubscriptionView({ initialTenant }: Props) {
                   <span className="muted tenant-usage-summary-unit">{subscription.billing_cycle === "monthly" ? t("perMonthUnit") : t("perYearUnit")}</span>
                 </span>
               )}
+              <SubscriptionDiscountNote subscription={subscription} />
             </div>
             {charges && hasCharges ? (
               <div className="tenant-usage-summary-cell">

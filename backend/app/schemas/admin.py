@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -111,7 +112,7 @@ class AdminTenantRead(BaseModel):
     package_storage_bytes: int = 0
     effective_storage_quota_bytes: int | None = None
     assigned_storage_packages: list[AdminTenantStoragePackageRead] = []
-    discount_percent: int = 0
+    discount_percent: float = 0
     billing_note: str | None = None
     # Abo-Start für die Forderungen im Cashflow (0127_cashflow). None = Erstellungsdatum.
     billing_start_date: date | None = None
@@ -226,7 +227,9 @@ class AdminTenantSubscriptionUpdate(BaseModel):
     plan_code: str | None = None
     billing_cycle: Literal["monthly", "yearly"] = "monthly"
     user_limit_override: int | None = None
-    discount_percent: int = Field(default=0, ge=0, le=100)
+    # Prozent mit bis zu 4 Nachkommastellen (0161); das Adminportal rechnet einen eingegebenen
+    # Preis in Prozent um.
+    discount_percent: Decimal = Field(default=Decimal(0), ge=0, le=100, max_digits=7, decimal_places=4)
     billing_note: str | None = None
     # Full-Replace wie die übrigen Felder: None = Erstellungsdatum des Mandanten.
     billing_start_date: date | None = None

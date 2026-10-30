@@ -4,6 +4,8 @@ seeded catalog rows (migrations 0084/0085), so these tests reuse them instead of
 throwaway features - only the plan itself is test-local."""
 from __future__ import annotations
 
+from decimal import Decimal
+
 import pytest
 from pydantic import ValidationError
 
@@ -11,6 +13,7 @@ from app.core.features_generated import MODULES
 from app.core.security import CurrentUser
 from app.models.entities import Feature, PlatformAdmin, TenantFeature
 from app.schemas.admin import AdminFeatureUpdate, AdminPlanWrite, AdminTenantCreate, AdminTenantSubscriptionUpdate
+from app.services import cashflow_service
 from app.services.admin_tenant_service import AdminTenantService
 from app.services.tenant_service import TenantService
 
@@ -309,6 +312,34 @@ def test_discount_and_note_are_stored_and_reduce_estimated_cost(db):
     assert subscription is not None
     assert subscription.estimated_monthly_cost_rp == 1500
     assert subscription.estimated_yearly_cost_rp == 15000
+    assert subscription.discount_percent == 25
+    assert subscription.list_monthly_cost_rp == 2000
+    assert subscription.list_yearly_cost_rp == 20000
+
+
+def test_discount_with_decimals_hits_target_price_and_rejects_more_precision(db):
+    """Rabatt über den Preis gesetzt (Adminportal): 4 Nachkommastellen genügen, damit der
+    Betrag rappengenau aufgeht; mehr Stellen weist das Schema ab."""
+    admin_service = AdminTenantService()
+    admin = make_platform_admin(db)
+    tenant = make_tenant(db)
+    admin_service.upsert_plan(db, "test_plan_decimal", _plan_write(price_monthly_rp=2000, price_yearly_rp=24990, feature_codes=[]))
+
+    # Wunschpreis CHF 199.00 statt 249.90 pro Jahr: 20.3681 %
+    updated = admin_service.update_tenant_subscription(
+        db,
+        tenant.id,
+        AdminTenantSubscriptionUpdate(plan_code="test_plan_decimal", billing_cycle="yearly", discount_percent=Decimal("20.3681")),
+        admin_id=admin.id,
+    )
+    assert updated is not None
+    assert updated.discount_percent == pytest.approx(20.3681)
+    assert cashflow_service.discounted_rp(24990, tenant.discount_percent) == 19900
+
+    with pytest.raises(ValidationError):
+        AdminTenantSubscriptionUpdate(discount_percent=Decimal("12.34567"))
+    with pytest.raises(ValidationError):
+        AdminTenantSubscriptionUpdate(discount_percent=Decimal("100.01"))
 
 
 def test_update_tenant_subscription_rejects_unknown_plan_code(db):

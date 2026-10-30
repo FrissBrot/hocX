@@ -88,6 +88,11 @@ class TenantSubscriptionRead(BaseModel):
     # bepreisten Features gebucht sind - dann gibt es schlicht nichts zu beziffern.
     estimated_monthly_cost_rp: int | None = None
     estimated_yearly_cost_rp: int | None = None
+    # Rabatt aus dem Adminportal (Prozent, bis 4 Nachkommastellen) und die Kosten davor -
+    # estimated_* oben sind bereits rabattiert.
+    discount_percent: float = 0
+    list_monthly_cost_rp: int | None = None
+    list_yearly_cost_rp: int | None = None
 
 
 class UserBase(BaseModel):

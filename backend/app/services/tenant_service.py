@@ -203,13 +203,14 @@ class TenantService:
         if plan is not None and (plan.price_yearly_rp is not None or extra_monthly_rp > 0):
             estimated_yearly_cost_rp = (plan.price_yearly_rp or 0) + extra_monthly_rp * 12
         # Rabatt aus dem Adminportal (0089_plan_catalog_details) - gleiche Rechnung wie die
-        # Kostenvorschau im Admin-Tab "Plan & Abo".
+        # Kostenvorschau im Admin-Tab "Plan & Abo". Der Preis ohne Rabatt bleibt für die Anzeige.
+        list_monthly_cost_rp = estimated_monthly_cost_rp
+        list_yearly_cost_rp = estimated_yearly_cost_rp
         if tenant.discount_percent:
-            factor = (100 - tenant.discount_percent) / 100
             if estimated_monthly_cost_rp is not None:
-                estimated_monthly_cost_rp = round(estimated_monthly_cost_rp * factor)
+                estimated_monthly_cost_rp = cashflow_service.discounted_rp(estimated_monthly_cost_rp, tenant.discount_percent)
             if estimated_yearly_cost_rp is not None:
-                estimated_yearly_cost_rp = round(estimated_yearly_cost_rp * factor)
+                estimated_yearly_cost_rp = cashflow_service.discounted_rp(estimated_yearly_cost_rp, tenant.discount_percent)
 
         # Benutzer im Sinn des Abos: aktive Konten mit Login (user_limit_service)
         user_count = user_limit_service.login_account_count(db, tenant_id)
@@ -244,6 +245,9 @@ class TenantService:
             features=features,
             estimated_monthly_cost_rp=estimated_monthly_cost_rp,
             estimated_yearly_cost_rp=estimated_yearly_cost_rp,
+            discount_percent=float(tenant.discount_percent or 0),
+            list_monthly_cost_rp=list_monthly_cost_rp,
+            list_yearly_cost_rp=list_yearly_cost_rp,
         )
 
     async def update_tenant(  # loop-ok: nur im Worker-Thread (core/offload.run_coroutine_in_thread bzw. Galerie-Ingest)

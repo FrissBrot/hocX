@@ -19,7 +19,7 @@ import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { CHART_COLORS } from "@/lib/constants/chart-colors";
-import { formatDate, formatRappen, toIntlLocale } from "@/lib/utils/format";
+import { formatDate, formatPercentNumber, formatRappen, toIntlLocale } from "@/lib/utils/format";
 import type {
   CashflowCost,
   CashflowCostStatus,
@@ -33,6 +33,11 @@ import type {
 import { Select } from "@/components/ui/select";
 
 type TFunc = ReturnType<typeof useTranslations>;
+
+/** Rabatt einer Forderung in Prozent, 0 ohne Rabattzeile. */
+function discountOf(charge: TenantCharge): number {
+  return charge.lines.find((line) => line.kind === "discount")?.percent ?? 0;
+}
 type TabId = "overview" | "charges" | "costs";
 const CHARGE_PAGE_SIZE = 50;
 
@@ -496,7 +501,12 @@ function ChargesTab({ t, onChanged }: { t: TFunc; onChanged: () => Promise<void>
                   <span className="muted">{t(`cycle.${charge.billing_cycle}`)}</span>
                 </span>
               </td>
-              <td className="cashflow-amount">{formatRappen(charge.amount_rp, locale)}</td>
+              <td className="cashflow-amount">
+                {formatRappen(charge.amount_rp, locale)}
+                {discountOf(charge) > 0 ? (
+                  <span className="tenant-charges-discount">{t("charge.discount", { percent: formatPercentNumber(discountOf(charge), locale) })}</span>
+                ) : null}
+              </td>
               <td className={charge.is_overdue ? "cashflow-overdue" : undefined}>{formatDate(charge.due_on)}</td>
               <td>
                 <span className="cashflow-status-cell">
@@ -557,7 +567,7 @@ function ChargeModal({ t, charge, onClose, onSave }: {
             <div className="admin-cost-row" key={`${line.kind}-${index}`}>
               <span>
                 {line.kind === "discount"
-                  ? t("charge.discount", { percent: line.percent ?? 0 })
+                  ? t("charge.discount", { percent: formatPercentNumber(line.percent ?? 0, locale) })
                   : line.kind === "storage_package" && (line.quantity ?? 1) > 1
                     ? t("charge.quantity", { label: line.label, quantity: line.quantity ?? 1 })
                     : line.label}

@@ -70,6 +70,15 @@ def test_charge_amount_includes_addons_discount_and_storage_packages(db):
     assert amount == 23400 + 6000
     assert [line["kind"] for line in lines] == ["plan", "feature", "discount", "storage_package"]
     assert lines[2]["amount_rp"] == -2600
+    assert lines[2]["percent"] == 10
+
+
+def test_discounted_rp_rounds_half_up_like_the_admin_preview():
+    assert cashflow_service.discounted_rp(2000, 0) == 2000
+    assert cashflow_service.discounted_rp(2000, 100) == 0
+    # 105 * 0.5 = 52.5 -> 53 (Math.round), nicht 52 wie Pythons round()
+    assert cashflow_service.discounted_rp(105, 50) == 53
+    assert cashflow_service.discounted_rp(24990, "20.3681") == 19900
 
 
 def test_tenant_without_price_advances_cursor_without_backfilling_later(db):

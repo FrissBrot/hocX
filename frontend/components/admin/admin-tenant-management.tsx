@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { AdminAvatar, BillingCycleToggle, formatPlanPrice, PlanBadge, PlanOption, planTones } from "@/components/admin/admin-plan-utils";
 import { AdminTenantSettingsModal } from "@/components/admin/admin-tenant-settings-modal";
 import { ActionMenu } from "@/components/ui/action-menu";
+import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
@@ -14,7 +15,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch, LONG_RUNNING_TIMEOUT_MS } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
-import { formatFileSize } from "@/lib/utils/format";
+import { formatFileSize, formatPercentNumber } from "@/lib/utils/format";
 import { AdminPlan, AdminTenantCreate, AdminTenantPage, AdminTenantSummary } from "@/types/api";
 
 type Props = {
@@ -388,6 +389,11 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
                   <span className="muted">–</span>
                 )}
                 <div className="muted admin-cell-sub">{formatPlanPrice(plan, tenant.billing_cycle, tPlans)}</div>
+                {tenant.discount_percent > 0 ? (
+                  <div className="admin-tenant-discount">
+                    <Badge variant="success">{t("discountBadge", { percent: formatPercentNumber(tenant.discount_percent, locale) })}</Badge>
+                  </div>
+                ) : null}
               </td>
               <td className="admin-cell-number">{tenant.participant_count}</td>
               <td className="admin-cell-number">{tenant.user_count}</td>
