@@ -37,7 +37,7 @@ describe("wheelStyle", () => {
     const far = wheelStyle({ ...view, top: 1200, height: 100 });
     expect(far.transform).toBe("perspective(1400px) rotateX(-24.00deg) scale(0.8800)");
     expect(far.opacity).toBe("0.400");
-    expect(far.filter).toBe("blur(1.40px) grayscale(0.40)");
+    expect(far.filter).toBe("");
   });
 });
 

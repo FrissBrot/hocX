@@ -4307,6 +4307,13 @@ input[type="color"]::-moz-color-swatch {
   transition: box-shadow var(--dur-base) ease, border-color var(--dur-base) ease;
 }
 
+/* Rad-Effekt: gekippte Abschnitte als eigene Ebene, damit transform/opacity beim Scrollen nur
+   neu zusammengesetzt statt neu gezeichnet werden. Der aktive Punkt bleibt bewusst ohne
+   (will-change: transform würde ihn wie transform selbst zum Bezugsrahmen für position:fixed machen). */
+.protocol-document-wheel .protocol-doc-section:not(.protocol-doc-section-active) {
+  will-change: transform, opacity;
+}
+
 /* The active section is marked with an accent ring instead of blurring everything else -
    inactive sections stay fully readable (no blur/opacity dip), which also keeps scanning
    ahead/behind the active section cheap for the browser with ~15 sections mounted. */
@@ -5986,6 +5993,13 @@ input[type="color"]::-moz-color-swatch {
 .structured-list-table td:first-child,
 .structured-list-table td:nth-child(2) {
   white-space: nowrap;
+}
+
+/* Nicht breiter als der Block: .event-table ist sonst max-content, lange (gruppierte) Werte
+   ragten dann einzeilig über die Karte hinaus. */
+.structured-list-table.event-table {
+  width: auto;
+  max-width: 100%;
 }
 
 /* Gruppierte Zeilen fassen viele Werte kommagetrennt zusammen - umbrechen statt die Tabelle zu sprengen. */

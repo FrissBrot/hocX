@@ -1971,7 +1971,7 @@ export function ProtocolEditor({
 
       <div className="protocol-document-shell">
         <article
-          className={`protocol-document${accordionEnabled ? " protocol-document-accordion" : ""}${accordionEnabled || wheelEnabled ? " protocol-document-spaced" : ""}`}
+          className={`protocol-document${accordionEnabled ? " protocol-document-accordion" : ""}${accordionEnabled || wheelEnabled ? " protocol-document-spaced" : ""}${wheelEnabled ? " protocol-document-wheel" : ""}`}
           ref={documentRef}
         >
           {visibleElements.length === 0 && (

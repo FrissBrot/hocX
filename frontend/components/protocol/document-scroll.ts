@@ -40,8 +40,10 @@ export type WheelStyle = { transform: string; transformOrigin: string; opacity: 
 const NO_WHEEL: WheelStyle = { transform: "", transformOrigin: "", opacity: "", filter: "" };
 
 /** Rad-Effekt eines Abschnitts: je weiter von der Mittellinie entfernt, desto stärker kippt er
- * nach hinten weg, wird kleiner, blasser und unscharf. Nur transform/opacity/filter - kein
- * Layout, die Scrollposition bleibt dadurch exakt. */
+ * nach hinten weg, wird kleiner und blasser. Nur transform/opacity - kein Layout, die
+ * Scrollposition bleibt exakt, und beides rechnet der Compositor ohne Neuzeichnen. Bewusst
+ * kein filter (blur/grayscale): der zeichnet grosse Abschnitte auf breiten Bildschirmen in
+ * jedem Frame neu und liess das Scrollen ruckeln. */
 export function wheelStyle(
   { top, height, scrollTop, viewport }: { top: number; height: number; scrollTop: number; viewport: number }
 ): WheelStyle {
@@ -64,9 +66,13 @@ export function wheelStyle(
     transformOrigin: below ? "50% 0%" : "50% 100%",
     transform: `perspective(1400px) rotateX(${((below ? -1 : 1) * e * 24).toFixed(2)}deg) scale(${(1 - 0.12 * e).toFixed(4)})`,
     opacity: (1 - 0.6 * e).toFixed(3),
-    filter: e > 0.02 ? `blur(${(e * 1.4).toFixed(2)}px) grayscale(${(e * 0.4).toFixed(2)})` : "",
+    filter: "",
   };
 }
+
+// Zuletzt geschriebener Stil je Abschnitt: unveränderte (z. B. weit entfernte, voll gekippte)
+// Abschnitte werden nicht in jedem Frame neu gesetzt.
+const appliedWheel = new WeakMap<HTMLElement, string>();
 
 /** Rad-Effekt auf alle Abschnitte anwenden (enabled=false entfernt ihn wieder). Erst alle
  * Positionen lesen, dann schreiben - sonst erzwingt jeder Abschnitt eine eigene Neuberechnung. */
@@ -83,6 +89,9 @@ export function applyWheelFrame(container: HTMLElement, enabled: boolean) {
   );
   sections.forEach((section, index) => {
     const style = styles[index];
+    const key = `${style.transform}|${style.opacity}`;
+    if (appliedWheel.get(section) === key) return;
+    appliedWheel.set(section, key);
     section.style.transformOrigin = style.transformOrigin;
     section.style.transform = style.transform;
     section.style.opacity = style.opacity;
