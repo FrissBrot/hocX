@@ -22,7 +22,7 @@ Pillow==13.0.0
 # fest, damit Dev, CI und Produktion identisch rendern.
 typst==0.15.0
 markdown-it-py==4.2.0
-pypdf==6.21.3
+pypdf==6.21.4
 # Vorschau/Thumbnails: nur die benötigten Seiten aus dem PDF rastern (TYPST-005, STUDIO-015)
 pypdfium2==5.14.0
 openpyxl==3.1.5
