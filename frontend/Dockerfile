@@ -1,11 +1,11 @@
-FROM node:24-bookworm@sha256:df02654fe43f6c43191e9eed5b3a54246d41dae8366028893c195b7fc00c745b AS deps
+FROM node:26-bookworm@sha256:fa52d1669505e29b58c042875b1d65c229e0787a3610fd52869b22b68e480853 AS deps
 
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
 RUN npm ci
 
-FROM node:24-bookworm@sha256:df02654fe43f6c43191e9eed5b3a54246d41dae8366028893c195b7fc00c745b AS build
+FROM node:26-bookworm@sha256:fa52d1669505e29b58c042875b1d65c229e0787a3610fd52869b22b68e480853 AS build
 
 WORKDIR /app
 
@@ -14,7 +14,7 @@ RUN mkdir -p public
 COPY . .
 RUN npm run build
 
-FROM node:24-bookworm-slim@sha256:be8204d4bd327363357f532187b752ff62759c31bedf98e9e18fc08c9cbd605c AS run
+FROM node:26-bookworm-slim@sha256:bc0a2afd3b74ce12222fc8bab99271e66257f021078f5f4a5d687a77d280c1d9 AS run
 
 WORKDIR /app
 ENV NODE_ENV=production
