@@ -35,7 +35,7 @@ services:
   traefik:
     # Gleiche Version wie docker-compose.traefik.yml: v3.1 spricht die Docker-API 1.24 fest an
     # und laedt gegen Docker Engine >= 29 keine Router (Audit MAIN-OPS-007).
-    image: traefik:v3.7.15@sha256:0f6150202bc1fed72a7bd2107460eaa510e5b8a905f3fdb5b84f2c8619c33368
+    image: traefik:v3.7.16@sha256:1336e85aaed293bd63d005086e0dd013b04078b26aaeb1c18b26a2f928af7e65
     restart: unless-stopped
     # M28 (Mittel, Audit 2026-08-12): Ceiling gegen einen durchgehenden Container, der den
     # ganzen (knappen) Host mitreisst - keine Zielwerte fuer Normalbetrieb, nur eine Obergrenze.
@@ -71,7 +71,7 @@ services:
       - --configFile=/etc/traefik/traefik.yml
 
   db:
-    image: postgres:16@sha256:d4d4f1579fcfba19c2257326f6a93f4bcf677a430619f084ced704e18eb428ce
+    image: postgres:17@sha256:31ba9c94a03ada9988f2bb493a22a75eef3a185884533e5cdbcd498ea835b08f
     restart: unless-stopped
     mem_limit: 768m
     cpus: 1.0
@@ -131,7 +131,7 @@ services:
       retries: 10
 
   redis:
-    image: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+    image: redis:8-alpine@sha256:21090af93f8324db2f0f0f4f38a7c60369d47d917e000c3423d89d2ae2883537
     restart: unless-stopped
     mem_limit: 128m
     cpus: 0.5
@@ -918,7 +918,7 @@ services:
         max-file: "3"
 
   clamav:
-    image: clamav/clamav@sha256:e19130cdebaeacc71fa46eab3ed6f69941f2f22aa5e08d55e9197f8edf43ce5e
+    image: clamav/clamav@sha256:bda39705e291105049c3936e2803ac90b955172af8030f94f05dce1252df6c6d
     restart: unless-stopped
     # Das Image prueft per Default nur 1x taeglich auf neue Signaturen. Verpasst clamd beim
     # Containerstart die Reload-Benachrichtigung (Socket noch nicht bereit), bliebe es sonst
