@@ -204,6 +204,11 @@ Fotos und Abgabebox-Uploads) brachte drei Korrekturen:
   Smoke-Checks. Scheiterte danach ein Folgeschritt (Storage-Controller, Demo-Seed), blieb es auf
   dem alten Release stehen, ein späterer Rollback hätte das falsche Ziel genommen. Ein
   fehlgeschlagener Demo-Seed auf Testumgebungen ist nur noch eine Warnung.
+- Dateirechte in der Dateiablage: Backend, Abgabebox und Foto-Worker legten Verzeichnisse und
+  Dateien mit der Docker-Standard-umask (2755/0644) an. Andere Dienste der Gruppe 5001 konnten dort
+  nicht schreiben, und jeder weitere `deploy.sh` verlangte root. Alle Prozesse nutzen jetzt umask
+  0007 (2770/0660). Auf Hosts, die bereits einen 1.2.0-Testkandidaten betrieben haben, einmalig den
+  root-Befehl ausführen, den `deploy.sh` dann nennt.
 - PostgreSQL 18 (siehe Schritt 3), Backend-Image mit `pg_dump`/`pg_restore` 18, CI und
   Test-Stacks auf 18. Dazu Traefik 3.7.16 und ein aktuelles ClamAV-Image.
 

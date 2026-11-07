@@ -286,3 +286,17 @@ def test_object_response_uses_file_response_for_the_filesystem(db, tmp_path, mon
     get_object_store().put_bytes(db, MAIN, "uploads/r.txt", b"abcdef")
     response = object_response(_Req(), MAIN, "uploads/r.txt", media_type="text/plain")
     assert response.__class__.__name__ == "FileResponse"
+
+
+def test_app_processes_use_group_umask_for_shared_storage(tmp_path):
+    # Update-Probe 2026-11-07: mit umask 0022 entstanden in storage/ 2755-Verzeichnisse und
+    # 0644-Dateien, danach verlangte deploy.sh root. Jeder Prozess, der `app` lädt, nutzt 0007.
+    import subprocess
+    import sys
+
+    script = "import os, app; print(oct(os.umask(0)))"
+    result = subprocess.run(
+        [sys.executable, "-c", script], cwd=Path(__file__).resolve().parents[1],
+        capture_output=True, text=True, check=True, preexec_fn=lambda: os.umask(0o022),
+    )
+    assert result.stdout.strip() == "0o7"
