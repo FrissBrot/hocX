@@ -86,6 +86,9 @@ class SshBorgServer:
             f"Port {self.port}\nListenAddress 127.0.0.1\nHostKey {self.host_key}\nPidFile {ssh_dir / 'sshd.pid'}\n"
             f"AuthorizedKeysFile {authorized}\nPasswordAuthentication no\nKbdInteractiveAuthentication no\n"
             "PermitRootLogin prohibit-password\nStrictModes no\nUsePAM no\nLogLevel ERROR\n"
+            # Kein zufälliges Verwerfen unangemeldeter Verbindungen (Default 10:30:100) bei vielen
+            # parallelen Testläufen auf einem ausgelasteten Runner.
+            "MaxStartups 100\nLoginGraceTime 60\n"
         )
         Path("/run/sshd").mkdir(exist_ok=True)
         self._sshd_config = config

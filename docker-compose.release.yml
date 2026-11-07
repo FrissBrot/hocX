@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:16@sha256:d4d4f1579fcfba19c2257326f6a93f4bcf677a430619f084ced704e18eb428ce
+    image: postgres:18@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
     restart: unless-stopped
     # Audit I1, 2026-08-16: this file had NO resource limits at all, unlike
     # docker-compose.yml (dev) after M28 - a runaway container here could take down the
@@ -48,7 +48,9 @@ services:
     secrets:
       - postgres_password
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # Ab PostgreSQL 18: Datenverzeichnis /var/lib/postgresql/18/docker, Upgrade aus dem alten
+      # Volume postgres_data (PostgreSQL 16) per scripts/lib/pg_upgrade.sh.
+      - postgres18_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -1091,7 +1093,7 @@ networks:
 volumes:
   backend_upload_tmp:
   abgabebox_upload_tmp:
-  postgres_data:
+  postgres18_data:
   local_s3_data:
 
 secrets:

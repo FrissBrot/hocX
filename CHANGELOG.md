@@ -18,8 +18,9 @@ die Umsetzung von vier Audits: **Datenschutz** (DSG/DSGVO: Löschung, Auskunft, 
 Sicherheitsprotokoll), **Sicherheit** (u. a. Row-Level-Security in PostgreSQL, verschlüsselte
 Exporte), **Stabilität unter Last** (neuer `job-worker`, Überlast-Schutz nach Abo) und
 **Feature-Recovery**. Neu ausserdem **Anliegen**: Punkte für kommende Sitzungen, die
-automatisch im nächsten Protokoll erscheinen. **Breaking Changes** - vor dem Update die
-Schritte unten lesen.
+automatisch im nächsten Protokoll erscheinen. Die Datenbank wechselt auf **PostgreSQL 18**
+(Umzug der Daten übernimmt `deploy.sh`). **Breaking Changes** - vor dem Update die Schritte
+unten lesen.
 
 ### Update von 1.1.13 auf 1.2.0
 
@@ -30,7 +31,9 @@ Schritte unten lesen.
    `0118`, `0136`, `0139`, `0141`). Der Rückweg auf 1.1.13 geht nur über `restore_db.sh` mit
    diesem Dump plus dem alten Deploy-Code. Der automatische App-Rollback von `deploy.sh` startet
    zwar die alten Images, rollt aber keine Migration zurück, und das 1.1.13-Backend erreicht das
-   jetzt passwortgeschützte Redis nicht.
+   jetzt passwortgeschützte Redis nicht. Das alte PostgreSQL-16-Volume bleibt nach dem Update
+   unverändert liegen (Schritt 3): der alte Deploy-Code startet wieder darauf, also mit dem Stand
+   unmittelbar vor dem Update.
 2. **Dump-Verschlüsselung vorbereiten (empfohlen).** `gpg` auf dem Host installieren und den
    öffentlichen Schlüssel unter `~/.hocx-backup/dump-public.asc` ablegen (oder
    `BACKUP_DUMP_PUBLIC_KEY_PATH` setzen, RUNBOOK Abschnitt 10). Ohne Schlüssel schreibt
@@ -42,7 +45,36 @@ Schritte unten lesen.
    Storage-Migration nennenswert Platz. PostgreSQL (`max_connections=150`) und Redis (neu mit
    Passwort im internen Netz `cache`) werden vor den Migrationen neu gestartet; ab dann bis zum
    Ende des Deploys ist die App nicht nutzbar. Wartungsfenster einplanen.
-4. **Code und Version.** Release 1.2.0 muss auf `main` stehen und den CI-Nachweis haben
+   **PostgreSQL 16 → 18:** Ein 16er-Cluster startet unter 18 nicht. `deploy.sh` stoppt deshalb
+   nach dem Pre-Deploy-Backup alle Dienste ausser Traefik und lokalem S3, überträgt Rollen und
+   Datenbanken per `pg_dumpall` direkt (ohne Zwischendatei) in das neue Volume
+   `<projekt>_postgres18_data` und vergleicht danach Datenbanken, Rollen und die Zeilenzahl jeder
+   Tabelle (`scripts/lib/pg_upgrade.sh`). Dauer etwa wie ein Dump plus Restore; freier Platz:
+   rund das Anderthalbfache der Datenbankgrösse plus 1 GB. Das alte Volume
+   `<projekt>_postgres_data` wird nur gelesen. Scheitert ein Schritt, entfernt `deploy.sh` das
+   neue Volume und startet die gestoppten Dienste wieder, die App läuft dann weiter auf 1.1.13.
+   Den Stack bis zum Abschluss nicht von Hand mit `docker compose up` starten, sonst legt
+   PostgreSQL 18 ein leeres Volume an (`deploy.sh` erkennt das und bricht ab).
+   Lief nach einem Rückweg auf 1.1.x wieder PostgreSQL 16 auf dem alten Volume, erkennt ein
+   erneuter 1.2.0-Deploy den veralteten 18er-Stand und bricht mit Anleitung ab.
+4. **Alte Vorlagen-Dateien zurücksetzen (als root, vor dem Code-Update).** 1.1.13 hat
+   TeX-Dateien unter `storage/document_templates/` und `storage/latex_templates/` im Repository
+   versioniert; das Backend schreibt sie bei jedem PDF-Export neu, und zwar mit Rechten, die der
+   Deploy-Benutzer nicht ändern kann. `update_deploy_code.sh` bricht dann mit «Tracked
+   Worktree-Aenderungen vorhanden» ab. Liegt `HOCX_STORAGE_PATH` im Checkout (Standard
+   `./storage`), deshalb im Repository-Verzeichnis:
+
+   ```bash
+   # als root
+   chown -R hocx-deploy:5001 storage && chmod -R u+rwX,g+rwX,o-rwx storage \
+     && find storage -type d -exec chmod g+s {} +
+   # als hocx-deploy
+   git restore storage && git status --short --untracked-files=no   # muss leer sein
+   ```
+
+   Zurückgesetzt wird nur erzeugter TeX-Code; hochgeladene Logos, Schriften und alle übrigen
+   Dateien sind nicht versioniert und bleiben unverändert.
+5. **Code und Version.** Release 1.2.0 muss auf `main` stehen und den CI-Nachweis haben
    (`update_deploy_code.sh` akzeptiert nur `main`). `HOCX_VERSION=v1.2.0` in `.env`, dann
    `./scripts/update_deploy_code.sh` und `./scripts/deploy.sh <test|prod>`. `deploy.sh` ergänzt
    die neuen Secrets (`STORAGE_CREDENTIALS_KEY`, `EXPORT_ENCRYPTION_KEY`, `REDIS_PASSWORD`,
@@ -55,7 +87,7 @@ Schritte unten lesen.
    Lastparameter `DB_POOL_*`, `DB_ADMISSION_*`, `OVERLOAD_*` und die Alarmschwellen
    `SECURITY_*` (RUNBOOK Abschnitt 17). `BACKUP_ENABLED=true` erst **nach** dem ersten
    1.2.0-Deploy setzen (vorher läuft kein `backup-worker`, `deploy.sh` bricht sonst ab).
-5. **Migrationen** `0113` bis `0160` laufen automatisch. Getestet von 1.1.13 mit Demodaten und
+6. **Migrationen** `0113` bis `0162` laufen automatisch. Getestet von 1.1.13 mit Demodaten und
    einem Vereinsstand mit TeX-Vorlage (Logo, Fussbild, eigene Schrift, eigener Vorlagen-Code),
    Protokollen, Todos, Bussen und Alt-PDF-Exporten: keine Fachdaten gehen verloren, Logo,
    Fussbild, Schrift und Farben landen je Mandant im Brand-Profil, die Alt-Exporte in der
@@ -63,7 +95,13 @@ Schritte unten lesen.
    Neue Dienste `storage-init`, `storage-worker`, `local-s3`, `backup-worker`,
    `document-worker` und `job-worker` startet `deploy.sh` mit `up -d`. Die Smoke-Checks prüfen
    zusätzlich `document-worker`, `storage-worker` und `job-worker`.
-6. **Nach dem Deploy:**
+7. **Nach dem Deploy:**
+   - Neue PDFs setzen die hochgeladene Schrift eines Vereins ein, wo 1.1.13 sie nur bei der
+     Schriftwahl «Eigene Schrift» bzw. «Century Gothic» nutzte und sonst DejaVu setzte. Exporte
+     sehen dadurch teilweise anders aus; die Schrift lässt sich im Brand-Profil umstellen.
+   - Das alte Datenbank-Volume nach ein paar Tagen Betrieb entfernen:
+     `docker volume rm <projekt>_postgres_data` (Name in der Ausgabe von `deploy.sh`). Danach
+     führt der Rückweg auf 1.1.13 nur noch über den Pre-Deploy-Dump.
    - `/admin/system`: Checks «Öffentliche Prüfseite», «Dateispeicher» und
      «Dokumentverarbeitung» grün; ein Protokoll exportieren und auf `/verify` der Abgabebox
      prüfen (Ergebnis «Original»).
@@ -76,7 +114,7 @@ Schritte unten lesen.
    - Optional einmalig den Bild-Metadaten-Backfill:
      `docker compose exec backend python -m scripts.backfill_image_metadata`
      (`backend/UPLOAD_DUPLICATES.md`, Abschnitt 12).
-7. **Später, bewusst entscheiden:** Erstmigration der Dateien in den Objektspeicher (RUNBOOK
+8. **Später, bewusst entscheiden:** Erstmigration der Dateien in den Objektspeicher (RUNBOOK
    Abschnitt 14) und Einrichtung des Borg-Offsite-Backups mit Ablösung der Cronjobs
    `backup_db`/`backup_storage` (RUNBOOK Abschnitt 15). Bis dahin bleibt das Dateisystem aktiv und
    die bisherigen Backup-Cronjobs gelten weiter.
@@ -145,6 +183,30 @@ Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116_document_reg
   Sprung auf 18 braucht ein Upgrade der Datenbank (`pg_upgrade` bzw. Dump/Restore) und ein
   anderes Volume-Layout und wird separat geplant.
 
+### Update-Probe (Nachtrag vom 2026-11-06)
+
+Ein vollständiges Update von 1.1.13 auf den aktuellen Stand mit `update_deploy_code.sh` und
+`deploy.sh test` (Altdaten mit TeX-Vorlage, Logo, Fussbild, eigener Schrift, PDF-Exporten,
+Fotos und Abgabebox-Uploads) brachte drei Korrekturen:
+
+- **Mandanten liessen sich nicht mehr löschen**, sobald ihre Konten Einträge im Audit-Log hatten
+  (praktisch immer: jede Anmeldung). `audit_log_forget_tenant` (0143) änderte die Zeilen in
+  derselben Transaktion, danach scheiterte das Löschen an `audit_log_actor_user_id_fkey`. Betraf
+  das Adminportal, das automatische Offboarding und auf Testumgebungen jeden Deploy (Neuaufbau
+  des Demo-Mandanten). Migration `0162_audit_forget_tenant_actor` entfernt dabei auch den Verweis
+  auf das Konto.
+- `deploy.sh` setzt fehlende Gruppenrechte auf eigenen Dateien unter `HOCX_STORAGE_PATH` selbst
+  (Git legt `storage/exports/.gitkeep` beim Code-Update mit 0644 neu an); root braucht es nur
+  noch für Dateien anderer Besitzer.
+- Update-Anleitung um das Zurücksetzen der in 1.1.13 versionierten Vorlagen-Dateien ergänzt
+  (Schritt 4).
+- Rollback-Ziel: `deploy.sh` schreibt `.releases/current.env` jetzt direkt nach bestandenen
+  Smoke-Checks. Scheiterte danach ein Folgeschritt (Storage-Controller, Demo-Seed), blieb es auf
+  dem alten Release stehen, ein späterer Rollback hätte das falsche Ziel genommen. Ein
+  fehlgeschlagener Demo-Seed auf Testumgebungen ist nur noch eine Warnung.
+- PostgreSQL 18 (siehe Schritt 3), Backend-Image mit `pg_dump`/`pg_restore` 18, CI und
+  Test-Stacks auf 18. Dazu Traefik 3.7.16 und ein aktuelles ClamAV-Image.
+
 ### Update-Werkzeuge (Nachtrag vom 2026-10-24, nach dem ersten Test-Update)
 
 - **Deploy und Rollback brachen ab**: `deploy.sh` schreibt `HOCX_BACKEND_WORKERS` ins
@@ -186,6 +248,9 @@ Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116_document_reg
 
 ### Breaking Changes
 
+- **PostgreSQL 18** statt 16, Daten in einem neuen Volume (`postgres18_data`, gemountet unter
+  `/var/lib/postgresql`). `deploy.sh` und `scripts/dev.sh` ziehen bestehende Daten automatisch
+  um (Update-Schritt 3); wer den Stack anders startet, muss das vorher selbst tun.
 - Der TeX-Export ist entfernt (inkl. TeX Live im Backend-Image). Dokumentvorlagen werden
   automatisch zu **Brand-Profilen** des Document Studio (Migrationen `0115` und `0118`): Farben,
   Schrift (inkl. hochgeladener Schriften), Format, Kopf-/Fuss-/Titelseiten-/TOC-Variante,

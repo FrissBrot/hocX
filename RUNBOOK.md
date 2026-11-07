@@ -213,6 +213,16 @@ vim .env   # HOCX_VERSION auf die vorherige Version (…-pre-vX.Y.Z = Stand vor 
 ./scripts/verify_release.sh prod
 ```
 
+**Rückweg hinter das PostgreSQL-18-Update (1.2.0 → 1.1.x):** Releases bis 1.1.x betreiben
+PostgreSQL 16 auf dem Volume `<projekt>_postgres_data`, ab 1.2.0 läuft PostgreSQL 18 auf
+`<projekt>_postgres18_data` (Umzug durch `deploy.sh`, `scripts/lib/pg_upgrade.sh`). Der alte
+Deploy-Code startet wieder auf dem alten Volume - solange es noch existiert, also mit dem Stand
+unmittelbar vor dem Update; ein `restore_db.sh` vorab wirkt dann nur auf die 18er-Datenbank und
+ist überflüssig. Ist das alte Volume schon gelöscht, legt PostgreSQL 16 ein leeres an: dann
+**zuerst** den alten Stand deployen und **danach** den Pre-Deploy-Dump mit `restore_db.sh`
+einspielen. Ein Dump von PostgreSQL 18 lässt sich in 16 meist, aber nicht garantiert einspielen;
+für den Rückweg deshalb den Dump *vor* dem Update (`…-pre-v1.2.0…`) nehmen.
+
 Verschlüsselte Dumps (`.sql.gz.gpg`, siehe Abschnitt 10 «Verschlüsselung der Dumps») brauchen den
 privaten Schlüssel aus der Notfallmappe: `BACKUP_DUMP_PRIVATE_KEY_PATH=/pfad/dump-private.asc` vor
 den Aufruf setzen oder den Schlüssel im GPG-Schlüsselbund des Benutzers haben.
@@ -444,7 +454,7 @@ beim Aufruf von `deploy.sh`), der neueste immer.
 - **Manuell testen**: `./scripts/backup_db.sh` direkt im Repo-Root ausführen und danach
   `ls -lh backups/` prüfen.
 - **⚠️ Offenes Risiko: kein Offsite-Backup aktiv (Audit I5, 2026-08-16).** `backups/`
-  liegt auf derselben Partition wie das Docker-Volume der Live-DB (`postgres_data`) -
+  liegt auf derselben Partition wie das Docker-Volume der Live-DB (`postgres18_data`) -
   bei Festplatten- oder Hostausfall sind Live-Daten und alle lokalen Backups gleichzeitig
   weg. Das Skript unterstützt seit diesem Fund einen optionalen rclone-Sync (siehe
   Kommentar am Ende von `backup_db.sh`): `OFFSITE_BACKUP_REMOTE` in `.env` setzen (z.B.

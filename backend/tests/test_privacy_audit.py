@@ -91,6 +91,30 @@ def test_deleting_a_person_removes_their_email_from_the_audit_log(db):
     assert row.actor_email is None and row.actor_user_id is None
 
 
+def test_tenant_with_audit_entries_of_its_accounts_can_be_deleted(db):
+    # Migration 0162: forget_tenant änderte die Zeilen in derselben Transaktion, danach scheiterte
+    # DELETE tenant an audit_log_actor_user_id_fkey (zwei ON DELETE SET NULL auf dieselbe Zeile).
+    from app.services.admin_tenant_service import AdminTenantService
+
+    tenant = make_tenant(db, "Wird gelöscht")
+    person = make_app_user(db, email="login@example.com", tenant_id=tenant.id, role_code="admin")
+    other = make_tenant(db, "Bleibt")
+    stays = make_app_user(db, email="bleibt@example.com", tenant_id=other.id)
+    for user, tenant_id in ((person, tenant.id), (stays, other.id)):
+        AuditService().log(db, action="user.login", tenant_id=tenant_id, actor_user_id=user.id, actor_email=user.email)
+    db.commit()
+    person_id, stays_id = person.id, stays.id
+
+    assert AdminTenantService().delete_tenant(db, tenant.id)
+
+    rows = db.execute(
+        text("SELECT tenant_id, actor_user_id, actor_email FROM audit_log WHERE action = 'user.login' AND actor_user_id IN (:a, :b) OR (action = 'user.login' AND actor_user_id IS NULL AND tenant_id IS NULL)"),
+        {"a": person_id, "b": stays_id},
+    ).all()
+    assert (None, None, None) in [tuple(row) for row in rows]
+    assert (other.id, stays_id, "bleibt@example.com") in [tuple(row) for row in rows]
+
+
 def test_purge_refuses_short_retention_and_app_role_cannot_delete(db):
     with pytest.raises(DBAPIError):
         nested = db.begin_nested()

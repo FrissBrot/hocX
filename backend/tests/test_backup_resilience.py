@@ -93,8 +93,15 @@ def test_unknown_ssh_key_is_rejected(tmp_path):
         import subprocess
 
         subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(stranger)], check=True)
-        with pytest.raises(BorgError) as info:
-            Borg(server.config(tmp_path / "c", ssh_key_file=stranger)).list_archives()
+        # Unter Last trennt sshd gelegentlich schon vor der Anmeldung (borg: connection_lost,
+        # vorübergehend - der Worker versucht es dann erneut). Wie der Worker neu versuchen;
+        # entscheidend ist, dass die Ablehnung des Schlüssels als dauerhaft erkannt wird.
+        for _ in range(5):
+            with pytest.raises(BorgError) as info:
+                Borg(server.config(tmp_path / "c", ssh_key_file=stranger)).list_archives()
+            if not info.value.transient:
+                break
+            time.sleep(1)
         assert info.value.code == "ssh_auth_failed"
         assert not info.value.transient
     finally:

@@ -38,6 +38,8 @@ source "$REPO_DIR/scripts/lib/cosign.sh"
 source "$REPO_DIR/scripts/lib/github.sh"
 # shellcheck source=scripts/lib/dump_crypto.sh
 source "$REPO_DIR/scripts/lib/dump_crypto.sh"
+# shellcheck source=scripts/lib/pg_upgrade.sh
+source "$REPO_DIR/scripts/lib/pg_upgrade.sh"
 
 case "$ENVIRONMENT" in
   test)
@@ -525,6 +527,13 @@ prepare_runtime_permissions() {
       return 1
       ;;
   esac
+  if [ "$EUID" -ne 0 ]; then
+    # Git legt versionierte Dateien (storage/exports/.gitkeep …) bei einem Deploy-Code-Update mit
+    # der umask des Deploy-Benutzers neu an (0644). Gruppe 5001 erben sie über das setgid-Verzeichnis;
+    # Gruppenrechte darf der Besitzer selbst setzen, root braucht es nur für fremde Dateien.
+    find "$path" -user "$EUID" -group 5001 \( ! -perm -g+w -o -perm /007 \) -exec chmod g+rwX,o-rwx {} + 2> /dev/null || true
+    find "$path" -user "$EUID" -group 5001 -type d ! -perm -g+s -exec chmod g+s {} + 2> /dev/null || true
+  fi
   if find "$path" \( ! -group 5001 -o ! -perm -g+w -o -perm /007 \) -print -quit | grep -q .; then
     if [ "$EUID" -ne 0 ]; then
       echo "$path muss fuer die Container-Gruppe 5001 vorbereitet werden." >&2
@@ -944,6 +953,22 @@ verify_release_images
 create_release_manifest
 prepare_thumbnail_dir
 
+# 1.2.0: PostgreSQL 16 -> 18 in ein neues Volume (scripts/lib/pg_upgrade.sh). Läuft nach dem
+# Pre-Deploy-Backup und vor dem ersten Start des neuen db-Dienstes; ohne altes Volume ein No-op.
+if ! pg_upgrade_major_if_needed "$PROJECT_NAME" "$POSTGRES_USER" "$POSTGRES_DB" "$("${DC[@]}" config --images db)"; then
+  echo "Deploy abgebrochen; es laeuft weiter das bisherige Release." >&2
+  [ ! -f "$BACKUP_FILE" ] || echo "Backup dieses Laufs: $BACKUP_FILE" >&2
+  exit 1
+fi
+
+# Nach einem Datenbank-Upgrade sind die alten App-Container gestoppt; scheitert danach die
+# Migration, laufen sie wieder (gegen PostgreSQL 18, Schema unverändert).
+restart_containers_stopped_for_pg_upgrade() {
+  [ "${#PG_UPGRADE_STOPPED_CONTAINERS[@]}" -gt 0 ] || return 0
+  echo "    Starte die fuer das Datenbank-Upgrade gestoppten Container wieder." >&2
+  docker start "${PG_UPGRADE_STOPPED_CONTAINERS[@]}" > /dev/null || echo "    Neustart fehlgeschlagen; bitte pruefen: docker ps -a" >&2
+}
+
 echo "==> [$ENVIRONMENT] Infrastruktur starten"
 "${DC[@]}" up -d --pull never db redis
 wait_for_exec db "Postgres" "pg_isready -U '$POSTGRES_USER' -d '$POSTGRES_DB'" 30 2
@@ -963,6 +988,7 @@ case "${HOCX_SINGLE_TENANT_RESOLUTION:-}" in
 esac
 if ! "${DC[@]}" run --rm --no-deps backend alembic ${ALEMBIC_ARGS[@]+"${ALEMBIC_ARGS[@]}"} upgrade head; then
   echo "Datenbankmigration fehlgeschlagen. Die laufende App wurde nicht veraendert." >&2
+  restart_containers_stopped_for_pg_upgrade
   [ ! -f "$BACKUP_FILE" ] || echo "Backup dieses Laufs: $BACKUP_FILE" >&2
   echo "Meldet die Migration 0078 Konten mit mehreren Mandanten oder ohne Mandant:" >&2
   echo "entweder bereinigen oder HOCX_SINGLE_TENANT_RESOLUTION=auto in .env setzen und erneut deployen." >&2
@@ -985,6 +1011,11 @@ if ! run_smoke_checks; then
   exit 1
 fi
 
+# Ab hier ist das neue Release das Rollback-Ziel: Folgeschritte (Storage-Controller, Cron,
+# Demo-Seed) ändern daran nichts mehr. Bisher stand das erst am Ende, ein Fehler dazwischen
+# liess current.env auf dem alten Release stehen.
+install -m 600 "$PROJECT_DIR/.releases/${HOCX_VERSION}.env" "$PROJECT_DIR/.releases/current.env"
+
 # Lokales S3 in den Sollzustand bringen (z. B. nach einem Wechsel zu externem S3 wieder stoppen,
 # das `up -d` oben hat es gestartet). Stoppt nur, löscht nie Daten.
 controller_files=()
@@ -1001,9 +1032,8 @@ fi
 
 if [ "$ENVIRONMENT" = test ]; then
   echo "==> [$ENVIRONMENT] Demo-Mandant neu befuellen"
-  "${DC[@]}" exec -T backend python scripts/seed_test_tenant.py
+  "${DC[@]}" exec -T backend python scripts/seed_test_tenant.py ||
+    echo "    WARNUNG: Demo-Mandant konnte nicht neu befuellt werden (siehe oben); das Release laeuft."
 fi
-
-install -m 600 "$PROJECT_DIR/.releases/${HOCX_VERSION}.env" "$PROJECT_DIR/.releases/current.env"
 
 echo "==> [$ENVIRONMENT] Fertig: laeuft jetzt auf $HOCX_VERSION"

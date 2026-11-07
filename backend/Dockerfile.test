@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # aus Debian (signiert), SSH-Client für die Hetzner Storage Box und der PostgreSQL-Client in der
 # Hauptversion des Servers (pg_dump/pg_restore müssen dazu passen - aus dem offiziellen
 # PGDG-Repository, Debian liefert nur die neueste Version). Siehe docs-site/docs/technik/backup/.
-ARG PG_MAJOR=16
+ARG PG_MAJOR=18
 RUN apt-get update && apt-get install -y --no-install-recommends postgresql-common ca-certificates \
     && /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y \
     && apt-get install -y --no-install-recommends \

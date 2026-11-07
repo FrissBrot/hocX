@@ -8,7 +8,7 @@
 #     Ergebnis 2026-10-21: ja - nach dem Timeout erhält ein zweiter "Worker" denselben Lock.
 set -euo pipefail
 NAME=hocx-audit-pgprobe
-docker run -d --name "$NAME" -e POSTGRES_PASSWORD=probe --tmpfs /var/lib/postgresql/data postgres:16 >/dev/null
+docker run -d --name "$NAME" -e POSTGRES_PASSWORD=probe --tmpfs /var/lib/postgresql postgres:18 >/dev/null
 trap 'docker rm -f "$NAME" >/dev/null' EXIT
 until docker exec "$NAME" pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done
 P="docker exec -i $NAME psql -U postgres -qAt"

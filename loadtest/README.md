@@ -115,7 +115,7 @@ docker run --rm --pid=container:hocx-loadtest-backend-1 --cap-add SYS_PTRACE pyt
 | `repro/pg_lock_probes.sh` | CONC-006/-023: Advisory-Lock nach Idle-Timeout frei; FOR SHARE hinter wartendem UPDATE |
 
 `repro/loop_block_probe.py` und `stream_dep_probe.py` laufen gegen einen Wegwerf-Postgres
-(`docker run -d --name hocx-audit-pgprobe -e POSTGRES_PASSWORD=probe --tmpfs /var/lib/postgresql/data postgres:16`)
+(`docker run -d --name hocx-audit-pgprobe -e POSTGRES_PASSWORD=probe --tmpfs /var/lib/postgresql postgres:18`)
 im Backend-Test-Image: `docker run --rm --network container:hocx-audit-pgprobe -v "$PWD/loadtest/repro:/probe:ro" hocx-tests-backend-test:latest python /probe/<datei>`.
 
 ## Erfolgskriterien (Startwerte, nach der ersten Baseline festschreiben)
