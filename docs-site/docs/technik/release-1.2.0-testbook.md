@@ -43,8 +43,16 @@ Objektspeicher (nur Datenbankstand).
 Nachweis Update-Ablauf (2026-11-06, REL-M1 auf einem frischen Wegwerf-Host): v1.1.13 mit
 `deploy.sh test` aufgesetzt, Altdaten über die API angelegt (TeX-Vorlage mit Logo, Fussbild,
 Schrift und Makro-Code, drei PDF-Exporte, Dokument-Upload, Demo-Fotos und Abgabebox-Uploads),
-dann nach `CHANGELOG.md` aktualisiert. Ergebnis siehe Changelog «Update-Probe»; nach den Korrekturen
-wiederholt.
+dann nach `CHANGELOG.md` aktualisiert. Ergebnis siehe Changelog «Update-Probe».
+
+Wiederholung nach den Korrekturen (2026-11-07, frischer Wegwerf-Host, v1.1.13 →
+`test-20261107-efbba2e-r44` → `test-20261107-5af5e1c-r45`, Schritte genau nach Changelog):
+`update_deploy_code.sh` nach Schritt 4 ohne Abbruch; `deploy.sh test` überträgt PostgreSQL 16 → 18
+(79 Tabellen, Zeilenzahlen identisch, altes Volume unverändert), Migrationen bis `0162`, Smoke-Checks
+grün, Demo-Mandant gelöscht und neu befüllt, `current.env` auf dem neuen Release, `/admin/system`
+ohne Fehler (nur Backup nicht eingerichtet). Ein zweiter Deploy verlangte root für neue Dateien der
+Dienste (umask 0022) - behoben in `5af5e1c8`; danach zwei weitere Deploys ohne root, neue Dateien
+2770/0660, Upgrade-Erkennung meldet nur noch das entfernbare alte Volume.
 
 ## Automatisierte Integrationsfälle
 
