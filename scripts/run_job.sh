@@ -73,12 +73,16 @@ STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "SELECT record_job_start(:'job');" | report -v job="$JOB_NAME"
 
 OUTPUT_FILE="$(mktemp)"
-trap 'rm -f "$OUTPUT_FILE"' EXIT
+STDERR_FILE="$(mktemp)"
+trap 'rm -f "$OUTPUT_FILE" "$STDERR_FILE"' EXIT
 
-# Ausgabe weiterreichen (Cron-Logdatei) und zugleich für die Fehlermeldung mitschneiden.
-"$@" > >(tee "$OUTPUT_FILE") 2> >(tee -a "$OUTPUT_FILE" >&2)
+# Ausgabe weiterreichen (Cron-Logdatei) und zugleich für die Fehlermeldung mitschneiden. Als
+# Pipelines statt Prozess-Substitution: die enden synchron, `wait` wartete nicht verlässlich auf
+# beide tee-Prozesse, und die Fehlermeldung war gelegentlich leer (flakiger test_run_job.sh).
+# Exit-Code dank pipefail der des Befehls (tee scheitert praktisch nie).
+{ { "$@" | tee "$OUTPUT_FILE"; } 2>&1 1>&3 3>&- | tee "$STDERR_FILE" >&2; } 3>&1
 EXIT_CODE=$?
-wait
+cat "$STDERR_FILE" >> "$OUTPUT_FILE"
 
 if [ "$EXIT_CODE" -eq 0 ]; then
   STATUS="success"

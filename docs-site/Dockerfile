@@ -7,7 +7,9 @@ RUN mkdocs build --strict
 
 FROM nginxinc/nginx-unprivileged:alpine@sha256:b5047b9b76845eac124358373c6852377c52e4b05834a47647e955dd91cb8f1e
 USER root
-RUN sed -i 's/8080/80/g' /etc/nginx/conf.d/default.conf
+# Sicherheitsupdates von Alpine mitnehmen, auch wenn das Basisimage (Digest oben) sie noch nicht
+# enthält - z. B. brotli-libs CVE-2026-111497, an der der Trivy-Scan in release.yml scheiterte.
+RUN apk upgrade --no-cache && sed -i 's/8080/80/g' /etc/nginx/conf.d/default.conf
 COPY nginx-gzip.conf /etc/nginx/conf.d/gzip.conf
 COPY --from=build /docs/site /usr/share/nginx/html
 USER 101
