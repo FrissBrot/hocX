@@ -14,6 +14,7 @@
     "invalidImage": "Nur PNG, JPEG oder WebP bis 6000 Pixel sind erlaubt.",
     "invalidKind": "Unbekannte Dateiart.",
     "lastRevision": "Der einzige Stand einer Vorlage kann nicht verworfen werden.",
+    "noColumns": "Mindestens eine Spalte muss ausgewählt sein.",
     "noDraft": "Es gibt keinen Entwurf zum Veröffentlichen.",
     "noTable": "Das Dokument enthält keine Tabelle für dieses Format.",
     "noTemplate": "Für diesen Dokumenttyp ist keine Vorlage verfügbar.",
@@ -34,8 +35,7 @@
     "verificationNameChanged": "Der Name hat sich seit dem Antrag geändert.",
     "verificationNoPending": "Es gibt keinen offenen Antrag.",
     "verificationNotVerified": "Die Organisation ist nicht verifiziert.",
-    "verificationReasonRequired": "Bitte eine Begründung angeben.",
-    "noColumns": "Mindestens eine Spalte muss ausgewählt sein."
+    "verificationReasonRequired": "Bitte eine Begründung angeben."
   },
   "attendanceShort": {
     "absent": "U",

@@ -14,6 +14,7 @@
     "invalidImage": "Sono ammessi solo PNG, JPEG o WebP fino a 6000 pixel.",
     "invalidKind": "Tipo di file sconosciuto.",
     "lastRevision": "L’unica versione di un modello non può essere scartata.",
+    "noColumns": "Seleziona almeno una colonna.",
     "noDraft": "Non c’è nessuna bozza da pubblicare.",
     "noTable": "Il documento non contiene alcuna tabella per questo formato.",
     "noTemplate": "Per questo tipo di documento non è disponibile alcun modello.",
@@ -34,8 +35,7 @@
     "verificationNameChanged": "Il nome è cambiato dalla richiesta.",
     "verificationNoPending": "Non esiste alcuna richiesta aperta.",
     "verificationNotVerified": "L’organizzazione non è verificata.",
-    "verificationReasonRequired": "Indica un motivo.",
-    "noColumns": "Seleziona almeno una colonna."
+    "verificationReasonRequired": "Indica un motivo."
   },
   "attendanceShort": {
     "absent": "A",

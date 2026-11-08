@@ -14,6 +14,7 @@
     "invalidImage": "Only PNG, JPEG or WebP up to 6000 pixels are allowed.",
     "invalidKind": "Unknown file kind.",
     "lastRevision": "The only version of a template cannot be discarded.",
+    "noColumns": "Select at least one column.",
     "noDraft": "There is no draft to publish.",
     "noTable": "The document contains no table for this format.",
     "noTemplate": "No template is available for this document type.",
@@ -34,8 +35,7 @@
     "verificationNameChanged": "The name has changed since the request.",
     "verificationNoPending": "There is no open request.",
     "verificationNotVerified": "The organisation is not verified.",
-    "verificationReasonRequired": "Please give a reason.",
-    "noColumns": "Select at least one column."
+    "verificationReasonRequired": "Please give a reason."
   },
   "attendanceShort": {
     "absent": "A",
