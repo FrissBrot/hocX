@@ -183,6 +183,26 @@ Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116_document_reg
   Sprung auf 18 braucht ein Upgrade der Datenbank (`pg_upgrade` bzw. Dump/Restore) und ein
   anderes Volume-Layout und wird separat geplant.
 
+### Protokoll-Editor und Abgabebox (Nachtrag vom 2026-11-08)
+
+- **Protokoll-Editor schneller bei langen Protokollen.** Tippen und Löschen renderte bei jedem
+  Tastendruck alle Punkte neu, jetzt nur noch den bearbeiteten. Der Rad-Effekt kippt nur noch
+  Abschnitte in Bildnähe (vorher war jeder Abschnitt eine eigene 3D-Ebene), und die Positionen
+  der Abschnitte werden nicht mehr in jedem Scroll-Frame neu gemessen. Gemessen mit 54 Punkten und
+  vierfach gedrosselter CPU: Tastendruck 128 → 57 ms, Scroll-Frame 62 → 35 ms im Mittel.
+- Abgabebox: die Sicherheitsprüfung (Captcha) läuft nur noch einmal pro Seitenaufruf. Das
+  Sitzungs-Token gilt für den ganzen Abgabe-Link statt für ein einzelnes Element; Bindung an
+  IP-Adresse und Ablaufzeit bleiben.
+- Abgabebox: «GPS-Daten des Bildes mitsenden» erscheint erst, wenn ein Bild ausgewählt ist.
+
+### Korrektur: Gekoppelte Listen im Protokoll (Nachtrag vom 2026-11-08)
+
+- Personen- und Termin-Spalten einer gekoppelten Liste blieben im Protokoll leer, obwohl die
+  Liste Werte hatte. Mit «Gruppieren nach» dieser Spalte landeten alle Einträge in einer Zeile
+  «Ohne Wert». Der eingefrorene Listenstand im Protokoll enthielt interne IDs, die die Oberfläche
+  nicht zuordnen konnte. Die API übersetzt sie jetzt beim Lesen und beim Speichern zurück, das gilt
+  auch für Zeilen «Zeile aus Liste», die Änderungsverfolgung und die Rückgängig-Kopie.
+
 ### Update-Probe (Nachtrag vom 2026-11-06)
 
 Ein vollständiges Update von 1.1.13 auf den aktuellen Stand mit `update_deploy_code.sh` und

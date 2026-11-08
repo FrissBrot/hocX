@@ -22,6 +22,7 @@ import { CollaborationPresenceBar } from "@/components/protocol/collaboration-pr
 import { computePopoverPosition, usePopoverDismiss } from "@/components/ui/popover";
 import { useProtocolCollaboration } from "@/lib/hooks/use-protocol-collaboration";
 import { useTagConfig } from "@/lib/hooks/use-tag-config";
+import { useStableCallbacks } from "@/lib/hooks/use-stable-callbacks";
 import { usePdfExport } from "@/lib/hooks/use-pdf-export";
 import { DocumentExportButton } from "@/components/documents/export-dialog";
 import { ApiError, browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
@@ -68,6 +69,8 @@ import { ProtocolSearchModal } from "@/components/protocol/protocol-search";
 import {
   animateScroll,
   applyWheelFrame,
+  measureSections,
+  type SectionLayout,
   offsetTopWithin,
   prefersReducedMotion,
   revealSection,
@@ -97,6 +100,8 @@ type ProtocolEditorProps = {
   /** Rad-Effekt beim Scrollen (Profileinstellung); an = Akkordeon aus */
   wheelEnabled?: boolean;
 };
+
+const EMPTY_AGENDA_ITEMS: ProtocolAgendaItem[] = [];
 
 export function ProtocolEditor({
   protocol,
@@ -569,20 +574,33 @@ export function ProtocolEditor({
     }
   }, [blockStatus]);
 
-  const visibleElements = useMemo(
-    () =>
-      [...elements]
-        .filter((element) => element.is_visible_snapshot)
-        .map((element) => ({
+  // Abgeleitete Punkte je Quell-Objekt zwischenspeichern: ein unveränderter Punkt behält seine
+  // Identität, und der memoisierte FocusedElementEditor rendert nur den geänderten neu.
+  const derivedElementsRef = useRef(new WeakMap<ProtocolElement, ProtocolElement>());
+  const derivedPlanningModeRef = useRef(isPlanningMode);
+  const visibleElements = useMemo(() => {
+    if (derivedPlanningModeRef.current !== isPlanningMode) {
+      derivedElementsRef.current = new WeakMap();
+      derivedPlanningModeRef.current = isPlanningMode;
+    }
+    const cache = derivedElementsRef.current;
+    return [...elements]
+      .filter((element) => element.is_visible_snapshot)
+      .map((element) => {
+        const cached = cache.get(element);
+        if (cached) return cached;
+        const derived = {
           ...element,
           blocks: [...element.blocks]
             .filter((block) => (isPlanningMode || block.is_visible_snapshot) && block.element_type_code !== "display")
             .sort((left, right) => left.sort_index - right.sort_index)
-        }))
-        .filter((element) => element.blocks.length > 0 || element.show_when_empty)
-        .sort((left, right) => left.sort_index - right.sort_index),
-    [elements, isPlanningMode]
-  );
+        };
+        cache.set(element, derived);
+        return derived;
+      })
+      .filter((element) => element.blocks.length > 0 || element.show_when_empty)
+      .sort((left, right) => left.sort_index - right.sort_index);
+  }, [elements, isPlanningMode]);
 
   const selectedElement = useMemo(
     () => visibleElements.find((element) => element.id === selectedElementId) ?? null,
@@ -601,11 +619,22 @@ export function ProtocolEditor({
     }
     return { byElement, other };
   }, [agendaItems, visibleElements]);
-  const agendaSectionHandlers = {
+  const agendaSectionHandlers = useMemo(() => ({
     onChanged: (updated: ProtocolAgendaItem) => setAgendaItems((current) => current.map((item) => (item.id === updated.id ? updated : item))),
     onRemoved: (itemId: string) => setAgendaItems((current) => current.filter((item) => item.id !== itemId)),
     onPostpone: (item: ProtocolAgendaItem) => setAgendaPostponeItem(item),
-  };
+  }), []);
+  // Je Punkt ein fertiges Element mit stabiler Identität, damit memoisierte Punkte nicht wegen
+  // eines neuen agendaSlot-Elements neu rendern.
+  const agendaSlots = useMemo(() => {
+    const slots: Record<string, React.ReactNode> = {};
+    for (const element of visibleElements) {
+      slots[element.id] = (
+        <AgendaItemsSection items={agendaByElement.byElement[element.id] ?? EMPTY_AGENDA_ITEMS} isReadOnly={isReadOnly} {...agendaSectionHandlers} />
+      );
+    }
+    return slots;
+  }, [visibleElements, agendaByElement, isReadOnly, agendaSectionHandlers]);
   const listPublicIds = useMemo(() => Object.assign({}, ...elements.flatMap((element) =>
     element.blocks.map((block) => block.public_reference_ids?.lists ?? {})
   )) as Record<string, string>, [elements]);
@@ -643,7 +672,8 @@ export function ProtocolEditor({
   useEffect(() => () => cancelCollabHoverClose(), [cancelCollabHoverClose]);
 
   function setStatus(protocolElementBlockId: string, status: SaveState) {
-    setBlockStatus((current) => ({ ...current, [protocolElementBlockId]: status }));
+    // Unveränderten Status nicht neu setzen: beim Tippen kam sonst pro Taste ein zusätzlicher Render
+    setBlockStatus((current) => (current[protocolElementBlockId] === status ? current : { ...current, [protocolElementBlockId]: status }));
   }
 
   // Programmatisches Scrollen des Dokuments (Sprung, Verankerung). Solange es läuft, bleibt der
@@ -830,24 +860,26 @@ export function ProtocolEditor({
 
     let rafId: number | null = null;
     const wheel = wheelEnabled && !prefersReducedMotion();
+    // Positionen der Abschnitte zwischenspeichern: sie ändern sich nur mit Grösse oder Inhalt
+    // (ResizeObserver/resize unten verwerfen den Stand). Vorher las jeder Scroll-Frame alle
+    // Abschnitte zweimal (Rad-Effekt und Spy), bei langen Protokollen ein grosser Teil des Frames.
+    let layout: SectionLayout[] | null = null;
+    const visibleIds = new Set(visibleElementIdsKey.split(",").filter(Boolean));
 
     function computeActiveSection() {
       rafId = null;
       const root = container!;
-      applyWheelFrame(root, wheel);
+      layout ??= measureSections(root);
+      applyWheelFrame(root, wheel, layout);
       if (programmaticScrollRef.current) return;
-      const sections = visibleElementIdsKey
-        .split(",")
-        .filter(Boolean)
-        .map((id) => document.getElementById(`protocol-element-${id}`))
-        .filter((section): section is HTMLElement => Boolean(section));
+      const sections = layout.filter((item) => visibleIds.has(item.section.id.replace("protocol-element-", "")));
       if (!sections.length) return;
 
       const scrollTop = root.scrollTop;
       const centerY = scrollTop + root.clientHeight / 2;
-      const ids = sections.map((section) => section.id.replace("protocol-element-", ""));
-      const tops = sections.map((section) => offsetTopWithin(section, root));
-      const heights = sections.map((section) => section.offsetHeight);
+      const ids = sections.map((item) => item.section.id.replace("protocol-element-", ""));
+      const tops = sections.map((item) => item.top);
+      const heights = sections.map((item) => item.height);
 
       // Steht der erste Punkt noch ganz im Bild (Anfang des Dokuments, z. B. nach dem Öffnen),
       // ist er aktiv, auch wenn die Mittellinie schon auf einen kurzen Folgepunkt fällt.
@@ -898,15 +930,23 @@ export function ProtocolEditor({
       rafId = window.requestAnimationFrame(computeActiveSection);
     }
 
+    function relayout() {
+      layout = null;
+      scheduleCompute();
+    }
+
     computeActiveSection();
     container.addEventListener("scroll", scheduleCompute, { passive: true });
-    window.addEventListener("resize", scheduleCompute);
-    // Inhalte ändern ihre Höhe (Tippen, Laden von Bildern): Rad-Effekt und Spy nachführen
-    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(scheduleCompute);
+    window.addEventListener("resize", relayout);
+    // Inhalte ändern ihre Höhe (Tippen, Laden von Bildern): Positionen neu messen, Rad-Effekt und
+    // Spy nachführen. Beobachtet werden alle direkten Kinder des Dokuments, damit auch eine
+    // Höhenänderung oberhalb eines Abschnitts (z. B. Anliegen) dessen Position aktualisiert.
+    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(relayout);
+    Array.from(container.children).forEach((child) => resizeObserver?.observe(child));
     container.querySelectorAll(".protocol-doc-section").forEach((section) => resizeObserver?.observe(section));
     return () => {
       container.removeEventListener("scroll", scheduleCompute);
-      window.removeEventListener("resize", scheduleCompute);
+      window.removeEventListener("resize", relayout);
       resizeObserver?.disconnect();
       if (rafId !== null) window.cancelAnimationFrame(rafId);
     };
@@ -1056,10 +1096,11 @@ export function ProtocolEditor({
 
   function updateBlockInState(blockId: string, updater: (current: ProtocolElement["blocks"][number]) => ProtocolElement["blocks"][number]) {
     setElements((current) =>
-      current.map((element) => ({
-        ...element,
-        blocks: element.blocks.map((block) => (block.id === blockId ? updater(block) : block))
-      }))
+      current.map((element) =>
+        element.blocks.some((block) => block.id === blockId)
+          ? { ...element, blocks: element.blocks.map((block) => (block.id === blockId ? updater(block) : block)) }
+          : element
+      )
     );
   }
 
@@ -1877,6 +1918,41 @@ export function ProtocolEditor({
     }
   }
 
+  // Stabile Handler fuer die memoisierten Punkte (FocusedElementEditor): ohne sie bekäme jeder
+  // Punkt bei jedem Render neue Funktionen und renderte bei jedem Tastendruck mit.
+  const elementHandlers = useStableCallbacks({
+    saveBlockConfiguration,
+    saveAttendanceStatus,
+    updateBlockInState,
+    handleTextChange,
+    addTodo,
+    updateTodo,
+    deleteTodo,
+    acceptTodoTrackedChange,
+    acceptTrackedListEntry,
+    acceptTrackedRow,
+    acceptTextTrackedChanges,
+    createEventFromBlock,
+    updateEventFromBlock,
+    deleteEventFromBlock,
+    uploadImage,
+    deleteImage,
+    createListEntryFromBlock,
+    updateListEntryFromBlock,
+    deleteListEntryFromBlock,
+    refreshBlockListSnapshot,
+    refreshListEntries,
+    undoBlockListSnapshot,
+    unhideEventBlock,
+    hideEventBlock,
+    removeEventBlock,
+    addEventBlockToElement,
+    openEventContextMenu,
+    handleQuickTodoCreated,
+    onPendingUpdate: (updated: Partial<TodoListItem> & { id: string }) => setPendingTodos((prev) => prev.map((t) => t.id === updated.id ? { ...t, ...updated } : t)),
+    onPendingDone: (todoId: string) => setPendingTodos((prev) => prev.filter((t) => t.id !== todoId)),
+  });
+
   return (
     <ParticipantDateContext.Provider value={protocol.protocol_date ?? null}>
     <ParticipantDirectoryContext.Provider value={participantDirectory}>
@@ -2019,53 +2095,47 @@ export function ProtocolEditor({
               setNewEventDrafts={setNewEventDrafts}
               setSelectedFiles={setSelectedFiles}
               setNewTodoTask={setNewTodoTask}
-              saveBlockConfiguration={saveBlockConfiguration}
-              saveAttendanceStatus={saveAttendanceStatus}
-              updateBlockInState={updateBlockInState}
-              handleTextChange={handleTextChange}
+              saveBlockConfiguration={elementHandlers.saveBlockConfiguration}
+              saveAttendanceStatus={elementHandlers.saveAttendanceStatus}
+              updateBlockInState={elementHandlers.updateBlockInState}
+              handleTextChange={elementHandlers.handleTextChange}
               forceEditable={forceEditable}
               isReadOnly={isReadOnly}
-              addTodo={addTodo}
-              updateTodo={updateTodo}
-              deleteTodo={deleteTodo}
-              acceptTodoTrackedChange={acceptTodoTrackedChange}
-              acceptTrackedListEntry={acceptTrackedListEntry}
-              acceptTrackedRow={acceptTrackedRow}
-              acceptTextTrackedChanges={acceptTextTrackedChanges}
-              createEventFromBlock={createEventFromBlock}
-              updateEventFromBlock={updateEventFromBlock}
-              deleteEventFromBlock={deleteEventFromBlock}
-              onEventContextMenu={openEventContextMenu}
-              uploadImage={uploadImage}
-              deleteImage={deleteImage}
+              addTodo={elementHandlers.addTodo}
+              updateTodo={elementHandlers.updateTodo}
+              deleteTodo={elementHandlers.deleteTodo}
+              acceptTodoTrackedChange={elementHandlers.acceptTodoTrackedChange}
+              acceptTrackedListEntry={elementHandlers.acceptTrackedListEntry}
+              acceptTrackedRow={elementHandlers.acceptTrackedRow}
+              acceptTextTrackedChanges={elementHandlers.acceptTextTrackedChanges}
+              createEventFromBlock={elementHandlers.createEventFromBlock}
+              updateEventFromBlock={elementHandlers.updateEventFromBlock}
+              deleteEventFromBlock={elementHandlers.deleteEventFromBlock}
+              onEventContextMenu={elementHandlers.openEventContextMenu}
+              uploadImage={elementHandlers.uploadImage}
+              deleteImage={elementHandlers.deleteImage}
               listDefinitionsById={listDefinitionsById}
               listEntriesByDefinition={listEntriesByDefinition}
-              createListEntryFromBlock={createListEntryFromBlock}
-              updateListEntryFromBlock={updateListEntryFromBlock}
-              deleteListEntryFromBlock={deleteListEntryFromBlock}
-              refreshBlockListSnapshot={refreshBlockListSnapshot}
-              refreshListEntries={refreshListEntries}
-              undoBlockListSnapshot={undoBlockListSnapshot}
+              createListEntryFromBlock={elementHandlers.createListEntryFromBlock}
+              updateListEntryFromBlock={elementHandlers.updateListEntryFromBlock}
+              deleteListEntryFromBlock={elementHandlers.deleteListEntryFromBlock}
+              refreshBlockListSnapshot={elementHandlers.refreshBlockListSnapshot}
+              refreshListEntries={elementHandlers.refreshListEntries}
+              undoBlockListSnapshot={elementHandlers.undoBlockListSnapshot}
               todoTagFilter={todoTagFilter}
               setTodoTagFilter={setTodoTagFilter}
               newTodoTags={newTodoTags}
               setNewTodoTags={setNewTodoTags}
               isPlanningMode={isPlanningMode}
-              unhideEventBlock={unhideEventBlock}
-              hideEventBlock={hideEventBlock}
-              removeEventBlock={removeEventBlock}
-              addEventBlockToElement={addEventBlockToElement}
-              onQuickTodoCreated={handleQuickTodoCreated}
+              unhideEventBlock={elementHandlers.unhideEventBlock}
+              hideEventBlock={elementHandlers.hideEventBlock}
+              removeEventBlock={elementHandlers.removeEventBlock}
+              addEventBlockToElement={elementHandlers.addEventBlockToElement}
+              onQuickTodoCreated={elementHandlers.handleQuickTodoCreated}
               pendingTodos={pendingTodos}
-              onPendingUpdate={(updated) => setPendingTodos((prev) => prev.map((t) => t.id === updated.id ? { ...t, ...updated } : t))}
-              onPendingDone={(todoId) => setPendingTodos((prev) => prev.filter((t) => t.id !== todoId))}
-              agendaSlot={
-                <AgendaItemsSection
-                  items={agendaByElement.byElement[element.id] ?? []}
-                  isReadOnly={isReadOnly}
-                  {...agendaSectionHandlers}
-                />
-              }
+              onPendingUpdate={elementHandlers.onPendingUpdate}
+              onPendingDone={elementHandlers.onPendingDone}
+              agendaSlot={agendaSlots[element.id]}
             />
             </div>
           ))}

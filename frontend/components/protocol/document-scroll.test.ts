@@ -39,6 +39,11 @@ describe("wheelStyle", () => {
     expect(far.opacity).toBe("0.400");
     expect(far.filter).toBe("");
   });
+
+  it("lässt Punkte weit ausserhalb des Bildes flach", () => {
+    expect(wheelStyle({ ...view, top: 2100, height: 100 }).transform).toBe("");
+    expect(wheelStyle({ scrollTop: 3000, viewport: 1000, top: 0, height: 1500 }).transform).toBe("");
+  });
 });
 
 it("skaliert die Sprungdauer mit der Distanz", () => {

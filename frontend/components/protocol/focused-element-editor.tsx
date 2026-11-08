@@ -3,7 +3,7 @@
 import { useParticipantSelectable } from "@/contexts/participant-date-context";
 import { useParticipantNameSource } from "@/contexts/participant-directory-context";
 
-import { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
+import { Dispatch, ReactNode, SetStateAction, memo, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { useConfirm } from "@/contexts/confirm-context";
@@ -103,7 +103,7 @@ import {
 import { ChartBlockRenderer } from "@/components/protocol/chart-block-renderer";
 import { SessionTodosSection } from "@/components/protocol/session-todos-section";
 
-export function FocusedElementEditor({
+function FocusedElementEditorImpl({
   collab,
   trackChangesActive,
   element,
@@ -3865,3 +3865,36 @@ export function FocusedElementEditor({
     </>
   );
 }
+
+type FocusedElementEditorProps = Parameters<typeof FocusedElementEditorImpl>[0];
+
+// Nach Block-ID geschlüsselte Zustände des Editors: ein Punkt vergleicht nur die Einträge seiner
+// eigenen Blöcke. Sonst renderte jeder Tastendruck (textDrafts) alle Punkte des Protokolls neu.
+const PER_BLOCK_PROPS = [
+  "textDrafts",
+  "imagesByBlock",
+  "newTodoTask",
+  "newEventDrafts",
+  "selectedFiles",
+  "todoTagFilter",
+  "newTodoTags",
+] as const satisfies readonly (keyof FocusedElementEditorProps)[];
+
+function focusedElementEditorPropsEqual(prev: FocusedElementEditorProps, next: FocusedElementEditorProps): boolean {
+  for (const key of Object.keys(next) as (keyof FocusedElementEditorProps)[]) {
+    if ((PER_BLOCK_PROPS as readonly string[]).includes(key)) continue;
+    if (!Object.is(prev[key], next[key])) return false;
+  }
+  if (Object.keys(prev).length !== Object.keys(next).length) return false;
+  for (const key of PER_BLOCK_PROPS) {
+    const before = prev[key] as Record<string, unknown>;
+    const after = next[key] as Record<string, unknown>;
+    if (before === after) continue;
+    if (next.element.blocks.some((block) => !Object.is(before[block.id], after[block.id]))) return false;
+  }
+  return true;
+}
+
+/** Ein Punkt des Protokoll-Editors. Memoisiert: der Editor gibt stabile Handler weiter
+ * (useStableCallbacks), daher rendert bei einer Änderung nur der betroffene Punkt neu. */
+export const FocusedElementEditor = memo(FocusedElementEditorImpl, focusedElementEditorPropsEqual);

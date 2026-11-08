@@ -51,6 +51,10 @@ export function wheelStyle(
   const reach = viewport * 0.6;
   if (reach <= 0) return NO_WHEEL;
   const bottom = top + height;
+  // Weit ausserhalb des Bildes (mehr als eine Bildschirmhöhe): flach lassen. Unsichtbar ist der
+  // Effekt dort ohnehin, aber jede gekippte Ebene kostet den Compositor in jedem Frame Zeit
+  // (bei ~50 Punkten war das der grösste Posten beim Scrollen und Tippen).
+  if (top > scrollTop + viewport * 2 || bottom < scrollTop - viewport) return NO_WHEEL;
   let distance = 0;
   let below = false;
   if (top > centerY) {
@@ -74,17 +78,30 @@ export function wheelStyle(
 // Abschnitte werden nicht in jedem Frame neu gesetzt.
 const appliedWheel = new WeakMap<HTMLElement, string>();
 
+export type SectionLayout = { section: HTMLElement; top: number; height: number };
+
+/** Positionen aller Abschnitte im Scrollraum. Unabhängig von den Transforms des Rad-Effekts,
+ * ändert sich also nur bei Grössen- oder Inhaltsänderungen - Aufrufer können das Ergebnis
+ * zwischenspeichern, statt es in jedem Scroll-Frame neu zu lesen. */
+export function measureSections(container: HTMLElement): SectionLayout[] {
+  return Array.from(container.querySelectorAll<HTMLElement>(".protocol-doc-section")).map((section) => ({
+    section,
+    top: offsetTopWithin(section, container),
+    height: section.offsetHeight,
+  }));
+}
+
 /** Rad-Effekt auf alle Abschnitte anwenden (enabled=false entfernt ihn wieder). Erst alle
  * Positionen lesen, dann schreiben - sonst erzwingt jeder Abschnitt eine eigene Neuberechnung. */
-export function applyWheelFrame(container: HTMLElement, enabled: boolean) {
-  const sections = Array.from(container.querySelectorAll<HTMLElement>(".protocol-doc-section"));
+export function applyWheelFrame(container: HTMLElement, enabled: boolean, layout: SectionLayout[] = measureSections(container)) {
+  const sections = layout.map((item) => item.section);
   const scrollTop = container.scrollTop;
   const viewport = container.clientHeight;
   // Der aktive Punkt bleibt immer flach: transform/filter machen ein Element zum Bezugsrahmen
   // für position:fixed, Menüs und Auswahllisten darin stünden sonst verschoben.
-  const styles = sections.map((section) =>
+  const styles = layout.map(({ section, top, height }) =>
     enabled && !section.classList.contains("protocol-doc-section-active")
-      ? wheelStyle({ top: offsetTopWithin(section, container), height: section.offsetHeight, scrollTop, viewport })
+      ? wheelStyle({ top, height, scrollTop, viewport })
       : NO_WHEEL
   );
   sections.forEach((section, index) => {
@@ -92,6 +109,8 @@ export function applyWheelFrame(container: HTMLElement, enabled: boolean) {
     const key = `${style.transform}|${style.opacity}`;
     if (appliedWheel.get(section) === key) return;
     appliedWheel.set(section, key);
+    // Eigene Ebene (will-change) nur, solange der Abschnitt tatsächlich gekippt ist
+    section.classList.toggle("protocol-doc-section-wheel", style.transform !== "");
     section.style.transformOrigin = style.transformOrigin;
     section.style.transform = style.transform;
     section.style.opacity = style.opacity;

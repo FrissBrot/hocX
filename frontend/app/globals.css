@@ -4308,9 +4308,11 @@ input[type="color"]::-moz-color-swatch {
 }
 
 /* Rad-Effekt: gekippte Abschnitte als eigene Ebene, damit transform/opacity beim Scrollen nur
-   neu zusammengesetzt statt neu gezeichnet werden. Der aktive Punkt bleibt bewusst ohne
+   neu zusammengesetzt statt neu gezeichnet werden. Nur Abschnitte in Bildnähe sind gekippt
+   (document-scroll.ts setzt .protocol-doc-section-wheel), sonst wären es bei langen Protokollen
+   Dutzende Ebenen. Der aktive Punkt bleibt bewusst ohne
    (will-change: transform würde ihn wie transform selbst zum Bezugsrahmen für position:fixed machen). */
-.protocol-document-wheel .protocol-doc-section:not(.protocol-doc-section-active) {
+.protocol-document-wheel .protocol-doc-section-wheel:not(.protocol-doc-section-active) {
   will-change: transform, opacity;
 }
 

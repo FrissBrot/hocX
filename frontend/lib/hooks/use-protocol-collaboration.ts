@@ -280,21 +280,42 @@ export function useProtocolCollaboration(protocolId: string | null | undefined) 
     [presence, selfUserId]
   );
 
-  return {
-    connected,
-    canEdit,
-    selfUserId,
-    presence,
-    otherPresence,
-    locks,
-    hasOtherActiveEditors,
-    lockField,
-    unlockField,
-    sendFieldUpdate,
-    sendStatusChanged,
-    onFieldUpdate,
-    onStatusChanged,
-    onListChanged,
-    isLockedByOther,
-  };
+  // Stabile Identität: der Protokoll-Editor reicht das Objekt an memoisierte Punkte weiter,
+  // ein neues Objekt pro Render liesse dort jedes Element bei jedem Tastendruck neu rendern.
+  return useMemo(
+    () => ({
+      connected,
+      canEdit,
+      selfUserId,
+      presence,
+      otherPresence,
+      locks,
+      hasOtherActiveEditors,
+      lockField,
+      unlockField,
+      sendFieldUpdate,
+      sendStatusChanged,
+      onFieldUpdate,
+      onStatusChanged,
+      onListChanged,
+      isLockedByOther,
+    }),
+    [
+      connected,
+      canEdit,
+      selfUserId,
+      presence,
+      otherPresence,
+      locks,
+      hasOtherActiveEditors,
+      lockField,
+      unlockField,
+      sendFieldUpdate,
+      sendStatusChanged,
+      onFieldUpdate,
+      onStatusChanged,
+      onListChanged,
+      isLockedByOther,
+    ]
+  );
 }
