@@ -16,7 +16,12 @@ from app.schemas.protocol import (
     ProtocolElementRead,
     ProtocolElementUpdate,
 )
-from app.services.snapshot_reference_ids import snapshot_reference_ids, translate_attendance_entries, translate_participant_refs
+from app.services.snapshot_reference_ids import (
+    snapshot_reference_ids,
+    translate_attendance_entries,
+    translate_list_snapshot_refs,
+    translate_participant_refs,
+)
 from app.services import public_id_service
 from app.services.element_config import parse_session_time
 from app.services.fine_tariff_service import tariff_block_values
@@ -75,6 +80,7 @@ class ProtocolElementService:
                 config = translate_attendance_entries(db, config)
             if protocol_tenant_id is not None:
                 config = translate_participant_refs(db, config, protocol_tenant_id)
+                config = translate_list_snapshot_refs(db, config, protocol_tenant_id)
             blocks_by_element.setdefault(block.protocol_element_id, []).append(
                 ProtocolElementBlockRead(
                     id=block.public_id,

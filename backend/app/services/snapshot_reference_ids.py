@@ -87,6 +87,147 @@ def _is_internal_id(value) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
 
 
+_LIST_VALUE_KEYS = ("column_one_value", "column_two_value")
+
+
+def _map_list_value(value_type: str, value: dict, convert) -> dict:
+    """Wendet convert(model, ref) auf die Personen-/Termin-Referenzen eines Listenwerts an.
+    convert liefert den neuen Wert oder None (= Referenz entfernen)."""
+    result = dict(value)
+    if value_type == "participant" and result.get("participant_id") is not None:
+        result["participant_id"] = convert(Participant, result["participant_id"])
+    elif value_type == "participants" and isinstance(result.get("participant_ids"), list):
+        mapped = (convert(Participant, ref) for ref in result["participant_ids"])
+        result["participant_ids"] = [ref for ref in mapped if ref is not None]
+    elif value_type == "event" and result.get("event_id") is not None:
+        result["event_id"] = convert(Event, result["event_id"])
+    return result
+
+
+def _map_list_snapshot(snapshot, convert):
+    """Eingefrorener Listen-Snapshot (Block «Gekoppelte Liste» bzw. Formularzeile «Zeile aus
+    Liste», list_snapshot_service.py): Werte stehen wie in list_entry mit internen ids,
+    ebenso _tracked_before und die Rückgängig-Kopie 'previous' (eigene Spaltentypen)."""
+    if not isinstance(snapshot, dict):
+        return snapshot
+    types = {
+        "column_one_value": str(snapshot.get("column_one_value_type") or "text"),
+        "column_two_value": str(snapshot.get("column_two_value_type") or "text"),
+    }
+
+    def map_holder(holder):
+        if not isinstance(holder, dict):
+            return holder
+        result = dict(holder)
+        for key in _LIST_VALUE_KEYS:
+            if isinstance(result.get(key), dict):
+                result[key] = _map_list_value(types[key], result[key], convert)
+        if isinstance(result.get("_tracked_before"), dict):
+            result["_tracked_before"] = map_holder(result["_tracked_before"])
+        return result
+
+    result = map_holder(snapshot)
+    if isinstance(snapshot.get("entries"), list):
+        result["entries"] = [map_holder(entry) for entry in snapshot["entries"]]
+    if isinstance(snapshot.get("previous"), dict):
+        result["previous"] = _map_list_snapshot(snapshot["previous"], convert)
+    return result
+
+
+def _map_config_list_snapshots(config: dict, convert) -> dict:
+    result = dict(config)
+    if isinstance(config.get("list_snapshot"), dict):
+        result["list_snapshot"] = _map_list_snapshot(config["list_snapshot"], convert)
+    rows = config.get("rows")
+    if isinstance(rows, list) and any(isinstance(row, dict) and isinstance(row.get("list_snapshot"), dict) for row in rows):
+        result["rows"] = [
+            {**row, "list_snapshot": _map_list_snapshot(row["list_snapshot"], convert)}
+            if isinstance(row, dict) and isinstance(row.get("list_snapshot"), dict)
+            else row
+            for row in rows
+        ]
+    return result
+
+
+def _has_list_snapshots(config: dict) -> bool:
+    if isinstance(config.get("list_snapshot"), dict):
+        return True
+    rows = config.get("rows")
+    return isinstance(rows, list) and any(isinstance(row, dict) and isinstance(row.get("list_snapshot"), dict) for row in rows)
+
+
+def translate_list_snapshot_refs(db, config: dict, tenant_id: int) -> dict:
+    """Eingefrorene Listen-Snapshots speichern Personen/Termine mit internen ids (Kopie von
+    list_entry.column_*_value_json), StructuredListTable vergleicht aber mit public UUIDs
+    und verwirft nicht-String-ids - Personen-Spalten erschienen im Protokoll leer, eine
+    Gruppierung danach landete komplett in «Ohne Wert» (Bug 2026-11-08). Übersetzt an der
+    API-Grenze, tenant-gebunden; nicht auflösbare ints fallen weg, UUID-Strings bleiben."""
+    if not _has_list_snapshots(config):
+        return config
+    wanted: dict[type, set[int]] = {Participant: set(), Event: set()}
+
+    def collect(model, ref):
+        if _is_internal_id(ref):
+            wanted[model].add(ref)
+        return ref
+
+    _map_config_list_snapshots(config, collect)
+    if not any(wanted.values()):
+        return config
+    id_maps: dict[type, dict[int, str]] = {}
+    for model, ids in wanted.items():
+        id_maps[model] = {
+            internal_id: str(public_id)
+            for internal_id, public_id in db.execute(
+                select(model.id, model.public_id).where(model.id.in_(ids), model.tenant_id == tenant_id)
+            ).all()
+        } if ids else {}
+
+    def to_public(model, ref):
+        return id_maps[model].get(ref) if _is_internal_id(ref) else ref
+
+    return _map_config_list_snapshots(config, to_public)
+
+
+def normalize_list_snapshot_refs(db, config: dict, tenant_id: int) -> dict:
+    """Gegenstück zu translate_list_snapshot_refs für den Schreibpfad (generischer Block-
+    PATCH schickt die ganze Konfiguration samt Snapshot zurück). list_snapshot_service
+    vergleicht gespeicherte mit frisch berechneten Werten (Änderungsverfolgung) - mit UUIDs
+    im Speicher erschiene sonst jeder Eintrag als geändert. Nicht auflösbare Werte bleiben."""
+    if not _has_list_snapshots(config):
+        return config
+    wanted: dict[type, dict[str, uuid.UUID]] = {Participant: {}, Event: {}}
+
+    def collect(model, ref):
+        if isinstance(ref, str):
+            try:
+                wanted[model][ref] = uuid.UUID(ref)
+            except ValueError:
+                pass
+        return ref
+
+    _map_config_list_snapshots(config, collect)
+    if not any(wanted.values()):
+        return config
+    id_maps: dict[type, dict[str, int]] = {}
+    for model, refs in wanted.items():
+        if not refs:
+            id_maps[model] = {}
+            continue
+        by_public_id = {
+            public_id: internal_id
+            for public_id, internal_id in db.execute(
+                select(model.public_id, model.id).where(model.public_id.in_(set(refs.values())), model.tenant_id == tenant_id)
+            ).all()
+        }
+        id_maps[model] = {raw: by_public_id[parsed] for raw, parsed in refs.items() if parsed in by_public_id}
+
+    def to_internal(model, ref):
+        return id_maps[model].get(ref, ref) if isinstance(ref, str) else ref
+
+    return _map_config_list_snapshots(config, to_internal)
+
+
 def translate_participant_refs(db, config: dict, tenant_id: int) -> dict:
     """Form rows and matrix cells prefilled from the template (ProtocolService.
     _transform_field_row/_matrix_build_row_values) store participant_id(s) as internal

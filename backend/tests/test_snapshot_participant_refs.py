@@ -8,7 +8,13 @@ from datetime import date
 from app.documents.context import BuildContext
 from app.documents.providers.lists import form_row_value
 from app.documents.providers.protocol import _single_value
-from app.services.snapshot_reference_ids import normalize_attendance_entries, translate_participant_refs
+from app.api.routes.protocol_elements import _block_to_read
+from app.services.snapshot_reference_ids import (
+    normalize_attendance_entries,
+    normalize_list_snapshot_refs,
+    translate_list_snapshot_refs,
+    translate_participant_refs,
+)
 from app.services.tenant_transfer_common import remap_block_configuration
 from tests.factories import (
     make_event,
@@ -16,6 +22,8 @@ from tests.factories import (
     make_list_definition,
     make_participant,
     make_protocol,
+    make_protocol_element,
+    make_protocol_element_block,
     make_template,
     make_tenant,
 )
@@ -157,3 +165,87 @@ def test_remap_block_configuration_keeps_public_id_refs():
     assert result["rows"][0]["event_id"] == 109
     assert result["rows"][0]["participant_ids"] == [105, 107]
     assert result["columns"][0]["row_values"]["r1"] == {"participant_id": 105, "event_id": 109}
+
+
+def _list_snapshot(person, people, event, *, types=("participant", "participants")):
+    return {
+        "synced_version": 1,
+        "column_one_value_type": "text",
+        "column_two_value_type": types[0],
+        "entries": [
+            {"id": 1, "sort_index": 10, "column_one_value": {"text_value": "Karo"}, "column_two_value": {"participant_id": person}},
+            {
+                "id": 2, "sort_index": 20, "column_one_value": {"text_value": "Bati"}, "column_two_value": {"participant_id": person},
+                "_tracked": "changed", "_tracked_before": {"column_one_value": {"text_value": "Bati"}, "column_two_value": {"participant_id": person}},
+            },
+        ],
+        "previous": {
+            "column_one_value_type": types[1],
+            "column_two_value_type": "event",
+            "entries": [{"id": 1, "column_one_value": {"participant_ids": people}, "column_two_value": {"event_id": event}}],
+        },
+    }
+
+
+def test_translates_list_snapshot_refs_and_back(db):
+    """Gekoppelte Liste im Protokoll: der eingefrorene Snapshot hielt interne ids, der Editor
+    verwarf sie - Spalte «Verantwortlich» leer, Gruppierung alles in «Ohne Wert» (Bug 2026-11-08)."""
+    tenant = make_tenant(db)
+    anna = make_participant(db, tenant.id, display_name="Anna")
+    ben = make_participant(db, tenant.id, display_name="Ben")
+    event = make_event(db, tenant.id, title="Sommerlager", event_date=date(2026, 7, 4))
+    foreign = make_participant(db, make_tenant(db, name="Fremd").id, display_name="Fremd")
+    stored = {
+        "linked_list_id": 1,
+        "list_snapshot": _list_snapshot(anna.id, [anna.id, ben.id, foreign.id], event.id),
+        "rows": [{"id": "r1", "value_type": "list_entry", "list_snapshot": {
+            "entry_exists": True, "column_one_value_type": "participant", "column_two_value_type": "text",
+            "column_one_value": {"participant_id": ben.id}, "column_two_value": {"text_value": "x"},
+        }}],
+    }
+
+    public = translate_list_snapshot_refs(db, stored, tenant.id)
+
+    entries = public["list_snapshot"]["entries"]
+    assert entries[0]["column_two_value"] == {"participant_id": str(anna.public_id)}
+    assert entries[1]["_tracked_before"]["column_two_value"] == {"participant_id": str(anna.public_id)}
+    previous = public["list_snapshot"]["previous"]["entries"][0]
+    assert previous["column_one_value"] == {"participant_ids": [str(anna.public_id), str(ben.public_id)]}
+    assert previous["column_two_value"] == {"event_id": str(event.public_id)}
+    assert public["rows"][0]["list_snapshot"]["column_one_value"] == {"participant_id": str(ben.public_id)}
+    assert entries[0]["column_one_value"] == {"text_value": "Karo"}
+    # Gespeicherter Stand bleibt unveraendert
+    assert stored["list_snapshot"]["entries"][0]["column_two_value"] == {"participant_id": anna.id}
+
+    back = normalize_list_snapshot_refs(db, public, tenant.id)
+
+    assert back["list_snapshot"]["entries"] == stored["list_snapshot"]["entries"]
+    assert back["list_snapshot"]["previous"]["entries"][0]["column_one_value"] == {"participant_ids": [anna.id, ben.id]}
+    assert back["list_snapshot"]["previous"]["entries"][0]["column_two_value"] == {"event_id": event.id}
+    assert back["rows"] == stored["rows"]
+
+
+def test_normalize_list_snapshot_keeps_foreign_and_invalid_refs(db):
+    tenant = make_tenant(db)
+    foreign = make_participant(db, make_tenant(db, name="Fremd").id, display_name="Fremd")
+    config = {"list_snapshot": _list_snapshot(str(foreign.public_id), ["kaputt"], None)}
+
+    result = normalize_list_snapshot_refs(db, config, tenant.id)
+
+    assert result["list_snapshot"]["entries"][0]["column_two_value"] == {"participant_id": str(foreign.public_id)}
+    assert result["list_snapshot"]["previous"]["entries"][0]["column_one_value"] == {"participant_ids": ["kaputt"]}
+
+
+def test_block_read_returns_public_ids_in_list_snapshot(db):
+    tenant = make_tenant(db)
+    anna = make_participant(db, tenant.id, display_name="Anna")
+    protocol = make_protocol(db, tenant.id, make_template(db, tenant.id).id)
+    block = make_protocol_element_block(
+        db,
+        make_protocol_element(db, protocol.id).id,
+        configuration_snapshot_json={"list_snapshot": _list_snapshot(anna.id, [anna.id], None)},
+    )
+
+    read = _block_to_read(db, block)
+
+    assert read.configuration_snapshot_json["list_snapshot"]["entries"][0]["column_two_value"] == {"participant_id": str(anna.public_id)}
