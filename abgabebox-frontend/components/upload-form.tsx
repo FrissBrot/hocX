@@ -5,9 +5,10 @@ import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 
 import { CaptchaWidget } from "@/components/captcha-widget";
+import { clearCaptchaSession, readCaptchaSession, storeCaptchaSession } from "@/lib/captcha-session";
 import { useFlowDone } from "@/components/flow-steps";
 import { publicApiUrl } from "@/lib/api";
-import { validateUploadFiles, SUPPORTED_UPLOAD_EXTENSIONS } from "@/lib/validate-upload";
+import { isImageFile, validateUploadFiles, SUPPORTED_UPLOAD_EXTENSIONS } from "@/lib/validate-upload";
 import { MAX_BUSY_RETRIES, isRetryableBusy, retryDelaySeconds } from "@/lib/upload-retry";
 
 type Props = {
@@ -33,7 +34,8 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
   const setFlowDone = useFlowDone();
   const [files, setFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
-  const [captchaSessionToken, setCaptchaSessionToken] = useState<string | null>(null);
+  // Bereits auf dieser Seite bestandene Prüfung (anderes Element desselben Links) weiterverwenden
+  const [captchaSessionToken, setCaptchaSessionToken] = useState<string | null>(() => readCaptchaSession(linkToken));
   const [captchaVerifying, setCaptchaVerifying] = useState(false);
   const [captchaKey, setCaptchaKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -132,6 +134,7 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
         return;
       }
       const result = await response.json();
+      storeCaptchaSession(linkToken, result.session_token, Number(result.expires_in_seconds) || 0);
       setCaptchaSessionToken(result.session_token);
       setCaptchaVerifying(false);
     } catch {
@@ -146,15 +149,16 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
   // captcha_enabled() im Backend). Ist doch ein Sitekey gesetzt, greift stattdessen der echte
   // Widget-Callback oben.
   useEffect(() => {
-    if (!sitekey) {
+    if (!sitekey && !readCaptchaSession(linkToken)) {
       handleSolved("no-friendly-captcha-configured");
     }
-  }, [sitekey, handleSolved]);
+  }, [sitekey, handleSolved, linkToken]);
 
   // Startet einen frischen Sicherheitscheck (z.B. nach abgelaufenem Sitzungs-Token) - der `key`-
   // Wechsel zwingt React, das Widget komplett neu zu montieren, was dank data-start="auto" sofort
   // eine neue Challenge loest, ohne dass ausgewaehlte Dateien verloren gehen.
   function requestFreshCaptcha() {
+    clearCaptchaSession(linkToken);
     setCaptchaSessionToken(null);
     exchangedSolutionRef.current = null;
     setCaptchaKey((k) => k + 1);
@@ -359,10 +363,13 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
       {error && <p className="error">{error}</p>}
       {retryNotice && <p className="muted" role="status">{retryNotice}</p>}
 
-      <label className="upload-gps-option">
-        <input type="checkbox" checked={includeGps} onChange={(event) => setIncludeGps(event.target.checked)} />
-        <span>{t("includeGps")}</span>
-      </label>
+      {/* Nur relevant, wenn ein Bild ausgewählt ist: andere Dateien tragen keinen Standort */}
+      {files.some(isImageFile) && (
+        <label className="upload-gps-option">
+          <input type="checkbox" checked={includeGps} onChange={(event) => setIncludeGps(event.target.checked)} />
+          <span>{t("includeGps")}</span>
+        </label>
+      )}
 
       <p className="upload-privacy-note">
         {tenantName ? t("privacyResponsible", { tenant: tenantName }) : null}{" "}

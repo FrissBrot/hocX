@@ -131,5 +131,6 @@ def test_captcha_session_token_is_bound_to_the_link(monkeypatch):
 
     assert captcha.verify_captcha_session_token(token, "A" * 32, "fotos", "event-1", client_ip="1.2.3.4") is True
     assert captcha.verify_captcha_session_token(token, "B" * 32, "fotos", "event-1", client_ip="1.2.3.4") is False
-    assert captcha.verify_captcha_session_token(token, "A" * 32, "other", "event-1", client_ip="1.2.3.4") is False
+    # Gilt für alle Aufträge/Elemente desselben Links (einmal prüfen pro Seitenaufruf)
+    assert captcha.verify_captcha_session_token(token, "A" * 32, "other", "event-2", client_ip="1.2.3.4") is True
     assert captcha.verify_captcha_session_token(token, "A" * 32, "fotos", "event-1", client_ip="9.9.9.9") is False

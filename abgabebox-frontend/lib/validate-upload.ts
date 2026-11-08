@@ -26,6 +26,14 @@ export function getExtension(filename: string): string {
   return parts.length > 1 ? parts.pop()!.toLowerCase() : "";
 }
 
+// Bildformate mit möglichen GPS-Metadaten. HEIC/HEIF liefern im Browser oft keinen MIME-Typ,
+// darum zusätzlich die Endung.
+const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "gif", "webp", "heic", "heif"]);
+
+export function isImageFile(file: File): boolean {
+  return file.type.startsWith("image/") || IMAGE_EXTENSIONS.has(getExtension(file.name));
+}
+
 export function validateUploadFiles(
   selected: File[],
   {
