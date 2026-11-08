@@ -650,6 +650,8 @@ export type SubmissionElementStatusEntry = {
   upload_id: string | null;
   files: SubmissionFile[];
   responsible_participant_id: string | null;
+  /** Alle Verantwortlichen (mehrere = gemeinsam); responsible_participant_id ist die erste */
+  responsible_participant_ids?: string[];
 };
 
 export type PlatformOidcConfigPublic = { enabled: boolean; issuer_url: string };
@@ -1629,7 +1631,9 @@ export type ProtocolElementBlock = {
   is_required_snapshot: boolean;
   is_visible_snapshot: boolean;
   export_visible_snapshot: boolean;
-  public_reference_ids?: { lists?: Record<string, string>; finance_accounts?: Record<string, string>; events?: Record<string, string> };
+  public_reference_ids?: { lists?: Record<string, string>; finance_accounts?: Record<string, string>; events?: Record<string, string>; list_entries?: Record<string, string> };
+  /** Gespeicherter Personenwert (UUID oder interne Zahl) -> Name, auch für Personen ausserhalb von Vorlage und Verzeichnis. */
+  participant_names?: Record<string, string>;
   configuration_snapshot_json: Record<string, unknown>;
   /** Optimistische Sperre der Blockkonfiguration (409 config_conflict bei veraltetem Stand). */
   config_version?: number;

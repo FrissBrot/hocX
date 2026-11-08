@@ -128,10 +128,10 @@
     "protocol_elements": "Punti",
     "protocol_event_title": "Appuntamento",
     "protocol_excused_count": "Numero di giustificati",
-    "protocol_new_todos_count": "Numero di nuove attività",
+    "protocol_new_todos_count": "Numero di nuove attività in questo verbale",
     "protocol_next_session": "Prossima seduta",
     "protocol_number": "Numero",
-    "protocol_open_todos": "Attività aperte",
+    "protocol_open_todos": "Attività aperte di questo verbale",
     "protocol_participant_count": "Numero di partecipanti",
     "protocol_participants": "Partecipanti",
     "protocol_present_count": "Numero di presenti",
@@ -144,7 +144,7 @@
     "statistics_events_count": "Numero di appuntamenti",
     "statistics_sessions_count": "Numero di sedute",
     "todos_done_count": "Numero di attività completate",
-    "todos_open": "Attività aperte",
+    "todos_open": "Attività aperte (tutte)",
     "todos_open_count": "Numero di attività aperte",
     "protocol_invitation_elements": "Punti dell’invito"
   },
@@ -812,7 +812,7 @@
     "format": {
       "csv": "CSV",
       "ics": "Calendario (ICS)",
-      "markdown": "Testo (Markdown)",
+      "markdown": "Copia testo (WhatsApp)",
       "xlsx": "Excel"
     },
     "language": "Lingua del documento",
@@ -831,7 +831,10 @@
     "watermarkAuto": "Automatico (per le bozze)",
     "watermarkOff": "Mai",
     "watermarkOn": "Sempre",
-    "working": "Creazione …"
+    "working": "Creazione …",
+    "columns": "Colonne",
+    "columnsHelp": "Vale per CSV, Excel e testo. Le colonne deselezionate mancano solo in questa esportazione.",
+    "markdownCopied": "Testo per WhatsApp copiato negli appunti"
   },
   "exports": {
     "allTypes": "Tutti i tipi di documento",

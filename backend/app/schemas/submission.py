@@ -122,6 +122,8 @@ class SubmissionElementRead(BaseModel):
     upload_id: uuid.UUID | None = None
     files: list[SubmissionFileRead] = Field(default_factory=list)
     responsible_participant_id: uuid.UUID | None = None
+    # Alle Verantwortlichen (mehrere = gemeinsam); responsible_participant_id ist die erste
+    responsible_participant_ids: list[uuid.UUID] = Field(default_factory=list)
 
 
 class SubmissionUploadLogEntry(PublicIdModel):

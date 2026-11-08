@@ -6,6 +6,71 @@ Versionierung nach [SemVer](https://semver.org/lang/de/). Die Beta-Historie
 ist der erste offiziell unterstützte Stand und muss keine älteren
 Installationen aktualisieren können.
 
+## [1.2.1] - Unveröffentlicht
+
+Fehlerkorrekturen auf 1.2.0 und kleinere Erweiterungen aus dem Testbetrieb. Drei neue
+Migrationen (`0163`–`0165`), keine Breaking Changes. Das Update läuft wie gewohnt über
+`deploy.sh`; die Migrationen korrigieren dabei bestehende Daten (siehe «Datenkorrekturen beim
+Update»).
+
+### Datenkorrekturen beim Update
+
+- `0163_attendance_fine_repair`: Anwesenheitsbussen in **nicht abgeschlossenen** Protokollen
+  werden an die erfasste Anwesenheit angeglichen. Fehlende Bussen für «Verspätet» und
+  «Unentschuldigt» entstehen neu, offene Bussen mit falschem Typ werden gelöscht. Abgeschlossene
+  Protokolle, eingezogene und mit Begründung gelöschte Bussen bleiben unverändert. Auch von Hand
+  in einem offenen Protokoll gelöschte Bussen werden dabei wieder angelegt.
+- `0164_submission_todo_public_ref`: Abgabe-Pendenzen, deren Element schon geprüfte Dateien hat,
+  werden erledigt. Einträge des Abgabe-Verlaufs aus dem erneuten Virenscan bekommen die richtige
+  Element-Referenz.
+- `0165_event_field_config`: neue Mandanten-Einstellung für die Spezialfelder der Termine.
+
+### Neu
+
+- **Spezialfelder der Termine umbenennen oder ausblenden.** Unter Mandant-Einstellungen →
+  Allgemein bekommen «Spezial 1–3» und «Spezial Text 1–3» eigene Namen oder werden ausgeblendet
+  (Werte bleiben erhalten). Gilt beim Anlegen und Bearbeiten von Terminen, in den Termin-Feldern
+  im Protokoll, im Abgabe-Formular, im Vorlagen-Editor und im Word-Import.
+- **Text-Export für WhatsApp.** «Text kopieren (WhatsApp)» im Export-Dialog legt die
+  Pendenzenliste direkt in die Zwischenablage, nur mit WhatsApp-Formatierung (fett, kursiv,
+  durchgestrichen). Für CSV, Excel und Text lassen sich die Spalten pro Export an- und abwählen.
+- **Smarte Datumsvorschläge** im Fälligkeits-Menü der Pendenzen: «morgen», «Freitag nächste
+  Woche», «Ende Monat», «in 3 Wochen», «24.12.» usw. erscheinen, sobald das Getippte passt.
+- **Mehrere Verantwortliche bei Abgaben.** Stehen mehrere Personen im Verantwortlichen-Feld eines
+  Termins (oder in einer Listenspalte mit mehreren Personen), bekommen alle gemeinsam die Pendenz.
+- **Abgabe-Status farbig:** abgegeben grün, Quarantäne gelb, offen blau, noch nicht offen bzw.
+  ohne Abgabe geschlossen grau, Frist verpasst oder Scanfehler rot.
+- Matrix-Planung: die Teilnehmerzahl lässt sich direkt in der Termintabelle ändern.
+- Neuer Hintergrund-Job «Abgabe-Pendenzen abgleichen» (alle 15 Minuten, `/admin/jobs`).
+
+### Behoben
+
+- **Verspätete bekamen keine Busse mehr**, nachdem im Anwesenheitsblock einmal geklickt wurde:
+  die Antwort enthielt den Bussentarif nicht, der Editor hielt die Bussen bis zum Neuladen für
+  ausgeschaltet.
+- **Abgaben schlossen ihre Pendenz nicht mehr ab.** Der Datenbank-Trigger suchte die Pendenz mit
+  der internen statt der öffentlichen ID. Die Verknüpfung Termin → Abgabe → Pendenz wird jetzt bei
+  jeder Termin-Änderung (Person, Titel, Tag, Löschen, Tag umbenennen, Importe) nachgeführt.
+  Weggefallene offene Pendenzen werden entfernt, von Hand ergänzte nur abgebrochen. Dateien in
+  Quarantäne erledigen eine Pendenz erst nach dem Scan.
+- **Neu angehakte Termine** in einem Element mit Vorlagen pro Termin bekamen leere Blöcke. Jetzt
+  entstehen alle Blöcke nach denselben Regeln wie beim Anlegen des Protokolls.
+- **Termin-Änderungen über das Menü der Matrix-Tabelle** gingen bei langsamer Verbindung verloren
+  (jeder Tastendruck speicherte parallel). Änderungen pro Termin laufen jetzt nacheinander.
+- **Personen in Matrix-Zellen** wurden gespeichert, aber nicht angezeigt.
+- Formular-Tabellen zeigten «N ausgewählt» statt der Namen.
+- **Kalender in Menüs:** ein Klick auf ein Datum im Kalender eines Menüs (z. B. Fälligkeit im
+  Pendenzen-Dialog) schloss das Menü, bevor das Datum ankam. Gilt für alle Menüs mit Kalender,
+  Auswahlliste, Uhrzeit oder Farbauswahl.
+- **Sperre bei gleichzeitiger Bearbeitung:** die Prüfung auf dem Server fand die Sperre des
+  Editors nie (interne statt öffentliche Block-ID); gleichzeitiges Speichern wird jetzt abgewiesen.
+- Vorbelegte Termine aus der Vorlage (Formular- und Matrixzeilen) erschienen im Protokoll leer;
+  verknüpfte Listeneinträge ohne Snapshot erschienen als gelöscht.
+- Virenscan-Ergebnisse fehlten im Verlauf eines Abgabe-Elements.
+- Der Link von Abgabe-Dateien in der Dateiübersicht führte auf eine nicht vorhandene Seite; er
+  öffnet jetzt die Abgabe.
+- Dokument-Studio: Pendenzen-Felder standen in der Auswahl unter «Protokoll».
+
 ## [1.2.0] - 2026-10-28
 
 Feature-Release auf 1.1.13. Fünf Entwicklungszweige sind zusammengeführt und aufeinander

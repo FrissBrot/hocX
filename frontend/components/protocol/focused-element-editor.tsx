@@ -5,6 +5,7 @@ import { useParticipantNameSource } from "@/contexts/participant-directory-conte
 
 import { Dispatch, ReactNode, SetStateAction, memo, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useEventFieldConfig } from "@/lib/hooks/use-event-field-config";
 
 import { useConfirm } from "@/contexts/confirm-context";
 import { restoreFine, useFineDelete } from "@/components/finances/fine-delete";
@@ -259,6 +260,8 @@ function FocusedElementEditorImpl({
   const t = useTranslations("protocols");
   const tBoard = useTranslations("protocols.attendanceBoard");
   const tTodos = useTranslations("todos");
+  const tTemplates = useTranslations("templates.elementEditor");
+  const eventFieldConfig = useEventFieldConfig();
   const confirm = useConfirm();
   const showToast = useToast();
   const sectionRef = useRef<HTMLElement | null>(null);
@@ -642,10 +645,12 @@ function FocusedElementEditorImpl({
         return;
       }
       const targetColumn = nextColumns[targetColumnIndex];
-      const currentValues = asObject(targetColumn.values);
+      // Zellen stehen in row_values (altes Schema: values) - so liest sie matrixCellValue. Hier
+      // stand bis 2026-11-08 nur `values`, die Auswahl wurde gespeichert, aber nie angezeigt.
+      const currentValues = asObject(targetColumn.row_values ?? targetColumn.values);
       nextColumns[targetColumnIndex] = {
         ...targetColumn,
-        values: {
+        row_values: {
           ...currentValues,
           [picker.rowId]: {
             ...asObject(currentValues[picker.rowId]),
@@ -661,7 +666,7 @@ function FocusedElementEditorImpl({
         return;
       }
       const targetColumn = nextColumns[targetColumnIndex];
-      const currentValues = asObject(targetColumn.values);
+      const currentValues = asObject(targetColumn.row_values ?? targetColumn.values);
       const targetCell = asObject(currentValues[picker.rowId]);
       const embeddedBlock = readMatrixEmbeddedBlock(targetCell);
       if (!embeddedBlock) {
@@ -679,7 +684,7 @@ function FocusedElementEditorImpl({
       };
       nextColumns[targetColumnIndex] = {
         ...targetColumn,
-        values: {
+        row_values: {
           ...currentValues,
           [picker.rowId]: {
             ...targetCell,
@@ -1740,11 +1745,16 @@ function FocusedElementEditorImpl({
                                   }}
                                 />
                               </div>
-                              {todoDueEvents.length ? (
-                                <div className="mini-menu-section">
-                                  <div className="mini-menu-section-title">{t("eventsLabel")}</div>
+                              {/* Immer mit Suche: smarte Datumsvorschläge auch ohne Termine */}
+                              <div className="mini-menu-section">
+                                  {todoDueEvents.length ? <div className="mini-menu-section-title">{t("eventsLabel")}</div> : null}
                                   <TodoMenuSearchList
                                     items={todoDueEvents}
+                                    searchPlaceholder={tTodos("dueSearchPlaceholder")}
+                                    onPickDate={(date) => {
+                                      void updateTodo(block.id, todo.id, { due_date: date, due_event_id: null, due_marker: null });
+                                      closeMenu();
+                                    }}
                                     getKey={(event) => event.id}
                                     getLabel={(event) => event.title}
                                     getSubtle={(event) => formatDateRange(event.event_date, event.event_end_date)}
@@ -1758,8 +1768,7 @@ function FocusedElementEditorImpl({
                                       closeMenu();
                                     }}
                                   />
-                                </div>
-                              ) : null}
+                              </div>
                               </>
                               )}
                             </TodoMiniMenu>
@@ -2055,8 +2064,12 @@ function FocusedElementEditorImpl({
                   }
                   const linkedEventId = isAutoEventBlock ? blockEventPublicId(block) : undefined;
                   const linkedEvent = linkedEventId ? availableEvents.find((e) => e.id === linkedEventId) : undefined;
+                  // Ausgeblendete Spezialfelder fehlen; ohne eigenes Label im Block gilt der
+                  // Name aus den Mandant-Einstellungen (Alias), sonst der Standardname
                   const configuredEventFields = isAutoEventBlock && Array.isArray(blockConfig.event_fields)
                     ? (blockConfig.event_fields as Array<{ field: string; label: string }>)
+                        .filter((ef) => !eventFieldConfig.hidden(ef.field))
+                        .map((ef) => ({ ...ef, label: ef.label?.trim() || eventFieldConfig.label(ef.field, tTemplates(`eventField.${ef.field}`)) }))
                     : [];
                   return (
                     <div className="grid">
@@ -2179,7 +2192,10 @@ function FocusedElementEditorImpl({
                             const linkedListEntryId = row.linked_list_entry_id ? String(row.linked_list_entry_id) : null;
                             const rowSnapshot = row.list_snapshot as RowListSnapshot | undefined;
                             const liveListDefinition = linkedListId ? listDefinitionsById.get(linkedListId) : undefined;
-                            const liveListEntry = (linkedListId ? listEntriesByDefinition[linkedListId] ?? [] : []).find((entry) => entry.id === linkedListEntryId);
+                            // Aus der Vorlage stehen Liste und Eintrag mit interner ID; Einträge sind nach
+                            // öffentlicher Listen-ID geladen und tragen die öffentliche ID
+                            const publicEntryId = linkedListEntryId ? block.public_reference_ids?.list_entries?.[linkedListEntryId] ?? linkedListEntryId : null;
+                            const liveListEntry = (liveListDefinition ? listEntriesByDefinition[liveListDefinition.id] ?? listEntriesByDefinition[linkedListId ?? ""] ?? [] : []).find((entry) => entry.id === publicEntryId);
                             const entryExists = rowSnapshot ? rowSnapshot.entry_exists : !!liveListDefinition && !!liveListEntry;
                             if (!entryExists) {
                               return (

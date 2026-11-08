@@ -34,7 +34,8 @@
     "verificationNameChanged": "Der Name hat sich seit dem Antrag geändert.",
     "verificationNoPending": "Es gibt keinen offenen Antrag.",
     "verificationNotVerified": "Die Organisation ist nicht verifiziert.",
-    "verificationReasonRequired": "Bitte eine Begründung angeben."
+    "verificationReasonRequired": "Bitte eine Begründung angeben.",
+    "noColumns": "Mindestens eine Spalte muss ausgewählt sein."
   },
   "attendanceShort": {
     "absent": "U",

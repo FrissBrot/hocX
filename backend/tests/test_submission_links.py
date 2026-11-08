@@ -228,7 +228,7 @@ def test_todo_sync_uses_a_link_url_and_needs_a_link(db):
     assignment = db.scalar(select(SubmissionAssignment).where(SubmissionAssignment.public_id == created.id))
 
     # Anlegen gleicht schon ab (FAR-010); ein erneuter Abgleich aktualisiert nur.
-    assert service.sync_submission_todos(db, assignment) == {"created": 0, "updated": 1}
+    assert service.sync_submission_todos(db, assignment) == {"created": 0, "updated": 1, "removed": 0}
     todo = db.scalar(select(ProtocolTodo).where(ProtocolTodo.submission_assignment_id == assignment.id))
     assert f"/{link.token}/fotos/event-{event.public_id}" in todo.reference_link
 

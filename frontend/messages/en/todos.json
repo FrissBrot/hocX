@@ -93,5 +93,39 @@
   "filesNoMatches": "No matching files",
   "filesEmpty": "No files linked",
   "removeFile": "Remove {name}",
-  "detailsLoadFailed": "Notes and files could not be loaded"
+  "detailsLoadFailed": "Notes and files could not be loaded",
+  "smartDate": {
+    "today": "Today",
+    "tomorrow": "Tomorrow",
+    "dayAfterTomorrow": "Day after tomorrow",
+    "weekdayThisWeek": "{weekday} this week",
+    "weekdayNextWeek": "{weekday} next week",
+    "weekdayNext": "{weekday}",
+    "endOfWeek": "End of week",
+    "startOfNextWeek": "Start of next week",
+    "endOfNextWeek": "End of next week",
+    "inTwoWeeks": "In 2 weeks",
+    "endOfMonth": "End of month",
+    "startOfNextMonth": "Start of next month",
+    "endOfNextMonth": "End of next month",
+    "endOfYear": "End of year",
+    "inDays": "{count, plural, one {In # day} other {In # days}}",
+    "inWeeks": "{count, plural, one {In # week} other {In # weeks}}",
+    "inMonths": "{count, plural, one {In # month} other {In # months}}",
+    "exactDate": "{date}"
+  },
+  "smartDateKeywords": {
+    "today": "now",
+    "weekdayNextWeek": "coming",
+    "weekdayNext": "next coming",
+    "endOfWeek": "weekend Sunday",
+    "startOfNextWeek": "Monday",
+    "endOfNextWeek": "weekend",
+    "inTwoWeeks": "two fortnight",
+    "endOfMonth": "month end",
+    "startOfNextMonth": "beginning",
+    "endOfNextMonth": "month end",
+    "endOfYear": "year end New Year's Eve"
+  },
+  "dueSearchPlaceholder": "Search date or event …"
 }

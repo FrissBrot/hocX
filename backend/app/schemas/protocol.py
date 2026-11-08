@@ -171,6 +171,8 @@ class ProtocolElementBlockRead(BaseModel):
     # Optimistische Sperre der Konfiguration (Migration 0149): beim PATCH als expected_config_version mitsenden.
     config_version: int = 0
     public_reference_ids: dict[str, dict[str, uuid.UUID]] = Field(default_factory=dict)
+    # Gespeicherter Personenwert (UUID/Zahl) -> Name, siehe snapshot_reference_ids.participant_display_names
+    participant_names: dict[str, str] = Field(default_factory=dict)
     text_content: str | None = None
     display_compiled_text: str | None = None
     display_snapshot_json: dict | None = None

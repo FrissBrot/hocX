@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import csv
 import io
-from typing import Any
+from typing import Any, Iterable
 
 from app.documents.catalog import BlockSpec
 from app.documents.model import Cell, ProtocolElementBlock, TableColumn, TableData, TextSpan
@@ -105,16 +105,18 @@ def _span_text(spans: list[dict[str, Any]]) -> str:
     return "".join(span.get("v", " ") for span in spans).strip()
 
 
-def layout_tables(compiled_data: dict[str, Any]) -> list[tuple[str, list[list[str]]]]:
-    """Gebundene und feste Tabellen der Vorlage (kompilierte ``table``-Knoten) als Textzeilen."""
-    result: list[tuple[str, list[list[str]]]] = []
+def layout_tables(compiled_data: dict[str, Any]) -> list[tuple[str, list[list[str]], bool]]:
+    """Gebundene und feste Tabellen der Vorlage (kompilierte ``table``-Knoten) als Textzeilen;
+    das dritte Feld sagt, ob die erste Zeile eine Kopfzeile ist."""
+    result: list[tuple[str, list[list[str]], bool]] = []
 
     def walk(nodes: list[dict[str, Any]]) -> None:
         for node in nodes:
             if node.get("t") == "table" and node.get("rows"):
                 header = [_span_text(column.get("header") or []) for column in node.get("columns", [])]
                 rows = [[_span_text(cell) for cell in row] for row in node["rows"]]
-                result.append((header[0] if header else "", ([header] if any(header) else []) + rows))
+                has_header = any(header)
+                result.append((header[0] if header else "", ([header] if has_header else []) + rows, has_header))
             walk(node.get("children") or [])
 
     for segment in compiled_data.get("segments", []):
@@ -122,9 +124,33 @@ def layout_tables(compiled_data: dict[str, Any]) -> list[tuple[str, list[list[st
     return result
 
 
-def all_tables(blocks: list[Any], compiled_data: dict[str, Any], strings: dict[str, str]) -> list[tuple[str, list[list[str]]]]:
-    tables = [(title, table_rows(table, strings)) for title, table in table_blocks(blocks, strings)]
-    return tables + layout_tables(compiled_data)
+def all_tables(
+    blocks: list[Any], compiled_data: dict[str, Any], strings: dict[str, str], *, exclude_columns: Iterable[str] = ()
+) -> list[tuple[str, list[list[str]]]]:
+    """Alle Tabellen als Textzeilen. ``exclude_columns`` sind Spaltenköpfe, die der Benutzer im
+    Export-Dialog abgewählt hat; sie fallen in jeder Tabelle weg."""
+    tables = [(title, table_rows(table, strings), True) for title, table in table_blocks(blocks, strings)]
+    tables += layout_tables(compiled_data)
+    excluded = set(exclude_columns)
+    return [(title, _drop_columns(rows, excluded) if has_header else rows) for title, rows, has_header in tables]
+
+
+def column_labels(blocks: list[Any], compiled_data: dict[str, Any], strings: dict[str, str]) -> list[str]:
+    """Spaltenköpfe aller Tabellen (ohne Duplikate, in Reihenfolge) für die Auswahl im Dialog."""
+    labels: list[str] = []
+    for _title, rows, has_header in [(title, table_rows(table, strings), True) for title, table in table_blocks(blocks, strings)] + layout_tables(compiled_data):
+        if has_header and rows:
+            labels.extend(label for label in rows[0] if label and label not in labels)
+    return labels
+
+
+def _drop_columns(rows: list[list[str]], excluded: set[str]) -> list[list[str]]:
+    if not excluded or not rows:
+        return rows
+    keep = [index for index, label in enumerate(rows[0]) if label not in excluded]
+    if not keep:
+        raise ValueError("noColumns")
+    return [[row[index] for index in keep if index < len(row)] for row in rows]
 
 
 def to_csv(tables: list[tuple[str, list[list[str]]]]) -> bytes:
@@ -213,7 +239,12 @@ def ics_content(prepared: Any) -> bytes:
     return events.ics(sorted(unique.values(), key=lambda event: (event.event_date, event.id)), tenant_name=tenant.name if tenant else "").encode("utf-8")
 
 
-def markdown_content(prepared: Any) -> bytes:
+def markdown_columns(strings: dict[str, str]) -> list[str]:
+    """Felder des Markdown-Exports (Aufgabe steht immer da)."""
+    return [strings[key] for key in ("col.status", "col.assignee", "col.due", "col.protocol", "col.tags") if key in strings]
+
+
+def markdown_content(prepared: Any, *, exclude_columns: Iterable[str] = ()) -> bytes:
     from app.documents.catalog import validate_spec
     from app.documents.providers import todos
 
@@ -229,4 +260,7 @@ def markdown_content(prepared: Any) -> bytes:
         group_by_person = group_by_person or params.group_by == "person"
         show_status = show_status or params.status != "open"
     strings = prepared.compiled.data["strings"]
-    return todos.markdown(rows, strings=strings, title=prepared.meta.title, group_by_person=group_by_person, show_status=show_status, today=ctx.today).encode("utf-8")
+    return todos.markdown(
+        rows, strings=strings, title=prepared.meta.title, group_by_person=group_by_person, show_status=show_status,
+        today=ctx.today, exclude_columns=set(exclude_columns),
+    ).encode("utf-8")

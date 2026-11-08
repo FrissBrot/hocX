@@ -106,6 +106,12 @@ export function MobileSubmissions({
   const [actionsOpen, setActionsOpen] = useState(false);
   const availableTags = useMemo(() => [...new Set(availableEvents.map((event) => event.tag).filter((tag): tag is string => !!tag))].sort(), [availableEvents]);
   const participantName = (id: string | null) => (id ? availableParticipants.find((participant) => participant.id === id)?.display_name ?? null : null);
+  // Alle Verantwortlichen eines Elements (mehrere = gemeinsam), null = niemand
+  const responsibleNames = (element: SubmissionElementStatusEntry) =>
+    (element.responsible_participant_ids?.length ? element.responsible_participant_ids : [element.responsible_participant_id])
+      .map(participantName)
+      .filter(Boolean)
+      .join(", ") || null;
   const selected = assignments.find((assignment) => assignment.id === selectedId) ?? null;
   const logLabels: Record<string, string> = {
     upload_received: t("logUploadReceived"),
@@ -288,7 +294,7 @@ export function MobileSubmissions({
             <div className="mobile-card mobile-list-card">
               {visible.map((element) => {
                 const state = elementState(element);
-                const person = participantName(element.responsible_participant_id);
+                const person = responsibleNames(element);
                 return (
                   <MobileListRow
                     key={element.element_ref}
@@ -303,7 +309,7 @@ export function MobileSubmissions({
                         </span>
                       </span>
                     }
-                    trailing={<span className={`mobile-submission-pill mobile-submission-pill-${state}`}>{stateLabel[state]}</span>}
+                    trailing={<span className={`mobile-submission-pill mobile-submission-pill-${state}${state === "closed" ? (element.files.length ? " mobile-submission-pill-closed-filled" : "") : ""}`}>{stateLabel[state]}</span>}
                   />
                 );
               })}
@@ -344,7 +350,7 @@ export function MobileSubmissions({
           <Modal
             open
             size="sheet"
-            title={participantName(openElement.responsible_participant_id) ?? openElement.label}
+            title={responsibleNames(openElement) ?? openElement.label}
             description={[openElement.label, openElement.window_end ? `${t("deadlineColon")} ${dateParts.dayMonth(openElement.window_end.slice(0, 10), locale)}` : null].filter(Boolean).join(" · ")}
             onClose={() => setOpenElement(null)}
             className="mobile-sheet mobile-sheet-tall"

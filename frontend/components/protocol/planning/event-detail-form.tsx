@@ -10,6 +10,7 @@ import { DateInput } from "@/components/ui/date-input";
 import { TagInput } from "@/components/ui/tag-input";
 import { CycleAssignment, EventSummary, ParticipantSummary } from "@/types/api";
 import { useCycleOptions } from "@/lib/hooks/use-cycle-options";
+import { useEventFieldConfig } from "@/lib/hooks/use-event-field-config";
 import type { TagConfig } from "@/lib/hooks/use-tag-config";
 
 type RoleField = "organizer_ids" | "leadership_ids" | "participant_ids" | "spezial1_ids" | "spezial2_ids" | "spezial3_ids";
@@ -59,7 +60,14 @@ export function EventDetailForm({
   const tCommon = useTranslations("common");
   const [activeRoleField, setActiveRoleField] = useState<RoleField | null>(null);
   const [roleSearch, setRoleSearch] = useState("");
-  const ROLE_FIELDS = roleFields(t);
+  // Spezialfelder: Alias und Ausblenden aus den Mandant-Einstellungen
+  const eventFields = useEventFieldConfig();
+  const ROLE_FIELDS = roleFields(t)
+    .filter((role) => !eventFields.hidden(role.field))
+    .map((role) => ({ ...role, label: eventFields.label(role.field, role.label) }));
+  const specialTexts = (["spezial_text1", "spezial_text2", "spezial_text3"] as const)
+    .map((field, index) => ({ field, label: eventFields.label(field, t(`detailForm.specialText${index + 1}Label`)) }))
+    .filter(({ field }) => !eventFields.hidden(field));
   const { options: cycleOptions, loading: cyclesLoading } = useCycleOptions();
   const cycleAssignments: CycleAssignment[] = event.cycle_assignments ?? [];
 
@@ -263,28 +271,13 @@ export function EventDetailForm({
                 <input value={event.location ?? ""} onChange={(e) => void onUpdate({ location: e.target.value || null })} />
               </label>
               <div className="two-col">
-                <label className="field-stack">
-                  <span className="field-label">{t("detailForm.specialText1Label")}</span>
-                  <input
-                    value={event.spezial_text1 ?? ""}
-                    onChange={(e) => void onUpdate({ spezial_text1: e.target.value || null })}
-                  />
-                </label>
-                <label className="field-stack">
-                  <span className="field-label">{t("detailForm.specialText2Label")}</span>
-                  <input
-                    value={event.spezial_text2 ?? ""}
-                    onChange={(e) => void onUpdate({ spezial_text2: e.target.value || null })}
-                  />
-                </label>
+                {specialTexts.map(({ field, label }) => (
+                  <label key={field} className="field-stack">
+                    <span className="field-label">{label}</span>
+                    <input value={event[field] ?? ""} onChange={(e) => void onUpdate({ [field]: e.target.value || null })} />
+                  </label>
+                ))}
               </div>
-              <label className="field-stack">
-                <span className="field-label">{t("detailForm.specialText3Label")}</span>
-                <input
-                  value={event.spezial_text3 ?? ""}
-                  onChange={(e) => void onUpdate({ spezial_text3: e.target.value || null })}
-                />
-              </label>
             </div>
           ),
         },

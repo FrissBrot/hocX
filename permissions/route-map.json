@@ -1070,6 +1070,12 @@
         "meetings.read"
       ]
     },
+    "POST /api/documents/export/columns": {
+      "handler": "documents.export_document_columns",
+      "requires": [
+        "meetings.read"
+      ]
+    },
     "GET /api/documents/exports": {
       "handler": "documents.list_document_exports",
       "requires": [
@@ -1173,6 +1179,18 @@
       "handler": "templates.patch_element_definition",
       "requires": [
         "templates.edit"
+      ]
+    },
+    "GET /api/event-field-config": {
+      "handler": "event_field_config.get_event_field_config",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "PUT /api/event-field-config": {
+      "handler": "event_field_config.put_event_field_config",
+      "requires": [
+        "settings.manage"
       ]
     },
     "GET /api/events": {

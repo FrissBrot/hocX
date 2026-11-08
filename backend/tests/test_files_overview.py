@@ -185,7 +185,7 @@ def test_list_tenant_files_includes_submission_upload_with_correct_content_url(d
     item = items[0]
     assert item.source == "submission_upload"
     assert item.ref_label == "Fotos Sommerlager"
-    assert item.ref_href == f"/submission-assignments/{assignment.id}"
+    assert item.ref_href == f"/submission-assignments?assignment={assignment.public_id}"
     assert item.content_url == f"/api/submission-uploads/{upload.public_id}/files/{stored_file.public_id}/content"
 
 

@@ -8,9 +8,11 @@ export const TODO_SYNC_FIELD_KEYS = ["task", "reference_link", "due_marker"] as 
 
 type TFunc = (key: string) => string;
 
-/** Bezeichnung eines Rückschreib-Feldes; `t` aus useTranslations("templates.elementEditor"). */
-export function syncFieldLabel(field: string, t: TFunc): string {
-  return (EVENT_SYNC_FIELD_KEYS as readonly string[]).includes(field) || (TODO_SYNC_FIELD_KEYS as readonly string[]).includes(field)
+/** Bezeichnung eines Rückschreib-Feldes; `t` aus useTranslations("templates.elementEditor").
+ * `alias` = useEventFieldConfig().label (eigene Namen der Spezialfelder aus den Mandant-Einstellungen). */
+export function syncFieldLabel(field: string, t: TFunc, alias?: (field: string, fallback: string) => string): string {
+  const label = (EVENT_SYNC_FIELD_KEYS as readonly string[]).includes(field) || (TODO_SYNC_FIELD_KEYS as readonly string[]).includes(field)
     ? t(`syncField.${field}`)
     : field;
+  return alias ? alias(field, label) : label;
 }

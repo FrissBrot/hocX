@@ -235,5 +235,25 @@
     "apply": "Apply",
     "applyConfirm": "{count, plural, one {Apply one suggestion?} other {Apply # suggestions?}} Submissions and gallery images are deleted permanently, members are deactivated.",
     "decided": "{done} done, {failed} failed."
+  },
+  "eventFields": {
+    "eyebrow": "Special event fields",
+    "description": "Give the special fields your own names or hide them. This applies everywhere events are shown and edited.",
+    "columnField": "Field",
+    "columnAlias": "Custom name",
+    "columnHidden": "Visibility",
+    "hide": "Hide",
+    "aliasFor": "Custom name for {field}",
+    "help": "Empty = default name. Hidden fields keep their values and can be shown again at any time.",
+    "saved": "Special fields saved",
+    "saveFailed": "Special fields could not be saved",
+    "defaults": {
+      "spezial1_ids": "Special 1",
+      "spezial2_ids": "Special 2",
+      "spezial3_ids": "Special 3",
+      "spezial_text1": "Special text 1",
+      "spezial_text2": "Special text 2",
+      "spezial_text3": "Special text 3"
+    }
   }
 }

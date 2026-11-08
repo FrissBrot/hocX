@@ -3,6 +3,7 @@ import { MobileTenantGeneral } from "@/components/mobile/areas/mobile-tenant";
 import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { getTranslations } from "next-intl/server";
 
+import { EventFieldSettings } from "@/components/settings/event-field-settings";
 import { TenantGeneralSettings } from "@/components/settings/tenant-general-settings";
 import { AppShell } from "@/components/ui/app-shell";
 import { RouteTabs } from "@/components/ui/route-tabs";
@@ -14,11 +15,13 @@ export default async function TenantSettingsPage({ searchParams }: { searchParam
   const session = await requireSession();
   const tenant = await resolveManageableTenant(session, tenantId);
   const [t, tTenant] = await Promise.all([getTranslations("nav"), getTranslations("tenantSettings")]);
+  // Spezialfelder gelten für den angemeldeten Mandanten (API ohne Mandanten-Parameter)
+  const isCurrentTenant = tenant.id === session.current_tenant?.id;
 
   return (
     <AppShell initialSession={session}>
       <ResponsiveView
-        mobile={<MobileTenantSettings title={tTenant("pageTitle")}><MobileTenantGeneral initialTenant={tenant} /></MobileTenantSettings>}
+        mobile={<MobileTenantSettings title={tTenant("pageTitle")}><MobileTenantGeneral initialTenant={tenant} />{isCurrentTenant && <EventFieldSettings />}</MobileTenantSettings>}
         desktop={
           <>
           <section className="panel">
@@ -31,6 +34,7 @@ export default async function TenantSettingsPage({ searchParams }: { searchParam
               </div>
               <RouteTabs tabs={tenantSettingsTabs(t)} activeHref="/tenant-settings" variant="pill" />
               <TenantGeneralSettings initialTenant={tenant} />
+              {isCurrentTenant && <EventFieldSettings />}
             </div>
           </section>
           </>

@@ -22,6 +22,7 @@ import {
   DocumentRequest,
   DocumentTemplateInfo,
   DocumentTypeInfo,
+  exportColumns,
   exportDocumentFile,
   ExportOptions,
   previewDocument,
@@ -65,6 +66,9 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
   const [previewState, setPreviewState] = useState<"idle" | "loading" | "error">("idle");
   const [previewError, setPreviewError] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  // Spalten für CSV, Excel und Text: alle angeboten, abgewählte gelten nur für diesen Export
+  const [columns, setColumns] = useState<string[]>([]);
+  const [excludedColumns, setExcludedColumns] = useState<string[]>([]);
   const cache = useRef(new Map<string, string[]>());
 
   useEffect(() => {
@@ -152,6 +156,35 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, templateId, requestKey, request]);
 
+  // Spaltenliste zur aktuellen Vorlage/Sprache/Filter; Optionen (Titel, Wasserzeichen) ändern sie nicht
+  const columnsKey = JSON.stringify({ ...request, options: null });
+  const hasTableFormats = (typeInfo?.formats ?? []).some((format) => format !== "ics");
+  useEffect(() => {
+    if (!open || !templateId || !hasTableFormats) {
+      setColumns([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      exportColumns(JSON.parse(columnsKey) as DocumentRequest, controller.signal)
+        .then((loaded) => {
+          setColumns(loaded);
+          setExcludedColumns((current) => current.filter((label) => loaded.includes(label)));
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setColumns([]);
+        });
+    }, PREVIEW_DEBOUNCE_MS);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [open, templateId, columnsKey, hasTableFormats]);
+
+  function toggleColumn(label: string, checked: boolean) {
+    setExcludedColumns((current) => (checked ? current.filter((item) => item !== label) : [...current, label]));
+  }
+
   async function createPdf() {
     setBusy("pdf");
     // Noch im Klick öffnen, damit der Browser das neue Fenster nicht blockiert
@@ -177,13 +210,29 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
   async function downloadFormat(format: "csv" | "xlsx" | "ics" | "markdown") {
     setBusy(format);
     try {
-      const { blob, filename } = await exportDocumentFile(request, format);
+      if (format === "markdown") {
+        await copyMarkdown();
+        return;
+      }
+      const { blob, filename } = await exportDocumentFile(request, format, format === "ics" ? [] : excludedColumns);
       saveBlob(blob, filename);
     } catch (error) {
       toast(apiErrorMessage(error, t("export.failed")), "error");
     } finally {
       setBusy(null);
     }
+  }
+
+  // Text (Markdown) landet für WhatsApp direkt in der Zwischenablage. ClipboardItem mit Promise
+  // hält die Nutzergeste über den Serveraufruf hinweg (Safari lehnt writeText danach sonst ab).
+  async function copyMarkdown() {
+    const text = exportDocumentFile(request, "markdown", excludedColumns).then(({ blob }) => blob.text());
+    if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+      await navigator.clipboard.write([new ClipboardItem({ "text/plain": text.then((value) => new Blob([value], { type: "text/plain" })) })]);
+    } else {
+      await navigator.clipboard.writeText(await text);
+    }
+    toast(t("export.markdownCopied"), "success");
   }
 
   const selectableTypes = types.filter((item) => (context.protocolId ? PROTOCOL_TYPES.includes(item.key) || item.key === context.documentType : item.key === context.documentType));
@@ -287,9 +336,32 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
             </label>
           </section>
 
+          {columns.length > 0 && (
+            <section className="studio-export-section" aria-labelledby="studio-export-columns">
+              <h3 id="studio-export-columns" className="studio-section-title">
+                {t("export.columns")}
+              </h3>
+              <div className="studio-param-checks">
+                {columns.map((label) => (
+                  <label key={label} className="studio-inline-check">
+                    <input type="checkbox" checked={!excludedColumns.includes(label)} onChange={(event) => toggleColumn(label, event.target.checked)} />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="field-help">{t("export.columnsHelp")}</p>
+            </section>
+          )}
+
           <div className="modal-actions studio-export-actions">
             {(typeInfo?.formats ?? []).map((format) => (
-              <button key={format} type="button" className="button-secondary" disabled={!!busy || !templateId} onClick={() => void downloadFormat(format)}>
+              <button
+                key={format}
+                type="button"
+                className="button-secondary"
+                disabled={!!busy || !templateId || (format !== "ics" && columns.length > 0 && excludedColumns.length >= columns.length)}
+                onClick={() => void downloadFormat(format)}
+              >
                 {busy === format ? t("export.working") : t(`export.format.${format}`)}
               </button>
             ))}

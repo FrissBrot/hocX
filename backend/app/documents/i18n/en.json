@@ -34,7 +34,8 @@
     "verificationNameChanged": "The name has changed since the request.",
     "verificationNoPending": "There is no open request.",
     "verificationNotVerified": "The organisation is not verified.",
-    "verificationReasonRequired": "Please give a reason."
+    "verificationReasonRequired": "Please give a reason.",
+    "noColumns": "Select at least one column."
   },
   "attendanceShort": {
     "absent": "A",

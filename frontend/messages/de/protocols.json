@@ -309,6 +309,7 @@
     "blockTypeUnavailable": "Dieser Zell-Blocktyp ist noch nicht verfügbar.",
     "cancelled": "Abgesagt",
     "colDate": "Dat.",
+    "colParticipantCount": "Anzahl Teilnehmende",
     "colDescription": "Beschreibung",
     "colTag": "Tag",
     "colTitle": "Titel",

@@ -318,7 +318,8 @@
     "componentInUse": "The component is still used in templates.",
     "brandArchived": "An archived brand profile cannot be the default.",
     "defaultBrand": "The default brand profile cannot be archived or deleted.",
-    "brandInUse": "The brand profile is in use. Please archive it instead of deleting it."
+    "brandInUse": "The brand profile is in use. Please archive it instead of deleting it.",
+    "noColumns": "Select at least one column."
   },
   "metadata": {
     "title": "Document details",

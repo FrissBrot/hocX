@@ -93,5 +93,39 @@
   "filesNoMatches": "Keine passenden Dateien",
   "filesEmpty": "Keine Dateien verknüpft",
   "removeFile": "{name} entfernen",
-  "detailsLoadFailed": "Notizen und Dateien konnten nicht geladen werden"
+  "detailsLoadFailed": "Notizen und Dateien konnten nicht geladen werden",
+  "smartDate": {
+    "today": "Heute",
+    "tomorrow": "Morgen",
+    "dayAfterTomorrow": "Übermorgen",
+    "weekdayThisWeek": "{weekday} diese Woche",
+    "weekdayNextWeek": "{weekday} nächste Woche",
+    "weekdayNext": "{weekday}",
+    "endOfWeek": "Ende Woche",
+    "startOfNextWeek": "Anfang nächste Woche",
+    "endOfNextWeek": "Ende nächste Woche",
+    "inTwoWeeks": "In 2 Wochen",
+    "endOfMonth": "Ende Monat",
+    "startOfNextMonth": "Anfang nächster Monat",
+    "endOfNextMonth": "Ende nächster Monat",
+    "endOfYear": "Ende Jahr",
+    "inDays": "{count, plural, one {In # Tag} other {In # Tagen}}",
+    "inWeeks": "{count, plural, one {In # Woche} other {In # Wochen}}",
+    "inMonths": "{count, plural, one {In # Monat} other {In # Monaten}}",
+    "exactDate": "{date}"
+  },
+  "smartDateKeywords": {
+    "today": "jetzt",
+    "weekdayNextWeek": "kommende",
+    "weekdayNext": "nächster kommender",
+    "endOfWeek": "Wochenende Sonntag",
+    "startOfNextWeek": "Montag Wochenbeginn",
+    "endOfNextWeek": "Wochenende",
+    "inTwoWeeks": "zwei vierzehn Tagen",
+    "endOfMonth": "Monatsende",
+    "startOfNextMonth": "Monatsanfang Monatsbeginn",
+    "endOfNextMonth": "Monatsende",
+    "endOfYear": "Jahresende Silvester"
+  },
+  "dueSearchPlaceholder": "Datum oder Termin suchen …"
 }

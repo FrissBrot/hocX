@@ -373,6 +373,7 @@ class TenantCloneService:
             name=new_name,
             profile_image_path=None,
             tag_config_json=copy.deepcopy(source.tag_config_json or {}),
+            event_field_config_json=copy.deepcopy(source.event_field_config_json or {}),
             public_slug=None,
         )
         db.add(new_tenant)

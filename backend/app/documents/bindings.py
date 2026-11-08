@@ -44,6 +44,9 @@ class BindingDef:
     item_fields: tuple[ItemField, ...] = ()
     # Beispielwert: literal oder ("key", <documentPdf-Schlüssel>) bzw. Liste von Element-dicts
     sample: Any = None
+    # Gruppe in der Auswahl des Designers, falls abweichend von ``group`` (die bestimmt, woher
+    # der Wert kommt): Pendenzen eines Protokolls stehen bei den übrigen Pendenzen.
+    display_group: str | None = None
 
     def item_field(self, key: str) -> ItemField | None:
         return next((item for item in self.item_fields if item.key == key), None)
@@ -136,11 +139,11 @@ _DEFINITIONS: list[BindingDef] = [
         sample=[{"name": ("key", f"sample.person{index}"), "status": ("key", "attendanceStatus.present" if index < 4 else "attendanceStatus.excused"), "status_code": "present" if index < 4 else "excused"} for index in range(1, 6)],
     ),
     BindingDef(
-        "protocol.open_todos", "list", "protocol", needs_protocol=True, item_fields=_TODO_FIELDS,
+        "protocol.open_todos", "list", "protocol", needs_protocol=True, item_fields=_TODO_FIELDS, display_group="todos",
         sample=[{"task": ("key", f"sample.task{index}"), "assignee": ("key", f"sample.person{index}"), "due": date(2026, 4, index * 3), "status": ("key", "todoStatus.open"), "protocol": "2026-03"} for index in range(1, 4)],
     ),
     # In diesem Protokoll erfasste Pendenzen, unabhängig vom heutigen Status
-    BindingDef("protocol.new_todos_count", "number", "protocol", needs_protocol=True, sample=4),
+    BindingDef("protocol.new_todos_count", "number", "protocol", needs_protocol=True, sample=4, display_group="todos"),
     # Aufgaben des Mandanten (sichtbare: eingeschränkte Leser nur ihre Protokolle)
     BindingDef(
         "todos.open", "list", "todos", item_fields=_TODO_FIELDS,
@@ -213,7 +216,7 @@ def catalog_payload() -> list[dict[str, Any]]:
         {
             "path": definition.path,
             "type": definition.type,
-            "group": definition.group,
+            "group": definition.display_group or definition.group,
             "access": definition.access,
             "needs_protocol": definition.needs_protocol,
             "item_fields": [{"key": item.key, "type": item.type} for item in definition.item_fields],

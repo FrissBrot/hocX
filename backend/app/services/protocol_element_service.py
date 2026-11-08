@@ -17,6 +17,7 @@ from app.schemas.protocol import (
     ProtocolElementUpdate,
 )
 from app.services.snapshot_reference_ids import (
+    participant_display_names,
     snapshot_reference_ids,
     translate_attendance_entries,
     translate_list_snapshot_refs,
@@ -24,7 +25,7 @@ from app.services.snapshot_reference_ids import (
 )
 from app.services import public_id_service
 from app.services.element_config import parse_session_time
-from app.services.fine_tariff_service import tariff_block_values
+from app.services.fine_tariff_service import attendance_fine_values
 from app.services.responsible_label_service import resolve_display_section_titles_batch
 
 
@@ -70,12 +71,10 @@ class ProtocolElementService:
             # der Vorlage bzw. des Mandanten (fine_tariff_service). attendance-fines.ts liest
             # diese Schlüssel.
             if row.element_type_code == "attendance":
+                values = attendance_fine_values(db, config, protocol_tenant_id, protocol_template_id, fine_values)
                 if config.get("fines_enabled") and protocol_tenant_id is not None:
-                    if fine_values is None:
-                        fine_values = tariff_block_values(db, protocol_tenant_id, protocol_template_id)
-                    config.update(fine_values)
-                else:
-                    config.update({"fine_account_id": None, "fine_amount_late": 0, "fine_amount_absent": 0})
+                    fine_values = values
+                config.update(values)
             if row.element_type_code == "attendance":
                 config = translate_attendance_entries(db, config)
             if protocol_tenant_id is not None:
@@ -110,6 +109,7 @@ class ProtocolElementService:
                     export_visible_snapshot=block.export_visible_snapshot,
                     configuration_snapshot_json=config,
                     public_reference_ids=snapshot_reference_ids(db, config, protocol_tenant_id),
+                    participant_names=participant_display_names(db, config, protocol_tenant_id) if protocol_tenant_id is not None else {},
                     text_content=row.text_content,
                     tracked_dirty=bool(row.tracked_dirty),
                     tracked_baseline_content=row.tracked_baseline_content,
@@ -257,3 +257,7 @@ class ProtocolElementService:
 
         db.add(template)
         db.commit()
+        # Termin mit Tag kann Element einer Abgabe sein
+        from app.services.submission_service import SubmissionService
+
+        SubmissionService().sync_todos_for_tenant(db, tenant_id=protocol.tenant_id)

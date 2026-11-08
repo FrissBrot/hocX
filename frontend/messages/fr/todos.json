@@ -93,5 +93,39 @@
   "filesNoMatches": "Aucun fichier correspondant",
   "filesEmpty": "Aucun fichier lié",
   "removeFile": "Retirer {name}",
-  "detailsLoadFailed": "Impossible de charger les notes et les fichiers"
+  "detailsLoadFailed": "Impossible de charger les notes et les fichiers",
+  "smartDate": {
+    "today": "Aujourd'hui",
+    "tomorrow": "Demain",
+    "dayAfterTomorrow": "Après-demain",
+    "weekdayThisWeek": "{weekday} cette semaine",
+    "weekdayNextWeek": "{weekday} la semaine prochaine",
+    "weekdayNext": "{weekday}",
+    "endOfWeek": "Fin de semaine",
+    "startOfNextWeek": "Début de la semaine prochaine",
+    "endOfNextWeek": "Fin de la semaine prochaine",
+    "inTwoWeeks": "Dans 2 semaines",
+    "endOfMonth": "Fin du mois",
+    "startOfNextMonth": "Début du mois prochain",
+    "endOfNextMonth": "Fin du mois prochain",
+    "endOfYear": "Fin de l'année",
+    "inDays": "{count, plural, one {Dans # jour} other {Dans # jours}}",
+    "inWeeks": "{count, plural, one {Dans # semaine} other {Dans # semaines}}",
+    "inMonths": "{count, plural, one {Dans # mois} other {Dans # mois}}",
+    "exactDate": "{date}"
+  },
+  "smartDateKeywords": {
+    "today": "maintenant",
+    "weekdayNextWeek": "prochain",
+    "weekdayNext": "prochain",
+    "endOfWeek": "week-end dimanche",
+    "startOfNextWeek": "lundi",
+    "endOfNextWeek": "week-end",
+    "inTwoWeeks": "deux quinze jours",
+    "endOfMonth": "fin de mois",
+    "startOfNextMonth": "commencement",
+    "endOfNextMonth": "fin de mois",
+    "endOfYear": "Saint-Sylvestre"
+  },
+  "dueSearchPlaceholder": "Rechercher une date ou un rendez-vous …"
 }

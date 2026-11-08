@@ -4302,4 +4302,8 @@ class WordImportService:
             for participant_id in created_participant_ids:
                 participant_service.delete_participant(db, participant_id, tenant_id=tenant_id)
             raise
+        # Angelegte/geänderte Termine: Abgabe-Pendenzen nachführen
+        from app.services.submission_service import SubmissionService
+
+        SubmissionService().sync_todos_for_tenant(db, tenant_id=tenant_id)
         return WordImportCommitResult(id=protocol_id, warnings=commit_warnings)

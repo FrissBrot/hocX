@@ -598,7 +598,8 @@ class FileService:
             )
             tags_url = f"/api/submission-uploads/{row.upload_public_id}/files/{row.public_id}/tags"
             metadata_url = f"/api/submission-uploads/{row.upload_public_id}/files/{row.public_id}/metadata"
-            ref_href = f"/submission-assignments/{row.ref_id}" if row.ref_id is not None else None
+            # Öffentliche ID; die Seite öffnet die Abgabe über ?assignment= (es gibt keine Detailroute)
+            ref_href = f"/submission-assignments?assignment={row.ref_public_id}" if row.ref_public_id is not None else None
         elif row.source == "protocol_export":
             content_url = self.build_content_url(row.public_id)
             thumbnail_url = None

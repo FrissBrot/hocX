@@ -309,6 +309,7 @@
     "blockTypeUnavailable": "Questo tipo di blocco cella non è ancora disponibile.",
     "cancelled": "Annullato",
     "colDate": "Data",
+    "colParticipantCount": "Numero di partecipanti",
     "colDescription": "Descrizione",
     "colTag": "Tag",
     "colTitle": "Titolo",

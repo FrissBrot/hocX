@@ -179,11 +179,15 @@ class SubmissionRepository:
     def list_pending_files_for_assignment(
         self, db: Session, *, assignment_id: int
     ) -> list[tuple[StoredFile, str]]:
-        """Return (stored_file, element_ref) for all pending files of an assignment."""
+        """Return (stored_file, element_ref) for all pending files of an assignment. Die Referenz
+        trägt wie überall die öffentliche ID (``event-<public_id>``), sonst fänden die Einträge des
+        Upload-Logs ihr Element nicht."""
         statement = (
-            select(StoredFile, SubmissionUpload.event_id, SubmissionUpload.list_entry_id)
+            select(StoredFile, Event.public_id.label("event_public_id"), ListEntry.public_id.label("entry_public_id"))
             .join(SubmissionUploadFile, SubmissionUploadFile.stored_file_id == StoredFile.id)
             .join(SubmissionUpload, SubmissionUpload.id == SubmissionUploadFile.upload_id)
+            .outerjoin(Event, Event.id == SubmissionUpload.event_id)
+            .outerjoin(ListEntry, ListEntry.id == SubmissionUpload.list_entry_id)
             .where(
                 SubmissionUpload.assignment_id == assignment_id,
                 StoredFile.scan_status == "pending",
@@ -191,12 +195,10 @@ class SubmissionRepository:
         )
         result = []
         for row in db.execute(statement):
-            event_id = row.event_id
-            list_entry_id = row.list_entry_id
-            if event_id is not None:
-                element_ref = f"event-{event_id}"
-            elif list_entry_id is not None:
-                element_ref = f"entry-{list_entry_id}"
+            if row.event_public_id is not None:
+                element_ref = f"event-{row.event_public_id}"
+            elif row.entry_public_id is not None:
+                element_ref = f"entry-{row.entry_public_id}"
             else:
                 element_ref = MANUAL_ELEMENT_REF
             result.append((row.StoredFile, element_ref))

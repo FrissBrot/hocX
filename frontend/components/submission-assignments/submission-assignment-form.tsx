@@ -2,6 +2,7 @@
 
 import { Dispatch, FormEvent, SetStateAction } from "react";
 import { useTranslations } from "next-intl";
+import { useEventFieldConfig } from "@/lib/hooks/use-event-field-config";
 
 import { DateInput } from "@/components/ui/date-input";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
@@ -260,6 +261,7 @@ export function SubmissionAssignmentFormModal({
   onManageLinks,
 }: Props) {
   const t = useTranslations("submissionAssignments");
+  const eventFields = useEventFieldConfig();
   const problem = formProblem(form, t);
   const selectedList = availableLists.find((list) => list.id === form.list_definition_id) ?? null;
   const selectedLinks = links.filter((link) => form.link_ids.includes(link.id));
@@ -269,12 +271,15 @@ export function SubmissionAssignmentFormModal({
   const responsibleOptions =
     form.source_type === "events"
       ? singleParticipantEventFields(t)
+          // Alias aus den Mandant-Einstellungen; ausgeblendete Felder nur, wenn schon gewählt
+          .filter((option) => !eventFields.hidden(option.value) || option.value === form.responsible_participant_source)
+          .map((option) => ({ ...option, label: eventFields.label(option.value, option.label) }))
       : form.source_type === "list" && selectedList
         ? ([
-            selectedList.column_one_value_type === "participant"
+            selectedList.column_one_value_type === "participant" || selectedList.column_one_value_type === "participants"
               ? { value: "column_one", label: selectedList.column_one_title || t("column1") }
               : null,
-            selectedList.column_two_value_type === "participant"
+            selectedList.column_two_value_type === "participant" || selectedList.column_two_value_type === "participants"
               ? { value: "column_two", label: selectedList.column_two_title || t("column2") }
               : null,
           ].filter((option): option is { value: string; label: string } => option !== null))

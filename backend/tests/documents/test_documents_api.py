@@ -147,6 +147,32 @@ def test_extra_formats(db, setup):
     assert excinfo.value.status_code == 422
 
 
+def test_export_columns_can_be_deselected(db, setup):
+    request = DocumentRequest(document_type="todos")
+    columns = routes.export_document_columns(request, db=db, user=setup["reader"]).columns
+    assert "Aufgabe" in columns and "Fällig" in columns
+
+    csv = routes.export_document_format(
+        routes.FormatExportRequest(document_type="todos", format="csv", exclude_columns=["Fällig"]), db=db, user=setup["reader"]
+    ).body.decode("utf-8")
+    assert "Getränke besorgen" in csv and "Fällig" not in csv
+
+    markdown = routes.export_document_format(
+        routes.FormatExportRequest(document_type="todos", format="markdown", exclude_columns=["Fällig", "Verantwortlich"]),
+        db=db, user=setup["reader"],
+    ).body.decode("utf-8")
+    # WhatsApp: Aufgabe fett, keine Markdown-Überschriften/Tabellen, abgewählte Felder fehlen
+    assert "*Getränke besorgen*" in markdown
+    assert "#" not in markdown and "|" not in markdown
+    assert "Fällig" not in markdown and "Verantwortlich" not in markdown
+
+    with pytest.raises(HTTPException) as excinfo:
+        routes.export_document_format(
+            routes.FormatExportRequest(document_type="todos", format="csv", exclude_columns=columns), db=db, user=setup["reader"]
+        )
+    assert excinfo.value.status_code == 422
+
+
 def test_page_params_reach_matching_components(db, setup):
     # Filter der Todo-Seite: nur erledigte - keine Zeile, also keine Tabelle für CSV
     with pytest.raises(HTTPException) as excinfo:

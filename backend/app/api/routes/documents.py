@@ -12,10 +12,10 @@ import asyncio
 import base64
 import uuid
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
@@ -53,6 +53,7 @@ _VALUE_ERRORS = {
     "protocol_required": "apiError.protocolRequired",
     "unknown_document_type": "apiError.unknownType",
     "noTable": "apiError.noTable",
+    "noColumns": "apiError.noColumns",
     "previewOnly": "apiError.previewOnly",
 }
 
@@ -328,6 +329,12 @@ async def preview_canvas(
 
 class FormatExportRequest(DocumentRequest):
     format: Literal["csv", "xlsx", "ics", "markdown"] = "csv"
+    # Im Export-Dialog abgewählte Spalten (Spaltenköpfe in der Dokumentsprache)
+    exclude_columns: list[Annotated[str, StringConstraints(max_length=200)]] = Field(default_factory=list, max_length=100)
+
+
+class ExportColumnsRead(BaseModel):
+    columns: list[str]
 
 
 _FORMAT_TYPES = {
@@ -343,17 +350,19 @@ def export_document_format(body: FormatExportRequest, db: Session = Depends(get_
     """CSV/XLSX aus den Tabellen, ICS aus den Termin-Komponenten, Markdown aus den
     Aufgaben-Komponenten der aufgelösten Vorlage - immer aus den fachlichen Daten."""
     permissions.require_export(user)
-    request = DocumentRequest.model_validate(body.model_dump(exclude={"format"}))
+    request = DocumentRequest.model_validate(body.model_dump(exclude={"format", "exclude_columns"}))
     savepoint = db.begin_nested()
     try:
         prepared = document_service.prepare(db, user, user.current_tenant_id, request)
         if body.format in ("csv", "xlsx"):
-            tables = extra_formats.all_tables(prepared.compiled.blocks, prepared.compiled.data, prepared.compiled.data["strings"])
+            tables = extra_formats.all_tables(
+                prepared.compiled.blocks, prepared.compiled.data, prepared.compiled.data["strings"], exclude_columns=body.exclude_columns
+            )
             content = extra_formats.to_csv(tables) if body.format == "csv" else extra_formats.to_xlsx(tables)
         elif body.format == "ics":
             content = extra_formats.ics_content(prepared)
         else:
-            content = extra_formats.markdown_content(prepared)
+            content = extra_formats.markdown_content(prepared, exclude_columns=body.exclude_columns)
     except (DocumentPermissionError, DocumentNotFoundError, ValueError) as exc:
         raise http_error(user, exc) from exc
     finally:
@@ -363,6 +372,27 @@ def export_document_format(body: FormatExportRequest, db: Session = Depends(get_
     media_type, extension = _FORMAT_TYPES[body.format]
     filename = f"{document_service._filename(prepared.meta.title, None)[:-4]}.{extension}"
     return Response(content=content, media_type=media_type, headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+@router.post("/documents/export/columns", response_model=ExportColumnsRead)
+def export_document_columns(body: DocumentRequest, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Spalten, die der Export-Dialog zum An- und Abwählen anbietet: Spaltenköpfe aller Tabellen
+    (CSV/Excel) plus die Felder des Markdown-Exports, in der Dokumentsprache."""
+    permissions.require_export(user)
+    savepoint = db.begin_nested()
+    try:
+        prepared = document_service.prepare(db, user, user.current_tenant_id, body)
+        strings = prepared.compiled.data["strings"]
+        columns = extra_formats.column_labels(prepared.compiled.blocks, prepared.compiled.data, strings)
+        doc_type = DOCUMENT_TYPES.get(prepared.document_type)
+        if doc_type is not None and "markdown" in doc_type.formats:
+            columns += [label for label in extra_formats.markdown_columns(strings) if label not in columns]
+    except (DocumentPermissionError, DocumentNotFoundError, ValueError) as exc:
+        raise http_error(user, exc) from exc
+    finally:
+        if savepoint.is_active:
+            savepoint.rollback()
+    return ExportColumnsRead(columns=columns)
 
 
 @router.get("/documents/exports", response_model=list[DocumentExportRead])

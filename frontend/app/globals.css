@@ -22966,6 +22966,8 @@ a.mobile-list-row { color: var(--text); }
 .mobile-submission-pill-submitted { background: var(--success-bg); color: var(--success-fg); }
 .mobile-submission-pill-quarantine { background: var(--warning-bg); color: var(--warning-fg); }
 .mobile-submission-pill-missed { background: var(--danger-bg); color: var(--danger-fg); }
+.mobile-submission-pill-open { background: var(--info-bg); color: var(--info-fg); }
+.mobile-submission-pill-closed-filled { background: var(--success-bg); color: var(--success-fg); }
 
 .mobile-clamav {
   margin: 0;
@@ -29231,4 +29233,30 @@ a.mobile-list-row { color: var(--text); }
 }
 .session-design-pages .studio-preview-page {
   max-width: 640px;
+}
+
+/* Mandant-Einstellungen: Spezialfelder der Termine (Feld | Alias | Ausblenden) */
+.event-field-settings {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(160px, 2fr) auto;
+  gap: var(--space-2) var(--space-3);
+  align-items: center;
+}
+
+.event-field-settings-row {
+  display: contents;
+}
+
+@media (max-width: 640px) {
+  .event-field-settings {
+    grid-template-columns: 1fr auto;
+  }
+
+  .event-field-settings > .field-label:nth-child(2) {
+    display: none;
+  }
+
+  .event-field-settings-row > input {
+    grid-column: 1 / -1;
+  }
 }

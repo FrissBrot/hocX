@@ -318,7 +318,8 @@
     "componentInUse": "Il componente è ancora usato in alcuni modelli.",
     "brandArchived": "Un profilo brand archiviato non può essere predefinito.",
     "defaultBrand": "Il profilo brand predefinito non può essere archiviato o eliminato.",
-    "brandInUse": "Il profilo brand è in uso. Archivialo invece di eliminarlo."
+    "brandInUse": "Il profilo brand è in uso. Archivialo invece di eliminarlo.",
+    "noColumns": "Seleziona almeno una colonna."
   },
   "metadata": {
     "title": "Dati del documento",

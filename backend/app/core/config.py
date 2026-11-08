@@ -152,6 +152,9 @@ class Settings(BaseSettings):
     # task_package_rollover_loop). Täglich reicht - beim Zuweisen, bei Paket-, Listen- und
     # Terminänderungen wird zusätzlich sofort nachgeführt.
     task_package_rollover_interval_minutes: int = 1440
+    # Abgabe-Pendenzen periodisch abgleichen (submission_todo_sync_loop). Termin-, Listen- und
+    # Abgabeänderungen gleichen sofort ab; der Job fängt Zykluswechsel und verknüpfte Dateien.
+    submission_todo_sync_interval_minutes: int = 15
     # Photo-culling Phase 3 auto-queue (main.py's photo_analysis_auto_queue_loop): how
     # often to check for unanalyzed images, and the UTC hour window it's allowed to queue
     # them in. Default 0/24 = rund um die Uhr - die Analyse läuft automatisch, es gibt keinen

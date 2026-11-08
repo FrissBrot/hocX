@@ -3,7 +3,7 @@ import uuid
 
 from sqlalchemy import select
 
-from app.models import Event, FinanceAccount, ListDefinition, Participant
+from app.models import Event, FinanceAccount, ListDefinition, ListEntry, Participant
 
 
 def translate_attendance_entries(db, config: dict) -> dict:
@@ -81,6 +81,9 @@ def normalize_attendance_entries(db, config: dict, tenant_id: int) -> dict:
 
 _PARTICIPANT_KEYS = ("participant_id", "template_participant_id")
 _PARTICIPANT_LIST_KEYS = ("participant_ids", "template_participant_ids")
+# Termine in Formularzeilen/Matrixzellen aus der Vorlage (ProtocolService._transform_field_row,
+# _matrix_build_row_values): ebenfalls interne Zahlen, der Editor vergleicht mit EventSummary.id
+_EVENT_KEYS = ("event_id", "template_event_id")
 
 
 def _is_internal_id(value) -> bool:
@@ -243,12 +246,14 @@ def translate_participant_refs(db, config: dict, tenant_id: int) -> dict:
             holders.extend(cell for cell in column["row_values"].values() if isinstance(cell, dict))
 
     internal_ids: set[int] = set()
+    event_ids: set[int] = set()
     for holder in holders:
         internal_ids.update(holder[key] for key in _PARTICIPANT_KEYS if _is_internal_id(holder.get(key)))
         for key in _PARTICIPANT_LIST_KEYS:
             if isinstance(holder.get(key), list):
                 internal_ids.update(value for value in holder[key] if _is_internal_id(value))
-    if not internal_ids:
+        event_ids.update(holder[key] for key in _EVENT_KEYS if _is_internal_id(holder.get(key)))
+    if not internal_ids and not event_ids:
         return config
 
     id_map = {
@@ -256,13 +261,22 @@ def translate_participant_refs(db, config: dict, tenant_id: int) -> dict:
         for internal_id, public_id in db.execute(
             select(Participant.id, Participant.public_id).where(Participant.id.in_(internal_ids), Participant.tenant_id == tenant_id)
         ).all()
-    }
+    } if internal_ids else {}
+    event_map = {
+        internal_id: str(public_id)
+        for internal_id, public_id in db.execute(
+            select(Event.id, Event.public_id).where(Event.id.in_(event_ids), Event.tenant_id == tenant_id)
+        ).all()
+    } if event_ids else {}
 
     def translate(holder: dict) -> dict:
         result = dict(holder)
         for key in _PARTICIPANT_KEYS:
             if _is_internal_id(result.get(key)):
                 result[key] = id_map.get(result[key])
+        for key in _EVENT_KEYS:
+            if _is_internal_id(result.get(key)):
+                result[key] = event_map.get(result[key])
         for key in _PARTICIPANT_LIST_KEYS:
             if isinstance(result.get(key), list):
                 result[key] = [
@@ -291,6 +305,49 @@ def translate_participant_refs(db, config: dict, tenant_id: int) -> dict:
     return result
 
 
+def _participant_ref_holders(config: dict) -> list[dict]:
+    rows = config.get("rows") if isinstance(config.get("rows"), list) else []
+    columns = config.get("columns") if isinstance(config.get("columns"), list) else []
+    holders: list[dict] = [row for row in rows if isinstance(row, dict)]
+    for column in columns:
+        if isinstance(column, dict) and isinstance(column.get("row_values"), dict):
+            holders.extend(cell for cell in column["row_values"].values() if isinstance(cell, dict))
+    return holders
+
+
+def participant_display_names(db, config: dict, tenant_id: int) -> dict[str, str]:
+    """Namen aller Personen, auf die Formularzeilen und Matrixzellen verweisen, je Wert so, wie
+    er in der Antwort steht (public UUID, sonst interne Zahl). Der Editor kennt nur die
+    Teilnehmer der Vorlage und das Verzeichnis; wer dort fehlt (ausgetreten, deaktiviert,
+    nicht ladbar), erschien sonst nur als «N ausgewählt» (Bug 2026-11-08). Nur Personen des
+    Mandanten; Namen stehen ohnehin im Protokoll."""
+    raw: set[str] = set()
+    for holder in _participant_ref_holders(config):
+        raw.update(str(holder[key]) for key in _PARTICIPANT_KEYS if holder.get(key) not in (None, "") and not isinstance(holder.get(key), bool))
+        for key in _PARTICIPANT_LIST_KEYS:
+            if isinstance(holder.get(key), list):
+                raw.update(str(value) for value in holder[key] if value not in (None, "") and not isinstance(value, bool))
+    internal_ids = {int(value) for value in raw if value.isdigit()}
+    public_ids = set()
+    for value in raw:
+        try:
+            public_ids.add(uuid.UUID(value))
+        except ValueError:
+            continue
+    names: dict[str, str] = {}
+    if internal_ids:
+        for internal_id, display_name in db.execute(
+            select(Participant.id, Participant.display_name).where(Participant.id.in_(internal_ids), Participant.tenant_id == tenant_id)
+        ).all():
+            names[str(internal_id)] = display_name
+    if public_ids:
+        for public_id, display_name in db.execute(
+            select(Participant.public_id, Participant.display_name).where(Participant.public_id.in_(public_ids), Participant.tenant_id == tenant_id)
+        ).all():
+            names[str(public_id)] = display_name
+    return names
+
+
 def snapshot_reference_ids(db, config: dict, tenant_id: int) -> dict:
     list_ids = [config.get("linked_list_id"), (config.get("auto_source") or {}).get("list_id")]
     for row in config.get("rows") or []:
@@ -298,6 +355,15 @@ def snapshot_reference_ids(db, config: dict, tenant_id: int) -> dict:
             list_ids.extend([row.get("linked_list_id"), (row.get("row_config") or {}).get("linked_list_id")])
     account_ids = [config.get("finance_account_id"), config.get("fine_list_account_id")]
     event_ids = [config.get("repeat_source_id")] if config.get("repeat_source_type") == "event" else []
+    # Formularzeilen «Zeile aus Liste» speichern den Eintrag intern; der Editor sucht ihn unter
+    # der öffentlichen ID (ohne Snapshot erschien er sonst als gelöscht)
+    entry_ids = {
+        value
+        for row in config.get("rows") or []
+        if isinstance(row, dict)
+        for value in (row.get("linked_list_entry_id"), (row.get("row_config") or {}).get("linked_list_entry_id"))
+        if isinstance(value, int) and not isinstance(value, bool)
+    }
     result = {}
     for name, model, values in (
         ("lists", ListDefinition, list_ids),
@@ -311,4 +377,12 @@ def snapshot_reference_ids(db, config: dict, tenant_id: int) -> dict:
                 select(model.id, model.public_id).where(model.id.in_(ids), model.tenant_id == tenant_id)
             ).all()
         } if ids else {}
+    result["list_entries"] = {
+        str(internal_id): str(public_id)
+        for internal_id, public_id in db.execute(
+            select(ListEntry.id, ListEntry.public_id)
+            .join(ListDefinition, ListDefinition.id == ListEntry.list_definition_id)
+            .where(ListEntry.id.in_(entry_ids), ListDefinition.tenant_id == tenant_id)
+        ).all()
+    } if entry_ids else {}
     return result

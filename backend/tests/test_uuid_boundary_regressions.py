@@ -22,7 +22,8 @@ def test_snapshot_public_references_preserve_internal_config_and_scope(db):
     result = snapshot_reference_ids(db, config, tenant.id)
     assert result == {"lists": {str(item.id): str(item.public_id) for item in lists},
                       "finance_accounts": {str(account.id): str(account.public_id)},
-                      "events": {str(event.id): str(event.public_id)}}
+                      "events": {str(event.id): str(event.public_id)},
+                      "list_entries": {}}
     assert config == original
 
     from tests.factories import make_template, make_protocol, make_protocol_element, make_protocol_element_block

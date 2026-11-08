@@ -2058,6 +2058,56 @@ class ProtocolService:
         db.add(protocol_element)
         db.flush()
 
+        self._materialize_element_blocks(
+            db,
+            protocol=protocol,
+            template=template,
+            template_element=template_element,
+            definition=definition,
+            protocol_element=protocol_element,
+            generated_blocks=generated_blocks,
+            type_ids=type_ids,
+            previous_payloads=previous_payloads,
+            last_completed_element=last_completed_element,
+            last_completed_list_snapshots=last_completed_list_snapshots,
+        )
+        return protocol_element
+
+    def _materialize_element_blocks(
+        self,
+        db: Session,
+        *,
+        protocol: Protocol,
+        template: Template,
+        template_element: TemplateElement,
+        definition: ElementDefinition,
+        protocol_element: ProtocolElement,
+        generated_blocks: list[tuple[dict, dict[str, object] | None, int]],
+        type_ids: dict[str, int],
+        previous_payloads: dict,
+        last_completed_element: ProtocolElement | None,
+        last_completed_list_snapshots: dict,
+    ) -> list[ProtocolElementBlock]:
+        """Legt die Blöcke eines Protokoll-Elements an: (Vorlagen-Block, Wiederholungs-Kontext,
+        Sortierung) je Eintrag in generated_blocks, inkl. Übernahmen aus dem Vorprotokoll,
+        Listen-Snapshots und offenen Todos. Genutzt beim Anlegen des Elements und beim
+        nachträglichen Anhaken eines Termins (add_event_block_to_element), damit beide Wege
+        dieselben Regeln pro Termin anwenden."""
+        tenant_id = protocol.tenant_id
+        text_type_id = type_ids.get("text")
+        todo_type_id = type_ids.get("todo")
+        display_type_id = type_ids.get("display")
+        static_text_type_id = type_ids.get("static_text")
+        form_type_id = type_ids.get("form")
+        event_list_type_id = type_ids.get("event_list")
+        bullet_list_type_id = type_ids.get("bullet_list")
+        attendance_type_id = type_ids.get("attendance")
+        session_date_type_id = type_ids.get("session_date")
+        matrix_type_id = type_ids.get("matrix")
+        image_type_id = type_ids.get("image")
+        entry_exit_type_id = type_ids.get("entry_exit")
+        legacy_repeat_config = template_element.configuration_json or {}
+        created_blocks: list[ProtocolElementBlock] = []
         for block, repeat_context, resolved_sort_index in generated_blocks:
             block_config = dict(block.get("configuration_json") or {})
             behavior = resolve_block_behavior(template_element.configuration_json, block)
@@ -2119,6 +2169,7 @@ class ProtocolService:
             )
             db.add(protocol_block)
             db.flush()
+            created_blocks.append(protocol_block)
 
             if block["element_type_id"] == text_type_id:
                 db.add(
@@ -2398,7 +2449,7 @@ class ProtocolService:
                         )
                     )
                     next_sort_index += 10
-        return protocol_element
+        return created_blocks
 
     def _maybe_auto_create_next_protocol(self, db: Session, protocol: Protocol) -> None:
         template = db.get(Template, protocol.template_id)
@@ -2807,124 +2858,131 @@ class ProtocolService:
         if definition is None:
             raise ValueError("Element definition not found")
 
-        # Find the block template with repeat_source: "event"
-        legacy_repeat_config = template_element.configuration_json or {}
+        blocks = self._create_event_blocks(
+            db, protocol=protocol, protocol_element=protocol_element, template_element=template_element,
+            definition=definition, event=event, block_sort_index=block_sort_index,
+        )
+        return blocks[0]
+
+    def add_event_blocks_to_element(
+        self, db: Session, *, protocol_element_id: int, event_id: int, tenant_id: int
+    ) -> list[ProtocolElementBlock]:
+        """Termin im Protokoll nachträglich anhaken: legt alle Blöcke an, die das Element pro
+        Termin vorsieht - nach denselben Regeln wie beim Anlegen des Protokolls."""
+        protocol_element = db.get(ProtocolElement, protocol_element_id)
+        protocol = db.get(Protocol, protocol_element.protocol_id) if protocol_element is not None else None
+        if protocol_element is None or protocol is None or protocol.tenant_id != tenant_id:
+            raise ValueError("Protocol element not found")
+        event = db.get(Event, event_id)
+        if event is None or event.tenant_id != tenant_id:
+            raise ValueError("Event not found")
+        template_element = db.get(TemplateElement, protocol_element.template_element_id) if protocol_element.template_element_id else None
+        definition = db.get(ElementDefinition, template_element.element_definition_id) if template_element is not None else None
+        if template_element is None or definition is None:
+            raise ValueError("Template element not found")
+        return self._create_event_blocks(
+            db, protocol=protocol, protocol_element=protocol_element, template_element=template_element,
+            definition=definition, event=event, block_sort_index=None,
+        )
+
+    def _create_event_blocks(
+        self,
+        db: Session,
+        *,
+        protocol: Protocol,
+        protocol_element: ProtocolElement,
+        template_element: TemplateElement,
+        definition: ElementDefinition,
+        event: Event,
+        block_sort_index: int | None,
+    ) -> list[ProtocolElementBlock]:
+        """Blöcke eines Termins für ein bestehendes Element. Vorher entstand nur ein Block nach
+        der ersten Vorlage und mit vereinfachter Logik (ohne Formular-/Matrix-Aufbau,
+        Übernahmen, Zyklus-Platzhalter und offene Todos) - neu angehakte Termine bekamen so
+        leere Blöcke. Jetzt derselbe Aufbau wie beim Anlegen (_materialize_element_blocks)."""
         definition_blocks = sorted(
             (definition.configuration_json or {}).get("blocks", []),
             key=lambda entry: (entry.get("sort_index", 0), entry.get("id", 0)),
         )
-
-        event_block_template = None
+        legacy_repeat_config = (template_element.configuration_json or {}) if len(definition_blocks) == 1 else {}
+        event_templates = []
         for block in definition_blocks:
             block_config = dict(block.get("configuration_json") or {})
-            effective = dict(block_config)
-            if not block_config.get("repeat_source") and legacy_repeat_config.get("repeat_source"):
-                effective = {**legacy_repeat_config, **block_config}
+            effective = {**legacy_repeat_config, **block_config} if not block_config.get("repeat_source") else block_config
             if str(effective.get("repeat_source") or "") != "event":
                 continue
-            if block_sort_index is None:
-                # No specific target requested (e.g. the manual "add event block" UI
-                # action) - keep the old behavior of using the first event-repeat block
-                # template found on this element.
-                event_block_template = block
-                break
-            if block.get("sort_index") == block_sort_index:
-                event_block_template = block
-                break
-
-        if event_block_template is None:
+            if block_sort_index is not None and block.get("sort_index") != block_sort_index:
+                continue
+            event_templates.append(block)
+        if not event_templates:
             raise ValueError("No event repeat block template found for this element")
 
-        # Build event context (same as _event_repeat_contexts output)
+        template = db.get(Template, protocol.template_id)
+        if template is None:
+            raise ValueError("Template not found")
         event_end_date = event.event_end_date or event.event_date
         date_range = (
             event.event_date.strftime("%d.%m.%Y")
             if event_end_date == event.event_date
             else f"{event.event_date.strftime('%d.%m.%Y')} - {event_end_date.strftime('%d.%m.%Y')}"
         )
-        repeat_context: dict[str, object] = {
-            "tokens": {
-                "{title}": event.title or "",
-                "{Titel}": event.title or "",
-                "{description}": event.description or "",
-                "{Beschreibung}": event.description or "",
-                "{event_date}": event.event_date.strftime("%d.%m.%Y"),
-                "{event_end_date}": event_end_date.strftime("%d.%m.%Y"),
-                "{event_date_range}": date_range,
-                "{date}": event.event_date.strftime("%d.%m.%Y"),
-                "{tag}": event.tag or "",
-                "{id}": str(event.id),
+        # Wie _event_repeat_contexts, plus Zyklus-Platzhalter wie beim Anlegen
+        repeat_context = self._with_cycle_tokens(
+            {
+                "tokens": {
+                    "{title}": event.title or "",
+                    "{Titel}": event.title or "",
+                    "{description}": event.description or "",
+                    "{Beschreibung}": event.description or "",
+                    "{event_date}": event.event_date.strftime("%d.%m.%Y"),
+                    "{event_end_date}": event_end_date.strftime("%d.%m.%Y"),
+                    "{event_date_range}": date_range,
+                    "{date}": event.event_date.strftime("%d.%m.%Y"),
+                    "{tag}": event.tag or "",
+                    "{id}": str(event.id),
+                },
+                "source_type": "event",
+                "source_id": event.id,
+                "source_label": event.title or "",
             },
-            "source_type": "event",
-            "source_id": event.id,
-            "source_label": event.title or "",
-        }
+            self._sync_cycle_tokens(db, template, protocol.protocol_date),
+        )
 
-        # Determine next sort index
         max_sort = db.scalar(
-            select(func.max(ProtocolElementBlock.sort_index))
-            .where(ProtocolElementBlock.protocol_element_id == protocol_element_id)
+            select(func.max(ProtocolElementBlock.sort_index)).where(ProtocolElementBlock.protocol_element_id == protocol_element.id)
         ) or 0
-        next_sort_index = int(max_sort) + 10
-
-        block_config = dict(event_block_template.get("configuration_json") or {})
-        behavior = resolve_block_behavior(template_element.configuration_json, event_block_template)
-
-        text_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "text"))
-        static_text_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "static_text"))
-        form_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "form"))
-
-        rendered_default_content = self._render_context_text(event_block_template.get("default_content"), repeat_context) or ""
-        form_snapshot = (
-            self._build_event_repeat_form_snapshot(db, raw_config=block_config, repeat_context=repeat_context, tenant_id=tenant_id, protocol=protocol)
-            if event_block_template["element_type_id"] == form_type_id
-            else {}
+        generated_blocks = [
+            (block, repeat_context, int(max_sort) + 10 * (index + 1)) for index, block in enumerate(event_templates)
+        ]
+        previous_element = self._previous_protocol_element(
+            db, tenant_id=protocol.tenant_id, template_element_id=template_element.id,
+            protocol_date=protocol.protocol_date, current_protocol_id=protocol.id,
         )
-
-        protocol_block = ProtocolElementBlock(
-            protocol_element_id=protocol_element_id,
-            template_element_block_id=None,
-            element_definition_id=definition.id,
-            element_type_id=event_block_template["element_type_id"],
-            render_type_id=event_block_template["render_type_id"],
-            title_snapshot=self._render_context_text(event_block_template["title"], repeat_context) or event_block_template["title"],
-            display_title_snapshot=self._render_context_text(event_block_template.get("title"), repeat_context),
-            description_snapshot=self._render_context_text(event_block_template.get("description"), repeat_context),
-            block_title_snapshot=self._render_context_text(event_block_template.get("block_title"), repeat_context),
-            is_editable_snapshot=behavior["is_editable"],
-            allows_multiple_values_snapshot=event_block_template.get("allows_multiple_values", False),
-            sort_index=next_sort_index,
-            render_order=next_sort_index,
-            is_required_snapshot=False,
-            is_visible_snapshot=behavior["is_visible"],
-            export_visible_snapshot=behavior["export_visible"],
-            configuration_snapshot_json={
-                **block_config,
-                "title_as_subtitle": behavior["title_as_subtitle"],
-                "default_content": rendered_default_content,
-                "copy_from_last_protocol": bool(behavior["copy_from_last_protocol"]),
-                "left_column_heading": block_config.get("left_column_heading") or legacy_repeat_config.get("left_column_heading"),
-                "value_column_heading": block_config.get("value_column_heading") or legacy_repeat_config.get("value_column_heading"),
-                "repeat_context": (repeat_context.get("tokens") or {}),
-                "source_sort_index": event_block_template["sort_index"],
-                "repeat_source_type": "event",
-                "repeat_source_id": event.id,
-                "repeat_source_label": event.title or "",
-                **form_snapshot,
-            },
+        last_completed_element = self._previous_protocol_element(
+            db, tenant_id=protocol.tenant_id, template_element_id=template_element.id,
+            protocol_date=protocol.protocol_date, current_protocol_id=protocol.id, status="abgeschlossen",
         )
-        db.add(protocol_block)
-        db.flush()
-
-        if event_block_template["element_type_id"] in (text_type_id, static_text_type_id):
-            db.add(ProtocolText(
-                protocol_element_block_id=protocol_block.id,
-                content=rendered_default_content,
-            ))
-
+        created = self._materialize_element_blocks(
+            db,
+            protocol=protocol,
+            template=template,
+            template_element=template_element,
+            definition=definition,
+            protocol_element=protocol_element,
+            generated_blocks=generated_blocks,
+            type_ids=self._element_type_ids(db),
+            previous_payloads=self._previous_block_payloads(db, protocol_element_id=previous_element.id) if previous_element is not None else {},
+            last_completed_element=last_completed_element,
+            last_completed_list_snapshots=(
+                self._previous_completed_block_list_snapshots(db, protocol_element_id=last_completed_element.id)
+                if last_completed_element is not None
+                else {}
+            ),
+        )
         db.commit()
-        db.refresh(protocol_block)
-        return protocol_block
+        for block in created:
+            db.refresh(block)
+        return created
 
     # ── Session notes / quick-todos ───────────────────────────────────────────
 

@@ -710,7 +710,24 @@ export function MatrixEmbeddedBlockEditor({
                           {embeddedEventColumns.showTag ? <td>{renderEmbeddedTag(eventRow.tag)}</td> : null}
                           {embeddedEventColumns.showTitle ? <td>{eventRow.title}</td> : null}
                           {embeddedEventColumns.showDescription ? <td>{eventRow.description || "—"}</td> : null}
-                          {embeddedEventColumns.showParticipantCount ? <td className="event-column-count">{eventRow.participant_count ?? 0}</td> : null}
+                          {embeddedEventColumns.showParticipantCount ? (
+                            <td className="event-column-count">
+                              {editable ? (
+                                // TN direkt in der Tabelle; Speichern zusammengefasst in updateEventFromBlock
+                                <input
+                                  type="number"
+                                  className="event-field-count"
+                                  min="0"
+                                  aria-label={t("colParticipantCount")}
+                                  value={eventRow.participant_count ?? 0}
+                                  onChange={(event) => void updateEvent(eventRow.id, { participant_count: Math.max(0, Number(event.target.value || "0")) })}
+                                  onFocus={(e) => e.target.select()}
+                                />
+                              ) : (
+                                eventRow.participant_count ?? 0
+                              )}
+                            </td>
+                          ) : null}
                           {embeddedEventColumns.showCancelled ? (
                             <td>{eventRow.is_cancelled ? <Badge variant="danger">{t("cancelled")}</Badge> : <span className="muted">–</span>}</td>
                           ) : null}

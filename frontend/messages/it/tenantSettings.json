@@ -235,5 +235,25 @@
     "apply": "Applica",
     "applyConfirm": "{count, plural, one {Applicare una proposta?} other {Applicare # proposte?}} Consegne e immagini della galleria vengono eliminate definitivamente, i membri disattivati.",
     "decided": "{done} eseguite, {failed} non riuscite."
+  },
+  "eventFields": {
+    "eyebrow": "Campi speciali degli eventi",
+    "description": "Assegna nomi propri ai campi speciali o nascondili. Vale ovunque gli eventi vengono mostrati e modificati.",
+    "columnField": "Campo",
+    "columnAlias": "Nome personalizzato",
+    "columnHidden": "Visibilità",
+    "hide": "Nascondi",
+    "aliasFor": "Nome personalizzato per {field}",
+    "help": "Vuoto = nome predefinito. I campi nascosti mantengono i loro valori e possono essere mostrati di nuovo in qualsiasi momento.",
+    "saved": "Campi speciali salvati",
+    "saveFailed": "Impossibile salvare i campi speciali",
+    "defaults": {
+      "spezial1_ids": "Speciale 1",
+      "spezial2_ids": "Speciale 2",
+      "spezial3_ids": "Speciale 3",
+      "spezial_text1": "Testo speciale 1",
+      "spezial_text2": "Testo speciale 2",
+      "spezial_text3": "Testo speciale 3"
+    }
   }
 }

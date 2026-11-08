@@ -233,3 +233,36 @@ def test_closed_protocol_cannot_be_synced(db):
     with pytest.raises(HTTPException) as exc_info:
         ProtocolService().sync_with_template(db, protocol.id)
     assert exc_info.value.status_code == 409
+
+
+def test_checking_a_new_event_creates_all_per_event_blocks_with_template_rules(db):
+    """Termin im Protokoll nachträglich anhaken: vorher entstand nur ein Block nach der ersten
+    Vorlage, ohne Formularzeilen - neu angehakte Termine bekamen leere Blöcke."""
+    tenant = make_tenant(db)
+    template = make_template(db, tenant.id)
+    hock = make_event(db, tenant.id, title="Hock", event_date=date(2026, 10, 5))
+    later = make_event(db, tenant.id, title="Schneetag", event_date=date(2027, 1, 23))
+    hock.tag = later.tag = "anlass"
+    db.flush()
+    repeat = {"repeat_source": "event", "repeat_event_filter": {"tags": ["anlass"], "range": {"mode": "window", "start_days": 0, "end_days": 14}}}
+    rows = [{"id": "pos", "label": "Positiv", "row_type": "text"}, {"id": "neg", "label": "Negativ", "row_type": "text"}]
+    definition = make_element_definition(db, tenant.id, "Rückblick", blocks=[
+        _block(db, code="text", title="{title}", sort_index=10, default_content="Bericht zu {title}", configuration_json=repeat),
+        _block(db, code="form", title="Aufnahme {title}", sort_index=20, configuration_json={**repeat, "rows": rows},
+               render_type_id=RENDER_TYPE_KEY_VALUE),
+    ])
+    make_template_element(db, template.id, definition.id, sort_index=10, section_name="Rückblick")
+    protocol = _create(db, template)
+    element = _elements(db, protocol.id)[0]
+    assert len(_blocks(db, element.id)) == 2  # nur der Hock liegt im Fenster
+
+    created = ProtocolService().add_event_blocks_to_element(
+        db, protocol_element_id=element.id, event_id=later.id, tenant_id=tenant.id
+    )
+
+    assert [block.title_snapshot for block in created] == ["Schneetag", "Aufnahme Schneetag"]
+    assert _text(db, created[0].id) == "Bericht zu Schneetag"
+    form_rows = created[1].configuration_snapshot_json["rows"]
+    assert [row["label"] for row in form_rows] == ["Positiv", "Negativ"]
+    assert all(block.configuration_snapshot_json["repeat_source_id"] == later.id for block in created)
+    assert len(_blocks(db, element.id)) == 4

@@ -256,7 +256,7 @@ class StoredFileRepository:
                 *self._shared_file_overview_columns(),
                 literal("submission_upload").label("source"),
                 SubmissionAssignment.id.label("ref_id"),
-                cast(null(), PG_UUID(as_uuid=True)).label("ref_public_id"),
+                SubmissionAssignment.public_id.label("ref_public_id"),
                 SubmissionAssignment.title.label("ref_label"),
                 cast(null(), Date).label("ref_date"),
                 cast(null(), Date).label("ref_end_date"),

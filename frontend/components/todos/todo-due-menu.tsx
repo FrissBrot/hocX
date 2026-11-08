@@ -6,6 +6,7 @@ import { Popover } from "@/components/ui/popover";
 import { DateInput } from "@/components/ui/date-input";
 import { TODO_DUE_PRESETS, todoDuePresetDate } from "@/lib/utils/todo-due";
 import { SearchInput } from "@/components/ui/search-input";
+import { useSmartDateSuggestions } from "@/components/todos/use-smart-date-suggestions";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { formatDate, formatDateRange } from "@/lib/utils/format";
@@ -47,6 +48,7 @@ export function TodoDueMenu({ todoId, label, dueDate, onApply }: Props) {
   const [customDate, setCustomDate] = useState(dueDate ?? "");
   const [search, setSearch] = useState("");
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const dateSuggestions = useSmartDateSuggestions(search);
 
   useEffect(() => {
     if (!open || data) {
@@ -117,12 +119,23 @@ export function TodoDueMenu({ todoId, label, dueDate, onApply }: Props) {
                 if (value) pick({ due_date: value, due_event_id: null, due_marker: null });
               }} />
             </label>
+            <div className="due-menu-divider" />
+            <SearchInput value={search} onChange={setSearch} placeholder={t("dueSearchPlaceholder")} />
+            {dateSuggestions.map((suggestion) => (
+              <button
+                key={`date-${suggestion.kind}-${suggestion.date}`}
+                type="button"
+                className="due-menu-option"
+                onClick={() => pick({ due_date: suggestion.date, due_event_id: null, due_marker: null })}
+              >
+                {suggestion.label}
+                <span className="due-menu-option-sub">{suggestion.subtle}</span>
+              </button>
+            ))}
             {data && data.events.length > 0 && (
               <>
-                <div className="due-menu-divider" />
-                <SearchInput value={search} onChange={setSearch} placeholder={tCommon("searchPlaceholder")} />
                 {filteredEvents.length === 0 ? (
-                  <span className="assignee-empty">{tCommon("noResults")}</span>
+                  dateSuggestions.length ? null : <span className="assignee-empty">{tCommon("noResults")}</span>
                 ) : (
                   filteredEvents.map((event) => (
                     <button

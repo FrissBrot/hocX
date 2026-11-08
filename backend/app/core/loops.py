@@ -136,6 +136,19 @@ async def task_package_rollover_loop() -> None:
     )
 
 
+async def submission_todo_sync_loop() -> None:
+    """Alle Abgabe-Pendenzen abgleichen (Person, Frist, erledigt bei eingereichten Dateien,
+    weggefallene Elemente). Idempotent - siehe SubmissionService.sync_all_todos."""
+    from app.services.submission_service import SubmissionService
+
+    service = SubmissionService()
+    await run_advisory_locked_loop(
+        name="submission_todo_sync",
+        interval_seconds=settings.submission_todo_sync_interval_minutes * 60,
+        task=service.sync_all_todos,
+    )
+
+
 def _photo_analysis_auto_queue_window_is_open() -> bool:
     hour = datetime.now(timezone.utc).hour
     start, end = settings.photo_analysis_auto_queue_start_hour, settings.photo_analysis_auto_queue_end_hour
@@ -322,6 +335,7 @@ BACKEND_LOOPS: tuple[LoopFactory, ...] = (
     domain_health_check_loop,
     cycle_snapshot_loop,
     task_package_rollover_loop,
+    submission_todo_sync_loop,
     photo_analysis_auto_queue_loop,
     retention_proposals_loop,
     system_monitor_loop,

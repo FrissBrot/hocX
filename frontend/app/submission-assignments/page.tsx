@@ -8,8 +8,10 @@ import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { CycleConfigSummary, EventSummary, ParticipantSummary, StructuredListDefinition, SubmissionAssignment, SubmissionLink } from "@/types/api";
 import { can, featureAccess } from "@/lib/permissions";
 
-export default async function SubmissionAssignmentsPage() {
+export default async function SubmissionAssignmentsPage({ searchParams }: { searchParams: Promise<{ assignment?: string }> }) {
   const session = await requireSession();
+  // ?assignment=<public_id> öffnet die Abgabe direkt (Link aus der Dateiübersicht)
+  const { assignment: initialAssignmentId } = await searchParams;
   const canWrite = can(session, "submissions.manage");
   const hasAbgabeboxFeature = featureAccess(session, "abgabebox") !== "none";
 
@@ -33,7 +35,7 @@ export default async function SubmissionAssignmentsPage() {
         desktop={
           <>
           <section className="panel">
-            <SubmissionAssignmentManager initialAssignments={assignments ?? []} initialLinks={links ?? []} availableLists={lists ?? []} availableEvents={events ?? []} availableParticipants={participants ?? []} availableCycleConfigs={cycleConfigs ?? []} tenantName={session.current_tenant?.name ?? null} />
+            <SubmissionAssignmentManager initialAssignments={assignments ?? []} initialLinks={links ?? []} availableLists={lists ?? []} availableEvents={events ?? []} availableParticipants={participants ?? []} availableCycleConfigs={cycleConfigs ?? []} tenantName={session.current_tenant?.name ?? null} initialSelectedId={initialAssignmentId ?? null} />
           </section>
           </>
         }

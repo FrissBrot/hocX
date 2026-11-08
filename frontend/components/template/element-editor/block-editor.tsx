@@ -5,6 +5,7 @@
 // andere Steuerelemente). Welche Abschnitte erscheinen, bestimmt die Elementtyp-Registry.
 import { ReactNode } from "react";
 import { useTranslations } from "next-intl";
+import { useEventFieldConfig } from "@/lib/hooks/use-event-field-config";
 
 import { ChartCycleSelection } from "@/components/protocol/chart-cycle-selection";
 import { DataTable } from "@/components/ui/data-table";
@@ -99,6 +100,8 @@ export function BlockEditor({
   const linkedList = data.lists.find((list) => list.id === form.config.linked_list_id) ?? null;
   const repeatFilter = repeatEventFilter(form);
   const eventFields = eventFieldsOf(form);
+  // Eigene Namen/Ausblenden der Spezialfelder (Mandant-Einstellungen)
+  const eventFieldConfig = useEventFieldConfig();
 
   const behaviorFields: Array<{ field: BehaviorField; shown: boolean }> = [
     { field: "is_editable", shown: true },
@@ -238,9 +241,11 @@ export function BlockEditor({
                 <span className="field-label">{t(`repeat.syncLabel.${repeatSource}`)}</span>
                 <Select value={String(form.config.sync_target_field ?? "")} onChange={(event) => setConfig({ sync_target_field: event.target.value || null })}>
                   <option value="">{t("repeat.syncNone")}</option>
-                  {(repeatSource === "event" ? EVENT_SYNC_FIELD_KEYS : TODO_SYNC_FIELD_KEYS).map((field) => (
-                    <option key={field} value={field}>{t(`syncField.${field}`)}</option>
-                  ))}
+                  {(repeatSource === "event" ? EVENT_SYNC_FIELD_KEYS : TODO_SYNC_FIELD_KEYS)
+                    .filter((field) => !eventFieldConfig.hidden(field) || field === form.config.sync_target_field)
+                    .map((field) => (
+                      <option key={field} value={field}>{eventFieldConfig.label(field, t(`syncField.${field}`))}</option>
+                    ))}
                 </Select>
                 <span className="field-help">{t(`repeat.syncHelp.${repeatSource}`)}</span>
               </label>
@@ -513,9 +518,9 @@ export function BlockEditor({
                   <div className="element-event-fields">
                     <span className="field-label">{t("table.eventFields")}</span>
                     <SearchableMultiSelect
-                      options={[...EVENT_FIELDS]}
+                      options={EVENT_FIELDS.filter((field) => !eventFieldConfig.hidden(field) || eventFields.some((entry) => entry.field === field && entry.enabled))}
                       getId={(field) => field}
-                      getLabel={(field) => t(`eventField.${field}`)}
+                      getLabel={(field) => eventFieldConfig.label(field, t(`eventField.${field}`))}
                       values={eventFields.filter((field) => field.enabled).map((field) => field.field)}
                       onChange={(selected) => setConfig({ event_fields: eventFields.map((field) => ({ ...field, enabled: selected.includes(field.field) })) })}
                       placeholder={t("table.eventFieldsPlaceholder")}
@@ -524,10 +529,10 @@ export function BlockEditor({
                     <div className="element-event-field-labels">
                       {eventFields.filter((field) => field.enabled).map((field) => (
                         <label key={field.field} className="field-stack">
-                          <span className="field-label">{t(`eventField.${field.field}`)}</span>
+                          <span className="field-label">{eventFieldConfig.label(field.field, t(`eventField.${field.field}`))}</span>
                           <input
                             value={field.label}
-                            placeholder={t(`eventField.${field.field}`)}
+                            placeholder={eventFieldConfig.label(field.field, t(`eventField.${field.field}`))}
                             onChange={(event) => setConfig({ event_fields: eventFields.map((entry) => entry.field === field.field ? { ...entry, label: event.target.value } : entry) })}
                           />
                         </label>

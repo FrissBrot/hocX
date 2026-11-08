@@ -97,6 +97,8 @@ type Props = {
   availableParticipants: ParticipantSummary[];
   availableCycleConfigs: CycleConfigSummary[];
   tenantName?: string | null;
+  /** Öffnet diese Abgabe beim Laden (``?assignment=`` aus der Dateiübersicht). */
+  initialSelectedId?: string | null;
 };
 
 function statusLabel(element: SubmissionElementStatusEntry, t: TFunc): string {
@@ -114,14 +116,20 @@ function statusLabel(element: SubmissionElementStatusEntry, t: TFunc): string {
   return t("statusOpen");
 }
 
-function statusVariant(element: SubmissionElementStatusEntry): BadgeVariant | null {
-  if (element.status === "closed") return "neutral";
-  if (element.status === "submitted") {
-    if (element.files.some((f) => f.scan_status === "error")) return "danger";
-    if (element.files.some((f) => f.scan_status === "pending")) return "warning";
-    return "success";
-  }
-  return null;
+// Jeder Zustand hat eine eigene Farbe: grün = abgegeben, gelb = in Prüfung, blau = läuft,
+// grau = noch nicht gestartet oder ohne Abgabe geschlossen, rot = Frist vorbei ohne Abgabe bzw.
+// Scanfehler.
+function statusVariant(element: SubmissionElementStatusEntry): BadgeVariant {
+  if (element.files.some((f) => f.scan_status === "error")) return "danger";
+  if (element.files.some((f) => f.scan_status === "pending")) return "warning";
+  if (element.status === "submitted") return "success";
+  if (element.status === "closed") return element.files.length ? "success" : "neutral";
+  const now = new Date();
+  const end = element.window_end ? new Date(element.window_end) : null;
+  const start = element.window_start ? new Date(element.window_start) : null;
+  if (end && now > end) return "danger";
+  if (start && now < start) return "neutral";
+  return "info";
 }
 
 function SummaryBar({ summary, size = "row" }: { summary: AssignmentSummary | undefined; size?: "row" | "detail" }) {
@@ -264,11 +272,16 @@ function VerifiedIcon() {
   );
 }
 
-export function SubmissionAssignmentManager({ initialAssignments, initialLinks, availableLists, availableEvents, availableParticipants, availableCycleConfigs, tenantName = null }: Props) {
+export function SubmissionAssignmentManager({ initialAssignments, initialLinks, availableLists, availableEvents, availableParticipants, availableCycleConfigs, tenantName = null, initialSelectedId = null }: Props) {
   const t = useTranslations("submissionAssignments");
   const showToast = useToast();
   const confirm = useConfirm();
   const { requestDelete, modal: deleteModal } = useDeleteWithFiles();
+  // Alle Verantwortlichen eines Elements (mehrere = gemeinsam), leer = niemand
+  const responsibleNames = (element: SubmissionElementStatusEntry) => {
+    const ids = element.responsible_participant_ids?.length ? element.responsible_participant_ids : element.responsible_participant_id ? [element.responsible_participant_id] : [];
+    return ids.map((id) => availableParticipants.find((p) => p.id === id)?.display_name ?? t("unknownParticipant")).join(", ");
+  };
   const [assignments, setAssignments] = useState(initialAssignments);
   const [links, setLinks] = useState(initialLinks);
   const [linksModalOpen, setLinksModalOpen] = useState(false);
@@ -413,6 +426,14 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
       setElementsLoading(false);
     }
   }
+
+  // Direkt geöffnete Abgabe (?assignment=), nur beim ersten Laden
+  useEffect(() => {
+    if (initialSelectedId && initialAssignments.some((assignment) => assignment.id === initialSelectedId)) {
+      void loadElements(initialSelectedId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     return () => clearRescanTimer();
@@ -724,9 +745,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
             ) : (
               <div className="subm-participant-list">
                 {elements.map((element, rowIndex) => {
-                  const responsibleName = element.responsible_participant_id
-                    ? (availableParticipants.find((p) => p.id === element.responsible_participant_id)?.display_name ?? t("unknownParticipant"))
-                    : null;
+                  const responsibleName = responsibleNames(element) || null;
                   // Titel ist immer das Element (Termin/Listeneintrag), die verantwortliche Person steht in der Metazeile
                   // - auch "Niemand zugewiesen", sofern die Abgabe überhaupt eine Verantwortlichen-Quelle hat.
                   const tracksResponsible = Boolean(selectedAssignment?.responsible_participant_source);
@@ -757,7 +776,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
                         <div className="subm-participant-meta">{meta}</div>
                       </div>
                       <div className="subm-participant-status">
-                        <Badge variant={variant ?? "neutral"}>
+                        <Badge variant={variant}>
                           {hasFiles ? <DownloadIcon /> : null} {label}
                         </Badge>
                       </div>
@@ -795,19 +814,14 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
         {elementModal ? (
           <div className="grid subm-element-modal">
             <div className="status-row">
-              {statusVariant(elementModal) ? (
-                <Badge variant={statusVariant(elementModal)!}>{statusLabel(elementModal, t)}</Badge>
-              ) : (
-                <Badge variant="neutral">{statusLabel(elementModal, t)}</Badge>
-              )}
+              <Badge variant={statusVariant(elementModal)}>{statusLabel(elementModal, t)}</Badge>
               {elementModal.window_start && elementModal.window_end ? (
                 <span className="subm-modal-meta">{elementModal.window_start} – {elementModal.window_end}</span>
               ) : elementModal.window_end ? (
                 <span className="subm-modal-meta">{t("deadlineColon")} {elementModal.window_end}</span>
               ) : null}
-              {elementModal.responsible_participant_id ? (() => {
-                const name = availableParticipants.find((p) => p.id === elementModal.responsible_participant_id)?.display_name
-                  ?? t("unknownParticipant");
+              {responsibleNames(elementModal) ? (() => {
+                const name = responsibleNames(elementModal);
                 return (
                   <span className="subm-responsible">
                     <span className="subm-avatar">{initials(name)}</span>

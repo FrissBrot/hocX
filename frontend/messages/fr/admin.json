@@ -537,6 +537,10 @@
       "job_worker": {
         "title": "Worker de tâches",
         "description": "Exécute les tâches lourdes en arrière-plan (import de galerie, exports PDF, exports de l’association, nouvelles analyses antivirus, nettoyage) - signe de vie chaque minute."
+      },
+      "submission_todo_sync": {
+        "title": "Synchroniser les tâches de dépôt",
+        "description": "Toutes les 15 minutes, aligne les tâches des dépôts sur les événements et les listes : personne, échéance, terminée dès que des fichiers sont déposés, éléments supprimés."
       }
     }
   },

@@ -57,3 +57,29 @@ def test_attendance_blocks_get_tariff_only_when_fines_enabled(db):
     assert enabled["fine_account_id"] == str(account.public_id)
     assert (enabled["fine_amount_late"], enabled["fine_amount_absent"]) == (2.0, 4.0)
     assert disabled["fine_account_id"] is None
+
+
+def test_single_block_response_keeps_tariff(db):
+    """Antwort auf einen Anwesenheitsklick (_block_to_read): ohne Tarif in der Antwort hielt der
+    Editor die Bussen danach für ausgeschaltet - weitere Verspätete bekamen keine Busse mehr,
+    und «Entschuldigt» liess die Verspätungsbusse stehen (Bug 2026-11-08)."""
+    from app.api.routes.protocol_elements import _block_to_read
+
+    tenant = make_tenant(db)
+    account = make_finance_account(db, tenant.id)
+    fine_tariff_service.update_tariff(
+        db, tenant.id, FineTariffUpdate(account_id=account.public_id, amount_late=Decimal("2"), amount_absent=Decimal("4"))
+    )
+    template = make_template(db, tenant.id)
+    protocol = make_protocol(db, tenant.id, template.id)
+    element = make_protocol_element(db, protocol.id)
+    enabled = make_protocol_element_block(db, element.id, {"fines_enabled": True, "attendance_entries": []}, sort_index=0, element_type_code="attendance")
+    disabled = make_protocol_element_block(db, element.id, {"fines_enabled": False, "attendance_entries": []}, sort_index=1, element_type_code="attendance")
+
+    config = _block_to_read(db, enabled).configuration_snapshot_json
+    assert config["fine_account_id"] == str(account.public_id)
+    assert (config["fine_amount_late"], config["fine_amount_absent"]) == (2.0, 4.0)
+    assert _block_to_read(db, disabled).configuration_snapshot_json["fine_account_id"] is None
+    # Gespeichert bleibt nur fines_enabled
+    db.refresh(enabled)
+    assert "fine_account_id" not in enabled.configuration_snapshot_json

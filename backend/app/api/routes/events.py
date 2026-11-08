@@ -18,7 +18,7 @@ from app.services.submission_service import SubmissionService
 from app.services.audit_service import AuditService
 from app.services import photo_event_link_service
 from app.services.task_package_service import sync_packages_after_change
-from app.models.entities import Event
+from app.models.entities import Event, SubmissionAssignment
 from app.core.offload import run_coroutine_in_thread
 
 router = APIRouter()
@@ -121,6 +121,8 @@ async def _import_events_csv_impl(  # loop-ok: nur über run_coroutine_in_thread
         raise HTTPException(status_code=400, detail=str(exc) if isinstance(exc, ValueError) else "CSV import failed") from exc
     for event in created:
         photo_event_link_service.sync_photos_for_event(db, event)
+    if created:
+        submission_service.sync_todos_for_tenant(db, tenant_id=user.current_tenant_id)
     for tag in sorted({event.tag for event in created if event.tag}):
         sync_packages_after_change(db, tenant_id=user.current_tenant_id, event_tag=tag)
     return created
@@ -169,6 +171,8 @@ def delete_event(
         raise HTTPException(status_code=404, detail="Event not found")
     # Audit S10, 2026-08-16 - see the identical fix in participants.py.
     audit.log(db, action="event.deleted", actor=user, entity_type="event", entity_id=current.id)
+    # Offene Abgabe-Pendenzen des gelöschten Termins fallen weg
+    submission_service.sync_todos_for_tenant(db, tenant_id=user.current_tenant_id)
     return {"message": "Event deleted"}
 
 
@@ -189,5 +193,15 @@ def rename_tag(
         .where(Event.tenant_id == user.current_tenant_id, Event.tag == payload.old_tag)
         .values(tag=payload.new_tag or None)
     )
+    # Abgaben mit dem alten Tag als Filter ziehen mit, sonst verlieren sie alle Termine. Ein
+    # Termin-Abgabe braucht einen Tag (ck_submission_assignment_source): beim Entfernen bleibt
+    # der alte Filter stehen und die Abgabe ist leer.
+    if payload.new_tag:
+        db.execute(
+            update(SubmissionAssignment)
+            .where(SubmissionAssignment.tenant_id == user.current_tenant_id, SubmissionAssignment.tag_filter == payload.old_tag)
+            .values(tag_filter=payload.new_tag)
+        )
     db.commit()
+    submission_service.sync_todos_for_tenant(db, tenant_id=user.current_tenant_id)
     return {"updated": result.rowcount}

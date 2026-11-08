@@ -77,6 +77,15 @@ export function usePopoverDismiss(open: boolean, onClose: () => void, refs: RefO
       if (refs.some((ref) => ref.current?.contains(target))) {
         return;
       }
+      // Aus dem Popover heraus geöffnete Panels (z. B. der Kalender eines DateInput) liegen als
+      // eigenes Portal später im body. Ein Klick dort gehört zum Popover und darf es nicht
+      // schliessen, sonst verschwindet das Feld samt Kalender, bevor das gewählte Datum ankommt.
+      // Früher geöffnete Panels (das Menü unter einem Kalender) zählen nicht dazu.
+      const own = refs[refs.length - 1]?.current;
+      const panel = target instanceof Element ? target.closest(".popover-panel, .mini-menu-popover-portal") : null;
+      if (own && panel && own.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING) {
+        return;
+      }
       onClose();
     }
     document.addEventListener("mousedown", onPointerDown);

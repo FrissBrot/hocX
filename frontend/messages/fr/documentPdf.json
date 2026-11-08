@@ -318,7 +318,8 @@
     "componentInUse": "Le composant est encore utilisé dans des modèles.",
     "brandArchived": "Un profil de marque archivé ne peut pas être le profil par défaut.",
     "defaultBrand": "Le profil de marque par défaut ne peut pas être archivé ou supprimé.",
-    "brandInUse": "Le profil de marque est utilisé. Veuillez l’archiver au lieu de le supprimer."
+    "brandInUse": "Le profil de marque est utilisé. Veuillez l’archiver au lieu de le supprimer.",
+    "noColumns": "Sélectionnez au moins une colonne."
   },
   "metadata": {
     "title": "Informations sur le document",

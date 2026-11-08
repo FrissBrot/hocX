@@ -309,6 +309,7 @@
     "blockTypeUnavailable": "This cell block type is not available yet.",
     "cancelled": "Cancelled",
     "colDate": "Date",
+    "colParticipantCount": "Number of participants",
     "colDescription": "Description",
     "colTag": "Tag",
     "colTitle": "Title",

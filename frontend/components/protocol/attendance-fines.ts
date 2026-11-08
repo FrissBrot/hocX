@@ -1,5 +1,6 @@
 import { browserApiFetch } from "@/lib/api/client";
 import type { AttendanceFine } from "@/types/api";
+import { runSerializedByKey } from "@/lib/utils/serialize-by-key";
 
 // Automatische Anwesenheits-Bussen (Verspaetet/Unentschuldigt) - gemeinsam fuer den Desktop-
 // Editor (focused-element-editor.tsx) und den mobilen Editor, damit beide exakt dieselben
@@ -20,8 +21,6 @@ export function attendanceFineConfig(blockConfig: Record<string, unknown>): Atte
   return { accountId, amountLate, amountAbsent, enabled: accountId != null && (amountLate > 0 || amountAbsent > 0) };
 }
 
-const pendingChanges = new Map<string, Promise<unknown>>();
-
 /**
  * Führt Anwesenheitsänderungen derselben Person (key, z. B. "<block>:<teilnehmer>") nacheinander
  * aus. Ein Klick auf eine Karte schaltet zum nächsten Status: wer «Entschuldigt» will, klickt
@@ -29,14 +28,7 @@ const pendingChanges = new Map<string, Promise<unknown>>();
  * der ersten noch nicht und liess sie stehen (Bug 2026-11-08: entschuldigt mit Verspätungsbusse).
  */
 export function runAttendanceChangeSerialized<T>(key: string, change: () => Promise<T>): Promise<T> {
-  const previous = pendingChanges.get(key) ?? Promise.resolve();
-  const next = previous.catch(() => undefined).then(change);
-  const settled = next.catch(() => undefined);
-  pendingChanges.set(key, settled);
-  void settled.then(() => {
-    if (pendingChanges.get(key) === settled) pendingChanges.delete(key);
-  });
-  return next;
+  return runSerializedByKey(`attendance:${key}`, change);
 }
 
 /**

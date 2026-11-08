@@ -2,6 +2,7 @@
 
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useEventFieldConfig } from "@/lib/hooks/use-event-field-config";
 
 import { daySpan } from "@/components/events/event-utils";
 import { DateInput } from "@/components/ui/date-input";
@@ -77,16 +78,20 @@ export function EventCreateModal({ open, onClose, initialDate, knownTags, availa
   const cyclesLoadedRef = useRef(false);
   const formRef = useRef<HTMLFormElement | null>(null);
 
+  const eventFields = useEventFieldConfig();
   const roleFields = useMemo<{ field: ParticipantPickerField; label: string }[]>(
-    () => [
+    () => ([
       { field: "organizer_ids", label: t("columns.organizers") },
       { field: "leadership_ids", label: t("columns.leadership") },
       { field: "participant_ids", label: t("columns.participantsRole") },
       { field: "spezial1_ids", label: t("columns.special1") },
       { field: "spezial2_ids", label: t("columns.special2") },
       { field: "spezial3_ids", label: t("columns.special3") },
-    ],
-    [t]
+    ] satisfies { field: ParticipantPickerField; label: string }[])
+      // Spezialfelder: Alias und Ausblenden aus den Mandant-Einstellungen
+      .filter((role) => !eventFields.hidden(role.field))
+      .map((role) => ({ ...role, label: eventFields.label(role.field, role.label) })),
+    [t, eventFields]
   );
 
   useEffect(() => {

@@ -93,5 +93,39 @@
   "filesNoMatches": "Nessun file corrispondente",
   "filesEmpty": "Nessun file collegato",
   "removeFile": "Rimuovi {name}",
-  "detailsLoadFailed": "Impossibile caricare note e file"
+  "detailsLoadFailed": "Impossibile caricare note e file",
+  "smartDate": {
+    "today": "Oggi",
+    "tomorrow": "Domani",
+    "dayAfterTomorrow": "Dopodomani",
+    "weekdayThisWeek": "{weekday} di questa settimana",
+    "weekdayNextWeek": "{weekday} della prossima settimana",
+    "weekdayNext": "{weekday}",
+    "endOfWeek": "Fine settimana",
+    "startOfNextWeek": "Inizio della prossima settimana",
+    "endOfNextWeek": "Fine della prossima settimana",
+    "inTwoWeeks": "Tra 2 settimane",
+    "endOfMonth": "Fine mese",
+    "startOfNextMonth": "Inizio del prossimo mese",
+    "endOfNextMonth": "Fine del prossimo mese",
+    "endOfYear": "Fine anno",
+    "inDays": "{count, plural, one {Tra # giorno} other {Tra # giorni}}",
+    "inWeeks": "{count, plural, one {Tra # settimana} other {Tra # settimane}}",
+    "inMonths": "{count, plural, one {Tra # mese} other {Tra # mesi}}",
+    "exactDate": "{date}"
+  },
+  "smartDateKeywords": {
+    "today": "adesso",
+    "weekdayNextWeek": "prossimo",
+    "weekdayNext": "prossimo",
+    "endOfWeek": "weekend domenica",
+    "startOfNextWeek": "lunedì",
+    "endOfNextWeek": "weekend",
+    "inTwoWeeks": "due quindici giorni",
+    "endOfMonth": "fine del mese",
+    "startOfNextMonth": "principio",
+    "endOfNextMonth": "fine del mese",
+    "endOfYear": "San Silvestro"
+  },
+  "dueSearchPlaceholder": "Cerca data o appuntamento …"
 }

@@ -55,6 +55,8 @@ class Tenant(Base, TimestampMixin):
     profile_image_path: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
     tag_config_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
+    # Alias/Ausblenden der Spezialfelder der Termine (Migration 0165, schemas/event_field_config.py)
+    event_field_config_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
     public_slug: Mapped[str | None] = mapped_column(Text, unique=True)
     # Vorlage, die im Import-Assistenten zuletzt ausgewählt wurde - wird beim nächsten
     # Öffnen der Seite wieder vorausgewählt. SET NULL statt CASCADE, damit das Löschen

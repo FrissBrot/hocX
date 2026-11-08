@@ -188,39 +188,57 @@ def provide(ctx: BuildContext, spec: BlockSpec, params: TodoTableParams):
     return [TodoTableBlock(**spec_fields(spec), table=todo_table(rows, columns, group_by=params.group_by, tag_config=tag_config))]
 
 
-def markdown(rows: list[Any], *, strings: dict[str, str], title: str, group_by_person: bool, show_status: bool, today: date) -> str:
-    """Todo-Liste als WhatsApp-taugliches Markdown (wie der frühere Markdown-Export)."""
+def markdown(
+    rows: list[Any],
+    *,
+    strings: dict[str, str],
+    title: str,
+    group_by_person: bool,
+    show_status: bool,
+    today: date,
+    exclude_columns: set[str] | None = None,
+) -> str:
+    """Todo-Liste für WhatsApp: nur Formatierung, die WhatsApp kennt (*fett*, _kursiv_,
+    ~durchgestrichen~), keine Tabellen oder Überschriften. Aufgabe fett, darunter je Feld eine
+    eingerückte Zeile mit kursivem Label. ``exclude_columns`` = im Dialog abgewählte Spaltenköpfe."""
+    excluded = exclude_columns or set()
 
     def plain(value: Any) -> str:
         text = " ".join(str(value or "").split())
         return text.replace("*", "∗").replace("_", "‗").replace("~", "∼").replace("`", "´")
 
+    def wanted(key: str) -> bool:
+        return strings.get(key, key) not in excluded
+
+    def field(key: str, value: str) -> str:
+        return f"    _{plain(strings[key])}:_ {value}"
+
     def entry(row: Any, index: int, include_assignee: bool) -> list[str]:
         code = status_code(row)
         task = plain(task_text(row)) or "–"
-        if code in ("done", "cancelled"):
-            task = f"~{task}~"
+        task = f"~{task}~" if code in ("done", "cancelled") else f"*{task}*"
         line = f"{index}. {task}"
-        if show_status:
-            line += f" [{strings.get(f'todoStatus.{code}', code)}]"
+        if show_status and wanted("col.status"):
+            line += f" _({plain(strings.get(f'todoStatus.{code}', code))})_"
         lines = [line]
-        if include_assignee and getattr(row, "assigned_participant_name", None):
-            lines.append(f"   {strings['col.assignee']}: {plain(row.assigned_participant_name)}")
-        due = due_cell(row)
-        due_text = due.v
-        if due.note_key:
-            note = strings.get(due.note_key, "")
-            due_text = f"{due_text} ({note})" if due_text else note
-        if due_text:
-            lines.append(f"   {strings['col.due']}: {plain(due_text)}")
-        if protocol_label(row):
-            lines.append(f"   {strings['col.protocol']}: {plain(protocol_label(row))}")
-        if todo_tags(row):
-            lines.append(f"   {strings['col.tags']}: {', '.join(plain(tag) for tag in todo_tags(row))}")
-        lines.append("")
+        if include_assignee and wanted("col.assignee") and getattr(row, "assigned_participant_name", None):
+            lines.append(field("col.assignee", plain(row.assigned_participant_name)))
+        if wanted("col.due"):
+            due = due_cell(row)
+            due_text = due.v
+            if due.note_key:
+                note = strings.get(due.note_key, "")
+                due_text = f"{due_text} ({note})" if due_text else note
+            if due_text:
+                lines.append(field("col.due", plain(due_text)))
+        if wanted("col.protocol") and protocol_label(row):
+            lines.append(field("col.protocol", plain(protocol_label(row))))
+        if wanted("col.tags") and todo_tags(row):
+            lines.append(field("col.tags", ", ".join(plain(tag) for tag in todo_tags(row))))
         return lines
 
-    lines = [f"*{plain(title)}*", strings["label.asOf"].replace("{date}", format_date(today)), f"{strings['col.count']}: {len(rows)}", ""]
+    as_of = strings["label.asOf"].replace("{date}", format_date(today))
+    lines = [f"*{plain(title)}*", f"_{plain(as_of)} · {plain(strings['col.count'])}: {len(rows)}_", ""]
     if not rows:
         lines.append(strings["empty.todo_table"])
         return "\n".join(lines)
@@ -231,9 +249,10 @@ def markdown(rows: list[Any], *, strings: dict[str, str], title: str, group_by_p
             groups.setdefault(getattr(row, "assigned_participant_name", None) or "", []).append(row)
         for name in sorted(groups, key=lambda value: (value == "", sort_key(value))):
             label = name or strings["group.unassigned"]
-            lines.append(f"*{plain(label)} ({len(groups[name])})*")
+            lines.append(f"*{plain(label)}* ({len(groups[name])})")
             for index, row in enumerate(groups[name], start=1):
                 lines.extend(entry(row, index, False))
+            lines.append("")
     else:
         for index, row in enumerate(ordered, start=1):
             lines.extend(entry(row, index, True))

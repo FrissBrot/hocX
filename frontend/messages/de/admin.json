@@ -537,6 +537,10 @@
       "job_worker": {
         "title": "Job-Worker",
         "description": "Führt schwere Hintergrundarbeit aus (Galerie-Import, PDF-Exporte, Vereinsexporte, Virenscan-Nachprüfung, Aufräumen) - Lebenszeichen jede Minute."
+      },
+      "submission_todo_sync": {
+        "title": "Abgabe-Pendenzen abgleichen",
+        "description": "Gleicht alle 15 Minuten die Pendenzen der Abgaben mit Terminen und Listen ab: Person, Frist, erledigt bei eingereichten Dateien, weggefallene Elemente."
       }
     }
   },

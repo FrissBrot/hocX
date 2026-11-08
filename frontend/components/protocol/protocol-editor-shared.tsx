@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl";
 
 import { TrackedChangeHideButton } from "@/components/ui/tracked-change-hide-button";
 import { usePopoverPosition, usePopoverDismiss } from "@/components/ui/popover";
+import { useSmartDateSuggestions } from "@/components/todos/use-smart-date-suggestions";
 import { SearchInput } from "@/components/ui/search-input";
 import { formatDate } from "@/lib/utils/format";
 import { applyEventFilter, blockEventFilter, defaultEventFilter } from "@/lib/element-types/event-filter";
@@ -619,6 +620,7 @@ export function TodoMenuSearchList<T>({
   onPick,
   emptyLabel,
   searchPlaceholder,
+  onPickDate,
 }: {
   items: T[];
   getKey: (item: T) => string | number;
@@ -628,19 +630,31 @@ export function TodoMenuSearchList<T>({
   onPick: (item: T) => void;
   emptyLabel?: string;
   searchPlaceholder?: string;
+  /** Fälligkeits-Menüs: smarte Datumsvorschläge zum Getippten (morgen, Freitag, in 3 Wochen …) */
+  onPickDate?: (date: string) => void;
 }) {
   const tCommon = useTranslations("common");
   const resolvedEmptyLabel = emptyLabel ?? tCommon("noResults");
   const resolvedSearchPlaceholder = searchPlaceholder ?? tCommon("searchPlaceholder");
   const [search, setSearch] = useState("");
+  const dateSuggestions = useSmartDateSuggestions(onPickDate ? search : "");
   const filtered = search.trim()
     ? items.filter((item) => getLabel(item).toLowerCase().includes(search.trim().toLowerCase()))
     : items;
   return (
     <>
       <SearchInput value={search} onChange={setSearch} placeholder={resolvedSearchPlaceholder} />
+      {dateSuggestions.map((suggestion) => (
+        <TodoMenuOption
+          key={`date-${suggestion.kind}-${suggestion.date}`}
+          label={suggestion.label}
+          subtle={suggestion.subtle}
+          active={false}
+          onClick={() => onPickDate?.(suggestion.date)}
+        />
+      ))}
       {filtered.length === 0 ? (
-        <span className="assignee-empty">{resolvedEmptyLabel}</span>
+        dateSuggestions.length || (onPickDate && !search.trim()) ? null : <span className="assignee-empty">{resolvedEmptyLabel}</span>
       ) : (
         filtered.map((item) => (
           <TodoMenuOption

@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from redis.exceptions import RedisError
 
 from app.core.db import get_db
+from app.core.element_types import element_type_code
 from app.core.redis_client import get_redis_sync, publish_best_effort
 from app.core.permissions import P
 from app.core.security import CurrentUser, get_current_user, require_permission
@@ -27,6 +28,7 @@ from app.services import list_snapshot_service, public_id_service
 from app.services.snapshot_reference_ids import (
     normalize_attendance_entries,
     normalize_list_snapshot_refs,
+    participant_display_names,
     snapshot_reference_ids,
     translate_attendance_entries,
     translate_list_snapshot_refs,
@@ -35,6 +37,7 @@ from app.services.snapshot_reference_ids import (
 from app.services.autosave_service import AutosaveService, TextConflictError
 from app.services.access_service import AccessService
 from app.services.collaboration_service import conflicting_lock_holder_sync, protocol_channel
+from app.services.fine_tariff_service import attendance_fine_values
 from app.services.protocol_element_service import BlockConfigConflict
 from app.services.protocol_element_service import ProtocolElementService
 from app.services.protocol_service import ProtocolService
@@ -84,7 +87,7 @@ def _block_and_protocol_or_404(db: Session, user: CurrentUser, protocol_element_
     return block, protocol
 
 
-def _ensure_block_not_locked_by_other(protocol_id: int, protocol_element_block_id: int, user: CurrentUser) -> None:
+def _ensure_block_not_locked_by_other(protocol_id: int, block_public_id: uuid.UUID, user: CurrentUser) -> None:
     """The collaboration WS layer's Redis field lock (field_key `block-<id>`, same format
     collaboration_ws.py's field_update handler now itself enforces before broadcasting) used
     to be purely cosmetic here - a client that skipped the WS lock entirely (or never opened
@@ -96,13 +99,15 @@ def _ensure_block_not_locked_by_other(protocol_id: int, protocol_element_block_i
     fields) and must keep working - or when the caller itself is the holder."""
     try:
         holder = conflicting_lock_holder_sync(
-            get_redis_sync(), protocol_id, f"block-{protocol_element_block_id}", user.user_id
+            # Der Editor sperrt mit der öffentlichen Block-ID (`block-<public_id>`); mit der
+            # internen ID fand diese Prüfung die Sperre nie.
+            get_redis_sync(), protocol_id, f"block-{block_public_id}", user.user_id
         )
     except RedisError:
         # Die Feldsperren sind eine Komfortschicht der Live-Bearbeitung, nicht die Quelle der
         # Wahrheit (dafür gibt es expected_content/config_version). Ist Redis nicht erreichbar,
         # wird gespeichert statt mit 500 abzubrechen (Concurrency-Audit CONC-011).
-        logging.getLogger(__name__).warning("Feldsperre für Block %s nicht prüfbar (Redis)", protocol_element_block_id, exc_info=True)
+        logging.getLogger(__name__).warning("Feldsperre für Block %s nicht prüfbar (Redis)", block_public_id, exc_info=True)
         return
     if holder is not None:
         raise HTTPException(
@@ -114,7 +119,10 @@ def _ensure_block_not_locked_by_other(protocol_id: int, protocol_element_block_i
 def _block_to_read(db: Session, block) -> ProtocolElementBlockRead:
     element = db.get(ProtocolElement, block.protocol_element_id)
     protocol = db.get(Protocol, element.protocol_id)
-    config = translate_attendance_entries(db, block.configuration_snapshot_json or {})
+    config = dict(block.configuration_snapshot_json or {})
+    if element_type_code(block.element_type_id) == "attendance":
+        config.update(attendance_fine_values(db, config, protocol.tenant_id, protocol.template_id))
+    config = translate_attendance_entries(db, config)
     config = translate_participant_refs(db, config, protocol.tenant_id)
     config = translate_list_snapshot_refs(db, config, protocol.tenant_id)
     return ProtocolElementBlockRead(
@@ -144,6 +152,7 @@ def _block_to_read(db: Session, block) -> ProtocolElementBlockRead:
         export_visible_snapshot=block.export_visible_snapshot,
         configuration_snapshot_json=config,
         public_reference_ids=snapshot_reference_ids(db, config, protocol.tenant_id),
+        participant_names=participant_display_names(db, config, protocol.tenant_id),
         text_content=None,
         display_compiled_text=None,
         display_snapshot_json={},
@@ -211,7 +220,7 @@ def patch_protocol_element_block(
 ):
     require_permission(user, P.MEETINGS_EDIT)
     existing, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
-    _ensure_block_not_locked_by_other(protocol.id, existing.id, user)
+    _ensure_block_not_locked_by_other(protocol.id, existing.public_id, user)
     if payload.configuration_snapshot_json is not None:
         payload.configuration_snapshot_json = normalize_attendance_entries(db, payload.configuration_snapshot_json, protocol.tenant_id)
         payload.configuration_snapshot_json = normalize_list_snapshot_refs(db, payload.configuration_snapshot_json, protocol.tenant_id)
@@ -252,7 +261,7 @@ def set_block_attendance_status(
     the generic config PATCH above (full-array overwrite races)."""
     require_permission(user, P.MEETINGS_EDIT)
     block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
-    _ensure_block_not_locked_by_other(protocol.id, block.id, user)
+    _ensure_block_not_locked_by_other(protocol.id, block.public_id, user)
     participant_internal_id = public_id_service.resolve_internal_id(db, Participant, participant_id, tenant_id=user.current_tenant_id)
     if participant_internal_id is None:
         raise HTTPException(status_code=404, detail="Participant not found")
@@ -343,7 +352,7 @@ def delete_protocol_element_block(
         raise HTTPException(status_code=404, detail="Protocol element block not found")
 
 
-@router.post("/protocol-elements/{protocol_element_id}/blocks/from-event", response_model=ProtocolElementBlockRead)
+@router.post("/protocol-elements/{protocol_element_id}/blocks/from-event", response_model=list[ProtocolElementBlockRead])
 def create_protocol_element_block_from_event(
     protocol_element_id: uuid.UUID,
     payload: ProtocolElementBlockFromEventCreate,
@@ -356,12 +365,17 @@ def create_protocol_element_block_from_event(
         raise HTTPException(status_code=404, detail="Protocol element not found")
     access_service.ensure_can_read_protocol_element(db, user, element.id)
     protocol_id = access_service.repository.protocol_id_for_element(db, protocol_element_id=element.id)
-    protocol_service.get_protocol_or_404_not_frozen(db, protocol_id)
+    protocol = protocol_service.get_protocol_or_404_not_frozen(db, protocol_id)
+    # Schreibroute: nur Protokolle des eigenen Mandanten, auch wenn Leserechte einmal weiter
+    # reichen (z. B. geteilte Inhalte) - Sicherheitsregel 1.2, ProtocolElement hat kein tenant_id
+    if protocol.tenant_id != user.current_tenant_id:
+        raise HTTPException(status_code=404, detail="Protocol element not found")
     event_internal_id = public_id_service.resolve_internal_id(db, Event, payload.event_id, tenant_id=user.current_tenant_id)
     if event_internal_id is None:
         raise HTTPException(status_code=400, detail="Event does not belong to current tenant")
     try:
-        protocol_block = protocol_service.add_event_block_to_element(
+        # Alle Blöcke, die das Element pro Termin vorsieht (nicht nur den ersten)
+        protocol_blocks = protocol_service.add_event_blocks_to_element(
             db,
             protocol_element_id=element.id,
             event_id=event_internal_id,
@@ -372,7 +386,7 @@ def create_protocol_element_block_from_event(
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Block could not be created") from exc
-    return _block_to_read(db, protocol_block)
+    return [_block_to_read(db, protocol_block) for protocol_block in protocol_blocks]
 
 
 @router.post("/protocol-element-blocks/{protocol_element_block_id}/list-snapshot/entries/{entry_id}/accept-tracked-change", response_model=ProtocolElementBlockRead)
@@ -438,7 +452,7 @@ def put_protocol_text(
 ):
     require_permission(user, P.MEETINGS_EDIT)
     block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
-    _ensure_block_not_locked_by_other(protocol.id, block.id, user)
+    _ensure_block_not_locked_by_other(protocol.id, block.public_id, user)
     track_changes_active = bool(protocol.status == "geplant" and protocol.track_changes_enabled)
     try:
         result = autosave_service.save_text_block(

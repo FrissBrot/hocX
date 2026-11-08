@@ -318,7 +318,8 @@
     "componentInUse": "Die Komponente wird noch in Vorlagen verwendet.",
     "brandArchived": "Ein archiviertes Brand-Profil kann nicht Standard sein.",
     "defaultBrand": "Das Standard-Brand-Profil kann nicht archiviert oder gelöscht werden.",
-    "brandInUse": "Das Brand-Profil wird verwendet. Bitte archivieren statt löschen."
+    "brandInUse": "Das Brand-Profil wird verwendet. Bitte archivieren statt löschen.",
+    "noColumns": "Mindestens eine Spalte muss ausgewählt sein."
   },
   "metadata": {
     "title": "Angaben zum Dokument",

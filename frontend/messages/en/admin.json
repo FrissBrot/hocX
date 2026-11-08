@@ -537,6 +537,10 @@
       "job_worker": {
         "title": "Job worker",
         "description": "Runs heavy background work (gallery import, PDF exports, organisation exports, virus re-scans, clean-up) - heartbeat every minute."
+      },
+      "submission_todo_sync": {
+        "title": "Sync submission tasks",
+        "description": "Every 15 minutes, aligns submission tasks with events and lists: person, due date, done once files are submitted, removed elements."
       }
     }
   },

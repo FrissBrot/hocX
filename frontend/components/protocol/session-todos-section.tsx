@@ -46,6 +46,7 @@ export function SessionTodosSection({
   onAcceptTrackedChange?: (blockId: string, todoId: string) => void;
 }) {
   const t = useTranslations("protocols.todos");
+  const tTodos = useTranslations("todos");
   const showToast = useToast();
   if (todos.length === 0 && pendingTodos.length === 0) return null;
   if (!sectionTag) return null;
@@ -179,11 +180,14 @@ export function SessionTodosSection({
                             <TodoMenuOption label={t("nextSession")} active={todo.due_marker === "next_session"}
                               onClick={() => { void onUpdate(todo.protocol_element_block_id, todo.id, { due_date: null, due_event_id: null, due_marker: "next_session" }); closeMenu(); }} />
                           </div>
-                          {dueEvents.length > 0 && (
+                          {/* Immer mit Suche: smarte Datumsvorschläge auch ohne Termine */}
+                          {(
                             <div className="mini-menu-section">
-                              <div className="mini-menu-section-title">{t("events")}</div>
+                              {dueEvents.length > 0 && <div className="mini-menu-section-title">{t("events")}</div>}
                               <TodoMenuSearchList
                                 items={dueEvents}
+                                searchPlaceholder={tTodos("dueSearchPlaceholder")}
+                                onPickDate={(date) => { void onUpdate(todo.protocol_element_block_id, todo.id, { due_date: date, due_event_id: null, due_marker: null }); closeMenu(); }}
                                 getKey={(event) => event.id}
                                 getLabel={(event) => event.title}
                                 getSubtle={(event) => formatDateRange(event.event_date, event.event_end_date ?? null)}

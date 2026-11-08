@@ -1,6 +1,7 @@
 """Concurrency-Audit CONC-011/-012: Feldsperren atomar (Lua), Zellsperren über Index-Sets statt
 Keyspace-SCAN, Präsenz mit Zeitstempel statt einmaligem TTL, Sperrprüfung fail open."""
 
+import uuid
 import asyncio
 import json
 import random
@@ -109,7 +110,7 @@ def test_block_write_proceeds_when_redis_is_unreachable(monkeypatch):
 
     monkeypatch.setattr(protocol_elements, "conflicting_lock_holder_sync", unreachable)
     # Wirft nicht (vorher 500 für jeden Protokoll-Schreibvorgang)
-    protocol_elements._ensure_block_not_locked_by_other(1, 2, make_current_user(1))
+    protocol_elements._ensure_block_not_locked_by_other(1, uuid.uuid4(), make_current_user(1))
 
 
 def test_publish_after_save_is_best_effort(monkeypatch):

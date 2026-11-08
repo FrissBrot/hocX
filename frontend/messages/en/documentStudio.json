@@ -128,10 +128,10 @@
     "protocol_elements": "Agenda items",
     "protocol_event_title": "Event",
     "protocol_excused_count": "Number excused",
-    "protocol_new_todos_count": "Number of new tasks",
+    "protocol_new_todos_count": "Number of new tasks in this protocol",
     "protocol_next_session": "Next meeting",
     "protocol_number": "Number",
-    "protocol_open_todos": "Open tasks",
+    "protocol_open_todos": "Open tasks from this protocol",
     "protocol_participant_count": "Number of participants",
     "protocol_participants": "Participants",
     "protocol_present_count": "Number present",
@@ -144,7 +144,7 @@
     "statistics_events_count": "Number of events",
     "statistics_sessions_count": "Number of meetings",
     "todos_done_count": "Number of completed tasks",
-    "todos_open": "Open tasks",
+    "todos_open": "Open tasks (all)",
     "todos_open_count": "Number of open tasks",
     "protocol_invitation_elements": "Agenda items of the invitation"
   },
@@ -812,7 +812,7 @@
     "format": {
       "csv": "CSV",
       "ics": "Calendar (ICS)",
-      "markdown": "Text (Markdown)",
+      "markdown": "Copy text (WhatsApp)",
       "xlsx": "Excel"
     },
     "language": "Document language",
@@ -831,7 +831,10 @@
     "watermarkAuto": "Automatic (for drafts)",
     "watermarkOff": "Never",
     "watermarkOn": "Always",
-    "working": "Creating …"
+    "working": "Creating …",
+    "columns": "Columns",
+    "columnsHelp": "Applies to CSV, Excel and text. Deselected columns are left out of this export only.",
+    "markdownCopied": "Text for WhatsApp copied to the clipboard"
   },
   "exports": {
     "allTypes": "All document types",

@@ -34,7 +34,8 @@
     "verificationNameChanged": "Il nome è cambiato dalla richiesta.",
     "verificationNoPending": "Non esiste alcuna richiesta aperta.",
     "verificationNotVerified": "L’organizzazione non è verificata.",
-    "verificationReasonRequired": "Indica un motivo."
+    "verificationReasonRequired": "Indica un motivo.",
+    "noColumns": "Seleziona almeno una colonna."
   },
   "attendanceShort": {
     "absent": "A",

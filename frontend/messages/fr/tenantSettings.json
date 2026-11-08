@@ -235,5 +235,25 @@
     "apply": "Appliquer",
     "applyConfirm": "{count, plural, one {Appliquer une proposition ?} other {Appliquer # propositions ?}} Les dépôts et images de la galerie sont supprimés définitivement, les membres désactivés.",
     "decided": "{done} effectuées, {failed} en échec."
+  },
+  "eventFields": {
+    "eyebrow": "Champs spéciaux des événements",
+    "description": "Donnez vos propres noms aux champs spéciaux ou masquez-les. Cela s'applique partout où les événements sont affichés et modifiés.",
+    "columnField": "Champ",
+    "columnAlias": "Nom personnalisé",
+    "columnHidden": "Visibilité",
+    "hide": "Masquer",
+    "aliasFor": "Nom personnalisé pour {field}",
+    "help": "Vide = nom par défaut. Les champs masqués conservent leurs valeurs et peuvent être réaffichés à tout moment.",
+    "saved": "Champs spéciaux enregistrés",
+    "saveFailed": "Les champs spéciaux n'ont pas pu être enregistrés",
+    "defaults": {
+      "spezial1_ids": "Spécial 1",
+      "spezial2_ids": "Spécial 2",
+      "spezial3_ids": "Spécial 3",
+      "spezial_text1": "Texte spécial 1",
+      "spezial_text2": "Texte spécial 2",
+      "spezial_text3": "Texte spécial 3"
+    }
   }
 }

@@ -2,6 +2,7 @@
 
 import { eventFilterTagText, normalizeEventFilter } from "@/lib/element-types/event-filter";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { runSerializedByKey } from "@/lib/utils/serialize-by-key";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
@@ -1567,22 +1568,59 @@ export function ProtocolEditor({
     }
   }
 
-  async function updateEventFromBlock(protocolElementBlockId: string, eventId: string, patch: Partial<EventSummary>) {
+  // Terminänderungen aus Terminübersicht/Detailformular kommen pro Tastendruck. Parallel
+  // abgeschickt konnte eine ältere Anfrage die neuere überholen - auf dem Server und beim
+  // Übernehmen der Antwort -, die Eingabe ging dann teilweise verloren (Bug 2026-11-08). Darum
+  // je Termin: sofort lokal anzeigen, nacheinander speichern, und was während einer laufenden
+  // Anfrage dazukommt, in einer einzigen Folgeanfrage zusammenfassen.
+  const queuedEventPatches = useRef(new Map<string, Partial<EventSummary>>());
+  const queuedEventSaves = useRef(new Map<string, Promise<boolean>>());
+  const confirmedEvents = useRef(new Map<string, EventSummary>());
+
+  function updateEventFromBlock(protocolElementBlockId: string, eventId: string, patch: Partial<EventSummary>): Promise<boolean> {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
+    setEvents((current) => current.map((event) => {
+      if (event.id !== eventId) return event;
+      if (!confirmedEvents.current.has(eventId)) confirmedEvents.current.set(eventId, event);
+      return { ...event, ...patch };
+    }));
     setStatus(protocolElementBlockId, "saving");
-    try {
-      const updated = await browserApiFetch<EventSummary>(`/api/events/${eventId}`, {
-        method: "PATCH",
-        body: JSON.stringify(patch),
-      });
-      setEvents((current) => current.map((event) => (event.id === eventId ? updated : event)));
-      collab.sendFieldUpdate("event-updated", updated);
-      setStatus(protocolElementBlockId, "saved");
-      return true;
-    } catch (err: unknown) {
-      setStatus(protocolElementBlockId, "error");
-      showToast(err instanceof Error ? err.message : t("eventSaveFailed"), "error");
-      return false;
-    }
+    const queued = queuedEventPatches.current.get(eventId);
+    queuedEventPatches.current.set(eventId, { ...(queued ?? {}), ...patch });
+    const pending = queuedEventSaves.current.get(eventId);
+    if (queued && pending) return pending;
+    const save = runSerializedByKey(`event:${eventId}`, async () => {
+      const body = queuedEventPatches.current.get(eventId) ?? {};
+      queuedEventPatches.current.delete(eventId);
+      if (queuedEventSaves.current.get(eventId) === save) queuedEventSaves.current.delete(eventId);
+      try {
+        const updated = await browserApiFetch<EventSummary>(`/api/events/${eventId}`, {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        });
+        // Steht schon die nächste Änderung an, bleibt die lokale (neuere) Fassung stehen.
+        if (!queuedEventPatches.current.has(eventId)) {
+          confirmedEvents.current.delete(eventId);
+          setEvents((current) => current.map((event) => (event.id === eventId ? updated : event)));
+        } else {
+          confirmedEvents.current.set(eventId, updated);
+        }
+        collab.sendFieldUpdate("event-updated", updated);
+        setStatus(protocolElementBlockId, "saved");
+        return true;
+      } catch (err: unknown) {
+        setStatus(protocolElementBlockId, "error");
+        showToast(err instanceof Error ? err.message : t("eventSaveFailed"), "error");
+        // Lokal schon angezeigte Änderung auf den zuletzt bestätigten Stand zurücksetzen
+        const confirmed = confirmedEvents.current.get(eventId);
+        if (confirmed && !queuedEventPatches.current.has(eventId)) {
+          confirmedEvents.current.delete(eventId);
+          setEvents((list) => list.map((event) => (event.id === eventId ? confirmed : event)));
+        }
+        return false;
+      }
+    });
+    queuedEventSaves.current.set(eventId, save);
+    return save;
   }
 
   async function deleteEventFromBlock(protocolElementBlockId: string, eventId: string) {
@@ -1897,7 +1935,8 @@ export function ProtocolEditor({
 
   async function addEventBlockToElement(elementId: string, eventId: string): Promise<ProtocolElement["blocks"][number] | null> {
     try {
-      const newBlock = await browserApiFetch<ProtocolElement["blocks"][number]>(
+      // Alle Blöcke, die das Element pro Termin vorsieht (Vorlagen pro Termin)
+      const newBlocks = await browserApiFetch<ProtocolElement["blocks"]>(
         `/api/protocol-elements/${elementId}/blocks/from-event`,
         {
           method: "POST",
@@ -1907,11 +1946,11 @@ export function ProtocolEditor({
       setElements((current) =>
         current.map((element) =>
           element.id === elementId
-            ? { ...element, blocks: [...element.blocks, newBlock] }
+            ? { ...element, blocks: [...element.blocks, ...newBlocks] }
             : element
         )
       );
-      return newBlock;
+      return newBlocks[0] ?? null;
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : t("eventAddFailed"), "error");
       return null;
@@ -1920,6 +1959,27 @@ export function ProtocolEditor({
 
   // Stabile Handler fuer die memoisierten Punkte (FocusedElementEditor): ohne sie bekäme jeder
   // Punkt bei jedem Render neue Funktionen und renderte bei jedem Tastendruck mit.
+  // Personen, auf die gespeicherte Formular-/Matrixwerte verweisen, die aber weder in der Vorlage
+  // noch im Verzeichnis stehen: Namen liefert der Server je Block mit (participant_names), sonst
+  // erschien nur «N ausgewählt». Über einen Schlüssel stabil gehalten, damit Tippen (neue
+  // elements) nicht jedes Mal alle Leser des Kontexts neu rendert.
+  const snapshotNamesKey = useMemo(() => {
+    const names: Record<string, string> = {};
+    for (const element of elements) {
+      for (const block of element.blocks) Object.assign(names, block.participant_names ?? {});
+    }
+    return JSON.stringify(Object.entries(names).sort(([a], [b]) => a.localeCompare(b)));
+  }, [elements]);
+  const directoryWithSnapshotNames = useMemo(() => {
+    const extra = (JSON.parse(snapshotNamesKey) as Array<[string, string]>)
+      .filter(([id]) => !participantDirectory.some((participant) => participant.id === id))
+      .map(([id, display_name]): ParticipantSummary => ({
+        id, tenant_id: protocol.tenant_id ?? "", first_name: null, last_name: null, display_name, email: null,
+        is_active: false, joined_at: null, left_at: null, created_at: "", updated_at: "",
+      }));
+    return extra.length ? [...participantDirectory, ...extra] : participantDirectory;
+  }, [snapshotNamesKey, participantDirectory, protocol.tenant_id]);
+
   const elementHandlers = useStableCallbacks({
     saveBlockConfiguration,
     saveAttendanceStatus,
@@ -1955,7 +2015,7 @@ export function ProtocolEditor({
 
   return (
     <ParticipantDateContext.Provider value={protocol.protocol_date ?? null}>
-    <ParticipantDirectoryContext.Provider value={participantDirectory}>
+    <ParticipantDirectoryContext.Provider value={directoryWithSnapshotNames}>
     <div className="grid" ref={editorRef}>
       <div className="protocol-document-header">
         <a href="/protocols" className="button-secondary protocol-document-back">{t("backToProtocols")}</a>

@@ -535,12 +535,26 @@ export function listExports(params: { protocolId?: string | null; documentType?:
 }
 
 /** CSV/XLSX/ICS/Markdown als Datei laden (Download im Browser). */
-export async function exportDocumentFile(request: DocumentRequest, format: "csv" | "xlsx" | "ics" | "markdown"): Promise<{ blob: Blob; filename: string }> {
+/** Spaltenköpfe, die der Export-Dialog zum An- und Abwählen anbietet. */
+export async function exportColumns(request: DocumentRequest, signal?: AbortSignal): Promise<string[]> {
+  const result = await browserApiFetch<{ columns: string[] }>("/api/documents/export/columns", {
+    method: "POST",
+    body: JSON.stringify(request),
+    signal,
+  });
+  return result.columns;
+}
+
+export async function exportDocumentFile(
+  request: DocumentRequest,
+  format: "csv" | "xlsx" | "ics" | "markdown",
+  excludeColumns: string[] = []
+): Promise<{ blob: Blob; filename: string }> {
   const response = await fetch("/api/documents/export", {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...request, format }),
+    body: JSON.stringify({ ...request, format, exclude_columns: excludeColumns }),
     signal: AbortSignal.timeout(DOCUMENT_TIMEOUT_MS),
   });
   if (!response.ok) {

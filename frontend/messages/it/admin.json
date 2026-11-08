@@ -537,6 +537,10 @@
       "job_worker": {
         "title": "Worker dei job",
         "description": "Esegue i lavori pesanti in background (importazione galleria, esportazioni PDF, esportazioni dell’associazione, nuove scansioni antivirus, pulizia) - segnale di vita ogni minuto."
+      },
+      "submission_todo_sync": {
+        "title": "Sincronizza le attività di consegna",
+        "description": "Ogni 15 minuti allinea le attività delle consegne con eventi e liste: persona, scadenza, completata appena vengono consegnati file, elementi rimossi."
       }
     }
   },

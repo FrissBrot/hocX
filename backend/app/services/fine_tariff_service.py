@@ -95,3 +95,16 @@ def tariff_block_values(db: Session, tenant_id: int, template_id: int | None = N
         "fine_amount_late": float(tariff.amount_late),
         "fine_amount_absent": float(tariff.amount_absent),
     }
+
+
+def attendance_fine_values(
+    db: Session, config: dict, tenant_id: int | None, template_id: int | None, tariff: dict | None = None
+) -> dict:
+    """Bussen-Schlüssel, die die API in die Konfiguration eines Anwesenheitsblocks einsetzt
+    (attendance-fines.ts liest sie): gespeichert ist nur fines_enabled, Konto und Beträge kommen
+    aus dem Tarif. Jede Antwort mit einem Anwesenheitsblock muss sie tragen - fehlten sie in der
+    Antwort auf einen Klick, legte der Editor danach keine Bussen mehr an und entfernte keine
+    mehr (Bug 2026-11-08). ``tariff`` erspart beim Auflisten mehrerer Blöcke die Abfrage."""
+    if config.get("fines_enabled") and tenant_id is not None:
+        return tariff if tariff is not None else tariff_block_values(db, tenant_id, template_id)
+    return {"fine_account_id": None, "fine_amount_late": 0, "fine_amount_absent": 0}
