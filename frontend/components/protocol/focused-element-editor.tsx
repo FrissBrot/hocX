@@ -84,7 +84,7 @@ import {
   trimSectionName,
   visibleBlockTitle,
 } from "@/components/protocol/protocol-editor-shared";
-import { attendanceFineConfig, syncAttendanceFine } from "@/components/protocol/attendance-fines";
+import { attendanceFineConfig, runAttendanceChangeSerialized, syncAttendanceFine } from "@/components/protocol/attendance-fines";
 import { MatrixEmbeddedBlockEditor } from "@/components/protocol/matrix-embedded-block-editor";
 import {
   MatrixAddColumnCard,
@@ -263,6 +263,12 @@ function FocusedElementEditorImpl({
   const showToast = useToast();
   const sectionRef = useRef<HTMLElement | null>(null);
   const didMountRef = useRef(false);
+  // Neueste Bussen auch für eine gerade wartende Anwesenheitsänderung derselben Person (siehe
+  // runAttendanceChangeSerialized): wird beim Anlegen/Löschen sofort nachgeführt.
+  const protocolFinesRef = useRef(protocolFines);
+  useEffect(() => {
+    protocolFinesRef.current = protocolFines;
+  }, [protocolFines]);
 
   useEffect(() => {
     if (!didMountRef.current) {
@@ -3066,7 +3072,11 @@ function FocusedElementEditorImpl({
                 const fineConfig = attendanceFineConfig(blockConfig);
                 const hasFineConfig = fineConfig.enabled;
 
-                async function handleAttendanceChange(participant: ParticipantSummary, newStatus: string) {
+                function handleAttendanceChange(participant: ParticipantSummary, newStatus: string) {
+                  return runAttendanceChangeSerialized(`${block.id}:${participant.id}`, () => applyAttendanceChange(participant, newStatus));
+                }
+
+                async function applyAttendanceChange(participant: ParticipantSummary, newStatus: string) {
                   const previousEntry = attendanceEntries.find((entry) => String(entry.participant_id) === participant.id);
                   const previousStatus = previousEntry ? String(previousEntry.status) : null;
                   // Explicit lock/unlock around the save, rather than relying only on this
@@ -3089,10 +3099,16 @@ function FocusedElementEditorImpl({
                       participant,
                       status: newStatus,
                       config: fineConfig,
-                      fines: protocolFines,
-                      onRemoved: (fineId) => setProtocolFines((prev) => prev.filter((f) => f.id !== fineId)),
-                      onCreated: (created) =>
-                        setProtocolFines((prev) => [...prev.filter((f) => !(f.participant_id === participant.id && f.status === "pending")), created]),
+                      fines: () => protocolFinesRef.current,
+                      onRemoved: (fineId) => {
+                        protocolFinesRef.current = protocolFinesRef.current.filter((f) => f.id !== fineId);
+                        setProtocolFines((prev) => prev.filter((f) => f.id !== fineId));
+                      },
+                      onCreated: (created) => {
+                        const withoutPending = (list: AttendanceFine[]) => list.filter((f) => !(f.participant_id === participant.id && f.status === "pending"));
+                        protocolFinesRef.current = [...withoutPending(protocolFinesRef.current), created];
+                        setProtocolFines((prev) => [...withoutPending(prev), created]);
+                      },
                     });
 
                     bumpStatsCharts();

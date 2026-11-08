@@ -10,7 +10,7 @@ import { MobileIcon } from "@/components/mobile/mobile-icons";
 import { useMobileSession } from "@/components/mobile/mobile-shell";
 import { MobileAvatar, MobileCheck, MobileChip, MobileSegmented } from "@/components/mobile/mobile-ui";
 import { dateParts } from "@/components/mobile/mobile-utils";
-import { attendanceFineConfig, syncAttendanceFine } from "@/components/protocol/attendance-fines";
+import { attendanceFineConfig, runAttendanceChangeSerialized, syncAttendanceFine } from "@/components/protocol/attendance-fines";
 import { ChartBlockRenderer } from "@/components/protocol/chart-block-renderer";
 import {
   formatFinanceAmount,
@@ -914,6 +914,12 @@ function AttendanceSheet({
   const tally = tallyAttendance(roster, entries);
   const fineConfig = attendanceFineConfig(blockConfig(block));
   const fieldKey = `block-${block.id}`;
+  // Neueste Bussen auch für eine gerade wartende Änderung derselben Person (siehe
+  // runAttendanceChangeSerialized): wird beim Anlegen/Löschen sofort nachgeführt.
+  const finesRef = useRef(fines);
+  useEffect(() => {
+    finesRef.current = fines;
+  }, [fines]);
   const shortLabels: Record<AttendanceStatus, string> = {
     present: t("editor.attShortPresent"),
     late: t("editor.attShortLate"),
@@ -921,7 +927,11 @@ function AttendanceSheet({
     absent: t("editor.attShortAbsent"),
   };
 
-  async function setAttendance(participant: ParticipantSummary, status: AttendanceStatus) {
+  function setAttendance(participant: ParticipantSummary, status: AttendanceStatus) {
+    return runAttendanceChangeSerialized(`${block.id}:${participant.id}`, () => applyAttendance(participant, status));
+  }
+
+  async function applyAttendance(participant: ParticipantSummary, status: AttendanceStatus) {
     const previousEntries = attendanceEntries(block);
     const previousStatus = previousEntries.find((entry) => String(entry.participant_id) === participant.id)?.status ?? null;
     if (previousStatus === status) return;
@@ -946,9 +956,16 @@ function AttendanceSheet({
         participant,
         status,
         config: fineConfig,
-        fines,
-        onRemoved: (fineId) => setFines((current) => current.filter((fine) => fine.id !== fineId)),
-        onCreated: (created) => setFines((current) => [...current.filter((fine) => !(fine.participant_id === participant.id && fine.status === "pending")), created]),
+        fines: () => finesRef.current,
+        onRemoved: (fineId) => {
+          finesRef.current = finesRef.current.filter((fine) => fine.id !== fineId);
+          setFines((current) => current.filter((fine) => fine.id !== fineId));
+        },
+        onCreated: (created) => {
+          const withoutPending = (list: AttendanceFine[]) => list.filter((fine) => !(fine.participant_id === participant.id && fine.status === "pending"));
+          finesRef.current = [...withoutPending(finesRef.current), created];
+          setFines((current) => [...withoutPending(current), created]);
+        },
       });
       onSaved();
     } catch (error) {

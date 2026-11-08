@@ -194,6 +194,9 @@ Prüfseite prüfbar, weil ihr Hash gespeichert war (Migration `0116_document_reg
   Sitzungs-Token gilt für den ganzen Abgabe-Link statt für ein einzelnes Element; Bindung an
   IP-Adresse und Ablaufzeit bleiben.
 - Abgabebox: «GPS-Daten des Bildes mitsenden» erscheint erst, wenn ein Bild ausgewählt ist.
+- Anwesenheit: Wer schnell über «Verspätet» auf «Entschuldigt» weiterklickte, behielt eine offene
+  Verspätungsbusse. Die beiden Änderungen liefen gleichzeitig, die zweite sah die eben angelegte
+  Busse noch nicht. Änderungen derselben Person laufen jetzt nacheinander (Desktop und Mobil).
 
 ### Korrektur: Gekoppelte Listen im Protokoll (Nachtrag vom 2026-11-08)
 

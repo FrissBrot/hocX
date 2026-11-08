@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const api = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/api/client", () => ({ browserApiFetch: api }));
 
-import { attendanceFineConfig, syncAttendanceFine } from "@/components/protocol/attendance-fines";
+import { attendanceFineConfig, runAttendanceChangeSerialized, syncAttendanceFine } from "@/components/protocol/attendance-fines";
 import type { AttendanceFine } from "@/types/api";
 
 const participant = { id: "p1", display_name: "Dario Huber" };
@@ -53,5 +53,40 @@ describe("attendance-fines", () => {
     const onRemoved = vi.fn();
     await syncAttendanceFine({ protocolId: "pr", participant, status: "present", config, fines: [fine("late")], onRemoved, onCreated: vi.fn() });
     expect(onRemoved).toHaveBeenCalledWith("f-late");
+  });
+
+  it("entfernt beim schnellen Weiterklicken auf Entschuldigt die eben angelegte Verspaetungsbusse", async () => {
+    // Bug 2026-11-08: «Verspaetet» und gleich danach «Entschuldigt» liefen parallel - die zweite
+    // Aenderung sah die Busse der ersten noch nicht, die Busse blieb trotz Entschuldigung stehen.
+    let fines: AttendanceFine[] = [];
+    let releaseCreate: (value: AttendanceFine) => void = () => {};
+    api.mockImplementation((path: string, init?: { method?: string }) => {
+      if (init?.method === "POST") return new Promise<AttendanceFine>((resolve) => { releaseCreate = resolve; });
+      return Promise.resolve(undefined);
+    });
+    const change = (status: string) =>
+      runAttendanceChangeSerialized("block:p1", () =>
+        syncAttendanceFine({
+          protocolId: "pr", participant, status, config, fines: () => fines,
+          onRemoved: (id) => { fines = fines.filter((f) => f.id !== id); },
+          onCreated: (created) => { fines = [...fines, created]; },
+        })
+      );
+
+    const late = change("late");
+    const excused = change("excused");
+    await vi.waitFor(() => expect(api).toHaveBeenCalledWith("/api/fines", expect.objectContaining({ method: "POST" })));
+    releaseCreate(fine("late"));
+    await Promise.all([late, excused]);
+
+    expect(fines).toEqual([]);
+    expect(api).toHaveBeenLastCalledWith("/api/fines/f-late", { method: "DELETE" });
+  });
+
+  it("laeuft nach einer fehlgeschlagenen Aenderung mit der naechsten weiter", async () => {
+    const failed = runAttendanceChangeSerialized("block:p2", () => Promise.reject(new Error("offline")));
+    const next = runAttendanceChangeSerialized("block:p2", () => Promise.resolve("ok"));
+    await expect(failed).rejects.toThrow("offline");
+    await expect(next).resolves.toBe("ok");
   });
 });
