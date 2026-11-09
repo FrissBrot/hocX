@@ -154,8 +154,11 @@ def test_export_lists_the_deletion_with_reason_in_the_deleting_protocol(db):
 
     table = protocol_fines(BuildContext(db=db, tenant_id=tenant.id, language="de"), following)
 
-    status = table.groups[0].rows[0].cells[3]
-    assert (status.status, status.v) == ("fineStatus.deleted", "P-A: Doppelt erfasst")
-    assert table.groups[0].rows[0].cells[2].strike is True
+    row = table.groups[0].rows[0]
+    # Herkunft in der Spalte «Protokoll», die Begründung beim Status
+    assert row.cells[2].v.startswith("P-A")
+    status = row.cells[4]
+    assert (status.status, status.v) == ("fineStatus.deleted", "Doppelt erfasst")
+    assert row.cells[3].strike is True
     # Gelöschte Bussen zählen nicht zur Summe.
-    assert table.totals[2].v == ""
+    assert table.totals[3].v == ""
