@@ -1,7 +1,8 @@
 import uuid
 from datetime import date
+from types import SimpleNamespace
 
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -10,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.core.db import get_db
 from app.core.permissions import P
 from app.core.security import CurrentUser, get_current_user, require_permission
-from app.models.entities import Event, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolTodo, Template
+from app.models.entities import ElementType, Event, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolTodo, Template
 from app.schemas.protocol import (
     ProtocolTodoCreate,
     ProtocolTodoRead,
@@ -112,12 +113,73 @@ def list_todos(
     block = public_id_service.get_by_public_id(db, ProtocolElementBlock, protocol_element_block_id)
     if block is None:
         raise HTTPException(status_code=404, detail="Protocol element block not found")
-    access_service.ensure_can_read_protocol_block(db, user, block.id)
+    # Gleiche Prüfung wie ensure_can_read_protocol_block, aber das Protokoll nur einmal ermitteln
     protocol_id = access_service.repository.protocol_id_for_block(db, protocol_element_block_id=block.id)
-    snapshot = service.frozen_snapshot(protocol_service.get_protocol(db, protocol_id) if protocol_id else None)
+    if protocol_id is None:
+        raise HTTPException(status_code=404, detail="Protocol block not found")
+    access_service.ensure_can_read_protocol(db, user, protocol_id)
+    snapshot = _frozen_todo_snapshot(db, protocol_id)
     if snapshot is not None:
         return service.snapshot_todos_for_block(snapshot, block.id)
     return service.list_todos(db, block.id)
+
+
+def _frozen_todo_snapshot(db: Session, protocol_id: int) -> dict | None:
+    """Eingefrorene Aufgaben eines abgeschlossenen Protokolls (frozen_snapshot), ohne die ganze
+    Protokollzeile zu laden: das Snapshot-JSON nur, wenn das Protokoll abgeschlossen ist."""
+    row = db.execute(
+        select(
+            Protocol.status,
+            case((Protocol.status == "abgeschlossen", Protocol.todos_snapshot_json), else_=None).label("todos_snapshot_json"),
+        ).where(Protocol.id == protocol_id)
+    ).one_or_none()
+    if row is None:
+        return None
+    return service.frozen_snapshot(SimpleNamespace(status=row.status, todos_snapshot_json=row.todos_snapshot_json))
+
+
+@router.get("/protocols/{protocol_id}/block-todos", response_model=dict[uuid.UUID, list[ProtocolTodoRead]])
+def list_protocol_block_todos(
+    protocol_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Aufgaben aller Aufgabenblöcke eines Protokolls in einer Anfrage (Block-public_id ->
+    Liste wie GET /protocol-element-blocks/{id}/todos). Die Protokollseite holte sie vorher
+    mit einer Anfrage je Block. Gleiche Prüfungen wie die Einzelroute: meetings.read und
+    Leserecht am Protokoll (Mandant, Status, Teilnehmer-Zuordnung); fremde oder unbekannte
+    Protokolle ergeben 404."""
+    require_permission(user, P.MEETINGS_READ)
+    protocol = public_id_service.get_by_public_id(db, Protocol, protocol_id, tenant_id=user.current_tenant_id)
+    if protocol is None:
+        raise HTTPException(status_code=404, detail="Protocol not found")
+    access_service.ensure_can_read_protocol(db, user, protocol.id)
+    blocks = db.execute(
+        select(ProtocolElementBlock.id, ProtocolElementBlock.public_id)
+        .join(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
+        .join(ElementType, ElementType.id == ProtocolElementBlock.element_type_id)
+        .where(ProtocolElement.protocol_id == protocol.id, ElementType.code == "todo")
+        .order_by(ProtocolElement.sort_index.asc(), ProtocolElementBlock.sort_index.asc(), ProtocolElementBlock.id.asc())
+    ).all()
+    result: dict[uuid.UUID, list[ProtocolTodoRead]] = {}
+    snapshot = service.frozen_snapshot(protocol)
+    if snapshot is not None:
+        for block_id, block_public_id in blocks:
+            result[block_public_id] = service.snapshot_todos_for_block(snapshot, block_id)
+        return result
+    query, *_ = service.repository._base_todo_query()
+    rows = db.execute(
+        query.where(ProtocolTodo.protocol_element_block_id.in_([block_id for block_id, _ in blocks])).order_by(
+            ProtocolTodo.protocol_element_block_id.asc(), ProtocolTodo.sort_index.asc(), ProtocolTodo.id.asc()
+        )
+    ).all() if blocks else []
+    service._prime_public_ids(db, rows)
+    rows_by_block: dict[int, list] = {}
+    for row in rows:
+        rows_by_block.setdefault(row.ProtocolTodo.protocol_element_block_id, []).append(row)
+    for block_id, block_public_id in blocks:
+        result[block_public_id] = [service._row_to_todo_read(db, row) for row in rows_by_block.get(block_id, [])]
+    return result
 
 
 @router.post(

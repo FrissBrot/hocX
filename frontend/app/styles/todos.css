@@ -1,0 +1,264 @@
+/* Bereichs-CSS, geladen nur von: todos. Siehe design/DESIGN.md Abschnitt 10. */
+
+.dropdown-search-input {
+  width: 100%;
+  min-height: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-solid);
+  color: var(--text);
+  font-size: var(--text-base);
+  box-sizing: border-box;
+}
+
+.dropdown-search-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.dropdown-option-active {
+  --button-bg: var(--accent-soft);
+}
+
+.dropdown-empty {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-base);
+  color: var(--muted);
+}
+
+/* Tag column header filter */
+.table-th-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+.table-th-label {
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+}
+
+.table-th-tag-select {
+  appearance: none;
+  -webkit-appearance: none;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--accent) 8%, transparent 92%);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border) 76%);
+  border-radius: var(--radius-sm);
+  padding: 2px var(--space-2) 2px var(--space-2);
+  cursor: pointer;
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: border-color var(--dur-fast), color var(--dur-fast);
+}
+
+.table-th-tag-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+  color: var(--text);
+}
+
+.table-th-tag-select option {
+  background: var(--panel-solid);
+  color: var(--text);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* Deterministic per-tag colors (todos table) - hashes the tag text into one
+   of 5 hues from the existing badge palette, so the same tag always matches. */
+.tag-chip-hue-0 { background: var(--info-bg); border-color: color-mix(in srgb, var(--info-fg) 30%, transparent 70%); color: var(--info-fg); }
+
+.tag-chip-hue-1 { background: var(--warning-bg); border-color: color-mix(in srgb, var(--warning-fg) 30%, transparent 70%); color: var(--warning-fg); }
+
+.tag-chip-hue-2 { background: var(--success-bg); border-color: color-mix(in srgb, var(--success-fg) 30%, transparent 70%); color: var(--success-fg); }
+
+.tag-chip-hue-3 { background: var(--danger-bg); border-color: color-mix(in srgb, var(--danger-fg) 30%, transparent 70%); color: var(--danger-fg); }
+
+.tag-chip-hue-4 { background: var(--neutral-bg); border-color: color-mix(in srgb, var(--neutral-fg) 30%, transparent 70%); color: var(--neutral-fg); }
+
+.todo-row-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.table-row-done .todo-row-task-text { text-decoration: line-through; }
+
+.todo-assignee-cell {
+  font-size: var(--text-sm);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.todo-due-cell {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.todo-due-overdue {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.data-table-lg .todo-row-tags {
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+/* Todo-Tabelle: volle Seitenbreite und lesbare Inhalte, mobil lokal scrollbar. */
+.todos-overview {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.data-table-todos .todo-assignee-cell,
+.data-table-todos .todo-due-cell {
+  display: block;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.data-table-todos .todo-row-tags {
+  flex-wrap: wrap;
+  overflow: visible;
+}
+
+/* ── Todo due-date menu popover ─────────────────────────────────── */
+/* Panel chrome comes from .popover-panel (components/ui/popover.tsx); this only
+   adds the due-menu's own internal layout/options. */
+.due-menu-popover {
+  display: grid;
+  gap: 2px;
+  min-width: 200px;
+}
+
+.due-menu-loading {
+  padding: var(--space-3) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.due-menu-option { --button-hover-bg: var(--accent-soft);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  --button-bg: transparent;
+  background: var(--button-bg);
+  color: var(--text);
+  font-size: var(--text-base);
+  cursor: pointer;
+  text-align: left;
+}
+
+.due-menu-option:hover { --button-bg: var(--accent-soft); background: var(--button-bg); }
+
+.due-menu-option-sub {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.due-menu-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 3px 0;
+}
+
+.todo-edit-heading { position: relative; padding: var(--space-5) 60px var(--space-4) var(--space-5); border-bottom: 1px solid var(--border); }
+
+.todo-edit-eyebrow { display: flex; gap: var(--space-2); align-items: center; color: var(--muted); font-size: var(--text-sm); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+
+.todo-edit-number { color: var(--primary); text-transform: none; letter-spacing: 0; }
+
+.todo-edit-modal .todo-edit-title { width: 100%; min-height: 0; margin-top: var(--space-2); padding: 0; border: 0; border-radius: 0; background: transparent !important; color: var(--text); font: 600 var(--text-2xl)/1.25 Georgia, serif; box-shadow: none; }
+
+.todo-edit-title:disabled { opacity: 1; }
+
+.todo-edit-close { width: 28px; min-height: 28px; --button-bg: transparent; --button-hover-bg: var(--neutral-bg); position: absolute; top: 22px; right: 26px; border: 0; background: transparent; color: var(--muted); font-size: var(--text-2xl); line-height: 1; padding: var(--space-1); }
+
+.todo-edit-body { display: grid; grid-template-columns: minmax(0, 1fr) 294px; }
+
+.todo-edit-main, .todo-edit-sidebar { display: flex; flex-direction: column; gap: var(--space-5); padding: var(--space-5) var(--space-5) var(--space-5); min-width: 0; }
+
+.todo-edit-sidebar { background: color-mix(in srgb, var(--bg) 55%, var(--panel)); border-left: 1px solid var(--border); padding-inline: var(--space-5); }
+
+.todo-edit-modal .field-stack { gap: var(--space-2); }
+
+.todo-edit-status { display: flex; padding: 3px; border-radius: var(--radius-md); background: color-mix(in srgb, var(--muted) 12%, var(--panel)); }
+
+.todo-edit-status button[aria-pressed="true"] { background: var(--panel); color: var(--text); box-shadow: var(--shadow-soft); }
+
+.todo-edit-modal .tag-input-field { min-height: 30px; border: 0; background: transparent; padding: 0; gap: var(--space-2); box-shadow: none; }
+
+.todo-edit-modal .tag-chip { border: 0; border-radius: var(--radius-pill); padding: var(--space-1) var(--space-3); background: color-mix(in srgb, var(--primary) 13%, var(--panel)); color: var(--primary); }
+
+.todo-edit-modal .modal-content input.tag-input-text:not([type="checkbox"]):not([type="radio"]) { min-width: 100px; min-height: 30px; padding: var(--space-1) var(--space-3); border: 1px dashed var(--border); border-radius: var(--radius-pill); background: transparent; font-size: var(--text-sm); }
+
+.todo-edit-source { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); min-width: 0; }
+
+.todo-edit-source small { display: block; margin-top: 2px; color: var(--muted); font-size: var(--text-sm); }
+
+.todo-edit-source-icon { display: grid; place-items: center; flex-shrink: 0; width: 35px; height: 35px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--primary) 10%, var(--panel)); color: var(--primary); }
+
+.todo-edit-source-arrow { margin-left: auto; color: var(--muted); }
+
+.todo-edit-sidebar .mini-menu, .todo-edit-sidebar .mini-menu-trigger { width: 100%; }
+
+.todo-edit-sidebar .mini-menu-trigger-label { white-space: normal; overflow-wrap: anywhere; }
+
+.todo-edit-sidebar .mini-menu-trigger { justify-content: space-between; min-height: 39px; padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--panel); color: var(--text); }
+
+.todo-edit-overdue { color: var(--danger); font-size: var(--text-sm); }
+
+.todo-edit-footer { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); padding: var(--space-4) var(--space-5); border-top: 1px solid var(--border); }
+
+.todo-edit-delete { width: auto; min-height: 0; flex-shrink: 0; --button-bg: transparent; --button-hover-bg: transparent; border: 0; padding: var(--space-2) 0; color: var(--danger); background: transparent; font-size: var(--text-base); }
+
+.todo-edit-actions { flex-shrink: 0; display: flex; gap: var(--space-3); margin-left: auto; }
+
+@media (max-width: 640px) {
+  .todo-edit-body { grid-template-columns: minmax(0, 1fr); }
+  .todo-edit-sidebar { border-left: 0; border-top: 1px solid var(--border); }
+  .todo-edit-heading { padding-left: var(--space-4); }
+  .todo-edit-main, .todo-edit-sidebar { padding: var(--space-4); }
+  .todo-edit-modal .todo-edit-title { font-size: var(--text-xl); }
+  .todo-edit-footer { flex-wrap: wrap; padding: var(--space-4) var(--space-4); }
+}
+
+.todo-edit-modal .todo-edit-title:focus-visible { outline: 2px solid var(--focus-ring-color); outline-offset: 3px; }
+
+/* Todo-Popup: Notizen (Markdown wie im Protokoll) und verknüpfte Dateien */
+.todo-edit-notes .rich-text-editor-content { min-height: 96px; max-height: 320px; overflow-y: auto; }
+
+.todo-edit-files { display: flex; flex-direction: column; gap: var(--space-1); margin: 0; padding: 0; list-style: none; }
+
+.todo-edit-file { display: flex; flex: 1; align-items: center; gap: var(--space-2); min-width: 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); text-decoration: none; }
+
+.todo-edit-file:hover { border-color: var(--border-strong); background: var(--neutral-bg); }
+
+.todo-file-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.todo-file-picker { display: flex; flex-direction: column; gap: var(--space-1); }
+
+.todo-file-results { position: static; }
+
+.todo-file-option { display: flex; align-items: center; gap: var(--space-2); }

@@ -1846,6 +1846,18 @@
         "meetings.edit"
       ]
     },
+    "GET /api/protocols/{protocol_id}/block-images": {
+      "handler": "files.list_protocol_block_images",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "GET /api/protocols/{protocol_id}/block-todos": {
+      "handler": "todos.list_protocol_block_todos",
+      "requires": [
+        "meetings.read"
+      ]
+    },
     "GET /api/protocols/{protocol_id}/cycle-events": {
       "handler": "protocols.get_cycle_events",
       "requires": [

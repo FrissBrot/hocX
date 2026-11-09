@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import type { Route } from "next";
 import { ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -18,12 +19,24 @@ import { ToastProvider, useToast } from "@/contexts/toast-context";
 import { ConfirmProvider, useConfirm } from "@/contexts/confirm-context";
 import { clearSimilarityGroupsCache } from "@/components/photos/use-similarity-groups";
 import { clearOfflineStore, getOfflineSnapshot } from "@/lib/offline-store";
-import { ProfileModal } from "@/components/ui/profile-modal";
 import { Menu, MenuDivider, MenuItem, Popover } from "@/components/ui/popover";
 import { ConnectivityStatus } from "@/components/ui/connectivity-status";
 import { CopyrightNotice } from "@/components/ui/copyright-notice";
 import { MobileShell } from "@/components/mobile/mobile-shell";
 import { useIsMobile } from "@/lib/hooks/use-is-mobile";
+
+// Erst beim Oeffnen laden (MFA-Verwaltung, geschuetzter Export, Sprachwahl).
+const ProfileModal = dynamic(() => import("@/components/ui/profile-modal").then((m) => m.ProfileModal), {
+  ssr: false,
+});
+
+// Sitzungspruefung im Browser: Jede Seite liefert die serverseitig frisch geladene Sitzung als
+// initialSession mit; ein eigener Abruf von /api/auth/session ist daher nur noetig, wenn keine
+// mitkam oder der letzte Abruf/die letzte Seite laenger als SESSION_STALE_MS her ist (Rueckkehr
+// in einen Tab, der lange im Hintergrund lag - abgelaufene Sitzung fuehrt dann zum Login).
+// Modulweit, weil AppShell bei jedem Seitenwechsel neu gemountet wird.
+const SESSION_STALE_MS = 60_000;
+let lastSessionCheckAt = 0;
 
 // Login rendert nie auf einer Mandanten-Custom-Domain — von dort muss eine volle Navigation
 // (nicht SPA-Routing) zur Hauptdomain erfolgen, sonst gäbe es dort keine Login-Seite zu zeigen.
@@ -140,25 +153,30 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
   useEffect(() => {
     let cancelled = false;
 
+    // Wendet eine (frisch geladene oder vom Server mitgelieferte) Sitzung an.
+    function applySession(current: SessionInfo) {
+      if (!current.authenticated) {
+        // Explicit "not logged in" from the server → redirect.
+        redirectToLogin(router);
+        return;
+      }
+      if (current.bridge_redirect_url && attemptBridgeRedirect(current.bridge_redirect_url)) {
+        return;
+      }
+      setSession(current);
+      setLanguage(current.user?.preferred_language ?? "de");
+      setProtocolAccordionEnabled(current.user?.protocol_accordion_enabled ?? true);
+      setProtocolWheelEnabled(current.user?.protocol_wheel_enabled ?? false);
+      setSessionStatus(t("sessionReady"));
+    }
+
     async function loadSession() {
+      lastSessionCheckAt = Date.now();
       try {
         const current = await browserApiFetch<SessionInfo>("/api/auth/session");
-        if (cancelled) {
-          return;
+        if (!cancelled) {
+          applySession(current);
         }
-        if (!current.authenticated) {
-          // Explicit "not logged in" from the server → redirect.
-          redirectToLogin(router);
-          return;
-        }
-        if (current.bridge_redirect_url && attemptBridgeRedirect(current.bridge_redirect_url)) {
-          return;
-        }
-        setSession(current);
-        setLanguage(current.user?.preferred_language ?? "de");
-        setProtocolAccordionEnabled(current.user?.protocol_accordion_enabled ?? true);
-        setProtocolWheelEnabled(current.user?.protocol_wheel_enabled ?? false);
-        setSessionStatus(t("sessionReady"));
       } catch {
         // Transient errors (network hiccup, backend 500, timeout) must NOT log
         // the user out. The session endpoint always returns HTTP 200 — a throw
@@ -171,10 +189,29 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
       }
     }
 
-    void loadSession();
+    function refreshIfStale() {
+      if (document.visibilityState === "visible" && Date.now() - lastSessionCheckAt > SESSION_STALE_MS) {
+        void loadSession();
+      }
+    }
+
+    // Mount: die mitgelieferte Sitzung kommt frisch vom Server und ersetzt den Abruf.
+    if (initialSession?.authenticated) {
+      lastSessionCheckAt = Date.now();
+      applySession(initialSession);
+    } else {
+      void loadSession();
+    }
+
+    window.addEventListener("focus", refreshIfStale);
+    document.addEventListener("visibilitychange", refreshIfStale);
     return () => {
       cancelled = true;
+      window.removeEventListener("focus", refreshIfStale);
+      document.removeEventListener("visibilitychange", refreshIfStale);
     };
+    // Laeuft beim Mount und wenn der Server eine neue Sitzung mitliefert (router.refresh(),
+    // Seitenwechsel innerhalb derselben Route) - dann ohne zusaetzlichen Request.
   }, [initialSession, router, t]);
 
   const activeCrumb = useMemo(() => {
@@ -239,9 +276,9 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
     }
   }
 
-  const profileModal = (
+  const profileModal = profileModalOpen ? (
     <ProfileModal
-      open={profileModalOpen}
+      open
       onClose={() => setProfileModalOpen(false)}
       language={language}
       onLanguageChange={setLanguage}
@@ -252,7 +289,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
       onSave={saveProfile}
       onLogout={() => void logout()}
     />
-  );
+  ) : null;
 
   // Mobile (bis 900 px): eigene Shell mit Tableiste statt Sidebar. Dieselben Routen, nur die
   // Bereiche aus dem Mobile-Design stehen in der Navigation (siehe mobile-shell.tsx).

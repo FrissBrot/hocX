@@ -1,5 +1,6 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 
 import { backendFetch } from "@/lib/api/client";
 import { SessionInfo, TenantSummary } from "@/types/api";
@@ -34,7 +35,9 @@ export async function backendFetchAllPagesWithSession<T>(path: string, pageSize 
   return items;
 }
 
-export async function requireSession(): Promise<SessionInfo> {
+// cache(): innerhalb eines Server-Renders teilen sich alle Aufrufer (Seite, Layout, Komponenten)
+// denselben Sitzungsabruf statt je einen eigenen Request an /api/auth/session.
+export const requireSession = cache(async function requireSession(): Promise<SessionInfo> {
   const session = await backendFetchWithSession<SessionInfo>("/api/auth/session");
   if (session === null) {
     // Volle Wartung: das Backend antwortet mit 503 - Wartungsansicht statt Fehlerseite.
@@ -64,7 +67,7 @@ export async function requireSession(): Promise<SessionInfo> {
     redirect("/login");
   }
   return session;
-}
+});
 
 // Shared by the /tenant-settings/* pages (Allgemein, Domains, Abo & Nutzung each get their own
 // route): resolves which tenant to show from an optional `?tenantId=` override, falling back to

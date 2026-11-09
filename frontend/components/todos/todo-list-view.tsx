@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
@@ -11,7 +12,6 @@ import { FilterTabOption, FilterTabs } from "@/components/ui/filter-tabs";
 import { SearchInput } from "@/components/ui/search-input";
 import { TagInput } from "@/components/ui/tag-input";
 import { DocumentExportButton } from "@/components/documents/export-dialog";
-import { TodoEditModal } from "@/components/todos/todo-edit-modal";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { TODO_STATUS } from "@/components/protocol/protocol-editor-shared";
 import { browserApiFetch } from "@/lib/api/client";
@@ -20,6 +20,11 @@ import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { formatDate } from "@/lib/utils/format";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { ParticipantSummary, TodoBlock, TodoListItem } from "@/types/api";
+
+// Erst beim Oeffnen laden: das Bearbeiten-Modal zieht den TipTap-Editor mit.
+const TodoEditModal = dynamic(() => import("@/components/todos/todo-edit-modal").then((m) => m.TodoEditModal), {
+  ssr: false,
+});
 
 type SortKey = "task" | "protocol_number" | "assigned_participant_name" | "resolved_due_date" | "todo_status_code";
 

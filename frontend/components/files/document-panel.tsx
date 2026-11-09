@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
+import { useVisibleInterval } from "@/lib/hooks/use-visible-interval";
 import { formatDateTime } from "@/lib/utils/format";
 import { DocumentDetail, DocumentStatus, DocumentSummary, DocumentText, DocumentVersionRead } from "@/types/api";
 
@@ -49,11 +50,8 @@ export function useDocumentDetail(summary: DocumentSummary | null | undefined) {
   }, [reload]);
 
   const processing = detail?.status === "processing";
-  useEffect(() => {
-    if (!processing) return;
-    const timer = setInterval(() => void reload(), POLL_INTERVAL_MS);
-    return () => clearInterval(timer);
-  }, [processing, reload]);
+  // Nur waehrend der Verarbeitung; pausiert in Hintergrund-Tabs.
+  useVisibleInterval(() => void reload(), processing ? POLL_INTERVAL_MS : null);
 
   return { detail, loadFailed, reload };
 }

@@ -9,6 +9,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { browserApiFetch } from "@/lib/api/client";
+import { useVisibleInterval } from "@/lib/hooks/use-visible-interval";
 import { formatDateTime, formatFileSize, formatTime, formatWeekdayDate } from "@/lib/utils/format";
 import { ContainerStatusEntry, HealthCheckEntry, HealthStatus, SystemHealthEvent, SystemProblem, SystemStatus } from "@/types/api";
 
@@ -97,6 +98,9 @@ export function AdminSystemStatus({ initialStatus }: Props) {
   const [status, setStatus] = useState(initialStatus);
   const [filter, setFilter] = useState<"all" | "problems">("all");
   const loadingRef = useRef(false);
+  // Abruf des aktuellen Effekts; das Polling pausiert in Hintergrund-Tabs (useVisibleInterval).
+  const pollRef = useRef<(() => void) | null>(null);
+  useVisibleInterval(() => pollRef.current?.(), POLL_INTERVAL_MS);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,10 +116,10 @@ export function AdminSystemStatus({ initialStatus }: Props) {
         loadingRef.current = false;
       }
     }
-    const interval = setInterval(() => void load(), POLL_INTERVAL_MS);
+    pollRef.current = () => void load();
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      pollRef.current = null;
     };
   }, []);
 

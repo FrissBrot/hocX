@@ -22,7 +22,7 @@ from app.core.rate_limit import enforce_rate_limit
 from app.core.permissions import P
 from app.core.features_generated import F
 from app.core.security import CurrentUser, get_current_user, require_feature, require_permission
-from app.models import GalleryImage, Protocol, ProtocolElementBlock, ProtocolImage, StoredFile, Tenant
+from app.models import ElementType, GalleryImage, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolImage, StoredFile, Tenant
 from app.schemas.files import (
     AlbumPendingReleaseRead,
     AlbumReleaseRequest,
@@ -754,6 +754,58 @@ def list_images(
         raise HTTPException(status_code=404, detail="Protocol element block not found")
     access_service.ensure_can_read_protocol_block(db, user, block.id)
     return service.list_protocol_images(db, block.id)
+
+
+@router.get("/protocols/{protocol_id}/block-images", response_model=dict[uuid.UUID, list[ProtocolImageRead]])
+def list_protocol_block_images(
+    protocol_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Bilder aller Bildblöcke eines Protokolls in einer Anfrage (Block-public_id -> Liste wie
+    GET /protocol-element-blocks/{id}/images), statt einer Anfrage je Block. Gleiche Prüfungen
+    wie die Einzelroute: meetings.read und Leserecht am Protokoll; fremde oder unbekannte
+    Protokolle ergeben 404."""
+    require_permission(user, P.MEETINGS_READ)
+    protocol = public_id_service.get_by_public_id(db, Protocol, protocol_id, tenant_id=user.current_tenant_id)
+    if protocol is None:
+        raise HTTPException(status_code=404, detail="Protocol not found")
+    access_service.ensure_can_read_protocol(db, user, protocol.id)
+    blocks = db.execute(
+        select(ProtocolElementBlock.id, ProtocolElementBlock.public_id)
+        .join(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
+        .join(ElementType, ElementType.id == ProtocolElementBlock.element_type_id)
+        .where(ProtocolElement.protocol_id == protocol.id, ElementType.code == "image")
+        .order_by(ProtocolElement.sort_index.asc(), ProtocolElementBlock.sort_index.asc(), ProtocolElementBlock.id.asc())
+    ).all()
+    result: dict[uuid.UUID, list[ProtocolImageRead]] = {block_public_id: [] for _, block_public_id in blocks}
+    if not blocks:
+        return result
+    public_id_by_block = {block_id: block_public_id for block_id, block_public_id in blocks}
+    rows = db.execute(
+        select(ProtocolImage, StoredFile)
+        .join(StoredFile, StoredFile.id == ProtocolImage.stored_file_id)
+        .where(ProtocolImage.protocol_element_block_id.in_(list(public_id_by_block)))
+        .order_by(ProtocolImage.protocol_element_block_id.asc(), ProtocolImage.sort_index.asc(), ProtocolImage.id.asc())
+    ).all()
+    # Gleiche Felder wie FileService.list_protocol_images
+    for row in rows:
+        block_public_id = public_id_by_block[row.ProtocolImage.protocol_element_block_id]
+        result[block_public_id].append(
+            ProtocolImageRead(
+                id=row.ProtocolImage.public_id,
+                protocol_element_block_id=block_public_id,
+                stored_file_id=row.StoredFile.public_id,
+                sort_index=row.ProtocolImage.sort_index,
+                title=row.ProtocolImage.title,
+                caption=row.ProtocolImage.caption,
+                original_name=row.StoredFile.original_name,
+                mime_type=row.StoredFile.mime_type,
+                file_size_bytes=row.StoredFile.file_size_bytes,
+                content_url=service.build_content_url(row.StoredFile.public_id),
+            )
+        )
+    return result
 
 
 def _ensure_block_protocol_not_frozen(db: Session, protocol_element_block_id: int) -> None:

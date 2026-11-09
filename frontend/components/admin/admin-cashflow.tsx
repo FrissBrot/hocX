@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import dynamic from "next/dynamic";
 
 import { ActionIcon } from "@/components/ui/action-icons";
 import { ActionMenu, ActionMenuItem } from "@/components/ui/action-menu";
@@ -18,7 +18,6 @@ import { Tabs } from "@/components/ui/tabs";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
-import { CHART_COLORS } from "@/lib/constants/chart-colors";
 import { formatDate, formatPercentNumber, formatRappen, toIntlLocale } from "@/lib/utils/format";
 import type {
   CashflowCost,
@@ -33,6 +32,11 @@ import type {
 import { Select } from "@/components/ui/select";
 
 type TFunc = ReturnType<typeof useTranslations>;
+
+// recharts erst nachladen (nur im Browser), siehe admin-cashflow-chart.tsx.
+const CashflowChart = dynamic(() => import("@/components/admin/admin-cashflow-chart").then((m) => m.CashflowChart), {
+  ssr: false,
+});
 
 /** Rabatt einer Forderung in Prozent, 0 ohne Rabattzeile. */
 function discountOf(charge: TenantCharge): number {
@@ -285,7 +289,12 @@ function OverviewTab({ t, overview, year, onYearChange }: { t: TFunc; overview: 
         <div className="stats-chart-header">
           <span className="stats-chart-title">{t("chart.title", { year })}</span>
         </div>
-        <CashflowChart t={t} months={overview.months} withPlanned={withPlanned} />
+        <CashflowChart
+          t={t}
+          months={overview.months}
+          withPlanned={withPlanned}
+          formatMonth={(month) => monthLabel(month, locale, "short")}
+        />
       </section>
 
       <DataTable
@@ -329,53 +338,6 @@ function OverviewTab({ t, overview, year, onYearChange }: { t: TFunc; overview: 
         </tr>
       </DataTable>
     </div>
-  );
-}
-
-function ChartTooltip({ active, payload, label, locale }: {
-  active?: boolean;
-  payload?: { name: string; value: number; color: string }[];
-  label?: string;
-  locale: string;
-}) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="stats-tooltip">
-      {label ? <div className="stats-tooltip-label">{label}</div> : null}
-      {payload.map((entry) => (
-        <div key={entry.name} className="stats-tooltip-row">
-          <span className="stats-tooltip-dot" style={{ background: entry.color }} />
-          <span className="stats-tooltip-name">{entry.name}:</span>
-          <span className="stats-tooltip-val">{formatRappen(Math.round(entry.value * 100), locale)}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function CashflowChart({ t, months, withPlanned }: { t: TFunc; months: CashflowMonth[]; withPlanned: boolean }) {
-  const locale = useLocale();
-  const data = months.map((month) => ({
-    month: monthLabel(month.month, locale, "short"),
-    income: month.income_rp / 100,
-    expenses: (month.fixed_rp + month.percent_rp) / 100,
-    planned: (month.planned_fixed_rp + month.planned_percent_rp) / 100,
-  }));
-  return (
-    <ResponsiveContainer width="100%" height={260}>
-      <BarChart data={data} barSize={16} barGap={2}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-        <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="var(--muted)" />
-        <YAxis tick={{ fontSize: 11 }} stroke="var(--muted)" width={56} />
-        <Tooltip cursor={{ fill: "var(--accent-soft)" }} content={<ChartTooltip locale={locale} />} />
-        <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: "var(--text-xs)" }} />
-        <Bar isAnimationActive={false} dataKey="income" name={t("chart.income")} fill={CHART_COLORS.income} radius={[4, 4, 0, 0]} />
-        <Bar isAnimationActive={false} dataKey="expenses" name={t("chart.expenses")} stackId="expenses" fill={CHART_COLORS.expenses} radius={withPlanned ? [0, 0, 0, 0] : [4, 4, 0, 0]} />
-        {withPlanned ? (
-          <Bar isAnimationActive={false} dataKey="planned" name={t("chart.planned")} stackId="expenses" fill="var(--chart-3)" radius={[4, 4, 0, 0]} />
-        ) : null}
-      </BarChart>
-    </ResponsiveContainer>
   );
 }
 

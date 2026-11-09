@@ -1,0 +1,473 @@
+/* Bereichs-CSS, geladen nur von: elements protocols submission-assignments templates. Siehe design/DESIGN.md Abschnitt 10. */
+
+.block-editor-hero {
+  padding: var(--space-5) var(--space-5);
+  border-radius: var(--radius-xl);
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border) 82%);
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--accent) 12%, transparent 88%), transparent 40%),
+    linear-gradient(180deg, color-mix(in srgb, var(--panel-solid) 96%, transparent 4%), color-mix(in srgb, var(--accent) 4%, transparent 96%));
+}
+
+.block-editor-hero-copy {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.block-editor-hero-action {
+  align-self: flex-start;
+}
+
+.selection-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.selection-card-checkbox {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+}
+
+.selection-card-active {
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent 66%);
+  background: color-mix(in srgb, var(--accent) 10%, transparent 90%);
+}
+
+.block-type-category-stack {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.block-type-category-head {
+  display: grid;
+  gap: 2px;
+  margin-bottom: var(--space-3);
+}
+
+.block-type-card:hover {
+  transform: translateY(-2px);
+}
+
+.block-type-card-active {
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent 66%);
+  --button-bg: color-mix(in srgb, var(--accent) 10%, transparent 90%);
+  background: var(--button-bg);
+}
+
+.block-type-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.block-type-preview {
+  min-height: 150px;
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  padding: var(--space-4);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--panel-solid) 96%, transparent 4%), color-mix(in srgb, var(--accent) 5%, transparent 95%));
+}
+
+.block-type-preview-line,
+.block-type-preview-title,
+.block-type-preview-chip {
+  border-radius: var(--radius-md);
+}
+
+.block-type-preview-image {
+  border-radius: var(--radius-md);
+}
+
+.block-type-preview-title {
+  width: 68%;
+  height: 16px;
+  background: color-mix(in srgb, var(--text) 14%, transparent 86%);
+}
+
+.block-type-preview-line {
+  width: 100%;
+  height: 12px;
+  background: color-mix(in srgb, var(--text) 10%, transparent 90%);
+}
+
+.block-type-preview-line-short {
+  width: 58%;
+}
+
+.block-type-preview-chip {
+  width: 78px;
+  height: 28px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent 84%);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent 76%);
+}
+
+.block-type-preview-image {
+  width: 100%;
+  min-height: 88px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, transparent 84%), transparent),
+    linear-gradient(180deg, color-mix(in srgb, var(--text) 8%, transparent 92%), color-mix(in srgb, var(--text) 2%, transparent 98%));
+  border: 1px solid var(--border);
+}
+
+.block-type-preview-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.block-type-preview-row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.block-type-preview-checkbox-checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.block-type-preview-dot-muted {
+  background: color-mix(in srgb, var(--text) 18%, transparent 82%);
+}
+
+.block-type-preview-tag-warn {
+  background: color-mix(in srgb, var(--warning) 20%, transparent 80%);
+  border-color: color-mix(in srgb, var(--warning) 32%, transparent 68%);
+}
+
+.block-type-preview-amount {
+  width: 62%;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 22%, transparent 78%);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent 70%);
+}
+
+.block-type-preview-grid {
+  display: grid;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.block-type-preview-grid-cols-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.block-type-preview-grid-cols-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.block-type-preview-cell {
+  height: 18px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--text) 10%, transparent 90%);
+}
+
+.block-type-preview-cell-accent {
+  background: color-mix(in srgb, var(--accent) 18%, transparent 82%);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent 76%);
+}
+
+.block-type-preview-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  height: 88px;
+}
+
+.block-type-preview-calendar {
+  min-height: 150px;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 0;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--panel-solid) 96%, transparent 4%), color-mix(in srgb, var(--accent) 5%, transparent 95%));
+}
+
+.block-type-preview-calendar-head {
+  height: 22px;
+  background: color-mix(in srgb, var(--accent) 22%, transparent 78%);
+}
+
+.block-type-preview-calendar-body {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-2);
+  padding: var(--space-4);
+  align-content: start;
+}
+
+.block-type-preview-calendar-cell {
+  border-radius: var(--radius-sm);
+  aspect-ratio: 1;
+  background: color-mix(in srgb, var(--text) 8%, transparent 92%);
+}
+
+.block-type-preview-calendar-cell-active {
+  background: var(--accent);
+}
+
+.block-type-summary {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.matrix-column-config-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.matrix-column-config-card {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel-solid) 90%, transparent 10%);
+}
+
+.matrix-column-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.matrix-column-remove {
+  min-height: 42px;
+  padding-inline: var(--space-4);
+}
+
+.matrix-column-title {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel-solid) 90%, transparent 10%);
+}
+
+.matrix-column-title {
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+.matrix-column-header {
+    grid-template-columns: 1fr;
+  }
+
+  .block-type-grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+}
+
+/* Escape hatch for data-table-lg's default single-line nowrap, for columns with
+   variable-length free text (descriptions etc.) that would otherwise force the
+   whole table to the width of its longest row. */
+.data-table-lg td.table-cell-wrap {
+  white-space: normal;
+}
+
+.subm-edit-eyebrow { display: flex; gap: var(--space-2); align-items: center; color: var(--muted); font-size: var(--text-sm); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+
+.subm-edit-modal .modal-content .subm-edit-title:not([type="checkbox"]):not([type="radio"]) { width: 100%; min-height: 0; margin-top: var(--space-2); padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--text); font: 600 var(--text-2xl)/1.25 Georgia, serif; box-shadow: none; }
+
+.subm-edit-title::placeholder { color: var(--muted); font-weight: 400; }
+
+.subm-edit-modal .subm-edit-title:focus-visible { outline: 2px solid var(--focus-ring-color); outline-offset: 3px; }
+
+.subm-edit-sidebar { background: color-mix(in srgb, var(--bg) 55%, var(--panel)); border-left: 1px solid var(--border); }
+
+.subm-edit-modal .field-stack { gap: var(--space-2); }
+
+.subm-edit-sources { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
+
+.subm-edit-modal .subm-edit-source-card:hover { border-color: var(--border-strong); }
+
+.subm-edit-modal .subm-edit-source-card[aria-checked="true"] { --button-bg: var(--accent-soft); --button-hover-bg: var(--accent-soft); border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+.subm-edit-modal .subm-edit-source-card[aria-checked="true"] strong { color: var(--accent-strong); }
+
+.subm-edit-label-row { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); }
+
+.subm-edit-count { color: var(--muted); font-size: var(--text-sm); }
+
+.subm-edit-types { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--panel-solid); overflow: hidden; }
+
+.subm-edit-type-row { display: grid; grid-template-columns: 120px minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); }
+
+.subm-edit-type-row + .subm-edit-type-row { border-top: 1px solid var(--border); }
+
+.subm-edit-modal .subm-edit-chip:hover { border-color: var(--text); color: var(--text); }
+
+.subm-edit-modal .subm-edit-chip:disabled { opacity: 0.5; cursor: not-allowed; border-color: var(--border-strong); color: var(--muted); }
+
+.subm-edit-modal .subm-edit-chip[aria-pressed="true"], .subm-edit-modal .subm-edit-chip[aria-checked="true"] { --button-bg: var(--primary); --button-hover-bg: var(--primary-strong); border-color: var(--primary); color: var(--primary-contrast); }
+
+.subm-edit-modal .subm-edit-type-all:hover { color: var(--text); }
+
+.subm-edit-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); }
+
+.subm-edit-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.subm-edit-url { display: block; padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--panel-solid); color: var(--text); font-family: var(--font-mono); font-size: var(--text-sm); line-height: 1.5; overflow-wrap: anywhere; }
+
+.subm-edit-link-option { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--panel-solid); color: var(--text); font-size: var(--text-md); cursor: pointer; }
+
+.subm-edit-link-option:hover { border-color: var(--border-strong); }
+
+.subm-edit-summary { padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--panel-solid); }
+
+.subm-edit-summary p { margin: 0; font-size: var(--text-base); line-height: 1.6; }
+
+.subm-edit-tag { padding: var(--space-1) var(--space-3); border-radius: var(--radius-pill); background: var(--info-bg); color: var(--info-fg); font-size: var(--text-sm); font-weight: 600; }
+
+.subm-edit-scan { display: flex; align-items: flex-start; gap: var(--space-2); margin: var(--space-1) 0 0; color: var(--muted); font-size: var(--text-sm); line-height: 1.5; }
+
+.subm-edit-modal .subm-edit-manage:hover { color: var(--accent-strong); }
+
+@media (max-width: 900px) {
+  /* Untereinander im normalen Fluss: ein Grid mit definierter Höhe würde die Zeilen auf die Modal-Höhe kappen. */
+  .subm-edit-body { display: block; overflow-y: auto; }
+  .subm-edit-main, .subm-edit-sidebar { overflow: visible; }
+  .subm-edit-sidebar { border-left: 0; border-top: 1px solid var(--border); }
+}
+
+@media (max-width: 640px) {
+  .subm-edit-heading { padding-left: var(--space-4); }
+  .subm-edit-main, .subm-edit-sidebar { padding: var(--space-4); }
+  .subm-edit-modal .modal-content .subm-edit-title:not([type="checkbox"]):not([type="radio"]) { font-size: var(--text-xl); }
+  .subm-edit-sources, .subm-edit-grid, .subm-edit-grid-2 { grid-template-columns: minmax(0, 1fr); }
+  .subm-edit-type-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .subm-edit-type-row .subm-edit-chips { grid-column: 1 / -1; grid-row: 2; }
+}
+
+.chart-cycle-selection {
+  gap: var(--space-3);
+}
+
+.chart-cycle-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+}
+
+.chart-cycle-options .button-pill-active {
+  border-color: var(--accent);
+  --button-bg: var(--accent-soft);
+  --button-hover-bg: var(--accent-soft);
+  color: var(--text);
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .chart-cycle-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ── Bereiche unter "Mehr": Zusatzklassen ──────────────────────── */
+.mobile-row-button {
+  --button-bg: transparent;
+  --button-hover-bg: transparent;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: var(--button-bg);
+  color: inherit;
+  font-weight: inherit;
+  text-align: left;
+}
+
+/* Lösch-Dialog mit Dateiauswahl (components/ui/delete-with-files-modal.tsx) */
+.delete-files {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.delete-files-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.delete-files-group {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.delete-files-heading {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.delete-files-list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.delete-files-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-solid);
+  cursor: pointer;
+}
+
+.delete-files-item-locked {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.delete-files-thumb {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  object-fit: cover;
+  border-radius: var(--radius-xs);
+  background: var(--neutral-bg);
+}
+
+.delete-files-text {
+  display: grid;
+  min-width: 0;
+}
+
+.delete-files-name {
+  overflow: hidden;
+  font-size: var(--text-base);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.delete-files-hint {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}

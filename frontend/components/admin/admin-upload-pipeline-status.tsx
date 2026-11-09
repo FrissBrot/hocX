@@ -9,6 +9,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SOURCE_KEY } from "@/components/files/file-detail-modal";
 import { browserApiFetch } from "@/lib/api/client";
+import { useVisibleInterval } from "@/lib/hooks/use-visible-interval";
 import { formatDateTime, formatFileSize } from "@/lib/utils/format";
 import {
   AdminTenantSummary,
@@ -73,6 +74,9 @@ export function AdminUploadPipelineStatus({ initialOverview, tenants }: Props) {
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
   const loadingRef = useRef(false);
+  // Abruf mit den aktuellen Filtern; das Polling pausiert in Hintergrund-Tabs (useVisibleInterval).
+  const pollRef = useRef<(() => void) | null>(null);
+  useVisibleInterval(() => pollRef.current?.(), POLL_INTERVAL_MS);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,10 +105,10 @@ export function AdminUploadPipelineStatus({ initialOverview, tenants }: Props) {
     }
 
     void load();
-    const interval = setInterval(() => void load(), POLL_INTERVAL_MS);
+    pollRef.current = () => void load();
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      pollRef.current = null;
     };
   }, [tenantId, source, scanStatus, offset]);
 

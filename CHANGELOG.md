@@ -8,8 +8,8 @@ Installationen aktualisieren können.
 
 ## [1.2.1] - Unveröffentlicht
 
-Fehlerkorrekturen auf 1.2.0 und kleinere Erweiterungen aus dem Testbetrieb. Drei neue
-Migrationen (`0163`–`0165`), keine Breaking Changes. Das Update läuft wie gewohnt über
+Fehlerkorrekturen auf 1.2.0, kleinere Erweiterungen aus dem Testbetrieb und ein Performance-Paket.
+Vier neue Migrationen (`0163`–`0166`), keine Breaking Changes. Das Update läuft wie gewohnt über
 `deploy.sh`; die Migrationen korrigieren dabei bestehende Daten (siehe «Datenkorrekturen beim
 Update»).
 
@@ -24,6 +24,19 @@ Update»).
   werden erledigt. Einträge des Abgabe-Verlaufs aus dem erneuten Virenscan bekommen die richtige
   Element-Referenz.
 - `0165_event_field_config`: neue Mandanten-Einstellung für die Spezialfelder der Termine.
+- `0166_perf_job_run_indexes`: `record_job_run` sucht den letzten Lauf über den passenden Index
+  statt über den ganzen Verlauf, vier überflüssige Indizes entfallen. Keine Datenänderung.
+
+### Beim Update beachten
+
+- **Postgres-Parameter im Release-Stack:** `random_page_cost=1.1`, `effective_io_concurrency=200`,
+  `max_wal_size=2GB`, `pg_stat_statements.track=top`. Sie gelten für alle Release-Instanzen und
+  gehen von SSD-Speicher aus; `deploy.sh` erstellt die Datenbank dafür neu (kurzer Neustart).
+- **Komprimierung liegt jetzt bei Traefik** (`compress@file`, zstd, Brotli, gzip, nur Text-Formate);
+  Next.js komprimiert nicht mehr selbst. Betrieb ohne Traefik liefert unkomprimiert aus: ein
+  eigener Reverse-Proxy muss HTML, CSS, JS und JSON selbst komprimieren.
+- **Abnahme auf dem Test-Host:** Skill `testhost-abnahme` (`.claude/skills/testhost-abnahme`) und
+  `scripts/testhost/abnahme.sh`.
 
 ### Neu
 
@@ -50,13 +63,29 @@ Update»).
   Punkt.
 - **Pendenzen exportieren mit Auswahl:** im Export-Dialog «Fällig bis», «Nur mit Tag» und jede
   Pendenz einzeln an- oder abwählen (gilt für PDF, CSV, Excel und Text).
+- **Matrix-Karten aus einer Liste aktualisieren.** Ändert sich die Liste hinter einer Matrix,
+  zeigt der Block einen Hinweis mit «Daten aktualisieren»: neue Einträge werden zu Karten,
+  Umbenennungen und Werte werden übernommen, Karten gelöschter Einträge entfallen. Karten mit
+  erfassten Werten bleiben stehen und sind als «Nicht mehr in der Liste» markiert.
 
 ### Geändert
 
 - **Rad-Effekt beim Scrollen standardmässig aus.** Er kippte jeden Abschnitt einzeln und
   ruckelte bei grossen Protokollen beim Scrollen und Schreiben. Wer ihn ausdrücklich eingeschaltet
   hat, behält ihn (Profileinstellung). Stattdessen werden Inhalte zum oberen und unteren Rand des
-  Protokollbereichs hin sanft blasser (eine Maske, ohne Rechenaufwand pro Abschnitt).
+  Protokollbereichs hin sanft blasser (zwei mitlaufende Verlaufs-Leisten, ohne Neuzeichnen beim
+  Scrollen).
+- **Performance.** Gemessen mit einem Protokoll mit 23 Traktanden, CPU 4-fach gedrosselt:
+  - Tippen in einer Pendenz: rund 60 ms statt 490 ms Verzögerung pro Taste. Pendenzen werden
+    verzögert gespeichert, Bearbeitungssperren und Änderungen zeichnen nicht mehr alle Traktanden
+    neu.
+  - Protokoll öffnen: erstes Byte nach rund 410 ms statt 1050 ms. Aufgaben und Bilder kommen
+    gebündelt (`GET /api/protocols/{id}/block-todos`, `/block-images`) statt je Block, Bezüge
+    werden gesammelt nachgeschlagen.
+  - Jede Seite lädt nur noch das CSS ihres Bereichs (250–340 KB statt 580 KB) und nur die
+    Übersetzungen ihres Bereichs; Diagramme und schwere Dialoge kommen erst bei Bedarf.
+    Neue Regeln dafür: `design/DESIGN.md` Abschnitt 10, `scripts/check-css-scopes.py`.
+  - API-Antworten werden komprimiert, Admin-Seiten fragen in versteckten Tabs nicht mehr ab.
 
 ### Behoben
 

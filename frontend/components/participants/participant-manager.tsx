@@ -171,6 +171,12 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
     return counts;
   }, [participants, today, loginTab]);
 
+  const loginTabCounts = useMemo(() => {
+    let withLogin = 0;
+    for (const participant of participants) if (participant.login_enabled) withLogin += 1;
+    return { withLogin, withoutLogin: participants.length - withLogin };
+  }, [participants]);
+
   const filteredParticipants = useMemo(() => {
     const dir = sortDirection === "asc" ? 1 : -1;
     const query = search.trim().toLowerCase();
@@ -184,13 +190,16 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
       .sort((a, b) => a.display_name.toLowerCase().localeCompare(b.display_name.toLowerCase()) * dir);
   }, [participants, search, statusFilter, sortDirection, today, loginTab]);
 
-  const visibleIds = filteredParticipants.map((participant) => participant.id);
-  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedParticipantIds.includes(id));
-  const someVisibleSelected = !allVisibleSelected && visibleIds.some((id) => selectedParticipantIds.includes(id));
+  const visibleIds = useMemo(() => filteredParticipants.map((participant) => participant.id), [filteredParticipants]);
+  // Set statt Array.includes: bei grossen Listen sonst quadratisch pro Render.
+  const selectedIdSet = useMemo(() => new Set(selectedParticipantIds), [selectedParticipantIds]);
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIdSet.has(id));
+  const someVisibleSelected = !allVisibleSelected && visibleIds.some((id) => selectedIdSet.has(id));
 
   function toggleSelectAllVisible(checked: boolean) {
+    const visibleIdSet = new Set(visibleIds);
     setSelectedParticipantIds((current) =>
-      checked ? [...new Set([...current, ...visibleIds])] : current.filter((id) => !visibleIds.includes(id))
+      checked ? [...new Set([...current, ...visibleIds])] : current.filter((id) => !visibleIdSet.has(id))
     );
   }
 
@@ -322,7 +331,8 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
         method: "DELETE",
         body: JSON.stringify({ participant_ids: selectedParticipantIds }),
       });
-      setParticipants((current) => current.filter((participant) => !selectedParticipantIds.includes(participant.id)));
+      const deletedIds = new Set(selectedParticipantIds);
+      setParticipants((current) => current.filter((participant) => !deletedIds.has(participant.id)));
       setSelectedParticipantIds([]);
       showToast(t("toasts.bulkDeleted"), "success");
     } catch (error) {
@@ -413,8 +423,8 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
         value={loginTab}
         onChange={(value) => { setLoginTab(value); setSelectedParticipantIds([]); }}
         options={[
-          { value: "withoutLogin", label: t("loginTabs.withoutLogin"), count: participants.filter((p) => !p.login_enabled).length },
-          { value: "withLogin", label: t("loginTabs.withLogin"), count: participants.filter((p) => p.login_enabled).length },
+          { value: "withoutLogin", label: t("loginTabs.withoutLogin"), count: loginTabCounts.withoutLogin },
+          { value: "withLogin", label: t("loginTabs.withLogin"), count: loginTabCounts.withLogin },
         ]}
       />
       <div className="list-filter-row">
@@ -466,7 +476,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
         }
       >
         {filteredParticipants.map((participant) => {
-          const isSelected = selectedParticipantIds.includes(participant.id);
+          const isSelected = selectedIdSet.has(participant.id);
           const fullName = [participant.first_name, participant.last_name].filter(Boolean).join(" ");
           const membership = membershipInfo(participant, today, t);
           return (

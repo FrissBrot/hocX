@@ -367,7 +367,8 @@
       "host": "Server (cron)",
       "storage-worker": "Storage worker",
       "document-worker": "Document worker",
-      "job-worker": "Job worker"
+      "job-worker": "Job worker",
+      "backup-worker": "Backup worker"
     },
     "interval": {
       "onDemand": "On demand",

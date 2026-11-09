@@ -1251,7 +1251,6 @@ class ProtocolElement(Base, TimestampMixin):
     __tablename__ = "protocol_element"
     __table_args__ = (
         UniqueConstraint("protocol_id", "sort_index", name="uq_protocol_element_protocol_sort"),
-        Index("idx_protocol_element_protocol_sort", "protocol_id", "sort_index"),
         Index("idx_protocol_element_template_element", "template_element_id"),
     )
 
@@ -1276,9 +1275,7 @@ class ProtocolElementBlock(Base, TimestampMixin):
     __tablename__ = "protocol_element_block"
     __table_args__ = (
         UniqueConstraint("protocol_element_id", "sort_index", name="uq_protocol_element_block_sort"),
-        Index("idx_protocol_element_block_sort", "protocol_element_id", "sort_index"),
         Index("idx_protocol_element_block_type", "element_type_id"),
-        Index("idx_protocol_element_block_configuration_gin", "configuration_snapshot_json", postgresql_using="gin"),
         Index("idx_protocol_element_block_element_definition", "element_definition_id"),
         Index("idx_protocol_element_block_render_type", "render_type_id"),
         Index("idx_protocol_element_block_template_element_block", "template_element_block_id"),

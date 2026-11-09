@@ -1,10 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 
-import { AgendaItemModal, AgendaPostponeModal } from "@/components/agenda/agenda-item-modal";
 import { ActionMenu, ActionMenuItem } from "@/components/ui/action-menu";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
@@ -16,6 +16,15 @@ import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { formatDate, formatMonthYear } from "@/lib/utils/format";
 import { AgendaItem, AgendaTemplateOption } from "@/types/api";
+
+// Erst beim Oeffnen laden: die Anliegen-Modals ziehen den TipTap-Editor mit.
+const AgendaItemModal = dynamic(() => import("@/components/agenda/agenda-item-modal").then((m) => m.AgendaItemModal), {
+  ssr: false,
+});
+const AgendaPostponeModal = dynamic(
+  () => import("@/components/agenda/agenda-item-modal").then((m) => m.AgendaPostponeModal),
+  { ssr: false }
+);
 
 type Filter = "open" | "treated" | "all";
 

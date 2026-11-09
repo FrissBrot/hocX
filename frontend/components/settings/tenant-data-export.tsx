@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
+import { useVisibleInterval } from "@/lib/hooks/use-visible-interval";
 import { formatDateTime, formatFileSize } from "@/lib/utils/format";
 
 const MIN_PASSWORD_LENGTH = 12;
@@ -58,11 +59,8 @@ export function TenantDataExportPanel() {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    if (!active) return;
-    const timer = window.setInterval(() => void load(), 10_000);
-    return () => window.clearInterval(timer);
-  }, [active, load]);
+  // Nur solange ein Export laeuft; pausiert in Hintergrund-Tabs.
+  useVisibleInterval(() => void load(), active ? 10_000 : null);
 
   async function submit(event: FormEvent) {
     event.preventDefault();

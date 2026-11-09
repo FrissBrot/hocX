@@ -1,13 +1,19 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
 
 import { AdminAvatar } from "@/components/admin/admin-plan-utils";
-import { AdminTenantSettingsModal } from "@/components/admin/admin-tenant-settings-modal";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { AdminPlan, AdminStoragePackage, AdminTenantSummary } from "@/types/api";
+
+// Erst beim Oeffnen laden (grosses Einstellungs-Modal).
+const AdminTenantSettingsModal = dynamic(
+  () => import("@/components/admin/admin-tenant-settings-modal").then((m) => m.AdminTenantSettingsModal),
+  { ssr: false }
+);
 
 type Props = {
   tenants: AdminTenantSummary[] | null;
@@ -78,15 +84,17 @@ export function AdminCatalogRebooking({ tenants, plans, storagePackages, onTenan
       </DataTable>
       <p className="muted admin-page-footnote">{t("footnote")}</p>
 
-      <AdminTenantSettingsModal
-        open={selected !== null}
-        onClose={() => setSelected(null)}
-        tenant={selected}
-        onSaved={(updated) => {
-          setSelected(updated);
-          onTenantSaved(updated);
-        }}
-      />
+      {selected !== null ? (
+        <AdminTenantSettingsModal
+          open
+          onClose={() => setSelected(null)}
+          tenant={selected}
+          onSaved={(updated) => {
+            setSelected(updated);
+            onTenantSaved(updated);
+          }}
+        />
+      ) : null}
     </>
   );
 }

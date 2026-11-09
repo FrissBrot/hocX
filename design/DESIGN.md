@@ -203,7 +203,7 @@ Der Schliessen-Button oben rechts ist immer der Icon-Button (`✕`, `button-icon
 ## 10. Arbeitsablauf bei UI-Änderungen
 
 1. Bestehenden Baustein (Abschnitt 4) oder eine ähnliche Seite suchen und **deren Struktur übernehmen**.
-2. Neue Optik als Klasse in `frontend/app/globals.css` (Tokens verwenden), Klassennamen mit Feature-Präfix (`finance-…`).
+2. Neue Optik als Klasse (Tokens verwenden), Klassennamen mit Feature-Präfix (`finance-…`): bereichsübergreifende Bausteine in `frontend/app/globals.css`, alles, was nur eine Route oder wenige Routen brauchen, in `frontend/app/styles/<bereich>.css`. Diese Dateien importiert nur das Layout der jeweiligen Route, damit nicht jede Seite das ganze CSS lädt. Wird eine Klasse aus einem Bereich neu auch anderswo verwendet: Regel nach `globals.css` verschieben oder das Bundle dort importieren. `python3 scripts/check-css-scopes.py` prüft das über den Importgraphen (läuft mit `check-design-rules.py`).
 3. `python3 scripts/check-design-rules.py` ausführen und alle Meldungen beheben.
 4. Typecheck und Tests: auf dem Host gibt es kein Node, daher im Container: `docker compose exec frontend node_modules/.bin/tsc --noEmit` und `docker compose exec frontend node_modules/.bin/vitest run`.
 5. Bei sichtbaren Änderungen Light **und** Dark bei 1440 und 390 px ansehen (Playwright-Screenshot gegen den E2E-Stack, `scripts/e2e.sh up`).

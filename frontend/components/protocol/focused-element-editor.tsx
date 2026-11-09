@@ -7,6 +7,7 @@ import { Dispatch, ReactNode, SetStateAction, memo, useEffect, useMemo, useRef, 
 import { useTranslations } from "next-intl";
 import { useEventFieldConfig } from "@/lib/hooks/use-event-field-config";
 import { FinanceTransactionForm } from "@/components/protocol/finance-transaction-form";
+import { TodoTaskInput } from "@/components/protocol/todo-task-input";
 
 import { useConfirm } from "@/contexts/confirm-context";
 import { restoreFine, useFineDelete } from "@/components/finances/fine-delete";
@@ -112,6 +113,7 @@ function FocusedElementEditorImpl({
   elementIndex,
   textDrafts,
   todosByBlock,
+  sessionTodos,
   imagesByBlock,
   newTodoTask,
   browserApiBaseUrl,
@@ -191,6 +193,8 @@ function FocusedElementEditorImpl({
   elementIndex: number;
   textDrafts: Record<string, string>;
   todosByBlock: Record<string, ProtocolTodo[]>;
+  /** Pendenzen mit dem Tag dieses Punkts (Sitzungsansicht), vom Editor stabil vorberechnet. */
+  sessionTodos: ProtocolTodo[];
   imagesByBlock: Record<string, ProtocolImage[]>;
   newTodoTask: Record<string, string>;
   browserApiBaseUrl: string;
@@ -454,6 +458,9 @@ function FocusedElementEditorImpl({
   }
 
   function autoResizeTodoField(target: HTMLTextAreaElement) {
+    // Mit `field-sizing: content` (globals.css, .todo-main-compact) wächst das Feld per CSS,
+    // ohne Reflow pro Taste.
+    if (FIELD_SIZING_SUPPORTED && target.closest(".todo-main-compact")) return;
     target.style.height = "0px";
     target.style.height = `${Math.max(40, target.scrollHeight)}px`;
   }
@@ -908,7 +915,8 @@ function FocusedElementEditorImpl({
   }
 
   function matrixRows(blockConfig: Record<string, any>) {
-    return ((Array.isArray(blockConfig.rows) ? blockConfig.rows : []) as Array<Record<string, any>>).sort(
+    // Kopie sortieren: blockConfig.rows gehört zum State und darf nicht verändert werden.
+    return [...((Array.isArray(blockConfig.rows) ? blockConfig.rows : []) as Array<Record<string, any>>)].sort(
       (left, right) => Number(left.sort_index ?? 0) - Number(right.sort_index ?? 0)
     );
   }
@@ -1292,6 +1300,69 @@ function FocusedElementEditorImpl({
       .map(({ column }) => column);
   }
 
+  // Abgleich der Listen-Karten mit dem aktuellen Stand der Liste: neue Einträge kommen als
+  // Karte dazu, Titel und Werte der Listenzeilen (auto_source_field) werden übernommen, im
+  // Protokoll erfasste Werte der übrigen Zeilen bleiben. Karten gelöschter Einträge fallen
+  // weg, ausser sie tragen erfasste Werte – dann bleiben sie als «nicht mehr in der Liste».
+  // null, solange die Liste nicht geladen ist oder nichts abzugleichen ist.
+  function matrixListSync(blockId: string, blockConfig: Record<string, any>): Array<Record<string, any>> | null {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
+    const { source, listId } = matrixAutoSourceInfo(blockConfig);
+    if (source !== "list" || !listId) return null;
+    const publicListId = listDefinitionsById.get(listId)?.id ?? listId;
+    if (!listEntriesByDefinition[publicListId] && !listEntriesByDefinition[listId]) return null;
+    const rows = matrixRows(blockConfig);
+    const rowKeys = rows.map((row, rowIndex) => String(row.id ?? row.sort_index ?? rowIndex));
+    const listRowIds = new Set(rowKeys.filter((_, index) => matrixSourceFieldForRow("list", rows[index])));
+    const columns = matrixColumns(blockConfig);
+    const columnByKey = new Map(columns.map((column) => [matrixColumnKey(blockId, column), column]));
+    const sameValue = (left: unknown, right: unknown) => JSON.stringify(left ?? {}) === JSON.stringify(right ?? {});
+    const hasEnteredValue = (column: Record<string, any>) => {
+      const cells = asObject(column.row_values ?? column.values);
+      return rows.some((row, index) => {
+        if (listRowIds.has(rowKeys[index])) return false;
+        const cell = asObject(cells[rowKeys[index]]);
+        const filled = Object.values(cell).some((value) =>
+          Array.isArray(value) ? value.length > 0 : typeof value === "string" ? value.trim() !== "" : value != null
+        );
+        return filled && !sameValue(cell, matrixDefaultCellValue(row));
+      });
+    };
+
+    let changed = false;
+    const usedKeys = new Set<string>();
+    const next: Array<Record<string, any>> = matrixListPool(blockConfig).map((entry) => {
+      const fresh = buildMatrixColumnForListEntry(rows, entry);
+      const existing = columnByKey.get(fresh.id);
+      if (!existing) {
+        changed = true;
+        return fresh;
+      }
+      usedKeys.add(fresh.id);
+      const cells = { ...asObject(existing.row_values ?? existing.values) };
+      for (const rowId of listRowIds) {
+        const freshCell = fresh.row_values[rowId] ?? {};
+        if (!sameValue(cells[rowId], freshCell)) changed = true;
+        cells[rowId] = freshCell;
+      }
+      if (existing.title !== fresh.title || existing.list_removed) changed = true;
+      const { list_removed: _removed, ...rest } = existing;
+      return { ...rest, title: fresh.title, row_values: cells };
+    });
+    for (const column of columns) {
+      const key = matrixColumnKey(blockId, column);
+      if (usedKeys.has(key)) continue;
+      if (!key.startsWith("gen-l-")) {
+        next.push(column);
+      } else if (hasEnteredValue(column)) {
+        if (!column.list_removed) changed = true;
+        next.push({ ...column, list_removed: true });
+      } else {
+        changed = true;
+      }
+    }
+    return changed ? next : null;
+  }
+
   // Non-destructive counterpart to generateMatrixColumns for planning mode: toggling a
   // candidate on/off only adds a column or flips its `hidden` flag, never overwrites or
   // drops existing (possibly manually edited) columns like the bulk "Generieren" button does.
@@ -1385,10 +1456,18 @@ function FocusedElementEditorImpl({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cycleRequestKeys, protocol.id]);
 
+  // Nur bei Änderungen an den Pendenzen dieses Punkts (todosByBlock gilt für alle Punkte).
+  const ownTodoListsRef = useRef<Array<ProtocolTodo[] | undefined>>([]);
+  const ownTodoLists = element.blocks.map((block) => todosByBlock[block.id]);
+  if (ownTodoLists.length !== ownTodoListsRef.current.length || ownTodoLists.some((list, index) => list !== ownTodoListsRef.current[index])) {
+    ownTodoListsRef.current = ownTodoLists;
+  }
+  const ownTodoListsKey = ownTodoListsRef.current;
   useEffect(() => {
+    if (FIELD_SIZING_SUPPORTED) return;
     const fields = sectionRef.current?.querySelectorAll<HTMLTextAreaElement>(".todo-main-compact .todo-input") ?? [];
     fields.forEach((field) => autoResizeTodoField(field));
-  }, [element.id, todosByBlock]);
+  }, [element.id, ownTodoListsKey]);
 
   useEffect(() => {
     const section = sectionRef.current;
@@ -1697,15 +1776,12 @@ function FocusedElementEditorImpl({
                             {trackedBeforeTask && (
                               <div className="tracked-strike tracked-before-caption">{trackedBeforeTask}</div>
                             )}
-                            <textarea
+                            <TodoTaskInput
                               className={`todo-input${isPendingDelete ? " tracked-strike" : isTrackedAdded || trackedBeforeTask ? " tracked-underline" : ""}`}
-                              rows={1}
                               value={todo.task}
                               readOnly={!todoEditable}
-                              onInput={(event) => autoResizeTodoField(event.currentTarget)}
-                              onChange={(event) => {
-                                if (!todoEditable) return;
-                                const task = event.target.value;
+                              onResize={autoResizeTodoField}
+                              onSave={(task) => {
                                 setTodosByBlock((current) => ({
                                   ...current,
                                   [block.id]: (current[block.id] ?? []).map((item) =>
@@ -2366,7 +2442,7 @@ function FocusedElementEditorImpl({
                                   </button>
                                 ) : variableValueType === "event" ? (
                                   <SearchableSelect
-                                    options={[...availableEvents].sort((left, right) => compareIsoDate(left.event_date, right.event_date))}
+                                    options={sortedAvailableEvents}
                                     getId={(eventRow) => eventRow.id}
                                     getLabel={(eventRow) => `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}`}
                                     value={variableRawValue?.event_id ?? null}
@@ -2443,7 +2519,7 @@ function FocusedElementEditorImpl({
                               </button>
                             ) : rowType === "event" ? (
                               <SearchableSelect
-                                options={[...availableEvents].sort((left, right) => compareIsoDate(left.event_date, right.event_date))}
+                                options={sortedAvailableEvents}
                                 getId={(eventRow) => eventRow.id}
                                 getLabel={(eventRow) => `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}`}
                                 value={row.event_id ?? null}
@@ -2514,6 +2590,7 @@ function FocusedElementEditorImpl({
                     {t("generateAction")}
                   </button>
                 ) : null;
+                const listSyncColumns = blockEditable ? matrixListSync(block.id, blockConfig) : null;
 
                 const renderCell = (row: Record<string, any>, rowId: string, column: Record<string, any>, columnId: string, cellEditable: boolean) => {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
                   const value = matrixCellValue(column, row, rowId);
@@ -2643,6 +2720,14 @@ function FocusedElementEditorImpl({
                 return (
                   <div className="matrix-board">
                     <MatrixBoardHeader source={sourceLabel} view={matrixView} onViewChange={changeMatrixView} actions={headerActions} />
+                    {listSyncColumns ? (
+                      <div className="list-snapshot-banner">
+                        <span className="muted">{t("matrixBoard.listChanged")}</span>
+                        <button type="button" className="list-snapshot-refresh-button" onClick={() => saveMatrixColumns(block.id, blockConfig, listSyncColumns)}>
+                          {t("refreshDataAction")}
+                        </button>
+                      </div>
+                    ) : null}
                     {!rows.length ? (
                       <div className="matrix-board-empty">{t("noRowsConfigured")}</div>
                     ) : !cols.length && !matrixInlineColumnManagement ? (
@@ -2697,6 +2782,9 @@ function FocusedElementEditorImpl({
                                 ) : (
                                   <span className="matrix-board-card-title">{columnName(column, columnIndex)}</span>
                                 )}
+                                {column.list_removed ? (
+                                  <Badge variant="warning">{t("matrixBoard.listRemoved")}</Badge>
+                                ) : null}
                               </header>
                               <div className="matrix-board-card-rows">
                                 {rows.map((row, rowIndex) => {
@@ -3691,12 +3779,12 @@ function FocusedElementEditorImpl({
       {agendaSlot}
       <SessionTodosSection
         sectionTag={trimSectionName(element.section_name_snapshot)}
-        todos={Object.values(todosByBlock).flat().filter((t) => (t.tags ?? []).includes(trimSectionName(element.section_name_snapshot).toLowerCase()))}
+        todos={sessionTodos}
         pendingTodos={pendingTodos.filter((t) => (t.tags ?? []).includes(trimSectionName(element.section_name_snapshot).toLowerCase()))}
         isReadOnly={isReadOnly}
         trackChangesActive={trackChangesActive}
         participants={availableParticipants}
-        dueEvents={[...availableEvents].sort((a, b) => a.event_date.localeCompare(b.event_date))}
+        dueEvents={sortedAvailableEvents}
         protocol={protocol}
         onUpdate={updateTodo}
         onDelete={deleteTodo}
@@ -3965,9 +4053,13 @@ function FocusedElementEditorImpl({
 
 type FocusedElementEditorProps = Parameters<typeof FocusedElementEditorImpl>[0];
 
+/** Browser kann Textfelder per CSS an den Inhalt anpassen (Chromium; sonst JS-Fallback). */
+const FIELD_SIZING_SUPPORTED = typeof CSS !== "undefined" && CSS.supports?.("field-sizing", "content") === true;
+
 // Nach Block-ID geschlüsselte Zustände des Editors: ein Punkt vergleicht nur die Einträge seiner
 // eigenen Blöcke. Sonst renderte jeder Tastendruck (textDrafts) alle Punkte des Protokolls neu.
 const PER_BLOCK_PROPS = [
+  "todosByBlock",
   "textDrafts",
   "imagesByBlock",
   "newTodoTask",
@@ -3980,6 +4072,8 @@ const PER_BLOCK_PROPS = [
 function focusedElementEditorPropsEqual(prev: FocusedElementEditorProps, next: FocusedElementEditorProps): boolean {
   for (const key of Object.keys(next) as (keyof FocusedElementEditorProps)[]) {
     if ((PER_BLOCK_PROPS as readonly string[]).includes(key)) continue;
+    // Die Sitzungsnotiz zeigt nur ein Block «Sitzungsnotizen» an.
+    if (key === "sessionNotes" && !next.element.blocks.some((block) => block.element_type_code === "session_notes")) continue;
     if (!Object.is(prev[key], next[key])) return false;
   }
   if (Object.keys(prev).length !== Object.keys(next).length) return false;

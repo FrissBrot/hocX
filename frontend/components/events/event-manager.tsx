@@ -3,11 +3,10 @@
 import { DocumentExportButton } from "@/components/documents/export-dialog";
 import { ChangeEvent, Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import dynamic from "next/dynamic";
 import { useLocale, useTranslations } from "next-intl";
 
 import { CalendarLinkHint } from "@/components/connections/calendar-link-hint";
-import { EventCalendarModal } from "@/components/events/event-calendar-modal";
-import { EventCreateModal } from "@/components/events/event-create-modal";
 import { EventIcon } from "@/components/events/event-icons";
 import { effectiveEndDate, fallbackTagColor, isoToUtcDate } from "@/components/events/event-utils";
 import { ActionMenu } from "@/components/ui/action-menu";
@@ -33,6 +32,15 @@ import {
   EventSummary,
   ParticipantSummary,
 } from "@/types/api";
+
+// Erst beim Oeffnen laden.
+const EventCreateModal = dynamic(() => import("@/components/events/event-create-modal").then((m) => m.EventCreateModal), {
+  ssr: false,
+});
+const EventCalendarModal = dynamic(
+  () => import("@/components/events/event-calendar-modal").then((m) => m.EventCalendarModal),
+  { ssr: false }
+);
 
 const PAGE_SIZE = 100;
 
@@ -995,26 +1003,30 @@ export function EventManager({ initialEvents, availableParticipants = [], tenant
         </div>
       </Modal>
 
-      <EventCreateModal
-        open={createDate !== null}
-        onClose={() => setCreateDate(null)}
-        initialDate={createDate ?? todayIso}
-        knownTags={knownTags}
-        availableParticipants={availableParticipants}
-        cycleConfigs={cycleConfigs}
-        tenantName={tenantName}
-        onCreated={(saved) => setEvents((current) => [saved, ...current])}
-      />
+      {createDate !== null ? (
+        <EventCreateModal
+          open
+          onClose={() => setCreateDate(null)}
+          initialDate={createDate}
+          knownTags={knownTags}
+          availableParticipants={availableParticipants}
+          cycleConfigs={cycleConfigs}
+          tenantName={tenantName}
+          onCreated={(saved) => setEvents((current) => [saved, ...current])}
+        />
+      ) : null}
 
-      <EventCalendarModal
-        open={calendarOpen}
-        onClose={() => setCalendarOpen(false)}
-        events={events}
-        todayIso={todayIso}
-        tagColor={tagColor}
-        onOpenEvent={setDetailEvent}
-        onCreateForDate={(iso) => openCreate(iso)}
-      />
+      {calendarOpen ? (
+        <EventCalendarModal
+          open
+          onClose={() => setCalendarOpen(false)}
+          events={events}
+          todayIso={todayIso}
+          tagColor={tagColor}
+          onOpenEvent={setDetailEvent}
+          onCreateForDate={(iso) => openCreate(iso)}
+        />
+      ) : null}
 
       <Modal
         open={Boolean(detailEvent)}

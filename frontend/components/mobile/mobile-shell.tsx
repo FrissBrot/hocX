@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { Route } from "next";
-import { createContext, CSSProperties, ReactNode, useContext, useEffect, useState } from "react";
+import { createContext, CSSProperties, ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 
@@ -13,11 +13,19 @@ import { buildNav, formatRoleLabel, isNavLinkActive, NavLink } from "@/component
 import { NavIcon } from "@/components/ui/nav-icons";
 import { ConnectivityStatus } from "@/components/ui/connectivity-status";
 import { browserApiFetch } from "@/lib/api/client";
+import { useVisibleInterval } from "@/lib/hooks/use-visible-interval";
 import { CONNECTIONS_HREF } from "@/lib/calendar-feeds";
 import type { SessionInfo, TodoListItem } from "@/types/api";
 import { can, featureAccess } from "@/lib/permissions";
 
 type ThemePreference = "light" | "dark" | "auto";
+
+// Badge am Todos-Tab: Anzahl eigener ueberfaelliger Todos. Modulweit zwischengespeichert, weil die
+// Shell bei jedem Seitenwechsel neu gemountet wird - frisch gezaehlt wird nach OVERDUE_REFRESH_MS,
+// beim Zurueckkehren in den Tab (useVisibleInterval) und beim Betreten/Verlassen der Todos.
+const OVERDUE_REFRESH_MS = 5 * 60_000;
+let overdueCache: { userId: string | null; count: number; at: number } | null = null;
+let lastInTodos: boolean | null = null;
 
 const MobileSessionContext = createContext<SessionInfo | null>(null);
 const MobileMoreContext = createContext<() => void>(() => {});
@@ -98,7 +106,10 @@ export function MobileShell({
   const t = useTranslations("mobile");
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
-  const [overdueCount, setOverdueCount] = useState(0);
+  const userId = session?.user?.id != null ? String(session.user.id) : null;
+  const [overdueCount, setOverdueCount] = useState(() =>
+    overdueCache && overdueCache.userId === userId ? overdueCache.count : 0
+  );
   const tabs = buildTabs(session);
   const activeTab: TabKey | null = moreOpen ? "more" : activeTabFor(pathname);
 
@@ -108,17 +119,35 @@ export function MobileShell({
 
   // Badge am Todos-Tab: eigene ueberfaellige Todos. Best effort - ohne Antwort bleibt der
   // Tab einfach ohne Zahl, ein Fehler hier darf die Navigation nie blockieren.
+  const mountedRef = useRef(true);
   useEffect(() => {
-    let cancelled = false;
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+  const loadOverdue = useCallback(() => {
     browserApiFetch<TodoListItem[]>("/api/todos/my?limit=500")
       .then((todos) => {
-        if (!cancelled) setOverdueCount((todos ?? []).filter(isTodoOverdue).length);
+        const count = (todos ?? []).filter(isTodoOverdue).length;
+        overdueCache = { userId, count, at: Date.now() };
+        if (mountedRef.current) setOverdueCount(count);
       })
       .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [pathname]);
+  }, [userId]);
+
+  const inTodos = pathname.startsWith("/todos");
+  useEffect(() => {
+    const changedTodosArea = lastInTodos !== null && lastInTodos !== inTodos;
+    lastInTodos = inTodos;
+    const cache = overdueCache;
+    if (changedTodosArea || !cache || cache.userId !== userId || Date.now() - cache.at > OVERDUE_REFRESH_MS) {
+      loadOverdue();
+    } else {
+      setOverdueCount(cache.count);
+    }
+  }, [inTodos, loadOverdue, userId]);
+  useVisibleInterval(loadOverdue, OVERDUE_REFRESH_MS);
 
   return (
     <MobileSessionContext.Provider value={session}>

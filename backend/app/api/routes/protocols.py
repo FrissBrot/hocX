@@ -167,7 +167,9 @@ def list_protocols(
     require_permission(user, P.MEETINGS_READ)
     # Ohne meetings.read_drafts nur abgeschlossene Protokolle; eingeschränkte Leser zusätzlich nur
     # zugewiesene (restrict_to_assigned). Mit meetings.read_drafts alles, jeder Status.
-    if not access_service.sees_all_protocols(user) and not access_service._is_restricted_reader(db, user):
+    # Einmal bestimmen (eine Abfrage), statt für Filter und Einschränkung je einzeln
+    restricted_reader = access_service._is_restricted_reader(db, user)
+    if not access_service.sees_all_protocols(user) and not restricted_reader:
         status_filter = "abgeschlossen"
         q = None
     protocols = service.list_protocols(
@@ -176,7 +178,7 @@ def list_protocols(
         query=q,
         status=status_filter,
         user_id=user.user_id,
-        restrict_to_assigned=access_service._is_restricted_reader(db, user),
+        restrict_to_assigned=restricted_reader,
         skip=skip,
         limit=limit,
     )

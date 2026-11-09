@@ -40,6 +40,10 @@ let flushTimer: number | null = null;
 let retryDelayMs = 1_000;
 
 function emit(patch: Partial<OfflineSnapshot>) {
+  // Ohne Änderung kein neuer Snapshot: queueMutation läuft pro Tastendruck, und jede neue
+  // Snapshot-Identität rendert alle Abonnenten (ConnectivityStatus) neu.
+  const keys = Object.keys(patch) as (keyof OfflineSnapshot)[];
+  if (keys.every((key) => snapshot[key] === patch[key])) return;
   snapshot = { ...snapshot, ...patch };
   listeners.forEach((listener) => listener());
 }

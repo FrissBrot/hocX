@@ -10,12 +10,17 @@ ALLOWED_FILES. Neue Ausnahmen nur, wenn es wirklich keine Token-Stufe gibt.
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-CSS_FILES = [ROOT / "frontend/app/globals.css", ROOT / "abgabebox-frontend/app/globals.css"]
+CSS_FILES = [
+    ROOT / "frontend/app/globals.css",
+    *sorted((ROOT / "frontend/app/styles").glob("*.css")),  # Bereichs-CSS (check-css-scopes.py)
+    ROOT / "abgabebox-frontend/app/globals.css",
+]
 TSX_GLOBS = [
     (ROOT / "frontend", ["components/**/*.tsx", "app/**/*.tsx", "lib/**/*.tsx"]),
     (ROOT / "abgabebox-frontend", ["components/**/*.tsx", "app/**/*.tsx"]),
@@ -192,6 +197,11 @@ def main() -> int:
             check_line(path, no, line, defined, is_css)
 
     check_shared_copies()
+    if not targets:
+        # Bereichs-CSS: nur im Gesamtlauf, die Prüfung braucht den ganzen Importgraphen.
+        scopes = subprocess.run([sys.executable, str(ROOT / "scripts/check-css-scopes.py")], capture_output=True, text=True)
+        if scopes.returncode != 0:
+            violations.extend(scopes.stdout.strip().splitlines())
     if violations:
         print("\n".join(violations))
         print(f"\n{len(violations)} Design-Regelverstoesse - siehe design/DESIGN.md")

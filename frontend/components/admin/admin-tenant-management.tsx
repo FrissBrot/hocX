@@ -1,10 +1,10 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useLocale, useTranslations } from "next-intl";
 
 import { AdminAvatar, BillingCycleToggle, formatPlanPrice, PlanBadge, PlanOption, planTones } from "@/components/admin/admin-plan-utils";
-import { AdminTenantSettingsModal } from "@/components/admin/admin-tenant-settings-modal";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
@@ -17,6 +17,12 @@ import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
 import { formatFileSize, formatPercentNumber } from "@/lib/utils/format";
 import { AdminPlan, AdminTenantCreate, AdminTenantPage, AdminTenantSummary } from "@/types/api";
+
+// Erst beim Oeffnen laden (grosses Einstellungs-Modal).
+const AdminTenantSettingsModal = dynamic(
+  () => import("@/components/admin/admin-tenant-settings-modal").then((m) => m.AdminTenantSettingsModal),
+  { ssr: false }
+);
 
 type Props = {
   initialPage: AdminTenantPage;
@@ -493,12 +499,14 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
         </form>
       </Modal>
 
-      <AdminTenantSettingsModal
-        open={settingsModalOpen}
-        onClose={() => setSettingsModalOpen(false)}
-        tenant={settingsTenant}
-        onSaved={handleTenantSaved}
-      />
+      {settingsModalOpen ? (
+        <AdminTenantSettingsModal
+          open
+          onClose={() => setSettingsModalOpen(false)}
+          tenant={settingsTenant}
+          onSaved={handleTenantSaved}
+        />
+      ) : null}
 
       <Modal
         open={cloneModalOpen}

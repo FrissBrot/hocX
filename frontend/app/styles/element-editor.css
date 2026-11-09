@@ -1,0 +1,545 @@
+/* Bereichs-CSS, geladen nur von: elements templates. Siehe design/DESIGN.md Abschnitt 10. */
+
+.event-window-box {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--panel-solid);
+}
+
+.event-window-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.table-row-active td {
+  background: color-mix(in srgb, var(--accent) 12%, transparent 88%);
+}
+
+.table-row-dragging td {
+  opacity: 0.58;
+  background: color-mix(in srgb, var(--accent) 14%, transparent 86%);
+}
+
+.rule-option-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--space-4);
+}
+
+.rule-option-card {
+  --button-hover-bg: color-mix(in srgb, var(--accent) 8%, transparent 92%);
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border);
+  --button-bg: color-mix(in srgb, var(--panel-solid) 92%, transparent 8%);
+  background: var(--button-bg);
+  text-align: left;
+  color: var(--text);
+}
+
+.rule-option-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent 66%);
+  --button-bg: color-mix(in srgb, var(--accent) 8%, transparent 92%);
+  background: var(--button-bg);
+}
+
+.rule-option-card-active {
+  border-color: color-mix(in srgb, var(--accent) 46%, transparent 54%);
+  --button-bg: color-mix(in srgb, var(--accent) 14%, transparent 86%);
+  background: var(--button-bg);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent 78%) inset;
+}
+
+.element-create-modal .modal-header-actions button { padding: var(--space-2) var(--space-3); }
+
+.grid.element-create-form { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-height: 0; gap: 0; }
+
+.element-create-layout { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); overflow-y: auto; min-height: 0; }
+
+.element-create-fields [hidden] { display: none; }
+
+.element-event-field-labels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+
+.element-event-field-labels:empty { display: none; }
+
+.element-create-fields .settings-section { padding: 0; border: 0; border-radius: 0; background: transparent; gap: var(--space-3); }
+
+.element-create-fields .block-editor-hero { padding: var(--space-4); border-radius: var(--radius-md); background: var(--accent-soft); }
+
+.element-create-fields .block-editor-hero-copy { gap: var(--space-2); position: relative; }
+
+.element-create-fields .block-editor-hero-pills { gap: var(--space-2); margin-top: var(--space-1); }
+
+.element-create-sidebar section { min-width: 0; display: grid; gap: var(--space-2); }
+
+.element-create-paper,
+.element-create-options { padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--panel-solid); overflow-wrap: anywhere; }
+
+.element-create-paper h4 { margin: 0; font-family: Georgia, serif; font-size: var(--text-lg); }
+
+.element-create-paper .data-table { font-size: var(--text-sm); table-layout: fixed; }
+
+.element-create-paper > .element-create-preview-meta { margin: var(--space-3) 0 0; font-size: var(--text-xs); }
+
+.element-create-content-preview { white-space: pre-wrap; }
+
+.element-create-option { display: flex; gap: var(--space-3); align-items: flex-start; padding: var(--space-3) 0; font-size: var(--text-sm); cursor: pointer; }
+
+.element-create-option:first-child { padding-top: 0; }
+
+.element-create-option:last-child { padding-bottom: 0; }
+
+.element-create-option + .element-create-option { border-top: 1px solid var(--border); }
+
+.element-create-cycle-tokens { display: grid; gap: var(--space-1); }
+
+@media (max-width: 900px) {
+  .element-create-layout { grid-template-columns: minmax(0, 1fr); }
+  .element-create-sidebar { border-left: 0; border-top: 1px solid var(--border); }
+}
+
+@media (max-width: 640px) {
+.element-edit-modal .rule-option-grid,
+.element-event-field-labels { grid-template-columns: minmax(0, 1fr); }
+  .element-edit-modal .settings-section { padding: var(--space-4); }
+  .element-create-footer p { flex-basis: 100%; }
+}
+
+.settings-section {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-5);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel-solid) 95%, transparent 5%);
+}
+
+.settings-section-copy {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.settings-section-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.settings-section-body {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.settings-section .card {
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--panel-solid) 97%, transparent 3%);
+}
+
+.compact-info-pop {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel-solid) 92%, transparent 8%);
+}
+
+.matrix-designer-corner {
+  display: grid;
+  gap: var(--space-2);
+  align-content: start;
+  min-height: 110px;
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  --button-bg: color-mix(in srgb, var(--panel-solid) 92%, transparent 8%);
+  --button-hover-bg: color-mix(in srgb, var(--accent) 8%, transparent 92%);
+  background: var(--button-bg);
+  color: var(--text);
+  text-align: left;
+}
+
+.matrix-designer-corner {
+  place-content: center;
+  font-size: var(--text-base);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.matrix-designer-cell-active {
+  border-color: color-mix(in srgb, var(--accent) 46%, transparent 54%);
+  --button-bg: color-mix(in srgb, var(--accent) 14%, transparent 86%);
+  background: var(--button-bg);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent 76%) inset;
+}
+
+/* ── Matrix designer redesign ── */
+.matrix-designer-layout {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: var(--space-3);
+  height: calc(100vh - 160px);
+  min-height: 0;
+}
+
+.matrix-designer-body {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: var(--space-3);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.matrix-designer-grid-scroll {
+  overflow: auto;
+  min-height: 0;
+}
+
+.matrix-designer-panel {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: 2px;
+}
+
+.matrix-designer-grid--compact .matrix-designer-corner {
+  min-height: 52px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  gap: 2px;
+}
+
+.matrix-designer-grid--compact .matrix-designer-corner {
+  font-size: var(--text-xs);
+}
+
+.matrix-designer-grid--compact .matrix-designer-cell strong {
+  font-size: var(--text-sm);
+}
+
+.matrix-designer-grid--compact .matrix-designer-cell .muted {
+  font-size: var(--text-xs);
+}
+
+.matrix-designer-cell-preview {
+  border-style: dashed;
+  opacity: 0.75;
+}
+
+/* ── Matrix-Designer (Modal «Matrix konfigurieren») ──
+   Alles unter .matrix-designer-modal, damit der Tabellen-Designer, der einige
+   der älteren matrix-designer-*-Klassen mitbenutzt, unverändert bleibt. */
+.matrix-designer-modal .matrix-designer-layout {
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 0;
+  height: calc(100dvh - 260px); /* design-ok: an Modal-Kopf und -Footer gekoppelt */
+  min-height: 420px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.matrix-designer-strip-end {
+  margin-left: auto;
+}
+
+.matrix-designer-source-note {
+  padding: var(--space-2) var(--space-5);
+  font-size: var(--text-sm);
+  color: var(--info-fg);
+  background: var(--info-bg);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Gemeinsamer Terminfilter-Baustein (element-editor/event-filter-editor.tsx) */
+.event-filter-editor {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.event-filter-advanced {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.event-filter-advanced-toggle {
+  justify-self: start;
+}
+
+.matrix-designer-source-filter {
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Tabellen-Designer: gleiche Zeilenliste wie die Matrix, aber ohne Spaltenraster */
+.table-designer-grid-row {
+  display: grid;
+  max-width: 640px;
+}
+
+.matrix-designer-row-head-dragging {
+  opacity: 0.5;
+}
+
+.matrix-designer-switch-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  position: relative;
+  cursor: pointer;
+  font-size: var(--text-base);
+  color: var(--text);
+  min-height: 28px;
+}
+
+.matrix-designer-modal .matrix-designer-body {
+  grid-template-columns: minmax(0, 1fr) clamp(280px, 30vw, 360px);
+  gap: 0;
+}
+
+.matrix-designer-count {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.matrix-designer-grid-row {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.matrix-designer-modal .matrix-designer-corner {
+  display: flex;
+  align-items: flex-end;
+  min-height: 0;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  background: transparent;
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+}
+
+.matrix-designer-head-preview {
+  background: var(--bg);
+}
+
+.matrix-designer-head-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.matrix-designer-head-sub {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.matrix-designer-head-empty {
+  display: flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.matrix-designer-row-head {
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.matrix-designer-cell-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.matrix-designer-cell-bar {
+  width: 50%;
+  height: 6px;
+  border-radius: var(--radius-xs);
+  background: var(--border);
+}
+
+.matrix-designer-cell-bar-wide {
+  width: 70%;
+}
+
+.matrix-designer-cell-bar-short {
+  width: 30%;
+}
+
+.matrix-designer-head:hover,
+.matrix-designer-row-head:hover,
+.matrix-designer-modal .matrix-designer-cell:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
+.matrix-designer-head-active,
+.matrix-designer-row-head-active,
+.matrix-designer-modal .matrix-designer-cell-active {
+  --button-bg: var(--accent-soft);
+  --button-hover-bg: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+}
+
+.matrix-designer-modal .matrix-designer-cell-column {
+  --button-bg: color-mix(in srgb, var(--accent-soft) 40%, var(--panel-solid));
+  --button-hover-bg: color-mix(in srgb, var(--accent-soft) 40%, var(--panel-solid));
+}
+
+.matrix-designer-add-row {
+  --button-bg: transparent;
+  --button-hover-bg: var(--bg);
+  margin-top: var(--space-1);
+  padding: var(--space-3);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--button-bg);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.matrix-designer-add-row:hover {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+  transform: none;
+}
+
+.matrix-designer-modal .matrix-designer-panel {
+  display: block;
+  padding: 0;
+  border-left: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.matrix-designer-inspector-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.matrix-designer-inspector-title {
+  margin-top: 2px;
+  font-family: "Canela", "Iowan Old Style", "Palatino Linotype", serif;
+  font-size: var(--text-xl);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.matrix-designer-chip {
+  --button-bg: var(--panel-solid);
+  --button-hover-bg: var(--panel-solid);
+  width: auto;
+  min-height: 0;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--button-bg);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.matrix-designer-chip:hover {
+  border-color: var(--border-strong);
+  transform: none;
+}
+
+.matrix-designer-chip-active {
+  --button-bg: var(--accent-soft);
+  --button-hover-bg: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  color: var(--accent-strong);
+}
+
+@media (max-width: 900px) {
+  .matrix-designer-modal .matrix-designer-layout {
+    height: auto;
+    min-height: 0;
+  }
+
+  .matrix-designer-modal .matrix-designer-body {
+    grid-template-columns: 1fr;
+    overflow: visible;
+  }
+
+  .matrix-designer-modal .matrix-designer-grid-scroll {
+    max-height: 60dvh;
+  }
+
+  .matrix-designer-modal .matrix-designer-panel {
+    border-left: none;
+    border-top: 1px solid var(--border);
+  }
+
+  .matrix-designer-strip-end {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .matrix-designer-modal .matrix-designer-strip,
+  .matrix-designer-toolbar,
+  .matrix-designer-inspector {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+  }
+
+  .matrix-designer-modal .matrix-designer-grid-scroll {
+    padding: 0 var(--space-4) var(--space-4);
+  }
+}
+
+.element-edit-modal .settings-section {
+  border-radius: var(--radius-lg);
+  background: var(--panel-solid);
+}
+
+.element-edit-modal .settings-section-copy p,
+.element-edit-modal .rule-option-card .muted {
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+.element-edit-modal .rule-option-grid {
+  gap: var(--space-3);
+}
+
+.element-edit-modal .rule-option-card {
+  border-radius: var(--radius-md);
+  align-content: start;
+}
+
+.element-edit-modal .rule-option-card-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.studio-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}

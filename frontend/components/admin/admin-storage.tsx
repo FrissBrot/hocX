@@ -11,6 +11,7 @@ import { StatusBanner } from "@/components/ui/status-banner";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
+import { useVisibleInterval } from "@/lib/hooks/use-visible-interval";
 import { formatDate, formatDateTime, formatFileSize } from "@/lib/utils/format";
 import {
   StorageConnectionTest,
@@ -100,10 +101,8 @@ export function AdminStorage({ initialOverview }: { initialOverview: StorageOver
     void reload();
   }, [reload]);
 
-  useEffect(() => {
-    const interval = setInterval(() => void reload(), overview.open_migration ? ACTIVE_POLL_MS : IDLE_POLL_MS);
-    return () => clearInterval(interval);
-  }, [overview.open_migration, reload]);
+  // Pausiert in Hintergrund-Tabs und laedt beim Zurueckkehren sofort nach.
+  useVisibleInterval(() => void reload(), overview.open_migration ? ACTIVE_POLL_MS : IDLE_POLL_MS);
 
   async function run(key: string, request: () => Promise<unknown>, success: string) {
     setBusy(key);

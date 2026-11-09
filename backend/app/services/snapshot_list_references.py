@@ -1,7 +1,31 @@
 """Listen-Snapshots behalten Namen und übersetzen Referenzen an der API-Grenze."""
-from sqlalchemy import select
+import uuid
+from types import SimpleNamespace
+
+from sqlalchemy import or_, select
 
 from app.models import Event, Participant
+
+# Grösster Wert einer BIGINT-Spalte; grössere Zahlen können keine id sein (und liessen die
+# Abfrage scheitern)
+_MAX_BIGINT = 2**63 - 1
+
+
+def _split_reference_values(wanted: set[str]) -> tuple[set[int], set[uuid.UUID]]:
+    """Gespeicherte Referenzen sind interne ids oder public UUIDs (als Text). Nur Werte, die
+    danach noch exakt als str(id)/str(public_id) passen können, werden abgefragt."""
+    internal_ids: set[int] = set()
+    public_ids: set[uuid.UUID] = set()
+    for value in wanted:
+        if value.isascii() and value.isdigit():
+            if int(value) <= _MAX_BIGINT:
+                internal_ids.add(int(value))
+            continue
+        try:
+            public_ids.add(uuid.UUID(value))
+        except ValueError:
+            continue
+    return internal_ids, public_ids
 
 
 def snapshot_list_rows(db, rows: list[dict], tenant_id: int, *, public: bool = False) -> list[dict]:
@@ -19,8 +43,23 @@ def snapshot_list_rows(db, rows: list[dict], tenant_id: int, *, public: bool = F
         if not wanted:
             references[key] = {}
             continue
-        # Tenant-Filter gilt auch für fehlerhafte oder manipulierte alte Referenzen.
-        objects = db.scalars(select(model).where(model.tenant_id == tenant_id)).all()
+        # Tenant-Filter gilt auch für fehlerhafte oder manipulierte alte Referenzen. Nur die
+        # referenzierten Zeilen und Spalten laden (vorher alle Personen bzw. Termine des
+        # Mandanten als ganze ORM-Objekte, sobald eine einzige Referenz vorkam).
+        internal_ids, public_ids = _split_reference_values(wanted)
+        conditions = []
+        if internal_ids:
+            conditions.append(model.id.in_(internal_ids))
+        if public_ids:
+            conditions.append(model.public_id.in_(public_ids))
+        if not conditions:
+            references[key] = {}
+            continue
+        columns = [model.id, model.public_id] + ([model.display_name] if model is Participant else [])
+        objects = [
+            SimpleNamespace(**row._mapping)
+            for row in db.execute(select(*columns).where(model.tenant_id == tenant_id, or_(*conditions))).all()
+        ]
         references[key] = {
             alias: obj for obj in objects for alias in (str(obj.id), str(obj.public_id)) if alias in wanted
         }

@@ -40,6 +40,7 @@ entryPoints:
       # profile, which Traefik applies automatically without listing it here.
       middlewares:
         - security-headers@file
+        - compress@file
   # Private Admin-Einstieg. Der Host-Port wird in Compose ausschliesslich an
   # 127.0.0.1 gebunden und ist damit als Ziel fuer den OpenZiti-Host-Tunnel
   # erreichbar, aber nicht direkt aus dem Internet.
@@ -55,6 +56,7 @@ entryPoints:
     http:
       middlewares:
         - security-headers@file
+        - compress@file
 
 providers:
   docker:

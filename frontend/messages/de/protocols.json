@@ -555,7 +555,9 @@
     "rowHeader": "Zeile",
     "columnFallback": "Spalte {index}",
     "columnNameLabel": "Spaltenname",
-    "notePlaceholder": "Notiz …"
+    "notePlaceholder": "Notiz …",
+    "listChanged": "Die Liste hat sich geändert.",
+    "listRemoved": "Nicht mehr in der Liste"
   },
   "transactionAddTitle": "Transaktion erfassen",
   "transactionDirection": "Art",

@@ -105,6 +105,12 @@ type ProtocolEditorProps = {
 };
 
 const EMPTY_AGENDA_ITEMS: ProtocolAgendaItem[] = [];
+const EMPTY_TODOS: ProtocolTodo[] = [];
+
+/** Gleiche Einträge in gleicher Reihenfolge (Identität), für stabile abgeleitete Arrays. */
+function sameItems<T>(left: readonly T[], right: readonly T[]) {
+  return left === right || (left.length === right.length && left.every((item, index) => item === right[index]));
+}
 
 export function ProtocolEditor({
   protocol,
@@ -161,6 +167,10 @@ export function ProtocolEditor({
     : null;
   const [listEntriesByDefinition, setListEntriesByDefinition] = useState<Record<string, StructuredListEntry[]>>(initialListEntries);
   const [todosByBlock, setTodosByBlock] = useState<Record<string, ProtocolTodo[]>>(initialTodos);
+  // Aktueller Stand für asynchrone Antworten: eine spät eintreffende Speicher-Antwort darf nicht
+  // auf dem Stand vom Zeitpunkt des Aufrufs aufbauen (überschriebe neuere Änderungen).
+  const todosByBlockRef = useRef(todosByBlock);
+  todosByBlockRef.current = todosByBlock;
   const [pendingTodos, setPendingTodos] = useState<TodoListItem[]>(initialPendingTodos);
   const [imagesByBlock, setImagesByBlock] = useState<Record<string, ProtocolImage[]>>(initialImages);
   const [financeTransactions, setFinanceTransactions] = useState<Record<string, FinanceTransaction[]>>(initialFinanceTransactions);
@@ -609,12 +619,14 @@ export function ProtocolEditor({
       .sort((left, right) => left.sort_index - right.sort_index);
   }, [elements, isPlanningMode]);
 
+  const visibleElementIdsKey = visibleElements.map((element) => element.id).join(",");
+
   const selectedElement = useMemo(
     () => visibleElements.find((element) => element.id === selectedElementId) ?? null,
     [selectedElementId, visibleElements]
   );
   const agendaByElement = useMemo(() => {
-    const visibleIds = new Set(visibleElements.map((element) => element.id));
+    const visibleIds = new Set(visibleElementIdsKey.split(",").filter(Boolean));
     const byElement: Record<string, ProtocolAgendaItem[]> = {};
     const other: ProtocolAgendaItem[] = [];
     for (const item of agendaItems) {
@@ -625,7 +637,7 @@ export function ProtocolEditor({
       }
     }
     return { byElement, other };
-  }, [agendaItems, visibleElements]);
+  }, [agendaItems, visibleElementIdsKey]);
   const agendaSectionHandlers = useMemo(() => ({
     onChanged: (updated: ProtocolAgendaItem) => setAgendaItems((current) => current.map((item) => (item.id === updated.id ? updated : item))),
     onRemoved: (itemId: string) => setAgendaItems((current) => current.filter((item) => item.id !== itemId)),
@@ -633,18 +645,47 @@ export function ProtocolEditor({
   }), []);
   // Je Punkt ein fertiges Element mit stabiler Identität, damit memoisierte Punkte nicht wegen
   // eines neuen agendaSlot-Elements neu rendern.
+  // Ein Slot wird nur neu gebaut, wenn sich die Anliegen dieses Punkts (oder isReadOnly) ändern.
+  const agendaSlotCacheRef = useRef(new Map<string, { items: ProtocolAgendaItem[]; isReadOnly: boolean; node: React.ReactNode }>());
   const agendaSlots = useMemo(() => {
+    const cache = agendaSlotCacheRef.current;
     const slots: Record<string, React.ReactNode> = {};
-    for (const element of visibleElements) {
-      slots[element.id] = (
-        <AgendaItemsSection items={agendaByElement.byElement[element.id] ?? EMPTY_AGENDA_ITEMS} isReadOnly={isReadOnly} {...agendaSectionHandlers} />
-      );
+    for (const elementId of visibleElementIdsKey.split(",").filter(Boolean)) {
+      const items = agendaByElement.byElement[elementId] ?? EMPTY_AGENDA_ITEMS;
+      const cached = cache.get(elementId);
+      if (cached && cached.isReadOnly === isReadOnly && sameItems(cached.items, items)) {
+        slots[elementId] = cached.node;
+        continue;
+      }
+      const node = <AgendaItemsSection items={items} isReadOnly={isReadOnly} {...agendaSectionHandlers} />;
+      cache.set(elementId, { items, isReadOnly, node });
+      slots[elementId] = node;
     }
     return slots;
-  }, [visibleElements, agendaByElement, isReadOnly, agendaSectionHandlers]);
-  const listPublicIds = useMemo(() => Object.assign({}, ...elements.flatMap((element) =>
+  }, [visibleElementIdsKey, agendaByElement, isReadOnly, agendaSectionHandlers]);
+  // Pendenzen je Punkt für die Sitzungsansicht (Tag = Punktname). Unveränderte Listen behalten
+  // ihre Identität, damit eine Pendenz-Änderung nur die betroffenen Punkte neu rendert.
+  const sessionTodoCacheRef = useRef(new Map<string, ProtocolTodo[]>());
+  const sessionTodosByElement = useMemo(() => {
+    const allTodos = Object.values(todosByBlock).flat();
+    const cache = sessionTodoCacheRef.current;
+    const result: Record<string, ProtocolTodo[]> = {};
+    for (const element of visibleElements) {
+      const tag = trimSectionName(element.section_name_snapshot).toLowerCase();
+      const todos = allTodos.filter((todo) => (todo.tags ?? []).includes(tag));
+      const previous = cache.get(element.id);
+      const stable = previous && sameItems(previous, todos) ? previous : todos.length ? todos : EMPTY_TODOS;
+      cache.set(element.id, stable);
+      result[element.id] = stable;
+    }
+    return result;
+  }, [todosByBlock, visibleElements]);
+  // Über den Inhalt stabil: ändert sich nur ein Block, bleibt das Objekt (und damit
+  // listDefinitionsById) gleich und die übrigen Punkte rendern nicht neu.
+  const listPublicIdsKey = JSON.stringify(Object.assign({}, ...elements.flatMap((element) =>
     element.blocks.map((block) => block.public_reference_ids?.lists ?? {})
-  )) as Record<string, string>, [elements]);
+  )));
+  const listPublicIds = useMemo(() => JSON.parse(listPublicIdsKey) as Record<string, string>, [listPublicIdsKey]);
   const listDefinitionsById = useMemo(() => {
     const definitions = new Map(lists.map((definition) => [definition.id, definition]));
     for (const [internalId, publicId] of Object.entries(listPublicIds)) {
@@ -675,6 +716,39 @@ export function ProtocolEditor({
       if (!pointerStillInside) setCollabStatusPanelOpen(false);
     }, 300);
   }, [cancelCollabHoverClose]);
+
+  // Stabile Handler/Werte für die schwebenden Sitzungs-Bedienelemente (memoisiert), damit sie
+  // nicht bei jeder Taste im Dokument mit neu rendern.
+  const quickActionHandlers = useMemo(() => ({
+    onNotesClick: () => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openNotes(); },
+    onNotesHover: () => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openNotes(false); },
+    onTodosClick: () => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openTodo(); },
+    onTodosHover: () => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openTodo(false); },
+    onAgendaClick: () => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.close(); setAgendaCreateOpen(true); },
+    onHoverLeave: () => {
+      sessionPanelRef.current?.scheduleClose();
+      scheduleCollabHoverClose();
+    },
+    onCollabClick: () => {
+      cancelCollabHoverClose();
+      collabOpenedByHoverRef.current = false;
+      sessionPanelRef.current?.close();
+      setCollabStatusPanelOpen(true);
+    },
+    onCollabHover: () => {
+      cancelCollabHoverClose();
+      collabOpenedByHoverRef.current = true;
+      sessionPanelRef.current?.close();
+      setCollabStatusPanelOpen(true);
+    },
+  }), [cancelCollabHoverClose, scheduleCollabHoverClose]);
+  const sessionDueEvents = useMemo(() => {
+    const tpl = availableTemplates.find((template) => template.id === protocol.template_id);
+    const tag = tpl?.todo_due_event_tag?.trim().toLowerCase();
+    const today = new Date().toISOString().slice(0, 10);
+    const upcoming = events.filter((event) => event.event_date >= today);
+    return tag ? upcoming.filter((event) => (event.tag ?? "").toLowerCase().includes(tag)) : upcoming;
+  }, [availableTemplates, protocol.template_id, events]);
 
   useEffect(() => () => cancelCollabHoverClose(), [cancelCollabHoverClose]);
 
@@ -798,8 +872,6 @@ export function ProtocolEditor({
     });
   }, [selectedElementId, scrollRequestId]);
 
-  const visibleElementIdsKey = visibleElements.map((element) => element.id).join(",");
-
   // Akkordeon, passiver Wechsel (Scroll-Spy): der neu aktive Abschnitt wird dort gehalten, wo
   // er vor dem Auf-/Zuklappen stand (passiveSnapRef). Nach unten scrollend holt eine kurze
   // Animation seinen Anfang an den oberen Rand und der Rest-Schwung des Mausrads wird kurz
@@ -847,9 +919,16 @@ export function ProtocolEditor({
   }, []);
 
   // Rad-Effekt nach jeder Änderung von Auswahl oder Punkten neu anwenden (bzw. entfernen)
+  // Ohne Effekt nur einmal zurücksetzen: applyWheelFrame misst alle Abschnitte, und
+  // visibleElements ändert sich bei jedem Tastendruck in Formularen/Matrix.
+  const wheelAppliedRef = useRef(false);
   useLayoutEffect(() => {
     const container = documentRef.current;
-    if (container) applyWheelFrame(container, wheelEnabled && !prefersReducedMotion());
+    if (!container) return;
+    const enabled = wheelEnabled && !prefersReducedMotion();
+    if (!enabled && !wheelAppliedRef.current) return;
+    applyWheelFrame(container, enabled);
+    wheelAppliedRef.current = enabled;
   }, [wheelEnabled, selectedElementId, visibleElements]);
 
   // Scroll-spy for the continuous document layout: tracks whichever section is closest to
@@ -1414,7 +1493,7 @@ export function ProtocolEditor({
         method: "POST",
         body: JSON.stringify({ task, tags: parsedTags, todo_status_id: TODO_STATUS.open, created_by: null })
       });
-      const next = [...(todosByBlock[protocolElementBlockId] ?? []), created].sort((left, right) => left.sort_index - right.sort_index);
+      const next = [...(todosByBlockRef.current[protocolElementBlockId] ?? []), created].sort((left, right) => left.sort_index - right.sort_index);
       setTodosByBlock((current) => ({ ...current, [protocolElementBlockId]: next }));
       collab.sendFieldUpdate(`block-${protocolElementBlockId}-todos`, next);
       setNewTodoTask((current) => ({ ...current, [protocolElementBlockId]: "" }));
@@ -1433,7 +1512,7 @@ export function ProtocolEditor({
         method: "PATCH",
         body: JSON.stringify(patch)
       });
-      const next = (todosByBlock[protocolElementBlockId] ?? []).map((todo) => (todo.id === todoId ? updated : todo));
+      const next = (todosByBlockRef.current[protocolElementBlockId] ?? []).map((todo) => (todo.id === todoId ? updated : todo));
       setTodosByBlock((current) => ({ ...current, [protocolElementBlockId]: next }));
       collab.sendFieldUpdate(`block-${protocolElementBlockId}-todos`, next);
       setStatus(protocolElementBlockId, "saved");
@@ -1453,7 +1532,7 @@ export function ProtocolEditor({
     setStatus(protocolElementBlockId, "saving");
     try {
       await browserApiFetch(`/api/protocol-todos/${todoId}`, { method: "DELETE" });
-      const next = (todosByBlock[protocolElementBlockId] ?? []).filter((todo) => todo.id !== todoId);
+      const next = (todosByBlockRef.current[protocolElementBlockId] ?? []).filter((todo) => todo.id !== todoId);
       setTodosByBlock((current) => ({ ...current, [protocolElementBlockId]: next }));
       collab.sendFieldUpdate(`block-${protocolElementBlockId}-todos`, next);
       setStatus(protocolElementBlockId, "saved");
@@ -2154,9 +2233,10 @@ export function ProtocolEditor({
 
       <div className="protocol-document-shell">
         <article
-          className={`protocol-document${accordionEnabled ? " protocol-document-accordion" : ""}${accordionEnabled || wheelEnabled ? " protocol-document-spaced" : ""}${wheelEnabled ? " protocol-document-wheel" : " protocol-document-fade"}`}
+          className={`protocol-document${accordionEnabled ? " protocol-document-accordion" : ""}${accordionEnabled || wheelEnabled ? " protocol-document-spaced" : ""}${wheelEnabled ? " protocol-document-wheel" : ""}`}
           ref={documentRef}
         >
+          {!wheelEnabled && <div className="protocol-document-fade-edge protocol-document-fade-top" aria-hidden="true" />}
           {visibleElements.length === 0 && (
             <div className="editor-panel-empty">
               <div>
@@ -2182,6 +2262,7 @@ export function ProtocolEditor({
               elementIndex={index}
               textDrafts={textDrafts}
               todosByBlock={todosByBlock}
+              sessionTodos={sessionTodosByElement[element.id] ?? EMPTY_TODOS}
               imagesByBlock={imagesByBlock}
               newTodoTask={newTodoTask}
               browserApiBaseUrl={browserApiBaseUrl}
@@ -2256,6 +2337,7 @@ export function ProtocolEditor({
             heading={tAgenda("editor.otherTitle")}
             {...agendaSectionHandlers}
           />
+          {!wheelEnabled && <div className="protocol-document-fade-edge protocol-document-fade-bottom" aria-hidden="true" />}
         </article>
 
         <aside className="protocol-quicknav">
@@ -2340,44 +2422,16 @@ export function ProtocolEditor({
           ref={sessionPanelRef}
           protocol={protocol}
           participants={availableParticipants}
-          dueEvents={(() => {
-            const tpl = availableTemplates.find((t) => t.id === protocol.template_id);
-            const tag = tpl?.todo_due_event_tag?.trim().toLowerCase();
-            const today = new Date().toISOString().slice(0, 10);
-            const upcoming = events.filter((e) => e.event_date >= today);
-            return tag ? upcoming.filter((e) => (e.tag ?? "").toLowerCase().includes(tag)) : upcoming;
-          })()}
+          dueEvents={sessionDueEvents}
           currentSectionName={selectedElement ? trimSectionName(selectedElement.section_name_snapshot) : null}
-          onSessionNotesChange={(notes) => setSessionNotes(notes)}
-          onQuickTodoCreated={(blockId, todoId, elementId) => void handleQuickTodoCreated(blockId, todoId, elementId)}
+          onSessionNotesChange={setSessionNotes}
+          onQuickTodoCreated={elementHandlers.handleQuickTodoCreated}
         />
       )}
 
       {protocolStatus === "vorbereitet" && !forceReadOnly && (
         <>
-          <QuickActionsPill
-            onNotesClick={() => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openNotes(); }}
-            onNotesHover={() => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openNotes(false); }}
-            onTodosClick={() => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openTodo(); }}
-            onTodosHover={() => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openTodo(false); }}
-            onAgendaClick={() => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.close(); setAgendaCreateOpen(true); }}
-            onHoverLeave={() => {
-              sessionPanelRef.current?.scheduleClose();
-              scheduleCollabHoverClose();
-            }}
-            onCollabClick={() => {
-              cancelCollabHoverClose();
-              collabOpenedByHoverRef.current = false;
-              sessionPanelRef.current?.close();
-              setCollabStatusPanelOpen(true);
-            }}
-            onCollabHover={() => {
-              cancelCollabHoverClose();
-              collabOpenedByHoverRef.current = true;
-              sessionPanelRef.current?.close();
-              setCollabStatusPanelOpen(true);
-            }}
-          />
+          <QuickActionsPill {...quickActionHandlers} />
           <CollaborationStatusPanel
             open={collabStatusPanelOpen}
             onClose={() => setCollabStatusPanelOpen(false)}

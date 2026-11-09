@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { useTranslations } from "next-intl";
 import { NavIcon } from "@/components/ui/nav-icons";
 
@@ -15,7 +16,7 @@ type QuickActionsPillProps = {
   onCollabHover?: () => void;
 };
 
-export function QuickActionsPill({ onNotesClick, onNotesHover, onTodosClick, onTodosHover, onAgendaClick, onHoverLeave, onCollabClick, onCollabHover }: QuickActionsPillProps) {
+export const QuickActionsPill = memo(function QuickActionsPill({ onNotesClick, onNotesHover, onTodosClick, onTodosHover, onAgendaClick, onHoverLeave, onCollabClick, onCollabHover }: QuickActionsPillProps) {
   const t = useTranslations("protocols.quickActions");
   return (
     <div className="protocol-quick-actions" role="toolbar" aria-label={t("ariaLabel")} onMouseLeave={onHoverLeave}>
@@ -60,4 +61,4 @@ export function QuickActionsPill({ onNotesClick, onNotesHover, onTodosClick, onT
       </button>
     </div>
   );
-}
+});

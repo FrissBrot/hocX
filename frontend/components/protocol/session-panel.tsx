@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { usePopupEscape } from "@/lib/hooks/use-popup-escape";
 import { useDeferredPopupSave } from "@/lib/hooks/use-deferred-popup-save";
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { browserApiFetch } from "@/lib/api/client";
 import { clearDraft, queueMutation, readDraft, removeMutation, saveDraft } from "@/lib/offline-store";
 import { useToast } from "@/contexts/toast-context";
@@ -38,7 +38,7 @@ export type SessionPanelHandle = {
 
 type ActivePanel = "notes" | "todo" | null;
 
-export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
+export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProps>(
   function SessionPanel({ protocol, participants, dueEvents = [], currentSectionName, onSessionNotesChange, onQuickTodoCreated }, ref) {
     const isParticipantSelectable = useParticipantSelectable();
     const t = useTranslations("protocols.sessionPanel");
@@ -588,4 +588,4 @@ export const SessionPanel = forwardRef<SessionPanelHandle, SessionPanelProps>(
       </>
     );
   }
-);
+));

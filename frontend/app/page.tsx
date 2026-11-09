@@ -1,5 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { AppShell } from "@/components/ui/app-shell";
+import { AreaIntlProvider } from "@/components/i18n/area-intl-provider";
 import { RouteTabs } from "@/components/ui/route-tabs";
 import { dashboardTabs } from "@/components/ui/section-tabs";
 import { DashboardView } from "@/components/dashboard/dashboard-view";
@@ -8,6 +9,7 @@ import { dashboardPermissions } from "@/components/dashboard/dashboard-permissio
 import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { AttendanceFineListItem, NextSessionInfo, ProtocolSummary, TodoListItem } from "@/types/api";
+import "@/app/styles/home.css";
 
 export default async function HomePage() {
   const session = await requireSession();
@@ -26,32 +28,36 @@ export default async function HomePage() {
 
   const hasProtocols = (protocols ?? []).length > 0;
 
+  // Die Startseite liegt direkt unter dem Root-Layout (kein eigenes layout.tsx moeglich), daher
+  // liefert sie ihre Uebersetzungs-Namespaces hier selbst nach (lib/i18n/message-scopes.ts).
   return (
-    <AppShell initialSession={session}>
-      <ResponsiveView
-        mobile={
-          <MobileDashboard
-            todos={todos ?? []}
-            fines={fines ?? []}
-            upcomingSessions={upcomingSessions ?? []}
-            access={access}
-            hasProtocols={hasProtocols}
-          />
-        }
-        desktop={
-          <>
-            <RouteTabs tabs={dashboardTabs(t)} activeHref="/" />
-            <DashboardView
+    <AreaIntlProvider area="dashboard">
+      <AppShell initialSession={session}>
+        <ResponsiveView
+          mobile={
+            <MobileDashboard
               todos={todos ?? []}
               fines={fines ?? []}
               upcomingSessions={upcomingSessions ?? []}
               access={access}
               hasProtocols={hasProtocols}
-              userName={session.user?.first_name || session.user?.display_name || ""}
             />
-          </>
-        }
-      />
-    </AppShell>
+          }
+          desktop={
+            <>
+              <RouteTabs tabs={dashboardTabs(t)} activeHref="/" />
+              <DashboardView
+                todos={todos ?? []}
+                fines={fines ?? []}
+                upcomingSessions={upcomingSessions ?? []}
+                access={access}
+                hasProtocols={hasProtocols}
+                userName={session.user?.first_name || session.user?.display_name || ""}
+              />
+            </>
+          }
+        />
+      </AppShell>
+    </AreaIntlProvider>
   );
 }

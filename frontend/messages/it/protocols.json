@@ -555,7 +555,9 @@
     "rowHeader": "Riga",
     "columnFallback": "Colonna {index}",
     "columnNameLabel": "Nome della colonna",
-    "notePlaceholder": "Nota …"
+    "notePlaceholder": "Nota …",
+    "listChanged": "L'elenco è cambiato.",
+    "listRemoved": "Non più nell'elenco"
   },
   "transactionAddTitle": "Registra transazione",
   "transactionDirection": "Tipo",

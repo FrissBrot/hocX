@@ -15,6 +15,7 @@ import { Tabs } from "@/components/ui/tabs";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
+import { useVisibleInterval } from "@/lib/hooks/use-visible-interval";
 import { formatDateTime, formatFileSize } from "@/lib/utils/format";
 import {
   BackupEvent,
@@ -96,10 +97,8 @@ export function AdminBackups({ initialStatus, initialSettings, isOwner }: { init
   }, []);
 
   const active = status.current_job !== null || status.current_restore !== null;
-  useEffect(() => {
-    const interval = setInterval(() => void reload(), active ? ACTIVE_POLL_MS : IDLE_POLL_MS);
-    return () => clearInterval(interval);
-  }, [active, reload]);
+  // Pausiert in Hintergrund-Tabs und laedt beim Zurueckkehren sofort nach.
+  useVisibleInterval(() => void reload(), active ? ACTIVE_POLL_MS : IDLE_POLL_MS);
 
   async function start(kind: "backup" | "restoreTest") {
     setBusy(kind);
@@ -459,10 +458,8 @@ function RestorePanel({ t, locale, restoreId, isOwner, onChanged }: { t: TFunc; 
 
   useEffect(() => {
     void load();
-    if (!open) return;
-    const interval = setInterval(() => void load(), ACTIVE_POLL_MS);
-    return () => clearInterval(interval);
-  }, [load, open]);
+  }, [load]);
+  useVisibleInterval(() => void load(), open ? ACTIVE_POLL_MS : null);
 
   useEffect(() => {
     if (job && !OPEN_RESTORE.includes(job.state)) void onChanged();

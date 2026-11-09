@@ -555,7 +555,9 @@
     "rowHeader": "Row",
     "columnFallback": "Column {index}",
     "columnNameLabel": "Column name",
-    "notePlaceholder": "Note …"
+    "notePlaceholder": "Note …",
+    "listChanged": "The list has changed.",
+    "listRemoved": "No longer in the list"
   },
   "transactionAddTitle": "Add transaction",
   "transactionDirection": "Type",

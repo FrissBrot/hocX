@@ -9,6 +9,7 @@ import { ClientMessagesBridge } from "@/components/i18n/client-messages-bridge";
 import { ViewportProvider } from "@/lib/hooks/use-is-mobile";
 import { isMobileUserAgent } from "@/lib/utils/viewport";
 import { NONCE_HEADER } from "@/lib/csp";
+import { pickNamespaces, ROOT_NAMESPACES } from "@/lib/i18n/message-scopes";
 import "./tokens.css";
 import "./globals.css";
 
@@ -48,7 +49,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   // Aufgeloest von i18n/request.ts (Cookie > Accept-Language > Default) - siehe dort fuer die
   // volle Prioritaetskette inkl. der gespeicherten Benutzerpraeferenz.
   const locale = await getLocale();
-  const messages = await getMessages();
+  // Nur die global gebrauchten Namespaces; die Bereiche legen ihre eigenen per AreaIntlProvider
+  // in ihrem layout.tsx nach (siehe lib/i18n/message-scopes.ts).
+  const messages = pickNamespaces(await getMessages(), ROOT_NAMESPACES);
   const requestHeaders = await headers();
   const initialMobile = isMobileUserAgent(requestHeaders.get("user-agent"));
   // Von proxy.ts pro Request gesetzt (Nonce-CSP, MAIN-FE-013).

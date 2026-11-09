@@ -367,7 +367,8 @@
       "host": "Serveur (cron)",
       "storage-worker": "Worker de stockage",
       "document-worker": "Worker de documents",
-      "job-worker": "Worker de tâches"
+      "job-worker": "Worker de tâches",
+      "backup-worker": "Worker de sauvegarde"
     },
     "interval": {
       "onDemand": "À la demande",

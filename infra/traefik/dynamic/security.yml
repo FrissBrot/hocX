@@ -38,6 +38,27 @@ http:
     # does not remove or weaken any header an app (e.g. the Next.js frontends) already sets
     # itself; Traefik's headers middleware only adds headers that are not already present in
     # the backend's response, it does not overwrite existing ones.
+    # Performance-Audit 2026-11: weder Backend noch Traefik komprimierten API-JSON (Listen,
+    # Protokoll-Elemente bis ~100 KB). Nur Text-Formate: Dateien, Fotos und Downloads (auch mit
+    # Range) bleiben unberührt, ebenso text/event-stream (Traefik schliesst es ohnehin aus).
+    # Next.js komprimiert deshalb nicht mehr selbst (compress: false in next.config.mjs).
+    compress:
+      compress:
+        encodings:
+          - zstd
+          - br
+          - gzip
+        minResponseBodyBytes: 1024
+        includedContentTypes:
+          - application/json
+          - text/html
+          - text/css
+          - text/plain
+          - text/x-component
+          - application/javascript
+          - text/javascript
+          - image/svg+xml
+          - application/manifest+json
     security-headers:
       headers:
         stsSeconds: 31536000

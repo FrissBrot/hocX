@@ -123,7 +123,9 @@ export function useProtocolCollaboration(protocolId: string | null | undefined) 
             const presenceList = Array.isArray(message.presence) ? (message.presence as CollaboratorInfo[]) : [];
             setPresence(presenceList);
             const serverLocks = (message.locks as Record<string, CollaboratorInfo>) ?? {};
-            setLocks(serverLocks);
+            // Nur fremde Sperren im State: eigene ändern nichts an der Anzeige, würden aber bei
+            // jedem Fokuswechsel das ganze Dokument neu rendern (eigene stehen in ownLocksRef).
+            setLocks(Object.fromEntries(Object.entries(serverLocks).filter(([, holder]) => holder.user_id !== selfId)));
             // Reconciled against the server's authoritative snapshot on every (re)connect,
             // not left as whatever this client last knew locally (audit finding,
             // 2026-08-25) - ownLocksRef otherwise still listed a field this client held
@@ -155,7 +157,17 @@ export function useProtocolCollaboration(protocolId: string | null | undefined) 
               user_id: message.user_id,
               display_name: message.display_name,
             };
-            setLocks((current) => ({ ...current, [message.field_key]: holder }));
+            const fieldKey = message.field_key as string;
+            setLocks((current) => {
+              if (holder.user_id === selfUserIdRef.current) {
+                if (!(fieldKey in current)) return current;
+                const next = { ...current };
+                delete next[fieldKey];
+                return next;
+              }
+              if (current[fieldKey]?.user_id === holder.user_id) return current;
+              return { ...current, [fieldKey]: holder };
+            });
             break;
           }
           case "lock_released": {

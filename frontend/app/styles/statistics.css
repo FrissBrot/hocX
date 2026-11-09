@@ -1,0 +1,353 @@
+/* Bereichs-CSS, geladen nur von: statistics. Siehe design/DESIGN.md Abschnitt 10. */
+
+/* ── Statistics ──────────────────────────────────────────────────────────── */
+
+.stats-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-5);
+  max-width: 1400px;
+}
+
+.stats-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.stats-period-picker {
+  display: flex;
+  gap: var(--space-1);
+  background: var(--panel-solid);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+}
+
+.stats-period-btn {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--muted);
+  --button-bg: none;
+  --button-hover-bg: color-mix(in srgb, var(--accent) 8%, transparent);
+  background: var(--button-bg);
+  border: none;
+  cursor: pointer;
+  transition: background var(--dur-fast), color var(--dur-fast);
+}
+
+.stats-period-btn:hover { color: var(--text); }
+
+.stats-period-btn-active {
+  --button-bg: var(--accent);
+  --button-hover-bg: var(--accent);
+  background: var(--button-bg);
+  color: var(--on-solid);
+}
+
+.stats-period-btn-active:hover { color: var(--on-solid); }
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: var(--space-4);
+}
+
+.stats-chart-wide {
+  grid-column: 1 / -1;
+}
+
+.stats-expand-btn {
+  --button-hover-bg: color-mix(in srgb, var(--muted) 15%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  border: none;
+  --button-bg: transparent;
+  background: var(--button-bg);
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--dur-base), background var(--dur-base), color var(--dur-base);
+  flex-shrink: 0;
+}
+
+.stats-chart-card:hover .stats-expand-btn {
+  opacity: 1;
+}
+
+.stats-expand-btn:hover {
+  --button-bg: color-mix(in srgb, var(--muted) 15%, transparent);
+  background: var(--button-bg);
+  color: var(--text);
+}
+
+/* ── Fullscreen overlay ── */
+
+.stats-fs-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-fullscreen);
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+  animation: stats-fs-in var(--dur-base) ease;
+}
+
+.stats-fs-card {
+  background: var(--panel-solid);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-overlay);
+  width: min(1100px, 100%);
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: stats-fs-slide var(--dur-base) ease;
+}
+
+.stats-fs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-5) var(--space-5) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.stats-fs-close {
+  --button-hover-bg: color-mix(in srgb, var(--muted) 15%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  border: none;
+  --button-bg: transparent;
+  background: var(--button-bg);
+  color: var(--muted);
+  cursor: pointer;
+  transition: background var(--dur-fast), color var(--dur-fast);
+}
+
+.stats-fs-close:hover {
+  --button-bg: color-mix(in srgb, var(--muted) 15%, transparent);
+  background: var(--button-bg);
+  color: var(--text);
+}
+
+.stats-fs-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.stats-chart-toolbar {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.stats-segment {
+  display: flex;
+  gap: 3px;
+  background: color-mix(in srgb, var(--border) 50%, transparent);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+}
+
+.stats-seg-btn {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--muted);
+  --button-bg: none;
+  background: var(--button-bg);
+  --button-hover-bg: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background var(--dur-fast), color var(--dur-fast);
+}
+
+.stats-seg-btn:hover { color: var(--text); }
+
+.stats-seg-btn-active {
+  --button-bg: var(--panel-solid);
+  background: var(--button-bg);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+
+.stats-pie-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.stats-pie-legend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 120px;
+}
+
+.stats-pie-legend-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-base);
+  color: var(--text);
+}
+
+.stats-pie-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.stats-no-data {
+  color: var(--muted);
+  font-size: var(--text-base);
+  text-align: center;
+  padding: var(--space-5) 0;
+}
+
+.stats-empty {
+  padding: 40px;
+  text-align: center;
+}
+
+.stats-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.stats-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.stats-section-title {
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+.stats-cycle-dd {
+  position: relative;
+}
+
+.stats-cycle-btn {
+  --button-hover-bg: color-mix(in srgb, var(--accent) 4%, var(--panel-solid));
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  --button-bg: var(--panel-solid);
+  background: var(--button-bg);
+  color: var(--text);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color var(--dur-base), background var(--dur-base), box-shadow var(--dur-base);
+  white-space: nowrap;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+.stats-cycle-btn:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  --button-bg: color-mix(in srgb, var(--accent) 4%, var(--panel-solid));
+  background: var(--button-bg);
+}
+
+.stats-cycle-btn-open {
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.stats-cycle-chevron {
+  color: var(--muted);
+  transition: transform var(--dur-base);
+  flex-shrink: 0;
+}
+
+.stats-cycle-chevron.open {
+  transform: rotate(180deg);
+}
+
+.stats-cycle-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 180px;
+  background: var(--panel-solid);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--text) 12%, transparent);
+  padding: var(--space-1);
+  z-index: var(--z-sticky);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.stats-cycle-item {
+  --button-hover-bg: color-mix(in srgb, var(--accent) 8%, transparent);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: none;
+  --button-bg: transparent;
+  background: var(--button-bg);
+  color: var(--text);
+  font-size: var(--text-xs);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-fast);
+}
+
+.stats-cycle-item:hover {
+  --button-bg: color-mix(in srgb, var(--accent) 8%, transparent);
+  background: var(--button-bg);
+}
+
+.stats-cycle-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.stats-cycle-check {
+  margin-left: auto;
+  color: var(--accent);
+  flex-shrink: 0;
+}

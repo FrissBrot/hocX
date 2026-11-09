@@ -1,0 +1,102 @@
+/* Bereichs-CSS, geladen nur von: task-packages. Siehe design/DESIGN.md Abschnitt 10. */
+
+/* Rollenwahl als Segmente statt Dropdown: wenige feste Werte, alle auf einen Blick. */
+.role-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--space-2);
+}
+
+.role-picker-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--muted);
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--dur-base) ease, background var(--dur-base) ease, color var(--dur-base) ease, box-shadow var(--dur-base) ease;
+}
+
+.role-picker-option:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.role-picker-option:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.role-picker-option:has(input:focus-visible) {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.mobile-embedded .section-card {
+  margin: 0;
+}
+
+/* ── Aufgabenpakete (/task-packages) ─────────────────────────────────── */
+.task-package-card { display: grid; gap: var(--space-3); }
+
+.task-package-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
+
+.task-package-title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+
+.task-package-title h2 { margin: 0; font-size: var(--text-xl); }
+
+.task-package-cycles { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+
+.task-package-chip { display: inline-flex; align-items: center; gap: var(--space-1); }
+
+.task-package-tags { display: block; font-size: var(--text-sm); }
+
+.task-package-responsible { display: block; }
+
+.task-package-row-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-1); }
+
+.task-package-form { gap: var(--space-5); }
+
+/* Tags und Verantwortliche sehen aus wie ein normales Eingabefeld im Modal (ein Rahmen, --bg). */
+.task-package-form .tag-input-field,
+.task-package-responsible-box { min-height: 48px; padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg); }
+
+.task-package-form .tag-input-field:focus-within { border-color: var(--accent); box-shadow: var(--focus-ring); }
+
+.modal-content .task-package-form input.tag-input-text:not([type="checkbox"]):not([type="radio"]) { width: auto; min-height: 30px; padding: 0 var(--space-1); border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+
+.task-package-responsible-box { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+
+.task-package-responsible-empty { padding: 0 var(--space-1); }
+
+.task-package-responsible-add { display: inline-flex; flex-wrap: wrap; gap: var(--space-2); margin-left: auto; }
+
+.task-package-add-trigger.mini-menu-compact { min-width: 0; }
+
+.task-package-add-trigger .mini-menu-trigger { width: auto; min-height: 32px; padding: var(--space-1) var(--space-3); border: 1px dashed var(--border-strong); border-radius: var(--radius-pill); background: transparent; color: var(--accent); font-weight: 600; }
+
+.task-package-add-trigger .mini-menu-trigger:hover,
+.task-package-add-trigger .mini-menu-trigger-open { border-style: solid; border-color: var(--accent); background: var(--accent-soft); }
+
+.task-package-add-trigger .mini-menu-trigger-label { font-size: var(--text-sm); }
+
+.task-package-add-trigger .mini-menu-trigger-icon { display: none; }
+
+.task-package-form .role-picker-option { min-height: 44px; padding: var(--space-2) var(--space-3); text-align: center; }
+
+.task-package-form .role-picker-option:has(input:disabled) { opacity: 0.45; cursor: not-allowed; }
+
+.task-package-form .role-picker-option:has(input:disabled):hover { border-color: var(--border); color: var(--muted); }
+
+.task-package-subfield { padding-left: var(--space-4); border-left: 2px solid var(--accent-soft); }
+
+.task-package-mode-list { display: grid; gap: var(--space-2); }
+
+.task-package-option-help { display: block; margin-top: var(--space-1); }

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.documents.locking import lock_row
 
-from app.models import ElementDefinition, Event, EventCategory, Protocol, ProtocolElement, ProtocolElementBlock, Template, TemplateElement, TemplateElementBlock
+from app.models import Event, EventCategory, Protocol, ProtocolElement, ProtocolElementBlock, Template
 from app.repositories.protocol_element_repository import (
     ProtocolElementBlockRepository,
     ProtocolElementRepository,
@@ -17,6 +17,7 @@ from app.schemas.protocol import (
     ProtocolElementUpdate,
 )
 from app.services.snapshot_reference_ids import (
+    SnapshotReferenceLoader,
     participant_display_names,
     snapshot_reference_ids,
     translate_attendance_entries,
@@ -51,19 +52,26 @@ class ProtocolElementService:
 
         ProtocolService().refresh_membership_blocks(db, protocol_id)
         protocol_row = db.execute(
-            select(Protocol.status, Protocol.tenant_id, Protocol.template_id).where(Protocol.id == protocol_id)
+            select(Protocol.status, Protocol.tenant_id, Protocol.template_id, Protocol.public_id).where(Protocol.id == protocol_id)
         ).one_or_none()
         protocol_status = protocol_row.status if protocol_row else ""
         protocol_tenant_id = protocol_row.tenant_id if protocol_row else None
         protocol_template_id = protocol_row.template_id if protocol_row else None
+        protocol_public_id = protocol_row.public_id if protocol_row else None
         element_rows = self.repository.list_for_protocol(db, protocol_id)
         elements = [row[0] for row in element_rows]
         show_when_empty_by_id = {row[0].id: row[1] for row in element_rows}
+        template_element_public_ids = {row[0].id: row[2] for row in element_rows}
+        element_public_ids = {element.id: element.public_id for element in elements}
         block_rows = self.repository.list_blocks_for_elements(db, [element.id for element in elements])
         blocks_by_element: dict[int, list[ProtocolElementBlockRead]] = {}
         section_titles_by_element_id = resolve_display_section_titles_batch(db, elements, protocol_status or "", protocol_tenant_id)
 
+        # Erst alle Konfigurationen aufbereiten, dann die Referenzen aller Blöcke gesammelt
+        # nachschlagen (SnapshotReferenceLoader) - vorher bis zu acht Abfragen je Block.
+        refs = SnapshotReferenceLoader(db, protocol_tenant_id)
         fine_values: dict | None = None
+        configs: list[dict] = []
         for row in block_rows:
             block = row.ProtocolElementBlock
             config = dict(block.configuration_snapshot_json or {})
@@ -75,21 +83,29 @@ class ProtocolElementService:
                 if config.get("fines_enabled") and protocol_tenant_id is not None:
                     fine_values = values
                 config.update(values)
+            if protocol_tenant_id is not None or row.element_type_code == "attendance":
+                refs.want_translations(config, attendance=row.element_type_code == "attendance")
+            configs.append(config)
+
+        for index, row in enumerate(block_rows):
+            config = configs[index]
             if row.element_type_code == "attendance":
-                config = translate_attendance_entries(db, config)
+                config = translate_attendance_entries(db, config, refs=refs)
             if protocol_tenant_id is not None:
-                config = translate_participant_refs(db, config, protocol_tenant_id)
-                config = translate_list_snapshot_refs(db, config, protocol_tenant_id)
+                config = translate_participant_refs(db, config, protocol_tenant_id, refs=refs)
+                config = translate_list_snapshot_refs(db, config, protocol_tenant_id, refs=refs)
+            configs[index] = config
+            refs.want_display(config)
+
+        for row, config in zip(block_rows, configs):
+            block = row.ProtocolElementBlock
             blocks_by_element.setdefault(block.protocol_element_id, []).append(
                 ProtocolElementBlockRead(
                     id=block.public_id,
-                    protocol_element_id=public_id_service.resolve_public_id(db, ProtocolElement, block.protocol_element_id),
-                    template_element_block_id=public_id_service.resolve_public_id(db, TemplateElementBlock, block.template_element_block_id)
-                    if block.template_element_block_id is not None
-                    else None,
-                    element_definition_id=public_id_service.resolve_public_id(db, ElementDefinition, block.element_definition_id)
-                    if block.element_definition_id is not None
-                    else None,
+                    protocol_element_id=element_public_ids.get(block.protocol_element_id)
+                    or public_id_service.resolve_public_id(db, ProtocolElement, block.protocol_element_id),
+                    template_element_block_id=row.template_element_block_public_id,
+                    element_definition_id=row.element_definition_public_id,
                     element_type_id=block.element_type_id,
                     render_type_id=block.render_type_id,
                     element_type_code=row.element_type_code,
@@ -108,8 +124,10 @@ class ProtocolElementService:
                     is_visible_snapshot=block.is_visible_snapshot,
                     export_visible_snapshot=block.export_visible_snapshot,
                     configuration_snapshot_json=config,
-                    public_reference_ids=snapshot_reference_ids(db, config, protocol_tenant_id),
-                    participant_names=participant_display_names(db, config, protocol_tenant_id) if protocol_tenant_id is not None else {},
+                    public_reference_ids=snapshot_reference_ids(db, config, protocol_tenant_id, refs=refs),
+                    participant_names=participant_display_names(db, config, protocol_tenant_id, refs=refs)
+                    if protocol_tenant_id is not None
+                    else {},
                     text_content=row.text_content,
                     tracked_dirty=bool(row.tracked_dirty),
                     tracked_baseline_content=row.tracked_baseline_content,
@@ -121,10 +139,10 @@ class ProtocolElementService:
         return [
             ProtocolElementRead(
                 id=element.public_id,
-                protocol_id=public_id_service.resolve_public_id(db, Protocol, element.protocol_id),
-                template_element_id=public_id_service.resolve_public_id(db, TemplateElement, element.template_element_id)
-                if element.template_element_id is not None
-                else None,
+                protocol_id=protocol_public_id
+                if protocol_public_id is not None
+                else public_id_service.resolve_public_id(db, Protocol, element.protocol_id),
+                template_element_id=template_element_public_ids.get(element.id),
                 sort_index=element.sort_index,
                 section_name_snapshot=section_titles_by_element_id[element.id],
                 section_order_snapshot=element.section_order_snapshot,

@@ -27,7 +27,9 @@ services:
       - -c
       - pg_stat_statements.max=5000
       - -c
-      - pg_stat_statements.track=all
+      # top statt all (Performance-Audit 2026-11): Statements in Funktionen/Triggern (RLS,
+      # record_job_run) werden sonst zusätzlich einzeln erfasst.
+      - pg_stat_statements.track=top
       - -c
       - shared_buffers=384MB
       - -c
@@ -36,6 +38,14 @@ services:
       - work_mem=16MB
       - -c
       - maintenance_work_mem=128MB
+      # Planer und I/O für SSD-Speicher (Performance-Audit 2026-11): der Default
+      # random_page_cost=4 stammt von Drehplatten und lässt den Planer Seq-Scans vorziehen.
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - effective_io_concurrency=200
+      - -c
+      - max_wal_size=2GB
     logging:
       driver: json-file
       options:

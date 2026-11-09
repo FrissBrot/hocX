@@ -19,6 +19,9 @@ const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
+  // Komprimieren übernimmt Traefik (compress@file, auch Brotli/zstd) - nicht zusätzlich im
+  // selben Node-Prozess wie das Server-Rendering.
+  compress: false,
   // Kein "X-Powered-By: Next.js" (Security-Audit SEC-012).
   poweredByHeader: false,
   typedRoutes: true,
