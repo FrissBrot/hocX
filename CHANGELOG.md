@@ -6,6 +6,54 @@ Versionierung nach [SemVer](https://semver.org/lang/de/). Die Beta-Historie
 ist der erste offiziell unterstützte Stand und muss keine älteren
 Installationen aktualisieren können.
 
+## [1.2.3] - 2026-11-09
+
+Rückmeldungen aus dem Testbetrieb von 1.2.2: Protokoll-Editor und PDF-Gestaltung. Eine neue
+Migration (`0167`), keine Breaking Changes. Update wie gewohnt über `deploy.sh`.
+
+### Migration
+
+- `0167_kreide_spacing`: Corporate-Design-Profile im Design «Kreide» bekommen grössere Abstände
+  (Zeilenabstand 1.35 → 1.5, Absatzabstand 2.5 → 3 mm, Abstand vor Abschnitten 6.5 → 10 mm),
+  je Wert nur, wenn er noch auf dem bisherigen Wert des Beispiels steht. Als neue Revision; die
+  vorherige lässt sich im Corporate Design wiederherstellen, bestehende PDFs bleiben gleich.
+
+### Neu
+
+- **Schnellmenü in allen Modi.** Sitzungsnotizen, Pendenz erfassen, Anliegen und Zusammenarbeit
+  stehen jetzt beim Vorbereiten, in der Sitzung und beim Überarbeiten zur Verfügung (nicht im
+  abgeschlossenen Protokoll).
+- **Im Protokoll erfasste Pendenzen bearbeiten:** der Text lässt sich direkt im Protokoll ändern
+  (im Nachverfolgungsmodus mit altem Text durchgestrichen).
+- **Matrix schreibt in die Liste zurück.** Stammen die Karten einer Matrix aus einer Liste, werden
+  Änderungen in den Zeilen aus der Liste (z. B. Leiter einer Gruppe) im Listeneintrag gespeichert.
+- **Bussen mit Herkunft:** der Bussen-Block im PDF zeigt in der Spalte «Protokoll» für jede
+  Busse Nummer und Datum des Protokolls, aus dem sie stammt.
+- **Terminlisten: Zeilen in Tag-Farbe.** Die Option (bisher «Tag-Farben») hinterlegt jede Zeile im
+  PDF und im Editor hell in der Farbe ihres Tags, auch ohne Tag-Spalte. Tags selbst erscheinen in
+  Terminlisten jetzt immer in ihrer Farbe.
+
+### Geändert
+
+- «Sitzungs-Todos» heisst in Protokollen und Vorlagen nur noch «Todos» (en «To-dos», fr «Tâches»,
+  it «Attività da fare»).
+- Design «Kreide» luftiger gesetzt (siehe Migration); gilt auch für neu übernommene Beispiele.
+- Zugeklappte Punkte im Akkordeon zeigen nur noch die Überschrift (vorher blieben die im
+  Protokoll erfassten Pendenzen und Anliegen sichtbar).
+
+### Behoben
+
+- **Scrollen im Akkordeon (ohne Rad-Effekt):** ein Mausrad-Schritt übersprang kurze, zugeklappte
+  Punkte, und am Dokumentanfang sprang die Auswahl beim Hochscrollen direkt auf den ersten Punkt.
+  Jetzt kommt immer der nächste Punkt dran; nach oben erscheint ein langer Punkt mit seinem Ende
+  am unteren Rand. Der Rest-Schwung des Mausrads wird in beide Richtungen kurz abgefangen.
+- **Teilnehmerzahl in Matrix-Karten sprang zurück,** wenn die Termine über einen Zyklus gefiltert
+  waren (die Karte zeigte einen einmal geladenen Stand).
+- **PDF: «Absatzabstand» wirkte nicht auf Textblöcke** (fester Abstand im Rich-Text); Aufzählungen
+  bleiben kompakt.
+- **PDF: «Linienstärke» wirkte nicht auf Rahmen** von Karten, Kacheln, Formularen, Pendenzen und
+  Matrix (fest 0.5 pt).
+
 ## [1.2.2] - 2026-11-09
 
 Erweiterungen aus dem Testbetrieb und ein Performance-Paket auf 1.2.1. Eine neue Migration
