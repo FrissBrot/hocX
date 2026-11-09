@@ -30,7 +30,7 @@ Kurzfassung, falls die Datei nicht geladen wurde:
 
 - Bei jeder UI-Änderung zuerst `design/DESIGN.md` lesen. Standardbausteine (`Modal`, `useConfirm`, `useToast`, `SearchableSelect`, `ActionMenu`, `DataTable`, `Badge`, …) statt Nachbauten. Dropdown-Entscheidungsbaum steht in Abschnitt 5, Datumsfelder (`DateInput`) in Abschnitt 6.
 - Nur Tokens aus `design/tokens.css` (Farben, `--radius-*`, `--text-*`, `--space-*`, `--shadow-*`, `--z-*`, `--dur-*`). Keine Hex-Farben, keine Radius-/Schrift-/z-index-Literale, keine `var(--x, #hex)`-Fallbacks.
-- Neue Optik als Klasse in `frontend/app/globals.css`, nicht als Inline-Style. Light **und** Dark prüfen.
+- Neue Optik als Klasse in `frontend/app/globals.css` oder, wenn sie nur bestimmte Routen brauchen, in `frontend/app/styles/<bereich>.css` (Prüfung: `python3 scripts/check-css-scopes.py`), nicht als Inline-Style. Light **und** Dark prüfen.
 - Tokens nur in `design/tokens.css` ändern, danach `./scripts/sync-design-tokens.sh` (die Kopien in `frontend/app/tokens.css` und `abgabebox-frontend/app/tokens.css` nie von Hand bearbeiten).
 - Vor jedem Commit mit UI-Änderung: `python3 scripts/check-design-rules.py` muss `Design-Regeln: ok` melden. Ausnahmen nur mit `design-ok`-Kommentar in derselben Zeile und kurzer Begründung.
 
@@ -181,6 +181,7 @@ Projektabhängigkeiten und Projektbefehle laufen in Containern. Auf dem Host ins
 - i18n (vor jedem Commit mit UI-Änderung): `python3 scripts/check-i18n-completeness.py`, `python3 scripts/check-i18n-hardcoded-text.py` und `python3 scripts/check-i18n-key-resolution.py`, nach jeder Änderung an `i18n/locales.json` zusätzlich `python3 scripts/sync-i18n-config.py`
 - E2E-Stack (eigene DB, Wegwerf-Konten): `./scripts/e2e.sh up` / `test` / `down`
 - Für visuelle Vergleiche Playwright-Screenshots gegen den E2E-Stack (`mcr.microsoft.com/playwright:v1.64.1-noble` - Image-Tag muss `frontend/package.json`s `@playwright/test`-Version entsprechen, siehe `scripts/e2e.sh`), Light/Dark, 1440 und 390 px.
+- Auf dem Test-Host (`/etc/hocx/environment` = `test`): nach einem Update Skill `testhost-abnahme` ausführen und selbst auswerten (`.claude/skills/testhost-abnahme/SKILL.md`).
 - Zuerst die kleinste relevante Prüfung ausführen; vollständige Test- oder E2E-Suites nur, wenn sie für die Änderung sinnvoll sind.
 - `docker builder prune`/`docker image prune -a` (oder `-f`-Varianten) nicht als Routine-Aufräumschritt während des Testens ausführen: `backend-test`/`abgabebox-backend-test`/`photo-analysis-worker-test` und `frontend-test`/`abgabebox-frontend-test` (`docker-compose.tests.yml`) sind bewusst so gebaut, dass ein unveränderter `requirements*.txt`/`package*.json` die pip-/npm-Install-Layer aus dem Docker-Build-Cache wiederverwendet statt neu zu installieren – ein Cache-Prune zwingt den nächsten `--build`-Lauf zur vollständigen Neuinstallation (mehrere Minuten) und kann bei `npm`/`pip` sogar andere (neuere) Paketversionen auflösen als die zuvor getestete, gecachte Schicht. Bei echtem Platzmangel gezielt alte, nicht mehr referenzierte Images/Volumes identifizieren statt pauschal zu pruning.
 

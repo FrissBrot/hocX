@@ -108,6 +108,11 @@ jedem Test-Deploy komplett neu auf - Login siehe Skript-Output/-Docstring. Laeuf
 - `docker compose -p hocx-test logs backend --tail=50` zeigt keine Fehler, insbesondere
   keine Alembic-Fehler beim Start
 
+**Abnahme durch Claude Code** auf dem Test-Host: Skill `testhost-abnahme`
+(`.claude/skills/testhost-abnahme/SKILL.md`) führt `scripts/testhost/abnahme.sh` aus und wertet
+die Ergebnisse selbst aus: Traefik-Komprimierung, Migrationen, Bereichs-CSS inklusive Dialoge,
+Übersetzungen, Ladezeiten. Zugangsdaten stehen in `~/.hocx-testhost.env`, nie im Repository.
+
 ## 3. Getesteten Candidate zum Release promoten
 
 Wenn Test erfolgreich war:
