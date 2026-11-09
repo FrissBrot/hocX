@@ -28,16 +28,43 @@ if [ -f "$CREDENTIALS" ]; then
 fi
 
 # Nie auf Prod: Die Prüfungen laden die Instanz und legen Testdaten an.
-HOST_MARKER="$(cat /etc/hocx/environment 2>/dev/null || true)"
+HOST_MARKER="$(cat "${HOCX_HOST_MARKER_FILE:-/etc/hocx/environment}" 2>/dev/null || true)"
 if [ "$HOST_MARKER" = prod ] || [ "$HOST_MARKER" = production ]; then
   echo "Dieser Host ist als Prod markiert, die Abnahme läuft nur auf dem Test-Host." >&2
   exit 2
 fi
 
+# shellcheck source=scripts/lib/env.sh
+source "$REPO_DIR/scripts/lib/env.sh"
+
+TH_ENV_FILE="${TH_ENV_FILE:-$REPO_DIR/.env}"
+TH_RELEASES_DIR="${TH_RELEASES_DIR:-$(dirname "$TH_ENV_FILE")/.releases}"
+
+# Liest genau einen Schlüssel aus einer dotenv-Datei (.env oder .releases/<Version>.env). Bewusst
+# nicht load_env_file: das exportiert alle Werte samt Secrets an jeden Unterprozess. Anführungs-
+# zeichen und Kommentare wie load_env_file: '...' wörtlich, "..." mit Escapes, sonst ohne
+# Inline-Kommentar. Die letzte Zuweisung gilt. Fehlt Datei oder Schlüssel: leere Ausgabe.
 env_value() {
-  [ -f "$REPO_DIR/.env" ] || return 0
-  # Nur einzelne, nicht geheime Werte; ein fehlender Eintrag ist kein Fehler (pipefail).
-  { grep -E "^$1=" "$REPO_DIR/.env" || true; } | tail -1 | cut -d= -f2- | tr -d '"'
+  local key="$1" file="${2:-$TH_ENV_FILE}" line value="" found=false
+  [ -f "$file" ] && [ -r "$file" ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%$'\r'}"
+    line="${line#export }"
+    [[ "$line" == "$key="* ]] || continue
+    value="${line#*=}"
+    found=true
+  done <"$file"
+  [ "$found" = true ] || return 0
+  if [[ "$value" == "'"*"'" && ${#value} -ge 2 ]]; then
+    value="${value:1:${#value}-2}"
+  elif [[ "$value" == '"'*'"' && ${#value} -ge 2 ]]; then
+    unescape_double_quoted "${value:1:${#value}-2}"
+    value="$REPLY"
+  else
+    strip_unquoted_comment "$value"
+    value="$REPLY"
+  fi
+  printf '%s\n' "$value"
 }
 
 TH_PROJECT="${TH_PROJECT:-hocx-test}"
@@ -62,7 +89,7 @@ container_of() {
 }
 
 server_checks() {
-  local db frontend_list names state unhealthy restarted image_tag expected running
+  local db frontend_list names state unhealthy restarted expected running manifest wanted_image
   db="$(container_of db)"
   if [ -z "$db" ]; then
     record TH-01 FAIL "Kein laufender db-Container im Projekt $TH_PROJECT (TH_PROJECT prüfen)"
@@ -85,15 +112,27 @@ server_checks() {
       *) restarted="$restarted $name(${state#* })" ;;
     esac
   done <<<"$names"
+  # deploy.sh startet per Digest (HOCX_BACKEND_IMAGE aus .releases/<HOCX_VERSION>.env), der
+  # Tag steht deshalb nicht im laufenden Image. Verglichen wird das Image mit dem Manifest.
   expected="$(env_value HOCX_VERSION)"
   running="$(docker inspect "$(container_of backend)" --format '{{.Config.Image}}' 2>/dev/null || true)"
-  image_tag="${running##*:}"
+  manifest="$TH_RELEASES_DIR/$expected.env"
+  wanted_image=""
+  [ -n "$expected" ] && wanted_image="$(env_value HOCX_BACKEND_IMAGE "$manifest")"
   if [ -n "$unhealthy" ]; then
     record TH-01 FAIL "Nicht gesund:$unhealthy"
-  elif [ -n "$expected" ] && [ "$image_tag" != "$expected" ]; then
-    record TH-01 FAIL "Backend läuft mit $image_tag, .env verlangt $expected"
+  elif [ -z "$expected" ]; then
+    record TH-01 FAIL "HOCX_VERSION fehlt in $TH_ENV_FILE"
+  elif [ ! -r "$manifest" ]; then
+    record TH-01 FAIL "Release-Manifest $manifest fehlt oder ist nicht lesbar: $expected wurde nicht mit deploy.sh ausgerollt"
+  elif [ -z "$wanted_image" ]; then
+    record TH-01 FAIL "HOCX_BACKEND_IMAGE fehlt in $manifest"
+  elif [ -z "$running" ]; then
+    record TH-01 FAIL "Kein laufender backend-Container im Projekt $TH_PROJECT (soll: $expected, ${wanted_image##*@})"
+  elif [ "$running" != "$wanted_image" ]; then
+    record TH-01 FAIL "Backend läuft mit $running, $expected verlangt ${wanted_image##*@}"
   else
-    record TH-01 PASS "Alle Container gesund, Backend-Image $image_tag"
+    record TH-01 PASS "Alle Container gesund, Backend $expected (${wanted_image##*@})"
   fi
 
   # TH-02: Migrationen auf dem Stand des Checkouts
