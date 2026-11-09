@@ -794,6 +794,13 @@
         "description": "Title band, key facts, key figures and numbered agenda items.",
         "name": "Atlas"
       }
+    },
+    "styles": {
+      "kreide": "White with fine lines: logo in the header, key figures in the secondary colour, plain footer.",
+      "signal": "Dark band with a signal stripe, key figures as coloured tiles, strong footer line.",
+      "fokus": "Plenty of white space, a small dot as the mark, key figures in a framed strip.",
+      "siegel": "Serif type, centred letterhead with a double rule, key figures between fine lines.",
+      "atlas": "Band in the primary colour with the logo, key figures on light tiles."
     }
   },
   "export": {
@@ -804,23 +811,24 @@
     "createPdf": "Create PDF",
     "created": "PDF created.",
     "createdVersion": "PDF created (version {version}).",
-    "description": "Choose a template, check the preview and create the PDF. Design happens in the Document Studio.",
+    "description": "Choose what to include, check the preview, pick a format. Design happens in the Document Studio.",
     "documentTitle": "Title",
     "documentTitleAuto": "Automatic",
     "documentType": "Document",
     "failed": "The export failed.",
     "format": {
+      "pdf": "PDF",
+      "xlsx": "Excel",
       "csv": "CSV",
-      "ics": "Calendar (ICS)",
-      "markdown": "Copy text (WhatsApp)",
-      "xlsx": "Excel"
+      "markdown": "Text",
+      "ics": "Calendar"
     },
     "language": "Document language",
     "languageDefault": "Organisation default",
     "loadFailed": "The export options could not be loaded.",
     "noTemplates": "No published template is available for this document.",
-    "openInStudio": "Design in the Document Studio",
-    "options": "Options",
+    "openInStudio": "Open in Document Studio ↗",
+    "options": "More options",
     "pdfReady": "PDF ready – click here to open",
     "preview": "Preview",
     "previewFailed": "The preview could not be created.",
@@ -833,20 +841,78 @@
     "watermarkOn": "Always",
     "working": "Creating …",
     "columns": "Columns",
-    "columnsHelp": "Applies to CSV, Excel and text. Deselected columns are left out of this export only.",
+    "columnsHelp": "Deselected columns are left out of this export only.",
     "markdownCopied": "Text for WhatsApp copied to the clipboard",
     "todoFilter": {
-      "title": "Select tasks",
-      "dueUntil": "Due by",
-      "tag": "Only with tag",
+      "title": "Which tasks?",
+      "statusLabel": "Status",
+      "status": {
+        "open": "Open",
+        "in_progress": "In progress",
+        "done": "Done",
+        "all": "All"
+      },
+      "dueLabel": "Due",
+      "due": {
+        "all": "All",
+        "overdue": "Overdue",
+        "nextSession": "Next meeting ({date})",
+        "month": "Until {date}",
+        "custom": "Date …"
+      },
+      "dueUntil": "Due until",
+      "includeUndated": "Include tasks without a due date",
+      "tag": "Tag",
       "allTags": "All tags",
-      "tagFromPage": "As on the page ({tag})",
+      "person": "Assigned to",
+      "allPeople": "Everyone",
+      "protocol": "From minutes",
+      "allProtocols": "All minutes",
+      "protocolUntitled": "Untitled",
+      "pick": "Select individually",
       "selection": "{selected} of {total} selected",
       "all": "All",
       "none": "None",
       "loading": "Loading tasks …",
-      "empty": "No tasks for these filters."
-    }
+      "loadFailed": "The tasks could not be loaded. The export still applies the filters.",
+      "empty": "No tasks match these filters.",
+      "item": {
+        "noDue": "no due date",
+        "due": "due {date}",
+        "overdueSince": "overdue since {date}"
+      }
+    },
+    "appearance": "Appearance",
+    "optionsHint": "Title, language, watermark",
+    "summaryTitle": "custom title",
+    "summaryWatermarkOn": "watermark always",
+    "summaryWatermarkOff": "watermark never",
+    "watermarkAutoShort": "Automatic",
+    "cancel": "Cancel",
+    "formatLabel": "Format",
+    "formatSub": {
+      "pdf": "For printing",
+      "xlsx": ".xlsx",
+      "csv": ".csv",
+      "markdown": "For WhatsApp",
+      "ics": ".ics"
+    },
+    "run": {
+      "pdf": "Create PDF",
+      "xlsx": "Download Excel",
+      "csv": "Download CSV",
+      "markdown": "Copy text",
+      "ics": "Download calendar"
+    },
+    "runCount": "{label} ({count})",
+    "previewPages": "{count, plural, one {# page} other {# pages}}",
+    "previewRows": "{rows, plural, one {# row} other {# rows}} · {columns, plural, one {# column} other {# columns}}",
+    "previewChars": "{count, number} characters",
+    "previewUpdating": "updating",
+    "previewMoreRows": "… and {count, plural, one {# more row} other {# more rows}}",
+    "previewWhatsapp": "This is how the text appears in WhatsApp",
+    "previewNone": "Calendar files have no preview.",
+    "previewEmpty": "No rows for this selection."
   },
   "exports": {
     "allTypes": "All document types",

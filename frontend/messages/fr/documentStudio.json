@@ -794,6 +794,13 @@
         "description": "Bandeau de titre, données clés, chiffres clés et points de l'ordre du jour numérotés.",
         "name": "Atlas"
       }
+    },
+    "styles": {
+      "kreide": "Blanc avec de fines lignes : logo dans l’en-tête, chiffres clés dans la couleur secondaire, pied de page sobre.",
+      "signal": "Bandeau sombre avec bande de signalisation, chiffres clés en tuiles colorées, ligne de pied marquée.",
+      "fokus": "Beaucoup d’espace blanc, un petit point comme marque, chiffres clés dans un bandeau encadré.",
+      "siegel": "Police à empattements, en-tête centré avec double filet, chiffres clés entre de fines lignes.",
+      "atlas": "Bandeau dans la couleur principale avec le logo, chiffres clés sur des surfaces claires."
     }
   },
   "export": {
@@ -804,23 +811,24 @@
     "createPdf": "Créer le PDF",
     "created": "PDF créé.",
     "createdVersion": "PDF créé (version {version}).",
-    "description": "Choisissez un modèle, vérifiez l’aperçu et créez le PDF. La mise en page se fait dans le Document Studio.",
+    "description": "Définissez la sélection, vérifiez l’aperçu, choisissez le format. La mise en page se fait dans le Document Studio.",
     "documentTitle": "Titre",
     "documentTitleAuto": "Automatique",
     "documentType": "Document",
     "failed": "L’export a échoué.",
     "format": {
+      "pdf": "PDF",
+      "xlsx": "Excel",
       "csv": "CSV",
-      "ics": "Calendrier (ICS)",
-      "markdown": "Copier le texte (WhatsApp)",
-      "xlsx": "Excel"
+      "markdown": "Texte",
+      "ics": "Calendrier"
     },
     "language": "Langue du document",
     "languageDefault": "Langue par défaut de la société",
     "loadFailed": "Les options d’export n’ont pas pu être chargées.",
     "noTemplates": "Aucun modèle publié n’est disponible pour ce document.",
-    "openInStudio": "Mettre en page dans le Document Studio",
-    "options": "Options",
+    "openInStudio": "Ouvrir dans le Document Studio ↗",
+    "options": "Plus d’options",
     "pdfReady": "PDF prêt – cliquer ici pour l’ouvrir",
     "preview": "Aperçu",
     "previewFailed": "L’aperçu n’a pas pu être créé.",
@@ -833,20 +841,78 @@
     "watermarkOn": "Toujours",
     "working": "Création …",
     "columns": "Colonnes",
-    "columnsHelp": "S'applique au CSV, à Excel et au texte. Les colonnes désélectionnées sont omises uniquement dans cet export.",
+    "columnsHelp": "Les colonnes désélectionnées manquent uniquement dans cet export.",
     "markdownCopied": "Texte pour WhatsApp copié dans le presse-papiers",
     "todoFilter": {
-      "title": "Choisir les tâches",
-      "dueUntil": "Échéance jusqu'au",
-      "tag": "Seulement avec l'étiquette",
-      "allTags": "Toutes les étiquettes",
-      "tagFromPage": "Comme sur la page ({tag})",
+      "title": "Quelles tâches ?",
+      "statusLabel": "Statut",
+      "status": {
+        "open": "Ouvertes",
+        "in_progress": "En cours",
+        "done": "Terminées",
+        "all": "Toutes"
+      },
+      "dueLabel": "Échéance",
+      "due": {
+        "all": "Toutes",
+        "overdue": "En retard",
+        "nextSession": "Prochaine séance ({date})",
+        "month": "Jusqu’au {date}",
+        "custom": "Date …"
+      },
+      "dueUntil": "Échéance jusqu’au",
+      "includeUndated": "Inclure les tâches sans échéance",
+      "tag": "Tag",
+      "allTags": "Tous les tags",
+      "person": "Responsable",
+      "allPeople": "Toutes les personnes",
+      "protocol": "Du procès-verbal",
+      "allProtocols": "Tous les procès-verbaux",
+      "protocolUntitled": "Sans titre",
+      "pick": "Sélectionner individuellement",
       "selection": "{selected} sur {total} sélectionnées",
       "all": "Toutes",
       "none": "Aucune",
       "loading": "Chargement des tâches …",
-      "empty": "Aucune tâche pour ces filtres."
-    }
+      "loadFailed": "Les tâches n’ont pas pu être chargées. L’export applique quand même les filtres.",
+      "empty": "Aucune tâche pour ces filtres.",
+      "item": {
+        "noDue": "sans échéance",
+        "due": "échéance {date}",
+        "overdueSince": "en retard depuis le {date}"
+      }
+    },
+    "appearance": "Apparence",
+    "optionsHint": "Titre, langue, filigrane",
+    "summaryTitle": "titre personnalisé",
+    "summaryWatermarkOn": "filigrane toujours",
+    "summaryWatermarkOff": "filigrane jamais",
+    "watermarkAutoShort": "Automatique",
+    "cancel": "Annuler",
+    "formatLabel": "Format",
+    "formatSub": {
+      "pdf": "Pour imprimer",
+      "xlsx": ".xlsx",
+      "csv": ".csv",
+      "markdown": "Pour WhatsApp",
+      "ics": ".ics"
+    },
+    "run": {
+      "pdf": "Créer le PDF",
+      "xlsx": "Télécharger Excel",
+      "csv": "Télécharger CSV",
+      "markdown": "Copier le texte",
+      "ics": "Télécharger le calendrier"
+    },
+    "runCount": "{label} ({count})",
+    "previewPages": "{count, plural, one {# page} other {# pages}}",
+    "previewRows": "{rows, plural, one {# ligne} other {# lignes}} · {columns, plural, one {# colonne} other {# colonnes}}",
+    "previewChars": "{count, number} caractères",
+    "previewUpdating": "mise à jour",
+    "previewMoreRows": "… et {count, plural, one {# autre ligne} other {# autres lignes}}",
+    "previewWhatsapp": "Voici comment le texte apparaît dans WhatsApp",
+    "previewNone": "Pas d’aperçu pour les fichiers de calendrier.",
+    "previewEmpty": "Aucune ligne pour cette sélection."
   },
   "exports": {
     "allTypes": "Tous les types de document",

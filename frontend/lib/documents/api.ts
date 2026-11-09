@@ -212,6 +212,8 @@ export type ProtocolStructure = {
 export type DesignExample = {
   key: string;
   document_type: string;
+  /** Design (Grundstil): «signal» auch für das Beispiel «signal-todos» */
+  design: string;
 };
 
 export type DocumentTemplateDetail = DocumentTemplateInfo & {
@@ -543,6 +545,22 @@ export async function exportColumns(request: DocumentRequest, signal?: AbortSign
     signal,
   });
   return result.columns;
+}
+
+export type ExportPreview = { tables: { title: string; rows: string[][]; total_rows: number }[]; text: string | null };
+
+/** Vorschau für CSV/Excel (Tabellen, gekürzt) und Text im Export-Dialog; ohne Download/Audit. */
+export async function exportPreview(
+  request: DocumentRequest,
+  format: "csv" | "xlsx" | "markdown",
+  excludeColumns: string[],
+  signal?: AbortSignal
+): Promise<ExportPreview> {
+  return browserApiFetch<ExportPreview>("/api/documents/export/preview", {
+    method: "POST",
+    body: JSON.stringify({ ...request, format, exclude_columns: excludeColumns }),
+    signal,
+  });
 }
 
 export async function exportDocumentFile(

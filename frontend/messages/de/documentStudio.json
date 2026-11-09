@@ -794,6 +794,13 @@
         "description": "Titelband, Eckdaten, Kennzahlen und nummerierte Traktanden.",
         "name": "Atlas"
       }
+    },
+    "styles": {
+      "kreide": "Weiss mit feinen Linien: Logo im Kopf, Kennzahlen in der Zweitfarbe, schlichte Fusszeile.",
+      "signal": "Dunkles Band mit Signalstreifen, Kennzahlen als farbige Kacheln, kräftige Fusslinie.",
+      "fokus": "Viel Weissraum, kleiner Punkt als Marke, Kennzahlen in einem gerahmten Streifen.",
+      "siegel": "Serifenschrift, zentrierter Briefkopf mit Doppellinie, Kennzahlen zwischen feinen Linien.",
+      "atlas": "Band in der Hauptfarbe mit Logo, Kennzahlen auf hellen Flächen."
     }
   },
   "export": {
@@ -804,23 +811,24 @@
     "createPdf": "PDF erstellen",
     "created": "PDF erstellt.",
     "createdVersion": "PDF erstellt (Version {version}).",
-    "description": "Vorlage wählen, Vorschau prüfen und PDF erzeugen. Gestaltet wird im Document Studio.",
+    "description": "Auswahl festlegen, Vorschau prüfen, Format wählen. Gestaltet wird im Document Studio.",
     "documentTitle": "Titel",
     "documentTitleAuto": "Automatisch",
     "documentType": "Dokument",
     "failed": "Der Export ist fehlgeschlagen.",
     "format": {
+      "pdf": "PDF",
+      "xlsx": "Excel",
       "csv": "CSV",
-      "ics": "Kalender (ICS)",
-      "markdown": "Text kopieren (WhatsApp)",
-      "xlsx": "Excel"
+      "markdown": "Text",
+      "ics": "Kalender"
     },
     "language": "Sprache des Dokuments",
     "languageDefault": "Standardsprache des Vereins",
     "loadFailed": "Die Exportoptionen konnten nicht geladen werden.",
     "noTemplates": "Für dieses Dokument ist keine veröffentlichte Vorlage verfügbar.",
-    "openInStudio": "Im Document Studio gestalten",
-    "options": "Optionen",
+    "openInStudio": "Im Document Studio öffnen ↗",
+    "options": "Weitere Optionen",
     "pdfReady": "PDF bereit – hier klicken zum Öffnen",
     "preview": "Vorschau",
     "previewFailed": "Die Vorschau konnte nicht erstellt werden.",
@@ -833,20 +841,78 @@
     "watermarkOn": "Immer",
     "working": "Wird erstellt …",
     "columns": "Spalten",
-    "columnsHelp": "Gilt für CSV, Excel und Text. Abgewählte Spalten fehlen nur in diesem Export.",
+    "columnsHelp": "Abgewählte Spalten fehlen nur in diesem Export.",
     "markdownCopied": "Text für WhatsApp in die Zwischenablage kopiert",
     "todoFilter": {
-      "title": "Pendenzen auswählen",
+      "title": "Welche Pendenzen?",
+      "statusLabel": "Status",
+      "status": {
+        "open": "Offen",
+        "in_progress": "In Arbeit",
+        "done": "Erledigt",
+        "all": "Alle"
+      },
+      "dueLabel": "Fälligkeit",
+      "due": {
+        "all": "Alle",
+        "overdue": "Überfällig",
+        "nextSession": "Nächste Sitzung ({date})",
+        "month": "Bis {date}",
+        "custom": "Datum …"
+      },
       "dueUntil": "Fällig bis",
-      "tag": "Nur mit Tag",
+      "includeUndated": "Pendenzen ohne Fälligkeit mitnehmen",
+      "tag": "Tag",
       "allTags": "Alle Tags",
-      "tagFromPage": "Wie auf der Seite ({tag})",
+      "person": "Zuständig",
+      "allPeople": "Alle Personen",
+      "protocol": "Aus Protokoll",
+      "allProtocols": "Alle Protokolle",
+      "protocolUntitled": "Ohne Titel",
+      "pick": "Einzeln an- und abwählen",
       "selection": "{selected} von {total} ausgewählt",
       "all": "Alle",
       "none": "Keine",
       "loading": "Pendenzen werden geladen …",
-      "empty": "Keine Pendenzen für diese Filter."
-    }
+      "loadFailed": "Die Pendenzen konnten nicht geladen werden. Der Export nutzt trotzdem die Filter.",
+      "empty": "Keine Pendenzen für diese Filter.",
+      "item": {
+        "noDue": "ohne Fälligkeit",
+        "due": "fällig {date}",
+        "overdueSince": "überfällig seit {date}"
+      }
+    },
+    "appearance": "Aussehen",
+    "optionsHint": "Titel, Sprache, Wasserzeichen",
+    "summaryTitle": "eigener Titel",
+    "summaryWatermarkOn": "Wasserzeichen immer",
+    "summaryWatermarkOff": "Wasserzeichen nie",
+    "watermarkAutoShort": "Automatisch",
+    "cancel": "Abbrechen",
+    "formatLabel": "Format",
+    "formatSub": {
+      "pdf": "Zum Drucken",
+      "xlsx": ".xlsx",
+      "csv": ".csv",
+      "markdown": "Für WhatsApp",
+      "ics": ".ics"
+    },
+    "run": {
+      "pdf": "PDF erstellen",
+      "xlsx": "Excel herunterladen",
+      "csv": "CSV herunterladen",
+      "markdown": "Text kopieren",
+      "ics": "Kalender herunterladen"
+    },
+    "runCount": "{label} ({count})",
+    "previewPages": "{count, plural, one {# Seite} other {# Seiten}}",
+    "previewRows": "{rows, plural, one {# Zeile} other {# Zeilen}} · {columns, plural, one {# Spalte} other {# Spalten}}",
+    "previewChars": "{count, number} Zeichen",
+    "previewUpdating": "wird aktualisiert",
+    "previewMoreRows": "… und {count, plural, one {# weitere Zeile} other {# weitere Zeilen}}",
+    "previewWhatsapp": "So erscheint der Text in WhatsApp",
+    "previewNone": "Für Kalenderdateien gibt es keine Vorschau.",
+    "previewEmpty": "Keine Zeilen für diese Auswahl."
   },
   "exports": {
     "allTypes": "Alle Dokumenttypen",

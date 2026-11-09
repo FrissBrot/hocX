@@ -1076,6 +1076,12 @@
         "meetings.read"
       ]
     },
+    "POST /api/documents/export/preview": {
+      "handler": "documents.export_document_preview",
+      "requires": [
+        "meetings.read"
+      ]
+    },
     "GET /api/documents/exports": {
       "handler": "documents.list_document_exports",
       "requires": [

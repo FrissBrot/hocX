@@ -374,6 +374,50 @@ def export_document_format(body: FormatExportRequest, db: Session = Depends(get_
     return Response(content=content, media_type=media_type, headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 
+class ExportPreviewTable(BaseModel):
+    title: str
+    rows: list[list[str]]
+    total_rows: int
+
+
+class ExportPreviewRead(BaseModel):
+    tables: list[ExportPreviewTable] = Field(default_factory=list)
+    text: str | None = None
+
+
+_PREVIEW_ROWS = 100
+
+
+@router.post("/documents/export/preview", response_model=ExportPreviewRead)
+def export_document_preview(body: FormatExportRequest, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Vorschau für CSV/Excel (Tabellen, höchstens 100 Zeilen je Tabelle) und Text (Markdown) im
+    Export-Dialog. Gleiche Prüfung und gleiche Daten wie POST /documents/export, aber nur zur
+    Anzeige: kein Download, deshalb wie die PDF-Vorschau ohne Audit-Eintrag (sonst entstünde
+    bei jeder Filteränderung einer). Der eigentliche Export bleibt auditiert."""
+    permissions.require_export(user)
+    if body.format == "ics":
+        raise HTTPException(status_code=422, detail="Keine Vorschau für Kalenderdateien")
+    request = DocumentRequest.model_validate(body.model_dump(exclude={"format", "exclude_columns"}))
+    savepoint = db.begin_nested()
+    try:
+        prepared = document_service.prepare(db, user, user.current_tenant_id, request)
+        if body.format == "markdown":
+            result = ExportPreviewRead(text=extra_formats.markdown_content(prepared, exclude_columns=body.exclude_columns).decode("utf-8"))
+        else:
+            tables = extra_formats.all_tables(
+                prepared.compiled.blocks, prepared.compiled.data, prepared.compiled.data["strings"], exclude_columns=body.exclude_columns
+            )
+            result = ExportPreviewRead(
+                tables=[ExportPreviewTable(title=title, rows=rows[: _PREVIEW_ROWS + 1], total_rows=max(len(rows) - 1, 0)) for title, rows in tables]
+            )
+    except (DocumentPermissionError, DocumentNotFoundError, ValueError) as exc:
+        raise http_error(user, exc) from exc
+    finally:
+        if savepoint.is_active:
+            savepoint.rollback()
+    return result
+
+
 @router.post("/documents/export/columns", response_model=ExportColumnsRead)
 def export_document_columns(body: DocumentRequest, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     """Spalten, die der Export-Dialog zum An- und Abwählen anbietet: Spaltenköpfe aller Tabellen

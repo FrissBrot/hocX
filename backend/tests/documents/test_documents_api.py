@@ -305,3 +305,30 @@ def test_todo_export_filters_by_due_date_tag_and_manual_selection(db, setup):
     todo = db.scalar(select(ProtocolTodo).where(ProtocolTodo.task == "Getränke besorgen"))
     assert "Getränke besorgen" not in exported(exclude_ids=[str(todo.public_id)])
     assert "Getränke besorgen" not in exported(tag="gibts-nicht")
+
+
+def test_export_preview_matches_export_without_audit(db, setup, monkeypatch):
+    """Vorschau im Export-Dialog: dieselben Daten wie der Export, aber kein Audit-Eintrag (sonst
+    einer je Filteränderung) und keine Kalender-Vorschau."""
+    logged: list[str] = []
+    monkeypatch.setattr(routes.audit, "log", lambda db, action, **kwargs: logged.append(action))
+
+    table = routes.export_document_preview(routes.FormatExportRequest(document_type="todos", format="csv", exclude_columns=["Fällig"]), db=db, user=setup["reader"])
+    header, *rows = table.tables[0].rows
+    assert "Aufgabe" in header and "Fällig" not in header
+    assert any("Getränke besorgen" in row for row in rows) and table.tables[0].total_rows == len(rows)
+
+    text = routes.export_document_preview(routes.FormatExportRequest(document_type="todos", format="markdown"), db=db, user=setup["reader"])
+    assert "*Getränke besorgen*" in text.text and not text.tables
+    assert logged == []
+
+    # Neue Filter des Export-Dialogs kommen als Seitenkontext an
+    overdue = routes.export_document_preview(
+        routes.FormatExportRequest(document_type="todos", format="csv", params={"overdue_only": True, "status": "all"}), db=db, user=setup["reader"]
+    )
+    # «Getränke besorgen» hat keine Fälligkeit, ist also nicht überfällig
+    assert not any("Getränke besorgen" in row for table in overdue.tables for row in table.rows)
+
+    with pytest.raises(HTTPException) as excinfo:
+        routes.export_document_preview(routes.FormatExportRequest(document_type="events", format="ics"), db=db, user=setup["reader"])
+    assert excinfo.value.status_code == 422

@@ -180,10 +180,15 @@ TodoColumn = Literal["status", "assignee", "due", "protocol", "tags"]
 
 
 class TodoTableParams(_Params):
-    status: Literal["all", "open", "done"] = "open"
+    # open = offen und in Arbeit; in_progress nur die in Arbeit
+    status: Literal["all", "open", "in_progress", "done"] = "open"
     participant_id: uuid.UUID | None = Field(None, json_schema_extra=_source("participants"))
     tag: str | None = Field(None, max_length=120)
     due_until: date | None = None
+    # Mit due_until: Pendenzen ohne Fälligkeit trotzdem aufnehmen (bisheriges Verhalten)
+    include_undated: bool = True
+    # Nur offene Pendenzen, deren Fälligkeit vor heute liegt
+    overdue_only: bool = False
     protocol_id: uuid.UUID | None = Field(None, json_schema_extra=_source("protocols"))
     group_by: Literal["none", "person", "status", "tag"] = "none"
     columns: list[TodoColumn] = Field(default_factory=lambda: ["status", "assignee", "due", "protocol"])

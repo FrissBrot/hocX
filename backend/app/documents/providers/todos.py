@@ -24,6 +24,12 @@ def is_open(row: Any) -> bool:
     return status_code(row) in ("open", "in_progress")
 
 
+def is_overdue(row: Any, today: date) -> bool:
+    """Offen und die Fälligkeit liegt vor heute (heute fällig ist noch nicht überfällig)."""
+    due = getattr(row, "resolved_due_date", None)
+    return is_open(row) and due is not None and due < today
+
+
 def due_cell(row: Any) -> Cell:
     """Fälligkeit: Datum plus Termin-Titel (Benutzertext) oder übersetzter Marker."""
     resolved = getattr(row, "resolved_due_date", None)
@@ -151,6 +157,8 @@ def filter_rows(ctx: BuildContext, rows: list[Any], params: TodoTableParams) -> 
 
     if params.status == "open":
         rows = [row for row in rows if is_open(row)]
+    elif params.status == "in_progress":
+        rows = [row for row in rows if status_code(row) == "in_progress"]
     elif params.status == "done":
         rows = [row for row in rows if status_code(row) == "done"]
     if params.participant_id is not None:
@@ -165,8 +173,13 @@ def filter_rows(ctx: BuildContext, rows: list[Any], params: TodoTableParams) -> 
     if params.tag:
         wanted = params.tag.strip().casefold()
         rows = [row for row in rows if any(tag.casefold() == wanted for tag in todo_tags(row))]
+    if params.overdue_only:
+        rows = [row for row in rows if is_overdue(row, ctx.today)]
     if params.due_until is not None:
-        rows = [row for row in rows if getattr(row, "resolved_due_date", None) is None or row.resolved_due_date <= params.due_until]
+        rows = [
+            row for row in rows
+            if (row.resolved_due_date <= params.due_until if getattr(row, "resolved_due_date", None) is not None else params.include_undated)
+        ]
     if params.exclude_ids:
         excluded = set(params.exclude_ids)
         rows = [row for row in rows if row.ProtocolTodo.public_id not in excluded]

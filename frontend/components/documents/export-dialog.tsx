@@ -1,16 +1,20 @@
 "use client";
 
-// Export Center: ein einheitlicher Exportablauf für alle Dokumente. Vorlage wählen (vorbelegt
-// nach Prioritätsregel: Zuweisung > Mandanten-Standard > Plattform-Standard), Vorschau mit den
-// echten Daten prüfen, Optionen setzen, PDF erzeugen oder ein Zusatzformat laden. Gestaltet wird
-// ausschliesslich im Document Studio - hier gibt es bewusst keinen Designer.
+// Export Center: ein einheitlicher Exportablauf für alle Dokumente (Design «Todo Export Popup»).
+// Links: Auswahl (bei Pendenzen), Aussehen (Vorlage, vorbelegt nach Prioritätsregel: Zuweisung >
+// Mandanten-Standard > Plattform-Standard) und weitere Optionen. Rechts: Vorschau im gewählten
+// Format (PDF-Seiten, Tabelle für CSV/Excel, WhatsApp-Text). Unten: Spalten, Format, Ausführen.
+// Gestaltet wird ausschliesslich im Document Studio - hier gibt es bewusst keinen Designer.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { templateDisplayName } from "@/components/documents/studio-labels";
+import { TodoExportFilters, useExportTodos } from "@/components/documents/todo-export-filters";
 import { Badge } from "@/components/ui/badge";
+import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
+import { Select } from "@/components/ui/select";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { useToast } from "@/contexts/toast-context";
 import { locales } from "@/i18n/locale-config.generated";
@@ -25,13 +29,21 @@ import {
   exportColumns,
   exportDocumentFile,
   ExportOptions,
+  ExportPreview,
+  exportPreview,
   previewDocument,
   renderDocument,
   saveBlob,
   studioApi,
 } from "@/lib/documents/api";
-import { Select } from "@/components/ui/select";
-import { EMPTY_TODO_EXPORT_FILTER, TodoExportFilter, TodoExportFilters, todoExportParams } from "@/components/documents/todo-export-filters";
+import {
+  initialTodoExportFilter,
+  localIsoDate,
+  matchesTodoFilter,
+  nextSessionDate,
+  TodoExportFilter,
+  todoExportParams,
+} from "@/lib/documents/todo-export-filter";
 
 export type DocumentExportContext = {
   /** Dokumenttyp (protocol, invitation, todos, events, statistics, list, …). */
@@ -48,8 +60,26 @@ type Props = {
   onExported?: () => void;
 };
 
+
+type ExportFormat = "pdf" | "csv" | "xlsx" | "ics" | "markdown";
+
 const PREVIEW_DEBOUNCE_MS = 400;
 const PROTOCOL_TYPES = ["protocol", "invitation", "agenda", "attendance"];
+
+const WHATSAPP_MARKS: Partial<Record<string, (text: string, key: number) => ReactNode>> = {
+  "*": (text, key) => <strong key={key}>{text}</strong>,
+  _: (text, key) => <em key={key}>{text}</em>,
+  "~": (text, key) => <s key={key}>{text}</s>,
+};
+
+/** WhatsApp-Formatierung (*fett*, _kursiv_, ~durchgestrichen~) als Elemente, ohne HTML. */
+function whatsappText(text: string): ReactNode[] {
+  return text.split(/(\*[^*\n]+\*|_[^_\n]+_|~[^~\n]+~)/g).map((part, index) => {
+    const mark = WHATSAPP_MARKS[part[0]];
+    if (mark && part.length >= 3 && part.endsWith(part[0])) return mark(part.slice(1, -1), index);
+    return <Fragment key={index}>{part}</Fragment>;
+  });
+}
 
 export function DocumentExportDialog({ open, onClose, context, onExported }: Props) {
   const t = useTranslations("documentStudio");
@@ -63,16 +93,22 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
   const [brandId, setBrandId] = useState<string>("");
   const [language, setLanguage] = useState<string>("");
   const [options, setOptions] = useState<ExportOptions>({ watermark: "auto" });
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [format, setFormat] = useState<ExportFormat>("pdf");
   const [pages, setPages] = useState<string[]>([]);
+  const [pageCount, setPageCount] = useState(0);
+  const [dataPreview, setDataPreview] = useState<ExportPreview | null>(null);
   const [previewState, setPreviewState] = useState<"idle" | "loading" | "error">("idle");
   const [previewError, setPreviewError] = useState("");
-  const [busy, setBusy] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   // Spalten für CSV, Excel und Text: alle angeboten, abgewählte gelten nur für diesen Export
   const [columns, setColumns] = useState<string[]>([]);
   const [excludedColumns, setExcludedColumns] = useState<string[]>([]);
-  // Pendenzen: Fälligkeit, Tag und Auswahl von Hand (nur Dokumenttyp «todos»)
-  const [todoFilter, setTodoFilter] = useState<TodoExportFilter>(EMPTY_TODO_EXPORT_FILTER);
-  const cache = useRef(new Map<string, string[]>());
+  // Pendenzen: Status, Fälligkeit, Tag, Person, Protokoll und Auswahl von Hand
+  const [todoFilter, setTodoFilter] = useState<TodoExportFilter>(() => initialTodoExportFilter(context.params));
+  const isTodos = documentType === "todos";
+  const todos = useExportTodos(open && isTodos);
+  const cache = useRef(new Map<string, { pages: string[]; count: number }>());
 
   useEffect(() => {
     if (open) setDocumentType(context.documentType);
@@ -112,7 +148,22 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
   }, [open, documentType]);
 
   const typeInfo = types.find((item) => item.key === documentType);
-  const paramsKey = JSON.stringify({ ...(context.params ?? {}), ...(documentType === "todos" ? todoExportParams(todoFilter) : {}) });
+  const formats: ExportFormat[] = ["pdf", ...((typeInfo?.formats ?? []) as ExportFormat[])];
+  useEffect(() => {
+    if (typeInfo && !["pdf", ...typeInfo.formats].includes(format)) setFormat("pdf");
+  }, [typeInfo, format]);
+
+  const today = localIsoDate();
+  const loadedTodos = Array.isArray(todos) ? todos : null;
+  const nextSession = useMemo(() => (loadedTodos ? nextSessionDate(loadedTodos, today) : null), [loadedTodos, today]);
+  const todoDates = useMemo(() => ({ today, nextSession }), [today, nextSession]);
+  const selectedTodos = useMemo(() => {
+    if (!isTodos || !loadedTodos) return null;
+    const excluded = new Set(todoFilter.exclude_ids);
+    return loadedTodos.filter((todo) => matchesTodoFilter(todo, todoFilter, todoDates) && !excluded.has(todo.id)).length;
+  }, [isTodos, loadedTodos, todoFilter, todoDates]);
+
+  const paramsKey = JSON.stringify({ ...(context.params ?? {}), ...(isTodos ? todoExportParams(todoFilter, todoDates) : {}) });
   const request = useMemo<DocumentRequest>(
     () => ({
       document_type: documentType,
@@ -126,25 +177,33 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
     [documentType, context.protocolId, templateId, brandId, paramsKey, options, language]
   );
 
-  // Vorschau: entprellt, veraltete Anfragen werden abgebrochen, Ergebnisse gecacht
+  // Vorschau im gewählten Format: entprellt, veraltete Anfragen werden abgebrochen. PDF-Seiten
+  // werden gecacht; CSV/Excel/Text kommen gekürzt von /documents/export/preview.
   const requestKey = JSON.stringify(request);
+  const dataFormat = format === "csv" || format === "xlsx" || format === "markdown" ? format : null;
+  const excludedKey = JSON.stringify(excludedColumns);
   useEffect(() => {
-    if (!open || !templateId) return;
-    const cached = cache.current.get(requestKey);
+    if (!open || !templateId || format === "ics") return;
+    const cached = format === "pdf" ? cache.current.get(requestKey) : undefined;
     if (cached) {
-      setPages(cached);
+      setPages(cached.pages);
+      setPageCount(cached.count);
       setPreviewState("idle");
       return;
     }
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       setPreviewState("loading");
-      previewDocument(request, 4, controller.signal)
-        .then((result) => {
-          cache.current.set(requestKey, result.pages);
-          setPages(result.pages);
-          setPreviewState("idle");
-        })
+      const done = dataFormat
+        ? exportPreview(request, dataFormat, JSON.parse(excludedKey), controller.signal).then((result) => setDataPreview(result))
+        : previewDocument(request, 4, controller.signal).then((result) => {
+            const count = result.page_count || result.pages.length;
+            cache.current.set(requestKey, { pages: result.pages, count });
+            setPages(result.pages);
+            setPageCount(count);
+          });
+      done
+        .then(() => setPreviewState("idle"))
         .catch((error) => {
           if (controller.signal.aborted) return;
           setPreviewState("error");
@@ -157,13 +216,13 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
     };
     // t/toast sind während der Lebensdauer der Komponente unveränderlich
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, templateId, requestKey, request]);
+  }, [open, templateId, requestKey, request, format, dataFormat, excludedKey]);
 
   // Spaltenliste zur aktuellen Vorlage/Sprache/Filter; Optionen (Titel, Wasserzeichen) ändern sie nicht
   // options weglassen (nicht null: der Server erwartet ein Objekt und lehnte die Anfrage sonst ab)
   const { options: _options, ...columnsRequest } = request;
   const columnsKey = JSON.stringify(columnsRequest);
-  const hasTableFormats = (typeInfo?.formats ?? []).some((format) => format !== "ics");
+  const hasTableFormats = (typeInfo?.formats ?? []).some((item) => item !== "ics");
   useEffect(() => {
     if (!open || !templateId || !hasTableFormats) {
       setColumns([]);
@@ -186,12 +245,13 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
     };
   }, [open, templateId, columnsKey, hasTableFormats]);
 
-  function toggleColumn(label: string, checked: boolean) {
-    setExcludedColumns((current) => (checked ? current.filter((item) => item !== label) : [...current, label]));
+  function toggleColumn(label: string) {
+    setExcludedColumns((current) =>
+      current.includes(label) ? current.filter((item) => item !== label) : current.length + 1 < columns.length ? [...current, label] : current
+    );
   }
 
   async function createPdf() {
-    setBusy("pdf");
     // Noch im Klick öffnen, damit der Browser das neue Fenster nicht blockiert
     const pdfWindow = window.open("about:blank", "_blank");
     if (pdfWindow) pdfWindow.opener = null;
@@ -206,25 +266,7 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
       onExported?.();
     } catch (error) {
       pdfWindow?.close();
-      toast(apiErrorMessage(error, t("export.failed")), "error");
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function downloadFormat(format: "csv" | "xlsx" | "ics" | "markdown") {
-    setBusy(format);
-    try {
-      if (format === "markdown") {
-        await copyMarkdown();
-        return;
-      }
-      const { blob, filename } = await exportDocumentFile(request, format, format === "ics" ? [] : excludedColumns);
-      saveBlob(blob, filename);
-    } catch (error) {
-      toast(apiErrorMessage(error, t("export.failed")), "error");
-    } finally {
-      setBusy(null);
+      throw error;
     }
   }
 
@@ -240,15 +282,107 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
     toast(t("export.markdownCopied"), "success");
   }
 
+  async function run() {
+    setBusy(true);
+    try {
+      if (format === "pdf") await createPdf();
+      else if (format === "markdown") await copyMarkdown();
+      else {
+        const { blob, filename } = await exportDocumentFile(request, format, format === "ics" ? [] : excludedColumns);
+        saveBlob(blob, filename);
+      }
+    } catch (error) {
+      toast(apiErrorMessage(error, t("export.failed")), "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const selectableTypes = types.filter((item) => (context.protocolId ? PROTOCOL_TYPES.includes(item.key) || item.key === context.documentType : item.key === context.documentType));
   const selected = templates?.find((item) => item.id === templateId) ?? null;
+  const showColumns = format !== "pdf" && format !== "ics" && columns.length > 0;
+  const runLabel = selectedTodos === null ? t(`export.run.${format}`) : t("export.runCount", { label: t(`export.run.${format}`), count: selectedTodos });
+  const runDisabled = busy || !templateId || selectedTodos === 0;
+  const optionBits = [
+    language ? t(`language.${language}`) : null,
+    options.title ? t("export.summaryTitle") : null,
+    options.watermark === "on" ? t("export.summaryWatermarkOn") : options.watermark === "off" ? t("export.summaryWatermarkOff") : null,
+    brandId ? brands.find((brand) => brand.id === brandId)?.name ?? null : null,
+  ].filter(Boolean);
+  const watermarkOptions = [
+    { value: "auto", label: t("export.watermarkAutoShort") },
+    { value: "on", label: t("export.watermarkOn") },
+    // Entwürfe ohne Kennzeichnung nur mit Schreibrecht (STUDIO-007, serverseitig erzwungen)
+    ...(capabilities?.unmark_drafts ? [{ value: "off", label: t("export.watermarkOff") }] : []),
+  ];
+  const morePages = Math.max(pageCount - pages.length, 0);
+  const sheetRows = (dataPreview?.tables ?? []).reduce((sum, table) => sum + table.total_rows, 0);
+  const sheetColumns = dataPreview?.tables[0]?.rows[0]?.length ?? 0;
+  const previewMeta =
+    format === "pdf"
+      ? pageCount
+        ? [t("export.previewPages", { count: pageCount }), selected ? templateDisplayName(t, selected) : null].filter(Boolean).join(" · ")
+        : ""
+      : format === "markdown"
+        ? dataPreview?.text != null
+          ? t("export.previewChars", { count: dataPreview.text.length })
+          : ""
+        : format === "ics"
+          ? ""
+          : dataPreview
+            ? t("export.previewRows", { rows: sheetRows, columns: sheetColumns })
+            : "";
+
+  const footer = (
+    <div className="export-footer">
+      {showColumns && (
+        <div className="export-columns" role="group" aria-label={t("export.columns")}>
+          <span className="field-label">{t("export.columns")}</span>
+          {columns.map((label) => {
+            const on = !excludedColumns.includes(label);
+            return (
+              <button key={label} type="button" aria-pressed={on} className={on ? "button-pill button-pill-active" : "button-pill"} onClick={() => toggleColumn(label)}>
+                {label}
+              </button>
+            );
+          })}
+          <span className="field-help">{t("export.columnsHelp")}</span>
+        </div>
+      )}
+      <div className="export-footer-row">
+        <div className="export-formats" role="radiogroup" aria-label={t("export.formatLabel")}>
+          {formats.map((item) => (
+            <button
+              key={item}
+              type="button"
+              role="radio"
+              aria-checked={format === item}
+              className={format === item ? "export-format export-format-active" : "export-format"}
+              onClick={() => setFormat(item)}
+            >
+              <span className="export-format-name">{t(`export.format.${item}`)}</span>
+              <span className="export-format-sub">{t(`export.formatSub.${item}`)}</span>
+            </button>
+          ))}
+        </div>
+        <div className="export-footer-actions">
+          <button type="button" className="button-ghost" onClick={onClose}>
+            {t("export.cancel")}
+          </button>
+          <button type="button" className="button-primary" disabled={runDisabled} onClick={() => void run()}>
+            {busy ? t("export.working") : runLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
-    <Modal className="studio-modal" open={open} onClose={onClose} title={t("export.title")} description={t("export.description")} size="fullscreen">
-      <div className="studio-export">
-        <aside className="studio-export-panel">
+    <Modal className="studio-modal export-modal" open={open} onClose={onClose} title={t("export.title")} description={t("export.description")} size="fullscreen" footer={footer}>
+      <div className="export-dialog">
+        <div className="export-dialog-panel">
           {selectableTypes.length > 1 && (
-            <label className="field-stack">
+            <label className="field-stack export-step">
               <span className="field-label">{t("export.documentType")}</span>
               <Select value={documentType} onChange={(event) => setDocumentType(event.target.value)}>
                 {selectableTypes.map((item) => (
@@ -260,141 +394,170 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
             </label>
           )}
 
-          <section className="studio-export-section" aria-labelledby="studio-export-templates">
-            <h3 id="studio-export-templates" className="studio-section-title">
-              {t("export.template")}
-            </h3>
+          {isTodos && <TodoExportFilters todos={todos} dates={todoDates} value={todoFilter} onChange={setTodoFilter} />}
+
+          <section className="export-step" aria-labelledby="export-step-appearance">
+            <div className="export-step-head">
+              <span className="export-step-number" aria-hidden="true">
+                {isTodos ? 2 : 1}
+              </span>
+              <h3 id="export-step-appearance" className="export-step-title">
+                {t("export.appearance")}
+              </h3>
+              {capabilities?.edit_templates && selected && (
+                <a className="studio-link export-step-meta" href={selected.editable ? `/documents/templates/${selected.id}` : "/documents"}>
+                  {t("export.openInStudio")}
+                </a>
+              )}
+            </div>
             {templates === null ? (
               <p className="muted">{t("common.loading")}</p>
             ) : templates.length === 0 ? (
               <StatusBanner tone="neutral" message={t("export.noTemplates")} />
             ) : (
-              <div className="studio-variant-list" role="radiogroup" aria-label={t("export.template")}>
+              <div className="export-templates" role="radiogroup" aria-label={t("export.template")}>
                 {templates.map((item) => (
                   <button
                     key={item.id}
                     type="button"
                     role="radio"
                     aria-checked={item.id === templateId}
-                    className={item.id === templateId ? "studio-variant studio-variant-active" : "studio-variant"}
+                    className={item.id === templateId ? "export-template export-template-active" : "export-template"}
                     onClick={() => setTemplateId(item.id)}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img className="studio-variant-thumb" src={studioApi.thumbnailUrl(item.id, item.published_revision?.id ?? "")} alt="" loading="lazy" />
-                    <span className="studio-variant-name">{templateDisplayName(t, item)}</span>
-                    {item.is_default && (
-                      <Badge variant="info" className="studio-variant-badge">
-                        {t("library.default")}
-                      </Badge>
-                    )}
+                    <img className="export-template-thumb" src={studioApi.thumbnailUrl(item.id, item.published_revision?.id ?? "")} alt="" loading="lazy" />
+                    <span className="export-template-name">
+                      {templateDisplayName(t, item)}
+                      {item.is_default && <Badge variant="info">{t("library.default")}</Badge>}
+                    </span>
                   </button>
                 ))}
               </div>
             )}
-            {capabilities?.edit_templates && selected && (
-              <a className="studio-link" href={selected.editable ? `/documents/templates/${selected.id}` : "/documents"}>
-                {t("export.openInStudio")}
-              </a>
-            )}
-          </section>
 
-          <section className="studio-export-section" aria-labelledby="studio-export-options">
-            <h3 id="studio-export-options" className="studio-section-title">
+            <button type="button" className="export-options-toggle" aria-expanded={optionsOpen} onClick={() => setOptionsOpen(!optionsOpen)}>
+              <span className="export-options-chevron" aria-hidden="true">
+                ›
+              </span>
               {t("export.options")}
-            </h3>
-            <label className="field-stack">
-              <span className="field-label">{t("export.language")}</span>
-              <Select value={language} onChange={(event) => setLanguage(event.target.value)}>
-                <option value="">{t("export.languageDefault")}</option>
-                {locales.map((code) => (
-                  <option key={code} value={code}>
-                    {t(`language.${code}`)}
-                  </option>
-                ))}
-              </Select>
-            </label>
-            {brands.length > 1 && (
-              <label className="field-stack">
-                <span className="field-label">{t("export.brand")}</span>
-                <Select value={brandId} onChange={(event) => setBrandId(event.target.value)}>
-                  <option value="">{t("export.brandDefault")}</option>
-                  {brands.map((brand) => (
-                    <option key={brand.id} value={brand.id}>
-                      {brand.name}
-                    </option>
-                  ))}
-                </Select>
-              </label>
-            )}
-            <label className="field-stack">
-              <span className="field-label">{t("export.documentTitle")}</span>
-              <input value={options.title ?? ""} maxLength={300} placeholder={t("export.documentTitleAuto")} onChange={(event) => setOptions({ ...options, title: event.target.value || null })} />
-            </label>
-            <label className="field-stack">
-              <span className="field-label">{t("export.watermark")}</span>
-              <Select value={options.watermark ?? "auto"} onChange={(event) => setOptions({ ...options, watermark: event.target.value as ExportOptions["watermark"] })}>
-                <option value="auto">{t("export.watermarkAuto")}</option>
-                <option value="on">{t("export.watermarkOn")}</option>
-                {/* Entwürfe ohne Kennzeichnung nur mit Schreibrecht (STUDIO-007, serverseitig erzwungen) */}
-                {capabilities?.unmark_drafts && <option value="off">{t("export.watermarkOff")}</option>}
-              </Select>
-            </label>
-          </section>
-
-          {documentType === "todos" && <TodoExportFilters pageParams={context.params ?? {}} value={todoFilter} onChange={setTodoFilter} />}
-
-          {columns.length > 0 && (
-            <section className="studio-export-section" aria-labelledby="studio-export-columns">
-              <h3 id="studio-export-columns" className="studio-section-title">
-                {t("export.columns")}
-              </h3>
-              <div className="studio-param-checks">
-                {columns.map((label) => (
-                  <label key={label} className="studio-inline-check">
-                    <input type="checkbox" checked={!excludedColumns.includes(label)} onChange={(event) => toggleColumn(label, event.target.checked)} />
-                    <span>{label}</span>
-                  </label>
-                ))}
-              </div>
-              <p className="field-help">{t("export.columnsHelp")}</p>
-            </section>
-          )}
-
-          <div className="modal-actions studio-export-actions">
-            {(typeInfo?.formats ?? []).map((format) => (
-              <button
-                key={format}
-                type="button"
-                className="button-secondary"
-                disabled={!!busy || !templateId || (format !== "ics" && columns.length > 0 && excludedColumns.length >= columns.length)}
-                onClick={() => void downloadFormat(format)}
-              >
-                {busy === format ? t("export.working") : t(`export.format.${format}`)}
-              </button>
-            ))}
-            <button type="button" className="button-primary" disabled={!!busy || !templateId} onClick={() => void createPdf()}>
-              {busy === "pdf" ? t("export.working") : t("export.createPdf")}
+              <span className="muted">· {optionBits.length ? optionBits.join(", ") : t("export.optionsHint")}</span>
             </button>
-          </div>
-        </aside>
+            {optionsOpen && (
+              <div className="export-options">
+                <label className="field-stack">
+                  <span className="field-label">{t("export.documentTitle")}</span>
+                  <input value={options.title ?? ""} maxLength={300} placeholder={t("export.documentTitleAuto")} onChange={(event) => setOptions({ ...options, title: event.target.value || null })} />
+                </label>
+                <div className="two-col">
+                  <label className="field-stack">
+                    <span className="field-label">{t("export.language")}</span>
+                    <Select value={language} onChange={(event) => setLanguage(event.target.value)}>
+                      <option value="">{t("export.languageDefault")}</option>
+                      {locales.map((code) => (
+                        <option key={code} value={code}>
+                          {t(`language.${code}`)}
+                        </option>
+                      ))}
+                    </Select>
+                  </label>
+                  <div className="field-stack">
+                    <span className="field-label" id="export-watermark-label">
+                      {t("export.watermark")}
+                    </span>
+                    <FilterTabs
+                      options={watermarkOptions}
+                      value={options.watermark ?? "auto"}
+                      onChange={(watermark) => setOptions({ ...options, watermark: watermark as ExportOptions["watermark"] })}
+                    />
+                  </div>
+                </div>
+                {brands.length > 1 && (
+                  <label className="field-stack">
+                    <span className="field-label">{t("export.brand")}</span>
+                    <Select value={brandId} onChange={(event) => setBrandId(event.target.value)}>
+                      <option value="">{t("export.brandDefault")}</option>
+                      {brands.map((brand) => (
+                        <option key={brand.id} value={brand.id}>
+                          {brand.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </label>
+                )}
+              </div>
+            )}
+          </section>
+        </div>
 
-        <section className="studio-export-preview" aria-live="polite" aria-label={t("export.preview")}>
-          <div className="studio-preview-bar">
-            <span className="field-label">{t("export.preview")}</span>
-            {previewState === "loading" && <span className="muted">{t("preview.loading")}</span>}
+        <section className="export-dialog-preview" aria-live="polite" aria-label={t("export.preview")}>
+          <div className="export-preview-bar">
+            <span className="export-preview-title">{t("export.preview")}</span>
+            <span className="export-preview-meta">{previewMeta}</span>
+            {previewState === "loading" && <span className="export-preview-loading">{t("export.previewUpdating")}</span>}
           </div>
-          {previewState === "error" && <StatusBanner tone="error" message={previewError} />}
-          {!templateId ? (
-            <p className="muted">{t("export.chooseTemplate")}</p>
-          ) : (
-            <div className="studio-preview-pages">
-              {pages.map((page, index) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img key={index} className="studio-preview-page" src={page} alt={t("preview.pageAlt", { page: index + 1 })} />
-              ))}
-            </div>
-          )}
-          <p className="field-help">{t("export.previewHint")}</p>
+          <div className={previewState === "loading" ? "export-preview-body export-preview-body-loading" : "export-preview-body"}>
+            {previewState === "error" && <StatusBanner tone="error" message={previewError} />}
+            {!templateId ? (
+              <p className="muted">{t("export.chooseTemplate")}</p>
+            ) : format === "ics" ? (
+              <p className="muted">{t("export.previewNone")}</p>
+            ) : format === "pdf" ? (
+              <div className="studio-preview-pages">
+                {pages.map((page, index) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img key={index} className="studio-preview-page" src={page} alt={t("preview.pageAlt", { page: index + 1 })} />
+                ))}
+                {morePages ? <p className="field-help">{t("export.previewHint")}</p> : null}
+              </div>
+            ) : format === "markdown" ? (
+              dataPreview?.text != null && (
+                <div className="export-whatsapp">
+                  <div className="export-whatsapp-bubble">{whatsappText(dataPreview.text)}</div>
+                  <p className="export-whatsapp-hint">{t("export.previewWhatsapp")}</p>
+                </div>
+              )
+            ) : dataPreview && sheetRows === 0 ? (
+              <p className="muted">{t("export.previewEmpty")}</p>
+            ) : (
+              dataPreview?.tables.map((table, index) => {
+                const [header = [], ...rows] = table.rows;
+                const hiddenRows = table.total_rows - rows.length;
+                return (
+                  <div key={index} className="export-sheet">
+                    {dataPreview.tables.length > 1 && <p className="field-label">{table.title}</p>}
+                    <div className="export-sheet-scroll">
+                      <table className="export-sheet-table">
+                        <thead>
+                          <tr>
+                            <th scope="col" aria-hidden="true" />
+                            {header.map((cell, cellIndex) => (
+                              <th key={cellIndex} scope="col">
+                                {cell}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((row, rowIndex) => (
+                            <tr key={rowIndex}>
+                              <th scope="row">{rowIndex + 2}</th>
+                              {row.map((cell, cellIndex) => (
+                                <td key={cellIndex} title={cell}>
+                                  {cell}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {hiddenRows ? <p className="field-help">{t("export.previewMoreRows", { count: hiddenRows })}</p> : null}
+                  </div>
+                );
+              })
+            )}
+          </div>
         </section>
       </div>
     </Modal>
