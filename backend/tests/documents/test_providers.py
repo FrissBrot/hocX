@@ -138,6 +138,22 @@ def test_events_are_tenant_scoped(db, world):
     assert "GV" in dumped and "Fremder Anlass" not in dumped
 
 
+def test_event_rows_are_tinted_with_the_tag_color(db, world):
+    tenant = world["tenant"]
+    tenant.tag_config_json = {"Scharanlass": {"color": "#16A34A"}}
+    make_event(db, tenant.id, title="Skiweekend", event_date=date(2026, 6, 1)).tag = "Scharanlass"
+    db.flush()
+
+    def rows(show):
+        blocks = build_blocks(_ctx(db, world, protocol=None), [BlockSpec(type="event_table", params={"date_from": "2026-01-01", "columns": ["date", "title"], "show_tag_colors": show})])
+        return {row.cells[1].v: row.tint for group in blocks[0].table.groups for row in group.rows}
+
+    colored = rows(True)
+    assert colored["Skiweekend"] == "#16A34A"
+    assert colored["GV"] is None  # ohne Tag keine Farbe
+    assert rows(False)["Skiweekend"] is None
+
+
 def test_member_list_requires_writer_and_finance_requires_feature(db, world):
     reader = make_current_user(world["tenant"].id, role="reader")
     ctx = _ctx(db, world, user=reader)
@@ -174,6 +190,11 @@ def test_fines_from_protocol(db, world):
     make_fine(db, world["protocol"].id, account.id, amount=7.5, participant_name_snapshot="Anna Muster")
     blocks = build_blocks(_ctx(db, world), [BlockSpec(type="fines")])
     assert "7.50 CHF" in _plain(blocks)
+    # Herkunft jeder Busse als eigene Spalte (auch für Bussen aus diesem Protokoll)
+    table = blocks[0].table
+    assert [column.key for column in table.columns] == ["person", "reason", "protocol", "amount", "status"]
+    origin = table.groups[0].rows[0].cells[2].v
+    assert world["protocol"].protocol_number in origin
 
 
 def test_protocol_element_content_filters(db, world):

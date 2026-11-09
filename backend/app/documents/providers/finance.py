@@ -135,8 +135,21 @@ FINE_STATUS = {"pending": "open", "collected": "collected"}
 
 
 def fines_table(ctx: BuildContext, own: list[AttendanceFine], collected_here: list[AttendanceFine], *, group_by_person: bool = False) -> TableData:
-    columns = [col("person", "col.person", width="fill"), col("reason", "col.reason"), col("amount", "col.amount", align="right"), col("status", "col.status")]
+    # Herkunft jeder Busse als eigene Spalte (Nummer · Datum des Protokolls, in dem sie entstand)
+    columns = [col("person", "col.person", width="fill"), col("reason", "col.reason"), col("protocol", "col.protocol"), col("amount", "col.amount", align="right"), col("status", "col.status")]
     accounts: dict[int, FinanceAccount | None] = {}
+    origins: dict[int, Protocol | None] = {}
+
+    def origin(fine: AttendanceFine) -> Protocol | None:
+        if fine.protocol_id not in origins:
+            origins[fine.protocol_id] = ctx.db.get(Protocol, fine.protocol_id)
+        return origins[fine.protocol_id]
+
+    def origin_label(fine: AttendanceFine) -> str:
+        protocol = origin(fine)
+        if protocol is None:
+            return "–"
+        return " · ".join(part for part in (protocol.protocol_number or "", format_date(protocol.protocol_date)) if part) or "–"
 
     def currency(fine: AttendanceFine) -> str:
         if fine.account_id not in accounts:
@@ -148,6 +161,7 @@ def fines_table(ctx: BuildContext, own: list[AttendanceFine], collected_here: li
         return TableRow(cells=[
             text_cell(fine.participant_name_snapshot),
             Cell(k="text", v="", note_key=f"fineType.{fine.fine_type}") if fine.fine_type in ("late", "absent") else text_cell(fine.fine_type),
+            text_cell(origin_label(fine)),
             amount_cell(f"{format_amount(fine.amount)} {currency(fine)}"),
             status,
         ])
@@ -165,14 +179,12 @@ def fines_table(ctx: BuildContext, own: list[AttendanceFine], collected_here: li
             status = status_cell("fineStatus.open")
         items.append((fine.participant_name_snapshot, row(fine, status), fine))
     for fine in collected_here:
-        # Busse aus einem früheren Protokoll, hier kassiert oder mit Begründung gelöscht:
-        # Herkunft (und Begründung) als Zusatz.
-        origin = ctx.db.get(Protocol, fine.protocol_id)
-        origin_number = origin.protocol_number if origin is not None else ""
+        # Busse aus einem früheren Protokoll, hier kassiert oder mit Begründung gelöscht. Die
+        # Herkunft steht in der Spalte «Protokoll», beim Löschen die Begründung als Zusatz.
         if fine.status == "deleted":
-            status = Cell(k="status", status="fineStatus.deleted", v=f"{origin_number}: {fine.delete_comment or ''}" if origin_number else fine.delete_comment or "")
+            status = Cell(k="status", status="fineStatus.deleted", v=fine.delete_comment or "")
         else:
-            status = Cell(k="status", status="fineStatus.collected", v=origin_number)
+            status = status_cell("fineStatus.collected")
         items.append((fine.participant_name_snapshot, row(fine, status), fine))
     if group_by_person:
         items.sort(key=lambda item: sort_key(item[0]))
@@ -181,12 +193,12 @@ def fines_table(ctx: BuildContext, own: list[AttendanceFine], collected_here: li
     for _, table_row, fine in items:
         if fine.status == "deleted":
             # Gelöschte Bussen zählen nicht zur Summe, der Betrag wird durchgestrichen.
-            table_row.cells[2].strike = True
+            table_row.cells[3].strike = True
             continue
         totals_by_currency[currency(fine)] = totals_by_currency.get(currency(fine), 0.0) + float(fine.amount)
     totals = None
     if items:
-        totals = [Cell(k="text", v="", note_key="label.total"), text_cell(""), amount_cell(" · ".join(f"{format_amount(value)} {code}" for code, value in totals_by_currency.items())), text_cell("")]
+        totals = [Cell(k="text", v="", note_key="label.total"), text_cell(""), text_cell(""), amount_cell(" · ".join(f"{format_amount(value)} {code}" for code, value in totals_by_currency.items())), text_cell("")]
     return TableData(columns=columns, groups=[TableGroup(rows=rows)] if rows else [], totals=totals)
 
 

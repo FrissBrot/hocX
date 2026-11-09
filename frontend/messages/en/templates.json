@@ -577,7 +577,7 @@
       "event_show_date": "Date",
       "event_show_end_date": "End date",
       "event_show_tag": "Tag",
-      "event_show_tag_colors": "Tag colours",
+      "event_show_tag_colors": "Rows in tag colour",
       "event_show_title": "Title",
       "event_show_description": "Description",
       "event_show_location": "Location",

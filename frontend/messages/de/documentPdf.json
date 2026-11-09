@@ -109,7 +109,7 @@
     "asOf": "Stand {date}",
     "responsible": "Verantwortlich",
     "agendaOther": "Weitere Anliegen",
-    "sessionTodos": "Sitzungs-Todos",
+    "sessionTodos": "Todos",
     "yes": "Ja",
     "scanToOpen": "Zum Öffnen scannen",
     "attendanceCounts": "{present} anwesend · {late} verspätet · {excused} entschuldigt · {absent} unentschuldigt",

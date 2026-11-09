@@ -5,7 +5,7 @@
 // eingesetzt ([#span.v]) - es gibt keine Auswertung von Benutzerinhalt (kein eval).
 
 #import "@preview/tiaoma:0.3.0": qrcode
-#import "lib/core.typ": tr, is-blank
+#import "lib/core.typ": tr, is-blank, border-w
 #import "base/blocks.typ": render-block
 #import "theme.typ": look, node-mark, with-appearance
 #import "base/rich.typ": render-rich
@@ -269,7 +269,7 @@
         block(
           above: spacing.above,
           inset: (left: if top { 0pt } else { 2.4em * (it.level - 1) }, y: if variant == "badges" { 0.25em } else { 0pt }),
-          stroke: if variant == "badges" { (bottom: 0.5pt + ctx.c.border) } else { none },
+          stroke: if variant == "badges" { (bottom: border-w(ctx) + ctx.c.border) } else { none },
           width: 100%,
           link(it.element.location(), [#box(width: 2.4em, mark)#it.body()#h(0.4em)#leader#h(0.4em)#text(fill: ctx.c.muted, it.page())]),
         )

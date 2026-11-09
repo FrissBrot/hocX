@@ -101,7 +101,10 @@
       cells.push(table.cell(colspan: count, fill: style.group-fill, inset: style.inset, text(weight: "bold", fill: style.group-color)[#label]))
     }
     for row in group.rows {
-      let row-fill = if style.zebra != none and calc.odd(body-row) { style.zebra } else { none }
+      let tint = row.at("tint", default: none)
+      // Farbige Zeile (Tag-Farbe) vor Zebra; vergangene Zeilen noch heller
+      let row-fill = if tint != none { rgb(tint).lighten(if row.at("muted", default: false) { 90% } else { 82% }) }
+        else if style.zebra != none and calc.odd(body-row) { style.zebra } else { none }
       body-row += 1
       for (index, cell) in row.cells.enumerate() {
         let content = render-cell(ctx, cell)

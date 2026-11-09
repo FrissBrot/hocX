@@ -3,7 +3,7 @@
 // Vorlage verwendbar. Eingebettet werden sie über data_block-Knoten (layout.typ).
 // Darstellungsvarianten (Grundstil, Brand- und Block-Übersteuerung) liefert look(ctx, art).
 
-#import "../lib/core.typ": colors, space, radius, tr, is-blank, tone-color, status-dot, tag-chip, empty-note
+#import "../lib/core.typ": colors, space, radius, tr, is-blank, border-w, tone-color, status-dot, tag-chip, empty-note
 #import "rich.typ": render-rich, render-inline
 #import "table.typ": data-table, render-cell, header-label
 #import "chart.typ": render-chart
@@ -28,7 +28,7 @@
   } else if style.variant == "accent" {
     block(width: 100%, inset: (left: space.s3, y: space.s1), stroke: (left: 2pt + ctx.theme.primary), body)
   } else if style.variant == "framed" or style.variant == "card" {
-    block(width: 100%, inset: space.s3, radius: style.radius * 1mm, stroke: 0.5pt + ctx.c.border, body)
+    block(width: 100%, inset: space.s3, radius: style.radius * 1mm, stroke: border-w(ctx) + ctx.c.border, body)
   } else {
     body
   }
@@ -128,12 +128,12 @@
   }
   let pad = (x: 0.7em, y: 0.55em)
   grid(columns: (1fr, 1fr, 1fr), column-gutter: space.s3, row-gutter: space.s3,
-    ..cards.map(card => block(breakable: false, width: 100%, stroke: 0.5pt + ctx.c.border, radius: style.radius * 1mm, clip: true, {
+    ..cards.map(card => block(breakable: false, width: 100%, stroke: border-w(ctx) + ctx.c.border, radius: style.radius * 1mm, clip: true, {
       block(width: 100%, above: 0pt, below: 0pt, inset: pad, fill: if filled { ctx.theme.primary } else { none },
-        stroke: if filled { none } else { (bottom: 0.5pt + ctx.c.border) },
+        stroke: if filled { none } else { (bottom: border-w(ctx) + ctx.c.border) },
         text(weight: "bold", fill: if filled { ctx.c.on_solid } else { ctx.theme.primary })[#card.title])
       for (position, section) in card.sections.enumerate() {
-        block(width: 100%, above: 0pt, below: 0pt, inset: pad, stroke: if position > 0 { (top: 0.5pt + ctx.c.border.lighten(40%)) } else { none }, {
+        block(width: 100%, above: 0pt, below: 0pt, inset: pad, stroke: if position > 0 { (top: border-w(ctx) + ctx.c.border.lighten(40%)) } else { none }, {
           if not is-blank(section.label) { block(above: 0pt, below: 0.35em, text(size: 0.75em, fill: ctx.c.muted)[#section.label]) }
           let lines = rich-lines(section.rich)
           if lines != none {
@@ -174,7 +174,7 @@
 
 #let image-figure(ctx, image-ref, max-width: 82%) = {
   if image-ref.at("missing", default: false) {
-    block(inset: space.s3, stroke: 0.5pt + ctx.c.border, radius: radius.xs, text(fill: ctx.c.muted)[#tr(ctx, "label.imageMissing")#if not is-blank(image-ref.at("caption", default: none)) [: #image-ref.caption]])
+    block(inset: space.s3, stroke: border-w(ctx) + ctx.c.border, radius: radius.xs, text(fill: ctx.c.muted)[#tr(ctx, "label.imageMissing")#if not is-blank(image-ref.at("caption", default: none)) [: #image-ref.caption]])
   } else {
     let width = if image-ref.at("width_pt", default: none) != none { calc.min(image-ref.width_pt, 1000) * 1pt } else { auto }
     figure(
@@ -243,7 +243,7 @@
       let mark = if status == "present" { text(size: 0.8em, fill: ctx.theme.primary, weight: "bold", tr(ctx, "attendanceStatus.present")) }
         else if status == none { text(fill: ctx.c.muted)[–] }
         else { text(size: 0.8em, fill: ctx.c.muted, tr(ctx, "attendanceStatus." + status)) }
-      block(width: 100%, inset: (y: 0.35em), stroke: (bottom: 0.5pt + ctx.c.border), [#entry.name #h(1fr) #mark])
+      block(width: 100%, inset: (y: 0.35em), stroke: (bottom: border-w(ctx) + ctx.c.border), [#entry.name #h(1fr) #mark])
     }))
 }
 
@@ -252,7 +252,7 @@
   b.entries.map(entry => {
     let status = entry.at("status", default: none)
     let here = status == "present" or status == "late"
-    box(inset: (x: 0.5em, y: 0.22em), radius: 0.8em, stroke: 0.5pt + ctx.c.border, {
+    box(inset: (x: 0.5em, y: 0.22em), radius: 0.8em, stroke: border-w(ctx) + ctx.c.border, {
       box(baseline: -0.1em, circle(radius: 0.22em, fill: if here { ctx.c.success } else { none }, stroke: if here { none } else { 0.5pt + ctx.c.muted }))
       h(0.3em)
       entry.name
@@ -358,7 +358,7 @@
     for _ in extra { rows.push([]) }
   }
   set text(size: style.font-size)
-  table(columns: (auto, ..extra.map(_ => 1fr)), inset: style.inset, stroke: 0.5pt + ctx.c.border_strong,
+  table(columns: (auto, ..extra.map(_ => 1fr)), inset: style.inset, stroke: border-w(ctx) + ctx.c.border_strong,
     table.header(repeat: true, ..header), ..rows)
 }
 
@@ -386,7 +386,7 @@
     }
     let trailing = calc.rem(7 - calc.rem(month.first_weekday + month.days, 7), 7)
     for _ in range(trailing) { cells.push(table.cell(fill: ctx.c.neutral_bg)[]) }
-    table(columns: range(7).map(_ => 1fr), inset: 3pt, stroke: 0.5pt + ctx.c.border, ..cells)
+    table(columns: range(7).map(_ => 1fr), inset: 3pt, stroke: border-w(ctx) + ctx.c.border, ..cells)
   })
 }
 
@@ -456,12 +456,12 @@
     if style.variant == "plain" {
       return grid(columns: range(count).map(_ => 1fr), column-gutter: space.s3, row-gutter: space.s3, ..cells)
     }
-    return block(width: 100%, stroke: 0.5pt + ctx.c.border, radius: style.radius * 1mm, clip: true,
-      table(columns: range(count).map(_ => 1fr), inset: space.s3, stroke: (x, y) => (left: if x > 0 { 0.5pt + ctx.c.border } else { none }, top: if y > 0 { 0.5pt + ctx.c.border } else { none }), ..cells))
+    return block(width: 100%, stroke: border-w(ctx) + ctx.c.border, radius: style.radius * 1mm, clip: true,
+      table(columns: range(count).map(_ => 1fr), inset: space.s3, stroke: (x, y) => (left: if x > 0 { border-w(ctx) + ctx.c.border } else { none }, top: if y > 0 { border-w(ctx) + ctx.c.border } else { none }), ..cells))
   }
   let filled = style.variant == "filled"
   grid(columns: range(count).map(_ => 1fr), column-gutter: space.s3, row-gutter: space.s3,
-    ..b.tiles.map(tile => block(width: 100%, inset: space.s3, radius: style.radius * 1mm, stroke: if filled { none } else { 0.6pt + ctx.c.border }, fill: if filled { ctx.theme.primary.lighten(90%) } else { ctx.c.panel }, {
+    ..b.tiles.map(tile => block(width: 100%, inset: space.s3, radius: style.radius * 1mm, stroke: if filled { none } else { border-w(ctx) + ctx.c.border }, fill: if filled { ctx.theme.primary.lighten(90%) } else { ctx.c.panel }, {
       text(size: 0.8em, fill: ctx.c.muted)[#if tile.at("label_key", default: none) != none { tr(ctx, tile.label_key) } else { tile.at("label", default: "") }]
       linebreak()
       text(size: 1.6em, weight: "bold", fill: if tile.tone == "default" { ctx.theme.primary } else { tone-color(ctx, tile.tone) })[#tile.value]
@@ -482,7 +482,7 @@
   let title = b.at("title", default: none)
   if is-blank(title) and b.at("title_key", default: none) != none { title = tr(ctx, b.title_key) }
   let pad = (x: 0.8em, y: 0.45em)
-  block(width: 100%, stroke: 0.5pt + ctx.c.border, radius: style.radius * 1mm, clip: true, {
+  block(width: 100%, stroke: border-w(ctx) + ctx.c.border, radius: style.radius * 1mm, clip: true, {
     if not is-blank(title) {
       block(above: 0pt, below: 0pt, inset: (x: pad.x, top: 0.55em, bottom: 0.3em), text(size: 0.75em, weight: "bold", tracking: 0.08em, fill: ctx.theme.primary)[#upper(title)])
     }
@@ -498,7 +498,7 @@
           fill: if done { ctx.theme.primary } else { none },
           if done { align(center + horizon, text(size: 0.6em, fill: ctx.c.on_solid)[✓]) })
         let task = row.cells.at(index-of("task")).at("v", default: "")
-        block(above: 0pt, below: 0pt, inset: pad, width: 100%, stroke: (top: 0.5pt + ctx.c.border), {
+        block(above: 0pt, below: 0pt, inset: pad, width: 100%, stroke: (top: border-w(ctx) + ctx.c.border), {
           set text(fill: if row.at("muted", default: false) { ctx.c.muted } else { ctx.c.text })
           grid(columns: (1.4em, 1fr, ..others.map(_ => auto)), column-gutter: 1em, mark, [#task], ..others.map(index => render-cell(ctx, row.cells.at(index))))
         })

@@ -109,7 +109,7 @@
     "asOf": "As of {date}",
     "responsible": "Responsible",
     "agendaOther": "Further topics",
-    "sessionTodos": "Meeting to-dos",
+    "sessionTodos": "To-dos",
     "yes": "Yes",
     "scanToOpen": "Scan to open",
     "attendanceCounts": "{present} present · {late} late · {excused} excused · {absent} absent",

@@ -110,7 +110,8 @@ def event_table(
     table_columns = event_columns(columns)
     keys = [column.key for column in table_columns]
     organizers = organizer_names(ctx, events) if "organizers" in keys else {}
-    config = tag_config(ctx) if show_tag_colors else {}
+    # Tags immer in ihrer Farbe (wie bei den Pendenzen); «Tag-Farben» färbt zusätzlich die Zeile ein
+    config = tag_config(ctx) if show_tag_colors or "tag" in keys else {}
     rows: list[TableRow] = []
     for event in events:
         end = event.event_end_date or event.event_date
@@ -119,7 +120,8 @@ def event_table(
             if key == "date":
                 cells.append(text_cell(format_date_range(event.event_date, end)))
             elif key == "tag":
-                cells.append(tags_cell(split_tag_text(event.tag), config) if show_tag_colors else text_cell(", ".join(split_tag_text(event.tag)) or "–"))
+                tags = split_tag_text(event.tag)
+                cells.append(tags_cell(tags, config) if tags else text_cell("–"))
             elif key == "title":
                 cells.append(text_cell(event.title, strike=bool(event.is_cancelled)))
             elif key == "description":
@@ -133,7 +135,10 @@ def event_table(
             elif key == "cancelled":
                 cells.append(Cell(k="text", v="", note_key="label.cancelled") if event.is_cancelled else text_cell("–"))
         muted = bool(gray_past and reference_date and end < reference_date)
-        rows.append(TableRow(cells=cells, muted=muted))
+        # «Tag-Farben»: die ganze Zeile in der Farbe des (ersten farbigen) Tags hinterlegen - auch
+        # ohne Tag-Spalte erkennt man so die Art des Termins.
+        tint = next((color for tag in split_tag_text(event.tag) if (color := safe_color((config.get(tag) or {}).get("color")))), None) if show_tag_colors else None
+        rows.append(TableRow(cells=cells, muted=muted, tint=tint))
     return TableData(columns=table_columns, groups=[TableGroup(rows=rows)] if rows else [])
 
 

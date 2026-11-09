@@ -109,7 +109,7 @@
     "asOf": "État au {date}",
     "responsible": "Responsable",
     "agendaOther": "Autres sujets",
-    "sessionTodos": "Tâches de la séance",
+    "sessionTodos": "Tâches",
     "yes": "Oui",
     "scanToOpen": "Scanner pour ouvrir",
     "attendanceCounts": "{present} présents · {late} en retard · {excused} excusés · {absent} absents",

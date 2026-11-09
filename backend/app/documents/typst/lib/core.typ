@@ -14,6 +14,10 @@
   value
 }
 
+// Linienstärke für Rahmen und Trennlinien aus dem Brand-Profil («Linienstärke», Standard 0.5).
+// Vorher waren viele Rahmen fest 0.5pt und folgten der Einstellung nicht.
+#let border-w(ctx) = if ctx != none and "brand" in ctx { ctx.brand.layout.border_width * 1pt } else { 0.5pt }
+
 #let is-blank(value) = value == none or (type(value) == str and value.trim() == "")
 
 // Bedeutungsfarben (Tone aus model.py) → Farbe

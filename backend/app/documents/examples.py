@@ -517,8 +517,10 @@ EXAMPLES: tuple[DesignExample, ...] = (
         {
             # Wie im Mockup: Traktandentitel in Textfarbe (nur die Nummer grün), 14/10.5 pt
             "colors": _colors("#0A600B", "#4A5D4C", "#E2001A", "#1A1D21", text="#1A1D21", muted="#6B7A6D", surface="#F4F6F3", border="#E6EAE4", table_header_background="#FFFFFF", table_header_text="#6B7A6D"),
-            "typography": {**_typography("liberation_sans", base_size=9.5), "size_h1": 14, "size_h2": 10.5, "size_h3": 9.5, "letter_spacing_heading": -0.1},
-            "layout": {"empty_blocks": "hide", "section_gap": 6.5},
+            "typography": {**_typography("liberation_sans", base_size=9.5), "size_h1": 14, "size_h2": 10.5, "size_h3": 9.5, "letter_spacing_heading": -0.1, "line_height": 1.5},
+            # Luftiger als der Standard (Rückmeldung 2026-11-09: Zeilen und Traktanden zu eng),
+            # bestehende Kreide-Profile hebt Migration 0167 an.
+            "layout": {"empty_blocks": "hide", "section_gap": 10, "paragraph_gap": 3},
             "appearance": {"base": "kreide"},
             "organization": _CLUB_ORGANIZATION,
         },

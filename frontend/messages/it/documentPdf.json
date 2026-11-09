@@ -109,7 +109,7 @@
     "asOf": "Situazione al {date}",
     "responsible": "Responsabile",
     "agendaOther": "Altri argomenti",
-    "sessionTodos": "Compiti della seduta",
+    "sessionTodos": "Attività da fare",
     "yes": "Sì",
     "scanToOpen": "Scansiona per aprire",
     "attendanceCounts": "{present} presenti · {late} in ritardo · {excused} giustificati · {absent} assenti",

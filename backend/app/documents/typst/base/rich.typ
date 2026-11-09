@@ -1,7 +1,7 @@
 // Rich-Text-Baum (model.py: RichBlock/RichInline) → Typst-Inhalt.
 // Jeder String wird als Text eingesetzt; es gibt keine Auswertung von Benutzerinhalt.
 
-#import "../lib/core.typ": colors, space, radius, tr
+#import "../lib/core.typ": colors, space, radius, tr, border-w
 #import "../theme.typ": look
 
 #let render-inline(nodes, ctx: none) = {
@@ -29,7 +29,11 @@
 }
 
 #let render-rich(nodes, ctx, compact: false) = {
-  let gap = if compact { 0.35em } else { 0.65em }
+  // Absatzabstand aus dem Brand-Profil (wie par.spacing in main.typ); vorher fest 0.65em, die
+  // Einstellung «Absatzabstand» wirkte dadurch auf Textblöcke nicht. Kompakt (Tabellenzellen) fest.
+  let gap = if compact { 0.35em } else if ctx != none and "brand" in ctx { ctx.brand.layout.paragraph_gap * 1mm + 0.4em } else { 0.65em }
+  // Aufzählungspunkte sind keine Absätze: enger als der Absatzabstand
+  let item-gap = if compact { 0.35em } else { 0.65em }
   for node in nodes {
     if node.t == "p" {
       block(above: gap, below: gap, render-inline(node.c, ctx: ctx))
@@ -37,9 +41,9 @@
       let size = (1.2em, 1.1em, 1em).at(node.level - 1, default: 1em)
       block(above: gap * 1.4, below: gap, sticky: true, text(weight: "bold", size: size, render-inline(node.c, ctx: ctx)))
     } else if node.t == "ul" {
-      list(spacing: gap, ..node.items.map(item => render-rich(item, ctx, compact: true)))
+      list(spacing: item-gap, ..node.items.map(item => render-rich(item, ctx, compact: true)))
     } else if node.t == "ol" {
-      enum(start: node.start, spacing: gap, ..node.items.map(item => render-rich(item, ctx, compact: true)))
+      enum(start: node.start, spacing: item-gap, ..node.items.map(item => render-rich(item, ctx, compact: true)))
     } else if node.t == "quote" {
       // Darstellung «quote» (Brand-Profil): Linie, hervorgehobener Kasten (z. B. Beschluss),
       // zwischen zwei Linien in Akzentfarbe

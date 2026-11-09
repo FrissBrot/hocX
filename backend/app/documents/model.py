@@ -178,6 +178,8 @@ class TableRow(_Strict):
     cells: list[Cell]
     muted: bool = False
     strong: bool = False
+    # Zeile hell in dieser Farbe hinterlegen (Terminliste mit «Tag-Farben»: Farbe des Tags)
+    tint: HexColor | None = None
 
 
 class TableGroup(_Strict):
