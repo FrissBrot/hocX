@@ -48,6 +48,8 @@ Update»).
   Benötigt «Finanzen verwalten».
 - PDF: Anwesenheit in den Darstellungen «Raster» und «Chips» mit ausgeschriebenem Status statt
   Punkt.
+- **Pendenzen exportieren mit Auswahl:** im Export-Dialog «Fällig bis», «Nur mit Tag» und jede
+  Pendenz einzeln an- oder abwählen (gilt für PDF, CSV, Excel und Text).
 
 ### Geändert
 
@@ -58,6 +60,8 @@ Update»).
 
 ### Behoben
 
+- Export-Dialog: die Spaltenauswahl erschien nie (die Anfrage für die Spaltenliste wurde vom Server
+  abgelehnt).
 - **Matrix-Karten aus einer Liste** stehen immer in der Reihenfolge der Liste und springen nicht
   mehr zwischen Spalten, wenn eine Karte höher wird. Die Karten-Auswahl erkannte beim Anlegen des
   Protokolls erzeugte Karten nicht (interne statt öffentliche ID) und konnte doppelte Karten anlegen.
