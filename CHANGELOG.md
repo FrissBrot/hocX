@@ -6,24 +6,14 @@ Versionierung nach [SemVer](https://semver.org/lang/de/). Die Beta-Historie
 ist der erste offiziell unterstützte Stand und muss keine älteren
 Installationen aktualisieren können.
 
-## [1.2.1] - Unveröffentlicht
+## [1.2.2] - 2026-11-09
 
-Fehlerkorrekturen auf 1.2.0, kleinere Erweiterungen aus dem Testbetrieb und ein Performance-Paket.
-Vier neue Migrationen (`0163`–`0166`), keine Breaking Changes. Das Update läuft wie gewohnt über
-`deploy.sh`; die Migrationen korrigieren dabei bestehende Daten (siehe «Datenkorrekturen beim
-Update»).
+Erweiterungen aus dem Testbetrieb und ein Performance-Paket auf 1.2.1. Eine neue Migration
+(`0166`), keine Breaking Changes. Das Update läuft wie gewohnt über `deploy.sh`; neu sind
+Postgres-Parameter und die Komprimierung durch Traefik (siehe «Beim Update beachten»).
 
-### Datenkorrekturen beim Update
+### Migration
 
-- `0163_attendance_fine_repair`: Anwesenheitsbussen in **nicht abgeschlossenen** Protokollen
-  werden an die erfasste Anwesenheit angeglichen. Fehlende Bussen für «Verspätet» und
-  «Unentschuldigt» entstehen neu, offene Bussen mit falschem Typ werden gelöscht. Abgeschlossene
-  Protokolle, eingezogene und mit Begründung gelöschte Bussen bleiben unverändert. Auch von Hand
-  in einem offenen Protokoll gelöschte Bussen werden dabei wieder angelegt.
-- `0164_submission_todo_public_ref`: Abgabe-Pendenzen, deren Element schon geprüfte Dateien hat,
-  werden erledigt. Einträge des Abgabe-Verlaufs aus dem erneuten Virenscan bekommen die richtige
-  Element-Referenz.
-- `0165_event_field_config`: neue Mandanten-Einstellung für die Spezialfelder der Termine.
 - `0166_perf_job_run_indexes`: `record_job_run` sucht den letzten Lauf über den passenden Index
   statt über den ganzen Verlauf, vier überflüssige Indizes entfallen. Keine Datenänderung.
 
@@ -40,21 +30,6 @@ Update»).
 
 ### Neu
 
-- **Spezialfelder der Termine umbenennen oder ausblenden.** Unter Mandant-Einstellungen →
-  Allgemein bekommen «Spezial 1–3» und «Spezial Text 1–3» eigene Namen oder werden ausgeblendet
-  (Werte bleiben erhalten). Gilt beim Anlegen und Bearbeiten von Terminen, in den Termin-Feldern
-  im Protokoll, im Abgabe-Formular, im Vorlagen-Editor und im Word-Import.
-- **Text-Export für WhatsApp.** «Text kopieren (WhatsApp)» im Export-Dialog legt die
-  Pendenzenliste direkt in die Zwischenablage, nur mit WhatsApp-Formatierung (fett, kursiv,
-  durchgestrichen). Für CSV, Excel und Text lassen sich die Spalten pro Export an- und abwählen.
-- **Smarte Datumsvorschläge** im Fälligkeits-Menü der Pendenzen: «morgen», «Freitag nächste
-  Woche», «Ende Monat», «in 3 Wochen», «24.12.» usw. erscheinen, sobald das Getippte passt.
-- **Mehrere Verantwortliche bei Abgaben.** Stehen mehrere Personen im Verantwortlichen-Feld eines
-  Termins (oder in einer Listenspalte mit mehreren Personen), bekommen alle gemeinsam die Pendenz.
-- **Abgabe-Status farbig:** abgegeben grün, Quarantäne gelb, offen blau, noch nicht offen bzw.
-  ohne Abgabe geschlossen grau, Frist verpasst oder Scanfehler rot.
-- Matrix-Planung: die Teilnehmerzahl lässt sich direkt in der Termintabelle ändern.
-- Neuer Hintergrund-Job «Abgabe-Pendenzen abgleichen» (alle 15 Minuten, `/admin/jobs`).
 - **Transaktionen im Protokoll erfassen:** im Block «Transaktionen» Datum, Beschreibung,
   Einnahme/Ausgabe und Betrag eintragen (mit dem Protokoll verknüpft, Saldo und Kontostand werden
   sofort nachgeführt); im Protokoll erfasste Transaktionen lassen sich dort wieder löschen.
@@ -94,6 +69,45 @@ Update»).
 - **Matrix-Karten aus einer Liste** stehen immer in der Reihenfolge der Liste und springen nicht
   mehr zwischen Spalten, wenn eine Karte höher wird. Die Karten-Auswahl erkannte beim Anlegen des
   Protokolls erzeugte Karten nicht (interne statt öffentliche ID) und konnte doppelte Karten anlegen.
+
+## [1.2.1] - 2026-11-08
+
+Fehlerkorrekturen auf 1.2.0 und kleinere Erweiterungen aus dem Testbetrieb. Drei neue
+Migrationen (`0163`–`0165`), keine Breaking Changes. Das Update läuft wie gewohnt über
+`deploy.sh`; die Migrationen korrigieren dabei bestehende Daten (siehe «Datenkorrekturen beim
+Update»).
+
+### Datenkorrekturen beim Update
+
+- `0163_attendance_fine_repair`: Anwesenheitsbussen in **nicht abgeschlossenen** Protokollen
+  werden an die erfasste Anwesenheit angeglichen. Fehlende Bussen für «Verspätet» und
+  «Unentschuldigt» entstehen neu, offene Bussen mit falschem Typ werden gelöscht. Abgeschlossene
+  Protokolle, eingezogene und mit Begründung gelöschte Bussen bleiben unverändert. Auch von Hand
+  in einem offenen Protokoll gelöschte Bussen werden dabei wieder angelegt.
+- `0164_submission_todo_public_ref`: Abgabe-Pendenzen, deren Element schon geprüfte Dateien hat,
+  werden erledigt. Einträge des Abgabe-Verlaufs aus dem erneuten Virenscan bekommen die richtige
+  Element-Referenz.
+- `0165_event_field_config`: neue Mandanten-Einstellung für die Spezialfelder der Termine.
+
+### Neu
+
+- **Spezialfelder der Termine umbenennen oder ausblenden.** Unter Mandant-Einstellungen →
+  Allgemein bekommen «Spezial 1–3» und «Spezial Text 1–3» eigene Namen oder werden ausgeblendet
+  (Werte bleiben erhalten). Gilt beim Anlegen und Bearbeiten von Terminen, in den Termin-Feldern
+  im Protokoll, im Abgabe-Formular, im Vorlagen-Editor und im Word-Import.
+- **Text-Export für WhatsApp.** «Text kopieren (WhatsApp)» im Export-Dialog legt die
+  Pendenzenliste direkt in die Zwischenablage, nur mit WhatsApp-Formatierung (fett, kursiv,
+  durchgestrichen). Für CSV, Excel und Text lassen sich die Spalten pro Export an- und abwählen.
+- **Smarte Datumsvorschläge** im Fälligkeits-Menü der Pendenzen: «morgen», «Freitag nächste
+  Woche», «Ende Monat», «in 3 Wochen», «24.12.» usw. erscheinen, sobald das Getippte passt.
+- **Mehrere Verantwortliche bei Abgaben.** Stehen mehrere Personen im Verantwortlichen-Feld eines
+  Termins (oder in einer Listenspalte mit mehreren Personen), bekommen alle gemeinsam die Pendenz.
+- **Abgabe-Status farbig:** abgegeben grün, Quarantäne gelb, offen blau, noch nicht offen bzw.
+  ohne Abgabe geschlossen grau, Frist verpasst oder Scanfehler rot.
+- Matrix-Planung: die Teilnehmerzahl lässt sich direkt in der Termintabelle ändern.
+- Neuer Hintergrund-Job «Abgabe-Pendenzen abgleichen» (alle 15 Minuten, `/admin/jobs`).
+
+### Behoben
 
 - **Verspätete bekamen keine Busse mehr**, nachdem im Anwesenheitsblock einmal geklickt wurde:
   die Antwort enthielt den Bussentarif nicht, der Editor hielt die Bussen bis zum Neuladen für
