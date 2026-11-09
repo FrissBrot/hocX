@@ -146,7 +146,8 @@
     "todos_done_count": "Anzahl erledigte Pendenzen",
     "todos_open": "Offene Pendenzen (alle)",
     "todos_open_count": "Anzahl offene Pendenzen",
-    "protocol_invitation_elements": "Traktanden der Einladung"
+    "protocol_invitation_elements": "Traktanden der Einladung",
+    "todos_overdue_count": "Anzahl überfällige Pendenzen"
   },
   "bindingField": {
     "assignee": "Zuständig",
@@ -766,7 +767,8 @@
     "text_and_todos": "Text und Pendenzen",
     "title": "Titel",
     "todos": "Todos",
-    "year": "Pro Jahr"
+    "year": "Pro Jahr",
+    "in_progress": "In Arbeit"
   },
   "examples": {
     "items": {
@@ -1359,7 +1361,9 @@
     "value": "Wert",
     "value_heading": "Spaltenkopf rechts",
     "with_place_date": "Feld «Ort, Datum»",
-    "invitation_only": "Nur Traktanden der Einladung"
+    "invitation_only": "Nur Traktanden der Einladung",
+    "include_undated": "Ohne Fälligkeit mitnehmen",
+    "overdue_only": "Nur überfällige"
   },
   "preview": {
     "chooseProtocol": "Protokoll wählen",

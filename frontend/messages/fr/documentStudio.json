@@ -146,7 +146,8 @@
     "todos_done_count": "Nombre de tâches terminées",
     "todos_open": "Tâches ouvertes (toutes)",
     "todos_open_count": "Nombre de tâches ouvertes",
-    "protocol_invitation_elements": "Points de l’invitation"
+    "protocol_invitation_elements": "Points de l’invitation",
+    "todos_overdue_count": "Nombre de tâches en retard"
   },
   "bindingField": {
     "assignee": "Responsable",
@@ -766,7 +767,8 @@
     "text_and_todos": "Texte et tâches",
     "title": "Titre",
     "todos": "Tâches",
-    "year": "Par année"
+    "year": "Par année",
+    "in_progress": "En cours"
   },
   "examples": {
     "items": {
@@ -1359,7 +1361,9 @@
     "value": "Valeur",
     "value_heading": "En-tête de droite",
     "with_place_date": "Champ « Lieu, date »",
-    "invitation_only": "Seulement les points de l’invitation"
+    "invitation_only": "Seulement les points de l’invitation",
+    "include_undated": "Inclure les tâches sans échéance",
+    "overdue_only": "Seulement en retard"
   },
   "preview": {
     "chooseProtocol": "Choisir un procès-verbal",

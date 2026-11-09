@@ -146,7 +146,8 @@
     "todos_done_count": "Numero di attività completate",
     "todos_open": "Attività aperte (tutte)",
     "todos_open_count": "Numero di attività aperte",
-    "protocol_invitation_elements": "Punti dell’invito"
+    "protocol_invitation_elements": "Punti dell’invito",
+    "todos_overdue_count": "Numero di attività scadute"
   },
   "bindingField": {
     "assignee": "Responsabile",
@@ -766,7 +767,8 @@
     "text_and_todos": "Testo e attività",
     "title": "Titolo",
     "todos": "Compiti",
-    "year": "Per anno"
+    "year": "Per anno",
+    "in_progress": "In corso"
   },
   "examples": {
     "items": {
@@ -1359,7 +1361,9 @@
     "value": "Valore",
     "value_heading": "Intestazione destra",
     "with_place_date": "Campo «Luogo, data»",
-    "invitation_only": "Solo i punti dell’invito"
+    "invitation_only": "Solo i punti dell’invito",
+    "include_undated": "Includi attività senza scadenza",
+    "overdue_only": "Solo scadute"
   },
   "preview": {
     "chooseProtocol": "Scegli verbale",

@@ -146,7 +146,8 @@
     "todos_done_count": "Number of completed tasks",
     "todos_open": "Open tasks (all)",
     "todos_open_count": "Number of open tasks",
-    "protocol_invitation_elements": "Agenda items of the invitation"
+    "protocol_invitation_elements": "Agenda items of the invitation",
+    "todos_overdue_count": "Number of overdue tasks"
   },
   "bindingField": {
     "assignee": "Assignee",
@@ -766,7 +767,8 @@
     "text_and_todos": "Text and tasks",
     "title": "Title",
     "todos": "To-dos",
-    "year": "Per year"
+    "year": "Per year",
+    "in_progress": "In progress"
   },
   "examples": {
     "items": {
@@ -1359,7 +1361,9 @@
     "value": "Value",
     "value_heading": "Right column header",
     "with_place_date": "“Place, date” field",
-    "invitation_only": "Only agenda items of the invitation"
+    "invitation_only": "Only agenda items of the invitation",
+    "include_undated": "Include tasks without due date",
+    "overdue_only": "Overdue only"
   },
   "preview": {
     "chooseProtocol": "Choose protocol",
