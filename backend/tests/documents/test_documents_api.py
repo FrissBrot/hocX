@@ -284,3 +284,24 @@ def test_preview_with_session_template_uses_its_agenda_and_latest_session(db, se
     with pytest.raises(HTTPException) as excinfo:
         render_now(body, db=db, user=setup["admin"])
     assert excinfo.value.status_code == 422
+
+
+
+def test_todo_export_filters_by_due_date_tag_and_manual_selection(db, setup):
+    """Export-Dialog: Fällig bis, nur mit Tag, einzelne Pendenzen abwählen."""
+    from sqlalchemy import select
+    from app.models import ProtocolTodo
+
+    def exported(**params) -> str:
+        try:
+            return routes.export_document_format(
+                routes.FormatExportRequest(document_type="todos", format="csv", params={"status": "all", **params}), db=db, user=setup["reader"]
+            ).body.decode("utf-8")
+        except HTTPException as exc:
+            assert exc.status_code == 422  # keine Zeile mehr -> keine Tabelle
+            return ""
+
+    assert "Getränke besorgen" in exported()
+    todo = db.scalar(select(ProtocolTodo).where(ProtocolTodo.task == "Getränke besorgen"))
+    assert "Getränke besorgen" not in exported(exclude_ids=[str(todo.public_id)])
+    assert "Getränke besorgen" not in exported(tag="gibts-nicht")

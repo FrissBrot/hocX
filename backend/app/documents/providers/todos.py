@@ -167,6 +167,9 @@ def filter_rows(ctx: BuildContext, rows: list[Any], params: TodoTableParams) -> 
         rows = [row for row in rows if any(tag.casefold() == wanted for tag in todo_tags(row))]
     if params.due_until is not None:
         rows = [row for row in rows if getattr(row, "resolved_due_date", None) is None or row.resolved_due_date <= params.due_until]
+    if params.exclude_ids:
+        excluded = set(params.exclude_ids)
+        rows = [row for row in rows if row.ProtocolTodo.public_id not in excluded]
     if params.protocol_id is not None:
         protocol = ctx.entity_by_ref(Protocol, params.protocol_id)
         protocol_internal_id = protocol.id if protocol is not None else -1

@@ -187,6 +187,8 @@ class TodoTableParams(_Params):
     protocol_id: uuid.UUID | None = Field(None, json_schema_extra=_source("protocols"))
     group_by: Literal["none", "person", "status", "tag"] = "none"
     columns: list[TodoColumn] = Field(default_factory=lambda: ["status", "assignee", "due", "protocol"])
+    # Im Export-Dialog von Hand abgewählte Pendenzen (öffentliche IDs); nur Seitenkontext
+    exclude_ids: list[uuid.UUID] = Field(default_factory=list, max_length=2000, json_schema_extra={"x-widget": "hidden"})
 
 
 # ── Termine ─────────────────────────────────────────────────────────────────

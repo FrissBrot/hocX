@@ -196,7 +196,7 @@ class SessionUserRead(BaseModel):
     email: str
     preferred_language: str
     protocol_accordion_enabled: bool = True
-    protocol_wheel_enabled: bool = True
+    protocol_wheel_enabled: bool = False
 
 
 class SessionRead(BaseModel):

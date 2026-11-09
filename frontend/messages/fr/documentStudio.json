@@ -834,7 +834,19 @@
     "working": "Création …",
     "columns": "Colonnes",
     "columnsHelp": "S'applique au CSV, à Excel et au texte. Les colonnes désélectionnées sont omises uniquement dans cet export.",
-    "markdownCopied": "Texte pour WhatsApp copié dans le presse-papiers"
+    "markdownCopied": "Texte pour WhatsApp copié dans le presse-papiers",
+    "todoFilter": {
+      "title": "Choisir les tâches",
+      "dueUntil": "Échéance jusqu'au",
+      "tag": "Seulement avec l'étiquette",
+      "allTags": "Toutes les étiquettes",
+      "tagFromPage": "Comme sur la page ({tag})",
+      "selection": "{selected} sur {total} sélectionnées",
+      "all": "Toutes",
+      "none": "Aucune",
+      "loading": "Chargement des tâches …",
+      "empty": "Aucune tâche pour ces filtres."
+    }
   },
   "exports": {
     "allTypes": "Tous les types de document",

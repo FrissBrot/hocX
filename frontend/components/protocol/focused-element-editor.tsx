@@ -6,6 +6,7 @@ import { useParticipantNameSource } from "@/contexts/participant-directory-conte
 import { Dispatch, ReactNode, SetStateAction, memo, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useEventFieldConfig } from "@/lib/hooks/use-event-field-config";
+import { FinanceTransactionForm } from "@/components/protocol/finance-transaction-form";
 
 import { useConfirm } from "@/contexts/confirm-context";
 import { restoreFine, useFineDelete } from "@/components/finances/fine-delete";
@@ -120,6 +121,10 @@ function FocusedElementEditorImpl({
   availableTemplates,
   availableAccounts,
   financeTransactions,
+  financeVersion = 0,
+  canManageFinances = false,
+  addFinanceTransaction,
+  deleteFinanceTransaction,
   protocolFines,
   setProtocolFines,
   pendingFines,
@@ -197,6 +202,11 @@ function FocusedElementEditorImpl({
   availableTemplates: TemplateSummary[];
   availableAccounts: FinanceAccount[];
   financeTransactions: Record<string, FinanceTransaction[]>;
+  /** Zählt erfasste/gelöschte Transaktionen hoch: Kontostände am Protokolldatum neu laden */
+  financeVersion?: number;
+  canManageFinances?: boolean;
+  addFinanceTransaction?: (accountId: string, values: { transaction_date: string; description: string; amount: number }) => Promise<boolean>;
+  deleteFinanceTransaction?: (accountId: string, transactionId: string) => Promise<void>;
   protocolFines: AttendanceFine[];
   setProtocolFines: Dispatch<SetStateAction<AttendanceFine[]>>;
   pendingFines: AttendanceFineListItem[];
@@ -329,7 +339,7 @@ function FocusedElementEditorImpl({
       return stored ? entry.public_reference_ids?.finance_accounts?.[String(stored)] ?? String(stored) : null;
     })
     .filter((id): id is string => Boolean(id));
-  const balancesAtProtocolDate = useBalancesAsOf(balanceAccountIds, protocol.protocol_date ?? null);
+  const balancesAtProtocolDate = useBalancesAsOf(balanceAccountIds, protocol.protocol_date ?? null, financeVersion);
   // Ungefilterte Bussen; die Bussenliste wendet ihre Block-Optionen darauf an.
   const allPendingFines = pendingFines;
   // Löschen mit Begründung wird in diesem Protokoll aufgeführt (MAIN-BE-002).
@@ -1237,7 +1247,9 @@ function FocusedElementEditorImpl({
 
   function matrixListPool(blockConfig: Record<string, any>) {
     const { listId, sort } = matrixAutoSourceInfo(blockConfig);
-    const entries = listId ? (listEntriesByDefinition[listId] ?? []) : [];
+    // auto_source.list_id steht aus der Vorlage intern; Einträge sind unter der öffentlichen ID geladen
+    const publicListId = listId ? listDefinitionsById.get(listId)?.id ?? listId : null;
+    const entries = publicListId ? (listEntriesByDefinition[publicListId] ?? listEntriesByDefinition[listId ?? ""] ?? []) : [];
     return sort === "alpha" || sort === "alpha_desc" ? sortByLabel(entries, matrixListEntryTitle, sort === "alpha_desc") : entries;
   }
 
@@ -1259,13 +1271,34 @@ function FocusedElementEditorImpl({
     saveMatrixColumns(blockId, blockConfig, nextColumns);
   }
 
+  // Karten aus einer Liste («gen-l-<Eintrag>»): beim Anlegen des Protokolls mit interner,
+  // im Editor mit öffentlicher Eintrags-ID. Beide auf die öffentliche ID abbilden.
+  function matrixColumnKey(blockId: string, column: Record<string, any>): string {
+    const id = String(column.id ?? "");
+    if (!id.startsWith("gen-l-")) return id;
+    const raw = id.slice("gen-l-".length);
+    const block = element.blocks.find((entry) => entry.id === blockId);
+    return `gen-l-${block?.public_reference_ids?.list_entries?.[raw] ?? raw}`;
+  }
+
+  // Karten aus einer Liste stehen immer in der Reihenfolge der Liste (bzw. ihrer Sortierung),
+  // egal wann sie hinzugekommen sind; übrige Karten behalten ihre Reihenfolge dahinter.
+  function orderMatrixColumns(blockId: string, blockConfig: Record<string, any>, columns: Array<Record<string, any>>) {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
+    if (matrixAutoSourceInfo(blockConfig).source !== "list") return columns;
+    const position = new Map(matrixListPool(blockConfig).map((entry, index) => [`gen-l-${entry.id}`, index]));
+    return columns
+      .map((column, index) => ({ column, index, rank: position.get(matrixColumnKey(blockId, column)) ?? Number.MAX_SAFE_INTEGER }))
+      .sort((left, right) => left.rank - right.rank || left.index - right.index)
+      .map(({ column }) => column);
+  }
+
   // Non-destructive counterpart to generateMatrixColumns for planning mode: toggling a
   // candidate on/off only adds a column or flips its `hidden` flag, never overwrites or
   // drops existing (possibly manually edited) columns like the bulk "Generieren" button does.
-  function matrixCandidateItems(blockConfig: Record<string, any>): CandidateItem[] {
+  function matrixCandidateItems(blockId: string, blockConfig: Record<string, any>): CandidateItem[] {
     const { source } = matrixAutoSourceInfo(blockConfig);
     const columns = matrixColumns(blockConfig);
-    const columnById = new Map(columns.map((c) => [String(c.id ?? ""), c]));
+    const columnById = new Map(columns.map((c) => [matrixColumnKey(blockId, c), c]));
 
     function toItem(id: string, label: string, sublabel?: string): CandidateItem {
       const existing = columnById.get(id);
@@ -1293,13 +1326,13 @@ function FocusedElementEditorImpl({
   function toggleMatrixColumn(blockId: string, blockConfig: Record<string, any>, candidateId: string, nextChecked: boolean) {
     const { source } = matrixAutoSourceInfo(blockConfig);
     const columns = matrixColumns(blockConfig);
-    const existing = columns.find((c) => String(c.id ?? "") === candidateId);
+    const existing = columns.find((c) => matrixColumnKey(blockId, c) === candidateId);
 
     if (existing) {
       saveMatrixColumns(
         blockId,
         blockConfig,
-        columns.map((c) => (String(c.id ?? "") === candidateId ? { ...c, hidden: !nextChecked } : c))
+        orderMatrixColumns(blockId, blockConfig, columns.map((c) => (c === existing ? { ...c, hidden: !nextChecked } : c)))
       );
       return;
     }
@@ -1317,7 +1350,8 @@ function FocusedElementEditorImpl({
       if (entry) newColumn = buildMatrixColumnForListEntry(rows, entry);
     }
     if (!newColumn) return;
-    saveMatrixColumns(blockId, blockConfig, [...columns, newColumn]);
+    // An ihren Platz in der Liste, nicht ans Ende
+    saveMatrixColumns(blockId, blockConfig, orderMatrixColumns(blockId, blockConfig, [...columns, newColumn]));
   }
 
   // Lädt die Termine aller Filter mit Zyklus in diesem Element (Terminliste, Matrix-Automodus,
@@ -2449,7 +2483,7 @@ function FocusedElementEditorImpl({
               )}
 
               {elementType === "matrix" && (() => {
-                const cols = matrixColumns(blockConfig).filter((c) => !c?.hidden);
+                const cols = orderMatrixColumns(block.id, blockConfig, matrixColumns(blockConfig)).filter((c) => !c?.hidden);
                 const rows = matrixRows(blockConfig);
                 const autoSource = matrixAutoSourceInfo(blockConfig);
                 const sourceLabel =
@@ -2706,7 +2740,7 @@ function FocusedElementEditorImpl({
                         onClose={() => setMatrixPickerBlockId(null)}
                         title={t("chooseColumns")}
                         description={t("matrixColumnsToggleDescription")}
-                        items={matrixCandidateItems(blockConfig)}
+                        items={matrixCandidateItems(block.id, blockConfig)}
                         onToggle={(item, nextChecked) => toggleMatrixColumn(block.id, blockConfig, item.id, nextChecked)}
                       />
                     )}
@@ -3351,9 +3385,22 @@ function FocusedElementEditorImpl({
 
                 // finance_transactions - gleiche Regeln wie Mobile und PDF (lib/element-types/period.ts)
                 const filtered = filterTransactions(txAll, blockConfig, protocol.protocol_date ?? null, protocolPeriod);
+                const canAddTransactions = canManageFinances && blockEditable && !!addFinanceTransaction;
+                const addForm = canAddTransactions ? (
+                  <FinanceTransactionForm
+                    defaultDate={protocol.protocol_date ?? new Date().toISOString().slice(0, 10)}
+                    currency={account.currency_label}
+                    onAdd={(values) => addFinanceTransaction!(account.id, values)}
+                  />
+                ) : null;
 
                 if (filtered.length === 0) {
-                  return <p className="muted">{t("noTransactionsInRange")}</p>;
+                  return (
+                    <>
+                      <p className="muted">{t("noTransactionsInRange")}</p>
+                      {addForm}
+                    </>
+                  );
                 }
 
                 let running = 0;
@@ -3361,14 +3408,15 @@ function FocusedElementEditorImpl({
 
                 return (
                   <div className="finance-proto-table">
-                    <div className="finance-proto-header">
+                    <div className={`finance-proto-header${canAddTransactions ? " finance-proto-row-actions" : ""}`}>
                       <span>{t("dateLabel")}</span>
                       <span>{t("descriptionLabel")}</span>
                       <span className="finance-tx-cell-right">{t("amountLabel")}</span>
                       <span className="finance-tx-cell-right">{t("balanceLabel")}</span>
+                      {canAddTransactions ? <span /> : null}
                     </div>
                     {withBalance.map(({ tx, running: r }) => (
-                      <div key={tx.id} className="finance-proto-row">
+                      <div key={tx.id} className={`finance-proto-row${canAddTransactions ? " finance-proto-row-actions" : ""}`}>
                         <span>{formatDate(tx.transaction_date)}</span>
                         <span>{tx.description}</span>
                         <span className={`finance-tx-cell-right${tx.amount < 0 ? " finance-amount-neg" : " finance-amount-pos"}`}>
@@ -3377,8 +3425,25 @@ function FocusedElementEditorImpl({
                         <span className={`finance-tx-cell-right${r < 0 ? " finance-balance-negative" : ""}`}>
                           {formatFinanceAmount(r, account.currency_label)}
                         </span>
+                        {canAddTransactions ? (
+                          // Löschen nur für Transaktionen, die in diesem Protokoll erfasst wurden
+                          tx.protocol_id === protocol.id && deleteFinanceTransaction ? (
+                            <button
+                              type="button"
+                              className="button-icon-soft button-icon-soft-danger"
+                              aria-label={t("transactionDelete")}
+                              onClick={async () => {
+                                const ok = await confirm({ message: t("transactionDeleteConfirm"), tone: "danger", confirmLabel: t("transactionDelete") });
+                                if (ok) await deleteFinanceTransaction(account.id, tx.id);
+                              }}
+                            >
+                              <ActionIcon name="delete" />
+                            </button>
+                          ) : <span />
+                        ) : null}
                       </div>
                     ))}
+                    {addForm}
                   </div>
                 );
               })()}

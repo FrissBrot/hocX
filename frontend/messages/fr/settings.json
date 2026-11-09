@@ -9,7 +9,7 @@
     },
     "languageLabel": "Langue",
     "wheelLabel": "Effet de roue au défilement",
-    "wheelHint": "Les points s’inclinent en défilant et avancent vers le centre. Tous les points restent ouverts.",
+    "wheelHint": "Les points s’inclinent en défilant et avancent vers le centre. Tous les points restent ouverts. Peut saccader avec de grands procès-verbaux.",
     "accordionLabel": "Réduire automatiquement les points du procès-verbal",
     "accordionHint": "N'afficher développé que le point actif.",
     "accordionWheelHint": "Indisponible tant que l’effet de roue est actif.",

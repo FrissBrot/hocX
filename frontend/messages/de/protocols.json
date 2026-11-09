@@ -556,5 +556,15 @@
     "columnFallback": "Spalte {index}",
     "columnNameLabel": "Spaltenname",
     "notePlaceholder": "Notiz …"
-  }
+  },
+  "transactionAddTitle": "Transaktion erfassen",
+  "transactionDirection": "Art",
+  "transactionIncome": "Einnahme",
+  "transactionExpense": "Ausgabe",
+  "transactionAdd": "Erfassen",
+  "transactionAdded": "Transaktion erfasst",
+  "transactionAddFailed": "Transaktion konnte nicht erfasst werden",
+  "transactionDelete": "Transaktion löschen",
+  "transactionDeleteConfirm": "Diese Transaktion löschen? Der Kontostand wird angepasst.",
+  "transactionDeleteFailed": "Transaktion konnte nicht gelöscht werden"
 }

@@ -556,5 +556,15 @@
     "columnFallback": "Colonne {index}",
     "columnNameLabel": "Nom de la colonne",
     "notePlaceholder": "Note …"
-  }
+  },
+  "transactionAddTitle": "Saisir une transaction",
+  "transactionDirection": "Type",
+  "transactionIncome": "Recette",
+  "transactionExpense": "Dépense",
+  "transactionAdd": "Saisir",
+  "transactionAdded": "Transaction saisie",
+  "transactionAddFailed": "La transaction n'a pas pu être saisie",
+  "transactionDelete": "Supprimer la transaction",
+  "transactionDeleteConfirm": "Supprimer cette transaction ? Le solde du compte sera ajusté.",
+  "transactionDeleteFailed": "La transaction n'a pas pu être supprimée"
 }

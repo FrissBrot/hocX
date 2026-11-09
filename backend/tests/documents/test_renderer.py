@@ -477,3 +477,20 @@ def test_real_worker_renders_and_is_reused(renderer):
     workers = list(renderer._idle)
     _render(renderer, compiled)
     assert workers and renderer._idle == workers and workers[0].compiles >= 2
+
+
+@pytest.mark.parametrize("variant", ["list", "compact", "table", "grid", "chips"])
+def test_attendance_status_is_written_out_in_every_variant(renderer, variant):
+    """Status als Text, nicht nur als Punkt (vorher: «grid» zeigte für anwesend nur ●, «chips»
+    nur einen gefüllten Kreis)."""
+    attendance = next(block for block in all_data_blocks() if block["type"] == "attendance")
+    compiled = compile_scenario(Scenario(
+        system("protocol_formal"),
+        {"protocol": [{"type": "protocol_element", "title": "Teilnehmer", "children": [{**attendance, "level": 2}]}]},
+        brand={"appearance": {"elements": {"attendance": {"variant": variant}}}},
+    ))
+    output = _render(renderer, compiled)
+    text = normalize(pdf_text(output.pdf))
+    assert output.warnings == []
+    assert "Anwesend" in text and "Entschuldigt" in text
+    assert "●" not in text

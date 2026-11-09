@@ -234,19 +234,20 @@
     }).flatten())
 }
 
-// Darstellung «grid»: Zusammenfassung oben, Namen dreispaltig mit Markierung
+// Darstellung «grid»: Zusammenfassung oben, Namen dreispaltig mit ausgeschriebenem Status
+// (früher ein Punkt für «anwesend» - ohne Legende nicht verständlich)
 #let attendance-grid(ctx, b) = {
   grid(columns: (1fr, 1fr, 1fr), column-gutter: 1.5em,
     ..b.entries.map(entry => {
       let status = entry.at("status", default: none)
-      let mark = if status == "present" { text(fill: ctx.theme.primary, weight: "bold")[●] }
+      let mark = if status == "present" { text(size: 0.8em, fill: ctx.theme.primary, weight: "bold", tr(ctx, "attendanceStatus.present")) }
         else if status == none { text(fill: ctx.c.muted)[–] }
         else { text(size: 0.8em, fill: ctx.c.muted, tr(ctx, "attendanceStatus." + status)) }
       block(width: 100%, inset: (y: 0.35em), stroke: (bottom: 0.5pt + ctx.c.border), [#entry.name #h(1fr) #mark])
     }))
 }
 
-// Darstellung «chips»: jede Person als Pill mit Punkt (gefüllt = anwesend)
+// Darstellung «chips»: jede Person als Pill, Status ausgeschrieben (nicht nur als Punkt)
 #let attendance-chips(ctx, b) = {
   b.entries.map(entry => {
     let status = entry.at("status", default: none)
@@ -255,6 +256,10 @@
       box(baseline: -0.1em, circle(radius: 0.22em, fill: if here { ctx.c.success } else { none }, stroke: if here { none } else { 0.5pt + ctx.c.muted }))
       h(0.3em)
       entry.name
+      if status != none {
+        h(0.3em)
+        text(size: 0.8em, fill: ctx.c.muted, tr(ctx, "attendanceStatus." + status))
+      }
     })
   }).join(h(0.3em))
 }

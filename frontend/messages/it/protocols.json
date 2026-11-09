@@ -556,5 +556,15 @@
     "columnFallback": "Colonna {index}",
     "columnNameLabel": "Nome della colonna",
     "notePlaceholder": "Nota …"
-  }
+  },
+  "transactionAddTitle": "Registra transazione",
+  "transactionDirection": "Tipo",
+  "transactionIncome": "Entrata",
+  "transactionExpense": "Uscita",
+  "transactionAdd": "Registra",
+  "transactionAdded": "Transazione registrata",
+  "transactionAddFailed": "Impossibile registrare la transazione",
+  "transactionDelete": "Elimina transazione",
+  "transactionDeleteConfirm": "Eliminare questa transazione? Il saldo del conto verrà adeguato.",
+  "transactionDeleteFailed": "Impossibile eliminare la transazione"
 }

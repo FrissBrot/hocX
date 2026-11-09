@@ -834,7 +834,19 @@
     "working": "Wird erstellt …",
     "columns": "Spalten",
     "columnsHelp": "Gilt für CSV, Excel und Text. Abgewählte Spalten fehlen nur in diesem Export.",
-    "markdownCopied": "Text für WhatsApp in die Zwischenablage kopiert"
+    "markdownCopied": "Text für WhatsApp in die Zwischenablage kopiert",
+    "todoFilter": {
+      "title": "Pendenzen auswählen",
+      "dueUntil": "Fällig bis",
+      "tag": "Nur mit Tag",
+      "allTags": "Alle Tags",
+      "tagFromPage": "Wie auf der Seite ({tag})",
+      "selection": "{selected} von {total} ausgewählt",
+      "all": "Alle",
+      "none": "Keine",
+      "loading": "Pendenzen werden geladen …",
+      "empty": "Keine Pendenzen für diese Filter."
+    }
   },
   "exports": {
     "allTypes": "Alle Dokumenttypen",

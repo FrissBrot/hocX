@@ -4307,6 +4307,21 @@ input[type="color"]::-moz-color-swatch {
   transition: box-shadow var(--dur-base) ease, border-color var(--dur-base) ease;
 }
 
+/* Leichter Ersatz für den Rad-Effekt (Standard): Inhalte werden zum oberen und unteren Rand des
+   Dokumentbereichs hin blasser. Eine einzige Maske auf dem Scrollbereich - der Browser
+   verschiebt den Inhalt darunter, ohne pro Abschnitt etwas zu berechnen (der Rad-Effekt
+   kippte jeden Abschnitt einzeln und ruckelte bei grossen Protokollen). Nur das Alpha der
+   Farben zählt, --bg dient als deckende Farbe. */
+.protocol-document-fade {
+  mask-image: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--bg) 25%, transparent 75%) 0%,
+    var(--bg) 14%,
+    var(--bg) 86%,
+    color-mix(in srgb, var(--bg) 25%, transparent 75%) 100%
+  );
+}
+
 /* Rad-Effekt: gekippte Abschnitte als eigene Ebene, damit transform/opacity beim Scrollen nur
    neu zusammengesetzt statt neu gezeichnet werden. Nur Abschnitte in Bildnähe sind gekippt
    (document-scroll.ts setzt .protocol-doc-section-wheel), sonst wären es bei langen Protokollen
@@ -7448,16 +7463,20 @@ input[type="color"]::-moz-color-swatch {
   color: var(--accent);
 }
 
+/* Raster statt CSS-Spalten: Karten stehen zeilenweise links nach rechts in fester Reihenfolge
+   (Reihenfolge der Liste). Mit `columns` flossen sie spaltenweise und sprangen in eine andere
+   Spalte, sobald eine Karte höher wurde (Person oder Termin ergänzt). */
 .matrix-board-cards {
-  columns: 320px;
-  column-gap: var(--space-3);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-3);
+  align-items: start;
 }
 
 .matrix-board-card {
   display: grid;
   width: 100%;
-  break-inside: avoid;
-  margin-bottom: var(--space-3);
+  min-width: 0;
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
   background: color-mix(in srgb, var(--bg) 35%, var(--panel-solid) 65%);
@@ -11816,6 +11835,32 @@ input[type="color"]::-moz-color-swatch {
   font-size: var(--text-sm);
 }
 .finance-proto-row:last-child { border-bottom: none; }
+
+/* Mit Löschen-Spalte (Transaktionen im Protokoll erfassen) */
+.finance-proto-header.finance-proto-row-actions,
+.finance-proto-row.finance-proto-row-actions {
+  grid-template-columns: 100px 1fr 140px 120px 28px;
+}
+
+/* Erfassungszeile unter der Transaktionsliste im Protokoll */
+.finance-proto-add {
+  display: grid;
+  grid-template-columns: 150px 1fr 130px 120px auto;
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.finance-proto-add-amount {
+  text-align: right;
+}
+
+@media (max-width: 640px) {
+  .finance-proto-add {
+    grid-template-columns: 1fr 1fr;
+  }
+}
 
 /* Utility buttons */
 .button-icon-soft { --button-hover-bg: color-mix(in srgb, var(--accent) 25%, transparent 75%);
@@ -29259,4 +29304,30 @@ a.mobile-list-row { color: var(--text); }
   .event-field-settings-row > input {
     grid-column: 1 / -1;
   }
+}
+
+
+/* Export-Dialog: Pendenzen von Hand an-/abwählen */
+.todo-export-list-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.todo-export-list-head .field-label {
+  flex: 1;
+}
+
+.todo-export-list {
+  display: grid;
+  gap: var(--space-1);
+  max-height: 260px;
+  overflow-y: auto;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.todo-export-item .field-help {
+  display: block;
 }

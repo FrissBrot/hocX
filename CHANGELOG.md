@@ -42,8 +42,25 @@ Update»).
   ohne Abgabe geschlossen grau, Frist verpasst oder Scanfehler rot.
 - Matrix-Planung: die Teilnehmerzahl lässt sich direkt in der Termintabelle ändern.
 - Neuer Hintergrund-Job «Abgabe-Pendenzen abgleichen» (alle 15 Minuten, `/admin/jobs`).
+- **Transaktionen im Protokoll erfassen:** im Block «Transaktionen» Datum, Beschreibung,
+  Einnahme/Ausgabe und Betrag eintragen (mit dem Protokoll verknüpft, Saldo und Kontostand werden
+  sofort nachgeführt); im Protokoll erfasste Transaktionen lassen sich dort wieder löschen.
+  Benötigt «Finanzen verwalten».
+- PDF: Anwesenheit in den Darstellungen «Raster» und «Chips» mit ausgeschriebenem Status statt
+  Punkt.
+
+### Geändert
+
+- **Rad-Effekt beim Scrollen standardmässig aus.** Er kippte jeden Abschnitt einzeln und
+  ruckelte bei grossen Protokollen beim Scrollen und Schreiben. Wer ihn ausdrücklich eingeschaltet
+  hat, behält ihn (Profileinstellung). Stattdessen werden Inhalte zum oberen und unteren Rand des
+  Protokollbereichs hin sanft blasser (eine Maske, ohne Rechenaufwand pro Abschnitt).
 
 ### Behoben
+
+- **Matrix-Karten aus einer Liste** stehen immer in der Reihenfolge der Liste und springen nicht
+  mehr zwischen Spalten, wenn eine Karte höher wird. Die Karten-Auswahl erkannte beim Anlegen des
+  Protokolls erzeugte Karten nicht (interne statt öffentliche ID) und konnte doppelte Karten anlegen.
 
 - **Verspätete bekamen keine Busse mehr**, nachdem im Anwesenheitsblock einmal geklickt wurde:
   die Antwort enthielt den Bussentarif nicht, der Editor hielt die Bussen bis zum Neuladen für

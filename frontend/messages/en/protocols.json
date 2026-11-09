@@ -556,5 +556,15 @@
     "columnFallback": "Column {index}",
     "columnNameLabel": "Column name",
     "notePlaceholder": "Note …"
-  }
+  },
+  "transactionAddTitle": "Add transaction",
+  "transactionDirection": "Type",
+  "transactionIncome": "Income",
+  "transactionExpense": "Expense",
+  "transactionAdd": "Add",
+  "transactionAdded": "Transaction added",
+  "transactionAddFailed": "Transaction could not be added",
+  "transactionDelete": "Delete transaction",
+  "transactionDeleteConfirm": "Delete this transaction? The account balance will be adjusted.",
+  "transactionDeleteFailed": "Transaction could not be deleted"
 }

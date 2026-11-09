@@ -364,6 +364,12 @@ def snapshot_reference_ids(db, config: dict, tenant_id: int) -> dict:
         for value in (row.get("linked_list_entry_id"), (row.get("row_config") or {}).get("linked_list_entry_id"))
         if isinstance(value, int) and not isinstance(value, bool)
     }
+    # Matrix-Karten aus einer Liste heissen beim Anlegen «gen-l-<interne Eintrags-ID>»; der
+    # Editor ordnet sie über die öffentliche ID der Liste zu (Reihenfolge, Auswahl)
+    for column in config.get("columns") or []:
+        column_id = str(column.get("id") or "") if isinstance(column, dict) else ""
+        if column_id.startswith("gen-l-") and column_id[6:].isdigit():
+            entry_ids.add(int(column_id[6:]))
     result = {}
     for name, model, values in (
         ("lists", ListDefinition, list_ids),

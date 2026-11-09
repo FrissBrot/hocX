@@ -83,7 +83,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
   const [protocolExitAnimation, setProtocolExitAnimation] = useState(false);
   const [language, setLanguage] = useState("de");
   const [protocolAccordionEnabled, setProtocolAccordionEnabled] = useState(true);
-  const [protocolWheelEnabled, setProtocolWheelEnabled] = useState(true);
+  const [protocolWheelEnabled, setProtocolWheelEnabled] = useState(false);
   const [sessionStatus, setSessionStatus] = useState(initialSession?.authenticated ? t("sessionReady") : t("sessionLoading"));
 
   const navGroups = useMemo(() => buildNav(session), [session]);
@@ -157,7 +157,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
         setSession(current);
         setLanguage(current.user?.preferred_language ?? "de");
         setProtocolAccordionEnabled(current.user?.protocol_accordion_enabled ?? true);
-        setProtocolWheelEnabled(current.user?.protocol_wheel_enabled ?? true);
+        setProtocolWheelEnabled(current.user?.protocol_wheel_enabled ?? false);
         setSessionStatus(t("sessionReady"));
       } catch {
         // Transient errors (network hiccup, backend 500, timeout) must NOT log

@@ -10,11 +10,18 @@ from app.services.user_service import UserService
 from tests.factories import make_app_user
 
 
-def test_wheel_effect_defaults_on_and_is_stored_without_touching_accordion(db):
+def test_wheel_effect_defaults_off_and_is_stored_without_touching_accordion(db):
+    """Rad-Effekt standardmässig aus (ruckelte bei grossen Protokollen); wer ihn ausdrücklich
+    einschaltet, behält ihn."""
     user = make_app_user(db, email="wheel@example.com")
     actor = build_current_user(db, user)
-    assert actor.protocol_wheel_enabled is True
+    assert actor.protocol_wheel_enabled is False
     assert actor.protocol_accordion_enabled is True
+
+    UserService().update_self(db, actor, UserSelfUpdate(protocol_wheel_enabled=True))
+    db.refresh(user)
+    actor = build_current_user(db, user)
+    assert actor.protocol_wheel_enabled is True
 
     UserService().update_self(db, actor, UserSelfUpdate(protocol_wheel_enabled=False))
     db.refresh(user)

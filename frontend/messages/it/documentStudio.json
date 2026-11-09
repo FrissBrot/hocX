@@ -834,7 +834,19 @@
     "working": "Creazione …",
     "columns": "Colonne",
     "columnsHelp": "Vale per CSV, Excel e testo. Le colonne deselezionate mancano solo in questa esportazione.",
-    "markdownCopied": "Testo per WhatsApp copiato negli appunti"
+    "markdownCopied": "Testo per WhatsApp copiato negli appunti",
+    "todoFilter": {
+      "title": "Seleziona attività",
+      "dueUntil": "Scadenza entro",
+      "tag": "Solo con etichetta",
+      "allTags": "Tutte le etichette",
+      "tagFromPage": "Come nella pagina ({tag})",
+      "selection": "{selected} di {total} selezionate",
+      "all": "Tutte",
+      "none": "Nessuna",
+      "loading": "Caricamento attività …",
+      "empty": "Nessuna attività per questi filtri."
+    }
   },
   "exports": {
     "allTypes": "Tutti i tipi di documento",

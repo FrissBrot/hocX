@@ -834,7 +834,19 @@
     "working": "Creating …",
     "columns": "Columns",
     "columnsHelp": "Applies to CSV, Excel and text. Deselected columns are left out of this export only.",
-    "markdownCopied": "Text for WhatsApp copied to the clipboard"
+    "markdownCopied": "Text for WhatsApp copied to the clipboard",
+    "todoFilter": {
+      "title": "Select tasks",
+      "dueUntil": "Due by",
+      "tag": "Only with tag",
+      "allTags": "All tags",
+      "tagFromPage": "As on the page ({tag})",
+      "selection": "{selected} of {total} selected",
+      "all": "All",
+      "none": "None",
+      "loading": "Loading tasks …",
+      "empty": "No tasks for these filters."
+    }
   },
   "exports": {
     "allTypes": "All document types",

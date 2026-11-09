@@ -9,7 +9,7 @@
     },
     "languageLabel": "Sprache",
     "wheelLabel": "Rad-Effekt beim Scrollen",
-    "wheelHint": "Punkte neigen sich beim Scrollen weg und kommen zur Mitte hin nach vorne. Alle Punkte bleiben geöffnet.",
+    "wheelHint": "Punkte neigen sich beim Scrollen weg und kommen zur Mitte hin nach vorne. Alle Punkte bleiben geöffnet. Kann bei grossen Protokollen ruckeln.",
     "accordionLabel": "Protokollpunkte automatisch einklappen",
     "accordionHint": "Nur den aktiven Punkt geöffnet anzeigen.",
     "accordionWheelHint": "Nicht möglich, solange der Rad-Effekt an ist.",

@@ -31,6 +31,7 @@ import {
   studioApi,
 } from "@/lib/documents/api";
 import { Select } from "@/components/ui/select";
+import { EMPTY_TODO_EXPORT_FILTER, TodoExportFilter, TodoExportFilters, todoExportParams } from "@/components/documents/todo-export-filters";
 
 export type DocumentExportContext = {
   /** Dokumenttyp (protocol, invitation, todos, events, statistics, list, …). */
@@ -69,6 +70,8 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
   // Spalten für CSV, Excel und Text: alle angeboten, abgewählte gelten nur für diesen Export
   const [columns, setColumns] = useState<string[]>([]);
   const [excludedColumns, setExcludedColumns] = useState<string[]>([]);
+  // Pendenzen: Fälligkeit, Tag und Auswahl von Hand (nur Dokumenttyp «todos»)
+  const [todoFilter, setTodoFilter] = useState<TodoExportFilter>(EMPTY_TODO_EXPORT_FILTER);
   const cache = useRef(new Map<string, string[]>());
 
   useEffect(() => {
@@ -109,7 +112,7 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
   }, [open, documentType]);
 
   const typeInfo = types.find((item) => item.key === documentType);
-  const paramsKey = JSON.stringify(context.params ?? {});
+  const paramsKey = JSON.stringify({ ...(context.params ?? {}), ...(documentType === "todos" ? todoExportParams(todoFilter) : {}) });
   const request = useMemo<DocumentRequest>(
     () => ({
       document_type: documentType,
@@ -157,7 +160,9 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
   }, [open, templateId, requestKey, request]);
 
   // Spaltenliste zur aktuellen Vorlage/Sprache/Filter; Optionen (Titel, Wasserzeichen) ändern sie nicht
-  const columnsKey = JSON.stringify({ ...request, options: null });
+  // options weglassen (nicht null: der Server erwartet ein Objekt und lehnte die Anfrage sonst ab)
+  const { options: _options, ...columnsRequest } = request;
+  const columnsKey = JSON.stringify(columnsRequest);
   const hasTableFormats = (typeInfo?.formats ?? []).some((format) => format !== "ics");
   useEffect(() => {
     if (!open || !templateId || !hasTableFormats) {
@@ -335,6 +340,8 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
               </Select>
             </label>
           </section>
+
+          {documentType === "todos" && <TodoExportFilters pageParams={context.params ?? {}} value={todoFilter} onChange={setTodoFilter} />}
 
           {columns.length > 0 && (
             <section className="studio-export-section" aria-labelledby="studio-export-columns">

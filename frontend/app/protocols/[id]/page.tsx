@@ -126,9 +126,10 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
               initialFinanceTransactions={initialFinanceTransactions}
               initialPendingTodos={pendingTodos}
               forceReadOnly={isRestricted}
+              canManageFinances={can(session, "finances.manage")}
               canViewFines={canViewFines}
               accordionEnabled={session.user?.protocol_accordion_enabled ?? true}
-              wheelEnabled={session.user?.protocol_wheel_enabled ?? true}
+              wheelEnabled={session.user?.protocol_wheel_enabled ?? false}
             />
           </section>
         }

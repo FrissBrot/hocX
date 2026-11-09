@@ -9,7 +9,7 @@
     },
     "languageLabel": "Language",
     "wheelLabel": "Wheel effect while scrolling",
-    "wheelHint": "Items tilt away while scrolling and come forward towards the centre. All items stay expanded.",
+    "wheelHint": "Items tilt away while scrolling and come forward towards the centre. All items stay expanded. May stutter with large minutes.",
     "accordionLabel": "Collapse protocol items automatically",
     "accordionHint": "Only show the active item expanded.",
     "accordionWheelHint": "Not available while the wheel effect is on.",

@@ -307,3 +307,15 @@ def test_public_reference_ids_cover_linked_list_entries(db):
     refs = snapshot_reference_ids(db, config, tenant.id)
 
     assert refs["list_entries"] == {str(entry.id): str(entry.public_id)}
+
+
+def test_public_reference_ids_cover_list_matrix_columns(db):
+    from tests.factories import make_list_entry
+    from app.services.snapshot_reference_ids import snapshot_reference_ids
+
+    tenant = make_tenant(db)
+    definition = make_list_definition(db, tenant.id)
+    entry = make_list_entry(db, definition.id)
+    config = {"columns": [{"id": f"gen-l-{entry.id}"}, {"id": "gen-l-6b0f2c1e"}, {"id": "manual-1"}]}
+
+    assert snapshot_reference_ids(db, config, tenant.id)["list_entries"] == {str(entry.id): str(entry.public_id)}

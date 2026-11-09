@@ -97,6 +97,8 @@ type ProtocolEditorProps = {
   initialPendingTodos?: TodoListItem[];
   forceReadOnly?: boolean;
   canViewFines?: boolean;
+  /** Transaktionen direkt im Block «Transaktionen» erfassen (finances.manage) */
+  canManageFinances?: boolean;
   accordionEnabled?: boolean;
   /** Rad-Effekt beim Scrollen (Profileinstellung); an = Akkordeon aus */
   wheelEnabled?: boolean;
@@ -120,8 +122,9 @@ export function ProtocolEditor({
   initialPendingTodos = [],
   forceReadOnly = false,
   canViewFines = true,
+  canManageFinances = false,
   accordionEnabled: accordionPreference = true,
-  wheelEnabled = true,
+  wheelEnabled = false,
 }: ProtocolEditorProps) {
   // Design «Protokoll-Editor v2»: mit Rad-Effekt bleiben alle Punkte offen (kein Akkordeon)
   const accordionEnabled = accordionPreference && !wheelEnabled;
@@ -161,6 +164,9 @@ export function ProtocolEditor({
   const [pendingTodos, setPendingTodos] = useState<TodoListItem[]>(initialPendingTodos);
   const [imagesByBlock, setImagesByBlock] = useState<Record<string, ProtocolImage[]>>(initialImages);
   const [financeTransactions, setFinanceTransactions] = useState<Record<string, FinanceTransaction[]>>(initialFinanceTransactions);
+  // Kontostände ändern sich mit Transaktionen, die im Protokoll erfasst werden
+  const [accounts, setAccounts] = useState<FinanceAccount[]>(availableAccounts);
+  const [financeVersion, setFinanceVersion] = useState(0);
   const [protocolFines, setProtocolFines] = useState<AttendanceFine[]>([]);
   const [pendingFines, setPendingFines] = useState<AttendanceFineListItem[]>([]);
   // Refresh chart blocks whenever fines change (add/delete)
@@ -1933,6 +1939,45 @@ export function ProtocolEditor({
     }
   }
 
+  // Transaktion im Block «Transaktionen» erfassen: verknüpft mit diesem Protokoll, Liste und
+  // Kontostand (auch «am Protokolldatum») werden sofort nachgeführt
+  async function addFinanceTransaction(
+    accountId: string,
+    values: { transaction_date: string; description: string; amount: number }
+  ): Promise<boolean> {
+    try {
+      const created = await browserApiFetch<FinanceTransaction>(`/api/finance/accounts/${accountId}/transactions`, {
+        method: "POST",
+        body: JSON.stringify({ ...values, protocol_id: protocol.id }),
+      });
+      setFinanceTransactions((current) => ({
+        ...current,
+        [accountId]: [created, ...(current[accountId] ?? [])].sort((a, b) => b.transaction_date.localeCompare(a.transaction_date)),
+      }));
+      setAccounts((current) => current.map((account) => (account.id === accountId ? { ...account, balance: account.balance + created.amount } : account)));
+      setFinanceVersion((value) => value + 1);
+      showToast(tRoot("transactionAdded"), "success");
+      return true;
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : tRoot("transactionAddFailed"), "error");
+      return false;
+    }
+  }
+
+  async function deleteFinanceTransaction(accountId: string, transactionId: string) {
+    const transaction = (financeTransactions[accountId] ?? []).find((tx) => tx.id === transactionId);
+    try {
+      await browserApiFetch(`/api/finance/transactions/${transactionId}`, { method: "DELETE" });
+      setFinanceTransactions((current) => ({ ...current, [accountId]: (current[accountId] ?? []).filter((tx) => tx.id !== transactionId) }));
+      if (transaction) {
+        setAccounts((current) => current.map((account) => (account.id === accountId ? { ...account, balance: account.balance - transaction.amount } : account)));
+      }
+      setFinanceVersion((value) => value + 1);
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : tRoot("transactionDeleteFailed"), "error");
+    }
+  }
+
   async function addEventBlockToElement(elementId: string, eventId: string): Promise<ProtocolElement["blocks"][number] | null> {
     try {
       // Alle Blöcke, die das Element pro Termin vorsieht (Vorlagen pro Termin)
@@ -2007,6 +2052,8 @@ export function ProtocolEditor({
     hideEventBlock,
     removeEventBlock,
     addEventBlockToElement,
+    addFinanceTransaction,
+    deleteFinanceTransaction,
     openEventContextMenu,
     handleQuickTodoCreated,
     onPendingUpdate: (updated: Partial<TodoListItem> & { id: string }) => setPendingTodos((prev) => prev.map((t) => t.id === updated.id ? { ...t, ...updated } : t)),
@@ -2107,7 +2154,7 @@ export function ProtocolEditor({
 
       <div className="protocol-document-shell">
         <article
-          className={`protocol-document${accordionEnabled ? " protocol-document-accordion" : ""}${accordionEnabled || wheelEnabled ? " protocol-document-spaced" : ""}${wheelEnabled ? " protocol-document-wheel" : ""}`}
+          className={`protocol-document${accordionEnabled ? " protocol-document-accordion" : ""}${accordionEnabled || wheelEnabled ? " protocol-document-spaced" : ""}${wheelEnabled ? " protocol-document-wheel" : " protocol-document-fade"}`}
           ref={documentRef}
         >
           {visibleElements.length === 0 && (
@@ -2143,8 +2190,12 @@ export function ProtocolEditor({
               availableParticipants={availableParticipants}
               availableEvents={events}
               availableTemplates={availableTemplates}
-              availableAccounts={availableAccounts}
+              availableAccounts={accounts}
               financeTransactions={financeTransactions}
+              financeVersion={financeVersion}
+              canManageFinances={canManageFinances}
+              addFinanceTransaction={elementHandlers.addFinanceTransaction}
+              deleteFinanceTransaction={elementHandlers.deleteFinanceTransaction}
               protocolFines={protocolFines}
               setProtocolFines={setProtocolFines}
               pendingFines={pendingFines}

@@ -28,7 +28,8 @@ export function useProtocolPeriod(protocolId: string, enabled: boolean): Protoco
 }
 
 /** Kontostände bis und mit Stichtag (Kontostand-Blöcke «Stand am Protokolldatum»), pro Konto. */
-export function useBalancesAsOf(accountIds: string[], asOf: string | null): Record<string, number> {
+/** `version` erhöhen, um nach einer Änderung (z. B. Transaktion im Protokoll) neu zu laden. */
+export function useBalancesAsOf(accountIds: string[], asOf: string | null, version = 0): Record<string, number> {
   const [balances, setBalances] = useState<Record<string, number>>({});
   const key = [...new Set(accountIds)].sort().join(",");
   useEffect(() => {
@@ -40,7 +41,7 @@ export function useBalancesAsOf(accountIds: string[], asOf: string | null): Reco
         .catch(() => undefined);
     }
     return () => { cancelled = true; };
-  }, [key, asOf]);
+  }, [key, asOf, version]);
   return balances;
 }
 
