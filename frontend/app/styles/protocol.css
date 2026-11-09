@@ -497,7 +497,9 @@
   margin-bottom: 0;
 }
 
-.protocol-document-accordion .protocol-doc-section-inactive > .element-block-stack {
+/* Zugeklappt bleibt nur die Überschrift: neben den Blöcken stehen auch Anliegen und die im
+   Protokoll erfassten Pendenzen direkt im Abschnitt (focused-element-editor.tsx). */
+.protocol-document-accordion .protocol-doc-section-inactive > :not(.editor-panel-header) {
   display: none;
 }
 

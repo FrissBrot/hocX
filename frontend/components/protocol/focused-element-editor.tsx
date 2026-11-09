@@ -81,6 +81,7 @@ import {
   createMatrixEmbeddedBlock,
   createProtocolEventDraft,
   embeddedBlockSummary,
+  eventRowTintStyle,
   formatFinanceAmount,
   formatShortDate,
   readMatrixEmbeddedBlock,
@@ -150,9 +151,9 @@ function FocusedElementEditorImpl({
   acceptTrackedListEntry,
   acceptTrackedRow,
   acceptTextTrackedChanges,
-  createEventFromBlock,
-  updateEventFromBlock,
-  deleteEventFromBlock,
+  createEventFromBlock: createEventFromBlockProp,
+  updateEventFromBlock: updateEventFromBlockProp,
+  deleteEventFromBlock: deleteEventFromBlockProp,
   onEventContextMenu,
   uploadImage,
   deleteImage,
@@ -333,6 +334,8 @@ function FocusedElementEditorImpl({
   const [creatingEventBlockNew, setCreatingEventBlockNew] = useState(false);
   const focusedTemplate = availableTemplates.find((t) => t.id === protocol.template_id) ?? null;
   const [cycleEventPools, setCycleEventPools] = useState<Record<string, EventSummary[]>>({});
+  const [cyclePoolVersion, setCyclePoolVersion] = useState(0);
+  const reloadCycleEventPools = () => setCyclePoolVersion((version) => version + 1);
   // Finanz-/Bussenblöcke: Vorprotokoll-Datum, Zyklusgrenzen und Saldo zum Protokolldatum.
   const blockCodes = element.blocks.map((entry) => entry.element_type_code);
   const protocolPeriod = useProtocolPeriod(protocol.id, blockCodes.includes("finance_transactions") || blockCodes.includes("fine_list"));
@@ -728,9 +731,60 @@ function FocusedElementEditorImpl({
     return configId ? `${configId}:${filter.cycle.offset}:${protocol.protocol_date ?? ""}` : null;
   }
 
+  // Zyklus-Pools sind ein einmal geladener Stand. Änderungen an Terminen (auch von anderen
+  // Bearbeitenden über availableEvents) müssen dort ankommen, sonst springt z. B. die TN-Zahl
+  // einer Matrix-Karte nach der Eingabe auf den geladenen Wert zurück (Bug 2026-11-09).
+  const availableEventsById = useMemo(() => new Map(availableEvents.map((event) => [event.id, event])), [availableEvents]);
+
+  function patchCycleEventPools(eventId: string, change: (event: EventSummary) => EventSummary | null) {
+    setCycleEventPools((current) => {
+      let changed = false;
+      const next: Record<string, EventSummary[]> = {};
+      for (const [key, pool] of Object.entries(current)) {
+        if (!pool.some((event) => event.id === eventId)) {
+          next[key] = pool;
+          continue;
+        }
+        changed = true;
+        next[key] = pool.flatMap((event) => {
+          if (event.id !== eventId) return [event];
+          const updated = change(event);
+          return updated ? [updated] : [];
+        });
+      }
+      return changed ? next : current;
+    });
+  }
+
+  function updateEventFromBlock(protocolElementBlockId: string, eventId: string, patch: Partial<EventSummary>): Promise<boolean> { // i18n-ok: TS-Generic-Signatur, kein UI-Text
+    patchCycleEventPools(eventId, (event) => ({ ...event, ...patch }));
+    return updateEventFromBlockProp(protocolElementBlockId, eventId, patch).then((saved) => {
+      // Fehlgeschlagen: der Editor setzt seinen Stand zurück, die Pools werden neu geladen
+      if (!saved) reloadCycleEventPools();
+      return saved;
+    });
+  }
+
+  async function deleteEventFromBlock(protocolElementBlockId: string, eventId: string): Promise<void> {
+    // Ob das Löschen geklappt hat, meldet der Editor nicht - neu laden statt raten
+    await deleteEventFromBlockProp(protocolElementBlockId, eventId);
+    reloadCycleEventPools();
+  }
+
+  async function createEventFromBlock(
+    protocolElementBlockId: string,
+    blockConfig: Record<string, any>, // i18n-ok: TS-Generic-Signatur, kein UI-Text
+    draftOverride?: ProtocolEventDraft
+  ): Promise<EventSummary | null> {
+    const created = await createEventFromBlockProp(protocolElementBlockId, blockConfig, draftOverride);
+    // Zu welchem Zyklus der neue Termin gehört, entscheidet das Backend
+    if (created) reloadCycleEventPools();
+    return created;
+  }
+
   function filteredEvents(filter: EventFilter, column?: Record<string, any> | null): EventSummary[] {
     const key = cyclePoolKey(filter);
-    const pool = key ? cycleEventPools[key] ?? [] : availableEvents;
+    const pool = key ? (cycleEventPools[key] ?? []).map((event) => availableEventsById.get(event.id) ?? event) : availableEvents;
     return applyEventFilter(pool, filter, { protocolDate: protocol.protocol_date, column, cycleAlreadyApplied: true });
   }
 
@@ -1000,6 +1054,58 @@ function FocusedElementEditorImpl({
 
   function saveMatrixColumns(blockId: string, blockConfig: Record<string, any>, nextColumns: Array<Record<string, any>>) {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
     void saveBlockConfiguration(blockId, { ...blockConfig, columns: nextColumns });
+    writeMatrixChangesToList(blockId, blockConfig, nextColumns);
+  }
+
+  // Wert einer Listenspalte aus einer Matrixzelle; die Form (Person, Personen, Termin, Text)
+  // folgt dem bisherigen Wert des Eintrags, sonst dem Inhalt der Zelle.
+  function listValueFromMatrixCell(current: Record<string, unknown>, cell: Record<string, unknown>): Record<string, unknown> {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
+    const ids = Array.isArray(cell.participant_ids) ? (cell.participant_ids as string[]) : cell.participant_id ? [String(cell.participant_id)] : [];
+    if (Array.isArray(current.participant_ids)) return { ...current, participant_ids: ids };
+    if ("participant_id" in current) return { ...current, participant_id: ids[0] ?? null };
+    if ("event_id" in current) return { ...current, event_id: cell.event_id ?? null };
+    if (Array.isArray(cell.participant_ids)) return { participant_ids: ids };
+    if (cell.participant_id) return { participant_id: String(cell.participant_id) };
+    if (cell.event_id) return { event_id: cell.event_id };
+    return { ...current, text_value: String(cell.text_value ?? "") };
+  }
+
+  // Karten aus einer Liste: Änderungen in Zeilen, die aus der Liste stammen (Spalte 1/2 des
+  // Eintrags), in die Liste zurückschreiben - dort gespeichert, in anderen Protokollen und der
+  // Listenverwaltung sichtbar. Verglichen wird mit dem Stand der Liste, nicht mit dem vorherigen
+  // Blockstand: Texteingaben stehen beim Speichern (onBlur) schon lokal im Block.
+  function writeMatrixChangesToList(blockId: string, blockConfig: Record<string, any>, nextColumns: Array<Record<string, any>>) {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
+    const { source, listId } = matrixAutoSourceInfo(blockConfig);
+    if (source !== "list" || !listId) return;
+    const publicListId = listDefinitionsById.get(listId)?.id ?? listId;
+    const entriesKey = listEntriesByDefinition[publicListId] ? publicListId : listId;
+    const entries = new Map(matrixListPool(blockConfig).map((entry) => [`gen-l-${entry.id}`, entry]));
+    const rows = matrixRows(blockConfig);
+    // Leere Werte ("", null, []) und Leerraum zählen nicht als Änderung
+    const meaningful = (value: unknown) => JSON.stringify(Object.entries(asObject(value))
+      .map(([key, item]) => [key, typeof item === "string" ? item.trim() : item] as const)
+      .filter(([, item]) => !(item == null || item === "" || (Array.isArray(item) && item.length === 0)))
+      .sort(([left], [right]) => left.localeCompare(right)));
+    const same = (left: unknown, right: unknown) => meaningful(left) === meaningful(right);
+    for (const column of nextColumns) {
+      const entry = entries.get(matrixColumnKey(blockId, column));
+      if (!entry) continue;
+      const fromList = buildMatrixColumnForListEntry(rows, entry).row_values;
+      const cells = asObject(column.row_values ?? column.values);
+      const payload: Record<string, Record<string, unknown>> = {};
+      rows.forEach((row, index) => {
+        const field = matrixSourceFieldForRow("list", row);
+        if (field !== "column_one" && field !== "column_two") return;
+        const rowId = String(row.id ?? row.sort_index ?? index);
+        const cell = asObject(cells[rowId]);
+        if (same(cell, fromList[rowId])) return;
+        const key = `${field}_value` as "column_one_value" | "column_two_value";
+        const current = asObject(entry[key]);
+        const next = listValueFromMatrixCell(current, cell);
+        if (!same(next, current)) payload[key] = next;
+      });
+      if (Object.keys(payload).length) void updateListEntryFromBlock(blockId, entriesKey, entry.id, payload);
+    }
   }
 
   function updateMatrixColumn(
@@ -1444,17 +1550,23 @@ function FocusedElementEditorImpl({
     }
   }
   const cycleRequestKeys = [...cycleRequests.keys()].sort().join("|");
+  // Neu laden (nach Anlegen/Löschen): alle Pools erneut holen, der alte Stand bleibt bis dahin sichtbar
+  const loadedCyclePoolVersion = useRef(new Map<string, number>());
   useEffect(() => {
     let cancelled = false;
     for (const [key, request] of cycleRequests) {
-      if (cycleEventPools[key]) continue;
+      if (cycleEventPools[key] && loadedCyclePoolVersion.current.get(key) === cyclePoolVersion) continue;
+      loadedCyclePoolVersion.current.set(key, cyclePoolVersion);
       fetchCycleEvents(protocol.id, { cycleConfigId: request.configId, cycleOffset: request.offset, limit: 500 })
         .then((result) => { if (!cancelled) setCycleEventPools((current) => ({ ...current, [key]: result.items })); })
-        .catch((error) => { if (!cancelled) showToast(error instanceof Error ? error.message : String(error), "error"); });
+        .catch((error) => {
+          loadedCyclePoolVersion.current.delete(key);
+          if (!cancelled) showToast(error instanceof Error ? error.message : String(error), "error");
+        });
     }
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cycleRequestKeys, protocol.id]);
+  }, [cycleRequestKeys, protocol.id, cyclePoolVersion]);
 
   // Nur bei Änderungen an den Pendenzen dieses Punkts (todosByBlock gilt für alle Punkte).
   const ownTodoListsRef = useRef<Array<ProtocolTodo[] | undefined>>([]);
@@ -2986,6 +3098,7 @@ function FocusedElementEditorImpl({
                               <tr
                                 key={eventRow.id}
                                 className={`${isPast && blockConfig.event_gray_past !== false ? "event-row-past" : ""}${showCancelledStyle ? " event-row-cancelled" : ""}`}
+                                style={eventRowTintStyle(eventRow.tag, tagConfig, blockConfig.event_show_tag_colors === true)}
                                 data-upcoming={rowIndex === firstUpcomingIndex ? "true" : undefined}
                                 onContextMenu={(nativeEvent) => onEventContextMenu(nativeEvent, eventRow, block.id)}
                               >
@@ -3040,7 +3153,7 @@ function FocusedElementEditorImpl({
                                         onTagColorChange={updateTagColor}
                                         onTagRename={renameTag}
                                       />
-                                    ) : blockConfig.event_show_tag_colors && eventRow.tag && tagConfig[eventRow.tag]?.color ? (
+                                    ) : eventRow.tag && tagConfig[eventRow.tag]?.color ? ( // Tags immer in ihrer Farbe
                                       <span
                                         className="tag-color-badge"
                                         style={{
@@ -3791,6 +3904,7 @@ function FocusedElementEditorImpl({
         onPendingUpdate={onPendingUpdate}
         onPendingDone={onPendingDone}
         onAcceptTrackedChange={acceptTodoTrackedChange}
+        onResizeTask={autoResizeTodoField}
       />
     </section>
     {isPlanningMode && (() => {

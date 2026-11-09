@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { scrollDuration, sectionScrollTarget, wheelStyle } from "./document-scroll";
+import { passiveSnapTarget, scrollDuration, sectionScrollTarget, wheelStyle } from "./document-scroll";
 
 describe("sectionScrollTarget", () => {
   const base = { viewport: 800, scrollHeight: 5000, first: false };
@@ -14,6 +14,21 @@ describe("sectionScrollTarget", () => {
   it("bleibt im Scrollbereich", () => {
     expect(sectionScrollTarget({ ...base, top: 100, height: 100 })).toBe(0);
     expect(sectionScrollTarget({ ...base, top: 4900, height: 100 })).toBe(4200);
+  });
+});
+
+describe("passiveSnapTarget", () => {
+  const base = { viewport: 800, scrollTop: 1000 };
+
+  it("setzt lange Punkte nach unten mit dem Anfang oben, nach oben mit dem Ende unten an", () => {
+    expect(passiveSnapTarget({ ...base, top: 1200, height: 1500, up: false })).toBe(1184);
+    expect(passiveSnapTarget({ ...base, top: 1200, height: 1500, up: true })).toBe(1916);
+  });
+
+  it("verschiebt kurze Punkte nur so weit, dass sie ganz im Bild stehen", () => {
+    expect(passiveSnapTarget({ ...base, top: 1200, height: 300, up: false })).toBe(1000);
+    expect(passiveSnapTarget({ ...base, top: 950, height: 300, up: true })).toBe(934);
+    expect(passiveSnapTarget({ ...base, top: 1600, height: 300, up: true })).toBe(1116);
   });
 });
 

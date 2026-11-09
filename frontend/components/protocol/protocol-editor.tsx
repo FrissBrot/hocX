@@ -73,9 +73,9 @@ import {
   measureSections,
   type SectionLayout,
   offsetTopWithin,
+  passiveSnapTarget,
   prefersReducedMotion,
   revealSection,
-  SCROLL_INSET,
   sectionScrollTarget,
   SPY_HYSTERESIS,
   WHEEL_HOLD_MS,
@@ -498,7 +498,7 @@ export function ProtocolEditor({
   // Oberkante, nach oben scrollend die Unterkante. Dadurch springt beim passiven Wechsel nichts.
   const passiveSnapRef = useRef<{ id: string; top: number; bottom: number; up: boolean } | null>(null);
   // Bis hierhin wird Mausrad nach unten abgefangen (Rest-Schwung nach dem Betreten eines Punkts)
-  const holdWheelUntilRef = useRef(0);
+  const holdWheelRef = useRef({ until: 0, up: false });
   const cancelScrollAnimationRef = useRef<(() => void) | null>(null);
   // True while a programmatic smooth scroll (search, nav click, Ctrl+Enter) is in flight.
   // The scroll-spy must stay passive during that time - otherwise it selects every section
@@ -896,23 +896,23 @@ export function ProtocolEditor({
     scrollDocumentTo(container, Math.max(0, Math.min(anchored, max)), "instant");
     revealSection(section, snap.up);
 
-    if (!snap.up) {
-      const tall = height >= viewport - SCROLL_INSET * 2;
-      const want = tall ? top - SCROLL_INSET : Math.min(container.scrollTop, top - SCROLL_INSET);
-      const target = Math.max(0, Math.min(want, max));
-      holdWheelUntilRef.current = performance.now() + WHEEL_HOLD_MS;
-      if (Math.abs(target - container.scrollTop) > 1 && !prefersReducedMotion()) {
-        scrollDocumentTo(container, target, "smooth", { duration: 300, cancelOnWheel: false });
-      }
+    // Nach unten beginnt ein Punkt oben (Anfang am oberen Rand), nach oben unten (Ende am
+    // unteren Rand). Ein kurzer Punkt wird nur so weit verschoben, dass er ganz im Bild steht.
+    const target = Math.max(0, Math.min(passiveSnapTarget({ top, height, viewport, scrollTop: container.scrollTop, up: snap.up }), max));
+    holdWheelRef.current = { until: performance.now() + WHEEL_HOLD_MS, up: snap.up };
+    if (Math.abs(target - container.scrollTop) > 1) {
+      scrollDocumentTo(container, target, prefersReducedMotion() ? "instant" : "smooth", { duration: 300, cancelOnWheel: false });
     }
   }, [accordionEnabled, selectedElementId, scrollDocumentTo]);
 
-  // Rest-Schwung abfangen (siehe oben): nur Mausrad nach unten, nur kurz nach dem Betreten.
+  // Rest-Schwung abfangen (siehe oben): nur in der Richtung, in der der Punkt betreten wurde,
+  // nur kurz danach.
   useEffect(() => {
     const container = documentRef.current;
     if (!container) return;
     function onWheel(event: WheelEvent) {
-      if (event.deltaY > 0 && performance.now() < holdWheelUntilRef.current) event.preventDefault(); // i18n-ok: Vergleich, kein UI-Text
+      const hold = holdWheelRef.current;
+      if (performance.now() < hold.until && (hold.up ? event.deltaY < 0 : event.deltaY > 0)) event.preventDefault(); // i18n-ok: Vergleich, kein UI-Text
     }
     container.addEventListener("wheel", onWheel, { passive: false });
     return () => container.removeEventListener("wheel", onWheel);
@@ -968,9 +968,11 @@ export function ProtocolEditor({
       const heights = sections.map((item) => item.height);
 
       // Steht der erste Punkt noch ganz im Bild (Anfang des Dokuments, z. B. nach dem Öffnen),
-      // ist er aktiv, auch wenn die Mittellinie schon auf einen kurzen Folgepunkt fällt.
-      const atDocumentStart = tops[0] >= scrollTop;
+      // ist er aktiv, auch wenn die Mittellinie schon auf einen kurzen Folgepunkt fällt. Nur
+      // solange noch kein späterer Punkt aktiv ist: von unten kommend wären sonst alle
+      // zugeklappten Punkte über dem aktiven auf einen Schlag übersprungen.
       const currentIndex = selectedElementIdRef.current ? ids.indexOf(selectedElementIdRef.current) : -1;
+      const atDocumentStart = tops[0] >= scrollTop && currentIndex <= 0; // i18n-ok: Vergleich, kein UI-Text
       let bestIndex = atDocumentStart ? 0 : -1;
       if (!atDocumentStart) {
         // Hysterese: der aktive Punkt bleibt, bis die Mittellinie 32px über seine Kante hinaus
@@ -996,6 +998,15 @@ export function ProtocolEditor({
         }
       }
       if (bestIndex < 0) return;
+      // Akkordeon: zugeklappte Punkte sind so kurz, dass ein Mausrad-Schritt die Mittellinie
+      // über einen hinwegschiebt - dann käme der übernächste dran. Liegt der Nachbar höchstens
+      // eine Bildschirmhöhe ausserhalb (weiter schiebt kein Mausrad-Schritt), ist er der nächste
+      // Punkt; weite Sprünge (Scrollbalken ziehen) bleiben möglich.
+      if (accordionEnabled && currentIndex >= 0 && Math.abs(bestIndex - currentIndex) > 1) {
+        const neighbour = currentIndex + Math.sign(bestIndex - currentIndex);
+        const viewport = root.clientHeight;
+        if (tops[neighbour] < scrollTop + 2 * viewport && tops[neighbour] + heights[neighbour] > scrollTop - viewport) bestIndex = neighbour;
+      }
       const bestId = ids[bestIndex];
       if (selectedElementIdRef.current === bestId) return;
       // Am Dokumentanfang nicht verankern: der erste Punkt bleibt oben stehen
@@ -2416,8 +2427,9 @@ export function ProtocolEditor({
         />
       )}
 
-      {/* Floating session panel — only during active session */}
-      {protocolStatus === "vorbereitet" && !forceReadOnly && (
+      {/* Schnellmenü (Notizen, Pendenzen, Anliegen, Zusammenarbeit): in allen bearbeitbaren
+          Modi - Vorbereiten, Sitzung und Überarbeiten -, nicht im abgeschlossenen Protokoll */}
+      {!isReadOnly && (
         <SessionPanel
           ref={sessionPanelRef}
           protocol={protocol}
@@ -2429,7 +2441,7 @@ export function ProtocolEditor({
         />
       )}
 
-      {protocolStatus === "vorbereitet" && !forceReadOnly && (
+      {!isReadOnly && (
         <>
           <QuickActionsPill {...quickActionHandlers} />
           <CollaborationStatusPanel

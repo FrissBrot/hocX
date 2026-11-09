@@ -9,6 +9,7 @@ import { useToast } from "@/contexts/toast-context";
 import { formatDate, formatDateRange } from "@/lib/utils/format";
 import { EventSummary, ParticipantSummary, ProtocolSummary, ProtocolTodo, TodoListItem } from "@/types/api";
 import { TODO_STATUS, TodoMenuOption, TodoMenuSearchList, TodoMiniMenu, TrackedTaskText, formatShortDate } from "@/components/protocol/protocol-editor-shared";
+import { TodoTaskInput } from "@/components/protocol/todo-task-input";
 
 type DueDraft =
   | { type: "none" }
@@ -30,6 +31,7 @@ export function SessionTodosSection({
   onPendingUpdate,
   onPendingDone,
   onAcceptTrackedChange,
+  onResizeTask,
 }: {
   sectionTag: string;
   todos: ProtocolTodo[];
@@ -44,6 +46,8 @@ export function SessionTodosSection({
   onPendingUpdate: (updated: Partial<TodoListItem> & { id: string }) => void;
   onPendingDone: (todoId: string) => void;
   onAcceptTrackedChange?: (blockId: string, todoId: string) => void;
+  /** Höhe des Textfelds nachführen, wo der Browser kein field-sizing kann */
+  onResizeTask?: (target: HTMLTextAreaElement) => void;
 }) {
   const t = useTranslations("protocols.todos");
   const tTodos = useTranslations("todos");
@@ -135,6 +139,8 @@ export function SessionTodosSection({
           const isClosedElsewhere = !!todo.closed_in_protocol_id;
           const isPendingDelete = trackChangesActive && !!todo.pending_delete;
           const isLocked = isClosedElsewhere || isPendingDelete;
+          const isTrackedAdded = trackChangesActive && todo.tracked_change === "added";
+          const trackedBeforeTask = trackChangesActive && todo.tracked_change === "changed" ? todo.tracked_change_before_json?.task : undefined;
           return (
             <article className={`todo-card todo-card-compact${isDone ? " todo-card-done" : ""}${isLocked ? " todo-card-locked" : ""}${isPendingDelete ? " todo-tracked-pending-delete" : ""}`} key={todo.id}>
               <button
@@ -151,16 +157,31 @@ export function SessionTodosSection({
                 {isDone || isLocked ? "✓" : "○"}
               </button>
               <div className="todo-main todo-main-compact">
-                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
-                  <span className="todo-task-text">
-                    <TrackedTaskText
-                      todo={todo}
-                      trackChangesActive={trackChangesActive}
-                      onAccept={onAcceptTrackedChange ? () => onAcceptTrackedChange(todo.protocol_element_block_id, todo.id) : undefined}
+                {!isReadOnly && !isLocked ? (
+                  // Im Protokoll erstellte Pendenzen: Text direkt hier bearbeiten (wie in Pendenzen-
+                  // Blöcken). Im Nachverfolgungsmodus steht der alte Text durchgestrichen darüber.
+                  <>
+                    {trackedBeforeTask && <div className="tracked-strike tracked-before-caption">{trackedBeforeTask}</div>}
+                    <TodoTaskInput
+                      className={`todo-input${isTrackedAdded || trackedBeforeTask ? " tracked-underline" : ""}`}
+                      value={todo.task}
+                      readOnly={false}
+                      onResize={(target) => onResizeTask?.(target)}
+                      onSave={(task) => void onUpdate(todo.protocol_element_block_id, todo.id, { task })}
                     />
-                  </span>
-                  {isLocked && !isPendingDelete && <span className="todo-closed-elsewhere-badge">{t("closedLaterBadge")}</span>}
-                </div>
+                  </>
+                ) : (
+                  <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+                    <span className="todo-task-text">
+                      <TrackedTaskText
+                        todo={todo}
+                        trackChangesActive={trackChangesActive}
+                        onAccept={onAcceptTrackedChange ? () => onAcceptTrackedChange(todo.protocol_element_block_id, todo.id) : undefined}
+                      />
+                    </span>
+                    {isLocked && !isPendingDelete && <span className="todo-closed-elsewhere-badge">{t("closedLaterBadge")}</span>}
+                  </div>
+                )}
                 {!isReadOnly && !isLocked && (
                   <div className="todo-inline-meta">
                     <TodoAssigneeMenu

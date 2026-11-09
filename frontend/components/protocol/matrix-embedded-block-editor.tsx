@@ -29,6 +29,7 @@ import {
   createEmbeddedFormRow,
   createInlineProtocolEventDraft,
   embeddedFormValueOptions,
+  eventRowTintStyle,
   formatShortDate,
   nextEmbeddedItemId,
 } from "@/components/protocol/protocol-editor-shared";
@@ -87,9 +88,9 @@ export function MatrixEmbeddedBlockEditor({
   const [embeddedEventDrafts, setEmbeddedEventDrafts] = useState<Record<string, Partial<EventSummary>>>({});
   const embeddedEventAutosaveTimers = useRef<Record<string, number>>({});
   const embeddedEventFilter = blockEventFilter(embeddedConfig);
-  // Tag-Farben wie in der Terminliste (event_show_tag_colors), Farbe zur Laufzeit aus der Tag-Verwaltung.
+  // Tags immer in ihrer Farbe wie in der Terminliste, Farbe zur Laufzeit aus der Tag-Verwaltung.
   const renderEmbeddedTag = (tag: string | null | undefined) => {
-    const color = tag && embeddedConfig.event_show_tag_colors === true ? tagConfig[tag]?.color : null;
+    const color = tag ? tagConfig[tag]?.color : null;
     if (!tag) return "—";
     if (!color) return tag;
     return (
@@ -705,6 +706,7 @@ export function MatrixEmbeddedBlockEditor({
                         <tr
                           key={eventRow.id}
                           className={`${isPast && embeddedConfig.event_gray_past !== false ? "event-row-past" : ""}${showCancelledStyle ? " event-row-cancelled" : ""}`}
+                          style={eventRowTintStyle(eventRow.tag, tagConfig, embeddedConfig.event_show_tag_colors === true)}
                         >
                           {embeddedEventColumns.showDate ? <td>{formatDateRange(eventRow.event_date, eventRow.event_end_date)}</td> : null}
                           {embeddedEventColumns.showTag ? <td>{renderEmbeddedTag(eventRow.tag)}</td> : null}
@@ -900,6 +902,7 @@ export function MatrixEmbeddedBlockEditor({
                     <tr
                       key={eventRow.id}
                       className={`${isPast && embeddedConfig.event_gray_past !== false ? "event-row-past" : ""}${showCancelledStyle ? " event-row-cancelled" : ""}`}
+                      style={eventRowTintStyle(eventRow.tag, tagConfig, embeddedConfig.event_show_tag_colors === true)}
                       onContextMenu={(nativeEvent) => onEventContextMenu(nativeEvent, eventRow)}
                     >
                       {embeddedEventColumns.showDate ? (

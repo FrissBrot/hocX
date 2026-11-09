@@ -669,3 +669,15 @@ export function TodoMenuSearchList<T>({
     </>
   );
 }
+
+/** Terminliste mit «Zeilen in Tag-Farbe» (event_show_tag_colors): Zeile hell in der Farbe des
+ * ersten farbigen Tags hinterlegen, wie im PDF (documents/providers/events.py). */
+export function eventRowTintStyle(
+  tag: string | null | undefined,
+  tagConfig: Record<string, { color?: string } | undefined>,
+  enabled: boolean
+): { backgroundColor: string } | undefined {
+  if (!enabled || !tag) return undefined;
+  const color = tag.split(",").map((item) => tagConfig[item.trim()]?.color).find(Boolean);
+  return color ? { backgroundColor: `color-mix(in srgb, ${color} 14%, transparent)` } : undefined;
+}

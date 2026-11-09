@@ -35,7 +35,19 @@ export function sectionScrollTarget(
   return Math.max(0, Math.min(want, scrollHeight - viewport));
 }
 
-export type WheelStyle = { transform: string; transformOrigin: string; opacity: string; filter: string };
+/** scrollTop nach dem passiven Wechsel im Akkordeon: nach unten steht der Anfang eines langen
+ * Punkts oben, nach oben sein Ende unten. Ein kurzer Punkt wird nur so weit verschoben, dass er
+ * ganz im Bild steht. Ohne Begrenzung auf den Scrollbereich. */
+export function passiveSnapTarget(
+  { top, height, viewport, scrollTop, up }: { top: number; height: number; viewport: number; scrollTop: number; up: boolean }
+): number {
+  const showStart = top - SCROLL_INSET;
+  const showEnd = top + height + SCROLL_INSET - viewport;
+  if (height >= viewport - SCROLL_INSET * 2) return up ? showEnd : showStart;
+  return Math.min(Math.max(scrollTop, showEnd), showStart);
+}
+
+export type WheelStyle ={ transform: string; transformOrigin: string; opacity: string; filter: string };
 
 const NO_WHEEL: WheelStyle = { transform: "", transformOrigin: "", opacity: "", filter: "" };
 
