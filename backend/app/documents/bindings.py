@@ -151,6 +151,7 @@ _DEFINITIONS: list[BindingDef] = [
     ),
     BindingDef("todos.open_count", "number", "todos", sample=3),
     BindingDef("todos.done_count", "number", "todos", sample=17),
+    BindingDef("todos.overdue_count", "number", "todos", sample=2),
     # Termine
     BindingDef(
         "events.upcoming", "list", "events", item_fields=_EVENT_FIELDS,
@@ -449,6 +450,8 @@ def _load_todos(resolver: BindingResolver) -> dict[str, Any]:
         "open": [_todo_item(resolver.strings, row) for row in open_rows],
         "open_count": len(open_rows),
         "done_count": sum(1 for row in rows if todo_provider.status_code(row) == "done"),
+        # Offen und Fälligkeit vor heute (wie der Filter «Überfällig» im Export-Dialog)
+        "overdue_count": sum(1 for row in rows if todo_provider.is_overdue(row, ctx.today)),
     }
 
 

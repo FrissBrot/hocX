@@ -389,17 +389,21 @@
   "kpi": {
     "attendanceRate": "Anwesenheitsquote",
     "balance": "Kontostand",
+    "done": "Erledigt",
     "doneTodos": "Erledigte Todos",
     "events": "Termine",
     "finesTotal": "Bussen total",
     "members": "Mitglieder",
+    "open": "Offen",
     "openTodos": "Offene Todos",
+    "overdue": "Überfällig",
     "sessions": "Sitzungen"
   },
   "label": {
     "agenda": "Traktanden",
     "agendaOther": "Weitere Anliegen",
     "asOf": "Stand {date}",
+    "asOfPrefix": "Stand",
     "attendanceCounts": "{present} anwesend · {late} verspätet · {excused} entschuldigt · {absent} unentschuldigt",
     "byMonth": "Nach Monat",
     "cancelled": "abgesagt",

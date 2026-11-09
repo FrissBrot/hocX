@@ -38,6 +38,17 @@ Postgres-Parameter und die Komprimierung durch Traefik (siehe «Beim Update beac
   Punkt.
 - **Pendenzen exportieren mit Auswahl:** im Export-Dialog «Fällig bis», «Nur mit Tag» und jede
   Pendenz einzeln an- oder abwählen (gilt für PDF, CSV, Excel und Text).
+- **Neuer Export-Dialog.** Links Auswahl und Aussehen, rechts eine Live-Vorschau im gewählten
+  Format: PDF-Seiten, Tabelle für CSV und Excel, die Nachricht für WhatsApp. Unten Spalten, Format
+  und ein einziger Knopf zum Erstellen. Bei Pendenzen zusätzlich filterbar nach Status (auch «In
+  Arbeit»), **Überfällig**, nächster Sitzung, Monatsende oder Datum (wahlweise mit Pendenzen ohne
+  Fälligkeit), Tag, zuständiger Person und Protokoll; jeder Filter zeigt die Anzahl.
+- **Gestaltungsbeispiele für alle Dokumenttypen.** Die Designs Kreide, Signal, Fokus, Siegel
+  und Atlas gibt es neben dem Protokoll jetzt auch für Einladung, Traktandenliste, Anwesenheit,
+  Präsenzliste, Mitgliederliste, Pendenzen, Terminplan, Kalender, Finanzbericht, Buchungen,
+  Bussen, Statistik, Liste, Formular und freies Dokument (75 Vorlagen im Katalog). Übernehmen wie
+  bei den Protokoll-Beispielen, auf Wunsch mit dem CD des Designs, danach frei bearbeiten. Die
+  Pendenzenliste zeigt dabei auch die Anzahl überfälliger Pendenzen.
 - **Matrix-Karten aus einer Liste aktualisieren.** Ändert sich die Liste hinter einer Matrix,
   zeigt der Block einen Hinweis mit «Daten aktualisieren»: neue Einträge werden zu Karten,
   Umbenennungen und Werte werden übernommen, Karten gelöschter Einträge entfallen. Karten mit

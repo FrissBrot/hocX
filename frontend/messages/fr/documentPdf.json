@@ -118,7 +118,8 @@
     "participantCount": "Participant·e·s",
     "byMonth": "Par mois",
     "openFines": "Amendes ouvertes",
-    "agenda": "Ordre du jour"
+    "agenda": "Ordre du jour",
+    "asOfPrefix": "État au"
   },
   "month": {
     "1": "janvier",
@@ -166,7 +167,10 @@
     "events": "Rendez-vous",
     "members": "Membres",
     "finesTotal": "Total des amendes",
-    "balance": "Solde"
+    "balance": "Solde",
+    "open": "Ouvertes",
+    "overdue": "En retard",
+    "done": "Terminées"
   },
   "docType": {
     "protocol": "Procès-verbal",

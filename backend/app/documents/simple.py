@@ -84,8 +84,9 @@ SIMPLE_BLOCKS: list[dict[str, Any]] = [
     {"key": "table", "match": {"type": "table"}, "settings": []},
     {"key": "qr_code", "match": {"type": "qr_code"}, "settings": []},
     {"key": "page_number", "match": {"type": "page_number"}, "settings": []},
-    # Abschnitte und Kästen: nur die fertige Bedingung, Inhalt im Modus «Erweitert»
-    {"key": "group", "match": {"type": ["section", "container", "stack", "row", "column", "grid"]}, "settings": [{"key": "condition", "kind": "condition"}]},
+    # Abschnitte, Kästen und frei positionierte Ebenen (Farbband im Kopf der Dokumenttyp-Designs):
+    # nur die fertige Bedingung, Inhalt im Modus «Erweitert»
+    {"key": "group", "match": {"type": ["section", "container", "stack", "row", "column", "grid", "absolute_layer"]}, "settings": [{"key": "condition", "kind": "condition"}]},
 ]
 
 # «+ Baustein hinzufügen»: häufige Bausteine (Schlüssel der Bibliothek, components.LIBRARY)

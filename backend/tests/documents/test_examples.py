@@ -16,6 +16,7 @@ from sqlalchemy import select
 from app.api.routes import document_studio as studio
 from app.documents import brand_service, service
 from app.documents.compiler import validate_template
+from app.documents.doc_types import DOCUMENT_TYPES
 from app.documents.appearance import APPEARANCE_BASES, APPEARANCE_VARIANTS, DESIGN_KEYS
 from app.documents.examples import ASSET_DIR, EXAMPLES, build_example_content, example_tokens, thumbnail_path
 from app.documents.layout import all_node_lists, iter_nodes
@@ -83,13 +84,13 @@ def test_example_brand_images_and_thumbnail_are_bundled(example):
 def test_example_is_a_design_with_every_element_kind(example):
     """Jedes Beispiel ist ein Design: Grundstil mit eigener Darstellung für jede Elementart,
     Seitenaufbau aus dem Design."""
-    base = APPEARANCE_BASES[example.key]
-    assert example.key in DESIGN_KEYS and not base.get("legacy")
+    base = APPEARANCE_BASES[example.appearance]
+    assert example.appearance in DESIGN_KEYS and not base.get("legacy")
     assert set(base["elements"]) == set(APPEARANCE_VARIANTS) - {"heading", "table"}
     for kind, variant in base["elements"].items():
         assert variant in APPEARANCE_VARIANTS[kind], (example.key, kind)
     tokens = example_tokens(example)
-    assert tokens.appearance.base == example.key and not tokens.appearance.elements
+    assert tokens.appearance.base == example.appearance and not tokens.appearance.elements
     assert tokens.layout.heading_style == base["layout"]["heading_style"] and tokens.layout.radius == base["layout"]["radius"]
 
 
@@ -210,8 +211,25 @@ def test_every_example_compiles_with_its_brand_and_images(db, world):
     assert block.id
     for example in EXAMPLES:
         imported = _import(db, world["admin"], key=example.key, name=example.key)
-        request = DocumentRequest(document_type="protocol", template_id=imported.id, revision_id=imported.draft_revision.id, protocol_id=protocol.public_id, data_mode="sample")
+        needs_protocol = DOCUMENT_TYPES[example.document_type].needs_protocol
+        request = DocumentRequest(document_type=example.document_type, template_id=imported.id, revision_id=imported.draft_revision.id, protocol_id=protocol.public_id if needs_protocol else None, data_mode="sample")
         prepared = service.prepare(db, world["admin"], tenant_id, request, preview=True)
         assert [item for item in prepared.compiled.diagnostics if item.severity == "error"] == [], example.key
         assert prepared.compiled.data["brand"]["colors"]["primary"] == example.tokens["colors"]["primary"], example.key
         assert len([name for name in prepared.compiled.files if name.endswith(".png")]) >= len(example.images), example.key
+
+
+def test_every_design_has_an_example_for_each_document_type():
+    """Kreide, Signal, Fokus, Siegel und Atlas gibt es für alle Dokumenttypen (Projekt
+    «Dokumenttypen»); jedes Beispiel bringt das CD seines Protokoll-Designs mit."""
+    from app.documents import example_types
+
+    by_key = {item.key: item for item in EXAMPLES}
+    assert len(EXAMPLES) == len(set(by_key))
+    for design in example_types.DESIGNS:
+        protocol = by_key[design]
+        for doc_type in set(DOCUMENT_TYPES) - {"protocol"}:
+            example = by_key[f"{design}-{doc_type}"]
+            assert example.document_type == doc_type and example.appearance == design
+            assert example.tokens == protocol.tokens and example.images == protocol.images
+

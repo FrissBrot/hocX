@@ -118,7 +118,8 @@
     "participantCount": "Partecipanti",
     "byMonth": "Per mese",
     "openFines": "Multe aperte",
-    "agenda": "Ordine del giorno"
+    "agenda": "Ordine del giorno",
+    "asOfPrefix": "Stato al"
   },
   "month": {
     "1": "gennaio",
@@ -166,7 +167,10 @@
     "events": "Appuntamenti",
     "members": "Membri",
     "finesTotal": "Totale multe",
-    "balance": "Saldo"
+    "balance": "Saldo",
+    "open": "Aperte",
+    "overdue": "Scadute",
+    "done": "Completate"
   },
   "docType": {
     "protocol": "Verbale",

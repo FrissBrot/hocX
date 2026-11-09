@@ -118,7 +118,8 @@
     "participantCount": "Participants",
     "byMonth": "By month",
     "openFines": "Open fines",
-    "agenda": "Agenda"
+    "agenda": "Agenda",
+    "asOfPrefix": "As of"
   },
   "month": {
     "1": "January",
@@ -166,7 +167,10 @@
     "events": "Events",
     "members": "Members",
     "finesTotal": "Fines total",
-    "balance": "Balance"
+    "balance": "Balance",
+    "open": "Open",
+    "overdue": "Overdue",
+    "done": "Done"
   },
   "docType": {
     "protocol": "Protocol",

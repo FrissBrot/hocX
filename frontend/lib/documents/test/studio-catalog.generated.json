@@ -937,7 +937,7 @@
    },
    {
     "access": "reader",
-    "group": "protocol",
+    "group": "todos",
     "item_fields": [
      {
       "key": "task",
@@ -966,7 +966,7 @@
    },
    {
     "access": "reader",
-    "group": "protocol",
+    "group": "todos",
     "item_fields": [],
     "needs_protocol": true,
     "path": "protocol.new_todos_count",
@@ -1015,6 +1015,14 @@
     "item_fields": [],
     "needs_protocol": false,
     "path": "todos.done_count",
+    "type": "number"
+   },
+   {
+    "access": "reader",
+    "group": "todos",
+    "item_fields": [],
+    "needs_protocol": false,
+    "path": "todos.overdue_count",
     "type": "number"
    },
    {
@@ -1933,6 +1941,16 @@
        "default": null,
        "title": "Due Until"
       },
+      "exclude_ids": {
+       "items": {
+        "format": "uuid",
+        "type": "string"
+       },
+       "maxItems": 2000,
+       "title": "Exclude Ids",
+       "type": "array",
+       "x-widget": "hidden"
+      },
       "group_by": {
        "default": "none",
        "enum": [
@@ -1943,6 +1961,16 @@
        ],
        "title": "Group By",
        "type": "string"
+      },
+      "include_undated": {
+       "default": true,
+       "title": "Include Undated",
+       "type": "boolean"
+      },
+      "overdue_only": {
+       "default": false,
+       "title": "Overdue Only",
+       "type": "boolean"
       },
       "participant_id": {
        "anyOf": [
@@ -1977,6 +2005,7 @@
        "enum": [
         "all",
         "open",
+        "in_progress",
         "done"
        ],
        "title": "Status",
@@ -5027,7 +5056,8 @@
        "stack",
        "row",
        "column",
-       "grid"
+       "grid",
+       "absolute_layer"
       ]
      },
      "settings": [

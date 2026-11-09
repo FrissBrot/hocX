@@ -389,17 +389,21 @@
   "kpi": {
     "attendanceRate": "Attendance rate",
     "balance": "Balance",
+    "done": "Done",
     "doneTodos": "Completed to-dos",
     "events": "Events",
     "finesTotal": "Fines total",
     "members": "Members",
+    "open": "Open",
     "openTodos": "Open to-dos",
+    "overdue": "Overdue",
     "sessions": "Meetings"
   },
   "label": {
     "agenda": "Agenda",
     "agendaOther": "Further topics",
     "asOf": "As of {date}",
+    "asOfPrefix": "As of",
     "attendanceCounts": "{present} present · {late} late · {excused} excused · {absent} absent",
     "byMonth": "By month",
     "cancelled": "cancelled",

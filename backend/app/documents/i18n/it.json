@@ -389,17 +389,21 @@
   "kpi": {
     "attendanceRate": "Tasso di presenza",
     "balance": "Saldo",
+    "done": "Completate",
     "doneTodos": "Compiti completati",
     "events": "Appuntamenti",
     "finesTotal": "Totale multe",
     "members": "Membri",
+    "open": "Aperte",
     "openTodos": "Compiti aperti",
+    "overdue": "Scadute",
     "sessions": "Sedute"
   },
   "label": {
     "agenda": "Ordine del giorno",
     "agendaOther": "Altri argomenti",
     "asOf": "Situazione al {date}",
+    "asOfPrefix": "Stato al",
     "attendanceCounts": "{present} presenti · {late} in ritardo · {excused} giustificati · {absent} assenti",
     "byMonth": "Per mese",
     "cancelled": "annullato",

@@ -25,6 +25,11 @@ export type CatalogItem = {
   adopted: boolean;
 };
 
+/** Design eines Katalog-Beispiels: «signal» für «signal» und «signal-todos». */
+export function designOfExample(exampleKey: string): string {
+  return exampleKey.split("-")[0];
+}
+
 /** Eigene und übernommene Vorlagen des Vereins (ohne den Katalog selbst). */
 export function ownTemplates(templates: DocumentTemplateInfo[]): DocumentTemplateInfo[] {
   return templates.filter((item) => item.origin !== "system");
@@ -38,8 +43,9 @@ export function catalogItems(t: TFunc, templates: DocumentTemplateInfo[], design
     key: `design:${design.key}`,
     kind: "design",
     documentType: design.document_type,
-    name: t("catalog.designName", { type: t(`docType.${design.document_type}`), design: t(`examples.items.${design.key}.name`) }),
-    description: t(`examples.items.${design.key}.description`),
+    name: t("catalog.designName", { type: t(`docType.${design.document_type}`), design: t(`examples.items.${design.design}.name`) }),
+    // Protokoll-Designs beschreiben ihre Titelseite, die übrigen Dokumenttypen den Stil des Designs
+    description: design.key === design.design ? t(`examples.items.${design.key}.description`) : t(`examples.styles.${design.design}`),
     thumbnail: studioApi.exampleThumbnailUrl(design.key),
     template: null,
     adopted: active.some((item) => item.catalog_key === design.key),
@@ -61,7 +67,7 @@ export function catalogItems(t: TFunc, templates: DocumentTemplateInfo[], design
 
 /** Herkunft einer eigenen Vorlage: «Eigene» oder «Aus Katalog · Alpin». */
 export function originLabel(t: TFunc, template: DocumentTemplateInfo): { label: string; fromCatalog: boolean } {
-  if (template.catalog_key) return { label: t("catalog.fromCatalog", { name: t(`examples.items.${template.catalog_key}.name`) }), fromCatalog: true };
+  if (template.catalog_key) return { label: t("catalog.fromCatalog", { name: t(`examples.items.${designOfExample(template.catalog_key)}.name`) }), fromCatalog: true };
   if (template.origin === "copy" && template.source_system_key) return { label: t("catalog.fromCatalog", { name: t(`system.${template.source_system_key}.name`) }), fromCatalog: true };
   return { label: t("origin.tenant"), fromCatalog: false };
 }

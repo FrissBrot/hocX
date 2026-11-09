@@ -47,7 +47,10 @@ describe("TemplateLibrary", () => {
     api.studioApi.exampleThumbnailUrl.mockReturnValue("/example.png");
     api.studioApi.catalog.mockResolvedValue(studio.catalog);
     api.studioApi.brands.mockResolvedValue(brands);
-    api.studioApi.listExamples.mockResolvedValue([{ key: "fokus", document_type: "protocol" }]);
+    api.studioApi.listExamples.mockResolvedValue([
+      { key: "fokus", document_type: "protocol", design: "fokus" },
+      { key: "fokus-todos", document_type: "todos", design: "fokus" },
+    ]);
     api.studioApi.listTemplates.mockResolvedValue([
       template("sys-todos", { name: "todos_standard", origin: "system", system_key: "todos_standard", editable: false, is_default: true }),
       template("sys-protocol", { name: "protocol_standard", document_type: "protocol", category: "protocols", origin: "system", system_key: "protocol_standard", editable: false, is_default: true }),
@@ -110,6 +113,18 @@ describe("TemplateLibrary", () => {
     expect(api.studioApi.updateTemplate).not.toHaveBeenCalled();
   });
 
+  it("offers the designs for the other document types and names them after their design", async () => {
+    api.studioApi.importExample.mockResolvedValue({ id: "new-todos" });
+    render(<TemplateLibrary capabilities={capabilities} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Neue Vorlage" }));
+    const dialog = await screen.findByRole("dialog", { name: "Neue Vorlage" });
+    fireEvent.click(within(within(dialog).getByRole("navigation", { name: "Dokumenttyp" })).getByRole("button", { name: /Pendenzenliste/ }));
+    fireEvent.click(within(dialog).getByRole("radio", { name: /Pendenzenliste Fokus/ }));
+    expect(within(dialog).getByRole("textbox", { name: "Name" })).toHaveValue("Pendenzenliste Fokus");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Erstellen und gestalten" }));
+    await waitFor(() => expect(api.studioApi.importExample).toHaveBeenCalledWith("fokus-todos", "Pendenzenliste Fokus", true));
+  });
+
   it("creates a template from a catalogue design with an existing brand instead", async () => {
     api.studioApi.importExample.mockResolvedValue({ id: "new-template" });
     api.studioApi.updateTemplate.mockResolvedValue({});
@@ -140,7 +155,7 @@ describe("TemplateLibrary", () => {
     render(<TemplateLibrary capabilities={capabilities} />);
     fireEvent.click(await screen.findByRole("button", { name: "Neue Vorlage" }));
     const dialog = await screen.findByRole("dialog", { name: "Neue Vorlage" });
-    await act(async () => resolveDesigns([{ key: "fokus", document_type: "protocol" }]));
+    await act(async () => resolveDesigns([{ key: "fokus", document_type: "protocol", design: "fokus" }]));
     expect(await within(dialog).findByRole("radio", { name: /Protokoll Fokus/ })).toHaveAttribute("aria-checked", "true");
     expect(within(dialog).getByRole("radio", { name: /^Aus dem Katalog/ })).toHaveAttribute("aria-checked", "true");
     expect(within(dialog).getByRole("textbox", { name: "Name" })).toHaveValue("Protokoll Fokus");

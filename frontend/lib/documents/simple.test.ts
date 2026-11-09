@@ -13,7 +13,9 @@ describe("simple mode helpers", () => {
     expect(matchSimpleBlock(catalog, { id: "x", type: "text" })?.key).toBe("text");
     expect(matchSimpleBlock(catalog, { id: "d", type: "data_block", component: "fines" })?.key).toBe("data");
     expect(matchSimpleBlock(catalog, { id: "s", type: "section", children: [] })?.key).toBe("group");
-    expect(matchSimpleBlock(catalog, { id: "a", type: "absolute_layer" })).toBeNull();
+    // Farbband im Kopf der Dokumenttyp-Designs: als Gruppe (nur Bedingung, Inhalt im Modus «Erweitert»)
+    expect(matchSimpleBlock(catalog, { id: "a", type: "absolute_layer" })?.key).toBe("group");
+    expect(matchSimpleBlock(catalog, { id: "w", type: "watermark" })).toBeNull();
   });
 
   it("reads and writes settings by path without mutating the node", () => {

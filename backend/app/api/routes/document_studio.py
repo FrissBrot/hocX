@@ -818,12 +818,14 @@ async def get_document_template_thumbnail(template_id: uuid.UUID, db: Session = 
 class ExampleRead(BaseModel):
     key: str
     document_type: str
+    # Design (Grundstil), zu dem das Beispiel gehört: «signal» auch für «signal-todos»
+    design: str
 
 
 @router.get("/document-studio/examples", response_model=list[ExampleRead])
 def list_design_examples(user: CurrentUser = Depends(get_current_user)):
     permissions.require_view(user)
-    return [ExampleRead(key=item.key, document_type=item.document_type) for item in sorted(examples.EXAMPLES, key=lambda item: item.sort_index)]
+    return [ExampleRead(key=item.key, document_type=item.document_type, design=item.appearance) for item in sorted(examples.EXAMPLES, key=lambda item: item.sort_index)]
 
 
 @router.get("/document-studio/examples/{example_key}/thumbnail")

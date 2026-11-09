@@ -171,8 +171,9 @@ def _footer_image(prefix: str, *, color: str = "$brand.muted", size: float | Non
     )
 
 
-def _agenda_rows(prefix: str, *, number_color: str, size: float = 10, number_prefix: str = "", responsible_italic: bool = False, line_color: str = "$brand.border", number_box: str | None = None) -> dict[str, Any]:
-    """Traktandenliste der Titelseite: eine Zeile je Protokollelement (Nummer, Titel, Verantwortlich)."""
+def _agenda_rows(prefix: str, *, number_color: str, size: float = 10, number_prefix: str = "", responsible_italic: bool = False, line_color: str = "$brand.border", number_box: str | None = None, source: str = "protocol.elements") -> dict[str, Any]:
+    """Traktandenliste der Titelseite: eine Zeile je Protokollelement (Nummer, Titel, Verantwortlich).
+    ``source``: protocol.invitation_elements für Einladung und Traktandenliste."""
     number_style: dict[str, Any] = {"size": size * 0.85, "weight": "bold", "color": number_color}
     number_node: dict[str, Any]
     if number_box:
@@ -188,7 +189,7 @@ def _agenda_rows(prefix: str, *, number_color: str, size: float = 10, number_pre
     return node(
         "container",
         f"{prefix}-agenda-row",
-        repeat={"source": "protocol.elements", "limit": 40},
+        repeat={"source": source, "limit": 40},
         style={"padding": _pad(1.8, 0), "border": {"width": 0.5, "color": line_color, "sides": ["bottom"]}},
         children=[
             node(
@@ -489,6 +490,13 @@ class DesignExample:
     # Beispielbilder (example_assets/) für Brand-Asset-Felder, z. B. {"logo": "club-logo.png"}
     images: dict[str, str] = field(default_factory=dict)
     sort_index: int = 0
+    # Design (Grundstil in APPEARANCE_BASES), leer = key. Die Beispiele der übrigen Dokumenttypen
+    # (example_types.py, Schlüssel «<design>-<typ>») gehören zum Design ihres Protokolls.
+    design: str = ""
+
+    @property
+    def appearance(self) -> str:
+        return self.design or self.key
 
 
 EXAMPLES: tuple[DesignExample, ...] = (
@@ -560,6 +568,13 @@ EXAMPLES: tuple[DesignExample, ...] = (
     ),
 )
 
+# Übrige Dokumenttypen in denselben Designs (Claude-Design-Projekt «Dokumenttypen»). Der Import
+# steht hier, weil example_types die Helfer oben verwendet.
+from app.documents import example_types  # noqa: E402
+
+PROTOCOL_EXAMPLES = EXAMPLES
+EXAMPLES = PROTOCOL_EXAMPLES + example_types.document_type_examples(PROTOCOL_EXAMPLES)
+
 EXAMPLE_KEYS: tuple[str, ...] = tuple(item.key for item in EXAMPLES)
 
 
@@ -575,7 +590,7 @@ def example_tokens(example: DesignExample, images: dict[str, str] | None = None)
     """CD des Beispiels; ``images`` setzt die Asset-IDs der importierten Beispielbilder. Der
     Seitenaufbau (Überschriften, Tabellen, Ecken …) kommt aus dem Design (APPEARANCE_BASES),
     ``tokens["layout"]`` enthält nur Abweichungen davon."""
-    layout = {**APPEARANCE_BASES[example.key]["layout"], **example.tokens.get("layout", {})}
+    layout = {**APPEARANCE_BASES[example.appearance]["layout"], **example.tokens.get("layout", {})}
     raw = {**example.tokens, "layout": layout, "assets": dict(images or {})}
     return BrandTokens.model_validate(raw)
 
@@ -591,7 +606,7 @@ def example_content(example: DesignExample) -> TemplateContent:
     bleibt beim Umstellen erhalten."""
     built = build_example_content(example)
     overrides = built.settings.brand_overrides
-    overrides.appearance_base = example.key
+    overrides.appearance_base = example.appearance
     base_size = example.tokens.get("typography", {}).get("base_size")
     if base_size is not None and overrides.base_size is None:
         overrides.base_size = base_size

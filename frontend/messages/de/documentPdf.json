@@ -118,7 +118,8 @@
     "participantCount": "Teilnehmende",
     "byMonth": "Nach Monat",
     "openFines": "Offene Bussen",
-    "agenda": "Traktanden"
+    "agenda": "Traktanden",
+    "asOfPrefix": "Stand"
   },
   "month": {
     "1": "Januar",
@@ -166,7 +167,10 @@
     "events": "Termine",
     "members": "Mitglieder",
     "finesTotal": "Bussen total",
-    "balance": "Kontostand"
+    "balance": "Kontostand",
+    "open": "Offen",
+    "overdue": "Überfällig",
+    "done": "Erledigt"
   },
   "docType": {
     "protocol": "Protokoll",
