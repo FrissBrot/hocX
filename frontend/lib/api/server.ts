@@ -66,8 +66,17 @@ export const requireSession = cache(async function requireSession(): Promise<Ses
     }
     redirect("/login");
   }
-  return session;
+  return withoutBridgeRedirect(session);
 });
+
+// Der Abruf oben geht über INTERNAL_API_URL (http://backend:8000): das Backend sieht den Host
+// "backend" statt der Domain des Browsers und hielt deshalb jede Seite für die falsche Domain -
+// die App-Shell schickte nach jedem Seitenaufruf auf die Bridge-Bestätigung (Test-Host 2026-11-09).
+// Den Host durchreichen geht nicht (Nodes fetch verwirft einen eigenen Host-Header). Die Bridge
+// prüft deshalb nur der Abruf aus dem Browser (AppShell, einmal je Seitenaufruf).
+export function withoutBridgeRedirect(session: SessionInfo): SessionInfo {
+  return session.bridge_redirect_url ? { ...session, bridge_redirect_url: null } : session;
+}
 
 // Shared by the /tenant-settings/* pages (Allgemein, Domains, Abo & Nutzung each get their own
 // route): resolves which tenant to show from an optional `?tenantId=` override, falling back to

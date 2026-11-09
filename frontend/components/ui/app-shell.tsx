@@ -37,6 +37,11 @@ const ProfileModal = dynamic(() => import("@/components/ui/profile-modal").then(
 // Modulweit, weil AppShell bei jedem Seitenwechsel neu gemountet wird.
 const SESSION_STALE_MS = 60_000;
 let lastSessionCheckAt = 0;
+// Ob in diesem Dokument schon einmal aus dem Browser geprüft wurde. Nur dieser Abruf sieht die
+// echte Domain und kann zur Domain des Mandanten weiterleiten (Bridge); die Sitzung vom Server
+// kommt ohne bridge_redirect_url (withoutBridgeRedirect in lib/api/server.ts). Ein voller
+// Seitenaufruf setzt das Modul zurück, Seitenwechsel in der App nicht.
+let browserSessionChecked = false;
 
 // Login rendert nie auf einer Mandanten-Custom-Domain — von dort muss eine volle Navigation
 // (nicht SPA-Routing) zur Hauptdomain erfolgen, sonst gäbe es dort keine Login-Seite zu zeigen.
@@ -172,6 +177,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
 
     async function loadSession() {
       lastSessionCheckAt = Date.now();
+      browserSessionChecked = true;
       try {
         const current = await browserApiFetch<SessionInfo>("/api/auth/session");
         if (!cancelled) {
@@ -195,10 +201,14 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
       }
     }
 
-    // Mount: die mitgelieferte Sitzung kommt frisch vom Server und ersetzt den Abruf.
+    // Mount: die mitgelieferte Sitzung kommt frisch vom Server und wird sofort angewendet. Beim
+    // ersten Mount des Dokuments zusätzlich im Hintergrund aus dem Browser prüfen (Bridge).
     if (initialSession?.authenticated) {
       lastSessionCheckAt = Date.now();
       applySession(initialSession);
+      if (!browserSessionChecked) {
+        void loadSession();
+      }
     } else {
       void loadSession();
     }
