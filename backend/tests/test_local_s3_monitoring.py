@@ -45,7 +45,15 @@ def _activate_local_s3(db, *, generation: int = 4242) -> None:
     )
 
 
+def _without_local_profile(db) -> None:
+    """Seit 0168_s3_only startet jede Installation auf dem lokalen S3. Für den Fall "Dateien
+    liegen bei einem externen Anbieter, kein lokales Profil" wird das Profil in der
+    (zurückgerollten) Testtransaktion zu einem externen umgewidmet."""
+    db.execute(text("UPDATE storage_profile SET provider = 's3_compatible' WHERE provider = 'garage_local'"))
+
+
 def test_no_local_s3_check_without_a_local_profile(db):
+    _without_local_profile(db)
     assert system_health_service._check_local_s3(db) == []
 
 
@@ -59,6 +67,7 @@ def test_local_s3_check_reports_need_and_usage_of_the_active_local_storage(db):
 
 
 def test_stopped_local_s3_is_fine_when_it_is_not_needed(db):
+    _without_local_profile(db)
     containers = [_container("local-s3", "exited"), _container("backend", "exited")]
     assert containers[0].status == "critical"
 

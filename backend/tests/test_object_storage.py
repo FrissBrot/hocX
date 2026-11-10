@@ -19,7 +19,6 @@ from sqlalchemy.exc import DBAPIError
 from app.core.config import settings
 from app.core.db import SessionLocal, engine
 from app.core.objstore_client import (
-    FilesystemBackend,
     InvalidObjectKey,
     ObjectNotFound,
     ProfileConfig,
@@ -75,50 +74,10 @@ def test_credentials_roundtrip_and_wrong_key_fails_closed():
 # --- Dateisystem-Backend ----------------------------------------------------------------------
 
 
-def _fs(tmp_path: Path) -> FilesystemBackend:
-    return FilesystemBackend(ProfileConfig(profile_id=1, generation=0, provider="filesystem"), {"main": tmp_path / "main", "abgabebox": tmp_path / "box"})
-
-
-def test_filesystem_backend_writes_atomically_and_verifies_integrity(tmp_path):
-    backend = _fs(tmp_path)
-    data = b"hallo welt"
-    info = backend.put_stream("main", "a/b.txt", io.BytesIO(data), size=len(data), sha256=hashlib.sha256(data).hexdigest(), content_type=None)
-    assert info.size == len(data) and (tmp_path / "main" / "a" / "b.txt").read_bytes() == data
-    # Falscher Hash: Ziel bleibt unverändert, keine halbe Datei, keine Temp-Reste.
-    with pytest.raises(StorageIntegrityError):
-        backend.put_stream("main", "a/b.txt", io.BytesIO(b"anders"), size=6, sha256="0" * 64, content_type=None)
-    assert (tmp_path / "main" / "a" / "b.txt").read_bytes() == data
-    assert not list((tmp_path / "main" / "a").glob(".hocx-upload-*"))
-
-
-def test_filesystem_backend_files_get_umask_permissions_not_mkstemp_0600(tmp_path):
-    # Abgabebox (uid 5001) schreibt, Backend (uid 5000, gleiche Gruppe) liest: mkstemp allein
-    # ergab 0600 und PermissionError beim Lesen der Einreichungen.
-    backend = _fs(tmp_path)
-    old_umask = os.umask(0o027)
-    try:
-        backend.put_stream("abgabebox", "t/1.jpg", io.BytesIO(b"jpg"), size=3, sha256=hashlib.sha256(b"jpg").hexdigest(), content_type=None)
-    finally:
-        os.umask(old_umask)
-    assert (tmp_path / "box" / "t" / "1.jpg").stat().st_mode & 0o777 == 0o640
-
-
-def test_filesystem_backend_range_list_and_traversal_guard(tmp_path):
-    backend = _fs(tmp_path)
-    backend.put_stream("main", "x/one.bin", io.BytesIO(b"0123456789"), size=10, sha256=hashlib.sha256(b"0123456789").hexdigest(), content_type=None)
-    assert b"".join(backend.open_read("main", "x/one.bin", start=2, end=4)) == b"234"
-    assert [i.key for i in backend.list("main", "x/")] == ["x/one.bin"]
-    with pytest.raises(ObjectNotFound):
-        list(backend.open_read("main", "x/missing.bin"))
-    with pytest.raises(InvalidObjectKey):
-        backend.head("main", "../outside")
-
-
 # --- Schreibprotokoll -------------------------------------------------------------------------
 
 
-def test_put_and_delete_are_journaled_with_increasing_versions(db, tmp_path, monkeypatch):
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
+def test_put_and_delete_are_journaled_with_increasing_versions(db):
     store = get_object_store()
     key = f"uploads/test/{uuid.uuid4().hex}.txt"
     store.put_bytes(db, MAIN, key, b"v1")
@@ -130,17 +89,17 @@ def test_put_and_delete_are_journaled_with_increasing_versions(db, tmp_path, mon
     registry = db.execute(text("SELECT status, version FROM storage_object WHERE namespace='main' AND key=:k"), {"k": key}).one()
     assert (registry.status, registry.version) == ("deleted", 3)
     # S3-008: physisch entfernt erst der Purge nach dem Commit.
-    assert (tmp_path / key).exists()
+    assert store.active_backend().head(MAIN, key) is not None
     store.purge_deleted(db)
-    assert not (tmp_path / key).exists()
+    assert store.active_backend().head(MAIN, key) is None
 
 
-def test_write_is_rejected_while_storage_is_fenced(db, tmp_path, monkeypatch):
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
+def test_write_is_rejected_while_storage_is_fenced(db):
+    key = f"uploads/fenced-{uuid.uuid4().hex}.txt"
     db.execute(text("UPDATE storage_state SET write_fenced = true, fence_reason = 'test' WHERE id = 1"))
     with pytest.raises(StorageWriteFenced):
-        get_object_store().put_bytes(db, MAIN, "uploads/fenced.txt", b"x")
-    assert not (tmp_path / "uploads" / "fenced.txt").exists()
+        get_object_store().put_bytes(db, MAIN, key, b"x")
+    assert get_object_store().active_backend().head(MAIN, key) is None
 
 
 def test_register_write_rejects_a_stale_generation(db):
@@ -281,11 +240,14 @@ class _Req:
         self.headers = {"range": range_header} if range_header else {}
 
 
-def test_object_response_uses_file_response_for_the_filesystem(db, tmp_path, monkeypatch):
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
-    get_object_store().put_bytes(db, MAIN, "uploads/r.txt", b"abcdef")
-    response = object_response(_Req(), MAIN, "uploads/r.txt", media_type="text/plain")
-    assert response.__class__.__name__ == "FileResponse"
+def test_object_response_streams_byte_ranges(db):
+    """Nur noch S3: Downloads werden gestreamt, eine Byte-Range ergibt 206 (Videos in Safari)."""
+    key = f"uploads/r-{uuid.uuid4().hex}.txt"
+    get_object_store().put_bytes(db, MAIN, key, b"abcdef")
+    response = object_response(_Req("bytes=1-3"), MAIN, key, media_type="text/plain")
+    assert response.__class__.__name__ == "StreamingResponse"
+    assert response.status_code == 206
+    assert response.headers["Content-Range"] == "bytes 1-3/6"
 
 
 def test_app_processes_use_group_umask_for_shared_storage(tmp_path):

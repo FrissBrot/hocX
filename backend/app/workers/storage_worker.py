@@ -72,7 +72,6 @@ from app.models import (
     StorageProfile,
     StorageState,
 )
-from app.models.entities import GalleryUploadJob
 from app.services import maintenance_service, storage_migration_service as sms, storage_profile_service
 from app.services.maintenance_estimator import estimate_storage_migration
 
@@ -88,7 +87,6 @@ CUTOVER_LOCK_TIMEOUT = "20s"
 MAX_CUTOVER_ATTEMPTS = 5
 # Fehlgeschlagene Healthchecks in Folge, ab denen observing in rollback_required wechselt.
 OBSERVE_MAX_FAILURES = 3
-GALLERY_DRAIN_TIMEOUT_SECONDS = 15 * 60
 THROUGHPUT_SAMPLE_SECONDS = 10
 CATCHUP_LAG_READY = 50
 NAMESPACES = ("main", "abgabebox")
@@ -330,32 +328,13 @@ def _sync_maintenance(db: Session, migration: StorageMigration) -> None:
     """Fortschritt und laufende Schätzung in das zugehörige Wartungsfenster übernehmen."""
     if migration.maintenance_window_id is None:
         return
-    scope = "full" if migration.kind == "initial" else "cutover"
     maintenance_service.update_progress(db, migration.maintenance_window_id, progress={
         "phase": migration.state,
         "objects_total": migration.total_objects, "objects_copied": migration.copied_objects,
         "objects_verified": migration.verified_objects, "bytes_total": migration.total_bytes,
         "bytes_copied": migration.copied_bytes,
-    }, estimate=estimate_storage_migration(db, migration, scope=scope))
+    }, estimate=estimate_storage_migration(db, migration, scope="cutover"))
     db.commit()
-
-
-def _invalid_and_counts(source: Backend, migration: StorageMigration) -> dict[str, Any]:
-    """Schnelle Inventur für Preflight/Schätzung (ohne Hashing)."""
-    counts = {"objects": 0, "bytes": 0, "excluded_objects": 0, "excluded_bytes": 0, "invalid_keys": []}
-    for namespace in NAMESPACES:
-        for info in source.list(namespace, ""):
-            if info.size < 0:
-                counts["invalid_keys"].append(f"{namespace}/{info.key}")
-                continue
-            if migration.kind == "initial" and sms.is_excluded_initial_key(namespace, info.key):
-                counts["excluded_objects"] += 1
-                counts["excluded_bytes"] += info.size
-                continue
-            counts["objects"] += 1
-            counts["bytes"] += info.size
-    counts["invalid_keys"] = counts["invalid_keys"][:500]
-    return counts
 
 
 def phase_preflight(db: Session, ctx: Ctx, migration: StorageMigration) -> None:
@@ -370,46 +349,25 @@ def phase_preflight(db: Session, ctx: Ctx, migration: StorageMigration) -> None:
     for namespace in NAMESPACES:
         if next(iter(target.list(namespace, "")), None) is not None:
             raise sms.MigrationError(f"Zielgeneration g{migration.target_generation} ist nicht leer ({namespace})")
-    if migration.kind == "live":
-        # Quelle erreichbar? (Liste reicht als Lebenszeichen)
-        next(iter(source.list("main", "")), None)
-    counts = _invalid_and_counts(source, migration) if migration.kind == "initial" else {
+    # Quelle erreichbar? (Liste reicht als Lebenszeichen)
+    next(iter(source.list("main", "")), None)
+    # Live-Migration: der Bestand steht im Register (storage_object), kein Durchlauf der Quelle nötig.
+    counts = {
         "objects": int(db.scalar(select(func.count()).select_from(StorageObject).where(StorageObject.status == "active")) or 0),
         "bytes": int(db.scalar(select(func.coalesce(func.sum(StorageObject.size_bytes), 0)).where(StorageObject.status == "active")) or 0),
         "invalid_keys": [],
     }
-    if counts["invalid_keys"]:
-        raise sms.MigrationError(f"{len(counts['invalid_keys'])} Dateien haben ungültige Namen - siehe Prüfbericht")
     checkpoint = {**(migration.checkpoint or {}), "preflight_inventory": counts}
     guarded(db, ctx, checkpoint=checkpoint)
     db.commit()
     db.refresh(migration)
-    estimate = {"full": estimate_storage_migration(db, migration, scope="full")}
-    if migration.kind == "live":
-        estimate["cutover"] = estimate_storage_migration(db, migration, scope="cutover")
+    estimate = {
+        "full": estimate_storage_migration(db, migration, scope="full"),
+        "cutover": estimate_storage_migration(db, migration, scope="cutover"),
+    }
     guarded(db, ctx, estimate=estimate)
     db.commit()
     move(db, ctx, migration, "awaiting_confirmation", message="Preflight bestanden - wartet auf Startbestätigung")
-
-
-# Ein Galerie-Import, der länger "running" ist, stammt von einem abgebrochenen Prozess (der
-# Ingest-Loop setzt solche Jobs beim nächsten Lauf nach der Wartung wieder auf "queued", siehe
-# FileService.process_pending_gallery_upload_jobs) - auf ihn zu warten wäre sinnlos.
-GALLERY_JOB_STALE_SECONDS = 3 * 60 * 60
-
-
-def _wait_gallery_jobs(db: Session, migration: StorageMigration, ctx: Ctx) -> None:
-    """Laufende Galerie-Importe zu Ende laufen lassen (neue starten in voller Wartung nicht)."""
-    deadline = time.monotonic() + GALLERY_DRAIN_TIMEOUT_SECONDS
-    while db.scalar(select(func.count()).select_from(GalleryUploadJob).where(
-        GalleryUploadJob.status == "running",
-        GalleryUploadJob.started_at > datetime.now(UTC) - timedelta(seconds=GALLERY_JOB_STALE_SECONDS),
-    )):
-        ctx.check()
-        if time.monotonic() > deadline:
-            raise sms.MigrationError("Laufende Galerie-Importe wurden nicht rechtzeitig fertig")
-        db.rollback()
-        time.sleep(5)
 
 
 def fence_storage(db: Session, migration: StorageMigration, reason: str) -> int:
@@ -441,40 +399,10 @@ def unfence_storage(db: Session, reason: str) -> None:
 
 
 def fence_reason(migration: StorageMigration) -> str:
-    return f"{'initial_migration' if migration.kind == 'initial' else 'cutover'}:{migration.id}"
-
-
-def phase_prepare_initial(db: Session, ctx: Ctx, migration: StorageMigration) -> None:
-    """Erstmigration: volle Wartung aktivieren, laufende Schreibvorgänge abschliessen, fencen."""
-    if migration.maintenance_window_id is None:
-        window = maintenance_service.create_window(
-            db, kind="full", reason_code="storage_initial_migration", state="preparing",
-            affected_features=["all"], source_job_type="storage_initial_migration", source_job_id=str(migration.id),
-            release_conditions=[{"key": "storage_migration_settled", "params": {"migration_id": str(migration.id)}}, {"key": "storage_not_fenced"}],
-            estimate=(migration.estimate or {}).get("full"),
-        )
-        guarded(db, ctx, maintenance_window_id=window.id)
-        db.commit()
-        db.refresh(migration)
-        event(db, migration, "maintenance_preparing", "Volle Wartung wird vorbereitet")
-    # Alle Prozesse übernehmen die Sperre spätestens nach Ablauf ihres Caches; laufende Anfragen
-    # bekommen zusätzlich Zeit zum Abschliessen.
-    time.sleep(max(2 * settings.maintenance_cache_seconds, 1) + 3)
-    _wait_gallery_jobs(db, migration, ctx)
-    fence_storage(db, migration, fence_reason(migration))
-    window = maintenance_service.lock_window(db, migration.maintenance_window_id)
-    if window.state in ("preparing", "failed"):
-        maintenance_service.transition(db, window, "active", details={"source": "storage_worker"})
-    db.commit()
-    event(db, migration, "fenced", "Schreibzugriffe gesperrt, Wartung aktiv")
+    return f"cutover:{migration.id}"
 
 
 def phase_inventory(db: Session, ctx: Ctx, migration: StorageMigration) -> None:
-    if migration.kind == "initial" and not (migration.checkpoint or {}).get("prepared"):
-        phase_prepare_initial(db, ctx, migration)
-        guarded(db, ctx, checkpoint={**(migration.checkpoint or {}), "prepared": True})
-        db.commit()
-        db.refresh(migration)
     source, target = backends(db, migration)
     # Journal-Position zum Zeitpunkt der Inventur: alles danach holt catching_up nach.
     if migration.snapshot_outbox_seq is None:
@@ -483,12 +411,11 @@ def phase_inventory(db: Session, ctx: Ctx, migration: StorageMigration) -> None:
         db.commit()
         db.refresh(migration)
     done = set((migration.checkpoint or {}).get("inventory_done", []))
-    report = dict((migration.checkpoint or {}).get("inventory_report") or {"excluded_objects": 0, "excluded_bytes": 0, "unregistered": 0, "registered_missing_in_source": 0})
+    report = dict((migration.checkpoint or {}).get("inventory_report") or {"unregistered": 0, "registered_missing_in_source": 0})
     for namespace in NAMESPACES:
         if namespace in done:
             continue
-        # Register vor der Inventur lesen - auch bei der Erstmigration: ein registriertes Objekt,
-        # das in der Quelle fehlt, muss sichtbar werden (sonst bliebe der Cutover später ohne
+        # Register vor der Inventur lesen: ein registriertes Objekt, das in der Quelle fehlt, muss sichtbar werden (sonst bliebe der Cutover später ohne
         # erkennbaren Grund hängen) und lässt sich nur bewusst als fehlend bestätigen.
         registry = {
             row.key: row for row in db.execute(select(StorageObject.key, StorageObject.size_bytes, StorageObject.sha256, StorageObject.version)
@@ -510,22 +437,11 @@ def phase_inventory(db: Session, ctx: Ctx, migration: StorageMigration) -> None:
                 FROM jsonb_to_recordset(CAST(:rows AS jsonb)) AS x(namespace text, key text, size bigint, sha text, version bigint)
                 ON CONFLICT (migration_id, namespace, key) DO NOTHING
             """), {"mid": migration.id, "rows": _json(batch)})
-            if migration.kind == "initial":
-                # Bestand registrieren (Grösse, SHA-256, Generation 0) - Grundlage für Quota,
-                # spätere Migrationen und die Endprüfung.
-                db.execute(text("""
-                    INSERT INTO storage_object (namespace, key, size_bytes, sha256, version, status, generation)
-                    SELECT x.namespace, x.key, x.size, x.sha, 1, 'active', :gen
-                    FROM jsonb_to_recordset(CAST(:rows AS jsonb)) AS x(namespace text, key text, size bigint, sha text, version bigint)
-                    ON CONFLICT (namespace, key) DO UPDATE SET size_bytes = EXCLUDED.size_bytes, sha256 = EXCLUDED.sha256,
-                        status = 'active', updated_at = NOW()
-                    WHERE NOT storage_object.purge_pending
-                """), {"rows": _json(batch), "gen": migration.source_generation})
             guarded(db, ctx, heartbeat_at=datetime.now(UTC))
             db.commit()
             batch.clear()
-            # Abbruch/Pause auch während der (bei der Erstmigration hashenden) Inventur - sonst
-            # griffe ein Notabbruch erst nach einem vollständigen Lesedurchlauf (S3-012).
+            # Abbruch/Pause auch während der Inventur - sonst griffe ein Notabbruch erst nach
+            # einem vollständigen Lesedurchlauf (S3-012).
             _check_interrupts(db, ctx, migration)
 
         for info in source.list(namespace, ""):
@@ -536,30 +452,20 @@ def phase_inventory(db: Session, ctx: Ctx, migration: StorageMigration) -> None:
                 # Backup-Hold, Restore-Staging, Verbindungstests: nie fachliche Objekte, werden
                 # nicht migriert (ein Backup-Hold gehört zur Quellgeneration).
                 continue
-            if migration.kind == "initial" and sms.is_excluded_initial_key(namespace, info.key):
-                report["excluded_objects"] += 1
-                report["excluded_bytes"] += info.size
-                continue
             if info.key in tombstones:
                 continue
             listed.add(info.key)
-            if migration.kind == "initial":
-                sha, size = hash_object(source, namespace, info.key)
-                batch.append({"namespace": namespace, "key": info.key, "size": size, "sha": sha, "version": 1})
-            else:
-                reg = registry.get(info.key)
-                if reg is None:
-                    report["unregistered"] += 1  # wird kopiert und registriert, nie ignoriert
-                batch.append({"namespace": namespace, "key": info.key, "size": reg.size_bytes if reg else info.size,
-                              "sha": reg.sha256 if reg else None, "version": reg.version if reg else None})
+            reg = registry.get(info.key)
+            if reg is None:
+                report["unregistered"] += 1  # wird kopiert und registriert, nie ignoriert
+            batch.append({"namespace": namespace, "key": info.key, "size": reg.size_bytes if reg else info.size,
+                          "sha": reg.sha256 if reg else None, "version": reg.version if reg else None})
             if len(batch) >= BATCH_SIZE:
                 flush()
         flush()
         # Registriert, aber in der Quelle nicht auffindbar: als Objekt aufnehmen, der
         # Kopierversuch meldet es dann als fehlend (vorbestehende Inkonsistenz).
         for key in sorted(set(registry) - listed):
-            if migration.kind == "initial" and sms.is_excluded_initial_key(namespace, key):
-                continue
             report["registered_missing_in_source"] += 1
             reg = registry[key]
             batch.append({"namespace": namespace, "key": key, "size": reg.size_bytes, "sha": reg.sha256, "version": reg.version})
@@ -882,7 +788,7 @@ def _final_reconcile(db: Session, ctx: Ctx, migration: StorageMigration, target:
     }
     for key, reg in expected.items():
         ctx.check()
-        if reg.status != "active" or (migration.kind == "initial" and sms.is_excluded_initial_key(*key)):
+        if reg.status != "active":
             continue
         checks["registry_objects"] += 1
         row = migrated.get(key)
@@ -904,7 +810,7 @@ def _final_reconcile(db: Session, ctx: Ctx, migration: StorageMigration, target:
 
 def phase_cutting_over(db: Session, ctx: Ctx, migration: StorageMigration) -> None:
     reason = fence_reason(migration)
-    if migration.kind == "live" and migration.maintenance_window_id is None:
+    if migration.maintenance_window_id is None:
         window = maintenance_service.create_window(
             db, kind="partial", block_scope="writes", reason_code="storage_cutover", state="preparing",
             affected_features=["writes", "uploads", "abgabebox"], source_job_type="storage_cutover", source_job_id=str(migration.id),
@@ -917,11 +823,10 @@ def phase_cutting_over(db: Session, ctx: Ctx, migration: StorageMigration) -> No
         time.sleep(max(2 * settings.maintenance_cache_seconds, 1))
     try:
         fence_storage(db, migration, reason)
-        if migration.kind == "live":
-            window = maintenance_service.lock_window(db, migration.maintenance_window_id)
-            if window.state == "preparing":
-                maintenance_service.transition(db, window, "active", details={"source": "storage_worker"})
-            db.commit()
+        window = maintenance_service.lock_window(db, migration.maintenance_window_id)
+        if window.state == "preparing":
+            maintenance_service.transition(db, window, "active", details={"source": "storage_worker"})
+        db.commit()
         _, target = backends(db, migration)
         # Journal vollständig nachziehen (bei gesetztem Fence kommt nichts mehr dazu).
         while apply_journal(db, ctx, migration):
@@ -983,11 +888,10 @@ def phase_cutting_over(db: Session, ctx: Ctx, migration: StorageMigration) -> No
         db.rollback()
         db.refresh(migration)
         if migration.cutover_committed_at is None:
-            # Vor dem Commit: Quelle bleibt aktiv, Fence wieder weg (Erstmigration: Wartung bleibt).
-            if migration.kind == "live":
-                unfence_storage(db, reason)
+            # Vor dem Commit: Quelle bleibt aktiv, Fence wieder weg.
+            unfence_storage(db, reason)
             event(db, migration, "cutover_aborted", f"Cutover abgebrochen, Quelle bleibt aktiv: {exc}", level="warning")
-            back = "ready_for_cutover" if migration.kind == "live" else "verifying"
+            back = "ready_for_cutover"
             # Cutover-Abbrüche eigens zählen: attempt wird nach jeder erfolgreichen Phase
             # zurückgesetzt und würde einen immer wieder scheiternden Cutover nie begrenzen
             # (jeder Versuch kostet ein Schreibsperre-Fenster).
@@ -1033,7 +937,7 @@ def _replan_from_registry(db: Session, ctx: Ctx, migration: StorageMigration, mi
 
 
 def _close_cutover_window(db: Session, migration: StorageMigration) -> None:
-    if migration.kind != "live" or migration.maintenance_window_id is None:
+    if migration.maintenance_window_id is None:
         return
     db.refresh(migration)
     try:
@@ -1226,7 +1130,21 @@ def purge_generations() -> int:
         # Eine Generation, auf der noch ein Backup-Hold liegt, liest ein laufendes Backup gerade
         # zu Ende (Cutover während des Backups) - erst nach dem Lösen des Holds bereinigen.
         held = db.scalar(select(StorageState.backup_hold_generation).where(StorageState.id == 1))
-        query = select(StorageGeneration).where(StorageGeneration.status == "purge_requested")
+        # Generationen des alten Dateisystem-Profils lassen sich nicht mehr bereinigen (hocX kennt
+        # nur noch S3, 0168 verlangt sie vor dem Update bereinigt/aufgegeben). Taucht trotzdem eine
+        # auf, wird sie markiert und übersprungen, damit sie S3-Bereinigungen nicht blockiert.
+        fs_message = ("Generation des Dateisystem-Speichers: Bereinigung wird nicht mehr unterstützt "
+                      "(nur noch S3) - Dateien bei Bedarf manuell vom Host entfernen")
+        fs_profiles = select(StorageProfile.id).where(StorageProfile.provider == "filesystem")
+        flagged = db.execute(update(StorageGeneration).where(
+            StorageGeneration.status == "purge_requested", StorageGeneration.profile_id.in_(fs_profiles),
+            StorageGeneration.purge_error.is_distinct_from(fs_message),
+        ).values(purge_error=fs_message))
+        if flagged.rowcount:
+            _logger.warning("%s Dateisystem-Generation(en) zur Bereinigung angefordert - übersprungen", flagged.rowcount)
+        db.commit()
+        query = select(StorageGeneration).where(StorageGeneration.status == "purge_requested",
+                                                StorageGeneration.profile_id.notin_(fs_profiles))
         if held is not None:
             query = query.where(StorageGeneration.generation != held)
         generation = db.scalars(query.order_by(StorageGeneration.id).limit(1).with_for_update(skip_locked=True)).first()
@@ -1237,21 +1155,11 @@ def purge_generations() -> int:
         profile = db.get(StorageProfile, generation.profile_id)
         try:
             backend = get_object_store().make_backend(storage_profile_service.profile_config(profile, generation.generation))
-            if profile.provider == "filesystem":
-                # Nur Dateien, die eine abgeschlossene Erstmigration nachweislich verifiziert hat.
-                keys = db.execute(select(StorageMigrationObject.namespace, StorageMigrationObject.key)
-                                  .join(StorageMigration, StorageMigration.id == StorageMigrationObject.migration_id)
-                                  .where(StorageMigration.source_generation == generation.generation, StorageMigration.state == "completed",
-                                         StorageMigrationObject.status == "verified")).all()
-                for namespace, key in keys:
-                    backend.delete(namespace, key)
+            for namespace in NAMESPACES:
+                for info in list(backend.list(namespace, "")):
+                    backend.delete(namespace, info.key)
                     purged += 1
-            else:
-                for namespace in NAMESPACES:
-                    for info in list(backend.list(namespace, "")):
-                        backend.delete(namespace, info.key)
-                        purged += 1
-                    backend.abort_stale_multipart_uploads(namespace, 0)
+                backend.abort_stale_multipart_uploads(namespace, 0)
             generation.status = "purged"
             generation.purged_at = datetime.now(UTC)
             generation.purge_error = None

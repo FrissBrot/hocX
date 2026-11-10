@@ -367,7 +367,7 @@ def confirmation_phrase(kind: str, backup_set: BackupSet) -> str:
 
 
 def preview(db: Session, request: RestorePreviewRequest) -> RestorePreviewRead:
-    from app.backup.restore_core import schema_compatibility
+    from app.backup.restore_core import BACKUP_PRE_S3_CODE, schema_compatibility
 
     _require_enabled()
     backup_set = _restorable_set(db, request.backup_set_id)
@@ -376,6 +376,9 @@ def preview(db: Session, request: RestorePreviewRequest) -> RestorePreviewRead:
     risks: list[str] = []
     if compat["state"] in ("newer", "unknown"):
         blockers.append("schema_newer")
+    # Sicherung vom Dateisystem-Speicher: mit dieser Version (nur S3) nicht wiederherstellbar.
+    if backup_set.profile_provider == "filesystem":
+        blockers.append(BACKUP_PRE_S3_CODE)
     if db.scalar(select(BackupRestoreJob.id).where(BackupRestoreJob.state.in_(OPEN_RESTORE_STATES)).limit(1)) is not None:
         blockers.append("restore_running")
     if backup_set.state == "partial":
@@ -395,7 +398,8 @@ def preview(db: Session, request: RestorePreviewRequest) -> RestorePreviewRead:
         state = db.get(StorageState, 1)
         profile = (db.scalars(select(StorageProfile).where(StorageProfile.public_id == request.target_profile_id)).first()
                    if request.target_profile_id else db.get(StorageProfile, state.active_profile_id))
-        if profile is None or not profile.is_enabled or profile.provider == "filesystem":
+        # Das alte Dateisystem-Profil ist seit 0168 deaktiviert und fällt hier mit heraus.
+        if profile is None or not profile.is_enabled:
             blockers.append("target_profile_invalid")
         risks += ["full_replaces_data", "maintenance_downtime", "sessions_reset"]
         steps = ["rescue_backup", "restore_database", "restore_objects", "verify", "maintenance", "swap", "smoke_test", "release"]

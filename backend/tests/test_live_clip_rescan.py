@@ -12,24 +12,16 @@ from fastapi import HTTPException
 
 from app import scanner
 from app.api.routes import files as files_routes
-from app.core.config import settings
+from app.core.storage import MAIN, get_object_store
 from app.models.entities import GalleryImage, StoredFile
 from app.services.file_service import FileService
 from tests.factories import make_current_user, make_tenant
 from tests.image_fixtures import jpeg
 
 
-@pytest.fixture(autouse=True)
-def _isolated_storage(monkeypatch, tmp_path):
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
-    monkeypatch.setattr(settings, "upload_root", str(tmp_path / "uploads"))
-
-
 def _stored(db, tenant_id: int, name: str, content: bytes, mime: str, scan_status: str) -> StoredFile:
-    key = f"uploads/test/{name}"
-    path = Path(settings.storage_root) / key
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(content)
+    key = f"uploads/tenant-{tenant_id}/test/{name}"
+    get_object_store().put_bytes(db, MAIN, key, content)
     stored_file = StoredFile(
         tenant_id=tenant_id, original_name=name, mime_type=mime, storage_path=key, scan_status=scan_status,
         file_size_bytes=len(content),

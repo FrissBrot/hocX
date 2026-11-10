@@ -65,10 +65,6 @@ persistente Ort aus der Speichermatrix ([Dateispeicher](../storage/architektur.m
 | Traefik-Konfiguration für Custom-Domains | nein | wird beim Start aus der Datenbank erzeugt |
 | `.env`, `STORAGE_CREDENTIALS_KEY`, Borg-Passphrase/-Schlüssel | nein | gehören in die Notfallmappe ([Betrieb](betrieb.md)) |
 
-Auf dem Dateisystem-Speicher ohne abgeschlossene Erstmigration ist das Register nicht
-vollständig; das Backup bricht dann mit `storage_registry_incomplete` ab, statt still Dateien
-auszulassen (bewusst übersteuerbar mit `BACKUP_TRUST_FILESYSTEM_REGISTRY`).
-
 Einzige fachliche Lücke: ZIP- bzw. Sammel-Uploads, die zum Backup-Zeitpunkt noch in der
 Warteschlange standen (`gallery_upload_job` mit Status `queued`/`running`). Ihre Zeile ist im
 Dump, die zwischengespeicherte Datei nicht. Nach einer Wiederherstellung schlagen diese Aufträge
@@ -125,7 +121,7 @@ daher Inhalte verlieren, auf die der Dump verweist.
 
 Lösung **Backup-Hold mit Copy-on-Write** (anbieterunabhängig, braucht keine S3-Versionierung):
 
-0. Registereinträge ohne SHA-256 (Altbestand aus der Erstmigration) werden vorher einmalig
+0. Registereinträge ohne SHA-256 (Altbestand aus der Erstmigration bis 1.2) werden vorher einmalig
    nachgehasht (`backfill_registry_hashes`, nur solange der Eintrag noch keinen Hash hat).
    Copy-on-Write braucht den Hash als Namen der Kopie; ohne ihn würde ein danach überschriebenes
    Altobjekt mit dem neuen Inhalt gesichert.
@@ -154,10 +150,11 @@ stattfinden: die gehaltene Generation wird nach dem Cutover nicht mehr beschrieb
 der Worker liest sie zu Ende. Das Bereinigen einer Generation (`purge_generations`) überspringt
 Generationen mit aktivem Hold. Folgebackups arbeiten automatisch mit der neuen Generation.
 
-Die Erstmigration vom Dateisystem (Generation 0) füllt das Register erst vollständig. Solange
-Generation 0 aktiv ist und keine abgeschlossene Erstmigration existiert, verweigert der Worker
-das Backup (`storage_registry_incomplete`), ausser `BACKUP_TRUST_FILESYSTEM_REGISTRY=true` ist
-gesetzt (Neuinstallation, bei der jede Datei über das Register geschrieben wurde).
+Gesichert werden immer Objekte aus S3. Sicherungspunkte aus der Zeit, in der die Dateien noch
+im Dateisystem lagen (vor der Erstmigration in 1.2), lehnt die Wiederherstellung ab: die
+Vorschau zeigt den Blocker `backup_pre_s3`, ein trotzdem gestarteter Auftrag endet mit demselben
+Fehlercode. Solche Backups lassen sich nur mit einem 1.2.x-Release wiederherstellen (siehe
+[Upgrade auf S3-only](../storage/migration.md#upgrade-auf-s3-only)).
 
 ## Retention und Garbage Collection
 
@@ -183,7 +180,7 @@ gesetzt (Neuinstallation, bei der jede Datei über das Register geschrieben wurd
 | Weg | Ziel | Kern |
 |---|---|---|
 | Voll-Restore (Admin) | aktuelle Installation | Rettungspunkt → neue DB `hocx_restore_<id>` → neue Storage-Generation im gewählten Profil → Referenzprüfung → Alembic falls nötig → kontrollierter Cutover (Wartung, DB-Rename) → Smoke-Test. Die alte DB bleibt als `hocx_pre_restore_<ts>`, die alte Generation unberührt (Rollback). |
-| Recovery-CLI | neuer Server, keine hocX-DB | Archive direkt aus dem Repository, Dump in leere Ziel-DB, Objekte in ein per CLI angegebenes Profil (S3 oder Dateisystem), Register/Profil/Generation in der wiederhergestellten DB neu setzen, Referenzprüfung |
+| Recovery-CLI | neuer Server, keine hocX-DB | Archive direkt aus dem Repository, Dump in leere Ziel-DB, Objekte in ein per CLI angegebenes S3-Profil, Register/Profil/Generation in der wiederhergestellten DB neu setzen, Referenzprüfung |
 | Mandant als Kopie | aktuelle Installation, **neuer** Mandant | Dump in isolierte Temp-DB, Alembic auf aktuellen Stand, Export-Logik gegen diese DB, Objekte direkt aus Borg in den aktiven Speicher, Import über `RecoveryFileSource` (ohne ZIP-Grenze, aber mit eigener Mengen-/Pfadprüfung) |
 
 Ein Restore aktiviert nie blind ein altes Storage-Profil: Objekte werden immer aus Borg in eine

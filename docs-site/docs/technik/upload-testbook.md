@@ -13,7 +13,7 @@ Metadaten-Backfill. Fachliche Beschreibung: `backend/UPLOAD_DUPLICATES.md`.
 
 Die Testdatenbank muss bis einschließlich `0113_image_capture_metadata` migriert sein (im Release
 1.2.0: `alembic upgrade head`). Seit 1.2.0 lesen alle Downloads aus dem Objektspeicher; die
-automatisierten Tests laufen gegen die Dateisystem-Generation, S3 prüfen STO-M1/STO-M2.
+automatisierten Tests laufen gegen das isolierte Test-S3 (`test-s3`), externe Anbieter prüft STO-M2.
 Die regulären Testskripte bereiten die Testumgebung vor:
 
 ```bash
@@ -162,7 +162,7 @@ Testdatei `backend/tests/test_upload_precheck.py`, sofern nicht anders angegeben
 | EXP-M1 | Bild mit Schätzdatum einzeln, als Mehrfachauswahl und über einen Freigabe-Link herunterladen; in einem Fotoprogramm (z. B. Apple Fotos, Lightroom, `exiftool`) öffnen | Programm sortiert unter dem geschätzten Tag; `exiftool` zeigt `CaptureDateEstimated=True`; Original auf dem Server unverändert (Hash vergleichen) |
 | EXP-M2 | Exportiertes Bild wieder hochladen | Wird als vorhanden bzw. mit geschätztem (nicht echtem) Datum übernommen |
 | BFL-M1 | Auf einer Kopie der Testdaten `python -m scripts.backfill_image_metadata --dry-run`, dann ohne `--dry-run`, dann erneut ausführen | Plausible Auswertung; zweiter Lauf `checked: 0`; Abbruch mit Ctrl+C und Neustart setzt fort |
-| STO-M1 | Nach einer Storage-Migration auf S3 (Testumgebung): Foto mit Schätzdatum einzeln, als Live-Photo-ZIP und als Partner ohne Standort herunterladen | Exportfassung bzw. bereinigte Datei wie auf dem Dateisystem; Videos im Browser spulbar (Range/206) |
+| STO-M1 | Nach einer Live-Migration auf ein anderes S3-Profil (Testumgebung): Foto mit Schätzdatum einzeln, als Live-Photo-ZIP und als Partner ohne Standort herunterladen | Exportfassung bzw. bereinigte Datei wie vor der Migration; Videos im Browser spulbar (Range/206) |
 | STO-M2 | Nach der Migration den Metadaten-Backfill und den Vorab-Abgleich ausführen | Backfill liest aus S3 (`missing_file` nur bei wirklich fehlenden Objekten); vorhandene Bilder werden weiter erkannt |
 | ABX-M1 | Handyfoto mit GPS über die Abgabebox einreichen | Aufnahmedatum und Standort in der Detailansicht; Abgabebox-Antwort unverändert (kein Duplikat- oder Metadatenhinweis) |
 

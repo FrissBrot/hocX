@@ -379,10 +379,6 @@ class Settings(BaseSettings):
         return (self.document_verify_base_url or f"{self.abgabebox_base_url.rstrip('/')}/verify").rstrip("/")
 
     @property
-    def storage_filesystem_roots(self) -> dict[str, Path]:
-        return {"main": Path(self.storage_root), "abgabebox": Path(self.abgabebox_storage_root)}
-
-    @property
     def is_production(self) -> bool:
         # 'prod' ist ein Alias: scripts/deploy.sh schrieb bis zum Audit MAIN-OPS-001 den
         # Host-Namen 'prod' in die .env, solche Hosts muessen weiter als Produktion gelten.

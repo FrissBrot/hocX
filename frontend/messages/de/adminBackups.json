@@ -366,8 +366,9 @@
     "schema_newer": "Das Backup stammt von einer neueren hocX-Version.",
     "restore_running": "Es läuft bereits eine Wiederherstellung.",
     "storage_migration_open": "Es läuft eine Storage-Migration.",
-    "target_profile_invalid": "Das Zielprofil ist ungültig (deaktiviert oder Dateisystem).",
-    "name_missing": "Bitte einen Namen für den neuen Mandanten angeben."
+    "target_profile_invalid": "Das Zielprofil ist ungültig (deaktiviert oder kein S3-Profil).",
+    "name_missing": "Bitte einen Namen für den neuen Mandanten angeben.",
+    "backup_pre_s3": "Das Backup stammt aus der Zeit vor der S3-Migration – mit hocX 1.2.x wiederherstellen."
   },
   "confirm": {
     "cancelJob": "Auftrag wirklich abbrechen? Ein Backup wird sauber beendet, bereits gesicherte Inhalte bleiben erhalten.",
@@ -434,7 +435,6 @@
   },
   "errors": {
     "unknown": "Unbekannter Fehler.",
-    "storage_registry_incomplete": "Erst die Erstmigration des Dateispeichers abschliessen - vorher ist das Objektregister unvollständig.",
     "staging_insufficient": "Zu wenig lokaler Platz für den Datenbank-Dump.",
     "pg_client_too_old": "Der PostgreSQL-Client im Image ist älter als der Server.",
     "pg_dump_failed": "pg_dump ist fehlgeschlagen.",
@@ -477,6 +477,7 @@
     "borg_timeout": "Borg hat das Zeitlimit überschritten.",
     "borg_borg_error": "Borg meldet einen Fehler.",
     "borg_disabled": "Das Backup-System ist nicht eingerichtet.",
-    "borg_configuration": "Die Backup-Konfiguration ist ungültig."
+    "borg_configuration": "Die Backup-Konfiguration ist ungültig.",
+    "backup_pre_s3": "Das Backup stammt aus der Zeit vor der S3-Migration – mit hocX 1.2.x wiederherstellen."
   }
 }

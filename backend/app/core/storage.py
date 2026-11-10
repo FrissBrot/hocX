@@ -1,7 +1,7 @@
 """Backend-Fassade für den Objektspeicher (siehe objstore_client.py und docs-site/docs/technik/storage/architektur.md).
 
 Alle persistenten Dateien des Backends werden ausschliesslich hierüber gelesen, geschrieben,
-kopiert und gelöscht. Lokale Pfade unter STORAGE_ROOT bleiben nur noch für temporäre
+kopiert und gelöscht - seit 0168_s3_only nur noch in S3. Lokale Pfade unter STORAGE_ROOT bleiben nur noch für temporäre
 Arbeitsdateien (Upload-Staging, Export-Arbeitsordner) und regenerierbare Caches (Thumbnails,
 Vorschaubilder der Studio-Vorlagen) in Gebrauch.
 
@@ -22,7 +22,7 @@ from functools import lru_cache
 from pathlib import Path, PurePosixPath
 
 from fastapi import HTTPException, Request
-from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 
 from app.core.config import settings
 from app.core.db import engine
@@ -55,7 +55,6 @@ def get_object_store() -> ObjectStore:
     return ObjectStore(
         service="backend",
         connect=engine.connect,
-        filesystem_roots=lambda: settings.storage_filesystem_roots,
         credentials_key=lambda: settings.storage_credentials_key,
     )
 
@@ -124,24 +123,16 @@ def object_response(
     headers: dict[str, str] | None = None,
     not_found_detail: str = "Datei fehlt im Speicher",
 ) -> Response:
-    """Download eines Objekts mit Range-Unterstützung (Videos in Safari brauchen 206).
-
-    Dateisystem: unverändert FileResponse. S3: gestreamt, ohne das Objekt in den Speicher zu
-    laden; eine einzelne Byte-Range wird an GetObject durchgereicht."""
+    """Download eines Objekts mit Range-Unterstützung (Videos in Safari brauchen 206): gestreamt,
+    ohne das Objekt in den Speicher zu laden; eine einzelne Byte-Range wird an GetObject
+    durchgereicht."""
     store = get_object_store()
     try:
-        local = store.local_path(namespace, key)
+        validate_key(key)
+        info = store.head(namespace, key)
     except InvalidObjectKey as exc:
         raise HTTPException(status_code=400, detail="Invalid file path") from exc
     extra = dict(headers or {})
-    if local is not None:
-        kwargs: dict = {"path": local, "media_type": media_type, "headers": extra}
-        if filename is not None:
-            kwargs["filename"] = filename
-            kwargs["content_disposition_type"] = "attachment" if attachment else "inline"
-        return FileResponse(**kwargs)
-
-    info = store.head(namespace, key)
     if info is None:
         raise HTTPException(status_code=404, detail=not_found_detail)
     extra.update(_content_disposition(filename, attachment))
@@ -203,7 +194,7 @@ def upload_directory(db, namespace: str, prefix: str, source_dir: Path) -> int:
         if not path.is_file():
             continue
         key = f"{prefix}/{path.relative_to(source_dir).as_posix()}"
-        store.put_file_in_place(db, namespace, key, path)
+        store.put_file(db, namespace, key, path)
         count += 1
     return count
 

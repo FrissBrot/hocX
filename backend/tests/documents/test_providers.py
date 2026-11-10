@@ -235,22 +235,22 @@ def test_restricted_reader_sees_only_accessible_todos(db, world):
 
 
 @pytest.mark.parametrize("scan_status", ["pending", "infected", "error"])
-def test_unscanned_images_are_not_embedded(db, world, tmp_path, monkeypatch, scan_status):
+def test_unscanned_images_are_not_embedded(db, world, scan_status):
     """TYPST-008: Bilder ohne Freigabe des Virenscans werden nicht dekodiert/eingebettet."""
     import io
 
     from PIL import Image
 
-    from app.core.config import settings
+    from app.core.storage import MAIN, get_object_store
     from app.models import StoredFile
 
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
     buffer = io.BytesIO()
     Image.new("RGB", (8, 8), (1, 2, 3)).save(buffer, format="PNG")
-    (tmp_path / "bild.png").write_bytes(buffer.getvalue())
+    key = f"uploads/tenant-{world['tenant'].id}/bild.png"
+    get_object_store().put_bytes(db, MAIN, key, buffer.getvalue())
 
     def stored(status):
-        row = StoredFile(tenant_id=world["tenant"].id, original_name="bild.png", mime_type="image/png", storage_path="bild.png", file_size_bytes=len(buffer.getvalue()), scan_status=status)
+        row = StoredFile(tenant_id=world["tenant"].id, original_name="bild.png", mime_type="image/png", storage_path=key, file_size_bytes=len(buffer.getvalue()), scan_status=status)
         db.add(row)
         db.flush()
         return row

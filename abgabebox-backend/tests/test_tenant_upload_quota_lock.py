@@ -1,4 +1,4 @@
-"""Regression tests for H12 (2026-08-12 audit): tenant_storage_bytes() walks the filesystem
+"""Regression tests for H12 (2026-08-12 audit): tenant_storage_bytes() reads the tenant's usage
 with no locking before an upload is written, so two near-simultaneous uploads for the same
 tenant could both observe "under quota" and together exceed it (TOCTOU). The fix wraps the
 check-then-write sequence in routes/public.py's upload() in db.tenant_upload_lock(), a per-tenant
@@ -6,31 +6,34 @@ Postgres advisory lock (chosen over an in-process asyncio.Lock because this serv
 `--workers 2`, i.e. two separate OS processes - see docker-compose.yml and db.py's docstring).
 
 These tests exercise the lock and the exact check-then-write pattern the route uses directly
-against real files under settings.storage_root (no HTTP layer, no captcha/ClamAV/DB fixtures
-needed - tenant_storage_bytes/save_to_quarantine only need a tenant_id and the filesystem), using
-a throwaway synthetic tenant id that nothing else in this suite touches.
+against the object store (test-s3, no HTTP layer, no captcha/ClamAV fixtures needed -
+tenant_storage_bytes/save_to_quarantine only need a tenant_id), using a throwaway synthetic
+tenant id that nothing else in this suite touches.
 """
 from __future__ import annotations
 
-import shutil
 import threading
 import time
-from pathlib import Path
 
-from app.config import settings
 from app.db import SessionLocal, tenant_upload_lock
-from app.storage import save_to_quarantine, tenant_storage_bytes
+from app.storage import NAMESPACE, get_store, save_to_quarantine, tenant_storage_bytes
 
 # Arbitrary, high enough to not collide with any real or other-test tenant id.
 _TENANT_ID = 999001
 
 
 def _reset():
-    for root in (
-        Path(settings.storage_root) / f"tenant-{_TENANT_ID}",
-        Path(settings.storage_root) / "quarantine" / f"tenant-{_TENANT_ID}",
-    ):
-        shutil.rmtree(root, ignore_errors=True)
+    store = get_store()
+    with SessionLocal() as db:
+        for prefix in (f"tenant-{_TENANT_ID}/", f"quarantine/tenant-{_TENANT_ID}/"):
+            for info in list(store.list(NAMESPACE, prefix)):
+                store.delete(db, NAMESPACE, info.key)
+        db.commit()
+
+
+def _usage() -> int:
+    with SessionLocal() as db:
+        return tenant_storage_bytes(db, _TENANT_ID)
 
 
 def _check_then_write(quota_bytes: int, content: bytes, results: dict, key: str) -> None:
@@ -47,7 +50,7 @@ def _check_then_write(quota_bytes: int, content: bytes, results: dict, key: str)
         if current + len(content) > quota_bytes:
             results[key] = "rejected"
             return
-        # Schreibt über den Objektspeicher (Dateisystem-Backend im Test) inkl. Journal.
+        # Schreibt über den Objektspeicher (test-s3) inkl. Journal.
         save_to_quarantine(db, content, tenant_id=_TENANT_ID, assignment_id=1, suffix=".pdf")
         db.commit()
         results[key] = "accepted"
@@ -78,7 +81,7 @@ def test_locked_concurrent_uploads_that_would_together_exceed_quota_are_serializ
 
         accepted = [v for v in results.values() if v == "accepted"]
         assert len(accepted) == 1, f"expected exactly one upload accepted under quota, got: {results}"
-        assert tenant_storage_bytes(None, _TENANT_ID) <= quota_bytes
+        assert _usage() <= quota_bytes
     finally:
         _reset()
 

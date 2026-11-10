@@ -21,7 +21,6 @@ kann kein Fence umgehen.
 
 | Job | Wartung |
 |---|---|
-| Erstmigration des Speichers | voll, Freigabe nach bestandener Endprüfung |
 | Live-Kopie | keine |
 | Cutover einer Live-Migration | `partial/writes`, nur für die Unterbrechung |
 | gewöhnliche Hintergrundjobs | keine (pausieren aber während voller Wartung) |

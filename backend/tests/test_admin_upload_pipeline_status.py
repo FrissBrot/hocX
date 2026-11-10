@@ -164,20 +164,23 @@ def test_overview_scan_status_filter_surfaces_infected_files(db):
     assert only_infected.files.items[0].scan_status == "infected"
 
 
-def test_overview_abgabebox_quarantine_reads_live_filesystem_not_db(db, monkeypatch, tmp_path):
+def test_overview_abgabebox_quarantine_reads_live_filesystem_not_db(db):
     """A file the abgabebox scanner hasn't finished with yet has no StoredFile row at all
     (see abgabebox-backend's upload() route: quarantine write happens before the scan, the
-    StoredFile insert only after) - it can only ever show up via the filesystem snapshot,
+    StoredFile insert only after) - it can only ever show up via the live object listing,
     never via `files`."""
-    from app.core.config import settings
+    from app.core.storage import ABGABEBOX, get_object_store
 
     tenant = make_tenant(db)
-    monkeypatch.setattr(settings, "abgabebox_storage_root", str(tmp_path))
-    quarantine_dir = tmp_path / "quarantine" / f"tenant-{tenant.id}" / "assignment-42"
-    quarantine_dir.mkdir(parents=True)
-    (quarantine_dir / "abc123.pdf").write_bytes(b"x" * 10)
-
-    overview = service.get_overview(db)
+    # Wie die Abgabebox: Objekt in der Quarantäne, ohne StoredFile-Zeile. Der Bucket ist über
+    # Testläufe hinweg geteilt - darum auf den eigenen Mandanten eingeschränkt und aufgeräumt.
+    key = f"quarantine/tenant-{tenant.id}/assignment-42/abc123.pdf"
+    backend = get_object_store().active_backend()
+    get_object_store().put_bytes(db, ABGABEBOX, key, b"x" * 10)
+    try:
+        overview = service.get_overview(db, tenant_id=tenant.id)
+    finally:
+        backend.delete(ABGABEBOX, key)
 
     assert overview.files.total == 0
     assert len(overview.abgabebox_quarantine) == 1

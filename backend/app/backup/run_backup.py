@@ -205,14 +205,6 @@ def drop_hold(env: RunEnv, db: Session, hold_id: uuid.UUID, generation: int) -> 
 # --- Erfassung --------------------------------------------------------------------------------
 
 
-def _registry_trusted(env: RunEnv, db: Session, profile: StorageProfile) -> bool:
-    if profile.provider != "filesystem":
-        return True
-    if env.config.trust_filesystem_registry:
-        return True
-    return db.scalar(select(StorageMigration.id).where(StorageMigration.kind == "initial", StorageMigration.state == "completed").limit(1)) is not None
-
-
 def _dangling_references(session: Session, conn: Any) -> dict[str, Any]:
     """DB-Verweise im Snapshot, deren Objekt im Register fehlt (vorbestehende Inkonsistenz -
     nicht sicherbar, wird als Warnung im Backup vermerkt)."""
@@ -284,13 +276,6 @@ def capture(env: RunEnv, db: Session, ctx: jobs.JobCtx, job: BackupJob, backup_i
     cutting_over = db.scalar(select(StorageMigration.id).where(StorageMigration.state == "cutting_over").limit(1))
     if cutting_over is not None:
         raise jobs.JobWait(120, "storage_cutover")
-    profile = db.get(StorageProfile, state.active_profile_id)
-    if not _registry_trusted(env, db, profile):
-        raise jobs.JobFailure(
-            "storage_registry_incomplete",
-            "Der Dateispeicher läuft noch auf dem bisherigen Dateisystem ohne vollständiges Objektregister - "
-            "zuerst die Erstmigration abschliessen (oder BACKUP_TRUST_FILESYSTEM_REGISTRY bewusst setzen).",
-        )
     clear_stale_hold(env, db, own_hold=backup_id)
 
     # Staging-Budget: der Dump ist im Custom-Format praktisch immer kleiner als die Datenbank.

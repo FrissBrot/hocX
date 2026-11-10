@@ -24,6 +24,10 @@ set -euo pipefail
 # 1.0.x auf 1.1.0, falls Konten mit mehreren Mandanten-Mitgliedschaften oder ganz ohne
 # Mandant existieren (Migration 0078, siehe CHANGELOG). Ohne den Wert bricht die Migration
 # in dem Fall ab und listet die Konten auf; die Datenbank bleibt dabei unveraendert.
+#
+# Nur noch S3 (Migration 0168_s3_only): Update nur, wenn die Dateien schon in S3 liegen. Ist der
+# bisherige Dateisystem-Bestand noch in der Rückfallfrist, fragt das Skript, ob sie übersprungen
+# werden soll (nicht interaktiv: HOCX_SKIP_STORAGE_FALLBACK=1), siehe scripts/lib/storage_gate.sh.
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENVIRONMENT="${1:-}"
@@ -40,6 +44,8 @@ source "$REPO_DIR/scripts/lib/github.sh"
 source "$REPO_DIR/scripts/lib/dump_crypto.sh"
 # shellcheck source=scripts/lib/pg_upgrade.sh
 source "$REPO_DIR/scripts/lib/pg_upgrade.sh"
+# shellcheck source=scripts/lib/storage_gate.sh
+source "$REPO_DIR/scripts/lib/storage_gate.sh"
 
 case "$ENVIRONMENT" in
   test)
@@ -944,6 +950,15 @@ else
 fi
 if "${DC[@]}" ps db --status running -q > /dev/null 2>&1 && [ -n "$("${DC[@]}" ps db --status running -q)" ]; then
   run_pre_deploy_backup || exit 1
+fi
+
+# Nur noch S3: prüft (und bereinigt auf Wunsch) mit dem noch laufenden Release, siehe
+# scripts/lib/storage_gate.sh. Ohne Erfolg bleibt alles beim bisherigen Release.
+echo "==> [$ENVIRONMENT] Objektspeicher: Voraussetzungen für «nur noch S3»"
+if ! storage_upgrade_gate; then
+  echo "Deploy abgebrochen; es laeuft weiter das bisherige Release." >&2
+  [ ! -f "$BACKUP_FILE" ] || echo "Backup dieses Laufs: $BACKUP_FILE" >&2
+  exit 1
 fi
 
 echo "==> [$ENVIRONMENT] Pull Images ($HOCX_VERSION)"

@@ -41,7 +41,7 @@ class JobDefinition:
     keep_history: bool = True
     # Läuft auch während voller Wartung weiter (Überwachung, Wartungssteuerung). Alle anderen
     # Backend-Loops pausieren dann (run_advisory_locked_loop), damit kein Hintergrundjob
-    # während einer Erstmigration Daten verändert.
+    # während einer vollen Wartung (z. B. Restore) Daten verändert.
     runs_during_maintenance: bool = False
 
 

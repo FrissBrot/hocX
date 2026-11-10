@@ -26,7 +26,6 @@ am Ende von `deploy.sh`) und entscheidet über die DB-Funktion `storage_local_s3
 | Grund | lokales S3 |
 |---|---|
 | aktiver Speicher | läuft |
-| Ziel der Erstmigration (Dateisystem noch aktiv) | läuft |
 | Quelle/Ziel einer offenen Migration | läuft |
 | Generation in der Rückfallfrist, offene Bereinigung | läuft |
 | nicht verifizierte Objekte einer abgeschlossenen Migration | läuft |

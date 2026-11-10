@@ -2,27 +2,21 @@
 
 import hashlib
 from datetime import UTC, datetime
-from pathlib import Path
-
 import pytest
 
-from app.core.config import settings
+from app.core.storage import MAIN, get_object_store
 from app.models.entities import GalleryImage, StoredFile
 from app.services.image_metadata_backfill import run_backfill
 from tests.factories import make_tenant
 from tests.image_fixtures import jpeg
 
 
-@pytest.fixture(autouse=True)
-def _isolated_storage_root(monkeypatch, tmp_path):
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
-
-
 def _stored(db, tenant_id, content: bytes | None, name: str, **values) -> StoredFile:
+    key = f"uploads/tenant-{tenant_id}/gallery/{name}"
     if content is not None:
-        (Path(settings.storage_root) / name).write_bytes(content)
+        get_object_store().put_bytes(db, MAIN, key, content)
     row = StoredFile(
-        tenant_id=tenant_id, original_name=name, mime_type="image/jpeg", storage_path=name,
+        tenant_id=tenant_id, original_name=name, mime_type="image/jpeg", storage_path=key,
         checksum_sha256=hashlib.sha256(content or name.encode()).hexdigest(), scan_status="clean", width=32, height=24, **values,
     )
     db.add(row)

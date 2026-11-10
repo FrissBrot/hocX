@@ -39,10 +39,13 @@ from app.backup import jobs
 from app.backup.pgtools import PgTarget, PgTools, validate_db_name
 from app.backup.repository import RepositoryView
 from app.backup.restore_core import (
+    BACKUP_PRE_S3_CODE,
+    BACKUP_PRE_S3_MESSAGE,
     PROFILE_COLUMNS,
     RestoreError,
     configure_restored_database,
     ensure_empty_generation,
+    is_pre_s3_backup,
     iter_manifest_slices,
     load_restore_point,
     purge_generation_objects,
@@ -140,6 +143,8 @@ def _prepare(env: RunEnv, db: Session, ctx: jobs.JobCtx, job: BackupRestoreJob, 
     if compat["state"] in ("newer", "unknown"):
         raise jobs.JobFailure("schema_incompatible",
                               f"Das Backup stammt von einer neueren/unbekannten hocX-Version (Revision {compat['revision']}) - zuerst diese Version einspielen")
+    if is_pre_s3_backup(metadata):
+        raise jobs.JobFailure(BACKUP_PRE_S3_CODE, BACKUP_PRE_S3_MESSAGE)
     open_migration = db.scalar(select(StorageMigration.id).where(StorageMigration.state.notin_(("completed", "failed", "cancelled"))).limit(1))
     if open_migration is not None:
         raise jobs.JobFailure("storage_migration_open", "Während einer Storage-Migration ist kein Restore möglich")
@@ -148,10 +153,9 @@ def _prepare(env: RunEnv, db: Session, ctx: jobs.JobCtx, job: BackupRestoreJob, 
     profile_id = options.get("target_profile_id")
     profile = (db.scalars(select(StorageProfile).where(StorageProfile.public_id == uuid.UUID(profile_id))).first()
                if profile_id else db.get(StorageProfile, state.active_profile_id))
+    # Das alte Dateisystem-Profil ist seit 0168 deaktiviert und fällt hier mit heraus.
     if profile is None or not profile.is_enabled:
         raise jobs.JobFailure("target_profile_invalid", "Zielprofil nicht gefunden oder deaktiviert")
-    if profile.provider == "filesystem":
-        raise jobs.JobFailure("target_profile_invalid", "Ein Voll-Restore schreibt immer in eine neue Generation eines S3-Profils")
     live_max = int(db.scalar(select(func.max(StorageGeneration.generation))) or 0)
     generation = max(live_max, int((metadata.get("storage") or {}).get("generation") or 0)) + 1
     db.add(StorageGeneration(profile_id=profile.id, generation=generation, status="preparing"))
@@ -707,6 +711,9 @@ def run_tenant_copy(env: RunEnv, db: Session, ctx: jobs.JobCtx) -> str:
     compat = schema_compatibility(metadata.get("alembic_revision"))
     if compat["state"] in ("newer", "unknown"):
         raise jobs.JobFailure("schema_incompatible", "Das Backup stammt von einer neueren/unbekannten hocX-Version")
+    # Auch hier wird die Sicherung bei älterem Schema hochmigriert - 0168 lehnt Dateisystem-Stände ab.
+    if is_pre_s3_backup(metadata):
+        raise jobs.JobFailure(BACKUP_PRE_S3_CODE, BACKUP_PRE_S3_MESSAGE)
     work = env.config.staging_dir / f"tenant-{ctx.job_id.hex}"
     work.mkdir(parents=True, exist_ok=True)
     target = PgTarget.from_url(env.database_url)

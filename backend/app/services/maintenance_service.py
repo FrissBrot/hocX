@@ -340,7 +340,7 @@ def _evaluate(db: Session, condition: dict[str, Any]) -> ConditionResult:
             return ConditionResult(key, ok, "ok" if ok else "integrity_not_confirmed", params)
         if migration.state == "failed" and migration.cutover_committed_at is not None:
             # Nach dem Cutover gescheitert (rollback_required, vom Admin bestätigt): aktiv ist das
-            # Ziel, zurück geht es nur per neuer Migration - bei der Erstmigration gibt es keine.
+            # Ziel, zurück geht es nur per neuer Migration.
             # Freigebbar, sobald ein erneuter Healthcheck des aktiven Ziels bestanden ist (S3-002).
             health = (migration.report or {}).get("target_health") or {}
             ok = (

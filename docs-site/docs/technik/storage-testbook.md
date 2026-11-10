@@ -1,7 +1,7 @@
 # Testbook: Objektspeicher (S3), Storage-Migration und Wartung
 
-Dieses Testbook prüft die Objektspeicher-Abstraktion (Dateisystem und S3), Speicherprofile,
-Erst- und Live-Migrationen mit Cutover, das Löschen nach dem Commit (Tombstones), den
+Dieses Testbook prüft die Objektspeicher-Abstraktion (nur S3), Speicherprofile,
+Live-Migrationen mit Cutover, das Upgrade-Tor «S3-only», das Löschen nach dem Commit (Tombstones), den
 Wartungsmodus und das Monitoring. Architektur und Betrieb: [Dateispeicher](storage/index.md),
 RUNBOOK Abschnitt 14.
 
@@ -29,7 +29,6 @@ Testdateien unter `backend/tests/`, sofern nicht anders angegeben.
 | ID | Prüfung | Erwartung | Testdatei / Test |
 |---|---|---|---|
 | OBJ-01 | Keys | Traversal, Steuerzeichen, Client-Endungen abgelehnt (Python und SQL) | `test_object_storage.py::test_validate_key_*`, `::test_safe_suffix_never_takes_unsafe_client_input`, `::test_register_write_rejects_invalid_keys_in_the_database_as_well` |
-| OBJ-02 | Dateisystem-Backend | atomar geschrieben, Integrität geprüft, Range/Liste, kein Ausbruch | `test_object_storage.py::test_filesystem_backend_*`, `::test_object_response_uses_file_response_for_the_filesystem` |
 | OBJ-03 | S3-Backend | Roundtrip, Range, Copy, Multipart grosser Dateien, Hash-Prüfung, Abbruch alter Multiparts | `test_object_storage.py::test_s3_backend_*` (`requires_s3`) |
 | OBJ-04 | Schreibprotokoll | Journal mit steigenden Versionen; Fence blockiert, Cutover wartet auf offene Schreiber; veraltete Generation verweigert | `test_object_storage.py::test_put_and_delete_are_journaled_with_increasing_versions`, `::test_write_is_rejected_while_storage_is_fenced`, `::test_fence_waits_for_open_write_transactions`, `::test_register_write_rejects_a_stale_generation` |
 | OBJ-05 | Fehlerklassen und Erreichbarkeit | anbieterunabhängige Fehler; nicht erreichbar ≠ fehlt; 503 statt 500 | `test_object_storage.py::test_client_errors_map_to_provider_independent_classes`, `::test_unreachable_endpoint_is_reported_as_unavailable_not_as_missing`, `test_storage_migration_faults.py::test_unreachable_storage_yields_503_not_500` |
@@ -50,8 +49,8 @@ Testdateien unter `backend/tests/`, sofern nicht anders angegeben.
 | ID | Prüfung | Erwartung | Testdatei |
 |---|---|---|---|
 | PRO-01 | Speicherprofile | gefährliche Werte und interne Endpunkte abgelehnt, Zugangsdaten verschlüsselt und nie ausgegeben, aktive/eingebaute Profile geschützt, Verbindungstest isoliert | `test_storage_profiles.py` |
-| MIG-01 | Zustandsmaschine | vollständige, sichere Übergänge; Erstmigration nimmt nur Caches/Temporäres aus | `test_storage_state_machine.py` |
-| MIG-02 | Ende-zu-Ende-Kette Dateisystem → lokales S3 → externes S3 → … | jede bestätigte Datei kommt an | `test_storage_migration_e2e.py` (`requires_s3`) |
+| MIG-01 | Zustandsmaschine | vollständige, sichere Übergänge | `test_storage_state_machine.py` |
+| MIG-02 | Ende-zu-Ende-Kette lokales S3 → externes S3 → … | jede bestätigte Datei kommt an | `test_storage_migration_e2e.py` (`requires_s3`) |
 | MIG-03 | Fehlerfälle | Wiederholungen, Leases, Absturz/Fortsetzung, gescheiterter Cutover, Journal-Lücken, gleichzeitige Starts, Abbruch/Pause, fehlende Quellobjekte, Aufräumen alter Generationen | `test_storage_migration_faults.py` |
 | MIG-04 | Referenzprüfung | Registereinträge ohne Datei werden gemeldet; abgelaufene Exporte zählen nicht als fehlend; Document-Studio-Assets sind Referenzen | `test_storage_migration_faults.py::test_initial_migration_surfaces_registered_files_missing_on_disk`, `::test_expired_exports_are_not_counted_as_missing_references`, `::test_storage_verify_detects_objects_missing_after_an_inconsistent_restore` |
 | MIG-05 | Worker-Konfiguration | spoolt auf Platte (nicht tmpfs), ungültige Optionen 409 | `test_storage_worker_config.py` |
@@ -74,7 +73,7 @@ Testdateien unter `backend/tests/`, sofern nicht anders angegeben.
 
 | ID | Durchführung | Erwartung |
 |---|---|---|
-| STO-M1 | Erstmigration Dateisystem → lokales S3 auf der Testumgebung (Wartung, Prüfbericht, Cutover) | Prüfbericht ohne fehlende Referenzen; App danach voll nutzbar; Altdateien als «unreferenziert» nur, wenn `cleanup-legacy-document-templates.sh` vorher nicht lief |
+| STO-M1 | Upgrade einer 1.2.x-Testinstanz mit abgeschlossener Erstmigration und Dateisystem-Generation in der Rückfallfrist: `deploy.sh` einmal mit «N», dann mit «j» (bzw. `HOCX_SKIP_STORAGE_FALLBACK=1`) | «N» bricht ab, altes Release läuft weiter; «j» bereinigt die Dateisystem-Generation, danach läuft `0168_s3_only` durch; System → Storage zeigt das Dateisystem-Profil deaktiviert ohne Aktionen, App voll nutzbar |
 | STO-M2 | Live-Migration lokales S3 → externes S3 bei laufender Nutzung (Uploads, Exporte) | kein Datenverlust, Cutover kurz, Fortschritt/Restzeit plausibel |
 | STO-M3 | Externes S3 kurz sperren | Check «Dateispeicher» kritisch mit ntfy, Uploads 503 mit Hinweis, nach Freigabe «behoben» |
 | STO-M4 | Wartungsfenster planen, starten, beenden | Anmeldeseite und Abgabebox zeigen den Hinweis, Freigabe erst bei erfüllten Bedingungen |

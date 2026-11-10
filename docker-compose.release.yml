@@ -431,8 +431,6 @@ services:
         max-file: "3"
     environment:
       PHOTO_WORKER_DATABASE_URL_FILE: /run/secrets/photo_worker_database_url
-      STORAGE_ROOT: /app/storage
-      ABGABEBOX_STORAGE_ROOT: /app/storage/abgabebox-uploads
       STORAGE_CREDENTIALS_KEY_FILE: /run/secrets/storage_credentials_key
     secrets:
       - photo_worker_database_url
@@ -443,8 +441,6 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    volumes:
-      - ${HOCX_STORAGE_PATH:-./storage}:/app/storage:ro
 
   frontend:
     image: ${HOCX_FRONTEND_IMAGE:-ghcr.io/${GHCR_NAMESPACE}/hocx-frontend:${HOCX_VERSION}}
@@ -709,7 +705,6 @@ services:
       BACKUP_UPLOAD_RATELIMIT_KIB: ${BACKUP_UPLOAD_RATELIMIT_KIB:-0}
       BACKUP_COMPRESSION: ${BACKUP_COMPRESSION:-auto,zstd,3}
       BACKUP_STORAGEBOX_QUOTA_BYTES: ${BACKUP_STORAGEBOX_QUOTA_BYTES:-0}
-      BACKUP_TRUST_FILESYSTEM_REGISTRY: ${BACKUP_TRUST_FILESYSTEM_REGISTRY:-false}
     secrets:
       - database_url
       - auth_secret

@@ -10,7 +10,8 @@ nichts aus einem der Dienste - nur Standardbibliothek, boto3, cryptography und S
 Aufbau:
 - Keys sind dienst- und anbieterunabhängig: (namespace, key), z. B. ("main",
   "uploads/tenant-3/gallery/<uuid>.jpg"). Der physische Ort hängt vom aktiven Profil und der
-  Generation ab (Dateisystem Generation 0: <root>/<key>; S3: <prefix>/g<generation>/<namespace>/<key>).
+  Generation ab (S3: <prefix>/g<generation>/<namespace>/<key>). Seit 0168_s3_only gibt es nur noch
+  S3-Profile; der frühere Dateisystem-Bestand (Generation 0) wird nicht mehr gelesen.
 - ObjectStore löst das aktive Profil über die SQL-Funktion storage_active_config() auf (kurz
   gecacht) und leitet Lese- und Schreibzugriffe dorthin.
 - Schreibzugriffe laufen immer über das Protokoll begin_write -> Objekt schreiben ->
@@ -208,10 +209,6 @@ class ProfileConfig:
     # S3: jedes Objekt mit ServerSideEncryption=AES256 schreiben (Speicherprofil, Migration 0147)
     server_side_encryption: bool = False
 
-    @property
-    def is_filesystem(self) -> bool:
-        return self.provider == "filesystem"
-
     def cache_key(self) -> tuple:
         return (self.profile_id, self.generation, self.config_version)
 
@@ -267,7 +264,6 @@ class Backend(Protocol):
     def delete(self, namespace: str, key: str) -> None: ...
     def list(self, namespace: str, prefix: str = "") -> Iterator[ObjectInfo]: ...
     def copy(self, namespace: str, source_key: str, target_key: str) -> ObjectInfo: ...
-    def local_path(self, namespace: str, key: str) -> Path | None: ...
     def abort_stale_multipart_uploads(self, namespace: str, older_than_seconds: int) -> int: ...
 
 
@@ -320,170 +316,6 @@ class RateLimiter:
                     return
                 wait = (amount - self._allowance) / self.rate
             time.sleep(min(wait, 1.0))
-
-
-def _new_file_mode() -> int:
-    """Rechte, die open() mit der umask des Prozesses vergeben hätte. mkstemp legt immer 0600 an -
-    damit konnte das Backend (uid 5000, Gruppe 5001) keine Abgabebox-Einreichung (uid 5001) mehr
-    lesen (PermissionError im Lasttest 2026-10-22, Ähnlichkeitsgruppen und Downloads)."""
-    try:
-        for line in Path("/proc/self/status").read_text().splitlines():
-            if line.startswith("Umask:"):
-                return 0o666 & ~int(line.split()[1], 8)
-    except (OSError, ValueError, IndexError):
-        pass
-    return 0o644
-
-
-class FilesystemBackend:
-    """Bisheriger Bestand (Generation 0) bzw. Tests. Physischer Ort: <root[namespace]>/<key>.
-    Schreibt atomar (temporäre Datei im Zielordner + os.replace) mit fsync, damit ein Abbruch
-    nie eine halbe Datei unter dem endgültigen Namen hinterlässt."""
-
-    def __init__(self, config: ProfileConfig, roots: "dict[str, Path] | Callable[[], dict[str, Path]]") -> None:
-        self.config = config
-        self._roots_source = roots
-
-    @property
-    def _roots(self) -> dict[str, Path]:
-        # Dynamisch, damit eine zur Laufzeit geänderte Einstellung (Tests, Umzug des Volumes)
-        # sofort gilt.
-        roots = self._roots_source() if callable(self._roots_source) else self._roots_source
-        return {ns: Path(root) for ns, root in roots.items()}
-
-    def _path(self, namespace: str, key: str) -> Path:
-        validate_namespace(namespace)
-        validate_key(key)
-        root = self._roots.get(namespace)
-        if root is None:
-            raise StorageConfigError(f"Kein Dateisystem-Stamm für {namespace!r} konfiguriert")
-        root = root.resolve()
-        full = (root / key).resolve()
-        if not str(full).startswith(str(root) + os.sep):
-            raise InvalidObjectKey("Ungültiger Speicherschlüssel")
-        return full
-
-    def local_path(self, namespace: str, key: str) -> Path | None:
-        path = self._path(namespace, key)
-        return path if path.is_file() else None
-
-    def put_stream(self, namespace, key, source, *, size, sha256, content_type) -> ObjectInfo:
-        target = self._path(namespace, key)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        reader = _HashingReader(source)
-        fd, tmp_name = tempfile.mkstemp(prefix=".hocx-upload-", dir=str(target.parent))
-        try:
-            os.fchmod(fd, _new_file_mode())
-            with os.fdopen(fd, "wb") as handle:
-                while chunk := reader.read(CHUNK_BYTES):
-                    handle.write(chunk)
-                handle.flush()
-                os.fsync(handle.fileno())
-            actual = reader.digest.hexdigest()
-            if sha256 and actual != sha256:
-                raise StorageIntegrityError("SHA-256 des geschriebenen Objekts stimmt nicht")
-            if size is not None and reader.size != size:
-                raise StorageIntegrityError("Grösse des geschriebenen Objekts stimmt nicht")
-            os.replace(tmp_name, target)
-        except BaseException:
-            Path(tmp_name).unlink(missing_ok=True)
-            raise
-        return ObjectInfo(namespace, key, reader.size, actual, content_type)
-
-    def put_stream_unbuffered(self, namespace, key, source, *, size, sha256, content_type) -> ObjectInfo:
-        # Schreibt ohnehin direkt in eine temporäre Datei im Zielordner.
-        return self.put_stream(namespace, key, source, size=size, sha256=sha256, content_type=content_type)
-
-    def open_read(self, namespace, key, *, start=0, end=None) -> Iterator[bytes]:
-        path = self._path(namespace, key)
-        try:
-            handle = path.open("rb")
-        except FileNotFoundError as exc:
-            raise ObjectNotFound(key) from exc
-        except IsADirectoryError as exc:
-            raise ObjectNotFound(key) from exc
-
-        def generator() -> Iterator[bytes]:
-            with handle:
-                handle.seek(start)
-                remaining = None if end is None else end - start + 1
-                while remaining is None or remaining > 0:
-                    chunk = handle.read(CHUNK_BYTES if remaining is None else min(CHUNK_BYTES, remaining))
-                    if not chunk:
-                        return
-                    if remaining is not None:
-                        remaining -= len(chunk)
-                    yield chunk
-
-        return generator()
-
-    def head(self, namespace, key) -> ObjectInfo | None:
-        path = self._path(namespace, key)
-        try:
-            stat = path.stat()
-        except FileNotFoundError:
-            return None
-        if not path.is_file():
-            return None
-        return ObjectInfo(namespace, key, stat.st_size, None, None, None, datetime.fromtimestamp(stat.st_mtime, timezone.utc))
-
-    def delete(self, namespace, key) -> None:
-        self._path(namespace, key).unlink(missing_ok=True)
-
-    def list(self, namespace, prefix="") -> Iterator[ObjectInfo]:
-        validate_namespace(namespace)
-        validate_prefix(prefix)
-        root = self._roots.get(namespace)
-        if root is None or not root.exists():
-            return
-        root = root.resolve()
-        # Nur das Verzeichnis des Präfixes durchlaufen, nicht den ganzen Stamm.
-        start = root / prefix.rsplit("/", 1)[0] if "/" in prefix else root
-        if not start.is_dir():
-            return
-        for current, dirnames, filenames in os.walk(start):
-            dirnames.sort()
-            for name in sorted(filenames):
-                full = Path(current) / name
-                relative = full.relative_to(root).as_posix()
-                if name.startswith(".hocx-upload-") or not relative.startswith(prefix):
-                    continue
-                try:
-                    validate_key(relative)
-                    stat = full.stat()
-                except (InvalidObjectKey, OSError):
-                    # Ungültige Namen bleiben sichtbar: der Aufrufer (Inventur) bekommt sie als
-                    # eigenen Eintrag mit size=-1 und meldet sie im Prüfbericht.
-                    yield ObjectInfo(namespace, relative, -1)
-                    continue
-                yield ObjectInfo(namespace, relative, stat.st_size, None, None, None, datetime.fromtimestamp(stat.st_mtime, timezone.utc))
-
-    def copy(self, namespace, source_key, target_key) -> ObjectInfo:
-        source = self._path(namespace, source_key)
-        if not source.is_file():
-            raise ObjectNotFound(source_key)
-        with source.open("rb") as handle:
-            digest = hashlib.sha256()
-            for chunk in iter(lambda: handle.read(CHUNK_BYTES), b""):
-                digest.update(chunk)
-            handle.seek(0)
-            return self.put_stream(namespace, target_key, handle, size=source.stat().st_size, sha256=digest.hexdigest(), content_type=None)
-
-    def abort_stale_multipart_uploads(self, namespace, older_than_seconds) -> int:
-        # Gegenstück zu S3-Multipart-Resten: liegengebliebene temporäre Upload-Dateien.
-        root = self._roots.get(namespace)
-        if root is None or not root.exists():
-            return 0
-        cutoff = time.time() - older_than_seconds
-        removed = 0
-        for path in root.rglob(".hocx-upload-*"):
-            try:
-                if path.stat().st_mtime < cutoff:
-                    path.unlink(missing_ok=True)
-                    removed += 1
-            except OSError:
-                continue
-        return removed
 
 
 def _map_client_error(exc: Exception, key: str) -> Exception:
@@ -635,9 +467,6 @@ class S3Backend:
 
     def physical_key(self, namespace: str, key: str) -> str:
         return self.physical_prefix(namespace) + validate_key(key)
-
-    def local_path(self, namespace, key) -> Path | None:
-        return None
 
     def put_stream(self, namespace, key, source, *, size, sha256, content_type) -> ObjectInfo:
         from boto3.s3.transfer import TransferConfig
@@ -806,10 +635,11 @@ class _WriteTicket:
 def _row_to_config(row: Any, credentials_key: str | None) -> ProfileConfig:
     mapping = row._mapping if hasattr(row, "_mapping") else row
     provider = mapping["provider"]
-    access_key = secret_key = None
-    if provider != "filesystem":
-        access_key = decrypt_credential(mapping["access_key_enc"], credentials_key or "")
-        secret_key = decrypt_credential(mapping["secret_key_enc"], credentials_key or "")
+    if provider == "filesystem":
+        # Nur noch S3 (0168_s3_only): ein aktives Dateisystem-Profil verhindert das Upgrade.
+        raise StorageConfigError("Dateisystem-Speicher wird nicht mehr unterstützt - nur noch S3-Profile")
+    access_key = decrypt_credential(mapping["access_key_enc"], credentials_key or "")
+    secret_key = decrypt_credential(mapping["secret_key_enc"], credentials_key or "")
     return ProfileConfig(
         profile_id=int(mapping["profile_id"]),
         generation=int(mapping["generation"]),
@@ -839,14 +669,12 @@ class ObjectStore:
         *,
         service: str,
         connect: Callable[[], Any],
-        filesystem_roots: "dict[str, Path] | Callable[[], dict[str, Path]]",
         credentials_key: "str | Callable[[], str] | None",
         backend_factory: BackendFactory | None = None,
         ttl_seconds: float = ACTIVE_CONFIG_TTL_SECONDS,
     ) -> None:
         self.service = service
         self._connect = connect
-        self.filesystem_roots = filesystem_roots
         self._credentials_key_source = credentials_key
         self._backend_factory = backend_factory
         self._ttl = ttl_seconds
@@ -864,8 +692,6 @@ class ObjectStore:
     def make_backend(self, config: ProfileConfig) -> Backend:
         if self._backend_factory is not None:
             return self._backend_factory(config)
-        if config.is_filesystem:
-            return FilesystemBackend(config, self.filesystem_roots)
         return S3Backend(config)
 
     def backend_for(self, config: ProfileConfig) -> Backend:
@@ -938,10 +764,6 @@ class ObjectStore:
                 raise StorageError("Objekt grösser als erlaubt")
         return bytes(buffer)
 
-    def local_path(self, namespace: str, key: str) -> Path | None:
-        """Nur beim Dateisystem-Backend: direkter Pfad (für FileResponse mit Range-Support)."""
-        return self.active_backend().local_path(namespace, key)
-
     def download_to(self, namespace: str, key: str, target: Path) -> ObjectInfo:
         target.parent.mkdir(parents=True, exist_ok=True)
         digest = hashlib.sha256()
@@ -955,13 +777,8 @@ class ObjectStore:
 
     @contextmanager
     def local_copy(self, namespace: str, key: str, *, work_dir: Path | None = None, suffix: str = "") -> Iterator[Path]:
-        """Lokaler Pfad für Bibliotheken, die nur mit Dateien arbeiten (ClamAV, PIL, zipfile).
-        Beim Dateisystem-Backend direkt die Originaldatei (nur lesen!), sonst eine temporäre Kopie,
-        die danach sofort gelöscht wird."""
-        direct = self.local_path(namespace, key)
-        if direct is not None:
-            yield direct
-            return
+        """Lokaler Pfad für Bibliotheken, die nur mit Dateien arbeiten (ClamAV, PIL, zipfile): eine
+        temporäre Kopie, die danach sofort gelöscht wird."""
         if work_dir is not None:
             work_dir.mkdir(parents=True, exist_ok=True)
         fd, name = tempfile.mkstemp(prefix="hocx-obj-", suffix=suffix or safe_suffix(key, ""), dir=str(work_dir) if work_dir else None)
@@ -990,11 +807,8 @@ class ObjectStore:
         return sha256 is None or digest.hexdigest() == sha256
 
     def usage_bytes(self, db: Any, namespace: str, prefix: str) -> int:
-        """Belegter Platz unter prefix - Dateisystem: Verzeichnis-Walk (wie bisher), S3: Summe
-        aus dem Objektregister (vollständig, sobald die Erstmigration es befüllt hat)."""
+        """Belegter Platz unter prefix: Summe aus dem Objektregister."""
         validate_prefix(prefix)
-        if self.active_state().config.is_filesystem:
-            return sum(max(info.size, 0) for info in self.active_backend().list(namespace, prefix))
         return int(db.execute(text("SELECT storage_usage_bytes(:ns, :prefix)"), {"ns": namespace, "prefix": prefix}).scalar() or 0)
 
     # Schreiben -------------------------------------------------------------------------------
@@ -1076,25 +890,6 @@ class ObjectStore:
             info = backend.put_stream(namespace, key, handle, size=path.stat().st_size, sha256=sha256, content_type=content_type)
         self._register(db, ticket, namespace, key, "put", info)
         return info
-
-    def put_file_in_place(self, db: Any, namespace: str, key: str, path: Path, *, content_type: str | None = None) -> ObjectInfo:
-        """Wie put_file - liegt path aber bereits genau am Zielort des aktiven
-        Dateisystem-Backends (lokaler Arbeitsordner == Speicherort), wird nur registriert statt die
-        Datei auf sich selbst zu kopieren."""
-        ticket, backend = self._begin_write(db)
-        self._lock_key(db, namespace, key)
-        local = backend.local_path(namespace, key)
-        if local is not None and local.resolve() == path.resolve():
-            # Die Datei liegt bereits am Zielort (nur Dateisystem-Generation): ein früherer Inhalt
-            # ist damit schon ersetzt. Das Backup erkennt die Abweichung am SHA-256.
-            digest = hashlib.sha256()
-            with path.open("rb") as handle:
-                for chunk in iter(lambda: handle.read(CHUNK_BYTES), b""):
-                    digest.update(chunk)
-            info = ObjectInfo(namespace, key, path.stat().st_size, digest.hexdigest(), content_type)
-            self._register(db, ticket, namespace, key, "put", info)
-            return info
-        return self.put_file(db, namespace, key, path, content_type=content_type)
 
     def delete(self, db: Any, namespace: str, key: str) -> None:
         """Registriert die Löschung in der Transaktion des Aufrufers (Tombstone, S3-008). Physisch

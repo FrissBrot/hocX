@@ -12,7 +12,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.api.routes import files as files_routes
-from app.core.config import settings
+from app.core.storage import MAIN, get_object_store
 from app.models.entities import GalleryImage, PhotoAlbum, PhotoAlbumItem, PhotoAlbumTenantShare, StoredFile
 from app.schemas.files import AlbumShareCreate, AlbumShareRespond, AlbumShareUpdate
 from app.services import photo_album_share_service, share_link_service
@@ -22,17 +22,9 @@ from tests.image_fixtures import jpeg, read_exif, response_bytes
 LATITUDE, LONGITUDE = 47.3769, 8.5417
 
 
-@pytest.fixture(autouse=True)
-def _isolated_storage(monkeypatch, tmp_path):
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
-    monkeypatch.setattr(settings, "upload_root", str(tmp_path / "uploads"))
-
-
 def _photo(db, tenant_id: int, content: bytes, *, name: str = "foto.jpg", mime: str = "image/jpeg") -> StoredFile:
-    key = f"uploads/test/{name}"
-    path = Path(settings.storage_root) / key
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(content)
+    key = f"uploads/tenant-{tenant_id}/test/{name}"
+    get_object_store().put_bytes(db, MAIN, key, content)
     stored_file = StoredFile(
         tenant_id=tenant_id, original_name=name, mime_type=mime, storage_path=key, scan_status="clean",
         file_size_bytes=len(content),
@@ -166,4 +158,6 @@ def test_live_photo_video_loses_its_location_for_partners_without_the_location(d
     # Partner erhalten den Clip nur über den Download des Fotos (die Inhalts-Route des Clips
     # selbst ist für sie gesperrt).
     downloaded = files_routes.download_stored_file(photo.public_id, part="video", db=db, user=partner_user)
-    assert "location" not in _ffprobe_tags(Path(downloaded.path))
+    served = tmp_path / "served.mp4"
+    served.write_bytes(response_bytes(downloaded))
+    assert "location" not in _ffprobe_tags(served)

@@ -30,11 +30,3 @@ def test_forbidden_transitions_are_rejected(from_state, to_state):
 def test_every_working_state_can_fail_safely_or_retry():
     for state in ("preflight", "inventory", "copying", "catching_up", "verifying", "ready_for_cutover", "cutting_over"):
         assert {"retrying", "failed"} & sms.MIGRATION_TRANSITIONS[state]
-
-
-def test_initial_migration_excludes_temporary_files_and_caches_only():
-    excluded = ["uploads/_staging/gallery/x.zip", "uploads/_multipart/y", "exports/protocol-1/main.tex", "document_templates/t/main.tex", "latex_templates/x.tex", "uploads/a/.hocx-upload-123"]
-    kept = ["uploads/tenant-1/gallery/a.jpg", "exports/generated/a.pdf", "document_template_parts/tenant-1/x/v1.tex", "document_template_snapshots/tenant-1/p/main.tex", "demo-seed/x.png", "unbekannt/datei.bin"]
-    assert all(sms.is_excluded_initial_key("main", key) for key in excluded)
-    assert not any(sms.is_excluded_initial_key("main", key) for key in kept)
-    assert not sms.is_excluded_initial_key("abgabebox", "quarantine/tenant-1/x.pdf")

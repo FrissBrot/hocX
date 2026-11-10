@@ -10,14 +10,12 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from app.core.config import settings
 from app.core.storage import ABGABEBOX, get_object_store
 from app.models import StorageObject
 from scripts.seed_test_tenant import store_demo_submission_file
 
 
-def test_demo_submission_file_survives_purge_of_previous_seed(db, tmp_path, monkeypatch):
-    monkeypatch.setattr(settings, "abgabebox_storage_root", str(tmp_path / "abgabebox"))
+def test_demo_submission_file_survives_purge_of_previous_seed(db):
     store = get_object_store()
 
     # Vorheriger Lauf: Datei des alten Demo-Mandanten, danach Mandant gelöscht (Tombstone).
@@ -28,8 +26,9 @@ def test_demo_submission_file_survives_purge_of_previous_seed(db, tmp_path, monk
     store.purge_deleted(db)
 
     assert new_key != old_key
-    assert (tmp_path / "abgabebox" / new_key).read_bytes() == b"neu"
-    assert not (tmp_path / "abgabebox" / old_key).exists()
+    backend = store.active_backend()
+    assert b"".join(backend.open_read(ABGABEBOX, new_key)) == b"neu"
+    assert backend.head(ABGABEBOX, old_key) is None
     row = db.scalars(select(StorageObject).where(StorageObject.namespace == ABGABEBOX, StorageObject.key == new_key)).one()
     assert row.status == "active"
     assert row.purge_pending is False

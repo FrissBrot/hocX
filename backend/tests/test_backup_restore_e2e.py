@@ -100,6 +100,15 @@ def test_tenant_restore_of_unknown_tenant_fails_cleanly(backup_env):  # noqa: F8
     assert db.scalar(select(Tenant.id).where(Tenant.name == "Gibt es nicht")) is None
 
 
+def _s3_target_args(tmp_path, prefix: str) -> list[str]:
+    """Ziel-Speicher für restore-full: das Test-S3 unter einem eigenen Präfix (= anderer Anbieter)."""
+    (tmp_path / "ak").write_text(os.environ["TEST_S3_ACCESS_KEY"])
+    (tmp_path / "sk").write_text(os.environ["TEST_S3_SECRET_KEY"])
+    return ["--storage", "s3", "--s3-provider", "garage_local", "--s3-endpoint", S3_ENDPOINT, "--s3-region", "garage",
+            "--s3-bucket", "hocx-main", "--s3-abgabebox-bucket", "hocx-abgabebox", "--s3-prefix", prefix, "--s3-addressing", "path",
+            "--s3-access-key-file", str(tmp_path / "ak"), "--s3-secret-key-file", str(tmp_path / "sk"), "--s3-insecure"]
+
+
 def test_cli_full_restore_into_new_database_and_new_provider(backup_env, tmp_path, monkeypatch):  # noqa: F811
     """Restore ohne laufendes Backend: CLI liest nur das Repository, schreibt in eine neue
     Datenbank und in einen ANDEREN Speicher (neuer Präfix = anderer Anbieter)."""
@@ -111,8 +120,6 @@ def test_cli_full_restore_into_new_database_and_new_provider(backup_env, tmp_pat
     db.commit()
     backup = run_backup_job(env)
     archive = db.get(BackupSet, backup.backup_set_id).archive_name
-    (tmp_path / "ak").write_text(os.environ["TEST_S3_ACCESS_KEY"])
-    (tmp_path / "sk").write_text(os.environ["TEST_S3_SECRET_KEY"])
     for name, value in (("BACKUP_REPOSITORY_URL", env.config.repository_url), ("BACKUP_PASSPHRASE_FILE", str(env.config.passphrase_file)),
                         ("BACKUP_WORK_DIR", str(env.config.work_dir)), ("BACKUP_ENABLED", "true")):
         monkeypatch.setenv(name, value)
@@ -120,10 +127,8 @@ def test_cli_full_restore_into_new_database_and_new_provider(backup_env, tmp_pat
     prefix = f"cli-{uuid.uuid4().hex[:8]}"
     try:
         assert cli_main(["--json", "list"]) == 0
-        rc = cli_main(["restore-full", "--archive", archive, "--target-db", target_db, "--storage", "s3", "--s3-provider", "garage_local",
-                       "--s3-endpoint", S3_ENDPOINT, "--s3-region", "garage", "--s3-bucket", "hocx-main", "--s3-abgabebox-bucket", "hocx-abgabebox",
-                       "--s3-prefix", prefix, "--s3-addressing", "path", "--s3-access-key-file", str(tmp_path / "ak"),
-                       "--s3-secret-key-file", str(tmp_path / "sk"), "--s3-insecure", "--database-url", settings.database_url, "--yes"])
+        rc = cli_main(["restore-full", "--archive", archive, "--target-db", target_db, *_s3_target_args(tmp_path, prefix),
+                       "--database-url", settings.database_url, "--yes"])
         assert rc == 0
         url = PgTarget.from_url(settings.database_url).with_database(target_db).sqlalchemy_url()
         restored = create_engine(url, poolclass=NullPool)
@@ -140,8 +145,9 @@ def test_cli_full_restore_into_new_database_and_new_provider(backup_env, tmp_pat
                                           secret_key=os.environ["TEST_S3_SECRET_KEY"], tls_verify=False))
         assert b"".join(backend.open_read("main", key)) == b"cli-inhalt"
         # Ein zweiter Restore in dieselbe Datenbank wird verweigert (nie überschreiben).
-        assert cli_main(["restore-full", "--archive", archive, "--target-db", target_db, "--storage", "filesystem",
-                         "--filesystem-root", str(tmp_path / "fs"), "--database-url", settings.database_url, "--yes"]) == 1
+        other_prefix = f"cli-{uuid.uuid4().hex[:8]}"
+        assert cli_main(["restore-full", "--archive", archive, "--target-db", target_db, *_s3_target_args(tmp_path, other_prefix),
+                         "--database-url", settings.database_url, "--yes"]) == 1
     finally:
         with PgTools(PgTarget.from_url(settings.database_url)) as pg:
             pg.drop_database(target_db)
@@ -163,9 +169,9 @@ def test_cli_full_restore_resumes_after_abort_in_the_object_phase(backup_env, tm
     url_file = tmp_path / "db-url"
     url_file.write_text(settings.database_url)
     target_db = f"hocx_cli_{uuid.uuid4().hex[:8]}"
-    fs_root = tmp_path / "fs"
-    argv = ["restore-full", "--archive", archive, "--target-db", target_db, "--storage", "filesystem", "--filesystem-root", str(fs_root),
-            "--filesystem-abgabebox-root", str(tmp_path / "fs-abgabebox"), "--database-url-file", str(url_file), "--yes"]
+    prefix = f"cli-resume-{uuid.uuid4().hex[:8]}"
+    argv = ["restore-full", "--archive", archive, "--target-db", target_db, *_s3_target_args(tmp_path, prefix),
+            "--database-url-file", str(url_file), "--yes"]
     real_objects = cli_module.restore_objects
     real_database = cli_module.restore_database
     calls = {"database": 0}
@@ -202,7 +208,7 @@ def test_cli_rejects_untrusted_archive_names(backup_env, monkeypatch, capsys):  
                         ("BACKUP_WORK_DIR", str(env.config.work_dir))):
         monkeypatch.setenv(name, value)
     assert cli_main(["show", "../../etc/passwd"]) == 1
-    assert cli_main(["restore-full", "--archive", "x", "--target-db", "Robert'); DROP TABLE x;--", "--storage", "filesystem",
+    assert cli_main(["restore-full", "--archive", "x", "--target-db", "Robert'); DROP TABLE x;--", "--storage", "s3",
                      "--database-url", "postgresql://u:p@localhost/db"]) == 1
 
 

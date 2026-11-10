@@ -1,23 +1,19 @@
 """Quarantäne darf bei Scanner-Ausfall keine registrierten Uploads verlieren."""
-import os
-import time
+import uuid
 
 from app import storage, scanner
-from app.config import settings
 from app.db import SessionLocal
 
 
-def test_quarantine_cleanup_protects_referenced_files_and_fails_closed(tmp_path, monkeypatch):
-    monkeypatch.setattr(settings, 'storage_root', str(tmp_path))
-    root = tmp_path / 'quarantine' / 'tenant-1'
-    root.mkdir(parents=True)
-    pending = root / 'pending.pdf'
-    orphan = root / 'orphan.pdf'
-    pending.write_bytes(b'pending')
-    orphan.write_bytes(b'orphan')
-    for path in (pending, orphan):
-        os.utime(path, (time.time() - 10000, time.time() - 10000))
+def test_quarantine_cleanup_protects_referenced_files_and_fails_closed(monkeypatch):
     store = storage.get_store()
+    run = uuid.uuid4().hex[:8]
+    pending = f'quarantine/tenant-1/{run}-pending.pdf'
+    orphan = f'quarantine/tenant-1/{run}-orphan.pdf'
+    with SessionLocal() as db:
+        store.put_bytes(db, storage.NAMESPACE, pending, b'pending')
+        store.put_bytes(db, storage.NAMESPACE, orphan, b'orphan')
+        db.commit()
     registered: list[str] = []
     real_delete = store.delete
 
@@ -26,14 +22,17 @@ def test_quarantine_cleanup_protects_referenced_files_and_fails_closed(tmp_path,
         registered.append(f'{namespace}/{key}')
 
     monkeypatch.setattr(store, 'delete', spy)
+    # max_age -60: die eben geschriebenen Objekte gelten als «alt» (Alter kommt aus LastModified).
     with SessionLocal() as db:
-        assert storage.cleanup_stale_quarantine_files(db, 100) == 0
-        assert pending.exists() and orphan.exists()
-        assert storage.cleanup_stale_quarantine_files(db, 100, is_referenced=lambda path: path.endswith('pending.pdf')) == 1
+        # Ohne Referenzprüfung (DB-Ausfall) wird nichts gelöscht - fail closed.
+        assert storage.cleanup_stale_quarantine_files(db, -60) == 0
+        assert store.exists(storage.NAMESPACE, pending) and store.exists(storage.NAMESPACE, orphan)
+        removed = storage.cleanup_stale_quarantine_files(db, -60, is_referenced=lambda key: not key.endswith(f'{run}-orphan.pdf'))
     # S3-008: die Abgabebox registriert nur die Löschung (committet), physisch entfernt sie der
-    # Backend-Job storage_purge danach (das Backend hat den Abgabebox-Speicher eingebunden).
-    assert registered == ['abgabebox/quarantine/tenant-1/orphan.pdf']
-    assert pending.exists() and orphan.exists()
+    # Backend-Job storage_purge danach.
+    assert removed == 1
+    assert registered == [f'abgabebox/{orphan}']
+    assert store.exists(storage.NAMESPACE, pending) and store.exists(storage.NAMESPACE, orphan)
 
 
 def test_scanner_errors_are_not_malware(monkeypatch):

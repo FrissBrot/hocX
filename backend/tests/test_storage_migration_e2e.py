@@ -1,4 +1,4 @@
-"""End-to-End: Dateisystem -> lokales S3 -> externes Test-S3 -> lokales S3 -> zweites Test-S3.
+"""End-to-End: lokales S3 -> externes Test-S3 -> lokales S3 -> zweites Test-S3.
 
 Läuft gegen das isolierte test-s3 (docker-compose.tests.yml) mit reproduzierbaren Testdaten. Nach
 jedem Wechsel wird geprüft: Anzahl, SHA-256, Grössen, Mandantenzugehörigkeit, Referenzen,
@@ -20,16 +20,15 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select, text, update
 
 from app.api.routes import files as files_routes
-from app.core.config import settings
 from app.core.db import get_db
 from app.core.security import get_current_user
 from app.core.storage import ABGABEBOX, MAIN, get_object_store
 from app.models import (
-    MaintenanceWindow,
     StorageGeneration,
     StorageMigration,
     StorageMigrationObject,
     StorageObject,
+    StorageProfile,
     StorageState,
     StoredFile,
 )
@@ -158,66 +157,27 @@ def overwrite_object(db, stored_file_id: int, content: bytes) -> None:
     db.commit()
 
 
-def test_full_migration_chain_keeps_every_confirmed_file(committed_storage, tmp_path, monkeypatch):
+def test_full_migration_chain_keeps_every_confirmed_file(committed_storage):
     db = committed_storage
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path / "storage"))
-    monkeypatch.setattr(settings, "upload_root", str(tmp_path / "storage" / "uploads"))
-    monkeypatch.setattr(settings, "export_root", str(tmp_path / "storage" / "exports"))
-    monkeypatch.setattr(settings, "abgabebox_storage_root", str(tmp_path / "abgabebox"))
-    (tmp_path / "abgabebox").mkdir()
     get_object_store.cache_clear()
+    local_id = db.get(StorageState, 1).active_profile_id  # lokales S3 aus 0168_s3_only
+    db.get(StorageProfile, local_id).last_test_ok = True  # Rückweg verlangt einen bestandenen Verbindungstest
 
     tenant = make_committed_tenant(db, "E2E Verein")
     other = make_committed_tenant(db, "Fremder Verein")
     expected = seed_files(db, tenant.id, 6, seed=1)
     deleted: set[int] = set()
-    # Nicht referenzierte Datei und Abgabebox-Datei direkt auf der Platte (Altbestand), dazu ein
-    # temporärer Staging-Rest, der bewusst NICHT migriert wird.
-    (tmp_path / "storage" / "uploads" / "orphans").mkdir(parents=True)
-    (tmp_path / "storage" / "uploads" / "orphans" / "alt.bin").write_bytes(b"verwaist")
-    (tmp_path / "abgabebox" / f"tenant-{tenant.id}" / "assignment-1").mkdir(parents=True)
-    (tmp_path / "abgabebox" / f"tenant-{tenant.id}" / "assignment-1" / "abgabe.pdf").write_bytes(b"%PDF-1.4 abgabe")
-    (tmp_path / "storage" / "uploads" / "_staging" / "gallery").mkdir(parents=True)
-    (tmp_path / "storage" / "uploads" / "_staging" / "gallery" / "temp.zip").write_bytes(b"temp")
+    # Nicht referenzierte Datei und Abgabebox-Datei: werden mitgenommen und im Bericht ausgewiesen.
+    get_object_store().put_bytes(db, MAIN, "uploads/orphans/alt.bin", b"verwaist")
+    get_object_store().put_bytes(db, ABGABEBOX, f"tenant-{tenant.id}/assignment-1/abgabe.pdf", b"%PDF-1.4 abgabe")
+    db.commit()
 
     run = uuid.uuid4().hex[:8]
-    local = create_test_profile(db, f"Lokal {run}", f"e2e-{run}/local", provider="garage_local")
     ext_a = create_test_profile(db, f"Extern A {run}", f"e2e-{run}/ext-a")
     ext_b = create_test_profile(db, f"Extern B {run}", f"e2e-{run}/ext-b")
     db.commit()
 
-    # 1) Erstmigration Dateisystem -> lokales S3 (volle Wartung)
-    migration = sms.create_migration(db, target_profile_id=local.id, options={"observe_seconds": 30}, actor_email="owner@example.com")
-    db.commit()
-    seen_windows: list[str] = []
-
-    def during_initial(m):
-        if m.maintenance_window_id is not None:
-            seen_windows.append(db.get(MaintenanceWindow, m.maintenance_window_id).state)
-
-    migration = drive(db, migration.id, on_state=during_initial)
-    assert migration.state == "completed", migration.last_error
-    assert migration.kind == "initial"
-    assert "active" in seen_windows  # während der Kopie war die Wartung aktiv
-    window = db.get(MaintenanceWindow, migration.maintenance_window_id)
-    assert window.state == "completed"  # erst nach bestandener Endprüfung freigegeben
-    report = sms.build_report(db, migration)
-    assert report["final_integrity_ok"] is True
-    inventory = report["inventory"]
-    assert inventory["excluded_objects"] >= 1  # Staging-Rest bewusst ausgelassen
-    unreferenced = {item["key"] for item in report["references"]["unreferenced"]}
-    assert "uploads/orphans/alt.bin" in unreferenced  # nicht still ignoriert, sondern berichtet
-    assert get_object_store().get_bytes(ABGABEBOX, f"tenant-{tenant.id}/assignment-1/abgabe.pdf") == b"%PDF-1.4 abgabe"
-    assert not get_object_store().exists(MAIN, "uploads/_staging/gallery/temp.zip")
-    verify_everything(db, expected, tenant.id, other.id, profile_id=local.id, generation=migration.target_generation, deleted=deleted)
-    source_gen = db.scalars(select(StorageGeneration).where(StorageGeneration.generation == 0)).first()
-    assert source_gen.status == "retained" and source_gen.retain_until > datetime.now(UTC)  # Rückfallfrist
-    assert (tmp_path / "storage" / "uploads" / "orphans" / "alt.bin").exists()  # nichts gelöscht
-
-    # Nach dem Cutover gehen neue Schreibvorgänge in das neue Ziel.
-    expected.update(seed_files(db, tenant.id, 2, seed=2))
-
-    # 2) Live-Migration lokal -> extern A, mit Änderungen während der Kopie
+    # 1) Live-Migration lokal -> extern A, mit Änderungen während der Kopie
     migration = sms.create_migration(db, target_profile_id=ext_a.id, options={"observe_seconds": 30, "parallelism": 3}, actor_email="owner@example.com")
     db.commit()
     victim, changed = sorted(expected)[0], sorted(expected)[1]
@@ -238,17 +198,23 @@ def test_full_migration_chain_keeps_every_confirmed_file(committed_storage, tmp_
     assert migration.applied_outbox_seq > migration.snapshot_outbox_seq  # Journal wurde nachgezogen
     verify_everything(db, expected, tenant.id, other.id, profile_id=ext_a.id, generation=migration.target_generation, deleted=deleted)
     assert migration.maintenance_window_id is None  # kurzer Schreib-Fence wieder freigegeben
+    assert migration.kind == "live"
+    report = sms.build_report(db, migration)
+    assert report["final_integrity_ok"] is True
+    unreferenced = {item["key"] for item in report["references"]["unreferenced"]}
+    assert "uploads/orphans/alt.bin" in unreferenced  # nicht still ignoriert, sondern berichtet
+    assert get_object_store().get_bytes(ABGABEBOX, f"tenant-{tenant.id}/assignment-1/abgabe.pdf") == b"%PDF-1.4 abgabe"
 
-    # 3) Zurück zum lokalen S3 (neue Generation - alte lokale Daten werden nie wieder aktiv)
-    previous_local_generation = db.scalars(select(StorageGeneration).where(StorageGeneration.profile_id == local.id).order_by(StorageGeneration.generation)).first().generation
-    migration = sms.create_migration(db, target_profile_id=local.id, options={"observe_seconds": 30}, actor_email="owner@example.com")
+    # 2) Zurück zum lokalen S3 (neue Generation - alte lokale Daten werden nie wieder aktiv)
+    previous_local_generation = db.scalars(select(StorageGeneration).where(StorageGeneration.profile_id == local_id).order_by(StorageGeneration.generation)).first().generation
+    migration = sms.create_migration(db, target_profile_id=local_id, options={"observe_seconds": 30}, actor_email="owner@example.com")
     db.commit()
     assert migration.target_generation > previous_local_generation
     migration = drive(db, migration.id)
     assert migration.state == "completed", migration.last_error
-    verify_everything(db, expected, tenant.id, other.id, profile_id=local.id, generation=migration.target_generation, deleted=deleted)
+    verify_everything(db, expected, tenant.id, other.id, profile_id=local_id, generation=migration.target_generation, deleted=deleted)
 
-    # 4) Zweite externe Migration nach abgeschlossener erster
+    # 3) Zweite externe Migration nach abgeschlossener erster
     expected.update(seed_files(db, tenant.id, 1, seed=4))
     migration = sms.create_migration(db, target_profile_id=ext_b.id, options={"observe_seconds": 30, "verify_mode": "head"}, actor_email="owner@example.com")
     db.commit()

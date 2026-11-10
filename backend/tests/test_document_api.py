@@ -8,7 +8,6 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi import HTTPException
-from fastapi.responses import FileResponse
 from sqlalchemy import select, update
 
 from app.api.routes import managed_documents as routes
@@ -20,6 +19,7 @@ from app.services import document_service, protocol_export_document_service
 from app.services.file_service import FileService
 from tests.document_support import FIXTURES, document_storage, gallery_document, savepoint_rollback, submission_document  # noqa: F401
 from tests.factories import make_current_user, make_protocol, make_template, make_tenant
+from tests.image_fixtures import response_bytes
 
 pytestmark = pytest.mark.usefixtures("savepoint_rollback")
 
@@ -85,7 +85,8 @@ def test_file_endpoint_serves_pdf_inline_and_original_as_download(db, document_s
     user = make_current_user(tenant.id, role="writer")
     version_id = routes.get_document(document.public_id, db=db, user=user).versions[0].id
     inline = routes.get_document_file(document.public_id, version_id, "pdf", request=None, download=False, db=db, user=user)
-    assert isinstance(inline, FileResponse)
+    # Aus dem Objektspeicher gestreamt (kein FileResponse mehr): Inhalt ist das PDF selbst.
+    assert response_bytes(inline).startswith(b"%PDF")
     assert inline.headers["content-disposition"].startswith("inline")
     assert inline.headers["x-content-type-options"] == "nosniff"
     download = routes.get_document_file(document.public_id, version_id, "original", request=None, download=True, db=db, user=user)

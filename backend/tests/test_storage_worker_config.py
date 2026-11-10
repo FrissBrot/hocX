@@ -35,9 +35,9 @@ def test_invalid_migration_options_are_rejected_as_migration_error(options):
     """S3-010: ungültige Optionen sind eine erwartete Ablehnung (409), kein 500 und kein
     Abbruch erst im Cutover; eine negative Rückfallfrist hebelte die Schutzfrist aus."""
     with pytest.raises(sms.MigrationError):
-        sms.merged_options(options, kind="live")
+        sms.merged_options(options)
 
 
 def test_valid_fallback_days_are_kept():
-    assert sms.merged_options({"fallback_days": "30"}, kind="live")["fallback_days"] == 30
-    assert sms.merged_options({}, kind="initial")["fallback_days"] is None
+    assert sms.merged_options({"fallback_days": "30"})["fallback_days"] == 30
+    assert sms.merged_options({})["fallback_days"] is None

@@ -6,7 +6,7 @@ from app import worker
 
 
 class _FsStore:
-    """Minimaler Ersatz für ObjectStore: liest wie das Dateisystem-Backend aus tmp_path."""
+    """Minimaler Ersatz für ObjectStore: Objekte liegen als Dateien in tmp_path (Key = Dateiname)."""
 
     def __init__(self, root):
         self.root = root
@@ -24,7 +24,6 @@ def test_process_job_marks_an_unreadable_file_as_analyzed_with_no_score(monkeypa
     """Regression for the bug fixed alongside face_analyzed_at: a file missing from disk
     used to be silently skipped (never marked analyzed), so it got retried by every future
     off-peak run forever. It must now be written back with score=None instead."""
-    monkeypatch.setattr(worker, "STORAGE_ROOT", tmp_path)
     monkeypatch.setattr(worker, "fetch_files", lambda engine, ids, **_kwargs: [{"id": 1, "storage_path": "does-not-exist.png", "mime_type": "image/png"}])
 
     written: list[list[tuple[int, float | None]]] = []
@@ -42,7 +41,6 @@ def test_process_job_marks_an_unreadable_file_as_analyzed_with_no_score(monkeypa
 def test_process_job_scores_a_readable_file_and_marks_it_done(monkeypatch, tmp_path):
     image_path = tmp_path / "photo.png"
     image_path.write_bytes(b"fake-image-bytes")
-    monkeypatch.setattr(worker, "STORAGE_ROOT", tmp_path)
     monkeypatch.setattr(worker, "fetch_files", lambda engine, ids, **_kwargs: [{"id": 7, "storage_path": "photo.png", "mime_type": "image/png"}])
     monkeypatch.setattr(worker, "score_face_quality", lambda detector, image_bytes: 8.25)
 
@@ -63,7 +61,6 @@ def test_process_job_handles_a_mix_of_readable_and_missing_files(monkeypatch, tm
     the job must land in the SAME batch call, not two separate ones - that's the whole
     point of batching (previously one connection-checkout+BEGIN/COMMIT cycle per file)."""
     (tmp_path / "ok.png").write_bytes(b"fake-image-bytes")
-    monkeypatch.setattr(worker, "STORAGE_ROOT", tmp_path)
     monkeypatch.setattr(
         worker,
         "fetch_files",

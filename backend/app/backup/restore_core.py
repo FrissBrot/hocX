@@ -54,6 +54,21 @@ def load_restore_point(view: RepositoryView, archive: str) -> dict[str, Any]:
     return metadata
 
 
+BACKUP_PRE_S3_CODE = "backup_pre_s3"
+BACKUP_PRE_S3_MESSAGE = "Backup stammt aus der Zeit vor der S3-Migration – mit hocX 1.2.x wiederherstellen"
+
+
+def is_pre_s3_backup(metadata: dict[str, Any]) -> bool:
+    """Sicherung vom Dateisystem-Speicher (vor der S3-Migration): diese hocX-Version kennt nur
+    noch S3, die gesicherte Datenbank liesse sich nicht auf den aktuellen Stand bringen (0168)."""
+    return (metadata.get("storage") or {}).get("provider") == "filesystem"
+
+
+def ensure_s3_backup(metadata: dict[str, Any]) -> None:
+    if is_pre_s3_backup(metadata):
+        raise RestoreError(BACKUP_PRE_S3_CODE, BACKUP_PRE_S3_MESSAGE)
+
+
 def schema_compatibility(revision: str | None) -> dict[str, Any]:
     """same: Datenbank passt zum Code; upgrade: ältere Revision, kontrolliertes Alembic-Upgrade
     nach der Prüfung möglich; newer/unknown: dieser Code kann den Stand nicht sicher betreiben -
@@ -320,8 +335,6 @@ def configure_restored_database(database_url: str, *, profile: dict[str, Any], g
         with engine.begin() as conn:
             row = conn.execute(text("SELECT id FROM storage_profile WHERE public_id = :pid"), {"pid": profile["public_id"]}).first()
             values = {column: profile.get(column) for column in PROFILE_COLUMNS}
-            if row is None and profile["provider"] == "filesystem":
-                row = conn.execute(text("SELECT id FROM storage_profile WHERE provider = 'filesystem'")).first()
             if row is not None:
                 profile_id = int(row.id)
                 conn.execute(

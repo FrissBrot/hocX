@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+from app.core.storage import MAIN, get_object_store
 from app.services import upload_pipeline
 from tests.factories import make_tenant
 
@@ -13,9 +14,17 @@ from tests.factories import make_tenant
 def _isolated_storage_root(monkeypatch, tmp_path):
     from app.core.config import settings
 
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path / "storage"))
-    monkeypatch.setattr(settings, "upload_root", str(tmp_path / "storage" / "uploads"))
     monkeypatch.setattr(settings, "thumbnail_root", str(tmp_path / "thumbs"))
+
+
+class _StoredObject:
+    """Original im Objektspeicher, physisch geprüft (am Register vorbei)."""
+
+    def __init__(self, key: str) -> None:
+        self.key = key
+
+    def exists(self) -> bool:
+        return get_object_store().active_backend().head(MAIN, self.key) is not None
 
 
 def _png() -> bytes:
@@ -32,7 +41,7 @@ def _ingest(db, tenant_id: int):
         sniff=upload_pipeline._sniff_image_mime, max_bytes=10 * 1024 * 1024, storage_subdir_parts=("test",),
         enable_perceptual_dedupe=False, enable_thumbnail=True, created_by=None,
     )
-    original = Path(settings.storage_root) / result.stored_file.storage_path
+    original = _StoredObject(result.stored_file.storage_path)
     thumbnail = Path(settings.thumbnail_root) / result.stored_file.thumbnail_path
     assert original.exists() and thumbnail.exists()
     return original, thumbnail

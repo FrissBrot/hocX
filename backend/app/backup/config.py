@@ -82,7 +82,6 @@ class BackupConfig:
     lock_wait_seconds: int
     compression: str
     quota_bytes: int | None
-    trust_filesystem_registry: bool
     pg_restore_jobs: int
 
     @property
@@ -189,7 +188,6 @@ def load_config() -> BackupConfig:
         lock_wait_seconds=_env_int("BACKUP_LOCK_WAIT_SECONDS", 600, minimum=1),
         compression=os.environ.get("BACKUP_COMPRESSION", "auto,zstd,3").strip() or "auto,zstd,3",
         quota_bytes=quota or None,
-        trust_filesystem_registry=_env_bool("BACKUP_TRUST_FILESYSTEM_REGISTRY", False),
         pg_restore_jobs=_env_int("BACKUP_PG_RESTORE_JOBS", 2, minimum=1),
     )
     config.validate(require_secrets=False)

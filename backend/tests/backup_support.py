@@ -45,7 +45,7 @@ def local_config(tmp_path: Path, **overrides) -> BackupConfig:
         expected_repository_id=None, maintenance_ssh_key_file=None, work_dir=tmp_path / "work",
         staging_max_bytes=2 * 1024 ** 3, batch_max_bytes=64 * 1024 * 1024, batch_max_objects=1000,
         upload_ratelimit_kib=0, lock_wait_seconds=30, compression="lz4", quota_bytes=None,
-        trust_filesystem_registry=True, pg_restore_jobs=1,
+        pg_restore_jobs=1,
     )
     return replace(config, **overrides)
 
@@ -160,7 +160,7 @@ from tests.storage_support import committed_storage, create_test_profile  # noqa
 def backup_env(committed_storage, tmp_path, monkeypatch):  # noqa: F811
     db = committed_storage
     started = datetime.now(UTC)
-    # Aktiver Speicher: frisches Test-S3-Profil in einer neuen Generation (Register vertrauenswürdig).
+    # Aktiver Speicher: frisches Test-S3-Profil in einer neuen Generation.
     profile = create_test_profile(db, f"Backup-Test {uuid.uuid4().hex[:6]}", f"bt-{uuid.uuid4().hex[:8]}")
     generation = int(db.scalar(select(func.max(StorageGeneration.generation))) or 0) + 1
     db.execute(update(StorageGeneration).where(StorageGeneration.status == "active").values(status="retained"))
@@ -168,7 +168,7 @@ def backup_env(committed_storage, tmp_path, monkeypatch):  # noqa: F811
     db.execute(update(StorageState).where(StorageState.id == 1).values(active_profile_id=profile.id, active_generation=generation))
     db.commit()
     get_object_store().invalidate()
-    config = local_config(tmp_path, trust_filesystem_registry=False, batch_max_objects=3)
+    config = local_config(tmp_path, batch_max_objects=3)
     borg = Borg(config)
     borg.init()
     env = RunEnv(config=config, borg=borg, engine=engine, database_url=settings.database_url, store=get_object_store(),

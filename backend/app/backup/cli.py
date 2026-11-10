@@ -42,6 +42,7 @@ from app.backup.restore_core import (
     configure_restored_database,
     ensure_app_roles,
     ensure_empty_generation,
+    ensure_s3_backup,
     load_restore_point,
     reference_report,
     restore_database,
@@ -51,7 +52,7 @@ from app.backup.restore_core import (
     schema_compatibility,
     verify_stream,
 )
-from app.core.objstore_client import FilesystemBackend, ProfileConfig, S3Backend, encrypt_credential
+from app.core.objstore_client import ProfileConfig, S3Backend, encrypt_credential
 
 
 def _print(data: Any, as_json: bool) -> None:
@@ -196,13 +197,6 @@ def cmd_verify(args: argparse.Namespace) -> int:
 def _target_backend(args: argparse.Namespace, generation: int) -> tuple[Any, dict[str, Any]]:
     """Ziel-Objektspeicher aus den CLI-Angaben. Liefert Backend und die Profilwerte für die
     wiederhergestellte Datenbank (Zugangsdaten mit STORAGE_CREDENTIALS_KEY verschlüsselt)."""
-    if args.storage == "filesystem":
-        roots = {"main": Path(args.filesystem_root), "abgabebox": Path(args.filesystem_abgabebox_root or Path(args.filesystem_root) / "abgabebox-uploads")}
-        config = ProfileConfig(profile_id=0, generation=generation, provider="filesystem")
-        profile = {"public_id": uuid.uuid4(), "name": "Lokales Dateisystem (bisheriger Bestand)", "provider": "filesystem", "endpoint_url": None,
-                   "region": None, "bucket": None, "abgabebox_bucket": None, "prefix": "", "addressing_style": "auto", "access_key_enc": None,
-                   "secret_key_enc": None, "restricted_access_key_enc": None, "restricted_secret_key_enc": None, "tls_verify": True, "ca_bundle_pem": None}
-        return FilesystemBackend(config, roots), profile
     credentials_key = _secret(None, None, "STORAGE_CREDENTIALS_KEY")
     if not credentials_key:
         raise SystemExit("STORAGE_CREDENTIALS_KEY(_FILE) fehlt - damit werden die S3-Zugangsdaten in der Datenbank verschlüsselt")
@@ -257,6 +251,7 @@ def cmd_restore_full(args: argparse.Namespace) -> int:
     try:
         view = RepositoryView(borg)
         metadata = load_restore_point(view, args.archive)
+        ensure_s3_backup(metadata)
         compat = schema_compatibility(metadata.get("alembic_revision"))
         report["schema"] = compat
         if compat["state"] in ("newer", "unknown"):
@@ -508,10 +503,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--target-db", required=True, help="Name der NEUEN Datenbank (darf nicht existieren)")
     p.add_argument("--database-url", help="Server/Zugang (Superuser), Default DATABASE_URL - mit Passwort besser --database-url-file")
     p.add_argument("--database-url-file", help="Datei mit der Datenbank-URL (Passwort nicht in der Prozessliste)")
-    p.add_argument("--storage", choices=("s3", "filesystem"), required=True)
+    # Nur noch S3 (das Dateisystem-Ziel ist entfallen); der Schalter bleibt für bestehende Aufrufe.
+    p.add_argument("--storage", choices=("s3",), default="s3")
     p.add_argument("--generation", type=int, help="Ziel-Generation (Default: Generation des Backups + 1)")
-    p.add_argument("--filesystem-root")
-    p.add_argument("--filesystem-abgabebox-root")
     p.add_argument("--s3-provider", default="s3_compatible", choices=("garage_local", "aws_s3", "hetzner", "s3_compatible"))
     p.add_argument("--s3-endpoint")
     p.add_argument("--s3-region", default="us-east-1")

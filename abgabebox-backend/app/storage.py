@@ -28,7 +28,6 @@ def get_store() -> ObjectStore:
     return ObjectStore(
         service="abgabebox",
         connect=engine.connect,
-        filesystem_roots=lambda: {NAMESPACE: Path(settings.storage_root)},
         credentials_key=lambda: settings.storage_credentials_key,
     )
 

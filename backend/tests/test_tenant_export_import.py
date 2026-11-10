@@ -35,6 +35,7 @@ import pytest
 from sqlalchemy import select
 
 from app.core.secret_crypto import decrypt_secret, encrypt_secret
+from app.core.storage import MAIN, get_object_store
 from app.core.security import hash_password
 from app.core.totp import generate_totp_secret
 from app.models.entities import (
@@ -201,19 +202,15 @@ def test_export_import_roundtrip_recreates_core_entities_with_new_ids(db):
 
 
 def test_export_import_roundtrip_keeps_word_import_document_and_source_file(db, monkeypatch, tmp_path):
-    from app.core.config import settings
     from app.services import tenant_import_service as import_module
 
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
     monkeypatch.setattr(import_module.scanner, "scan_file", lambda *args, **kwargs: "clean")
 
     tenant = make_tenant(db, "Word Import Tenant")
     creator = make_app_user(db, email="word-import@example.com", tenant_id=tenant.id, role_code="writer")
     template = make_template(db, tenant.id, name="Importvorlage")
     protocol = make_protocol(db, tenant.id, template.id, protocol_number="WI-1")
-    source_path = tmp_path / "word-imports" / "source.docx"
-    source_path.parent.mkdir(parents=True)
-    source_path.write_bytes(b"docx-test-content")
+    get_object_store().put_bytes(db, MAIN, "word-imports/source.docx", b"docx-test-content")
     stored_file = StoredFile(
         tenant_id=tenant.id, storage_path="word-imports/source.docx",
         original_name="Sitzung.docx", mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -256,24 +253,20 @@ def test_export_import_roundtrip_keeps_word_import_document_and_source_file(db, 
     assert imported.analysis_snapshot_json == {"title": "Test"}
     assert imported.review_draft_json == {"approved": True}
     assert imported_file.original_name == "Sitzung.docx"
-    assert (tmp_path / imported_file.storage_path).read_bytes() == b"docx-test-content"
+    assert get_object_store().get_bytes(MAIN, imported_file.storage_path) == b"docx-test-content"
 
 
 def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp_path):
     """Regression guard for tenant-owned tables that used to be silently omitted."""
-    from app.core.config import settings
     from app.services import tenant_import_service as import_module
 
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
     monkeypatch.setattr(import_module.scanner, "scan_file", lambda *args, **kwargs: "clean")
 
     tenant = make_tenant(db, "Complete Backup")
     user = make_app_user(db, email="backup@example.com", tenant_id=tenant.id, role_code="admin")
     template = make_template(db, tenant.id, name="Learned Template")
     protocol = make_protocol(db, tenant.id, template.id, protocol_number="BACKUP-1")
-    generated_path = tmp_path / "exports" / "backup.pdf"
-    generated_path.parent.mkdir(parents=True)
-    generated_path.write_bytes(b"pdf-cache")
+    get_object_store().put_bytes(db, MAIN, "exports/backup.pdf", b"pdf-cache")
     generated_file = StoredFile(
         tenant_id=tenant.id, storage_path="exports/backup.pdf", original_name="backup.pdf",
         mime_type="application/pdf", file_size_bytes=9, scan_status="clean", created_by=user.id,
@@ -307,9 +300,7 @@ def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp
     from app.documents.brand import BrandTokens
     from app.documents.layout import TemplateContent
 
-    logo_path = tmp_path / "document_assets" / "logo.png"
-    logo_path.parent.mkdir(parents=True)
-    logo_path.write_bytes(b"png-logo")
+    get_object_store().put_bytes(db, MAIN, "document_assets/logo.png", b"png-logo")
     logo = DocumentAsset(tenant_id=tenant.id, kind="image", category="logo", name="Logo", storage_path="document_assets/logo.png", mime_type="image/png")
     db.add(logo)
     db.flush()
@@ -376,10 +367,10 @@ def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp
     assert outcome.suggested_score == pytest.approx(0.87)
     assert cache.stored_file_id is not None and cache.version_label == "v0.1" and cache.content_hash == "ab" * 32
     assert db.get(StoredFile, cache.stored_file_id).tenant_id == imported_tenant.id
-    assert (tmp_path / db.get(StoredFile, cache.stored_file_id).storage_path).read_bytes() == b"pdf-cache"
+    assert get_object_store().get_bytes(MAIN, db.get(StoredFile, cache.stored_file_id).storage_path) == b"pdf-cache"
     assert imported_brand.is_default and imported_logo.category == "logo"
     assert brand_service.tokens_of(brand_service.current_revision(db, imported_brand)).assets.logo == imported_logo.public_id
-    assert (tmp_path / imported_logo.storage_path).read_bytes() == b"png-logo"
+    assert get_object_store().get_bytes(MAIN, imported_logo.storage_path) == b"png-logo"
     assert imported_document_template.brand_id == imported_brand.id
     published = db.get(DocumentTemplateRevision, imported_document_template.published_revision_id)
     assert published.status == "published"
@@ -988,15 +979,12 @@ def test_export_import_roundtrip_remaps_last_word_import_template_id(db):
 
 
 def test_export_import_roundtrip_recreates_gallery_image(db, monkeypatch, tmp_path):
-    from app.core.config import settings
     from app.services import tenant_import_service as import_svc_module
 
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
     monkeypatch.setattr(import_svc_module.scanner, "scan_file", lambda path, host, port: "clean")
 
     tenant_a = make_tenant(db, "Tenant A")
-    (tmp_path / "gallery").mkdir()
-    (tmp_path / "gallery" / "photo.png").write_bytes(b"fake-png-bytes")
+    get_object_store().put_bytes(db, MAIN, "gallery/photo.png", b"fake-png-bytes")
     stored_file = StoredFile(
         tenant_id=tenant_a.id, original_name="photo.png", mime_type="image/png",
         storage_path="gallery/photo.png", file_size_bytes=14,
@@ -1025,16 +1013,13 @@ def test_export_import_roundtrip_recreates_gallery_image(db, monkeypatch, tmp_pa
 def test_export_import_roundtrip_remaps_the_live_photo_clip(db, monkeypatch, tmp_path):
     """gallery_image.live_video_stored_file_id points at a second stored_file of the same tenant -
     it must follow that file's new id, not keep the exported one (stored_file.id is global)."""
-    from app.core.config import settings
     from app.services import tenant_import_service as import_svc_module
 
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
     monkeypatch.setattr(import_svc_module.scanner, "scan_file", lambda path, host, port: "clean")
 
     tenant_a = make_tenant(db, "Tenant A")
-    (tmp_path / "gallery").mkdir()
-    (tmp_path / "gallery" / "photo.jpg").write_bytes(b"fake-jpeg-bytes")
-    (tmp_path / "gallery" / "photo.mp4").write_bytes(b"fake-mp4-bytes")
+    get_object_store().put_bytes(db, MAIN, "gallery/photo.jpg", b"fake-jpeg-bytes")
+    get_object_store().put_bytes(db, MAIN, "gallery/photo.mp4", b"fake-mp4-bytes")
     photo = StoredFile(
         tenant_id=tenant_a.id, original_name="photo.jpg", mime_type="image/jpeg",
         storage_path="gallery/photo.jpg", file_size_bytes=15,
@@ -1070,10 +1055,8 @@ def test_export_import_roundtrip_remaps_gallery_image_event_id(db, monkeypatch, 
     internal id happens to be lower is created first here specifically so the source
     tenant's event does NOT land on id 1, the way a bug that forgot to remap could
     accidentally still "work" by coincidence in a near-empty test database."""
-    from app.core.config import settings
     from app.services import tenant_import_service as import_svc_module
 
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
     monkeypatch.setattr(import_svc_module.scanner, "scan_file", lambda path, host, port: "clean")
 
     other_tenant = make_tenant(db, "Other Tenant")
@@ -1081,8 +1064,7 @@ def test_export_import_roundtrip_remaps_gallery_image_event_id(db, monkeypatch, 
 
     tenant_a = make_tenant(db, "Tenant A")
     event = make_event(db, tenant_a.id, title="Tenant A's Event")
-    (tmp_path / "gallery").mkdir()
-    (tmp_path / "gallery" / "photo.png").write_bytes(b"fake-png-bytes")
+    get_object_store().put_bytes(db, MAIN, "gallery/photo.png", b"fake-png-bytes")
     stored_file = StoredFile(
         tenant_id=tenant_a.id, original_name="photo.png", mime_type="image/png",
         storage_path="gallery/photo.png", file_size_bytes=14,
@@ -1112,18 +1094,17 @@ def test_export_import_roundtrip_remaps_gallery_image_event_id(db, monkeypatch, 
 
 
 def _storage(monkeypatch, tmp_path):
-    from app.core.config import settings
     from app.services import tenant_import_service as import_module
 
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
-    monkeypatch.setattr(settings, "abgabebox_storage_root", str(tmp_path))
+    # Dateien liegen im Objektspeicher (Test-S3); nur der Virenscan wird ersetzt.
     monkeypatch.setattr(import_module.scanner, "scan_file", lambda *args, **kwargs: "clean")
 
 
 def _stored_image(db, tmp_path, tenant_id: int, name: str = "photo.png") -> StoredFile:
-    (tmp_path / name).write_bytes(b"fake-png-bytes")
+    key = f"uploads/tenant-{tenant_id}/{name}"
+    get_object_store().put_bytes(db, MAIN, key, b"fake-png-bytes")
     stored_file = StoredFile(
-        tenant_id=tenant_id, original_name=name, mime_type="image/png", storage_path=name, file_size_bytes=14,
+        tenant_id=tenant_id, original_name=name, mime_type="image/png", storage_path=key, file_size_bytes=14,
     )
     db.add(stored_file)
     db.flush()
@@ -1764,7 +1745,7 @@ def test_import_marks_registry_entries_without_matching_pdf_as_unverified(db, mo
     _storage(monkeypatch, tmp_path)
     tenant = make_tenant(db, "Registerprüfung")
     pdf = b"%PDF-1.7 hocx test"
-    (tmp_path / "export.pdf").write_bytes(pdf)
+    get_object_store().put_bytes(db, MAIN, "export.pdf", pdf)
     db.add(StoredFile(tenant_id=tenant.id, original_name="export.pdf", mime_type="application/pdf", storage_path="export.pdf", file_size_bytes=len(pdf)))
     backed = hashlib.sha256(pdf).hexdigest()
     db.add(DocumentRegistry(tenant_id=tenant.id, sha256=backed, document_type="protocol", title="Mit Datei"))

@@ -33,10 +33,7 @@ logger = logging.getLogger("photo-analysis-worker")
 
 POLL_INTERVAL_SECONDS = float(os.environ.get("PHOTO_WORKER_POLL_INTERVAL_SECONDS", "10"))
 MODEL_PATH = os.environ.get("PHOTO_WORKER_MODEL_PATH", "/app/models/face_detection_yunet.onnx")
-# Dateisystem-Stämme für den bisherigen Bestand (Generation 0); nach der Migration auf S3 liest
-# der Worker über das aktive Speicherprofil (objstore_client.py, nur lesend).
-STORAGE_ROOT = Path(os.environ.get("STORAGE_ROOT", "/app/storage"))
-ABGABEBOX_STORAGE_ROOT = Path(os.environ.get("ABGABEBOX_STORAGE_ROOT", str(STORAGE_ROOT / "abgabebox-uploads")))
+# Dateien liest der Worker nur über das aktive S3-Speicherprofil (objstore_client.py, nur lesend).
 
 
 def _credentials_key() -> str:
@@ -51,7 +48,6 @@ def build_store(engine) -> ObjectStore:
     return ObjectStore(
         service="photo-worker",
         connect=engine.connect,
-        filesystem_roots={"main": STORAGE_ROOT, "abgabebox": ABGABEBOX_STORAGE_ROOT},
         credentials_key=_credentials_key,
     )
 

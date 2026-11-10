@@ -8,7 +8,6 @@ import asyncio
 import io
 import uuid
 from datetime import date
-from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
@@ -20,7 +19,7 @@ from app.models.entities import PhotoAlbum, PhotoAlbumItem, ProtocolImage, Store
 from app.schemas.files import FileBulkDelete, FileBulkTagsUpdate, PhotoAlbumItemBestUpdate
 from app.services import photo_album_service
 from app.services.file_service import FileService
-from app.core.storage import get_object_store
+from app.core.storage import MAIN, get_object_store
 from tests.factories import (
     make_current_user,
     make_protocol,
@@ -73,8 +72,8 @@ def test_delete_gallery_images_removes_row_and_disk_files(db):
     tenant = make_tenant(db)
     item = _upload_gallery_image(db, tenant.id)
     stored_file = service.stored_file_repository.get_by_public_id(db, item.id, tenant_id=tenant.id)
-    disk_path = Path(settings.storage_root) / stored_file.storage_path
-    assert disk_path.exists()
+    backend = get_object_store().active_backend()
+    assert backend.head(MAIN, stored_file.storage_path) is not None
 
     deleted, errors = service.delete_gallery_images(db, tenant.id, [item.id])
     db.commit()
@@ -84,7 +83,7 @@ def test_delete_gallery_images_removes_row_and_disk_files(db):
     assert service.stored_file_repository.get_by_public_id(db, item.id, tenant_id=tenant.id) is None
     # S3-008: physisch entfernt erst der Purge-Job nach dem Commit.
     get_object_store().purge_deleted(db)
-    assert not disk_path.exists()
+    assert backend.head(MAIN, stored_file.storage_path) is None
 
 
 def test_delete_gallery_images_refuses_non_gallery_sources(db):

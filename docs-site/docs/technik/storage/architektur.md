@@ -11,7 +11,6 @@ flowchart LR
     SW[Storage-Worker]:::svc
   end
   BE & AB & PW & SW -->|objstore_client| R{{ObjectStore}}
-  R -->|aktive Generation| G0[(Dateisystem g0)]
   R -->|aktive Generation| G1[(S3-Profil gN)]
   BE & AB -->|storage_begin_write / register_write| DB[(PostgreSQL)]
   SW --> DB
@@ -22,9 +21,9 @@ flowchart LR
   `scripts/sync-objstore-client.sh` kopiert ihn nach `abgabebox-backend/app/` und
   `photo-analysis-worker/app/` (die Abgabebox darf aus Isolationsgründen keinen Backend-Code
   importieren). `--check` prüft in CI, dass die Kopien aktuell sind.
-- **Backends**: `FilesystemBackend` (bisheriger Bestand, Generation 0) und `S3Backend` (boto3,
-  Path- oder Virtual-Host-Adressierung, eigene CA, Timeouts, adaptive Retries, Multipart ab
-  16 MiB, Bandbreitenbegrenzung).
+- **Backend**: nur noch `S3Backend` (boto3, Path- oder Virtual-Host-Adressierung, eigene CA,
+  Timeouts, adaptive Retries, Multipart ab 16 MiB, Bandbreitenbegrenzung). Den Dateisystem-Speicher
+  von 1.2 (Generation 0) gibt es nicht mehr, siehe [Upgrade auf S3-only](migration.md#upgrade-auf-s3-only).
 - **Operationen**: `put_bytes`/`put_file`, `get_bytes`/`iter_bytes` (Streaming, Byte-Ranges),
   `delete`, `exists`/`head`, `list`, `copy`/`move`, `verify` (Grösse + SHA-256, optional
   vollständiges Nachlesen), `local_copy` (temporäre Datei für Bibliotheken, die Pfade brauchen).
@@ -46,12 +45,13 @@ entstehen nur aus Code (`tenant-<id>`, UUID) plus einer geprüften Endung (`safe
 Dateiname des Clients wird nie Teil des Pfads. Die Mandantentrennung bleibt wie bisher in den
 Zugriffsprüfungen der Routen; die Keys enthalten zusätzlich `tenant-<id>`.
 
-Physischer Ort: Dateisystem `<root>/<key>`, S3 `<prefix>/g<generation>/<namespace>/<key>` im
-Bucket des Profils (Namespace `abgabebox` optional in einem eigenen Bucket).
+Physischer Ort: `<prefix>/g<generation>/<namespace>/<key>` im Bucket des Profils (Namespace `abgabebox` optional in einem eigenen Bucket).
 
-## Was persistent ist (Migrationsmatrix)
+## Was persistent ist
 
-| Daten | Vorher | Jetzt | Art |
+Die Spalte «Bis 1.2» nennt den früheren Ort im Dateisystem.
+
+| Daten | Bis 1.2 | Jetzt | Art |
 |---|---|---|---|
 | Galerie-, Dokument-, Protokollbild-Uploads, Live-Photo-Clips | `uploads/` | Objekt `main` | persistent |
 | Word-Import-Quellen | `uploads/word-imports/` | Objekt `main` | persistent |
@@ -64,13 +64,11 @@ Bucket des Profils (Namespace `abgabebox` optional in einem eigenen Bucket).
 | Thumbnails | `storage-local/thumbnails` | lokaler Cache | regenerierbar |
 | Upload-Staging, Multipart-Puffer, Export-Arbeitsordner, ZIP-Downloads | lokal | lokal (temporär) | temporär |
 
-Unbekannte Ordner werden bei der Erstmigration **mitgenommen** und im Prüfbericht als
-unreferenziert ausgewiesen, nie still ignoriert oder gelöscht.
-
 ## Aktiver Speicher, Generationen und Fencing
 
 `storage_state` (eine Zeile) hält aktives Profil, aktive Generation und das Schreib-Fence.
-Jede Migration schreibt in eine **neue Generation** (`storage_generation`). Dadurch:
+Jede Migration schreibt in eine **neue Generation** (`storage_generation`); eine Neuinstallation
+beginnt mit Generation 1 auf dem lokalen S3. Dadurch:
 
 - können alte Daten eines früher genutzten Ziels nie unbemerkt wieder aktiv werden,
 - bleibt die abgelöste Generation während der Rückfallfrist (`STORAGE_FALLBACK_DAYS`) unberührt,

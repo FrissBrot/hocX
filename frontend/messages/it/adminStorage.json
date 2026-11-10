@@ -43,7 +43,6 @@
   },
   "confirm": {
     "deleteProfile": "Eliminare il profilo «{name}»? I dati nel bucket non vengono toccati.",
-    "startInitial": "Avviare la migrazione iniziale? hocX entra in manutenzione completa ed è bloccato per gli utenti finché tutti i file non sono copiati e verificati.",
     "startLive": "Avviare la migrazione dal vivo? hocX resta utilizzabile durante la copia.",
     "cutover": "Passare al nuovo archivio? Le scritture vengono bloccate brevemente, poi hocX lavora con il nuovo archivio.",
     "resume": "Riprendere la migrazione?",
@@ -63,11 +62,11 @@
     "generation": "Generazione",
     "location": "Posizione",
     "localS3": "S3 locale",
-    "filesystem": "File system locale (dati esistenti)",
+    "filesystem": "File system locale (fino alla 1.2, solo cronologia)",
     "extent": "Volume"
   },
   "provider": {
-    "filesystem": "File system",
+    "filesystem": "File system (fino alla 1.2, non più supportato)",
     "garage_local": "S3 locale (Garage)",
     "aws_s3": "AWS S3",
     "hetzner": "Hetzner Object Storage",
@@ -79,7 +78,6 @@
     "notConfigured": "Non configurato",
     "reason": {
       "active": "archivio attivo",
-      "initial_target": "destinazione della migrazione iniziale",
       "requested": "richiesto da un amministratore",
       "migration": "usato da una migrazione",
       "fallback_period": "periodo di ripiego in corso",
@@ -132,9 +130,7 @@
     "empty": "Nessuna generazione.",
     "size": "{count, plural, one {# oggetto} other {# oggetti}}, {size}",
     "since": "dal {date}",
-    "retainUntil": "conservare fino al {date}",
-    "next": "Creata alla prossima migrazione",
-    "nextMeta": "Verrà creata sul profilo di destinazione"
+    "retainUntil": "conservare fino al {date}"
   },
   "generationStatus": {
     "preparing": "In preparazione",
@@ -152,7 +148,8 @@
     "created": "Creata il {date}",
     "copied": "{copied} / {total} oggetti",
     "checked": "{verified} verificati · {failed} non riusciti",
-    "emptyHint": "La prima migrazione sposta i dati esistenti in un profilo S3."
+    "emptyHint": "Una migrazione sposta tutti i file in un altro profilo S3.",
+    "kindInitial": "Migrazione iniziale (fino alla 1.2)"
   },
   "state": {
     "pending": "Creata",
@@ -179,9 +176,7 @@
   },
   "migration": {
     "title": "{source} → {target}",
-    "initialHint": "Migrazione iniziale: hocX è in manutenzione completa durante la migrazione.",
     "liveHint": "Migrazione dal vivo: hocX resta utilizzabile, solo il passaggio blocca brevemente le scritture.",
-    "confirmInitial": "Verifica preliminare superata. Durata prevista della manutenzione: {range}.",
     "confirmLive": "Verifica preliminare superata. Durata prevista della copia: {range}, interruzione durante il passaggio: {cutover}.",
     "heartbeatStale": "Il worker di archiviazione non risponde più. Controlla il container storage-worker - la migrazione riprende dopo il riavvio.",
     "copyProgress": "{copied} di {total} copiati",
@@ -254,7 +249,6 @@
   },
   "startForm": {
     "title": "Prepara migrazione",
-    "initialHint": "Migrazione iniziale dal file system: dopo la tua conferma hocX entra in manutenzione completa finché tutti i file non sono copiati e verificati.",
     "liveHint": "Migrazione dal vivo: hocX resta utilizzabile durante la copia. Le modifiche vengono recuperate continuamente.",
     "target": "Destinazione",
     "needsTest": "Questo profilo richiede prima un test di connessione riuscito.",
@@ -296,16 +290,7 @@
     "label": "Digita «{expected}» per confermare"
   },
   "hero": {
-    "initialPending": "Migrazione iniziale in sospeso",
-    "target": "Destinazione: {name}",
     "noTarget": "Ancora nessun profilo di destinazione",
-    "noTargetText": "La migrazione iniziale richiede un profilo S3 attivato.",
-    "initialText": "I dati esistenti sono ancora nel file system. Per la migrazione iniziale è previsto il profilo «{name}».",
-    "tested": {
-      "ok": "Connessione testata con successo.",
-      "failed": "L’ultimo test di connessione non è riuscito.",
-      "never": "La connessione non è mai stata testata."
-    },
     "switched": "Commutato il {date}",
     "switchedObjects": "{count, plural, one {# oggetto copiato e verificato} other {# oggetti copiati e verificati}}",
     "retained": "La generazione sostituita {generation} viene conservata fino al {date} e può poi essere ripulita consapevolmente.",
@@ -337,7 +322,7 @@
     "credentials": "Credenziali",
     "credentialsStored": "•••••• salvate cifrate",
     "credentialsMissing": "Non salvate",
-    "noTestNeeded": "Nessun test necessario – percorso locale",
+    "legacy": "Non più utilizzabile – solo cronologia",
     "lastTestOk": "Ultimo test {time} · riuscito",
     "lastTestFailed": "Ultimo test {time} · non riuscito",
     "testing": "Test della connessione …",

@@ -10,7 +10,8 @@
    `LOCAL_S3_ABGABEBOX_ACCESS_KEY`/`LOCAL_S3_ABGABEBOX_SECRET_KEY`.
 2. Geheimnisse landen als Compose-Secret-Dateien in `.secrets/` (0600).
 3. `local-s3` startet, `storage-init` richtet Layout, Schlüssel und Buckets idempotent ein,
-   das Backend legt das Profil «Lokales S3 (Garage)» an bzw. hält es aktuell.
+   das Backend legt das Profil «Lokales S3 (Garage)» an bzw. hält es aktuell. Bei einer
+   Neuinstallation ist es von Anfang an der aktive Speicher (Generation 1).
 4. `storage-worker` startet (gleiches Image wie das Backend).
 5. Die Smoke-Checks führen `storage-init` erneut aus; schlägt die Einrichtung fehl, rollt der
    Deploy zurück.
@@ -21,7 +22,14 @@
     Ohne diesen Schlüssel lassen sich gespeicherte S3-Zugangsdaten nicht mehr entschlüsseln.
     Er gehört in das gleiche Secret-Backup wie `.env`.
 
-Bis zur Erstmigration bleibt das Dateisystem aktiv – das Update allein verschiebt keine Datei.
+Vor einem Update von 1.2.x prüft `deploy.sh`, ob die Instanz bereits vollständig auf S3 läuft,
+und bereinigt bei Bedarf den alten Dateisystem-Bestand – siehe
+[Upgrade auf S3-only](migration.md#upgrade-auf-s3-only).
+
+| Variable (nur beim Aufruf von `deploy.sh`) | Bedeutung | Default |
+|---|---|---|
+| `HOCX_SKIP_STORAGE_FALLBACK` | `1`: Rückfallfrist der Dateisystem-Generation ohne Rückfrage beenden (nötig, wenn nicht interaktiv) | – |
+| `HOCX_STORAGE_PURGE_TIMEOUT` | maximale Wartezeit auf die Bereinigung des Dateisystem-Bestands in Sekunden | `3600` |
 
 ## Konfiguration
 
@@ -77,4 +85,5 @@ Generation in der Rückfallfrist halten, lassen sich weder löschen noch in ihre
 | Objekte `dead` | dauerhaft fehlgeschlagen; «Fehlgeschlagene erneut versuchen». Fehlen sie schon in der Quelle (`source_missing`), mit «Fehlende bestätigen» bewusst ausweisen. |
 | Worker-Heartbeat veraltet | `docker compose logs storage-worker`; nach Neustart übernimmt er die Migration (Lease läuft nach 60 s ab). |
 | Profil lässt sich nicht ändern | aktiv oder in Migration/Rückfallfrist – neues Profil anlegen und migrieren. |
+| `deploy.sh` meldet «Upgrade gesperrt» | Instanz noch nicht vollständig auf S3, Migration offen oder Dateisystem-Bestand nicht bereinigt – siehe [Upgrade auf S3-only](migration.md#upgrade-auf-s3-only). |
 | Login zeigt Wartung, obwohl Arbeiten fertig sind | Wartung endet nur über die Freigabe (System → Wartung); offene Bedingungen werden dort angezeigt. |

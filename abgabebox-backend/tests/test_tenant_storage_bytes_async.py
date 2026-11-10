@@ -1,6 +1,6 @@
 """Regression tests for the medium audit finding (2026-08-27): storage.tenant_storage_bytes()
-does a synchronous Path.rglob()+stat() walk over every file ever stored for a tenant - cost
-grows with total accumulated files - and was called directly from routes/public.py's
+did a synchronous walk over every file ever stored for a tenant (seit «nur noch S3»: eine
+Summe über das Objektregister) - cost grows with total accumulated files - and was called directly from routes/public.py's
 `async def upload()` while holding the cross-process tenant_upload_lock(), blocking the whole
 event loop (every tenant, every other in-flight request on that worker) for the duration of the
 walk.
@@ -21,24 +21,14 @@ from __future__ import annotations
 import asyncio
 import re
 import time
+import uuid
 from pathlib import Path
 
-from app.config import settings
-from app.storage import tenant_storage_bytes
+from app.db import SessionLocal
+from app.storage import NAMESPACE, get_store, tenant_storage_bytes
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 _TENANT_ID = 999002
-
-
-def _reset(tmp_path: Path) -> None:
-    for root in (
-        tmp_path / f"tenant-{_TENANT_ID}",
-        tmp_path / "quarantine" / f"tenant-{_TENANT_ID}",
-    ):
-        if root.exists():
-            for f in root.rglob("*"):
-                if f.is_file():
-                    f.unlink()
 
 
 def test_upload_route_wraps_tenant_storage_bytes_in_to_thread():
@@ -51,22 +41,20 @@ def test_upload_route_wraps_tenant_storage_bytes_in_to_thread():
     )
 
 
-def test_tenant_storage_bytes_via_to_thread_does_not_starve_the_event_loop(tmp_path, monkeypatch):
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
-    _reset(tmp_path)
+def test_tenant_storage_bytes_via_to_thread_does_not_starve_the_event_loop():
+    store = get_store()
+    key = f"tenant-{_TENANT_ID}/assignment-1/{uuid.uuid4().hex}.bin"
+    with SessionLocal() as db:
+        store.put_bytes(db, NAMESPACE, key, b"x" * 500)
+        db.commit()
     try:
-        tenant_dir = tmp_path / f"tenant-{_TENANT_ID}" / "assignment-1"
-        tenant_dir.mkdir(parents=True)
-        (tenant_dir / "f.bin").write_bytes(b"x" * 500)
-
-        # Simulate a tenant with a very large accumulated file count (a slow walk) by wrapping
+        # Simulate a tenant with a very large accumulated file count (a slow query) by wrapping
         # the real function with an artificial delay - deterministic, rather than depending on
-        # rglob() actually being slow enough on a handful of tmp_path files to expose a
-        # regression via timing alone.
+        # the registry sum actually being slow enough to expose a regression via timing alone.
         def slow_tenant_storage_bytes(tenant_id: int) -> int:
             time.sleep(0.2)
-            # Dateisystem-Backend: Verzeichnis-Walk ohne DB-Zugriff (db=None).
-            return tenant_storage_bytes(None, tenant_id)
+            with SessionLocal() as db:
+                return tenant_storage_bytes(db, tenant_id)
 
         async def scenario():
             ticks = 0
@@ -91,4 +79,6 @@ def test_tenant_storage_bytes_via_to_thread_does_not_starve_the_event_loop(tmp_p
         # window - this is the same class of regression a direct (non-threaded) call would cause.
         assert ticks >= 15, f"event loop starved while tenant_storage_bytes ran (only {ticks} ticks)"
     finally:
-        _reset(tmp_path)
+        with SessionLocal() as db:
+            store.delete(db, NAMESPACE, key)
+            db.commit()

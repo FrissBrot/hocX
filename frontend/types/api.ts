@@ -1893,6 +1893,7 @@ export type MaintenanceOverview = {
 
 // --- Storage (backend/app/schemas/storage_admin.py) -------------------------------------------
 
+// "filesystem" nur noch als deaktivierte Historie (Speicher bis 1.2, siehe Migration 0168_s3_only).
 export type StorageProvider = "filesystem" | "garage_local" | "aws_s3" | "hetzner" | "s3_compatible";
 
 export type StorageDataLocation = "ch" | "eu_eea" | "adequate" | "third_country";
@@ -1957,7 +1958,7 @@ export type StorageMigrationEvent = {
 
 export type StorageMigration = {
   id: string;
-  kind: "initial" | "live";
+  kind: "initial" | "live"; // "initial" (Dateisystem → S3) nur noch in der Historie, neu entstehen nur Live-Migrationen
   state: StorageMigrationState;
   resume_state: string | null;
   source_profile_name: string;

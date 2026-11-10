@@ -82,37 +82,12 @@ DEFAULT_OPTIONS = {
     "max_object_attempts": 8,
 }
 
-# Ausgeschlossen aus der Erstmigration: temporäre Arbeitsdateien und regenerierbare Caches
-# (Namespace "main", relativ zu STORAGE_ROOT). Alles andere wird übernommen - auch unbekannte
-# Ordner, die der Prüfbericht dann gesondert ausweist.
-INITIAL_EXCLUDED_PREFIXES = (
-    "uploads/_staging/",
-    "uploads/_multipart/",
-    "document_templates/",
-    "latex_templates/",
-    "abgabebox-uploads/",  # eigener Namespace "abgabebox" (separater Mount)
-)
-INITIAL_INCLUDED_EXPORT_PREFIX = "exports/generated/"
-
-
 class MigrationError(ValueError):
     """Erwartete Ablehnung (ValueError-Konvention: kein Eintrag im Fehlerlog)."""
 
 
-def is_excluded_initial_key(namespace: str, key: str) -> bool:
-    if namespace != "main":
-        return False
-    if key.startswith("exports/") and not key.startswith(INITIAL_INCLUDED_EXPORT_PREFIX):
-        return True  # Export-Arbeitsordner
-    if "/.hocx-upload-" in f"/{key}" or key.rsplit("/", 1)[-1].startswith(".hocx-upload-"):
-        return True
-    return any(key.startswith(prefix) for prefix in INITIAL_EXCLUDED_PREFIXES)
-
-
-def merged_options(options: dict[str, Any] | None, *, kind: str) -> dict[str, Any]:
+def merged_options(options: dict[str, Any] | None) -> dict[str, Any]:
     merged = dict(DEFAULT_OPTIONS)
-    if kind == "initial":
-        merged.update({"auto_cutover": True, "observe_seconds": 60})
     for key, value in (options or {}).items():
         if key not in DEFAULT_OPTIONS:
             raise MigrationError(f"Unbekannte Option: {key}")
@@ -198,8 +173,8 @@ def lock_migration(db: Session, migration_id: uuid.UUID) -> StorageMigration:
 
 
 def create_migration(db: Session, *, target_profile_id: int, options: dict[str, Any] | None, actor_email: str | None) -> StorageMigration:
-    """Neue Migration vom aktiven Speicher zum Zielprofil. Erstmigration (Quelle = Dateisystem)
-    oder Live-Migration (Quelle = aktives S3-Profil) wird aus dem aktiven Zustand abgeleitet."""
+    """Neue Live-Migration vom aktiven S3-Profil zum Zielprofil. Das Dateisystem ist seit 0168
+    weder Quelle noch Ziel (hocX unterstützt nur noch S3)."""
     # Serialisiert gleichzeitige Anlage-Versuche (zwei Admins, Doppelklick); der Unique-Index
     # uq_storage_migration_open ist die zweite, harte Sicherung.
     db.execute(text("SELECT pg_advisory_xact_lock(202600023)"))
@@ -224,6 +199,9 @@ def create_migration(db: Session, *, target_profile_id: int, options: dict[str, 
         raise MigrationError("Profil nicht gefunden")
     if target.id == source.id:
         raise MigrationError("Quelle und Ziel sind dasselbe Profil")
+    # Altes Dateisystem-Profil (nur noch Historie nach 0168): weder Quelle noch Ziel.
+    if source.provider == "filesystem":
+        raise MigrationError("Aktiver Speicher ist das Dateisystem - wird nicht mehr unterstützt")
     if target.provider == "filesystem":
         raise MigrationError("Das Dateisystem kann kein Migrationsziel sein")
     if not target.is_enabled:
@@ -232,8 +210,8 @@ def create_migration(db: Session, *, target_profile_id: int, options: dict[str, 
         raise MigrationError("Zielprofil muss zuerst einen erfolgreichen Verbindungstest bestehen")
     if storage_profile_service.locations_overlap(source, target):
         raise MigrationError("Quelle und Ziel überschneiden sich (gleicher Bucket, überlappender Präfix)")
-    kind = "initial" if source.provider == "filesystem" else "live"
-    merged = merged_options(options, kind=kind)
+    kind = "live"
+    merged = merged_options(options)
     next_generation = int(db.scalar(select(func.coalesce(func.max(StorageGeneration.generation), 0))) or 0) + 1
     migration = StorageMigration(
         kind=kind,
@@ -263,8 +241,7 @@ def create_migration(db: Session, *, target_profile_id: int, options: dict[str, 
 
 
 def start(db: Session, migration_id: uuid.UUID, *, actor_email: str | None) -> StorageMigration:
-    """Bestätigt den Start nach Preflight und Schätzung. Bei der Erstmigration aktiviert der
-    Worker daraufhin die volle Wartung."""
+    """Bestätigt den Start nach Preflight und Schätzung."""
     migration = lock_migration(db, migration_id)
     if migration.state != "awaiting_confirmation":
         raise MigrationError("Migration wartet nicht auf eine Startbestätigung")
@@ -305,9 +282,9 @@ def cancel(db: Session, migration_id: uuid.UUID, *, actor_email: str | None) -> 
     migration.cancel_requested = True
     add_event(db, migration.id, "cancel_requested", actor_email=actor_email)
     worker_active = migration.lease_expires_at is not None and migration.lease_expires_at > datetime.now(UTC)
-    # Ohne aktiven Worker und ohne Wartung/Fence (Live-Migration oder Erstmigration vor dem
-    # Start) kann sofort abgebrochen werden; sonst räumt der Worker Fence und Wartung auf.
-    if not worker_active and (migration.kind == "live" or migration.state in ("pending", "preflight", "awaiting_confirmation")):
+    # Ohne aktiven Worker (Live-Migration: keine volle Wartung) kann sofort abgebrochen werden;
+    # sonst räumt der Worker Fence und Wartung auf.
+    if not worker_active:
         finish_cancel(db, migration, actor_email=actor_email)
     return migration
 
@@ -375,8 +352,8 @@ def acknowledge_rollback(db: Session, migration_id: uuid.UUID, *, actor_email: s
     bleibt das (bereits umgeschaltete) Ziel; zurück geht es nur über eine neue Migration.
 
     Bei einem committeten Cutover wird das aktive Ziel dabei sofort erneut geprüft (S3-002). Erst
-    ein bestandener Healthcheck macht ein noch gesperrtes Wartungsfenster der Erstmigration
-    freigebbar; scheitert er, prüft der Storage-Worker regelmässig nach."""
+    ein bestandener Healthcheck macht ein noch gesperrtes Wartungsfenster freigebbar; scheitert
+    er, prüft der Storage-Worker regelmässig nach."""
     migration = lock_migration(db, migration_id)
     if migration.state != "rollback_required":
         raise MigrationError("Migration erfordert keinen Rollback")
@@ -511,8 +488,8 @@ def cleanup_journal(db: Session) -> dict[str, int]:
 
 # Erzeugte Exporte: die Aufbewahrung (cleanup_old_generated_exports) entfernt das Objekt und lässt
 # die StoredFile-Zeile bewusst stehen (Download liefert dann 404). Eine solche Referenz ohne Objekt
-# ist abgelaufen, nicht fehlend - sonst meldete jede Altinstallation "fehlende Dateien", die
-# Erstmigration schaltete nie automatisch um und storage_verify bliebe dauerhaft inkonsistent (S3-013).
+# ist abgelaufen, nicht fehlend - sonst meldete jede Altinstallation "fehlende Dateien" und
+# storage_verify bliebe dauerhaft inkonsistent (S3-013).
 EXPORT_REFERENCE_KIND = "stored_file_export"
 
 
