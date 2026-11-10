@@ -16,10 +16,17 @@ Installationen aktualisieren können.
   Browsers). Der Effekt ersetzt den bisherigen und bleibt im Profil ein- und ausschaltbar;
   er setzt die eingeklappten Punkte (Akkordeon) voraus.
 - **PDF öffnen mit Ladeanimation.** Der neue Tab bleibt nicht mehr leer und weiss, sondern
-  zeigt sofort «PDF wird erstellt…» mit einer Animation, bis das PDF erscheint.
+  zeigt sofort «Ihr PDF wird erstellt» mit einer Presse, die das Dokument zusammensetzt und
+  stempelt, bis das PDF erscheint.
+- **Links im Text.** Webadressen und E-Mail-Adressen werden erkannt: im Editor als Link
+  dargestellt (Strg/Cmd+Klick öffnet sie), im PDF klickbar.
+- **Matrix: vergangene Termine ausgegraut.** Terminzeilen haben im Matrix-Dialog den Schalter
+  «Vergangene Termine ausgegraut» (Standard an); im PDF erscheinen sie grau wie im Editor.
 
 ### Behoben
 
+- **PDF: entfernte Termine erscheinen nicht mehr.** Termine, die im Editor aus einer
+  Termin-Serie entfernt wurden, standen mit ihren leeren Vorgaben weiterhin im PDF.
 - **PDF: «Abstand vor Abschnitten» wirkt.** Der Wert aus dem Corporate Design kam nie im PDF an:
   Nach jedem Traktandum stand ein fester Abstand von 12 pt, der den eingestellten Abstand vor dem
   nächsten Traktandum übersteuerte. Jetzt gilt zwischen Traktanden genau der eingestellte Wert,
