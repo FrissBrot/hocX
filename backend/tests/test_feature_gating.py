@@ -114,7 +114,7 @@ def test_default_factory_user_has_custom_domain_booked():
 
 @pytest.mark.parametrize("role", ["reader", "writer", "kassier", "admin"])
 def test_wanderplaner_read_blocked_when_tenant_has_not_booked_it(role):
-    """wanderplaner ist wie abgabebox ein Opt-in-Feature (Migration 0168: kein Backfill fuer
+    """wanderplaner ist wie abgabebox ein Opt-in-Feature (Migration 0169: kein Backfill fuer
     Bestandsmandanten, anders als finance in 0084) - make_current_user()'s Default-Featureset
     enthaelt es deshalb bewusst nicht (siehe unten)."""
     user = make_current_user(tenant_id=1, role=role, features=frozenset())
@@ -147,7 +147,7 @@ def test_wanderplaner_write_blocked_for_reader_even_when_booked():
 
 def test_default_factory_user_has_no_wanderplaner_booked():
     """Gegenteil von test_default_factory_user_has_finance_booked(): wanderplaner ist neu und
-    NICHT rueckwirkend fuer Bestandsmandanten gebucht (siehe Migration 0168)."""
+    NICHT rueckwirkend fuer Bestandsmandanten gebucht (siehe Migration 0169)."""
     user = make_current_user(tenant_id=1, role="admin")
     with pytest.raises(HTTPException):
         require_permission(user, P.HIKING_MANAGE)

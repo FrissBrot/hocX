@@ -1,7 +1,6 @@
 """Audit MAIN-SEC-002: Mandanten-Profilbild darf kein ausführbares Dokument werden."""
 import asyncio
 import io
-from pathlib import Path
 
 import pytest
 from fastapi import HTTPException, UploadFile
@@ -9,6 +8,7 @@ from PIL import Image
 from starlette.datastructures import Headers
 
 from app.api.routes import tenants as tenant_routes
+from app.core.storage import MAIN, get_object_store
 from app.services.tenant_service import apply_tenant_profile_image
 from tests.factories import make_tenant
 
@@ -48,15 +48,13 @@ def test_profile_image_rejects_non_images(db, content, filename, content_type):
 
 
 def test_profile_image_is_reencoded_as_png_regardless_of_filename(db):
-    from app.core.config import settings
-
     tenant = make_tenant(db)
     asyncio.run(apply_tenant_profile_image(db, tenant, _upload(_png(), "logo.html", "text/html")))
 
     assert tenant.profile_image_path is not None
     assert tenant.profile_image_path.endswith(".png")
-    stored = Path(settings.storage_root) / tenant.profile_image_path
-    with Image.open(stored) as image:
+    stored = get_object_store().get_bytes(MAIN, tenant.profile_image_path)
+    with Image.open(io.BytesIO(stored)) as image:
         assert image.format == "PNG"
 
 
@@ -73,13 +71,10 @@ def test_profile_image_route_sets_fixed_type_and_csp(db):
 
 
 def test_legacy_profile_image_with_unsafe_suffix_is_served_as_download(db):
-    from app.core.config import settings
-
     tenant = make_tenant(db)
-    legacy = Path(settings.upload_root) / "tenant-profiles" / "legacy.html"
-    legacy.parent.mkdir(parents=True, exist_ok=True)
-    legacy.write_bytes(b"<script>alert(1)</script>")
-    tenant.profile_image_path = str(legacy.relative_to(settings.storage_root))
+    legacy_key = f"uploads/tenant-profiles/legacy-{tenant.id}.html"
+    get_object_store().put_bytes(db, MAIN, legacy_key, b"<script>alert(1)</script>")
+    tenant.profile_image_path = legacy_key
     db.flush()
 
     response = tenant_routes.tenant_profile_image(tenant.public_id, request=None, db=db)

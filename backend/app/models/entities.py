@@ -2230,7 +2230,7 @@ class PlatformNotificationSettings(Base):
 class PhotoAlbum(Base, TimestampMixin):
     """Manuelle Alben und automatische Alben pro Zyklus, Abgabe, Abgabe-Element oder
     Wandertour. Feldbedingungen und partielle eindeutige Indizes sichern jeweils genau
-    ein Album pro Ziel (Migrationen 0068 und 0168_wanderplaner)."""
+    ein Album pro Ziel (Migrationen 0068 und 0169_wanderplaner)."""
 
     __tablename__ = "photo_album"
 

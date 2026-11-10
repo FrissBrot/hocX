@@ -12,7 +12,7 @@ from starlette.datastructures import Headers
 from app.api.routes import files as files_routes
 from app.models import ProtocolImage, StoredFile
 from app.services.file_service import FileService, _safe_storage_path
-from app.core.storage import get_object_store
+from app.core.storage import MAIN, get_object_store
 from tests.factories import (
     make_current_user,
     make_protocol,
@@ -27,9 +27,12 @@ from tests.factories import (
 def _isolated_storage_root(monkeypatch, tmp_path):
     from app.core.config import settings
 
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path / "storage"))
-    monkeypatch.setattr(settings, "upload_root", str(tmp_path / "storage" / "uploads"))
     monkeypatch.setattr(settings, "thumbnail_root", str(tmp_path / "storage-local" / "thumbnails"))
+
+
+def _physically_present(key: str) -> bool:
+    """Objekt liegt im Bucket (am Register vorbei - Tombstones zählen bis zum Purge als vorhanden)."""
+    return get_object_store().active_backend().head(MAIN, key) is not None
 
 
 def _png_upload() -> UploadFile:
@@ -65,18 +68,17 @@ def _shared_image_setup(db):
 
 
 def test_delete_shared_protocol_image_keeps_file_for_other_protocol(db):
-    from app.core.config import settings
-
     _, service, image_a, image_b = _shared_image_setup(db)
     stored_file = db.get(StoredFile, image_a.stored_file_id)
-    file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
-    assert file_path.exists()
+    key = stored_file.storage_path
+    assert _physically_present(key)
 
     assert service.delete_protocol_image(db, image_b.id) is True
 
     assert db.get(ProtocolImage, image_a.id) is not None
     assert db.get(StoredFile, image_a.stored_file_id) is not None
-    assert file_path.exists()
+    get_object_store().purge_deleted(db)
+    assert _physically_present(key)
 
 
 def test_delete_last_protocol_image_reference_removes_file_and_thumbnail(db):
@@ -85,7 +87,8 @@ def test_delete_last_protocol_image_reference_removes_file_and_thumbnail(db):
     _, service, image_a, image_b = _shared_image_setup(db)
     stored_file_id = image_a.stored_file_id
     stored_file = db.get(StoredFile, stored_file_id)
-    file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
+    key = stored_file.storage_path
+    assert _physically_present(key)
     thumb_path = (
         _safe_storage_path(settings.thumbnail_root, stored_file.thumbnail_path) if stored_file.thumbnail_path else None
     )
@@ -96,7 +99,7 @@ def test_delete_last_protocol_image_reference_removes_file_and_thumbnail(db):
     assert db.get(StoredFile, stored_file_id) is None
     # S3-008: physisch entfernt erst der Purge-Job nach dem Commit.
     get_object_store().purge_deleted(db)
-    assert not file_path.exists()
+    assert not _physically_present(key)
     if thumb_path is not None:
         assert not Path(thumb_path).exists()
 

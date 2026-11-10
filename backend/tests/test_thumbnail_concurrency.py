@@ -19,22 +19,20 @@ from tests.factories import make_tenant
 def _isolated_storage_root(monkeypatch, tmp_path):
     from app.core.config import settings
 
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path / "storage"))
     monkeypatch.setattr(settings, "thumbnail_root", str(tmp_path / "storage-local" / "thumbnails"))
     monkeypatch.setattr(module, "_THUMBNAIL_BACKFILL_FAILED", set())
 
 
 def _image(db, tenant_id, name, content=None):
-    from app.core.config import settings
+    from app.core.storage import MAIN, get_object_store
 
-    path = Path(settings.storage_root) / name
-    path.parent.mkdir(parents=True, exist_ok=True)
     if content is None:
         buffer = io.BytesIO()
         Image.new("RGB", (640, 480), color=(40, 80, 120)).save(buffer, format="PNG")
         content = buffer.getvalue()
-    path.write_bytes(content)
-    stored_file = StoredFile(tenant_id=tenant_id, original_name=name, mime_type="image/png", storage_path=name, scan_status="clean")
+    key = f"uploads/tenant-{tenant_id}/{name}"
+    get_object_store().put_bytes(db, MAIN, key, content)
+    stored_file = StoredFile(tenant_id=tenant_id, original_name=name, mime_type="image/png", storage_path=key, scan_status="clean")
     db.add(stored_file)
     db.flush()
     return stored_file

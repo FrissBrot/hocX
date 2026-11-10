@@ -366,8 +366,9 @@
     "schema_newer": "La sauvegarde provient d'une version plus récente de hocX.",
     "restore_running": "Une restauration est déjà en cours.",
     "storage_migration_open": "Une migration du stockage est en cours.",
-    "target_profile_invalid": "Le profil cible est invalide (désactivé ou système de fichiers).",
-    "name_missing": "Veuillez saisir un nom pour le nouveau mandant."
+    "target_profile_invalid": "Le profil cible n'est pas valide (désactivé ou pas un profil S3).",
+    "name_missing": "Veuillez saisir un nom pour le nouveau mandant.",
+    "backup_pre_s3": "La sauvegarde date d'avant la migration S3 – la restaurer avec hocX 1.2.x."
   },
   "confirm": {
     "cancelJob": "Vraiment annuler cette tâche ? Une sauvegarde est arrêtée proprement, les contenus déjà sauvegardés sont conservés.",
@@ -434,7 +435,6 @@
   },
   "errors": {
     "unknown": "Erreur inconnue.",
-    "storage_registry_incomplete": "Terminez d'abord la migration initiale du stockage - le registre des objets est incomplet jusque-là.",
     "staging_insufficient": "Espace local insuffisant pour le dump de la base.",
     "pg_client_too_old": "Le client PostgreSQL de l'image est plus ancien que le serveur.",
     "pg_dump_failed": "pg_dump a échoué.",
@@ -477,6 +477,7 @@
     "borg_timeout": "Borg a dépassé le délai.",
     "borg_borg_error": "Borg signale une erreur.",
     "borg_disabled": "Le système de sauvegarde n'est pas configuré.",
-    "borg_configuration": "La configuration de sauvegarde est invalide."
+    "borg_configuration": "La configuration de sauvegarde est invalide.",
+    "backup_pre_s3": "La sauvegarde date d'avant la migration S3 – la restaurer avec hocX 1.2.x."
   }
 }

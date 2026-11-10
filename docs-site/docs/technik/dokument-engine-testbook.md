@@ -122,6 +122,5 @@ Testdateien unter `backend/tests/documents/`, sofern nicht anders angegeben.
 
 - Golden-Bilder belegen die Darstellung mit den gebündelten Schriften im Testimage, nicht die
   Anzeige in jedem PDF-Viewer (DOC-M1).
-- Die automatisierten Tests laufen gegen die Dateisystem-Generation des Objektspeichers; das
-  Zusammenspiel mit S3 prüft das [Release-Testbook](release-1.2.0-testbook.md) (REL-M3).
+- Die automatisierten Tests laufen gegen das isolierte Test-S3 (`test-s3`) des Testcompose.
 - E2E-Abläufe im Browser sind für Studio und Prüfseite nicht automatisiert.

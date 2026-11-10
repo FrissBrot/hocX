@@ -138,15 +138,11 @@ export function AdminStorage({ initialOverview }: { initialOverview: StorageOver
   const active = overview.active_profile;
   const migration = overview.open_migration;
   const activeGeneration = overview.generations.find((generation) => generation.status === "active" && generation.generation === overview.active_generation) ?? null;
-  const initialPending = active.provider === "filesystem" && migration === null;
-  // Ziel der Erstmigration: bevorzugt das eingebaute lokale S3, sonst das erste aktivierte S3-Profil.
-  const initialTarget =
-    overview.profiles.find((profile) => profile.provider === "garage_local" && profile.is_enabled) ??
-    overview.profiles.find((profile) => profile.provider !== "filesystem" && profile.is_enabled) ??
-    null;
+  // Dateisystem-Profile (bis 1.2) gibt es nur noch als deaktivierte Historie: ihre Generationen bekommen keine Aktionen.
+  const legacyProfileIds = new Set(overview.profiles.filter(isLegacyProfile).map((profile) => profile.id));
   const lastCompleted = history.find((entry) => entry.state === "completed") ?? null;
   const retained = overview.generations.find((generation) => generation.status === "retained" && generation.retain_until) ?? null;
-  const step = migrationStep(migration, initialPending, Boolean(initialTarget?.last_test_ok));
+  const step = migrationStep(migration);
 
   return (
     <div className="grid storage-page">
@@ -214,26 +210,7 @@ export function AdminStorage({ initialOverview }: { initialOverview: StorageOver
                     <span>{percent(migration.copied_objects, migration.total_objects)} %</span>
                   </div>
                 </div>
-                <p className="muted">{migration.kind === "initial" ? t("migration.initialHint") : t("migration.liveHint")}</p>
-              </>
-            ) : initialPending ? (
-              <>
-                <Badge variant="warning">{t("hero.initialPending")}</Badge>
-                <div className="storage-hero-title">{initialTarget ? t("hero.target", { name: initialTarget.name }) : t("hero.noTarget")}</div>
-                <p className="muted">
-                  {initialTarget ? t("hero.initialText", { name: initialTarget.name }) : t("hero.noTargetText")}{" "}
-                  {initialTarget ? t(`hero.tested.${initialTarget.last_test_at === null ? "never" : initialTarget.last_test_ok ? "ok" : "failed"}`) : null}
-                </p>
-                <div className="storage-hero-actions">
-                  {initialTarget ? (
-                    <button type="button" className="button-secondary" disabled={busy !== null} onClick={() => void testProfile(initialTarget)}>
-                      {busy === `test:${initialTarget.id}` ? t("profileCard.testing") : initialTarget.last_test_at ? t("profileCard.retest") : t("actions.test")}
-                    </button>
-                  ) : (
-                    <button type="button" className="button-secondary" onClick={() => setEditing("new")}>{t("actions.newProfile")}</button>
-                  )}
-                  <button type="button" className="button-primary" disabled={!initialTarget} onClick={() => setStarting(true)}>{t("actions.startMigration")}</button>
-                </div>
+                <p className="muted">{t("migration.liveHint")}</p>
               </>
             ) : lastCompleted ? (
               <>
@@ -300,7 +277,7 @@ export function AdminStorage({ initialOverview }: { initialOverview: StorageOver
             <h2 className="storage-section-title">{t("generations.title")}</h2>
             <p className="muted storage-small">{t("generations.description")}</p>
           </div>
-          {overview.generations.length === 0 && !initialPending ? <p className="muted">{t("generations.empty")}</p> : null}
+          {overview.generations.length === 0 ? <p className="muted">{t("generations.empty")}</p> : null}
           <ul className="storage-list">
             {overview.generations.map((generation) => (
               <li key={generation.id}>
@@ -319,20 +296,11 @@ export function AdminStorage({ initialOverview }: { initialOverview: StorageOver
                   </span>
                   {generation.purge_error ? <span className="storage-small storage-error">{generation.purge_error}</span> : null}
                 </div>
-                {generation.status === "retained" || generation.status === "abandoned" ? (
+                {(generation.status === "retained" || generation.status === "abandoned") && !legacyProfileIds.has(generation.profile_id) ? (
                   <button type="button" className="button-danger storage-list-action" onClick={() => setPurging(generation)}>{t("actions.purge")}</button>
                 ) : null}
               </li>
             ))}
-            {initialPending ? (
-              <li className="storage-list-ghost">
-                <span className="storage-gen-chip">g{overview.active_generation + 1}</span>
-                <div className="storage-list-text">
-                  <strong>{t("generations.next")}</strong>
-                  <span className="muted storage-small">{t("generations.nextMeta")}</span>
-                </div>
-              </li>
-            ) : null}
           </ul>
         </section>
 
@@ -350,7 +318,10 @@ export function AdminStorage({ initialOverview }: { initialOverview: StorageOver
                   <div className="storage-list-text">
                     <div className="storage-list-line storage-list-line-spread">
                       <strong><span className="storage-mono">g{entry.source_generation} → g{entry.target_generation}</span> · {entry.target_profile_name}</strong>
-                      <Badge variant={MIGRATION_VARIANTS[entry.state]}>{t(`state.${entry.state}`)}</Badge>
+                      <span className="storage-badges">
+                        {entry.kind === "initial" ? <Badge variant="neutral">{t("history.kindInitial")}</Badge> : null}
+                        <Badge variant={MIGRATION_VARIANTS[entry.state]}>{t(`state.${entry.state}`)}</Badge>
+                      </span>
                     </div>
                     <span className="muted storage-small storage-list-meta">
                       <span>{t("history.created", { date: formatDateTime(entry.created_at, locale) })}</span>
@@ -379,8 +350,8 @@ export function AdminStorage({ initialOverview }: { initialOverview: StorageOver
 const STEP_KEYS = ["prepare", "copy", "verify", "switch"] as const;
 
 /** Index des aktuellen Schritts (0-3), 4 = alles erledigt. */
-export function migrationStep(migration: StorageMigration | null, initialPending: boolean, targetTested: boolean): number {
-  if (!migration) return initialPending ? (targetTested ? 1 : 0) : 4;
+export function migrationStep(migration: StorageMigration | null): number {
+  if (!migration) return 4;
   const state = ["paused", "retrying"].includes(migration.state) ? migration.resume_state ?? "copying" : migration.state;
   if (["pending", "preflight", "awaiting_confirmation"].includes(state)) return 0;
   if (["inventory", "copying", "catching_up"].includes(state)) return 1;
@@ -394,8 +365,13 @@ function percent(value: number, total: number): number {
   return total > 0 ? Math.min(100, Math.round((value / total) * 100)) : 0;
 }
 
+/** Dateisystem-Profil aus der Zeit vor 1.2: nur noch Historie, nicht mehr nutzbar. */
+function isLegacyProfile(profile: StorageProfile): boolean {
+  return profile.provider === "filesystem";
+}
+
 function profileLocation(profile: StorageProfile, t: TFunc): string {
-  if (profile.provider === "filesystem") return t("active.filesystem");
+  if (isLegacyProfile(profile)) return t("active.filesystem");
   return `${profile.endpoint_url ?? "AWS"} · ${profile.bucket ?? ""}${profile.prefix ? `/${profile.prefix}` : ""}`; // i18n-ok: technische Adresse
 }
 
@@ -413,11 +389,11 @@ function ProviderIcon({ provider, large = false }: { provider: StorageProvider; 
 function ProfileCard({ profile, t, locale, busy, migrationTarget, onTest, onEdit, onDelete }: {
   profile: StorageProfile; t: TFunc; locale: string; busy: string | null; migrationTarget: boolean; onTest: () => void; onEdit: () => void; onDelete: () => void;
 }) {
-  const filesystem = profile.provider === "filesystem";
+  const filesystem = isLegacyProfile(profile);
   const testing = busy === `test:${profile.id}`;
   const testTone = filesystem ? "neutral" : testing ? "running" : profile.last_test_at === null ? "never" : profile.last_test_ok ? "ok" : "failed";
   const testText = filesystem
-    ? t("profileCard.noTestNeeded")
+    ? t("profileCard.legacy")
     : testing
       ? t("profileCard.testing")
       : profile.last_test_at === null
@@ -495,13 +471,14 @@ function MigrationPanel({ migration, t, locale, busy, run }: {
     <article className="card storage-migration" aria-live="polite">
       <DataToolbar
         title={t("migration.title", { source: migration.source_profile_name, target: migration.target_profile_name })}
-        description={migration.kind === "initial" ? t("migration.initialHint") : t("migration.liveHint")}
+        description={t("migration.liveHint")}
         actions={<Badge variant={MIGRATION_VARIANTS[migration.state]} dot>{t(`state.${migration.state}`)}</Badge>}
       />
       {migration.state === "awaiting_confirmation" ? (
-        <StatusBanner tone="neutral" message={migration.kind === "initial"
-          ? t("migration.confirmInitial", { range: rangeText(t, full?.remaining_low_seconds, full?.remaining_high_seconds) })
-          : t("migration.confirmLive", { range: rangeText(t, full?.remaining_low_seconds, full?.remaining_high_seconds), cutover: rangeText(t, cutover?.remaining_low_seconds, cutover?.remaining_high_seconds) })} />
+        <StatusBanner tone="neutral" message={t("migration.confirmLive", {
+          range: rangeText(t, full?.remaining_low_seconds, full?.remaining_high_seconds),
+          cutover: rangeText(t, cutover?.remaining_low_seconds, cutover?.remaining_high_seconds),
+        })} />
       ) : null}
       {migration.last_error ? <StatusBanner tone="error" message={migration.last_error} /> : null}
       {heartbeatAge !== null && heartbeatAge > HEARTBEAT_STALE_SECONDS && !terminal && !["awaiting_confirmation", "paused"].includes(migration.state) ? (
@@ -529,7 +506,7 @@ function MigrationPanel({ migration, t, locale, busy, run }: {
       {migration.state === "rollback_required" ? <StatusBanner tone="error" message={t("migration.rollbackRequired")} /> : null}
       <div className="table-actions">
         {migration.state === "awaiting_confirmation" ? (
-          <button type="button" className="button-primary" disabled={busy !== null} onClick={() => void action("start", "start", migration.kind === "initial" ? t("confirm.startInitial") : t("confirm.startLive"))}>{t("actions.start")}</button>
+          <button type="button" className="button-primary" disabled={busy !== null} onClick={() => void action("start", "start", t("confirm.startLive"))}>{t("actions.start")}</button>
         ) : null}
         {migration.needs_cutover_confirmation ? (
           <button type="button" className="button-primary" disabled={busy !== null} onClick={() => void action("confirmCutover", "confirm-cutover", t("confirm.cutover"))}>{t("actions.confirmCutover")}</button>
@@ -720,17 +697,14 @@ function StartMigrationModal({ t, overview, activeGeneration, busy, onTest, onCl
   onTest: (profile: StorageProfile) => void; onClose: () => void; onSaved: () => void;
 }) {
   const showToast = useToast();
-  const candidates = overview.profiles.filter((p) => p.provider !== "filesystem" && !p.is_active && p.is_enabled);
-  const [target, setTarget] = useState(
-    (candidates.find((p) => p.provider === "garage_local" && overview.active_profile.provider === "filesystem") ?? candidates[0])?.id ?? "",
-  );
+  const candidates = overview.profiles.filter((p) => !isLegacyProfile(p) && !p.is_active && p.is_enabled);
+  const [target, setTarget] = useState(candidates[0]?.id ?? "");
   const [parallelism, setParallelism] = useState(4);
   const [bandwidth, setBandwidth] = useState(0);
   const [verifyMode, setVerifyMode] = useState<"full" | "head">("full");
   const [autoCutover, setAutoCutover] = useState(false);
   const [confirmThirdCountry, setConfirmThirdCountry] = useState(false);
   const [saving, setSaving] = useState(false);
-  const initial = overview.active_profile.provider === "filesystem";
   const selected = candidates.find((p) => p.id === target);
   const tested = Boolean(selected?.last_test_ok);
   const testState = !selected ? "missing" : tested ? "ok" : selected.last_test_at ? "failed" : "missing";
@@ -739,8 +713,7 @@ function StartMigrationModal({ t, overview, activeGeneration, busy, onTest, onCl
     event.preventDefault();
     setSaving(true);
     try {
-      const options: Record<string, unknown> = { parallelism, bandwidth_limit_mbps: bandwidth, verify_mode: verifyMode };
-      if (!initial) options.auto_cutover = autoCutover;
+      const options = { parallelism, bandwidth_limit_mbps: bandwidth, verify_mode: verifyMode, auto_cutover: autoCutover };
       await browserApiFetch("/api/admin/storage/migrations", {
         method: "POST", body: JSON.stringify({ target_profile_id: target, options, confirm_third_country: confirmThirdCountry }),
       });
@@ -756,7 +729,7 @@ function StartMigrationModal({ t, overview, activeGeneration, busy, onTest, onCl
   return (
     <Modal open title={t("startForm.title")} onClose={onClose} size="wide">
       <ModalSaveForm className="grid" onSubmit={submit}>
-        <p className="muted">{initial ? t("startForm.initialHint") : t("startForm.liveHint")}</p>
+        <p className="muted">{t("startForm.liveHint")}</p>
         <div className="storage-route">
           <div className="storage-route-card">
             <span className="storage-eyebrow">{t("startForm.from")}</span>
@@ -829,9 +802,7 @@ function StartMigrationModal({ t, overview, activeGeneration, busy, onTest, onCl
               <Select className="input" value={verifyMode} onChange={(e) => setVerifyMode(e.target.value as "full" | "head")}>
                 <option value="full">{t("verifyMode.full")}</option><option value="head">{t("verifyMode.head")}</option>
               </Select></label>
-            {!initial ? (
-              <label className="checkbox-row"><input type="checkbox" checked={autoCutover} onChange={(e) => setAutoCutover(e.target.checked)} /><span>{t("startForm.autoCutover")}</span></label>
-            ) : null}
+            <label className="checkbox-row"><input type="checkbox" checked={autoCutover} onChange={(e) => setAutoCutover(e.target.checked)} /><span>{t("startForm.autoCutover")}</span></label>
           </div>
         </details>
         <p className="muted">{t("startForm.nextStep")}</p>

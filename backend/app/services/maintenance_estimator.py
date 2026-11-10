@@ -42,7 +42,7 @@ def _percentile(values: list[float], fraction: float) -> float:
 
 
 def _is_local(profile: StorageProfile | None) -> bool:
-    return profile is None or profile.provider in ("filesystem", "garage_local")
+    return profile is None or profile.provider == "garage_local"
 
 
 def measured_rates(migration: StorageMigration) -> tuple[float | None, float | None]:
@@ -121,7 +121,7 @@ def _reserve(db: Session, base_seconds: float, *, reason_code: str, min_reserve:
 
 
 def estimate_storage_migration(db: Session, migration: StorageMigration, *, scope: str = "full") -> dict[str, Any] | None:
-    """scope="full": verbleibende Gesamtdauer (Erstmigration in voller Wartung).
+    """scope="full": verbleibende Gesamtdauer der Migration (Kopieren, Prüfen, Cutover).
     scope="cutover": nur die tatsächliche Unterbrechung beim Cutover (Journal nachziehen,
     Endprüfung, Umschalten) - nicht die vorausgehende Kopierdauer."""
     target = db.get(StorageProfile, migration.target_profile_id)
@@ -185,12 +185,11 @@ def _result(base: float, reserve: int, components: dict[str, int], rate: float, 
 
 def estimate_for_window(db: Session, window: MaintenanceWindow) -> dict[str, Any] | None:
     """Laufende Neuschätzung für jobgebundene Fenster (vom maintenance_supervisor aufgerufen)."""
-    if window.source_job_type in ("storage_initial_migration", "storage_cutover") and window.source_job_id:
+    if window.source_job_type == "storage_cutover" and window.source_job_id:
         import uuid
 
         migration = db.get(StorageMigration, uuid.UUID(window.source_job_id))
         if migration is None:
             return None
-        scope = "cutover" if window.source_job_type == "storage_cutover" else "full"
-        return estimate_storage_migration(db, migration, scope=scope)
+        return estimate_storage_migration(db, migration, scope="cutover")
     return None

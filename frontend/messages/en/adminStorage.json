@@ -43,7 +43,6 @@
   },
   "confirm": {
     "deleteProfile": "Delete profile “{name}”? Data stored in the bucket is not touched.",
-    "startInitial": "Start the initial migration? hocX enters full maintenance and is locked for users until all files are copied and verified.",
     "startLive": "Start the live migration? hocX stays usable while copying.",
     "cutover": "Switch to the new storage? Writes are briefly locked, afterwards hocX works with the new storage.",
     "resume": "Resume the migration?",
@@ -63,11 +62,11 @@
     "generation": "Generation",
     "location": "Location",
     "localS3": "Local S3",
-    "filesystem": "Local file system (existing data)",
+    "filesystem": "Local file system (until 1.2, history only)",
     "extent": "Size"
   },
   "provider": {
-    "filesystem": "File system",
+    "filesystem": "File system (until 1.2, no longer supported)",
     "garage_local": "Local S3 (Garage)",
     "aws_s3": "AWS S3",
     "hetzner": "Hetzner Object Storage",
@@ -79,7 +78,6 @@
     "notConfigured": "Not set up",
     "reason": {
       "active": "active storage",
-      "initial_target": "target of the initial migration",
       "requested": "requested by an administrator",
       "migration": "used by a migration",
       "fallback_period": "fallback period running",
@@ -132,9 +130,7 @@
     "empty": "No generations.",
     "size": "{count, plural, one {# object} other {# objects}}, {size}",
     "since": "since {date}",
-    "retainUntil": "keep until {date}",
-    "next": "Created by the next migration",
-    "nextMeta": "Will be created on the target profile"
+    "retainUntil": "keep until {date}"
   },
   "generationStatus": {
     "preparing": "Preparing",
@@ -152,7 +148,8 @@
     "created": "Created {date}",
     "copied": "{copied} / {total} objects",
     "checked": "{verified} verified · {failed} failed",
-    "emptyHint": "The first migration moves the existing data into an S3 profile."
+    "emptyHint": "A migration moves all files to another S3 profile.",
+    "kindInitial": "Initial migration (until 1.2)"
   },
   "state": {
     "pending": "Created",
@@ -179,9 +176,7 @@
   },
   "migration": {
     "title": "{source} → {target}",
-    "initialHint": "Initial migration: hocX is in full maintenance during the migration.",
     "liveHint": "Live migration: hocX stays usable, only the cutover briefly locks writes.",
-    "confirmInitial": "Preflight passed. Expected maintenance duration: {range}.",
     "confirmLive": "Preflight passed. Expected copy duration: {range}, interruption during cutover: {cutover}.",
     "heartbeatStale": "The storage worker no longer reports. Please check the storage-worker container - the migration resumes after it restarts.",
     "copyProgress": "{copied} of {total} copied",
@@ -254,7 +249,6 @@
   },
   "startForm": {
     "title": "Prepare migration",
-    "initialHint": "Initial migration from the file system: after you confirm the start, hocX enters full maintenance until all files are copied and verified.",
     "liveHint": "Live migration: hocX stays usable while copying. Changes are caught up continuously.",
     "target": "Target",
     "needsTest": "This profile needs a successful connection test first.",
@@ -296,16 +290,7 @@
     "label": "Type “{expected}” to confirm"
   },
   "hero": {
-    "initialPending": "Initial migration pending",
-    "target": "Target: {name}",
     "noTarget": "No target profile yet",
-    "noTargetText": "The initial migration needs an enabled S3 profile.",
-    "initialText": "The existing data is still on the file system. The profile “{name}” is intended for the initial migration.",
-    "tested": {
-      "ok": "Connection tested successfully.",
-      "failed": "The last connection test failed.",
-      "never": "The connection has never been tested."
-    },
     "switched": "Switched on {date}",
     "switchedObjects": "{count, plural, one {# object} other {# objects}} copied and verified",
     "retained": "The replaced generation {generation} is kept until {date} and can be purged deliberately afterwards.",
@@ -337,7 +322,7 @@
     "credentials": "Credentials",
     "credentialsStored": "•••••• stored encrypted",
     "credentialsMissing": "Not stored",
-    "noTestNeeded": "No test needed – local path",
+    "legacy": "No longer usable – history only",
     "lastTestOk": "Last tested {time} · successful",
     "lastTestFailed": "Last tested {time} · failed",
     "testing": "Testing connection …",

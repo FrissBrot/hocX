@@ -14,9 +14,11 @@ from PIL import Image
 from app.api.routes import public_share as public_share_routes
 from app.api.routes import share_links as share_links_routes
 from app.core.config import settings
+from app.core.storage import MAIN, get_object_store
 from app.models.entities import GalleryImage, PhotoAlbum, PhotoAlbumItem, StoredFile
 from app.schemas.files import ShareLinkCreate
 from tests.factories import make_current_user, make_tenant
+from tests.image_fixtures import response_bytes
 
 
 @pytest.fixture(autouse=True)
@@ -36,9 +38,9 @@ def _make_file(db, tenant_id: int, name: str = "foto.png", content: bytes | None
     goes through FileService.list_tenant_files, which only ever surfaces files joined to one
     of the four known origins (see StoredFileRepository._files_overview_branches); a bare
     StoredFile row with no such join would never validate."""
-    (public_share_routes.Path(settings.storage_root)).mkdir(parents=True, exist_ok=True)
-    (public_share_routes.Path(settings.storage_root) / name).write_bytes(_png_bytes() if content is None else content)
-    stored_file = StoredFile(tenant_id=tenant_id, original_name=name, mime_type=mime_type, storage_path=name)
+    key = f"uploads/tenant-{tenant_id}/share/{name}"
+    get_object_store().put_bytes(db, MAIN, key, _png_bytes() if content is None else content)
+    stored_file = StoredFile(tenant_id=tenant_id, original_name=name, mime_type=mime_type, storage_path=key)
     db.add(stored_file)
     db.flush()
     db.add(GalleryImage(tenant_id=tenant_id, stored_file_id=stored_file.id))
@@ -237,7 +239,7 @@ def test_download_public_share_file_rejects_a_file_outside_the_link(db):
     assert exc_info.value.status_code == 404
 
 
-def test_download_public_share_file_serves_the_file_on_disk(db):
+def test_download_public_share_file_serves_the_stored_file(db):
     tenant = make_tenant(db)
     user = make_current_user(tenant.id, role="writer")
     a = _make_file(db, tenant.id, "a.png")
@@ -249,7 +251,7 @@ def test_download_public_share_file_serves_the_file_on_disk(db):
 
     response = public_share_routes.download_public_share_file(token, a.public_id, _FakeRequest(), db)
 
-    assert response.path.name == "a.png"
+    assert response_bytes(response) == _png_bytes()
     assert 'filename="a.png"' in response.headers["content-disposition"]
 
 
@@ -263,8 +265,9 @@ def test_download_public_share_all_builds_a_zip_for_multiple_files(db):
 
     response = public_share_routes.download_public_share_all(token, _FakeRequest(), db)
 
-    assert response.path.suffix == ".zip"
-    assert response.path.exists()
+    assert response.media_type == "application/zip"
+    with zipfile.ZipFile(io.BytesIO(response_bytes(response))) as archive:
+        assert sorted(archive.namelist()) == ["a.png", "b.png"]
 
 
 def test_download_public_share_all_zips_even_a_single_file(db):
@@ -276,8 +279,9 @@ def test_download_public_share_all_zips_even_a_single_file(db):
 
     response = public_share_routes.download_public_share_all(token, _FakeRequest(), db)
 
-    assert response.path.suffix == ".zip"
     assert response.media_type == "application/zip"
+    with zipfile.ZipFile(io.BytesIO(response_bytes(response))) as archive:
+        assert archive.namelist() == ["a.png"]
 
 
 def test_download_public_share_all_is_not_used_up_by_loading_the_gallery_thumbnails(db):
@@ -323,7 +327,7 @@ def test_download_public_share_all_limits_the_zip_to_the_selection(db):
 
     response = public_share_routes.download_public_share_all(token, _FakeRequest(), db, ids=f"{b.public_id},{outsider.public_id}")
 
-    with zipfile.ZipFile(response.path) as archive:
+    with zipfile.ZipFile(io.BytesIO(response_bytes(response))) as archive:
         assert archive.namelist() == ["b.png"]
 
     with pytest.raises(HTTPException) as exc_info:
@@ -343,7 +347,7 @@ def test_view_public_share_file_serves_only_browser_safe_images_inline(db):
 
     response = public_share_routes.view_public_share_file(token, png.public_id, _FakeRequest(), db)
     assert response.media_type == "image/png"
-    assert Image.open(response.path).size == (4, 3)
+    assert Image.open(io.BytesIO(response_bytes(response))).size == (4, 3)
     assert "attachment" not in response.headers.get("content-disposition", "")
 
     with pytest.raises(HTTPException) as exc_info:
@@ -455,10 +459,10 @@ def test_public_downloads_strip_the_metadata_the_link_does_not_share(db):
     single = public_share_routes.download_public_share_file(token, photo.public_id, _FakeRequest(), db)
     view = public_share_routes.view_public_share_file(token, photo.public_id, _FakeRequest(), db)
     archive_response = public_share_routes.download_public_share_all(token, _FakeRequest(), db)
-    with zipfile.ZipFile(archive_response.path) as archive:
+    with zipfile.ZipFile(io.BytesIO(response_bytes(archive_response))) as archive:
         zipped = archive.read("foto.jpg")
 
-    for content in (single.path.read_bytes(), view.path.read_bytes(), zipped):
+    for content in (response_bytes(single), response_bytes(view), zipped):
         exif = Image.open(io.BytesIO(content)).getexif()
         assert 0x8825 not in exif  # kein Standort
         assert 0x010F not in exif  # keine Kamera

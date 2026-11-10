@@ -6,15 +6,13 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import io
-import os
 from datetime import UTC, date, datetime, timedelta
-from pathlib import Path
 
 from pypdf import PdfReader
 from sqlalchemy import select
 
 from app.core.config import settings
-from app.core.storage import get_object_store
+from app.core.storage import MAIN, get_object_store
 from app.documents import service
 from app.documents.service import DocumentRequest, short_document_id
 from app.documents.xmp import HOCX_XMP_NAMESPACE
@@ -38,7 +36,7 @@ def _render(db, tenant, protocol):
 
 
 def _pdf_bytes(stored: StoredFile) -> bytes:
-    return (Path(settings.storage_root) / stored.storage_path).read_bytes()
+    return get_object_store().get_bytes(MAIN, stored.storage_path)
 
 
 def test_each_export_registers_the_delivered_bytes(db):
@@ -91,22 +89,22 @@ def test_retention_deletes_files_but_never_registry_entries(db):
     tenant, _protocol = _setup(db)
     # Ohne Protokollbezug: Protokollexporte sind Versionen logischer Dokumente und bleiben.
     result = asyncio.run(service.render(db, None, tenant.id, DocumentRequest(document_type="todos")))
-    path = Path(settings.storage_root) / result.stored_file.storage_path
-    old = path.stat().st_mtime - 400 * 86400
-    os.utime(path, (old, old))
+    key = result.stored_file.storage_path
+    assert get_object_store().active_backend().head(MAIN, key) is not None
     result.export.created_at = datetime.now(UTC) - timedelta(days=400)
     db.flush()
     service.cleanup_old_generated_exports(db, retention_days=30)
     # S3-008: physisch entfernt erst der Purge-Job nach dem Commit.
     get_object_store().purge_deleted(db)
-    assert not path.exists()
+    assert get_object_store().active_backend().head(MAIN, key) is None
     assert db.scalar(select(DocumentRegistry).where(DocumentRegistry.public_id == result.export.public_id)) is not None
 
 
 def test_failed_registration_leaves_neither_file_nor_rows(db, monkeypatch):
     tenant, protocol = _setup(db)
-    generated = Path(settings.export_root) / service.GENERATED_DIR
-    before = set(generated.iterdir()) if generated.is_dir() else set()
+    backend = get_object_store().active_backend()
+    prefix = service._generated_prefix() + "/"
+    before = {info.key for info in backend.list(MAIN, prefix)}
     monkeypatch.setattr(service, "DocumentRegistry", lambda **_: (_ for _ in ()).throw(RuntimeError("kaputt")))
     # Der Rollback im Fehlerpfad würde sonst die äussere Testtransaktion beenden.
     monkeypatch.setattr(db, "rollback", lambda: None)
@@ -115,5 +113,5 @@ def test_failed_registration_leaves_neither_file_nor_rows(db, monkeypatch):
         raise AssertionError("Render hätte scheitern müssen")
     except RuntimeError as exc:
         assert "kaputt" in str(exc)
-    after = set(generated.iterdir()) if generated.is_dir() else set()
+    after = {info.key for info in backend.list(MAIN, prefix)}
     assert after == before

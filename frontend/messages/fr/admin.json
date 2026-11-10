@@ -212,7 +212,7 @@
       },
       "local_s3": {
         "title": "S3 local (Garage)",
-        "detail": "{reason, select, active {Stockage actif} initial_target {Cible de la première migration} migration {Partie d'une migration en cours} fallback_period {Délai de retour après une migration} pending_operation {Nettoyage en attente} requested {Demandé manuellement} unverified_objects {Objets pas encore vérifiés} not_needed {Inutile, arrêté} other {Statut inconnu}} · {objects, number} objets · {gb, number} Go",
+        "detail": "{reason, select, active {Stockage actif} migration {Partie d'une migration en cours} fallback_period {Délai de retour après une migration} pending_operation {Nettoyage en attente} requested {Demandé manuellement} unverified_objects {Objets pas encore vérifiés} not_needed {Inutile, arrêté} other {Statut inconnu}} · {objects, number} objets · {gb, number} Go",
         "problem": "S3 local (Garage) non évaluable"
       },
       "orphaned_files": {

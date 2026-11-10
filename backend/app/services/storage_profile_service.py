@@ -73,7 +73,9 @@ def mask(value_enc: str | None) -> str | None:
 def profile_config(profile: StorageProfile, generation: int, *, restricted: bool = False) -> ProfileConfig:
     access_enc = profile.restricted_access_key_enc if restricted and profile.restricted_access_key_enc else profile.access_key_enc
     secret_enc = profile.restricted_secret_key_enc if restricted and profile.restricted_secret_key_enc else profile.secret_key_enc
-    is_fs = profile.provider == "filesystem"
+    if profile.provider == "filesystem":
+        # Altes Dateisystem-Profil (seit 0168 nur Historie): kein Backend mehr dafür.
+        raise StorageConfigError("Dateisystem-Speicher wird nicht mehr unterstützt - nur noch S3-Profile")
     return ProfileConfig(
         profile_id=profile.id,
         generation=generation,
@@ -84,8 +86,8 @@ def profile_config(profile: StorageProfile, generation: int, *, restricted: bool
         abgabebox_bucket=profile.abgabebox_bucket,
         prefix=profile.prefix or "",
         addressing_style=profile.addressing_style,
-        access_key=None if is_fs else decrypt_credential(access_enc, _key()),
-        secret_key=None if is_fs else decrypt_credential(secret_enc, _key()),
+        access_key=decrypt_credential(access_enc, _key()),
+        secret_key=decrypt_credential(secret_enc, _key()),
         tls_verify=profile.tls_verify,
         ca_bundle_pem=profile.ca_bundle_pem,
         config_version=profile.config_version,

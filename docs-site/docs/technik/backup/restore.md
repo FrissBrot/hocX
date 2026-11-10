@@ -114,7 +114,10 @@ Repository-Zugang und die Notfallmappe (Passphrase, Borg-Schlüssel-Export, `.en
 
    Ist der Borg-Schlüssel im Repository beschädigt, zuerst `borg key import` mit dem
    Papier-Export (siehe Borg-Doku).
-4. Wiederherstellen in eine **neue** Datenbank und einen Objektspeicher nach Wahl:
+4. Wiederherstellen in eine **neue** Datenbank und ein S3-Ziel nach Wahl (ein Dateisystem-Ziel
+   gibt es nicht mehr; Backups von vor der S3-Migration lehnt die Wiederherstellung mit
+   `backup_pre_s3` ab - sie lassen sich nur mit 1.2.x wiederherstellen, siehe
+   [Upgrade auf S3-only](../storage/migration.md#kein-weg-zuruck)):
 
    ```bash
    # Ziel: neues S3 (z. B. anderer Anbieter) - Zugangsdaten als Dateien, nie als Argument
@@ -122,9 +125,6 @@ Repository-Zugang und die Notfallmappe (Passphrase, Borg-Schlüssel-Export, `.en
      --s3-provider hetzner --s3-endpoint https://fsn1.your-objectstorage.com --s3-region fsn1 \
      --s3-bucket hocx-prod --s3-prefix hocx --s3-addressing virtual \
      --s3-access-key-file /run/s3-ak --s3-secret-key-file /run/s3-sk
-   # oder: lokales Dateisystem (leere Verzeichnisse)
-   $CLI restore-full --archive hocx-rp-… --target-db hocx_restored --storage filesystem \
-     --filesystem-root /app/storage --filesystem-abgabebox-root /app/abgabebox-storage
    ```
 
    Die CLI legt Profil, Generation und Speicherzustand in der wiederhergestellten DB neu an,

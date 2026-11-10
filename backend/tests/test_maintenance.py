@@ -159,7 +159,7 @@ def test_a_storage_migration_window_cannot_be_released_while_the_migration_runs(
     from app.models import StorageGeneration, StorageState
 
     state = db.get(StorageState, 1)
-    migration = StorageMigration(kind="initial", state="copying", source_profile_id=state.active_profile_id, source_generation=state.active_generation,
+    migration = StorageMigration(kind="live", state="copying", source_profile_id=state.active_profile_id, source_generation=state.active_generation,
                                  source_config_version=1, target_profile_id=state.active_profile_id, target_generation=987654,
                                  target_config_version=1)
     db.add(migration)
@@ -225,7 +225,7 @@ def test_public_status_shows_ranges_overdue_and_estimating_without_internal_deta
 
 
 def _migration(**values) -> StorageMigration:
-    defaults = dict(kind="initial", state="copying", source_profile_id=1, source_generation=0, source_config_version=1, target_profile_id=1,
+    defaults = dict(kind="live", state="copying", source_profile_id=1, source_generation=0, source_config_version=1, target_profile_id=1,
                     target_generation=1, target_config_version=1, options={"parallelism": 4, "verify_mode": "full"}, checkpoint={},
                     throughput=[], total_objects=1000, total_bytes=10 * 1024**3, copied_objects=0, copied_bytes=0, verified_objects=0)
     defaults.update(values)

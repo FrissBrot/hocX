@@ -39,7 +39,6 @@ Alle in `.env` (Allowlist in `scripts/lib/env.sh`); `deploy.sh` übergibt sie nu
 | `BACKUP_UPLOAD_RATELIMIT_KIB` | `0` | Upload-Begrenzung in KiB/s |
 | `BACKUP_COMPRESSION` | `auto,zstd,3` | Borg-Kompression (`auto` überspringt unkomprimierbare Bilder) |
 | `BACKUP_STORAGEBOX_QUOTA_BYTES` | `0` | Kapazität der Box für die Belegungswarnung (85 %/95 %) |
-| `BACKUP_TRUST_FILESYSTEM_REGISTRY` | `false` | nur Neuinstallationen ohne Erstmigration, siehe Architektur |
 | `HOCX_PRE_DEPLOY_BACKUP` | `required` | `skip` = Deploy ohne vorheriges Offsite-Backup (bewusste Entscheidung) |
 | `HOCX_PRE_DEPLOY_BACKUP_TIMEOUT` | `7200` | Sekunden, die `deploy.sh` auf das Backup wartet (inkl. Warten auf ein gerade laufendes Backup) |
 | `HOCX_PRE_DEPLOY_BACKUP_ALLOW_PARTIAL` | `true` | teilweise erfolgreiches Backup (DB vollständig, einzelne Objekte fehlen) akzeptieren; fehlende Objekte stehen im Deploy-Log. `false` = Deploy abbrechen |

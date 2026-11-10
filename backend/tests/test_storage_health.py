@@ -12,7 +12,8 @@ from app.services import system_alert_service, system_health_service
 
 def test_object_storage_check_reports_the_active_generation(db):
     check = system_health_service._check_object_storage()
-    assert check.status == "ok" and check.params["generation"] == 0
+    active_generation = db.get(StorageState, 1).active_generation
+    assert check.status == "ok" and check.params["generation"] == active_generation
 
 
 def test_storage_migration_check_escalates_rollback_and_stale_workers(db):

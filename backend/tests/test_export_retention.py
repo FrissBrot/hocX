@@ -11,12 +11,10 @@ import asyncio
 
 import pytest
 from datetime import UTC, date, datetime, timedelta
-from pathlib import Path
 
 from sqlalchemy import select
 
-from app.core.config import settings
-from app.core.storage import get_object_store
+from app.core.storage import MAIN, get_object_store
 from app.documents import service
 from app.documents.service import DocumentRequest
 from app.models import DocumentExport, DocumentRegistry, StoredFile
@@ -46,8 +44,18 @@ def _render(db, tenant, protocol):
     return asyncio.run(service.render(db, None, tenant.id, DocumentRequest(protocol_id=protocol.public_id, document_type="protocol")))
 
 
-def _path(stored: StoredFile) -> Path:
-    return Path(settings.storage_root) / stored.storage_path
+class _StoredObject:
+    """Physischer Zustand eines Exports im Bucket (am Register vorbei, wie vorher der Dateipfad)."""
+
+    def __init__(self, key: str) -> None:
+        self.key = key
+
+    def exists(self) -> bool:
+        return get_object_store().active_backend().head(MAIN, self.key) is not None
+
+
+def _path(stored: StoredFile) -> _StoredObject:
+    return _StoredObject(stored.storage_path)
 
 
 def test_repeated_protocol_export_keeps_only_the_newest_file(db):

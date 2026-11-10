@@ -10,7 +10,6 @@ import asyncio
 import io
 import os
 from datetime import date, timedelta
-from pathlib import Path
 
 import pytest
 
@@ -74,7 +73,7 @@ def sample(db):
 
 
 def test_every_system_template_exports_with_real_data(db, sample):
-    from app.core.config import settings
+    from app.core.storage import MAIN, get_object_store
 
     pdfs: list[tuple[str, bytes]] = []
     for definition in SYSTEM_TEMPLATES:
@@ -86,7 +85,7 @@ def test_every_system_template_exports_with_real_data(db, sample):
             params={"list_id": str(sample["list"].public_id)} if definition.document_type == "list" else {},
         )
         result = asyncio.run(service.render(db, None, sample["tenant"].id, request))
-        pdf = (Path(settings.storage_root) / result.stored_file.storage_path).read_bytes()
+        pdf = get_object_store().get_bytes(MAIN, result.stored_file.storage_path)
         assert pdf.startswith(b"%PDF"), definition.key
         assert result.export.template_id == template.id and result.export.design_hash
         pdfs.append((definition.key, pdf))

@@ -366,8 +366,9 @@
     "schema_newer": "The backup comes from a newer hocX version.",
     "restore_running": "A restore is already running.",
     "storage_migration_open": "A storage migration is running.",
-    "target_profile_invalid": "The target profile is invalid (disabled or file system).",
-    "name_missing": "Please enter a name for the new tenant."
+    "target_profile_invalid": "The target profile is invalid (disabled or not an S3 profile).",
+    "name_missing": "Please enter a name for the new tenant.",
+    "backup_pre_s3": "The backup dates from before the S3 migration – restore it with hocX 1.2.x."
   },
   "confirm": {
     "cancelJob": "Really cancel this job? A backup is stopped cleanly; contents already saved are kept.",
@@ -434,7 +435,6 @@
   },
   "errors": {
     "unknown": "Unknown error.",
-    "storage_registry_incomplete": "Complete the initial file storage migration first - until then the object registry is incomplete.",
     "staging_insufficient": "Not enough local space for the database dump.",
     "pg_client_too_old": "The PostgreSQL client in the image is older than the server.",
     "pg_dump_failed": "pg_dump failed.",
@@ -477,6 +477,7 @@
     "borg_timeout": "Borg exceeded the time limit.",
     "borg_borg_error": "Borg reported an error.",
     "borg_disabled": "The backup system is not set up.",
-    "borg_configuration": "The backup configuration is invalid."
+    "borg_configuration": "The backup configuration is invalid.",
+    "backup_pre_s3": "The backup dates from before the S3 migration – restore it with hocX 1.2.x."
   }
 }

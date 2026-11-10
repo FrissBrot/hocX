@@ -15,6 +15,7 @@ from starlette.datastructures import Headers
 
 from app.api.routes import files as files_routes
 from app.core.config import settings
+from app.core.storage import MAIN, get_object_store
 from app.models.entities import GalleryImage, GalleryUploadJob, StoredFile
 from app.schemas.files import CaptureDateUpdate, UploadPrecheckRequest
 from app.services import file_service as file_service_module
@@ -27,8 +28,6 @@ service = FileService()
 
 @pytest.fixture(autouse=True)
 def _isolated_storage_root(monkeypatch, tmp_path):
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
-    monkeypatch.setattr(settings, "upload_root", str(tmp_path / "uploads"))
     monkeypatch.setattr(settings, "thumbnail_root", str(tmp_path / "thumbnails"))
 
 
@@ -36,13 +35,16 @@ def _sha(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
 
 
+def _gallery_key(tenant_id: int, name: str) -> str:
+    return f"uploads/tenant-{tenant_id}/gallery/{name}"
+
+
 def _gallery_file(db, tenant_id: int, content: bytes, *, name="foto.jpg", **values) -> StoredFile:
-    (settings_path := __import__("pathlib").Path(settings.storage_root)).mkdir(parents=True, exist_ok=True)
-    (settings_path / name).write_bytes(content)
+    get_object_store().put_bytes(db, MAIN, _gallery_key(tenant_id, name), content)
     values.setdefault("width", 32)
     values.setdefault("height", 24)
     row = StoredFile(
-        tenant_id=tenant_id, original_name=name, mime_type="image/jpeg", storage_path=name,
+        tenant_id=tenant_id, original_name=name, mime_type="image/jpeg", storage_path=_gallery_key(tenant_id, name),
         checksum_sha256=values.pop("checksum_sha256", _sha(content)), scan_status="clean", **values,
     )
     db.add(row)
@@ -90,7 +92,7 @@ def test_existing_image_gets_missing_estimate_without_upload_and_second_check_is
     user = _writer(db, tenant.id)
     content = jpeg()
     row = _gallery_file(db, tenant.id, content)
-    before = (settings_path := __import__("pathlib").Path(settings.storage_root) / "foto.jpg").read_bytes()
+    before = get_object_store().get_bytes(MAIN, row.storage_path)
 
     first = _precheck(db, user, [_entry(content)], estimated=date(1998, 8, 1))[0]
     assert first.status == "metadata_updated"
@@ -100,7 +102,7 @@ def test_existing_image_gets_missing_estimate_without_upload_and_second_check_is
     assert row.estimated_taken_on == date(1998, 8, 1)
     assert row.exif_taken_at is None
     assert row.estimated_taken_set_by == user.user_id
-    assert settings_path.read_bytes() == before  # Datei unverändert, nichts übertragen
+    assert get_object_store().get_bytes(MAIN, row.storage_path) == before  # Datei unverändert, nichts übertragen
 
     again = _precheck(db, user, [_entry(content)], estimated=date(1998, 8, 1))[0]
     assert again.status == "already_exists" and again.applied == []

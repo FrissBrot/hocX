@@ -6,9 +6,11 @@ is missing is stamped as attempted (not just skipped), so it isn't reselected fo
 from __future__ import annotations
 
 import io
+import uuid
 
 from PIL import Image
 
+from app.core.storage import MAIN, get_object_store
 from app.models.entities import StoredFile
 from app.services.file_service import FileService
 from tests.factories import make_tenant
@@ -22,8 +24,8 @@ def _png_bytes(color=(40, 80, 120), size=(48, 48)) -> bytes:
     return buffer.getvalue()
 
 
-def _make_pending_stored_file(db, tenant_id, tmp_path, *, write_content: bytes | None) -> StoredFile:
-    relative = f"gallery/{len(list(tmp_path.glob('gallery/*'))) if (tmp_path / 'gallery').exists() else 0}.png"
+def _make_pending_stored_file(db, tenant_id, *, write_content: bytes | None) -> StoredFile:
+    relative = f"uploads/tenant-{tenant_id}/gallery/{uuid.uuid4().hex}.png"
     stored_file = StoredFile(
         tenant_id=tenant_id, original_name="foto.png", mime_type="image/png",
         storage_path=relative, scan_status="clean",
@@ -31,18 +33,13 @@ def _make_pending_stored_file(db, tenant_id, tmp_path, *, write_content: bytes |
     db.add(stored_file)
     db.flush()
     if write_content is not None:
-        path = tmp_path / relative
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(write_content)
+        get_object_store().put_bytes(db, MAIN, relative, write_content)
     return stored_file
 
 
-def test_backfill_computes_scores_and_stamps_quality_analyzed_at(db, monkeypatch, tmp_path):
-    from app.core.config import settings
-
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
+def test_backfill_computes_scores_and_stamps_quality_analyzed_at(db, monkeypatch):
     tenant = make_tenant(db)
-    stored_file = _make_pending_stored_file(db, tenant.id, tmp_path, write_content=_png_bytes())
+    stored_file = _make_pending_stored_file(db, tenant.id, write_content=_png_bytes())
 
     updated = service.backfill_missing_quality_scores(db)
 
@@ -53,15 +50,12 @@ def test_backfill_computes_scores_and_stamps_quality_analyzed_at(db, monkeypatch
     assert stored_file.quality_analyzed_at is not None
 
 
-def test_backfill_stamps_a_file_missing_from_disk_instead_of_leaving_it_pending_forever(db, monkeypatch, tmp_path):
+def test_backfill_stamps_a_file_missing_from_disk_instead_of_leaving_it_pending_forever(db, monkeypatch):
     """Regression test (2026-09-17 audit fix): previously a missing file was `continue`d
     past with both scores left NULL and no marker set, so it matched this method's
     "still missing a score" query on every future tick, forever."""
-    from app.core.config import settings
-
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
     tenant = make_tenant(db)
-    stored_file = _make_pending_stored_file(db, tenant.id, tmp_path, write_content=None)
+    stored_file = _make_pending_stored_file(db, tenant.id, write_content=None)
 
     updated = service.backfill_missing_quality_scores(db)
 
@@ -76,12 +70,9 @@ def test_backfill_stamps_a_file_missing_from_disk_instead_of_leaving_it_pending_
     assert second_pass_updated == 0
 
 
-def test_backfill_ignores_an_already_analyzed_file(db, monkeypatch, tmp_path):
-    from app.core.config import settings
-
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
+def test_backfill_ignores_an_already_analyzed_file(db, monkeypatch):
     tenant = make_tenant(db)
-    stored_file = _make_pending_stored_file(db, tenant.id, tmp_path, write_content=_png_bytes())
+    stored_file = _make_pending_stored_file(db, tenant.id, write_content=_png_bytes())
     service.backfill_missing_quality_scores(db)
     db.refresh(stored_file)
     first_sharpness = stored_file.sharpness_score
@@ -93,17 +84,15 @@ def test_backfill_ignores_an_already_analyzed_file(db, monkeypatch, tmp_path):
     assert stored_file.sharpness_score == first_sharpness
 
 
-def test_backfill_commits_in_batches(db, monkeypatch, tmp_path):
+def test_backfill_commits_in_batches(db, monkeypatch):
     """CONC-006: Ergebnisse in Batches festschreiben - eine Transaktion über bis zu 2000 Bilder
     lief in den Idle-Timeout der Rolle und verlor dann alles."""
-    from app.core.config import settings
     from app.services import file_service as module
 
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
     monkeypatch.setattr(module, "QUALITY_BACKFILL_COMMIT_EVERY", 2)
     tenant = make_tenant(db)
     for _ in range(5):
-        _make_pending_stored_file(db, tenant.id, tmp_path, write_content=None)
+        _make_pending_stored_file(db, tenant.id, write_content=None)
     commits = []
     original_commit = db.commit
     monkeypatch.setattr(db, "commit", lambda: (commits.append(1), original_commit()))

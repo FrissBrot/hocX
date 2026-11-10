@@ -679,9 +679,19 @@ eine neue Revision. Bestehende Exporte behalten ihre Revision (`document_export.
 Ausführlich: `docs-site/docs/technik/storage/` (Architektur, Betrieb, lokales S3, Migrationen,
 Wartungsmodus, Backup & Recovery).
 
-**Update auf 1.2**: `deploy.sh` ergänzt die neuen Secrets in `.env`, startet `local-s3`,
-`storage-init` und `storage-worker`. Danach ist weiterhin das Dateisystem aktiv - es wird nichts
-verschoben, bis die Erstmigration gestartet wird.
+hocX speichert Dateien nur noch in S3; eine Neuinstallation startet direkt auf dem lokalen S3
+(Garage). `deploy.sh` ergänzt die nötigen Secrets in `.env` und startet `local-s3`,
+`storage-init` und `storage-worker`.
+
+**Update von 1.2.x (S3-only)**: Voraussetzung ist eine abgeschlossene Erstmigration auf S3 und
+keine offene Storage-Migration, sonst bricht `deploy.sh` mit «Upgrade gesperrt» ab (das bisherige
+Release läuft weiter). Liegt der alte Dateisystem-Bestand noch in der Rückfallfrist, fragt
+`deploy.sh` «Rückfallfrist jetzt beenden und den Dateisystem-Bestand bereinigen? [j/N]»
+(nicht interaktiv: `HOCX_SKIP_STORAGE_FALLBACK=1`) und wartet, bis der `storage-worker` des
+bisherigen Releases bereinigt hat (`HOCX_STORAGE_PURGE_TIMEOUT`, Default 3600 s). Bereinigt werden
+nur Dateien, deren Kopie die Erstmigration verifiziert hat. Danach gibt es keinen Weg zurück auf
+das Dateisystem; Backups von vor der S3-Migration lassen sich nur mit 1.2.x wiederherstellen.
+Details: `docs-site/docs/technik/storage/migration.md`, Abschnitt «Upgrade auf S3-only».
 
 **Cronjob `storage_controller`** richtet `deploy.sh` selbst ein (Marker
 `# hocx-managed:<projekt>:storage_controller` in der crontab von `hocx-deploy`, abschaltbar mit
@@ -693,25 +703,10 @@ unverändert; ihn entfernen (`crontab -e`), damit der verwaltete Eintrag beim n�
 30 3 * * * /docker/hocX/scripts/run_job.sh backup_storage env HOCX_COMPOSE_PROJECT=hocx HOCX_COMPOSE_FILES="docker-compose.release.yml docker-compose.clamav.yml docker-compose.traefik.yml" /docker/hocX/scripts/backup_storage.sh >> /docker/hocX/backups/backup_storage.log 2>&1
 ```
 
-**Erste produktive Migration** (Dateisystem → lokales S3):
-
-1. Frisches DB-Backup (`scripts/backup_db.sh`) und Plattenplatz prüfen: das lokale S3 braucht
-   etwa so viel Platz wie `storage/` belegt (die Originale bleiben während der Rückfallfrist liegen).
-2. Wartung ankündigen: System → Wartung → «Wartung planen» (erscheint auf der Anmeldeseite).
-3. System → Storage → Profil «Lokales S3 (Garage)» → «Verbindung testen».
-4. «Migration vorbereiten» → Preflight abwarten → Schätzung prüfen → «Migration starten».
-5. Fortschritt unter System → Storage verfolgen; die Wartung endet automatisch nach
-   bestandener Endprüfung und Beobachtungsphase. Verweist die Datenbank auf fehlende Dateien
-   (abgelaufene Exporte zählen nicht dazu), wartet der Cutover in voller Wartung auf
-   «Umschalten bestätigen» (Liste im Prüfbericht) - Prüfbericht während der Wartung im Blick
-   behalten. Scheitert die Prüfung nach dem Umschalten dreimal in Folge (`rollback_required`):
-   «zur Kenntnis genommen», danach lässt sich die Wartung freigeben, sobald der automatische
-   Healthcheck des aktiven Ziels bestanden ist.
-6. Danach: `docker compose exec backend python -m app.workers.storage_verify --full`.
-
-**Notfall**: Bei Fehlern bleibt die Wartung bestehen und das Dateisystem aktiv. Ursache im
-Migrationsverlauf/Fehlerprotokoll prüfen, Migration fortsetzen oder abbrechen; die Wartung lässt
-sich unter System → Wartung erst beenden, wenn alle Freigabebedingungen erfüllt sind.
+**Notfall bei einer Migration**: Bei Fehlern vor dem Umschalten bleibt die Quelle aktiv. Ursache
+im Migrationsverlauf/Fehlerprotokoll prüfen, Migration fortsetzen oder abbrechen; eine Wartung
+lässt sich unter System → Wartung erst beenden, wenn alle Freigabebedingungen erfüllt sind.
+Danach: `docker compose exec backend python -m app.workers.storage_verify --full`.
 
 ## 15. Offsite-Backup (BorgBackup, Hetzner Storage Box)
 

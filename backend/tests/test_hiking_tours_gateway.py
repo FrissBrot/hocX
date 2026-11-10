@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import uuid
-from pathlib import Path
 
 import pytest
 from fastapi import FastAPI, HTTPException
@@ -14,6 +13,7 @@ from app.api.routes import hiking_tours
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.security import get_current_user
+from app.core.storage import MAIN, get_object_store
 from app.models.entities import StoredFile
 from app.services import wanderplaner_client
 from app.services.wanderplaner_client import WanderplanerResponse
@@ -126,9 +126,7 @@ def test_upstream_server_errors_keep_the_cause_for_system_error_log(service):
     assert exc_info.value.__cause__ is not None
 
 
-def test_print_stores_the_pdf_as_tenant_file(db, service, tmp_path, monkeypatch):
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
-    monkeypatch.setattr(settings, "export_root", str(tmp_path / "exports"))
+def test_print_stores_the_pdf_as_tenant_file(db, service):
     tenant = make_tenant(db)
     service.response = WanderplanerResponse(
         200,
@@ -151,7 +149,8 @@ def test_print_stores_the_pdf_as_tenant_file(db, service, tmp_path, monkeypatch)
     stored = db.query(StoredFile).filter(StoredFile.public_id == uuid.UUID(body["generated_file_id"])).one()
     assert stored.tenant_id == tenant.id
     assert stored.original_name == "Rigi über Goldau.pdf"
-    assert (Path(settings.storage_root) / stored.storage_path).read_bytes() == b"%PDF-1.5 test"
+    # Nur noch S3 (0168_s3_only): das PDF liegt im aktiven Speicherprofil.
+    assert get_object_store().get_bytes(MAIN, stored.storage_path) == b"%PDF-1.5 test"
     assert service.calls[0]["timeout"] == settings.wanderplaner_print_timeout_seconds
 
 

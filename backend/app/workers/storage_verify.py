@@ -86,7 +86,7 @@ def verify(*, full: bool = False) -> dict[str, Any]:
             if not ok:
                 report["registry_mismatch"].append({"namespace": namespace, "key": key, "reason": "sha256"})
     if registry:
-        # Nur sinnvoll, wenn das Register befüllt ist (nach der Erstmigration).
+        # Nur sinnvoll, wenn das Register befüllt ist.
         report["unregistered_objects"] = [
             {"namespace": ns, "key": key} for ns, key in sorted(present) if (ns, key) not in registry
         ]

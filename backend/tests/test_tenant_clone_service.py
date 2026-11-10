@@ -237,23 +237,21 @@ def test_clone_full_rewrites_abgabe_element_refs_to_the_cloned_rows(db):
     assert db.scalar(select(ProtocolTodo.element_ref).where(ProtocolTodo.tenant_id == cloned.id)) == expected
 
 
-def test_clone_copies_document_studio_data(db, tmp_path, monkeypatch):
+def test_clone_copies_document_studio_data(db):
     """Assets (mit Datei), Brand-Profile samt Revisionen, Mandantenvorlagen samt Revisionen,
     Komponenten und Zuweisungen reisen beim Klon mit; alle Verweise zeigen danach auf die
     Kopien, nie auf den Quellmandanten. Systemvorlagen bleiben geteilt."""
-    from app.core.config import settings
+    from app.core.storage import MAIN, get_object_store
     from app.documents import brand_service, template_service
     from app.documents.brand import BrandTokens
     from app.documents.layout import TemplateContent
     from app.models import DocumentAsset, DocumentBrand, DocumentComponent, DocumentTemplate, DocumentTemplateAssignment, DocumentTemplateRevision, Template
 
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
     source = make_tenant(db, "Stilquelle")
     template = make_template(db, source.id)
-    logo_file = tmp_path / "document_assets" / "src.png"
-    logo_file.parent.mkdir(parents=True)
-    logo_file.write_bytes(b"logo")
-    logo = DocumentAsset(tenant_id=source.id, kind="image", category="logo", name="Logo", storage_path="document_assets/src.png")
+    logo_key = f"document_assets/tenant-{source.id}/src.png"
+    get_object_store().put_bytes(db, MAIN, logo_key, b"logo")
+    logo = DocumentAsset(tenant_id=source.id, kind="image", category="logo", name="Logo", storage_path=logo_key)
     db.add(logo)
     db.flush()
     brand = brand_service.create_brand(db, source.id, name="Vereinsstil", tokens=BrandTokens.model_validate({"assets": {"logo": str(logo.public_id)}}), is_default=True)
@@ -276,7 +274,7 @@ def test_clone_copies_document_studio_data(db, tmp_path, monkeypatch):
     new_assignment = db.scalar(select(DocumentTemplateAssignment).where(DocumentTemplateAssignment.tenant_id == cloned.id))
     assert new_brand.id != brand.id and new_brand.is_default
     assert brand_service.tokens_of(brand_service.current_revision(db, new_brand)).assets.logo == new_logo.public_id != logo.public_id
-    assert (tmp_path / new_logo.storage_path).read_bytes() == b"logo"
+    assert get_object_store().get_bytes(MAIN, new_logo.storage_path) == b"logo"
     assert new_component.node_json["source"]["asset_id"] == str(new_logo.public_id)
     published = db.get(DocumentTemplateRevision, new_document_template.published_revision_id)
     assert published.template_id == new_document_template.id

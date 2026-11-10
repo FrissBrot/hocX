@@ -23,9 +23,17 @@ from tests.factories import make_protocol, make_protocol_element, make_protocol_
 def _isolated_storage_root(monkeypatch, tmp_path):
     from app.core.config import settings
 
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path / "storage"))
-    monkeypatch.setattr(settings, "upload_root", str(tmp_path / "storage" / "uploads"))
+    # Originale liegen im Objektspeicher; lokal bleibt nur der Thumbnail-Cache.
     monkeypatch.setattr(settings, "thumbnail_root", str(tmp_path / "storage-local" / "thumbnails"))
+
+
+def _put_original(db, tenant_id: int, content: bytes) -> str:
+    """Original wie ein Upload in den Objektspeicher legen, liefert den storage_path (Key)."""
+    from app.core.storage import MAIN, get_object_store
+
+    key = f"uploads/tenant-{tenant_id}/original.png"
+    get_object_store().put_bytes(db, MAIN, key, content)
+    return key
 
 
 def _png_bytes(color: tuple[int, int, int] = (10, 20, 30), size: tuple[int, int] = (800, 600)) -> bytes:
@@ -69,13 +77,11 @@ def test_ensure_thumbnail_backfills_a_stored_file_created_without_one(db):
     from app.core.config import settings
 
     tenant = make_tenant(db)
-    original_path = Path(settings.storage_root) / "original.png"
-    original_path.parent.mkdir(parents=True, exist_ok=True)
-    original_path.write_bytes(_png_bytes(color=(50, 60, 70)))
+    key = _put_original(db, tenant.id, _png_bytes(color=(50, 60, 70)))
 
     stored_file = StoredFile(
         tenant_id=tenant.id, original_name="original.png", mime_type="image/png",
-        storage_path="original.png",
+        storage_path=key,
     )
     db.add(stored_file)
     db.flush()
@@ -101,13 +107,11 @@ def test_ensure_thumbnail_regenerates_when_thumbnail_root_no_longer_has_the_file
     from app.core.config import settings
 
     tenant = make_tenant(db)
-    original_path = Path(settings.storage_root) / "original.png"
-    original_path.parent.mkdir(parents=True, exist_ok=True)
-    original_path.write_bytes(_png_bytes(color=(90, 80, 70)))
+    key = _put_original(db, tenant.id, _png_bytes(color=(90, 80, 70)))
 
     stored_file = StoredFile(
         tenant_id=tenant.id, original_name="original.png", mime_type="image/png",
-        storage_path="original.png", thumbnail_path="stale/pre-migration-name.thumb.jpg",
+        storage_path=key, thumbnail_path="stale/pre-migration-name.thumb.jpg",
     )
     db.add(stored_file)
     db.flush()
@@ -145,13 +149,11 @@ def test_delete_stored_file_also_removes_its_thumbnail(db):
     from app.core.config import settings
 
     tenant = make_tenant(db)
-    original_path = Path(settings.storage_root) / "original.png"
-    original_path.parent.mkdir(parents=True, exist_ok=True)
-    original_path.write_bytes(_png_bytes())
+    key = _put_original(db, tenant.id, _png_bytes())
 
     stored_file = StoredFile(
         tenant_id=tenant.id, original_name="original.png", mime_type="image/png",
-        storage_path="original.png",
+        storage_path=key,
     )
     db.add(stored_file)
     db.flush()

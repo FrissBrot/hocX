@@ -30,27 +30,17 @@ from tests.factories import (
 service = FileService()
 
 
-@pytest.fixture(autouse=True)
-def _isolated_storage_root(monkeypatch, tmp_path):
-    from app.core.config import settings
-
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
-    monkeypatch.setattr(settings, "upload_root", str(tmp_path / "uploads"))
-    monkeypatch.setattr(settings, "abgabebox_storage_root", str(tmp_path / "abgabebox"))
-
-
 def _png_bytes(size: tuple[int, int] = (640, 480)) -> bytes:
     buffer = io.BytesIO()
     Image.new("RGB", size, color=(10, 20, 30)).save(buffer, format="PNG")
     return buffer.getvalue()
 
 
-def _write_file(root: str, relative_path: str, content: bytes) -> None:
-    from pathlib import Path
+def _write_file(db, root: str, relative_path: str, content: bytes) -> None:
+    """Legt die Datei im Namespace des Stammverzeichnisses ab (Haupt-Backend oder Abgabebox)."""
+    from app.core.storage import get_object_store, namespace_for_root
 
-    path = Path(root) / relative_path
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(content)
+    get_object_store().put_bytes(db, namespace_for_root(root), relative_path, content)
 
 
 def _make_protocol_image_file(db, tenant_id, *, size=(640, 480)):
@@ -61,9 +51,9 @@ def _make_protocol_image_file(db, tenant_id, *, size=(640, 480)):
     protocol = make_protocol(db, tenant_id, template.id, protocol_number="9/2026", protocol_date=date(2026, 5, 1))
     element = make_protocol_element(db, protocol.id)
     block = make_protocol_element_block(db, element.id, configuration_snapshot_json={})
-    relative_path = "uploads/tenant-x/block-x/foto.png"
+    relative_path = f"uploads/tenant-{tenant_id}/block-{block.id}/foto.png"
     content = _png_bytes(size)
-    _write_file(settings.storage_root, relative_path, content)
+    _write_file(db, settings.storage_root, relative_path, content)
     stored_file = StoredFile(
         tenant_id=tenant_id, original_name="foto.png", mime_type="image/png",
         storage_path=relative_path, file_size_bytes=len(content),
@@ -89,9 +79,9 @@ def _make_submission_upload_image(db, tenant_id, *, size=(320, 240)):
     upload = SubmissionUpload(assignment_id=assignment.id, list_entry_id=entry.id, status="submitted")
     db.add(upload)
     db.flush()
-    relative_path = "foto.png"
+    relative_path = f"tenant-{tenant_id}/upload-{upload.id}/foto.png"
     content = _png_bytes(size)
-    _write_file(settings.abgabebox_storage_root, relative_path, content)
+    _write_file(db, settings.abgabebox_storage_root, relative_path, content)
     stored_file = StoredFile(tenant_id=tenant_id, original_name="foto.png", mime_type="image/png", storage_path=relative_path, file_size_bytes=len(content))
     db.add(stored_file)
     db.flush()

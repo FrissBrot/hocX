@@ -18,6 +18,7 @@ from starlette.datastructures import Headers
 
 from app.api.routes import files as files_routes
 from app.core.config import settings
+from app.core.storage import MAIN, get_object_store
 from app.models.entities import GalleryImage, GalleryUploadJob, StoredFile
 from app.services import apple_media, file_service as file_service_module, public_id_service
 from app.services.file_service import FileService
@@ -244,7 +245,7 @@ def test_live_photo_is_stored_as_photo_plus_playable_mp4(db):
     assert video.original_name == "IMG_0002.mp4"
     assert items[0].live_video_url == f"/api/stored-files/{video.public_id}/content"
     # H.264 (nicht mehr HEVC) im MP4-Container, ohne Ton.
-    written = (Path(settings.storage_root) / video.storage_path).read_bytes()
+    written = get_object_store().get_bytes(MAIN, video.storage_path)
     assert written[4:8] == b"ftyp"
     probe = subprocess.run(
         ["ffprobe", "-v", "error", "-show_entries", "stream=codec_name,codec_type", "-of", "csv=p=0", "-"],

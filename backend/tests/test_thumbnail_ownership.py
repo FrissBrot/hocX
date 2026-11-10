@@ -1,12 +1,12 @@
 """Audit MAIN-BE-003: Import und Klon übernehmen thumbnail_path nicht; ensure_thumbnail und
 die Löschpfade akzeptieren nur die eigene Vorschau "<id>.jpg"."""
 import io
-from pathlib import Path
 
 import pytest
 from PIL import Image
 from sqlalchemy import select
 
+from app.core.storage import MAIN, get_object_store
 from app.models.entities import StoredFile
 from app.services.file_service import FileService, owned_thumbnail_path
 from app.services.tenant_clone_service import TenantCloneService
@@ -26,18 +26,17 @@ def storage(monkeypatch, tmp_path):
     from app.core.config import settings
     from app.services import tenant_import_service as import_module
 
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path / "storage"))
-    monkeypatch.setattr(settings, "abgabebox_storage_root", str(tmp_path / "storage"))
+    # Originale im Objektspeicher, nur der Thumbnail-Cache bleibt lokal.
     monkeypatch.setattr(settings, "thumbnail_root", str(tmp_path / "thumbs"))
     monkeypatch.setattr(import_module.scanner, "scan_file", lambda *args, **kwargs: "clean")
-    (tmp_path / "storage").mkdir()
     (tmp_path / "thumbs").mkdir()
     return settings
 
 
 def _image_with_thumbnail(db, settings, tenant_id: int, name: str, color) -> StoredFile:
-    (Path(settings.storage_root) / name).write_bytes(_png_bytes(color))
-    stored_file = StoredFile(tenant_id=tenant_id, original_name=name, mime_type="image/png", storage_path=name, file_size_bytes=10)
+    key = f"uploads/tenant-{tenant_id}/{name}"
+    get_object_store().put_bytes(db, MAIN, key, _png_bytes(color))
+    stored_file = StoredFile(tenant_id=tenant_id, original_name=name, mime_type="image/png", storage_path=key, file_size_bytes=10)
     db.add(stored_file)
     db.flush()
     assert FileService().ensure_thumbnail(db, stored_file, settings.storage_root) is not None

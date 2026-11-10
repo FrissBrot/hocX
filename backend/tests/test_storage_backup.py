@@ -5,28 +5,22 @@ zwischen Register und Speicher wird gemeldet - und das Manifest wird trotzdem ge
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 
 import pytest
 
-from app.core.config import settings
 from app.core.storage import MAIN, get_object_store
 from app.workers import storage_backup
 from tests.storage_support import committed_storage  # noqa: F401
 
 
 @pytest.fixture
-def fs_store(committed_storage, tmp_path, monkeypatch):
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path / "storage"))
-    monkeypatch.setattr(settings, "upload_root", str(tmp_path / "storage" / "uploads"))
-    monkeypatch.setattr(settings, "export_root", str(tmp_path / "storage" / "exports"))
-    monkeypatch.setattr(settings, "abgabebox_storage_root", str(tmp_path / "abgabebox"))
-    (tmp_path / "abgabebox").mkdir()
-    get_object_store.cache_clear()
+def fs_store(committed_storage):
+    # Aktives Profil ist das lokale Test-S3 (0168_s3_only); committed_storage räumt auf.
     store = get_object_store()
-    assert store.active_state(force=True).config.is_filesystem
+    store.invalidate()
     yield committed_storage, store
-    get_object_store.cache_clear()
 
 
 def test_object_changed_during_the_backup_is_taken_in_its_new_state(fs_store, tmp_path, monkeypatch):
@@ -58,7 +52,10 @@ def test_real_mismatch_is_reported_without_aborting_the_backup(fs_store, tmp_pat
     store.put_bytes(db, MAIN, good, b"gut")
     store.put_bytes(db, MAIN, bad, b"original")
     db.commit()
-    store.local_path(MAIN, bad).write_bytes(b"am System vorbei veraendert")
+    # Am Register vorbei direkt im Bucket überschreiben (Register kennt weiter den alten Hash).
+    changed = b"am System vorbei veraendert"
+    store.active_backend(force=True).put_stream(
+        MAIN, bad, io.BytesIO(changed), size=len(changed), sha256=hashlib.sha256(changed).hexdigest(), content_type=None)
     result = storage_backup.backup(tmp_path / "backup")
     assert result["mismatched"] == 1
     manifest = json.loads((tmp_path / "backup" / storage_backup.MANIFEST).read_text(encoding="utf-8"))

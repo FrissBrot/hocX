@@ -5,7 +5,6 @@ import hashlib
 import io
 import zipfile
 from datetime import UTC, date, datetime
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -15,6 +14,7 @@ from app.api.routes import files as files_routes
 from app.api.routes import public_share as public_share_routes
 from app.api.routes import share_links as share_links_routes
 from app.core.config import settings
+from app.core.storage import MAIN, get_object_store
 from app.models.entities import GalleryImage, StoredFile
 from app.schemas.files import ShareLinkCreate
 from app.services import image_export_service, image_metadata_service
@@ -25,8 +25,6 @@ from tests.test_share_link_routes import _FakeRequest
 
 @pytest.fixture(autouse=True)
 def _isolated_storage_root(monkeypatch, tmp_path):
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path / "storage"))
-    monkeypatch.setattr(settings, "upload_root", str(tmp_path / "storage" / "uploads"))
     monkeypatch.setattr(settings, "thumbnail_root", str(tmp_path / "thumbs"))
 
 
@@ -109,11 +107,10 @@ def test_unsupported_formats_are_exported_unchanged():
 
 
 def _stored(db, tenant_id, content, name="bild.jpg", **values):
-    root = Path(settings.storage_root)
-    root.mkdir(parents=True, exist_ok=True)
-    (root / name).write_bytes(content)
+    key = f"uploads/tenant-{tenant_id}/gallery/{name}"
+    get_object_store().put_bytes(db, MAIN, key, content)
     row = StoredFile(
-        tenant_id=tenant_id, original_name=name, mime_type="image/jpeg", storage_path=name,
+        tenant_id=tenant_id, original_name=name, mime_type="image/jpeg", storage_path=key,
         checksum_sha256=hashlib.sha256(content).hexdigest(), scan_status="clean", **values,
     )
     db.add(row)
@@ -130,17 +127,18 @@ def test_single_download_uses_a_temporary_export_and_keeps_the_original(db):
     response = files_routes.download_stored_file(row.public_id, part="image", db=db, user=make_current_user(tenant.id))
     exported = response_bytes(response)
     # Exportfassung als Bytes, nie das gespeicherte Original
-    assert getattr(response, "path", None) is None or Path(response.path).name != "bild.jpg"
+    assert exported != content
     assert read_exif(exported)[1][0x9003] == "1975:05:05 12:00:00"
-    assert (Path(settings.storage_root) / "bild.jpg").read_bytes() == content
+    assert get_object_store().get_bytes(MAIN, row.storage_path) == content
     assert 'filename="bild.jpg"' in response.headers["content-disposition"]
 
 
 def test_single_download_without_estimate_serves_the_original(db):
     tenant = make_tenant(db)
-    row = _stored(db, tenant.id, jpeg())
+    content = jpeg()
+    row = _stored(db, tenant.id, content)
     response = files_routes.download_stored_file(row.public_id, part="image", db=db, user=make_current_user(tenant.id))
-    assert Path(response.path).name == "bild.jpg"
+    assert response_bytes(response) == content
 
 
 def test_public_share_zip_uses_the_date_logic_and_respects_the_privacy_switch(db):
@@ -153,7 +151,7 @@ def test_public_share_zip_uses_the_date_logic_and_respects_the_privacy_switch(db
         ShareLinkCreate(name="mit", file_ids=[a.public_id, b.public_id], share_location=True, share_capture_date=True, share_camera=True), db, user
     )
     response = public_share_routes.download_public_share_all(shared.url.removeprefix("/share/"), _FakeRequest(), db)
-    with zipfile.ZipFile(response.path) as archive:
+    with zipfile.ZipFile(io.BytesIO(response_bytes(response))) as archive:
         assert read_exif(archive.read("a.jpg"))[1][0x9003] == "1960:06:06 12:00:00"
         assert read_exif(archive.read("b.jpg"))[1][0x9003] == "2020:02:02 02:02:00"
 
@@ -161,7 +159,7 @@ def test_public_share_zip_uses_the_date_logic_and_respects_the_privacy_switch(db
         ShareLinkCreate(name="ohne", file_ids=[a.public_id], share_location=True, share_capture_date=False, share_camera=True), db, user
     )
     response = public_share_routes.download_public_share_all(hidden.url.removeprefix("/share/"), _FakeRequest(), db)
-    with zipfile.ZipFile(response.path) as archive:
+    with zipfile.ZipFile(io.BytesIO(response_bytes(response))) as archive:
         exported = archive.read("a.jpg")
     assert 0x9003 not in read_exif(exported)[1]
     assert b"CaptureDateEstimated" not in exported
@@ -232,4 +230,4 @@ def test_single_download_with_server_gps_serves_the_original(db):
     content = jpeg(latitude=47.0, longitude=8.0)
     row = _stored(db, tenant.id, content, gps_latitude=47.0, gps_longitude=8.0, gps_source="server")
     response = files_routes.download_stored_file(row.public_id, part="image", db=db, user=make_current_user(tenant.id))
-    assert Path(response.path).name == "bild.jpg"
+    assert response_bytes(response) == content

@@ -83,6 +83,16 @@ services:
       # code more than before).
       AUTH_SECRET: test-auth-secret-0123456789-not-a-real-secret
       ADMIN_AUTH_SECRET: test-admin-auth-secret-0123456789
+      # Nur noch S3 (Migration 0168_s3_only): die frische Test-Datenbank startet direkt auf dem
+      # isolierten test-s3 - dieselben Schlüssel wie test-s3-init, nie produktive Buckets.
+      STORAGE_CREDENTIALS_KEY: test-storage-credentials-key-0123456789abcdef
+      LOCAL_S3_ENDPOINT: http://test-s3:3900
+      LOCAL_S3_BUCKET: hocx-main
+      LOCAL_S3_ABGABEBOX_BUCKET: hocx-abgabebox
+      LOCAL_S3_ACCESS_KEY: GK0000000000000000000000a1
+      LOCAL_S3_SECRET_KEY: "1111111111111111111111111111111111111111111111111111111111111111"
+      LOCAL_S3_ABGABEBOX_ACCESS_KEY: GK0000000000000000000000b2
+      LOCAL_S3_ABGABEBOX_SECRET_KEY: "2222222222222222222222222222222222222222222222222222222222222222"
     depends_on:
       test-db:
         condition: service_healthy
@@ -107,7 +117,6 @@ services:
       REDIS_URL: redis://test-redis:6379/0
       # Objektspeicher-Tests (tests/test_object_storage*.py, test_storage_migration_e2e.py) gegen
       # das isolierte test-s3 - nie gegen produktive Buckets.
-      STORAGE_CREDENTIALS_KEY: test-storage-credentials-key-0123456789abcdef
       TEST_S3_ENDPOINT: http://test-s3:3900
       TEST_S3_ACCESS_KEY: GK0000000000000000000000a1
       TEST_S3_SECRET_KEY: "1111111111111111111111111111111111111111111111111111111111111111"
@@ -115,6 +124,16 @@ services:
       TEST_S3_ABGABEBOX_SECRET_KEY: "2222222222222222222222222222222222222222222222222222222222222222"
       ABGABEBOX_STORAGE_ROOT: /tmp/hocx-test-abgabebox-storage
       STORAGE_WORK_ROOT: /tmp/hocx-test-work
+      # Nur noch S3 (Migration 0168_s3_only): die frische Test-Datenbank startet direkt auf dem
+      # isolierten test-s3 - dieselben Schlüssel wie test-s3-init, nie produktive Buckets.
+      STORAGE_CREDENTIALS_KEY: test-storage-credentials-key-0123456789abcdef
+      LOCAL_S3_ENDPOINT: http://test-s3:3900
+      LOCAL_S3_BUCKET: hocx-main
+      LOCAL_S3_ABGABEBOX_BUCKET: hocx-abgabebox
+      LOCAL_S3_ACCESS_KEY: GK0000000000000000000000a1
+      LOCAL_S3_SECRET_KEY: "1111111111111111111111111111111111111111111111111111111111111111"
+      LOCAL_S3_ABGABEBOX_ACCESS_KEY: GK0000000000000000000000b2
+      LOCAL_S3_ABGABEBOX_SECRET_KEY: "2222222222222222222222222222222222222222222222222222222222222222"
     depends_on:
       test-migrations:
         condition: service_completed_successfully
@@ -139,8 +158,13 @@ services:
       # No real FriendlyCaptcha keys are configured for this profile, so this must be an
       # accepted dev/test value or every upload test gets rejected fail-closed.
       ABGABEBOX_ENVIRONMENT: test
+      # Nur noch S3: die Abgabebox entschlüsselt ihre eingeschränkten Zugangsdaten aus dem aktiven
+      # Profil (0168_s3_only legt es auf test-s3 an).
+      STORAGE_CREDENTIALS_KEY: test-storage-credentials-key-0123456789abcdef
     depends_on:
       test-migrations:
+        condition: service_completed_successfully
+      test-s3-init:
         condition: service_completed_successfully
     volumes:
       - ./abgabebox-backend:/app

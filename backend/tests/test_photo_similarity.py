@@ -256,21 +256,35 @@ def test_verified_duplicates_do_not_merge_through_a_chain():
     assert [[image.id for image in group] for group in groups] == [[1, 2], [3]]
 
 
-def test_gallery_tabs_separate_copies_from_different_photos(tmp_path, monkeypatch):
+def _put_png(db, image, prefix: str, name: str) -> str:
+    """Bild als PNG in den Objektspeicher legen (wie ein Upload), liefert den Key."""
+    import io
+
+    from app.core.storage import MAIN, get_object_store
+
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    key = f"{prefix}/{name}"
+    get_object_store().put_bytes(db, MAIN, key, buffer.getvalue())
+    return key
+
+
+def test_gallery_tabs_separate_copies_from_different_photos(db):
+    import uuid
     from types import SimpleNamespace
-    from app.core.config import settings
+
     from app.services.file_service import FileService, _groupable
 
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
+    prefix = f"uploads/test-similarity/{uuid.uuid4().hex}"
     photo = _photo_like_image()
-    photo.save(tmp_path / "1.png")
-    photo.save(tmp_path / "2.png")
+    _put_png(db, photo, prefix, "1.png")
+    _put_png(db, photo, prefix, "2.png")
     photo.paste((0, 0, 0), (80, 80, 110, 110))
-    photo.save(tmp_path / "3.png")
+    _put_png(db, photo, prefix, "3.png")
     # Identischer grober Fingerabdruck simuliert eine pHash-Kollision.
     rows = [SimpleNamespace(id=i, public_id=i, perceptual_hash="123456789abcdef0",
                             sharpness_score=1, exposure_score=1, face_quality_score=None,
-                            checksum_sha256=str(i), source="gallery_upload", storage_path=f"{i}.png")
+                            checksum_sha256=str(i), source="gallery_upload", storage_path=f"{prefix}/{i}.png")
             for i in (1, 2, 3)]
     file_paths = {row.id: (row.checksum_sha256, row.storage_path) for row in rows}
     service = FileService()
@@ -321,22 +335,22 @@ def test_series_grouping_skips_hash_collisions_rejected_by_linked():
     assert sorted(sorted(image.id for image in group) for group in groups) == [[1, 2], [3]]
 
 
-def test_burst_frames_with_different_capture_times_are_no_duplicates(tmp_path, monkeypatch):
+def test_burst_frames_with_different_capture_times_are_no_duplicates(db):
+    import uuid
     from datetime import datetime, timedelta
     from types import SimpleNamespace
 
-    from app.core.config import settings
     from app.services.file_service import FileService, _groupable
 
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
+    prefix = f"uploads/test-similarity/{uuid.uuid4().hex}"
     photo = _photo_like_image()
-    photo.save(tmp_path / "1.png")
-    photo.save(tmp_path / "2.png")
+    _put_png(db, photo, prefix, "1.png")
+    _put_png(db, photo, prefix, "2.png")
     start = datetime(2026, 7, 10, 11, 48, 5)
     rows = [SimpleNamespace(id=i, public_id=i, perceptual_hash="123456789abcdef0",
                             sharpness_score=1, exposure_score=1, face_quality_score=None,
                             exif_taken_at=start + timedelta(seconds=3 * i),
-                            checksum_sha256=str(i), source="gallery_upload", storage_path=f"{i}.png")
+                            checksum_sha256=str(i), source="gallery_upload", storage_path=f"{prefix}/{i}.png")
             for i in (1, 2)]
     file_paths = {row.id: (row.checksum_sha256, row.storage_path) for row in rows}
     groups, _ = FileService()._compute_similarity_groups(rows, [_groupable(row) for row in rows], file_paths)

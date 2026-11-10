@@ -2,7 +2,7 @@
 
 Die Migrationstests müssen echt committen (der Worker arbeitet mit eigenen Verbindungen) - das
 Fixture committed_storage hält darum den Ausgangszustand fest und stellt ihn danach wieder her:
-aktiver Speicher zurück auf das Dateisystem, angelegte Profile, Migrationen, Generationen,
+aktiver Speicher zurück auf das lokale Test-S3-Profil, angelegte Profile, Migrationen, Generationen,
 Wartungsfenster, Registry-/Journal-Einträge und Test-Mandanten werden entfernt. Alles S3-seitige
 liegt im isolierten test-s3 (docker-compose.tests.yml), nie in produktiven Buckets.
 """
@@ -78,6 +78,9 @@ def committed_storage(monkeypatch):
     state = db.get(StorageState, 1)
     original = (state.active_profile_id, state.active_generation)
     existing_profiles = set(db.scalars(select(StorageProfile.id)))
+    # Das aktive lokale Profil (0168_s3_only) ist ein gewöhnliches Profil - Tests, die Profile
+    # ändern (z. B. ensure_local_profile), dürfen es nicht für alle folgenden Tests verbiegen.
+    profile_snapshot = [dict(row._mapping) for row in db.execute(text("SELECT * FROM storage_profile"))]
     # Register-/Journal-Reste anderer Tests (die mit echten Commits geschrieben haben) würden
     # sonst als "registriert, aber in der Quelle fehlend" in die Migration eingehen - die
     # Migrationstests arbeiten auf eigenen, frischen Speicherwurzeln.
@@ -108,6 +111,12 @@ def committed_storage(monkeypatch):
         new_profiles = set(db.scalars(select(StorageProfile.id))) - existing_profiles
         if new_profiles:
             db.execute(delete(StorageProfile).where(StorageProfile.id.in_(new_profiles)))
+        for row in profile_snapshot:
+            columns = [column for column in row if column != "id"]
+            db.execute(
+                text(f"UPDATE storage_profile SET {', '.join(f'{c} = :{c}' for c in columns)} WHERE id = :id"),  # sql-ok: Spaltennamen aus der Tabelle selbst
+                row,
+            )
         db.commit()
         db.close()
         get_object_store().invalidate()
@@ -152,9 +161,6 @@ class FaultyBackend:
 
     def copy(self, *args, **kwargs):
         return self.inner.copy(*args, **kwargs)
-
-    def local_path(self, *args, **kwargs):
-        return self.inner.local_path(*args, **kwargs)
 
     def abort_stale_multipart_uploads(self, *args, **kwargs):
         return self.inner.abort_stale_multipart_uploads(*args, **kwargs)

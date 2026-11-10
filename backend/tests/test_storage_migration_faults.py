@@ -17,8 +17,7 @@ import pytest
 from sqlalchemy import select, text, update
 from sqlalchemy.exc import OperationalError
 
-from app.core.config import settings
-from app.core.objstore_client import FilesystemBackend, S3Backend, StorageUnavailable
+from app.core.objstore_client import S3Backend, StorageUnavailable
 from app.core.storage import MAIN, get_object_store
 from app.models import MaintenanceWindow, StorageGeneration, StorageMigration, StorageMigrationObject, StorageProfile, StorageState, StoredFile
 from app.services import storage_migration_service as sms
@@ -31,13 +30,10 @@ pytestmark = requires_s3
 
 
 @pytest.fixture
-def setup(committed_storage, tmp_path, monkeypatch):
+def setup(committed_storage):
+    """Ausgangslage: aktives lokales Test-S3 (0168_s3_only) mit Dateien; «local» ist ein zweites
+    lokales Profil als Ziel der ersten Migration, «external» ein externes."""
     db = committed_storage
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path / "storage"))
-    monkeypatch.setattr(settings, "upload_root", str(tmp_path / "storage" / "uploads"))
-    monkeypatch.setattr(settings, "export_root", str(tmp_path / "storage" / "exports"))
-    monkeypatch.setattr(settings, "abgabebox_storage_root", str(tmp_path / "abgabebox"))
-    (tmp_path / "abgabebox").mkdir()
     get_object_store.cache_clear()
     tenant = make_committed_tenant(db, "Fehler Verein")
     files = seed_files(db, tenant.id, 5, seed=7)
@@ -54,7 +50,7 @@ def inject(failing_profile_id: int, failures: dict[str, list[Exception]]) -> lis
     created: list[FaultyBackend] = []
 
     def factory(config):
-        real = FilesystemBackend(config, store.filesystem_roots) if config.is_filesystem else S3Backend(config)
+        real = S3Backend(config)
         if config.profile_id != failing_profile_id:
             return real
         faulty = FaultyBackend(real, failures)
@@ -67,6 +63,7 @@ def inject(failing_profile_id: int, failures: dict[str, list[Exception]]) -> lis
 
 
 def initial(db, local) -> StorageMigration:
+    """Erste Migration: vom aktiven lokalen S3 auf das Testprofil «local»."""
     migration = sms.create_migration(db, target_profile_id=local.id, options={"observe_seconds": 30}, actor_email="owner@example.com")
     db.commit()
     return drive(db, migration.id)
@@ -240,42 +237,9 @@ def test_a_single_failed_health_check_after_the_cutover_is_retried(setup, monkey
     _failing_probe(monkeypatch, 1)
     done = drive(db, migration.id)
     assert done.state == "completed"
-    window = db.get(MaintenanceWindow, done.maintenance_window_id)
-    assert window.state == "completed"
+    # Live-Migration: der kurze Schreib-Fence des Cutovers ist wieder freigegeben.
+    assert done.maintenance_window_id is None or db.get(MaintenanceWindow, done.maintenance_window_id).state == "completed"
     assert_files_intact(db, files)
-
-
-def test_rollback_required_of_the_initial_migration_can_be_released_after_a_passing_health_check(setup, monkeypatch):
-    db, _tenant, files, local, _external = setup
-    migration = sms.create_migration(db, target_profile_id=local.id, options={"observe_seconds": 30}, actor_email="owner@example.com")
-    db.commit()
-    drive(db, migration.id, until="observing")
-    real = _failing_probe(monkeypatch, None)
-    assert drive(db, migration.id, until="rollback_required").state == "rollback_required"
-    window_id = db.get(StorageMigration, migration.id).maintenance_window_id
-    with pytest.raises(maintenance_service.MaintenanceError):
-        maintenance_service.release(db, window_id, actor_email="owner@example.com", source="admin")
-    db.rollback()
-    sms.acknowledge_rollback(db, migration.id, actor_email="owner@example.com")  # Ziel noch gestört
-    db.commit()
-    db.expire_all()
-    assert db.get(StorageMigration, migration.id).report["target_health"]["ok"] is False
-    with pytest.raises(maintenance_service.MaintenanceError):
-        maintenance_service.release(db, window_id, actor_email="owner@example.com", source="admin")
-    db.rollback()
-    # Ziel wieder gesund: der Worker prüft nach, danach ist die Wartung über den regulären Weg frei.
-    monkeypatch.setattr(storage_profile_service, "run_connection_test", real)
-    monkeypatch.setattr(storage_worker, "HEALTH_RECHECK_SECONDS", 0)
-    assert storage_worker.recheck_failed_cutovers() == 1
-    db.expire_all()
-    window = maintenance_service.release(db, window_id, actor_email="owner@example.com", source="admin")
-    db.commit()
-    assert window.state == "completed"
-    assert db.get(StorageState, 1).active_profile_id == local.id
-    assert_files_intact(db, files)
-
-
-# 9/10/11: Änderungen während der Migration werden nachgeführt ---------------------------------
 
 
 def test_changes_after_snapshot_never_resurrect_deleted_or_stale_versions(setup):
@@ -362,6 +326,7 @@ def test_two_admins_starting_a_migration_concurrently_create_only_one(setup):
 
 def test_profile_changes_during_a_migration_are_rejected_and_detected(setup):
     db, _tenant, _files, local, _external = setup
+    source_generation = db.get(StorageState, 1).active_generation
     migration = sms.create_migration(db, target_profile_id=local.id, options={}, actor_email="owner@example.com")
     db.commit()
     with pytest.raises(storage_profile_service.StorageProfileError):
@@ -372,7 +337,7 @@ def test_profile_changes_during_a_migration_are_rejected_and_detected(setup):
     db.commit()
     result = drive(db, migration.id)
     assert result.state == "failed" and "geändert" in (result.last_error or "")
-    assert db.get(StorageState, 1).active_generation == 0  # Quelle bleibt aktiv
+    assert db.get(StorageState, 1).active_generation == source_generation  # Quelle bleibt aktiv
 
 
 # Abbruch, Pause, dauerhaft fehlgeschlagene Objekte -------------------------------------------
@@ -396,37 +361,6 @@ def test_cancel_and_pause_resume_keep_the_source_active(setup):
     assert db.get(StorageState, 1).active_profile_id == local.id
     generation = db.scalars(select(StorageGeneration).where(StorageGeneration.generation == cancelled.target_generation)).first()
     assert generation.status == "abandoned"  # Zieldaten bleiben, Bereinigung ist ein eigener Schritt
-    assert_files_intact(db, files)
-
-
-def test_cancel_during_the_inventory_of_the_initial_migration_takes_effect_after_the_next_batch(setup, monkeypatch):
-    """S3-012: die Inventur der Erstmigration hasht jede Datei unter voller Wartung - ein
-    Abbruch muss nach dem nächsten Stapel greifen, nicht erst nach dem kompletten Lesedurchlauf."""
-    db, _tenant, files, local, _external = setup
-    monkeypatch.setattr(storage_worker, "BATCH_SIZE", 1)
-    migration = sms.create_migration(db, target_profile_id=local.id, options={"observe_seconds": 30}, actor_email="owner@example.com")
-    db.commit()
-    migration_id = migration.id
-    drive(db, migration_id, until="inventory")
-    real = storage_worker.hash_object
-    calls = {"n": 0}
-
-    def hashing(backend, namespace, key):
-        calls["n"] += 1
-        if calls["n"] == 1:
-            with storage_worker.engine.begin() as conn:
-                conn.execute(text("UPDATE storage_migration SET cancel_requested = true WHERE id = :id"), {"id": migration_id})
-        return real(backend, namespace, key)
-
-    monkeypatch.setattr(storage_worker, "hash_object", hashing)
-    storage_worker.run_once("w")
-    db.expire_all()
-    cancelled = db.get(StorageMigration, migration_id)
-    assert cancelled.state == "cancelled"
-    assert calls["n"] < len(files)
-    state = db.get(StorageState, 1)
-    assert state.active_generation == 0 and not state.write_fenced
-    assert db.get(MaintenanceWindow, cancelled.maintenance_window_id).state == "completed"
     assert_files_intact(db, files)
 
 
@@ -458,13 +392,14 @@ def test_objects_missing_in_the_source_block_cutover_until_acknowledged(setup):
     assert f"main/{victim.storage_path}" in done.checkpoint["accepted_missing"]
 
 
-def test_initial_migration_surfaces_registered_files_missing_on_disk(setup):
-    """Ein Registereintrag ohne Datei auf der Platte darf die Erstmigration weder still
+def test_migration_surfaces_registered_objects_missing_in_the_source(setup):
+    """Ein Registereintrag ohne Objekt in der Quelle darf die Migration weder still
     überspringen noch endlos blockieren: er wird als fehlend sichtbar und muss bestätigt werden."""
     db, _tenant, _files, local, _external = setup
     ghost = "uploads/ghost/verschwunden.bin"
+    source_generation = db.get(StorageState, 1).active_generation
     db.execute(text("""INSERT INTO storage_object (namespace, key, size_bytes, sha256, version, status, generation)
-                       VALUES ('main', :key, 3, :sha, 1, 'active', 0)"""), {"key": ghost, "sha": "a" * 64})
+                       VALUES ('main', :key, 3, :sha, 1, 'active', :gen)"""), {"key": ghost, "sha": "a" * 64, "gen": source_generation})
     db.commit()
     migration = sms.create_migration(db, target_profile_id=local.id, options={"observe_seconds": 30, "max_object_attempts": 1}, actor_email="owner@example.com")
     db.commit()
@@ -482,7 +417,7 @@ def test_initial_migration_surfaces_registered_files_missing_on_disk(setup):
         db.commit()
         storage_worker.run_once("w")
     assert dead == ghost
-    assert db.get(StorageState, 1).active_generation == 0  # Quelle weiter aktiv
+    assert db.get(StorageState, 1).active_generation == source_generation  # Quelle weiter aktiv
     assert sms.accept_missing(db, migration.id, actor_email="owner@example.com") == 1
     db.commit()
     assert drive(db, migration.id).state == "completed"
@@ -514,22 +449,25 @@ def test_expired_exports_are_not_counted_as_missing_references(setup):
 
 def test_purging_an_old_generation_requires_confirmation_and_expired_retention(setup):
     db, _tenant, files, local, external = setup
+    source_generation = db.get(StorageState, 1).active_generation
+    source_profile = db.get(StorageProfile, db.get(StorageState, 1).active_profile_id)
     assert initial(db, local).state == "completed"
-    old = db.scalars(select(StorageGeneration).where(StorageGeneration.generation == 0)).first()
+    old = db.scalars(select(StorageGeneration).where(StorageGeneration.generation == source_generation)).first()
+    confirmation = f"g{source_generation}"
     with pytest.raises(sms.MigrationError, match="Bestätigung"):
         sms.request_generation_purge(db, old.id, confirmation="ja", actor_email="owner@example.com")
     with pytest.raises(sms.MigrationError, match="Rückfallfrist"):
-        sms.request_generation_purge(db, old.id, confirmation="g0", actor_email="owner@example.com")
+        sms.request_generation_purge(db, old.id, confirmation=confirmation, actor_email="owner@example.com")
     db.rollback()
     db.execute(update(StorageGeneration).where(StorageGeneration.id == old.id).values(retain_until=datetime.now(UTC) - timedelta(days=1)))
     db.commit()
-    sms.request_generation_purge(db, old.id, confirmation="g0", actor_email="owner@example.com")
+    sms.request_generation_purge(db, old.id, confirmation=confirmation, actor_email="owner@example.com")
     db.commit()
     storage_worker.purge_generations()
     db.expire_all()
     assert db.get(StorageGeneration, old.id).status == "purged"
-    for stored_file_id in files:
-        assert not (settings.storage_root and __import__("pathlib").Path(settings.storage_root, db.get(StoredFile, stored_file_id).storage_path).exists())
+    old_backend = S3Backend(storage_profile_service.profile_config(source_profile, source_generation))
+    assert next(iter(old_backend.list(MAIN, "")), None) is None  # alte Generation geleert
     assert_files_intact(db, files)  # aktive Generation unberührt
 
 

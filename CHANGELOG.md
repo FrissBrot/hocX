@@ -6,6 +6,47 @@ Versionierung nach [SemVer](https://semver.org/lang/de/). Die Beta-Historie
 ist der erste offiziell unterstützte Stand und muss keine älteren
 Installationen aktualisieren können.
 
+## [Unreleased]
+
+hocX speichert Dateien nur noch in S3. Eine neue Migration (`0168_s3_only`). **Breaking
+Changes** - vor dem Update die Voraussetzungen unten prüfen; das Update läuft über `deploy.sh`.
+
+### Breaking Changes
+
+- **Nur noch S3.** Der Dateisystem-Speicher von 1.2 (Generation 0), die Erstmigration
+  Dateisystem → lokales S3 und die Rückfallfrist der Dateisystem-Generation entfallen. Dateien
+  liegen ausschliesslich in einem S3-kompatiblen Objektspeicher (lokales Garage oder externer
+  Anbieter); ein Weg zurück auf das Dateisystem existiert nicht.
+- **Update nur von 1.2.x mit abgeschlossener Erstmigration** und ohne offene Storage-Migration.
+  Sonst bricht `deploy.sh` vor dem Update mit «Upgrade gesperrt» ab, das bisherige Release läuft
+  weiter; die Migration `0168_s3_only` prüft dasselbe noch einmal, ohne die Datenbank zu ändern.
+- **Rückfallfrist beim Deploy beenden.** Liegt der Dateisystem-Bestand noch in der Rückfallfrist,
+  warnt `deploy.sh` und fragt «Rückfallfrist jetzt beenden und den Dateisystem-Bestand
+  bereinigen? [j/N]» (nicht interaktiv: `HOCX_SKIP_STORAGE_FALLBACK=1`, sonst Abbruch). Danach
+  bereinigt der `storage-worker` des bisherigen Releases den Bestand - nur Dateien, deren Kopie die
+  Erstmigration verifiziert hat - und `deploy.sh` wartet darauf (`HOCX_STORAGE_PURGE_TIMEOUT`,
+  Default 3600 s). Ist die Frist schon abgelaufen, wird ohne Rückfrage bereinigt.
+- **Backups von vor der S3-Migration** lassen sich nur noch mit hocX 1.2.x wiederherstellen; die
+  Wiederherstellung lehnt sie mit `backup_pre_s3` ab. `BACKUP_TRUST_FILESYSTEM_REGISTRY` und das
+  Restore-Ziel `--storage filesystem` der Recovery-CLI entfallen.
+
+### Migration
+
+- `0168_s3_only`: Upgrade-Tor (siehe oben). Neuinstallationen ohne Dateien stellen direkt auf das
+  Profil «Lokales S3 (Garage)» aus `LOCAL_S3_*` um (Generation 1). Das bisherige
+  Dateisystem-Profil bleibt als deaktivierte Historie erhalten.
+
+### Geändert
+
+- **Neuinstallationen starten direkt auf dem lokalen S3**, ohne Erstmigration und ohne
+  Wartungsfenster.
+- System → Storage zeigt keine Erstmigration mehr. Das alte Dateisystem-Profil erscheint als
+  «Dateisystem (bis 1.2, nicht mehr unterstützt)» ohne Aktionen, frühere Erstmigrationen im
+  Verlauf als «Erstmigration (bis 1.2)». Jede Migration ist eine Live-Migration zwischen
+  S3-Profilen.
+- Dokumentation: neuer Abschnitt «Upgrade auf S3-only» (Technik → Dateispeicher → Migrationen),
+  RUNBOOK Abschnitt 14 angepasst.
+
 ## [1.2.3] - 2026-11-09
 
 Rückmeldungen aus dem Testbetrieb von 1.2.2: Protokoll-Editor und PDF-Gestaltung. Eine neue

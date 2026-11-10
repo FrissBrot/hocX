@@ -6,6 +6,7 @@ Hinweis: In der Test-Session rollt db.rollback() bis zum Testbeginn zurück (auc
 import pytest
 from sqlalchemy import select
 
+from app.core.storage import MAIN, get_object_store
 from app.models.entities import ProtocolImage, StoredFile, Tenant
 from app.services.tenant_clone_service import TenantCloneService
 from app.services.tenant_export_service import TenantExportService
@@ -18,13 +19,16 @@ def storage(monkeypatch, tmp_path):
     from app.core.config import settings
     from app.services import tenant_import_service as import_module
 
-    monkeypatch.setattr(settings, "storage_root", str(tmp_path / "storage"))
-    monkeypatch.setattr(settings, "abgabebox_storage_root", str(tmp_path / "abgabebox"))
+    # Dateien im Objektspeicher (Test-S3), lokal nur der Thumbnail-Cache.
     monkeypatch.setattr(settings, "thumbnail_root", str(tmp_path / "thumbs"))
     monkeypatch.setattr(import_module.scanner, "scan_file", lambda *args, **kwargs: "clean")
-    (tmp_path / "storage").mkdir()
-    (tmp_path / "abgabebox").mkdir()
     return tmp_path
+
+
+def _physical_keys(prefix: str) -> set[str]:
+    """Physisch vorhandene Objekte unter dem Präfix (am Register vorbei). Der Bucket ist über
+    Testläufe geteilt - geprüft wird deshalb, dass nichts Neues übrig bleibt."""
+    return {info.key for info in get_object_store().active_backend().list(MAIN, prefix)}
 
 
 def _tenant_with_protocol_image(db, storage):
@@ -33,8 +37,9 @@ def _tenant_with_protocol_image(db, storage):
     protocol = make_protocol(db, tenant.id, template.id)
     element = make_protocol_element(db, protocol.id)
     block = make_protocol_element_block(db, element.id, configuration_snapshot_json={})
-    (storage / "storage" / "bild.png").write_bytes(b"fake-png-bytes")
-    stored_file = StoredFile(tenant_id=tenant.id, original_name="bild.png", mime_type="image/png", storage_path="bild.png", file_size_bytes=14)
+    key = f"uploads/tenant-{tenant.id}/bild.png"
+    get_object_store().put_bytes(db, MAIN, key, b"fake-png-bytes")
+    stored_file = StoredFile(tenant_id=tenant.id, original_name="bild.png", mime_type="image/png", storage_path=key, file_size_bytes=14)
     db.add(stored_file)
     db.flush()
     db.add(ProtocolImage(protocol_element_block_id=block.id, stored_file_id=stored_file.id, sort_index=0))
@@ -48,6 +53,7 @@ def _boom(*_args, **_kwargs):
 
 def test_failed_import_after_files_leaves_no_tenant_and_no_files(db, storage, monkeypatch):
     tenant = _tenant_with_protocol_image(db, storage)
+    before = _physical_keys("tenant_imports/")
     zip_path, _ = TenantExportService().export(db, tenant.id, "full")
     monkeypatch.setattr(TenantImportService, "_import_share_links", _boom, raising=False)
     try:
@@ -57,20 +63,22 @@ def test_failed_import_after_files_leaves_no_tenant_and_no_files(db, storage, mo
         zip_path.unlink(missing_ok=True)
 
     assert db.scalar(select(Tenant.id).where(Tenant.name == "Import")) is None
-    imports_dir = storage / "storage" / "tenant_imports"
-    assert not imports_dir.exists() or not any(imports_dir.iterdir())
+    # Aufgeräumt wird per Tombstone; physisch entfernt erst der Purge-Job (S3-008).
+    get_object_store().purge_deleted(db)
+    assert _physical_keys("tenant_imports/") == before
 
 
 def test_failed_clone_after_files_leaves_no_tenant_and_no_files(db, storage, monkeypatch):
     tenant = _tenant_with_protocol_image(db, storage)
+    before = _physical_keys("tenant_clones/")
     monkeypatch.setattr(TenantCloneService, "_clone_finance_transactions", _boom, raising=False)
 
     with pytest.raises(RuntimeError, match="boom"):
         TenantCloneService().clone_full(db, tenant.id, "Kopie")
 
     assert db.scalar(select(Tenant.id).where(Tenant.name == "Kopie")) is None
-    clones_dir = storage / "storage" / "tenant_clones"
-    assert not clones_dir.exists() or not any(clones_dir.iterdir())
+    get_object_store().purge_deleted(db)
+    assert _physical_keys("tenant_clones/") == before
 
 
 def test_cleanup_failure_does_not_mask_original_error(db, storage, monkeypatch):

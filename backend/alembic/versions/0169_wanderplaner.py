@@ -18,8 +18,8 @@ deshalb weder PostGIS noch pgRouting.
 
 Ersetzt die nie auf main gelaufene Branch-Revision 0097_wanderplaner_feature.
 
-Revision ID: 0168_wanderplaner
-Revises: 0167_kreide_spacing
+Revision ID: 0169_wanderplaner
+Revises: 0168_s3_only
 Create Date: 2026-11-10
 """
 
@@ -27,8 +27,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision = "0168_wanderplaner"
-down_revision = "0167_kreide_spacing"
+revision = "0169_wanderplaner"
+down_revision = "0168_s3_only"
 branch_labels = None
 depends_on = None
 

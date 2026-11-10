@@ -90,10 +90,10 @@ def test_active_and_builtin_profiles_are_protected(committed_storage):
     # des db-Fixtures nicht. committed_storage stellt den Ausgangszustand danach wieder her.
     db = committed_storage
     state = db.get(StorageState, 1)
-    filesystem = db.get(StorageProfile, state.active_profile_id)
+    active = db.get(StorageProfile, state.active_profile_id)
     client = _client(db)
-    assert client.delete(f"/api/admin/storage/profiles/{filesystem.public_id}").status_code == 409
-    assert client.patch(f"/api/admin/storage/profiles/{filesystem.public_id}", json={"name": "x"}).status_code == 409
+    assert client.delete(f"/api/admin/storage/profiles/{active.public_id}").status_code == 409
+    assert client.patch(f"/api/admin/storage/profiles/{active.public_id}", json={"bucket": "x"}).status_code == 409
     profile = sps.create_profile(db, _values(), actor_email="x")
     db.execute(text("UPDATE storage_state SET active_profile_id = :id WHERE id = 1"), {"id": profile.id})
     db.commit()
@@ -155,6 +155,15 @@ def _local_settings(monkeypatch, **overrides):
         monkeypatch.setattr(settings, key, value)
 
 
+def _detach_bootstrap_local(db) -> None:
+    """Das eingebaute lokale Profil der Test-Datenbank ist aktiv (0168_s3_only). Für diese Tests
+    wird es zu einem gewöhnlichen Profil, damit ensure_local_profile ein frisches eingebautes
+    anlegt; committed_storage stellt den Ausgangszustand danach wieder her."""
+    db.execute(text("UPDATE storage_profile SET is_builtin = false, name = name || ' (Test-Ausgangslage)' "
+                    "WHERE provider = 'garage_local' AND is_builtin"))
+    db.commit()
+
+
 def _builtin_local(db) -> StorageProfile:
     from sqlalchemy import select
 
@@ -163,6 +172,7 @@ def _builtin_local(db) -> StorageProfile:
 
 def test_ensure_local_profile_never_moves_an_active_profile(committed_storage, monkeypatch):
     db = committed_storage
+    _detach_bootstrap_local(db)
     _local_settings(monkeypatch)
     profile = sps.ensure_local_profile(db)
     db.execute(text("UPDATE storage_state SET active_profile_id = :p, active_generation = 7 WHERE id = 1"), {"p": profile.id})
@@ -186,6 +196,7 @@ def test_ensure_local_profile_leaves_a_profile_of_an_open_migration_untouched(co
     from app.services import storage_migration_service as sms
 
     db = committed_storage
+    _detach_bootstrap_local(db)
     _local_settings(monkeypatch)
     profile = sps.ensure_local_profile(db)
     profile.last_test_ok = True
