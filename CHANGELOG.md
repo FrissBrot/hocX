@@ -6,6 +6,16 @@ Versionierung nach [SemVer](https://semver.org/lang/de/). Die Beta-Historie
 ist der erste offiziell unterstützte Stand und muss keine älteren
 Installationen aktualisieren können.
 
+## [Unreleased]
+
+### Behoben
+
+- **PDF: «Abstand vor Abschnitten» wirkt.** Der Wert aus dem Corporate Design kam nie im PDF an:
+  Nach jedem Traktandum stand ein fester Abstand von 12 pt, der den eingestellten Abstand vor dem
+  nächsten Traktandum übersteuerte. Jetzt gilt zwischen Traktanden genau der eingestellte Wert,
+  vor anderen Abschnitten mit Titel (z. B. Todos) mindestens 12 pt. Dokumente mit dem
+  Standardwert (8 mm) werden dadurch sichtbar luftiger.
+
 ## [1.2.3] - 2026-11-10
 
 Rückmeldungen aus dem Testbetrieb von 1.2.2 (Protokoll-Editor und PDF-Gestaltung) und **nur noch

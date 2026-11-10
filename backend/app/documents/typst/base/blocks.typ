@@ -551,6 +551,9 @@
   let title = b.at("title", default: none)
   if is-blank(title) and b.at("title_key", default: none) != none { title = tr(ctx, b.title_key) }
   if not is-blank(title) and b.type != "heading" {
+    // Der nachlaufende schwache ``v`` des vorigen Bausteins übersteuert sonst das ``above``
+    // der Überschrift (Abschnittsabstand, siehe render-block-body)
+    v(heading-above(ctx.brand, b.level), weak: true)
     heading(level: b.level, outlined: true)[#title]
   }
 }
@@ -597,18 +600,22 @@
     // bricht es normal um (ein unteilbarer Block, der grösser als die Seite ist, liefe über).
     // ``size`` ist der ganze Inhaltsbereich der Seite bzw. Spalte, nicht der Restplatz.
     // Abstände wie ohne Hülle: Am Anfang und Ende eines Blocks verfallen der Abstand der
-    // ersten Überschrift und der nachlaufende ``v`` des letzten Bausteins, deshalb trägt die
-    // Hülle den Überschriftenabstand und der ``v`` steht ausserhalb (ein expliziter ``v``
-    // übersteuert wie bisher den Abstand über der nächsten Überschrift).
+    // ersten Überschrift und der nachlaufende ``v`` des letzten Bausteins, deshalb stehen
+    // beide ausserhalb der Hülle. Ein schwacher ``v`` übersteuert das ``above`` eines Blocks,
+    // deshalb steht der Abschnittsabstand (brand.layout.section_gap) als eigener ``v`` davor
+    // und danach; von zwei schwachen ``v`` gilt der grössere, zwischen zwei Traktanden also
+    // genau der Abschnittsabstand.
     let titled = not is-blank(b.at("title", default: none)) or b.at("title_key", default: none) != none
-    block(width: 100%, above: if titled { heading-above(ctx.brand, b.level) } else { auto }, layout(size => {
+    let gap = if titled { heading-above(ctx.brand, b.level) } else { space.s4 }
+    if titled { v(gap, weak: true) }
+    block(width: 100%, above: if titled { gap } else { auto }, layout(size => {
       if measure(block(width: size.width, body)).height <= size.height {
         block(breakable: false, width: 100%, body)
       } else {
         body
       }
     }))
-    v(space.s4, weak: true)
+    v(gap, weak: true)
   } else {
     if b.empty and hide-empty { return }
     // Die Pendenzen-Darstellung «checklist» setzt ihren Titel selbst in den Kasten
