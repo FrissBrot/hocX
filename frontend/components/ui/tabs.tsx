@@ -5,6 +5,8 @@ import { ReactNode, useState } from "react";
 export type TabItem = {
   id: string;
   label: string;
+  /** Kleiner Zusatz hinter dem Titel, z. B. «gemeinsame Gestaltung» */
+  note?: string | null;
   content: ReactNode;
 };
 
@@ -31,6 +33,7 @@ export function Tabs({ tabs, activeId, onChange }: { tabs: TabItem[]; activeId?:
             onClick={() => select(tab.id)}
           >
             {tab.label}
+            {tab.note ? <span className="tabs-note">{tab.note}</span> : null}
           </button>
         ))}
       </div>

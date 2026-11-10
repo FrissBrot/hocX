@@ -1,0 +1,37 @@
+{
+  "title": "Platform admin",
+  "tagline": "Manage organizations and users across the whole system.",
+  "groups": {
+    "tenants": "Organizations",
+    "system": "System",
+    "access": "Access"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "tenants": "Organizations",
+    "pricing": "Pricing",
+    "cashflow": "Cash flow",
+    "users": "Users",
+    "domains": "Domains",
+    "systemStatus": "System status",
+    "errorLogs": "Error log",
+    "uploadPipeline": "File pipeline",
+    "notifications": "Notifications",
+    "jobs": "Jobs",
+    "admins": "Admin accounts",
+    "sso": "SSO",
+    "security": "Security",
+    "verifications": "Verifications",
+    "storage": "Storage",
+    "backups": "Backups",
+    "maintenance": "Maintenance",
+    "documentTemplates": "Document templates",
+    "auditLog": "Audit log"
+  },
+  "logout": "Log out",
+  "menuToggleClose": "Close",
+  "breadcrumbNav": "Breadcrumb",
+  "readOnlyBanner": "Read-only access (support): changes aren't possible with this account.",
+  "accountSettings": "Account Settings",
+  "accountSettingsLoadFailed": "Could not load account settings."
+}

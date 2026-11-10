@@ -1,0 +1,184 @@
+// Darstellungswerte aus dem Brand-Profil (document.json → brand, siehe brand_service.resolve_brand).
+// Kein Code aus Benutzerdaten: Farben sind geprüfte Hex-Werte, Schriften geprüfte Familiennamen.
+
+#import "_tokens.typ": colors
+
+#let hex(value, fallback) = if value == none { fallback } else { rgb(value) }
+
+// Palette für alle Komponenten (ctx.c). Brand-Farben überschreiben die neutralen Grundwerte.
+#let palette(brand) = {
+  let b = brand.colors
+  (
+    text: rgb(b.text),
+    muted: rgb(b.muted),
+    border: rgb(b.border).lighten(35%),
+    border_strong: rgb(b.border),
+    bg: rgb(b.background),
+    panel: rgb(b.background),
+    surface: rgb(b.surface),
+    accent: rgb(b.accent),
+    accent_strong: rgb(b.accent).darken(15%),
+    accent_soft: rgb(b.accent).lighten(88%),
+    success: rgb(b.success),
+    warning: rgb(b.warning),
+    danger: rgb(b.danger),
+    info: rgb(b.info),
+    success_bg: rgb(b.success).lighten(85%),
+    success_fg: rgb(b.success).darken(15%),
+    warning_bg: rgb(b.warning).lighten(85%),
+    warning_fg: rgb(b.warning).darken(15%),
+    danger_bg: rgb(b.danger).lighten(85%),
+    danger_fg: rgb(b.danger).darken(15%),
+    neutral_bg: rgb(b.surface),
+    neutral_fg: rgb(b.muted),
+    on_solid: colors.on_solid,
+    watermark: rgb(b.watermark),
+    chart_1: colors.chart_1,
+    chart_2: colors.chart_2,
+    chart_3: colors.chart_3,
+    chart_4: colors.chart_4,
+    chart_5: colors.chart_5,
+  )
+}
+
+// Darstellung je Elementart (brand.resolve_appearance): (variant, radius in mm)
+#let appearance-of(brand, kind) = brand.at("appearance", default: (:)).at(kind, default: (variant: none, radius: brand.layout.radius))
+
+// Abstand über einer Überschrift; auch für Blöcke, die mit einer Überschrift beginnen
+// (blocks.typ: zusammengehaltene Traktanden), weil Typst den Abstand des ersten Kinds nicht
+// nach aussen weitergibt.
+#let heading-above(brand, level) = {
+  let gap = brand.layout.section_gap * 1mm
+  if level == 1 { gap * 1.4 } else { gap }
+}
+
+// Text rechts in der nächsten Überschrift (Verantwortliche eines Traktandums, blocks.typ). Steht
+// nicht im Überschriftentext, damit das Inhaltsverzeichnis nur den Titel zeigt.
+#let heading-aside = state("hocx-heading-aside", none)
+
+#let heading-rule(brand, c) = {
+  let t = brand.typography
+  let heading-look = appearance-of(brand, "heading")
+  let style = if heading-look.variant == none { brand.layout.heading_style } else { heading-look.variant }
+  let primary = rgb(brand.colors.primary)
+  let heading-color = rgb(brand.colors.heading)
+  let secondary = rgb(brand.colors.secondary)
+  let gap = brand.layout.section_gap * 1mm
+  it => context {
+    let sizes = (t.size_h1 * 1pt, t.size_h2 * 1pt, t.size_h3 * 1pt, t.base_size * 1pt)
+    let body = if t.heading_transform == "upper" { upper(it) } else { it }
+    set text(
+      font: brand.fonts.heading,
+      size: sizes.at(it.level - 1, default: t.base_size * 1pt),
+      weight: t.weight_heading,
+      tracking: t.letter_spacing_heading * 1pt,
+      fill: if it.level == 1 { heading-color } else { secondary.darken(10%) },
+    )
+    set block(above: heading-above(brand, it.level), below: 0.65em, sticky: true)
+    // Abschnittsnummer (brand.layout.heading_number_style) und Text rechts (heading-aside).
+    // Ohne beides setzt Typst die Überschrift selbst («plain»: Nummer wie Text).
+    let number-style = brand.layout.at("heading_number_style", default: "plain")
+    let aside = heading-aside.get()
+    if (it.numbering != none and number-style != "plain") or aside != none {
+      let title = if t.heading_transform == "upper" { upper(it.body) } else { it.body }
+      if it.numbering != none {
+        let number = counter(heading).display(it.numbering)
+        let top = it.level == 1
+        let mark = if number-style == "badge" and top {
+          box(baseline: 0.12em, inset: (x: 0.35em, y: 0.22em), radius: heading-look.radius * 1mm, fill: primary,
+            text(fill: c.on_solid, weight: "bold", size: 0.8em, number))
+        } else if number-style == "paragraph" {
+          text(fill: primary, weight: "regular")[§#h(0.15em)#number]
+        } else if number-style == "accent" {
+          text(fill: primary, weight: "regular", number)
+        } else {
+          number
+        }
+        let aligned = top and number-style == "accent"
+        title = box(width: if aligned { 1.8em } else { auto }, mark) + h(if aligned { 0em } else { 0.45em }) + title
+      }
+      if aside != none {
+        title = title + h(1fr) + text(size: t.base_size * 0.85pt, weight: "regular", tracking: 0pt, fill: c.muted, aside)
+      }
+      body = title
+    }
+    if it.level > 1 or style == "plain" {
+      block(body)
+    } else if style == "underline" {
+      block(width: 100%, stroke: (bottom: 0.6pt + primary.lighten(55%)), inset: (bottom: 0.3em), body)
+    } else if style == "bar" {
+      block(width: 100%, stroke: (left: 3pt + primary), inset: (left: 0.5em, y: 0.15em), body)
+    } else {
+      block(width: 100%, fill: primary.lighten(88%), inset: (x: 0.5em, y: 0.35em), radius: heading-look.radius * 1mm, body)
+    }
+  }
+}
+
+#let table-style(brand, c, variant: none) = {
+  let style = if variant != none { variant } else { appearance-of(brand, "table").at("variant", default: none) }
+  if style == none { style = brand.layout.table_style }
+  let header-bg = rgb(brand.colors.table_header_background)
+  let header-fg = rgb(brand.colors.table_header_text)
+  let primary = rgb(brand.colors.primary)
+  let line = brand.layout.border_width * 1pt
+  let base = (
+    header-fill: header-bg,
+    header-color: header-fg,
+    header-size: 0.95em,
+    group-fill: c.neutral_bg,
+    group-color: rgb(brand.colors.secondary).darken(20%),
+    total-fill: header-bg.lighten(40%),
+    zebra: none,
+    rule: (line * 1.6) + primary,
+    inset: (x: 5pt, y: 4.5pt),
+    font-size: 0.92em,
+  )
+  if style == "grid" {
+    base + (stroke: line + c.border_strong)
+  } else if style == "zebra" {
+    base + (stroke: none, header-fill: primary, header-color: c.on_solid, zebra: rgb(brand.colors.table_zebra), inset: (x: 5pt, y: 4pt))
+  } else if style == "minimal" {
+    base + (stroke: (x, y) => if y == 0 { (bottom: line + c.border_strong) } else { none }, header-fill: none, header-color: c.text, total-fill: none)
+  } else {
+    base + (stroke: (x, y) => (bottom: (line * 0.8) + c.border))
+  }
+}
+
+#let make-theme(brand, c) = (
+  primary: rgb(brand.colors.primary),
+  secondary: rgb(brand.colors.secondary),
+  fonts: brand.fonts.body,
+  heading-fonts: brand.fonts.heading,
+  heading: heading-rule(brand, c),
+  table: table-style(brand, c),
+  components: (:),
+)
+
+#let make-ctx(doc) = {
+  let c = palette(doc.brand)
+  let appearance = doc.brand.at("appearance", default: (:))
+  (doc: doc, strings: doc.strings, brand: doc.brand, c: c, theme: make-theme(doc.brand, c), appearance: appearance, marks: doc.at("node_marks", default: false))
+}
+
+// Positionsmarke für die Vorschau des Designers (Klick wählt den Knoten): nur wenn das Dokument
+// sie anfordert (node_marks), sonst nichts - der Export bleibt unverändert.
+#let node-mark(ctx, id, edge) = {
+  if ctx.at("marks", default: false) and id != none {
+    context [#metadata((id: id, edge: edge, pos: here().position())) <hocx-node>]
+  }
+}
+
+// Block-Übersteuerung aus dem Designer (data-Knoten mit «appearance»): bereits vollständig
+// aufgelöst, ersetzt die Brand-Werte für die enthaltenen Blöcke.
+#let with-appearance(ctx, appearance) = {
+  if appearance == none { return ctx }
+  let merged = ctx.appearance + appearance
+  let theme = ctx.theme + (table: table-style(ctx.brand, ctx.c, variant: merged.at("table", default: (variant: none)).variant))
+  ctx + (appearance: merged, theme: theme)
+}
+
+// Variante und Radius einer Elementart im aktuellen Kontext
+#let look(ctx, kind, default: none) = {
+  let item = ctx.at("appearance", default: (:)).at(kind, default: none)
+  if item == none { (variant: default, radius: ctx.brand.layout.radius) } else { item }
+}

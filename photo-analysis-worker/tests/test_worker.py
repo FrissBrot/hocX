@@ -5,12 +5,27 @@ these don't need a database or the real YuNet model."""
 from app import worker
 
 
+class _FsStore:
+    """Minimaler Ersatz für ObjectStore: liest wie das Dateisystem-Backend aus tmp_path."""
+
+    def __init__(self, root):
+        self.root = root
+
+    def get_bytes(self, namespace, key):
+        from app.objstore_client import ObjectNotFound
+
+        path = self.root / key
+        if not path.is_file():
+            raise ObjectNotFound(key)
+        return path.read_bytes()
+
+
 def test_process_job_marks_an_unreadable_file_as_analyzed_with_no_score(monkeypatch, tmp_path):
     """Regression for the bug fixed alongside face_analyzed_at: a file missing from disk
     used to be silently skipped (never marked analyzed), so it got retried by every future
     off-peak run forever. It must now be written back with score=None instead."""
     monkeypatch.setattr(worker, "STORAGE_ROOT", tmp_path)
-    monkeypatch.setattr(worker, "fetch_files", lambda engine, ids: [{"id": 1, "storage_path": "does-not-exist.png", "mime_type": "image/png"}])
+    monkeypatch.setattr(worker, "fetch_files", lambda engine, ids, **_kwargs: [{"id": 1, "storage_path": "does-not-exist.png", "mime_type": "image/png"}])
 
     written: list[list[tuple[int, float | None]]] = []
     monkeypatch.setattr(worker, "write_face_quality_scores_batch", lambda engine, results: written.append(results))
@@ -18,7 +33,7 @@ def test_process_job_marks_an_unreadable_file_as_analyzed_with_no_score(monkeypa
     finished: list[tuple[str, str]] = []
     monkeypatch.setattr(worker, "finish_job", lambda engine, job_id, *, status, error=None: finished.append((job_id, status)))
 
-    worker._process_job(engine=None, detector=None, job={"id": "job-1", "tenant_id": 1, "stored_file_ids": [1]})
+    worker._process_job(engine=None, detector=None, store=_FsStore(tmp_path), job={"id": "job-1", "tenant_id": 1, "stored_file_ids": [1]})
 
     assert written == [[(1, None)]]
     assert finished == [("job-1", "done")]
@@ -28,7 +43,7 @@ def test_process_job_scores_a_readable_file_and_marks_it_done(monkeypatch, tmp_p
     image_path = tmp_path / "photo.png"
     image_path.write_bytes(b"fake-image-bytes")
     monkeypatch.setattr(worker, "STORAGE_ROOT", tmp_path)
-    monkeypatch.setattr(worker, "fetch_files", lambda engine, ids: [{"id": 7, "storage_path": "photo.png", "mime_type": "image/png"}])
+    monkeypatch.setattr(worker, "fetch_files", lambda engine, ids, **_kwargs: [{"id": 7, "storage_path": "photo.png", "mime_type": "image/png"}])
     monkeypatch.setattr(worker, "score_face_quality", lambda detector, image_bytes: 8.25)
 
     written: list[list[tuple[int, float | None]]] = []
@@ -37,7 +52,7 @@ def test_process_job_scores_a_readable_file_and_marks_it_done(monkeypatch, tmp_p
     finished: list[tuple[str, str]] = []
     monkeypatch.setattr(worker, "finish_job", lambda engine, job_id, *, status, error=None: finished.append((job_id, status)))
 
-    worker._process_job(engine=None, detector=None, job={"id": "job-2", "tenant_id": 1, "stored_file_ids": [7]})
+    worker._process_job(engine=None, detector=None, store=_FsStore(tmp_path), job={"id": "job-2", "tenant_id": 1, "stored_file_ids": [7]})
 
     assert written == [[(7, 8.25)]]
     assert finished == [("job-2", "done")]
@@ -52,7 +67,7 @@ def test_process_job_handles_a_mix_of_readable_and_missing_files(monkeypatch, tm
     monkeypatch.setattr(
         worker,
         "fetch_files",
-        lambda engine, ids: [
+        lambda engine, ids, **_kwargs: [
             {"id": 1, "storage_path": "ok.png", "mime_type": "image/png"},
             {"id": 2, "storage_path": "missing.png", "mime_type": "image/png"},
         ],
@@ -63,6 +78,33 @@ def test_process_job_handles_a_mix_of_readable_and_missing_files(monkeypatch, tm
     monkeypatch.setattr(worker, "write_face_quality_scores_batch", lambda engine, results: written.append(results))
     monkeypatch.setattr(worker, "finish_job", lambda engine, job_id, *, status, error=None: None)
 
-    worker._process_job(engine=None, detector=None, job={"id": "job-3", "tenant_id": 1, "stored_file_ids": [1, 2]})
+    worker._process_job(engine=None, detector=None, store=_FsStore(tmp_path), job={"id": "job-3", "tenant_id": 1, "stored_file_ids": [1, 2]})
 
     assert written == [[(1, 5.0), (2, None)]]
+
+
+class _UnavailableStore:
+    def get_bytes(self, namespace, key):
+        from app.objstore_client import StorageUnavailable
+
+        raise StorageUnavailable("ConnectTimeoutError")
+
+
+def test_process_job_fails_on_transient_storage_errors_instead_of_marking_files_analyzed(monkeypatch):
+    """S3-011: S3 kurz nicht erreichbar darf Dateien nicht dauerhaft als "analysiert ohne Score"
+    markieren - der Job scheitert und die Dateien werden später erneut eingeplant."""
+    import pytest
+
+    from app.objstore_client import StorageUnavailable
+
+    monkeypatch.setattr(worker, "fetch_files", lambda engine, ids, **_kwargs: [{"id": 1, "storage_path": "a.png", "mime_type": "image/png"}])
+    written: list = []
+    monkeypatch.setattr(worker, "write_face_quality_scores_batch", lambda engine, results: written.append(results))
+    finished: list = []
+    monkeypatch.setattr(worker, "finish_job", lambda engine, job_id, *, status, error=None: finished.append((job_id, status)))
+
+    with pytest.raises(StorageUnavailable):
+        worker._process_job(engine=None, detector=None, store=_UnavailableStore(), job={"id": "job-1", "tenant_id": 1, "stored_file_ids": [1]})
+
+    assert written == []
+    assert finished == []

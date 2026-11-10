@@ -22,7 +22,7 @@ def test_analysis_decodes_list_uuid(monkeypatch, endpoint):
     override = {0: {"role": "list", "list_definition_id": str(public_id), "list_grouping_strategy": "fill_down"}}
     resolver = Mock(return_value={public_id: 42})
     monkeypatch.setattr(routes.public_id_service, "resolve_internal_ids", resolver)
-    monkeypatch.setattr(routes, "require_writer", lambda user: None)
+    monkeypatch.setattr(routes, "require_permission", lambda user, permission: None)
     monkeypatch.setattr(routes, "_encode_analysis", lambda db, analysis: analysis)
 
     def analyze(db, **kwargs):

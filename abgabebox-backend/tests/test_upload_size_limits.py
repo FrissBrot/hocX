@@ -99,3 +99,20 @@ def test_max_upload_request_bytes_matches_traefik_body_limit_label():
         match = pattern.search(compose_text)
         assert match is not None, f"abgabebox-upload-body-limit maxRequestBodyBytes label not found in {compose_path.name}"
         assert int(match.group(1)) == MAX_UPLOAD_BODY_BYTES, f"mismatch in {compose_path.name}"
+
+
+def test_verify_router_has_its_own_small_limits_and_wins_over_the_upload_router():
+    """POST /api/public/verify würde sonst vom Upload-Router (POST /api/public, 151-MiB-Body,
+    In-Flight 2) gematcht. In jeder Compose-Datei: eigener Router mit höherer Priorität, 4 KiB
+    Body-Limit und eigenem Rate-Limit."""
+    prefix = r"(?:\$\{ROUTER_PREFIX:-hocx\}-)?"
+    for compose_path in COMPOSE_PATHS:
+        text = compose_path.read_text()
+        verify_priority = re.search(rf"traefik\.http\.routers\.{prefix}abgabebox-verify\.priority=(\d+)", text)
+        upload_priority = re.search(rf"traefik\.http\.routers\.{prefix}abgabebox-upload\.priority=(\d+)", text)
+        assert verify_priority and upload_priority, compose_path.name
+        assert int(verify_priority.group(1)) > int(upload_priority.group(1)), compose_path.name
+        assert re.search(rf"routers\.{prefix}abgabebox-verify\.rule=.*Path\(`/api/public/verify`\) && Method\(`POST`\)", text), compose_path.name
+        body = re.search(rf"middlewares\.{prefix}abgabebox-verify-body-limit\.buffering\.maxRequestBodyBytes=(\d+)", text)
+        assert body and int(body.group(1)) <= 4096, compose_path.name
+        assert re.search(rf"middlewares\.{prefix}abgabebox-verify-ratelimit\.ratelimit\.average=30", text), compose_path.name

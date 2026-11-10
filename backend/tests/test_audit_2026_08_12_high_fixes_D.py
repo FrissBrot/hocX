@@ -5,9 +5,10 @@ though a batch variant, resolve_display_section_titles_batch() (three IN(...) qu
 already used correctly by ProtocolElementService.list_protocol_elements), existed for exactly
 this purpose. For protocols with many elements this multiplied DB roundtrips unnecessarily.
 
-Fix (backend/app/services/export_service.py, around line 611-614): resolve all elements'
-titles with one resolve_display_section_titles_batch() call up front, then look each one up
-by element.id inside the loop - mirroring protocol_element_service.py's calling convention.
+Fix: resolve all elements' titles with one resolve_display_section_titles_batch() call up
+front, then look each one up by element.id inside the loop - mirroring
+protocol_element_service.py's calling convention. Seit der Dokument-Engine gilt das für den
+Protokoll-Provider (app/documents/providers/protocol.py, element_blocks).
 
 This test verifies two things:
 1. Correctness: a protocol mixing a plain (non-live) section title with a live-resolved,
@@ -19,13 +20,12 @@ This test verifies two things:
 from __future__ import annotations
 
 import asyncio
-import tempfile
-from pathlib import Path
 from unittest.mock import patch
 
-import app.services.export_service as export_service_module
 import app.services.responsible_label_service as responsible_label_service_module
-from app.services.export_service import ExportService
+from app.documents import service as document_service
+from app.documents.context import BuildContext
+from app.documents.providers.protocol import element_blocks
 from tests.factories import (
     make_participant,
     make_protocol,
@@ -37,32 +37,15 @@ from tests.factories import (
 )
 
 
-def _make_empty_template_dir() -> str:
-    """Minimal, self-contained document-template directory (no fontspec/custom fonts) - same
-    approach as test_export_service.py's helper, kept local here to avoid cross-test-file
-    coupling."""
-    template_dir = tempfile.mkdtemp(prefix="hocx-test-template-h10-")
-    styles_dir = Path(template_dir) / "styles"
-    styles_dir.mkdir(parents=True, exist_ok=True)
-    (styles_dir / "theme.tex").write_text(
-        "\\usepackage{xcolor}\n\\definecolor{hocxSecondary}{rgb}{0.4,0.4,0.4}\n",
-        encoding="utf-8",
-    )
-    return template_dir
-
-
-def _protocol_with_template_dir(db, protocol_number: str) -> tuple:
+def _protocol(db, protocol_number: str) -> tuple:
     tenant = make_tenant(db, "H10 Batch Title Verein")
     template = make_template(db, tenant.id)
     protocol = make_protocol(db, tenant.id, template.id, protocol_number=protocol_number)
-    protocol.document_template_path_snapshot = _make_empty_template_dir()
-    db.add(protocol)
-    db.flush()
     return tenant, template, protocol
 
 
-def test_export_latex_batch_resolves_titles_correctly_and_avoids_per_element_lookups(db):
-    tenant, template, protocol = _protocol_with_template_dir(db, "H10-1")
+def test_export_batch_resolves_titles_correctly_and_avoids_per_element_lookups(db):
+    tenant, template, protocol = _protocol(db, "H10-1")
 
     participant_a = make_participant(db, tenant.id, display_name="Anna Muster")
     participant_b = make_participant(db, tenant.id, display_name="Bruno Beispiel")
@@ -95,15 +78,14 @@ def test_export_latex_batch_resolves_titles_correctly_and_avoids_per_element_loo
 
     db.flush()
 
-    service = ExportService()
-
     real_batch_fn = responsible_label_service_module.resolve_display_section_titles_batch
     with patch.object(
-        export_service_module, "resolve_display_section_titles_batch", wraps=real_batch_fn
+        responsible_label_service_module, "resolve_display_section_titles_batch", wraps=real_batch_fn
     ) as batch_spy, patch.object(
         responsible_label_service_module, "resolve_display_section_title"
     ) as single_item_spy:
-        _protocol, _export_dir, _latex_source, body_content = service._build_export_context(db, protocol.id)
+        ctx = BuildContext(db=db, tenant_id=tenant.id, language="de", protocol=protocol)
+        body_content = str([block.title for block in element_blocks(ctx, protocol)])
 
     # Correctness: all three titles resolved as expected.
     assert "Traktandum 1" in body_content
@@ -118,10 +100,8 @@ def test_export_latex_batch_resolves_titles_correctly_and_avoids_per_element_loo
 
 
 def test_export_pdf_end_to_end_still_produces_a_real_pdf_with_batch_titles(db):
-    """Full export_pdf() path (not just _build_export_context) still works after switching
-    to the batch resolver - guards against a wiring mistake breaking the real export
-    entrypoint."""
-    tenant, template, protocol = _protocol_with_template_dir(db, "H10-2")
+    """Voller Render-Pfad (nicht nur der Provider) funktioniert mit dem Batch-Resolver."""
+    tenant, template, protocol = _protocol(db, "H10-2")
     participant = make_participant(db, tenant.id, display_name="Anna Muster")
 
     element = make_protocol_element(db, protocol.id, sort_index=0, section_name="STALE - should not appear")
@@ -134,8 +114,9 @@ def test_export_pdf_end_to_end_still_produces_a_real_pdf_with_batch_titles(db):
     text_block = make_protocol_element_block(db, element.id, configuration_snapshot_json={}, sort_index=0, element_type_code="text")
     make_protocol_text(db, text_block.id, content="Ein Beschluss.")
 
-    service = ExportService()
-    result = asyncio.run(service.export_pdf(db, protocol.id))
+    result = asyncio.run(
+        document_service.render(db, None, tenant.id, document_service.DocumentRequest(protocol_id=protocol.public_id))
+    )
 
-    assert result.status == "generated"
-    assert result.export_format == "pdf"
+    assert result.export.document_type == "protocol"
+    assert result.stored_file.mime_type == "application/pdf"

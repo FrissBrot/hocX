@@ -1,0 +1,235 @@
+{
+  "status": {
+    "draft": "Brouillon",
+    "analyzed": "Analysé automatiquement",
+    "reconnoitered": "Reconnu",
+    "approved": "Validé"
+  },
+  "kind": {
+    "START": "Départ",
+    "END": "Arrivée",
+    "NAVIGATION": "Point fixe",
+    "BREAK": "Lieu de pause",
+    "SUMMIT": "Sommet",
+    "PASS": "Col",
+    "HUT": "Cabane",
+    "WATER": "Eau",
+    "DECISION": "Point fixe",
+    "EMERGENCY_EXIT": "Échappatoire",
+    "USER_DEFINED": "Point fixe"
+  },
+  "routingProfile": {
+    "wanderwege_bevorzugen": "Privilégier les chemins de randonnée",
+    "schnellste_route": "Itinéraire le plus rapide",
+    "einfache_route": "Itinéraire facile"
+  },
+  "verification": {
+    "AUTO_DETECTED": "Détecté automatiquement",
+    "NEEDS_VERIFICATION": "À vérifier sur place",
+    "VERIFIED": "Confirmé par le responsable",
+    "REJECTED": "Rejeté"
+  },
+  "danger": {
+    "normal": {
+      "label": "Itinéraire",
+      "description": "Chemin de randonnée ou de randonnée de montagne sans danger détecté"
+    },
+    "steep_exposed": {
+      "label": "Raide/exposé",
+      "description": "Plus de 40 % de montée ou plus de 70 % de pente directement à côté du chemin"
+    },
+    "alpine": {
+      "label": "Chemin de randonnée alpine",
+      "description": "Officiellement balisé comme chemin de randonnée alpine"
+    },
+    "badge": {
+      "steep_exposed": "Raide/exposé",
+      "alpine": "Alpin"
+    }
+  },
+  "units": {
+    "km": "{value} km",
+    "meters": "{value} m",
+    "minutes": "{minutes} min",
+    "hoursMinutes": "{hours} h {minutes} min",
+    "lkm": "{value} km-effort"
+  },
+  "fields": {
+    "title": "Titre",
+    "description": "Description",
+    "date": "Date"
+  },
+  "actions": {
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "saving": "Enregistrement…",
+    "delete": "Supprimer",
+    "remove": "Retirer",
+    "close": "Fermer"
+  },
+  "manager": {
+    "title": "Planificateur de randonnées",
+    "subtitle": "Planifier des randonnées, calculer l’itinéraire et établir le tableau de marche.",
+    "importGpx": "Importer un GPX",
+    "newTour": "Nouvelle randonnée",
+    "listTitle": "Randonnées",
+    "columns": {
+      "title": "Titre",
+      "date": "Date",
+      "status": "Statut",
+      "elevationProfile": "Profil altimétrique"
+    },
+    "empty": "Aucune randonnée planifiée pour l’instant.",
+    "create": {
+      "optional": "Facultatif.",
+      "startAndEnd": "Départ et arrivée",
+      "startAndEndHelp": "Le tracé, le profil altimétrique et les points automatiques sont chargés lors de la création. Le tracé de l’itinéraire est transmis à swisstopo pour le profil altimétrique.",
+      "setStart": "Définir le départ{done, select, true { ✓} other {}}",
+      "setEnd": "Définir l’arrivée{done, select, true { ✓} other {}}",
+      "clickToSetStart": "Cliquer sur la carte pour définir le départ.",
+      "clickToSetEnd": "Cliquer sur la carte pour définir l’arrivée.",
+      "calculating": "Calcul de l’itinéraire et du profil altimétrique…",
+      "submit": "Créer la randonnée",
+      "missingStartEnd": "Veuillez définir le départ et l’arrivée sur la carte",
+      "created": "Randonnée créée",
+      "error": "Erreur lors de la création"
+    },
+    "gpx": {
+      "help": "Le fichier GPX sert de point de départ à une nouvelle randonnée. Le tracé, le profil altimétrique et les points automatiques sont chargés ; le tracé de l’itinéraire est transmis à swisstopo pour le profil altimétrique.",
+      "file": "Fichier GPX",
+      "importing": "Importation et calcul…",
+      "submit": "Importer",
+      "missingFile": "Veuillez sélectionner un fichier GPX",
+      "imported": "Fichier GPX importé",
+      "error": "L’importation GPX a échoué"
+    }
+  },
+  "detail": {
+    "noDescription": "Aucune description",
+    "edit": "Modifier",
+    "reconnaissance": "Reconnaissance",
+    "print": "Imprimer",
+    "exportGpx": "Exporter en GPX",
+    "approve": "Valider",
+    "approving": "Validation…",
+    "toast": {
+      "saved": "Randonnée enregistrée",
+      "saveError": "Erreur lors de l’enregistrement",
+      "deleted": "Randonnée supprimée",
+      "deleteError": "Erreur lors de la suppression",
+      "routeSaved": "Randonnée enregistrée et recalculée",
+      "routeSaveError": "Les modifications n’ont pas pu être enregistrées",
+      "verificationError": "Le statut n’a pas pu être modifié",
+      "reconnaissanceSaved": "Reconnaissance enregistrée",
+      "reconnaissanceError": "La reconnaissance n’a pas pu être enregistrée",
+      "approved": "Randonnée validée",
+      "approveError": "La validation a échoué",
+      "printCreated": "PDF d’impression créé",
+      "printError": "Le PDF d’impression n’a pas pu être créé"
+    },
+    "confirm": {
+      "deleteTour": "Supprimer vraiment la randonnée « {title} » ?",
+      "removeWaypoint": "Retirer le point « {label} » ?",
+      "approveTour": "Valider la randonnée « {title} » ?"
+    },
+    "route": {
+      "title": "Carte et itinéraire",
+      "description": "Les points de passage peuvent être déplacés par glisser-déposer. Les modifications ne sont appliquées qu’à l’enregistrement ; le tracé, le profil altimétrique et les points automatiques sont alors recalculés.",
+      "routingProfile": "Profil d’itinéraire",
+      "savingAndCalculating": "Enregistrement et calcul…",
+      "discardChanges": "Annuler les modifications",
+      "addVia": "Ajouter un point de passage",
+      "unsavedHint": "Modifications non enregistrées. L’itinéraire et le profil altimétrique affichés correspondent encore au dernier état enregistré.",
+      "swisstopoHint": "Lors de l’enregistrement, le tracé de l’itinéraire est transmis à swisstopo pour le profil altimétrique.",
+      "placeViaHint": "Cliquer sur la carte pour placer le point de passage.",
+      "distance": "Distance : <strong>{value}</strong>",
+      "ascent": "Montée : <strong>{value}</strong>",
+      "descent": "Descente : <strong>{value}</strong>"
+    },
+    "elevation": {
+      "title": "Profil altimétrique",
+      "description": "Au survol, le profil altimétrique indique la position sur la carte. L’analyse automatique ajoute les bifurcations, croisements et cabanes marquants – environ toutes les 15 minutes de marche.",
+      "empty": "Aucun profil altimétrique récupéré pour l’instant."
+    },
+    "editModal": {
+      "title": "Modifier la randonnée"
+    },
+    "reconnaissanceModal": {
+      "reconnoiteredOn": "Reconnu le {date}.",
+      "reconnoiteredByOn": "Reconnu par {name} le {date}.",
+      "approvedOn": "Validé le {date}.",
+      "approvedByOn": "Validé par {name} le {date}.",
+      "remarks": "Autres remarques",
+      "submit": "Marquer comme reconnu",
+      "checklist": {
+        "trail_condition": "État du chemin vérifié",
+        "problem_spots": "Passages problématiques vérifiés",
+        "exits": "Échappatoires vérifiées",
+        "access_roads": "Voies d’accès vérifiées",
+        "water_points": "Points d’eau vérifiés",
+        "alternative_route": "Itinéraire alternatif vérifié",
+        "decision_points": "Points de décision importants vérifiés"
+      }
+    },
+    "printModal": {
+      "paper": "Format du papier",
+      "orientation": "Orientation",
+      "portrait": "Portrait",
+      "landscape": "Paysage",
+      "scale": "Échelle",
+      "scaleOption": "1:{scale}",
+      "result": "PDF avec {count, plural, one {# feuille de carte} other {# feuilles de carte}} créé - <link>Télécharger le PDF</link>.",
+      "creating": "Création…",
+      "submit": "Créer le PDF"
+    }
+  },
+  "map": {
+    "aria": "Carte",
+    "legendAria": "Légende de l’évaluation des dangers",
+    "legendNone": " (aucun)",
+    "waypointInfo": "Informations sur le point de passage",
+    "closeWaypointInfo": "Fermer les informations sur le point de passage",
+    "elevation": "Altitude : {value} m",
+    "break": "Pause : {minutes} min"
+  },
+  "marchTable": {
+    "title": "Points de passage et tableau de marche",
+    "speedFactor": "Facteur de vitesse : {value} km-effort/h",
+    "noRoute": "Calculer l’itinéraire pour afficher les distances et les temps de marche.",
+    "empty": "Aucun point de passage.",
+    "columns": {
+      "index": "#",
+      "name": "Nom",
+      "type": "Type",
+      "elevation": "Altitude",
+      "distance": "Distance",
+      "cumulativeDistance": "Distance cum.",
+      "ascent": "Montée",
+      "descent": "Descente",
+      "lkm": "km-effort",
+      "time": "Temps",
+      "cumulativeTime": "Temps cum.",
+      "arrival": "Arrivée",
+      "break": "Pause",
+      "departure": "Départ",
+      "remarks": "Remarques",
+      "status": "Statut",
+      "actions": "Actions"
+    },
+    "breakMinutesAria": "Pause en minutes",
+    "decisionMetrics": "Depuis le départ : {fromStart} · Jusqu’à l’arrivée : {toEnd} · Retour : {back}",
+    "nearestExit": " · Échappatoire la plus proche : {time}",
+    "summary": {
+      "totalDistance": "Distance totale : <strong>{value}</strong>",
+      "ascentDescent": "Montée/descente : <strong>{ascent} / {descent} m</strong>",
+      "lkm": "Kilomètres-effort : <strong>{value}</strong>",
+      "walkingTime": "Temps de marche : <strong>{value}</strong>",
+      "breaks": "Pauses : <strong>{value}</strong>",
+      "totalTime": "Temps total : <strong>{value}</strong>"
+    }
+  },
+  "elevationChart": {
+    "distance": "Distance :",
+    "elevation": "Altitude :"
+  }
+}

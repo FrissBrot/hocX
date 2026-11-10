@@ -109,6 +109,13 @@ describe("PhotosView", () => {
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Alle Fotos", "Alben", "Duplikate", "Ähnliche"]);
   });
 
+  it("has no manual analysis button - analysis runs automatically", async () => {
+    mockFilesAndProgress([makeItem({ id: "a" })], NO_PROGRESS);
+    render(<PhotosView />);
+    await screen.findAllByRole("checkbox");
+    expect(screen.queryByRole("button", { name: /Analyse/ })).not.toBeInTheDocument();
+  });
+
   it("preserves photos after a pagination failure, pauses automatic loading and retries the same page", async () => {
     const items = Array.from({ length: 60 }, (_, index) => makeItem({ id: `photo-${index}` }));
     mockFilesAndProgress([], NO_PROGRESS);
@@ -189,10 +196,10 @@ describe("PhotosView", () => {
     ], NO_PROGRESS);
     render(<PhotosView />);
     const tourButton = await screen.findByRole("button", { name: /Rigi/ });
-    expect(screen.getByText("Sommerlager")).toBeInTheDocument();
+    expect(screen.getByText(/Sommerlager/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Pilatus/ })).toBeInTheDocument();
     fireEvent.click(tourButton);
-    expect(await screen.findByText("2 ausgewählt")).toBeInTheDocument();
+    expect(await screen.findByText("2 Fotos ausgewählt")).toBeInTheDocument();
     expect(tourButton).toHaveAttribute("aria-pressed", "true");
   });
 
@@ -205,7 +212,17 @@ describe("PhotosView", () => {
     fireEvent.click(checkboxes[0]);
     fireEvent.click(checkboxes[1]);
 
-    await waitFor(() => expect(screen.getByText("2 ausgewählt")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("2 Fotos ausgewählt")).toBeInTheDocument());
+  });
+
+  it("selects all loaded photos from the bulk bar", async () => {
+    mockFilesAndProgress([makeItem({ id: "a" }), makeItem({ id: "b" }), makeItem({ id: "c" })], NO_PROGRESS);
+    render(<PhotosView />);
+    const checkboxes = await screen.findAllByRole("checkbox");
+    fireEvent.click(checkboxes[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Alle auswählen", exact: true }));
+    expect(screen.getByText("3 Fotos ausgewählt")).toBeInTheDocument();
+    expect(checkboxes.every((checkbox) => checkbox.getAttribute("aria-checked") === "true")).toBe(true);
   });
 
   it("never renders the analysis progress bar text", async () => {

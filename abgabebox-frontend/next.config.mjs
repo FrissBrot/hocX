@@ -1,3 +1,5 @@
+import createNextIntlPlugin from "next-intl/plugin";
+
 // connect-src erlaubt zusaetzlich https://api.friendlycaptcha.com: components/captcha-widget.tsx
 // bindet das Friendly-Captcha-Skript zwar selbst gehostet ein (public/friendly-challenge.module.min.js),
 // das Widget loest die Proof-of-Work-Challenge aber per XHR/fetch gegen den data-puzzle-endpoint
@@ -11,17 +13,9 @@
 // automatisches Fallback auf blob: und blockiert die Worker-Erzeugung, was das Widget selbst als
 // "Background worker error undefined" anzeigt (Verifizierung fehlgeschlagen).
 //
-// script-src braucht 'unsafe-inline': per echtem Playwright-Browser-Test (nicht nur `npm run
-// build`) festgestellt, dass der App Router auf dynamischen Seiten (z.B. /[linkToken]) selbst
-// mehrere inline <script>-Tags fuer den RSC-Hydration-Payload einbettet (self.__next_f.push...),
-// unabhaengig vom eigenen App-Code. Ohne 'unsafe-inline' wurden diese von der CSP geblockt und
-// die Seite hydratisierte nie (kein Fehler im Server-Log, nur eine tote Seite im Browser) - der
-// urspruengliche Build-only-Test hatte das nicht erkannt. Ein Nonce-basierter Ansatz waere die
-// sauberere Loesung, ist hier aber (wie in frontend/next.config.mjs) bewusst zurueckgestellt.
-const isDevelopment = process.env.NODE_ENV !== "production";
-const scriptSrc = ["'self'", "'unsafe-inline'", isDevelopment && "'unsafe-eval'"]
-  .filter(Boolean)
-  .join(" ");
+// Die Content-Security-Policy setzt proxy.ts pro Request mit Nonce (lib/csp.ts, Security-Audit
+// SEC-012) - vorher stand hier eine statische Policy mit script-src 'unsafe-inline', weil der App
+// Router die RSC-Hydration-Skripte inline einbettet.
 
 const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
@@ -31,30 +25,20 @@ const securityHeaders = [
   { key: "Referrer-Policy", value: "no-referrer" },
   { key: "X-Robots-Tag", value: "noindex, nofollow" },
   { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
-  {
-    key: "Content-Security-Policy",
-    value: [
-      "default-src 'self'",
-      `script-src ${scriptSrc}`,
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob:",
-      "font-src 'self'",
-      "connect-src 'self' https://api.friendlycaptcha.com",
-      "worker-src 'self' blob:",
-      "object-src 'none'",
-      "frame-src 'none'",
-      "frame-ancestors 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-    ].join("; "),
-  },
 ];
 
 const apiProxyTarget = process.env.ABGABEBOX_API_PROXY_TARGET?.replace(/\/$/, "");
 
+const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
+  // Komprimieren übernimmt Traefik (compress@file, auch Brotli/zstd) - nicht zusätzlich im
+  // selben Node-Prozess wie das Server-Rendering.
+  compress: false,
+  // Kein "X-Powered-By: Next.js" (Security-Audit SEC-012).
+  poweredByHeader: false,
   // Same reasoning as frontend/next.config.mjs: `next dev` only auto-allows "localhost" and
   // its --hostname, but this repo's e2e stack reaches the dev server via 127.0.0.1. Without
   // this the HMR websocket is rejected and the page never hydrates (markup renders, but
@@ -89,4 +73,4 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+export default withNextIntl(nextConfig);

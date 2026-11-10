@@ -237,3 +237,30 @@ def test_factor_scoped_to_owning_admin_not_visible_to_another_admin(db):
 
     assert service.get_self_overview(db, _actor_for(admin_two)).has_factors is False
     assert service.get_self_overview(db, _actor_for(admin_one)).has_factors is True
+
+
+def test_login_ticket_totp_enrollment_rejected_when_factor_exists(db):
+    """MAIN-SEC-001: Mit Passwort allein darf kein zusätzlicher Faktor im Login entstehen."""
+    admin = _make_admin(db, "admin-sec001@example.com")
+    db.add(
+        UserMfaFactor(
+            platform_admin_id=admin.id,
+            factor_type="totp",
+            label="Auth App",
+            secret_encrypted=encrypt_secret(generate_totp_secret()),
+        )
+    )
+    db.flush()
+    service = AdminMfaService()
+
+    pending = service.prepare_login(db, admin)
+    assert pending.status == "verification_required"
+    assert pending.can_add_totp is False
+
+    try:
+        service.start_login_totp_enrollment(db, pending.ticket)
+    except HTTPException as exc:
+        assert exc.status_code == 403
+    else:
+        raise AssertionError("Einrichtung trotz bestehendem Faktor erlaubt")
+    assert len(service._list_factors(db, admin.id)) == 1

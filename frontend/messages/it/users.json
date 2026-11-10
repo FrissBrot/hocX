@@ -1,0 +1,67 @@
+{
+  "pageTitle": "Partecipanti",
+  "ownAccessOnlyHint": "Accessi e ruoli di questa organizzazione.",
+  "pageHint": "Gli account di questa organizzazione e i loro ruoli.",
+  "newUser": "Nuovo partecipante",
+  "emptyState": {
+    "title": "Solo il tuo accesso",
+    "description": "Invita altre persone e assegna loro un ruolo: Admin, Redattore, Cassiere o Lettore.",
+    "invite": "+ Invita partecipante"
+  },
+  "explainRoles": "Spiega i ruoli",
+  "explainRolesDescription": "Ogni account può avere più ruoli e riceve tutte le loro autorizzazioni. I ruoli si gestiscono in «Ruoli».",
+  "tabs": {
+    "active": "Partecipanti con accesso",
+    "participants": "Partecipanti"
+  },
+  "searchUsers": "Cerca partecipanti",
+  "searchParticipants": "Cerca partecipanti",
+  "columns": {
+    "displayName": "Nome visualizzato",
+    "name": "Nome",
+    "email": "E-mail",
+    "role": "Ruolo",
+    "actions": "Azioni",
+    "participantEmail": "E-mail (partecipante)"
+  },
+  "mfaButton": "MFA",
+  "delete": "Elimina",
+  "close": "Chiudi",
+  "editUserTitle": "Modifica partecipante",
+  "createUserTitle": "Crea partecipante",
+  "userModalDescription": "Gestisci i dati dell'account e il ruolo.",
+  "firstName": "Nome",
+  "lastName": "Cognome",
+  "displayName": "Nome visualizzato",
+  "email": "E-mail",
+  "newPassword": "Nuova password",
+  "password": "Password",
+  "passwordHelpEdit": "Compila solo per cambiare la password. Almeno 12 caratteri.",
+  "passwordHelpCreate": "Richiesta solo per l’accesso. Almeno 12 caratteri.",
+  "role": "Ruolo",
+  "active": "Attivo",
+  "enableLogin": "Attiva accesso",
+  "cancel": "Annulla",
+  "save": "Salva",
+  "enableLoginForTitle": "Attiva accesso per {name}",
+  "enableLoginTitle": "Attiva accesso",
+  "enableLoginDescription": "Imposta un indirizzo e-mail e una password per l’accesso di questo partecipante.",
+  "mfaTitle": "MFA di {name}",
+  "mfaTitleFallback": "MFA",
+  "roleDescriptions": {
+    "admin": "Accesso completo all'interno dell'organizzazione, inclusa la struttura (modelli, cicli, impostazioni) e la gestione partecipanti.",
+    "writer": "Lavora nell'area verbali e gestisce i dati operativi, senza modificare struttura o finanze.",
+    "kassier": "Come lettore, con in più accesso completo in scrittura a finanze e multe.",
+    "reader": "Accesso in sola lettura, può avviare esportazioni PDF e vede solo le proprie multe."
+  },
+  "toasts": {
+    "loginEnabled": "Accesso attivato",
+    "loginEnableFailed": "Impossibile attivare l'accesso",
+    "userSaved": "Partecipante salvato",
+    "userCreated": "Partecipante creato",
+    "userSaveFailed": "Impossibile salvare l'partecipante",
+    "deleteConfirm": "Eliminare definitivamente l'partecipante \"{name}\"? L'account e l'accesso andranno persi immediatamente.",
+    "userDeleted": "Partecipante eliminato",
+    "userDeleteFailed": "Impossibile eliminare l'partecipante"
+  }
+}

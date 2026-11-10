@@ -131,7 +131,12 @@ INSERT INTO public.element_type (id, code, description) VALUES (8, 'bullet_list'
 INSERT INTO public.element_type (id, code, description) VALUES (9, 'attendance', 'Attendance control block');
 INSERT INTO public.element_type (id, code, description) VALUES (10, 'session_date', 'Next session date block');
 INSERT INTO public.element_type (id, code, description) VALUES (11, 'matrix', 'Responsive matrix block');
-INSERT INTO public.element_type (id, code, description) VALUES (12, 'entry_exit', 'Participant entry/exit block');
+INSERT INTO public.element_type (id, code, description) VALUES (12, 'finance_balance', 'Finance account balance');
+INSERT INTO public.element_type (id, code, description) VALUES (13, 'finance_transactions', 'Finance transaction table');
+INSERT INTO public.element_type (id, code, description) VALUES (14, 'fine_list', 'Attendance fine list');
+INSERT INTO public.element_type (id, code, description) VALUES (15, 'chart', 'Statistics chart block');
+INSERT INTO public.element_type (id, code, description) VALUES (16, 'entry_exit', 'Participant entry/exit block');
+INSERT INTO public.element_type (id, code, description) VALUES (17, 'session_notes', 'Session notes block');
 
 
 --
@@ -144,7 +149,6 @@ INSERT INTO public.render_type (id, code, description) VALUES (3, 'todo_list', '
 INSERT INTO public.render_type (id, code, description) VALUES (4, 'image', 'Image block');
 INSERT INTO public.render_type (id, code, description) VALUES (5, 'key_value', 'Key-value output');
 INSERT INTO public.render_type (id, code, description) VALUES (6, 'plain_text', 'Plain rendered text');
-INSERT INTO public.render_type (id, code, description) VALUES (7, 'raw_latex', 'Raw LaTeX fragment');
 
 
 --
@@ -418,7 +422,7 @@ SELECT pg_catalog.setval('public.element_definition_id_seq', 1, false);
 -- Name: element_type_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.element_type_id_seq', 12, true);
+SELECT pg_catalog.setval('public.element_type_id_seq', 16, true);
 
 
 --

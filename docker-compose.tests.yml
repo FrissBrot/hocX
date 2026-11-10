@@ -1,12 +1,12 @@
 services:
   test-db:
-    image: postgres:16
+    image: postgres:18@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
     environment:
       POSTGRES_DB: hocx_test
       POSTGRES_USER: hocx_test
       POSTGRES_PASSWORD: hocx_test
     tmpfs:
-      - /var/lib/postgresql/data
+      - /var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U hocx_test -d hocx_test"]
       interval: 2s
@@ -15,7 +15,7 @@ services:
     profiles: [tests]
 
   test-redis:
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
     tmpfs:
       - /data
     healthcheck:
@@ -24,6 +24,47 @@ services:
       timeout: 5s
       retries: 20
     profiles: [tests]
+
+  # Isoliertes S3 (Garage) nur für Tests - Daten im tmpfs, nichts Persistentes, keine Ports.
+  test-s3:
+    image: dxflrs/garage:v2.5.0@sha256:677e5b758e4425a325b811c425c026bf35a4bf42f7ddbaa773de3f4fd779a5a5
+    environment:
+      GARAGE_RPC_SECRET: 5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e
+      GARAGE_ADMIN_TOKEN: test-garage-admin-token
+    volumes:
+      - ./infra/garage/garage.toml:/etc/garage.toml:ro
+    tmpfs:
+      - /var/lib/garage
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    profiles: [tests]
+
+  test-s3-init:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.test
+    environment:
+      GARAGE_ADMIN_URL: http://127.0.0.1:3903
+      GARAGE_ADMIN_TOKEN: test-garage-admin-token
+      GARAGE_CAPACITY: 1G
+      LOCAL_S3_BUCKET: hocx-main
+      LOCAL_S3_ABGABEBOX_BUCKET: hocx-abgabebox
+      LOCAL_S3_ACCESS_KEY: GK0000000000000000000000a1
+      LOCAL_S3_SECRET_KEY: "1111111111111111111111111111111111111111111111111111111111111111"
+      LOCAL_S3_ABGABEBOX_ACCESS_KEY: GK0000000000000000000000b2
+      LOCAL_S3_ABGABEBOX_SECRET_KEY: "2222222222222222222222222222222222222222222222222222222222222222"
+    volumes:
+      - ./infra/garage/bootstrap.py:/bootstrap/bootstrap.py:ro
+    command: ["python3", "/bootstrap/bootstrap.py"]
+    depends_on:
+      test-s3:
+        condition: service_healthy
+    profiles: [tests]
+    # Admin-API lauscht nur auf 127.0.0.1 im test-s3-Container (infra/garage/garage.toml).
+    network_mode: "service:test-s3"
 
   test-migrations:
     build:
@@ -59,17 +100,28 @@ services:
       STORAGE_ROOT: /tmp/hocx-test-storage
       EXPORT_ROOT: /tmp/hocx-test-storage/exports
       UPLOAD_ROOT: /tmp/hocx-test-storage/uploads
-      LATEX_TEMPLATE_ROOT: /tmp/hocx-test-storage/latex_templates
       # Account-lockout/rate-limit primitives (login, MFA verify, password-change,
       # tenant-by-domain lookup) are Redis-backed - without this service the whole
       # `tests` profile could only ever pass by pointing at an ad-hoc container
       # started by hand outside the compose file.
       REDIS_URL: redis://test-redis:6379/0
+      # Objektspeicher-Tests (tests/test_object_storage*.py, test_storage_migration_e2e.py) gegen
+      # das isolierte test-s3 - nie gegen produktive Buckets.
+      STORAGE_CREDENTIALS_KEY: test-storage-credentials-key-0123456789abcdef
+      TEST_S3_ENDPOINT: http://test-s3:3900
+      TEST_S3_ACCESS_KEY: GK0000000000000000000000a1
+      TEST_S3_SECRET_KEY: "1111111111111111111111111111111111111111111111111111111111111111"
+      TEST_S3_ABGABEBOX_ACCESS_KEY: GK0000000000000000000000b2
+      TEST_S3_ABGABEBOX_SECRET_KEY: "2222222222222222222222222222222222222222222222222222222222222222"
+      ABGABEBOX_STORAGE_ROOT: /tmp/hocx-test-abgabebox-storage
+      STORAGE_WORK_ROOT: /tmp/hocx-test-work
     depends_on:
       test-migrations:
         condition: service_completed_successfully
       test-redis:
         condition: service_healthy
+      test-s3-init:
+        condition: service_completed_successfully
     volumes:
       - ./backend:/app
     profiles: [tests]
@@ -102,7 +154,7 @@ services:
   # Eigene Test-DB fuer den Wanderplaner-Service (PostGIS + pgRouting), wie in dev/release
   # getrennt von der hocX-Test-DB.
   wanderplaner-test-db:
-    image: pgrouting/pgrouting:16-3.5-3.6
+    image: pgrouting/pgrouting:16-3.5-3.6@sha256:2d974c31dfa3b24aee8299a8741b59df5c510ab155b6d9bd7e41a76acc30ad83
     environment:
       POSTGRES_DB: wanderplaner_test
       POSTGRES_USER: wanderplaner_test
@@ -153,25 +205,36 @@ services:
     profiles: [tests]
 
   frontend-test:
-    image: node:22-bookworm-slim
+    # Same deps-layer trick as the dev/prod frontend service (docker-compose.yml): node_modules
+    # is baked into the image by `target: deps`'s own `npm ci` and only rebuilt when
+    # package.json/package-lock.json change - the named volume below then keeps that install
+    # instead of the (image-)npm ci on every single test invocation re-downloading and
+    # reinstalling the entire dependency tree from scratch (previously the dominant cost of
+    # every local/CI test-stack run; perf audit 2026-10-05).
+    build:
+      context: ./frontend
+      target: deps
     working_dir: /app
     environment:
       CI: "true"
     volumes:
       - ./frontend:/app
       - frontend-test-node-modules:/app/node_modules
-    command: sh -c "npm ci --no-audit --no-fund && npm test"
+    command: npm test
     profiles: [tests]
 
   abgabebox-frontend-test:
-    image: node:22-bookworm-slim
+    # Same deps-layer trick as frontend-test above - see its comment.
+    build:
+      context: ./abgabebox-frontend
+      target: deps
     working_dir: /app
     environment:
       CI: "true"
     volumes:
       - ./abgabebox-frontend:/app
       - abgabebox-frontend-test-node-modules:/app/node_modules
-    command: sh -c "npm ci --no-audit --no-fund && npm test"
+    command: npm test
     profiles: [tests]
 
 volumes:

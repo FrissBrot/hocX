@@ -1,6 +1,6 @@
 # hocX – Hinweise für Claude Code
 
-Monorepo: `frontend/` (Next.js, Hauptapp + Plattform-Admin), `abgabebox-frontend/` (öffentliche Upload-Seite), `backend/` (FastAPI), `design/` (Design-Tokens und -Regeln). Sprache in UI-Texten und Kommentaren: Deutsch.
+Monorepo: `frontend/` (Next.js, Hauptapp + Plattform-Admin), `abgabebox-frontend/` (öffentliche Upload-Seite), `backend/` (FastAPI), `design/` (Design-Tokens und -Regeln). Kommentare und Entwicklerdokumentation: Deutsch. UI-Texte: siehe Abschnitt „Internationalisierung / i18n" unten — hocX ist mehrsprachig, kein UI-Text wird mehr direkt auf Deutsch in Komponenten geschrieben.
 
 ## Codebase-Navigation und Kontext
 
@@ -10,6 +10,18 @@ Monorepo: `frontend/` (Next.js, Hauptapp + Plattform-Admin), `abgabebox-frontend
 - Bestehende Implementierungen und Tests bevorzugt über CCE auffinden; `grep`/`rg` gezielt einsetzen, wenn eine exakte Textsuche sinnvoller ist.
 - Tests zunächst möglichst nah an der Änderung und gezielt ausführen. Breitere Suites und E2E erst verwenden, wenn die Änderung oder Verifikation sie erfordert.
 
+## Sicherheitsregeln (verbindlich)
+
+@SECURITY-RULES.md
+
+Kurzfassung, falls die Datei nicht geladen wurde:
+
+- Jeder Datenzugriff ist auf den Mandanten des Aufrufers gescoped (`get_by_public_id(..., tenant_id=...)`); Schreiben ist strenger als Lesen.
+- Neue Tabelle mit Mandantendaten: `tenant_id NOT NULL` und RLS-Policy im selben Change (Untertabellen über die Elterntabelle).
+- SQL nur mit gebundenen Parametern; keine Geheimnisse in URLs, Logs oder im Repo; zustandsändernd nie per `GET`.
+- `python3 scripts/check-security-rules.py <Dateien>` muss `Sicherheitsregeln: ok` melden (läuft auch als Hook, im Pre-Commit und in der CI). Ausnahmen nur begründet in derselben Zeile markieren.
+- Änderungen an Auth, Mandantenzugriff, öffentlichen Endpunkten, Uploads, Migrationen oder Secrets: vor dem Commit Security-Review des Diffs (Agent `security-reviewer`).
+
 ## Design-Regeln (verbindlich)
 
 @design/DESIGN.md
@@ -18,9 +30,112 @@ Kurzfassung, falls die Datei nicht geladen wurde:
 
 - Bei jeder UI-Änderung zuerst `design/DESIGN.md` lesen. Standardbausteine (`Modal`, `useConfirm`, `useToast`, `SearchableSelect`, `ActionMenu`, `DataTable`, `Badge`, …) statt Nachbauten. Dropdown-Entscheidungsbaum steht in Abschnitt 5, Datumsfelder (`DateInput`) in Abschnitt 6.
 - Nur Tokens aus `design/tokens.css` (Farben, `--radius-*`, `--text-*`, `--space-*`, `--shadow-*`, `--z-*`, `--dur-*`). Keine Hex-Farben, keine Radius-/Schrift-/z-index-Literale, keine `var(--x, #hex)`-Fallbacks.
-- Neue Optik als Klasse in `frontend/app/globals.css`, nicht als Inline-Style. Light **und** Dark prüfen.
+- Neue Optik als Klasse in `frontend/app/globals.css` oder, wenn sie nur bestimmte Routen brauchen, in `frontend/app/styles/<bereich>.css` (Prüfung: `python3 scripts/check-css-scopes.py`), nicht als Inline-Style. Light **und** Dark prüfen.
 - Tokens nur in `design/tokens.css` ändern, danach `./scripts/sync-design-tokens.sh` (die Kopien in `frontend/app/tokens.css` und `abgabebox-frontend/app/tokens.css` nie von Hand bearbeiten).
 - Vor jedem Commit mit UI-Änderung: `python3 scripts/check-design-rules.py` muss `Design-Regeln: ok` melden. Ausnahmen nur mit `design-ok`-Kommentar in derselben Zeile und kurzer Begründung.
+
+## Internationalisierung / i18n – VERBINDLICH
+
+hocX ist eine mehrsprachige Anwendung (next-intl, ohne URL-Locale-Routing). Die aktuell unterstützten
+Sprachen werden **ausschliesslich** aus `i18n/locales.json` bestimmt (Default: `de`) — generiert via
+`python3 scripts/sync-i18n-config.py` nach `frontend/i18n/locale-config.generated.ts`,
+`abgabebox-frontend/i18n/locale-config.generated.ts` und `backend/app/core/locale_config_generated.py`
+(analog zu `design/tokens.css` + `sync-design-tokens.sh`: Quelle einmal ändern, Sync-Skript laufen
+lassen, generierte Dateien nie von Hand editieren). Eine Sprachliste wie `["de", "en", "fr", "it"]`
+darf an **keiner weiteren Stelle** im Code auftauchen — CI, Tests, Language Selector und
+Backend-Validierung lesen immer aus dieser generierten Konfiguration.
+
+Verbindliche Regeln:
+
+1. Kein neuer benutzersichtbarer UI-Text wird direkt in React-/TSX-Komponenten geschrieben.
+   Jeder neue Text braucht einen semantischen Translation Key (`participants.delete.confirmTitle`,
+   nicht `text1`) in `frontend/messages/<locale>/<namespace>.json` bzw.
+   `abgabebox-frontend/messages/<locale>/<namespace>.json`.
+2. Bei jeder neuen Funktion/UI-Änderung müssen im selben Change Übersetzungen für **alle** aktuell
+   registrierten Sprachen ergänzt werden (`python3 scripts/check-i18n-completeness.py` muss „ok"
+   melden) — auch wenn der Auftrag Mehrsprachigkeit nicht ausdrücklich erwähnt. Eine UI-Aufgabe gilt
+   nicht als abgeschlossen, solange Übersetzungen fehlen.
+3. Client-Komponenten: `useTranslations("<namespace>")` aus `next-intl`. Async Server Components
+   (`page.tsx` ohne `"use client"`): `getTranslations("<namespace>")` aus `next-intl/server`. Reine
+   Hilfsfunktionen/Modul-Konstanten ohne eigene Komponente (z.B. `section-tabs.ts`) nehmen `t` als
+   Parameter entgegen, statt selbst einen Hook aufzurufen — siehe `app-shell-nav.ts::formatRoleLabel`
+   und `section-tabs.ts` als Vorbild.
+4. Variablen und Pluralisierung immer über ICU-Syntax (`t("key", { count })` mit
+   `"{count, plural, one {...} other {...}}"`), nie String-Konkatenation.
+5. Datum/Zeit/Zahlen: `formatDateTime`/`formatTime`/`formatWeekdayDate`/`formatRappen` aus
+   `frontend/lib/utils/format.ts` nehmen optional die aktuelle UI-Locale (`useLocale()`) entgegen.
+   Ausnahme bewusst: `formatDate`/`formatDateInputValue`/`DateInput` bleiben **immer** `TT.MM.JJJJ`
+   (siehe `design/DESIGN.md` Abschnitt 6 — das ist ein festes Eingabeformat, keine Sprachfrage).
+6. Sprachauswahl persistiert für eingeloggte Nutzer in `app_user.preferred_language` (Pydantic-
+   validiert gegen die zentrale Locale-Liste, siehe `backend/app/schemas/user.py`) und wird bei
+   Login/Session-Abruf/Self-Update serverseitig in den Cookie `hocx_locale` gespiegelt
+   (`issue_locale_cookie` in `backend/app/core/security.py`) — Priorität bei der Ermittlung:
+   gespeicherte Präferenz → Cookie → Browser-Sprache → Default. Eine unbekannte/nicht unterstützte
+   Locale fällt immer auf `de` zurück, bricht nie die Anwendung.
+7. Prüfungen vor Abschluss jeder UI-Aufgabe (siehe auch Abschnitt „Prüfen" unten):
+   `python3 scripts/check-i18n-completeness.py`, `python3 scripts/check-i18n-hardcoded-text.py`
+   und `python3 scripts/check-i18n-key-resolution.py` müssen „ok" melden. Ein echter Fund im
+   Hardcoded-Text-Check wird übersetzt; ein False Positive (kein UI-Text) wird mit
+   `// i18n-ok: <Begründung>` in derselben Zeile markiert. Completeness/Hardcoded-Text prüfen nur
+   Key-Parität zwischen Locales bzw. hartcodierten Text — ein `t("key")`-Aufruf, der syntaktisch
+   korrekt aussieht, aber den falschen Namespace oder einen nicht existierenden Key trifft (z. B.
+   `useTranslations("nav")` gefolgt von `t("breadcrumbNav")`, obwohl der Key in `common.json`
+   liegt), fällt erst zur Laufzeit mit next-intls `MISSING_MESSAGE` auf — das deckt
+   `check-i18n-key-resolution.py` ab, mit der bekannten Grenze, dass mehrstufige
+   Parameter-Weiterleitung (TFunc-Muster, siehe unten) nicht immer statisch auflösbar ist; solche
+   Fälle werden übersprungen statt geraten, nie als Fehlalarm gemeldet.
+8. Neue Sprache hinzufügen: ausschliesslich `i18n/locales.json` ergänzen, `sync-i18n-config.py`
+   laufen lassen, dann für jeden registrierten Namespace eine `messages/<neue-locale>/<namespace>.json`
+   anlegen. Language Selector, CI und Tests erkennen sie danach automatisch — kein Code in
+   Komponenten, CI-Workflows oder Testdateien wird dafür angepasst.
+9. Bei UI-Reviews explizit auf i18n-Vollständigkeit achten (fehlende Keys, hart codierte Strings,
+   fehlende Pluralregeln).
+
+## Berechtigungen / RBAC (verbindlich)
+
+hocX prüft Rechte über systemseitig definierte Berechtigungen, nicht über Rollen-Codes. Ein Konto hat
+eine oder mehrere Rollen seines Mandanten (`tenant_role`, `user_role`); vier Standardrollen
+(`admin`, `writer`, `kassier`, `reader`) legt ein Trigger für jeden Mandanten an, `admin` hat immer
+alle Berechtigungen. Details: `docs/RBAC_ARCHITECTURE_PROPOSAL.md`.
+
+- Quelle der Berechtigungen ist ausschliesslich `permissions/catalog.json` → `python3 scripts/sync-permission-catalog.py`
+  (generiert `backend/app/core/permissions_generated.py` und `frontend/lib/permissions.generated.ts`, nie von Hand
+  editieren; CI prüft mit `--check`).
+- Backend: `require_permission(user, P.X)` im Routenrumpf, `user.can(P.X)` für Verzweigungen. Frontend nur zur
+  Benutzerführung: `can(session, "x.y")` aus `frontend/lib/permissions.ts`. Nie `"admin"`/`"writer"` vergleichen.
+- Neue Berechtigung: Katalog ergänzen, Sync, Migration fügt sie in `permission` ein und den passenden
+  Standardrollen hinzu (auch in `hocx_seed_tenant_roles`), Übersetzungen `roles.permissions.<bereich>.<aktion>.label/description`
+  in allen Locales.
+- Rollen ändern/zuweisen nur über `services/role_service.py` (Schutzregeln, Savepoint-Guard).
+- Durchgesetzt wird das automatisch:
+  - `check-security-rules.py` (Hook, Pre-Commit, CI) meldet Rollen-Code-Vergleiche
+    (`role-code-comparison`) und Schreibzugriffe auf Rollentabellen ausserhalb von `role_service.py`
+    (`role-write-outside-role-service`). Ausnahme nur begründet mit `# rbac-ok: <Begründung>`.
+  - `sync-permission-catalog.py --check` verlangt zu jedem Key Übersetzungen in allen Locales, eine
+    Migration und mindestens eine Prüfung im Backend.
+  - `tests/test_route_permission_inventory.py` schlägt fehl, wenn eine Route keine Prüfung hat.
+- **Rechte-Übersicht:** `permissions/route-map.json` (Route → geprüfte Berechtigung) wird generiert
+  und eingecheckt. Nach jeder Änderung an Routen oder Prüfungen `python3 scripts/sync-route-permissions.py`
+  ausführen; CI und Pre-Commit prüfen mit `--check`. Den Diff dieser Datei vor dem Commit bewusst
+  lesen: eine wegfallende `requires`-Prüfung oder eine neue `note`-Ausnahme gehört begründet in die
+  Commit-Nachricht.
+- Wöchentlich prüft `.github/workflows/rbac-audit.yml` den Stand von `main` erneut (RBAC-, RLS- und
+  Inventar-Tests, E2E `rbac-roles`, Übersicht und Katalog).
+
+## Abo-Features / Entitlements (verbindlich)
+
+Buchbare Produkt-Features (was ein Mandant im Abo hat) sind von Berechtigungen (was ein Benutzer darf)
+getrennt. Details: `docs/FEATURE_ENTITLEMENT_ARCHITECTURE.md`, Produktstruktur: `docs/PRODUCT_MODULE_ARCHITECTURE.md`.
+
+- Einzige Quelle ist `permissions/features.json` → `python3 scripts/sync-feature-catalog.py` (generiert
+  `backend/app/core/features_generated.py` und `frontend/lib/features.generated.ts`; CI und Pre-Commit prüfen mit `--check`).
+- Backend: nach `require_permission` zusätzlich `require_feature(user, F.X, write=...)`; `write=False` nur für reine
+  Lese-Endpunkte (gilt dann auch im Nur-Lesen-Zustand nach einem Downgrade). Hintergrundjobs prüfen
+  `tenant_feature.access == 'full'` selbst. Frontend nur zur Benutzerführung: `featureAccess(session, "x")`.
+- Neues Feature: Eintrag in `features.json`, Sync, Migration (Tabelle `feature`, Bestandsschutz-Backfill für bestehende
+  Mandanten, `plan_feature`), Prüfungen, Übersetzung `common.features.<code>` in allen Locales.
+- Downgrade löscht nie Daten: `downgrade: read_only` (lesen ja, ändern nein) oder `blocked` (nur für Dienste wie Domains).
+- Keine Feature-Flags für einzelne Buttons oder Einstellungen; Grundfunktionen (Datenschutz, Export, Standardrollen) nie an ein Abo binden.
 
 ## Zentrale Fehlererfassung (verbindlich)
 
@@ -38,14 +153,37 @@ Beim Schreiben oder Ändern von Backend-Code (Routen, Services) gilt deshalb:
 4. Ein `except Exception`-Block, der eine Exception **schluckt** (nur `logger.exception(...)`, `pass`, oder in eine Ergebnisliste/Toast-Text umwandelt, ohne erneut zu raisen) — auch innerhalb eines Requests — verliert den Fehler ebenfalls für `system_error_log`. Sofern es sich nicht um einen bewusst harmlosen Best-Effort-Fall handelt (z. B. optionale EXIF-Metadaten, DNS-Lookup mit Fallback), zusätzlich `record_system_error(...)`/`insert_error_log(...)` aufrufen.
 5. Nach jeder Änderung an einem `except Exception`-Block in `backend/`/`abgabebox-backend/` kurz gegenprüfen: landet ein hier auftretender, bislang unbekannter Fehler tatsächlich in `system_error_log` (inkl. eines Blicks auf den tatsächlich verwendeten `source`-Wert), oder wird die Kette (raise mit `from exc` / expliziter Logging-Call / Constraint) unterbrochen?
 
+## Hintergrundjobs (verbindlich)
+
+Jeder periodische Job erscheint unter `/admin/jobs` und braucht dafür drei Dinge im selben Change:
+
+1. Einen Eintrag in `backend/app/core/job_registry.py` (`JOB_DEFINITIONS`: Takt, Kategorie, `max_silence_seconds`). Backend-Loops zusätzlich mit eindeutiger Lock-ID in `BACKGROUND_LOCK_IDS` und Aufruf `run_advisory_locked_loop(name="<job>", ...)` – das meldet jeden Lauf automatisch. Lock-IDs anderer Dienste auf derselben DB (abgabebox) gehören in `EXTERNAL_LOCK_IDS`.
+2. Übersetzungen `admin.jobs.jobNames.<job>.title/description` in allen Locales (`frontend/messages/<locale>/admin.json`).
+3. Dienste ausserhalb des Backends (abgabebox, Worker, künftige Host-Cronjobs) melden über die SQL-Funktionen `record_job_run`/`record_job_start`/`record_job_heartbeat` (Migration `0105_system_job_status.py`), nie per direktem `INSERT`. Ein Job, der meldet, aber nicht registriert ist, erscheint als „Nicht registriert“.
+
+Meldungen erst schreiben, nachdem Lock-Verbindung und Session des Ticks freigegeben sind (siehe Kommentar in `run_advisory_locked_loop`), sonst erschöpft der gleichzeitige Start aller Loops den Connection-Pool.
+
+Host-Cronjobs immer über `scripts/run_job.sh <job> <befehl>` starten (meldet Läufe, siehe RUNBOOK Abschnitt 10).
+
+## Systemmonitoring (verbindlich)
+
+`/admin/system` und die ntfy-Alarme beruhen auf `backend/app/services/system_health_service.py` (Sammeln, Schwellwerte) und `system_alert_service.py` (Probleme ableiten, entprellen, benachrichtigen). Beim Erweitern:
+
+- Neue Dienst-Prüfung: in `collect_checks` ergänzen, deutscher Titel/Text für ntfy in `system_alert_service.py` (`_CHECK_TITLES_DE`, `_CHECK_PROBLEM_TITLES_DE`, `_check_message`) und Übersetzungen `admin.system.checks.<key>.title/detail/problem` in allen Locales. Zahlen in `detail` immer als `{param, number}`.
+- Probleme haben stabile Schlüssel `<quelle>:<subjekt>[:<zusatz>]` und einen `reason`; die Oberfläche übersetzt über `admin.system.problems.<quelle>.<reason>` - neue Gründe dort ergänzen.
+- Das Backend bekommt nie den Docker-Socket, nur den `docker-socket-proxy` (nur GET auf Container) im internen Netz `docker-api`. Keine weiteren Proxy-Rechte (`POST`, `EXEC`, ...) freischalten.
+
 ## Prüfen
 
 Projektabhängigkeiten und Projektbefehle laufen in Containern. Auf dem Host installiertes Node/Python dient auch Dev-Tools und ist kein Grund, Frontend- oder Backend-Abhängigkeiten auf dem Host zu installieren oder Projektbefehle dorthin zu verlagern.
 
 - Typecheck/Tests Frontend: `docker compose exec frontend node_modules/.bin/tsc --noEmit` bzw. `.../vitest run`
+- i18n (vor jedem Commit mit UI-Änderung): `python3 scripts/check-i18n-completeness.py`, `python3 scripts/check-i18n-hardcoded-text.py` und `python3 scripts/check-i18n-key-resolution.py`, nach jeder Änderung an `i18n/locales.json` zusätzlich `python3 scripts/sync-i18n-config.py`
 - E2E-Stack (eigene DB, Wegwerf-Konten): `./scripts/e2e.sh up` / `test` / `down`
-- Für visuelle Vergleiche Playwright-Screenshots gegen den E2E-Stack (`mcr.microsoft.com/playwright:v1.55.0-noble`), Light/Dark, 1440 und 390 px.
+- Für visuelle Vergleiche Playwright-Screenshots gegen den E2E-Stack (`mcr.microsoft.com/playwright:v1.64.1-noble` - Image-Tag muss `frontend/package.json`s `@playwright/test`-Version entsprechen, siehe `scripts/e2e.sh`), Light/Dark, 1440 und 390 px.
+- Auf dem Test-Host (`/etc/hocx/environment` = `test`): nach einem Update Skill `testhost-abnahme` ausführen und selbst auswerten (`.claude/skills/testhost-abnahme/SKILL.md`).
 - Zuerst die kleinste relevante Prüfung ausführen; vollständige Test- oder E2E-Suites nur, wenn sie für die Änderung sinnvoll sind.
+- `docker builder prune`/`docker image prune -a` (oder `-f`-Varianten) nicht als Routine-Aufräumschritt während des Testens ausführen: `backend-test`/`abgabebox-backend-test`/`photo-analysis-worker-test` und `frontend-test`/`abgabebox-frontend-test` (`docker-compose.tests.yml`) sind bewusst so gebaut, dass ein unveränderter `requirements*.txt`/`package*.json` die pip-/npm-Install-Layer aus dem Docker-Build-Cache wiederverwendet statt neu zu installieren – ein Cache-Prune zwingt den nächsten `--build`-Lauf zur vollständigen Neuinstallation (mehrere Minuten) und kann bei `npm`/`pip` sogar andere (neuere) Paketversionen auflösen als die zuvor getestete, gecachte Schicht. Bei echtem Platzmangel gezielt alte, nicht mehr referenzierte Images/Volumes identifizieren statt pauschal zu pruning.
 
 ## Sonstiges
 

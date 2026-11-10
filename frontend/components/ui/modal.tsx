@@ -1,11 +1,22 @@
 "use client";
 
-import { ComponentProps, createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
+import { ComponentProps, createContext, KeyboardEvent as ReactKeyboardEvent, ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslations } from "next-intl";
 
 import { usePopupEscape, usePopupScrollLock } from "@/lib/hooks/use-popup-escape";
+import { ActionIcon } from "@/components/ui/action-icons";
 
 const ModalDepth = createContext(0);
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled]):not([type=\"hidden\"])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "[contenteditable=\"true\"]",
+  "[tabindex]:not([tabindex=\"-1\"])",
+].join(",");
 const pendingSaves = new WeakMap<HTMLFormElement, Promise<void>>();
 
 /** Behält native Formularvalidierung bei und macht laufende Submits für Escape sichtbar. */
@@ -29,7 +40,8 @@ type ModalProps = {
   children: ReactNode;
   onClose: () => void;
   onEscape?: () => void | Promise<void>;
-  size?: "default" | "wide" | "fullscreen";
+  /** `sheet`: Bottom-Sheet der Mobile-Oberflaeche (volle Breite, unten angedockt). */
+  size?: "default" | "wide" | "fullscreen" | "sheet";
   headerActions?: ReactNode;
   hideCloseButton?: boolean;
   /** Skips the title bar entirely (no h2, no close button) for shells that build their own
@@ -43,6 +55,7 @@ type ModalProps = {
 };
 
 export function Modal({ open, title, description, children, onClose, onEscape, size = "default", headerActions, hideCloseButton = false, hideHeader = false, header, footer, className = "" }: ModalProps) {
+  const t = useTranslations("common");
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -51,6 +64,53 @@ export function Modal({ open, title, description, children, onClose, onEscape, s
 
   const depth = useContext(ModalDepth);
   const rootRef = useRef<HTMLDivElement>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
+  // Klick-Ziehen aus dem Dialog (z. B. Textauswahl bis ueber den Rand) endet als click auf dem
+  // Backdrop - geschlossen wird nur, wenn auch der mousedown auf dem Backdrop selbst begann
+  // (Audit MAIN-FE-009, sonst gingen ungespeicherte Eingaben verloren).
+  const pressStartedOnBackdropRef = useRef(false);
+  // Element, das vor dem Oeffnen den Fokus hatte - bekommt ihn nach dem Schliessen zurueck.
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  if (open && previousFocusRef.current === null && typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
+    previousFocusRef.current = document.activeElement;
+  }
+
+  // Fokus beim Oeffnen in den Dialog legen (sofern nicht schon ein Feld per autoFocus drin ist)
+  // und beim Schliessen zurueckgeben (WCAG 2.4.3).
+  useEffect(() => {
+    if (!open || !mounted) return;
+    const shell = shellRef.current;
+    if (shell && !shell.contains(document.activeElement)) shell.focus({ preventScroll: true });
+    return () => {
+      const previous = previousFocusRef.current;
+      previousFocusRef.current = null;
+      if (previous && previous.isConnected) previous.focus({ preventScroll: true });
+    };
+  }, [open, mounted]);
+
+  // Tab/Shift+Tab bleiben im Dialog. Nur fuer Ereignisse aus diesem Dialog selbst: ein darin
+  // geoeffneter Unterdialog liegt in einem eigenen Portal, seine Ereignisse blubbern aber durch
+  // den React-Baum bis hierher.
+  function trapTab(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "Tab") return;
+    const shell = shellRef.current;
+    if (!shell || !(event.target instanceof Node) || !shell.contains(event.target)) return;
+    const focusable = Array.from(shell.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+    if (focusable.length === 0) {
+      event.preventDefault();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = document.activeElement;
+    if (event.shiftKey && (active === first || active === shell)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
   usePopupScrollLock(open && mounted);
   usePopupEscape(open && mounted, () => {
     if (onEscape) return onEscape();
@@ -70,8 +130,28 @@ export function Modal({ open, title, description, children, onClose, onEscape, s
 
   return createPortal(
     <ModalDepth.Provider value={depth + 1}>
-    <div ref={rootRef} style={{ zIndex: `calc(var(--z-modal) + ${depth})` }} className="modal-backdrop" onClick={onClose} role="presentation">
-      <div className={`modal-shell modal-${size}${hideHeader ? " modal-noheader" : ""}${footer ? " modal-has-footer" : ""} ${className}`} onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-label={title}>
+    <div
+      ref={rootRef}
+      style={{ zIndex: `calc(var(--z-modal) + ${depth})` }}
+      className="modal-backdrop"
+      onMouseDown={(event) => { pressStartedOnBackdropRef.current = event.target === event.currentTarget; }}
+      onClick={(event) => {
+        const startedOnBackdrop = pressStartedOnBackdropRef.current;
+        pressStartedOnBackdropRef.current = false;
+        if (event.target === event.currentTarget && startedOnBackdrop) onClose();
+      }}
+      role="presentation"
+    >
+      <div
+        ref={shellRef}
+        tabIndex={-1}
+        className={`modal-shell modal-${size}${hideHeader ? " modal-noheader" : ""}${footer ? " modal-has-footer" : ""} ${className}`}
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={trapTab}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+      >
         {!hideHeader ? (
           <div className="modal-header">
             {header ?? (
@@ -83,10 +163,8 @@ export function Modal({ open, title, description, children, onClose, onEscape, s
             <div className="modal-header-actions">
               {headerActions}
               {!hideCloseButton ? (
-                <button type="button" className="button-icon modal-close" onClick={onClose} aria-label="Schliessen">
-                  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="16" height="16">
-                    <path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-                  </svg>
+                <button type="button" className="button-icon modal-close" onClick={onClose} aria-label={t("close")}>
+                  <ActionIcon name="close" />
                 </button>
               ) : null}
             </div>

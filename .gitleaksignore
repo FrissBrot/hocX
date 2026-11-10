@@ -1,0 +1,5 @@
+# Geprüfte Fehlalarme in bereits veröffentlichter Historie (Release 1.2.0, Freigabe 2026-10-24).
+# Testpasswort im Test, inzwischen zur Laufzeit erzeugt:
+b1f4617c0aa1a3cf290c674da7141be5ea076550:backend/tests/test_process_kind_secrets.py:generic-api-key:14
+# Kein Secret: `insecure=args.s3_insecure` (CLI-Schalter) in der Recovery-CLI:
+bb7dc166a7f40c69bc057947a355f920d7ec782e:backend/app/backup/cli.py:generic-api-key:201

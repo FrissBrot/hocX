@@ -18,7 +18,10 @@ ENV_FILE="$REPO_DIR/.env"
 
 # shellcheck source=scripts/lib/env.sh
 source "$REPO_DIR/scripts/lib/env.sh"
+# shellcheck source=scripts/lib/pg_upgrade.sh
+source "$REPO_DIR/scripts/lib/pg_upgrade.sh"
 
+# shellcheck disable=SC2119 # bewusst ohne Argument: Standard-Markierung /etc/hocx/environment
 require_unprovisioned_dev_host
 
 usage() {
@@ -119,6 +122,12 @@ run_smoke_checks() {
 case "$ACTION" in
   up)
     echo "==> [dev] Starte lokalen Dev-Stack"
+    # PostgreSQL 16 -> 18 wie beim Release-Deploy (scripts/lib/pg_upgrade.sh), ohne altes
+    # Volume ein No-op. Benutzer/Datenbank aus der aufgelösten Compose-Konfiguration.
+    "${DC[@]}" pull --quiet db
+    db_setting() { "${DC[@]}" config db 2> /dev/null | sed -n "s/^ *$1: *//p" | head -n 1 | tr -d "\"'"; }
+    pg_upgrade_major_if_needed "$PROJECT_NAME" "$(db_setting POSTGRES_USER)" "$(db_setting POSTGRES_DB)" \
+      "$("${DC[@]}" config --images db)" || exit 1
     "${DC[@]}" up -d --build
     run_smoke_checks
     cat <<'EOF'

@@ -61,7 +61,13 @@ def test_delete_fine_rejects_frozen_protocol(db):
     fine = _fine(db, protocol_id=protocol.id, account_id=account.id)
 
     repo = FinesRepository()
-    assert repo.delete_fine(db, fine.id, tenant.id) is False
+    # Seit MAIN-BE-002 (Soft-Delete): ohne Begründung abgelehnt, hart gelöscht wird nie.
+    from app.repositories.fines_repository import FineDeleteError
+
+    with pytest.raises(FineDeleteError) as exc:
+        repo.delete_fine(db, fine.id, tenant.id)
+    assert exc.value.code == "reason_required"
+    assert db.get(AttendanceFine, fine.id).status == "pending"
 
 
 def test_collect_fine_rejects_frozen_protocol(db):

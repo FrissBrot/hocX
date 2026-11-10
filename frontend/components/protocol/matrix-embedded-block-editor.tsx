@@ -1,31 +1,39 @@
 "use client";
 
+import { useParticipantSelectable } from "@/contexts/participant-date-context";
+import { useParticipantNameSource } from "@/contexts/participant-directory-context";
+
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { useConfirm } from "@/contexts/confirm-context";
 import { Badge } from "@/components/ui/badge";
 import { DateInput } from "@/components/ui/date-input";
+import { TimeInput } from "@/components/ui/time-input";
 import { LightboxImage } from "@/components/ui/lightbox-image";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { EventOverviewModal } from "@/components/protocol/planning/event-overview-modal";
 import { PlanningIconTrigger } from "@/components/protocol/planning/planning-icon-trigger";
 import { TagConfig } from "@/lib/hooks/use-tag-config";
+import { blockEventFilter, eventFilterTagText, type EventFilter } from "@/lib/element-types/event-filter";
 import { formatDateRange } from "@/lib/utils/format";
 import { EventSummary, ParticipantSummary, ProtocolSummary } from "@/types/api";
 import {
-  ATTENDANCE_OPTIONS,
-  EMBEDDED_FORM_VALUE_OPTIONS,
   MatrixEmbeddedBlock,
   ProtocolEventDraft,
   asObject,
-  attendanceParticipants,
+  attendanceOptions,
+  protocolAttendanceParticipants,
   canCreateProtocolEventDraft,
   compareIsoDate,
   createEmbeddedFormRow,
   createInlineProtocolEventDraft,
+  embeddedFormValueOptions,
+  eventRowTintStyle,
   formatShortDate,
   nextEmbeddedItemId,
 } from "@/components/protocol/protocol-editor-shared";
+import { Select } from "@/components/ui/select";
 
 export function MatrixEmbeddedBlockEditor({
   embeddedBlock,
@@ -39,8 +47,7 @@ export function MatrixEmbeddedBlockEditor({
   createEvent,
   updateEvent,
   deleteEvent,
-  currentCycleYear,
-  cycleConfigId,
+  filterEvents,
   onEventContextMenu,
   isPlanningMode,
   knownEventTags,
@@ -59,8 +66,8 @@ export function MatrixEmbeddedBlockEditor({
   createEvent: (forcedTag: string, draft: ProtocolEventDraft) => Promise<EventSummary | null>;
   updateEvent: (eventId: string, patch: Partial<EventSummary>) => Promise<boolean>;
   deleteEvent: (eventId: string) => Promise<void>;
-  currentCycleYear: number | null;
-  cycleConfigId: string | null;
+  /** Termine für einen Filter (inkl. Zyklus-Pool), siehe filteredEvents im focused-element-editor. */
+  filterEvents: (filter: EventFilter, column?: Record<string, any> | null) => EventSummary[];
   onEventContextMenu: (nativeEvent: React.MouseEvent, eventRow: EventSummary) => void;
   isPlanningMode: boolean;
   knownEventTags: string[];
@@ -68,22 +75,33 @@ export function MatrixEmbeddedBlockEditor({
   onTagColorChange: (tag: string, color: string) => Promise<void>;
   onTagRename: (oldTag: string, newTag: string) => Promise<void>;
 }) {
+  const isParticipantSelectable = useParticipantSelectable();
+  const participantNames = useParticipantNameSource(availableParticipants);
+  const t = useTranslations("protocols.matrixEditor");
+  const tRoot = useTranslations("protocols");
+  const tCommon = useTranslations("common");
   const confirm = useConfirm();
   const elementTypeId = Number(embeddedBlock.element_type_id ?? 0);
   const embeddedConfig = asObject(embeddedBlock.configuration_snapshot_json);
   const sortedEvents = [...availableEvents].sort((left, right) => compareIsoDate(left.event_date, right.event_date));
   const embeddedBlockClassName = "matrix-embedded-block";
-  const eligibleAttendanceParticipants = useMemo(
-    () => attendanceParticipants(availableParticipants),
-    [availableParticipants]
-  );
   const [embeddedEventDrafts, setEmbeddedEventDrafts] = useState<Record<string, Partial<EventSummary>>>({});
   const embeddedEventAutosaveTimers = useRef<Record<string, number>>({});
-  const forcedEmbeddedTag =
-    (embeddedConfig.event_use_column_tag_filter === true ? String(matrixColumn?.event_tag_filter || matrixColumn?.title || "").trim() : "") ||
-    String(embeddedConfig.event_tag_filter ?? "").trim();
+  const embeddedEventFilter = blockEventFilter(embeddedConfig);
+  // Tags immer in ihrer Farbe wie in der Terminliste, Farbe zur Laufzeit aus der Tag-Verwaltung.
+  const renderEmbeddedTag = (tag: string | null | undefined) => {
+    const color = tag ? tagConfig[tag]?.color : null;
+    if (!tag) return "—";
+    if (!color) return tag;
+    return (
+      <span className="tag-color-badge" style={{ backgroundColor: `${color}22`, color, borderColor: `${color}55` }}>
+        {tag}
+      </span>
+    );
+  };
+  const forcedEmbeddedTag = eventFilterTagText(embeddedEventFilter, matrixColumn);
   const [newEmbeddedEventDraft, setNewEmbeddedEventDraft] = useState<ProtocolEventDraft>(() =>
-    createInlineProtocolEventDraft(protocol.protocol_date, forcedEmbeddedTag)
+    createInlineProtocolEventDraft(protocol.protocol_date, forcedEmbeddedTag, true, tRoot)
   );
   const [showNewEmbeddedEventRow, setShowNewEmbeddedEventRow] = useState(false);
   const [creatingEmbeddedEvent, setCreatingEmbeddedEvent] = useState(false);
@@ -128,7 +146,7 @@ export function MatrixEmbeddedBlockEditor({
       if (hasManualContent) {
         return current;
       }
-      return createInlineProtocolEventDraft(protocol.protocol_date, forcedEmbeddedTag, embeddedEventColumns.showTitle);
+      return createInlineProtocolEventDraft(protocol.protocol_date, forcedEmbeddedTag, embeddedEventColumns.showTitle, tRoot);
     });
   }, [embeddedEventColumns.showTitle, forcedEmbeddedTag, protocol.protocol_date]);
 
@@ -142,7 +160,7 @@ export function MatrixEmbeddedBlockEditor({
   }, []);
 
   function participantNameById(participantId: string | null | undefined) {
-    return availableParticipants.find((participant) => participant.id === participantId)?.display_name ?? "—";
+    return participantNames.find((participant) => participant.id === participantId)?.display_name ?? "—";
   }
 
   function eventLabelById(eventId: string | null | undefined) {
@@ -151,7 +169,7 @@ export function MatrixEmbeddedBlockEditor({
   }
 
   function attendanceStatusLabel(status: string | null | undefined) {
-    return ATTENDANCE_OPTIONS.find((option) => option.value === status)?.label ?? "Unbekannt";
+    return attendanceOptions(tRoot).find((option) => option.value === status)?.label ?? t("unknown");
   }
 
   function embeddedEventPayload(eventRow: EventSummary, draft: Partial<EventSummary>) {
@@ -203,7 +221,7 @@ export function MatrixEmbeddedBlockEditor({
     }
     setCreatingEmbeddedEvent(false);
     setShowNewEmbeddedEventRow(false);
-    setNewEmbeddedEventDraft(createInlineProtocolEventDraft(protocol.protocol_date, forcedEmbeddedTag, embeddedEventColumns.showTitle));
+    setNewEmbeddedEventDraft(createInlineProtocolEventDraft(protocol.protocol_date, forcedEmbeddedTag, embeddedEventColumns.showTitle, tRoot));
   }
 
   function scheduleEmbeddedEventCreate(nextDraft: ProtocolEventDraft) {
@@ -237,17 +255,11 @@ export function MatrixEmbeddedBlockEditor({
     if (!selectedIds.length) {
       return "Teilnehmer waehlen";
     }
-    const selectedParticipants = availableParticipants.filter((participant) => selectedIds.includes(participant.id));
+    const selectedParticipants = participantNames.filter((participant) => selectedIds.includes(participant.id));
     if (!selectedParticipants.length) {
       return `${selectedIds.length} ausgewaehlt`;
     }
-    if (selectedParticipants.length === 1) {
-      return selectedParticipants[0].display_name;
-    }
-    if (selectedParticipants.length === 2) {
-      return `${selectedParticipants[0].display_name}, ${selectedParticipants[1].display_name}`;
-    }
-    return `${selectedParticipants[0].display_name} + ${selectedParticipants.length - 1}`;
+    return selectedParticipants.map((participant) => participant.display_name).join(", ");
   }
 
   if (elementTypeId === 1 || elementTypeId === 5) {
@@ -266,7 +278,7 @@ export function MatrixEmbeddedBlockEditor({
           value={String(embeddedBlock.text_content ?? "")}
           onChange={(event) => updateEmbeddedBlock((current) => ({ ...current, text_content: event.target.value }))}
           onBlur={() => updateEmbeddedBlock((current) => current, true)}
-          placeholder="Blockinhalt"
+          placeholder={t("blockContentPlaceholder")}
         />
       </div>
     );
@@ -287,7 +299,7 @@ export function MatrixEmbeddedBlockEditor({
               ))}
             </div>
           ) : (
-            <div className="matrix-static-value">Keine Todos</div>
+            <div className="matrix-static-value">{t("noTodos")}</div>
           )}
         </div>
       );
@@ -334,7 +346,7 @@ export function MatrixEmbeddedBlockEditor({
                   className="button-secondary button-danger todo-delete"
                   onClick={async () => {
                     const ok = await confirm({
-                      message: `Todo "${String(item.task ?? "").trim() || "Unbenannt"}" löschen?`,
+                      message: `Todo "${String(item.task ?? "").trim() || "Unbenannt"}" endgültig löschen?`,
                       tone: "danger",
                       confirmLabel: "Löschen",
                     });
@@ -352,7 +364,7 @@ export function MatrixEmbeddedBlockEditor({
           })}
         </div>
         <div className="todo-create todo-create-inline">
-          <input value="" readOnly placeholder="Neues Todo mit dem Button hinzufügen" />
+          <input value="" readOnly placeholder={t("addTodoPlaceholder")} />
           <button
             type="button"
             onClick={() =>
@@ -387,7 +399,7 @@ export function MatrixEmbeddedBlockEditor({
               ))}
             </div>
           ) : (
-            <div className="matrix-static-value">Kein Bild</div>
+            <div className="matrix-static-value">{t("noImage")}</div>
           )}
         </div>
       );
@@ -398,7 +410,7 @@ export function MatrixEmbeddedBlockEditor({
           {images.map((image, index) => (
             <div className="card image-card" key={String(image.id ?? index)}>
               <label className="field-stack">
-                <span className="field-label">Bild-URL</span>
+                <span className="field-label">{t("imageUrl")}</span>
                 <input
                   value={String(image.url ?? "")}
                   onChange={(event) =>
@@ -414,7 +426,7 @@ export function MatrixEmbeddedBlockEditor({
                 />
               </label>
               <label className="field-stack">
-                <span className="field-label">Bildunterschrift</span>
+                <span className="field-label">{t("imageCaption")}</span>
                 <input
                   value={String(image.caption ?? "")}
                   onChange={(event) =>
@@ -426,7 +438,7 @@ export function MatrixEmbeddedBlockEditor({
                     }))
                   }
                   onBlur={() => updateEmbeddedBlock((current) => current, true)}
-                  placeholder="Optional"
+                  placeholder={tCommon("optional")}
                 />
               </label>
               {String(image.url ?? "").trim() ? <LightboxImage alt={String(image.caption ?? "Matrixbild")} src={String(image.url)} /> : null}
@@ -500,7 +512,7 @@ export function MatrixEmbeddedBlockEditor({
               })}
             </div>
           ) : (
-            <div className="matrix-static-value">Leere Tabelle</div>
+            <div className="matrix-static-value">{t("emptyTable")}</div>
           )}
         </div>
       );
@@ -521,10 +533,10 @@ export function MatrixEmbeddedBlockEditor({
                   }))
                 }
                 onBlur={() => updateEmbeddedBlock((current) => current, true)}
-                placeholder="Zeilenbezeichnung"
+                placeholder={t("rowLabelPlaceholder")}
               />
               <div className="grid">
-                <select
+                <Select
                   value={String(row.value_type ?? "text")}
                   onChange={(event) =>
                     updateEmbeddedConfig((current) => ({
@@ -544,15 +556,17 @@ export function MatrixEmbeddedBlockEditor({
                     }), true)
                   }
                 >
-                  {EMBEDDED_FORM_VALUE_OPTIONS.map((option) => (
+                  {embeddedFormValueOptions(tRoot).map((option) => (
                     <option key={`embedded-form-type-${option.value}`} value={option.value}>
                       {option.label}
                     </option>
                   ))}
-                </select>
+                </Select>
                 {String(row.value_type ?? "text") === "participant" ? (
                   <SearchableSelect
-                    options={availableParticipants}
+                    options={participantNames}
+                    isOptionSelectable={(participant) =>
+                      isParticipantSelectable(participant) && availableParticipants.some((entry) => entry.id === participant.id)}
                     getId={(participant) => participant.id}
                     getLabel={(participant) => participant.display_name}
                     value={row.participant_id ?? null}
@@ -564,11 +578,11 @@ export function MatrixEmbeddedBlockEditor({
                         ),
                       }), true)
                     }
-                    nullLabel="Teilnehmer waehlen"
+                    nullLabel={tRoot("chooseParticipant")}
                   />
                 ) : String(row.value_type ?? "text") === "participants" ? (
                   <button type="button" className="button-ghost form-participant-picker-button" onClick={() => openMultiParticipantPicker(row)}>
-                    {embeddedParticipantSummary(row)}
+                    <span className="participant-summary-text" title={embeddedParticipantSummary(row)}>{embeddedParticipantSummary(row)}</span>
                   </button>
                 ) : String(row.value_type ?? "text") === "event" ? (
                   <SearchableSelect
@@ -584,7 +598,7 @@ export function MatrixEmbeddedBlockEditor({
                         ),
                       }), true)
                     }
-                    nullLabel="Termin waehlen"
+                    nullLabel={tRoot("chooseEventAlt")}
                   />
                 ) : (
                   <textarea
@@ -600,7 +614,7 @@ export function MatrixEmbeddedBlockEditor({
                       }))
                     }
                     onBlur={() => updateEmbeddedBlock((current) => current, true)}
-                    placeholder="Inhalt"
+                    placeholder={t("contentPlaceholder")}
                   />
                 )}
               </div>
@@ -609,7 +623,7 @@ export function MatrixEmbeddedBlockEditor({
                 className="button-secondary button-danger todo-delete"
                 onClick={async () => {
                   const ok = await confirm({
-                    message: `Zeile "${String(row.label ?? "").trim() || "Unbenannt"}" löschen?`,
+                    message: `Zeile "${String(row.label ?? "").trim() || "Unbenannt"}" endgültig löschen?`,
                     tone: "danger",
                     confirmLabel: "Löschen",
                   });
@@ -644,23 +658,7 @@ export function MatrixEmbeddedBlockEditor({
   }
 
   if (elementTypeId === 7) {
-    const tagFilters = String(embeddedConfig.event_tag_filter ?? "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
-    const columnTagFilters = embeddedConfig.event_use_column_tag_filter === true
-      ? String(matrixColumn?.event_tag_filter || matrixColumn?.title || "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean) : [];
-    const matchingEvents = sortedEvents.filter((eventRow) => {
-      const effectiveEndDate = eventRow.event_end_date || eventRow.event_date;
-      const eventTag = (eventRow.tag ?? "").toLowerCase();
-      const matchesTag =
-        (!tagFilters.length || tagFilters.some((t) => eventTag.includes(t))) &&
-        (!columnTagFilters.length || columnTagFilters.some((t) => eventTag.includes(t)));
-      const matchesDate = !protocol.protocol_date ? true : embeddedConfig.event_only_before_protocol_date === true ? effectiveEndDate < protocol.protocol_date : embeddedConfig.event_only_from_protocol_date === false ? true : effectiveEndDate >= protocol.protocol_date;
-      const matchesCycle = embeddedConfig.event_only_current_cycle !== true || currentCycleYear === null
-        ? true
-        : (eventRow.cycle_assignments ?? []).some(
-            (a) => a.cycle_config_id === cycleConfigId && a.cycle_year === currentCycleYear
-          );
-      return matchesTag && matchesDate && matchesCycle;
-    });
+    const matchingEvents = filterEvents(embeddedEventFilter, matrixColumn);
     const embeddedEventDraftValue = (eventRow: EventSummary) => ({
       ...eventRow,
       ...(embeddedEventDrafts[eventRow.id] ?? {}),
@@ -671,9 +669,9 @@ export function MatrixEmbeddedBlockEditor({
         <div className={embeddedBlockClassName}>
           {matchingEvents.length === 0 ? (
             <div className="editor-block-empty-placeholder-auto">
-              <span>Keine Elemente angezeigt.</span>
+              <span>{t("noElementsShown")}</span>
               <PlanningIconTrigger
-                title="Terminübersicht öffnen"
+                title={t("openEventOverview")}
                 icon="🗓"
                 onClick={() => setShowEmbeddedEventOverview(true)}
               />
@@ -682,7 +680,7 @@ export function MatrixEmbeddedBlockEditor({
             <>
               <div className="editor-planning-toolbar">
                 <PlanningIconTrigger
-                  title="Terminübersicht öffnen"
+                  title={t("openEventOverview")}
                   icon="🗓"
                   onClick={() => setShowEmbeddedEventOverview(true)}
                 />
@@ -691,12 +689,12 @@ export function MatrixEmbeddedBlockEditor({
                 <table className="data-table event-table event-table-compact">
                   <thead>
                     <tr>
-                      {embeddedEventColumns.showDate ? <th>Dat.</th> : null}
-                      {embeddedEventColumns.showTag ? <th>Tag</th> : null}
-                      {embeddedEventColumns.showTitle ? <th>Titel</th> : null}
-                      {embeddedEventColumns.showDescription ? <th>Beschreibung</th> : null}
+                      {embeddedEventColumns.showDate ? <th>{t("colDate")}</th> : null}
+                      {embeddedEventColumns.showTag ? <th>{t("colTag")}</th> : null}
+                      {embeddedEventColumns.showTitle ? <th>{t("colTitle")}</th> : null}
+                      {embeddedEventColumns.showDescription ? <th>{t("colDescription")}</th> : null}
                       {embeddedEventColumns.showParticipantCount ? <th className="event-column-count">TN</th> : null}
-                      {embeddedEventColumns.showCancelled ? <th>Abgesagt</th> : null}
+                      {embeddedEventColumns.showCancelled ? <th>{t("cancelled")}</th> : null}
                     </tr>
                   </thead>
                   <tbody>
@@ -708,14 +706,32 @@ export function MatrixEmbeddedBlockEditor({
                         <tr
                           key={eventRow.id}
                           className={`${isPast && embeddedConfig.event_gray_past !== false ? "event-row-past" : ""}${showCancelledStyle ? " event-row-cancelled" : ""}`}
+                          style={eventRowTintStyle(eventRow.tag, tagConfig, embeddedConfig.event_show_tag_colors === true)}
                         >
                           {embeddedEventColumns.showDate ? <td>{formatDateRange(eventRow.event_date, eventRow.event_end_date)}</td> : null}
-                          {embeddedEventColumns.showTag ? <td>{eventRow.tag || "—"}</td> : null}
+                          {embeddedEventColumns.showTag ? <td>{renderEmbeddedTag(eventRow.tag)}</td> : null}
                           {embeddedEventColumns.showTitle ? <td>{eventRow.title}</td> : null}
                           {embeddedEventColumns.showDescription ? <td>{eventRow.description || "—"}</td> : null}
-                          {embeddedEventColumns.showParticipantCount ? <td className="event-column-count">{eventRow.participant_count ?? 0}</td> : null}
+                          {embeddedEventColumns.showParticipantCount ? (
+                            <td className="event-column-count">
+                              {editable ? (
+                                // TN direkt in der Tabelle; Speichern zusammengefasst in updateEventFromBlock
+                                <input
+                                  type="number"
+                                  className="event-field-count"
+                                  min="0"
+                                  aria-label={t("colParticipantCount")}
+                                  value={eventRow.participant_count ?? 0}
+                                  onChange={(event) => void updateEvent(eventRow.id, { participant_count: Math.max(0, Number(event.target.value || "0")) })}
+                                  onFocus={(e) => e.target.select()}
+                                />
+                              ) : (
+                                eventRow.participant_count ?? 0
+                              )}
+                            </td>
+                          ) : null}
                           {embeddedEventColumns.showCancelled ? (
-                            <td>{eventRow.is_cancelled ? <Badge variant="danger">Abgesagt</Badge> : <span className="muted">–</span>}</td>
+                            <td>{eventRow.is_cancelled ? <Badge variant="danger">{t("cancelled")}</Badge> : <span className="muted">–</span>}</td>
                           ) : null}
                         </tr>
                       );
@@ -753,19 +769,19 @@ export function MatrixEmbeddedBlockEditor({
             <table className="data-table event-table event-table-compact">
               <thead>
                 <tr>
-                  {embeddedEventColumns.showDate ? <th>Dat.</th> : null}
-                  {embeddedEventColumns.showTag ? <th>Tag</th> : null}
-                  {embeddedEventColumns.showTitle ? <th>Titel</th> : null}
-                  {embeddedEventColumns.showDescription ? <th>Beschreibung</th> : null}
+                  {embeddedEventColumns.showDate ? <th>{t("colDate")}</th> : null}
+                  {embeddedEventColumns.showTag ? <th>{t("colTag")}</th> : null}
+                  {embeddedEventColumns.showTitle ? <th>{t("colTitle")}</th> : null}
+                  {embeddedEventColumns.showDescription ? <th>{t("colDescription")}</th> : null}
                   {embeddedEventColumns.showParticipantCount ? <th className="event-column-count">TN</th> : null}
-                  {embeddedEventColumns.showCancelled ? <th>Abgesagt</th> : null}
+                  {embeddedEventColumns.showCancelled ? <th>{t("cancelled")}</th> : null}
                   {editable ? (
-                    <th className="event-column-actions" aria-label="Aktionen">
+                    <th className="event-column-actions" aria-label={tCommon("actions")}>
                       <button
                         type="button"
                         className="button-ghost button-icon"
-                        title="Terminzeile hinzufügen"
-                        aria-label="Terminzeile hinzufügen"
+                        title={t("addEventRow")}
+                        aria-label={t("addEventRow")}
                         disabled={showNewEmbeddedEventRow || creatingEmbeddedEvent}
                         onClick={() => {
                           setShowNewEmbeddedEventRow(true);
@@ -777,7 +793,7 @@ export function MatrixEmbeddedBlockEditor({
                               Number(current.participant_count || "0") > 0;
                             return hasManualContent
                               ? current
-                              : createInlineProtocolEventDraft(protocol.protocol_date, forcedEmbeddedTag, embeddedEventColumns.showTitle);
+                              : createInlineProtocolEventDraft(protocol.protocol_date, forcedEmbeddedTag, embeddedEventColumns.showTitle, tRoot);
                           });
                         }}
                       >
@@ -818,7 +834,7 @@ export function MatrixEmbeddedBlockEditor({
                           readOnly={Boolean(forcedEmbeddedTag)}
                           disabled={creatingEmbeddedEvent}
                           onChange={(event) => patchNewEmbeddedEventDraft({ tag: event.target.value })}
-                          placeholder="Tag"
+                          placeholder={t("colTag")}
                         />
                       </td>
                     ) : null}
@@ -829,7 +845,7 @@ export function MatrixEmbeddedBlockEditor({
                           value={newEmbeddedEventDraft.title}
                           disabled={creatingEmbeddedEvent}
                           onChange={(event) => patchNewEmbeddedEventDraft({ title: event.target.value })}
-                          placeholder="Titel"
+                          placeholder={t("colTitle")}
                         />
                       </td>
                     ) : null}
@@ -840,7 +856,7 @@ export function MatrixEmbeddedBlockEditor({
                           value={newEmbeddedEventDraft.description}
                           disabled={creatingEmbeddedEvent}
                           onChange={(event) => patchNewEmbeddedEventDraft({ description: event.target.value })}
-                          placeholder="Beschreibung"
+                          placeholder={t("colDescription")}
                         />
                       </td>
                     ) : null}
@@ -865,8 +881,8 @@ export function MatrixEmbeddedBlockEditor({
                           <button
                             type="button"
                             className="button-ghost button-icon button-icon-danger"
-                            title="Neue Terminzeile verwerfen"
-                            aria-label="Neue Terminzeile verwerfen"
+                            title={t("discardNewEventRow")}
+                            aria-label={t("discardNewEventRow")}
                             disabled={creatingEmbeddedEvent}
                             onClick={resetNewEmbeddedEventRow}
                           >
@@ -886,6 +902,7 @@ export function MatrixEmbeddedBlockEditor({
                     <tr
                       key={eventRow.id}
                       className={`${isPast && embeddedConfig.event_gray_past !== false ? "event-row-past" : ""}${showCancelledStyle ? " event-row-cancelled" : ""}`}
+                      style={eventRowTintStyle(eventRow.tag, tagConfig, embeddedConfig.event_show_tag_colors === true)}
                       onContextMenu={(nativeEvent) => onEventContextMenu(nativeEvent, eventRow)}
                     >
                       {embeddedEventColumns.showDate ? (
@@ -920,7 +937,7 @@ export function MatrixEmbeddedBlockEditor({
                               onChange={(event) => queueEmbeddedEventSave(eventRow, { tag: event.target.value || null })}
                             />
                           ) : (
-                            eventRow.tag || "—"
+                            renderEmbeddedTag(eventRow.tag)
                           )}
                         </td>
                       ) : null}
@@ -968,7 +985,7 @@ export function MatrixEmbeddedBlockEditor({
                       ) : null}
                       {embeddedEventColumns.showCancelled ? (
                         <td>
-                          {eventRow.is_cancelled ? <Badge variant="danger">Abgesagt</Badge> : <span className="muted">–</span>}
+                          {eventRow.is_cancelled ? <Badge variant="danger">{t("cancelled")}</Badge> : <span className="muted">–</span>}
                         </td>
                       ) : null}
                       {editable ? (
@@ -977,8 +994,8 @@ export function MatrixEmbeddedBlockEditor({
                             <button
                               type="button"
                               className="button-ghost button-icon button-icon-danger"
-                              title="Termin löschen"
-                              aria-label="Termin löschen"
+                              title={t("deleteEvent")}
+                              aria-label={t("deleteEvent")}
                               onClick={async () => {
                                 const ok = await confirm({
                                   message: `Termin "${eventRow.title}" endgültig löschen? Das entfernt ihn aus allen Protokollen.`,
@@ -1010,7 +1027,7 @@ export function MatrixEmbeddedBlockEditor({
                         Number(editable)
                       }
                     >
-                      <span className="muted">Keine passenden Termine.</span>
+                      <span className="muted">{t("noMatchingEventsPeriod")}</span>
                     </td>
                   </tr>
                 ) : null}
@@ -1018,7 +1035,7 @@ export function MatrixEmbeddedBlockEditor({
             </table>
           </div>
         ) : (
-          <span className="muted">Keine passenden Termine</span>
+          <span className="muted">{t("noMatchingEvents")}</span>
         )}
       </div>
     );
@@ -1036,7 +1053,7 @@ export function MatrixEmbeddedBlockEditor({
               ))}
             </div>
           ) : (
-            <div className="matrix-static-value">Keine Punkte</div>
+            <div className="matrix-static-value">{t("noBullets")}</div>
           )}
         </div>
       );
@@ -1085,7 +1102,7 @@ export function MatrixEmbeddedBlockEditor({
                 className="button-secondary button-danger todo-delete"
                 onClick={async () => {
                   const ok = await confirm({
-                    message: `Bulletpoint "${String(item ?? "").trim() || "Unbenannt"}" löschen?`,
+                    message: `Bulletpoint "${String(item ?? "").trim() || "Unbenannt"}" endgültig löschen?`,
                     tone: "danger",
                     confirmLabel: "Löschen",
                   });
@@ -1102,7 +1119,7 @@ export function MatrixEmbeddedBlockEditor({
           ))}
         </div>
         <div className="todo-create todo-create-inline">
-          <input value="" readOnly placeholder="Neuen Punkt hinzufügen" />
+          <input value="" readOnly placeholder={t("addBulletPlaceholder")} />
           <button
             type="button"
             onClick={() =>
@@ -1121,6 +1138,7 @@ export function MatrixEmbeddedBlockEditor({
 
   if (elementTypeId === 9) {
     const attendanceEntries = (Array.isArray(embeddedConfig.attendance_entries) ? embeddedConfig.attendance_entries : []) as Array<Record<string, any>>;
+    const eligibleAttendanceParticipants = protocolAttendanceParticipants(availableParticipants, attendanceEntries, protocol);
     if (!editable) {
       return (
         <div className={embeddedBlockClassName}>
@@ -1147,7 +1165,7 @@ export function MatrixEmbeddedBlockEditor({
               <div className="attendance-row" key={`embedded-attendance-${participant.id}`}>
                 <span className="attendance-name">{participant.display_name}</span>
                 <div className="segment-control attendance-segment-control">
-                  {ATTENDANCE_OPTIONS.map((option) => (
+                  {attendanceOptions(tRoot).map((option) => (
                     <button
                       key={option.value}
                       type="button"
@@ -1185,6 +1203,7 @@ export function MatrixEmbeddedBlockEditor({
           <div className="matrix-static-value">
             {String(embeddedConfig.session_label ?? "").trim() || "Naechste Sitzung"}
             {String(embeddedConfig.selected_date ?? "").trim() ? `: ${formatShortDate(String(embeddedConfig.selected_date))}` : ""}
+            {String(embeddedConfig.selected_date ?? "").trim() && String(embeddedConfig.selected_time ?? "").trim() ? `, ${String(embeddedConfig.selected_time)}` : ""}
           </div>
         </div>
       );
@@ -1193,7 +1212,7 @@ export function MatrixEmbeddedBlockEditor({
       <div className={embeddedBlockClassName}>
         <div className="two-col">
           <label className="field-stack">
-            <span className="field-label">Bezeichnung</span>
+            <span className="field-label">{t("designationLabel")}</span>
             <input
               value={String(embeddedConfig.session_label ?? "")}
               onChange={(event) =>
@@ -1203,11 +1222,11 @@ export function MatrixEmbeddedBlockEditor({
                 }))
               }
               onBlur={() => updateEmbeddedBlock((current) => current, true)}
-              placeholder="Naechste Sitzung"
+              placeholder={t("nextSessionPlaceholder")}
             />
           </label>
           <label className="field-stack">
-            <span className="field-label">Datum</span>
+            <span className="field-label">{t("dateLabel")}</span>
             <DateInput
               value={String(embeddedConfig.selected_date ?? "")}
               onChange={(value) =>
@@ -1218,10 +1237,22 @@ export function MatrixEmbeddedBlockEditor({
               }
             />
           </label>
+          <label className="field-stack">
+            <span className="field-label">{t("timeLabel")}</span>
+            <TimeInput
+              value={String(embeddedConfig.selected_time ?? "")}
+              onChange={(value) =>
+                updateEmbeddedConfig((current) => ({
+                  ...current,
+                  selected_time: value || null,
+                }), true)
+              }
+            />
+          </label>
         </div>
       </div>
     );
   }
 
-  return <span className="muted">Dieser Zell-Blocktyp ist noch nicht verfügbar.</span>;
+  return <span className="muted">{t("blockTypeUnavailable")}</span>;
 }

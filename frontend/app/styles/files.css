@@ -1,0 +1,67 @@
+/* Bereichs-CSS, geladen nur von: files. Siehe design/DESIGN.md Abschnitt 10. */
+
+.list-filter-count {
+  margin-left: auto;
+}
+
+/* Dateien table */
+
+.files-table-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.files-table-actions-inner {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+
+/* Dateien-Seite wie Fotos: Kopf auf dem Seitenhintergrund, Filterleiste und Tabelle in einer
+   gemeinsamen Karte. */
+.files-page { padding: var(--space-5); }
+
+.files-overview { gap: var(--space-4); min-width: 0; }
+
+.files-card {
+  max-width: var(--table-max-width);
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--panel-solid);
+  box-shadow: var(--shadow-soft);
+}
+
+.files-toolbar { padding: var(--space-3); border-bottom: 1px solid var(--border); }
+
+.files-table-name-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+.files-table-name-line { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+
+.files-table-filename { overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+
+.files-table-processing { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--info-fg); font-size: var(--text-xs); }
+
+.files-table-processing-spinner {
+  flex-shrink: 0;
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid color-mix(in srgb, var(--info-fg) 25%, transparent);
+  border-top-color: var(--info-fg);
+  border-radius: 50%;
+  animation: word-import-spin 1s linear infinite;
+}
+
+.files-table-ref { font-size: var(--text-sm); }
+
+.files-table-ref .file-card-ref { display: inline; min-height: 0; padding: 0; font-size: inherit; font-weight: 600; line-height: inherit; white-space: normal; vertical-align: baseline; }
+
+@media (prefers-reduced-motion: reduce) {
+  .files-table-processing-spinner { animation: none; }
+}
+
+@media (max-width: 640px) {
+  .files-page { padding: var(--space-4); }
+}

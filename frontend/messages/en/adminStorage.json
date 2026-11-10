@@ -1,0 +1,352 @@
+{
+  "title": "Storage",
+  "loadFailed": "The storage overview could not be loaded.",
+  "description": "Manage storage profiles and migrate files between storages. The switch only happens once every file has been copied and verified.",
+  "actions": {
+    "newProfile": "Add profile",
+    "startMigration": "Prepare migration",
+    "requestLocal": "Provide local S3",
+    "test": "Test connection",
+    "edit": "Edit",
+    "delete": "Delete",
+    "purge": "Purge",
+    "report": "Verification report",
+    "start": "Start migration",
+    "confirmCutover": "Confirm cutover",
+    "resume": "Resume",
+    "pause": "Pause",
+    "retryFailed": "Retry failed objects",
+    "acceptMissing": "Acknowledge missing",
+    "acknowledgeRollback": "Acknowledge",
+    "cancel": "Cancel",
+    "close": "Close",
+    "save": "Save",
+    "prepareMigration": "Run preflight"
+  },
+  "toast": {
+    "failed": "Action failed",
+    "testOk": "Connection test succeeded",
+    "testFailed": "Connection test failed: {error}",
+    "deleted": "Profile deleted",
+    "localRequested": "Local S3 requested - the server will start it within a few minutes",
+    "profileSaved": "Profile saved",
+    "migrationCreated": "Migration created - preflight is running",
+    "purgeRequested": "Purge requested",
+    "start": "Migration started",
+    "confirmCutover": "Cutover confirmed",
+    "resume": "Migration resumed",
+    "pause": "Migration paused",
+    "retryFailed": "Objects will be retried",
+    "acceptMissing": "Missing objects acknowledged",
+    "acknowledgeRollback": "Acknowledged",
+    "cancel": "Cancellation requested"
+  },
+  "confirm": {
+    "deleteProfile": "Delete profile “{name}”? Data stored in the bucket is not touched.",
+    "startInitial": "Start the initial migration? hocX enters full maintenance and is locked for users until all files are copied and verified.",
+    "startLive": "Start the live migration? hocX stays usable while copying.",
+    "cutover": "Switch to the new storage? Writes are briefly locked, afterwards hocX works with the new storage.",
+    "resume": "Resume the migration?",
+    "pause": "Pause the migration? Objects already copied are kept.",
+    "retryFailed": "Retry all failed objects?",
+    "acceptMissing": "Acknowledge objects that are already missing in the source? They are listed in the report and not transferred.",
+    "acknowledgeRollback": "Confirm that you have reviewed the state? The new storage stays active; going back requires a new migration.",
+    "cancel": "Cancel the migration in a controlled way? The source stays active, nothing is deleted."
+  },
+  "banner": {
+    "noCredentialsKey": "STORAGE_CREDENTIALS_KEY is not set - S3 credentials cannot be stored securely.",
+    "fenced": "Writes are currently locked (cutover or maintenance)."
+  },
+  "active": {
+    "title": "Active storage",
+    "profile": "Profile",
+    "generation": "Generation",
+    "location": "Location",
+    "localS3": "Local S3",
+    "filesystem": "Local file system (existing data)",
+    "extent": "Size"
+  },
+  "provider": {
+    "filesystem": "File system",
+    "garage_local": "Local S3 (Garage)",
+    "aws_s3": "AWS S3",
+    "hetzner": "Hetzner Object Storage",
+    "s3_compatible": "S3-compatible"
+  },
+  "localS3": {
+    "needed": "Needed",
+    "notNeeded": "Not needed",
+    "notConfigured": "Not set up",
+    "reason": {
+      "active": "active storage",
+      "initial_target": "target of the initial migration",
+      "requested": "requested by an administrator",
+      "migration": "used by a migration",
+      "fallback_period": "fallback period running",
+      "pending_operation": "purge or preparation pending",
+      "unverified_objects": "unverified objects",
+      "not_needed": "can be stopped (data is kept)",
+      "no_local_profile": "no local profile",
+      "db_unavailable": "status unknown"
+    }
+  },
+  "profiles": {
+    "title": "Storage profiles",
+    "description": "Credentials are stored encrypted and never shown again.",
+    "empty": "No profiles yet."
+  },
+  "columns": {
+    "name": "Name",
+    "location": "Location",
+    "status": "Status",
+    "lastTest": "Last test",
+    "actions": "Actions",
+    "generation": "Generation",
+    "profile": "Profile",
+    "size": "Size",
+    "retainUntil": "Retain until",
+    "created": "Created",
+    "route": "From → To",
+    "objects": "Objects",
+    "time": "Time",
+    "event": "Event",
+    "actor": "By"
+  },
+  "status": {
+    "active": "Active",
+    "builtin": "Built-in",
+    "disabled": "Disabled",
+    "inMigration": "In migration",
+    "pinned": "Data in fallback period",
+    "sharedCredentials": "Submission box without own credentials",
+    "encrypted": "Encrypted"
+  },
+  "test": {
+    "ok": "OK",
+    "failed": "Failed",
+    "never": "Never tested"
+  },
+  "generations": {
+    "title": "Storage generations",
+    "description": "Every migration writes to a new generation. Superseded generations are kept until they are purged deliberately.",
+    "empty": "No generations.",
+    "size": "{count, plural, one {# object} other {# objects}}, {size}",
+    "since": "since {date}",
+    "retainUntil": "keep until {date}",
+    "next": "Created by the next migration",
+    "nextMeta": "Will be created on the target profile"
+  },
+  "generationStatus": {
+    "preparing": "Preparing",
+    "active": "Active",
+    "retained": "Fallback period",
+    "abandoned": "Abandoned",
+    "purge_requested": "Purge requested",
+    "purging": "Purging",
+    "purged": "Purged"
+  },
+  "history": {
+    "title": "Recent migrations",
+    "empty": "No migrations yet.",
+    "objects": "{verified} of {total} verified",
+    "created": "Created {date}",
+    "copied": "{copied} / {total} objects",
+    "checked": "{verified} verified · {failed} failed",
+    "emptyHint": "The first migration moves the existing data into an S3 profile."
+  },
+  "state": {
+    "pending": "Created",
+    "preflight": "Preflight",
+    "awaiting_confirmation": "Awaiting start",
+    "inventory": "Inventory",
+    "copying": "Copying",
+    "catching_up": "Catching up",
+    "verifying": "Verifying",
+    "ready_for_cutover": "Ready for cutover",
+    "cutting_over": "Cutting over",
+    "observing": "Observing",
+    "completed": "Completed",
+    "paused": "Paused",
+    "retrying": "Retrying",
+    "failed": "Failed",
+    "cancelled": "Cancelled",
+    "rollback_required": "Rollback required"
+  },
+  "estimate": {
+    "unknown": "Being determined",
+    "minutes": "{low}–{high} minutes",
+    "hours": "{low}–{high} hours"
+  },
+  "migration": {
+    "title": "{source} → {target}",
+    "initialHint": "Initial migration: hocX is in full maintenance during the migration.",
+    "liveHint": "Live migration: hocX stays usable, only the cutover briefly locks writes.",
+    "confirmInitial": "Preflight passed. Expected maintenance duration: {range}.",
+    "confirmLive": "Preflight passed. Expected copy duration: {range}, interruption during cutover: {cutover}.",
+    "heartbeatStale": "The storage worker no longer reports. Please check the storage-worker container - the migration resumes after it restarts.",
+    "copyProgress": "{copied} of {total} copied",
+    "copyAria": "Copy progress",
+    "verifyProgress": "{verified} of {total} objects verified",
+    "verifyAria": "Verification progress",
+    "cutoverWithMissing": "{count, plural, one {# database reference points to a missing file (see report). Cutover only after confirmation.} other {# database references point to missing files (see report). Cutover only after confirmation.}}",
+    "cutoverReady": "All objects are copied and verified. The cutover is waiting for your confirmation.",
+    "rollbackRequired": "The check after the cutover failed. The new storage is active; there is deliberately no automatic fallback. Please review the report and start a migration back if needed."
+  },
+  "facts": {
+    "objects": "Objects",
+    "objectCounts": "{total} total · {copied} copied · {verified} verified · {failed} failed",
+    "started": "Started",
+    "runtime": "Runtime",
+    "averageRate": "Average rate",
+    "currentRate": "Current rate",
+    "rate": "{value}/s",
+    "remaining": "Remaining (estimated)",
+    "heartbeat": "Last heartbeat",
+    "workerActive": "Worker active",
+    "checkpoint": "Last checkpoint",
+    "generation": "Generation",
+    "references": "References",
+    "referenceCounts": "{missing} missing · {unreferenced} unreferenced"
+  },
+  "events": {
+    "title": "History ({count})",
+    "empty": "No events.",
+    "worker": "Storage worker"
+  },
+  "profileForm": {
+    "editTitle": "Edit storage profile",
+    "newTitle": "Add storage profile",
+    "locationLocked": "The location of this profile is locked because it is active or still holds required data. Create a new profile and migrate to change the location.",
+    "name": "Display name",
+    "provider": "Provider",
+    "endpoint": "Endpoint",
+    "endpointHelp": "Leave empty for AWS; for Hetzner it is derived from the region.",
+    "region": "Region",
+    "bucket": "Bucket",
+    "abgabeboxBucket": "Bucket for the submission box",
+    "abgabeboxBucketHelp": "Recommended: a separate bucket with its own restricted credentials.",
+    "prefix": "Prefix / namespace",
+    "prefixHelp": "Must not overlap with any other profile in the same bucket.",
+    "addressing": "Addressing",
+    "accessKey": "Access key",
+    "secretKey": "Secret key",
+    "keepSecret": "Leave empty to keep the stored credentials.",
+    "restrictedAccessKey": "Access key (submission box, restricted)",
+    "restrictedSecretKey": "Secret key (submission box, restricted)",
+    "restrictedHelp": "The publicly reachable submission box uses these credentials. Without them it uses the main credentials.",
+    "tlsVerify": "Verify TLS certificate",
+    "caBundle": "Custom CA certificate (PEM, optional)",
+    "caBundleStored": "A CA certificate is stored",
+    "enabled": "Profile enabled",
+    "serverSideEncryption": "Server-side encryption (AES-256)",
+    "serverSideEncryptionHelp": "Every object is stored encrypted at the provider; the connection test checks this.",
+    "dataLocation": "Data location",
+    "dataLocationChoose": "Please choose",
+    "dataLocationHelp": "Derived from the region for AWS and Hetzner. Determines whether club data leaves Switzerland or the EU.",
+    "transferBasis": "Legal basis for the transfer",
+    "transferBasisHelp": "e.g. standard contractual clauses and data processing agreement of …",
+    "locationConfirm": "Transfer abroad reviewed, clubs informed"
+  },
+  "addressing": {
+    "auto": "Automatic",
+    "path": "Path style",
+    "virtual": "Virtual-host style"
+  },
+  "startForm": {
+    "title": "Prepare migration",
+    "initialHint": "Initial migration from the file system: after you confirm the start, hocX enters full maintenance until all files are copied and verified.",
+    "liveHint": "Live migration: hocX stays usable while copying. Changes are caught up continuously.",
+    "target": "Target",
+    "needsTest": "This profile needs a successful connection test first.",
+    "parallelism": "Parallel transfers",
+    "bandwidth": "Bandwidth (Mbit/s)",
+    "bandwidthHelp": "0 = unlimited",
+    "verifyMode": "Verification",
+    "autoCutover": "Switch over automatically after successful verification",
+    "nextStep": "A preflight with a time estimate runs first. The migration only starts after your confirmation.",
+    "to": "To",
+    "newGeneration": "{generation} · new",
+    "flow": "Process",
+    "advanced": "Advanced options",
+    "retention": "The replaced generation is kept and never purged automatically.",
+    "test": {
+      "ok": {
+        "title": "Connection to the target successful",
+        "text": "Writing, reading and deleting a test object works."
+      },
+      "missing": {
+        "title": "Target profile not tested yet",
+        "text": "The migration cannot start without a successful test."
+      },
+      "failed": {
+        "title": "Last connection test failed",
+        "text": "The migration cannot start without a successful test."
+      }
+    },
+    "from": "From",
+    "confirmThirdCountry": "The target is in a third country – transfer reviewed, clubs informed"
+  },
+  "verifyMode": {
+    "full": "Full (re-read content and check SHA-256)",
+    "head": "Fast (size and stored SHA-256)"
+  },
+  "purge": {
+    "title": "Purge generation {generation}",
+    "warning": "Permanently deletes the data of this generation in profile “{profile}”. The active generation is not affected.",
+    "label": "Type “{expected}” to confirm"
+  },
+  "hero": {
+    "initialPending": "Initial migration pending",
+    "target": "Target: {name}",
+    "noTarget": "No target profile yet",
+    "noTargetText": "The initial migration needs an enabled S3 profile.",
+    "initialText": "The existing data is still on the file system. The profile “{name}” is intended for the initial migration.",
+    "tested": {
+      "ok": "Connection tested successfully.",
+      "failed": "The last connection test failed.",
+      "never": "The connection has never been tested."
+    },
+    "switched": "Switched on {date}",
+    "switchedObjects": "{count, plural, one {# object} other {# objects}} copied and verified",
+    "retained": "The replaced generation {generation} is kept until {date} and can be purged deliberately afterwards.",
+    "noMigration": "No migration open. Another profile only becomes active through a migration.",
+    "progress": "{copied} of {total} objects copied"
+  },
+  "steps": {
+    "prepare": {
+      "title": "Prepare",
+      "description": "Test the target, create a new generation"
+    },
+    "copy": {
+      "title": "Copy",
+      "description": "All objects into the new generation"
+    },
+    "verify": {
+      "title": "Verify",
+      "description": "Compare size and SHA-256 of every object"
+    },
+    "switch": {
+      "title": "Switch",
+      "description": "The new generation becomes active"
+    }
+  },
+  "profileCard": {
+    "endpoint": "Endpoint",
+    "bucket": "Bucket / prefix",
+    "abgabeboxBucket": "Abgabebox bucket",
+    "credentials": "Credentials",
+    "credentialsStored": "•••••• stored encrypted",
+    "credentialsMissing": "Not stored",
+    "noTestNeeded": "No test needed – local path",
+    "lastTestOk": "Last tested {time} · successful",
+    "lastTestFailed": "Last tested {time} · failed",
+    "testing": "Testing connection …",
+    "retest": "Test again"
+  },
+  "location": {
+    "ch": "Switzerland",
+    "eu_eea": "EU/EEA",
+    "adequate": "Adequate country",
+    "third_country": "Third country"
+  }
+}

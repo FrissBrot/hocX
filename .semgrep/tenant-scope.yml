@@ -1,0 +1,22 @@
+# Security-Audit release/1.2.0 (Bericht 03): public_id-Lookups ohne tenant_id= sind der häufigste
+# Weg zu Cross-Tenant-Lecks (vgl. SEC-003). Die CI prüft diff-basiert (.github/workflows/ci.yml,
+# Job tenant-scope-lint): nur neue Stellen in einem Pull-Request blockieren. Eine bewusste
+# Ausnahme (z. B. gefolgt von einer eigenen Mandantenprüfung) wird in derselben Zeile mit
+#   # nosemgrep: public-id-lookup-without-tenant -- <Begründung>
+# markiert. Lokal: semgrep scan --config .semgrep/tenant-scope.yml backend/app
+rules:
+  - id: public-id-lookup-without-tenant
+    languages: [python]
+    severity: ERROR
+    message: >-
+      public_id-Lookup ohne tenant_id=: auf den Mandanten des Aufrufers scopen oder als bewusste
+      Ausnahme mit "# nosemgrep: public-id-lookup-without-tenant -- <Begründung>" markieren.
+    patterns:
+      - pattern-either:
+          - pattern: $SERVICE.get_by_public_id(...)
+          - pattern: $SERVICE.resolve_internal_id(...)
+          - pattern: $SERVICE.resolve_internal_ids(...)
+          - pattern: get_by_public_id(...)
+          - pattern: resolve_internal_id(...)
+          - pattern: resolve_internal_ids(...)
+      - pattern-not: $FUNC(..., tenant_id=$TENANT, ...)

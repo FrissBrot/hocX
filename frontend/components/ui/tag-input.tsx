@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { usePopupEscape } from "@/lib/hooks/use-popup-escape";
+import { ActionIcon } from "@/components/ui/action-icons";
 import type { TagConfig } from "@/lib/hooks/use-tag-config";
 
 export const TAG_COLORS = [
@@ -12,7 +14,7 @@ export function TagInput({
   value,
   onChange,
   suggestions = [],
-  placeholder = "Tag hinzufügen…",
+  placeholder,
   multi = true,
   readOnly = false,
   alwaysShowPlaceholder = false,
@@ -33,7 +35,10 @@ export function TagInput({
   onTagColorChange?: (tag: string, color: string) => Promise<void>;
   onTagRename?: (oldTag: string, newTag: string) => Promise<void>;
 }) {
-  const tags = value ? value.split(",").map((t) => t.trim()).filter(Boolean) : [];
+  const t = useTranslations("common.tagInput");
+  const tCommonClose = useTranslations("common")("close");
+  const resolvedPlaceholder = placeholder ?? t("addPlaceholder");
+  const tags = value ? value.split(",").map((tag) => tag.trim()).filter(Boolean) : [];
   const [inputVal, setInputVal] = useState("");
   const [open, setOpen] = useState(false);
   const [editingTag, setEditingTag] = useState<string | null>(null);
@@ -90,7 +95,7 @@ export function TagInput({
     } catch {
       // Rename failed server-side - keep the edit panel open so the user
       // can retry, instead of silently pretending it worked.
-      setRenameError("Umbenennen fehlgeschlagen. Bitte erneut versuchen.");
+      setRenameError(t("renameFailed"));
     } finally {
       setSaving(false);
     }
@@ -149,7 +154,7 @@ export function TagInput({
                   className="tag-chip-remove"
                   tabIndex={-1}
                   onClick={(e) => { e.stopPropagation(); removeTag(tag); }}
-                  aria-label={`Tag ${tag} entfernen`}
+                  aria-label={t("removeTag", { tag })}
                 >
                   ×
                 </button>
@@ -165,7 +170,7 @@ export function TagInput({
             onChange={(e) => { setInputVal(e.target.value); setOpen(true); setEditingTag(null); }}
             onFocus={() => setOpen(true)}
             onKeyDown={handleKeyDown}
-            placeholder={alwaysShowPlaceholder || tags.length === 0 ? placeholder : ""}
+            placeholder={alwaysShowPlaceholder || tags.length === 0 ? resolvedPlaceholder : ""}
           />
         )}
       </div>
@@ -175,8 +180,8 @@ export function TagInput({
           {editingTag !== null ? (
             <div className="tag-edit-panel">
               <div className="tag-edit-header">
-                <span className="tag-edit-title">Tag bearbeiten</span>
-                <button type="button" className="tag-edit-cancel" onPointerDown={(e) => { e.preventDefault(); setEditingTag(null); setRenameError(null); }}>✕</button>
+                <span className="tag-edit-title">{t("editTag")}</span>
+                <button type="button" className="tag-edit-cancel" title={tCommonClose} aria-label={tCommonClose} onPointerDown={(e) => { e.preventDefault(); setEditingTag(null); setRenameError(null); }}><ActionIcon name="close" /></button>
               </div>
               {onTagRename && (
                 <input
@@ -184,7 +189,7 @@ export function TagInput({
                   value={renameVal}
                   onChange={(e) => { setRenameVal(e.target.value); setRenameError(null); }}
                   onKeyDown={(e) => { if (e.key === "Enter") void handleRenameConfirm(); }}
-                  placeholder="Neuer Name…"
+                  placeholder={t("newNamePlaceholder")}
                   autoFocus
                 />
               )}
@@ -213,7 +218,7 @@ export function TagInput({
                       e.preventDefault();
                       await onTagColorChange(editingTag, "");
                     }}
-                    title="Keine Farbe"
+                    title={t("noColor")}
                   >
                     ✕
                   </button>
@@ -226,7 +231,7 @@ export function TagInput({
                   disabled={saving || !renameVal.trim() || renameVal.trim() === editingTag}
                   onPointerDown={async (e) => { e.preventDefault(); await handleRenameConfirm(); }}
                 >
-                  {saving ? "…" : "Umbenennen"}
+                  {saving ? "…" : t("rename")}
                 </button>
               )}
             </div>
@@ -246,7 +251,8 @@ export function TagInput({
                 <button
                   type="button"
                   className="tag-input-edit-btn"
-                  title="Farbe / Umbenennen"
+                  title={t("colorOrRename")}
+                  aria-label={t("colorOrRename")}
                   onPointerDown={(e) => {
                     e.preventDefault();
                     setEditingTag(s);
@@ -254,7 +260,7 @@ export function TagInput({
                     setRenameError(null);
                   }}
                 >
-                  ✎
+                  <ActionIcon name="edit" />
                 </button>
               )}
             </div>
@@ -266,7 +272,7 @@ export function TagInput({
               className="tag-input-option"
               onPointerDown={(e) => { e.preventDefault(); addTag(inputVal); }}
             >
-              + „{inputVal}" hinzufügen
+              {t("addNewTag", { tag: inputVal })}
             </button>
           )}
         </div>

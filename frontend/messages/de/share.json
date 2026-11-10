@@ -1,0 +1,38 @@
+{
+  "modal": {
+    "title": "Link teilen",
+    "createFailed": "Link konnte nicht erstellt werden.",
+    "createdHint": "Jede Person mit diesem Link kann die Dateien ohne Anmeldung herunterladen.",
+    "linkLabel": "Freigabe-Link",
+    "done": "Fertig",
+    "nameLabel": "Name",
+    "expiryLabel": "Ablaufdatum",
+    "expiryHint": "Optional – ohne Ablaufdatum bleibt der Link aktiv, bis er widerrufen wird.",
+    "cancel": "Abbrechen",
+    "creating": "Wird erstellt…",
+    "create": "Link erstellen"
+  },
+  "publicPage": {
+    "linkUnavailable": "Link nicht verfügbar",
+    "linkUnavailableHint": "Dieser Link ist ungültig, abgelaufen oder wurde widerrufen.",
+    "sharedAlbum": "hat ein Album mit dir geteilt",
+    "sharedFiles": "hat Dateien mit dir geteilt",
+    "photoCount": "{count, plural, one {# Foto} other {# Fotos}}",
+    "fileCount": "{count, plural, one {# Datei} other {# Dateien}}",
+    "validUntil": "Link gültig bis {date}",
+    "select": "Auswählen",
+    "cancelSelect": "Abbrechen",
+    "downloadSelected": "{count, plural, =0 {Nichts ausgewählt} one {# herunterladen} other {# herunterladen}}",
+    "downloadAll": "Alle herunterladen",
+    "download": "Herunterladen",
+    "noFiles": "Keine Dateien verfügbar.",
+    "open": "{name} öffnen",
+    "toggleSelect": "{name} auswählen",
+    "previous": "Vorheriges",
+    "next": "Nächstes",
+    "close": "Schliessen",
+    "position": "{index} von {total}",
+    "footerNotice": "Bitte teile diese Fotos nicht öffentlich ohne Einverständnis der abgebildeten Personen.",
+    "sharedWith": "Geteilt mit <brand>hocX</brand>"
+  }
+}

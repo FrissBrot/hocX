@@ -1,5 +1,7 @@
 "use client";
 
+import { memo } from "react";
+import { useTranslations } from "next-intl";
 import { NavIcon } from "@/components/ui/nav-icons";
 
 type QuickActionsPillProps = {
@@ -7,18 +9,21 @@ type QuickActionsPillProps = {
   onNotesHover: () => void;
   onTodosClick: () => void;
   onTodosHover: () => void;
+  /** Anliegen im aktuellen Protokoll erfassen. */
+  onAgendaClick?: () => void;
   onHoverLeave: () => void;
   onCollabClick?: () => void;
   onCollabHover?: () => void;
 };
 
-export function QuickActionsPill({ onNotesClick, onNotesHover, onTodosClick, onTodosHover, onHoverLeave, onCollabClick, onCollabHover }: QuickActionsPillProps) {
+export const QuickActionsPill = memo(function QuickActionsPill({ onNotesClick, onNotesHover, onTodosClick, onTodosHover, onAgendaClick, onHoverLeave, onCollabClick, onCollabHover }: QuickActionsPillProps) {
+  const t = useTranslations("protocols.quickActions");
   return (
-    <div className="protocol-quick-actions" role="toolbar" aria-label="Schnellmenü" onMouseLeave={onHoverLeave}>
+    <div className="protocol-quick-actions" role="toolbar" aria-label={t("ariaLabel")} onMouseLeave={onHoverLeave}>
       <button
         type="button"
         className="protocol-quick-actions-btn"
-        title="Sitzungsnotizen öffnen"
+        title={t("sessionNotes")}
         onClick={onNotesClick}
         onMouseEnter={onNotesHover}
       >
@@ -27,16 +32,27 @@ export function QuickActionsPill({ onNotesClick, onNotesHover, onTodosClick, onT
       <button
         type="button"
         className="protocol-quick-actions-btn"
-        title="Todo erstellen"
+        title={t("createTodo")}
         onClick={onTodosClick}
         onMouseEnter={onTodosHover}
       >
         <NavIcon name="todos" />
       </button>
+      {onAgendaClick && (
+        <button
+          type="button"
+          className="protocol-quick-actions-btn"
+          title={t("createAgendaItem")}
+          aria-label={t("createAgendaItem")}
+          onClick={onAgendaClick}
+        >
+          <NavIcon name="agenda" />
+        </button>
+      )}
       <button
         type="button"
         className="protocol-quick-actions-btn"
-        title={onCollabClick ? "Kollaborationsansicht" : "Kollaborationsansicht (bald verfügbar)"}
+        title={onCollabClick ? t("collaborationView") : t("collaborationViewSoon")}
         onClick={onCollabClick}
         onMouseEnter={onCollabHover}
         disabled={!onCollabClick}
@@ -45,4 +61,4 @@ export function QuickActionsPill({ onNotesClick, onNotesHover, onTodosClick, onT
       </button>
     </div>
   );
-}
+});

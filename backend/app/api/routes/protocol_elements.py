@@ -1,16 +1,21 @@
 import json
+import logging
 import uuid
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, HTTPException
+from redis.exceptions import RedisError
 
 from app.core.db import get_db
-from app.core.redis_client import get_redis_sync
-from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
-from app.models import ElementDefinition, Event, Protocol, ProtocolElement, ProtocolElementBlock, TemplateElement, TemplateElementBlock
+from app.core.element_types import element_type_code
+from app.core.redis_client import get_redis_sync, publish_best_effort
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_permission
+from app.models import ElementDefinition, Event, Participant, Protocol, ProtocolElement, ProtocolElementBlock, TemplateElement, TemplateElementBlock
 from app.schemas.protocol import (
+    AttendanceStatusUpdate,
     ProtocolElementBlockFromEventCreate,
     ProtocolElementBlockRead,
     ProtocolElementBlockUpdate,
@@ -20,10 +25,20 @@ from app.schemas.protocol import (
     ProtocolTextUpdate,
 )
 from app.services import list_snapshot_service, public_id_service
-from app.services.snapshot_reference_ids import snapshot_reference_ids
-from app.services.autosave_service import AutosaveService
+from app.services.snapshot_reference_ids import (
+    normalize_attendance_entries,
+    normalize_list_snapshot_refs,
+    participant_display_names,
+    snapshot_reference_ids,
+    translate_attendance_entries,
+    translate_list_snapshot_refs,
+    translate_participant_refs,
+)
+from app.services.autosave_service import AutosaveService, TextConflictError
 from app.services.access_service import AccessService
 from app.services.collaboration_service import conflicting_lock_holder_sync, protocol_channel
+from app.services.fine_tariff_service import attendance_fine_values
+from app.services.protocol_element_service import BlockConfigConflict
 from app.services.protocol_element_service import ProtocolElementService
 from app.services.protocol_service import ProtocolService
 from app.services.responsible_label_service import resolve_display_section_title
@@ -35,19 +50,25 @@ protocol_service = ProtocolService()
 access_service = AccessService()
 
 
-def _broadcast_block_update(protocol_id: int, block: ProtocolElementBlock, user: CurrentUser) -> None:
+def _broadcast_block_update(protocol_id: int, read: ProtocolElementBlockRead, user: CurrentUser) -> None:
     """Same mechanism regular block edits already use (collaboration_ws.py's field_update
     passthrough) - other viewers of this same protocol see the refresh/sync/undo live with
-    no new frontend WS handling needed."""
-    get_redis_sync().publish(
+    no new frontend WS handling needed.
+
+    Sendet dasselbe wie die REST-Antwort (_block_to_read): öffentliche Block- und Nutzer-ID
+    (das Frontend hört auf "block-<public_id>" und filtert eigene Updates über die öffentliche
+    Nutzer-ID), übersetzte Teilnehmer-Referenzen statt interner IDs und config_version, damit
+    die optimistische Sperre der anderen Bearbeiter (CONC-005) nicht auf einem alten Stand
+    bleibt. Vorher kamen diese Updates wegen der internen Block-ID nie an."""
+    publish_best_effort(
         protocol_channel(protocol_id),
         json.dumps({
             "type": "field_update",
-            "field_key": f"block-{block.id}",
-            "patch": {"configuration_snapshot_json": block.configuration_snapshot_json},
-            "user_id": user.user_id,
+            "field_key": f"block-{read.id}",
+            "patch": {"configuration_snapshot_json": read.configuration_snapshot_json, "config_version": read.config_version},
+            "user_id": str(user.user_public_id),
             "display_name": user.display_name,
-        }),
+        }, default=str),
     )
 
 
@@ -66,7 +87,7 @@ def _block_and_protocol_or_404(db: Session, user: CurrentUser, protocol_element_
     return block, protocol
 
 
-def _ensure_block_not_locked_by_other(protocol_id: int, protocol_element_block_id: int, user: CurrentUser) -> None:
+def _ensure_block_not_locked_by_other(protocol_id: int, block_public_id: uuid.UUID, user: CurrentUser) -> None:
     """The collaboration WS layer's Redis field lock (field_key `block-<id>`, same format
     collaboration_ws.py's field_update handler now itself enforces before broadcasting) used
     to be purely cosmetic here - a client that skipped the WS lock entirely (or never opened
@@ -76,9 +97,18 @@ def _ensure_block_not_locked_by_other(protocol_id: int, protocol_element_block_i
     proceeds normally when nobody holds it - most writes never acquire a lock at all (matrix
     row/column edits, attendance batch edits, anything outside the click-to-edit text/config
     fields) and must keep working - or when the caller itself is the holder."""
-    holder = conflicting_lock_holder_sync(
-        get_redis_sync(), protocol_id, f"block-{protocol_element_block_id}", user.user_id
-    )
+    try:
+        holder = conflicting_lock_holder_sync(
+            # Der Editor sperrt mit der öffentlichen Block-ID (`block-<public_id>`); mit der
+            # internen ID fand diese Prüfung die Sperre nie.
+            get_redis_sync(), protocol_id, f"block-{block_public_id}", user.user_id
+        )
+    except RedisError:
+        # Die Feldsperren sind eine Komfortschicht der Live-Bearbeitung, nicht die Quelle der
+        # Wahrheit (dafür gibt es expected_content/config_version). Ist Redis nicht erreichbar,
+        # wird gespeichert statt mit 500 abzubrechen (Concurrency-Audit CONC-011).
+        logging.getLogger(__name__).warning("Feldsperre für Block %s nicht prüfbar (Redis)", block_public_id, exc_info=True)
+        return
     if holder is not None:
         raise HTTPException(
             status_code=409,
@@ -89,6 +119,12 @@ def _ensure_block_not_locked_by_other(protocol_id: int, protocol_element_block_i
 def _block_to_read(db: Session, block) -> ProtocolElementBlockRead:
     element = db.get(ProtocolElement, block.protocol_element_id)
     protocol = db.get(Protocol, element.protocol_id)
+    config = dict(block.configuration_snapshot_json or {})
+    if element_type_code(block.element_type_id) == "attendance":
+        config.update(attendance_fine_values(db, config, protocol.tenant_id, protocol.template_id))
+    config = translate_attendance_entries(db, config)
+    config = translate_participant_refs(db, config, protocol.tenant_id)
+    config = translate_list_snapshot_refs(db, config, protocol.tenant_id)
     return ProtocolElementBlockRead(
         id=block.public_id,
         protocol_element_id=public_id_service.resolve_public_id(db, ProtocolElement, block.protocol_element_id),
@@ -102,6 +138,7 @@ def _block_to_read(db: Session, block) -> ProtocolElementBlockRead:
         render_type_id=block.render_type_id,
         element_type_code=None,
         render_type_code=None,
+        config_version=block.config_version,
         title_snapshot=block.title_snapshot,
         display_title_snapshot=block.display_title_snapshot,
         description_snapshot=block.description_snapshot,
@@ -113,9 +150,9 @@ def _block_to_read(db: Session, block) -> ProtocolElementBlockRead:
         is_required_snapshot=block.is_required_snapshot,
         is_visible_snapshot=block.is_visible_snapshot,
         export_visible_snapshot=block.export_visible_snapshot,
-        latex_template_snapshot=block.latex_template_snapshot,
-        configuration_snapshot_json=block.configuration_snapshot_json or {},
-        public_reference_ids=snapshot_reference_ids(db, block.configuration_snapshot_json or {}, protocol.tenant_id),
+        configuration_snapshot_json=config,
+        public_reference_ids=snapshot_reference_ids(db, config, protocol.tenant_id),
+        participant_names=participant_display_names(db, config, protocol.tenant_id),
         text_content=None,
         display_compiled_text=None,
         display_snapshot_json={},
@@ -128,7 +165,7 @@ def list_protocol_elements(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     protocol = public_id_service.get_by_public_id(db, Protocol, protocol_id, tenant_id=user.current_tenant_id)
     if protocol is None:
         raise HTTPException(status_code=404, detail="Protocol not found")
@@ -143,7 +180,7 @@ def patch_protocol_element(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     element = public_id_service.get_by_public_id(db, ProtocolElement, protocol_element_id)
     if element is None:
         raise HTTPException(status_code=404, detail="Protocol element not found")
@@ -181,17 +218,66 @@ def patch_protocol_element_block(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     existing, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
-    _ensure_block_not_locked_by_other(protocol.id, existing.id, user)
+    _ensure_block_not_locked_by_other(protocol.id, existing.public_id, user)
+    if payload.configuration_snapshot_json is not None:
+        payload.configuration_snapshot_json = normalize_attendance_entries(db, payload.configuration_snapshot_json, protocol.tenant_id)
+        payload.configuration_snapshot_json = normalize_list_snapshot_refs(db, payload.configuration_snapshot_json, protocol.tenant_id)
     try:
         protocol_element_block = service.update_protocol_element_block(db, existing.id, payload)
+    except BlockConfigConflict as exc:
+        # Erwartet (jemand anderes hat gespeichert): aktuellen Stand mitliefern, der Client lädt
+        # ihn und weist darauf hin (Concurrency-Audit CONC-005).
+        # Kein eigener Rollback: get_db beendet die Transaktion (und die Zeilensperre) beim Fehler.
+        current = _block_to_read(db, exc.block)
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "config_conflict",
+                "message": "Der Block wurde inzwischen geändert",
+                "configuration_snapshot_json": current.configuration_snapshot_json,
+                "config_version": current.config_version,
+            },
+        ) from None
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Protocol element block could not be updated") from exc
     if protocol_element_block is None:
         raise HTTPException(status_code=404, detail="Protocol element block not found")
     return _block_to_read(db, protocol_element_block)
+
+
+@router.post("/protocol-element-blocks/{protocol_element_block_id}/attendance/{participant_id}", response_model=ProtocolElementBlockRead)
+def set_block_attendance_status(
+    protocol_element_block_id: uuid.UUID,
+    participant_id: uuid.UUID,
+    payload: AttendanceStatusUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Single-participant attendance status upsert - see ProtocolElementService.
+    set_attendance_status for why this exists instead of routing attendance clicks through
+    the generic config PATCH above (full-array overwrite races)."""
+    require_permission(user, P.MEETINGS_EDIT)
+    block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
+    _ensure_block_not_locked_by_other(protocol.id, block.public_id, user)
+    participant_internal_id = public_id_service.resolve_internal_id(db, Participant, participant_id, tenant_id=user.current_tenant_id)
+    if participant_internal_id is None:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    participant = db.get(Participant, participant_internal_id)
+    try:
+        updated = service.set_attendance_status(
+            db, block.id, participant_internal_id, participant.display_name, payload.status
+        )
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Attendance status could not be updated") from exc
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Protocol element block not found")
+    read = _block_to_read(db, updated)
+    _broadcast_block_update(protocol.id, read, user)
+    return read
 
 
 @router.post("/protocol-element-blocks/{protocol_element_block_id}/list-snapshot/refresh", response_model=ProtocolElementBlockRead)
@@ -202,14 +288,15 @@ def refresh_block_list_snapshot(
 ):
     """User-initiated refresh: pulls in the list's current data, stashes the block's
     previous snapshot as the one undo step."""
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     track_changes_active = protocol.status == "geplant" and protocol.track_changes_enabled
     block = list_snapshot_service.refresh_block_list_snapshot(
         db, block, protocol.tenant_id, keep_undo=True, protocol=protocol, track_changes_active=track_changes_active
     )
-    _broadcast_block_update(protocol.id, block, user)
-    return _block_to_read(db, block)
+    read = _block_to_read(db, block)
+    _broadcast_block_update(protocol.id, read, user)
+    return read
 
 
 @router.post("/protocol-element-blocks/{protocol_element_block_id}/list-snapshot/sync", response_model=ProtocolElementBlockRead)
@@ -221,14 +308,15 @@ def sync_block_list_snapshot(
     """Silent resync called by the frontend right after the protocol itself writes to a
     linked list entry, so the editor never shows a stale hint for a change it just made
     itself. Never touches an existing undo point."""
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     track_changes_active = protocol.status == "geplant" and protocol.track_changes_enabled
     block = list_snapshot_service.refresh_block_list_snapshot(
         db, block, protocol.tenant_id, keep_undo=False, protocol=protocol, track_changes_active=track_changes_active
     )
-    _broadcast_block_update(protocol.id, block, user)
-    return _block_to_read(db, block)
+    read = _block_to_read(db, block)
+    _broadcast_block_update(protocol.id, read, user)
+    return read
 
 
 @router.post("/protocol-element-blocks/{protocol_element_block_id}/list-snapshot/undo", response_model=ProtocolElementBlockRead)
@@ -237,13 +325,14 @@ def undo_block_list_snapshot(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     updated = list_snapshot_service.undo_block_list_snapshot(db, block)
     if updated is None:
         raise HTTPException(status_code=409, detail="Nothing to undo")
-    _broadcast_block_update(protocol.id, updated, user)
-    return _block_to_read(db, updated)
+    read = _block_to_read(db, updated)
+    _broadcast_block_update(protocol.id, read, user)
+    return read
 
 
 @router.delete("/protocol-element-blocks/{protocol_element_block_id}", status_code=204)
@@ -252,7 +341,7 @@ def delete_protocol_element_block(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     existing, _ = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     try:
         found = service.delete_protocol_element_block(db, existing.id)
@@ -263,25 +352,30 @@ def delete_protocol_element_block(
         raise HTTPException(status_code=404, detail="Protocol element block not found")
 
 
-@router.post("/protocol-elements/{protocol_element_id}/blocks/from-event", response_model=ProtocolElementBlockRead)
+@router.post("/protocol-elements/{protocol_element_id}/blocks/from-event", response_model=list[ProtocolElementBlockRead])
 def create_protocol_element_block_from_event(
     protocol_element_id: uuid.UUID,
     payload: ProtocolElementBlockFromEventCreate,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     element = public_id_service.get_by_public_id(db, ProtocolElement, protocol_element_id)
     if element is None:
         raise HTTPException(status_code=404, detail="Protocol element not found")
     access_service.ensure_can_read_protocol_element(db, user, element.id)
     protocol_id = access_service.repository.protocol_id_for_element(db, protocol_element_id=element.id)
-    protocol_service.get_protocol_or_404_not_frozen(db, protocol_id)
+    protocol = protocol_service.get_protocol_or_404_not_frozen(db, protocol_id)
+    # Schreibroute: nur Protokolle des eigenen Mandanten, auch wenn Leserechte einmal weiter
+    # reichen (z. B. geteilte Inhalte) - Sicherheitsregel 1.2, ProtocolElement hat kein tenant_id
+    if protocol.tenant_id != user.current_tenant_id:
+        raise HTTPException(status_code=404, detail="Protocol element not found")
     event_internal_id = public_id_service.resolve_internal_id(db, Event, payload.event_id, tenant_id=user.current_tenant_id)
     if event_internal_id is None:
         raise HTTPException(status_code=400, detail="Event does not belong to current tenant")
     try:
-        protocol_block = protocol_service.add_event_block_to_element(
+        # Alle Blöcke, die das Element pro Termin vorsieht (nicht nur den ersten)
+        protocol_blocks = protocol_service.add_event_blocks_to_element(
             db,
             protocol_element_id=element.id,
             event_id=event_internal_id,
@@ -292,7 +386,7 @@ def create_protocol_element_block_from_event(
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Block could not be created") from exc
-    return _block_to_read(db, protocol_block)
+    return [_block_to_read(db, protocol_block) for protocol_block in protocol_blocks]
 
 
 @router.post("/protocol-element-blocks/{protocol_element_block_id}/list-snapshot/entries/{entry_id}/accept-tracked-change", response_model=ProtocolElementBlockRead)
@@ -306,11 +400,12 @@ def accept_tracked_list_entry(
     is the *frozen snapshot's* copy of a ListEntry id inside configuration_snapshot_json,
     not a live lookup - deliberately left as the internal int the snapshot already stores
     (see the public_id migration's deferred scope for block/snapshot JSON payloads)."""
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     block = list_snapshot_service.accept_tracked_list_entry(db, block, entry_id)
-    _broadcast_block_update(protocol.id, block, user)
-    return _block_to_read(db, block)
+    read = _block_to_read(db, block)
+    _broadcast_block_update(protocol.id, read, user)
+    return read
 
 
 @router.post("/protocol-element-blocks/{protocol_element_block_id}/rows/{row_id}/accept-tracked-change", response_model=ProtocolElementBlockRead)
@@ -321,11 +416,12 @@ def accept_tracked_row(
     user: CurrentUser = Depends(get_current_user),
 ):
     """'Ausblenden' for one row-link ('Zeile aus Liste') form row's red tracked-change highlight."""
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     block = list_snapshot_service.accept_tracked_row(db, block, row_id)
-    _broadcast_block_update(protocol.id, block, user)
-    return _block_to_read(db, block)
+    read = _block_to_read(db, block)
+    _broadcast_block_update(protocol.id, read, user)
+    return read
 
 
 @router.post("/protocol-element-blocks/{protocol_element_block_id}/text/accept-tracked-changes", response_model=ProtocolTextRead)
@@ -335,7 +431,7 @@ def accept_text_tracked_changes(
     user: CurrentUser = Depends(get_current_user),
 ):
     """'Ausblenden' for a text block's red tracked-change highlight (whole block)."""
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     existing, _ = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     try:
         result = autosave_service.accept_tracked_changes(db, existing.id)
@@ -354,16 +450,9 @@ def put_protocol_text(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     block, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
-    _ensure_block_not_locked_by_other(protocol.id, block.id, user)
-    current_text = autosave_service.text_repository.get_by_protocol_element_block_id(db, block.id)
-    current_content = current_text.content if current_text is not None else ""
-    if payload.expected_content is not None and payload.expected_content != current_content:
-        raise HTTPException(
-            status_code=409,
-            detail="Der Text wurde zwischenzeitlich von einer anderen Person geändert. Der lokale Entwurf bleibt erhalten.",
-        )
+    _ensure_block_not_locked_by_other(protocol.id, block.public_id, user)
     track_changes_active = bool(protocol.status == "geplant" and protocol.track_changes_enabled)
     try:
         result = autosave_service.save_text_block(
@@ -373,7 +462,11 @@ def put_protocol_text(
             tenant_id=protocol.tenant_id,
             track_changes_active=track_changes_active,
             block_config=block.configuration_snapshot_json,
+            expected_content=payload.expected_content,
         )
+    except TextConflictError as exc:
+        # Konfliktprüfung läuft unter Zeilensperre im Service (Audit MAIN-BE-011).
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Text block could not be saved") from exc

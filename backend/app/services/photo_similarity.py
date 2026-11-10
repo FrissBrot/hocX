@@ -3,7 +3,8 @@ perceptual_hash already computed for the tenant-wide duplicate-upload warning (s
 file_service.py's PERCEPTUAL_DUPLICATE_THRESHOLD/_closest_perceptual_match), and picks one
 "best" image per group using the Phase 1 quality scores (photo_quality.py). Pure
 computation over already-computed per-image data - no model, no DB/network access inside
-this module - which is why grouping can run synchronously in the request path instead of
+the hash grouping; duplicate candidates additionally load normalized original pixels.
+Hash grouping can run synchronously in the request path instead of
 needing the dedicated worker container later phases will need: an int XOR + popcount per
 pair costs a fraction of a microsecond, so even the O(n^2) pairwise comparison stays under
 a second for the batch sizes (~1000 images) this feature targets. See
@@ -13,6 +14,12 @@ tests/test_photo_similarity.py for the benchmark MAX_GROUPING_IMAGES is based on
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Callable
+
+import numpy as np
+from PIL import Image, ImageFilter, ImageOps, UnidentifiedImageError
 
 import imagehash
 
@@ -25,7 +32,7 @@ from app.services.upload_pipeline import PERCEPTUAL_DUPLICATE_THRESHOLD
 # tuned SIMILARITY_HAMMING_THRESHOLD constant, despite the module docstring already
 # claiming they were unified - no circular import actually blocks this: upload_pipeline.py
 # has no reason to import this module back).
-# Used for the "Duplikate" tab: same shot, just re-encoded/cropped/resized.
+# Kandidatenfilter für Duplikate; erst der zusätzliche Pixelvergleich bestätigt Kopien.
 SIMILARITY_HAMMING_THRESHOLD = PERCEPTUAL_DUPLICATE_THRESHOLD
 
 # Looser threshold for the "Ähnliche" tab: photo series (e.g. burst shots of the same scene)
@@ -36,10 +43,30 @@ SIMILARITY_HAMMING_THRESHOLD = PERCEPTUAL_DUPLICATE_THRESHOLD
 # revisit if real-world galleries turn out to need a different band.
 SERIES_HAMMING_THRESHOLD = 14
 
+# Der 64-Bit-pHash allein trennt Serien nicht zuverlässig: bei Tausenden Bildern liegen immer
+# wieder zwei fremde Aufnahmen (z. B. ein Tag- und ein Nachtbild) zufällig innerhalb der
+# Schwelle, und die Union-Find-Verkettung zieht dann ganze Gruppen zusammen. Jede Verbindung
+# einer Serie muss darum zusätzlich zeitlich (EXIF) und farblich passen.
+SERIES_MAX_CAPTURE_GAP = timedelta(minutes=10)
+# Höchster RMS-Abstand (0–255) der mittleren Farben eines 4×4-Rasters (series_colors_match)
+SERIES_MAX_COLOR_DISTANCE = 30.0
+# Duplikat = dieselbe Aufnahme. Tragen beide Bilder eine EXIF-Aufnahmezeit, muss sie
+# übereinstimmen (Serienbilder liegen Sekunden auseinander, Kopien behalten die Zeit).
+DUPLICATE_MAX_CAPTURE_GAP = timedelta(seconds=1)
+
+# Teil des gespeicherten Fingerabdrucks (file_service._similarity_fingerprint): eine Änderung
+# der Gruppierungsregeln erzwingt eine Neuberechnung bestehender Ergebnisse.
+SIMILARITY_RULES_VERSION = 2
+
 # Safety cap for the synchronous grouping endpoint/service method - protects the shared,
 # memory-constrained backend container from an unbounded O(n^2) computation blocking one of
 # its two worker processes. Larger batches need the async worker Phase 3 introduces.
 MAX_GROUPING_IMAGES = 1500
+
+# Obergrenze der Hintergrundgruppierung je Mandant (FileService.refresh_similarity_results,
+# job-worker): der paarweise Hash-Vergleich wächst quadratisch (10 000 Bilder ~50 Mio. Paare,
+# einige Sekunden). Darüber zeigen die Tabs einen Hinweis statt eines Ergebnisses.
+MAX_BACKGROUND_GROUPING_IMAGES = 10000
 
 
 @dataclass(frozen=True)
@@ -49,6 +76,20 @@ class GroupableImage:
     sharpness_score: float | None
     exposure_score: float | None
     face_quality_score: float | None = None
+    # EXIF-Aufnahmezeit; fehlt sie bei einem der Bilder, entfällt die Zeitprüfung
+    taken_at: datetime | None = None
+
+
+def capture_times_compatible(a: GroupableImage, b: GroupableImage, max_gap: timedelta) -> bool:
+    """False nur, wenn beide Bilder eine Aufnahmezeit haben und diese weiter als max_gap
+    auseinanderliegen."""
+    if a.taken_at is None or b.taken_at is None:
+        return True
+    try:
+        return abs(a.taken_at - b.taken_at) <= max_gap
+    except TypeError:
+        # Mischung aus naiven und zeitzonenbehafteten Werten: Wanduhrzeit vergleichen
+        return abs(a.taken_at.replace(tzinfo=None) - b.taken_at.replace(tzinfo=None)) <= max_gap
 
 
 def _quality_rank(image: GroupableImage) -> float:
@@ -64,24 +105,37 @@ def _quality_rank(image: GroupableImage) -> float:
     return score if score is not None else float("-inf")
 
 
+def sort_best_first(images: list[GroupableImage]) -> list[GroupableImage]:
+    """Dieselbe Reihenfolge wie innerhalb von group_similar_images - für Gruppen, deren beste
+    Aufnahme erst beim Abruf mit den aktuellen Qualitätswerten bestimmt wird."""
+    return sorted(images, key=_quality_rank, reverse=True)
+
+
 def _hash_as_int(perceptual_hash: imagehash.ImageHash) -> int:
     return int("".join("1" if bit else "0" for bit in perceptual_hash.hash.flatten()), 2)
 
 
 def group_similar_images(
-    images: list[GroupableImage], *, threshold: int = SIMILARITY_HAMMING_THRESHOLD
+    images: list[GroupableImage],
+    *,
+    threshold: int = SIMILARITY_HAMMING_THRESHOLD,
+    max_images: int = MAX_GROUPING_IMAGES,
+    linked: Callable[[GroupableImage, GroupableImage], bool] | None = None,
 ) -> list[list[GroupableImage]]:
     """Union-find clustering by perceptual-hash Hamming distance. Images without a
     perceptual_hash (a decode failure at upload time - see _compute_perceptual_hash) never
     join a group, each becomes its own singleton. Returns groups in first-seen order (the
     order `images` was given in), each group's images sorted best-first (see _quality_rank).
-    Raises ValueError above MAX_GROUPING_IMAGES - callers should catch this and ask the user
-    to narrow their filter rather than let it silently run long.
+    Raises ValueError above `max_images` (default MAX_GROUPING_IMAGES; the background refresh
+    passes MAX_BACKGROUND_GROUPING_IMAGES) rather than letting it silently run long.
 
     `threshold` picks which "closeness" band this call groups by - SIMILARITY_HAMMING_THRESHOLD
-    (default, "Duplikate" tab) or the looser SERIES_HAMMING_THRESHOLD ("Ähnliche" tab)."""
-    if len(images) > MAX_GROUPING_IMAGES:
-        raise ValueError(f"too many images to group synchronously (max {MAX_GROUPING_IMAGES}, got {len(images)})")
+    (default, "Duplikate" tab) or the looser SERIES_HAMMING_THRESHOLD ("Ähnliche" tab).
+
+    `linked` bestätigt jedes Paar innerhalb der Schwelle zusätzlich (Serien: Aufnahmezeit und
+    Farben); Paare, die schon in derselben Gruppe sind, werden nicht mehr geprüft."""
+    if len(images) > max_images:
+        raise ValueError(f"too many images to group (max {max_images}, got {len(images)})")
 
     parent = {image.id: image.id for image in images}
 
@@ -109,11 +163,78 @@ def group_similar_images(
     hashed = [(image, _hash_as_int(imagehash.hex_to_hash(image.perceptual_hash))) for image in images if image.perceptual_hash]
     for i, (image_a, bits_a) in enumerate(hashed):
         for image_b, bits_b in hashed[i + 1 :]:
-            if (bits_a ^ bits_b).bit_count() <= threshold:
-                union(image_a.id, image_b.id)
+            if (bits_a ^ bits_b).bit_count() > threshold:
+                continue
+            if linked is not None and (find(image_a.id) == find(image_b.id) or not linked(image_a, image_b)):
+                continue
+            union(image_a.id, image_b.id)
 
     groups: dict[int, list[GroupableImage]] = {}
     for image in images:
         groups.setdefault(find(image.id), []).append(image)
 
     return [sorted(group, key=_quality_rank, reverse=True) for group in groups.values()]
+
+
+def duplicate_signature(path: "Path | BinaryIO") -> tuple[float, np.ndarray] | None:
+    """Bildinhalt normalisieren; Auflösung, JPEG-Qualität, EXIF-Rotation und - wie der
+    pHash-Kandidatenfilter selbst (siehe group_similar_images) - auch Schärfe/Blur
+    tolerieren: ein unscharfes Serienbild derselben Aufnahme ist kein anderes Foto. Der
+    Blur-Radius 2 glättet nur Kompressions- und Skalierungsrauschen. Ein Serienbild mit
+    anderer Pose oder Schärfe ist kein Duplikat, sondern gehört unter «Ähnliche» (der
+    frühere Radius 6 liess genau solche Serienbilder als Duplikate durch)."""
+    try:
+        with Image.open(path) as original:
+            image = ImageOps.exif_transpose(original).convert("RGB")
+            ratio = image.width / image.height
+            image = image.resize((128, 128), Image.Resampling.LANCZOS)
+            image = image.filter(ImageFilter.GaussianBlur(radius=2))
+            return ratio, np.asarray(image, dtype=np.float32)
+    except (OSError, UnidentifiedImageError, Image.DecompressionBombError):
+        # Fehlende/unlesbare Originale sind kein Beleg für ein Duplikat.
+        return None
+
+
+def same_photo(a: tuple[float, np.ndarray] | None, b: tuple[float, np.ndarray] | None) -> bool:
+    """Konservativer Inhaltsvergleich, zusätzlich zum groben pHash-Kandidatenfilter."""
+    if a is None or b is None:
+        return False
+    ratio_a, pixels_a = a
+    ratio_b, pixels_b = b
+    if abs(ratio_a / ratio_b - 1) > 0.01:
+        return False
+    squared = (pixels_a - pixels_b) ** 2
+    # Lokale Abweichungen (z.B. ein anderes Gesicht) dürfen nicht im Hintergrund
+    # verschwinden. Jede der 64 Bildkacheln muss dieselben Inhalte zeigen.
+    tiles = squared.reshape(8, 16, 8, 16, 3).mean(axis=(1, 3, 4))
+    return bool(np.sqrt(squared.mean()) <= 5 and np.sqrt(tiles.max()) <= 10)
+
+
+def series_colors_match(a: tuple[float, np.ndarray] | None, b: tuple[float, np.ndarray] | None) -> bool:
+    """Grober Farbvergleich für Serien: mittlere Farbe je Feld eines 4×4-Rasters. Trennt
+    Aufnahmen, deren pHash zufällig nah liegt (Tag/Nacht, drinnen/draussen), toleriert aber
+    Bewegung und andere Posen innerhalb einer Szene. Ohne Signatur (Original fehlt) nicht
+    trennen - das bisherige Verhalten der reinen Hash-Gruppierung."""
+    if a is None or b is None:
+        return True
+    grid_a = a[1].reshape(4, 32, 4, 32, 3).mean(axis=(1, 3))
+    grid_b = b[1].reshape(4, 32, 4, 32, 3).mean(axis=(1, 3))
+    return bool(np.sqrt(((grid_a - grid_b) ** 2).mean()) <= SERIES_MAX_COLOR_DISTANCE)
+
+
+def verified_duplicate_groups(
+    images: list[GroupableImage], matches: Callable[[int, int], bool], *, max_images: int = MAX_GROUPING_IMAGES
+) -> list[list[GroupableImage]]:
+    """Jedes Gruppenmitglied muss zu allen anderen passen, ohne Ähnlichkeitsketten."""
+    result = []
+    for candidates in group_similar_images(images, max_images=max_images):
+        partitions = []
+        for image in candidates:
+            for group in partitions:
+                if all(matches(image.id, other.id) for other in group):
+                    group.append(image)
+                    break
+            else:
+                partitions.append([image])
+        result.extend(partitions)
+    return result

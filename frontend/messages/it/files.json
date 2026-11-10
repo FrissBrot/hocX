@@ -1,0 +1,223 @@
+{
+  "partition": {
+    "imagesHint": "Carica le immagini tramite la pagina Foto.",
+    "unsupported": "Non supportato: {names}"
+  },
+  "modal": {
+    "title": "Carica file",
+    "description": "I file finiscono in File, vengono scansionati per virus al caricamento e possono essere collegati a un evento, una consegna o un ciclo."
+  },
+  "dropzone": {
+    "releaseToUpload": "Rilascia per caricare",
+    "dragHint": "Trascina i file qui",
+    "orText": "oppure",
+    "browse": "Scegli file",
+    "formatsAriaLabel": "Formati supportati"
+  },
+  "queue": {
+    "heading": "Coda",
+    "countNone": "Nessun file selezionato",
+    "count": "{count, plural, one {# file selezionato} other {# file selezionati}}",
+    "empty": "Nessun file ancora selezionato.",
+    "uploading": "Caricamento…",
+    "ready": "Pronto per il caricamento",
+    "removeFile": "Rimuovi {name}"
+  },
+  "tags": {
+    "label": "Tag per tutti i file",
+    "placeholder": "Aggiungi tag…"
+  },
+  "footer": {
+    "summary": "{count, plural, one {# file} other {# file}}",
+    "cancel": "Annulla",
+    "uploading": "Caricamento…",
+    "uploadCount": "{count, plural, one {Carica # file} other {Carica # file}}",
+    "upload": "Carica"
+  },
+  "errors": {
+    "uploadFailed": "Caricamento non riuscito"
+  },
+  "source": {
+    "protocol": "Verbale",
+    "wordImport": "Import Word",
+    "submission": "Consegna",
+    "upload": "Caricamento",
+    "protocolExport": "Esportazione del verbale"
+  },
+  "detail": {
+    "openOriginal": "Apri originale",
+    "detailsTitle": "Dettagli",
+    "source": "Origine",
+    "reference": "Riferimento",
+    "uploadedAt": "Caricato",
+    "uploadedBy": "Caricato da",
+    "fileType": "Tipo file",
+    "unknown": "Sconosciuto",
+    "size": "Dimensione",
+    "dimensions": "Dimensioni immagine",
+    "loading": "Caricamento…",
+    "originTitle": "Provenienza",
+    "tagsTitle": "Tag",
+    "saving": "Salvataggio…",
+    "tagPlaceholder": "Aggiungi tag…",
+    "openOriginalNewTab": "Apri originale in nuova scheda",
+    "shareLink": "Condividi link"
+  },
+  "table": {
+    "columnName": "Nome",
+    "columnSource": "Origine",
+    "columnReference": "Riferimento",
+    "columnUploaded": "Caricato",
+    "columnSize": "Dimensione",
+    "empty": "Nessun file trovato.",
+    "protocolRef": "Verbale {label}",
+    "download": "Scarica",
+    "share": "Condividi",
+    "openPdf": "Apri PDF",
+    "processingStage": "In elaborazione · {stage}",
+    "processingStages": {
+      "scan": "Controllo antivirus",
+      "pdf": "Vista PDF",
+      "text": "Estrazione del testo"
+    }
+  },
+  "view": {
+    "title": "File",
+    "descriptionEmpty": "Tutti i documenti di questa organizzazione.",
+    "description": "Tutti i file non immagine caricati di questa organizzazione - da verbali, import Word, consegne e caricamenti diretti. Per le foto vedi la pagina separata \"Foto\".",
+    "uploadButton": "+ Carica file",
+    "emptyTitle": "Ancora nessun file",
+    "emptyDescription": "I documenti da verbali e consegne si raccoglieranno qui – oppure caricali direttamente.",
+    "emptyHint": "Ogni file viene scansionato automaticamente per virus al caricamento.",
+    "searchPlaceholder": "Cerca file",
+    "tagPlaceholder": "Scegli o digita un tag…",
+    "countFiles": "{count, plural, one {# file} other {# file}}",
+    "loadMoreLoading": "Caricamento altri file…",
+    "loadMore": "Carica altri ({count} caricati)",
+    "dropOverlayTitle": "Rilascia per caricare",
+    "dropOverlayHint": "Imposterai il caricamento in seguito.",
+    "loadError": "Impossibile caricare i file.",
+    "uploadedToast": "{count, plural, one {# file caricato.} other {# file caricati.}}",
+    "descriptionLinked": "Tutti i file non immagine – da verbali, importazioni Word, consegne e caricamenti diretti. Le immagini si trovano in <photos>Foto</photos>."
+  },
+  "sourceOptions": {
+    "all": "Tutte le origini",
+    "protocols": "Verbali",
+    "wordImport": "Import Word",
+    "submissions": "Consegne",
+    "uploads": "Caricamenti",
+    "protocolExports": "Esportazioni dei verbali"
+  },
+  "sortOptions": {
+    "newestFirst": "Più recenti prima",
+    "oldestFirst": "Più vecchi prima",
+    "nameAsc": "Nome (A-Z)",
+    "nameDesc": "Nome (Z-A)",
+    "sizeDesc": "Dimensione (grande-piccolo)",
+    "sizeAsc": "Dimensione (piccolo-grande)"
+  },
+  "target": {
+    "ruleType": "{filename}: tipo file '.{ext}' non consentito",
+    "ruleTooLarge": "{filename}: troppo grande (max. {maxSize} MB)",
+    "ruleMaxFiles": "È consentito un massimo di {max} file per elemento ({count} selezionati)",
+    "categoryNone": "Nessun riferimento",
+    "categoryEvent": "Evento",
+    "categorySubmissionElement": "Elemento di consegna",
+    "categoryCycle": "Ciclo",
+    "referenceLabel": "Riferimento",
+    "eventLabel": "Evento",
+    "eventPlaceholder": "Scegli evento…",
+    "assignmentLabel": "Consegna",
+    "assignmentPlaceholder": "Scegli consegna…",
+    "cycleLabel": "Ciclo",
+    "cyclePlaceholder": "Scegli ciclo…",
+    "rulesPrefix": "Regole della consegna:",
+    "rulesOnlyTypes": "solo {types}",
+    "rulesAllTypes": "tutti i tipi di file",
+    "rulesPerFile": "max. {size} MB per file",
+    "rulesMaxFiles": "max. {max} file per elemento",
+    "elementLabel": "Elemento di consegna",
+    "elementPlaceholder": "Scegli elemento…"
+  },
+  "document": {
+    "title": "Documento",
+    "status": "Stato",
+    "statusLabel": {
+      "processing": "In elaborazione",
+      "ready": "Pronto",
+      "partial": "Elaborato parzialmente",
+      "failed": "Elaborazione non riuscita"
+    },
+    "pdf": "Vista PDF",
+    "pdfReady": "Pronta",
+    "text": "Testo",
+    "jobStatus": {
+      "queued": "In attesa di elaborazione",
+      "running": "In creazione",
+      "done": "Non disponibile",
+      "failed": "Non riuscito",
+      "blocked": "Bloccato (controllo antivirus)",
+      "none": "Non disponibile"
+    },
+    "extractionStatus": {
+      "ready": "Estratto",
+      "empty": "Nessun testo trovato",
+      "ocr_required": "Riconoscimento del testo (OCR) necessario",
+      "unsupported": "Non supportato per questo formato",
+      "failed": "Non riuscito"
+    },
+    "currentVersion": "Versione attuale",
+    "versionNumber": "Versione {number}",
+    "downloadPdf": "Scarica PDF",
+    "downloadOriginal": "Scarica file originale",
+    "showText": "Mostra testo estratto",
+    "hideText": "Nascondi testo",
+    "textEmpty": "Nessun testo disponibile.",
+    "textLoadError": "Non è stato possibile caricare il testo.",
+    "reprocess": "Elabora di nuovo",
+    "reprocessStarted": "L’elaborazione è stata riavviata.",
+    "reprocessError": "Non è stato possibile riavviare l’elaborazione.",
+    "historyTitle": "Versioni ({count})",
+    "current": "Attuale",
+    "openPdf": "Apri PDF",
+    "original": "Originale",
+    "previewTitle": "Anteprima PDF di {name}",
+    "previewProcessing": "La vista PDF è in fase di creazione …",
+    "previewUnavailable": "Per questo documento non è disponibile una vista PDF. Il file originale è disponibile nei dettagli.",
+    "loadError": "Non è stato possibile caricare i dettagli del documento.",
+    "openPdfNewTab": "Apri PDF in una nuova scheda"
+  },
+  "uploadResults": {
+    "title": "Risultato del caricamento",
+    "summaryImages": "{count, plural, one {1 immagine elaborata} other {# immagini elaborate}}: {parts}.",
+    "summaryFiles": "{count, plural, one {1 file elaborato} other {# file elaborati}}: {parts}.",
+    "partUploaded": "{count} caricati",
+    "partSkipped": "{count} saltati",
+    "partMetadataUpdated": "{count} saltati con metadati completati",
+    "partFailed": "{count} non riusciti",
+    "detailsAction": "Dettagli",
+    "appliedDetail": "Completato: {fields}",
+    "status": {
+      "uploaded": "Caricato",
+      "skipped": "Saltato",
+      "metadata_updated": "Saltato · metadati completati",
+      "failed": "Non riuscito"
+    },
+    "fields": {
+      "taken_at": "data di scatto",
+      "gps": "luogo (GPS)",
+      "camera": "fotocamera",
+      "dimensions": "dimensioni",
+      "orientation": "orientamento",
+      "estimated_taken_on": "data di scatto stimata"
+    },
+    "errors": {
+      "too_large": "Troppo grande (massimo {max_mb} MB).",
+      "unsupported_format": "Formato di file non supportato o non corrispondente all'estensione.",
+      "scan_failed": "Impossibile verificare la presenza di malware.",
+      "infected": "Rilevato come infetto dall'antivirus, non salvato.",
+      "quota_exceeded": "Quota di archiviazione raggiunta, non salvato.",
+      "heic_unreadable": "Impossibile leggere il file HEIC."
+    }
+  }
+}

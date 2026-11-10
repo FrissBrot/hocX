@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
+import { PhotoActionIcon } from "./photo-action-icon";
 import { LivePhotoClip } from "@/components/photos/live-photo-clip";
 import { browserApiBaseUrl } from "@/lib/api/client";
 import { FileOverviewItem } from "@/types/api";
@@ -18,8 +20,10 @@ export function PhotoTile({
   onOpen: () => void;
   onToggleSelect: () => void;
 }) {
+  const t = useTranslations("photos.tile");
   const previewRef = useRef<HTMLButtonElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
+  const [rowSpan, setRowSpan] = useState<number>();
   const [requestedUrl, setRequestedUrl] = useState<string | null>(null);
   const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
   // Live Photo: der Clip spielt, solange der Zeiger auf der Kachel liegt (oder sie per Tastatur fokussiert ist).
@@ -27,6 +31,23 @@ export function PhotoTile({
   const thumbnailUrl = item.thumbnail_url ? `${browserApiBaseUrl}${item.thumbnail_url}` : `${browserApiBaseUrl}${item.content_url}`;
   const requested = requestedUrl === thumbnailUrl;
   const loaded = loadedUrl === thumbnailUrl;
+  const placeholderTone = Array.from(item.id).reduce((hash, character) => hash + character.charCodeAt(0), 0) % 6;
+
+  useEffect(() => {
+    const preview = previewRef.current;
+    const grid = preview?.parentElement?.parentElement;
+    if (!preview || !grid || typeof ResizeObserver === "undefined") return;
+    // Die Höhe folgt dem Bildformat; der Abstand kommt aus dem jeweiligen Theme/Layout.
+    const measure = () => {
+      if (getComputedStyle(grid).display !== "grid") return;
+      const gap = parseFloat(getComputedStyle(grid).getPropertyValue("--photo-grid-gap")) || 0;
+      setRowSpan(Math.ceil(preview.getBoundingClientRect().height + gap));
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(preview);
+    measure();
+    return () => observer.disconnect();
+  }, [item.width, item.height]);
 
   useEffect(() => {
     const preview = previewRef.current;
@@ -52,7 +73,8 @@ export function PhotoTile({
 
   return (
     <div
-      className={`photo-tile${selected ? " photo-tile-selected" : ""}`}
+      className={`photo-tile photo-tile-tone-${placeholderTone}${selected ? " photo-tile-selected" : ""}`}
+      style={rowSpan ? { gridRowEnd: `span ${rowSpan}` } : undefined}
       onMouseEnter={item.live_video_url ? () => setLiveActive(true) : undefined}
       onMouseLeave={item.live_video_url ? () => setLiveActive(false) : undefined}
       onFocus={item.live_video_url ? () => setLiveActive(true) : undefined}
@@ -78,7 +100,7 @@ export function PhotoTile({
       {item.live_video_url && (
         <>
           <LivePhotoClip src={`${browserApiBaseUrl}${item.live_video_url}`} active={liveActive} className="photo-tile-live-video" />
-          <span className="photo-tile-badge photo-tile-badge-live">LIVE</span>
+          <span className="photo-tile-badge photo-tile-badge-live">{t("liveBadge")}</span>
         </>
       )}
       <button
@@ -86,7 +108,7 @@ export function PhotoTile({
         className={`photo-tile-select${selected ? " photo-tile-select-checked" : ""}`}
         role="checkbox"
         aria-checked={selected}
-        aria-label={selected ? "Auswahl aufheben" : "Auswählen"}
+        aria-label={selected ? t("deselectAriaLabel") : t("selectAriaLabel")}
         onClick={(event) => {
           event.stopPropagation();
           onToggleSelect();
@@ -98,8 +120,8 @@ export function PhotoTile({
           </svg>
         )}
       </button>
-      {item.is_best && <span className="photo-tile-badge">★ Best-of</span>}
-      {item.share_pending && <span className="photo-tile-badge photo-tile-badge-pending">Nicht freigegeben</span>}
+      {item.is_best && <span className="photo-tile-badge photo-tile-badge-best" aria-label={t("bestBadge")} title={t("bestBadge")}><PhotoActionIcon name="star" /></span>}
+      {item.share_pending && <span className="photo-tile-badge photo-tile-badge-pending">{t("pendingBadge")}</span>}
     </div>
   );
 }

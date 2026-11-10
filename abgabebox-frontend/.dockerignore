@@ -1,0 +1,8 @@
+# Lokale Artefakte nicht in Image/Build-Cache (Audit MAIN-OPS-017).
+node_modules
+.next
+coverage
+npm-debug.log
+*.tsbuildinfo
+.env
+.env.*

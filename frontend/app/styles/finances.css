@@ -1,0 +1,370 @@
+/* Bereichs-CSS, geladen nur von: finances. Siehe design/DESIGN.md Abschnitt 10. */
+
+/* ── Finance module ─────────────────────────────────────────────── */
+
+.finance-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: var(--space-5);
+  align-items: start;
+  min-height: 480px;
+}
+
+.finance-sidebar {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-5);
+  gap: var(--space-4);
+}
+
+.finance-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.finance-sidebar-title {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.finance-account-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.finance-account-card {
+  --button-hover-bg: color-mix(in srgb, var(--accent) 6%, var(--panel) 94%);
+  display: grid;
+  gap: 2px;
+  padding: var(--space-3) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-fast), border-color var(--dur-fast);
+  width: 100%;
+  min-height: 0;
+  box-shadow: none;
+}
+
+.finance-account-card:hover { background: color-mix(in srgb, var(--accent) 6%, var(--panel) 94%); }
+
+.finance-account-card-active,
+.finance-account-card-active:hover { background: var(--accent-soft) !important; border-color: transparent !important; }
+
+.finance-account-name {
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.finance-account-desc {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+.finance-account-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+  opacity: 0;
+  transition: opacity var(--dur-fast);
+}
+
+.finance-account-card:hover .finance-account-actions,
+.finance-account-card:focus-within .finance-account-actions,
+.finance-account-card-active .finance-account-actions {
+  opacity: 1;
+}
+
+.finance-account-count {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  flex: 1;
+}
+
+.finance-empty {
+  padding: var(--space-2) 0;
+  font-size: var(--text-sm);
+}
+
+/* Finance main panel */
+.finance-main {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  padding: var(--space-5) var(--space-5);
+  display: grid;
+  gap: var(--space-5);
+  align-content: start;
+}
+
+.finance-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 200px;
+}
+
+.finance-main-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.finance-main-title {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 var(--space-2);
+}
+
+.finance-main-balance {
+  font-size: 2.6rem; /* design-ok: Display-Zahl (Hero) */
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+/* Transaktionsformular: Einnahme/Ausgabe mit positiv eingegebenem Betrag. */
+.finance-tx-form {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg) 75%, var(--panel-solid));
+}
+
+.finance-tx-form-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.finance-tx-form-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.finance-tx-direction .filter-tabs { background: var(--neutral-bg); border-color: transparent; }
+
+.finance-tx-direction .filter-tabs-option-active { display: inline-flex; align-items: center; gap: var(--space-2); }
+
+.finance-tx-direction .filter-tabs-option-active::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+.finance-tx-direction-income .filter-tabs-option-active { color: var(--success-fg); }
+
+.finance-tx-direction-expense .filter-tabs-option-active { color: var(--danger-fg); }
+
+.finance-tx-form-row {
+  display: grid;
+  grid-template-columns: minmax(0, 212px) minmax(0, 1fr);
+  gap: var(--space-3) var(--space-4);
+  align-items: start;
+}
+
+.finance-tx-field-desc { min-width: 0; }
+
+.finance-tx-field-date { grid-column: 1; }
+
+.finance-tx-amount-input,
+.finance-tx-date-input {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--panel-solid);
+}
+
+.finance-tx-amount-input:focus-within,
+.finance-tx-date-input:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.finance-tx-currency {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-3);
+  border-right: 1px solid var(--border);
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.finance-tx-date-input .date-input { flex: 1; min-width: 0; gap: 0; grid-template-columns: 36px minmax(0, 1fr); }
+
+.finance-tx-date-input .date-input-field { grid-column: 2; grid-row: 1; padding-left: 0; padding-right: 0; border: none; background: transparent; }
+
+.finance-tx-date-input .date-input-picker { grid-column: 1; grid-row: 1; width: 36px; min-width: 36px; border: none; border-radius: var(--radius-sm); --button-bg: transparent; }
+
+.finance-tx-date-input .date-input-picker svg { width: 16px; height: 16px; }
+
+.finance-tx-today { padding: 0 var(--space-3); border: none; color: var(--muted); font-size: var(--text-sm); }
+
+.finance-tx-form .finance-form-actions .button-primary { width: auto; }
+
+.finance-tx-form .finance-form-actions button { min-height: 40px; padding: var(--space-2) var(--space-4); }
+
+.finance-tx-form-footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-3);
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-4);
+}
+
+.finance-tx-booking-note { margin: 0; color: var(--muted); font-size: var(--text-sm); }
+
+.finance-form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+/* Transaction table */
+.finance-tx-table {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.finance-tx-header {
+  display: grid;
+  grid-template-columns: 100px 1fr 150px 130px 60px;
+  gap: 0 var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: color-mix(in srgb, var(--panel-solid) 78%, transparent 22%);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  align-items: center;
+}
+
+.finance-tx-row {
+  display: grid;
+  grid-template-columns: 100px 1fr 150px 130px 60px;
+  gap: 0 var(--space-3);
+  align-items: center;
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent 50%);
+  background: var(--panel);
+  transition: background var(--dur-fast);
+}
+
+.finance-tx-row:last-child { border-bottom: none; }
+
+.finance-tx-row:hover { background: color-mix(in srgb, var(--accent) 4%, var(--panel) 96%); }
+
+.finance-tx-date { font-size: var(--text-sm); color: var(--muted); white-space: nowrap; }
+
+.finance-tx-desc { font-size: var(--text-base); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.finance-tx-amount { font-size: var(--text-base); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.finance-tx-running { font-size: var(--text-sm); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.finance-tx-actions { display: flex; align-items: center; gap: var(--space-1); justify-content: flex-end; }
+
+/* Konto-Dialog */
+.finance-account-modal {
+  width: min(560px, 100%);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-overlay);
+}
+
+.finance-account-modal .modal-header .muted {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.finance-account-modal textarea {
+  resize: vertical;
+}
+
+.finance-account-modal .modal-actions {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .finance-account-modal {
+    padding: var(--space-4);
+  }
+
+  .finance-tx-form { padding: var(--space-4); }
+  .finance-tx-form-row { grid-template-columns: minmax(0, 1fr); }
+  .finance-tx-form-header { gap: var(--space-2); }
+  .finance-tx-form-title { font-size: var(--text-base); }
+  .finance-tx-field-date { grid-column: auto; }
+  .finance-tx-form-footer { align-items: flex-start; }
+  .finance-tx-booking-note { width: 100%; }
+
+  .finance-tx-table {
+    overflow-x: auto;
+  }
+
+  .finance-tx-header,
+  .finance-tx-row {
+    min-width: 480px;
+  }
+}
+
+@media (max-width: 900px) {
+  .finance-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Finance form (Inhalt des Modal) */
+.finance-form-modal {
+  display: grid;
+  gap: var(--space-4);
+}
+
+/* ── Provisional balance ────────────────────────────────────────── */
+.finance-account-provisional {
+  font-size: var(--text-xs);
+  color: var(--success);
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+@media (max-width: 640px) {
+.finance-sidebar {
+    padding: var(--space-4);
+  }
+}

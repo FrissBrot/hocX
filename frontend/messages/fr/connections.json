@@ -1,0 +1,73 @@
+{
+  "page": {
+    "title": "Connexions",
+    "description": "Affichez vos rendez-vous et vos tâches de hocX dans Apple Calendrier ou Google Agenda. Les calendriers se mettent à jour automatiquement – les modifications se font toujours dans hocX."
+  },
+  "status": {
+    "active": "Connecté",
+    "invalid": "Non valide",
+    "off": "Non connecté"
+  },
+  "events": {
+    "title": "Rendez-vous",
+    "description": "Tous les rendez-vous de {tenant} dans un calendrier séparé.",
+    "calendarName": "hocX – Rendez-vous ({tenant})"
+  },
+  "todos": {
+    "title": "Tâches",
+    "description": "Les tâches avec échéance comme entrées sur toute la journée – ouvertes avec ☐, terminées avec ✓.",
+    "calendarName": "hocX – Tâches ({tenant})"
+  },
+  "options": {
+    "scope": "Quelles tâches",
+    "scopeMine": "Uniquement mes tâches",
+    "scopeAll": "Toutes les tâches que je vois",
+    "includeCompleted": "Afficher les tâches terminées",
+    "hideDetails": "Transmettre uniquement le titre et la date",
+    "hideDetailsHelp": "Sans description, lieu ni noms. Google enregistre les calendriers abonnés sur ses propres serveurs."
+  },
+  "actions": {
+    "enable": "Créer la connexion",
+    "apple": "Apple Calendrier",
+    "google": "Google Agenda",
+    "regenerate": "Générer une nouvelle URL",
+    "remove": "Supprimer la connexion",
+    "more": "Autres actions"
+  },
+  "url": {
+    "label": "URL d'abonnement",
+    "help": "Cette adresse est secrète : toute personne qui la connaît peut lire le calendrier. En cas de doute, générez une nouvelle URL."
+  },
+  "meta": {
+    "lastAccess": "Dernière récupération : {date}",
+    "neverAccessed": "Pas encore récupéré par une application de calendrier"
+  },
+  "invalid": "Cette URL n'est plus valide, car vous vous êtes déconnecté partout ou avez changé votre mot de passe. Générez une nouvelle URL et configurez à nouveau l'abonnement.",
+  "confirm": {
+    "regenerate": "L'URL actuelle ne fonctionnera plus. Vous devrez reconfigurer les abonnements existants dans Apple ou Google.",
+    "regenerateLabel": "Générer une nouvelle URL",
+    "remove": "Le calendrier ne sera plus mis à jour dans Apple ou Google. Supprimez-y aussi l'abonnement manuellement.",
+    "removeLabel": "Supprimer"
+  },
+  "toasts": {
+    "enabled": "Connexion créée",
+    "saved": "Enregistré",
+    "regenerated": "Nouvelle URL générée",
+    "removed": "Connexion supprimée",
+    "failed": "Cela n'a pas fonctionné. Veuillez réessayer."
+  },
+  "howto": {
+    "title": "Comment le configurer",
+    "apple": "Apple (iPhone, iPad, Mac) : touchez « Apple Calendrier » et confirmez l'abonnement. La mise à jour se fait environ toutes les heures.",
+    "google": "Google : ouvrez « Google Agenda » et ajoutez-le. Google ne recharge les calendriers abonnés que toutes les quelques heures – les modifications y apparaissent avec un délai.",
+    "android": "Android : utilisez l'option Google – le calendrier apparaît ensuite aussi dans l'application de calendrier du téléphone.",
+    "readOnly": "La connexion fonctionne dans un seul sens : les modifications se font dans hocX, pas dans le calendrier."
+  },
+  "hint": {
+    "events": "Afficher les rendez-vous dans Apple Calendrier ou Google Agenda",
+    "todos": "Afficher les tâches dans Apple Calendrier ou Google Agenda",
+    "action": "Connecter",
+    "linked": "Connecté à votre calendrier",
+    "manage": "Gérer"
+  }
+}

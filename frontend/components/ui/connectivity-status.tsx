@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
+import { useTranslations } from "next-intl";
 import {
+  bindOfflineStoreToUser,
   discardBlockedMutations,
   flushOutbox,
   getOfflineServerSnapshot,
@@ -11,10 +13,15 @@ import {
   subscribeOfflineStore,
 } from "@/lib/offline-store";
 
-export function ConnectivityStatus() {
+export function ConnectivityStatus({ userId }: { userId?: string | null }) {
+  const t = useTranslations("common.connectivity");
   const state = useSyncExternalStore(subscribeOfflineStore, getOfflineSnapshot, getOfflineServerSnapshot);
 
   useEffect(() => {
+    // Zuerst binden: die Outbox eines anderen Kontos darf nie mit dieser Session gesendet werden.
+    // Ohne bekanntes Konto (Session lädt noch) wird nichts gesendet.
+    if (!userId) return;
+    bindOfflineStoreToUser(userId);
     initializeOfflineStore();
     const online = () => { setNetworkOnline(true); void flushOutbox(); };
     const offline = () => setNetworkOnline(false);
@@ -25,7 +32,7 @@ export function ConnectivityStatus() {
       window.removeEventListener("online", online);
       window.removeEventListener("offline", offline);
     };
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
@@ -36,7 +43,7 @@ export function ConnectivityStatus() {
       const anchor = (event.target as Element | null)?.closest("a[href]") as HTMLAnchorElement | null;
       if (!anchor || anchor.origin !== window.location.origin || anchor.target === "_blank") return;
       // Synchrone Abfrage im Klick-Handler: useConfirm() ist async und kann die Navigation nicht mehr stoppen.
-      if (!window.confirm("Es gibt noch nicht gespeicherte Änderungen. Seite trotzdem verlassen?")) { // design-ok
+      if (!window.confirm(t("leaveConfirm"))) { // design-ok
         event.preventDefault();
         event.stopPropagation();
       }
@@ -47,22 +54,22 @@ export function ConnectivityStatus() {
       window.removeEventListener("beforeunload", warn);
       document.removeEventListener("click", guardInternalNavigation, true);
     };
-  }, [state.pending]);
+  }, [state.pending, t]);
 
   if (state.online && state.pending === 0 && !state.flushing && !state.lastError) return null;
   const message = !state.online
-    ? `Offline – ${state.pending ? `${state.pending} Änderung${state.pending === 1 ? "" : "en"} lokal vorgemerkt` : "Verbindung wird überwacht"}`
+    ? (state.pending ? t("offlineWithPending", { count: state.pending }) : t("offlineIdle"))
     : state.flushing
-      ? `${state.pending} Änderung${state.pending === 1 ? "" : "en"} wird nachgesendet …`
+      ? t("flushing", { count: state.pending })
       : state.pending
-        ? `${state.pending} Änderung${state.pending === 1 ? "" : "en"} noch nicht gespeichert`
-        : state.lastError ?? "Verbindung wiederhergestellt";
+        ? t("pendingUnsaved", { count: state.pending })
+        : state.lastError ?? t("reconnected");
 
   return (
     <div className={`connectivity-status ${!state.online || state.lastError ? "connectivity-status-error" : ""}`} role="status" aria-live="polite">
       <span>{message}</span>
       {state.online && state.pending > 0 && !state.flushing && (
-        <button type="button" onClick={() => void flushOutbox()}>Jetzt erneut versuchen</button>
+        <button type="button" onClick={() => void flushOutbox()}>{t("retryButton")}</button>
       )}
       {state.blocked > 0 && (
         // Mutations rejected with a non-retryable error (validation/auth/conflict) stay
@@ -70,9 +77,7 @@ export function ConnectivityStatus() {
         // being sent (see flushOutbox), but they also never resolve on their own, so give
         // the user an explicit way to give up on them.
         <button type="button" onClick={() => discardBlockedMutations()}>
-          {state.blocked === 1
-            ? "Fehlgeschlagene Änderung verwerfen"
-            : `${state.blocked} fehlgeschlagene Änderungen verwerfen`}
+          {t("discardBlocked", { count: state.blocked })}
         </button>
       )}
     </div>

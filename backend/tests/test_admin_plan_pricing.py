@@ -4,16 +4,20 @@ seeded catalog rows (migrations 0084/0085), so these tests reuse them instead of
 throwaway features - only the plan itself is test-local."""
 from __future__ import annotations
 
+from decimal import Decimal
+
 import pytest
 from pydantic import ValidationError
 
+from app.core.features_generated import MODULES
 from app.core.security import CurrentUser
 from app.models.entities import Feature, PlatformAdmin, TenantFeature
 from app.schemas.admin import AdminFeatureUpdate, AdminPlanWrite, AdminTenantCreate, AdminTenantSubscriptionUpdate
+from app.services import cashflow_service
 from app.services.admin_tenant_service import AdminTenantService
 from app.services.tenant_service import TenantService
 
-from tests.factories import make_tenant
+from tests.factories import make_tenant, system_role_permissions
 
 
 def make_platform_admin(db, email="pricing-admin@example.com") -> PlatformAdmin:
@@ -25,8 +29,7 @@ def make_platform_admin(db, email="pricing-admin@example.com") -> PlatformAdmin:
 
 def test_plan_write_rejects_negative_price_and_limit_fields():
     """Hardening fix (audit 2026-09-24): AdminPlanWrite had no lower bound on its price/limit
-    fields, unlike sibling schemas (AdminTenantStorageQuotaUpdate.quota_mb,
-    AdminTenantSubscriptionUpdate.discount_percent). Only reachable by a platform-admin-owner,
+    fields, unlike sibling schemas (AdminTenantSubscriptionUpdate.discount_percent). Only reachable by a platform-admin-owner,
     but should fail validation the same way as everywhere else instead of persisting a negative
     price/limit that then flows into cost/quota calculations."""
     with pytest.raises(ValidationError):
@@ -96,7 +99,7 @@ def test_update_feature_sets_standalone_price(db):
 def test_update_tenant_subscription_baselines_plan_features_without_removing_extras(db):
     admin_service = AdminTenantService()
     admin = make_platform_admin(db)
-    tenant = make_tenant(db)
+    tenant = make_tenant(db, features=())
 
     admin_service.upsert_plan(
         db,
@@ -179,12 +182,12 @@ def test_tenant_subscription_view_computes_estimated_cost_including_extra_featur
             display_name="Test Admin",
             email="test@example.com",
             preferred_language="de",
-            is_participant_account=False,
+
             current_tenant_id=tenant.id,
             current_tenant_public_id=tenant.public_id,
             current_tenant_name=tenant.name,
             current_tenant_profile_image_path=None,
-            current_role="admin",
+            permissions=system_role_permissions("admin"),
             current_tenant_features=frozenset({"finance", "abgabebox"}),
         )
         subscription = tenant_service.get_subscription(db, tenant.id, actor)
@@ -297,18 +300,46 @@ def test_discount_and_note_are_stored_and_reduce_estimated_cost(db):
         display_name="Test Admin",
         email="test@example.com",
         preferred_language="de",
-        is_participant_account=False,
+
         current_tenant_id=tenant.id,
         current_tenant_public_id=tenant.public_id,
         current_tenant_name=tenant.name,
         current_tenant_profile_image_path=None,
-        current_role="admin",
+        permissions=system_role_permissions("admin"),
         current_tenant_features=frozenset(),
     )
     subscription = tenant_service.get_subscription(db, tenant.id, actor)
     assert subscription is not None
     assert subscription.estimated_monthly_cost_rp == 1500
     assert subscription.estimated_yearly_cost_rp == 15000
+    assert subscription.discount_percent == 25
+    assert subscription.list_monthly_cost_rp == 2000
+    assert subscription.list_yearly_cost_rp == 20000
+
+
+def test_discount_with_decimals_hits_target_price_and_rejects_more_precision(db):
+    """Rabatt über den Preis gesetzt (Adminportal): 4 Nachkommastellen genügen, damit der
+    Betrag rappengenau aufgeht; mehr Stellen weist das Schema ab."""
+    admin_service = AdminTenantService()
+    admin = make_platform_admin(db)
+    tenant = make_tenant(db)
+    admin_service.upsert_plan(db, "test_plan_decimal", _plan_write(price_monthly_rp=2000, price_yearly_rp=24990, feature_codes=[]))
+
+    # Wunschpreis CHF 199.00 statt 249.90 pro Jahr: 20.3681 %
+    updated = admin_service.update_tenant_subscription(
+        db,
+        tenant.id,
+        AdminTenantSubscriptionUpdate(plan_code="test_plan_decimal", billing_cycle="yearly", discount_percent=Decimal("20.3681")),
+        admin_id=admin.id,
+    )
+    assert updated is not None
+    assert updated.discount_percent == pytest.approx(20.3681)
+    assert cashflow_service.discounted_rp(24990, tenant.discount_percent) == 19900
+
+    with pytest.raises(ValidationError):
+        AdminTenantSubscriptionUpdate(discount_percent=Decimal("12.34567"))
+    with pytest.raises(ValidationError):
+        AdminTenantSubscriptionUpdate(discount_percent=Decimal("100.01"))
 
 
 def test_update_tenant_subscription_rejects_unknown_plan_code(db):
@@ -329,3 +360,140 @@ def test_update_tenant_subscription_rejects_unknown_plan_code(db):
             AdminTenantSubscriptionUpdate(plan_code="does_not_exist", billing_cycle="monthly", user_limit_override=None),
             admin_id=admin.id,
         )
+
+
+def _named_plan_write(name: str, **overrides) -> AdminPlanWrite:
+    values = dict(
+        name=name,
+        price_monthly_rp=1000,
+        price_yearly_rp=10000,
+        included_user_limit=5,
+        included_storage_bytes=1_000_000,
+        sort_order=0,
+        feature_codes=[],
+    )
+    values.update(overrides)
+    return AdminPlanWrite(**values)
+
+
+def test_featured_plan_is_exclusive(db):
+    """Die Website hebt genau einen Plan als "Beliebteste Wahl" hervor - einen neuen Plan zu
+    markieren, setzt den bisher markierten zurueck."""
+    service = AdminTenantService()
+    service.upsert_plan(db, "test_feat_a", _named_plan_write("Feat A", is_featured=True))
+    service.upsert_plan(db, "test_feat_b", _named_plan_write("Feat B", is_featured=True))
+
+    featured = [p.code for p in service.list_plans(db) if p.is_featured]
+    assert featured == ["test_feat_b"]
+
+
+def test_public_plans_lists_only_bookable_plans_with_feature_names(db):
+    """Die oeffentliche Website zeigt nur buchbare Plaene, inklusive der Feature-Namen aus dem
+    Katalog - Aenderungen im Adminportal schlagen damit ohne Deployment durch."""
+    service = AdminTenantService()
+    service.upsert_plan(db, "test_pub_visible", _named_plan_write("Pub Visible", feature_codes=["finance"], is_featured=True))
+    service.upsert_plan(db, "test_pub_hidden", _named_plan_write("Pub Hidden", is_bookable=False))
+
+    plans = {p.code: p for p in service.list_public_plans(db)}
+    assert "test_pub_hidden" not in plans
+    assert "legacy" not in plans
+    visible = plans["test_pub_visible"]
+    assert visible.is_featured is True
+    assert visible.price_monthly_rp == 1000
+    assert [f.code for f in visible.features] == ["finance"]
+    assert visible.features[0].name == db.get(Feature, "finance").name
+
+
+def test_public_plan_comparison_lists_sellable_features_by_module(db):
+    """Vergleichstabelle der Website: Abos wie die Preiskarten, dazu jedes Feature, das in einem
+    buchbaren Abo steckt oder einzeln zubuchbar ist - nach Produktmodul, ohne interne Felder."""
+    service = AdminTenantService()
+    service.upsert_plan(db, "test_cmp_plan", _named_plan_write("Cmp Plan", feature_codes=["finance", "document_designer"]))
+    service.upsert_plan(db, "test_cmp_hidden", _named_plan_write("Cmp Hidden", feature_codes=["custom_roles"], is_bookable=False))
+    db.add(Feature(code="test_cmp_addon", name="Zusatz", description="Einzeln buchbar", standalone_price_monthly_rp=500))
+    db.add(Feature(code="test_cmp_unsold", name="Nicht verkauft"))
+    db.flush()
+
+    comparison = service.public_plan_comparison(db)
+    assert [plan.code for plan in comparison.plans] == [plan.code for plan in service.list_public_plans(db)]
+    features = {feature.code: feature for feature in comparison.features}
+    assert {"finance", "document_designer", "test_cmp_addon"} <= set(features)
+    assert "test_cmp_unsold" not in features
+    if not any("custom_roles" in [f.code for f in plan.features] for plan in comparison.plans):
+        assert "custom_roles" not in features
+    assert features["finance"].module == "finance" and features["document_designer"].module == "documents"
+    assert features["test_cmp_addon"].module == "other" and features["test_cmp_addon"].standalone_price_monthly_rp == 500
+    modules = [feature.module for feature in comparison.features]
+    order = [*MODULES, "other"]
+    assert modules == sorted(modules, key=order.index)
+    payload = comparison.model_dump()
+    assert set(payload["plans"][0]) == {"code", "name", "description", "price_monthly_rp", "price_yearly_rp", "included_user_limit", "included_storage_bytes", "is_featured", "features"}
+
+
+def test_public_customers_lists_only_tenants_marked_for_website(db):
+    """Nur ausdruecklich freigegebene Mandanten erscheinen auf der Website unter "Im Einsatz bei"."""
+    service = AdminTenantService()
+    listed = make_tenant(db, name="Website Verein Gelistet")
+    hidden = make_tenant(db, name="Website Verein Versteckt")
+
+    result = service.set_tenant_website_listing(db, listed.id, True)
+    assert result is not None and result.show_on_website is True
+
+    names = [c.name for c in service.list_public_customers(db)]
+    assert listed.name in names
+    assert hidden.name not in names
+
+    service.set_tenant_website_listing(db, listed.id, False)
+    assert listed.name not in [c.name for c in service.list_public_customers(db)]
+
+
+def test_set_tenant_website_listing_unknown_tenant_returns_none(db):
+    assert AdminTenantService().set_tenant_website_listing(db, -1, True) is None
+
+
+@pytest.mark.parametrize("kind", ["plan", "storage_package"])
+def test_delete_unused_catalog_entry_and_reject_missing(db, kind):
+    from sqlalchemy import select
+    from app.models.entities import Plan, PlanFeature, StoragePackage
+    from app.schemas.admin import AdminStoragePackageWrite
+
+    service = AdminTenantService()
+    code = "test_delete_unused"
+    if kind == "plan":
+        service.upsert_plan(db, code, _plan_write())
+        model, remove = Plan, service.delete_plan
+    else:
+        service.upsert_storage_package(db, code, AdminStoragePackageWrite(name="Unused", bytes=1024))
+        model, remove = StoragePackage, service.delete_storage_package
+    assert remove(db, code) is True
+    assert db.get(model, code) is None
+    if kind == "plan":
+        assert db.scalar(select(PlanFeature).where(PlanFeature.plan_code == code)) is None
+        assert db.get(Feature, "finance") is not None
+    assert remove(db, code) is False
+
+
+@pytest.mark.parametrize("kind", ["plan", "storage_package"])
+def test_delete_assigned_catalog_entry_preserves_assignment(db, kind):
+    from app.models.entities import Plan, StoragePackage, Tenant, TenantStoragePackage
+    from app.schemas.admin import AdminStoragePackageWrite
+
+    service = AdminTenantService()
+    code = "test_delete_assigned"
+    tenant = make_tenant(db)
+    if kind == "plan":
+        service.upsert_plan(db, code, _plan_write())
+        service.update_tenant_subscription(db, tenant.id, AdminTenantSubscriptionUpdate(plan_code=code), admin_id=None)
+        model, remove = Plan, service.delete_plan
+    else:
+        service.upsert_storage_package(db, code, AdminStoragePackageWrite(name="Assigned", bytes=1024))
+        db.add(TenantStoragePackage(tenant_id=tenant.id, package_code=code, quantity=1))
+        db.commit()
+        model, remove = StoragePackage, service.delete_storage_package
+    with pytest.raises(ValueError, match="still assigned"):
+        remove(db, code)
+    assert db.get(model, code) is not None
+    if kind == "plan":
+        assert db.get(Tenant, tenant.id).plan_code == code
+    else:
+        assert db.query(TenantStoragePackage).filter_by(tenant_id=tenant.id, package_code=code).count() == 1

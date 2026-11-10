@@ -34,7 +34,7 @@ class AdminUserService:
                 def _matches(user: UserRead) -> bool:
                     haystack = (
                         f"{user.display_name} {user.first_name} {user.last_name} {user.email} "
-                        f"{user.tenant_name} {user.role_code}"
+                        f"{user.tenant_name} {' '.join(role.name or role.system_key or '' for role in user.roles)}"
                     ).lower()
                     return query in haystack
 
@@ -52,8 +52,6 @@ class AdminUserService:
     def update_user(self, db: Session, user_id: int, payload: UserUpdate) -> UserRead | None:
         return self.user_service.admin_update_user(db, user_id, payload)
 
-    def merge_users(self, db: Session, *, source_user_id: int, target_user_id: int) -> UserRead:
-        return self.user_service.merge_users(db, source_user_id=source_user_id, target_user_id=target_user_id)
 
 
 class PlatformAdminService:

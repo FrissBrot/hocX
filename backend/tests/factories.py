@@ -3,9 +3,10 @@ satisfy FK constraints for the tables these tests actually touch."""
 import uuid
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.core.secret_crypto import encrypt_secret
+from app.core.permissions import SYSTEM_ROLE_PERMISSIONS, expand
 from app.core.security import CurrentUser, hash_password
 from app.core.totp import generate_totp_secret
 from app.models.entities import (
@@ -25,22 +26,34 @@ from app.models.entities import (
     ProtocolText,
     ProtocolTodo,
     RenderType,
-    Role,
     Template,
     TemplateElement,
     TemplateParticipant,
     Tenant,
     TenantDomain,
+    TenantFeature,
+    TenantRole,
     TodoStatus,
     UserMfaFactor,
+    UserRole,
     WordImportProfile,
 )
 
 
-def make_tenant(db, name="Test Tenant") -> Tenant:
+# Bis 0158 frei verfügbar, seither buchbar - Bestandsmandanten haben sie per Backfill
+GRANDFATHERED_FEATURES = ("task_packages", "custom_roles", "photo_sharing", "document_designer")
+
+
+def make_tenant(db, name="Test Tenant", *, features: tuple[str, ...] = GRANDFATHERED_FEATURES) -> Tenant:
+    """Mandant wie ein Bestandsmandant: mit den seit 0158 buchbaren Features (Bestandsschutz).
+    finance/abgabebox/custom_domain bleiben wie bisher ungebucht (grant_tenant_feature)."""
     tenant = Tenant(name=name)
     db.add(tenant)
     db.flush()
+    for code in features:
+        db.add(TenantFeature(tenant_id=tenant.id, feature_code=code))
+    if features:
+        db.flush()
     return tenant
 
 
@@ -165,23 +178,35 @@ def make_protocol_todo(
     sort_index: int = 0,
     tenant_id: int | None = None,
 ) -> ProtocolTodo:
+    """tenant_id muss nur für Todos ohne Block angegeben werden; bei Todos mit Block setzt ihn die
+    Datenbank aus dem Protokoll (Migration 0131_todo_tenant_id)."""
     open_status_id = db.scalar(select(TodoStatus.id).where(TodoStatus.code == "open"))
     todo = ProtocolTodo(
-        tenant_id=tenant_id,
         protocol_element_block_id=protocol_element_block_id,
         sort_index=sort_index,
         task=task,
         todo_status_id=open_status_id,
     )
+    if tenant_id is not None:
+        todo.tenant_id = tenant_id
     db.add(todo)
     db.flush()
     return todo
 
 
-def role_id_by_code(db, code: str) -> int:
-    """Roles (admin/writer/reader/kassier) are pre-seeded reference data, same as
-    ElementType/TodoStatus - never created by tests, only looked up."""
-    return db.scalar(select(Role.id).where(Role.code == code))
+def system_role(db, tenant_id: int, code: str) -> TenantRole:
+    """Standardrollen (admin/writer/kassier/reader) legt der Trigger beim Anlegen jedes Mandanten
+    an (Migration 0156_rbac) - Tests legen sie nie selbst an, sie schlagen sie nur nach."""
+    return db.scalar(select(TenantRole).where(TenantRole.tenant_id == tenant_id, TenantRole.system_key == code))
+
+
+def assign_roles(db, user: AppUser, *codes: str) -> AppUser:
+    """Ersetzt die Rollen eines Kontos durch die Standardrollen ``codes`` (ohne Schutzregeln)."""
+    db.execute(delete(UserRole).where(UserRole.user_id == user.id))
+    for code in codes:
+        db.add(UserRole(tenant_id=user.tenant_id, user_id=user.id, role_id=system_role(db, user.tenant_id, code).id))
+    db.flush()
+    return user
 
 
 def make_app_user(
@@ -195,16 +220,16 @@ def make_app_user(
     tenant_id: int | None = None,
     role_code: str = "reader",
 ) -> AppUser:
-    """A user always belongs to exactly one tenant with one role. Without an explicit
-    tenant_id the user gets a fresh tenant of their own, so tests that don't care which tenant
-    they are in stay a one-liner."""
+    """A user always belongs to exactly one tenant; role_code is the standard role it gets
+    (see assign_roles for several). Without an explicit tenant_id the user gets a fresh tenant of
+    their own, so tests that don't care which tenant they are in stay a one-liner."""
     if tenant_id is None:
         tenant_id = make_tenant(db, f"Tenant of {email}").id
     user = AppUser(
         tenant_id=tenant_id,
-        role_id=role_id_by_code(db, role_code),
         email=email,
         password_hash=hash_password(password),
+        login_enabled=True,
         first_name=first_name,
         last_name=last_name,
         display_name=f"{first_name} {last_name}",
@@ -212,7 +237,7 @@ def make_app_user(
     )
     db.add(user)
     db.flush()
-    return user
+    return assign_roles(db, user, role_code)
 
 
 def make_mfa_enrolled_user(
@@ -248,8 +273,17 @@ def make_mfa_enrolled_user(
     return user, secret
 
 
+# Bestehende Mandanten haben per Backfill alle Features ausser verify_domain (0084-0086, 0158)
+DEFAULT_TEST_FEATURES = frozenset({"finance", "abgabebox", "custom_domain", "task_packages", "custom_roles", "photo_sharing", "document_designer"})
+
+
 def make_current_user(
-    tenant_id: int, role: str = "writer", user_id: int = 1, features: frozenset[str] | None = None
+    tenant_id: int,
+    role: str = "writer",
+    user_id: int = 1,
+    features: frozenset[str] | None = None,
+    *,
+    permissions: frozenset[str] | None = None,
 ) -> CurrentUser:
     """A plain CurrentUser for calling route functions directly (bypassing Depends/auth
     entirely - route functions are still ordinary callables, no ASGI/TestClient needed).
@@ -262,9 +296,9 @@ def make_current_user(
     that need a public_id to line up with a real row already fetch it themselves from the
     ORM object made via make_tenant/make_app_user.
 
-    features defaults to {"finance", "abgabebox", "custom_domain"} rather than empty - every
-    existing tenant is backfilled with all three (see migrations
-    0084_tenant_feature/0085_plan_pricing/0086_custom_domain_enforcement), so this default keeps
+    features defaults to DEFAULT_TEST_FEATURES rather than empty - every existing tenant is
+    backfilled with these (see migrations 0084_tenant_feature/0085_plan_pricing/
+    0086_custom_domain_enforcement/0158_feature_entitlements), so this default keeps
     every pre-existing role/permission test green without needing to know about feature-gating.
     Tests for feature-gating itself pass an explicit `features` set."""
     return CurrentUser(
@@ -275,14 +309,23 @@ def make_current_user(
         display_name="Test User",
         email="test@example.com",
         preferred_language="de",
-        is_participant_account=False,
         current_tenant_id=tenant_id,
         current_tenant_public_id=uuid.uuid4(),
         current_tenant_name="Test Tenant",
         current_tenant_profile_image_path=None,
-        current_role=role,
-        current_tenant_features=features if features is not None else frozenset({"finance", "abgabebox", "custom_domain"}),
+        current_tenant_features=features if features is not None else DEFAULT_TEST_FEATURES,
+        # role: eine Standardrolle (admin/writer/kassier/reader) als Abkürzung für ihre
+        # Berechtigungen; permissions überschreibt das für eigene Rollen (RBAC-Tests).
+        permissions=permissions if permissions is not None else system_role_permissions(role),
     )
+
+
+def system_role_permissions(*roles: str) -> frozenset[str]:
+    """Effektive Berechtigungen einer Kombination von Standardrollen (Vereinigungsmenge)."""
+    result: set[str] = set()
+    for role in roles:
+        result |= {str(key) for key in SYSTEM_ROLE_PERMISSIONS.get(role, frozenset())}
+    return frozenset(str(key) for key in expand(result))
 
 
 def make_cycle_config(
@@ -299,9 +342,10 @@ def make_cycle_config(
 
 
 def make_participant(db, tenant_id: int, display_name: str = "Test Person") -> Participant:
-    participant = Participant(tenant_id=tenant_id, display_name=display_name)
+    participant = Participant(tenant_id=tenant_id, display_name=display_name, login_enabled=False)
     db.add(participant)
     db.flush()
+    assign_roles(db, participant, "reader")
     return participant
 
 
@@ -402,6 +446,17 @@ def make_tenant_domain(
         verification_token=uuid.uuid4().hex,
         status=status,
     )
+    db.add(row)
+    db.flush()
+    return row
+
+
+def grant_tenant_feature(db, tenant_id: int, feature_code: str = "custom_domain") -> TenantFeature:
+    """A real `tenant_feature` DB row - distinct from `make_current_user`'s
+    `current_tenant_features` frozenset, which only fakes what a request-scoped `CurrentUser`
+    saw and is never read by code that queries the table directly (e.g.
+    traefik_config_service.tenant_ids_with_custom_domain_feature)."""
+    row = TenantFeature(tenant_id=tenant_id, feature_code=feature_code)
     db.add(row)
     db.flush()
     return row

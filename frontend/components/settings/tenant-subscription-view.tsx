@@ -1,28 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 
+import { ChargeFilter, TenantBillingCard, TenantOverdueBanner, useTenantCharges } from "@/components/settings/tenant-charges";
 import { Badge } from "@/components/ui/badge";
 import { NavIcon, NavIconKey } from "@/components/ui/nav-icons";
 import { colorForUser, initials } from "@/components/protocol/collaboration-presence";
-import { CATEGORY_COLORS, CATEGORY_HINTS, StorageQuotaComposition } from "@/components/storage/storage-usage-view";
+import { CATEGORY_COLORS, categoryHints, StorageQuotaComposition } from "@/components/storage/storage-usage-view";
 import { browserApiFetch } from "@/lib/api/client";
-import { formatFileSize, formatRappen } from "@/lib/utils/format";
+import { formatFileSize, formatPercentNumber, formatRappen } from "@/lib/utils/format";
+import type { Locale } from "@/i18n/locale-config.generated";
 import { StorageUsageRead, TenantSubscription, TenantSummary, UserSummary } from "@/types/api";
 
 type Props = {
   initialTenant: TenantSummary;
 };
 
-const FEATURE_ICONS: Record<string, NavIconKey> = {
+export const FEATURE_ICONS: Record<string, NavIconKey> = {
   abgabebox: "submissions",
   finance: "finances",
 };
 
-export function TenantSubscriptionView({ initialTenant }: Props) {
-  const tenantId = initialTenant.id;
-
+/** Abo, Speichernutzung und Nutzerliste eines Mandanten - geteilt zwischen Desktop und Mobile. */
+export function useTenantSubscriptionData(tenantId: string) {
   const [subscription, setSubscription] = useState<TenantSubscription | null>(null);
   const [subscriptionLoading, setSubscriptionLoading] = useState(false);
   const [storageUsage, setStorageUsage] = useState<StorageUsageRead | null>(null);
@@ -65,106 +67,161 @@ export function TenantSubscriptionView({ initialTenant }: Props) {
     }
   }
 
+  return { subscription, subscriptionLoading, storageUsage, tenantUsers };
+}
+
+/** Kosten im gewählten Abrechnungsintervall, oder null wenn (noch) kein Preis gesetzt ist. */
+export function subscriptionCostRp(subscription: TenantSubscription): number | null {
+  return subscription.billing_cycle === "monthly" ? subscription.estimated_monthly_cost_rp : subscription.estimated_yearly_cost_rp;
+}
+
+/** Rabatt des Abos mit dem Preis davor, oder null ohne Rabatt bzw. ohne Preis. */
+export function subscriptionDiscount(subscription: TenantSubscription): { percent: number; listRp: number; savedRp: number } | null {
+  const cost = subscriptionCostRp(subscription);
+  const listRp = subscription.billing_cycle === "monthly" ? subscription.list_monthly_cost_rp : subscription.list_yearly_cost_rp;
+  if (!subscription.discount_percent || cost === null || listRp === null) return null;
+  return { percent: subscription.discount_percent, listRp, savedRp: listRp - cost };
+}
+
+/** Rabatt-Hinweis unter den Abo-Kosten: Preis ohne Rabatt durchgestrichen und die Prozente. */
+export function SubscriptionDiscountNote({ subscription, className }: { subscription: TenantSubscription; className?: string }) {
+  const t = useTranslations("tenantSettings");
+  const locale = useLocale();
+  const discount = subscriptionDiscount(subscription);
+  if (!discount) return null;
+  return (
+    <span className={`tenant-discount-note${className ? ` ${className}` : ""}`}>
+      <s className="muted">{formatRappen(discount.listRp, locale)}</s>
+      <Badge variant="success">{t("discountBadge", { percent: formatPercentNumber(discount.percent, locale) })}</Badge>
+    </span>
+  );
+}
+
+export function TenantSubscriptionView({ initialTenant }: Props) {
+  const t = useTranslations("tenantSettings");
+  const storageHints = categoryHints(useTranslations("storage"));
+  const locale = useLocale();
+  const { subscription, subscriptionLoading, storageUsage, tenantUsers } = useTenantSubscriptionData(initialTenant.id);
+  const charges = useTenantCharges(initialTenant.id);
+  const [chargeFilter, setChargeFilter] = useState<ChargeFilter>("all");
+  const billingRef = useRef<HTMLDivElement | null>(null);
+  const hasCharges = Boolean(charges && charges.items.length > 0);
+  const billingLabel = subscription?.billing_cycle === "yearly" ? t("billingYearly") : t("billingMonthly");
+  const cost = subscription ? subscriptionCostRp(subscription) : null;
+  const userLimit = subscription?.effective_user_limit ?? null;
+  const usedBytes = storageUsage?.total_bytes ?? subscription?.storage_used_bytes ?? 0;
+  const quotaBytes = storageUsage?.quota_bytes ?? null;
+
+  function showOpenCharges() {
+    setChargeFilter("open");
+    billingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   return (
     <>
       {subscriptionLoading && !subscription ? (
         <section className="card">
-          <div className="eyebrow">Aktueller Plan</div>
-          <div className="muted">Wird geladen…</div>
+          <div className="eyebrow">{t("currentPlanEyebrow")}</div>
+          <div className="muted">{t("loadingPlan")}</div>
         </section>
       ) : !subscription ? (
         <section className="card">
-          <div className="eyebrow">Aktueller Plan</div>
-          <div className="muted">Abo-Daten konnten nicht geladen werden.</div>
+          <div className="eyebrow">{t("currentPlanEyebrow")}</div>
+          <div className="muted">{t("subscriptionLoadFailed")}</div>
         </section>
       ) : (
         <>
-          <section className="card tenant-usage-plan-head">
-            <div>
-              <div className="eyebrow">Aktueller Plan</div>
+          {charges ? <TenantOverdueBanner charges={charges} onShow={showOpenCharges} /> : null}
+
+          <section className={`card tenant-usage-summary${hasCharges ? " tenant-usage-summary-3" : ""}`}>
+            <div className="tenant-usage-summary-cell">
+              <span className="tenant-usage-stat-label">{t("currentPlanEyebrow")}</span>
               <div className="tenant-usage-plan-title">
-                <h2 className="tenant-usage-plan-name">{subscription.plan_name ?? "Kein Plan zugewiesen"}</h2>
-                <span className="pill">{subscription.billing_cycle === "monthly" ? "Monatlich" : "Jährlich"}</span>
+                <h2 className="tenant-usage-plan-name">{subscription.plan_name ?? t("noPlanAssigned")}</h2>
+                <span className="pill">{billingLabel}</span>
               </div>
-              {subscription.plan_code === "legacy" ? (
-                <p className="muted">Übernommen aus dem bisherigen System — ohne Limits bei Nutzern und Speicher.</p>
-              ) : null}
+              {subscription.plan_code === "legacy" ? <p className="muted tenant-usage-legacy">{t("legacyPlanNote")}</p> : null}
             </div>
-            <div className="tenant-usage-plan-stats">
-              <div>
-                <div className="tenant-usage-stat-label">Abrechnung</div>
-                <div className="tenant-usage-stat-value">{subscription.billing_cycle === "monthly" ? "Monatlich" : "Jährlich"}</div>
-              </div>
-              <div>
-                <div className="tenant-usage-stat-label">Kosten</div>
-                <div className="tenant-usage-stat-value">
-                  {(subscription.billing_cycle === "monthly"
-                    ? subscription.estimated_monthly_cost_rp
-                    : subscription.estimated_yearly_cost_rp) === null
-                    ? "Noch nicht festgelegt"
-                    : formatRappen(
-                        subscription.billing_cycle === "monthly"
-                          ? subscription.estimated_monthly_cost_rp
-                          : subscription.estimated_yearly_cost_rp
-                      )}
-                </div>
-              </div>
+            <div className="tenant-usage-summary-cell">
+              <span className="tenant-usage-stat-label">{t("costLabel")}</span>
+              {cost === null ? (
+                <span className="tenant-usage-summary-value">{t("costNotSet")}</span>
+              ) : (
+                <span className="tenant-usage-summary-stack">
+                  <span className="tenant-usage-summary-value">{formatRappen(cost, locale as Locale)}</span>
+                  <span className="muted tenant-usage-summary-unit">{subscription.billing_cycle === "monthly" ? t("perMonthUnit") : t("perYearUnit")}</span>
+                </span>
+              )}
+              <SubscriptionDiscountNote subscription={subscription} />
             </div>
+            {charges && hasCharges ? (
+              <div className="tenant-usage-summary-cell">
+                <span className="tenant-usage-stat-label">{t("charges.openLabel")}</span>
+                <span className="tenant-usage-summary-inline">
+                  <span className="tenant-usage-summary-value">{formatRappen(charges.open.amount_rp, locale as Locale)}</span>
+                  <span className={charges.overdue.count ? "tenant-usage-summary-unit tenant-charges-overdue" : "muted tenant-usage-summary-unit"}>
+                    {charges.open.count === 0
+                      ? t("charges.allPaidShort")
+                      : charges.overdue.count
+                        ? t("charges.openCountOverdue", { count: charges.open.count, overdue: charges.overdue.count })
+                        : t("charges.openCount", { count: charges.open.count })}
+                  </span>
+                </span>
+              </div>
+            ) : null}
           </section>
 
-          <div className="two-col">
+          {charges && hasCharges ? (
+            <div ref={billingRef}>
+              <TenantBillingCard charges={charges} filter={chargeFilter} onFilterChange={setChargeFilter} />
+            </div>
+          ) : null}
+
+          <div className="tenant-usage-cards">
             <section className="card grid">
               <div className="tenant-usage-card-head">
-                <div className="eyebrow">Nutzer</div>
+                <div className="eyebrow">{t("usersEyebrow")}</div>
+                <Link href="/users" className="tenant-usage-link">
+                  {t("manageUsersLink")}
+                </Link>
               </div>
               <div>
                 <span className="tenant-usage-big-number">{subscription.user_count}</span>
-                <span className="tenant-usage-big-number-unit">von {subscription.effective_user_limit ?? "unbegrenzt"}</span>
+                <span className="tenant-usage-big-number-unit">
+                  {userLimit !== null ? t("seatsOf", { limit: userLimit }) : t("seatsUnlimited")}
+                </span>
               </div>
-              <div className="tenant-user-dots">
-                {Array.from({ length: Math.min(subscription.effective_user_limit ?? Math.max(subscription.user_count * 10, 40), 60) }).map(
-                  (_, index) => (
-                    <span key={index} className={index < subscription.user_count ? "tenant-user-dot tenant-user-dot-filled" : "tenant-user-dot"} />
-                  )
-                )}
+              <UsageBar value={subscription.user_count} max={userLimit} />
+              <div className="tenant-avatar-row">
+                {tenantUsers.length > 0 ? (
+                  <div className="tenant-user-avatars">
+                    {tenantUsers.slice(0, 8).map((u) => (
+                      <span key={u.id} className="tenant-user-avatar" style={{ backgroundColor: colorForUser(u.id) }} title={u.display_name}>
+                        {initials(u.display_name)}
+                      </span>
+                    ))}
+                    {tenantUsers.length > 8 ? <span className="tenant-user-avatar tenant-user-avatar-overflow">+{tenantUsers.length - 8}</span> : null}
+                  </div>
+                ) : null}
+                {userLimit !== null ? (
+                  <span className="muted tenant-usage-note">{t("seatsFree", { count: Math.max(0, userLimit - subscription.user_count) })}</span>
+                ) : null}
               </div>
-              {tenantUsers.length > 0 ? (
-                <div className="tenant-user-avatars">
-                  {tenantUsers.slice(0, 8).map((u) => (
-                    <span key={u.id} className="tenant-user-avatar" style={{ backgroundColor: colorForUser(u.id) }} title={u.display_name}>
-                      {initials(u.display_name)}
-                    </span>
-                  ))}
-                  {tenantUsers.length > 8 ? (
-                    <span className="tenant-user-avatar tenant-user-avatar-overflow">+{tenantUsers.length - 8}</span>
-                  ) : null}
-                </div>
-              ) : null}
-              <Link href="/users" className="tenant-usage-link">
-                Benutzer verwalten →
-              </Link>
             </section>
 
             <section className="card grid tenant-usage-storage-card">
               <div className="tenant-usage-card-head">
-                <div className="eyebrow">Speicher</div>
-                {storageUsage?.quota_bytes != null && storageUsage.total_bytes > storageUsage.quota_bytes ? (
-                  <Badge variant="danger">Kontingent überschritten</Badge>
+                <div className="eyebrow">{t("storageEyebrow")}</div>
+                {quotaBytes !== null && usedBytes > quotaBytes ? (
+                  <Badge variant="danger">{t("quotaExceeded")}</Badge>
                 ) : (
-                  <span className="muted">
-                    {storageUsage?.quota_bytes != null ? `${formatFileSize(storageUsage.quota_bytes)} Kontingent` : "Kein Kontingent gesetzt"}
-                  </span>
+                  <span className="muted tenant-usage-note">{quotaBytes !== null ? t("quotaLabel", { size: formatFileSize(quotaBytes) }) : t("noQuotaSet")}</span>
                 )}
               </div>
               <div>
-                <span className="tenant-usage-big-number">{formatFileSize(storageUsage?.total_bytes ?? subscription.storage_used_bytes)}</span>
-                <span className="tenant-usage-big-number-unit">belegt</span>
+                <span className="tenant-usage-big-number">{formatFileSize(usedBytes)}</span>
+                <span className="tenant-usage-big-number-unit">{t("used")}</span>
               </div>
-              <StorageQuotaComposition
-                planStorageBytes={subscription.included_storage_bytes}
-                packageStorageBytes={subscription.package_storage_bytes}
-              />
-
               {storageUsage && storageUsage.categories.some((c) => c.bytes > 0) ? (
                 <>
                   <div className="storage-usage-bar">
@@ -174,10 +231,13 @@ export function TenantSubscriptionView({ initialTenant }: Props) {
                         <div
                           key={category.key}
                           className="storage-usage-segment"
-                          style={{ width: `${(category.bytes / storageUsage.total_bytes) * 100}%`, background: CATEGORY_COLORS[category.key] }}
+                          style={{ width: `${(category.bytes / Math.max(storageUsage.total_bytes, quotaBytes ?? 0)) * 100}%`, background: CATEGORY_COLORS[category.key] }}
                           title={`${category.label}: ${formatFileSize(category.bytes)}`}
                         />
                       ))}
+                  </div>
+                  <div className="tenant-usage-note">
+                    <StorageQuotaComposition planStorageBytes={subscription.included_storage_bytes} packageStorageBytes={subscription.package_storage_bytes} />
                   </div>
                   <div className="grid tenant-storage-legend">
                     {storageUsage.categories
@@ -191,19 +251,27 @@ export function TenantSubscriptionView({ initialTenant }: Props) {
                             </span>
                             <span>{formatFileSize(category.bytes)}</span>
                           </div>
-                          <div className="muted tenant-storage-legend-hint">{CATEGORY_HINTS[category.key]}</div>
+                          <div className="muted tenant-storage-legend-hint">{storageHints[category.key]}</div>
                         </div>
                       ))}
                   </div>
                 </>
-              ) : null}
+              ) : (
+                <>
+                  <UsageBar value={usedBytes} max={quotaBytes} />
+                  <div className="muted tenant-usage-note tenant-usage-inline-note">
+                    <StorageQuotaComposition planStorageBytes={subscription.included_storage_bytes} packageStorageBytes={subscription.package_storage_bytes} />
+                    {usedBytes === 0 ? <span className="tenant-usage-no-files">{t("noFilesYet")}</span> : null}
+                  </div>
+                </>
+              )}
             </section>
           </div>
 
           <section className="card">
-            <div className="eyebrow">Im Plan enthaltene Module</div>
+            <div className="eyebrow">{t("includedModulesEyebrow")}</div>
             {subscription.features.length === 0 ? (
-              <div className="muted">Keine Module gebucht.</div>
+              <div className="muted">{t("noModulesBooked")}</div>
             ) : (
               <div className="grid tenant-module-list">
                 {subscription.features.map((feature) => (
@@ -215,11 +283,11 @@ export function TenantSubscriptionView({ initialTenant }: Props) {
                       <strong>{feature.name}</strong>
                       {feature.description ? <div className="muted">{feature.description}</div> : null}
                       {!feature.included_in_plan && feature.standalone_price_monthly_rp !== null ? (
-                        <div className="muted">+{formatRappen(feature.standalone_price_monthly_rp)}/Monat</div>
+                        <div className="muted">{t("pricePerMonth", { price: formatRappen(feature.standalone_price_monthly_rp, locale as Locale) })}</div>
                       ) : null}
                     </div>
                     <Badge variant="success" dot className="tenant-module-status">
-                      Aktiv
+                      {t("moduleActive")}
                     </Badge>
                   </div>
                 ))}
@@ -229,5 +297,15 @@ export function TenantSubscriptionView({ initialTenant }: Props) {
         </>
       )}
     </>
+  );
+}
+
+/** Fortschrittsbalken für Nutzer und Speicher; ohne Limit bleibt er leer. */
+function UsageBar({ value, max }: { value: number; max: number | null }) {
+  const percent = max ? Math.min(100, (value / max) * 100) : 0;
+  return (
+    <div className="tenant-usage-bar">
+      <div className={`tenant-usage-bar-fill${max !== null && value > max ? " tenant-usage-bar-over" : ""}`} style={{ width: `${percent}%` }} />
+    </div>
   );
 }

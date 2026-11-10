@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { browserApiFetch } from "@/lib/api/client";
 import {
@@ -100,6 +101,7 @@ export type HistoricalListState = {
  * fetched first to resolve which internal id belongs to the currently selected list's
  * public_id. */
 export function useHistoricalList(selectedListId: string | null): HistoricalListState {
+  const tCommon = useTranslations("common");
   const [cycles, setCycles] = useState<TableSnapshotCycleSummary[]>([]);
   const [selected, setSelected] = useState<{ cycleConfigId: string; cycleYear: number; cycleConfigName: string } | null>(null);
   const [mode, setMode] = useState<"live" | "historical" | "reconstructing">("live");
@@ -240,7 +242,7 @@ export function useHistoricalList(selectedListId: string | null): HistoricalList
       entryPublicId: string,
       values: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>
     ) => {
-      if (!selected || !selectedListId) throw new Error("Kein historischer Zyklus ausgewählt");
+      if (!selected || !selectedListId) throw new Error(tCommon("clientErrors.noHistoricalCycleSelected"));
       const backendValues: Record<string, unknown> = {};
       if (values.sort_index !== undefined) backendValues.sort_index = values.sort_index;
       if (values.column_one_value !== undefined) backendValues.column_one_value_json = values.column_one_value;
@@ -254,12 +256,12 @@ export function useHistoricalList(selectedListId: string | null): HistoricalList
         current.map((entry) => (entry.id === entryPublicId ? mapEntryRow(updated, selectedListId) : entry))
       );
     },
-    [selected, selectedListId]
+    [selected, selectedListId, tCommon]
   );
 
   const deleteHistoricalEntry = useCallback(
     async (entryPublicId: string) => {
-      if (!selected) throw new Error("Kein historischer Zyklus ausgewählt");
+      if (!selected) throw new Error(tCommon("clientErrors.noHistoricalCycleSelected"));
       await browserApiFetch(
         `/api/table-snapshots/${selected.cycleConfigId}/${selected.cycleYear}/list_entry/rows/${entryPublicId}`,
         { method: "DELETE", body: JSON.stringify({ confirm_historical_edit: true }) }
@@ -267,7 +269,7 @@ export function useHistoricalList(selectedListId: string | null): HistoricalList
       setIsEdited(true);
       setEntries((current) => current.filter((entry) => entry.id !== entryPublicId));
     },
-    [selected]
+    [selected, tCommon]
   );
 
   const updateDraftEntry = useCallback(
@@ -285,7 +287,7 @@ export function useHistoricalList(selectedListId: string | null): HistoricalList
   }, []);
 
   const confirmReconstruction = useCallback(async () => {
-    if (!selected || !selectedListId || !definition) throw new Error("Kein Entwurf zum Bestätigen");
+    if (!selected || !selectedListId || !definition) throw new Error(tCommon("clientErrors.noDraftToConfirm"));
     await browserApiFetch(
       `/api/table-snapshots/${selected.cycleConfigId}/${selected.cycleYear}/lists/${selectedListId}/reconstruct`,
       {
@@ -313,7 +315,7 @@ export function useHistoricalList(selectedListId: string | null): HistoricalList
     setReconstructSource(null);
     await refetchCycles();
     loadForList(selected.cycleConfigId, selected.cycleYear, selectedListId);
-  }, [selected, selectedListId, definition, entries, refetchCycles, loadForList]);
+  }, [selected, selectedListId, definition, entries, refetchCycles, loadForList, tCommon]);
 
   return {
     mode,

@@ -3,7 +3,6 @@ from __future__ import annotations
 import copy
 import functools
 import logging
-import shutil
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -15,12 +14,18 @@ from app.core.config import settings
 from app.models import (
     AttendanceFine,
     CycleConfig,
+    DocumentAsset,
+    DocumentBrand,
+    DocumentBrandRevision,
+    DocumentComponent,
     DocumentTemplate,
-    DocumentTemplatePart,
+    DocumentTemplateAssignment,
+    DocumentTemplateRevision,
     ElementDefinition,
     Event,
     EventCycle,
     FinanceAccount,
+    FineTariff,
     FinanceTransaction,
     GroupEntity,
     Leader,
@@ -34,6 +39,9 @@ from app.models import (
     ProtocolImage,
     ProtocolText,
     ProtocolTodo,
+    ProtocolTodoAssignee,
+    ProtocolTodoFile,
+    AgendaItem,
     StoredFile,
     SubmissionAssignment,
     SubmissionLink,
@@ -43,19 +51,25 @@ from app.models import (
     Template,
     TemplateElement,
     TemplateElementBlock,
+    TaskPackage,
+    TaskPackageCycle,
+    TaskPackageItem,
     TemplateParticipant,
     Tenant,
 )
 from app.models.entities import submission_assignment_link_table
 from app.services import submission_link_service
-from app.services.document_template_service import DocumentTemplateService
-from app.services.file_service import _safe_storage_path
+from app.core.storage import ABGABEBOX, MAIN, ObjectNotFound, get_object_store, new_object_key, safe_suffix, validate_key
 from app.services.tenant_transfer_common import (
     remap_block_configuration,
-    remap_document_template_config,
     remap_element_definition_config,
     remap_list_value,
+    remap_occurrence_key,
+    remap_repeat_source_todo,
+    remap_responsible_assignments,
     remap_template_element_config,
+    remap_todos_snapshot,
+    replace_public_ids,
 )
 
 _ALWAYS_EXCLUDE = {"id", "public_id", "created_at", "updated_at"}
@@ -77,7 +91,7 @@ def _copy_row(source: Any, overrides: dict[str, Any] | None = None) -> Any:
 
     `id`/`created_at`/`updated_at` are always dropped so the DB assigns fresh ones. JSONB/other
     mutable values are deep-copied so the new row never shares object identity with `source`.
-    References to users (created_by, participant.app_user_id, ...) are reset to NULL: a user
+    References to users (created_by, assigned_user_id, ...) are reset to NULL: a user
     belongs to exactly one tenant, so a clone can never point at the source tenant's accounts.
     """
     model = type(source)
@@ -86,7 +100,7 @@ def _copy_row(source: Any, overrides: dict[str, Any] | None = None) -> Any:
     values = {
         column.key: None if column.key in user_columns else copy.deepcopy(getattr(source, column.key))
         for column in mapper.columns
-        if column.key not in _ALWAYS_EXCLUDE
+        if column.key not in _ALWAYS_EXCLUDE and column.computed is None
     }
     if overrides:
         values.update(overrides)
@@ -97,21 +111,21 @@ class TenantCloneService:
     """Clones a tenant either as an empty structure/config copy or as a full data backup.
 
     Known, deliberate limitations (disclosed rather than silently handled):
-    - `ProtocolExportCache` (cached PDF/LaTeX exports) is never cloned — it is regeneratable.
+    - `DocumentExport` und `DocumentRegistry` (erzeugte PDFs und ihr Register) werden nie
+      geklont: die Dokumente gehören zum Original, ihre Dokument-ID und ihr Hash bleiben dort
+      prüfbar. Ebenso wenig die Bestätigung der Organisation durch hocX.
     - `UserProtocolScroll` (per-user scroll position) is never cloned — ephemeral UI state.
     - Users (and their per-user access rows) are never cloned: an account belongs to exactly
       one tenant. Every reference to a user on cloned rows is reset to NULL, and the new
       tenant starts without accounts - the platform admin creates them afterwards.
-    - Cloned protocols keep pointing at the ORIGINAL tenant's `document_template_path_snapshot`
-      directory (an immutable historical export artifact), it is not physically duplicated.
+    - Dokument-Rezepte: Verweise in Blockparametern (public_ids) werden nur für Termine,
+      Personen, Listen, Konten, Zyklen, Vorlagen und Protokolle umgeschrieben; andere bleiben
+      und ergeben beim Export «nicht gefunden».
     - Only participant-ID references we know the shape of are remapped: `Event.*_ids`,
       `ListEntry` values, and `attendance_entries[].participant_id` inside protocol block
       snapshots. Any other participant/event IDs embedded in free-form block configuration_json
       (e.g. matrix-element cell data) are left untouched.
     """
-
-    def __init__(self) -> None:
-        self.document_template_service = DocumentTemplateService()
 
     # ── public entry points ──────────────────────────────────────────────
 
@@ -130,11 +144,13 @@ class TenantCloneService:
         self._partial_tenant_id: int | None = None
         try:
             return impl(db, source_tenant_id, new_name)
-        except Exception:
+        except Exception as exc:
             db.rollback()
             if self._partial_tenant_id is not None:
-                db.query(Tenant).filter(Tenant.id == self._partial_tenant_id).delete()
-                db.commit()
+                # Vollständiges Aufräumen inkl. Dateien (Audit MAIN-BE-006).
+                from app.services.admin_tenant_service import AdminTenantService
+
+                AdminTenantService().cleanup_partial_tenant(db, self._partial_tenant_id, original=exc)
             raise
 
     def _clone_structure_impl(self, db: Session, source_tenant_id: int, new_name: str) -> Tenant:
@@ -145,9 +161,9 @@ class TenantCloneService:
         new_tenant = self._clone_tenant_base(db, source, new_name)
         self._partial_tenant_id = new_tenant.id
         cycle_config_map = self._clone_cycle_configs(db, source.id, new_tenant.id)
-        part_map = self._clone_document_template_parts(db, source.id, new_tenant.id)
-        document_template_map = self._clone_document_templates(db, source.id, new_tenant.id, part_map)
+        self._clone_document_brands(db, source.id, new_tenant.id)
         finance_account_map = self._clone_finance_accounts(db, source.id, new_tenant.id)
+        self._clone_fine_tariff(db, source.id, new_tenant.id, finance_account_map)
         # Cloned before element_definitions/templates (mirrors _clone_full_impl's ordering)
         # and its returned id map threaded through both, instead of the empty dict used
         # here before this fix (audit finding, 2026-08-25) - element/template
@@ -162,9 +178,8 @@ class TenantCloneService:
             participant_map={}, event_map={}, list_definition_map=list_definition_map, list_entry_map={},
             finance_account_map=finance_account_map,
         )
-        self._clone_templates(
+        structure_template_map, _, _ = self._clone_templates(
             db, source.id, new_tenant.id,
-            document_template_map=document_template_map,
             cycle_config_map=cycle_config_map,
             element_definition_map=element_definition_map,
             event_map={},
@@ -172,6 +187,21 @@ class TenantCloneService:
             list_definition_map=list_definition_map,
             list_entry_map={},
             finance_account_map=finance_account_map,
+        )
+        # Ohne Listeneinträge/Personen bleiben nur Aufgaben ohne Verantwortliche übrig.
+        self._clone_task_packages(
+            db, source.id, new_tenant.id,
+            cycle_config_map=cycle_config_map, participant_map={}, list_definition_map=list_definition_map, list_entry_map={},
+        )
+        self._clone_document_templates(
+            db, source.id, new_tenant.id,
+            protocol_template_map=structure_template_map,
+            public_id_map={
+                **self._public_id_map(db, CycleConfig, cycle_config_map),
+                **self._public_id_map(db, ListDefinition, list_definition_map),
+                **self._public_id_map(db, FinanceAccount, finance_account_map),
+                **self._public_id_map(db, Template, structure_template_map),
+            },
         )
         return new_tenant
 
@@ -186,15 +216,32 @@ class TenantCloneService:
         self._clone_leaders(db, source.id, new_tenant.id)
         participant_map = self._clone_participants(db, source.id, new_tenant.id)
         cycle_config_map = self._clone_cycle_configs(db, source.id, new_tenant.id)
-        part_map = self._clone_document_template_parts(db, source.id, new_tenant.id)
-        document_template_map = self._clone_document_templates(db, source.id, new_tenant.id, part_map)
+        self._clone_document_brands(db, source.id, new_tenant.id)
         event_map = self._clone_events(db, source.id, new_tenant.id, group_map=group_map, participant_map=participant_map)
+        # Fuer im Editor gewaehlte (als public UUID gespeicherte) Referenzen in Block-Snapshots,
+        # siehe remap_block_configuration.
+        self._participant_public_ids = {
+            str(public_id): internal_id
+            for internal_id, public_id in db.execute(select(Participant.id, Participant.public_id).where(Participant.tenant_id == source.id)).all()
+        }
+        self._event_public_ids = {
+            str(public_id): internal_id
+            for internal_id, public_id in db.execute(select(Event.id, Event.public_id).where(Event.tenant_id == source.id)).all()
+        }
         self._clone_event_cycles(db, event_map=event_map, cycle_config_map=cycle_config_map)
         list_definition_map = self._clone_list_definitions(db, source.id, new_tenant.id)
         list_entry_map = self._clone_list_entries(
             db, list_definition_map=list_definition_map, participant_map=participant_map, event_map=event_map
         )
         finance_account_map = self._clone_finance_accounts(db, source.id, new_tenant.id)
+        self._clone_fine_tariff(db, source.id, new_tenant.id, finance_account_map)
+        # Abgabe-Element references ("event-<public_id>"/"entry-<public_id>" in
+        # submission_upload_log.element_ref and protocol_todo.element_ref) - every cloned row
+        # gets a fresh public_id, so these strings have to be rewritten old -> new.
+        self._element_ref_public_ids = {
+            **self._public_id_map(db, Event, event_map),
+            **self._public_id_map(db, ListEntry, list_entry_map),
+        }
         element_definition_map = self._clone_element_definitions(
             db, source.id, new_tenant.id,
             participant_map=participant_map, event_map=event_map,
@@ -203,7 +250,6 @@ class TenantCloneService:
         )
         template_map, template_element_map, template_element_block_map = self._clone_templates(
             db, source.id, new_tenant.id,
-            document_template_map=document_template_map,
             cycle_config_map=cycle_config_map,
             element_definition_map=element_definition_map,
             event_map=event_map,
@@ -224,9 +270,12 @@ class TenantCloneService:
         stored_file_map = self._clone_stored_files(db, source.id, new_tenant.id)
         self._clone_submission_upload_files(db, submission_upload_map=submission_upload_map, stored_file_map=stored_file_map)
         protocol_map = self._clone_protocols(
-            db, source.id, new_tenant.id, template_map=template_map, document_template_map=document_template_map, event_map=event_map
+            db, source.id, new_tenant.id, template_map=template_map, event_map=event_map
         )
-        protocol_element_map = self._clone_protocol_elements(db, protocol_map=protocol_map, template_element_map=template_element_map)
+        protocol_element_map = self._clone_protocol_elements(
+            db, protocol_map=protocol_map, template_element_map=template_element_map,
+            participant_map=participant_map, list_definition_map=list_definition_map, list_entry_map=list_entry_map,
+        )
         protocol_element_block_map = self._clone_protocol_element_blocks(
             db,
             protocol_element_map=protocol_element_map,
@@ -249,15 +298,73 @@ class TenantCloneService:
             finance_account_map=finance_account_map,
             finance_transaction_map=finance_transaction_map,
         )
-        self._clone_protocol_todos(
+        task_package_item_map = self._clone_task_packages(
+            db, source.id, new_tenant.id,
+            cycle_config_map=cycle_config_map, participant_map=participant_map,
+            list_definition_map=list_definition_map, list_entry_map=list_entry_map,
+        )
+        todo_map = self._clone_protocol_todos(
             db, source.id, new_tenant.id,
             protocol_element_block_map=protocol_element_block_map,
             participant_map=participant_map,
             event_map=event_map,
             protocol_map=protocol_map,
             submission_assignment_map=submission_assignment_map,
+            task_package_item_map=task_package_item_map,
+            cycle_config_map=cycle_config_map,
+        )
+        self._clone_protocol_todo_assignees(db, todo_map=todo_map, participant_map=participant_map)
+        self._clone_protocol_todo_files(db, todo_map=todo_map, stored_file_map=stored_file_map)
+        self._remap_todo_repeat_sources(db, protocol_element_block_map=protocol_element_block_map, todo_map=todo_map)
+        self._clone_agenda_items(
+            db, source.id, new_tenant.id, template_map=template_map, template_element_map=template_element_map,
+            protocol_map=protocol_map, protocol_element_map=protocol_element_map,
+        )
+        self._clone_document_templates(
+            db, source.id, new_tenant.id,
+            protocol_template_map=template_map,
+            public_id_map={
+                **self._public_id_map(db, CycleConfig, cycle_config_map),
+                **self._public_id_map(db, ListDefinition, list_definition_map),
+                **self._public_id_map(db, FinanceAccount, finance_account_map),
+                **self._public_id_map(db, Participant, participant_map),
+                **self._public_id_map(db, Event, event_map),
+                **self._public_id_map(db, Template, template_map),
+                **self._public_id_map(db, Protocol, protocol_map),
+                **self._public_id_map(db, StoredFile, stored_file_map),
+            },
+        )
+        self._clone_todo_snapshots(
+            db,
+            protocol_map=protocol_map,
+            protocol_element_block_map=protocol_element_block_map,
+            public_id_map={
+                **self._public_id_map(db, Protocol, protocol_map),
+                **self._public_id_map(db, ProtocolElementBlock, protocol_element_block_map),
+                **self._public_id_map(db, ProtocolTodo, todo_map),
+                **self._public_id_map(db, Participant, participant_map),
+                **self._element_ref_public_ids,
+            },
         )
         return new_tenant
+
+    def _clone_todo_snapshots(
+        self, db: Session, *, protocol_map: dict[int, int], protocol_element_block_map: dict[int, int], public_id_map: dict[str, str]
+    ) -> None:
+        """Eingefrorene Todo-Liste abgeschlossener Protokolle mitnehmen (Audit MAIN-BE-012)."""
+        if not protocol_map:
+            return
+        sources = db.execute(
+            select(Protocol.id, Protocol.todos_snapshot_json).where(
+                Protocol.id.in_(list(protocol_map.keys())), Protocol.todos_snapshot_json.is_not(None)
+            )
+        ).all()
+        for source_id, snapshot in sources:
+            target = db.get(Protocol, protocol_map[source_id])
+            if target is not None:
+                target.todos_snapshot_json = remap_todos_snapshot(snapshot, protocol_element_block_map, public_id_map)
+        if sources:
+            db.commit()
 
     # ── tenant base + physical files ───────────────────────────────────────
 
@@ -266,12 +373,13 @@ class TenantCloneService:
             name=new_name,
             profile_image_path=None,
             tag_config_json=copy.deepcopy(source.tag_config_json or {}),
+            event_field_config_json=copy.deepcopy(source.event_field_config_json or {}),
             public_slug=None,
         )
         db.add(new_tenant)
         db.commit()
         db.refresh(new_tenant)
-        image_path = self._clone_tenant_profile_image(source.profile_image_path, new_tenant_id=new_tenant.id)
+        image_path = self._clone_tenant_profile_image(db, source.profile_image_path, new_tenant_id=new_tenant.id)
         if image_path is not None:
             new_tenant.profile_image_path = image_path
             db.add(new_tenant)
@@ -279,11 +387,14 @@ class TenantCloneService:
             db.refresh(new_tenant)
         return new_tenant
 
-    def _clone_tenant_profile_image(self, source_path: str | None, *, new_tenant_id: int) -> str | None:
+    def _clone_tenant_profile_image(self, db: Session, source_path: str | None, *, new_tenant_id: int) -> str | None:
         if not source_path:
             return None
-        source = _safe_storage_path(settings.storage_root, source_path)
-        if not source.exists():
+        upload_prefix = Path(settings.upload_root).resolve().relative_to(Path(settings.storage_root).resolve()).as_posix()
+        target = f"{upload_prefix}/tenant-profiles/tenant-{new_tenant_id}-{uuid4().hex}{safe_suffix(source_path, '.png')}"
+        try:
+            get_object_store().copy(db, MAIN, source_path, target)
+        except ObjectNotFound:
             # Unlike the structurally identical import path (which appends a warning the
             # admin sees), a missing source file here was silently dropped with no signal
             # at all (audit finding, 2026-08-25) - logged so it's at least discoverable in
@@ -291,39 +402,17 @@ class TenantCloneService:
             # ended up empty.
             _logger.warning("tenant clone: source profile image missing at %s (new_tenant_id=%s)", source_path, new_tenant_id)
             return None
-        suffix = Path(source_path).suffix or ".png"
-        profile_dir = Path(settings.upload_root) / "tenant-profiles"
-        profile_dir.mkdir(parents=True, exist_ok=True)
-        target = profile_dir / f"tenant-{new_tenant_id}-{uuid4().hex}{suffix}"
-        shutil.copy2(source, target)
-        return str(target.relative_to(Path(settings.storage_root).resolve()))
+        return target
 
-    def _clone_stored_file_content(self, storage_path: str, *, root: str, new_tenant_id: int) -> str:
-        root_path = Path(root).resolve()
-        source = _safe_storage_path(root, storage_path)
-        suffix = Path(storage_path).suffix or ".bin"
-        target_dir = root_path / "tenant_clones" / f"tenant-{new_tenant_id}"
-        target_dir.mkdir(parents=True, exist_ok=True)
-        target_path = target_dir / f"{uuid4().hex}{suffix}"
-        if source.exists():
-            shutil.copy2(source, target_path)
-        else:
+    def _clone_stored_file_content(self, db: Session, storage_path: str, *, namespace: str, new_tenant_id: int) -> str:
+        """Kopie im selben Namespace (serverseitig bei S3). Fehlt die Quelle, bleibt der Key
+        ohne Objekt - wie bisher die leere Zieldatei, sichtbar im Prüfbericht als fehlend."""
+        target = new_object_key("tenant_clones", f"tenant-{new_tenant_id}", filename=storage_path)
+        try:
+            get_object_store().copy(db, namespace, storage_path, target)
+        except ObjectNotFound:
             _logger.warning("tenant clone: source stored file missing at %s (new_tenant_id=%s)", storage_path, new_tenant_id)
-        return str(target_path.relative_to(root_path))
-
-    def _clone_document_template_part_file(
-        self, source_storage_path: str, *, new_tenant_id: int, part_type: str, code: str, version: int
-    ) -> str:
-        source = _safe_storage_path(settings.storage_root, source_storage_path)
-        suffix = Path(source_storage_path).suffix or ".tex"
-        target_dir = Path(settings.storage_root) / "document_template_parts" / f"tenant-{new_tenant_id}" / part_type / code
-        target_dir.mkdir(parents=True, exist_ok=True)
-        target_path = target_dir / f"v{version}{suffix}"
-        if source.exists():
-            shutil.copy2(source, target_path)
-        else:
-            _logger.warning("tenant clone: source document template part missing at %s (new_tenant_id=%s)", source_storage_path, new_tenant_id)
-        return str(target_path.relative_to(Path(settings.storage_root).resolve()))
+        return target
 
     # ── structure/config tables ─────────────────────────────────────────
 
@@ -360,42 +449,106 @@ class TenantCloneService:
         db.commit()
         return id_map
 
-    def _clone_document_template_parts(self, db: Session, source_tenant_id: int, new_tenant_id: int) -> dict[int, int]:
-        rows = db.scalars(select(DocumentTemplatePart).where(DocumentTemplatePart.tenant_id == source_tenant_id)).all()
-        id_map: dict[int, int] = {}
-        for row in rows:
-            new_storage_path = self._clone_document_template_part_file(
-                row.storage_path, new_tenant_id=new_tenant_id, part_type=row.part_type, code=row.code, version=row.version,
-            )
-            new_row = _copy_row(row, {"tenant_id": new_tenant_id, "storage_path": new_storage_path})
-            db.add(new_row)
+    def _clone_document_brands(self, db: Session, source_tenant_id: int, new_tenant_id: int) -> None:
+        """Document-Studio-Assets (Dateien werden kopiert) und Brand-Profile samt Revisionen.
+        Tokens verweisen per public_id auf Assets und werden auf die neuen Assets umgeschrieben;
+        die Zuordnungen merkt sich der Klon für Vorlagen und Komponenten."""
+        asset_public_map: dict[str, str] = {}
+        for asset in db.scalars(select(DocumentAsset).where(DocumentAsset.tenant_id == source_tenant_id)).all():
+            target = validate_key(f"document_assets/tenant-{new_tenant_id}/{uuid4().hex}{safe_suffix(asset.storage_path, '')}")
+            try:
+                get_object_store().copy(db, MAIN, asset.storage_path, target)
+            except ObjectNotFound:
+                _logger.warning("tenant clone: source document asset missing at %s (new_tenant_id=%s)", asset.storage_path, new_tenant_id)
+                continue
+            new_asset = _copy_row(asset, {"tenant_id": new_tenant_id, "storage_path": target, "created_by": None})
+            db.add(new_asset)
             db.flush()
-            id_map[row.id] = new_row.id
+            asset_public_map[str(asset.public_id).lower()] = str(new_asset.public_id)
+        brand_map: dict[int, int] = {}
+        brand_revision_map: dict[int, int] = {}
+        for brand in db.scalars(select(DocumentBrand).where(DocumentBrand.tenant_id == source_tenant_id)).all():
+            new_brand = _copy_row(brand, {"tenant_id": new_tenant_id, "created_by": None, "updated_by": None})
+            db.add(new_brand)
+            db.flush()
+            brand_map[brand.id] = new_brand.id
+            for revision in db.scalars(select(DocumentBrandRevision).where(DocumentBrandRevision.brand_id == brand.id)).all():
+                new_revision = _copy_row(revision, {"brand_id": new_brand.id, "tokens_json": replace_public_ids(revision.tokens_json, asset_public_map), "created_by": None})
+                db.add(new_revision)
+                db.flush()
+                brand_revision_map[revision.id] = new_revision.id
         db.commit()
-        return id_map
+        self._document_asset_public_map = asset_public_map
+        self._document_brand_map = brand_map
+        self._document_brand_revision_map = brand_revision_map
 
     def _clone_document_templates(
-        self, db: Session, source_tenant_id: int, new_tenant_id: int, part_map: dict[int, int]
-    ) -> dict[int, int]:
-        rows = db.scalars(select(DocumentTemplate).where(DocumentTemplate.tenant_id == source_tenant_id)).all()
-        id_map: dict[int, int] = {}
-        for row in rows:
-            new_row = _copy_row(row, {
-                "tenant_id": new_tenant_id,
-                "filesystem_path": "",
-                "configuration_json": remap_document_template_config(row.configuration_json, part_map),
-            })
-            db.add(new_row)
+        self,
+        db: Session,
+        source_tenant_id: int,
+        new_tenant_id: int,
+        *,
+        public_id_map: dict[str, str],
+        protocol_template_map: dict[int, int],
+    ) -> None:
+        """Wiederverwendbare Komponenten, Mandantenvorlagen samt Revisionen und Zuweisungen.
+        Referenzen im Layout (Assets, Komponenten, Listen, Konten, Protokollvorlagen …) werden
+        per public_id auf die Kopien umgeschrieben; Systemvorlagen bleiben geteilt."""
+        brand_map = getattr(self, "_document_brand_map", {})
+        brand_revision_map = getattr(self, "_document_brand_revision_map", {})
+        mapping = {**public_id_map, **getattr(self, "_document_asset_public_map", {})}
+        for component in db.scalars(select(DocumentComponent).where(DocumentComponent.tenant_id == source_tenant_id)).all():
+            new_component = _copy_row(component, {"tenant_id": new_tenant_id, "node_json": replace_public_ids(component.node_json, mapping), "created_by": None, "updated_by": None})
+            db.add(new_component)
             db.flush()
-            id_map[row.id] = new_row.id
-        db.commit()
-        for new_id in id_map.values():
-            template = self.document_template_service.repository.get(db, new_id)
-            if template is None:
+            mapping[str(component.public_id).lower()] = str(new_component.public_id)
+        template_map: dict[int, int] = {}
+        for template in db.scalars(select(DocumentTemplate).where(DocumentTemplate.tenant_id == source_tenant_id)).all():
+            new_template = _copy_row(template, {
+                "tenant_id": new_tenant_id,
+                "brand_id": brand_map.get(template.brand_id) if template.brand_id else None,
+                "published_revision_id": None,
+                # Herkunft aus Systemvorlagen bleibt (global), aus Mandantenvorlagen nicht
+                "source_template_id": template.source_template_id if template.origin == "copy" else None,
+                "source_revision_id": template.source_revision_id if template.origin == "copy" else None,
+                "created_by": None,
+                "updated_by": None,
+            })
+            db.add(new_template)
+            db.flush()
+            template_map[template.id] = new_template.id
+            for revision in db.scalars(select(DocumentTemplateRevision).where(DocumentTemplateRevision.template_id == template.id)).all():
+                new_revision = _copy_row(revision, {
+                    "template_id": new_template.id,
+                    "content_json": replace_public_ids(revision.content_json, mapping),
+                    "brand_revision_id": brand_revision_map.get(revision.brand_revision_id) if revision.brand_revision_id else None,
+                    "created_by": None,
+                    "updated_by": None,
+                    "published_by": None,
+                })
+                db.add(new_revision)
+                db.flush()
+                if template.published_revision_id == revision.id:
+                    new_template.published_revision_id = new_revision.id
+        for assignment in db.scalars(select(DocumentTemplateAssignment).where(DocumentTemplateAssignment.tenant_id == source_tenant_id)).all():
+            document_template_id = assignment.document_template_id
+            if document_template_id is not None and document_template_id in template_map:
+                document_template_id = template_map[document_template_id]
+            elif document_template_id is not None:
+                target = db.get(DocumentTemplate, document_template_id)
+                document_template_id = document_template_id if target is not None and target.tenant_id is None else None
+            protocol_template_id = protocol_template_map.get(assignment.protocol_template_id) if assignment.protocol_template_id else None
+            brand_id = brand_map.get(assignment.brand_id) if assignment.brand_id else None
+            if (assignment.protocol_template_id and protocol_template_id is None) or (document_template_id is None and brand_id is None):
                 continue
-            path = self.document_template_service._materialize_template(db, template)
-            self.document_template_service.repository.update(db, template, {"filesystem_path": path})
-        return id_map
+            db.add(DocumentTemplateAssignment(
+                tenant_id=new_tenant_id,
+                document_type=assignment.document_type,
+                protocol_template_id=protocol_template_id,
+                document_template_id=document_template_id,
+                brand_id=brand_id,
+            ))
+        db.commit()
 
     def _clone_list_definitions(self, db: Session, source_tenant_id: int, new_tenant_id: int) -> dict[int, int]:
         rows = db.scalars(select(ListDefinition).where(ListDefinition.tenant_id == source_tenant_id)).all()
@@ -407,6 +560,18 @@ class TenantCloneService:
             id_map[row.id] = new_row.id
         db.commit()
         return id_map
+
+    def _clone_fine_tariff(self, db: Session, source_tenant_id: int, new_tenant_id: int, finance_account_map: dict[int, int]) -> None:
+        tariff = db.get(FineTariff, source_tenant_id)
+        if tariff is None:
+            return
+        db.add(FineTariff(
+            tenant_id=new_tenant_id,
+            account_id=finance_account_map.get(tariff.account_id) if tariff.account_id else None,
+            amount_late=tariff.amount_late,
+            amount_absent=tariff.amount_absent,
+        ))
+        db.commit()
 
     def _clone_finance_accounts(self, db: Session, source_tenant_id: int, new_tenant_id: int) -> dict[int, int]:
         rows = db.scalars(select(FinanceAccount).where(FinanceAccount.tenant_id == source_tenant_id)).all()
@@ -425,7 +590,6 @@ class TenantCloneService:
         source_tenant_id: int,
         new_tenant_id: int,
         *,
-        document_template_map: dict[int, int],
         cycle_config_map: dict[int, int],
         element_definition_map: dict[int, int],
         event_map: dict[int, int],
@@ -439,10 +603,10 @@ class TenantCloneService:
         for row in templates:
             new_row = _copy_row(row, {
                 "tenant_id": new_tenant_id,
-                "document_template_id": document_template_map.get(row.document_template_id) if row.document_template_id else None,
                 "next_event_id": event_map.get(row.next_event_id) if row.next_event_id else None,
                 "last_event_id": event_map.get(row.last_event_id) if row.last_event_id else None,
                 "cycle_config_id": cycle_config_map.get(row.cycle_config_id) if row.cycle_config_id else None,
+                "fine_account_id": finance_account_map.get(row.fine_account_id) if row.fine_account_id else None,
             })
             db.add(new_row)
             db.flush()
@@ -484,6 +648,8 @@ class TenantCloneService:
                         list_definition_map=list_definition_map,
                         list_entry_map=list_entry_map,
                         finance_account_map=finance_account_map,
+                        participant_public_ids=self._participant_public_ids,
+                        event_public_ids=self._event_public_ids,
                     ),
                 })
                 db.add(new_row)
@@ -516,7 +682,7 @@ class TenantCloneService:
         rows = db.scalars(select(Participant).where(Participant.tenant_id == source_tenant_id)).all()
         id_map: dict[int, int] = {}
         for row in rows:
-            new_row = _copy_row(row, {"tenant_id": new_tenant_id})
+            new_row = _copy_row(row, {"tenant_id": new_tenant_id, "login_enabled": False, "password_hash": None, "external_identity_json": {}})
             db.add(new_row)
             db.flush()
             id_map[row.id] = new_row.id
@@ -705,8 +871,25 @@ class TenantCloneService:
             new_assignment_id = submission_assignment_map.get(row.assignment_id)
             if new_assignment_id is None:
                 continue
-            db.add(_copy_row(row, {"assignment_id": new_assignment_id}))
+            db.add(_copy_row(row, {
+                "assignment_id": new_assignment_id,
+                "element_ref": replace_public_ids(row.element_ref, self._element_ref_public_ids),
+            }))
         db.commit()
+
+    @staticmethod
+    def _public_id_map(db: Session, model: type, id_map: dict[int, int]) -> dict[str, str]:
+        """old public_id -> new public_id for every row cloned through `id_map`."""
+        if not id_map:
+            return {}
+        old_ids, new_ids = list(id_map.keys()), list(id_map.values())
+        old_public = dict(db.execute(select(model.id, model.public_id).where(model.id.in_(old_ids))).all())
+        new_public = dict(db.execute(select(model.id, model.public_id).where(model.id.in_(new_ids))).all())
+        return {
+            str(old_public[old_id]).lower(): str(new_public[new_id])
+            for old_id, new_id in id_map.items()
+            if old_id in old_public and new_id in new_public
+        }
 
     def _clone_stored_files(self, db: Session, source_tenant_id: int, new_tenant_id: int) -> dict[int, int]:
         rows = db.scalars(select(StoredFile).where(StoredFile.tenant_id == source_tenant_id)).all()
@@ -718,9 +901,11 @@ class TenantCloneService:
         )
         id_map: dict[int, int] = {}
         for row in rows:
-            root = settings.abgabebox_storage_root if row.id in abgabebox_ids else settings.storage_root
-            new_storage_path = self._clone_stored_file_content(row.storage_path, root=root, new_tenant_id=new_tenant_id)
-            new_row = _copy_row(row, {"tenant_id": new_tenant_id, "storage_path": new_storage_path})
+            namespace = ABGABEBOX if row.id in abgabebox_ids else MAIN
+            new_storage_path = self._clone_stored_file_content(db, row.storage_path, namespace=namespace, new_tenant_id=new_tenant_id)
+            # Eigene Vorschau statt der der Quelle (Audit MAIN-BE-003): sonst teilen sich Quelle und
+            # Klon "<quell_id>.jpg", und Löschen im Klon entfernt das Thumbnail der Quelle.
+            new_row = _copy_row(row, {"tenant_id": new_tenant_id, "storage_path": new_storage_path, "thumbnail_path": None})
             db.add(new_row)
             db.flush()
             id_map[row.id] = new_row.id
@@ -748,7 +933,6 @@ class TenantCloneService:
         new_tenant_id: int,
         *,
         template_map: dict[int, int],
-        document_template_map: dict[int, int],
         event_map: dict[int, int],
     ) -> dict[int, int]:
         rows = db.scalars(select(Protocol).where(Protocol.tenant_id == source_tenant_id)).all()
@@ -760,10 +944,10 @@ class TenantCloneService:
             new_row = _copy_row(row, {
                 "tenant_id": new_tenant_id,
                 "template_id": new_template_id,
-                "document_template_id": document_template_map.get(row.document_template_id) if row.document_template_id else None,
                 "event_id": event_map.get(row.event_id) if row.event_id else None,
-                # document_template_path_snapshot intentionally left pointing at the ORIGINAL
-                # tenant's immutable snapshot directory - see class docstring.
+                # Die Todo-Momentaufnahme referenziert Block-IDs des Quellmandanten - sie wird
+                # nach dem Klonen der Blöcke und Todos umgeschrieben (_clone_todo_snapshots).
+                "todos_snapshot_json": None,
             })
             db.add(new_row)
             db.flush()
@@ -771,7 +955,10 @@ class TenantCloneService:
         db.commit()
         return id_map
 
-    def _clone_protocol_elements(self, db: Session, *, protocol_map: dict[int, int], template_element_map: dict[int, int]) -> dict[int, int]:
+    def _clone_protocol_elements(
+        self, db: Session, *, protocol_map: dict[int, int], template_element_map: dict[int, int],
+        participant_map: dict[int, int], list_definition_map: dict[int, int], list_entry_map: dict[int, int],
+    ) -> dict[int, int]:
         if not protocol_map:
             return {}
         rows = db.scalars(select(ProtocolElement).where(ProtocolElement.protocol_id.in_(protocol_map.keys()))).all()
@@ -783,6 +970,10 @@ class TenantCloneService:
             new_row = _copy_row(row, {
                 "protocol_id": new_protocol_id,
                 "template_element_id": template_element_map.get(row.template_element_id) if row.template_element_id else None,
+                "responsible_assignments_snapshot": remap_responsible_assignments(
+                    row.responsible_assignments_snapshot, participant_map=participant_map,
+                    list_definition_map=list_definition_map, list_entry_map=list_entry_map,
+                ),
             })
             db.add(new_row)
             db.flush()
@@ -821,6 +1012,7 @@ class TenantCloneService:
                     row.configuration_snapshot_json, participant_map=participant_map,
                     event_map=event_map, list_definition_map=list_definition_map, list_entry_map=list_entry_map,
                     finance_account_map=finance_account_map,
+                    participant_public_ids=self._participant_public_ids, event_public_ids=self._event_public_ids,
                 ),
             })
             db.add(new_row)
@@ -922,16 +1114,136 @@ class TenantCloneService:
         event_map: dict[int, int],
         protocol_map: dict[int, int],
         submission_assignment_map: dict[int, int],
-    ) -> None:
+        task_package_item_map: dict[int, int] | None = None,
+        cycle_config_map: dict[int, int] | None = None,
+    ) -> dict[int, int]:
         rows = db.scalars(select(ProtocolTodo).where(ProtocolTodo.tenant_id == source_tenant_id)).all()
+        id_map: dict[int, int] = {}
+        task_package_item_map = task_package_item_map or {}
+        cycle_config_map = cycle_config_map or {}
         for row in rows:
             new_row = _copy_row(row, {
                 "tenant_id": new_tenant_id,
+                "task_package_item_id": task_package_item_map.get(row.task_package_item_id) if row.task_package_item_id else None,
+                "cycle_config_id": cycle_config_map.get(row.cycle_config_id) if row.cycle_config_id else None,
+                "occurrence_key": remap_occurrence_key(row.occurrence_key, event_map),
                 "protocol_element_block_id": protocol_element_block_map.get(row.protocol_element_block_id) if row.protocol_element_block_id else None,
                 "assigned_participant_id": participant_map.get(row.assigned_participant_id) if row.assigned_participant_id else None,
                 "due_event_id": event_map.get(row.due_event_id) if row.due_event_id else None,
                 "closed_in_protocol_id": protocol_map.get(row.closed_in_protocol_id) if row.closed_in_protocol_id else None,
                 "submission_assignment_id": submission_assignment_map.get(row.submission_assignment_id) if row.submission_assignment_id else None,
+                "element_ref": replace_public_ids(row.element_ref, self._element_ref_public_ids),
             })
             db.add(new_row)
+            db.flush()
+            id_map[row.id] = new_row.id
+        db.commit()
+        return id_map
+
+    def _clone_agenda_items(
+        self,
+        db: Session,
+        source_tenant_id: int,
+        new_tenant_id: int,
+        *,
+        template_map: dict[int, int],
+        template_element_map: dict[int, int],
+        protocol_map: dict[int, int],
+        protocol_element_map: dict[int, int],
+    ) -> None:
+        for row in db.scalars(select(AgendaItem).where(AgendaItem.tenant_id == source_tenant_id)).all():
+            template_id = template_map.get(row.template_id)
+            if template_id is None:
+                continue
+            db.add(_copy_row(row, {
+                "tenant_id": new_tenant_id,
+                "template_id": template_id,
+                "template_element_id": template_element_map.get(row.template_element_id) if row.template_element_id else None,
+                "protocol_id": protocol_map.get(row.protocol_id) if row.protocol_id else None,
+                "protocol_element_id": protocol_element_map.get(row.protocol_element_id) if row.protocol_element_id else None,
+            }))
+        db.commit()
+
+    def _clone_task_packages(
+        self,
+        db: Session,
+        source_tenant_id: int,
+        new_tenant_id: int,
+        *,
+        cycle_config_map: dict[int, int],
+        participant_map: dict[int, int],
+        list_definition_map: dict[int, int],
+        list_entry_map: dict[int, int],
+    ) -> dict[int, int]:
+        """Aufgabenpakete samt Zyklus-Zuweisungen und Aufgaben. Verweise auf Listenzeilen/
+        Personen, die nicht mitkopiert wurden, fallen weg."""
+        item_map: dict[int, int] = {}
+        for package in db.scalars(select(TaskPackage).where(TaskPackage.tenant_id == source_tenant_id)).all():
+            new_package = _copy_row(package, {"tenant_id": new_tenant_id})
+            db.add(new_package)
+            db.flush()
+            for package_cycle in db.scalars(select(TaskPackageCycle).where(TaskPackageCycle.task_package_id == package.id)).all():
+                cycle_config_id = cycle_config_map.get(package_cycle.cycle_config_id)
+                if cycle_config_id is not None:
+                    db.add(_copy_row(package_cycle, {"task_package_id": new_package.id, "cycle_config_id": cycle_config_id}))
+            for item in db.scalars(select(TaskPackageItem).where(TaskPackageItem.task_package_id == package.id)).all():
+                responsible = []
+                for entry in item.responsible_json or []:
+                    if entry.get("participant_id"):
+                        participant_id = participant_map.get(int(entry["participant_id"]))
+                        if participant_id:
+                            responsible.append({"participant_id": participant_id})
+                    elif entry.get("list_definition_id") and entry.get("list_entry_id"):
+                        list_definition_id = list_definition_map.get(int(entry["list_definition_id"]))
+                        list_entry_id = list_entry_map.get(int(entry["list_entry_id"]))
+                        if list_definition_id and list_entry_id:
+                            responsible.append({"list_definition_id": list_definition_id, "list_entry_id": list_entry_id})
+                new_item = _copy_row(item, {"task_package_id": new_package.id, "responsible_json": responsible})
+                db.add(new_item)
+                db.flush()
+                item_map[item.id] = new_item.id
+        db.commit()
+        return item_map
+
+    def _clone_protocol_todo_assignees(self, db: Session, *, todo_map: dict[int, int], participant_map: dict[int, int]) -> None:
+        source_todo_ids = list(todo_map)
+        for start in range(0, len(source_todo_ids), 1000):
+            rows = db.scalars(
+                select(ProtocolTodoAssignee).where(ProtocolTodoAssignee.protocol_todo_id.in_(source_todo_ids[start:start + 1000]))
+            ).all()
+            for row in rows:
+                participant_id = participant_map.get(row.participant_id)
+                if participant_id is None:
+                    continue
+                db.add(ProtocolTodoAssignee(protocol_todo_id=todo_map[row.protocol_todo_id], participant_id=participant_id, sort_index=row.sort_index))
+        db.commit()
+
+    def _clone_protocol_todo_files(self, db: Session, *, todo_map: dict[int, int], stored_file_map: dict[int, int]) -> None:
+        source_todo_ids = list(todo_map)
+        for start in range(0, len(source_todo_ids), 1000):
+            rows = db.scalars(
+                select(ProtocolTodoFile).where(ProtocolTodoFile.protocol_todo_id.in_(source_todo_ids[start:start + 1000]))
+            ).all()
+            for row in rows:
+                stored_file_id = stored_file_map.get(row.stored_file_id)
+                if stored_file_id is None:
+                    continue
+                db.add(ProtocolTodoFile(protocol_todo_id=todo_map[row.protocol_todo_id], stored_file_id=stored_file_id, sort_index=row.sort_index))
+        db.commit()
+
+    def _remap_todo_repeat_sources(
+        self, db: Session, *, protocol_element_block_map: dict[int, int], todo_map: dict[int, int]
+    ) -> None:
+        """Second pass for blocks bound to a todo ("Wiederholen aus Todo"): the todos are
+        cloned after the blocks, see remap_repeat_source_todo."""
+        new_block_ids = list(protocol_element_block_map.values())
+        for start in range(0, len(new_block_ids), 1000):
+            blocks = db.scalars(
+                select(ProtocolElementBlock).where(ProtocolElementBlock.id.in_(new_block_ids[start:start + 1000]))
+            ).all()
+            for block in blocks:
+                new_config = remap_repeat_source_todo(block.configuration_snapshot_json, todo_map)
+                if new_config is not None:
+                    block.configuration_snapshot_json = new_config
+                    db.add(block)
         db.commit()

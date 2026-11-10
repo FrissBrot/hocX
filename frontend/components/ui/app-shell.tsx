@@ -1,23 +1,47 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import type { Route } from "next";
 import { ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import { attemptBridgeRedirect } from "@/lib/bridge-redirect";
 import { browserApiFetch } from "@/lib/api/client";
+import { CONNECTIONS_HREF } from "@/lib/calendar-feeds";
 import { getRuntimeConfig } from "@/lib/runtime-config";
 import { SessionInfo } from "@/types/api";
 
 import { buildNav, formatRoleLabel, isNavLinkActive, NavLink } from "@/components/ui/app-shell-nav";
 import { NavIcon } from "@/components/ui/nav-icons";
 import { ToastProvider, useToast } from "@/contexts/toast-context";
-import { ConfirmProvider } from "@/contexts/confirm-context";
-import { ProfileModal } from "@/components/ui/profile-modal";
+import { ConfirmProvider, useConfirm } from "@/contexts/confirm-context";
+import { clearSimilarityGroupsCache } from "@/components/photos/use-similarity-groups";
+import { clearOfflineStore, getOfflineSnapshot } from "@/lib/offline-store";
 import { Menu, MenuDivider, MenuItem, Popover } from "@/components/ui/popover";
 import { ConnectivityStatus } from "@/components/ui/connectivity-status";
 import { CopyrightNotice } from "@/components/ui/copyright-notice";
+import { MobileShell } from "@/components/mobile/mobile-shell";
+import { useIsMobile } from "@/lib/hooks/use-is-mobile";
+
+// Erst beim Oeffnen laden (MFA-Verwaltung, geschuetzter Export, Sprachwahl).
+const ProfileModal = dynamic(() => import("@/components/ui/profile-modal").then((m) => m.ProfileModal), {
+  ssr: false,
+});
+
+// Sitzungspruefung im Browser: Jede Seite liefert die serverseitig frisch geladene Sitzung als
+// initialSession mit; ein eigener Abruf von /api/auth/session ist daher nur noetig, wenn keine
+// mitkam oder der letzte Abruf/die letzte Seite laenger als SESSION_STALE_MS her ist (Rueckkehr
+// in einen Tab, der lange im Hintergrund lag - abgelaufene Sitzung fuehrt dann zum Login).
+// Modulweit, weil AppShell bei jedem Seitenwechsel neu gemountet wird.
+const SESSION_STALE_MS = 60_000;
+let lastSessionCheckAt = 0;
+// Ob in diesem Dokument schon einmal aus dem Browser geprüft wurde. Nur dieser Abruf sieht die
+// echte Domain und kann zur Domain des Mandanten weiterleiten (Bridge); die Sitzung vom Server
+// kommt ohne bridge_redirect_url (withoutBridgeRedirect in lib/api/server.ts). Ein voller
+// Seitenaufruf setzt das Modul zurück, Seitenwechsel in der App nicht.
+let browserSessionChecked = false;
 
 // Login rendert nie auf einer Mandanten-Custom-Domain — von dort muss eine volle Navigation
 // (nicht SPA-Routing) zur Hauptdomain erfolgen, sonst gäbe es dort keine Login-Seite zu zeigen.
@@ -59,7 +83,12 @@ export function AppShell({ children, initialSession = null }: { children: ReactN
 // ToastProvider) is actually available here - AppShell itself only sets up the
 // provider and isn't a descendant of it.
 function AppShellInner({ children, initialSession = null }: { children: ReactNode; initialSession?: SessionInfo | null }) {
+  const t = useTranslations("nav");
+  const tSettings = useTranslations("settings");
+  const confirm = useConfirm();
+  const tCommon = useTranslations("common");
   const showToast = useToast();
+  const isMobile = useIsMobile();
   const pathname = usePathname();
   const router = useRouter();
   const avatarTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -72,11 +101,12 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
   const [protocolExitAnimation, setProtocolExitAnimation] = useState(false);
   const [language, setLanguage] = useState("de");
   const [protocolAccordionEnabled, setProtocolAccordionEnabled] = useState(true);
-  const [sessionStatus, setSessionStatus] = useState(initialSession?.authenticated ? "Ready" : "Loading workspace...");
+  const [protocolWheelEnabled, setProtocolWheelEnabled] = useState(false);
+  const [sessionStatus, setSessionStatus] = useState(initialSession?.authenticated ? t("sessionReady") : t("sessionLoading"));
 
   const navGroups = useMemo(() => buildNav(session), [session]);
   const activeNavGroup = useMemo(
-    () => navGroups.find((group) => group.links.some((link) => isNavLinkActive(link, pathname)))?.title ?? null,
+    () => navGroups.find((group) => group.links.some((link) => isNavLinkActive(link, pathname)))?.titleKey ?? null,
     [navGroups, pathname]
   );
   const [expandedNavGroup, setExpandedNavGroup] = useState<string | null>(null);
@@ -128,24 +158,31 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
   useEffect(() => {
     let cancelled = false;
 
+    // Wendet eine (frisch geladene oder vom Server mitgelieferte) Sitzung an.
+    function applySession(current: SessionInfo) {
+      if (!current.authenticated) {
+        // Explicit "not logged in" from the server → redirect.
+        redirectToLogin(router);
+        return;
+      }
+      if (current.bridge_redirect_url && attemptBridgeRedirect(current.bridge_redirect_url)) {
+        return;
+      }
+      setSession(current);
+      setLanguage(current.user?.preferred_language ?? "de");
+      setProtocolAccordionEnabled(current.user?.protocol_accordion_enabled ?? true);
+      setProtocolWheelEnabled(current.user?.protocol_wheel_enabled ?? false);
+      setSessionStatus(t("sessionReady"));
+    }
+
     async function loadSession() {
+      lastSessionCheckAt = Date.now();
+      browserSessionChecked = true;
       try {
         const current = await browserApiFetch<SessionInfo>("/api/auth/session");
-        if (cancelled) {
-          return;
+        if (!cancelled) {
+          applySession(current);
         }
-        if (!current.authenticated) {
-          // Explicit "not logged in" from the server → redirect.
-          redirectToLogin(router);
-          return;
-        }
-        if (current.bridge_redirect_url && attemptBridgeRedirect(current.bridge_redirect_url)) {
-          return;
-        }
-        setSession(current);
-        setLanguage(current.user?.preferred_language ?? "de");
-        setProtocolAccordionEnabled(current.user?.protocol_accordion_enabled ?? true);
-        setSessionStatus("Ready");
       } catch {
         // Transient errors (network hiccup, backend 500, timeout) must NOT log
         // the user out. The session endpoint always returns HTTP 200 — a throw
@@ -153,31 +190,58 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
         // If the user truly has no session the server-side requireSession() will
         // have already redirected them before this component even mounts.
         if (!cancelled) {
-          setSessionStatus("Ready");
+          setSessionStatus(t("sessionReady"));
         }
       }
     }
 
-    void loadSession();
+    function refreshIfStale() {
+      if (document.visibilityState === "visible" && Date.now() - lastSessionCheckAt > SESSION_STALE_MS) {
+        void loadSession();
+      }
+    }
+
+    // Mount: die mitgelieferte Sitzung kommt frisch vom Server und wird sofort angewendet. Beim
+    // ersten Mount des Dokuments zusätzlich im Hintergrund aus dem Browser prüfen (Bridge).
+    if (initialSession?.authenticated) {
+      lastSessionCheckAt = Date.now();
+      applySession(initialSession);
+      if (!browserSessionChecked) {
+        void loadSession();
+      }
+    } else {
+      void loadSession();
+    }
+
+    window.addEventListener("focus", refreshIfStale);
+    document.addEventListener("visibilitychange", refreshIfStale);
     return () => {
       cancelled = true;
+      window.removeEventListener("focus", refreshIfStale);
+      document.removeEventListener("visibilitychange", refreshIfStale);
     };
-  }, [initialSession, router]);
+    // Laeuft beim Mount und wenn der Server eine neue Sitzung mitliefert (router.refresh(),
+    // Seitenwechsel innerhalb derselben Route) - dann ohne zusaetzlichen Request.
+  }, [initialSession, router, t]);
 
   const activeCrumb = useMemo(() => {
     for (const group of navGroups) {
       for (const link of group.links) {
         if (isNavLinkActive(link, pathname)) {
-          return { group: group.title, label: link.label };
+          return { group: group.titleKey ? t(group.titleKey) : null, label: t(link.labelKey) };
         }
       }
     }
-    return { group: null, label: "Dashboard" };
-  }, [navGroups, pathname]);
+    // Seiten aus dem Benutzermenue stehen nicht in der Sidebar-Navigation.
+    if (pathname === CONNECTIONS_HREF) {
+      return { group: null, label: t("connections") };
+    }
+    return { group: null, label: t("dashboard") };
+  }, [navGroups, pathname, t]);
 
-  const tenantName = session?.current_tenant?.name ?? "Mandant";
+  const tenantName = session?.current_tenant?.name ?? t("defaultTenantName");
   const userInitial = session?.user?.display_name?.slice(0, 1) ?? "U";
-  const roleLabel = formatRoleLabel(session?.current_role) || sessionStatus;
+  const roleLabel = formatRoleLabel(session, t) || sessionStatus;
 
   function selectTheme(nextTheme: "light" | "dark" | "auto") {
     setThemePreference(nextTheme);
@@ -192,6 +256,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
         body: JSON.stringify({
           preferred_language: language,
           protocol_accordion_enabled: protocolAccordionEnabled,
+          protocol_wheel_enabled: protocolWheelEnabled,
         })
       });
       const refreshed = await browserApiFetch<SessionInfo>("/api/auth/session");
@@ -199,23 +264,66 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
       setProfileModalOpen(false);
       router.refresh();
     } catch {
-      showToast("Profil konnte nicht gespeichert werden.", "error");
+      showToast(tSettings("profileModal.saveFailed"), "error");
     }
   }
 
   async function logout() {
+    // Ungesendete Änderungen gehen beim Abmelden verloren - die Ablage wird geleert, damit auf
+    // einem geteilten Gerät kein Protokolltext zurückbleibt (Datenschutz-Audit PRIV-019).
+    if (getOfflineSnapshot().pending > 0) {
+      const ok = await confirm({ tone: "danger", message: tSettings("logoutPendingConfirm"), confirmLabel: tSettings("logoutAnyway") });
+      if (!ok) return;
+    }
     try {
       await browserApiFetch("/api/auth/logout", { method: "POST" });
+      clearOfflineStore();
+      clearSimilarityGroupsCache();
       window.sessionStorage.removeItem("hocx-tenant-prompted");
       redirectToLogin(router);
     } catch {
-      showToast("Abmelden fehlgeschlagen. Bitte erneut versuchen.", "error");
+      showToast(tSettings("logoutFailed"), "error");
     }
+  }
+
+  const profileModal = profileModalOpen ? (
+    <ProfileModal
+      open
+      onClose={() => setProfileModalOpen(false)}
+      language={language}
+      onLanguageChange={setLanguage}
+      protocolAccordionEnabled={protocolAccordionEnabled}
+      onProtocolAccordionChange={setProtocolAccordionEnabled}
+      protocolWheelEnabled={protocolWheelEnabled}
+      onProtocolWheelChange={setProtocolWheelEnabled}
+      onSave={saveProfile}
+      onLogout={() => void logout()}
+    />
+  ) : null;
+
+  // Mobile (bis 900 px): eigene Shell mit Tableiste statt Sidebar. Dieselben Routen, nur die
+  // Bereiche aus dem Mobile-Design stehen in der Navigation (siehe mobile-shell.tsx).
+  if (isMobile) {
+    return (
+      <>
+        <MobileShell
+          session={session}
+          themePreference={themePreference}
+          themeReady={themeReady}
+          onSelectTheme={selectTheme}
+          onOpenProfile={() => setProfileModalOpen(true)}
+          onLogout={() => void logout()}
+        >
+          {children}
+        </MobileShell>
+        {profileModal}
+      </>
+    );
   }
 
   return (
     <main className={`app-frame${isProtocolWriting ? " app-frame-writing" : ""}${protocolExitAnimation ? " app-frame-protocol-exit" : ""}`}>
-      <ConnectivityStatus />
+      <ConnectivityStatus userId={session?.user?.id ?? null} />
       <div className="shell">
         {isProtocolWriting && (
           <div
@@ -243,7 +351,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
               <img
                 className="brand-mark brand-mark-tenant"
                 src={session.current_tenant.profile_image_url}
-                alt={`Logo von ${tenantName}`}
+                alt={t("tenantLogoAlt", { tenant: tenantName })}
               />
             ) : (
               <div className="brand-mark">hX</div>
@@ -263,26 +371,26 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
                   onClick={() => setMobileNavOpen(false)}
                 >
                   <NavIcon name={link.icon} className="nav-link-icon" />
-                  <span className="nav-link-label">{link.label}</span>
+                  <span className="nav-link-label">{t(link.labelKey)}</span>
                 </Link>
               );
-              if (group.title === null) {
+              if (group.titleKey === null) {
                 return (
                   <div className="nav-links" key="ungrouped">
                     {group.links.map(renderLink)}
                   </div>
                 );
               }
-              const isExpanded = expandedNavGroup === group.title;
+              const isExpanded = expandedNavGroup === group.titleKey;
               return (
-                <div className={`nav-group${isExpanded ? " nav-group-expanded" : ""}`} key={group.title}>
+                <div className={`nav-group${isExpanded ? " nav-group-expanded" : ""}`} key={group.titleKey}>
                   <button
                     type="button"
                     className="nav-group-label"
                     aria-expanded={isExpanded}
-                    onClick={() => setExpandedNavGroup(group.title)}
+                    onClick={() => setExpandedNavGroup(group.titleKey)}
                   >
-                    <span>{group.title}</span>
+                    <span>{t(group.titleKey)}</span>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" width={14} height={14} aria-hidden="true">
                       <path d="M9 18l6-6-6-6" />
                     </svg>
@@ -320,10 +428,10 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
           <header className="topbar">
             <div className="topbar-actions">
               <button type="button" className="button-ghost mobile-nav-toggle" onClick={() => setMobileNavOpen((current) => !current)}>
-                {mobileNavOpen ? "Schliessen" : "☰"}
+                {mobileNavOpen ? t("menuToggleClose") : "☰"}
               </button>
             </div>
-            <div className="topbar-breadcrumb">
+            <nav className="topbar-breadcrumb" aria-label={tCommon("breadcrumbNav")}>
               {activeCrumb.group ? (
                 <>
                   <span className="topbar-breadcrumb-group">{activeCrumb.group}</span>
@@ -331,7 +439,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
                 </>
               ) : null}
               <span className="topbar-breadcrumb-page">{activeCrumb.label}</span>
-            </div>
+            </nav>
             <Popover open={avatarMenuOpen} onOpenChange={setAvatarMenuOpen} anchorRef={avatarTriggerRef} align="start">
               <Menu>
                 <div className="menu-header">
@@ -345,18 +453,27 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
                     setProfileModalOpen(true);
                   }}
                 >
-                  Profil bearbeiten
+                  {t("profileEdit")}
+                </MenuItem>
+                <MenuItem
+                  selected={pathname === CONNECTIONS_HREF}
+                  onSelect={() => {
+                    setAvatarMenuOpen(false);
+                    router.push(CONNECTIONS_HREF as Route);
+                  }}
+                >
+                  {t("connections")}
                 </MenuItem>
                 <MenuDivider />
-                <div className="menu-header menu-header-tight">Darstellung</div>
+                <div className="menu-header menu-header-tight">{t("appearance")}</div>
                 <MenuItem selected={themeReady && themePreference === "light"} onSelect={() => selectTheme("light")}>
-                  Hell
+                  {t("themeLight")}
                 </MenuItem>
                 <MenuItem selected={themeReady && themePreference === "dark"} onSelect={() => selectTheme("dark")}>
-                  Dunkel
+                  {t("themeDark")}
                 </MenuItem>
                 <MenuItem selected={themeReady && themePreference === "auto"} onSelect={() => selectTheme("auto")}>
-                  Automatisch
+                  {t("themeAuto")}
                 </MenuItem>
                 <MenuDivider />
                 <MenuItem
@@ -366,7 +483,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
                     void logout();
                   }}
                 >
-                  Abmelden
+                  {t("logout")}
                 </MenuItem>
               </Menu>
             </Popover>
@@ -375,16 +492,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
         </div>
       </div>
 
-      <ProfileModal
-        open={profileModalOpen}
-        onClose={() => setProfileModalOpen(false)}
-        language={language}
-        onLanguageChange={setLanguage}
-        protocolAccordionEnabled={protocolAccordionEnabled}
-        onProtocolAccordionChange={setProtocolAccordionEnabled}
-        onSave={saveProfile}
-        onLogout={() => void logout()}
-      />
+      {profileModal}
     </main>
   );
 }

@@ -20,6 +20,11 @@ on:
         description: "Zum Schutz vor Fehlklicks exakt DEPLOY eingeben"
         required: true
         type: string
+      allow_critical_vulnerabilities:
+        description: "Nur im Notfall: Images trotz kritischer, behebbarer OS-Schwachstellen freigeben (Trivy). Danach Images neu bauen."
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -35,18 +40,39 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       candidate_sha: ${{ steps.proof.outputs.candidate_sha }}
+      source_tag: ${{ steps.normalize.outputs.source_tag }}
+      release_tag: ${{ steps.normalize.outputs.release_tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
-      - name: Validate production confirmation and tags
+      # Manuell eingetippte/eingefuegte workflow_dispatch-Inputs bringen leicht ein
+      # unsichtbares, fuehrendes/anhaengendes Leerzeichen mit (Copy-Paste aus einer
+      # Zusammenfassung, Autovervollstaendigung) - ohne Trim scheitert ein sonst
+      # korrekter Tag an einer verankerten Regex mit einer Fehlermeldung, die die Ursache
+      # nicht zeigt (fand genau das bei "test-20261004-160b5c8-r13 "). Einmal hier
+      # getrimmt und als Job-Output weitergegeben, damit jeder spaetere Schritt/Job
+      # (inklusive promote/publish-release) densel­ben bereinigten Wert sieht statt
+      # erneut die rohen inputs.* zu lesen.
+      - name: Normalize tag inputs
+        id: normalize
         env:
           SOURCE_TAG: ${{ inputs.source_tag }}
           RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          echo "source_tag=$(printf '%s' "$SOURCE_TAG" | xargs)" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$(printf '%s' "$RELEASE_TAG" | xargs)" >> "$GITHUB_OUTPUT"
+
+      - name: Validate production confirmation and tags
+        env:
+          SOURCE_TAG: ${{ steps.normalize.outputs.source_tag }}
+          RELEASE_TAG: ${{ steps.normalize.outputs.release_tag }}
           CONFIRM_PRODUCTION: ${{ inputs.confirm_production }}
         run: |
           set -euo pipefail
+          CONFIRM_PRODUCTION="$(printf '%s' "$CONFIRM_PRODUCTION" | xargs)"
           [ "$CONFIRM_PRODUCTION" = DEPLOY ] || {
             echo "Prod-Promotion nicht bestaetigt: exakt DEPLOY eingeben." >&2
             exit 1
@@ -65,13 +91,15 @@ jobs:
         id: proof
         env:
           GH_TOKEN: ${{ github.token }}
-          SOURCE_TAG: ${{ inputs.source_tag }}
+          SOURCE_TAG: ${{ steps.normalize.outputs.source_tag }}
         run: |
           set -euo pipefail
           candidate_sha="$(printf '%s' "$SOURCE_TAG" | sed -E 's/^test-[0-9]{8}-([0-9a-f]{7,40})-r[0-9]+$/\1/')"
-          proof="$(gh api \
+          # --paginate: aeltere Kandidaten jenseits der neuesten 100 Deployments bleiben
+          # promotebar (Audit MAIN-OPS-016). awk statt head, damit gh kein SIGPIPE bekommt.
+          proof="$(gh api --paginate \
             'repos/${{ github.repository }}/deployments?environment=test&task=hocx-candidate&per_page=100' \
-            --jq "first(.[] | select(.payload.candidate_tag == \"$SOURCE_TAG\")) | [.id, .sha] | @tsv")"
+            --jq ".[] | select(.payload.candidate_tag == \"$SOURCE_TAG\") | [.id, .sha] | @tsv" | awk 'NR == 1')"
           read -r deployment_id deployment_sha <<< "$proof"
           [ -n "$deployment_id" ] || {
             echo "Kein Testnachweis fuer $SOURCE_TAG vorhanden." >&2
@@ -93,7 +121,7 @@ jobs:
       - name: Prepare changelog and check existing tag
         env:
           CANDIDATE_SHA: ${{ steps.proof.outputs.candidate_sha }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_TAG: ${{ steps.normalize.outputs.release_tag }}
         run: |
           set -euo pipefail
           git fetch origin "$CANDIDATE_SHA"
@@ -107,14 +135,62 @@ jobs:
           python3 scripts/release_notes.py "$RELEASE_TAG" "$RUNNER_TEMP/candidate-changelog.md" > release-notes.md
 
       - name: Preserve verified release notes
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-notes
           path: release-notes.md
           retention-days: 7
 
-  promote:
+  # Security-Audit release/1.2.0, SEC-017: alle Images werden vor der Freigabe gescannt; erst wenn
+  # jeder Scan bestanden hat, startet promote - sonst wäre ein Release teilweise freigegeben.
+  scan-candidate:
     needs: verify-tested-candidate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      matrix:
+        service:
+          - backend
+          - frontend
+          - abgabebox-backend
+          - abgabebox-frontend
+          - docs
+          - photo-analysis-worker
+    steps:
+      - name: Lowercase image owner
+        run: echo "OWNER_LC=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+      # Kritische Schwachstellen mit verfügbarem Fix stoppen die Freigabe (Abhilfe: Images neu bauen,
+      # Basis-Images aktualisieren). HIGH steht nur in der Summary. Trivy per Digest gepinnt, wie
+      # alle Actions/Images in diesem Repo.
+      - name: Scan candidate image (Trivy)
+        env:
+          IMAGE: ghcr.io/${{ env.OWNER_LC }}/hocx-${{ matrix.service }}:${{ needs.verify-tested-candidate.outputs.source_tag }}
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          ALLOW_CRITICAL: ${{ inputs.allow_critical_vulnerabilities }}
+        run: |
+          set -uo pipefail
+          trivy() { docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa "$@"; }
+          {
+            echo "### Trivy: ${{ matrix.service }}"
+            echo '```'
+            trivy image --quiet --scanners vuln --ignore-unfixed --severity HIGH,CRITICAL --format table "$IMAGE"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if ! trivy image --quiet --scanners vuln --ignore-unfixed --severity CRITICAL --exit-code 1 --format table "$IMAGE"; then
+            if [ "$ALLOW_CRITICAL" = "true" ]; then
+              echo "::warning::Kritische Schwachstellen in $IMAGE, Freigabe per allow_critical_vulnerabilities erzwungen"
+            else
+              echo "::error::Kritische, behebbare Schwachstellen in $IMAGE - Images neu bauen oder im Notfall allow_critical_vulnerabilities setzen"
+              exit 1
+            fi
+          fi
+
+  promote:
+    needs: [verify-tested-candidate, scan-candidate]
     runs-on: ubuntu-latest
     environment:
       name: production
@@ -134,8 +210,8 @@ jobs:
 
       - name: Validate tags
         env:
-          SOURCE_TAG: ${{ inputs.source_tag }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_TAG: ${{ needs.verify-tested-candidate.outputs.source_tag }}
+          RELEASE_TAG: ${{ needs.verify-tested-candidate.outputs.release_tag }}
         run: |
           set -euo pipefail
           tag_regex='^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$'
@@ -149,38 +225,37 @@ jobs:
           fi
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Ensure candidate image exists
         env:
-          IMAGE: ghcr.io/${{ env.OWNER_LC }}/hocx-${{ matrix.service }}:${{ inputs.source_tag }}
+          IMAGE: ghcr.io/${{ env.OWNER_LC }}/hocx-${{ matrix.service }}:${{ needs.verify-tested-candidate.outputs.source_tag }}
         run: docker buildx imagetools inspect "$IMAGE" > /dev/null
 
       - name: Promote tested image to release tag
         env:
-          SOURCE_IMAGE: ghcr.io/${{ env.OWNER_LC }}/hocx-${{ matrix.service }}:${{ inputs.source_tag }}
-          RELEASE_IMAGE: ghcr.io/${{ env.OWNER_LC }}/hocx-${{ matrix.service }}:${{ inputs.release_tag }}
+          SOURCE_IMAGE: ghcr.io/${{ env.OWNER_LC }}/hocx-${{ matrix.service }}:${{ needs.verify-tested-candidate.outputs.source_tag }}
+          RELEASE_IMAGE: ghcr.io/${{ env.OWNER_LC }}/hocx-${{ matrix.service }}:${{ needs.verify-tested-candidate.outputs.release_tag }}
         run: docker buildx imagetools create -t "$RELEASE_IMAGE" "$SOURCE_IMAGE"
 
       - name: Update latest tag
         if: ${{ inputs.update_latest }}
         env:
-          SOURCE_IMAGE: ghcr.io/${{ env.OWNER_LC }}/hocx-${{ matrix.service }}:${{ inputs.source_tag }}
+          SOURCE_IMAGE: ghcr.io/${{ env.OWNER_LC }}/hocx-${{ matrix.service }}:${{ needs.verify-tested-candidate.outputs.source_tag }}
           LATEST_IMAGE: ghcr.io/${{ env.OWNER_LC }}/hocx-${{ matrix.service }}:latest
         run: docker buildx imagetools create -t "$LATEST_IMAGE" "$SOURCE_IMAGE"
 
       - name: Write summary
         env:
           SERVICE: ${{ matrix.service }}
-          SOURCE_TAG: ${{ inputs.source_tag }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_TAG: ${{ needs.verify-tested-candidate.outputs.source_tag }}
+          RELEASE_TAG: ${{ needs.verify-tested-candidate.outputs.release_tag }}
           UPDATE_LATEST: ${{ inputs.update_latest }}
         run: |
           {
@@ -198,11 +273,11 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: release-notes
 
@@ -211,8 +286,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           CANDIDATE_SHA: ${{ needs.verify-tested-candidate.outputs.candidate_sha }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
-          SOURCE_TAG: ${{ inputs.source_tag }}
+          RELEASE_TAG: ${{ needs.verify-tested-candidate.outputs.release_tag }}
+          SOURCE_TAG: ${{ needs.verify-tested-candidate.outputs.source_tag }}
           UPDATE_LATEST: ${{ inputs.update_latest }}
         run: |
           set -euo pipefail

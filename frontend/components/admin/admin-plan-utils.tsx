@@ -1,3 +1,5 @@
+import { useTranslations } from "next-intl";
+
 import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { NavIconKey } from "@/components/ui/nav-icons";
@@ -36,12 +38,14 @@ export function formatChfShort(rp: number | null | undefined): string {
   return Number.isInteger(francs) ? `CHF ${francs}.–` : `CHF ${francs.toFixed(2)}`;
 }
 
+type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
+
 /** "CHF 190.00 / Jahr" bzw. "Kein Preis festgelegt" für eine Tabellenzelle. */
-export function formatPlanPrice(plan: AdminPlan | undefined, cycle: "monthly" | "yearly"): string {
-  if (!plan) return "Kein Plan zugewiesen";
+export function formatPlanPrice(plan: AdminPlan | undefined, cycle: "monthly" | "yearly", t: TFunc): string {
+  if (!plan) return t("noPlanAssigned");
   const rp = cycle === "monthly" ? plan.price_monthly_rp : plan.price_yearly_rp;
-  if (rp === null) return "Kein Preis festgelegt";
-  return `CHF ${(rp / 100).toFixed(2)} / ${cycle === "monthly" ? "Monat" : "Jahr"}`;
+  if (rp === null) return t("noPriceSet");
+  return t("pricePerCycle", { price: `CHF ${(rp / 100).toFixed(2)}`, cycle: cycle === "monthly" ? t("month") : t("year") });
 }
 
 const FEATURE_ICON_HINTS: [RegExp, NavIconKey][] = [
@@ -96,13 +100,31 @@ export function estimateSubscriptionCost({
   cycle: "monthly" | "yearly";
   addOns: AdminFeature[];
   discountPercent: number;
-}): { planRp: number | null; addOnRp: number; totalRp: number | null } {
+}): { planRp: number | null; addOnRp: number; subtotalRp: number | null; totalRp: number | null } {
   const planRp = plan ? (cycle === "monthly" ? plan.price_monthly_rp : plan.price_yearly_rp) : null;
   const perMonth = addOns.reduce((sum, f) => sum + (f.standalone_price_monthly_rp ?? 0), 0);
   const addOnRp = cycle === "monthly" ? perMonth : perMonth * 12;
-  if (planRp === null && addOnRp === 0) return { planRp, addOnRp, totalRp: null };
+  if (planRp === null && addOnRp === 0) return { planRp, addOnRp, subtotalRp: null, totalRp: null };
   const subtotal = (planRp ?? 0) + addOnRp;
-  return { planRp, addOnRp, totalRp: Math.round(subtotal * ((100 - discountPercent) / 100)) };
+  return { planRp, addOnRp, subtotalRp: subtotal, totalRp: discountedRp(subtotal, discountPercent) };
+}
+
+/** Betrag nach Rabatt, kaufmännisch gerundet - wie cashflow_service.discounted_rp. */
+export function discountedRp(subtotalRp: number, discountPercent: number): number {
+  return Math.round((subtotalRp * (100 - discountPercent)) / 100);
+}
+
+/** Rabatt auf 0–100 % mit höchstens 4 Nachkommastellen begrenzen (Genauigkeit der Datenbank). */
+export function clampDiscountPercent(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(100, Math.max(0, Math.round(value * 10_000) / 10_000));
+}
+
+/** Rabatt in Prozent, der aus dem Preis ohne Rabatt den gewünschten Preis macht. Vier
+ * Nachkommastellen reichen, damit der Preis auf den Rappen genau herauskommt. */
+export function discountPercentForPrice(subtotalRp: number, targetRp: number): number {
+  if (subtotalRp <= 0) return 0;
+  return clampDiscountPercent((1 - targetRp / subtotalRp) * 100);
 }
 
 /** Auswahlkarte eines Plans (Name, Limits, Preis) - "Neuer Mandant" und Tab "Plan & Abo". */
@@ -119,6 +141,7 @@ export function PlanOption({
   cycle: "monthly" | "yearly";
   onSelect: () => void;
 }) {
+  const t = useTranslations("admin.plans");
   const price = cycle === "monthly" ? plan.price_monthly_rp : plan.price_yearly_rp;
   return (
     <label className={checked ? "admin-plan-option admin-plan-option-active" : "admin-plan-option"}>
@@ -126,28 +149,29 @@ export function PlanOption({
       <span className="admin-plan-option-copy">
         <span className="admin-plan-option-title">
           <strong>{plan.name}</strong>
-          {!plan.is_bookable ? <Badge className="admin-badge-sm">nicht buchbar</Badge> : null}
+          {!plan.is_bookable ? <Badge className="admin-badge-sm">{t("notBookable")}</Badge> : null}
         </span>
         <span className="muted">
-          {plan.included_user_limit === null ? "Unbegrenzt Benutzer" : `${plan.included_user_limit} Benutzer`}
+          {plan.included_user_limit === null ? t("unlimitedUsers") : t("userCount", { count: plan.included_user_limit })}
           {" · "}
-          {plan.included_storage_bytes === null ? "kein Speicherlimit" : formatFileSize(plan.included_storage_bytes)}
+          {plan.included_storage_bytes === null ? t("noStorageLimit") : formatFileSize(plan.included_storage_bytes)}
         </span>
       </span>
-      <span className="admin-plan-option-price">{price === null ? "–" : `${formatChfShort(price)} / ${cycle === "monthly" ? "Monat" : "Jahr"}`}</span>
+      <span className="admin-plan-option-price">{price === null ? "–" : t("pricePerCycle", { price: formatChfShort(price), cycle: cycle === "monthly" ? t("month") : t("year") })}</span>
     </label>
   );
 }
 
 export function BillingCycleToggle({ value, onChange }: { value: "monthly" | "yearly"; onChange: (value: "monthly" | "yearly") => void }) {
+  const t = useTranslations("admin.plans");
   return (
     <div>
       <FilterTabs
         value={value}
         onChange={onChange}
         options={[
-          { value: "monthly", label: "Monatlich" },
-          { value: "yearly", label: "Jährlich" },
+          { value: "monthly", label: t("monthly") },
+          { value: "yearly", label: t("yearly") },
         ]}
       />
     </div>

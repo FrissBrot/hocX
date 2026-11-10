@@ -155,7 +155,8 @@ def test_delete_album_share_rejects_an_unrelated_tenant(db):
 
     with pytest.raises(HTTPException) as exc_info:
         files_routes.delete_album_share(album.id, partner.public_id, db, stranger_user)
-    assert exc_info.value.status_code == 403
+    # 404 unter Row-Level-Security (Migration 0132): die fremde Zeile ist dann gar nicht sichtbar.
+    assert exc_info.value.status_code in (403, 404)
 
 
 def test_delete_album_share_lets_the_partner_leave(db):

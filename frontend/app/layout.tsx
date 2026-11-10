@@ -1,6 +1,15 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import { getServerVersion } from "@/lib/server-version";
+import { headers } from "next/headers";
 import { Inter } from "next/font/google";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import { getMainAppUrl } from "@/lib/site-config";
+import { ClientMessagesBridge } from "@/components/i18n/client-messages-bridge";
+import { ViewportProvider } from "@/lib/hooks/use-is-mobile";
+import { isMobileUserAgent } from "@/lib/utils/viewport";
+import { NONCE_HEADER } from "@/lib/csp";
+import { pickNamespaces, ROOT_NAMESPACES } from "@/lib/i18n/message-scopes";
 import "./tokens.css";
 import "./globals.css";
 
@@ -9,13 +18,18 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "sw
 export async function generateMetadata(): Promise<Metadata> {
   const baseUrl = getMainAppUrl();
   const metadataBase = baseUrl ? new URL(baseUrl) : undefined;
+  const t = await getTranslations("common.meta");
 
   return {
     metadataBase,
     title: "hocX",
-    description: "Protocol and template management workspace",
+    description: t("description"),
   };
 }
+
+// viewport-fit=cover: die Mobile-Tableiste reserviert ueber env(safe-area-inset-bottom) selbst
+// Platz fuer den Home-Indikator, statt dass der Browser einen leeren Streifen darunter laesst.
+export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 // Ohne das wuerde Next.js Routen ohne eigene dynamische Datenabhaengigkeit (z.B. /login)
 // statisch zur Build-Zeit vorrendern - dann wuerde das untenstehende __HOCX_CONFIG__-Script
@@ -23,29 +37,42 @@ export async function generateMetadata(): Promise<Metadata> {
 // Request die echten Laufzeit-Werte (Domain/Version dieser konkreten Umgebung) zu lesen.
 export const dynamic = "force-dynamic";
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   // Server-seitig gelesen (nicht NEXT_PUBLIC_*), damit dasselbe, in der CI gebaute Image
   // in Test und Prod mit unterschiedlichen Domains/Versionen laufen kann, ohne dass diese
   // Werte zur Build-Zeit im Client-Bundle eingefroren werden.
   const runtimeConfig = {
     mainAppDomain: process.env.TRAEFIK_DOMAIN || null,
-    version: process.env.HOCX_VERSION || "dev"
+    ...getServerVersion()
   };
 
+  // Aufgeloest von i18n/request.ts (Cookie > Accept-Language > Default) - siehe dort fuer die
+  // volle Prioritaetskette inkl. der gespeicherten Benutzerpraeferenz.
+  const locale = await getLocale();
+  // Nur die global gebrauchten Namespaces; die Bereiche legen ihre eigenen per AreaIntlProvider
+  // in ihrem layout.tsx nach (siehe lib/i18n/message-scopes.ts).
+  const messages = pickNamespaces(await getMessages(), ROOT_NAMESPACES);
+  const requestHeaders = await headers();
+  const initialMobile = isMobileUserAgent(requestHeaders.get("user-agent"));
+  // Von proxy.ts pro Request gesetzt (Nonce-CSP, MAIN-FE-013).
+  const nonce = requestHeaders.get(NONCE_HEADER) ?? undefined;
+
   return (
-    <html lang="de" className={inter.variable} suppressHydrationWarning>
-      {/* Plain <script> statt next/script: Next 16/React 19 warnt bei <Script strategy="beforeInteractive">
-          im <body> ("Encountered a script tag while rendering React component"). Das Layout ist eine
+    <html lang={locale} className={inter.variable} suppressHydrationWarning>
+      {/* Plain script statt next/script: Next 16/React 19 warnt bei Script strategy beforeInteractive
+          im body ("Encountered a script tag while rendering React component"). Das Layout ist eine
           Server Component, die Tags landen also unveraendert im initialen HTML und laufen vor der Hydration. */}
       <head>
         <script
           id="hocx-runtime-config"
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `window.__HOCX_CONFIG__ = ${JSON.stringify(runtimeConfig).replace(/</g, "\\u003c")};`
           }}
         />
         <script
           id="hocx-theme"
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `
               (function () {
@@ -64,7 +91,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         />
       </head>
       <body suppressHydrationWarning>
-        {children}
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <ClientMessagesBridge />
+          <ViewportProvider initialMobile={initialMobile}>{children}</ViewportProvider>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

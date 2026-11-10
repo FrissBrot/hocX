@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 
 import { buildDangerGradientStops } from "./hiking-tour-elevation-danger-gradient";
@@ -10,23 +11,23 @@ import { Area, AreaChart, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAx
 import { ElevationProfilePoint, HikingTourWaypoint, MarchTimeTable, TerrainDangerSegment } from "@/types/api";
 
 function ElevationTooltip({ active, payload }: { active?: boolean; payload?: { payload: ElevationProfilePoint }[] }) {
+  const t = useTranslations("wanderplaner");
   if (!active || !payload?.length) return null;
   const point = payload[0].payload;
   return (
     <div className="stats-tooltip">
       <div className="stats-tooltip-row">
-        <span className="stats-tooltip-name">Distanz:</span>
-        <span className="stats-tooltip-val">{(point.distance_m / 1000).toFixed(2)} km</span>
+        <span className="stats-tooltip-name">{t("elevationChart.distance")}</span>
+        <span className="stats-tooltip-val">{t("units.km", { value: (point.distance_m / 1000).toFixed(2) })}</span>
       </div>
       <div className="stats-tooltip-row">
-        <span className="stats-tooltip-name">Höhe:</span>
-        <span className="stats-tooltip-val">{Math.round(point.elevation_m)} m</span>
+        <span className="stats-tooltip-name">{t("elevationChart.elevation")}</span>
+        <span className="stats-tooltip-val">{t("units.meters", { value: String(Math.round(point.elevation_m)) })}</span>
       </div>
     </div>
   );
 }
 
-type RechartsHoverState = { activePayload?: { payload: ElevationProfilePoint }[] } | null;
 
 export function HikingTourElevationChart({
   points,
@@ -91,7 +92,11 @@ export function HikingTourElevationChart({
       <AreaChart
         data={points}
         margin={{ top: labelHeight, right: 8, bottom: 0, left: 0 }}
-        onMouseMove={(state: RechartsHoverState) => onHoverPoint?.(state?.activePayload?.[0]?.payload ?? null)}
+        onMouseMove={(state) => {
+          // Recharts 3 liefert nur noch den Index des aktiven Datenpunkts (kein activePayload).
+          const index = state?.activeTooltipIndex;
+          onHoverPoint?.(index === null || index === undefined ? null : (points[Number(index)] ?? null));
+        }}
         onMouseLeave={() => onHoverPoint?.(null)}
       >
         <defs>

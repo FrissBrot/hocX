@@ -4,11 +4,19 @@ import uuid
 from datetime import date, datetime
 from typing import Literal
 
+from app.schemas.documents import DocumentSummary
 from pydantic import BaseModel, Field
 
-FileOverviewSource = Literal["protocol_image", "word_import", "submission_upload", "gallery_upload"]
+FileOverviewSource = Literal["protocol_image", "word_import", "submission_upload", "gallery_upload", "protocol_export"]
 
 PhotoAlbumKind = Literal["manual", "cycle", "submission", "submission_element", "hiking_tour"]
+
+DateSource = Literal["exif", "estimated", "upload", "context"]
+
+# Ergebnis je Datei eines Uploads bzw. Vorab-Abgleichs (siehe UPLOAD_DUPLICATES.md).
+UploadFileStatus = Literal["uploaded", "skipped", "metadata_updated", "failed"]
+PrecheckStatus = Literal["upload_required", "already_exists", "metadata_updated", "fallback_required"]
+MetadataField = Literal["taken_at", "gps", "camera", "dimensions", "orientation", "estimated_taken_on"]
 
 
 class FileAlbumRef(BaseModel):
@@ -66,8 +74,15 @@ class FileOverviewItem(BaseModel):
     width: int | None = None
     height: int | None = None
     # The photo's logical date for the Fotos page's date-group headers - protocol/word-
-    # import date, the Termin's event_date for a gallery upload, else the upload date.
+    # import date, else the central capture-date priority (capture_date.py): real EXIF date,
+    # estimated date, upload date.
     group_date: date | None = None
+    # Woher group_date stammt: "exif" (echtes Aufnahmedatum), "estimated" (geschaetzt),
+    # "upload" (Fallback Uploaddatum) oder "context" (Protokoll-/Word-Import-Datum). Steuert
+    # die dezente Kennzeichnung in der Galerie.
+    date_source: DateSource = "upload"
+    exif_taken_at: datetime | None = None
+    estimated_taken_on: date | None = None
     # Short context label for that date group's header (protocol title + block title, word-
     # import display name, submission assignment title, or event title) - None when there's
     # nothing more specific than the plain upload date (e.g. an event-less gallery upload).
@@ -77,6 +92,9 @@ class FileOverviewItem(BaseModel):
     # Live Photo: content URL of the short MP4 the Fotos grid plays on hover - None for every
     # ordinary photo (see apple_media.py).
     live_video_url: str | None = None
+    # Logisches Dokument hinter diesem Eintrag (PDF-Ansicht, Verarbeitungsstatus, Versionen) -
+    # None für Bilder, ZIPs und andere Nicht-Dokumente (siehe app/services/documents/formats.py).
+    document: DocumentSummary | None = None
     # Every album this file belongs to (unscoped GET /files only - see
     # FileService.attach_album_context; empty when the file is in no album).
     albums: list[FileAlbumRef] = []
@@ -89,26 +107,6 @@ class FileOverviewItem(BaseModel):
     share_pending: bool = False
 
 
-class PhotoAnalysisJobCreate(BaseModel):
-    """Same filter shape as GET /files/similarity-groups - "analyze whatever this filtered
-    view currently shows"."""
-
-    source: FileOverviewSource | None = None
-    search: str | None = None
-    tags: list[str] | None = None
-    file_ids: list[uuid.UUID] | None = None
-
-
-class PhotoAnalysisJobRead(BaseModel):
-    id: uuid.UUID
-    status: Literal["queued", "running", "done", "failed"]
-    image_count: int
-    created_at: datetime
-    started_at: datetime | None
-    finished_at: datetime | None
-    error: str | None
-
-
 class SimilarityGroup(BaseModel):
     """Photo-culling Phase 2 (see photo_similarity.py). `images` is sorted best-first;
     `best_id` is a convenience duplicate of `images[0].id` for a frontend that only wants
@@ -116,6 +114,17 @@ class SimilarityGroup(BaseModel):
 
     best_id: uuid.UUID
     images: list[FileOverviewItem]
+
+
+class SimilarityGroupList(BaseModel):
+    """Abruf der vorberechneten Gruppen (FileService.list_similarity_groups). `pending`: der
+    Hintergrundjob hat für diesen Mandanten noch nichts berechnet; `too_many`: mehr Bilder als
+    MAX_BACKGROUND_GROUPING_IMAGES. `computed_at` ist der Stand der Berechnung - neue Fotos
+    erscheinen nach dem nächsten Lauf, gelöschte fallen sofort heraus."""
+
+    status: Literal["ready", "pending", "too_many"]
+    computed_at: datetime | None = None
+    groups: list[SimilarityGroup]
 
 
 class StoredFileTagsUpdate(BaseModel):
@@ -142,6 +151,28 @@ class GalleryUploadJobRead(BaseModel):
     error: str | None
 
 
+UploadFailureCode = Literal[
+    "too_large", "unsupported_format", "scan_failed", "infected", "quota_exceeded", "heic_unreadable", "rule_violation"
+]
+
+
+class UploadFileResult(BaseModel):
+    """Ergebnis einer einzelnen Datei: hochgeladen, übersprungen (exaktes Duplikat, nichts zu
+    tun), übersprungen mit ergänzten Metadaten oder fehlgeschlagen. `applied` nennt nur
+    tatsächlich gespeicherte Ergänzungen."""
+
+    name: str
+    status: UploadFileStatus
+    file_id: uuid.UUID | None = None
+    applied: list[MetadataField] = []
+    conflicts: list[MetadataField] = []
+    message: str | None = None
+    # Maschinenlesbarer Grund eines Fehlschlags (IMGMETA-012) - das Frontend übersetzt ihn;
+    # `message` bleibt deutscher Text für ältere Clients und unbekannte Codes.
+    code: UploadFailureCode | None = None
+    params: dict[str, int | str] = {}
+
+
 class GalleryUploadJobDetail(GalleryUploadJobRead):
     """Full result, fetched once a job has left the active listing (GET
     /files/gallery-upload-jobs/{id}) - same (items, errors) shape the old synchronous
@@ -149,6 +180,7 @@ class GalleryUploadJobDetail(GalleryUploadJobRead):
 
     imported_items: list[FileOverviewItem]
     errors: list[str]
+    file_results: list[UploadFileResult] = []
 
 
 class DocumentUploadResult(BaseModel):
@@ -157,6 +189,82 @@ class DocumentUploadResult(BaseModel):
 
     items: list[FileOverviewItem]
     errors: list[str]
+    file_results: list[UploadFileResult] = []
+
+
+class ClientGpsMetadata(BaseModel):
+    """GPS aus der Browser-Analyse - WGS84-Dezimalgrad, Süd/West negativ. Bereichsprüfung
+    hier, Plausibilitätsprüfung (z. B. 0/0) in image_metadata_service."""
+
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    altitude_m: float | None = None
+    direction_deg: float | None = None
+    accuracy_m: float | None = None
+    timestamp: datetime | None = None
+
+
+class ClientImageMetadata(BaseModel):
+    """Im Browser extrahierte Metadaten - nicht vertrauenswürdig, siehe image_metadata_service."""
+
+    # Lokale Kamerazeit ohne Zeitzone ("YYYY-MM-DDTHH:MM:SS"); ein Offset kommt separat.
+    taken_at: str | None = Field(default=None, max_length=40)
+    taken_offset: str | None = Field(default=None, max_length=8)
+    gps: ClientGpsMetadata | None = None
+    camera_make: str | None = Field(default=None, max_length=200)
+    camera_model: str | None = Field(default=None, max_length=200)
+    width: int | None = None
+    height: int | None = None
+    orientation: int | None = None
+
+
+class UploadPrecheckFile(BaseModel):
+    # Frei wählbare Kennung des Clients, kommt unverändert zurück.
+    client_id: str = Field(max_length=100)
+    sha256: str = Field(pattern=r"^[0-9a-fA-F]{64}$")
+    name: str = Field(default="", max_length=500)
+    size: int = Field(ge=0)
+    mime_type: str | None = Field(default=None, max_length=100)
+    # "ok": vollständig analysiert, "unsupported"/"failed": Browser konnte die Datei nicht
+    # (sicher) analysieren - der Server fällt dann auf den normalen Upload zurück.
+    analysis: Literal["ok", "unsupported", "failed"] = "ok"
+    metadata: ClientImageMetadata | None = None
+
+
+class UploadPrecheckRequest(BaseModel):
+    context: Literal["gallery", "document", "protocol_image"] = "gallery"
+    # Schätzdatum aus dem Upload-Popup - gilt nur für Bilder ohne echtes Aufnahmedatum.
+    estimated_taken_on: date | None = None
+    files: list[UploadPrecheckFile] = Field(max_length=500)
+
+
+class UploadPrecheckResult(BaseModel):
+    client_id: str
+    status: PrecheckStatus
+    # Nur bei already_exists/metadata_updated: das vorhandene Bild (immer aus dem eigenen Mandanten).
+    file_id: uuid.UUID | None = None
+    applied: list[MetadataField] = []
+    conflicts: list[MetadataField] = []
+
+
+class UploadPrecheckResponse(BaseModel):
+    results: list[UploadPrecheckResult]
+
+
+class CaptureDateUpdate(BaseModel):
+    """PATCH /stored-files/{id}/capture-date - null entfernt das geschätzte Datum."""
+
+    estimated_taken_on: date | None
+
+
+class GpsMetadataRead(BaseModel):
+    latitude: float
+    longitude: float
+    altitude_m: float | None = None
+    direction_deg: float | None = None
+    accuracy_m: float | None = None
+    timestamp: datetime | None = None
+    source: str | None = None
 
 
 class StoredFileMetadata(BaseModel):
@@ -176,6 +284,19 @@ class StoredFileMetadata(BaseModel):
     exif_taken_at: datetime | None
     exif_camera: str | None
     uploaded_by_name: str | None
+    # Drei getrennte Datumsarten plus das daraus nach capture_date.py gewählte Datum.
+    exif_taken_offset: str | None = None
+    exif_taken_source: str | None = None
+    estimated_taken_on: date | None = None
+    estimated_taken_set_at: datetime | None = None
+    estimated_taken_set_by_name: str | None = None
+    effective_date: date | None = None
+    date_source: DateSource = "upload"
+    camera_make: str | None = None
+    camera_model: str | None = None
+    gps: GpsMetadataRead | None = None
+    # Darf der aktuelle Benutzer das geschätzte Datum bearbeiten (nur Bilder, Schreibrecht)?
+    can_edit_capture_date: bool = False
 
 
 class PhotoAlbumCreate(BaseModel):
@@ -190,6 +311,21 @@ class AlbumTenantShareStatus(BaseModel):
     status: Literal["pending", "accepted", "declined"]
     invited_at: datetime
     responded_at: datetime | None = None
+    # Standort (GPS) der Fotos mit diesem Partner teilen (IMGMETA-007).
+    share_location: bool = True
+    # Öffentliche Links (SEC-002): Partner darf das Album verlinken (Besitzer entscheidet) bzw.
+    # Fotos des Partners dürfen in öffentlichen Links erscheinen (Partner entscheidet, hier nur Anzeige).
+    partner_public_links: bool = True
+    partner_photos_public: bool = True
+
+
+class AlbumMyShareRead(BaseModel):
+    """Die eigene Freigabe in einem Album eines anderen Mandanten (nur für Partner gesetzt)."""
+
+    # Vom Besitzer: darf ich dieses Album öffentlich verlinken?
+    public_links_allowed: bool
+    # Meine Entscheidung: dürfen meine Fotos in öffentlichen Links erscheinen?
+    my_photos_public: bool
 
 
 class PhotoAlbumRead(BaseModel):
@@ -211,6 +347,8 @@ class PhotoAlbumRead(BaseModel):
     # Partner tenants this album has been shared with - only populated for the owning tenant
     # (see files.py's list_albums), drives the "Freigabe verwalten" section.
     shared_with: list[AlbumTenantShareStatus] = []
+    # Nur für Partner (fremdes Album): eigene Freigabe-Einstellungen für öffentliche Links.
+    my_share: AlbumMyShareRead | None = None
     # Gerade geteilt (Mandanten-Freigabe offen/angenommen oder aktiver Album-Link) - fuer ein
     # Partner-Album immer True. Steuert den Warnhinweis beim Hinzufuegen von Fotos.
     is_shared: bool = False
@@ -247,6 +385,21 @@ class SharedTargetAlbumRead(BaseModel):
 
 class AlbumShareCreate(BaseModel):
     target_tenant_public_id: uuid.UUID
+    # Standard an: Mandanten, die ein Album teilen, vertrauen sich (Freigabe-Links: Standard aus).
+    share_location: bool = True
+
+
+class AlbumShareUpdate(BaseModel):
+    """Vom Besitzer für einen Partner: Standort teilen und/oder öffentliche Links erlauben."""
+
+    share_location: bool | None = None
+    partner_public_links: bool | None = None
+
+
+class AlbumMyShareUpdate(BaseModel):
+    """Vom Partner für die eigene Freigabe: eigene Fotos in öffentlichen Links zeigen."""
+
+    my_photos_public: bool
 
 
 class AlbumShareRespond(BaseModel):
@@ -317,6 +470,10 @@ class ShareLinkCreate(BaseModel):
     expires_at: datetime | None = None
     file_ids: list[uuid.UUID] | None = None
     album_id: uuid.UUID | None = None
+    # Welche Foto-Metadaten oeffentlich mitgehen (siehe photo_metadata_privacy.py).
+    share_location: bool = False
+    share_capture_date: bool = True
+    share_camera: bool = False
 
 
 class ShareLinkRead(BaseModel):
@@ -330,6 +487,9 @@ class ShareLinkRead(BaseModel):
     expires_at: datetime | None = None
     revoked_at: datetime | None = None
     status: Literal["active", "expired", "revoked"]
+    share_location: bool = False
+    share_capture_date: bool = True
+    share_camera: bool = False
 
 
 class PublicShareFile(BaseModel):
@@ -338,11 +498,26 @@ class PublicShareFile(BaseModel):
     mime_type: str | None
     file_size_bytes: int | None
     is_image: bool
+    width: int | None = None
+    height: int | None = None
+    taken_at: datetime | None = None
     thumbnail_url: str | None
+    # Grossansicht in der Lightbox: das Original inline, wenn der Browser es sicher darstellen
+    # kann (JPEG/PNG/WebP/GIF), sonst die Vorschau; None fuer Nicht-Bilder.
+    view_url: str | None = None
     download_url: str
 
 
 class PublicShareRead(BaseModel):
     name: str
+    # Untertitel ueber dem Titel (z. B. Albumname, wenn der Link anders heisst).
+    context: str | None = None
+    is_album: bool = False
+    tenant_name: str
+    expires_at: datetime | None = None
+    total_size_bytes: int = 0
+    date_from: datetime | None = None
+    date_to: datetime | None = None
     files: list[PublicShareFile]
+    # Immer ein ZIP; mit ?ids=<uuid>,<uuid> nur die Auswahl.
     download_all_url: str | None = None

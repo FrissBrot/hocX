@@ -1,5 +1,6 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
@@ -7,6 +8,7 @@ import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { DataToolbar } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
+import { Select } from "@/components/ui/select";
 import { HikingTourElevationChart } from "@/components/wanderplaner/hiking-tour-elevation-chart";
 import { HikingTourLoadingLandscape } from "@/components/wanderplaner/hiking-tour-loading-landscape";
 import { HikingTourMap } from "@/components/wanderplaner/hiking-tour-map";
@@ -14,6 +16,7 @@ import { HikingTourMarchTable } from "@/components/wanderplaner/hiking-tour-marc
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
+import { toIntlLocale } from "@/lib/utils/format";
 import {
   ElevationProfile,
   ElevationProfilePoint,
@@ -28,29 +31,22 @@ import {
 } from "@/types/api";
 
 // Auftrag Abschnitt 17 - dieselbe feste Item-Liste wie RECONNAISSANCE_CHECKLIST_ITEMS im
-// Backend (app/schemas/hiking_tour.py), hier nur mit deutschen Labels.
-const RECONNAISSANCE_CHECKLIST_LABELS: Record<string, string> = {
-  trail_condition: "Wegzustand geprüft",
-  problem_spots: "Problematische Stellen geprüft",
-  exits: "Ausstiege geprüft",
-  access_roads: "Zufahrten geprüft",
-  water_points: "Wasserstellen geprüft",
-  alternative_route: "Alternativroute geprüft",
-  decision_points: "Wichtige Entscheidungspunkte geprüft",
-};
+// Backend (app/schemas/hiking_tour.py); Labels unter wanderplaner.detail.reconnaissanceModal.checklist.
+const RECONNAISSANCE_CHECKLIST_ITEMS = [
+  "trail_condition",
+  "problem_spots",
+  "exits",
+  "access_roads",
+  "water_points",
+  "alternative_route",
+  "decision_points",
+] as const;
 
 // Auftrag Abschnitt 15 - dieselben Werte wie PAPER_SIZES_MM/DEFAULT_SCALES im Backend
 // (app/core/print_layout.py); Architektur ist dort fuer weitere Massstaebe offen, hier nur
 // die drei geforderten Presets.
 const PRINT_PAPER_OPTIONS = ["A4", "A3", "A2", "A1"] as const;
 const PRINT_SCALE_OPTIONS = [10_000, 25_000, 50_000] as const;
-
-const STATUS_LABEL: Record<string, string> = {
-  draft: "Entwurf",
-  analyzed: "Automatisch analysiert",
-  reconnoitered: "Rekognosziert",
-  approved: "Freigegeben",
-};
 
 const STATUS_VARIANT: Record<string, BadgeVariant> = {
   draft: "neutral",
@@ -59,34 +55,25 @@ const STATUS_VARIANT: Record<string, BadgeVariant> = {
   approved: "success",
 };
 
-const KIND_LABEL: Record<HikingTourWaypointKind, string> = {
-  START: "Start",
-  END: "Ziel",
-  NAVIGATION: "Fixpunkt",
-  BREAK: "Pausenplatz",
-  SUMMIT: "Gipfel",
-  PASS: "Pass",
-  HUT: "Hütte",
-  WATER: "Wasser",
-  DECISION: "Fixpunkt",
-  EMERGENCY_EXIT: "Notausstieg",
-  USER_DEFINED: "Fixpunkt",
-};
-
-const ROUTING_PROFILE_LABEL: Record<HikingTourRoutingProfile, string> = {
-  wanderwege_bevorzugen: "Wanderwege bevorzugen",
-  schnellste_route: "Schnellste Route",
-  einfache_route: "Einfache Route",
-};
+const ROUTING_PROFILES: HikingTourRoutingProfile[] = ["wanderwege_bevorzugen", "schnellste_route", "einfache_route"];
 
 type EditFormState = { title: string; description: string; tour_date: string };
+type TFunc = (key: string, values?: Record<string, string | number>) => string;
 
-function formatDistance(meters: number | null): string {
+function formatDistance(t: TFunc, meters: number | null): string {
   if (meters === null) return "–";
-  return meters >= 1000 ? `${(meters / 1000).toFixed(1)} km` : `${Math.round(meters)} m`;
+  return meters >= 1000
+    ? t("units.km", { value: (meters / 1000).toFixed(1) })
+    : t("units.meters", { value: String(Math.round(meters)) });
 }
 
 export function HikingTourDetail({ initialTour, canWrite }: { initialTour: HikingTour; canWrite: boolean }) {
+  const t = useTranslations("wanderplaner");
+  const locale = useLocale();
+  const intlLocale = toIntlLocale(locale);
+  const kindLabel = (kind: HikingTourWaypointKind) => t(`kind.${kind}`);
+  const formatTimestampDate = (value: string) => new Date(value).toLocaleDateString(intlLocale);
+  const strong = (chunks: React.ReactNode) => <strong>{chunks}</strong>;
   const router = useRouter();
   const confirm = useConfirm();
   const showToast = useToast();
@@ -131,22 +118,22 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
       });
       setTour((prev) => ({ ...updated, route_legs: prev.route_legs }));
       setShowEdit(false);
-      showToast("Wanderung gespeichert", "success");
+      showToast(t("detail.toast.saved"), "success");
     } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : "Fehler beim Speichern", "error");
+      showToast(err instanceof Error ? err.message : t("detail.toast.saveError"), "error");
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDeleteTour() {
-    if (!(await confirm({ message: `Wanderung «${tour.title}» wirklich löschen?`, tone: "danger", confirmLabel: "Löschen" }))) return;
+    if (!(await confirm({ message: t("detail.confirm.deleteTour", { title: tour.title }), tone: "danger", confirmLabel: t("actions.delete") }))) return;
     try {
       await browserApiFetch(`/api/hiking-tours/${tour.id}`, { method: "DELETE" });
-      showToast("Wanderung gelöscht", "success");
+      showToast(t("detail.toast.deleted"), "success");
       router.push("/hiking-planner");
     } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : "Fehler beim Löschen", "error");
+      showToast(err instanceof Error ? err.message : t("detail.toast.deleteError"), "error");
     }
   }
 
@@ -173,7 +160,7 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
 
   async function handleDeleteWaypoint(waypoint: HikingTourWaypoint) {
     if (savingRoute || waypoint.kind === "START" || waypoint.kind === "END") return;
-    if (!(await confirm({ message: `Punkt «${waypoint.label ?? KIND_LABEL[waypoint.kind]}» entfernen?`, tone: "danger", confirmLabel: "Entfernen" }))) return;
+    if (!(await confirm({ message: t("detail.confirm.removeWaypoint", { label: waypoint.label ?? kindLabel(waypoint.kind) }), tone: "danger", confirmLabel: t("actions.remove") }))) return;
     setDraftWaypoints((previous) => previous.filter((point) => point.id !== waypoint.id));
   }
 
@@ -219,9 +206,9 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
       setProfile(updated.routing_profile ?? "wanderwege_bevorzugen");
       setHoveredPoint(null);
       setMarchTableRevision((value) => value + 1);
-      showToast("Wanderung gespeichert und neu berechnet", "success");
+      showToast(t("detail.toast.routeSaved"), "success");
     } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : "Änderungen konnten nicht gespeichert werden", "error");
+      showToast(err instanceof Error ? err.message : t("detail.toast.routeSaveError"), "error");
     } finally {
       setSavingRoute(false);
     }
@@ -290,7 +277,7 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
       setTour((prev) => ({ ...prev, waypoints: prev.waypoints.map((wp) => (wp.id === updated.id ? updated : wp)) }));
       setDraftWaypoints((previous) => previous.map((waypoint) => waypoint.id === updated.id ? { ...waypoint, verification_status: updated.verification_status } : waypoint));
     } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : "Status konnte nicht geändert werden", "error");
+      showToast(err instanceof Error ? err.message : t("detail.toast.verificationError"), "error");
     }
   }
 
@@ -304,23 +291,23 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
       });
       setTour((prev) => ({ ...updated, route_legs: prev.route_legs }));
       setShowReconnaissance(false);
-      showToast("Rekognoszierung gespeichert", "success");
+      showToast(t("detail.toast.reconnaissanceSaved"), "success");
     } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : "Rekognoszierung konnte nicht gespeichert werden", "error");
+      showToast(err instanceof Error ? err.message : t("detail.toast.reconnaissanceError"), "error");
     } finally {
       setSavingReconnaissance(false);
     }
   }
 
   async function handleApprove() {
-    if (!(await confirm({ message: `Wanderung «${tour.title}» freigeben?`, confirmLabel: "Freigeben" }))) return;
+    if (!(await confirm({ message: t("detail.confirm.approveTour", { title: tour.title }), confirmLabel: t("detail.approve") }))) return;
     setApproving(true);
     try {
       const updated = await browserApiFetch<HikingTour>(`/api/hiking-tours/${tour.id}/approve`, { method: "POST" });
       setTour((prev) => ({ ...updated, route_legs: prev.route_legs }));
-      showToast("Wanderung freigegeben", "success");
+      showToast(t("detail.toast.approved"), "success");
     } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : "Freigabe fehlgeschlagen", "error");
+      showToast(err instanceof Error ? err.message : t("detail.toast.approveError"), "error");
     } finally {
       setApproving(false);
     }
@@ -347,9 +334,9 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
         signal: AbortSignal.timeout(180_000),
       });
       setPrintResult(result);
-      showToast("Druck-PDF erstellt", "success");
+      showToast(t("detail.toast.printCreated"), "success");
     } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : "Druck-PDF konnte nicht erstellt werden", "error");
+      showToast(err instanceof Error ? err.message : t("detail.toast.printError"), "error");
     } finally {
       setPrinting(false);
     }
@@ -369,34 +356,34 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
       <div className="page-header">
         <div>
           <h1 className="page-title">{tour.title}</h1>
-          <p className="muted">{tour.description || "Keine Beschreibung"}</p>
-          <Badge variant={STATUS_VARIANT[tour.status] ?? "neutral"}>{STATUS_LABEL[tour.status] ?? tour.status}</Badge>
+          <p className="muted">{tour.description || t("detail.noDescription")}</p>
+          <Badge variant={STATUS_VARIANT[tour.status] ?? "neutral"}>{STATUS_VARIANT[tour.status] ? t(`status.${tour.status}`) : tour.status}</Badge>
         </div>
         {canWrite && (
           <div className="page-header-actions">
             <button type="button" className="button-secondary" onClick={() => setShowEdit(true)} disabled={savingRoute}>
-              Bearbeiten
+              {t("detail.edit")}
             </button>
             <button type="button" className="button-secondary" onClick={() => setShowReconnaissance(true)} disabled={savingRoute}>
-              Rekognoszierung
+              {t("detail.reconnaissance")}
             </button>
             {tour.route_legs.length > 0 && (
               <button type="button" className="button-secondary" onClick={() => { setPrintResult(null); setShowPrint(true); }} disabled={savingRoute}>
-                Drucken
+                {t("detail.print")}
               </button>
             )}
             {tour.route_legs.length > 0 && (
               <a className="button-secondary" href={`/api/hiking-tours/${tour.id}/gpx`}>
-                GPX exportieren
+                {t("detail.exportGpx")}
               </a>
             )}
             {tour.status === "reconnoitered" && (
               <button type="button" className="button-primary" onClick={() => void handleApprove()} disabled={approving || savingRoute}>
-                {approving ? "Wird freigegeben…" : "Freigeben"}
+                {approving ? t("detail.approving") : t("detail.approve")}
               </button>
             )}
             <button type="button" className="button-danger" onClick={() => void handleDeleteTour()} disabled={savingRoute}>
-              Löschen
+              {t("actions.delete")}
             </button>
           </div>
         )}
@@ -404,22 +391,22 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
 
       <div className="section-card">
         <DataToolbar
-          title="Karte & Route"
-          description="Wegpunkte lassen sich per Ziehen verschieben. Änderungen werden erst beim Speichern übernommen; Weg, Höhenprofil und automatische Punkte werden dann neu berechnet."
+          title={t("detail.route.title")}
+          description={t("detail.route.description")}
           actions={
             canWrite ? (
               <div className="page-header-actions">
-                <select aria-label="Routingprofil" disabled={savingRoute} value={profile} onChange={(event) => setProfile(event.target.value as HikingTourRoutingProfile)}>
-                  {Object.entries(ROUTING_PROFILE_LABEL).map(([value, label]) => (
+                <Select aria-label={t("detail.route.routingProfile")} disabled={savingRoute} value={profile} onChange={(event) => setProfile(event.target.value as HikingTourRoutingProfile)}>
+                  {ROUTING_PROFILES.map((value) => (
                     <option key={value} value={value}>
-                      {label}
+                      {t(`routingProfile.${value}`)}
                     </option>
                   ))}
-                </select>
+                </Select>
                 {(routeDirty || needsPlanning || savingRoute) && (
                   <button type="button" className="button-primary wanderplaner-loading-button" onClick={() => void handleSaveRoute()} disabled={savingRoute} aria-busy={savingRoute}>
                     {savingRoute && <HikingTourLoadingLandscape />}
-                    <span className="wanderplaner-loading-label">{savingRoute ? "Wird gespeichert und berechnet…" : "Speichern"}</span>
+                    <span className="wanderplaner-loading-label">{savingRoute ? t("detail.route.savingAndCalculating") : t("actions.save")}</span>
                   </button>
                 )}
                 {routeDirty && !savingRoute && (
@@ -427,7 +414,7 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
                     setDraftWaypoints(tour.waypoints);
                     setProfile(tour.routing_profile ?? "wanderwege_bevorzugen");
                     setPlacingVia(false);
-                  }}>Änderungen verwerfen</button>
+                  }}>{t("detail.route.discardChanges")}</button>
                 )}
                 <button
                   type="button"
@@ -435,15 +422,15 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
                   disabled={savingRoute}
                   onClick={() => setPlacingVia((value) => !value)}
                 >
-                  Via-Punkt hinzufügen
+                  {t("detail.route.addVia")}
                 </button>
               </div>
             ) : undefined
           }
         />
-        {routeDirty && <p className="field-help">Ungespeicherte Änderungen. Die angezeigte Route und das Höhenprofil entsprechen noch dem letzten gespeicherten Stand.</p>}
-        {(routeDirty || needsPlanning) && <p className="field-help">Beim Speichern wird der Routenverlauf für das Höhenprofil an swisstopo übermittelt.</p>}
-        {placingVia && <p className="field-help">Auf die Karte klicken, um den Via-Punkt zu platzieren.</p>}
+        {routeDirty && <p className="field-help">{t("detail.route.unsavedHint")}</p>}
+        {(routeDirty || needsPlanning) && <p className="field-help">{t("detail.route.swisstopoHint")}</p>}
+        {placingVia && <p className="field-help">{t("detail.route.placeViaHint")}</p>}
         <HikingTourMap
           waypoints={mapWaypoints}
           routeCoordinates={routeCoordinates}
@@ -455,15 +442,9 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
         />
         {tour.route_distance_m !== null && tour.route_distance_m !== undefined && (
           <div className="wanderplaner-route-summary">
-            <span>
-              Distanz: <strong>{formatDistance(tour.route_distance_m)}</strong>
-            </span>
-            <span>
-              Aufstieg: <strong>{Math.round(tour.route_ascent_m ?? 0)} m</strong>
-            </span>
-            <span>
-              Abstieg: <strong>{Math.round(tour.route_descent_m ?? 0)} m</strong>
-            </span>
+            <span>{t.rich("detail.route.distance", { value: formatDistance(t, tour.route_distance_m), strong })}</span>
+            <span>{t.rich("detail.route.ascent", { value: t("units.meters", { value: String(Math.round(tour.route_ascent_m ?? 0)) }), strong })}</span>
+            <span>{t.rich("detail.route.descent", { value: t("units.meters", { value: String(Math.round(tour.route_descent_m ?? 0)) }), strong })}</span>
           </div>
         )}
       </div>
@@ -471,13 +452,13 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
       {tour.route_legs.length > 0 && (
         <div className="section-card">
           <DataToolbar
-            title="Höhenprofil"
-            description="Beim Überfahren markiert das Höhenprofil die Stelle auf der Karte. Die automatische Analyse ergänzt markante Verzweigungen, Querungen und Hütten – ungefähr alle 15 Gehminuten."
+            title={t("detail.elevation.title")}
+            description={t("detail.elevation.description")}
           />
           {elevationProfile ? (
             <HikingTourElevationChart points={elevationProfile.points} waypoints={tour.waypoints} marchTable={marchTable} onHoverPoint={setHoveredPoint} dangerSegments={terrainDanger?.segments} />
           ) : (
-            <p className="field-help">Noch kein Höhenprofil abgerufen.</p>
+            <p className="field-help">{t("detail.elevation.empty")}</p>
           )}
         </div>
       )}
@@ -494,28 +475,28 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
         />
       </div>
 
-      <Modal open={showEdit} title="Wanderung bearbeiten" onClose={() => setShowEdit(false)}>
+      <Modal open={showEdit} title={t("detail.editModal.title")} onClose={() => setShowEdit(false)}>
         <form onSubmit={(event) => void handleEditSave(event)}>
           <div className="grid">
             <label className="field-stack">
-              <span className="field-label">Titel</span>
+              <span className="field-label">{t("fields.title")}</span>
               <input required value={editForm.title} onChange={(event) => setEditForm({ ...editForm, title: event.target.value })} />
             </label>
             <label className="field-stack">
-              <span className="field-label">Beschreibung</span>
+              <span className="field-label">{t("fields.description")}</span>
               <textarea rows={3} value={editForm.description} onChange={(event) => setEditForm({ ...editForm, description: event.target.value })} />
             </label>
             <label className="field-stack">
-              <span className="field-label">Datum</span>
+              <span className="field-label">{t("fields.date")}</span>
               <DateInput value={editForm.tour_date} onChange={(value) => setEditForm({ ...editForm, tour_date: value })} />
             </label>
           </div>
           <div className="modal-actions">
             <button type="button" className="button-ghost" onClick={() => setShowEdit(false)}>
-              Abbrechen
+              {t("actions.cancel")}
             </button>
             <button type="submit" className="button-primary" disabled={saving}>
-              {saving ? "Wird gespeichert…" : "Speichern"}
+              {saving ? t("actions.saving") : t("actions.save")}
             </button>
           </div>
         </form>
@@ -523,7 +504,7 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
 
       <Modal
         open={showReconnaissance}
-        title="Rekognoszierung"
+        title={t("detail.reconnaissance")}
         onClose={() => setShowReconnaissance(false)}
       >
         <form onSubmit={(event) => void handleSaveReconnaissance(event)}>
@@ -532,22 +513,20 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
               <p className="muted">
                 {tour.reconnoitered_at && (
                   <>
-                    Rekognosziert {tour.reconnoitered_by_name ? `von ${tour.reconnoitered_by_name} ` : ""}
-                    am {new Date(tour.reconnoitered_at).toLocaleDateString("de-CH")}.{" "}
+                    {tour.reconnoitered_by_name
+                      ? t("detail.reconnaissanceModal.reconnoiteredByOn", { name: tour.reconnoitered_by_name, date: formatTimestampDate(tour.reconnoitered_at) })
+                      : t("detail.reconnaissanceModal.reconnoiteredOn", { date: formatTimestampDate(tour.reconnoitered_at) })}{" "}
                   </>
                 )}
-                {tour.approved_at && (
-                  <>
-                    Freigegeben {tour.approved_by_name ? `von ${tour.approved_by_name} ` : ""}
-                    am {new Date(tour.approved_at).toLocaleDateString("de-CH")}.
-                  </>
-                )}
+                {tour.approved_at && (tour.approved_by_name
+                  ? t("detail.reconnaissanceModal.approvedByOn", { name: tour.approved_by_name, date: formatTimestampDate(tour.approved_at) })
+                  : t("detail.reconnaissanceModal.approvedOn", { date: formatTimestampDate(tour.approved_at) }))}
               </p>
             )}
             <div className="grid">
-              {Object.entries(RECONNAISSANCE_CHECKLIST_LABELS).map(([key, label]) => (
+              {RECONNAISSANCE_CHECKLIST_ITEMS.map((key) => (
                 <label key={key} className="mini-menu-option">
-                  <span>{label}</span>
+                  <span>{t(`detail.reconnaissanceModal.checklist.${key}`)}</span>
                   <input
                     type="checkbox"
                     checked={checklistDraft[key] ?? false}
@@ -557,73 +536,76 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
               ))}
             </div>
             <label className="field-stack">
-              <span className="field-label">Weitere Bemerkungen</span>
+              <span className="field-label">{t("detail.reconnaissanceModal.remarks")}</span>
               <textarea rows={3} value={remarksDraft} onChange={(event) => setRemarksDraft(event.target.value)} />
             </label>
           </div>
           <div className="modal-actions">
             <button type="button" className="button-ghost" onClick={() => setShowReconnaissance(false)}>
-              Abbrechen
+              {t("actions.cancel")}
             </button>
             <button type="submit" className="button-primary" disabled={savingReconnaissance}>
-              {savingReconnaissance ? "Wird gespeichert…" : "Als rekognosziert markieren"}
+              {savingReconnaissance ? t("actions.saving") : t("detail.reconnaissanceModal.submit")}
             </button>
           </div>
         </form>
       </Modal>
 
-      <Modal open={showPrint} title="Drucken" onClose={() => setShowPrint(false)}>
+      <Modal open={showPrint} title={t("detail.print")} onClose={() => setShowPrint(false)}>
         <form onSubmit={(event) => void handlePrint(event)}>
           <div className="grid two-col">
             <label className="field-stack">
-              <span className="field-label">Papierformat</span>
-              <select value={printForm.paper} onChange={(event) => setPrintForm((prev) => ({ ...prev, paper: event.target.value }))}>
+              <span className="field-label">{t("detail.printModal.paper")}</span>
+              <Select value={printForm.paper} onChange={(event) => setPrintForm((prev) => ({ ...prev, paper: event.target.value }))}>
                 {PRINT_PAPER_OPTIONS.map((paper) => (
                   <option key={paper} value={paper}>
                     {paper}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
             <label className="field-stack">
-              <span className="field-label">Ausrichtung</span>
-              <select
+              <span className="field-label">{t("detail.printModal.orientation")}</span>
+              <Select
                 value={printForm.orientation}
                 onChange={(event) => setPrintForm((prev) => ({ ...prev, orientation: event.target.value }))}
               >
-                <option value="portrait">Hochformat</option>
-                <option value="landscape">Querformat</option>
-              </select>
+                <option value="portrait">{t("detail.printModal.portrait")}</option>
+                <option value="landscape">{t("detail.printModal.landscape")}</option>
+              </Select>
             </label>
             <label className="field-stack">
-              <span className="field-label">Massstab</span>
-              <select
+              <span className="field-label">{t("detail.printModal.scale")}</span>
+              <Select
                 value={printForm.scale}
                 onChange={(event) => setPrintForm((prev) => ({ ...prev, scale: Number(event.target.value) }))}
               >
                 {PRINT_SCALE_OPTIONS.map((scale) => (
                   <option key={scale} value={scale}>
-                    1:{scale.toLocaleString("de-CH")}
+                    {t("detail.printModal.scaleOption", { scale: scale.toLocaleString(intlLocale) })}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
           </div>
           {printResult && (
             <p className="field-help">
-              PDF mit {printResult.sheet_count} Kartenblatt{printResult.sheet_count === 1 ? "" : "blättern"} erstellt -{" "}
-              <a href={printResult.content_url} target="_blank" rel="noreferrer">
-                PDF herunterladen
-              </a>
-              .
+              {t.rich("detail.printModal.result", {
+                count: printResult.sheet_count,
+                link: (chunks) => (
+                  <a href={printResult.content_url} target="_blank" rel="noreferrer">
+                    {chunks}
+                  </a>
+                ),
+              })}
             </p>
           )}
           <div className="modal-actions">
             <button type="button" className="button-ghost" onClick={() => setShowPrint(false)}>
-              Schliessen
+              {t("actions.close")}
             </button>
             <button type="submit" className="button-primary" disabled={printing}>
-              {printing ? "Wird erstellt…" : "PDF erstellen"}
+              {printing ? t("detail.printModal.creating") : t("detail.printModal.submit")}
             </button>
           </div>
         </form>

@@ -6,7 +6,8 @@ const { fetchMock, editorMock, settingsMock } = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/api/server", () => ({
   backendFetchWithSession: fetchMock,
-  requireSession: async () => ({ current_role: "admin", current_tenant: { id: "first-tenant" } }),
+  backendFetchAllPagesWithSession: async (path: string) => (await fetchMock(path)) ?? [],
+  requireSession: async () => ({ permissions: ["settings.manage", "access.manage"], roles: [], current_tenant: { id: "first-tenant", enabled_features: [] } }),
   // Mirrors the real resolveManageableTenant (lib/api/server.ts) closely enough for this test:
   // picks the requested tenant by id out of the (mocked) manageable-tenants list, falling back
   // to the first one.
@@ -19,7 +20,6 @@ vi.mock("@/lib/api/server", () => ({
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("@/components/ui/app-shell", () => ({ AppShell: ({ children }: any) => children }));
 vi.mock("@/components/protocol/protocol-editor", () => ({ ProtocolEditor: editorMock }));
-vi.mock("@/components/protocol/protocol-builder", () => ({ ProtocolOverview: () => null }));
 vi.mock("@/components/settings/tenant-general-settings", () => ({ TenantGeneralSettings: settingsMock }));
 
 import ProtocolDetailPage from "./protocols/[id]/page";
@@ -40,14 +40,14 @@ it("loads snapshot references using public UUIDs and retains snapshot cache keys
       public_reference_ids: { lists: { "42": listId }, finance_accounts: { "73": accountId } },
     }] }];
     if (url === `/api/lists/${listId}/entries`) return entries;
-    if (url === `/api/finance/accounts/${accountId}/transactions`) return transactions;
+    if (url === `/api/finance/accounts/${accountId}/transactions?limit=200`) return transactions;
     return [];
   });
   render(await ProtocolDetailPage({ params: Promise.resolve({ id: "protocol" }) }));
   expect(fetchMock).toHaveBeenCalledWith(`/api/lists/${listId}/entries`);
-  expect(fetchMock).toHaveBeenCalledWith(`/api/finance/accounts/${accountId}/transactions`);
+  expect(fetchMock).toHaveBeenCalledWith(`/api/finance/accounts/${accountId}/transactions?limit=200`);
   expect(fetchMock).not.toHaveBeenCalledWith("/api/lists/42/entries");
-  expect(fetchMock).not.toHaveBeenCalledWith("/api/finance/accounts/73/transactions");
+  expect(fetchMock).not.toHaveBeenCalledWith("/api/finance/accounts/73/transactions?limit=200");
   const props = editorMock.mock.calls[0][0];
   expect(props.initialListEntries["42"]).toEqual(entries);
   expect(props.initialListEntries[listId]).toEqual(entries);

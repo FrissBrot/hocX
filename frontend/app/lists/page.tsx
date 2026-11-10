@@ -1,29 +1,30 @@
+import { MobileLists } from "@/components/mobile/areas/mobile-lists";
+import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { redirect } from "next/navigation";
 
 import { ListManager } from "@/components/lists/list-manager";
 import { AppShell } from "@/components/ui/app-shell";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import {
-  DocumentTemplate,
   EventSummary,
   ParticipantSummary,
   StructuredListDefinition,
   StructuredListEntry,
 } from "@/types/api";
+import { can } from "@/lib/permissions";
 
 export default async function ListsPage() {
   const session = await requireSession();
-  const canWrite = session.current_role === "admin" || session.current_role === "writer";
+  const canWrite = can(session, "meetings.edit");
 
   if (!canWrite) {
     redirect("/");
   }
 
-  const [lists, participants, events, documentTemplates] = await Promise.all([
+  const [lists, participants, events] = await Promise.all([
     backendFetchWithSession<StructuredListDefinition[]>("/api/lists"),
-    backendFetchWithSession<ParticipantSummary[]>("/api/participants?limit=500"),
+    backendFetchWithSession<ParticipantSummary[]>("/api/participants?limit=2000"),
     backendFetchWithSession<EventSummary[]>("/api/events"),
-    backendFetchWithSession<DocumentTemplate[]>("/api/document-templates"),
   ]);
 
   const listEntryPairs = await Promise.all(
@@ -36,15 +37,21 @@ export default async function ListsPage() {
 
   return (
     <AppShell initialSession={session}>
-      <section className="panel lists-page">
-        <ListManager
-          initialLists={lists ?? []}
-          initialEntriesByList={initialEntriesByList}
-          availableParticipants={participants ?? []}
-          availableEvents={events ?? []}
-          documentTemplates={documentTemplates ?? []}
-        />
-      </section>
+      <ResponsiveView
+        mobile={<MobileLists initialLists={lists ?? []} initialEntriesByList={initialEntriesByList} participants={participants ?? []} events={events ?? []} />}
+        desktop={
+          <>
+          <section className="panel lists-page">
+            <ListManager
+              initialLists={lists ?? []}
+              initialEntriesByList={initialEntriesByList}
+              availableParticipants={participants ?? []}
+              availableEvents={events ?? []}
+            />
+          </section>
+          </>
+        }
+      />
     </AppShell>
   );
 }

@@ -7,6 +7,8 @@
 /Marschtabelle_Zeitberechnung.xlsx
 # Lokale Zweit-Dev-Stack-Overrides fuer parallele Branch-Arbeit (siehe Worktree-Konvention).
 docker-compose.dev.branch-ports.yml
+# Host-spezifische Compose-Anpassungen (scripts/lib/env.sh: HOCX_LOCAL_COMPOSE_FILE)
+/docker-compose.local.yml
 .claude/settings.local.json
 .venv/
 __pycache__/
@@ -38,16 +40,16 @@ storage/generated/*
 storage/tenant_clones/*
 storage/tenant_imports/*
 
-# Tenant-specific content: ignore all, but keep tenant-1 demo templates
-storage/document_template_parts/tenant-*/
-!storage/document_template_parts/tenant-1/
-!storage/document_template_parts/tenant-1/**
-storage/document_templates/tenant-*/
-!storage/document_templates/tenant-1/
-!storage/document_templates/tenant-1/**
+# Document-Studio-Uploads (Schriften, Logos, Bilder) und Reste früherer Dokument-Engines
+storage/document_assets/
+storage/document_style_assets/
+storage/document_template_parts/
+storage/document_templates/
 
-# Protocol snapshots are generated at runtime (may contain user data)
 storage/document_template_snapshots/
+# Zwischengespeicherte Vorschaubilder der Vorlagenbibliothek je Mandant (document_studio.py,
+# THUMBNAIL_DIR) - werden bei Bedarf neu erzeugt
+storage/document_thumbnails/
 
 # Keep placeholder files so directories exist after clone
 !storage/uploads/.gitkeep
@@ -61,6 +63,8 @@ infra/traefik/dynamic/tenant-domains.yml
 
 # DB backups and abgabebox uploads — real user data, never committed
 backups/
+# ... aber nicht die gleichnamige Admin-Route
+!frontend/app/admin/backups/
 storage/abgabebox-uploads/*
 
 # Generated thumbnails (FileService.ensure_thumbnail) — real tenant images, never committed.
@@ -94,3 +98,9 @@ storage/demo-seed/
 
 # Scratch audit/investigation notes, not living documentation
 .audit-1.1/
+
+# Lasttest: Session-Tokens und Messdaten nie committen (loadtest/README.md)
+loadtest/tokens.json
+loadtest/results/
+loadtest/fixtures/*.jpg
+loadtest/fixtures/*.zip

@@ -1,20 +1,28 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
+import { useLocale, useTranslations } from "next-intl";
 
 import { AdminAvatar, BillingCycleToggle, formatPlanPrice, PlanBadge, PlanOption, planTones } from "@/components/admin/admin-plan-utils";
-import { AdminTenantSettingsModal } from "@/components/admin/admin-tenant-settings-modal";
 import { ActionMenu } from "@/components/ui/action-menu";
+import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import { SearchInput } from "@/components/ui/search-input";
-import { browserApiFetch } from "@/lib/api/client";
+import { browserApiFetch, LONG_RUNNING_TIMEOUT_MS } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
-import { formatFileSize } from "@/lib/utils/format";
+import { formatFileSize, formatPercentNumber } from "@/lib/utils/format";
 import { AdminPlan, AdminTenantCreate, AdminTenantPage, AdminTenantSummary } from "@/types/api";
+
+// Erst beim Oeffnen laden (grosses Einstellungs-Modal).
+const AdminTenantSettingsModal = dynamic(
+  () => import("@/components/admin/admin-tenant-settings-modal").then((m) => m.AdminTenantSettingsModal),
+  { ssr: false }
+);
 
 type Props = {
   initialPage: AdminTenantPage;
@@ -22,6 +30,8 @@ type Props = {
   initialPlanFilter?: string;
 };
 
+// Wie export_crypto.MIN_PASSWORD_LENGTH im Backend.
+const EXPORT_PASSWORD_MIN_LENGTH = 12;
 const PAGE_SIZE = 50;
 
 // Ab diesem Anteil wird der Speicherbalken in der Liste als Warnung eingefärbt.
@@ -45,6 +55,9 @@ const emptyCreateForm: AdminTenantCreate & { slugTouched: boolean } = {
 };
 
 export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFilter = "" }: Props) {
+  const t = useTranslations("admin.tenants");
+  const tPlans = useTranslations("admin.plans");
+  const locale = useLocale();
   const showToast = useToast();
   const confirm = useConfirm();
   const [page, setPage] = useState(initialPage);
@@ -66,9 +79,13 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportTenant, setExportTenant] = useState<AdminTenantSummary | null>(null);
   const [exportScope, setExportScope] = useState<"structure" | "structure_lists" | "full" | "full_abgabebox">("structure");
+  const [exportPassword, setExportPassword] = useState("");
+  const [exportPasswordConfirm, setExportPasswordConfirm] = useState("");
+  const [exportCredentials, setExportCredentials] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importName, setImportName] = useState("");
   const [importFile, setImportFile] = useState<File | null>(null);
+  const [importPassword, setImportPassword] = useState("");
   const [importBusy, setImportBusy] = useState(false);
   const [importWarnings, setImportWarnings] = useState<string[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -155,9 +172,9 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
       });
       await Promise.all([fetchPage(offset, search), reloadPlans()]);
       setModalOpen(false);
-      showToast("Mandant erstellt", "success");
+      showToast(t("created"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Mandant konnte nicht erstellt werden", "error");
+      showToast(error instanceof Error ? error.message : t("createFailed"), "error");
     } finally {
       setCreateBusy(false);
     }
@@ -193,12 +210,13 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
       await browserApiFetch<AdminTenantSummary>(`/api/admin/tenants/${cloneTenant.id}/clone`, {
         method: "POST",
         body: JSON.stringify({ new_name: cloneName, mode: cloneMode }),
+        timeoutMs: LONG_RUNNING_TIMEOUT_MS,
       });
       await Promise.all([fetchPage(offset, search), reloadPlans()]);
       setCloneModalOpen(false);
-      showToast("Mandant geklont", "success");
+      showToast(t("cloned"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Mandant konnte nicht geklont werden", "error");
+      showToast(error instanceof Error ? error.message : t("cloneFailed"), "error");
     } finally {
       setCloneBusy(false);
     }
@@ -207,8 +225,15 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
   function openExport(tenant: AdminTenantSummary) {
     setExportTenant(tenant);
     setExportScope("structure");
+    setExportPassword("");
+    setExportPasswordConfirm("");
     setExportModalOpen(true);
   }
+
+  // Ohne Passwort verschlüsselt das Backend mit dem Server-Schlüssel (export_crypto.py); mit
+  // Passwort muss es lang genug und bestätigt sein.
+  const exportPasswordTooShort = exportPassword !== "" && exportPassword.length < EXPORT_PASSWORD_MIN_LENGTH;
+  const exportPasswordMismatch = exportPassword !== "" && exportPassword !== exportPasswordConfirm;
 
   async function submitExport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -223,14 +248,18 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
     // downloadZip/downloadFile already use elsewhere in this codebase.
     try {
       const { browserApiBaseUrl } = await import("@/lib/api/client");
-      const res = await fetch(`${browserApiBaseUrl}/api/admin/tenants/${exportTenant.id}/export?scope=${exportScope}`, {
+      // POST statt GET: das optionale Passwort steht nur im Body, nie in einer URL.
+      const res = await fetch(`${browserApiBaseUrl}/api/admin/tenants/${exportTenant.id}/export`, {
+        method: "POST",
         credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scope: exportScope, password: exportPassword || null, include_credentials: exportCredentials }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
       const disposition = res.headers.get("content-disposition") ?? "";
       const filenameMatch = /filename="?([^";]+)"?/i.exec(disposition);
-      const filename = filenameMatch?.[1] ?? `${exportTenant.name}-export.zip`;
+      const filename = filenameMatch?.[1] ?? `${exportTenant.name}-export.zip.hocxenc`;
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -238,7 +267,7 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
       a.click();
       URL.revokeObjectURL(url);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Export fehlgeschlagen", "error");
+      showToast(error instanceof Error ? error.message : t("exportFailed"), "error");
       return;
     }
     setExportModalOpen(false);
@@ -246,10 +275,10 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
 
   async function deleteTenant(tenant: AdminTenantSummary) {
     const confirmed = await confirm({
-      title: `"${tenant.name}" löschen?`,
-      message: `${tenant.participant_count} Teilnehmer, ${tenant.user_count} Benutzerzugriffe und alle Protokolle, Termine und Dateien dieses Mandanten gehen dabei verloren. Das kann nicht rückgängig gemacht werden.`,
+      title: t("deleteConfirmTitle", { name: tenant.name }),
+      message: t("deleteConfirmMessage", { participants: tenant.participant_count, users: tenant.user_count }),
       tone: "danger",
-      confirmLabel: "Endgültig löschen"
+      confirmLabel: t("deletePermanently")
     });
     if (!confirmed) return;
     try {
@@ -262,15 +291,16 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
         await fetchPage(offset, search);
       }
       void reloadPlans();
-      showToast("Mandant gelöscht", "success");
+      showToast(t("deleted"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Mandant konnte nicht gelöscht werden", "error");
+      showToast(error instanceof Error ? error.message : t("deleteFailed"), "error");
     }
   }
 
   function openImport() {
     setImportName("");
     setImportFile(null);
+    setImportPassword("");
     setImportModalOpen(true);
   }
 
@@ -282,6 +312,7 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
       const formData = new FormData();
       formData.append("new_name", importName);
       formData.append("file", importFile);
+      if (importPassword) formData.append("password", importPassword);
       const result = await browserApiFetch<{ tenant: AdminTenantSummary; warnings: string[] }>(
         "/api/admin/tenants/import",
         // Uploads/entpackt/importiert bis zu MAX_TENANT_IMPORT_UPLOAD_BYTES (2 GB, siehe
@@ -296,13 +327,13 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
         // 2026-08-25) - the toast pointed there but most admins never open devtools, so
         // real issues (skipped rows, missing source files, ...) went unseen in practice.
         // Shown in a dedicated modal now instead.
-        showToast(`Mandant importiert mit ${result.warnings.length} Hinweis(en)`, "success");
+        showToast(t("importedWithWarnings", { count: result.warnings.length }), "success");
         setImportWarnings(result.warnings);
       } else {
-        showToast("Mandant importiert", "success");
+        showToast(t("imported"), "success");
       }
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Mandant konnte nicht importiert werden", "error");
+      showToast(error instanceof Error ? error.message : t("importFailed"), "error");
     } finally {
       setImportBusy(false);
     }
@@ -312,28 +343,28 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
     <div className="grid">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Mandanten</h1>
-          <p className="muted">Alle Mandanten im System. Neue Mandanten werden hier zentral angelegt.</p>
+          <h1 className="page-title">{t("title")}</h1>
+          <p className="muted">{t("description")}</p>
         </div>
-        <div className="page-header-actions">
+        <div className="table-toolbar-actions">
           <button type="button" className="button-secondary" onClick={openImport}>
-            Mandant importieren
+            {t("importTenant")}
           </button>
           <button type="button" className="button-primary" onClick={openCreate}>
-            + Neuer Mandant
+            {t("newTenant")}
           </button>
         </div>
       </div>
 
       <article className="card admin-tenant-filter-card">
-        <SearchInput value={search} onChange={setSearch} placeholder="Mandanten durchsuchen" />
+        <SearchInput value={search} onChange={setSearch} placeholder={t("searchPlaceholder")} />
         {plans.length > 0 ? (
           <FilterTabs
             variant="chips"
             value={planFilter}
             onChange={changePlanFilter}
             options={[
-              { value: "", label: "Alle", count: totalTenantCount },
+              { value: "", label: t("all"), count: totalTenantCount },
               ...plans.map((plan) => ({ value: plan.code, label: plan.name, count: plan.tenant_count })),
             ]}
           />
@@ -341,8 +372,8 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
       </article>
 
       <DataTable
-        columns={["Bild", "Mandant", "Plan", "Teilnehmer", "Benutzer", "Speicher", "Erstellt am", ""]}
-        emptyMessage={loading ? "Wird geladen…" : "Keine Mandanten gefunden."}
+        columns={[t("colImage"), t("colTenant"), t("colPlan"), t("colParticipants"), t("colUsers"), t("colStorage"), t("colCreatedAt"), ""]}
+        emptyMessage={loading ? t("loading") : t("noTenantsFound")}
       >
         {visibleTenants.map((tenant) => {
           const plan = tenant.plan_code ? plansByCode.get(tenant.plan_code) : undefined;
@@ -363,7 +394,12 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
                 ) : (
                   <span className="muted">–</span>
                 )}
-                <div className="muted admin-cell-sub">{formatPlanPrice(plan, tenant.billing_cycle)}</div>
+                <div className="muted admin-cell-sub">{formatPlanPrice(plan, tenant.billing_cycle, tPlans)}</div>
+                {tenant.discount_percent > 0 ? (
+                  <div className="admin-tenant-discount">
+                    <Badge variant="success">{t("discountBadge", { percent: formatPercentNumber(tenant.discount_percent, locale) })}</Badge>
+                  </div>
+                ) : null}
               </td>
               <td className="admin-cell-number">{tenant.participant_count}</td>
               <td className="admin-cell-number">{tenant.user_count}</td>
@@ -380,18 +416,18 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
                 ) : (
                   <div className="admin-storage-cell">
                     <div className="admin-storage-bar admin-storage-bar-unlimited" />
-                    <div className="admin-storage-label">{formatFileSize(tenant.storage_used_bytes)} (kein Limit)</div>
+                    <div className="admin-storage-label">{t("noLimitUsage", { used: formatFileSize(tenant.storage_used_bytes) })}</div>
                   </div>
                 )}
               </td>
-              <td className="admin-cell-number">{new Date(tenant.created_at).toLocaleDateString("de-CH")}</td>
+              <td className="admin-cell-number">{new Date(tenant.created_at).toLocaleDateString(locale)}</td>
               <td onClick={(event) => event.stopPropagation()}>
                 <ActionMenu
                   items={[
-                    { label: "Einstellungen", onClick: () => openSettings(tenant) },
-                    { label: "Klonen", onClick: () => openClone(tenant) },
-                    { label: "Exportieren", onClick: () => openExport(tenant) },
-                    { label: "Löschen", onClick: () => deleteTenant(tenant), danger: true },
+                    { label: t("settings"), onClick: () => openSettings(tenant) },
+                    { label: t("clone"), onClick: () => openClone(tenant) },
+                    { label: t("export"), onClick: () => openExport(tenant) },
+                    { label: t("delete"), onClick: () => deleteTenant(tenant), danger: true },
                   ]}
                 />
               </td>
@@ -402,23 +438,23 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
 
       <Pagination offset={offset} limit={PAGE_SIZE} total={page.total} onOffsetChange={setOffset} />
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Neuer Mandant" description="Legt einen neuen Mandanten mit Standard-Dokumentvorlage an.">
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={t("newTenant")} description={t("newTenantDescription")}>
         <form className="grid" onSubmit={submit}>
           <div className="two-col">
             <label className="field-stack">
-              <span className="field-label">Mandantenname</span>
+              <span className="field-label">{t("tenantName")}</span>
               <input
                 value={createForm.name}
                 onChange={(event) => {
                   const name = event.target.value;
                   setCreateForm((current) => ({ ...current, name, public_slug: current.slugTouched ? current.public_slug : slugify(name) }));
                 }}
-                placeholder="z.B. Turnverein Muster"
+                placeholder={t("tenantNamePlaceholder")}
                 required
               />
             </label>
             <label className="field-stack">
-              <span className="field-label">Öffentlicher Slug</span>
+              <span className="field-label">{t("publicSlug")}</span>
               <span className="admin-slug-input">
                 <span className="admin-slug-prefix" aria-hidden="true">/</span>
                 <input
@@ -427,14 +463,14 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
                     setCreateForm((current) => ({ ...current, public_slug: event.target.value.toLowerCase(), slugTouched: event.target.value !== "" }))
                   }
                   pattern="[a-z0-9-]+"
-                  aria-label="Öffentlicher Slug"
+                  aria-label={t("publicSlug")}
                 />
               </span>
             </label>
           </div>
           <div className="field-stack">
-            <span className="field-label">Plan</span>
-            <div className="admin-plan-options" role="radiogroup" aria-label="Plan">
+            <span className="field-label">{t("plan")}</span>
+            <div className="admin-plan-options" role="radiogroup" aria-label={t("plan")}>
               {bookablePlans.map((plan) => (
                 <PlanOption
                   key={plan.code}
@@ -446,43 +482,45 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
                 />
               ))}
             </div>
-            <span className="field-help">Nicht buchbare Pläne (z.B. Bestandsmandanten) lassen sich danach in den Mandant-Einstellungen zuweisen.</span>
+            <span className="field-help">{t("nonBookablePlansHint")}</span>
           </div>
           <div className="field-stack">
-            <span className="field-label">Abrechnung</span>
+            <span className="field-label">{t("billing")}</span>
             <BillingCycleToggle value={createForm.billing_cycle} onChange={(billing_cycle) => setCreateForm((current) => ({ ...current, billing_cycle }))} />
           </div>
           <div className="modal-actions">
             <button type="button" className="button-ghost" onClick={() => setModalOpen(false)}>
-              Abbrechen
+              {t("cancel")}
             </button>
             <button type="submit" className="button-primary" disabled={createBusy || createForm.name.trim() === ""}>
-              {createBusy ? "Wird erstellt…" : "Mandant erstellen"}
+              {createBusy ? t("creating") : t("createTenant")}
             </button>
           </div>
         </form>
       </Modal>
 
-      <AdminTenantSettingsModal
-        open={settingsModalOpen}
-        onClose={() => setSettingsModalOpen(false)}
-        tenant={settingsTenant}
-        onSaved={handleTenantSaved}
-      />
+      {settingsModalOpen ? (
+        <AdminTenantSettingsModal
+          open
+          onClose={() => setSettingsModalOpen(false)}
+          tenant={settingsTenant}
+          onSaved={handleTenantSaved}
+        />
+      ) : null}
 
       <Modal
         open={cloneModalOpen}
         onClose={() => setCloneModalOpen(false)}
-        title={cloneTenant ? `"${cloneTenant.name}" klonen` : "Mandant klonen"}
-        description="Legt einen neuen Mandanten an, der auf diesem hier basiert."
+        title={cloneTenant ? t("cloneTitleNamed", { name: cloneTenant.name }) : t("cloneTitle")}
+        description={t("cloneDescription")}
       >
         <form className="grid" onSubmit={submitClone}>
           <label className="field-stack">
-            <span className="field-label">Name des neuen Mandanten</span>
+            <span className="field-label">{t("nameOfNewTenant")}</span>
             <input value={cloneName} onChange={(event) => setCloneName(event.target.value)} required />
           </label>
           <div className="field-stack">
-            <span className="field-label">Umfang</span>
+            <span className="field-label">{t("scope")}</span>
             <label className="field-radio-option">
               <input
                 type="radio"
@@ -492,8 +530,8 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
                 onChange={() => setCloneMode("structure")}
               />
               <span>
-                <strong>Nur Struktur &amp; Konfiguration</strong>
-                <div className="muted">Vorlagen, Formularfelder, Dokumentvorlagen, Zyklen, Konten. Keine Teilnehmer, Termine, Protokolle oder Benutzer.</div>
+                <strong>{t("cloneStructureOnlyTitle")}</strong>
+                <div className="muted">{t("cloneStructureOnlyDescription")}</div>
               </span>
             </label>
             <label className="field-radio-option">
@@ -505,17 +543,17 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
                 onChange={() => setCloneMode("full")}
               />
               <span>
-                <strong>Alles (vollständige Kopie)</strong>
-                <div className="muted">Zusätzlich Teilnehmer, Termine, Protokolle, Bussen, Todos, Abgaben und Benutzerzugriffe — z.B. für Tests.</div>
+                <strong>{t("cloneFullTitle")}</strong>
+                <div className="muted">{t("cloneFullDescription")}</div>
               </span>
             </label>
           </div>
           <div className="modal-actions">
             <button type="button" className="button-ghost" onClick={() => setCloneModalOpen(false)}>
-              Abbrechen
+              {t("cancel")}
             </button>
             <button type="submit" className="button-primary" disabled={cloneBusy}>
-              {cloneBusy ? "Wird geklont…" : "Klonen"}
+              {cloneBusy ? t("cloning") : t("clone")}
             </button>
           </div>
         </form>
@@ -524,12 +562,12 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
       <Modal
         open={exportModalOpen}
         onClose={() => setExportModalOpen(false)}
-        title={exportTenant ? `"${exportTenant.name}" exportieren` : "Mandant exportieren"}
-        description="Erstellt eine ZIP-Datei zum Herunterladen, die später im Adminpanel wieder als neuer Mandant importiert werden kann."
+        title={exportTenant ? t("exportTitleNamed", { name: exportTenant.name }) : t("exportTitle")}
+        description={t("exportDescription")}
       >
         <form className="grid" onSubmit={submitExport}>
           <div className="field-stack">
-            <span className="field-label">Umfang</span>
+            <span className="field-label">{t("scope")}</span>
             <label className="field-radio-option">
               <input
                 type="radio"
@@ -539,8 +577,8 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
                 onChange={() => setExportScope("structure")}
               />
               <span>
-                <strong>Nur Struktur</strong>
-                <div className="muted">Zyklen, Formularfelder, Dokumentvorlagen, Listen (nur Definition, ohne Inhalt), Konten, Benutzerrollen und verifizierte Domains (inkl. Prüfcode).</div>
+                <strong>{t("exportStructureOnlyTitle")}</strong>
+                <div className="muted">{t("exportStructureOnlyDescription")}</div>
               </span>
             </label>
             <label className="field-radio-option">
@@ -552,8 +590,8 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
                 onChange={() => setExportScope("structure_lists")}
               />
               <span>
-                <strong>Struktur + Listeninhalt</strong>
-                <div className="muted">Wie oben, zusätzlich die Einträge in den Listen. Ohne Teilnehmer/Termine - Listeneinträge, die auf einen Teilnehmer oder Termin verweisen, werden dabei ohne diesen Verweis übernommen.</div>
+                <strong>{t("exportStructureListsTitle")}</strong>
+                <div className="muted">{t("exportStructureListsDescription")}</div>
               </span>
             </label>
             <label className="field-radio-option">
@@ -565,8 +603,8 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
                 onChange={() => setExportScope("full")}
               />
               <span>
-                <strong>Struktur + alle Protokolle</strong>
-                <div className="muted">Zusätzlich Teilnehmer, Termine, Protokolle, Bussen, Todos und Dateien (inkl. Fotos-Galerie). Ohne Abgabebox.</div>
+                <strong>{t("exportFullTitle")}</strong>
+                <div className="muted">{t("exportFullDescription")}</div>
               </span>
             </label>
             <label className="field-radio-option">
@@ -578,17 +616,46 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
                 onChange={() => setExportScope("full_abgabebox")}
               />
               <span>
-                <strong>Alles inklusive Abgabebox</strong>
-                <div className="muted">Wie oben, zusätzlich Abgabebox-Konfiguration und hochgeladene Dateien.</div>
+                <strong>{t("exportFullAbgabeboxTitle")}</strong>
+                <div className="muted">{t("exportFullAbgabeboxDescription")}</div>
               </span>
             </label>
           </div>
+          {/* Datenschutz-Audit Paket 6: Zugangsdaten nur auf ausdrücklichen Wunsch */}
+          <label className="checkbox-row"><input type="checkbox" checked={exportCredentials} onChange={(event) => setExportCredentials(event.target.checked)} /><span>{t("exportCredentials")}</span></label>
+          <p className="field-help">{t("exportCredentialsHint")}</p>
+          <label className="field-stack">
+            <span className="field-label">{t("exportPasswordLabel")}</span>
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={exportPassword}
+              onChange={(event) => setExportPassword(event.target.value)}
+            />
+            <span className="field-help">
+              {exportPasswordTooShort ? t("exportPasswordTooShort", { min: EXPORT_PASSWORD_MIN_LENGTH }) : t("exportPasswordHelp")}
+            </span>
+          </label>
+          {exportPassword ? (
+            <label className="field-stack">
+              <span className="field-label">{t("exportPasswordConfirmLabel")}</span>
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={exportPasswordConfirm}
+                onChange={(event) => setExportPasswordConfirm(event.target.value)}
+              />
+              {exportPasswordConfirm && exportPasswordMismatch ? (
+                <span className="field-help">{t("exportPasswordMismatch")}</span>
+              ) : null}
+            </label>
+          ) : null}
           <div className="modal-actions">
             <button type="button" className="button-ghost" onClick={() => setExportModalOpen(false)}>
-              Abbrechen
+              {t("cancel")}
             </button>
-            <button type="submit" className="button-primary">
-              Exportieren
+            <button type="submit" className="button-primary" disabled={exportPasswordTooShort || exportPasswordMismatch}>
+              {t("export")}
             </button>
           </div>
         </form>
@@ -599,50 +666,61 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
         onClose={() => {
           if (!importBusy) setImportModalOpen(false);
         }}
-        title="Mandant importieren"
-        description="Legt anhand einer zuvor exportierten ZIP-Datei einen neuen Mandanten an."
+        title={t("importTenant")}
+        description={t("importDescription")}
       >
         <form className="grid" onSubmit={submitImport}>
           <label className="field-stack">
-            <span className="field-label">Name des neuen Mandanten</span>
+            <span className="field-label">{t("nameOfNewTenant")}</span>
             <input value={importName} onChange={(event) => setImportName(event.target.value)} disabled={importBusy} required />
           </label>
           <label className="field-stack">
-            <span className="field-label">Export-Datei (.zip)</span>
+            <span className="field-label">{t("exportFile")}</span>
             <input
               type="file"
-              accept=".zip"
+              accept=".hocxenc,.zip"
               onChange={(event) => setImportFile(event.target.files?.[0] ?? null)}
               disabled={importBusy}
               required
             />
+          </label>
+          <label className="field-stack">
+            <span className="field-label">{t("importPasswordLabel")}</span>
+            <input
+              type="password"
+              autoComplete="off"
+              value={importPassword}
+              onChange={(event) => setImportPassword(event.target.value)}
+              disabled={importBusy}
+            />
+            <span className="field-help">{t("importPasswordHelp")}</span>
           </label>
           {importBusy ? (
             <div className="tenant-import-status" role="status" aria-live="polite">
               <div className="tenant-import-status-copy">
                 <span className="tenant-import-upload-icon" aria-hidden="true">↑</span>
                 <span>
-                  <strong>Datei wird hochgeladen und verarbeitet …</strong>
+                  <strong>{t("uploadingAndProcessing")}</strong>
                   <span className="tenant-import-filename">{importFile?.name}</span>
                 </span>
               </div>
               <div
                 className="tenant-import-progress-track"
                 role="progressbar"
-                aria-label="Upload und Import laufen"
-                aria-valuetext="Upload und Import laufen"
+                aria-label={t("uploadAndImportRunning")}
+                aria-valuetext={t("uploadAndImportRunning")}
               >
                 <span className="tenant-import-progress-bar" />
               </div>
-              <span className="tenant-import-status-hint">Das kann je nach Dateigrösse einen Moment dauern.</span>
+              <span className="tenant-import-status-hint">{t("mayTakeAMoment")}</span>
             </div>
           ) : null}
           <div className="modal-actions">
             <button type="button" className="button-ghost" onClick={() => setImportModalOpen(false)} disabled={importBusy}>
-              Abbrechen
+              {t("cancel")}
             </button>
             <button type="submit" className="button-primary" disabled={importBusy || !importFile}>
-              {importBusy ? "Wird importiert…" : "Importieren"}
+              {importBusy ? t("importing") : t("import")}
             </button>
           </div>
         </form>
@@ -651,8 +729,8 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
       <Modal
         open={importWarnings !== null}
         onClose={() => setImportWarnings(null)}
-        title="Import-Hinweise"
-        description="Der Mandant wurde importiert, aber einzelne Zeilen wurden dabei übersprungen oder angepasst:"
+        title={t("importNotesTitle")}
+        description={t("importNotesDescription")}
       >
         <ul className="grid">
           {(importWarnings ?? []).map((warning, index) => (
@@ -661,7 +739,7 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
         </ul>
         <div className="modal-actions">
           <button type="button" className="button-ghost" onClick={() => setImportWarnings(null)}>
-            Schliessen
+            {t("close")}
           </button>
         </div>
       </Modal>

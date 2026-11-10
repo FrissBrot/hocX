@@ -1,8 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Popover } from "@/components/ui/popover";
+import { DateInput } from "@/components/ui/date-input";
+import { TODO_DUE_PRESETS, todoDuePresetDate } from "@/lib/utils/todo-due";
 import { SearchInput } from "@/components/ui/search-input";
+import { useSmartDateSuggestions } from "@/components/todos/use-smart-date-suggestions";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { formatDate, formatDateRange } from "@/lib/utils/format";
@@ -30,16 +34,21 @@ export type DuePatch = {
 type Props = {
   todoId: string;
   label: string;
+  dueDate?: string | null;
   onApply: (patch: DuePatch, label: string) => void;
 };
 
-export function TodoDueMenu({ todoId, label, onApply }: Props) {
+export function TodoDueMenu({ todoId, label, dueDate, onApply }: Props) {
+  const t = useTranslations("todos");
+  const tCommon = useTranslations("common");
   const showToast = useToast();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<DueEventsResponse | null>(null);
+  const [customDate, setCustomDate] = useState(dueDate ?? "");
   const [search, setSearch] = useState("");
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const dateSuggestions = useSmartDateSuggestions(search);
 
   useEffect(() => {
     if (!open || data) {
@@ -49,7 +58,7 @@ export function TodoDueMenu({ todoId, label, onApply }: Props) {
     browserApiFetch<DueEventsResponse>(`/api/protocol-todos/${todoId}/due-events`)
       .then((res) => setData(res))
       .catch((error) => {
-        showToast(error instanceof Error ? error.message : "Termine konnten nicht geladen werden", "error");
+        showToast(error instanceof Error ? error.message : t("dueEventsLoadFailed"), "error");
       })
       .finally(() => setLoading(false));
   }, [open, todoId, data, showToast]);
@@ -67,7 +76,7 @@ export function TodoDueMenu({ todoId, label, onApply }: Props) {
     : [];
 
   function pick(patch: DuePatch) {
-    const label = patch.due_event_id ? data?.events.find((event) => event.id === patch.due_event_id)?.title ?? "Termin" : patch.due_marker ? "Nächster Hock" : "Kein Enddatum";
+    const label = patch.due_event_id ? data?.events.find((event) => event.id === patch.due_event_id)?.title ?? t("eventFallback") : patch.due_marker ? t("nextHockLabel") : patch.due_date ? formatDate(patch.due_date) : t("noEndDate");
     onApply(patch, label);
     setOpen(false);
   }
@@ -85,24 +94,48 @@ export function TodoDueMenu({ todoId, label, onApply }: Props) {
       </button>
       <Popover open={open} onOpenChange={setOpen} anchorRef={triggerRef} className="due-menu-popover">
         {loading ? (
-          <div className="due-menu-loading">Lädt…</div>
+          <div className="due-menu-loading">{tCommon("loading")}</div>
         ) : (
           <>
             <button type="button" className="due-menu-option" onClick={() => pick({ due_date: null, due_event_id: null, due_marker: null })}>
-              Kein Enddatum
+              {t("noEndDate")}
             </button>
             <button type="button" className="due-menu-option" onClick={() => pick({ due_date: null, due_event_id: null, due_marker: "next_session" })}>
-              Nächster Hock
+              {t("nextHockLabel")}
               {data?.next_event_id && data.events.find((e) => e.id === data.next_event_id) && (
                 <span className="due-menu-option-sub">{formatDate(data.events.find((e) => e.id === data.next_event_id)!.event_date)}</span>
               )}
             </button>
+            {TODO_DUE_PRESETS.map((preset) => (
+              <button key={preset} type="button" className="due-menu-option" onClick={() => pick({ due_date: todoDuePresetDate(preset), due_event_id: null, due_marker: null })}>
+                {t(preset)}
+                <span className="due-menu-option-sub">{formatDate(todoDuePresetDate(preset))}</span>
+              </button>
+            ))}
+            <label className="field-stack">
+              <span className="field-label">{t("customDateLabel")}</span>
+              <DateInput value={customDate} onChange={(value) => {
+                setCustomDate(value);
+                if (value) pick({ due_date: value, due_event_id: null, due_marker: null });
+              }} />
+            </label>
+            <div className="due-menu-divider" />
+            <SearchInput value={search} onChange={setSearch} placeholder={t("dueSearchPlaceholder")} />
+            {dateSuggestions.map((suggestion) => (
+              <button
+                key={`date-${suggestion.kind}-${suggestion.date}`}
+                type="button"
+                className="due-menu-option"
+                onClick={() => pick({ due_date: suggestion.date, due_event_id: null, due_marker: null })}
+              >
+                {suggestion.label}
+                <span className="due-menu-option-sub">{suggestion.subtle}</span>
+              </button>
+            ))}
             {data && data.events.length > 0 && (
               <>
-                <div className="due-menu-divider" />
-                <SearchInput value={search} onChange={setSearch} placeholder="Suchen…" />
                 {filteredEvents.length === 0 ? (
-                  <span className="assignee-empty">Keine Ergebnisse</span>
+                  dateSuggestions.length ? null : <span className="assignee-empty">{tCommon("noResults")}</span>
                 ) : (
                   filteredEvents.map((event) => (
                     <button

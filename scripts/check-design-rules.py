@@ -10,12 +10,17 @@ ALLOWED_FILES. Neue Ausnahmen nur, wenn es wirklich keine Token-Stufe gibt.
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-CSS_FILES = [ROOT / "frontend/app/globals.css", ROOT / "abgabebox-frontend/app/globals.css"]
+CSS_FILES = [
+    ROOT / "frontend/app/globals.css",
+    *sorted((ROOT / "frontend/app/styles").glob("*.css")),  # Bereichs-CSS (check-css-scopes.py)
+    ROOT / "abgabebox-frontend/app/globals.css",
+]
 TSX_GLOBS = [
     (ROOT / "frontend", ["components/**/*.tsx", "app/**/*.tsx", "lib/**/*.tsx"]),
     (ROOT / "abgabebox-frontend", ["components/**/*.tsx", "app/**/*.tsx"]),
@@ -28,6 +33,15 @@ ALLOWED_HEX_FILES = {
     "frontend/components/ui/tag-input.tsx",  # vom Nutzer waehlbare Tag-Farben
     "frontend/components/storage/storage-usage-view.tsx",  # Kategorienfarben (getestet)
     "frontend/components/protocol/collaboration-presence.tsx",  # Avatar-Farben pro Person
+}
+
+# Bausteine, die das native Auswahl-/Picker-Element selbst kapseln
+NATIVE_PICKER_FILES = {
+    "frontend/components/ui/select.tsx",
+    "frontend/components/ui/date-input.tsx",
+    "frontend/components/ui/time-input.tsx",
+    "frontend/components/ui/color-input.tsx",
+    "abgabebox-frontend/components/ui/select.tsx",
 }
 
 SPACE_SCALE = {4, 8, 12, 16, 24, 32}
@@ -82,7 +96,7 @@ def check_line(path: Path, no: int, line: str, defined: set[str], is_css: bool) 
                 continue  # lokale Paletten (--c0.., --pv-*) werden am Ort definiert
             report(path, no, "farbe", f"Hex-Farbe {m.group(0)} - Token aus design/tokens.css nutzen")
     for m in re.finditer(r"var\((--[a-z0-9-]+),\s*#", code):
-        if m.group(1) in GLOBAL_TOKENS:  # Fallbacks lokaler Variablen (--dt-accent) sind ok
+        if m.group(1) in GLOBAL_TOKENS:  # Fallbacks lokaler Variablen sind ok
             report(path, no, "farbe", f"Hex-Fallback fuer {m.group(1)} - Token ist immer definiert, Fallback entfernen")
 
     # --- undefinierte Variablen ---------------------------------------------------
@@ -140,8 +154,33 @@ def check_line(path: Path, no: int, line: str, defined: set[str], is_css: bool) 
                 report(path, no, "klasse", f"'{old}' ist umbenannt - '{new}' nutzen")
         if re.search(r"\bwindow\.(confirm|alert|prompt)\(|(?<![\w.])(?:alert|prompt)\(", code):
             report(path, no, "dialog", "Native Dialoge vermeiden - useConfirm()/useToast() nutzen")
-        if re.search(r"<(?:select|dialog)\b", code):
-            pass  # <select> ist fuer einfache Listen erlaubt
+        # Natives Auswahl-/Datums-/Zeit-/Farbfeld zeigt die Oberflaeche des Betriebssystems:
+        # Select, DateInput, TimeInput, ColorInput nutzen (die Bausteine selbst kapseln das
+        # native Element; die Abgabebox hat bisher nur Select)
+        if r.startswith(("frontend/", "abgabebox-frontend/")) and r not in NATIVE_PICKER_FILES and not code.lstrip().startswith(("//", "*")):
+            if re.search(r"<select\b", code):
+                report(path, no, "auswahl", "Natives <select> - Select aus @/components/ui/select nutzen")
+            m = re.search(r"type=[\"'{]+(date|time|datetime-local|color)[\"'}]", code)
+            if m:
+                component = {"date": "DateInput", "datetime-local": "DateInput + TimeInput", "time": "TimeInput", "color": "ColorInput"}[m.group(1)]
+                report(path, no, "auswahl", f"Natives type=\"{m.group(1)}\" - {component} nutzen")
+
+
+# Bausteine, die die Abgabebox als Kopie der (dort getesteten) Hauptanwendung fuehrt: muessen
+# gleich bleiben, bis auf Kommentarzeilen am Dateianfang (Herkunftshinweis).
+SHARED_COPIES = {
+    "abgabebox-frontend/components/ui/select.tsx": "frontend/components/ui/select.tsx",
+}
+
+
+def check_shared_copies() -> None:
+    def body(path: Path) -> list[str]:
+        lines = path.read_text().splitlines()
+        return [line for line in lines if not line.startswith("// Auswahlfeld im hocX-Look")]
+
+    for copy, source in SHARED_COPIES.items():
+        if body(ROOT / copy) != body(ROOT / source):
+            report(ROOT / copy, 1, "kopie", f"weicht von {source} ab - Aenderungen in beiden Apps gleich machen")
 
 
 def main() -> int:
@@ -157,6 +196,12 @@ def main() -> int:
         for no, line in enumerate(path.read_text().splitlines(), 1):
             check_line(path, no, line, defined, is_css)
 
+    check_shared_copies()
+    if not targets:
+        # Bereichs-CSS: nur im Gesamtlauf, die Prüfung braucht den ganzen Importgraphen.
+        scopes = subprocess.run([sys.executable, str(ROOT / "scripts/check-css-scopes.py")], capture_output=True, text=True)
+        if scopes.returncode != 0:
+            violations.extend(scopes.stdout.strip().splitlines())
     if violations:
         print("\n".join(violations))
         print(f"\n{len(violations)} Design-Regelverstoesse - siehe design/DESIGN.md")

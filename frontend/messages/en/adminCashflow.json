@@ -1,0 +1,183 @@
+{
+  "title": "Cash flow",
+  "description": "Income from tenant subscriptions and platform expenses. No real invoices are created.",
+  "loading": "Loading …",
+  "tabs": {
+    "overview": "Overview",
+    "charges": "Receivables",
+    "costs": "Costs"
+  },
+  "actions": {
+    "newCost": "Add expense",
+    "cancel": "Cancel",
+    "save": "Save",
+    "create": "Add",
+    "edit": "Edit",
+    "delete": "Delete"
+  },
+  "overview": {
+    "year": "Year",
+    "includePlanned": "Include planned costs",
+    "income": "Income {year}",
+    "incomeSub": "Paid receivables to date",
+    "expenses": "Expenses {year}",
+    "expensesSub": "Active costs to date",
+    "expensesSubPlanned": "Of which planned: {planned}",
+    "result": "Result {year}",
+    "resultSub": "Income minus expenses",
+    "balance": "Overall balance",
+    "balancePlanned": "With planned costs: {amount}"
+  },
+  "runRate": {
+    "title": "Per month, current state",
+    "income": "Subscriptions ({count, plural, one {# paying tenant} other {# paying tenants}})",
+    "fixed": "Fixed expenses",
+    "percent": "Fees",
+    "net": "Result per month",
+    "planned": "Incl. planned costs ({amount})",
+    "hint": "Yearly amounts are converted to one month."
+  },
+  "receivables": {
+    "title": "Receivables",
+    "open": "Open ({count, plural, one {# receivable} other {# receivables}})",
+    "waived": "Waived ({count, plural, one {# receivable} other {# receivables}})",
+    "hint": "Open and waived receivables do not count as income.",
+    "overdue": "Overdue ({count, plural, one {# receivable} other {# receivables}})"
+  },
+  "chart": {
+    "title": "Trend {year}",
+    "income": "Income",
+    "expenses": "Expenses",
+    "planned": "Planned"
+  },
+  "table": {
+    "month": "Month",
+    "income": "Income",
+    "fixed": "Fixed expenses",
+    "percent": "Fees",
+    "net": "Result",
+    "open": "Open",
+    "forecast": "Forecast",
+    "total": "Total {year}",
+    "totalToDate": "Total to date"
+  },
+  "charges": {
+    "intro": "What each tenant owes per billing period. Receivables are created automatically from the subscription start. Only paid receivables appear in the cash flow.",
+    "all": "All",
+    "search": "Search tenant",
+    "sum": "{count, plural, one {# receivable} other {# receivables}} · {amount}",
+    "empty": "No receivables in this view.",
+    "deletedTenant": "(deleted)",
+    "columns": {
+      "tenant": "Tenant",
+      "period": "Period",
+      "amount": "Amount",
+      "status": "Status",
+      "paidOn": "Paid on",
+      "dueOn": "Due on"
+    },
+    "actions": {
+      "details": "Details and payment",
+      "recalculate": "Recalculate amount"
+    }
+  },
+  "charge": {
+    "discount": "Discount {percent} %",
+    "quantity": "{label} × {quantity}",
+    "total": "Total",
+    "frozen": "Amount fixed when the receivable was created.",
+    "status": "Status",
+    "paidOn": "Paid on",
+    "note": "Note"
+  },
+  "chargeStatus": {
+    "open": "Open",
+    "paid": "Paid",
+    "waived": "Waived",
+    "overdue": "Overdue"
+  },
+  "cycle": {
+    "monthly": "Monthly",
+    "yearly": "Yearly"
+  },
+  "costs": {
+    "intro": "Fixed expenses are due from the subscription date in the chosen interval. Percentage expenses (e.g. payment fees) are deducted from every paid receivable. Only active costs are counted.",
+    "all": "All",
+    "monthlySum": "Fixed expenses per month: {active} active · {planned} incl. planned",
+    "empty": "No costs added yet.",
+    "percentAmount": "{percent} per payment",
+    "fixedAmount": {
+      "monthly": "{amount} / month",
+      "yearly": "{amount} / year",
+      "once": "{amount} one-off"
+    },
+    "until": "until {date}",
+    "perPayment": "On every payment",
+    "confirmDelete": "Delete “{name}”? The expense also disappears from past months.",
+    "columns": {
+      "name": "Name",
+      "kind": "Type",
+      "amount": "Amount",
+      "start": "Subscription date",
+      "next": "Next due",
+      "status": "Status"
+    }
+  },
+  "costKind": {
+    "fixed": "Fixed",
+    "percent": "Percentage"
+  },
+  "costStatus": {
+    "active": "Active",
+    "planned": "Planned"
+  },
+  "interval": {
+    "monthly": "Monthly",
+    "yearly": "Yearly",
+    "once": "One-off"
+  },
+  "costForm": {
+    "newTitle": "Add expense",
+    "editTitle": "Edit expense",
+    "kind": "Type",
+    "kindHelp": {
+      "fixed": "Fixed amount, e.g. server or licence",
+      "percent": "Share of every payment, e.g. fees"
+    },
+    "name": "Name",
+    "namePlaceholder": {
+      "fixed": "e.g. Hetzner server",
+      "percent": "e.g. TWINT payment fee"
+    },
+    "amount": "Amount",
+    "interval": "Interval",
+    "percent": "Percentage",
+    "percentHelp": "Calculated on every paid receivable.",
+    "startDate": "Subscription date",
+    "date": "Date",
+    "endDate": "End date (optional)",
+    "status": "Status",
+    "statusHelp": {
+      "active": "Counted in the cash flow.",
+      "planned": "Only in the “incl. planned costs” calculation."
+    },
+    "note": "Note"
+  },
+  "toast": {
+    "loadFailed": "Cash flow could not be loaded.",
+    "failed": "Action failed.",
+    "charge": {
+      "open": "Receivable is open again.",
+      "paid": "Receivable marked as paid.",
+      "waived": "Receivable waived."
+    },
+    "recalculated": "Amount recalculated.",
+    "cost": {
+      "active": "“{name}” is active.",
+      "planned": "“{name}” is planned."
+    },
+    "costCreated": "Expense added.",
+    "costUpdated": "Expense saved.",
+    "costDeleted": "Expense deleted."
+  }
+}

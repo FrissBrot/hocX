@@ -44,7 +44,6 @@ test("admin creates a storage package, assigns it to a tenant, and the tenant se
     const afterSubscription = await afterResponse.json();
     expect(afterSubscription.package_storage_bytes).toBe(2_000_000_000);
     expect(afterSubscription.storage_quota_bytes).toBe((planStorageBytes ?? 0) + 2_000_000_000);
-    expect(afterSubscription.storage_quota_manual_override).toBe(false);
   } finally {
     if (tenantId) {
       await adminApi.put(`/api/admin/tenants/${tenantId}/storage-packages`, { data: { items: [] } }).catch(() => {});

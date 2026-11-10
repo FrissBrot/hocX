@@ -1,7 +1,9 @@
 "use client";
 
 import { KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
+import { useParticipantSelectable } from "@/contexts/participant-date-context";
 import { Popover } from "@/components/ui/popover";
 import { SearchInput } from "@/components/ui/search-input";
 
@@ -9,11 +11,12 @@ import { SearchInput } from "@/components/ui/search-input";
 // callers) but is generic so a caller keyed by string (e.g. a Matrix column_key) can
 // instantiate TodoAssigneeMenu<string> instead of widening every other call site's
 // type to a union.
-export type AssigneeOption<Id extends string | number = number> = { id: Id | null; display_name: string };
+export type AssigneeOption<Id extends string | number = number> = { id: Id | null; display_name: string; joined_at?: string | null; left_at?: string | null };
 
 type Props<Id extends string | number> = {
   label: string;
   participants: AssigneeOption<Id>[];
+  isOptionSelectable?: (option: AssigneeOption<Id>) => boolean;
   activeId: Id | null;
   onChange: (option: AssigneeOption<Id>) => void;
   /** Text for the built-in "id: null" option - defaults to the todo-assignee wording
@@ -25,10 +28,14 @@ type Props<Id extends string | number> = {
 export function TodoAssigneeMenu<Id extends string | number = number>({
   label,
   participants,
+  isOptionSelectable,
   activeId,
   onChange,
-  nullLabel = "Niemand",
+  nullLabel,
 }: Props<Id>) {
+  const isParticipantSelectable = useParticipantSelectable();
+  const t = useTranslations("todos");
+  const tCommon = useTranslations("common");
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [highlighted, setHighlighted] = useState(0);
@@ -36,7 +43,7 @@ export function TodoAssigneeMenu<Id extends string | number = number>({
   const listRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
 
-  const options: AssigneeOption<Id>[] = [{ id: null, display_name: nullLabel }, ...participants];
+  const options: AssigneeOption<Id>[] = [{ id: null, display_name: nullLabel ?? t("nobodyLabel") }, ...participants.filter((option) => (isOptionSelectable ?? isParticipantSelectable)(option))];
   const filtered = search.trim()
     ? options.filter((o) => o.display_name.toLowerCase().includes(search.trim().toLowerCase()))
     : options;
@@ -98,10 +105,10 @@ export function TodoAssigneeMenu<Id extends string | number = number>({
         <span className="mini-menu-trigger-icon">⌄</span>
       </button>
       <Popover open={open} onOpenChange={setOpen} anchorRef={triggerRef} className="assignee-popover-portal">
-        <SearchInput ref={searchRef} value={search} onChange={setSearch} placeholder="Suchen…" onKeyDown={handleInputKey} />
+        <SearchInput ref={searchRef} value={search} onChange={setSearch} placeholder={tCommon("searchPlaceholder")} onKeyDown={handleInputKey} />
         <div className="menu-list" role="listbox" ref={listRef}>
           {filtered.length === 0 ? (
-            <span className="assignee-empty">Keine Ergebnisse</span>
+            <span className="assignee-empty">{tCommon("noResults")}</span>
           ) : (
             filtered.map((option, index) => (
               <button

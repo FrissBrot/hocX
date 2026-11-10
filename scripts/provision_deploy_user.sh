@@ -96,7 +96,8 @@ install -d -m 700 -o "$DEPLOY_USER" -g "$DEPLOY_GROUP" \
 # wie fuer jeden anderen User. Muss root:root gehoeren statt hocx-deploy, sonst
 # kann Traefik /letsencrypt/acme.json nie lesen/schreiben ("permission denied",
 # ACME-Resolver wird stillschweigend uebersprungen - kein echtes Zertifikat).
-install -d -m 700 -o root -g root "$REPO_DIR/infra/traefik/letsencrypt"
+# 0711 statt 0700: Git (als Deploy-Benutzer) muss die versionierte .gitkeep per Namen erreichen.
+install -d -m 711 -o root -g root "$REPO_DIR/infra/traefik/letsencrypt"
 if [ ! -e "$REPO_DIR/.deploy.lock" ]; then
   install -m 600 -o "$DEPLOY_USER" -g "$DEPLOY_GROUP" /dev/null "$REPO_DIR/.deploy.lock"
 else

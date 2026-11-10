@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models import (
+    Document,
     Event,
     ListDefinition,
     ListEntry,
@@ -20,7 +21,8 @@ from app.models import (
     WordImportDocument,
 )
 from app.schemas.admin import TenantCleanupCategory, TenantCleanupCounts
-from app.services.file_service import _safe_storage_path
+from app.core.storage import ABGABEBOX, MAIN, get_object_store
+from app.services.file_service import owned_thumbnail_path
 
 
 class TenantCleanupService:
@@ -82,7 +84,7 @@ class TenantCleanupService:
             lists_full=self._count(db, ListDefinition, tenant_id),
             events=self._count(db, Event, tenant_id),
             todos=self._count(db, ProtocolTodo, tenant_id),
-            participants=self._count(db, Participant, tenant_id),
+            participants=int(db.scalar(select(func.count(Participant.id)).where(Participant.tenant_id == tenant_id, Participant.login_enabled.is_(False))) or 0),
             documents=documents,
         )
 
@@ -130,7 +132,10 @@ class TenantCleanupService:
             counts.todos = result.rowcount or 0
 
         if "participants" in selected:
-            result = db.execute(delete(Participant).where(Participant.tenant_id == tenant_id))
+            from app.services.participant_service import ParticipantService
+            participant_ids = list(db.scalars(select(Participant.id).where(Participant.tenant_id == tenant_id, Participant.login_enabled.is_(False))))
+            ParticipantService()._clear_orphaned_list_references(db, tenant_id, set(participant_ids))
+            result = db.execute(delete(Participant).where(Participant.id.in_(participant_ids)))
             counts.participants = result.rowcount or 0
 
         if "documents" in selected:
@@ -144,6 +149,10 @@ class TenantCleanupService:
 
     def _cleanup_documents(self, db: Session, tenant_id: int) -> int:
         deleted = 0
+        # Logische Dokumente zuerst: ihre erzeugten Dateien (PDF-Ansichten) sind danach
+        # unreferenziert und fallen in den Orphan-Sweep unten (samt Objekt).
+        db.execute(update(Document).where(Document.tenant_id == tenant_id).values(current_version_id=None))
+        db.execute(delete(Document).where(Document.tenant_id == tenant_id))
         # No-op if "protocols" already cleared these in the same call.
         result = db.execute(delete(WordImportDocument).where(WordImportDocument.tenant_id == tenant_id))
         deleted += result.rowcount or 0
@@ -186,14 +195,12 @@ class TenantCleanupService:
             )
         ).all()
         for stored_file in orphaned:
-            root = settings.abgabebox_storage_root if stored_file.id in abgabebox_stored_file_ids else settings.storage_root
-            file_path = _safe_storage_path(root, stored_file.storage_path)
-            if file_path.exists():
-                file_path.unlink()
-            if stored_file.thumbnail_path:
-                thumbnail_path = _safe_storage_path(settings.thumbnail_root, stored_file.thumbnail_path)
-                if thumbnail_path.exists():
-                    thumbnail_path.unlink()
+            namespace = ABGABEBOX if stored_file.id in abgabebox_stored_file_ids else MAIN
+            # Im selben Transaktionskontext wie der DB-Delete (Journal/Fence, siehe objstore_client).
+            get_object_store().delete(db, namespace, stored_file.storage_path)
+            thumbnail_path = owned_thumbnail_path(stored_file)
+            if thumbnail_path is not None and thumbnail_path.exists():
+                thumbnail_path.unlink()
             db.delete(stored_file)
             deleted += 1
         return deleted

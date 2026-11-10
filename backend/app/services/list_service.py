@@ -132,10 +132,40 @@ class ListService:
 
     def list_entries(self, db: Session, *, list_definition_id: int) -> list[ListEntryRead]:
         definition = self.repository.get_definition(db, list_definition_id)
-        return [
-            self._entry_read(db, item, definition=definition)
-            for item in self.repository.list_entries(db, list_definition_id=list_definition_id)
-        ]
+        entries = self.repository.list_entries(db, list_definition_id=list_definition_id)
+        self._prime_entry_references(db, definition, entries)
+        return [self._entry_read(db, item, definition=definition) for item in entries]
+
+    @staticmethod
+    def _prime_entry_references(db: Session, definition: ListDefinition | None, entries: list[ListEntry]) -> None:
+        """Eine Sammelabfrage je Modell (Liste, Personen, Termine) für alle Einträge, statt dass
+        _denormalize_value jede Person/jeden Termin einzeln auflöst (16-20 Abfragen je Liste)."""
+        if not entries:
+            return
+        public_id_service.prime_public_ids(db, ListDefinition, {entry.list_definition_id for entry in entries})
+        wanted: dict[type, set[int]] = {Participant: set(), Event: set()}
+
+        def add(model: type, value: Any) -> None:
+            # Nur echte interne ids; alles andere löst _denormalize_value wie bisher selbst auf
+            if isinstance(value, int) and not isinstance(value, bool):
+                wanted[model].add(value)
+
+        for entry in entries:
+            for value_type, stored in (
+                (definition.column_one_value_type if definition else "text", entry.column_one_value_json),
+                (definition.column_two_value_type if definition else "text", entry.column_two_value_json),
+            ):
+                value = stored or {}
+                if value_type == "participant":
+                    add(Participant, value.get("participant_id"))
+                elif value_type == "participants" and isinstance(value.get("participant_ids"), list):
+                    for item in value["participant_ids"]:
+                        add(Participant, item)
+                elif value_type == "event":
+                    add(Event, value.get("event_id"))
+        for model, ids in wanted.items():
+            if ids:
+                public_id_service.prime_public_ids(db, model, ids)
 
     def get_entry(self, db: Session, list_entry_id: int) -> ListEntry | None:
         return self.repository.get_entry(db, list_entry_id)
@@ -175,8 +205,13 @@ class ListService:
         return self._entry_read(db, updated, definition=definition)
 
     def delete_entry(self, db: Session, list_entry_id: int) -> bool:
+        from app.services import deletion_service
+
         entry = self.repository.get_entry(db, list_entry_id)
         if entry is None:
             return False
+        # Einreichungen zu diesem Eintrag samt Dateien löschen (sonst verwaist, PRIV-003).
+        if deletion_service.erase_uploads_of(db, list_entry_id=list_entry_id):
+            entry = self.repository.get_entry(db, list_entry_id)
         self.repository.delete_entry(db, entry)
         return True

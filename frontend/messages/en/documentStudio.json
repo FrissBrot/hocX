@@ -1,0 +1,2333 @@
+{
+  "assets": {
+    "actionsFor": "Actions for {name}",
+    "category": {
+      "background": "Background",
+      "font": "Font",
+      "graphic": "Graphic",
+      "image": "Image",
+      "letterhead": "Letterhead",
+      "logo": "Logo",
+      "watermark": "Watermark"
+    },
+    "categoryAll": "All",
+    "categoryLabel": "Category",
+    "delete": "Delete",
+    "deleteConfirm": "Delete “{name}”?",
+    "deleted": "Deleted.",
+    "description": "Logos, footer images and font files used by your templates.",
+    "edit": "Edit",
+    "editTitle": "Edit file",
+    "emptyNoUpload": "Administrators can upload files here.",
+    "emptyTitle": "No files yet",
+    "emptyUpload": "Upload a logo, graphic or font (PNG, JPG, SVG, TTF, OTF).",
+    "loadFailed": "Files could not be loaded.",
+    "name": "Name",
+    "pickFont": "Choose font",
+    "pickImage": "Choose image",
+    "referenceKind": {
+      "brand": "Brand profile",
+      "component": "Component",
+      "template": "Template"
+    },
+    "title": "Images and fonts",
+    "unused": "Not used anywhere.",
+    "upload": "Upload",
+    "uploadFailed": "Upload failed.",
+    "uploadFont": "Upload font",
+    "uploadImage": "Upload image",
+    "uploaded": "Uploaded.",
+    "uploading": "Uploading …",
+    "usage": "Show usage",
+    "usageTitle": "Usage of “{name}”",
+    "filter": {
+      "all": "All",
+      "used": "In use",
+      "unused": "Not in use"
+    },
+    "group": {
+      "logos": "Logos",
+      "graphics": "Footer images and graphics",
+      "fonts": "Fonts"
+    },
+    "usedIn": "In “{name}”{count, plural, =0 {} other { and # more}}",
+    "notUsed": "Not in use",
+    "duplicates": "{count, number}× present",
+    "mergeDuplicates": "{count, plural, one {Merge # duplicate} other {Merge # duplicates}}",
+    "merged": "{count, plural, =0 {No unused duplicates found} one {# duplicate removed} other {# duplicates removed}}"
+  },
+  "assignments": {
+    "actions": "Actions",
+    "add": "Add override",
+    "brand": "Corporate design",
+    "brandDefault": "Default profile",
+    "chooseProtocolTemplate": "Choose protocol template",
+    "defaults": "Default per document type",
+    "description": "Which template is used when exporting? Order: chosen in the export, protocol template, organisation default, hocX default.",
+    "documentType": "Document type",
+    "inherit": "As default",
+    "loadFailed": "The assignments could not be loaded.",
+    "noScoped": "No overrides.",
+    "open": "Default templates",
+    "perProtocolTemplate": "Overrides per protocol template",
+    "perProtocolTemplateHelp": "For example a separate logo for the youth section.",
+    "platformDefault": "hocX default",
+    "protocolTemplate": "Protocol template",
+    "remove": "Remove",
+    "saved": "Assignment saved.",
+    "template": "Template",
+    "title": "Default templates and assignments"
+  },
+  "binding": {
+    "brandImage": "Image “{key}”",
+    "brand_background": "Background image",
+    "brand_footer_image": "Footer image",
+    "brand_footer_line": "Footer line",
+    "brand_footer_show_number": "Number in footer",
+    "brand_footer_show_pages": "Page number in footer",
+    "brand_footer_text": "Footer text",
+    "brand_header_line": "Header line",
+    "brand_header_show_date": "Date in header",
+    "brand_header_show_logo": "Logo in header",
+    "brand_header_show_title": "Title in header",
+    "brand_letterhead": "Letterhead",
+    "brand_logo": "Logo",
+    "brand_logo_alt": "Light logo",
+    "brand_show_metadata": "Document details wanted",
+    "brand_title_page": "Title page wanted",
+    "brand_toc": "Table of contents wanted",
+    "brand_verify_show_id": "Show document ID",
+    "brand_verify_show_qr": "Show QR code",
+    "brand_verify_show_url": "Show verification address",
+    "brand_watermark": "Watermark image",
+    "brand_watermark_draft": "Watermark on drafts",
+    "document_created_by": "Created by",
+    "document_date": "Date",
+    "document_is_draft": "Is draft",
+    "document_language": "Language",
+    "document_number": "Number",
+    "document_short_id": "Document ID",
+    "document_status": "Status",
+    "document_subtitle": "Subtitle",
+    "document_title": "Title",
+    "document_type": "Document type",
+    "document_version": "Version",
+    "events_upcoming": "Upcoming events",
+    "events_upcoming_count": "Number of upcoming events",
+    "finance_accounts": "Accounts",
+    "finance_total_balance": "Total balance",
+    "members_active": "Active members",
+    "members_active_count": "Number of active members",
+    "organization_address": "Address",
+    "organization_contact": "Contact",
+    "organization_name": "Organisation name",
+    "organization_place": "Place",
+    "organization_website": "Website",
+    "protocol_absent_count": "Number absent",
+    "protocol_date": "Date",
+    "protocol_elements": "Agenda items",
+    "protocol_event_title": "Event",
+    "protocol_excused_count": "Number excused",
+    "protocol_new_todos_count": "Number of new tasks in this protocol",
+    "protocol_next_session": "Next meeting",
+    "protocol_number": "Number",
+    "protocol_open_todos": "Open tasks from this protocol",
+    "protocol_participant_count": "Number of participants",
+    "protocol_participants": "Participants",
+    "protocol_present_count": "Number present",
+    "protocol_status": "Status",
+    "protocol_status_code": "Status (code)",
+    "protocol_template_name": "Minutes template name",
+    "protocol_title": "Title",
+    "protocol_version": "Version",
+    "statistics_attendance_rate": "Attendance rate",
+    "statistics_events_count": "Number of events",
+    "statistics_sessions_count": "Number of meetings",
+    "todos_done_count": "Number of completed tasks",
+    "todos_open": "Open tasks (all)",
+    "todos_open_count": "Number of open tasks",
+    "protocol_invitation_elements": "Agenda items of the invitation",
+    "todos_overdue_count": "Number of overdue tasks"
+  },
+  "bindingField": {
+    "assignee": "Assignee",
+    "balance": "Balance",
+    "currency": "Currency",
+    "date": "Date",
+    "description": "Description",
+    "due": "Due",
+    "email": "Email",
+    "index": "Number",
+    "joined_at": "Joined",
+    "location": "Location",
+    "name": "Name",
+    "protocol": "Minutes",
+    "responsible": "Responsible",
+    "role": "Role",
+    "status": "Status",
+    "status_code": "Status (code)",
+    "tag": "Tag",
+    "task": "Task",
+    "title": "Title"
+  },
+  "bindingGroup": {
+    "brand": "Corporate design",
+    "document": "Document",
+    "events": "Events",
+    "finance": "Finance",
+    "members": "Members",
+    "organization": "Organisation",
+    "protocol": "Minutes",
+    "statistics": "Statistics",
+    "todos": "Tasks"
+  },
+  "bindingType": {
+    "amount": "Amount",
+    "bool": "Yes/No",
+    "date": "Date",
+    "image": "Image",
+    "list": "List",
+    "number": "Number",
+    "percent": "Percent",
+    "text": "Text"
+  },
+  "brand": {
+    "actionsFor": "Actions for {name}",
+    "addColor": "+ Colour",
+    "addImage": "+ Image",
+    "advanced": "Advanced options",
+    "advancedAssets": "Images and backgrounds",
+    "allColors": "All colours",
+    "allColorsHelp": "Changing a derived colour here turns off automatic derivation.",
+    "archive": "Archive",
+    "archived": "Archived",
+    "archivedDone": "Profile archived.",
+    "asset": {
+      "background": "Background",
+      "footer_image": "Footer image",
+      "letterhead": "Letterhead",
+      "logo": "Logo",
+      "logo_alt": "Light logo (for dark areas)",
+      "watermark": "Watermark"
+    },
+    "assets": "Logos and images",
+    "borderWidth": "Line width",
+    "colors": "Colours",
+    "conflict": "The profile has been changed in the meantime. Please reload.",
+    "copyName": "{name} (copy)",
+    "create": "Another profile",
+    "createTitle": "New brand profile",
+    "created": "Profile created.",
+    "customColorKey": "Key",
+    "customColorLabel": "Label",
+    "customColorValue": "Colour",
+    "customColors": "Custom colours",
+    "customFont": "Custom font …",
+    "default": "Default",
+    "defaultFlag": {
+      "heading_numbering": "Number headings",
+      "show_metadata": "Document details",
+      "title_page": "Title page",
+      "toc": "Table of contents",
+      "watermark_draft": "Watermark on drafts"
+    },
+    "defaultSet": "Default profile changed.",
+    "delete": "Delete",
+    "deleteConfirm": "Delete profile “{name}”? Templates will then use the default profile.",
+    "deleted": "Profile deleted.",
+    "deriveColors": "Derive remaining colours automatically",
+    "deriveColorsHelp": "Headings, tables, lines and surfaces follow the primary and secondary colour.",
+    "description": "Who you are: colours, logo, font and club details. Every template uses this profile – the layout itself comes from the template's design.",
+    "discardChanges": "Discard unsaved changes?",
+    "documentDefaults": "Defaults for documents",
+    "documentDefaultsHelp": "Applies unless a template specifies otherwise.",
+    "documentLanguage": "Organisation document language",
+    "documentLanguageHelp": "Default for all exports, changeable per document in the export dialog.",
+    "documentLanguageSaved": "Document language saved.",
+    "duplicate": "Duplicate",
+    "editor": "Edit profile",
+    "fallbacks": "Fallback fonts",
+    "font": {
+      "body": "Body text",
+      "both": "Font",
+      "heading": "Headings"
+    },
+    "footerText": "Footer text",
+    "headerFooter": "Header and footer",
+    "headerFooterHelp": "For templates with the standard header and footer.",
+    "headingTransform": "Heading case",
+    "headingWeight": "Heading weight",
+    "hf": {
+      "footer_line": "Line above footer",
+      "footer_show_number": "Document number in footer",
+      "footer_show_pages": "Page number in footer",
+      "header_line": "Line below header",
+      "header_show_date": "Date in header",
+      "header_show_logo": "Logo in header",
+      "header_show_title": "Title in header"
+    },
+    "imageKey": "Key",
+    "imageLabel": "Label",
+    "layout": "Page layout",
+    "letterSpacing": "Heading letter spacing",
+    "lineHeight": "Line height",
+    "makeDefault": "Use as default",
+    "margin": {
+      "bottom": "Bottom margin",
+      "left": "Left margin",
+      "right": "Right margin",
+      "top": "Top margin"
+    },
+    "name": "Name",
+    "noImage": "No image selected",
+    "org": {
+      "address": "Address",
+      "contact": "Contact",
+      "name": "Name",
+      "place": "Place (for “place, date”)",
+      "website": "Website"
+    },
+    "orgNameHelp": "Empty = tenant name.",
+    "organization": "Organisation",
+    "ownImages": "Further images",
+    "pageSize": "Default format",
+    "paragraphGap": "Paragraph spacing",
+    "preset": "Starting point",
+    "presetHelp": {
+      "bordeaux": "Wine red with serif font, formal.",
+      "classic_blue": "Calm blue, sans-serif font, lined tables.",
+      "compact": "Small font and tight spacing for long lists.",
+      "forest": "Dark green with colour bars on headings.",
+      "graphite": "Neutral grey, sober and modern."
+    },
+    "presetName": {
+      "bordeaux": "Bordeaux",
+      "classic_blue": "Classic blue",
+      "compact": "Compact",
+      "forest": "Forest",
+      "graphite": "Graphite"
+    },
+    "previewTemplate": "Template for preview",
+    "profiles": "Profiles",
+    "radius": "Corner radius",
+    "readOnly": "Only administrators can change the corporate design.",
+    "remove": "Remove",
+    "removeColor": "Remove colour",
+    "reset": "Discard changes",
+    "restored": "Version restored.",
+    "revisions": "Versions",
+    "revisionsTitle": "Versions of “{name}”",
+    "save": "Save",
+    "saveFailed": "Saving failed.",
+    "saved": "Saved as version {revision}.",
+    "sectionGap": "Space before sections",
+    "showArchived": "Show archived",
+    "size": {
+      "base_size": "Base size",
+      "size_h1": "Heading 1",
+      "size_h2": "Heading 2",
+      "size_h3": "Heading 3",
+      "size_small": "Small",
+      "size_subtitle": "Subtitle",
+      "size_title": "Title"
+    },
+    "switch": "Switch",
+    "title": "Branding",
+    "typography": "Typography",
+    "typographyAdvanced": "Fonts and spacing",
+    "unarchive": "Restore",
+    "unarchived": "Profile restored.",
+    "unitMm": "mm",
+    "unitPt": "pt",
+    "verify": "Verification",
+    "verifyFlag": {
+      "show_id": "Show document ID",
+      "show_qr": "Show QR code",
+      "show_url": "Show verification address"
+    },
+    "verifyHelp": "Details in the verification note at the end of the document.",
+    "choice": {
+      "heading_number_style": {
+        "label": "Section number",
+        "help": "Applies when the template numbers headings.",
+        "plain": "Like text",
+        "accent": "Coloured number",
+        "badge": "Number on colour",
+        "paragraph": "With section sign (§)"
+      },
+      "responsible_display": {
+        "label": "Responsible people on agenda items",
+        "help": "Where the people responsible for an agenda item appear.",
+        "title": "In brackets in the title",
+        "right": "Right of the title",
+        "below": "On a line below"
+      },
+      "empty_blocks": {
+        "label": "Empty blocks",
+        "help": "Blocks and agenda items without content.",
+        "note": "Show a note",
+        "hide": "Leave out"
+      }
+    },
+    "unused": "Not in use",
+    "archiveUnused": "Archive",
+    "unusedArchived": "{count, plural, one {# profile archived} other {# profiles archived}}",
+    "oneProfileHint": "A second profile is only needed for independent groups with their own logo.",
+    "affects": "Applies to {count, plural, =0 {no template} one {# template} other {# templates}} · Version {revision}"
+  },
+  "canvas": {
+    "approximateHint": "The workspace is an approximation. The PDF preview is binding.",
+    "background": "Background",
+    "body": "Content",
+    "componentMissing": "Component not found",
+    "dataComponent": "Data from hocX",
+    "disabledNode": "disabled",
+    "dragHandle": "Move “{name}”",
+    "dropBody": "Drag elements from the library here or click them.",
+    "dropFooter": "Footer empty",
+    "dropHeader": "Header empty",
+    "dropHere": "Drag element here",
+    "dropTitlePage": "Design the title page: drag elements here",
+    "emptyItem": "Empty item",
+    "emptyRichText": "Enter formatted text",
+    "emptyText": "Enter text",
+    "footer": "Footer (every page)",
+    "header": "Header (every page)",
+    "hiddenNode": "hidden",
+    "noImage": "No image selected",
+    "pageBreak": "Page break",
+    "reusable": "Component: {name}",
+    "titlePage": "Title page",
+    "titlePageConditional": "Title page (per brand default)",
+    "watermark": "Watermark"
+  },
+  "category": {
+    "all": "All",
+    "events": "Events",
+    "finance": "Finance",
+    "forms": "Forms",
+    "general": "General",
+    "lists": "Lists",
+    "people": "People",
+    "protocols": "Minutes",
+    "statistics": "Statistics",
+    "tasks": "Tasks"
+  },
+  "colorRef": {
+    "accent": "Accent",
+    "accent_2": "Accent 2",
+    "background": "Background",
+    "border": "Lines",
+    "danger": "Danger",
+    "heading": "Headings",
+    "info": "Information",
+    "muted": "Muted text",
+    "primary": "Primary",
+    "secondary": "Secondary",
+    "success": "Success",
+    "surface": "Surface",
+    "table_header_background": "Table header background",
+    "table_header_text": "Table header text",
+    "table_zebra": "Table alternating rows",
+    "text": "Text",
+    "warning": "Warning",
+    "watermark": "Watermark"
+  },
+  "common": {
+    "actionFailed": "The action failed.",
+    "cancel": "Cancel",
+    "create": "Create",
+    "loading": "Loading …",
+    "save": "Save"
+  },
+  "component": {
+    "attendance": "Attendance",
+    "attendance_matrix": "Attendance matrix",
+    "attendance_sheet": "Sign-in sheet",
+    "chart": "Chart",
+    "entry_exit": "Joins and leaves",
+    "event_agenda": "Event list",
+    "event_calendar_month": "Monthly calendar",
+    "event_table": "Event table",
+    "finance_balance": "Account balances",
+    "finance_transactions": "Transactions",
+    "fines": "Fines",
+    "form": "Form",
+    "image": "Image from files",
+    "image_gallery": "Image gallery",
+    "kpi_tiles": "Key figures",
+    "list_table": "Custom list",
+    "matrix": "Matrix",
+    "member_list": "Members",
+    "protocol_element": "Minutes content",
+    "session_date": "Meeting date",
+    "session_notes": "Meeting notes",
+    "signature_fields": "Signature fields",
+    "stat_table": "Statistics table",
+    "todo_table": "Tasks"
+  },
+  "componentHelp": {
+    "attendance": "Present, excused and absent people of the meeting.",
+    "attendance_matrix": "Attendance across several meetings as a table.",
+    "attendance_sheet": "List of names with fields to sign.",
+    "chart": "Bar, line or pie chart from statistics data.",
+    "entry_exit": "Member joins and leaves in the period.",
+    "event_agenda": "Upcoming events as a list.",
+    "event_calendar_month": "Events in a monthly grid.",
+    "event_table": "Events as a table with place and time.",
+    "finance_balance": "Account balances on a reference date.",
+    "finance_transactions": "Transactions of a period, optionally with subtotals.",
+    "fines": "Fines per person or reason.",
+    "form": "Fields to fill in by hand.",
+    "image": "An image from the tenant’s files.",
+    "image_gallery": "Several images in a grid.",
+    "kpi_tiles": "Key figures as tiles.",
+    "list_table": "A custom hocX list as a table.",
+    "matrix": "Matrix of a protocol.",
+    "member_list": "Members with selectable columns.",
+    "protocol_element": "Minutes content: agenda items, texts, decisions, tasks.",
+    "session_date": "Date and time of the meeting.",
+    "session_notes": "Notes of the meeting.",
+    "signature_fields": "Lines for signatures with place and date.",
+    "stat_table": "Statistics as a table.",
+    "todo_table": "Tasks with assignees and due dates."
+  },
+  "components": {
+    "actions": "Actions",
+    "delete": "Delete",
+    "deleteConfirm": "Delete component “{name}”? Templates using it will show a notice.",
+    "description": "Reusable building blocks used in several templates. Changes apply to all templates.",
+    "descriptionLabel": "Description",
+    "edit": "Edit",
+    "editHelp": "Edit the content in the designer of a template that contains the component.",
+    "editTitle": "Edit component",
+    "empty": "No components yet",
+    "emptyHelp": "Select an element in the designer and choose “Save as reusable component”.",
+    "loadFailed": "Components could not be loaded.",
+    "name": "Name",
+    "saved": "Component saved.",
+    "title": "Components",
+    "type": "Type",
+    "updated": "Updated"
+  },
+  "condition": {
+    "add": "+ Rule",
+    "all": "all rules apply",
+    "always": "Always shown.",
+    "any": "at least one rule applies",
+    "combine": "Show when",
+    "complex": "Complex rule (editable in expert mode only).",
+    "op": {
+      "contains": "contains",
+      "count_eq": "has exactly as many entries as",
+      "count_gt": "has more entries than",
+      "count_lt": "has fewer entries than",
+      "empty": "is empty",
+      "eq": "equals",
+      "exists": "is present",
+      "gt": "is greater than",
+      "gte": "is at least",
+      "lt": "is less than",
+      "lte": "is at most",
+      "ne": "does not equal",
+      "not_exists": "is not present"
+    },
+    "operator": "Comparison",
+    "remove": "Remove rule",
+    "title": "Visibility rules",
+    "value": "Value"
+  },
+  "create": {
+    "description": "Choose a document type, then what to start from.",
+    "documentType": "Document type",
+    "startFrom": "Starting point",
+    "submit": "Create and design",
+    "title": "New template",
+    "design": "Design",
+    "start": {
+      "catalog": "From the catalogue",
+      "copy": "Copy of your own",
+      "blank": "Blank"
+    },
+    "startCatalogHelp": "{count, plural, =0 {Nothing in the catalogue} one {# template, previewed in your colours} other {# templates, previewed in your colours}}",
+    "startCopyHelp": "{count, plural, =0 {None of your own yet} other {# available}}",
+    "startBlankHelp": "Only header and footer from your branding",
+    "brand": "Branding",
+    "brandDefault": "{name} (default)",
+    "brandHelp": "Colours, logo and font come from the branding. No new profile is created.",
+    "footCatalog": "Copies only “{name}” to your club.",
+    "footCopy": "Copies the selected template of your own.",
+    "footBlank": "Starts without a design.",
+    "brandDesign": "Branding of the design (new)",
+    "brandDesignHelp": "The design’s logo, images, colours and font are created as a branding profile of their own and linked to the template. You can adjust it, or later switch the template to your branding and delete it."
+  },
+  "data": {
+    "help": "Insert data fields from hocX. On export they are filled with the permissions of the person exporting."
+  },
+  "designer": {
+    "conflict": "Someone else has changed this template in the meantime.",
+    "conflictOverwrite": "Save my version",
+    "conflictReload": "Load latest version",
+    "discardConfirm": "Discard all changes since the last publication?",
+    "loadFailed": "The template could not be loaded.",
+    "publishBlocked": "{count, plural, one {One error prevents} other {# errors prevent}} publishing.",
+    "publishConfirm": "Publish the draft? New exports will use this version from now on.",
+    "publishFailed": "Publishing failed.",
+    "published": "Template published.",
+    "readOnly": "This template can only be viewed.",
+    "saveFailed": "Saving failed.",
+    "systemReadOnly": "System templates are read-only. Create a copy to customise it.",
+    "workspace": "Workspace",
+    "leaveUnsaved": "Your changes could not be saved. Leave anyway? Unsaved changes will be lost.",
+    "leaveAnyway": "Leave anyway"
+  },
+  "diagnosticCode": {
+    "assetNotFound": "Image or font not found",
+    "bindingNeedsProtocol": "Data field needs minutes",
+    "bindingPermission": "No permission for this data field",
+    "bindingTypeMismatch": "Data field does not fit this element",
+    "componentCycle": "Component contains itself",
+    "componentNotFound": "Component not found",
+    "componentPermission": "No permission for this data",
+    "invalidComponent": "Component is invalid",
+    "invalidCondition": "Invalid condition",
+    "invalidNode": "Invalid element",
+    "invalidParams": "Invalid settings",
+    "masterOnly": "Only allowed in header or footer",
+    "needsProtocol": "Needs minutes",
+    "referenceNotFound": "Linked record not found",
+    "repeatLimit": "Too many repetitions",
+    "schema": "Template is invalid",
+    "unknownBinding": "Unknown data field",
+    "unknownColor": "Unknown colour",
+    "unknownComponent": "Unknown data component",
+    "unknownFont": "Unknown font",
+    "unknownNodeType": "Unknown element type",
+    "unknownTextKey": "Unknown text snippet"
+  },
+  "diagnosticShort": {
+    "error": "Error",
+    "warning": "Warning"
+  },
+  "docType": {
+    "agenda": "Agenda",
+    "attendance": "Attendance list",
+    "attendance_sheet": "Sign-in sheet",
+    "calendar": "Calendar",
+    "custom": "Free document",
+    "events": "Event schedule",
+    "finance": "Financial report",
+    "fines": "Fines overview",
+    "form": "Form",
+    "invitation": "Invitation",
+    "list": "List",
+    "members": "Member list",
+    "protocol": "Minutes",
+    "statistics": "Statistics report",
+    "todos": "Task list",
+    "transactions": "Transaction list"
+  },
+  "docTypeHelp": {
+    "agenda": "Only the agenda items of a meeting.",
+    "attendance": "Who attended a meeting.",
+    "attendance_sheet": "Blank list to sign on site.",
+    "calendar": "Monthly calendar with events.",
+    "custom": "Blank document, freely designable.",
+    "events": "Upcoming events as a list or table.",
+    "finance": "Account balances and financial development.",
+    "fines": "Fines per person with status.",
+    "form": "Form to fill in on paper.",
+    "invitation": "Invitation to a meeting with agenda.",
+    "list": "A custom list as a table.",
+    "members": "Members with contact details and roles.",
+    "protocol": "Minutes of a meeting with agenda items, decisions and tasks.",
+    "statistics": "Key figures, tables and charts.",
+    "todos": "Open and completed tasks.",
+    "transactions": "Transactions of one or more accounts."
+  },
+  "document": {
+    "addMaster": "+ Page master",
+    "asPage": "As page",
+    "autoVerify": "Verification note at the end",
+    "autoVerifyHelp": "Added automatically if the template has no own verification note.",
+    "bodyFont": "Body font",
+    "brand": "Corporate design",
+    "brandDefault": "Default profile",
+    "brandFollow": "Follow",
+    "brandHelp": "Colours, fonts and logo come from the selected Brand Studio profile.",
+    "brandLocked": "For published templates, only people allowed to publish can change the profile.",
+    "brandMode": "Profile changes",
+    "brandModeHelp": "Follow: the published template adopts later changes. Pin: the state at publishing is kept.",
+    "brandPinned": "Pin when publishing",
+    "columnGap": "Column gap",
+    "columns": "Text columns",
+    "design": "Design",
+    "firstPageMaster": "First page",
+    "firstPageMasterHelp": "Different header/footer on the first content page.",
+    "fromBrand": "As in profile",
+    "hasFooter": "Footer",
+    "hasHeader": "Header",
+    "headingColor": "Heading colour",
+    "headingFont": "Heading font",
+    "height": "Height",
+    "help": "No element selected: these settings apply to the whole document.",
+    "hyphenate": "Hyphenation",
+    "justify": "Justified text",
+    "landscape": "Landscape",
+    "language": "Language",
+    "languageExport": "Export language",
+    "languageHelp": "Fixed language for this template, otherwise the export language.",
+    "logo": "Logo",
+    "logoFromBrand": "Logo from profile",
+    "margins": "Page margins",
+    "masterLabel": "Name",
+    "masterName": "Page master {id}",
+    "masters": "Page masters",
+    "mastersHelp": "Headers and footers apply to all pages of a page master.",
+    "newMaster": "New page master",
+    "numbering": "Number headings",
+    "off": "No",
+    "on": "Yes",
+    "orientation": "Orientation",
+    "page": "Page",
+    "portrait": "Portrait",
+    "primary": "Primary colour",
+    "reset": "Reset",
+    "sameAsOthers": "Same as other pages",
+    "secondary": "Secondary colour",
+    "sectionEnabled": "Show “{name}”",
+    "sections": "Sections",
+    "sectionsHelp": "Switch sections on and off and change their order.",
+    "settings": "More settings",
+    "size": "Format",
+    "sizeValue": {
+      "A3": "A3",
+      "A4": "A4",
+      "A5": "A5",
+      "Legal": "Legal",
+      "Letter": "Letter",
+      "custom": "Custom size"
+    },
+    "title": "Document",
+    "titlePage": "Title page",
+    "titlePageBackground": "Title page background",
+    "titlePageEnabled": "Use title page",
+    "width": "Width"
+  },
+  "enum": {
+    "active_members": "Active members",
+    "all": "All",
+    "asc": "Ascending",
+    "assignee": "Assignee",
+    "attendanceRate": "Attendance rate",
+    "attendance_by_participant": "Attendance per person",
+    "attendance_over_time": "Attendance per month",
+    "cancelled": "Cancelled",
+    "column_one": "First column",
+    "column_two": "Second column",
+    "current_month": "Current month",
+    "current_year": "Current year",
+    "date": "Date",
+    "desc": "Descending",
+    "description": "Description",
+    "done": "Completed",
+    "doneTodos": "Completed to-dos",
+    "due": "Due",
+    "email": "Email",
+    "events": "Events",
+    "finance_by_month": "Finances per month",
+    "finesTotal": "Fines total",
+    "fines_by_participant": "Fines per person",
+    "fines_by_type": "Fines by reason",
+    "groups": "Groups",
+    "groups_avg": "Avg. participants per group",
+    "groups_sessions": "Events per group",
+    "joined_at": "Joined",
+    "last_12_months": "Last 12 months",
+    "last_month": "Last month",
+    "last_year": "Last year",
+    "left_at": "Left",
+    "location": "Location",
+    "members": "Members",
+    "month": "Per month",
+    "none": "None",
+    "open": "Open",
+    "openTodos": "Open to-dos",
+    "organizers": "Organizers",
+    "participant_count": "Participants",
+    "person": "Person",
+    "protocol": "Protocol",
+    "role": "Role",
+    "sessions": "Meetings",
+    "status": "Status",
+    "tag": "Tag",
+    "tags": "Tags",
+    "template": "Participants of a template",
+    "text": "Text only",
+    "text_and_todos": "Text and tasks",
+    "title": "Title",
+    "todos": "To-dos",
+    "year": "Per year",
+    "in_progress": "In progress"
+  },
+  "examples": {
+    "items": {
+      "alpin": {
+        "description": "Title page with a band in the primary colour, key figures and table of contents, footer image at the bottom.",
+        "name": "Alpin"
+      },
+      "kreide": {
+        "description": "White title page with fine lines, key figures and table of contents, footer image at the bottom.",
+        "name": "Kreide"
+      },
+      "signal": {
+        "description": "Dark title band with a signal stripe, key facts, key figures and distribution list.",
+        "name": "Signal"
+      },
+      "fokus": {
+        "description": "Lots of white space, agenda on the title page and participants as chips.",
+        "name": "Fokus"
+      },
+      "siegel": {
+        "description": "Serif typeface, centred letterhead, agenda items with § numbers and signatures.",
+        "name": "Siegel"
+      },
+      "atlas": {
+        "description": "Title band, key facts, key figures and numbered agenda items.",
+        "name": "Atlas"
+      }
+    },
+    "styles": {
+      "kreide": "White with fine lines: logo in the header, key figures in the secondary colour, plain footer.",
+      "signal": "Dark band with a signal stripe, key figures as coloured tiles, strong footer line.",
+      "fokus": "Plenty of white space, a small dot as the mark, key figures in a framed strip.",
+      "siegel": "Serif type, centred letterhead with a double rule, key figures between fine lines.",
+      "atlas": "Band in the primary colour with the logo, key figures on light tiles."
+    }
+  },
+  "export": {
+    "brand": "Corporate design",
+    "brandDefault": "As defined by the template",
+    "button": "Export",
+    "chooseTemplate": "Please choose a template.",
+    "createPdf": "Create PDF",
+    "created": "PDF created.",
+    "createdVersion": "PDF created (version {version}).",
+    "description": "Choose what to include, check the preview, pick a format. Design happens in the Document Studio.",
+    "documentTitle": "Title",
+    "documentTitleAuto": "Automatic",
+    "documentType": "Document",
+    "failed": "The export failed.",
+    "format": {
+      "pdf": "PDF",
+      "xlsx": "Excel",
+      "csv": "CSV",
+      "markdown": "Text",
+      "ics": "Calendar"
+    },
+    "language": "Document language",
+    "languageDefault": "Organisation default",
+    "loadFailed": "The export options could not be loaded.",
+    "noTemplates": "No published template is available for this document.",
+    "openInStudio": "Open in Document Studio ↗",
+    "options": "More options",
+    "pdfReady": "PDF ready – click here to open",
+    "preview": "Preview",
+    "previewFailed": "The preview could not be created.",
+    "previewHint": "The preview shows the first pages with the current data.",
+    "template": "Template",
+    "title": "Export document",
+    "watermark": "“Draft” watermark",
+    "watermarkAuto": "Automatic (for drafts)",
+    "watermarkOff": "Never",
+    "watermarkOn": "Always",
+    "working": "Creating …",
+    "columns": "Columns",
+    "columnsHelp": "Deselected columns are left out of this export only.",
+    "markdownCopied": "Text for WhatsApp copied to the clipboard",
+    "todoFilter": {
+      "title": "Which tasks?",
+      "statusLabel": "Status",
+      "status": {
+        "open": "Open",
+        "in_progress": "In progress",
+        "done": "Done",
+        "all": "All"
+      },
+      "dueLabel": "Due",
+      "due": {
+        "all": "All",
+        "overdue": "Overdue",
+        "nextSession": "Next meeting ({date})",
+        "month": "Until {date}",
+        "custom": "Date …"
+      },
+      "dueUntil": "Due until",
+      "includeUndated": "Include tasks without a due date",
+      "tag": "Tag",
+      "allTags": "All tags",
+      "person": "Assigned to",
+      "allPeople": "Everyone",
+      "protocol": "From minutes",
+      "allProtocols": "All minutes",
+      "protocolUntitled": "Untitled",
+      "pick": "Select individually",
+      "selection": "{selected} of {total} selected",
+      "all": "All",
+      "none": "None",
+      "loading": "Loading tasks …",
+      "loadFailed": "The tasks could not be loaded. The export still applies the filters.",
+      "empty": "No tasks match these filters.",
+      "item": {
+        "noDue": "no due date",
+        "due": "due {date}",
+        "overdueSince": "overdue since {date}"
+      }
+    },
+    "appearance": "Appearance",
+    "optionsHint": "Title, language, watermark",
+    "summaryTitle": "custom title",
+    "summaryWatermarkOn": "watermark always",
+    "summaryWatermarkOff": "watermark never",
+    "watermarkAutoShort": "Automatic",
+    "cancel": "Cancel",
+    "formatLabel": "Format",
+    "formatSub": {
+      "pdf": "For printing",
+      "xlsx": ".xlsx",
+      "csv": ".csv",
+      "markdown": "For WhatsApp",
+      "ics": ".ics"
+    },
+    "run": {
+      "pdf": "Create PDF",
+      "xlsx": "Download Excel",
+      "csv": "Download CSV",
+      "markdown": "Copy text",
+      "ics": "Download calendar"
+    },
+    "runCount": "{label} ({count})",
+    "previewPages": "{count, plural, one {# page} other {# pages}}",
+    "previewRows": "{rows, plural, one {# row} other {# rows}} · {columns, plural, one {# column} other {# columns}}",
+    "previewChars": "{count, number} characters",
+    "previewUpdating": "updating",
+    "previewMoreRows": "… and {count, plural, one {# more row} other {# more rows}}",
+    "previewWhatsapp": "This is how the text appears in WhatsApp",
+    "previewNone": "Calendar files have no preview.",
+    "previewEmpty": "No rows for this selection."
+  },
+  "exports": {
+    "allTypes": "All document types",
+    "created": "Created",
+    "description": "All generated PDFs with template, version and verification ID.",
+    "designHash": "Design checksum",
+    "document": "Document",
+    "documentId": "Document ID",
+    "documentType": "Type",
+    "empty": "No exports yet.",
+    "file": "File",
+    "fileExpired": "File no longer stored",
+    "legacyTemplate": "Earlier template",
+    "loadFailed": "History could not be loaded.",
+    "next": "Next",
+    "open": "Open",
+    "previous": "Previous",
+    "template": "Template",
+    "title": "Export history"
+  },
+  "fields": {
+    "addBinding": "+ Data field",
+    "addBreak": "+ Line break",
+    "addText": "+ Text",
+    "align": "Alignment",
+    "alignValue": {
+      "center": "Centre",
+      "justify": "Justified",
+      "left": "Left",
+      "right": "Right"
+    },
+    "allLanguages": "All languages",
+    "automatic": "Automatic",
+    "background": "Background",
+    "blockAlign": "Position",
+    "bold": "Bold",
+    "border": "Border",
+    "borderColor": "Border colour",
+    "borderEnabled": "Show border",
+    "borderStyle": "Line style",
+    "borderWidth": "Line width",
+    "brandFont": {
+      "body": "Brand: body text",
+      "heading": "Brand: headings",
+      "mono": "Brand: body text"
+    },
+    "colorInherit": "No colour (inherit)",
+    "customColor": "Custom colour",
+    "customColorHex": "Custom colour as hex value",
+    "dataSource": "Data source",
+    "dateFormat": "Date format",
+    "dateFormatValue": {
+      "long": "12 March 2026",
+      "month_year": "March 2026",
+      "short": "12.03.2026",
+      "weekday": "Thu, 12.03.2026",
+      "year": "2026"
+    },
+    "fallback": "Fallback if empty",
+    "font": "Font",
+    "fontSize": "Font size",
+    "height": "Height",
+    "inherit": "Inherit",
+    "italic": "Italic",
+    "itemFields": "Fields of “{list}”",
+    "lengthUnit": {
+      "auto": "Automatic",
+      "fill": "Full width",
+      "fr": "Share",
+      "mm": "Millimetres",
+      "percent": "Percent"
+    },
+    "letterSpacing": "Letter spacing",
+    "lineBreak": "Line break",
+    "lineHeight": "Line height",
+    "lineStyle": {
+      "dashed": "Dashed",
+      "dotted": "Dotted",
+      "solid": "Solid"
+    },
+    "marginBottom": "Space below",
+    "marginTop": "Space above",
+    "mmHint": "Values in millimetres",
+    "needsProtocol": "protocol only",
+    "noBinding": "No data source",
+    "noPermission": "no permission",
+    "numberFormat": "Number format",
+    "numberFormatValue": {
+      "amount": "Amount",
+      "decimal": "One decimal",
+      "integer": "Whole number",
+      "percent": "Percent"
+    },
+    "padding": "Padding",
+    "radius": "Corner radius",
+    "removeSegment": "Remove part",
+    "side": {
+      "bottom": "Bottom",
+      "left": "Left",
+      "right": "Right",
+      "top": "Top"
+    },
+    "textColor": "Text colour",
+    "textSegment": "Text",
+    "transform": "Letter case",
+    "transformValue": {
+      "lower": "lowercase",
+      "none": "Unchanged",
+      "upper": "UPPERCASE"
+    },
+    "translationHelp": "Leave empty to use the text for all languages.",
+    "translations": "Translations",
+    "unit": "Unit",
+    "weight": "Weight",
+    "weightValue": {
+      "bold": "Bold",
+      "medium": "Medium",
+      "regular": "Regular"
+    },
+    "width": "Width"
+  },
+  "font": {
+    "inter": "Inter (sans-serif)",
+    "liberation_sans": "Liberation Sans (sans-serif)",
+    "liberation_serif": "Liberation Serif (serif)",
+    "noto_sans": "Noto Sans (sans-serif)"
+  },
+  "language": {
+    "de": "German",
+    "en": "English",
+    "fr": "French",
+    "it": "Italian"
+  },
+  "left": {
+    "components": "Elements",
+    "data": "Data",
+    "reusable": "Own",
+    "structure": "Structure",
+    "title": "Building blocks"
+  },
+  "library": {
+    "actionsFor": "Actions for “{name}”",
+    "archive": "Archive",
+    "archived": "Template archived.",
+    "archivedBadge": "Archived",
+    "copyName": "{name} (copy)",
+    "create": "New template",
+    "customize": "Customise (create copy)",
+    "default": "Default",
+    "defaultSet": "Default template set.",
+    "delete": "Delete",
+    "deleteConfirm": "Delete template “{name}” permanently?",
+    "deleted": "Template deleted.",
+    "description": "All document templates: provided by hocX, customised or created by you.",
+    "draft": "Draft",
+    "duplicate": "Duplicate",
+    "duplicated": "Copy created.",
+    "edit": "Edit",
+    "emptyDescription": "Adjust the search or filter or create a new template.",
+    "emptyTitle": "No templates found",
+    "entry": {
+      "absolute_layer": "Free layer",
+      "agenda_items": "Agenda items",
+      "agenda_numbered": "Numbered agenda",
+      "attendance": "Attendance",
+      "attendance_matrix": "Attendance matrix",
+      "attendance_sheet": "Sign-in sheet",
+      "calendar": "Monthly calendar",
+      "chart": "Chart",
+      "columns_2": "Two columns",
+      "columns_3": "Three columns",
+      "container": "Box",
+      "date": "Date",
+      "decisions": "Decisions",
+      "divider": "Divider",
+      "document_number": "Document number",
+      "document_title": "Document title",
+      "entry_exit": "Joins and leaves",
+      "events_agenda": "Event list",
+      "events_table": "Event table",
+      "finance_balance": "Account balances",
+      "finance_transactions": "Transactions",
+      "fines": "Fines",
+      "footer": "Footer",
+      "form": "Form",
+      "grid": "Grid",
+      "header": "Header",
+      "heading": "Heading",
+      "image": "Image",
+      "image_gallery": "Image gallery",
+      "list": "List",
+      "list_table": "Custom list",
+      "logo": "Logo",
+      "matrix": "Matrix",
+      "members": "Members",
+      "metadata": "Document details",
+      "open_tasks_table": "Open tasks (table)",
+      "organization": "Organisation",
+      "page_break": "Page break",
+      "page_number": "Page number",
+      "participants_table": "Participants (table)",
+      "protocol_image": "Image from minutes",
+      "protocol_sections": "Minutes content",
+      "qr_code": "QR code",
+      "rich_text": "Formatted text",
+      "section": "Section",
+      "session_info": "Meeting details",
+      "session_notes": "Meeting notes",
+      "signatures": "Signatures",
+      "spacer": "Spacer",
+      "statistics_kpis": "Key figures",
+      "statistics_table": "Statistics table",
+      "subtitle": "Subtitle",
+      "table": "Table",
+      "tasks": "Tasks",
+      "text": "Text",
+      "toc": "Table of contents",
+      "upcoming_events_table": "Upcoming events (table)",
+      "verify_note": "Verification note",
+      "version": "Version",
+      "watermark": "Watermark"
+    },
+    "help": {
+      "absolute_layer": "Position elements freely, e.g. for a cover.",
+      "agenda_items": "Only the titles of the agenda items.",
+      "agenda_numbered": "Agenda items as a numbered list.",
+      "attendance": "Who was present.",
+      "attendance_matrix": "Attendance across several meetings.",
+      "attendance_sheet": "List to sign.",
+      "calendar": "Events in a monthly grid.",
+      "chart": "Bar, line or pie chart.",
+      "columns_2": "Content side by side in two columns.",
+      "columns_3": "Content side by side in three columns.",
+      "container": "Area with background and border.",
+      "date": "Date of the document.",
+      "decisions": "Decisions and texts of the minutes.",
+      "divider": "Horizontal line.",
+      "document_number": "Number of the document.",
+      "document_title": "Title of the document.",
+      "entry_exit": "Membership changes.",
+      "events_agenda": "Upcoming events as a list.",
+      "events_table": "Events as a table.",
+      "finance_balance": "Balance of the accounts.",
+      "finance_transactions": "Transactions of a period.",
+      "fines": "Fines overview.",
+      "footer": "Footer with page number.",
+      "form": "Fields to fill in.",
+      "grid": "Elements in rows and columns.",
+      "header": "Header with logo and title.",
+      "heading": "Heading with outline level.",
+      "image": "Image from corporate design or files.",
+      "image_gallery": "Several images in a grid.",
+      "list": "Bulleted or numbered list.",
+      "list_table": "A hocX list as a table.",
+      "logo": "Logo from the corporate design.",
+      "matrix": "Matrix from the minutes.",
+      "members": "Member list.",
+      "metadata": "Number, date, status and version.",
+      "open_tasks_table": "Table of the open tasks of the minutes.",
+      "organization": "Name and address of the organisation.",
+      "page_break": "A new page starts afterwards.",
+      "page_number": "Current page, optionally with total.",
+      "participants_table": "Table with each person’s status.",
+      "protocol_image": "Image stored in the minutes.",
+      "protocol_sections": "All content of the minutes.",
+      "qr_code": "Code for verification or to an address.",
+      "rich_text": "Text with bold, italic and lists.",
+      "section": "Section with title, in the table of contents.",
+      "session_info": "Date, place and participants.",
+      "session_notes": "Notes of the meeting.",
+      "signatures": "Signature fields with place and date.",
+      "spacer": "Empty space between elements.",
+      "statistics_kpis": "Key figures as tiles.",
+      "statistics_table": "Statistics as a table.",
+      "subtitle": "Subtitle of the document.",
+      "table": "Fixed table or one filled with data.",
+      "tasks": "Tasks with assignees.",
+      "text": "Plain text, also with data fields.",
+      "toc": "List of all headings.",
+      "upcoming_events_table": "Table of the next events.",
+      "verify_note": "Note on verifying the PDF.",
+      "version": "Version of the minutes.",
+      "watermark": "Diagonal text or image behind the content."
+    },
+    "loadFailed": "The templates could not be loaded.",
+    "name": "Name",
+    "noDescription": "No description",
+    "preview": "Preview",
+    "previewOf": "Preview of “{name}”",
+    "rename": "Rename",
+    "renameTitle": "Rename template",
+    "renamed": "Template renamed.",
+    "revisions": "Revisions",
+    "search": "Search templates",
+    "setDefault": "Set as default",
+    "showArchived": "Show archived",
+    "title": "Templates",
+    "unarchive": "Restore",
+    "unarchived": "Template restored.",
+    "unpublished": "Not published",
+    "documentsTitle": "Document templates",
+    "documentsDescription": "How minutes, invitations and all other exports look. Only your own and added templates are listed here – everything else is in the catalogue.",
+    "exportHistory": "Export history",
+    "group": {
+      "session": {
+        "title": "Meeting",
+        "help": "Minutes, invitation, agenda"
+      },
+      "other": {
+        "title": "Other documents",
+        "help": "Lists and exports"
+      }
+    },
+    "addFromCatalog": "Add from catalogue",
+    "gapNone": "More designs and templates in the catalogue",
+    "gapOne": "{type} uses the catalogue default “{name}”",
+    "gapMore": "{types} …",
+    "usageSessions": "{type} · {count, plural, =0 {not assigned to any meeting template} one {# meeting template} other {# meeting templates}}",
+    "usageExports": "{type} · {count, plural, =0 {no export in the last 12 months} one {# export} other {# exports}}",
+    "update": "Update v{revision}"
+  },
+  "libraryGroup": {
+    "data_events": "Events",
+    "data_finance": "Finance",
+    "data_forms": "Forms",
+    "data_lists": "Lists",
+    "data_people": "People",
+    "data_protocol": "Minutes",
+    "data_statistics": "Statistics",
+    "data_tasks": "Tasks",
+    "document": "Document",
+    "general": "Basic elements"
+  },
+  "metadataField": {
+    "date": "Date",
+    "number": "Number",
+    "organization": "Organisation",
+    "place": "Place",
+    "status": "Status",
+    "type": "Document type",
+    "version": "Version"
+  },
+  "mode": {
+    "advanced": "Advanced",
+    "simple": "Simple"
+  },
+  "nodeType": {
+    "absolute_layer": "Free layer",
+    "column": "Column",
+    "component_ref": "Component",
+    "container": "Box",
+    "data_block": "Data component",
+    "divider": "Divider",
+    "footer": "Footer",
+    "grid": "Grid",
+    "header": "Header",
+    "image": "Image",
+    "list": "List",
+    "metadata": "Document details",
+    "page_break": "Page break",
+    "page_number": "Page number",
+    "qr_code": "QR code",
+    "rich_text": "Formatted text",
+    "row": "Columns",
+    "section": "Section",
+    "spacer": "Spacer",
+    "stack": "Group",
+    "table": "Table",
+    "text": "Text",
+    "toc": "Table of contents",
+    "verify_note": "Verification note",
+    "watermark": "Watermark"
+  },
+  "origin": {
+    "copy": "Copy",
+    "system": "Built-in",
+    "tenant": "Own"
+  },
+  "palette": {
+    "insert": "Insert “{name}”",
+    "noResults": "No elements found.",
+    "search": "Search element"
+  },
+  "params": {
+    "account_id": "Account",
+    "account_ids": "Accounts (empty = all)",
+    "active_only": "Active members only",
+    "addRow": "+ Row",
+    "as_of": "As of",
+    "blank_rows": "Blank rows",
+    "caption": "Caption",
+    "chart_type": "Chart",
+    "columns": "Columns",
+    "content": "Content",
+    "cycle_config_id": "Cycle",
+    "cycle_key": "Cycle key",
+    "cycle_offset": "Cycle (0 = current, -1 = previous)",
+    "date_from": "From",
+    "date_to": "To",
+    "due_until": "Due until",
+    "element_id": "Section (empty = all)",
+    "event_filter": "Event filter",
+    "fields": "Signature fields",
+    "file_id": "Image",
+    "file_ids": "Images (empty = from protocol)",
+    "filter_column": "Filter column",
+    "filter_event_id": "Filter: event",
+    "filter_participant_id": "Filter: person",
+    "filter_text": "Filter: text",
+    "gray_past": "Grey out past events",
+    "group_by": "Group by",
+    "group_by_person": "Group by person",
+    "highlight_empty": "Highlight empty values",
+    "include_cancelled": "Include cancelled events",
+    "include_images": "Include images",
+    "include_session_todos": "Show to-dos",
+    "label": "Label",
+    "label_heading": "Left column header",
+    "last_n": "Only the last transactions",
+    "list_id": "List",
+    "name": "Name",
+    "none": "– none –",
+    "participant_id": "Person",
+    "protocol_block_id": "Protocol block",
+    "protocol_id": "Protocol (empty = current)",
+    "relative": "Period",
+    "removeRow": "Remove row",
+    "rows": "Rows",
+    "session_date": "Meeting date",
+    "show_location": "Show location",
+    "show_rates": "Show rate",
+    "show_tag_colors": "Tint rows in tag colour",
+    "sort_by": "Sort by",
+    "sort_direction": "Order",
+    "source": "People from",
+    "status": "Status",
+    "subtotals": "Subtotals",
+    "table": "Table",
+    "tag": "Tag",
+    "tags": "Tags (one per line)",
+    "template_id": "Template",
+    "tiles": "Key figures",
+    "titles_only": "Titles only (agenda)",
+    "value": "Value",
+    "value_heading": "Right column header",
+    "with_place_date": "“Place, date” field",
+    "invitation_only": "Only agenda items of the invitation",
+    "include_undated": "Include tasks without due date",
+    "overdue_only": "Overdue only"
+  },
+  "preview": {
+    "chooseProtocol": "Choose protocol",
+    "dataMode": "Preview data",
+    "failed": "The preview could not be created.",
+    "issues": "Notes",
+    "loading": "Creating preview …",
+    "morePages": "{count, plural, one {# more page} other {# more pages}} in the PDF.",
+    "noProtocol": "No protocol",
+    "pageAlt": "Page {page}",
+    "pages": "{count, plural, one {# page} other {# pages}}",
+    "protocolRequired": "Please choose a protocol for real data.",
+    "realData": "Real data",
+    "sample": "Sample data",
+    "sampleHint": "Rendered with sample content, as the PDF will look.",
+    "showElement": "Show element",
+    "title": "Preview",
+    "draftHint": "The preview shows the draft. PDF exports use the published version until the draft is published.",
+    "unpublishedHint": "This template has not been published yet and is not used for PDF exports.",
+    "latestSession": "Last meeting of this template"
+  },
+  "props": {
+    "addColumn": "+ Column",
+    "anchor": "Reference",
+    "anchorFlow": "In text flow",
+    "anchorHelp": "Page: freely on the whole page (e.g. cover). Flow: area of fixed height in the text.",
+    "anchorPage": "Whole page",
+    "angle": "Angle",
+    "brandImage": "Image",
+    "breakBefore": "Start on a new page",
+    "breakable": "May break across pages",
+    "caption": "Caption",
+    "chooseImage": "Choose image",
+    "column": "Column {number}",
+    "columnCell": "Cell content",
+    "columnHeader": "Column header",
+    "columnWidthHelp": "Column width: select a column and set it under “Size”.",
+    "columns": "Columns",
+    "customTitle": "Title",
+    "delete": "Delete (Del)",
+    "deleteConfirm": "Delete element including its content?",
+    "density": "Spacing",
+    "densityValue": {
+      "compact": "Compact",
+      "normal": "Normal",
+      "very_compact": "Very compact"
+    },
+    "duplicate": "Duplicate (Ctrl+D)",
+    "emptyText": "Text if empty",
+    "enabled": "Show",
+    "enabledHelp": "Switched-off elements stay in the template but do not appear in the PDF.",
+    "financeRestricted": "Visible only with access to finances.",
+    "fit": "Fit",
+    "fitValue": {
+      "contain": "Show completely",
+      "cover": "Fill area",
+      "stretch": "Stretch"
+    },
+    "flexible": "Fill rest of page",
+    "flexibleHelp": "Pushes the following elements to the page end (e.g. bottom of the title page).",
+    "frame": {
+      "height": "Height",
+      "rotate": "Rotation",
+      "width": "Width",
+      "x": "From left",
+      "y": "From top"
+    },
+    "gap": "Space between elements",
+    "gapX": "Horizontal gap",
+    "gapY": "Vertical gap",
+    "group": {
+      "align": "Alignment",
+      "background": "Background",
+      "border": "Border",
+      "component": "Component",
+      "container": "Container",
+      "content": "Content",
+      "data": "Data",
+      "divider": "Line",
+      "frame": "Position (mm)",
+      "grid": "Grid",
+      "image": "Image",
+      "layer": "Free layer",
+      "list": "List",
+      "metadata": "Details",
+      "pagebreak": "Page break",
+      "pagenumber": "Page number",
+      "pagination": "Page break behaviour",
+      "qr": "QR code",
+      "repeat": "Repeat",
+      "row": "Columns",
+      "section": "Section",
+      "size": "Size",
+      "spacer": "Spacing",
+      "spacing": "Spacing",
+      "stack": "Arrangement",
+      "table": "Table",
+      "toc": "Table of contents",
+      "typography": "Typography",
+      "verify": "Verification note",
+      "visibility": "Visibility",
+      "watermark": "Watermark"
+    },
+    "hideIfEmpty": "Hide when there is no data",
+    "image": "Image",
+    "imageFromAssets": "Own image",
+    "imageFromBrand": "From the corporate design (e.g. logo)",
+    "imageMissing": "Image missing",
+    "imageSource": "Image source",
+    "keepTogether": "Keep together",
+    "keepTogetherHelp": "Do not split across two pages.",
+    "layerHeight": "Area height",
+    "length": "Length",
+    "level": "Outline level",
+    "lineColor": "Colour",
+    "listItem": "Entry",
+    "listItems": "Entries",
+    "listSource": "Entries from data",
+    "locked": "This element is part of the template and cannot be deleted.",
+    "marker": "Marker",
+    "markerValue": {
+      "bullet": "Bullets",
+      "none": "None",
+      "number": "Numbers"
+    },
+    "metadataInline": "On one line",
+    "metadataLayout": "Layout",
+    "metadataList": "List",
+    "name": "Name in structure",
+    "namePlaceholder": "Own name (optional)",
+    "nextMaster": "Page master afterwards",
+    "nextMasterHelp": "For example an appendix in landscape.",
+    "oneItemPerLine": "One entry per line.",
+    "outlineLevel": "Outline level of title",
+    "outlined": "List in table of contents",
+    "pageBreakHelp": "The following content starts on a new page.",
+    "pageNumberFormat": "Format",
+    "pageOf": "Page 1 of 3",
+    "pageOnly": "1",
+    "personalRestricted": "Personal data: visible to roles with write access only.",
+    "qrSize": "Size",
+    "qrTarget": "Target",
+    "qrTargetValue": {
+      "protocol": "Protocol online",
+      "url": "Custom address",
+      "verify": "PDF verification"
+    },
+    "removeColumn": "Remove column",
+    "repeatHeader": "Repeat column headers on every page",
+    "repeatHeaderHelp": "For long tables across several pages.",
+    "repeatHelp": "Inside, the fields of the entry are available as data source.",
+    "repeatLimit": "Maximum number of entries",
+    "repeatSource": "Repeat for each entry",
+    "reusable": "Reusable component",
+    "richText": "Text",
+    "richTextHelp": "**bold**, *italic*, lists with “- ”, headings with “## ”.",
+    "role": "Text type",
+    "roleValue": {
+      "caption": "Caption",
+      "heading": "Heading",
+      "label": "Label",
+      "paragraph": "Paragraph",
+      "small": "Small print",
+      "subtitle": "Subtitle",
+      "title": "Document title"
+    },
+    "rowLimit": "Maximum number of rows",
+    "sameMaster": "Unchanged",
+    "saveAsComponent": "Save as reusable component",
+    "sectionTitle": "Section title",
+    "showHeader": "Show column headers",
+    "spacerSize": "Height",
+    "tableBoundHelp": "One row per entry; the cells show the fields of the entry.",
+    "tableRows": "Rows",
+    "tableRowsHelp": "One line per row, separate cells with “|”.",
+    "tableSource": "Rows from data",
+    "tableStaticHelp": "Fixed table: enter rows below.",
+    "text": "Text",
+    "thickness": "Thickness",
+    "title": "Properties",
+    "titleMode": "Title",
+    "titleModeValue": {
+      "auto": "Component name",
+      "custom": "Custom title",
+      "none": "No title"
+    },
+    "tocDepth": "Depth",
+    "tocTitle": "Show heading",
+    "url": "Address",
+    "valign": "Vertical alignment",
+    "valignValue": {
+      "bottom": "Bottom",
+      "middle": "Middle",
+      "top": "Top"
+    },
+    "verifyId": "Show document ID",
+    "verifyQr": "Show QR code",
+    "verifyUrl": "Show verification address",
+    "watermarkAlways": "Always",
+    "watermarkColor": "Colour",
+    "watermarkDraft": "Drafts only",
+    "watermarkSize": "Font size",
+    "watermarkText": "Text (empty = “Draft”)",
+    "watermarkWhen": "Show",
+    "zebra": "Alternate row colours",
+    "zebraBrand": "As in corporate design",
+    "zebraOff": "No",
+    "zebraOn": "Yes"
+  },
+  "revisions": {
+    "actions": "Actions",
+    "change": {
+      "added": "Added",
+      "modified": "Changed",
+      "moved": "Moved",
+      "removed": "Removed"
+    },
+    "changed": "Changed",
+    "compare": "Compare",
+    "compareFailed": "The comparison failed.",
+    "compareHint": "Select two revisions to compare them.",
+    "compareSelect": "Select revision {revision} for comparison",
+    "description": "Published versions stay unchanged. An older version can be taken over as a new draft.",
+    "differences": "Differences",
+    "field": {
+      "anchor": "Reference",
+      "angle": "Angle",
+      "asset_id": "Image",
+      "break_before": "Page break before",
+      "breakable": "Breakable",
+      "caption": "Caption",
+      "children": "Content",
+      "color": "Colour",
+      "column_widths": "Column widths",
+      "columns": "Columns",
+      "component": "Data component",
+      "component_id": "Component",
+      "content": "Content",
+      "density": "Spacing",
+      "depth": "Depth",
+      "empty_text": "Text if empty",
+      "enabled": "Show",
+      "fields": "Fields",
+      "fit": "Fit",
+      "flexible": "Fill rest",
+      "format": "Format",
+      "frame": "Position",
+      "gap": "Gap",
+      "gap_x": "Horizontal gap",
+      "gap_y": "Vertical gap",
+      "height": "Height",
+      "hide_if_empty": "Hide if empty",
+      "id": "Identifier",
+      "item": "Entry",
+      "items": "Entries",
+      "keep_together": "Keep together",
+      "layout": "Layout",
+      "length": "Length",
+      "level": "Level",
+      "limit": "Limit",
+      "line_style": "Line style",
+      "locked": "Locked",
+      "markdown": "Text",
+      "marker": "Marker",
+      "master": "Page master",
+      "name": "Name",
+      "outlined": "In table of contents",
+      "params": "Settings",
+      "repeat": "Repeat",
+      "repeat_header": "Repeat header",
+      "role": "Text type",
+      "rows": "Rows",
+      "show_header": "Column headers",
+      "show_id": "Document ID",
+      "show_qr": "QR code",
+      "show_title": "Heading",
+      "show_url": "Verification address",
+      "size": "Size",
+      "source": "Data source",
+      "style": "Style",
+      "target": "Target",
+      "text": "Text",
+      "thickness": "Thickness",
+      "title": "Title",
+      "title_mode": "Title mode",
+      "translations": "Translations",
+      "type": "Type",
+      "url": "Address",
+      "valign": "Vertical alignment",
+      "visible_if": "Visibility",
+      "when": "Show",
+      "zebra": "Alternating rows"
+    },
+    "loadFailed": "The revisions could not be loaded.",
+    "master": "Page master “{name}”",
+    "noDifferences": "No differences.",
+    "note": "Note",
+    "number": "Revision {revision}",
+    "restore": "Restore",
+    "restoreConfirm": "Take over revision {revision} as a new draft?",
+    "restored": "Taken over as draft.",
+    "revision": "Revision",
+    "settingsArea": {
+      "page": "Page",
+      "settings": "Document settings",
+      "title_page": "Title page"
+    },
+    "status": "Status",
+    "statusLabel": {
+      "draft": "Draft",
+      "published": "Published",
+      "superseded": "Superseded"
+    },
+    "title": "Revisions of “{name}”"
+  },
+  "structure": {
+    "conditional": "Visible only under conditions",
+    "empty": "Still empty.",
+    "hasIssues": "Has notes",
+    "hide": "Hide",
+    "locked": "Locked",
+    "moveDown": "Move down",
+    "moveUp": "Move up",
+    "repeated": "Repeated for each entry",
+    "show": "Show",
+    "title": "Document structure"
+  },
+  "system": {
+    "agenda_standard": {
+      "description": "Numbered agenda items of a meeting.",
+      "name": "Agenda"
+    },
+    "attendance_list": {
+      "description": "Attendance of a meeting.",
+      "name": "Attendance list"
+    },
+    "attendance_sheet_standard": {
+      "description": "List of names to sign.",
+      "name": "Sign-in sheet"
+    },
+    "calendar_month": {
+      "description": "Events in a monthly grid.",
+      "name": "Monthly calendar"
+    },
+    "custom_blank": {
+      "description": "Blank page with header and footer.",
+      "name": "Blank document"
+    },
+    "custom_letter": {
+      "description": "Letter template with letterhead and address field.",
+      "name": "Letter"
+    },
+    "events_agenda": {
+      "description": "Upcoming events as a list.",
+      "name": "Event list"
+    },
+    "events_table": {
+      "description": "Events as a landscape table.",
+      "name": "Event table"
+    },
+    "finance_report": {
+      "description": "Balances, transactions and development.",
+      "name": "Financial report"
+    },
+    "fines_overview": {
+      "description": "Fines per person with status.",
+      "name": "Fines overview"
+    },
+    "form_blank": {
+      "description": "Fields to fill in by hand.",
+      "name": "Form"
+    },
+    "invitation_letter": {
+      "description": "Letter format with address block.",
+      "name": "Invitation letter"
+    },
+    "invitation_standard": {
+      "description": "Invitation with agenda and meeting details.",
+      "name": "Invitation standard"
+    },
+    "list_standard": {
+      "description": "A hocX list as a table.",
+      "name": "List"
+    },
+    "members_standard": {
+      "description": "Members with contact details.",
+      "name": "Member list"
+    },
+    "protocol_compact": {
+      "description": "Space-saving without title page.",
+      "name": "Minutes compact"
+    },
+    "protocol_decisions": {
+      "description": "Decisions and tasks without discussion.",
+      "name": "Decision minutes"
+    },
+    "protocol_formal": {
+      "description": "With cover, table of contents and signatures.",
+      "name": "Minutes formal"
+    },
+    "protocol_short": {
+      "description": "Only the essentials on one page.",
+      "name": "Short minutes"
+    },
+    "protocol_standard": {
+      "description": "Clear minutes with title page, attendance and content.",
+      "name": "Minutes standard"
+    },
+    "signature_sheet": {
+      "description": "Signature fields with place and date.",
+      "name": "Signature sheet"
+    },
+    "statistics_charts": {
+      "description": "Statistics as charts.",
+      "name": "Chart report"
+    },
+    "statistics_report": {
+      "description": "Key figures and tables for the year.",
+      "name": "Annual report"
+    },
+    "todos_by_person": {
+      "description": "Tasks grouped by assignee.",
+      "name": "Tasks by person"
+    },
+    "todos_standard": {
+      "description": "Open tasks as a table.",
+      "name": "Task list"
+    },
+    "transactions_list": {
+      "description": "Transactions with subtotals.",
+      "name": "Transaction list"
+    }
+  },
+  "toolbar": {
+    "back": "To library",
+    "discard": "Discard draft",
+    "mode": "Editing mode",
+    "name": "Template name",
+    "pageSize": "Page size",
+    "publish": "Publish",
+    "publishBlocked": "Fix {count, plural, one {# error} other {# errors}}, then publish.",
+    "redo": "Redo",
+    "redoShortcut": "Redo (Ctrl+Y)",
+    "save": "Save",
+    "saveState": {
+      "conflict": "Conflict",
+      "dirty": "Unsaved changes",
+      "error": "Not saved",
+      "saved": "Saved",
+      "saving": "Saving …"
+    },
+    "statusDraft": "Draft",
+    "statusPublished": "Published",
+    "statusUnpublished": "Never published",
+    "title": "Toolbar",
+    "toLandscape": "Landscape",
+    "toPortrait": "Portrait",
+    "undo": "Undo",
+    "undoShortcut": "Undo (Ctrl+Z)",
+    "view": "View",
+    "viewValue": {
+      "design": "Design",
+      "preview": "PDF preview",
+      "split": "Split"
+    },
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out"
+  },
+  "appearance": {
+    "baseTitle": "Base style",
+    "baseHelp": "Gives every element its look. Adjust individual element types under “Advanced options” and single blocks in the designer.",
+    "base": {
+      "classic": {
+        "name": "Classic",
+        "help": "Fine lines and subtle corners."
+      },
+      "alpin": {
+        "name": "Alpin",
+        "help": "Solid colour areas, cards with coloured headers, to-dos with checkboxes."
+      },
+      "kreide": {
+        "name": "Kreide",
+        "help": "White with fine lines, accent colour only in numbers and checkboxes."
+      },
+      "signal": {
+        "name": "Signal",
+        "help": "High contrast and square: colour areas, grid tables, status pills."
+      },
+      "fokus": {
+        "name": "Fokus",
+        "help": "Plenty of white space, rounded corners, participants as chips."
+      },
+      "siegel": {
+        "name": "Siegel",
+        "help": "Formal: fine lines, § numbers, responsible persons below the title."
+      },
+      "atlas": {
+        "name": "Atlas",
+        "help": "Colour bars, numbers on colour, to-dos with status pills."
+      },
+      "rounded": {
+        "name": "Rounded",
+        "help": "Soft surfaces with rounded corners, highlighted boxes."
+      },
+      "bold": {
+        "name": "Bold",
+        "help": "Colour bars, coloured table headers, square surfaces."
+      },
+      "minimal": {
+        "name": "Minimal",
+        "help": "No surfaces or bars, plenty of white space."
+      }
+    },
+    "elementsTitle": "Element appearance",
+    "elementsHelp": "Overrides the base style. In the designer, each single block can be adjusted as well.",
+    "inheritBase": "Base style ({value})",
+    "inheritBrand": "As in profile ({value})",
+    "cornersInherit": "Default corners",
+    "cornersFor": "Corners: {kind}",
+    "corners": {
+      "square": "Square",
+      "rounded": "Rounded"
+    },
+    "kind": {
+      "heading": "Headings",
+      "table": "Tables",
+      "attendance": "Attendance",
+      "session_date": "Next meeting",
+      "finance_balance": "Account balance",
+      "kpi_tiles": "Key figures",
+      "form": "Form",
+      "matrix": "Matrix",
+      "todo": "Tasks",
+      "toc": "Table of contents",
+      "quote": "Quotes and decisions",
+      "text": "Text",
+      "static_text": "Fixed texts and displays",
+      "bullet_list": "Bullet lists",
+      "image": "Images",
+      "chart": "Charts",
+      "entry_exit": "Joins and leaves"
+    },
+    "variant": {
+      "attendance": {
+        "list": "List",
+        "compact": "Compact by status",
+        "table": "Table",
+        "grid": "Grid with summary",
+        "chips": "Name chips"
+      },
+      "session_date": {
+        "line": "Line",
+        "box": "Highlighted box"
+      },
+      "finance_balance": {
+        "list": "List",
+        "tiles": "Tiles"
+      },
+      "kpi_tiles": {
+        "outlined": "Outlined",
+        "filled": "Filled",
+        "plain": "Plain",
+        "divided": "One row with dividers"
+      },
+      "form": {
+        "grid": "Two columns",
+        "table": "Table"
+      },
+      "heading": {
+        "bar": "Colour bar",
+        "boxed": "Colour box",
+        "plain": "Plain",
+        "underline": "Underlined"
+      },
+      "table": {
+        "grid": "Grid",
+        "lines": "Lines",
+        "minimal": "Minimal",
+        "zebra": "Alternating rows"
+      },
+      "matrix": {
+        "table": "Table",
+        "cards": "Cards",
+        "cards_filled": "Cards with coloured header"
+      },
+      "todo": {
+        "table": "Table",
+        "checklist": "Box with checkboxes",
+        "status": "Table with status pills"
+      },
+      "toc": {
+        "indented": "Indented",
+        "leaders": "With dotted leaders",
+        "badges": "Numbers on colour"
+      },
+      "quote": {
+        "line": "Line on the left",
+        "box": "Highlighted box",
+        "framed": "Between two lines"
+      },
+      "text": {
+        "plain": "Plain text",
+        "note": "Note box",
+        "accent": "With accent line"
+      },
+      "static_text": {
+        "plain": "Plain text",
+        "note": "Note box",
+        "accent": "With accent line"
+      },
+      "bullet_list": {
+        "bullets": "Bullets",
+        "numbers": "Numbers",
+        "dashes": "Dashes",
+        "checks": "Checkboxes"
+      },
+      "image": {
+        "plain": "No frame",
+        "framed": "Framed",
+        "card": "Card"
+      },
+      "chart": {
+        "plain": "No frame",
+        "card": "Framed"
+      },
+      "entry_exit": {
+        "list": "Stacked",
+        "columns": "Side by side"
+      }
+    },
+    "designerTitle": "Appearance",
+    "designerHelp": "Applies to this block only. Empty = as in the brand profile.",
+    "legacyBase": "Former base style"
+  },
+  "blockAppearance": {
+    "title": "Building block",
+    "listTitle": "Style building blocks individually",
+    "listHelp": "A building block takes over the appearance of this block. Choose a building block to display it differently.",
+    "listLabel": "Building blocks of the meeting template",
+    "notOwned": "Building blocks can be styled individually once the design is used by only one meeting template (in the template editor under «PDF» → «Adjust only here»).",
+    "empty": "The meeting template has no building blocks that appear in the PDF yet.",
+    "overridden": "Own appearance",
+    "inElement": "Agenda item: {element}",
+    "help": "Applies to this building block only. Empty = like the minutes content.",
+    "inherit": "Like minutes content ({value})",
+    "noOptions": "There are no appearance options for this building block.",
+    "missing": "This building block no longer exists in the meeting template.",
+    "back": "Back to minutes content",
+    "reset": "Reset"
+  },
+  "simple": {
+    "title": "Design the document",
+    "titlePage": "Title page",
+    "step": {
+      "look": "Appearance",
+      "content": "Content",
+      "page": "Page"
+    },
+    "contentSummary": "{visible} of {total} blocks visible",
+    "contentHelp": "What the document contains, from top to bottom. Tap a block to adjust it; clicking in the preview jumps here.",
+    "hidden": "Hidden",
+    "visible": "Show «{name}»",
+    "custom": "This area was designed freely. You can show, hide and move it here; everything else is done in «Advanced» mode.",
+    "customShort": "Custom area",
+    "openAdvanced": "Open advanced",
+    "openAdvancedHelp": "Free design with canvas, data fields and page masters",
+    "remove": "Remove block",
+    "removeConfirm": "Remove «{name}» from the template?",
+    "add": "+ Add block",
+    "variantInherit": "Like style ({value})",
+    "textWithFields": "This text contains data fields and can be edited in «Advanced» mode.",
+    "signatureLabel": "Signature {number}",
+    "signatureRemove": "Remove signature {number}",
+    "signatureAdd": "+ Signature",
+    "imageChoose": "Choose image",
+    "conditionCustom": "This area has its own condition («Advanced» mode).",
+    "condition": {
+      "open_todos": "Only show if there are open to-dos",
+      "protocol_open_todos": "Only show if there are open to-dos",
+      "upcoming_events": "Only show if there are upcoming events"
+    },
+    "sourceTitle": "Appearance of «{name}»",
+    "look": {
+      "style": "Style",
+      "styleHelp": "Gives all elements a consistent appearance. Colours, logo and font come from your corporate design.",
+      "fromBrand": "As in profile",
+      "fromBrandHelp": "Style of the corporate design",
+      "color": "Main colour",
+      "colorBrand": "Main colour from profile",
+      "colorCustom": "Custom colour",
+      "font": "Font",
+      "fontBrand": "As in profile",
+      "fontSans": "Sans serif",
+      "fontSerif": "Serif",
+      "styleFromBrandShort": "Style from profile",
+      "fontFromBrandShort": "Font from profile"
+    },
+    "page": {
+      "withTitlePage": "With title page",
+      "withoutTitlePage": "Without title page",
+      "portrait": "Portrait",
+      "landscape": "Landscape",
+      "titlePage": "Own title page",
+      "titlePageHelp": "Large title with logo, the content starts on page 2",
+      "header": "Header on every page",
+      "headerLogo": "Logo or organisation",
+      "headerTitle": "Document title",
+      "headerDate": "Date",
+      "footer": "Footer on every page",
+      "footerPages": "Page number («Page 1 of 2»)",
+      "footerNumber": "Document number",
+      "footerText": "Footer text",
+      "format": "Format"
+    },
+    "block": {
+      "protocol": {
+        "name": "Agenda items",
+        "help": "The agenda items with their blocks"
+      },
+      "todos": {
+        "name": "To-dos",
+        "help": "Tasks with assignees and due dates"
+      },
+      "attendance": {
+        "name": "Participants",
+        "help": "Who attended and who was excused"
+      },
+      "session_date": {
+        "name": "Next meeting",
+        "help": "Date of the next meeting"
+      },
+      "signatures": {
+        "name": "Signatures",
+        "help": "Lines to sign on"
+      },
+      "events": {
+        "name": "Events",
+        "help": "The upcoming events"
+      },
+      "balance": {
+        "name": "Account balances",
+        "help": "Balance of the accounts"
+      },
+      "kpis": {
+        "name": "Key figures",
+        "help": "Figures at a glance"
+      },
+      "data": {
+        "name": "Data from hocX",
+        "help": "Content from hocX"
+      },
+      "verify": {
+        "name": "Verification note",
+        "help": "So recipients can verify authenticity"
+      },
+      "metadata": {
+        "name": "Document details",
+        "help": "Number, date, status"
+      },
+      "title": {
+        "name": "Title",
+        "help": "The document title"
+      },
+      "subtitle": {
+        "name": "Subtitle",
+        "help": "Line below the title"
+      },
+      "heading": {
+        "name": "Heading",
+        "help": "Structures the document"
+      },
+      "text": {
+        "name": "Text",
+        "help": "A fixed paragraph"
+      },
+      "rich_text": {
+        "name": "Text",
+        "help": "Formatted text"
+      },
+      "image": {
+        "name": "Image",
+        "help": "Photo or graphic"
+      },
+      "toc": {
+        "name": "Table of contents",
+        "help": "Overview of the sections"
+      },
+      "divider": {
+        "name": "Divider",
+        "help": "Horizontal line"
+      },
+      "page_break": {
+        "name": "New page",
+        "help": "A new page starts after this"
+      },
+      "spacer": {
+        "name": "Spacing",
+        "help": "Empty space"
+      },
+      "list": {
+        "name": "List",
+        "help": "Bulleted list"
+      },
+      "table": {
+        "name": "Table",
+        "help": "Values in rows and columns"
+      },
+      "qr_code": {
+        "name": "QR code",
+        "help": "To scan with a phone"
+      },
+      "page_number": {
+        "name": "Page number",
+        "help": "Number of the page"
+      },
+      "group": {
+        "name": "Area",
+        "help": "Several elements together"
+      }
+    },
+    "setting": {
+      "protocol": {
+        "session_todos": {
+          "label": "Show to-dos with the agenda item",
+          "help": "Tasks tagged with the agenda item"
+        },
+        "images": {
+          "label": "Show images",
+          "help": "Photos and graphics from the minutes"
+        },
+        "titles_only": {
+          "label": "Titles only",
+          "help": "For a short agenda"
+        }
+      },
+      "todos": {
+        "only_if_any": {
+          "label": "Only show if there are entries",
+          "help": "Otherwise the section is left out"
+        },
+        "style": {
+          "label": "Appearance"
+        }
+      },
+      "attendance": {
+        "style": {
+          "label": "Appearance"
+        }
+      },
+      "session_date": {
+        "style": {
+          "label": "Appearance"
+        }
+      },
+      "balance": {
+        "style": {
+          "label": "Appearance"
+        }
+      },
+      "kpis": {
+        "style": {
+          "label": "Appearance"
+        }
+      },
+      "signatures": {
+        "names": {
+          "label": "Signatures by",
+          "placeholder": "e.g. President"
+        },
+        "place_date": {
+          "label": "«Place, date» field",
+          "help": "Space for place and date next to the signatures"
+        }
+      },
+      "events": {
+        "only_if_any": {
+          "label": "Only show if there are events",
+          "help": "Otherwise the section is left out"
+        }
+      },
+      "data": {
+        "only_if_any": {
+          "label": "Only show if there are entries",
+          "help": "Otherwise the section is left out"
+        }
+      },
+      "verify": {
+        "qr": {
+          "label": "Show QR code",
+          "help": "Recipients can check the PDF with their phone"
+        }
+      },
+      "metadata": {
+        "fields": {
+          "label": "Details"
+        }
+      },
+      "title": {
+        "text": {
+          "label": "Title"
+        }
+      },
+      "subtitle": {
+        "text": {
+          "label": "Subtitle"
+        }
+      },
+      "heading": {
+        "text": {
+          "label": "Heading"
+        }
+      },
+      "text": {
+        "text": {
+          "label": "Text"
+        }
+      },
+      "rich_text": {
+        "text": {
+          "label": "Text",
+          "help": "**bold**, *italic*, lists with «- »"
+        }
+      },
+      "image": {
+        "image": {
+          "label": "Image"
+        }
+      },
+      "group": {
+        "condition": {
+          "label": "Condition"
+        }
+      }
+    }
+  },
+  "usage": {
+    "shared": "Affects {count, plural, one {# template} other {# templates}} ({names}) and their next documents. PDFs already created stay unchanged.",
+    "default": "Also applies to new templates without their own assignment.",
+    "single": "Used only in “{name}”.",
+    "unused": "Currently not used in any template.",
+    "dismiss": "Hide notice"
+  },
+  "catalog": {
+    "open": "Browse catalogue",
+    "title": "Catalogue",
+    "description": "Designs show their own branding and bring it along when added; templates appear with yours. Only what you add is copied to your club.",
+    "designName": "{type} {design}",
+    "fromCatalog": "From catalogue · {name}",
+    "adopted": "“{name}” added – just this one template",
+    "add": "Add",
+    "addAgain": "Add again",
+    "addNamed": "Add “{name}”",
+    "alreadyAdopted": "Already added",
+    "back": "Back to catalogue",
+    "adoptedWithBrand": "“{name}” added – with its own branding, which you can adjust or replace with yours"
+  },
+  "cleanup": {
+    "bannerTitle": "{count, plural, one {# template is} other {# templates are}} not in use",
+    "bannerText": "Archiving tidies up the list. Nothing is lost: archived templates can be restored, and everything built in stays in the catalogue.",
+    "open": "Tidy up",
+    "title": "Archive unused templates",
+    "description": "None of these templates is a default, assigned to a meeting template or was exported in the last 12 months.",
+    "footnote": "Archiving can be undone at any time.",
+    "submit": "{count, plural, one {Archive #} other {Archive #}}",
+    "done": "{count, plural, =0 {No template archived} one {# template archived} other {# templates archived}}"
+  }
+}

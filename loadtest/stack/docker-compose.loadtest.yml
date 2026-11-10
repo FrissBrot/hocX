@@ -1,0 +1,16 @@
+# Lasttest-Stack (loadtest/stack/up.sh): Release-Konfiguration ohne Traefik. Der Lastgenerator
+# (k6) läuft als Container im Netz <projekt>_default und spricht backend:8000 bzw.
+# abgabebox-backend:8000 direkt an - Traefik-Limits (inflightreq, Rate-Limits) gelten deshalb
+# nicht und sind im Ergebnis zu vermerken.
+services:
+  backend:
+    environment:
+      # k6 sendet Origin = BASE_URL (Origin-Prüfung für POST/PATCH/DELETE)
+      EXTRA_CORS_ORIGINS: http://backend:8000
+    # Keine Traefik-Router: der Host-Traefik (falls vorhanden) soll diesen Stack nie ausliefern.
+    labels: !reset []
+  abgabebox-backend:
+    environment:
+      ABGABEBOX_ENVIRONMENT: test
+      ABGABEBOX_CORS_ORIGIN: http://abgabebox-backend:8000
+    labels: !reset []

@@ -8,23 +8,20 @@ from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.db import get_db
-from app.core.security import (
-    CurrentUser,
-    get_current_user,
-    require_all_fines_read,
-    require_feature,
-    require_finance_write,
-    require_reader,
-)
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_feature, require_permission
 from app.models.entities import AttendanceFine, Protocol
-from app.repositories.fines_repository import DuplicateFineError, FinesRepository
+from app.repositories.fines_repository import DuplicateFineError, FineDeleteError, FinesRepository
 from app.schemas.fines import (
     AttendanceFineCreate,
     AttendanceFineListItem,
     AttendanceFineRead,
     CollectFinePayload,
+    DeleteFinePayload,
+    FineTariffRead,
+    FineTariffUpdate,
 )
-from app.services import public_id_service
+from app.services import fine_tariff_service, public_id_service
 from app.services.audit_service import AuditService
 
 router = APIRouter()
@@ -39,14 +36,12 @@ def list_fines(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    """Readers only see fines assigned to their own participant identity.
+    """Ohne reports.personal nur die eigenen Bussen (eigene Daten, keine Permission nötig).
 
-    Writer, kassier and admin may inspect all fines in the current tenant; mutation remains
-    restricted to kassier and admin below.
+    Mit reports.personal alle Bussen des Mandanten; ändern nur mit finances.manage (unten).
     """
-    require_reader(user)
     require_feature(user, "finance")
-    if user.current_role == "reader":
+    if not user.can(P.REPORTS_PERSONAL):
         return repo.list_fines_for_user(db, user.current_tenant_id, user.user_id, skip=skip, limit=limit)
     return repo.list_fines_for_tenant(db, user.current_tenant_id, skip=skip, limit=limit)
 
@@ -68,13 +63,44 @@ def _resolve_fine_id(db: Session, fine_id: uuid.UUID) -> int:
     return internal_id
 
 
+@router.get("/fines/tariff", response_model=FineTariffRead)
+def get_fine_tariff(
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Zentraler Bussentarif des Mandanten (Konto + Beträge für «zu spät»/«abwesend»)."""
+    require_permission(user, P.MEETINGS_READ)
+    require_feature(user, "finance")
+    return fine_tariff_service.read_tariff(db, user.current_tenant_id)
+
+
+@router.put("/fines/tariff", response_model=FineTariffRead)
+def update_fine_tariff(
+    payload: FineTariffUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_permission(user, P.FINANCES_MANAGE)
+    require_feature(user, "finance")
+    try:
+        result = fine_tariff_service.update_tariff(db, user.current_tenant_id, payload)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    audit.log(
+        db, action="fine_tariff.updated", actor=user, entity_type="fine_tariff", entity_id=user.current_tenant_id,
+        details={"amount_late": float(result.amount_late), "amount_absent": float(result.amount_absent)},
+    )
+    return result
+
+
 @router.get("/protocols/{protocol_id}/pending-fines", response_model=list[AttendanceFineListItem])
 def list_pending_fines(
     protocol_id: uuid.UUID,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_all_fines_read(user)
+    require_permission(user, P.REPORTS_PERSONAL)
     require_feature(user, "finance")
     internal_id = _resolve_protocol_id(db, protocol_id, user)
     return repo.list_pending_fines_for_protocol(db, internal_id, user.current_tenant_id)
@@ -86,7 +112,7 @@ def list_protocol_fines(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_all_fines_read(user)
+    require_permission(user, P.REPORTS_PERSONAL)
     require_feature(user, "finance")
     internal_id = _resolve_protocol_id(db, protocol_id, user)
     return repo.list_fines_for_protocol(db, internal_id, user.current_tenant_id)
@@ -98,7 +124,7 @@ def create_fine(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_finance_write(user)
+    require_permission(user, P.FINANCES_MANAGE)
     try:
         result = repo.create_fine(db, payload, user.current_tenant_id)
     except DuplicateFineError as exc:
@@ -120,19 +146,58 @@ def create_fine(
 @router.delete("/fines/{fine_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_fine(
     fine_id: uuid.UUID,
+    payload: DeleteFinePayload | None = None,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_finance_write(user)
+    """Offene Busse löschen. Im offenen Ursprungsprotokoll hart, sonst mit Begründung
+    (Status `deleted`, aufgeführt im Protokoll `protocol_id` bzw. im nächsten offenen)."""
+    require_permission(user, P.FINANCES_MANAGE)
     internal_id = _resolve_fine_id(db, fine_id)
+    payload = payload or DeleteFinePayload()
+    protocol_context_id = None
+    if payload.protocol_id is not None:
+        protocol_context_id = _resolve_protocol_id(db, payload.protocol_id, user)
     try:
-        deleted = repo.delete_fine(db, internal_id, user.current_tenant_id)
+        outcome = repo.delete_fine(
+            db, internal_id, user.current_tenant_id,
+            actor_user_id=user.user_id, reason=payload.reason, protocol_context_id=protocol_context_id,
+        )
+    except FineDeleteError as exc:
+        db.rollback()
+        status_code = 422 if exc.code == "reason_required" else 409
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Fine could not be deleted") from exc
-    if not deleted:
+    if outcome is None:
         raise HTTPException(status_code=404, detail="Fine not found or already collected")
-    audit.log(db, action="fine.deleted", actor=user, entity_type="attendance_fine", entity_id=internal_id)
+    if outcome == "soft":
+        audit.log(
+            db, action="fine.deleted_with_reason", actor=user, entity_type="attendance_fine", entity_id=internal_id,
+            details={"reason": (payload.reason or "").strip()},
+        )
+    else:
+        audit.log(db, action="fine.deleted", actor=user, entity_type="attendance_fine", entity_id=internal_id)
+
+
+@router.post("/fines/{fine_id}/restore", response_model=AttendanceFineRead)
+def restore_fine(
+    fine_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_permission(user, P.FINANCES_MANAGE)
+    internal_id = _resolve_fine_id(db, fine_id)
+    try:
+        result = repo.restore_fine(db, internal_id, user.current_tenant_id)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Fine could not be restored") from exc
+    if result is None:
+        raise HTTPException(status_code=404, detail="Fine not found, not deleted or already finalized")
+    audit.log(db, action="fine.restored", actor=user, entity_type="attendance_fine", entity_id=internal_id)
+    return result
 
 
 @router.post("/fines/{fine_id}/collect", response_model=AttendanceFineRead)
@@ -142,7 +207,7 @@ def collect_fine(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_finance_write(user)
+    require_permission(user, P.FINANCES_MANAGE)
     internal_id = _resolve_fine_id(db, fine_id)
     collecting_protocol_internal_id = None
     if payload.collecting_protocol_id is not None:
@@ -168,7 +233,7 @@ def reopen_fine(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_finance_write(user)
+    require_permission(user, P.FINANCES_MANAGE)
     internal_id = _resolve_fine_id(db, fine_id)
     try:
         result = repo.reopen_fine(db, internal_id, user.current_tenant_id)

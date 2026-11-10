@@ -13,76 +13,30 @@ Tour-Aenderungen davon unberuehrt (siehe sync_photos_for_tours_best_effort)."""
 from __future__ import annotations
 
 import logging
-import math
-from datetime import UTC, datetime
-from io import BytesIO
-
-from PIL import Image
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
 from app.core.error_log import record_system_error
+from app.core.features_generated import F
 from app.models.entities import PhotoAlbum, PhotoAlbumItem, StoredFile, TenantFeature
 from app.services import wanderplaner_client
 from app.services.photo_event_link_service import capture_date
 
 _logger = logging.getLogger(__name__)
 
-WANDERPLANER_FEATURE = "wanderplaner"
-
-
-def extract_gps(content: bytes) -> tuple[float | None, float | None]:
-    """Fehlende oder beschädigte optionale EXIF-Daten verhindern keinen Upload."""
-    try:
-        with Image.open(BytesIO(content)) as image:
-            gps = image.getexif().get_ifd(0x8825)
-        def coordinate(values, ref, positive, negative, limit):
-            if isinstance(ref, bytes):
-                ref = ref.decode('ascii')
-            if ref not in (positive, negative) or len(values) != 3:
-                raise ValueError('Ungültige GPS-Angabe')
-            degrees, minutes, seconds = map(float, values)
-            if not (0 <= degrees <= limit and 0 <= minutes < 60 and 0 <= seconds < 60):
-                raise ValueError('Ungültige GPS-Koordinaten')
-            value = degrees + minutes / 60 + seconds / 3600
-            if not math.isfinite(value) or value > limit:
-                raise ValueError('Ungültige GPS-Koordinaten')
-            return -value if ref == negative else value
-        return coordinate(gps[2], gps[1], 'N', 'S', 90), coordinate(gps[4], gps[3], 'E', 'W', 180)
-    except Exception:
-        return None, None
+WANDERPLANER_FEATURE = F.WANDERPLANER
 
 
 def tenant_uses_wanderplaner(db: Session, tenant_id: int) -> bool:
     if not wanderplaner_client.is_configured():
         return False
+    # Alben werden geschrieben: im Nur-Lesen-Zustand nach einem Downgrade kein Abgleich.
     return db.scalar(select(TenantFeature.feature_code).where(
         TenantFeature.tenant_id == tenant_id, TenantFeature.feature_code == WANDERPLANER_FEATURE,
+        TenantFeature.access == "full",
     )) is not None
-
-
-def _analyze_missing_gps(db: Session, tenant_id: int) -> None:
-    """Einmaliges Nachlesen bestehender Fotos, damit neue Touren ältere Uploads finden."""
-    from app.core.config import settings
-    from app.services.file_service import _extract_image_metadata, _safe_storage_path
-
-    for stored_file in db.scalars(select(StoredFile).where(
-        StoredFile.tenant_id == tenant_id, StoredFile.mime_type.like('image/%'),
-        StoredFile.gps_analyzed_at.is_(None), StoredFile.scan_status == 'clean',
-    )):
-        path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
-        try:
-            content = path.read_bytes()
-        except OSError:
-            continue
-        stored_file.gps_latitude, stored_file.gps_longitude = extract_gps(content)
-        _, _, taken_at, _ = _extract_image_metadata(content)
-        if stored_file.exif_taken_at is None:
-            stored_file.exif_taken_at = taken_at
-        stored_file.gps_analyzed_at = datetime.now(UTC)
-    db.flush()
 
 
 def sync_photos_for_tours(db: Session, tenant_id: int, *, file_ids=None) -> None:
@@ -94,8 +48,8 @@ def sync_photos_for_tours(db: Session, tenant_id: int, *, file_ids=None) -> None
     if file_ids is not None and not file_ids:
         return
     db.flush()
-    if file_ids is None:
-        _analyze_missing_gps(db, tenant_id)
+    # GPS und Aufnahmedatum liest die Upload-Analyse (image_metadata_service) bzw. für ältere
+    # Fotos der Metadaten-Backfill; ohne Koordinaten bleibt ein Foto hier aussen vor.
     query = select(StoredFile).where(
         StoredFile.tenant_id == tenant_id, StoredFile.gps_latitude.is_not(None), StoredFile.gps_longitude.is_not(None),
     )
@@ -137,7 +91,7 @@ def sync_photos_for_tours(db: Session, tenant_id: int, *, file_ids=None) -> None
     db.flush()
 
 
-def sync_photos_for_tours_best_effort(db: Session, tenant_id: int, *, file_ids=None, actor_email: str | None = None) -> None:
+def sync_photos_for_tours_best_effort(db: Session, tenant_id: int, *, file_ids=None, actor_user_id: int | None = None) -> None:
     """Abgleich in einem Savepoint nach einer Tour-Aenderung bzw. einem Upload. Ein Fehler
     hier darf die eigentliche Aktion nicht scheitern lassen, wird aber in system_error_log
     festgehalten (CLAUDE.md, Zentrale Fehlererfassung, Regel 4)."""
@@ -151,16 +105,18 @@ def sync_photos_for_tours_best_effort(db: Session, tenant_id: int, *, file_ids=N
         # Eigene Session: record_system_error committet, die Transaktion des Aufrufers (z.B.
         # ein laufender Upload) darf dadurch nicht vorzeitig festgeschrieben werden.
         with SessionLocal() as log_db:
-            record_system_error(log_db, exc=exc, tenant_id=tenant_id, actor_email=actor_email)
+            record_system_error(log_db, exc=exc, tenant_id=tenant_id, actor_user_id=actor_user_id)
 
 
-def attach_tour_context(db: Session, items) -> None:
-    if not items:
+def attach_tour_context(db: Session, tenant_id: int | None, items) -> None:
+    """Tour-Kontext der Fotos (Untergruppen in der Fotoansicht). Nur Alben des eigenen Mandanten,
+    explizit gefiltert statt allein über RLS; ohne Mandant (mandantenübergreifende Listen) nichts."""
+    if not items or tenant_id is None:
         return
     by_id = {item.id: item for item in items}
     rows = db.execute(select(PhotoAlbumItem.file_id, PhotoAlbum.hiking_tour_public_id, PhotoAlbum.name)
         .join(PhotoAlbum, PhotoAlbum.id == PhotoAlbumItem.album_id)
-        .where(PhotoAlbum.kind == 'hiking_tour', PhotoAlbumItem.file_id.in_(by_id)))
+        .where(PhotoAlbum.tenant_id == tenant_id, PhotoAlbum.kind == 'hiking_tour', PhotoAlbumItem.file_id.in_(by_id)))
     for file_id, tour_id, title in rows:
         by_id[file_id].hiking_tour_id = tour_id
         by_id[file_id].hiking_tour_title = title

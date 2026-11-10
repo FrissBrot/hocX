@@ -1,0 +1,528 @@
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { ApiError } from "@/lib/api/client";
+import { contentFixture } from "@/lib/documents/test/content-fixture";
+import studio from "@/lib/documents/test/studio-catalog.generated.json";
+
+import { TemplateDesigner } from "./designer";
+
+const api = vi.hoisted(() => ({
+  previewDocument: vi.fn(),
+  previewCanvas: vi.fn(),
+  studioApi: {
+    getTemplate: vi.fn(),
+    catalog: vi.fn(),
+    capabilities: vi.fn(),
+    brands: vi.fn(),
+    assets: vi.fn(),
+    components: vi.fn(),
+    saveDraft: vi.fn(),
+    publish: vi.fn(),
+    updateTemplate: vi.fn(),
+    duplicateTemplate: vi.fn(),
+    discardDraft: vi.fn(),
+    createComponent: vi.fn(),
+    protocolStructure: vi.fn(),
+    exampleThumbnailUrl: vi.fn((key: string) => `/thumb/${key}.png`),
+  },
+}));
+const { toast, confirm, push } = vi.hoisted(() => ({ toast: vi.fn(), confirm: vi.fn(), push: vi.fn() }));
+
+vi.mock("@/lib/documents/api", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/documents/api")>()), ...api }));
+vi.mock("@/contexts/toast-context", () => ({ useToast: () => toast }));
+vi.mock("@/contexts/confirm-context", () => ({ useConfirm: () => confirm }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+
+const revision = (overrides: Record<string, unknown> = {}) => ({ id: "rev-draft", revision_no: 2, status: "draft", lock_version: 3, brand_mode: "follow", schema_version: 1, note: null, created_at: "", updated_at: "", published_at: null, created_by_name: null, template_id: "tpl", brand_id: null, ...overrides });
+
+function detail(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "tpl",
+    name: "Pendenzen Verein",
+    description: null,
+    document_type: "todos",
+    variant: null,
+    category: "tasks",
+    origin: "tenant",
+    system_key: null,
+    source_system_key: null,
+    status: "active",
+    editable: true,
+    is_default: false,
+    brand_id: null,
+    published_revision: revision({ id: "rev-pub", revision_no: 1, status: "published", lock_version: 1 }),
+    draft_revision: revision(),
+    created_at: "",
+    updated_at: "",
+    content: contentFixture(),
+    working_revision_id: "rev-draft",
+    diagnostics: [],
+    ...overrides,
+  };
+}
+
+const capabilities = { export: true, view_templates: true, edit_templates: true, publish_templates: true, manage_brand: true, finance_data: true, personal_data: true };
+const brand = { id: "brand-1", name: "Standard", description: null, is_default: true, archived: false, revision: 1, lock_version: 1, tokens: studio.brand_tokens, updated_at: "" };
+
+async function renderDesigner({ simple = false }: { simple?: boolean } = {}) {
+  render(<TemplateDesigner templateId="tpl" />);
+  await screen.findByRole("textbox", { name: "Name der Vorlage" });
+  // Der Designer startet im Modus «Einfach»; die meisten Tests prüfen die freie Gestaltung
+  if (!simple) fireEvent.click(screen.getByRole("button", { name: "Erweitert öffnen" }));
+}
+
+async function advance(ms: number) {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(ms);
+  });
+}
+
+function canvasNode(name: string) {
+  return within(screen.getByRole("main", { name: "Arbeitsfläche" })).getByRole("treeitem", { name });
+}
+
+describe("TemplateDesigner", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    [toast, confirm, push, api.previewDocument, api.previewCanvas, ...Object.values(api.studioApi)].forEach((fn) => fn.mockReset());
+    api.previewCanvas.mockReturnValue(new Promise(() => undefined));
+    try {
+      window.localStorage.clear();
+    } catch {
+      // ohne Speicher gilt der einfache Modus
+    }
+    api.studioApi.getTemplate.mockResolvedValue(detail());
+    api.studioApi.catalog.mockResolvedValue(studio.catalog);
+    api.studioApi.capabilities.mockResolvedValue(capabilities);
+    api.studioApi.brands.mockResolvedValue([brand]);
+    api.studioApi.assets.mockResolvedValue([]);
+    api.studioApi.components.mockResolvedValue([]);
+    api.studioApi.protocolStructure.mockResolvedValue({ owned: false, session_template_name: null, elements: [] });
+    api.previewDocument.mockResolvedValue({ pages: ["data:image/png;base64,AAA"], page_count: 1, diagnostics: [], template_id: null, template_source: null, design_hash: null });
+    api.studioApi.saveDraft.mockImplementation(async (_id: string, body: { lock_version: number | null }) => ({ revision: revision({ lock_version: (body.lock_version ?? 3) + 1 }), diagnostics: [] }));
+  });
+
+  it("inserts a library element at the end of the body and autosaves with the lock version", async () => {
+    await renderDesigner();
+    const [insertText] = screen.getAllByRole("button", { name: "«Text» einfügen" });
+    fireEvent.click(insertText);
+    expect(screen.getByText("Ungespeicherte Änderungen")).toBeInTheDocument();
+
+    await advance(1300);
+    await waitFor(() => expect(api.studioApi.saveDraft).toHaveBeenCalledTimes(1));
+    const [, body] = api.studioApi.saveDraft.mock.calls[0];
+    expect(body.lock_version).toBe(3);
+    expect(body.content.body.map((node: { type: string }) => node.type)).toEqual(["text", "section", "verify_note", "text"]);
+    await waitFor(() => expect(screen.getByText("Gespeichert")).toBeInTheDocument());
+
+    // Der nächste Speichervorgang verwendet die neue Sperrversion
+    fireEvent.click(screen.getAllByRole("button", { name: "«Text» einfügen" })[0]);
+    await advance(1300);
+    await waitFor(() => expect(api.studioApi.saveDraft).toHaveBeenCalledTimes(2));
+    expect(api.studioApi.saveDraft.mock.calls[1][1].lock_version).toBe(4);
+  });
+
+  // Simuliert den Server: Antwort erst auf Abruf, Sperrversion wird wie im Backend geprüft
+  function controlledServer(initialLock = 3) {
+    const state = { lock: initialLock, pending: [] as Array<() => void> };
+    api.studioApi.saveDraft.mockImplementation(
+      (_id: string, body: { lock_version: number | null }) =>
+        new Promise((resolve, reject) => {
+          state.pending.push(() => {
+            if (body.lock_version !== null && body.lock_version !== state.lock) {
+              reject(new ApiError("Konflikt", "conflict", 409, { lock_version: state.lock }));
+              return;
+            }
+            state.lock += 1;
+            resolve({ revision: revision({ lock_version: state.lock }), diagnostics: [] });
+          });
+        })
+    );
+    const respond = async () => {
+      await act(async () => {
+        state.pending.shift()!();
+        await Promise.resolve();
+      });
+    };
+    return { state, respond };
+  }
+
+  const insertText = () => fireEvent.click(screen.getAllByRole("button", { name: "«Text» einfügen" })[0]);
+  const conflictText = "Jemand anderes hat diese Vorlage inzwischen geändert.";
+
+  it("keeps changes made during a running save dirty and saves them with the new lock version (STUDIO-001)", async () => {
+    const server = controlledServer();
+    await renderDesigner();
+    insertText();
+    await advance(1300);
+    await waitFor(() => expect(api.studioApi.saveDraft).toHaveBeenCalledTimes(1));
+
+    // Änderung während der laufenden Anfrage
+    insertText();
+    await server.respond();
+    expect(screen.queryByText("Gespeichert")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Veröffentlichen" })).toBeDisabled();
+
+    await advance(1300);
+    await waitFor(() => expect(api.studioApi.saveDraft).toHaveBeenCalledTimes(2));
+    const second = api.studioApi.saveDraft.mock.calls[1][1];
+    expect(second.lock_version).toBe(4);
+    expect(second.content.body).toHaveLength(5);
+    await server.respond();
+    expect(await screen.findByText("Gespeichert")).toBeInTheDocument();
+    expect(screen.queryByText(conflictText)).not.toBeInTheDocument();
+  });
+
+  it("does not send a second save while one is pending and follows up afterwards (STUDIO-001)", async () => {
+    const server = controlledServer();
+    await renderDesigner();
+    insertText();
+    await advance(1300);
+    await waitFor(() => expect(api.studioApi.saveDraft).toHaveBeenCalledTimes(1));
+
+    // Autosave-Timer der zweiten Änderung läuft ab, während die erste Anfrage noch offen ist
+    insertText();
+    await advance(1300);
+    expect(api.studioApi.saveDraft).toHaveBeenCalledTimes(1);
+
+    await server.respond();
+    await waitFor(() => expect(api.studioApi.saveDraft).toHaveBeenCalledTimes(2));
+    expect(api.studioApi.saveDraft.mock.calls[1][1].lock_version).toBe(4);
+    expect(api.studioApi.saveDraft.mock.calls[1][1].content.body).toHaveLength(5);
+    await server.respond();
+    expect(await screen.findByText("Gespeichert")).toBeInTheDocument();
+    expect(screen.queryByText(conflictText)).not.toBeInTheDocument();
+  });
+
+  it("saves a change of the brand mode alone (STUDIO-004)", async () => {
+    await renderDesigner();
+    fireEvent.change(screen.getByRole("combobox", { name: "Bearbeitungsmodus" }), { target: { value: "advanced" } });
+    const brandMode = screen.getAllByRole("combobox", { hidden: true }).find((element) => within(element).queryByRole("option", { name: "Mitgehen", hidden: true }));
+    fireEvent.change(brandMode!, { target: { value: "pinned" } });
+    expect(screen.getByText("Ungespeicherte Änderungen")).toBeInTheDocument();
+    await advance(1300);
+    await waitFor(() => expect(api.studioApi.saveDraft).toHaveBeenCalledTimes(1));
+    expect(api.studioApi.saveDraft.mock.calls[0][1].brand_mode).toBe("pinned");
+    expect(await screen.findByText("Gespeichert")).toBeInTheDocument();
+  });
+
+  it("locks the brand profile of published templates without the publish right (STUDIO-003)", async () => {
+    api.studioApi.capabilities.mockResolvedValue({ ...capabilities, publish_templates: false });
+    await renderDesigner();
+    const brandSelect = screen.getAllByRole("combobox").find((element) => within(element).queryByRole("option", { name: "Standard" }));
+    expect(brandSelect).toBeDisabled();
+    expect(screen.getByText("Bei veröffentlichten Vorlagen können nur Personen mit Veröffentlichungsrecht das Profil wechseln.")).toBeInTheDocument();
+  });
+
+  it("deletes the selected element with the keyboard and restores it with undo", async () => {
+    await renderDesigner();
+    fireEvent.click(canvasNode("Einleitung"));
+    fireEvent.keyDown(window, { key: "Delete" });
+    await waitFor(() => expect(within(screen.getByRole("main", { name: "Arbeitsfläche" })).queryByRole("treeitem", { name: "Einleitung" })).not.toBeInTheDocument());
+    fireEvent.keyDown(window, { key: "z", ctrlKey: true });
+    expect(await within(screen.getByRole("main", { name: "Arbeitsfläche" })).findByRole("treeitem", { name: "Einleitung" })).toBeInTheDocument();
+  });
+
+  it("ignores delete shortcuts while a dialog is open or a toolbar button has focus (STUDIO-016)", async () => {
+    await renderDesigner();
+    fireEvent.click(canvasNode("Einleitung"));
+    const dialog = document.createElement("div");
+    dialog.setAttribute("aria-modal", "true");
+    document.body.appendChild(dialog);
+    fireEvent.keyDown(window, { key: "Delete" });
+    dialog.remove();
+    expect(canvasNode("Einleitung")).toBeInTheDocument();
+
+    const back = screen.getByRole("button", { name: "Zur Bibliothek" });
+    back.focus();
+    fireEvent.keyDown(back, { key: "Backspace" });
+    expect(canvasNode("Einleitung")).toBeInTheDocument();
+    await advance(1300);
+    expect(api.studioApi.saveDraft).not.toHaveBeenCalled();
+  });
+
+  it("keeps locked elements when deleting", async () => {
+    await renderDesigner();
+    fireEvent.click(canvasNode("Prüfvermerk"));
+    fireEvent.keyDown(window, { key: "Delete" });
+    await advance(1300);
+    expect(api.studioApi.saveDraft).not.toHaveBeenCalled();
+    expect(canvasNode("Prüfvermerk")).toBeInTheDocument();
+  });
+
+  it("stops autosaving on a conflict and reloads the newer state on request", async () => {
+    api.studioApi.saveDraft.mockRejectedValueOnce(new ApiError("Konflikt", "conflict", 409, { lock_version: 7 }));
+    await renderDesigner();
+    fireEvent.click(screen.getAllByRole("button", { name: "«Text» einfügen" })[0]);
+    await advance(1300);
+    expect(await screen.findByText("Jemand anderes hat diese Vorlage inzwischen geändert.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "«Text» einfügen" })[0]);
+    await advance(2000);
+    expect(api.studioApi.saveDraft).toHaveBeenCalledTimes(1);
+
+    api.studioApi.getTemplate.mockResolvedValue(detail({ draft_revision: revision({ lock_version: 7 }) }));
+    fireEvent.click(screen.getByRole("button", { name: "Neuen Stand laden" }));
+    await waitFor(() => expect(screen.queryByText("Jemand anderes hat diese Vorlage inzwischen geändert.")).not.toBeInTheDocument());
+    fireEvent.click(screen.getAllByRole("button", { name: "«Text» einfügen" })[0]);
+    await advance(1300);
+    await waitFor(() => expect(api.studioApi.saveDraft).toHaveBeenCalledTimes(2));
+    expect(api.studioApi.saveDraft.mock.calls[1][1].lock_version).toBe(7);
+  });
+
+  it("blocks publishing while the draft has errors and selects the faulty element", async () => {
+    api.studioApi.getTemplate.mockResolvedValue(detail({ diagnostics: [{ node_id: "inner-1", severity: "error", code: "unknownBinding", detail: "foo.bar" }] }));
+    await renderDesigner();
+    fireEvent.click(screen.getByRole("button", { name: "Veröffentlichen" }));
+    expect(toast).toHaveBeenCalledWith("Ein Fehler verhindert das Veröffentlichen.", "error");
+    expect(confirm).not.toHaveBeenCalled();
+    expect(api.studioApi.publish).not.toHaveBeenCalled();
+    expect(await screen.findByText("Unbekanntes Datenfeld (foo.bar)")).toBeInTheDocument();
+  });
+
+  it("publishes after confirmation", async () => {
+    confirm.mockResolvedValue(true);
+    api.studioApi.publish.mockResolvedValue(detail({ draft_revision: null, published_revision: revision({ id: "rev-draft", status: "published" }) }));
+    await renderDesigner();
+    fireEvent.click(screen.getByRole("button", { name: "Veröffentlichen" }));
+    await waitFor(() => expect(api.studioApi.publish).toHaveBeenCalledWith("tpl"));
+    expect(toast).toHaveBeenCalledWith("Vorlage veröffentlicht.", "success");
+    expect(await screen.findByText("Veröffentlicht")).toBeInTheDocument();
+  });
+
+  it("shows system templates read-only and offers a copy", async () => {
+    api.studioApi.getTemplate.mockResolvedValue(detail({ origin: "system", system_key: "todos_standard", editable: false, draft_revision: null }));
+    api.studioApi.duplicateTemplate.mockResolvedValue({ id: "copy-1" });
+    await renderDesigner();
+    expect(screen.getByText("Systemvorlagen sind schreibgeschützt. Erstelle eine Kopie, um sie anzupassen.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Veröffentlichen" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "«Text» einfügen" })[0]).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /Kopie|anpassen/ }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/documents/templates/copy-1"));
+  });
+
+  it("renders the binding preview with the real engine request", async () => {
+    await renderDesigner();
+    await advance(800);
+    await waitFor(() => expect(api.previewDocument).toHaveBeenCalled());
+    const [request, maxPages] = api.previewDocument.mock.calls.at(-1)!;
+    expect(request).toMatchObject({ document_type: "todos", data_mode: "sample", protocol_id: null });
+    expect(request.content.body).toHaveLength(3);
+    expect(maxPages).toBe(12);
+  });
+  it("inserts data fields as bound text and lists as tables bound to the entry fields", async () => {
+    await renderDesigner();
+    fireEvent.click(screen.getByRole("tab", { name: "Daten" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "«Name der Organisation» einfügen" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "«Aktive Mitglieder» einfügen" })[0]);
+    await advance(1300);
+    await waitFor(() => expect(api.studioApi.saveDraft).toHaveBeenCalled());
+    const body = api.studioApi.saveDraft.mock.calls.at(-1)![1].content.body;
+    expect(body.at(-2)).toMatchObject({ type: "text", content: { default: [{ t: "bind", path: "organization.name" }] } });
+    const table = body.at(-1);
+    expect(table).toMatchObject({ type: "table", source: "members.active" });
+    expect(table.columns.length).toBeGreaterThan(0);
+    expect(table.columns[0].cell.default[0].path).toMatch(/^item\./);
+  });
+
+  it("disables data fields the exporting person may not read", async () => {
+    api.studioApi.capabilities.mockResolvedValue({ ...capabilities, finance_data: false });
+    await renderDesigner();
+    fireEvent.click(screen.getByRole("tab", { name: "Daten" }));
+    expect(screen.getAllByRole("button", { name: "«Gesamtsaldo» einfügen" })[0]).toBeDisabled();
+    expect(screen.getAllByRole("button", { name: "«Name der Organisation» einfügen" })[0]).toBeEnabled();
+  });
+
+  it("styles a single building block of the minutes content and resets it", async () => {
+    const key = "11111111-1111-4111-8111-111111111111:2";
+    api.studioApi.getTemplate.mockResolvedValue(detail({ document_type: "protocol", content: { ...contentFixture(), body: [{ id: "proto", type: "data_block", component: "protocol_element", params: {}, title_mode: "none", level: 1, hide_if_empty: true, appearance: {} }] } }));
+    api.studioApi.protocolStructure.mockResolvedValue({
+      owned: true,
+      session_template_name: "Vorstand",
+      elements: [{ id: "11111111-1111-4111-8111-111111111111", title: "Finanzen", blocks: [
+        { key: "11111111-1111-4111-8111-111111111111:1", title: "Bericht", element_type: "text", element_type_id: 1, appearance_kinds: ["text"] },
+        { key, title: "", element_type: "todo", element_type_id: 2, appearance_kinds: ["todo", "table"] },
+      ] }],
+    });
+    await renderDesigner();
+    fireEvent.click(screen.getByRole("tab", { name: "Struktur" }));
+    const left = screen.getByRole("complementary", { name: "Bausteine" });
+    expect(within(left).getByText("Finanzen")).toBeInTheDocument();
+    // Ohne eigenen Titel: Name des Bausteintyps
+    fireEvent.click(await within(left).findByRole("button", { name: "Todo" }));
+    const panel = screen.getByRole("complementary", { name: "Eigenschaften" });
+    expect(within(panel).getByText("Traktandum: Finanzen")).toBeInTheDocument();
+    fireEvent.change(within(panel).getByRole("combobox", { name: "Pendenzen" }), { target: { value: "checklist" } });
+    await advance(1300);
+    await waitFor(() => expect(api.studioApi.saveDraft).toHaveBeenCalled());
+    expect(api.studioApi.saveDraft.mock.calls.at(-1)![1].content.body[0].block_appearance).toEqual({ [key]: { todo: { variant: "checklist", corners: null } } });
+    expect(within(left).getByTitle("Eigene Darstellung")).toBeInTheDocument();
+    fireEvent.click(within(panel).getByRole("button", { name: "Zurücksetzen" }));
+    await advance(1300);
+    await waitFor(() => expect(api.studioApi.saveDraft.mock.calls.at(-1)![1].content.body[0].block_appearance).toEqual({}));
+  });
+
+  it("explains why building blocks cannot be styled in a shared design", async () => {
+    api.studioApi.getTemplate.mockResolvedValue(detail({ document_type: "protocol", content: { ...contentFixture(), body: [{ id: "proto", type: "data_block", component: "protocol_element", params: {}, title_mode: "none", level: 1, hide_if_empty: true, appearance: {} }] } }));
+    await renderDesigner();
+    fireEvent.click(screen.getByRole("tab", { name: "Struktur" }));
+    expect(await screen.findAllByText(/nur von einer Sitzungsvorlage verwendet/)).not.toHaveLength(0);
+  });
+
+  it("edits the text of the selected element in the properties panel", async () => {
+    await renderDesigner();
+    fireEvent.click(canvasNode("Einleitung"));
+    const panel = screen.getByRole("complementary", { name: "Eigenschaften" });
+    const segment = within(panel).getAllByRole("textbox", { name: "Text" })[0];
+    expect(segment).toHaveValue("Einleitung");
+    fireEvent.change(segment, { target: { value: "Willkommen" } });
+    await advance(1300);
+    await waitFor(() => expect(api.studioApi.saveDraft).toHaveBeenCalled());
+    expect(api.studioApi.saveDraft.mock.calls.at(-1)![1].content.body[0].content.default[0]).toEqual({ t: "text", v: "Willkommen" });
+  });
+
+  it("saves before following an internal link with unsaved changes (STUDIO-016)", async () => {
+    await renderDesigner();
+    insertText();
+    const link = document.createElement("a");
+    link.href = "/protocols";
+    link.textContent = "Protokolle";
+    document.body.appendChild(link);
+    fireEvent.click(link);
+    await waitFor(() => expect(api.studioApi.saveDraft).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/protocols"));
+    expect(confirm).not.toHaveBeenCalled();
+    link.remove();
+  });
+
+  it("asks before leaving when saving fails (STUDIO-016)", async () => {
+    api.studioApi.saveDraft.mockRejectedValue(new ApiError("kaputt", "error", 500, null));
+    confirm.mockResolvedValue(false);
+    await renderDesigner();
+    insertText();
+    fireEvent.click(screen.getByRole("button", { name: "Zur Bibliothek" }));
+    await waitFor(() => expect(confirm).toHaveBeenCalled());
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("models the workspace as a tree with one focusable element per node (STUDIO-016)", async () => {
+    await renderDesigner();
+    const workspace = screen.getByRole("main", { name: "Arbeitsfläche" });
+    const trees = within(workspace).getAllByRole("tree");
+    expect(trees.length).toBeGreaterThan(0);
+    expect(within(workspace).queryAllByRole("button", { pressed: false })).toHaveLength(0);
+    const items = within(trees.find((tree) => within(tree).queryAllByRole("treeitem").length > 1)!).getAllByRole("treeitem");
+    expect(items.every((item) => item.tabIndex === -1)).toBe(true);
+    items[0].focus();
+    fireEvent.keyDown(items[0], { key: "ArrowDown" });
+    expect(document.activeElement).toBe(items[1]);
+    fireEvent.keyDown(items[1], { key: "Home" });
+    expect(document.activeElement).toBe(items[0]);
+  });
+
+  it("shows resolved values, hides elements missing from the PDF and numbers headings like the preview", async () => {
+    const resolved = {
+      colors: { primary: "#174B7A", secondary: "#4A5D4C", heading: "#174B7A", text: "#111111", muted: "#666666", background: "#FFFFFF", border: "#DDDDDD", watermark: "#EEEEEE" },
+      custom_colors: {},
+      fonts: { body: ["Liberation Sans", "Noto Sans"], heading: ["Liberation Sans"] },
+      typography: { base_size: 10, size_title: 24, size_subtitle: 14, size_h1: 16, size_h2: 13, size_h3: 11, size_small: 8, weight_body: 400, weight_heading: 700, line_height: 1.4, letter_spacing_heading: 0, heading_transform: "none" },
+      layout: { paragraph_gap: 2, section_gap: 6, heading_style: "plain", table_style: "lines", border_width: 0.5, radius: 1 },
+      appearance: {},
+    };
+    api.previewCanvas.mockResolvedValue({
+      hints: {
+        hidden: { "intro@": "condition" },
+        texts: { "inner-1@": { text: "Eins aus den Daten" } },
+        rows: {},
+        repeats: {},
+        headings: [{ level: 1, text: "Abschnitt", outlined: true }],
+        heading_index: { "sec@": 0 },
+      },
+      brand: resolved,
+      numbering: true,
+      snippets: {},
+      snippet_pad: 2,
+      diagnostics: [],
+    });
+    await renderDesigner();
+    await advance(600);
+    const canvas = within(screen.getByRole("main", { name: "Arbeitsfläche" }));
+    await waitFor(() => expect(canvas.getByText("Eins aus den Daten")).toBeInTheDocument());
+    expect(api.previewCanvas.mock.calls[0][0]).toMatchObject({ data_mode: "sample", document_type: "todos" });
+    expect(canvasNode("Einleitung")).toHaveClass("studio-node-hidden");
+    expect(canvasNode("Abschnitt").querySelector(".studio-heading")).toHaveTextContent("1 Abschnitt");
+  });
+
+  describe("simple mode", () => {
+    const boxes = { node_boxes: [{ node_id: "intro", page: 1, x: 50, y: 60, width: 495, height: 40 }], page_size: [595, 842] };
+
+    beforeEach(() => {
+      api.previewDocument.mockResolvedValue({ pages: ["data:image/png;base64,AAA"], page_count: 1, diagnostics: [], template_id: null, template_source: null, design_hash: null, ...boxes });
+    });
+
+    it("lists the blocks and shows, hides and styles them", async () => {
+      await renderDesigner({ simple: true });
+      const panel = screen.getByRole("complementary", { name: "Dokument einfach gestalten" });
+      expect(within(panel).getByRole("button", { name: /Einleitung/ })).toBeInTheDocument();
+      // Abschnitt mit Titel heisst wie sein Titel, der Prüfvermerk nach seiner Bausteinart
+      expect(within(panel).getByRole("button", { name: /Abschnitt/ })).toBeInTheDocument();
+      expect(within(panel).getByRole("button", { name: /Prüfvermerk/ })).toBeInTheDocument();
+      fireEvent.click(within(panel).getByRole("switch", { name: "«Einleitung» anzeigen" }));
+      fireEvent.click(within(panel).getByRole("radio", { name: "Signal" }));
+      await advance(1300);
+      await waitFor(() => expect(api.studioApi.saveDraft).toHaveBeenCalled());
+      const saved = api.studioApi.saveDraft.mock.calls.at(-1)![1].content;
+      expect(saved.body[0].enabled).toBe(false);
+      expect(saved.settings.brand_overrides.appearance_base).toBe("signal");
+    });
+
+    it("edits the settings of a block and adds a new one", async () => {
+      await renderDesigner({ simple: true });
+      const panel = screen.getByRole("complementary", { name: "Dokument einfach gestalten" });
+      fireEvent.click(within(panel).getByRole("button", { name: /Einleitung/ }));
+      fireEvent.change(within(panel).getByRole("textbox", { name: "Text" }), { target: { value: "Willkommen" } });
+      fireEvent.click(within(panel).getByRole("button", { name: "+ Baustein hinzufügen" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: /Trennlinie/ }));
+      await advance(1300);
+      await waitFor(() => expect(api.studioApi.saveDraft).toHaveBeenCalled());
+      const saved = api.studioApi.saveDraft.mock.calls.at(-1)![1].content;
+      expect(saved.body[0].content.default).toEqual([{ t: "text", v: "Willkommen" }]);
+      // Neuer Baustein direkt nach dem gewählten
+      expect(saved.body[1].type).toBe("divider");
+    });
+
+    it("selects a block by clicking into the preview", async () => {
+      await renderDesigner({ simple: true });
+      await advance(400);
+      const hit = await screen.findByRole("button", { name: "Einleitung", pressed: false });
+      fireEvent.click(hit);
+      expect(screen.getByRole("button", { name: "Einleitung", pressed: true })).toBeInTheDocument();
+      expect(within(screen.getByRole("complementary", { name: "Dokument einfach gestalten" })).getByRole("textbox", { name: "Text" })).toHaveValue("Einleitung");
+      expect(api.previewDocument.mock.calls.at(-1)![3]).toEqual({ nodeBoxes: true });
+    });
+
+    it("switches header and footer parts and the title page for this template only", async () => {
+      await renderDesigner({ simple: true });
+      const panel = screen.getByRole("complementary", { name: "Dokument einfach gestalten" });
+      fireEvent.click(within(panel).getByRole("button", { name: /^3/ }));
+      fireEvent.click(within(panel).getByRole("switch", { name: "Logo bzw. Organisation" }));
+      fireEvent.click(within(panel).getByRole("switch", { name: "Eigene Titelseite" }));
+      fireEvent.click(within(panel).getByRole("radio", { name: "Querformat" }));
+      await advance(1300);
+      await waitFor(() => expect(api.studioApi.saveDraft).toHaveBeenCalled());
+      const saved = api.studioApi.saveDraft.mock.calls.at(-1)![1].content;
+      expect(saved.settings.brand_overrides.header_show_logo).toBe(false);
+      expect(saved.title_page).toMatchObject({ enabled: true, visible_if: null });
+      expect(saved.page.orientation).toBe("landscape");
+    });
+
+    it("always starts in simple mode for people who do not manage the corporate design", async () => {
+      api.studioApi.capabilities.mockResolvedValue({ ...capabilities, manage_brand: false });
+      await renderDesigner({ simple: true });
+      expect(screen.getByRole("button", { name: "Erweitert öffnen" })).toBeInTheDocument();
+      expect(screen.queryByRole("combobox", { name: "Bearbeitungsmodus" })).not.toBeInTheDocument();
+    });
+  });
+});
+

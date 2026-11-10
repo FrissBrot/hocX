@@ -13,7 +13,7 @@ per SELECT lesbar - die Spaltenlisten hier bilden also nicht mehr die tatsaechli
 DB-Grants ab, sondern nur die Spalten, die dieser Service kennt/braucht.
 """
 
-from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Integer, MetaData, Table, Text
+from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Float, Integer, MetaData, SmallInteger, Table, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 metadata = MetaData()
@@ -49,6 +49,8 @@ tenant_feature_table = Table(
     metadata,
     Column("tenant_id", BigInteger),
     Column("feature_code", Text),
+    # 'full' oder 'read_only' (0158_feature_entitlements): nur volle Buchung nimmt Uploads an
+    Column("access", Text),
 )
 
 # tenant: die restricted Rolle darf nur (id, storage_quota_bytes) lesen (Migration
@@ -83,6 +85,7 @@ submission_assignment_table = Table(
     Column("max_file_size_mb", Integer),
     Column("is_active", Boolean),
     Column("sort_order", Text),
+    Column("auto_close", Text),
 )
 
 # cycle_config/event_cycle: nur fuer den Zyklus-Filter der Termin-Abgaben. Spalten-SELECT
@@ -140,8 +143,10 @@ list_entry_table = Table(
     Column("column_two_value_json", JSONB),
 )
 
+# Seit 0108 sind Teilnehmer Zeilen in app_user; hocx_abgabebox darf dort nur diese Spalten
+# lesen (Grant in 0109_abgabebox_participant_grant.py), keine Login-/Kontodaten.
 participant_table = Table(
-    "participant",
+    "app_user",
     metadata,
     Column("id", BigInteger, primary_key=True),
     Column("public_id", UUID(as_uuid=True)),
@@ -199,6 +204,20 @@ stored_file_table = Table(
     Column("checksum_sha256", Text),
     Column("perceptual_hash", Text),
     Column("scan_status", Text),
+    # Bild-Metadaten (Migration 0113, siehe app/image_metadata.py) - nur beim INSERT gesetzt.
+    Column("exif_taken_at", DateTime(timezone=True)),
+    Column("exif_taken_offset", Text),
+    Column("exif_taken_source", Text),
+    Column("gps_latitude", Float),
+    Column("gps_longitude", Float),
+    Column("gps_altitude_m", Float),
+    Column("gps_direction_deg", Float),
+    Column("gps_source", Text),
+    Column("camera_make", Text),
+    Column("camera_model", Text),
+    Column("orientation", SmallInteger),
+    Column("metadata_scanned_at", DateTime(timezone=True)),
+    Column("metadata_scan_status", Text),
 )
 
 # system_error_log: nur INSERT-Grant, absichtlich KEIN SELECT - siehe Migration 0039.

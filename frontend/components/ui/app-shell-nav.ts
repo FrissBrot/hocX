@@ -1,23 +1,17 @@
 import { SessionInfo } from "@/types/api";
+import { can, rolesLabel } from "@/lib/permissions";
 import { NavIconKey } from "@/components/ui/nav-icons";
 
-export type NavLink = { href: string; label: string; icon: NavIconKey; match?: string[] };
-// `title: null` renders the links flat, without a group heading (used for the Dashboard).
-export type NavGroup = { title: string | null; links: NavLink[] };
+// labelKey/titleKey sind next-intl-Schluessel im "nav"-Namespace (frontend/messages/<locale>/nav.json),
+// keine fertigen Texte - uebersetzt wird erst beim Rendern (app-shell.tsx), weil buildNav selbst
+// keine React-Komponente ist und daher keinen useTranslations()-Hook aufrufen kann.
+export type NavLink = { href: string; labelKey: string; icon: NavIconKey; match?: string[] };
+// `titleKey: null` renders the links flat, without a group heading (used for the Dashboard).
+export type NavGroup = { titleKey: string | null; links: NavLink[] };
 
-export function formatRoleLabel(role: string | null | undefined): string {
-  switch (role) {
-    case "admin":
-      return "Admin";
-    case "writer":
-      return "Schreiber";
-    case "kassier":
-      return "Kassier";
-    case "reader":
-      return "Leser";
-    default:
-      return role ?? "Status";
-  }
+/** Rollen des angemeldeten Kontos für Kopfzeile/Profil (mehrere möglich), sonst "Status". */
+export function formatRoleLabel(session: Pick<SessionInfo, "roles"> | null | undefined, t: (key: string) => string): string {
+  return rolesLabel(session?.roles, t) || t("roles.status");
 }
 
 export function isNavLinkActive(link: NavLink, pathname: string): boolean {
@@ -25,61 +19,65 @@ export function isNavLinkActive(link: NavLink, pathname: string): boolean {
 }
 
 export function buildNav(session: SessionInfo | null): NavGroup[] {
-  const role = session?.current_role ?? null;
-  const isAdmin = role === "admin";
-  const isWriter = isAdmin || role === "writer";
-  const hasFinance = role !== null && (session?.current_tenant?.enabled_features?.includes("finance") ?? false);
-  const hasAbgabebox = role !== null && (session?.current_tenant?.enabled_features?.includes("abgabebox") ?? false);
-  const hasWanderplaner = role !== null && (session?.current_tenant?.enabled_features?.includes("wanderplaner") ?? false);
+  const editsMeetings = can(session, "meetings.edit");
 
   // `match` lists the sibling routes that share a section's tab strip (see RouteTabs), so the
   // section stays highlighted while one of its other tabs is open.
   const groups: NavGroup[] = [
-    { title: null, links: [{ href: "/", label: "Dashboard", icon: "dashboard", match: ["/statistics"] }] },
+    { titleKey: null, links: [{ href: "/", labelKey: "dashboard", icon: "dashboard", match: ["/statistics"] }] },
     {
-      title: "Arbeiten",
+      titleKey: "groups.work",
       links: [
-        { href: "/protocols", label: "Protokolle", icon: "protocols" },
-        ...(isWriter ? [{ href: "/events", label: "Termine", icon: "events" as const }] : []),
-        { href: "/todos", label: "Todos", icon: "todos" },
-        ...(isWriter && hasAbgabebox ? [{ href: "/submission-assignments", label: "Abgaben", icon: "submissions" as const }] : []),
-        ...(hasFinance ? [{ href: "/finances", label: "Finanzen", icon: "finances" as const, match: ["/fines"] }] : []),
-        ...(hasWanderplaner ? [{ href: "/hiking-planner", label: "Wanderplaner", icon: "wanderplaner" as const }] : []),
+        { href: "/protocols", labelKey: "protocols", icon: "protocols" },
+        ...(editsMeetings ? [{ href: "/events", labelKey: "events", icon: "events" as const }] : []),
+        { href: "/todos", labelKey: "todos", icon: "todos" },
+        { href: "/agenda", labelKey: "agenda", icon: "agenda" },
+        ...(can(session, "submissions.manage") ? [{ href: "/submission-assignments", labelKey: "submissions", icon: "submissions" as const }] : []),
+        ...(can(session, "finances.read") ? [{ href: "/finances", labelKey: "finances", icon: "finances" as const, match: ["/fines"] }] : []),
+        ...(can(session, "hiking.read") ? [{ href: "/hiking-planner", labelKey: "wanderplaner", icon: "wanderplaner" as const }] : []),
       ],
     },
   ];
 
-  if (isWriter) {
+  const masterData: NavLink[] = [
+    ...(can(session, "participants.manage") ? [{ href: "/participants", labelKey: "participants", icon: "participants" as const }] : []),
+    ...(editsMeetings ? [{ href: "/lists", labelKey: "lists", icon: "lists" as const }] : []),
+    ...(can(session, "files.manage")
+      ? [
+          { href: "/photos", labelKey: "photos", icon: "photos" as const },
+          { href: "/files", labelKey: "files", icon: "files" as const },
+          { href: "/shared-links", labelKey: "sharedLinks", icon: "share" as const },
+        ]
+      : []),
+  ];
+  if (masterData.length > 0) {
+    groups.push({ titleKey: "groups.masterData", links: masterData });
+  }
+
+  // Konfiguration in drei Bereichen (Bereichs-Tabs siehe section-tabs.ts): Protokollvorlagen mit
+  // Bausteinen, Abläufe (Zyklen, Aufgabenpakete) und Gestaltung der PDFs. templates.edit passt
+  // Vorlagen und Gestaltung an; Abläufe brauchen templates.manage.
+  if (can(session, "templates.edit")) {
     groups.push({
-      title: "Stammdaten",
+      titleKey: "groups.configuration",
       links: [
-        { href: "/participants", label: "Teilnehmer", icon: "participants" },
-        { href: "/lists", label: "Stammlisten", icon: "lists" },
-        { href: "/photos", label: "Fotos", icon: "photos" },
-        { href: "/files", label: "Dateien", icon: "files" },
-        { href: "/shared-links", label: "Geteilte Links", icon: "share" },
+        { href: "/templates", labelKey: "protocolTemplates", icon: "templates", match: ["/elements"] },
+        ...(can(session, "templates.manage")
+          ? [{ href: "/cycles", labelKey: "workflows", icon: "cycles" as const, match: ["/task-packages"] }]
+          : []),
+        { href: "/documents", labelKey: "design", icon: "documents", match: ["/documents"] },
       ],
     });
   }
 
-  if (isAdmin) {
-    groups.push(
-      {
-        title: "Konfiguration",
-        links: [
-          { href: "/templates", label: "Vorlagen", icon: "templates", match: ["/elements", "/settings"] },
-          { href: "/cycles", label: "Zyklen", icon: "cycles" },
-        ],
-      },
-      {
-        title: "Administration",
-        links: [
-          { href: "/users", label: "Benutzer", icon: "users" },
-          { href: "/tenant-settings", label: "Mandant-Einstellungen", icon: "tenant" },
-          { href: "/tools/import", label: "Import", icon: "tools", match: ["/tools"] },
-        ],
-      }
-    );
+  const administration: NavLink[] = [
+    ...(can(session, "access.manage") ? [{ href: "/users", labelKey: "users", icon: "users" as const }] : []),
+    ...(can(session, "settings.manage") ? [{ href: "/tenant-settings", labelKey: "tenantSettings", icon: "tenant" as const }] : []),
+    // Wie bisher nur in der Administration sichtbar (Navigation wie vor RBAC: Rolle admin).
+    ...(can(session, "templates.manage") ? [{ href: "/tools/import", labelKey: "import", icon: "tools" as const, match: ["/tools"] }] : []),
+  ];
+  if (administration.length > 0) {
+    groups.push({ titleKey: "groups.administration", links: administration });
   }
 
   return groups;

@@ -31,15 +31,16 @@ from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.secret_crypto import encrypt_secret
 from app.core.security import hash_password
+from app.core.storage import ABGABEBOX, get_object_store
 from app.models.entities import (
     AppUser,
     CycleConfig,
-    DocumentTemplate,
     ElementDefinition,
     Event,
     ListDefinition,
     ListEntry,
     Participant,
+    PlatformAdmin,
     ProtocolElement,
     ProtocolElementBlock,
     ProtocolText,
@@ -61,7 +62,7 @@ from app.services.admin_tenant_service import AdminTenantService
 from app.services.file_service import FileService
 from app.services.list_service import ListService
 from app.services.protocol_service import ProtocolService
-from app.services import submission_link_service
+from app.services import role_service, submission_link_service
 from app.services.submission_service import SubmissionService
 
 DEMO_TENANT_NAME = "Jubla Sonnenberg"
@@ -69,13 +70,14 @@ DEMO_TENANT_SLUG = "jubla"
 DEMO_PASSWORD = "ChangeMe123!"
 SEED_ASSETS_DIR = Path(__file__).resolve().parents[1] / "sql" / "seed_assets"
 
-# Optional: a developer-chosen base32 TOTP secret (see .env.example) enrolled for every demo
-# account below, so the same authenticator entry keeps working across every reseed instead of
+# Optional: a base32 TOTP secret (see .env.example; on test hosts scripts/lib/env_migrate.sh
+# generates one once and keeps it) enrolled for every demo account below and for every platform
+# admin, so the same authenticator entry keeps working across every reseed instead of
 # re-enrolling via QR code each time. Left unset, demo accounts get no MFA factor and go
 # through the normal enroll-on-first-login flow, same as any other new account.
 DEMO_TOTP_SEED = os.environ.get("DEMO_TOTP_SEED", "").strip().replace(" ", "").upper()
 
-# element_type/render_type/role/todo_status/event_category ids: fixed lookup rows from
+# element_type/render_type/todo_status/event_category ids: fixed lookup rows from
 # sql/baseline_lookup_data.sql, always present regardless of environment.
 ELEMENT_TYPE_TEXT = 1
 ELEMENT_TYPE_TODO = 2
@@ -83,10 +85,6 @@ ELEMENT_TYPE_IMAGE = 3
 RENDER_TYPE_PARAGRAPH = 2
 RENDER_TYPE_TODO_LIST = 3
 RENDER_TYPE_IMAGE = 4
-ROLE_ADMIN = 1
-ROLE_WRITER = 2
-ROLE_READER = 3
-ROLE_KASSIER = 4
 TODO_STATUS_OPEN = 1
 TODO_STATUS_DONE = 3
 EVENT_CATEGORY_GROUP_SESSION = 2
@@ -135,19 +133,21 @@ def create_tenant_and_users(db) -> tuple[Tenant, dict[str, AppUser]]:
     for first_name, last_name, role_code in LEADERS:
         user = AppUser(
             tenant_id=tenant.id,
-            role_id={"admin": ROLE_ADMIN, "writer": ROLE_WRITER, "reader": ROLE_READER, "kassier": ROLE_KASSIER}[role_code],
             first_name=first_name,
             last_name=last_name,
             display_name=f"{first_name} {last_name}",
             email=f"{role_code}@{DEMO_TENANT_SLUG}.hocx.local",
             password_hash=password_hash,
+            login_enabled=True,
             is_active=True,
         )
         db.add(user)
         db.flush()
+        # Standardrollen legt der Trigger beim Anlegen des Mandanten an (Migration 0156_rbac).
+        role_service.set_user_roles(db, None, user, [role_service.system_role(db, tenant.id, role_code)])
         if DEMO_TOTP_SEED:
             db.add(UserMfaFactor(
-                user_id=user.id, factor_type="totp", label="Dev-Seed (DEMO_TOTP_SEED)",
+                user_id=user.id, factor_type="totp", label=DEMO_TOTP_LABEL,
                 secret_encrypted=encrypt_secret(DEMO_TOTP_SEED),
             ))
         users[role_code] = user
@@ -155,32 +155,54 @@ def create_tenant_and_users(db) -> tuple[Tenant, dict[str, AppUser]]:
     return tenant, users
 
 
+DEMO_TOTP_LABEL = "Dev-Seed (DEMO_TOTP_SEED)"
+
+
+def ensure_platform_admin_demo_totp(db) -> None:
+    """Gibt jedem Plattform-Admin einen TOTP-Faktor mit DEMO_TOTP_SEED (Admin-Seite).
+
+    Plattform-Admins überleben den Reseed (eigene Tabelle, kein Mandant). Ein vorhandener
+    Dev-Seed-Faktor bekommt den aktuellen Seed, selbst eingerichtete Faktoren bleiben unberührt.
+    """
+    if not DEMO_TOTP_SEED:
+        return
+    for admin in db.query(PlatformAdmin).filter(PlatformAdmin.is_active.is_(True)).all():
+        factor = (
+            db.query(UserMfaFactor)
+            .filter(UserMfaFactor.platform_admin_id == admin.id, UserMfaFactor.factor_type == "totp",
+                    UserMfaFactor.label == DEMO_TOTP_LABEL)
+            .one_or_none()
+        )
+        if factor is None:
+            db.add(UserMfaFactor(platform_admin_id=admin.id, factor_type="totp", label=DEMO_TOTP_LABEL,
+                                 secret_encrypted=encrypt_secret(DEMO_TOTP_SEED)))
+        else:
+            factor.secret_encrypted = encrypt_secret(DEMO_TOTP_SEED)
+            factor.totp_last_counter = None
+    db.flush()
+
+
 def create_template_structure(db, tenant: Tenant, created_by: AppUser) -> Template:
     cycle_config = CycleConfig(tenant_id=tenant.id, name="Vereinsjahr", reset_month=7, reset_day=31)
     db.add(cycle_config)
     db.flush()
 
-    document_template = DocumentTemplate(
-        tenant_id=tenant.id,
-        code="default_protocol",
-        name="Standardprotokoll",
-        description="Dateisystembasierte Starter-LaTeX-Vorlage",
-        filesystem_path="/app/storage/latex_templates/default_protocol/v1",
-        version=1,
-        is_active=True,
+    # Brand-Profil wie ein Verein es einrichten würde (Document Studio)
+    from app.documents import brand_service
+    from app.documents.brand import BrandTokens
+
+    brand_service.create_brand(
+        db,
+        tenant.id,
+        name="Vereins-CI",
+        tokens=BrandTokens.model_validate(
+            {"colors": {"primary": "#A83F2F", "secondary": "#6F675D", "heading": "#A83F2F"}, "layout": {"title_page": True, "toc": True, "heading_numbering": True}}
+        ),
         is_default=True,
-        configuration_json={
-            "slots": {},
-            "theme": {"font_size": "11pt", "font_family": "default", "primary_color": "A83F2F", "secondary_color": "6F675D"},
-            "options": {"show_toc": True, "numbering_mode": "sections"},
-        },
     )
-    db.add(document_template)
-    db.flush()
 
     template = Template(
         tenant_id=tenant.id,
-        document_template_id=document_template.id,
         name="Sitzungsprotokoll",
         description="Vorlage fuer die woechentliche Vorstandssitzung",
         protocol_number_pattern="Sitzung {n}",
@@ -195,7 +217,7 @@ def create_template_structure(db, tenant: Tenant, created_by: AppUser) -> Templa
     text_def = ElementDefinition(
         tenant_id=tenant.id, element_type_id=ELEMENT_TYPE_TEXT, render_type_id=RENDER_TYPE_PARAGRAPH,
         title="Besprechung", display_title="Besprechung", description="Freitext fuer die Sitzungsnotizen",
-        is_editable=True, allows_multiple_values=False, export_visible=True, latex_template="elements/paragraph.tex",
+        is_editable=True, allows_multiple_values=False, export_visible=True,
         configuration_json={"blocks": [{"id": 1, "title": "Besprechungstext", "block_title": "Besprechungstext",
                                          "render_type_id": RENDER_TYPE_PARAGRAPH, "element_type_id": ELEMENT_TYPE_TEXT,
                                          "is_visible": True, "is_editable": True, "export_visible": True,
@@ -205,7 +227,7 @@ def create_template_structure(db, tenant: Tenant, created_by: AppUser) -> Templa
     todo_def = ElementDefinition(
         tenant_id=tenant.id, element_type_id=ELEMENT_TYPE_TODO, render_type_id=RENDER_TYPE_TODO_LIST,
         title="Offene Punkte", display_title="Offene Punkte", description="Pendenzenliste",
-        is_editable=True, allows_multiple_values=True, export_visible=True, latex_template="elements/todo_list.tex",
+        is_editable=True, allows_multiple_values=True, export_visible=True,
         configuration_json={"blocks": [{"id": 1, "title": "Offene Punkte", "block_title": "Offene Punkte",
                                          "render_type_id": RENDER_TYPE_TODO_LIST, "element_type_id": ELEMENT_TYPE_TODO,
                                          "is_visible": True, "is_editable": True, "export_visible": True,
@@ -215,7 +237,7 @@ def create_template_structure(db, tenant: Tenant, created_by: AppUser) -> Templa
     image_def = ElementDefinition(
         tenant_id=tenant.id, element_type_id=ELEMENT_TYPE_IMAGE, render_type_id=RENDER_TYPE_IMAGE,
         title="Bilder", display_title="Bilder", description="Fotos zu dieser Sitzung",
-        is_editable=True, allows_multiple_values=True, export_visible=True, latex_template="elements/image.tex",
+        is_editable=True, allows_multiple_values=True, export_visible=True,
         configuration_json={"blocks": [{"id": 1, "title": "Bilder", "block_title": "Bilder",
                                          "render_type_id": RENDER_TYPE_IMAGE, "element_type_id": ELEMENT_TYPE_IMAGE,
                                          "is_visible": True, "is_editable": True, "export_visible": True,
@@ -249,10 +271,13 @@ def create_participants(db, tenant: Tenant) -> list[Participant]:
     for name in PARTICIPANTS:
         first_name, last_name = name.split(" ", 1)
         participant = Participant(
-            tenant_id=tenant.id, first_name=first_name, last_name=last_name, display_name=name, is_active=True,
+            tenant_id=tenant.id, first_name=first_name, last_name=last_name, display_name=name,
+            is_active=True,
             joined_at=date.today() - timedelta(days=365 * 2),
         )
         db.add(participant)
+        db.flush()
+        role_service.assign_default_role(db, participant)
         participants.append(participant)
     db.flush()
     return participants
@@ -430,17 +455,27 @@ def create_submission_assignment(db, tenant: Tenant, list_definition: ListDefini
         mime_type = "application/pdf" if file_path.suffix == ".pdf" else "image/jpeg"
         stored_file = StoredFile(
             tenant_id=tenant.id, original_name=file_path.name, mime_type=mime_type,
-            storage_path=f"demo-seed/{file_path.name}", file_size_bytes=len(content), scan_status="clean",
+            storage_path=store_demo_submission_file(db, tenant.id, file_path.name, content, mime_type),
+            file_size_bytes=len(content), scan_status="clean",
         )
         db.add(stored_file)
         db.flush()
 
-        target_dir = Path(settings.abgabebox_storage_root) / "demo-seed"
-        target_dir.mkdir(parents=True, exist_ok=True)
-        (target_dir / file_path.name).write_bytes(content)
-
         db.add(SubmissionUploadFile(upload_id=upload.id, stored_file_id=stored_file.id))
     db.flush()
+
+
+def store_demo_submission_file(db, tenant_id: int, name: str, content: bytes, mime_type: str) -> str:
+    """Legt eine Demo-Abgabe über den Objektspeicher ab und gibt den Schlüssel zurück.
+
+    Der Schlüssel enthält die (bei jedem Lauf neue) Mandanten-ID: Das Löschen des vorherigen
+    Demo-Mandanten hinterlässt für dessen Schlüssel Tombstones, und der Purge-Job entfernt sie
+    kurz darauf physisch. Ein fester Schlüssel wie früher «demo-seed/<name>», direkt auf die
+    Platte geschrieben, verschwand dadurch nach jedem Deploy von 1.2 auf 1.2 wieder.
+    """
+    key = f"demo-seed/tenant-{tenant_id}/{name}"
+    get_object_store().put_bytes(db, ABGABEBOX, key, content, content_type=mime_type)
+    return key
 
 
 def main() -> None:
@@ -478,9 +513,14 @@ def main() -> None:
         create_submission_assignment(db, tenant, list_definition)
         db.commit()
 
+        ensure_platform_admin_demo_totp(db)
+        db.commit()
+
         log(f"Demo tenant '{DEMO_TENANT_NAME}' seeded successfully.")
         log(f"Login: admin@{DEMO_TENANT_SLUG}.hocx.local / writer@{DEMO_TENANT_SLUG}.hocx.local / "
             f"reader@{DEMO_TENANT_SLUG}.hocx.local / kassier@{DEMO_TENANT_SLUG}.hocx.local, password: {DEMO_PASSWORD}")
+        if DEMO_TOTP_SEED:
+            log("TOTP: alle Demo-Konten und Plattform-Admins nutzen DEMO_TOTP_SEED aus der .env")
     except Exception:
         db.rollback()
         raise

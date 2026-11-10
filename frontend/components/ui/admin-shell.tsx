@@ -2,43 +2,57 @@
 
 import Link from "next/link";
 import type { Route } from "next";
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import { browserApiFetch } from "@/lib/api/client";
 import { ToastProvider } from "@/contexts/toast-context";
 import { ConfirmProvider } from "@/contexts/confirm-context";
 import { AdminSessionInfo, AdminTenantPage } from "@/types/api";
+import { AdminAccountSettings } from "@/components/admin/admin-account-settings";
+import { Menu, MenuDivider, MenuItem, Popover } from "@/components/ui/popover";
 import { CopyrightNotice } from "@/components/ui/copyright-notice";
 
-type AdminIconKey = "dashboard" | "tenants" | "pricing" | "users" | "domains" | "errors" | "pipeline" | "admins" | "sso" | "security";
+type AdminIconKey = "dashboard" | "tenants" | "pricing" | "cashflow" | "users" | "domains" | "verifications" | "documents" | "errors" | "pipeline" | "jobs" | "system" | "notifications" | "admins" | "sso" | "security" | "storage" | "backups" | "maintenance";
 
-type AdminNavLink = { href: string; label: string; icon: AdminIconKey; badge?: "count" };
+type AdminNavLink = { href: string; labelKey: string; icon: AdminIconKey; badge?: "count" };
 
-const navGroups: { title: string | null; links: AdminNavLink[] }[] = [
-  { title: null, links: [{ href: "/admin", label: "Dashboard", icon: "dashboard" }] },
+// labelKey/titleKey sind Schluessel im "adminShell"-Namespace (frontend/messages/<locale>/adminShell.json) -
+// uebersetzt wird erst beim Rendern in AdminShell, siehe app-shell-nav.ts fuer dasselbe Muster.
+const navGroups: { titleKey: string | null; links: AdminNavLink[] }[] = [
+  { titleKey: null, links: [{ href: "/admin", labelKey: "nav.dashboard", icon: "dashboard" }] },
   {
-    title: "Mandanten",
+    titleKey: "groups.tenants",
     links: [
-      { href: "/admin/tenants", label: "Mandanten", icon: "tenants", badge: "count" },
-      { href: "/admin/plans", label: "Preise", icon: "pricing" },
-      { href: "/admin/users", label: "Benutzer", icon: "users" },
-      { href: "/admin/domains", label: "Domains", icon: "domains" },
+      { href: "/admin/tenants", labelKey: "nav.tenants", icon: "tenants", badge: "count" },
+      { href: "/admin/plans", labelKey: "nav.pricing", icon: "pricing" },
+      { href: "/admin/cashflow", labelKey: "nav.cashflow", icon: "cashflow" },
+      { href: "/admin/users", labelKey: "nav.users", icon: "users" },
+      { href: "/admin/domains", labelKey: "nav.domains", icon: "domains" },
+      { href: "/admin/verifications", labelKey: "nav.verifications", icon: "verifications" },
     ],
   },
   {
-    title: "System",
+    titleKey: "groups.system",
     links: [
-      { href: "/admin/error-logs", label: "Fehlerprotokoll", icon: "errors" },
-      { href: "/admin/upload-pipeline", label: "Datei-Pipeline", icon: "pipeline" },
+      { href: "/admin/system", labelKey: "nav.systemStatus", icon: "system" },
+      { href: "/admin/error-logs", labelKey: "nav.errorLogs", icon: "errors" },
+      { href: "/admin/audit", labelKey: "nav.auditLog", icon: "security" },
+      { href: "/admin/upload-pipeline", labelKey: "nav.uploadPipeline", icon: "pipeline" },
+      { href: "/admin/jobs", labelKey: "nav.jobs", icon: "jobs" },
+      { href: "/admin/document-templates", labelKey: "nav.documentTemplates", icon: "documents" },
+      { href: "/admin/storage", labelKey: "nav.storage", icon: "storage" },
+      { href: "/admin/backups", labelKey: "nav.backups", icon: "backups" },
+      { href: "/admin/maintenance", labelKey: "nav.maintenance", icon: "maintenance" },
+      { href: "/admin/notifications", labelKey: "nav.notifications", icon: "notifications" },
     ],
   },
   {
-    title: "Zugang",
+    titleKey: "groups.access",
     links: [
-      { href: "/admin/admins", label: "Admin-Accounts", icon: "admins" },
-      { href: "/admin/sso", label: "SSO", icon: "sso" },
-      { href: "/admin/security", label: "Sicherheit", icon: "security" },
+      { href: "/admin/admins", labelKey: "nav.admins", icon: "admins" },
+      { href: "/admin/sso", labelKey: "nav.sso", icon: "sso" },
     ],
   },
 ];
@@ -72,6 +86,13 @@ function AdminNavIcon({ name }: { name: AdminIconKey }) {
         <circle cx="8" cy="8" r="1.4" />
       </>
     ),
+    cashflow: (
+      <>
+        <path d="M3.5 20.5h17" />
+        <path d="M4 15.5l4.5-4.5 3.5 3 7.5-7.5" />
+        <path d="M15 6.5h4.5V11" />
+      </>
+    ),
     users: (
       <>
         <circle cx="9" cy="8" r="3.5" />
@@ -83,6 +104,18 @@ function AdminNavIcon({ name }: { name: AdminIconKey }) {
       <>
         <circle cx="12" cy="12" r="8.5" />
         <path d="M3.5 12h17M12 3.5c2.3 2.4 3.4 5.2 3.4 8.5s-1.1 6.1-3.4 8.5c-2.3-2.4-3.4-5.2-3.4-8.5s1.1-6.1 3.4-8.5z" />
+      </>
+    ),
+    verifications: (
+      <>
+        <path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z" />
+        <path d="M9 12l2 2 4-4" />
+      </>
+    ),
+    documents: (
+      <>
+        <path d="M7 3.5h7l4 4V20.5H7z" />
+        <path d="M14 3.5v4h4M9.5 12h6M9.5 15.5h6" />
       </>
     ),
     errors: (
@@ -106,6 +139,42 @@ function AdminNavIcon({ name }: { name: AdminIconKey }) {
         <path d="M10.4 12.6L20 3M16 7l2.5 2.5M13.5 9.5l2 2" />
       </>
     ),
+    system: (
+      <>
+        <path d="M3 12h4l2.5-6 4 12 2.5-6H21" />
+      </>
+    ),
+    notifications: (
+      <>
+        <path d="M6 16.5V11a6 6 0 0112 0v5.5l1.5 2h-15z" />
+        <path d="M10 20.5a2 2 0 004 0" />
+      </>
+    ),
+    jobs: (
+      <>
+        <circle cx="12" cy="12" r="8.5" />
+        <path d="M12 7.5V12l3 2" />
+      </>
+    ),
+    storage: (
+      <>
+        <ellipse cx="12" cy="6" rx="7.5" ry="2.5" />
+        <path d="M4.5 6v6c0 1.4 3.4 2.5 7.5 2.5s7.5-1.1 7.5-2.5V6" />
+        <path d="M4.5 12v6c0 1.4 3.4 2.5 7.5 2.5s7.5-1.1 7.5-2.5v-6" />
+      </>
+    ),
+    backups: (
+      <>
+        <path d="M4.5 12a7.5 7.5 0 101.9-5" />
+        <path d="M4.5 4.5V8H8" />
+        <path d="M12 8v4l2.5 1.5" />
+      </>
+    ),
+    maintenance: (
+      <>
+        <path d="M14.5 6.5a4 4 0 00-5.3 5.3L4 17l3 3 5.2-5.2a4 4 0 005.3-5.3l-2.4 2.4-2.6-.6-.6-2.6z" />
+      </>
+    ),
     security: (
       <>
         <rect x="4.5" y="10.5" width="15" height="10" rx="2" />
@@ -121,8 +190,12 @@ function AdminNavIcon({ name }: { name: AdminIconKey }) {
 }
 
 export function AdminShell({ children, session }: { children: ReactNode; session: AdminSessionInfo }) {
+  const t = useTranslations("adminShell");
   const pathname = usePathname();
   const router = useRouter();
+  const avatarTriggerRef = useRef<HTMLButtonElement>(null);
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [tenantTotal, setTenantTotal] = useState<number | null>(null);
 
@@ -132,6 +205,10 @@ export function AdminShell({ children, session }: { children: ReactNode; session
       .then((page) => setTenantTotal(page.total))
       .catch(() => setTenantTotal(null));
   }, []);
+
+  useEffect(() => {
+    if (pathname === "/admin/security") setAccountSettingsOpen(true);
+  }, [pathname]);
 
   const activeLink = allNavLinks.find((link) => isActiveLink(link.href, pathname));
   // The backend's require_admin_write already rejects every create/update/delete for a
@@ -160,14 +237,14 @@ export function AdminShell({ children, session }: { children: ReactNode; session
             <div className="brand-mark">hX</div>
             <div>
               <div className="eyebrow">hocX</div>
-              <h2 className="sidebar-title">Platform-Admin</h2>
+              <h2 className="sidebar-title">{t("title")}</h2>
             </div>
           </div>
-          <p className="muted sidebar-copy">Mandanten und Benutzer über das ganze System verwalten.</p>
+          <p className="muted sidebar-copy">{t("tagline")}</p>
           <nav className="sidebar-nav admin-sidebar-nav">
             {navGroups.map((group) => (
-              <div className="admin-nav-group" key={group.title ?? "root"}>
-                {group.title ? <div className="admin-nav-group-title">{group.title}</div> : null}
+              <div className="admin-nav-group" key={group.titleKey ?? "root"}>
+                {group.titleKey ? <div className="admin-nav-group-title">{t(group.titleKey)}</div> : null}
                 <div className="nav-links">
                   {group.links.map((link) => (
                     <Link
@@ -177,7 +254,7 @@ export function AdminShell({ children, session }: { children: ReactNode; session
                       onClick={() => setMobileNavOpen(false)}
                     >
                       <AdminNavIcon name={link.icon} />
-                      <span className="nav-link-label">{link.label}</span>
+                      <span className="nav-link-label">{t(link.labelKey)}</span>
                       {link.badge === "count" && tenantTotal !== null ? <span className="admin-nav-count">{tenantTotal}</span> : null}
                     </Link>
                   ))}
@@ -187,15 +264,15 @@ export function AdminShell({ children, session }: { children: ReactNode; session
           </nav>
           <div className="sidebar-footer">
             <div className="admin-identity">
-              <div className="identity-avatar admin-identity-avatar">
-                <span>{session.admin?.display_name?.slice(0, 1) ?? "A"}</span>
-              </div>
+              <button ref={avatarTriggerRef} type="button" className="identity-button admin-identity-trigger" aria-label={t("accountSettings")} aria-haspopup="menu" aria-expanded={avatarMenuOpen} onClick={() => setAvatarMenuOpen((current) => !current)}>
+                <span className="identity-avatar admin-identity-avatar">{session.admin?.display_name?.slice(0, 1) ?? "A"}</span>
+              </button>
               <div className="admin-identity-copy">
                 <strong>{session.admin?.display_name ?? "..."}</strong>
                 <div className="identity-subtle">{session.admin?.email}</div>
               </div>
               <button type="button" className="button-ghost admin-identity-logout" onClick={() => void logout()}>
-                Logout
+                {t("logout")}
               </button>
             </div>
             <CopyrightNotice />
@@ -208,31 +285,45 @@ export function AdminShell({ children, session }: { children: ReactNode; session
               className="button-ghost mobile-nav-toggle"
               onClick={() => setMobileNavOpen((current) => !current)}
             >
-              {mobileNavOpen ? "Schliessen" : "☰"}
+              {mobileNavOpen ? t("menuToggleClose") : "☰"}
             </button>
-            <nav className="topbar-breadcrumb admin-breadcrumb" aria-label="Brotkrumen">
+            <nav className="topbar-breadcrumb admin-breadcrumb" aria-label={t("breadcrumbNav")}>
               {activeLink && activeLink.href !== "/admin" ? (
                 <>
                   <Link href="/admin" className="topbar-breadcrumb-group">
-                    Platform-Admin
+                    {t("title")}
                   </Link>
                   <span className="topbar-breadcrumb-sep" aria-hidden="true">/</span>
-                  <span aria-current="page">{activeLink.label}</span>
+                  <span aria-current="page">{t(activeLink.labelKey)}</span>
                 </>
               ) : (
-                <span aria-current="page">Platform-Admin</span>
+                <span aria-current="page">{t("title")}</span>
               )}
             </nav>
           </header>
           {isReadOnlyAdmin && (
             <div className="admin-readonly-banner">
-              Nur-Lesezugriff (support): Änderungen sind mit diesem Account nicht möglich.
+              {t("readOnlyBanner")}
             </div>
           )}
           <div className="shell-content">{children}</div>
         </div>
       </div>
     </main>
+    <Popover open={avatarMenuOpen} onOpenChange={setAvatarMenuOpen} anchorRef={avatarTriggerRef} align="start">
+      <Menu>
+        <div className="menu-header">
+          <div className="menu-header-name">{session.admin?.display_name}</div>
+          <div className="menu-header-role">{session.admin?.email}</div>
+        </div>
+        <MenuDivider />
+        <MenuItem onSelect={() => { setAvatarMenuOpen(false); setMobileNavOpen(false); setAccountSettingsOpen(true); }}>
+          {t("accountSettings")}
+        </MenuItem>
+        <MenuItem onSelect={() => { setAvatarMenuOpen(false); void logout(); }}>{t("logout")}</MenuItem>
+      </Menu>
+    </Popover>
+    <AdminAccountSettings open={accountSettingsOpen} onClose={() => { setAccountSettingsOpen(false); if (pathname === "/admin/security") router.replace("/admin"); }} />
     </ConfirmProvider>
     </ToastProvider>
   );

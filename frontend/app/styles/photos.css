@@ -1,0 +1,8 @@
+/* Bereichs-CSS, geladen nur von: photos. Siehe design/DESIGN.md Abschnitt 10. */
+
+/* Fotoübersicht: kompakte Filter, haftende Auswahlleiste und vier Fotospalten. */
+.photos-page { padding: var(--space-5); }
+
+@media (max-width: 640px) {
+  .photos-page { padding: var(--space-4); }
+}

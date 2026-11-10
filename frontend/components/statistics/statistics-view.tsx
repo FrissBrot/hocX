@@ -1,46 +1,58 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { DocumentExportButton } from "@/components/documents/export-dialog";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 
 import { EmptyState } from "@/components/ui/empty-state";
-import {
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from "recharts";
+import { StatusBanner } from "@/components/ui/status-banner";
+import { ActionIcon } from "@/components/ui/action-icons";
 import { StatisticsOverview } from "@/types/api";
 import { CHART_COLORS, CHART_PIE_PALETTE } from "@/lib/constants/chart-colors";
+import { FullscreenCtx, fmtAmount } from "@/components/statistics/statistics-chart-utils";
+import type { PieEntry } from "@/components/statistics/statistics-charts";
+import { fineCountsByParticipant, fineCountsByType, fineTotalsByCurrency, formatFineTotals } from "@/lib/utils/fine-stats";
 
 import { usePopupEscape, usePopupScrollLock } from "@/lib/hooks/use-popup-escape";
 
 type Props = { data: StatisticsOverview | null };
 
-const FullscreenCtx = createContext(false);
-function useChartHeight(normal: number, fs = 480) {
-  return useContext(FullscreenCtx) ? fs : normal;
-}
+// recharts erst nachladen (nur im Browser): die Diagramme brauchen ohnehin die gemessene
+// Containerbreite, serverseitig gerendert wuerden sie nichts zeigen.
+const AttendanceTimeChart = dynamic(
+  () => import("@/components/statistics/statistics-charts").then((m) => m.AttendanceTimeChart),
+  { ssr: false }
+);
+const AttendanceParticipantChart = dynamic(
+  () => import("@/components/statistics/statistics-charts").then((m) => m.AttendanceParticipantChart),
+  { ssr: false }
+);
+const FinanceChart = dynamic(
+  () => import("@/components/statistics/statistics-charts").then((m) => m.FinanceChart),
+  { ssr: false }
+);
+const GroupSessionsChart = dynamic(
+  () => import("@/components/statistics/statistics-charts").then((m) => m.GroupSessionsChart),
+  { ssr: false }
+);
+const GroupAvgChart = dynamic(
+  () => import("@/components/statistics/statistics-charts").then((m) => m.GroupAvgChart),
+  { ssr: false }
+);
+const PieDonutChart = dynamic(
+  () => import("@/components/statistics/statistics-charts").then((m) => m.PieDonutChart),
+  { ssr: false }
+);
+const FinesParticipantChart = dynamic(
+  () => import("@/components/statistics/statistics-charts").then((m) => m.FinesParticipantChart),
+  { ssr: false }
+);
 
 const COLORS = CHART_COLORS;
 const PIE_PALETTE = CHART_PIE_PALETTE;
-
-function fmtMonth(m: string): string {
-  const [y, mo] = m.split("-");
-  return new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString("de-CH", { month: "short", year: "2-digit" });
-}
-
-function fmtAmount(n: number): string {
-  return n.toLocaleString("de-CH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
 
 type Period = "all" | "12m" | "6m" | "3m";
 
@@ -124,6 +136,8 @@ function CycleDropdown({ value, onChange, options }: { value: string; onChange: 
 }
 
 function ChartCard({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
+  const t = useTranslations("statistics");
+  const tCommon = useTranslations("common");
   const [fullscreen, setFullscreen] = useState(false);
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -135,10 +149,8 @@ function ChartCard({ title, children, className = "" }: { title: string; childre
       <div className="stats-fs-card" onClick={(e) => e.stopPropagation()}>
         <div className="stats-fs-header">
           <span className="stats-chart-title">{title}</span>
-          <button type="button" className="stats-fs-close" onClick={() => setFullscreen(false)} aria-label="Schliessen">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <line x1="3" y1="3" x2="13" y2="13" /><line x1="13" y1="3" x2="3" y2="13" />
-            </svg>
+          <button type="button" className="stats-fs-close" onClick={() => setFullscreen(false)} aria-label={tCommon("close")}>
+            <ActionIcon name="close" />
           </button>
         </div>
         <div className="stats-fs-content">
@@ -153,7 +165,7 @@ function ChartCard({ title, children, className = "" }: { title: string; childre
     <div className={`stats-chart-card ${className}`}>
       <div className="stats-chart-header">
         <span className="stats-chart-title">{title}</span>
-        <button type="button" className="stats-expand-btn" onClick={() => setFullscreen(true)} title="Vollbild">
+        <button type="button" className="stats-expand-btn" onClick={() => setFullscreen(true)} title={t("fullscreen")}>
           <ExpandIcon />
         </button>
       </div>
@@ -164,11 +176,12 @@ function ChartCard({ title, children, className = "" }: { title: string; childre
 }
 
 function PeriodPicker({ value, onChange }: { value: Period; onChange: (p: Period) => void }) {
+  const t = useTranslations("statistics");
   const options: { label: string; value: Period }[] = [
-    { label: "3 Mo.", value: "3m" },
-    { label: "6 Mo.", value: "6m" },
-    { label: "12 Mo.", value: "12m" },
-    { label: "Alles", value: "all" },
+    { label: t("period3m"), value: "3m" },
+    { label: t("period6m"), value: "6m" },
+    { label: t("period12m"), value: "12m" },
+    { label: t("periodAll"), value: "all" },
   ];
   return (
     <div className="stats-period-picker">
@@ -181,162 +194,11 @@ function PeriodPicker({ value, onChange }: { value: Period; onChange: (p: Period
   );
 }
 
-function ChartTooltip({ active, payload, label, formatter }: {
-  active?: boolean;
-  payload?: { name: string; value: number; color: string }[];
-  label?: string;
-  formatter?: (val: number, name: string) => string;
-}) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="stats-tooltip">
-      {label && <div className="stats-tooltip-label">{label}</div>}
-      {payload.map((p) => (
-        <div key={p.name} className="stats-tooltip-row">
-          <span className="stats-tooltip-dot" style={{ background: p.color }} />
-          <span className="stats-tooltip-name">{p.name}:</span>
-          <span className="stats-tooltip-val">{formatter ? formatter(p.value, p.name) : p.value}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ── Chart sub-components (need hooks for fullscreen height) ───────────────────
-
-type AttEntry = { month: string; present: number; absent: number; excused: number };
-function AttendanceTimeChart({ data }: { data: AttEntry[] }) {
-  const h = useChartHeight(240);
-  return (
-    <ResponsiveContainer width="100%" height={h}>
-      <BarChart data={data.map((d) => ({ ...d, month: fmtMonth(d.month) }))} barSize={18}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-        <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="var(--muted)" />
-        <YAxis allowDecimals={false} tick={{ fontSize: 11 }} stroke="var(--muted)" width={28} />
-        <Tooltip content={<ChartTooltip />} />
-        <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: "var(--text-xs)" }} />
-        <Bar dataKey="present" name="Anwesend" stackId="a" fill={COLORS.present} />
-        <Bar dataKey="excused" name="Entschuldigt" stackId="a" fill={COLORS.excused} />
-        <Bar dataKey="absent" name="Abwesend" stackId="a" fill={COLORS.absent} radius={[4, 4, 0, 0]} />
-      </BarChart>
-    </ResponsiveContainer>
-  );
-}
-
-type ParticipantAttEntry = { name: string; present: number; absent: number; excused: number };
-function AttendanceParticipantChart({ data }: { data: ParticipantAttEntry[] }) {
-  const h = useChartHeight(Math.max(240, data.length * 32), Math.max(480, data.length * 48));
-  return (
-    <ResponsiveContainer width="100%" height={h}>
-      <BarChart layout="vertical" data={data.map((d) => ({ name: d.name, Anwesend: d.present, Entschuldigt: d.excused, Abwesend: d.absent }))} barSize={14}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
-        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} stroke="var(--muted)" />
-        <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 11 }} stroke="var(--muted)" />
-        <Tooltip content={<ChartTooltip />} />
-        <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: "var(--text-xs)" }} />
-        <Bar dataKey="Anwesend" stackId="a" fill={COLORS.present} />
-        <Bar dataKey="Entschuldigt" stackId="a" fill={COLORS.excused} />
-        <Bar dataKey="Abwesend" stackId="a" fill={COLORS.absent} radius={[0, 4, 4, 0]} />
-      </BarChart>
-    </ResponsiveContainer>
-  );
-}
-
-type FinanceEntry = { month: string; income: number; expenses: number; net: number };
-function FinanceChart({ data }: { data: FinanceEntry[] }) {
-  const h = useChartHeight(240);
-  return (
-    <ResponsiveContainer width="100%" height={h}>
-      <BarChart data={data.map((d) => ({ ...d, month: fmtMonth(d.month) }))} barSize={18}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-        <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="var(--muted)" />
-        <YAxis tick={{ fontSize: 11 }} stroke="var(--muted)" width={50} />
-        <Tooltip content={<ChartTooltip formatter={(v) => `${fmtAmount(v)} CHF`} />} />
-        <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: "var(--text-xs)" }} />
-        <Bar dataKey="income" name="Einnahmen" fill={COLORS.income} radius={[4, 4, 0, 0]} />
-        <Bar dataKey="expenses" name="Ausgaben" fill={COLORS.expenses} radius={[4, 4, 0, 0]} />
-      </BarChart>
-    </ResponsiveContainer>
-  );
-}
-
-type GroupEntry = { name: string; "Alle Termine": number; "Mit Teilnehmern": number; "Ø Teilnehmer": number };
-function GroupSessionsChart({ data }: { data: GroupEntry[] }) {
-  const h = useChartHeight(Math.max(220, data.length * 52), Math.max(480, data.length * 72));
-  return (
-    <ResponsiveContainer width="100%" height={h}>
-      <BarChart layout="vertical" data={data} barSize={14} barGap={3}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
-        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} stroke="var(--muted)" />
-        <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 11 }} stroke="var(--muted)" />
-        <Tooltip content={<ChartTooltip />} />
-        <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: "var(--text-xs)" }} />
-        <Bar dataKey="Alle Termine" fill={COLORS.sessions} radius={[0, 4, 4, 0]} opacity={0.5} />
-        <Bar dataKey="Mit Teilnehmern" fill={COLORS.sessions} radius={[0, 4, 4, 0]} />
-      </BarChart>
-    </ResponsiveContainer>
-  );
-}
-
-function GroupAvgChart({ data }: { data: GroupEntry[] }) {
-  const h = useChartHeight(Math.max(220, data.length * 40), Math.max(480, data.length * 60));
-  return (
-    <ResponsiveContainer width="100%" height={h}>
-      <BarChart layout="vertical" data={data} barSize={18}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
-        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} stroke="var(--muted)" />
-        <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11 }} stroke="var(--muted)" />
-        <Tooltip content={<ChartTooltip formatter={(v) => v.toFixed(1)} />} />
-        <Bar dataKey="Ø Teilnehmer" fill={COLORS.participants} radius={[0, 4, 4, 0]} />
-      </BarChart>
-    </ResponsiveContainer>
-  );
-}
-
-type PieEntry = { name: string; value: number; color: string };
-function PieDonutChart({ data }: { data: PieEntry[] }) {
-  const h = useChartHeight(200, 320);
-  return (
-    <div className="stats-pie-wrap">
-      <ResponsiveContainer width="100%" height={h}>
-        <PieChart>
-          <Pie data={data} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={3} dataKey="value">
-            {data.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
-          </Pie>
-          <Tooltip formatter={(val) => [`${val}`, ""]} />
-        </PieChart>
-      </ResponsiveContainer>
-      <div className="stats-pie-legend">
-        {data.map((d) => (
-          <div key={d.name} className="stats-pie-legend-row">
-            <span className="stats-pie-dot" style={{ background: d.color }} />
-            <span>{d.name} · {d.value}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-type FineEntry = { name: string; count: number };
-function FinesParticipantChart({ data }: { data: FineEntry[] }) {
-  const h = useChartHeight(Math.max(220, data.length * 36), Math.max(480, data.length * 52));
-  return (
-    <ResponsiveContainer width="100%" height={h}>
-      <BarChart layout="vertical" data={data.map((f) => ({ name: f.name, Anzahl: f.count }))} barSize={14}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
-        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} stroke="var(--muted)" />
-        <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 11 }} stroke="var(--muted)" />
-        <Tooltip content={<ChartTooltip />} />
-        <Bar dataKey="Anzahl" fill={COLORS.fines} radius={[0, 4, 4, 0]} />
-      </BarChart>
-    </ResponsiveContainer>
-  );
-}
-
 // ── Main view ─────────────────────────────────────────────────────────────────
 
 export function StatisticsView({ data }: Props) {
+  const t = useTranslations("statistics");
+  const locale = useLocale();
   const router = useRouter();
   const [period, setPeriod] = useState<Period>("all");
   const [attendanceView, setAttendanceView] = useState<"participant" | "time">("time");
@@ -389,25 +251,25 @@ export function StatisticsView({ data }: Props) {
       }
       return Object.entries(merged).map(([name, v]) => ({
         name,
-        "Alle Termine": v.session_count,
-        "Mit Teilnehmern": v.session_count_with_participants,
-        "Ø Teilnehmer": v.sessions_with_p > 0 ? Math.round((v.weighted_participants / v.sessions_with_p) * 10) / 10 : 0,
-      })).sort((a, b) => b["Alle Termine"] - a["Alle Termine"]);
+        allSessions: v.session_count,
+        withParticipants: v.session_count_with_participants,
+        avgParticipants: v.sessions_with_p > 0 ? Math.round((v.weighted_participants / v.sessions_with_p) * 10) / 10 : 0,
+      })).sort((a, b) => b.allSessions - a.allSessions);
     }
     const [configId, year] = selectedCycle.split(":");
     return stats
       .filter((g) => g.cycle_config_id === configId && g.cycle_year === Number(year))
       .map((g) => ({
         name: g.group_name,
-        "Alle Termine": g.session_count,
-        "Mit Teilnehmern": g.session_count_with_participants,
-        "Ø Teilnehmer": Math.round(g.avg_participants * 10) / 10,
+        allSessions: g.session_count,
+        withParticipants: g.session_count_with_participants,
+        avgParticipants: Math.round(g.avg_participants * 10) / 10,
       }))
-      .sort((a, b) => b["Alle Termine"] - a["Alle Termine"]);
+      .sort((a, b) => b.allSessions - a.allSessions);
   }, [data, selectedCycle]);
 
   if (!data) {
-    return <div className="stats-empty"><p className="muted">Keine Statistikdaten verfügbar.</p></div>;
+    return <div className="stats-empty"><p className="muted">{t("noDataAvailable")}</p></div>;
   }
 
   const hasNoStatistics =
@@ -423,36 +285,38 @@ export function StatisticsView({ data }: Props) {
       <div className="stats-page">
         <div className="page-header">
           <div>
-            <h1 className="page-title">Statistiken</h1>
-            <p className="muted">Auswertungen zu Anwesenheit, Todos und Finanzen.</p>
+            <h1 className="page-title">{t("pageTitle")}</h1>
+            <p className="muted">{t("pageIntroEmpty")}</p>
           </div>
         </div>
         <EmptyState
-          title="Noch keine Auswertung möglich"
-          description="Sobald Protokolle mit Anwesenheit, Todos oder Finanzdaten vorliegen, entstehen hier automatisch Diagramme."
+          title={t("emptyTitle")}
+          description={t("emptyDescription")}
           actions={
             <button type="button" className="button-primary" onClick={() => router.push("/protocols")}>
-              Zum ersten Protokoll
+              {t("goToFirstProtocol")}
             </button>
           }
-          hint="Ab dem zweiten Protokoll zeigt der Zeitverlauf Entwicklungen über mehrere Monate."
+          hint={t("emptyHint")}
         />
       </div>
     );
   }
 
   const todoData: PieEntry[] = [
-    { name: "Erledigt", value: data.todos.done, color: COLORS.done },
-    { name: "Offen", value: data.todos.open, color: COLORS.open },
+    { name: t("todoDone"), value: data.todos.done, color: COLORS.done },
+    { name: t("todoOpen"), value: data.todos.open, color: COLORS.open },
   ];
 
-  const fineTypeData: PieEntry[] = data.fines_by_type.map((f, i) => ({
+  const fineTypeData: PieEntry[] = fineCountsByType(data.fines_by_type).map((f, i) => ({
     name: f.label,
     value: f.count,
     color: PIE_PALETTE[i % PIE_PALETTE.length],
   }));
 
-  const top10Fines = data.fines_by_participant.slice(0, 10);
+  const top10Fines = fineCountsByParticipant(data.fines_by_participant).slice(0, 10);
+  // Summen aus den Typen: fines_by_participant enthält für Leser nur die eigene Zeile.
+  const fineTotals = fineTotalsByCurrency(data.fines_by_type);
   const top15Attendance = data.attendance_by_participant.slice(0, 15);
 
   const hasCycles = data.cycles.length > 0;
@@ -463,31 +327,33 @@ export function StatisticsView({ data }: Props) {
 
       <div className="page-header">
         <div>
-          <h1 className="page-title">Statistiken</h1>
-          <p className="muted">Auswertungen und Kennzahlen für diesen Mandanten.</p>
+          <h1 className="page-title">{t("pageTitle")}</h1>
+          <p className="muted">{t("pageIntro")}</p>
         </div>
+        <DocumentExportButton context={{ documentType: "statistics" }} />
       </div>
+      {data.per_person_scope === "own" ? <StatusBanner tone="neutral" message={t("perPersonOwnHint")} /> : null}
 
       {/* ── KPI row ── */}
       <div className="stats-kpi-row">
-        <StatCard label="Protokolle" value={data.protocols_total} />
-        <StatCard label="Mitglieder" value={data.participants_active} sub={`${data.participants_total} gesamt`} />
-        <StatCard label="Todos" value={data.todos.total} sub={`${data.todos.open} offen`} />
-        <StatCard label="Bussen gesamt" value={data.fines_by_participant.reduce((s, f) => s + f.count, 0)} />
-        <StatCard label="Bussenbetrag" value={`${fmtAmount(data.fines_by_participant.reduce((s, f) => s + f.amount, 0))} CHF`} />
+        <StatCard label={t("kpiProtocols")} value={data.protocols_total} />
+        <StatCard label={t("kpiMembers")} value={data.participants_active} sub={t("totalCountSub", { count: data.participants_total })} />
+        <StatCard label={t("kpiTodos")} value={data.todos.total} sub={t("openCountSub", { count: data.todos.open })} />
+        <StatCard label={t("kpiFinesTotal")} value={fineTotals.reduce((s, f) => s + f.count, 0)} />
+        <StatCard label={t("kpiFinesAmount")} value={formatFineTotals(fineTotals, (amount) => fmtAmount(amount, locale))} />
       </div>
 
       {/* ── Section: Gruppen ── */}
       {hasGroups && (
         <div className="stats-section">
           <div className="stats-section-header">
-            <h2 className="stats-section-title">Gruppen</h2>
+            <h2 className="stats-section-title">{t("sectionGroups")}</h2>
             {hasCycles && (
               <CycleDropdown
                 value={selectedCycle}
                 onChange={setSelectedCycle}
                 options={[
-                  { value: "all", label: "Alle Zyklen" },
+                  { value: "all", label: t("allCycles") },
                   ...data.cycles.map((c) => ({ value: `${c.cycle_config_id}:${c.cycle_year}`, label: c.label })),
                 ]}
               />
@@ -495,15 +361,15 @@ export function StatisticsView({ data }: Props) {
           </div>
 
           <div className="stats-grid">
-            <ChartCard title="Termine pro Gruppe">
+            <ChartCard title={t("chartSessionsPerGroup")}>
               {groupsFiltered.length === 0
-                ? <p className="stats-no-data">Keine Daten für diesen Zyklus.</p>
+                ? <p className="stats-no-data">{t("noDataForCycle")}</p>
                 : <GroupSessionsChart data={groupsFiltered} />}
             </ChartCard>
 
-            <ChartCard title="Ø Teilnehmer pro Gruppe">
+            <ChartCard title={t("chartAvgParticipantsPerGroup")}>
               {groupsFiltered.length === 0
-                ? <p className="stats-no-data">Keine Daten für diesen Zyklus.</p>
+                ? <p className="stats-no-data">{t("noDataForCycle")}</p>
                 : <GroupAvgChart data={groupsFiltered} />}
             </ChartCard>
           </div>
@@ -513,37 +379,37 @@ export function StatisticsView({ data }: Props) {
       {/* ── Section: Zeitreihen ── */}
       <div className="stats-section">
         <div className="stats-section-header">
-          <h2 className="stats-section-title">Zeitverlauf</h2>
+          <h2 className="stats-section-title">{t("sectionTimeline")}</h2>
           <div className="stats-toolbar">
             <PeriodPicker value={period} onChange={setPeriod} />
           </div>
         </div>
 
         <div className="stats-grid">
-          <ChartCard title="Anwesenheit" className="stats-chart-wide">
+          <ChartCard title={t("chartAttendance")} className="stats-chart-wide">
             <div className="stats-chart-toolbar">
               <div className="stats-segment">
-                <button type="button" className={`stats-seg-btn${attendanceView === "time" ? " stats-seg-btn-active" : ""}`} onClick={() => setAttendanceView("time")}>Über Zeit</button>
-                <button type="button" className={`stats-seg-btn${attendanceView === "participant" ? " stats-seg-btn-active" : ""}`} onClick={() => setAttendanceView("participant")}>Pro Mitglied</button>
+                <button type="button" className={`stats-seg-btn${attendanceView === "time" ? " stats-seg-btn-active" : ""}`} onClick={() => setAttendanceView("time")}>{t("viewByTime")}</button>
+                <button type="button" className={`stats-seg-btn${attendanceView === "participant" ? " stats-seg-btn-active" : ""}`} onClick={() => setAttendanceView("participant")}>{t("viewByMember")}</button>
               </div>
             </div>
             {attendanceView === "time" ? (
               attendanceTime.length === 0
-                ? <p className="stats-no-data">Keine Anwesenheitsdaten im gewählten Zeitraum.</p>
+                ? <p className="stats-no-data">{t("noAttendanceDataPeriod")}</p>
                 : <AttendanceTimeChart data={attendanceTime} />
             ) : (
               top15Attendance.length === 0
-                ? <p className="stats-no-data">Keine Anwesenheitsdaten vorhanden.</p>
+                ? <p className="stats-no-data">{t("noAttendanceData")}</p>
                 : <AttendanceParticipantChart data={top15Attendance} />
             )}
           </ChartCard>
 
           {data.finance_by_month.length > 0 && (
-            <ChartCard title="Finanzen pro Monat" className="stats-chart-wide">
+            <ChartCard title={t("chartFinancePerMonth")} className="stats-chart-wide">
               <div className="stats-chart-toolbar">
                 {accounts.length > 1 && (
                   <div className="stats-segment">
-                    <button type="button" className={`stats-seg-btn${financeAccount === "all" ? " stats-seg-btn-active" : ""}`} onClick={() => setFinanceAccount("all")}>Alle Konten</button>
+                    <button type="button" className={`stats-seg-btn${financeAccount === "all" ? " stats-seg-btn-active" : ""}`} onClick={() => setFinanceAccount("all")}>{t("allAccounts")}</button>
                     {accounts.map((a) => (
                       <button key={a} type="button" className={`stats-seg-btn${financeAccount === a ? " stats-seg-btn-active" : ""}`} onClick={() => setFinanceAccount(a)}>{a}</button>
                     ))}
@@ -551,7 +417,7 @@ export function StatisticsView({ data }: Props) {
                 )}
               </div>
               {financeMonths.length === 0
-                ? <p className="stats-no-data">Keine Finanzdaten im gewählten Zeitraum.</p>
+                ? <p className="stats-no-data">{t("noFinanceDataPeriod")}</p>
                 : <FinanceChart data={financeMonths} />}
             </ChartCard>
           )}
@@ -561,21 +427,21 @@ export function StatisticsView({ data }: Props) {
       {/* ── Section: Übersicht ── */}
       <div className="stats-section">
         <div className="stats-section-header">
-          <h2 className="stats-section-title">Übersicht</h2>
+          <h2 className="stats-section-title">{t("sectionOverview")}</h2>
         </div>
         <div className="stats-grid">
-          <ChartCard title="Todos Übersicht">
+          <ChartCard title={t("chartTodosOverview")}>
             <PieDonutChart data={todoData} />
           </ChartCard>
 
           {fineTypeData.length > 0 && (
-            <ChartCard title="Bussen nach Typ">
+            <ChartCard title={t("chartFinesByType")}>
               <PieDonutChart data={fineTypeData} />
             </ChartCard>
           )}
 
           {top10Fines.length > 0 && (
-            <ChartCard title="Bussen pro Mitglied (Top 10)" className="stats-chart-wide">
+            <ChartCard title={t("chartFinesPerMemberTop10")} className="stats-chart-wide">
               <FinesParticipantChart data={top10Fines} />
             </ChartCard>
           )}

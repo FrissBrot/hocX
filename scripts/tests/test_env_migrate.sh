@@ -51,6 +51,11 @@ migrate_env_file "$ENV_FILE" > "$TEST_DIR/out.txt"
 grep -q 'entfernt: TRAEFIK_WEB_DOMAIN' "$TEST_DIR/out.txt" || fail "Entfernen nicht gemeldet"
 grep -q 'PHOTO_WORKER_DB_PASSWORD' "$TEST_DIR/out.txt" || fail "Ergaenzen nicht gemeldet"
 
+# MAIN-OPS-001: 1.0.x schrieb den Host-Namen 'prod'; die Anwendung braucht 'production'.
+grep -q 'HOCX_ENVIRONMENT prod -> production' "$TEST_DIR/out.txt" || fail "Umstellung prod -> production nicht gemeldet"
+test "$(value_of "$ENV_FILE" HOCX_ENVIRONMENT)" = production || fail "HOCX_ENVIRONMENT wurde nicht auf production migriert"
+test "$(grep -c 'HOCX_ENVIRONMENT=' "$ENV_FILE")" -eq 1 || fail "HOCX_ENVIRONMENT steht mehrfach in der .env"
+
 if grep -q '^TRAEFIK_WEB_DOMAIN=' "$ENV_FILE"; then
   fail "TRAEFIK_WEB_DOMAIN steht noch in der .env"
 fi
@@ -59,6 +64,9 @@ password="$(value_of "$ENV_FILE" PHOTO_WORKER_DB_PASSWORD)"
 test "$(value_of "$ENV_FILE" PHOTO_WORKER_DATABASE_URL)" = \
   "postgresql+psycopg://hocx_photo_worker:${password}@db:5432/hocx" \
   || fail "PHOTO_WORKER_DATABASE_URL passt nicht zum Passwort"
+# MAIN-OPS-005: Redis-Passwort fuer bestehende Installationen erzeugen.
+grep -q 'ergaenzt: REDIS_PASSWORD' "$TEST_DIR/out.txt" || fail "REDIS_PASSWORD-Ergaenzung nicht gemeldet"
+[[ "$(value_of "$ENV_FILE" REDIS_PASSWORD)" =~ ^[0-9a-f]{64}$ ]] || fail "REDIS_PASSWORD ist kein 64-stelliger Hex-Wert"
 
 # Git behaelt Modus 600 nicht; fuer den Wertevergleich braucht load_env_file eine 600er Kopie.
 cp "$FIXTURE" "$TEST_DIR/original.env"
@@ -66,6 +74,7 @@ chmod 600 "$TEST_DIR/original.env"
 while IFS='=' read -r key _; do
   [[ "$key" =~ ^[A-Z_]+$ ]] || continue
   [ "$key" != TRAEFIK_WEB_DOMAIN ] || continue
+  [ "$key" != HOCX_ENVIRONMENT ] || continue
   test "$(value_of "$ENV_FILE" "$key")" = "$(value_of "$TEST_DIR/original.env" "$key")" \
     || fail "Bestehender Wert von $key wurde veraendert"
 done < <(grep -E '^[A-Z_]+=' "$FIXTURE")
@@ -75,7 +84,7 @@ backups=("$TEST_DIR"/.env.bak-*)
 test "${#backups[@]}" -eq 1 || fail "Erwartet genau eine Sicherung, gefunden: ${#backups[@]}"
 test "$(stat -c '%a' "${backups[0]}")" = 600 || fail "Sicherung hat nicht Modus 600"
 cmp -s "${backups[0]}" "$FIXTURE" || fail "Sicherung entspricht nicht der urspruenglichen .env"
-test -z "$(ls "$TEST_DIR" | grep -F '.tmp.' || true)" || fail "Temporaere Datei uebrig geblieben"
+test -z "$(find "$TEST_DIR" -maxdepth 1 -name '*.tmp.*' -print -quit)" || fail "Temporaere Datei uebrig geblieben"
 
 # --- 3. Idempotenz: zweiter Lauf aendert nichts, legt keine weitere Sicherung an ---------
 cp "$ENV_FILE" "$TEST_DIR/after-first-run"
@@ -113,17 +122,45 @@ fresh_env
 printf "HOCX_SINGLE_TENANT_RESOLUTION='auto'\n" >> "$ENV_FILE"
 test "$(value_of "$ENV_FILE" HOCX_SINGLE_TENANT_RESOLUTION)" = auto
 
+# --- 6b. DEMO_TOTP_SEED: nur auf Testhosts erzeugt, danach unveraendert ---------------------
+fresh_env
+migrate_env_file "$ENV_FILE" > /dev/null
+test -z "$(value_of "$ENV_FILE" DEMO_TOTP_SEED)" || fail "DEMO_TOTP_SEED darf ausserhalb von test nicht entstehen"
+fresh_env
+grep -Ev '^HOCX_ENVIRONMENT=' "$ENV_FILE" > "$ENV_FILE.next" && mv "$ENV_FILE.next" "$ENV_FILE" && chmod 600 "$ENV_FILE"
+printf "HOCX_ENVIRONMENT='test'\nDEMO_TOTP_SEED=\n" >> "$ENV_FILE"
+migrate_env_file "$ENV_FILE" > /dev/null
+seed="$(value_of "$ENV_FILE" DEMO_TOTP_SEED)"
+[[ "$seed" =~ ^[A-Z2-7]{32}$ ]] || fail "DEMO_TOTP_SEED ist kein base32-Seed: $seed"
+test "$(grep -c '^DEMO_TOTP_SEED=' "$ENV_FILE")" -eq 1 || fail "DEMO_TOTP_SEED steht doppelt in der .env"
+migrate_env_file "$ENV_FILE" > /dev/null
+test "$(value_of "$ENV_FILE" DEMO_TOTP_SEED)" = "$seed" || fail "DEMO_TOTP_SEED wurde neu erzeugt"
+
 # --- 7. deploy.sh: Verdrahtung des Update-Pfads --------------------------------------------
 DEPLOY="$REPO_DIR/scripts/deploy.sh"
+# shellcheck disable=SC2016  # Literale Suchmuster in deploy.sh
 migrate_line="$(grep -n '^  migrate_env_file "\$ENV_FILE"' "$DEPLOY" | head -n 1 | cut -d: -f1)"
+# shellcheck disable=SC2016
 load_line="$(grep -n '^load_env_file "\$ENV_FILE"' "$DEPLOY" | head -n 1 | cut -d: -f1)"
-test -n "$migrate_line" && test -n "$load_line" && test "$migrate_line" -lt "$load_line" \
-  || fail "deploy.sh muss die .env vor dem Laden migrieren"
+if ! { test -n "$migrate_line" && test -n "$load_line" && test "$migrate_line" -lt "$load_line"; }; then
+  fail "deploy.sh muss die .env vor dem Laden migrieren"
+fi
+# shellcheck disable=SC2016
 grep -q 'source "\$REPO_DIR/scripts/lib/env_migrate.sh"' "$DEPLOY" || fail "deploy.sh laedt env_migrate.sh nicht"
 grep -q 'HOCX_PHOTO_ANALYSIS_WORKER_IMAGE' "$DEPLOY" || fail "Worker-Image wird nicht aus der Shell entfernt"
 test "$(grep -c 'docs photo-analysis-worker' "$DEPLOY")" -ge 4 \
   || fail "photo-analysis-worker fehlt in Signatur-/Manifest-/Rollback-Listen"
 grep -q '^prepare_thumbnail_dir$' "$DEPLOY" || fail "prepare_thumbnail_dir wird nicht aufgerufen"
+# security.yml wird bei jedem Deploy-Code-Update vom Deploy-Benutzer neu geschrieben; nur der
+# Container-Schritt (ohne root auf dem Host) bringt sie zurueck auf Gruppe 5001.
+sed -n '/^prepare_thumbnail_dir() {/,/^}/p' "$DEPLOY" | grep -q 'infra/traefik/dynamic' \
+  || fail "prepare_thumbnail_dir haertet infra/traefik/dynamic nicht"
+sed -n '/^prepare_runtime_permissions() {/,/^}/p' "$DEPLOY" | grep -v '^ *#' | grep -q 'infra/traefik/dynamic' \
+  && fail "prepare_runtime_permissions verlangt fuer infra/traefik/dynamic wieder root"
+grep -q '"0:0:711"' "$DEPLOY" || fail "deploy.sh setzt letsencrypt nicht auf root 0711"
+# shellcheck disable=SC2016  # Literales Suchmuster
+grep -q 'install -d -m 711 -o root -g root "$REPO_DIR/infra/traefik/letsencrypt"' "$REPO_DIR/scripts/provision_deploy_user.sh" \
+  || fail "provision_deploy_user.sh legt letsencrypt nicht mit 0711 an"
 grep -q 'single_tenant_resolution=auto' "$DEPLOY" || fail "Mandanten-Aufloesung fehlt beim Alembic-Aufruf"
 grep -q 'storage-local/thumbnails' "$REPO_DIR/scripts/provision_deploy_user.sh" \
   || fail "provision_deploy_user.sh legt storage-local/thumbnails nicht an"
@@ -136,9 +173,15 @@ migrate_env_file "$ENV_FILE" > /dev/null
 load_env_file "$ENV_FILE"
 for variable in POSTGRES_PASSWORD APP_DB_PASSWORD AUTH_SECRET ADMIN_AUTH_SECRET \
   INITIAL_ADMIN_PASSWORD ABGABEBOX_DB_PASSWORD ABGABEBOX_CAPTCHA_SESSION_SECRET \
-  PHOTO_WORKER_DB_PASSWORD PHOTO_WORKER_DATABASE_URL; do
+  PHOTO_WORKER_DB_PASSWORD PHOTO_WORKER_DATABASE_URL REDIS_PASSWORD; do
   test -n "${!variable-}" || fail "$variable ist nach der Migration leer"
 done
+
+# --- 7b. Test-Hosts behalten 'test' ----------------------------------------------------------
+fresh_env
+sed -i "s/^HOCX_ENVIRONMENT=.*/HOCX_ENVIRONMENT='test'/" "$ENV_FILE"
+migrate_env_file "$ENV_FILE" > /dev/null
+test "$(value_of "$ENV_FILE" HOCX_ENVIRONMENT)" = test || fail "HOCX_ENVIRONMENT=test wurde veraendert"
 
 # --- 8. Compose loest die migrierte .env fuer Test und Prod ohne fehlende Variablen auf --
 if command -v docker > /dev/null 2>&1 && docker compose version > /dev/null 2>&1; then
@@ -163,5 +206,31 @@ if command -v docker > /dev/null 2>&1 && docker compose version > /dev/null 2>&1
 else
   echo "    (Docker nicht verfuegbar: Compose-Aufloesung uebersprungen)"
 fi
+
+# --- Objektspeicher (1.2.0): Secrets werden einmalig erzeugt und danach nie ueberschrieben ---
+fresh_env
+migrate_env_file "$ENV_FILE" > /dev/null
+key_first="$(value_of "$ENV_FILE" STORAGE_CREDENTIALS_KEY)"
+access_first="$(value_of "$ENV_FILE" LOCAL_S3_ACCESS_KEY)"
+test "${#key_first}" -ge 32 || fail "STORAGE_CREDENTIALS_KEY nicht erzeugt"
+[[ "$access_first" =~ ^GK[0-9a-f]{24}$ ]] || fail "LOCAL_S3_ACCESS_KEY hat nicht das Garage-Format: $access_first"
+[[ "$(value_of "$ENV_FILE" LOCAL_S3_SECRET_KEY)" =~ ^[0-9a-f]{64}$ ]] || fail "LOCAL_S3_SECRET_KEY hat nicht 64 Hex-Zeichen"
+export_key_first="$(value_of "$ENV_FILE" EXPORT_ENCRYPTION_KEY)"
+[[ "$export_key_first" =~ ^[0-9a-f]{64}$ ]] || fail "EXPORT_ENCRYPTION_KEY hat nicht 64 Hex-Zeichen"
+migrate_env_file "$ENV_FILE" > /dev/null
+test "$(value_of "$ENV_FILE" EXPORT_ENCRYPTION_KEY)" = "$export_key_first" || fail "EXPORT_ENCRYPTION_KEY wurde beim zweiten Lauf ueberschrieben"
+test "$(value_of "$ENV_FILE" STORAGE_CREDENTIALS_KEY)" = "$key_first" || fail "STORAGE_CREDENTIALS_KEY wurde beim zweiten Lauf ueberschrieben"
+test "$(value_of "$ENV_FILE" LOCAL_S3_ACCESS_KEY)" = "$access_first" || fail "LOCAL_S3_ACCESS_KEY wurde beim zweiten Lauf ueberschrieben"
+
+# Leere Platzhalter (z. B. "STORAGE_CREDENTIALS_KEY=" aus .env.example) werden ersetzt statt
+# den Schluessel ein zweites Mal anzuhaengen.
+fresh_env
+printf "STORAGE_CREDENTIALS_KEY=\nLOCAL_S3_ACCESS_KEY=''\nLOCAL_S3_ACCESS_KEY=\n" >> "$ENV_FILE"
+migrate_env_file "$ENV_FILE" > /dev/null
+test "$(grep -c '^STORAGE_CREDENTIALS_KEY=' "$ENV_FILE")" -eq 1 || fail "STORAGE_CREDENTIALS_KEY steht mehrfach in der .env"
+test "$(grep -c '^LOCAL_S3_ACCESS_KEY=' "$ENV_FILE")" -eq 1 || fail "LOCAL_S3_ACCESS_KEY steht mehrfach in der .env"
+test "${#key_first}" -ge 32
+[[ "$(value_of "$ENV_FILE" LOCAL_S3_ACCESS_KEY)" =~ ^GK[0-9a-f]{24}$ ]] || fail "Platzhalter LOCAL_S3_ACCESS_KEY nicht ersetzt"
+test "$(stat -c '%a' "$ENV_FILE")" = 600 || fail ".env hat nach dem Ersetzen nicht Modus 600"
 
 echo "Env-Migration 1.0.x -> 1.1.0: ok"

@@ -28,7 +28,7 @@ def setup_upload(monkeypatch):
     monkeypatch.setattr(public, 'tenant_storage_bytes', lambda *a: 0)
     monkeypatch.setattr(public.repository, "get_tenant_storage_quota_bytes", lambda *a, **k: None)
     monkeypatch.setattr(public.repository, "get_tenant_storage_usage_bytes", lambda *a, **k: 0)
-    monkeypatch.setattr(public.repository, 'list_tenant_image_hashes', lambda *a, **k: [])
+    monkeypatch.setattr(public.repository, 'list_assignment_image_hashes', lambda *a, **k: [])
 
 
 def upload(contents):
@@ -55,7 +55,7 @@ def test_all_duplicates_succeed_without_scan_or_quota(monkeypatch):
 def test_mixed_batch_only_scans_and_stores_new_file(monkeypatch):
     setup_upload(monkeypatch)
     monkeypatch.setattr(public.repository, 'count_files_by_element', lambda *a, **k: {})
-    monkeypatch.setattr(public, 'save_to_quarantine', lambda content, **k: ('quarantine/test.pdf', hashlib.sha256(content).hexdigest()))
+    monkeypatch.setattr(public, 'save_to_quarantine', lambda db, content, **k: ('quarantine/test.pdf', hashlib.sha256(content).hexdigest()))
     monkeypatch.setattr(public, 'move_from_quarantine', lambda *a: 'test.pdf')
     saved = []
     monkeypatch.setattr(public.repository, 'insert_full_upload', lambda *a, **k: saved.extend(k['files']))
@@ -74,7 +74,7 @@ def test_concurrent_duplicates_are_silently_accepted_but_scanned_once(monkeypatc
     scans = []
     monkeypatch.setattr(public.repository, 'list_checksums_for_element', lambda *a, **k: set(committed))
     monkeypatch.setattr(public.repository, 'count_files_by_element', lambda *a, **k: {(1, None): len(committed)})
-    monkeypatch.setattr(public, 'save_to_quarantine', lambda content, **k: ('quarantine/test.pdf', hashlib.sha256(content).hexdigest()))
+    monkeypatch.setattr(public, 'save_to_quarantine', lambda db, content, **k: ('quarantine/test.pdf', hashlib.sha256(content).hexdigest()))
     monkeypatch.setattr(public, 'move_from_quarantine', lambda *a: 'test.pdf')
     monkeypatch.setattr(public.repository, 'insert_full_upload', lambda *a, **k: committed.update(f['checksum_sha256'] for f in k['files']))
 
@@ -92,7 +92,9 @@ def test_concurrent_duplicates_are_silently_accepted_but_scanned_once(monkeypatc
                 files=[UploadFile(io.BytesIO(NEW), filename='new.pdf')])
         return await asyncio.wait_for(asyncio.gather(request(), request()), timeout=10)
     results = asyncio.run(run())
-    assert len(scans) == 1 and len(committed) == 1
+    # Scan läuft bewusst vor dem Upload-Lock (CONC-008): gleichzeitige identische Einreichungen
+    # werden ggf. beide gescannt, gespeichert wird genau eine.
+    assert 1 <= len(scans) <= 2 and len(committed) == 1
     assert all(result.ok and result.files_received == 1 and not result.image_duplicate_warnings for result in results)
 
 

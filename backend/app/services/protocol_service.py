@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, timedelta
+from types import SimpleNamespace
 
 from fastapi import HTTPException
 from sqlalchemy import func, or_, select
@@ -9,7 +10,6 @@ from sqlalchemy.orm import Session
 from app.core.cycle_utils import reset_boundary
 from app.models import (
     AttendanceFine,
-    DocumentTemplate,
     ElementDefinition,
     ElementType,
     Event,
@@ -22,6 +22,7 @@ from app.models import (
     ProtocolElementBlock,
     ProtocolImage,
     ProtocolTodo,
+    ProtocolTodoAssignee,
     ProtocolText,
     RenderType,
     Template,
@@ -29,11 +30,12 @@ from app.models import (
     TemplateParticipant,
     TodoStatus,
 )
-from app.services.document_template_service import DocumentTemplateService
 from app.services.access_service import AccessService
 from app.services.block_behavior import resolve_block_behavior
+from app.services.event_filter import event_matches_filter, normalize_event_filter, resolve_cycle_event_ids, sort_and_limit
 from app.repositories.participant_repository import participant_eligible_on
 from app.services import list_snapshot_service
+from app.services.protocol_todo_service import ProtocolTodoService
 from app.services.responsible_label_service import (
     resolve_display_section_title,
     resolve_responsible_label,
@@ -42,34 +44,6 @@ from app.services.responsible_label_service import (
 from app.repositories.protocol_repository import ProtocolRepository
 from app.schemas.protocol import NextSessionAttendanceEntry, NextSessionRead, ProtocolCreateFromTemplate, ProtocolUpdate
 from app.services import public_id_service
-
-
-def _matrix_row_type(row: dict) -> str:
-    """Resolves a matrix row's type across schema generations: new schema uses `row_type`
-    directly; old schema used `embedded_element_type_id` (takes precedence when present) or
-    fell back to `value_type`, defaulting to "text" if none is set."""
-    if row.get("row_type"):
-        return str(row["row_type"])
-    if row.get("embedded_element_type_id"):
-        return str(row["embedded_element_type_id"])
-    return str(row.get("value_type") or "text")
-
-
-def _matrix_row_config(row: dict) -> dict:
-    """Resolves a matrix row's config across schema generations: new schema stores a
-    `row_config` dict directly; old schema spread relevant keys (event_tag_filter,
-    event_title_filter, use_column_title_as_tag, hide_past_events) onto the row itself,
-    alongside an `embedded_configuration_json` dict."""
-    if isinstance(row.get("row_config"), dict):
-        return row["row_config"]
-    cfg: dict = {}
-    old_embedded = row.get("embedded_configuration_json")
-    if isinstance(old_embedded, dict):
-        cfg.update(old_embedded)
-    for k in ("event_tag_filter", "event_title_filter", "use_column_title_as_tag", "hide_past_events"):
-        if k in row:
-            cfg.setdefault(k, row[k])
-    return cfg
 
 
 def _matrix_build_row_values(column: dict, rows: list[dict]) -> dict:
@@ -118,10 +92,158 @@ def _matrix_auto_cell_value(row: dict, col_value: dict) -> dict:
     return {"text_value": text} if text else {}
 
 
+# --- Vorlagen-Abgleich offener Protokolle (ProtocolService.sync_with_template) ---------
+# Schlüssel in configuration_snapshot_json, die im Protokoll erfasste Daten tragen. Alles
+# andere stammt aus der Vorlage und wird beim Abgleich durch den aktuellen Stand ersetzt.
+_SYNC_USER_CONFIG_KEYS = (
+    "manually_hidden",
+    "bullet_items",
+    "attendance_entries",
+    "entries",
+    "selected_date",
+    "selected_time",
+    "session_label",
+    "session_tag",
+    "linked_list_group_by",
+    "linked_list_sort_by",
+    "linked_list_sort_direction",
+    "quick_todos",
+    "quick_todo_tag",
+    "todo_items",
+    "images",
+)
+# Zwischenplatz für bestehende Elemente/Blöcke während des Abgleichs (Sortierung ist
+# eindeutig und nicht negativ).
+_SYNC_PARKED_SORT_INDEX = 1_000_000
+_SYNC_FORM_ROW_VALUE_KEYS = ("text_value", "participant_id", "participant_ids", "event_id")
+
+
+def _sync_has_value(value) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (list, dict)):
+        return bool(value)
+    return True
+
+
+def _sync_form_row_has_value(row: dict) -> bool:
+    return any(_sync_has_value(row.get(key)) for key in _SYNC_FORM_ROW_VALUE_KEYS)
+
+
+def _sync_matrix_column_has_values(column: dict) -> bool:
+    for key in ("row_values", "values"):
+        cells = column.get(key)
+        if not isinstance(cells, dict):
+            continue
+        for cell in cells.values():
+            if isinstance(cell, dict) and any(_sync_has_value(value) for value in cell.values()):
+                return True
+    return False
+
+
+def _sync_merge_form_rows(old_rows: list, fresh_rows: list) -> list[dict]:
+    """Zeilen aus der Vorlage (Beschriftung, Typ, Listenverknüpfung) mit den im Protokoll
+    erfassten Werten derselben Zeilen-ID. Nicht mehr vorhandene Zeilen fallen weg, ausser
+    sie enthalten einen Wert."""
+    old_by_id = {
+        str(row["id"]): row for row in old_rows if isinstance(row, dict) and row.get("id") is not None
+    }
+    merged: list[dict] = []
+    used_ids: set[str] = set()
+    for fresh_row in fresh_rows:
+        row_id = str(fresh_row["id"]) if fresh_row.get("id") is not None else None
+        old_row = old_by_id.get(row_id) if row_id is not None else None
+        if old_row is None:
+            merged.append(fresh_row)
+            continue
+        used_ids.add(row_id)
+        row = dict(fresh_row)
+        if old_row.get("value_type") == fresh_row.get("value_type"):
+            for key in _SYNC_FORM_ROW_VALUE_KEYS:
+                if key in old_row:
+                    row[key] = old_row[key]
+        same_link = (old_row.get("linked_list_id"), old_row.get("linked_list_entry_id")) == (
+            fresh_row.get("linked_list_id"),
+            fresh_row.get("linked_list_entry_id"),
+        )
+        for key, value in old_row.items():
+            if key == "list_snapshot" and not same_link:
+                continue
+            if key not in fresh_row or key == "list_snapshot":
+                row[key] = value
+        merged.append(row)
+    for old_row in old_rows:
+        if not isinstance(old_row, dict):
+            continue
+        if old_row.get("id") is not None and str(old_row["id"]) in used_ids:
+            continue
+        if _sync_form_row_has_value(old_row):
+            merged.append(old_row)
+    return merged
+
+
+def _sync_merge_matrix_columns(old_columns: list, fresh_columns: list, *, allow_column_management: bool) -> list[dict]:
+    """Spalten in der Reihenfolge der Vorlage, Zellwerte aus dem Protokoll. Im Protokoll
+    erzeugte Spalten (gen-*, Spaltenverwaltung) und Spalten mit Werten bleiben erhalten."""
+    old_by_id = {
+        str(column["id"]): column for column in old_columns if isinstance(column, dict) and column.get("id") is not None
+    }
+    merged: list[dict] = []
+    used_ids: set[str] = set()
+    for fresh_column in fresh_columns:
+        column_id = str(fresh_column["id"]) if fresh_column.get("id") is not None else None
+        old_column = old_by_id.get(column_id) if column_id is not None else None
+        if old_column is None:
+            merged.append(fresh_column)
+            continue
+        used_ids.add(column_id)
+        old_cells = old_column.get("row_values") if isinstance(old_column.get("row_values"), dict) else {}
+        fresh_cells = fresh_column.get("row_values") if isinstance(fresh_column.get("row_values"), dict) else {}
+        merged.append({
+            **old_column,
+            "title": fresh_column.get("title"),
+            "title_placeholder": fresh_column.get("title_placeholder"),
+            "event_tag_filter": fresh_column.get("event_tag_filter"),
+            "sort_index": fresh_column.get("sort_index"),
+            # Neue Vorlagen-Zeilen bekommen ihre Vorbelegung, erfasste Werte haben Vorrang.
+            "row_values": {**fresh_cells, **old_cells},
+        })
+    for old_column in old_columns:
+        if not isinstance(old_column, dict):
+            continue
+        column_id = str(old_column.get("id") or "")
+        if column_id and column_id in used_ids:
+            continue
+        if column_id.startswith("gen-") or allow_column_management or _sync_matrix_column_has_values(old_column):
+            merged.append(old_column)
+    return merged
+
+
+def _sync_merge_block_config(old: dict, fresh: dict, element_type_code: str | None) -> dict:
+    """Neue Block-Konfiguration aus der Vorlage (`fresh`), ergänzt um die im Protokoll
+    erfassten Daten des bestehenden Blocks (`old`)."""
+    merged = dict(fresh)
+    for key in _SYNC_USER_CONFIG_KEYS:
+        if key in old:
+            merged[key] = old[key]
+    if element_type_code == "form":
+        if old.get("linked_list_id") == fresh.get("linked_list_id") and "list_snapshot" in old:
+            merged["list_snapshot"] = old["list_snapshot"]
+        merged["rows"] = _sync_merge_form_rows(old.get("rows") or [], fresh.get("rows") or [])
+    elif element_type_code == "matrix":
+        merged["columns"] = _sync_merge_matrix_columns(
+            old.get("columns") or [],
+            fresh.get("columns") or [],
+            allow_column_management=bool(fresh.get("allow_column_management")),
+        )
+    return merged
+
+
 class ProtocolService:
     def __init__(self, repository: ProtocolRepository | None = None) -> None:
         self.repository = repository or ProtocolRepository()
-        self.document_template_service = DocumentTemplateService()
         self.access_service = AccessService()
 
     def list_protocols(
@@ -162,12 +284,19 @@ class ProtocolService:
         return db.scalar(select(ElementType.id).where(ElementType.code == "attendance"))
 
     def get_next_session_attendance(self, db: Session, tenant_id: int) -> NextSessionRead:
-        """The tenant's next open protocol plus its attendance list, if it has one - used by
-        the dashboard's quick-excuse tile."""
-        protocol = self.repository.next_open(db, tenant_id=tenant_id)
-        if protocol is None:
-            return NextSessionRead(protocol=None, attendance_block_id=None, entries=[])
+        protocols = self.repository.upcoming_open(db, tenant_id=tenant_id)
+        return self._session_attendance(db, protocols[0]) if protocols else NextSessionRead()
 
+    def get_upcoming_sessions_attendance(
+        self, db: Session, tenant_id: int, *, protocol_ids: list[int] | None = None,
+    ) -> list[NextSessionRead]:
+        return [
+            self._session_attendance(db, protocol)
+            for protocol in self.repository.upcoming_open(db, tenant_id=tenant_id, protocol_ids=protocol_ids)
+        ]
+
+    def _session_attendance(self, db: Session, protocol: Protocol) -> NextSessionRead:
+        self.refresh_membership_blocks(db, protocol.id)
         attendance_type_id = self._attendance_type_id(db)
         block = None
         if attendance_type_id is not None:
@@ -289,11 +418,18 @@ class ProtocolService:
         many protocols in its scope already have a protocol_date on or before its own date, so
         the number always matches chronological order within the scope regardless of the order
         protocols were created/imported in. exclude_protocol_id lets a protocol that already
-        exists recompute its own rank (see _renumber_later_siblings) without counting itself."""
+        exists recompute its own rank (see _renumber_later_siblings) without counting itself.
+
+        n/n_year/n_month zählen pro Vorlage. n_cycle zählt über alle Vorlagen, die derselben
+        CycleConfig zugeordnet sind (ein Zyklus ist eine gemeinsame Folge, z. B. zählen Hock
+        und Arbeitsweekend im selben Scharjahr durch); eine Vorlage ohne Zyklus behält ein
+        n_cycle pro Vorlage (Kalenderjahr)."""
         cycle_start, cycle_end = self._cycle_bounds(protocol_date, reset_month=reset_month, reset_day=reset_day)
         base_filters = [Protocol.tenant_id == tenant_id, Protocol.template_id == template_id]
         if exclude_protocol_id is not None:
             base_filters.append(Protocol.id != exclude_protocol_id)
+        template = db.get(Template, template_id)
+        cycle_config_id = template.cycle_config_id if template is not None else None
         # Single query with conditional aggregation for per-template counts.
         row = db.execute(
             select(
@@ -322,18 +458,36 @@ class ProtocolService:
         if exclude_protocol_id is not None:
             cycle_all_filters.append(Protocol.id != exclude_protocol_id)
         cycle_all = db.scalar(select(func.count(Protocol.id)).where(*cycle_all_filters)) or 0
+        cycle_count = row.cycle
+        if cycle_config_id is not None:
+            cycle_count = (
+                db.scalar(
+                    select(func.count(Protocol.id))
+                    .join(Template, Template.id == Protocol.template_id)
+                    .where(*cycle_all_filters, Template.cycle_config_id == cycle_config_id)
+                )
+                or 0
+            )
         return {
             "n": row.overall + 1,
             "n_year": row.yearly + 1,
             "n_month": row.monthly + 1,
-            "n_cycle": row.cycle + 1,
+            "n_cycle": cycle_count + 1,
             "n_cycle_all": cycle_all + 1,
             "cycle_year_start": cycle_start.year,
             "cycle_year_end": cycle_end.year,
         }
 
     def _add_virtual_dates(
-        self, counts: dict[str, int], *, extra_dates: list[date], target_date: date, reset_month: int, reset_day: int
+        self,
+        counts: dict[str, int],
+        *,
+        extra_dates: list[date],
+        target_date: date,
+        reset_month: int,
+        reset_day: int,
+        same_template: bool = True,
+        same_cycle: bool = True,
     ) -> dict[str, int]:
         """Adds protocols that don't exist in the DB yet (or, for preview_title, may never
         exist as a Protocol row at all - see the word-import queue's still-open sibling
@@ -341,18 +495,23 @@ class ProtocolService:
         be <= target_date (it's being added because it ranks before/with target_date, same
         convention _sequence_counts uses for real rows) - later dates are ignored defensively.
         Cycle bounds are derived from target_date, not extra_date: the question is always
-        "does this extra date fall into target_date's cycle", never the reverse."""
+        "does this extra date fall into target_date's cycle", never the reverse.
+        same_template/same_cycle: gehört das virtuelle Protokoll zu einer anderen Vorlage,
+        zählt es nicht in n/n_year/n_month, und in n_cycle nur bei gleichem Zyklus (siehe
+        _sequence_counts)."""
         cycle_start, cycle_end = self._cycle_bounds(target_date, reset_month=reset_month, reset_day=reset_day)
         for extra_date in extra_dates:
             if extra_date > target_date:
                 continue
-            counts["n"] += 1
-            if extra_date.year == target_date.year:
-                counts["n_year"] += 1
-                if extra_date.month == target_date.month:
-                    counts["n_month"] += 1
+            if same_template:
+                counts["n"] += 1
+                if extra_date.year == target_date.year:
+                    counts["n_year"] += 1
+                    if extra_date.month == target_date.month:
+                        counts["n_month"] += 1
             if cycle_start <= extra_date <= cycle_end:
-                counts["n_cycle"] += 1
+                if same_cycle:
+                    counts["n_cycle"] += 1
                 counts["n_cycle_all"] += 1
         return counts
 
@@ -387,8 +546,9 @@ class ProtocolService:
           tenant-wide count (_sequence_counts's cycle_all query has no template_id filter), so
           inserting an earlier-dated protocol into THIS template can also shift the n_cycle_all
           rank of a later-dated, still-open protocol that belongs to a DIFFERENT template - but
-          only if that other template's own pattern actually uses {n_cycle_all} (its n/n_year/
-          n_month/n_cycle are per-template and can't be affected by an insert elsewhere). Cross-
+          only if that other template's own pattern actually uses {n_cycle_all}, oder {n_cycle}
+          wenn sie demselben Zyklus zugeordnet ist (n/n_year/n_month sind pro Vorlage und werden
+          von einem Einschub anderswo nicht berührt). Cross-
           template siblings are recomputed against `reset_month`/`reset_day` - i.e. the inserted
           protocol's own cycle config - since {n_cycle_all} only makes sense as a single shared
           counter when every template using it shares the same cycle boundary.
@@ -418,9 +578,16 @@ class ProtocolService:
             )
         ).all()
         for sibling, sibling_template in cross_template_rows:
-            if self._pattern_uses_token(
-                sibling_template.protocol_number_pattern, "n_cycle_all"
-            ) or self._pattern_uses_token(sibling_template.title_pattern, "n_cycle_all"):
+            shift_tokens = ["n_cycle_all"]
+            # n_cycle ist eine gemeinsame Folge aller Vorlagen desselben Zyklus (siehe
+            # _sequence_counts) - ein Einschub hier verschiebt also auch deren n_cycle.
+            if template.cycle_config_id is not None and sibling_template.cycle_config_id == template.cycle_config_id:
+                shift_tokens.append("n_cycle")
+            if any(
+                self._pattern_uses_token(sibling_template.protocol_number_pattern, token)
+                or self._pattern_uses_token(sibling_template.title_pattern, token)
+                for token in shift_tokens
+            ):
                 pairs.append((sibling, sibling_template))
 
         if not pairs:
@@ -450,6 +617,9 @@ class ProtocolService:
                 target_date=sibling.protocol_date,
                 reset_month=reset_month,
                 reset_day=reset_day,
+                same_template=sibling_template.id == template.id,
+                same_cycle=sibling_template.id == template.id
+                or (template.cycle_config_id is not None and sibling_template.cycle_config_id == template.cycle_config_id),
             )
             # number_blocked tracks whether the number's own collision check (below) refused
             # to apply the new rank - if so, the title must NOT be re-rendered with that same
@@ -538,6 +708,47 @@ class ProtocolService:
             rendered = rendered.replace(token, value)
         return rendered
 
+    def _pick_available_number(self, db: Session, *, tenant_id: int, template: Template,
+                               counts: dict[str, int], protocol_date: date) -> str | None:
+        has_counter = any(self._pattern_uses_token(template.protocol_number_pattern, token)
+                          for token in ("n", "n_year", "n_month", "n_cycle", "n_cycle_all"))
+        for bump in range(100 if has_counter else 1):
+            bumped = {**counts, **{key: counts[key] + bump
+                       for key in ("n", "n_year", "n_month", "n_cycle", "n_cycle_all")}}
+            candidate = self._format_pattern(template.protocol_number_pattern, counts=bumped, protocol_date=protocol_date)
+            if not candidate:
+                break
+            if not db.scalar(select(Protocol.id).where(
+                Protocol.tenant_id == tenant_id, Protocol.protocol_number == candidate
+            )):
+                return candidate
+        return None
+
+    def preview_names(self, db: Session, *, tenant_id: int, template: Template,
+                      protocol_date: date) -> dict[str, str | None]:
+        """Dieselbe Nummernwahl wie beim Erstellen, ohne bleibende Änderungen.
+
+        Rückdatierte Protokolle verschieben offene Geschwister. Diese Verschiebung
+        wird in einem stets zurückgerollten Savepoint simuliert, damit auch dort
+        die Vorschau die tatsächliche freie Nummer zeigt.
+        """
+        from app.models import CycleConfig
+        cfg = db.get(CycleConfig, template.cycle_config_id) if template.cycle_config_id else None
+        reset_month, reset_day = (cfg.reset_month, cfg.reset_day) if cfg else (12, 31)
+        counts = self._sequence_counts(db, tenant_id=tenant_id, template_id=template.id,
+                                      protocol_date=protocol_date, reset_month=reset_month, reset_day=reset_day)
+        savepoint = db.begin_nested()
+        try:
+            self._renumber_later_siblings(db, tenant_id=tenant_id, template=template,
+                                         protocol_date=protocol_date, reset_month=reset_month, reset_day=reset_day)
+            return {
+                "protocol_number": self._pick_available_number(db, tenant_id=tenant_id, template=template,
+                                                               counts=counts, protocol_date=protocol_date),
+                "title": self._format_pattern(template.title_pattern, counts=counts, protocol_date=protocol_date),
+            }
+        finally:
+            savepoint.rollback()
+
     def preview_title(
         self,
         db: Session,
@@ -580,41 +791,18 @@ class ProtocolService:
         rendered = self._format_pattern(template.title_pattern, counts=counts, protocol_date=protocol_date)
         return rendered or fallback or protocol_date.strftime("%d.%m.%Y")
 
-    def _responsible_participant_name(self, participant: Participant | None, *, mode: str, fallback_id: int | None = None) -> str:
-        if participant is None:
-            return f"Teilnehmer {fallback_id}" if fallback_id else ""
-        if mode == "first_name":
-            return (participant.first_name or "").strip() or participant.display_name
-        if mode == "last_name":
-            return (participant.last_name or "").strip() or participant.display_name
-        return participant.display_name
-
-    def _template_element_responsible_label(self, db: Session, configuration_json: dict | None) -> str:
-        template_config = configuration_json or {}
-        responsibility = template_config.get("responsibility")
+    def _template_element_responsible_label(self, db: Session, configuration_json: dict | None, tenant_id: int | None) -> str:
+        """Verantwortliche aus der Vorlage; mit einer Tabellenzeile verknüpfte Zuweisungen lesen den
+        aktuellen Wert der Zeile (wie resolve_display_section_title im Protokoll)."""
+        responsibility = (configuration_json or {}).get("responsibility")
         if not isinstance(responsibility, dict):
             return ""
         assignments = responsibility.get("assignments")
         if not isinstance(assignments, list):
             return ""
-        mode = str(responsibility.get("name_display_mode") or "display_name")
-        names: list[str] = []
-        seen_ids: set[int] = set()
-        for assignment in assignments:
-            if not isinstance(assignment, dict):
-                continue
-            try:
-                participant_id = int(assignment.get("participant_id") or 0)
-            except (TypeError, ValueError):
-                participant_id = 0
-            if not participant_id or participant_id in seen_ids:
-                continue
-            seen_ids.add(participant_id)
-            participant = db.get(Participant, participant_id)
-            participant_name = self._responsible_participant_name(participant, mode=mode, fallback_id=participant_id)
-            if participant_name:
-                names.append(participant_name)
-        return ", ".join(names)
+        return resolve_responsible_label(
+            db, assignments, str(responsibility.get("name_display_mode") or "display_name"), live=True, tenant_id=tenant_id
+        )
 
     def _payload_key(
         self,
@@ -813,6 +1001,72 @@ class ProtocolService:
         entries.sort(key=lambda entry: (str(entry["date"]), str(entry["type"]), str(entry["participant_name"])))
         return entries
 
+    def refresh_membership_blocks(self, db: Session, protocol_id: int, *, commit: bool = True) -> None:
+        """Mitgliedschaftsdaten offener Protokolle nachführen; manuelle Werte erhalten.
+
+        Die bei Erstellung gespeicherten Listen veralten bei späteren Datumsänderungen.
+        Abgeschlossene Protokolle behalten hingegen ihren historischen Stand.
+        """
+        protocol = self.repository.get(db, protocol_id)
+        if protocol is None or protocol.status == "abgeschlossen":
+            return
+        rows = db.execute(
+            select(ProtocolElementBlock, ElementType.code)
+            .join(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
+            .join(ElementType, ElementType.id == ProtocolElementBlock.element_type_id)
+            .where(ProtocolElement.protocol_id == protocol_id, ElementType.code.in_(["attendance", "entry_exit"]))
+        ).all()
+        if not rows:
+            return
+        participants = list(db.scalars(
+            select(Participant)
+            .join(TemplateParticipant, TemplateParticipant.participant_id == Participant.id)
+            .where(
+                TemplateParticipant.template_id == protocol.template_id,
+                TemplateParticipant.exclude_from_attendance.is_(False),
+                Participant.tenant_id == protocol.tenant_id,
+                participant_eligible_on(protocol.protocol_date),
+            )
+            .order_by(Participant.display_name.asc(), Participant.id.asc())
+        ))
+        changed = False
+        for block, code in rows:
+            config = dict(block.configuration_snapshot_json or {})
+            if code == "attendance":
+                previous = {entry.get("participant_id"): entry for entry in config.get("attendance_entries", [])}
+                excluded_ids = set(self._coerce_int_list(config.get("attendance_excluded_participant_ids")))
+                config["attendance_entries"] = [
+                    {**previous.get(participant.id, {"status": "absent"}),
+                     "participant_id": participant.id, "participant_name": participant.display_name}
+                    for participant in participants
+                    if participant.id not in excluded_ids
+                ]
+            else:
+                previous = {
+                    (entry.get("participant_id"), entry.get("type"), entry.get("date")): entry
+                    for entry in config.get("entries", [])
+                }
+                entries = self._entry_exit_entries(
+                    db, tenant_id=protocol.tenant_id, template_id=protocol.template_id,
+                    protocol_date=protocol.protocol_date, current_protocol_id=protocol.id,
+                    block_config=config,
+                )
+                config["entries"] = [
+                    {**entry, "hidden": bool(previous.get(
+                        (entry["participant_id"], entry["type"], entry["date"]), {}
+                    ).get("hidden", False))}
+                    for entry in entries
+                ]
+            if config != (block.configuration_snapshot_json or {}):
+                block.configuration_snapshot_json = config
+                db.add(block)
+                changed = True
+        if changed:
+            if commit:
+                db.commit()
+            else:
+                db.flush()
+
     def _manually_hidden_event_ids(
         self,
         db: Session,
@@ -873,20 +1127,13 @@ class ProtocolService:
         current_protocol_id: int,
         repeat_config: dict,
     ) -> list[dict[str, object]]:
-        statement = select(Event).where(Event.tenant_id == tenant_id)
-        tag_filters = [t.strip() for t in str(repeat_config.get("event_tag_filter") or "").lower().split(",") if t.strip()]
-        title_filter = str(repeat_config.get("event_title_filter") or "").strip().lower()
-        description_filter = str(repeat_config.get("event_description_filter") or "").strip().lower()
-        date_mode = str(repeat_config.get("event_date_mode") or "relative_window")
-        window_start_days = int(repeat_config.get("event_window_start_days") or 0)
-        window_end_days = int(repeat_config.get("event_window_end_days") or 14)
+        # Gemeinsamer Terminfilter (event_filter.py), gespeichert als repeat_event_filter.
+        event_filter = normalize_event_filter(repeat_config.get("repeat_event_filter"), default_range_mode="window")
         include_unlisted_past = bool(repeat_config.get("event_include_unlisted_past", False))
-        only_before_protocol_date = bool(repeat_config.get("event_only_before_protocol_date", False))
-        start_date = protocol_date + timedelta(days=min(window_start_days, window_end_days))
-        end_date = protocol_date + timedelta(days=max(window_start_days, window_end_days))
-        if date_mode == "all_future" and not include_unlisted_past:
-            statement = statement.where(Event.event_date >= protocol_date)
-        statement = statement.order_by(Event.event_date.asc(), Event.id.asc())
+        protocol_ref = SimpleNamespace(tenant_id=tenant_id, template_id=template_id, protocol_date=protocol_date)
+        cycle_event_ids = resolve_cycle_event_ids(db, event_filter, protocol_ref)
+        catchup_filter = {**event_filter, "range": {"mode": "all"}}
+        statement = select(Event).where(Event.tenant_id == tenant_id).order_by(Event.event_date.asc(), Event.id.asc())
         recently_listed_ids = (
             self._recently_listed_event_ids(
                 db,
@@ -906,28 +1153,25 @@ class ProtocolService:
             template_element_id=template_element_id,
             current_protocol_id=current_protocol_id,
         )
-        contexts: list[dict[str, object]] = []
+        matching_events = []
         for event in db.scalars(statement):
-            event_end_date = event.event_end_date or event.event_date
-            event_tag_lower = (event.tag or "").lower()
-            if tag_filters and not any(t in event_tag_lower for t in tag_filters):
-                continue
-            if title_filter and title_filter not in (event.title or "").lower():
-                continue
-            if description_filter and description_filter not in (event.description or "").lower():
-                continue
             if event.id in manually_hidden_ids:
                 continue
-            if only_before_protocol_date and event.event_date > protocol_date:
-                continue
-            in_primary_window = (
-                event_end_date >= protocol_date
-                if date_mode == "all_future"
-                else event_end_date >= start_date and event.event_date <= end_date
+            event_end_date = event.event_end_date or event.event_date
+            in_primary_window = event_matches_filter(
+                event, event_filter, protocol_date=protocol_date, cycle_event_ids=cycle_event_ids
             )
-            include_as_past_catchup = include_unlisted_past and event_end_date < protocol_date and event.id not in recently_listed_ids
-            if not in_primary_window and not include_as_past_catchup:
-                continue
+            include_as_past_catchup = (
+                include_unlisted_past
+                and event_end_date < protocol_date
+                and event.id not in recently_listed_ids
+                and event_matches_filter(event, catchup_filter, protocol_date=protocol_date, cycle_event_ids=cycle_event_ids)
+            )
+            if in_primary_window or include_as_past_catchup:
+                matching_events.append(event)
+        contexts: list[dict[str, object]] = []
+        for event in sort_and_limit(matching_events, event_filter):
+            event_end_date = event.event_end_date or event.event_date
             date_range = event.event_date.strftime("%d.%m.%Y") if event_end_date == event.event_date else f"{event.event_date.strftime('%d.%m.%Y')} - {event_end_date.strftime('%d.%m.%Y')}"
             contexts.append(
                 {
@@ -1131,6 +1375,7 @@ class ProtocolService:
         current_protocol_id: int,
         repeat_source_type: str | None = None,
         repeat_source_id: int | None = None,
+        assignee_participant_id: int | None = None,
     ) -> list[ProtocolTodo]:
         latest_protocol_id = self._latest_previous_protocol_id(
             db,
@@ -1160,6 +1405,16 @@ class ProtocolService:
         )
         if closed_status_ids:
             query = query.where(ProtocolTodo.todo_status_id.not_in(closed_status_ids))
+        if assignee_participant_id is not None:
+            # Block-Option «Nur Todos dieser Person übernehmen» (todo_assignee_participant_id).
+            query = query.where(
+                or_(
+                    ProtocolTodo.assigned_participant_id == assignee_participant_id,
+                    ProtocolTodo.id.in_(
+                        select(ProtocolTodoAssignee.protocol_todo_id).where(ProtocolTodoAssignee.participant_id == assignee_participant_id)
+                    ),
+                )
+            )
         todos: list[ProtocolTodo] = []
         for todo, block in db.execute(query).all():
             block_config = block.configuration_snapshot_json or {}
@@ -1265,8 +1520,6 @@ class ProtocolService:
             if event_id is None:
                 raise ValueError("Event does not belong to current tenant")
 
-        selected_document_template_id = template.document_template_id
-        document_template = db.get(DocumentTemplate, selected_document_template_id) if selected_document_template_id else None
         from app.models import CycleConfig
         cycle_cfg = db.get(CycleConfig, template.cycle_config_id) if template.cycle_config_id else None
         counts = self._sequence_counts(
@@ -1285,28 +1538,11 @@ class ProtocolService:
                 "{cycle_year_end}": str(counts["cycle_year_end"]),
             }
 
-        _has_counter_token = any(
-            self._pattern_uses_token(template.protocol_number_pattern, token)
-            for token in ("n", "n_year", "n_month", "n_cycle", "n_cycle_all")
-        )
-
-        def _pick_protocol_number(current_counts: dict[str, int]) -> tuple[str | None, dict[str, int]]:
-            if payload.protocol_number:
-                return payload.protocol_number, current_counts
-            # A pattern with no counter token at all formats identically regardless of
-            # `bump` - every one of the 100 iterations below would recompute the exact
-            # same candidate and re-run the exact same collision SELECT (audit finding,
-            # 2026-08-25). Try it exactly once instead.
-            bump_range = range(100) if _has_counter_token else range(1)
-            for bump in bump_range:
-                bumped = {**current_counts, "n": current_counts["n"] + bump, "n_year": current_counts["n_year"] + bump, "n_month": current_counts["n_month"] + bump, "n_cycle": current_counts["n_cycle"] + bump, "n_cycle_all": current_counts["n_cycle_all"] + bump}
-                candidate = self._format_pattern(template.protocol_number_pattern, counts=bumped, protocol_date=payload.protocol_date)
-                if not candidate:
-                    break
-                exists = db.scalar(select(Protocol.id).where(Protocol.tenant_id == tenant_id, Protocol.protocol_number == candidate))
-                if not exists:
-                    return candidate, bumped
-            return None, current_counts
+        def _pick_protocol_number(current_counts: dict[str, int]) -> str | None:
+            return payload.protocol_number or self._pick_available_number(
+                db, tenant_id=tenant_id, template=template,
+                counts=current_counts, protocol_date=payload.protocol_date,
+            )
 
         if not payload.protocol_number:
             # Auto-derived number/title: slot this protocol into its true chronological position
@@ -1338,7 +1574,7 @@ class ProtocolService:
         max_attempts = 1 if payload.protocol_number else 5
         protocol: Protocol | None = None
         for attempt in range(max_attempts):
-            protocol_number, counts = _pick_protocol_number(counts)
+            protocol_number = _pick_protocol_number(counts)
             title = payload.title or self._format_pattern(
                 template.title_pattern,
                 counts=counts,
@@ -1350,9 +1586,6 @@ class ProtocolService:
                 tenant_id=tenant_id,
                 template_id=template.id,
                 template_version=template.version,
-                document_template_id=selected_document_template_id,
-                document_template_version=document_template.version if document_template else None,
-                document_template_path_snapshot=None,
                 protocol_number=protocol_number,
                 title=title,
                 protocol_date=payload.protocol_date,
@@ -1363,7 +1596,7 @@ class ProtocolService:
             try:
                 # SAVEPOINT scoped to just this insert attempt (same pattern as
                 # ParticipantService.import_csv's per-row retry) - a unique-constraint collision
-                # only unwinds the failed Protocol row, not the template/document_template/
+                # only unwinds the failed Protocol row, not the template/
                 # cycle_cfg already read above, so the retry can immediately re-query fresh
                 # counts and try again without disturbing anything else in the session.
                 with db.begin_nested():
@@ -1386,464 +1619,24 @@ class ProtocolService:
                 )
 
 
-        text_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "text"))
-        todo_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "todo"))
-        display_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "display"))
-        static_text_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "static_text"))
-        form_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "form"))
-        event_list_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "event_list"))
-        bullet_list_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "bullet_list"))
-        attendance_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "attendance"))
-        session_date_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "session_date"))
-        matrix_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "matrix"))
-        image_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "image"))
-        entry_exit_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "entry_exit"))
-
-        template_rows = db.execute(
-            select(TemplateElement, ElementDefinition)
-            .join(ElementDefinition, ElementDefinition.id == TemplateElement.element_definition_id)
-            .where(TemplateElement.template_id == template.id)
-            .order_by(TemplateElement.sort_index.asc(), TemplateElement.id.asc())
-        ).all()
-
-        visible_element_index = 0
-        for template_element, definition in template_rows:
-            legacy_repeat_config = template_element.configuration_json or {}
-            responsible_label = self._template_element_responsible_label(db, legacy_repeat_config)
-            element_title = self._render_context_text(definition.title, {"tokens": cycle_tokens}) if cycle_tokens else definition.title
-            section_title = f"{element_title} ({responsible_label})" if responsible_label else element_title
-            responsibility_config = legacy_repeat_config.get("responsibility")
-            responsibility_config = responsibility_config if isinstance(responsibility_config, dict) else {}
-            responsible_assignments = responsibility_config.get("assignments")
-            responsible_assignments = responsible_assignments if isinstance(responsible_assignments, list) else None
-            responsible_name_display_mode = str(responsibility_config.get("name_display_mode") or "display_name")
-            definition_blocks = sorted(
-                (definition.configuration_json or {}).get("blocks", []),
-                key=lambda entry: (entry.get("sort_index", 0), entry.get("id", 0)),
-            )
-            generated_blocks: list[tuple[dict, dict[str, object] | None, int]] = []
-            next_block_sort_index = 10
-            for block in definition_blocks:
-                repeat_contexts = self._block_repeat_contexts(
-                    db,
-                    tenant_id=tenant_id,
-                    template_id=template.id,
-                    template_element_id=template_element.id,
-                    protocol_date=payload.protocol_date,
-                    current_protocol_id=protocol.id,
-                    block=block,
-                    legacy_repeat_config=legacy_repeat_config if len(definition_blocks) == 1 else {},
-                )
-                if not repeat_contexts:
-                    continue
-                for repeat_context in repeat_contexts:
-                    generated_blocks.append((block, self._with_cycle_tokens(repeat_context, cycle_tokens), next_block_sort_index))
-                    next_block_sort_index += 10
-            show_when_empty = bool((definition.configuration_json or {}).get("show_when_empty", False))
-            if not generated_blocks and not show_when_empty:
-                continue
-            visible_element_index += 1
-            previous_element = self._previous_protocol_element(
+        type_ids = self._element_type_ids(db)
+        sort_index = 10
+        for template_element, definition in self._template_rows(db, template.id):
+            created_element = self._materialize_template_element(
                 db,
-                tenant_id=tenant_id,
-                template_element_id=template_element.id,
-                protocol_date=payload.protocol_date,
-                current_protocol_id=protocol.id,
+                protocol=protocol,
+                template=template,
+                template_element=template_element,
+                definition=definition,
+                sort_index=sort_index,
+                cycle_tokens=cycle_tokens,
+                type_ids=type_ids,
             )
-            previous_payloads = (
-                self._previous_block_payloads(db, protocol_element_id=previous_element.id)
-                if previous_element is not None
-                else {}
-            )
-            last_completed_element = self._previous_protocol_element(
-                db,
-                tenant_id=tenant_id,
-                template_element_id=template_element.id,
-                protocol_date=payload.protocol_date,
-                current_protocol_id=protocol.id,
-                status="abgeschlossen",
-            )
-            last_completed_list_snapshots = (
-                self._previous_completed_block_list_snapshots(db, protocol_element_id=last_completed_element.id)
-                if last_completed_element is not None
-                else {}
-            )
-            protocol_element = ProtocolElement(
-                protocol_id=protocol.id,
-                template_element_id=template_element.id,
-                sort_index=visible_element_index * 10,
-                section_name_snapshot=section_title,
-                element_title_snapshot=element_title,
-                responsible_assignments_snapshot=responsible_assignments,
-                responsible_name_display_mode=responsible_name_display_mode,
-                section_order_snapshot=visible_element_index * 10,
-                is_required_snapshot=False,
-                is_visible_snapshot=True,
-                export_visible_snapshot=True,
-            )
-            db.add(protocol_element)
-            db.flush()
-
-            for block, repeat_context, resolved_sort_index in generated_blocks:
-                block_config = dict(block.get("configuration_json") or {})
-                behavior = resolve_block_behavior(template_element.configuration_json, block)
-                carry_from_last_protocol = bool(behavior["copy_from_last_protocol"])
-                repeat_source_type = str(repeat_context.get("source_type") or "") if repeat_context else ""
-                repeat_source_id_raw = repeat_context.get("source_id") if repeat_context else None
-                try:
-                    repeat_source_id = int(repeat_source_id_raw) if repeat_source_id_raw is not None else None
-                except (TypeError, ValueError):
-                    repeat_source_id = None
-                previous_payload = previous_payloads.get(
-                    self._payload_key(
-                        source_sort_index=block["sort_index"],
-                        repeat_source_type=repeat_source_type or None,
-                        repeat_source_id=repeat_source_id,
-                    ),
-                    {},
-                )
-                last_completed_payload = last_completed_list_snapshots.get(
-                    self._payload_key(
-                        source_sort_index=block["sort_index"],
-                        repeat_source_type=repeat_source_type or None,
-                        repeat_source_id=repeat_source_id,
-                    ),
-                    {},
-                )
-                carried_text = previous_payload.get("text_content") if carry_from_last_protocol else None
-                rendered_default_content = self._render_context_text(block.get("default_content"), repeat_context) or ""
-                protocol_block = ProtocolElementBlock(
-                    protocol_element_id=protocol_element.id,
-                    template_element_block_id=None,
-                    element_definition_id=definition.id,
-                    element_type_id=block["element_type_id"],
-                    render_type_id=block["render_type_id"],
-                    title_snapshot=self._render_context_text(block["title"], repeat_context) or block["title"],
-                    display_title_snapshot=self._render_context_text(block.get("title"), repeat_context),
-                    description_snapshot=self._render_context_text(block.get("description"), repeat_context),
-                    block_title_snapshot=self._render_context_text(block.get("block_title"), repeat_context),
-                    is_editable_snapshot=behavior["is_editable"],
-                    allows_multiple_values_snapshot=block.get("allows_multiple_values", False),
-                    sort_index=resolved_sort_index,
-                    render_order=resolved_sort_index,
-                    is_required_snapshot=False,
-                    is_visible_snapshot=behavior["is_visible"],
-                    export_visible_snapshot=behavior["export_visible"],
-                    latex_template_snapshot=block.get("latex_template"),
-                    configuration_snapshot_json={
-                        **block_config,
-                        "title_as_subtitle": behavior["title_as_subtitle"],
-                        "default_content": self._render_context_text(block.get("default_content"), repeat_context),
-                        "copy_from_last_protocol": carry_from_last_protocol,
-                        "left_column_heading": block_config.get("left_column_heading") or legacy_repeat_config.get("left_column_heading"),
-                        "value_column_heading": block_config.get("value_column_heading") or legacy_repeat_config.get("value_column_heading"),
-                        "repeat_context": (repeat_context or {}).get("tokens", {}),
-                        "source_sort_index": block["sort_index"],
-                        "repeat_source_type": repeat_source_type or None,
-                        "repeat_source_id": repeat_source_id,
-                        "repeat_source_label": (repeat_context or {}).get("source_label"),
-                    },
-                )
-                db.add(protocol_block)
-                db.flush()
-
-                if block["element_type_id"] == text_type_id:
-                    db.add(
-                        ProtocolText(
-                            protocol_element_block_id=protocol_block.id,
-                            content=carried_text if carried_text is not None else rendered_default_content,
-                        )
-                    )
-                elif block["element_type_id"] == static_text_type_id:
-                    db.add(
-                        ProtocolText(
-                            protocol_element_block_id=protocol_block.id,
-                            content=carried_text if carried_text is not None else rendered_default_content,
-                        )
-                    )
-                elif block["element_type_id"] == display_type_id:
-                    db.add(
-                        ProtocolDisplaySnapshot(
-                            protocol_element_block_id=protocol_block.id,
-                            source_type=None,
-                            source_id=None,
-                            compiled_text=None,
-                            snapshot_json={},
-                        )
-                    )
-                elif block["element_type_id"] == image_type_id and carry_from_last_protocol:
-                    for prev_img in previous_payload.get("images", []):
-                        db.add(ProtocolImage(
-                            protocol_element_block_id=protocol_block.id,
-                            stored_file_id=prev_img.stored_file_id,
-                            sort_index=prev_img.sort_index,
-                            title=prev_img.title,
-                            caption=prev_img.caption,
-                        ))
-                elif block["element_type_id"] == bullet_list_type_id:
-                    protocol_block.configuration_snapshot_json = {
-                        **(protocol_block.configuration_snapshot_json or {}),
-                        "bullet_items": [],
-                    }
-                    db.add(protocol_block)
-                elif block["element_type_id"] == form_type_id:
-                    _form_cfg = protocol_block.configuration_snapshot_json or {}
-                    linked_list_id = self._coerce_optional_int(_form_cfg.get("linked_list_id"))
-                    # Support both new "rows" and old "field_rows" schema
-                    _form_raw_rows = _form_cfg.get("rows") or _form_cfg.get("field_rows") or []
-                    field_rows = (
-                        []
-                        if linked_list_id
-                        else [self._transform_field_row(row, repeat_context=repeat_context) for row in _form_raw_rows]
-                    )
-                    _last_completed_rows = last_completed_payload.get("rows") or []
-                    _last_completed_rows_by_entry = {
-                        row["linked_list_entry_id"]: row.get("list_snapshot")
-                        for row in _last_completed_rows
-                        if isinstance(row, dict) and row.get("linked_list_entry_id") is not None
-                    }
-                    for _field_row in field_rows:
-                        if _field_row.get("linked_list_id") and _field_row.get("linked_list_entry_id"):
-                            _live_row_snapshot = list_snapshot_service.compute_row_list_snapshot_for_protocol(
-                                db,
-                                list_definition_id=_field_row["linked_list_id"],
-                                list_entry_id=_field_row["linked_list_entry_id"],
-                                tenant_id=tenant_id,
-                                value_source=_field_row.get("value_source"),
-                                protocol=protocol,
-                            )
-                            _field_row["list_snapshot"] = list_snapshot_service.tag_initial_row_snapshot(
-                                _live_row_snapshot,
-                                _last_completed_rows_by_entry.get(_field_row["linked_list_entry_id"]),
-                                # Only tag against a real prior baseline: with no last-completed
-                                # protocol at all (the very first protocol for this template),
-                                # there's nothing to have changed relative to - see
-                                # tag_initial_list_entries call below for the whole-list case.
-                                track_changes_active=protocol.track_changes_enabled and last_completed_element is not None,
-                            )
-                    _whole_list_snapshot = (
-                        list_snapshot_service.compute_whole_list_snapshot(db, linked_list_id, tenant_id) if linked_list_id else None
-                    )
-                    if _whole_list_snapshot is not None:
-                        _last_completed_whole = last_completed_payload.get("list_snapshot")
-                        _last_completed_entries = (
-                            _last_completed_whole.get("entries")
-                            if isinstance(_last_completed_whole, dict)
-                            else None
-                        )
-                        _whole_list_snapshot["entries"] = list_snapshot_service.tag_initial_list_entries(
-                            _whole_list_snapshot["entries"],
-                            _last_completed_entries,
-                            # Gate on an actual recorded snapshot existing for THIS block, not
-                            # just on a last-completed protocol existing: a protocol completed
-                            # before the list_snapshot feature shipped has no 'list_snapshot' on
-                            # its blocks at all, which looks identical to "never captured" - if
-                            # we tagged against that, every entry would come back "added" against
-                            # a baseline that was simply never recorded, not one that was empty.
-                            track_changes_active=protocol.track_changes_enabled and _last_completed_whole is not None,
-                        )
-                    protocol_block.configuration_snapshot_json = {
-                        **(protocol_block.configuration_snapshot_json or {}),
-                        "linked_list_id": linked_list_id,
-                        "rows": field_rows,
-                        **({"list_snapshot": _whole_list_snapshot} if _whole_list_snapshot is not None else {}),
-                    }
-                    db.add(protocol_block)
-                elif block["element_type_id"] == matrix_type_id:
-                    _matrix_cfg = protocol_block.configuration_snapshot_json or {}
-                    # Backward compat: support both old field_rows and new rows
-                    _raw_rows = _matrix_cfg.get("rows") or _matrix_cfg.get("field_rows") or []
-                    # Backward compat: support both old matrix_columns and new columns
-                    _raw_columns = _matrix_cfg.get("columns") or _matrix_cfg.get("matrix_columns") or []
-
-                    matrix_rows = [
-                        {
-                            "id": row.get("id"),
-                            "label": self._render_context_text(row.get("label") or row.get("title") or "Feld", repeat_context) or "Feld",
-                            "row_type": _matrix_row_type(row),
-                            "locked_in_protocol": bool(
-                                row.get("locked_in_protocol") if "locked_in_protocol" in row
-                                else not bool(row.get("protocol_editable", True))
-                            ),
-                            "sort_index": row.get("sort_index"),
-                            "row_config": _matrix_row_config(row),
-                            "auto_source_field": row.get("auto_source_field")
-                                or row.get("source_field_participant")
-                                or row.get("source_field_event")
-                                or row.get("source_field_list"),
-                            # Keep for export_service backward compat
-                            "template_value": self._render_context_text(row.get("template_value") or "", repeat_context) or "",
-                            "template_participant_id": self._coerce_optional_int(row.get("template_participant_id")),
-                            "template_participant_ids": self._coerce_int_list(row.get("template_participant_ids")),
-                            "template_event_id": self._coerce_optional_int(row.get("template_event_id")),
-                        }
-                        for row in _raw_rows
-                    ]
-
-                    # auto_source: new schema or backward compat from matrix_column_source*
-                    _old_src_type = _matrix_cfg.get("matrix_column_source") or ""
-                    _auto_source = _matrix_cfg.get("auto_source") or (
-                        {
-                            "type": _old_src_type,
-                            "list_id": _matrix_cfg.get("matrix_column_source_list_id"),
-                            "event_tag_filter": _matrix_cfg.get("matrix_column_source_event_tag"),
-                        }
-                        if _old_src_type else None
-                    )
-
-                    _matrix_mode = _matrix_cfg.get("mode") or "manual"
-                    if _matrix_mode == "auto" and isinstance(_auto_source, dict) and _auto_source.get("type") == "list":
-                        _list_id = int(_auto_source.get("list_id") or 0)
-                        # Defense in depth: ElementDefinitionService._validate_linked_lists
-                        # already rejects a cross-tenant auto_source.list_id at definition
-                        # save time, but re-check tenant ownership here too rather than
-                        # trusting the stored configuration_json alone.
-                        _auto_list_def = db.get(ListDefinition, _list_id) if _list_id else None
-                        _list_entries = (
-                            list(db.scalars(
-                                select(ListEntry)
-                                .where(ListEntry.list_definition_id == _list_id)
-                                .order_by(ListEntry.sort_index.asc(), ListEntry.id.asc())
-                            ))
-                            if _auto_list_def is not None and _auto_list_def.tenant_id == tenant_id
-                            else []
-                        )
-                        matrix_columns = []
-                        for _idx, _entry in enumerate(_list_entries):
-                            _col1 = dict(_entry.column_one_value_json or {})
-                            _col2 = dict(_entry.column_two_value_json or {})
-                            _title = str(_col1.get("text_value") or _col2.get("text_value") or "").strip() or f"Eintrag {_entry.id}"
-                            _row_values: dict = {}
-                            for _row in matrix_rows:
-                                _row_id = str(_row.get("id") or "")
-                                _src_field = _row.get("auto_source_field") or ""
-                                if _src_field == "column_one":
-                                    _row_values[_row_id] = _matrix_auto_cell_value(_row, _col1)
-                                elif _src_field == "column_two":
-                                    _row_values[_row_id] = _matrix_auto_cell_value(_row, _col2)
-                            matrix_columns.append({
-                                "id": f"gen-l-{_entry.id}",
-                                "title": _title,
-                                "sort_index": (_idx + 1) * 10,
-                                "event_tag_filter": None,
-                                "row_values": _row_values,
-                            })
-                    else:
-                        matrix_columns = [
-                            {
-                                "id": column.get("id"),
-                                "title": self._render_context_text(column.get("title") or "", repeat_context) or "",
-                                "event_tag_filter": column.get("event_tag_filter"),
-                                "sort_index": column.get("sort_index"),
-                                "row_values": _matrix_build_row_values(column, matrix_rows),
-                            }
-                            for column in _raw_columns
-                        ]
-
-                    protocol_block.configuration_snapshot_json = {
-                        **_matrix_cfg,
-                        "block_kind": "matrix",
-                        "mode": _matrix_cfg.get("mode") or "manual",
-                        "allow_column_management": bool(
-                            _matrix_cfg.get("allow_column_management",
-                            _matrix_cfg.get("matrix_allow_column_management", False))
-                        ),
-                        "auto_source": _auto_source,
-                        "rows": matrix_rows,
-                        "columns": matrix_columns,
-                    }
-                    db.add(protocol_block)
-                elif block["element_type_id"] == attendance_type_id:
-                    participants = list(
-                        db.execute(
-                            select(Participant)
-                            .join(TemplateParticipant, TemplateParticipant.participant_id == Participant.id)
-                            .where(
-                                TemplateParticipant.template_id == template.id,
-                                TemplateParticipant.exclude_from_attendance.is_(False),
-                                participant_eligible_on(payload.protocol_date),
-                            )
-                            .order_by(Participant.display_name.asc(), Participant.id.asc())
-                        ).scalars()
-                    )
-                    protocol_block.configuration_snapshot_json = {
-                        **(protocol_block.configuration_snapshot_json or {}),
-                        "attendance_entries": [
-                            {
-                                "participant_id": participant.id,
-                                "participant_name": participant.display_name,
-                                "status": "absent",
-                            }
-                            for participant in participants
-                        ],
-                    }
-                    db.add(protocol_block)
-                elif block["element_type_id"] == entry_exit_type_id:
-                    protocol_block.configuration_snapshot_json = {
-                        **(protocol_block.configuration_snapshot_json or {}),
-                        "entries": self._entry_exit_entries(
-                            db,
-                            tenant_id=tenant_id,
-                            template_id=template.id,
-                            protocol_date=payload.protocol_date,
-                            current_protocol_id=protocol.id,
-                            block_config=block_config,
-                        ),
-                    }
-                    db.add(protocol_block)
-                elif block["element_type_id"] == session_date_type_id:
-                    next_event = db.get(Event, template.next_event_id) if template.next_event_id else None
-                    protocol_block.configuration_snapshot_json = {
-                        **(protocol_block.configuration_snapshot_json or {}),
-                        "selected_date": next_event.event_date.isoformat() if next_event else None,
-                        "session_label": next_event.title if next_event else "Naechste Sitzung",
-                        "session_tag": next_event.tag if next_event else "next_session",
-                    }
-                    db.add(protocol_block)
-                elif block["element_type_id"] == event_list_type_id:
-                    protocol_block.configuration_snapshot_json = {
-                        **(protocol_block.configuration_snapshot_json or {}),
-                        "event_only_from_protocol_date": bool((protocol_block.configuration_snapshot_json or {}).get("event_only_from_protocol_date", True)),
-                        "event_gray_past": bool((protocol_block.configuration_snapshot_json or {}).get("event_gray_past", True)),
-                        "event_allow_end_date": bool((protocol_block.configuration_snapshot_json or {}).get("event_allow_end_date", False)),
-                    }
-                    db.add(protocol_block)
-
-                if block["element_type_id"] == todo_type_id:
-                    open_todos = self._open_todos_for_template_block(
-                        db,
-                        tenant_id=tenant_id,
-                        template_id=template.id,
-                        template_element_id=template_element.id,
-                        block_sort_index=block["sort_index"],
-                        protocol_date=payload.protocol_date,
-                        current_protocol_id=protocol.id,
-                        repeat_source_type=repeat_source_type or None,
-                        repeat_source_id=repeat_source_id,
-                    )
-                    next_sort_index = 0
-                    for open_todo in open_todos:
-                        db.add(
-                            ProtocolTodo(
-                                protocol_element_block_id=protocol_block.id,
-                                sort_index=next_sort_index,
-                                task=open_todo.task,
-                                assigned_user_id=open_todo.assigned_user_id,
-                                assigned_participant_id=open_todo.assigned_participant_id,
-                                todo_status_id=open_todo.todo_status_id,
-                                due_date=open_todo.due_date,
-                                due_event_id=open_todo.due_event_id,
-                                due_marker=open_todo.due_marker,
-                                completed_at=open_todo.completed_at,
-                                reference_link=open_todo.reference_link,
-                                created_by=open_todo.created_by,
-                            )
-                        )
-                        next_sort_index += 10
+            if created_element is not None:
+                sort_index += 10
 
         db.commit()
         db.refresh(protocol)
-        protocol = self.document_template_service.snapshot_template_for_protocol(db, protocol, selected_document_template_id)
         self.access_service.add_protocol_access_for_template(
             db,
             tenant_id=tenant_id,
@@ -1852,6 +1645,811 @@ class ProtocolService:
         )
         db.commit()
         return int(protocol.id)
+
+    def sync_with_template(self, db: Session, protocol_id: int, *, dry_run: bool = False) -> dict:
+        """Elemente eines offenen Protokolls nach dem aktuellen Stand seiner Vorlage neu
+        aufbauen, ohne erfasste Daten zu verlieren.
+
+        Jedes Vorlagen-Element wird wie beim Erstellen frisch erzeugt (_materialize_template_
+        element) und dann mit dem bestehenden Element zusammengeführt: Titel, Beschreibungen,
+        Filter und übrige Einstellungen kommen aus der Vorlage, Texte, Todos, Bilder, Werte
+        und Anwesenheiten bleiben an den bestehenden Blöcken (IDs bleiben gleich). Neue
+        Elemente/Blöcke kommen dazu. Was nicht mehr in der Vorlage ist, wird entfernt, ausser
+        es enthält Daten - dann bleibt es am Ende stehen. dry_run liefert nur die Übersicht.
+        """
+        protocol = self.get_protocol_or_404_not_frozen(db, protocol_id)
+        template = db.get(Template, protocol.template_id)
+        if template is None:
+            raise ValueError("Template not found")
+        savepoint = db.begin_nested()
+        try:
+            summary = self._apply_template_sync(db, protocol, template)
+        except Exception:
+            savepoint.rollback()
+            raise
+        if dry_run:
+            savepoint.rollback()
+            return {**summary, "applied": False}
+        savepoint.commit()
+        protocol.template_version = template.version
+        db.add(protocol)
+        db.commit()
+        return {**summary, "applied": True}
+
+    def _sync_cycle_tokens(self, db: Session, template: Template, protocol_date: date) -> dict[str, str]:
+        from app.models import CycleConfig
+
+        cycle_cfg = db.get(CycleConfig, template.cycle_config_id) if template.cycle_config_id else None
+        if cycle_cfg is None:
+            return {}
+        counts = self._sequence_counts(
+            db,
+            tenant_id=template.tenant_id,
+            template_id=template.id,
+            protocol_date=protocol_date,
+            reset_month=cycle_cfg.reset_month,
+            reset_day=cycle_cfg.reset_day,
+        )
+        return {
+            "{cycle_name}": cycle_cfg.name,
+            "{cycle_year_start}": str(counts["cycle_year_start"]),
+            "{cycle_year_end}": str(counts["cycle_year_end"]),
+        }
+
+    def _apply_template_sync(self, db: Session, protocol: Protocol, template: Template) -> dict:
+        type_ids = self._element_type_ids(db)
+        type_codes = {type_id: code for code, type_id in type_ids.items()}
+        cycle_tokens = self._sync_cycle_tokens(db, template, protocol.protocol_date)
+        summary: dict = {
+            "added_elements": [],
+            "updated_elements": [],
+            "removed_elements": [],
+            "kept_elements": [],
+            "added_blocks": 0,
+            "removed_blocks": 0,
+            "kept_blocks": 0,
+        }
+
+        old_elements = list(db.scalars(
+            select(ProtocolElement)
+            .where(ProtocolElement.protocol_id == protocol.id)
+            .order_by(ProtocolElement.sort_index.asc(), ProtocolElement.id.asc())
+        ))
+        original_sort = {element.id: element.sort_index for element in old_elements}
+        old_by_template_element: dict[int, ProtocolElement] = {}
+        for element in old_elements:
+            if element.template_element_id is not None:
+                old_by_template_element.setdefault(element.template_element_id, element)
+        # Sortier-Plätze freigeben (uq_protocol_element_protocol_sort, Werte >= 0), die neu
+        # erzeugten Elemente belegen 10, 20, ...
+        for position, element in enumerate(old_elements):
+            element.sort_index = _SYNC_PARKED_SORT_INDEX + position
+        db.flush()
+
+        matched_ids: set[int] = set()
+        sort_index = 10
+        for template_element, definition in self._template_rows(db, template.id):
+            fresh = self._materialize_template_element(
+                db,
+                protocol=protocol,
+                template=template,
+                template_element=template_element,
+                definition=definition,
+                sort_index=sort_index,
+                cycle_tokens=cycle_tokens,
+                type_ids=type_ids,
+            )
+            if fresh is None:
+                continue
+            sort_index += 10
+            old = old_by_template_element.get(template_element.id)
+            if old is None:
+                summary["added_elements"].append(fresh.element_title_snapshot or fresh.section_name_snapshot)
+                continue
+            matched_ids.add(old.id)
+            self._merge_synced_element(db, old=old, fresh=fresh, type_codes=type_codes, summary=summary)
+            summary["updated_elements"].append(old.element_title_snapshot or old.section_name_snapshot)
+
+        for element in old_elements:
+            if element.id in matched_ids:
+                continue
+            title = element.element_title_snapshot or element.section_name_snapshot
+            if element.template_element_id is None and element.section_name_snapshot == self._SESSION_ELEMENT_NAME:
+                element.sort_index = original_sort[element.id]
+            elif self._element_has_content(db, element, type_codes):
+                element.sort_index = sort_index
+                sort_index += 10
+                summary["kept_elements"].append(title)
+            else:
+                db.delete(element)
+                summary["removed_elements"].append(title)
+            db.flush()
+
+        self.refresh_membership_blocks(db, protocol.id, commit=False)
+        db.flush()
+        return summary
+
+    def _block_sync_key(self, block: ProtocolElementBlock) -> tuple:
+        config = block.configuration_snapshot_json or {}
+        return (
+            config.get("source_sort_index"),
+            str(config.get("repeat_source_type") or "") or None,
+            str(config["repeat_source_id"]) if config.get("repeat_source_id") is not None else None,
+        )
+
+    def _element_blocks(self, db: Session, protocol_element_id: int) -> list[ProtocolElementBlock]:
+        return list(db.scalars(
+            select(ProtocolElementBlock)
+            .where(ProtocolElementBlock.protocol_element_id == protocol_element_id)
+            .order_by(ProtocolElementBlock.sort_index.asc(), ProtocolElementBlock.id.asc())
+        ))
+
+    def _merge_synced_element(
+        self,
+        db: Session,
+        *,
+        old: ProtocolElement,
+        fresh: ProtocolElement,
+        type_codes: dict[int, str],
+        summary: dict,
+    ) -> None:
+        old.section_name_snapshot = fresh.section_name_snapshot
+        old.element_title_snapshot = fresh.element_title_snapshot
+        old.responsible_assignments_snapshot = fresh.responsible_assignments_snapshot
+        old.responsible_name_display_mode = fresh.responsible_name_display_mode
+        old.section_order_snapshot = fresh.section_order_snapshot
+        target_sort_index = fresh.sort_index
+
+        old_blocks = self._element_blocks(db, old.id)
+        fresh_blocks = self._element_blocks(db, fresh.id)
+        old_by_key: dict[tuple, ProtocolElementBlock] = {}
+        for block in old_blocks:
+            old_by_key.setdefault(self._block_sync_key(block), block)
+        for position, block in enumerate(old_blocks):
+            block.sort_index = _SYNC_PARKED_SORT_INDEX + position
+        db.flush()
+
+        matched_ids: set[int] = set()
+        next_block_sort_index = 10
+        for fresh_block in fresh_blocks:
+            next_block_sort_index = max(next_block_sort_index, fresh_block.sort_index + 10)
+            old_block = old_by_key.get(self._block_sync_key(fresh_block))
+            if (
+                old_block is None
+                or old_block.id in matched_ids
+                or old_block.element_type_id != fresh_block.element_type_id
+            ):
+                fresh_block.protocol_element_id = old.id
+                db.flush()
+                summary["added_blocks"] += 1
+                continue
+            matched_ids.add(old_block.id)
+            self._merge_synced_block(db, old=old_block, fresh=fresh_block, type_codes=type_codes)
+            new_sort_index, new_render_order = fresh_block.sort_index, fresh_block.render_order
+            db.delete(fresh_block)
+            db.flush()
+            old_block.sort_index = new_sort_index
+            old_block.render_order = new_render_order
+            db.flush()
+
+        for block in old_blocks:
+            if block.id in matched_ids:
+                continue
+            if self._block_has_content(db, block, type_codes.get(block.element_type_id)):
+                block.sort_index = next_block_sort_index
+                block.render_order = next_block_sort_index
+                next_block_sort_index += 10
+                summary["kept_blocks"] += 1
+            else:
+                db.delete(block)
+                summary["removed_blocks"] += 1
+            db.flush()
+
+        db.delete(fresh)
+        db.flush()
+        old.sort_index = target_sort_index
+        db.flush()
+
+    def _merge_synced_block(
+        self,
+        db: Session,
+        *,
+        old: ProtocolElementBlock,
+        fresh: ProtocolElementBlock,
+        type_codes: dict[int, str],
+    ) -> None:
+        code = type_codes.get(fresh.element_type_id)
+        old_config = dict(old.configuration_snapshot_json or {})
+        for attr in (
+            "element_definition_id",
+            "render_type_id",
+            "title_snapshot",
+            "display_title_snapshot",
+            "description_snapshot",
+            "block_title_snapshot",
+            "is_editable_snapshot",
+            "allows_multiple_values_snapshot",
+            "is_required_snapshot",
+            "export_visible_snapshot",
+        ):
+            setattr(old, attr, getattr(fresh, attr))
+        if not old_config.get("manually_hidden"):
+            old.is_visible_snapshot = fresh.is_visible_snapshot
+        old.configuration_snapshot_json = _sync_merge_block_config(
+            old_config, dict(fresh.configuration_snapshot_json or {}), code
+        )
+
+        if code in ("text", "static_text"):
+            # Unveränderte Vorgabetexte (und nicht bearbeitbare feste Texte) folgen der
+            # Vorlage, eigene Texte bleiben.
+            fresh_content = db.scalar(
+                select(ProtocolText.content).where(ProtocolText.protocol_element_block_id == fresh.id)
+            ) or ""
+            old_text = db.scalar(select(ProtocolText).where(ProtocolText.protocol_element_block_id == old.id))
+            if old_text is None:
+                db.add(ProtocolText(protocol_element_block_id=old.id, content=fresh_content))
+            else:
+                old_default = str(old_config.get("default_content") or "").strip()
+                untouched = (old_text.content or "").strip() == old_default
+                fixed_text = code == "static_text" and not fresh.is_editable_snapshot
+                if (untouched or fixed_text) and old_text.content != fresh_content:
+                    old_text.content = fresh_content
+                    db.add(old_text)
+        elif code == "display" and db.scalar(
+            select(func.count()).select_from(ProtocolDisplaySnapshot)
+            .where(ProtocolDisplaySnapshot.protocol_element_block_id == old.id)
+        ) == 0:
+            db.add(ProtocolDisplaySnapshot(
+                protocol_element_block_id=old.id, source_type=None, source_id=None, compiled_text=None, snapshot_json={},
+            ))
+        db.add(old)
+
+    def _block_has_content(self, db: Session, block: ProtocolElementBlock, code: str | None) -> bool:
+        """Ob ein Block im Protokoll erfasste Daten trägt (dann wird er beim Vorlagen-
+        Abgleich nicht gelöscht)."""
+        for model in (ProtocolTodo, ProtocolImage):
+            if db.scalar(
+                select(func.count()).select_from(model).where(model.protocol_element_block_id == block.id)
+            ):
+                return True
+        config = block.configuration_snapshot_json or {}
+        if code in ("text", "static_text"):
+            content = (db.scalar(
+                select(ProtocolText.content).where(ProtocolText.protocol_element_block_id == block.id)
+            ) or "").strip()
+            return bool(content) and content != str(config.get("default_content") or "").strip()
+        if code == "bullet_list":
+            return any(_sync_has_value(item) for item in config.get("bullet_items") or [])
+        if code == "form":
+            return any(isinstance(row, dict) and _sync_form_row_has_value(row) for row in config.get("rows") or [])
+        if code == "matrix":
+            return any(
+                isinstance(column, dict) and _sync_matrix_column_has_values(column)
+                for column in config.get("columns") or []
+            )
+        if code == "attendance":
+            return any(
+                isinstance(entry, dict) and entry.get("status") not in (None, "", "absent")
+                for entry in config.get("attendance_entries") or []
+            )
+        return False
+
+    def _element_has_content(self, db: Session, element: ProtocolElement, type_codes: dict[int, str]) -> bool:
+        return any(
+            self._block_has_content(db, block, type_codes.get(block.element_type_id))
+            for block in self._element_blocks(db, element.id)
+        )
+
+    def _element_type_ids(self, db: Session) -> dict[str, int]:
+        return dict(db.execute(select(ElementType.code, ElementType.id)).tuples().all())
+
+    def _template_rows(self, db: Session, template_id: int) -> list[tuple[TemplateElement, ElementDefinition]]:
+        return [
+            (template_element, definition)
+            for template_element, definition in db.execute(
+                select(TemplateElement, ElementDefinition)
+                .join(ElementDefinition, ElementDefinition.id == TemplateElement.element_definition_id)
+                .where(TemplateElement.template_id == template_id)
+                .order_by(TemplateElement.sort_index.asc(), TemplateElement.id.asc())
+            ).all()
+        ]
+
+    def _materialize_template_element(
+        self,
+        db: Session,
+        *,
+        protocol: Protocol,
+        template: Template,
+        template_element: TemplateElement,
+        definition: ElementDefinition,
+        sort_index: int,
+        cycle_tokens: dict[str, str],
+        type_ids: dict[str, int],
+    ) -> ProtocolElement | None:
+        """Legt ein Protokoll-Element samt Blöcken aus einem Vorlagen-Element an (inkl.
+        Übernahmen aus dem Vorprotokoll und offenen Todos). None, wenn das Element ohne
+        Blöcke ausgeblendet bleibt (show_when_empty aus). Genutzt von create_from_template
+        und sync_with_template."""
+        tenant_id = protocol.tenant_id
+        text_type_id = type_ids.get("text")
+        todo_type_id = type_ids.get("todo")
+        display_type_id = type_ids.get("display")
+        static_text_type_id = type_ids.get("static_text")
+        form_type_id = type_ids.get("form")
+        event_list_type_id = type_ids.get("event_list")
+        bullet_list_type_id = type_ids.get("bullet_list")
+        attendance_type_id = type_ids.get("attendance")
+        session_date_type_id = type_ids.get("session_date")
+        matrix_type_id = type_ids.get("matrix")
+        image_type_id = type_ids.get("image")
+        entry_exit_type_id = type_ids.get("entry_exit")
+        legacy_repeat_config = template_element.configuration_json or {}
+        responsible_label = self._template_element_responsible_label(db, legacy_repeat_config, tenant_id)
+        element_title = self._render_context_text(definition.title, {"tokens": cycle_tokens}) if cycle_tokens else definition.title
+        section_title = f"{element_title} ({responsible_label})" if responsible_label else element_title
+        responsibility_config = legacy_repeat_config.get("responsibility")
+        responsibility_config = responsibility_config if isinstance(responsibility_config, dict) else {}
+        responsible_assignments = responsibility_config.get("assignments")
+        responsible_assignments = responsible_assignments if isinstance(responsible_assignments, list) else None
+        responsible_name_display_mode = str(responsibility_config.get("name_display_mode") or "display_name")
+        definition_blocks = sorted(
+            (definition.configuration_json or {}).get("blocks", []),
+            key=lambda entry: (entry.get("sort_index", 0), entry.get("id", 0)),
+        )
+        generated_blocks: list[tuple[dict, dict[str, object] | None, int]] = []
+        next_block_sort_index = 10
+        for block in definition_blocks:
+            repeat_contexts = self._block_repeat_contexts(
+                db,
+                tenant_id=tenant_id,
+                template_id=template.id,
+                template_element_id=template_element.id,
+                protocol_date=protocol.protocol_date,
+                current_protocol_id=protocol.id,
+                block=block,
+                legacy_repeat_config=legacy_repeat_config if len(definition_blocks) == 1 else {},
+            )
+            if not repeat_contexts:
+                continue
+            for repeat_context in repeat_contexts:
+                generated_blocks.append((block, self._with_cycle_tokens(repeat_context, cycle_tokens), next_block_sort_index))
+                next_block_sort_index += 10
+        show_when_empty = bool((definition.configuration_json or {}).get("show_when_empty", False))
+        if not generated_blocks and not show_when_empty:
+            return None
+        previous_element = self._previous_protocol_element(
+            db,
+            tenant_id=tenant_id,
+            template_element_id=template_element.id,
+            protocol_date=protocol.protocol_date,
+            current_protocol_id=protocol.id,
+        )
+        previous_payloads = (
+            self._previous_block_payloads(db, protocol_element_id=previous_element.id)
+            if previous_element is not None
+            else {}
+        )
+        last_completed_element = self._previous_protocol_element(
+            db,
+            tenant_id=tenant_id,
+            template_element_id=template_element.id,
+            protocol_date=protocol.protocol_date,
+            current_protocol_id=protocol.id,
+            status="abgeschlossen",
+        )
+        last_completed_list_snapshots = (
+            self._previous_completed_block_list_snapshots(db, protocol_element_id=last_completed_element.id)
+            if last_completed_element is not None
+            else {}
+        )
+        protocol_element = ProtocolElement(
+            protocol_id=protocol.id,
+            template_element_id=template_element.id,
+            sort_index=sort_index,
+            section_name_snapshot=section_title,
+            element_title_snapshot=element_title,
+            responsible_assignments_snapshot=responsible_assignments,
+            responsible_name_display_mode=responsible_name_display_mode,
+            section_order_snapshot=sort_index,
+            is_required_snapshot=False,
+            is_visible_snapshot=True,
+            export_visible_snapshot=True,
+        )
+        db.add(protocol_element)
+        db.flush()
+
+        self._materialize_element_blocks(
+            db,
+            protocol=protocol,
+            template=template,
+            template_element=template_element,
+            definition=definition,
+            protocol_element=protocol_element,
+            generated_blocks=generated_blocks,
+            type_ids=type_ids,
+            previous_payloads=previous_payloads,
+            last_completed_element=last_completed_element,
+            last_completed_list_snapshots=last_completed_list_snapshots,
+        )
+        return protocol_element
+
+    def _materialize_element_blocks(
+        self,
+        db: Session,
+        *,
+        protocol: Protocol,
+        template: Template,
+        template_element: TemplateElement,
+        definition: ElementDefinition,
+        protocol_element: ProtocolElement,
+        generated_blocks: list[tuple[dict, dict[str, object] | None, int]],
+        type_ids: dict[str, int],
+        previous_payloads: dict,
+        last_completed_element: ProtocolElement | None,
+        last_completed_list_snapshots: dict,
+    ) -> list[ProtocolElementBlock]:
+        """Legt die Blöcke eines Protokoll-Elements an: (Vorlagen-Block, Wiederholungs-Kontext,
+        Sortierung) je Eintrag in generated_blocks, inkl. Übernahmen aus dem Vorprotokoll,
+        Listen-Snapshots und offenen Todos. Genutzt beim Anlegen des Elements und beim
+        nachträglichen Anhaken eines Termins (add_event_block_to_element), damit beide Wege
+        dieselben Regeln pro Termin anwenden."""
+        tenant_id = protocol.tenant_id
+        text_type_id = type_ids.get("text")
+        todo_type_id = type_ids.get("todo")
+        display_type_id = type_ids.get("display")
+        static_text_type_id = type_ids.get("static_text")
+        form_type_id = type_ids.get("form")
+        event_list_type_id = type_ids.get("event_list")
+        bullet_list_type_id = type_ids.get("bullet_list")
+        attendance_type_id = type_ids.get("attendance")
+        session_date_type_id = type_ids.get("session_date")
+        matrix_type_id = type_ids.get("matrix")
+        image_type_id = type_ids.get("image")
+        entry_exit_type_id = type_ids.get("entry_exit")
+        legacy_repeat_config = template_element.configuration_json or {}
+        created_blocks: list[ProtocolElementBlock] = []
+        for block, repeat_context, resolved_sort_index in generated_blocks:
+            block_config = dict(block.get("configuration_json") or {})
+            behavior = resolve_block_behavior(template_element.configuration_json, block)
+            carry_from_last_protocol = bool(behavior["copy_from_last_protocol"])
+            repeat_source_type = str(repeat_context.get("source_type") or "") if repeat_context else ""
+            repeat_source_id_raw = repeat_context.get("source_id") if repeat_context else None
+            try:
+                repeat_source_id = int(repeat_source_id_raw) if repeat_source_id_raw is not None else None
+            except (TypeError, ValueError):
+                repeat_source_id = None
+            previous_payload = previous_payloads.get(
+                self._payload_key(
+                    source_sort_index=block["sort_index"],
+                    repeat_source_type=repeat_source_type or None,
+                    repeat_source_id=repeat_source_id,
+                ),
+                {},
+            )
+            last_completed_payload = last_completed_list_snapshots.get(
+                self._payload_key(
+                    source_sort_index=block["sort_index"],
+                    repeat_source_type=repeat_source_type or None,
+                    repeat_source_id=repeat_source_id,
+                ),
+                {},
+            )
+            carried_text = previous_payload.get("text_content") if carry_from_last_protocol else None
+            rendered_default_content = self._render_context_text(block.get("default_content"), repeat_context) or ""
+            protocol_block = ProtocolElementBlock(
+                protocol_element_id=protocol_element.id,
+                template_element_block_id=None,
+                element_definition_id=definition.id,
+                element_type_id=block["element_type_id"],
+                render_type_id=block["render_type_id"],
+                title_snapshot=self._render_context_text(block["title"], repeat_context) or block["title"],
+                display_title_snapshot=self._render_context_text(block.get("title"), repeat_context),
+                description_snapshot=self._render_context_text(block.get("description"), repeat_context),
+                block_title_snapshot=self._render_context_text(block.get("block_title"), repeat_context),
+                is_editable_snapshot=behavior["is_editable"],
+                allows_multiple_values_snapshot=block.get("allows_multiple_values", False),
+                sort_index=resolved_sort_index,
+                render_order=resolved_sort_index,
+                is_required_snapshot=False,
+                is_visible_snapshot=behavior["is_visible"],
+                export_visible_snapshot=behavior["export_visible"],
+                configuration_snapshot_json={
+                    **block_config,
+                    "title_as_subtitle": behavior["title_as_subtitle"],
+                    "default_content": self._render_context_text(block.get("default_content"), repeat_context),
+                    "copy_from_last_protocol": carry_from_last_protocol,
+                    "left_column_heading": block_config.get("left_column_heading") or legacy_repeat_config.get("left_column_heading"),
+                    "value_column_heading": block_config.get("value_column_heading") or legacy_repeat_config.get("value_column_heading"),
+                    "repeat_context": (repeat_context or {}).get("tokens", {}),
+                    "source_sort_index": block["sort_index"],
+                    "repeat_source_type": repeat_source_type or None,
+                    "repeat_source_id": repeat_source_id,
+                    "repeat_source_label": (repeat_context or {}).get("source_label"),
+                },
+            )
+            db.add(protocol_block)
+            db.flush()
+            created_blocks.append(protocol_block)
+
+            if block["element_type_id"] == text_type_id:
+                db.add(
+                    ProtocolText(
+                        protocol_element_block_id=protocol_block.id,
+                        content=carried_text if carried_text is not None else rendered_default_content,
+                    )
+                )
+            elif block["element_type_id"] == static_text_type_id:
+                db.add(
+                    ProtocolText(
+                        protocol_element_block_id=protocol_block.id,
+                        content=carried_text if carried_text is not None else rendered_default_content,
+                    )
+                )
+            elif block["element_type_id"] == display_type_id:
+                db.add(
+                    ProtocolDisplaySnapshot(
+                        protocol_element_block_id=protocol_block.id,
+                        source_type=None,
+                        source_id=None,
+                        compiled_text=None,
+                        snapshot_json={},
+                    )
+                )
+            elif block["element_type_id"] == image_type_id and carry_from_last_protocol:
+                for prev_img in previous_payload.get("images", []):
+                    db.add(ProtocolImage(
+                        protocol_element_block_id=protocol_block.id,
+                        stored_file_id=prev_img.stored_file_id,
+                        sort_index=prev_img.sort_index,
+                        title=prev_img.title,
+                        caption=prev_img.caption,
+                    ))
+            elif block["element_type_id"] == bullet_list_type_id:
+                protocol_block.configuration_snapshot_json = {
+                    **(protocol_block.configuration_snapshot_json or {}),
+                    "bullet_items": [],
+                }
+                db.add(protocol_block)
+            elif block["element_type_id"] == form_type_id:
+                _form_cfg = protocol_block.configuration_snapshot_json or {}
+                linked_list_id = self._coerce_optional_int(_form_cfg.get("linked_list_id"))
+                _form_raw_rows = _form_cfg.get("rows") or []
+                field_rows = (
+                    []
+                    if linked_list_id
+                    else [self._transform_field_row(row, repeat_context=repeat_context) for row in _form_raw_rows]
+                )
+                _last_completed_rows = last_completed_payload.get("rows") or []
+                _last_completed_rows_by_entry = {
+                    row["linked_list_entry_id"]: row.get("list_snapshot")
+                    for row in _last_completed_rows
+                    if isinstance(row, dict) and row.get("linked_list_entry_id") is not None
+                }
+                for _field_row in field_rows:
+                    if _field_row.get("linked_list_id") and _field_row.get("linked_list_entry_id"):
+                        _live_row_snapshot = list_snapshot_service.compute_row_list_snapshot_for_protocol(
+                            db,
+                            list_definition_id=_field_row["linked_list_id"],
+                            list_entry_id=_field_row["linked_list_entry_id"],
+                            tenant_id=tenant_id,
+                            value_source=_field_row.get("value_source"),
+                            protocol=protocol,
+                        )
+                        _field_row["list_snapshot"] = list_snapshot_service.tag_initial_row_snapshot(
+                            _live_row_snapshot,
+                            _last_completed_rows_by_entry.get(_field_row["linked_list_entry_id"]),
+                            # Only tag against a real prior baseline: with no last-completed
+                            # protocol at all (the very first protocol for this template),
+                            # there's nothing to have changed relative to - see
+                            # tag_initial_list_entries call below for the whole-list case.
+                            track_changes_active=protocol.track_changes_enabled and last_completed_element is not None,
+                        )
+                _whole_list_snapshot = (
+                    list_snapshot_service.compute_whole_list_snapshot(db, linked_list_id, tenant_id) if linked_list_id else None
+                )
+                if _whole_list_snapshot is not None:
+                    _last_completed_whole = last_completed_payload.get("list_snapshot")
+                    _last_completed_entries = (
+                        _last_completed_whole.get("entries")
+                        if isinstance(_last_completed_whole, dict)
+                        else None
+                    )
+                    _whole_list_snapshot["entries"] = list_snapshot_service.tag_initial_list_entries(
+                        _whole_list_snapshot["entries"],
+                        _last_completed_entries,
+                        # Gate on an actual recorded snapshot existing for THIS block, not
+                        # just on a last-completed protocol existing: a protocol completed
+                        # before the list_snapshot feature shipped has no 'list_snapshot' on
+                        # its blocks at all, which looks identical to "never captured" - if
+                        # we tagged against that, every entry would come back "added" against
+                        # a baseline that was simply never recorded, not one that was empty.
+                        track_changes_active=protocol.track_changes_enabled and _last_completed_whole is not None,
+                    )
+                protocol_block.configuration_snapshot_json = {
+                    **(protocol_block.configuration_snapshot_json or {}),
+                    "linked_list_id": linked_list_id,
+                    "rows": field_rows,
+                    **({"list_snapshot": _whole_list_snapshot} if _whole_list_snapshot is not None else {}),
+                }
+                db.add(protocol_block)
+            elif block["element_type_id"] == matrix_type_id:
+                _matrix_cfg = protocol_block.configuration_snapshot_json or {}
+                # Definitionen liegen im aktuellen Schema vor (Migration 0113, element_config.py).
+                _raw_rows = _matrix_cfg.get("rows") or []
+                _raw_columns = _matrix_cfg.get("columns") or []
+
+                matrix_rows = [
+                    {
+                        "id": row.get("id"),
+                        "label": self._render_context_text(row.get("label") or "Feld", repeat_context) or "Feld",
+                        "row_type": str(row.get("row_type") or "text"),
+                        "locked_in_protocol": bool(row.get("locked_in_protocol", False)),
+                        "sort_index": row.get("sort_index"),
+                        "row_config": row.get("row_config") if isinstance(row.get("row_config"), dict) else {},
+                        "auto_source_field": row.get("auto_source_field"),
+                        # Für den Dokument-Export (Provider) beibehalten
+                        "template_value": self._render_context_text(row.get("template_value") or "", repeat_context) or "",
+                        "template_participant_id": self._coerce_optional_int(row.get("template_participant_id")),
+                        "template_participant_ids": self._coerce_int_list(row.get("template_participant_ids")),
+                        "template_event_id": self._coerce_optional_int(row.get("template_event_id")),
+                    }
+                    for row in _raw_rows
+                ]
+
+                _auto_source = _matrix_cfg.get("auto_source") if isinstance(_matrix_cfg.get("auto_source"), dict) else None
+
+                _matrix_mode = _matrix_cfg.get("mode") or "manual"
+                if _matrix_mode == "auto" and isinstance(_auto_source, dict) and _auto_source.get("type") == "list":
+                    _list_id = int(_auto_source.get("list_id") or 0)
+                    # Defense in depth: ElementDefinitionService._validate_linked_lists
+                    # already rejects a cross-tenant auto_source.list_id at definition
+                    # save time, but re-check tenant ownership here too rather than
+                    # trusting the stored configuration_json alone.
+                    _auto_list_def = db.get(ListDefinition, _list_id) if _list_id else None
+                    _list_entries = (
+                        list(db.scalars(
+                            select(ListEntry)
+                            .where(ListEntry.list_definition_id == _list_id)
+                            .order_by(ListEntry.sort_index.asc(), ListEntry.id.asc())
+                        ))
+                        if _auto_list_def is not None and _auto_list_def.tenant_id == tenant_id
+                        else []
+                    )
+                    matrix_columns = []
+                    for _idx, _entry in enumerate(_list_entries):
+                        _col1 = dict(_entry.column_one_value_json or {})
+                        _col2 = dict(_entry.column_two_value_json or {})
+                        _title = str(_col1.get("text_value") or _col2.get("text_value") or "").strip() or f"Eintrag {_entry.id}"
+                        _row_values: dict = {}
+                        for _row in matrix_rows:
+                            _row_id = str(_row.get("id") or "")
+                            _src_field = _row.get("auto_source_field") or ""
+                            if _src_field == "column_one":
+                                _row_values[_row_id] = _matrix_auto_cell_value(_row, _col1)
+                            elif _src_field == "column_two":
+                                _row_values[_row_id] = _matrix_auto_cell_value(_row, _col2)
+                        matrix_columns.append({
+                            "id": f"gen-l-{_entry.id}",
+                            "title": _title,
+                            "sort_index": (_idx + 1) * 10,
+                            "event_tag_filter": None,
+                            "row_values": _row_values,
+                        })
+                else:
+                    matrix_columns = [
+                        {
+                            "id": column.get("id"),
+                            "title": self._render_context_text(column.get("title") or "", repeat_context) or "",
+                            "title_placeholder": column.get("title_placeholder"),
+                            "event_tag_filter": column.get("event_tag_filter"),
+                            "sort_index": column.get("sort_index"),
+                            "row_values": _matrix_build_row_values(column, matrix_rows),
+                        }
+                        for column in _raw_columns
+                    ]
+
+                protocol_block.configuration_snapshot_json = {
+                    **_matrix_cfg,
+                    "block_kind": "matrix",
+                    "mode": _matrix_cfg.get("mode") or "manual",
+                    "allow_column_management": bool(_matrix_cfg.get("allow_column_management", False)),
+                    "auto_source": _auto_source,
+                    "rows": matrix_rows,
+                    "columns": matrix_columns,
+                }
+                db.add(protocol_block)
+            elif block["element_type_id"] == attendance_type_id:
+                # Zusätzlich zur Vorlage (exclude_from_attendance) pro Block ausgeblendete Personen.
+                excluded_ids = set(self._coerce_int_list(block_config.get("attendance_excluded_participant_ids")))
+                participants = list(
+                    db.execute(
+                        select(Participant)
+                        .join(TemplateParticipant, TemplateParticipant.participant_id == Participant.id)
+                        .where(
+                            TemplateParticipant.template_id == template.id,
+                            TemplateParticipant.exclude_from_attendance.is_(False),
+                            participant_eligible_on(protocol.protocol_date),
+                        )
+                        .order_by(Participant.display_name.asc(), Participant.id.asc())
+                    ).scalars()
+                )
+                protocol_block.configuration_snapshot_json = {
+                    **(protocol_block.configuration_snapshot_json or {}),
+                    "attendance_entries": [
+                        {
+                            "participant_id": participant.id,
+                            "participant_name": participant.display_name,
+                            "status": "absent",
+                        }
+                        for participant in participants
+                        if participant.id not in excluded_ids
+                    ],
+                }
+                db.add(protocol_block)
+            elif block["element_type_id"] == entry_exit_type_id:
+                protocol_block.configuration_snapshot_json = {
+                    **(protocol_block.configuration_snapshot_json or {}),
+                    "entries": self._entry_exit_entries(
+                        db,
+                        tenant_id=tenant_id,
+                        template_id=template.id,
+                        protocol_date=protocol.protocol_date,
+                        current_protocol_id=protocol.id,
+                        block_config=block_config,
+                    ),
+                }
+                db.add(protocol_block)
+            elif block["element_type_id"] == session_date_type_id:
+                next_event = db.get(Event, template.next_event_id) if template.next_event_id else None
+                protocol_block.configuration_snapshot_json = {
+                    **(protocol_block.configuration_snapshot_json or {}),
+                    "selected_date": next_event.event_date.isoformat() if next_event else None,
+                    "selected_time": next_event.start_time.strftime("%H:%M") if next_event and next_event.start_time else None,
+                    "session_label": next_event.title if next_event else "Naechste Sitzung",
+                    "session_tag": next_event.tag if next_event else "next_session",
+                }
+                db.add(protocol_block)
+            elif block["element_type_id"] == event_list_type_id:
+                protocol_block.configuration_snapshot_json = {
+                    **(protocol_block.configuration_snapshot_json or {}),
+                    "event_gray_past": bool((protocol_block.configuration_snapshot_json or {}).get("event_gray_past", True)),
+                    "event_allow_end_date": bool((protocol_block.configuration_snapshot_json or {}).get("event_allow_end_date", False)),
+                }
+                db.add(protocol_block)
+
+            if block["element_type_id"] == todo_type_id:
+                open_todos = self._open_todos_for_template_block(
+                    db,
+                    tenant_id=tenant_id,
+                    template_id=template.id,
+                    template_element_id=template_element.id,
+                    block_sort_index=block["sort_index"],
+                    protocol_date=protocol.protocol_date,
+                    current_protocol_id=protocol.id,
+                    repeat_source_type=repeat_source_type or None,
+                    repeat_source_id=repeat_source_id,
+                    assignee_participant_id=self._coerce_optional_int(block_config.get("todo_assignee_participant_id")),
+                )
+                next_sort_index = 0
+                for open_todo in open_todos:
+                    db.add(
+                        ProtocolTodo(
+                            protocol_element_block_id=protocol_block.id,
+                            sort_index=next_sort_index,
+                            task=open_todo.task,
+                            assigned_user_id=open_todo.assigned_user_id,
+                            assigned_participant_id=open_todo.assigned_participant_id,
+                            todo_status_id=open_todo.todo_status_id,
+                            due_date=open_todo.due_date,
+                            due_event_id=open_todo.due_event_id,
+                            due_marker=open_todo.due_marker,
+                            completed_at=open_todo.completed_at,
+                            reference_link=open_todo.reference_link,
+                            created_by=open_todo.created_by,
+                        )
+                    )
+                    next_sort_index += 10
+        return created_blocks
 
     def _maybe_auto_create_next_protocol(self, db: Session, protocol: Protocol) -> None:
         template = db.get(Template, protocol.template_id)
@@ -2027,8 +2625,8 @@ class ProtocolService:
         """Replays every stage-change hook between previous_status and updated.status, in
         order - so a validated forward skip (e.g. geplant -> abgeschlossen for Word-Import)
         still fires every hook a step-by-step transition would have fired instead of silently
-        skipping them. No-op for backward moves (single-step revert only reuses already-frozen
-        data, nothing to (re-)run).
+        skipping them. Backward moves only discard the todo snapshot when leaving
+        abgeschlossen; everything else frozen is reused as-is.
 
         The status change itself (already applied via repository.update(..., commit=False))
         and every hook below run uncommitted until the single db.commit() at the end, so a
@@ -2044,10 +2642,30 @@ class ProtocolService:
                 stage_from, stage_to = self._STATUS_ORDER[idx], self._STATUS_ORDER[idx + 1]
                 if stage_from == "vorbereitet" and stage_to == "durchgeführt":
                     self._clear_tracked_changes(db, protocol_id, commit=False)
+                    # Wartende Anliegen mit diesem Zielprotokoll gehören ab jetzt fest dazu.
+                    from app.services.agenda_item_service import AgendaItemService
+
+                    AgendaItemService().bind_to_protocol(db, updated)
                 if stage_to == "abgeschlossen":
+                    # Korrekturweg (Datenschutz-Audit F): nach Zurückstufen und Ändern verschwinden
+                    # die Änderungsmarkierungen samt alter Fassung (Baseline) und die PDFs des
+                    # früheren Abschlusses. Beim ersten Abschluss ist beides schon leer.
+                    self._clear_tracked_changes(db, protocol_id, commit=False)
+                    from app.documents.service import supersede_closed_exports
+
+                    supersede_closed_exports(db, updated)
                     self._freeze_responsible_titles(db, protocol_id, updated.tenant_id, commit=False)
                     list_snapshot_service.freeze_list_snapshots_for_protocol(db, protocol_id, updated.tenant_id, commit=False)
+                    # Todos bleiben danach live bearbeitbar - das Protokoll selbst zeigt ab
+                    # jetzt diese Momentaufnahme (siehe ProtocolTodoService.frozen_snapshot).
+                    updated.todos_snapshot_json = ProtocolTodoService().build_protocol_snapshot(db, updated)
+                    db.add(updated)
                     crossed_into_abgeschlossen = True
+        elif new_idx < prev_idx and previous_status == "abgeschlossen":
+            # Zurücksetzen verwirft die Momentaufnahme (das Frontend warnt davor): das
+            # Protokoll zeigt wieder die Live-Todos, inkl. aller Änderungen seit Abschluss.
+            updated.todos_snapshot_json = None
+            db.add(updated)
         try:
             db.commit()
         except Exception:
@@ -2066,17 +2684,8 @@ class ProtocolService:
         values = payload.model_dump(exclude_unset=True)
         # Concurrency precondition consumed by the route; it is not a database column.
         values.pop("expected_session_notes", None)
-        # document_template_id/event_id arrive as public UUIDs - resolve to internal ids,
-        # scoped to this protocol's tenant, before they're used as raw PK/FK values below.
-        document_template_id: int | None = None
-        if "document_template_id" in values:
-            raw_document_template_id = values.pop("document_template_id")
-            if raw_document_template_id is not None:
-                document_template_id = public_id_service.resolve_internal_id(
-                    db, DocumentTemplate, raw_document_template_id, tenant_id=protocol.tenant_id
-                )
-                if document_template_id is None:
-                    raise ValueError("Document template does not belong to current tenant")
+        # event_id arrives as a public UUID - resolve to an internal id, scoped to this
+        # protocol's tenant, before it's used as a raw FK value below.
         if values.get("event_id") is not None:
             # event_id is client-supplied - without this check a writer could re-link an
             # existing protocol to another tenant's Event (see create_from_template above).
@@ -2088,10 +2697,12 @@ class ProtocolService:
         if new_status is not None and new_status != previous_status:
             self._validate_status_transition(previous_status, new_status)
         if not values:
-            if "document_template_id" in payload.model_fields_set:
-                return self.document_template_service.snapshot_template_for_protocol(db, protocol, document_template_id)
             return protocol
         has_status_transition = new_status is not None and new_status != previous_status
+        # Vor dem Einfrieren auch ohne vorheriges Öffnen die aktuellen Mitgliedschaften sichern.
+        if has_status_transition and new_status == "abgeschlossen":
+            protocol.protocol_date = values.get("protocol_date", protocol.protocol_date)
+            self.refresh_membership_blocks(db, protocol_id, commit=False)
         updated = self.repository.update(db, protocol, values, commit=not has_status_transition)
         if has_status_transition:
             updated = self._run_status_transition_hooks(db, protocol_id, previous_status, updated)
@@ -2110,8 +2721,6 @@ class ProtocolService:
             and "protocol_number" not in values
         ):
             self._renumber_for_date_change(db, updated)
-        if "document_template_id" in payload.model_fields_set:
-            return self.document_template_service.snapshot_template_for_protocol(db, updated, document_template_id)
         return updated
 
     def _renumber_for_date_change(self, db: Session, protocol: Protocol) -> None:
@@ -2181,7 +2790,7 @@ class ProtocolService:
         brand new to this protocol), so track_changes_active is always False - equivalent
         to leaving each row/entry untagged."""
         linked_list_id = self._coerce_optional_int(raw_config.get("linked_list_id"))
-        raw_rows = raw_config.get("rows") or raw_config.get("field_rows") or []
+        raw_rows = raw_config.get("rows") or []
         field_rows = (
             []
             if linked_list_id
@@ -2249,125 +2858,131 @@ class ProtocolService:
         if definition is None:
             raise ValueError("Element definition not found")
 
-        # Find the block template with repeat_source: "event"
-        legacy_repeat_config = template_element.configuration_json or {}
+        blocks = self._create_event_blocks(
+            db, protocol=protocol, protocol_element=protocol_element, template_element=template_element,
+            definition=definition, event=event, block_sort_index=block_sort_index,
+        )
+        return blocks[0]
+
+    def add_event_blocks_to_element(
+        self, db: Session, *, protocol_element_id: int, event_id: int, tenant_id: int
+    ) -> list[ProtocolElementBlock]:
+        """Termin im Protokoll nachträglich anhaken: legt alle Blöcke an, die das Element pro
+        Termin vorsieht - nach denselben Regeln wie beim Anlegen des Protokolls."""
+        protocol_element = db.get(ProtocolElement, protocol_element_id)
+        protocol = db.get(Protocol, protocol_element.protocol_id) if protocol_element is not None else None
+        if protocol_element is None or protocol is None or protocol.tenant_id != tenant_id:
+            raise ValueError("Protocol element not found")
+        event = db.get(Event, event_id)
+        if event is None or event.tenant_id != tenant_id:
+            raise ValueError("Event not found")
+        template_element = db.get(TemplateElement, protocol_element.template_element_id) if protocol_element.template_element_id else None
+        definition = db.get(ElementDefinition, template_element.element_definition_id) if template_element is not None else None
+        if template_element is None or definition is None:
+            raise ValueError("Template element not found")
+        return self._create_event_blocks(
+            db, protocol=protocol, protocol_element=protocol_element, template_element=template_element,
+            definition=definition, event=event, block_sort_index=None,
+        )
+
+    def _create_event_blocks(
+        self,
+        db: Session,
+        *,
+        protocol: Protocol,
+        protocol_element: ProtocolElement,
+        template_element: TemplateElement,
+        definition: ElementDefinition,
+        event: Event,
+        block_sort_index: int | None,
+    ) -> list[ProtocolElementBlock]:
+        """Blöcke eines Termins für ein bestehendes Element. Vorher entstand nur ein Block nach
+        der ersten Vorlage und mit vereinfachter Logik (ohne Formular-/Matrix-Aufbau,
+        Übernahmen, Zyklus-Platzhalter und offene Todos) - neu angehakte Termine bekamen so
+        leere Blöcke. Jetzt derselbe Aufbau wie beim Anlegen (_materialize_element_blocks)."""
         definition_blocks = sorted(
             (definition.configuration_json or {}).get("blocks", []),
             key=lambda entry: (entry.get("sort_index", 0), entry.get("id", 0)),
         )
-
-        event_block_template = None
+        legacy_repeat_config = (template_element.configuration_json or {}) if len(definition_blocks) == 1 else {}
+        event_templates = []
         for block in definition_blocks:
             block_config = dict(block.get("configuration_json") or {})
-            effective = dict(block_config)
-            if not block_config.get("repeat_source") and legacy_repeat_config.get("repeat_source"):
-                effective = {**legacy_repeat_config, **block_config}
+            effective = {**legacy_repeat_config, **block_config} if not block_config.get("repeat_source") else block_config
             if str(effective.get("repeat_source") or "") != "event":
                 continue
-            if block_sort_index is None:
-                # No specific target requested (e.g. the manual "add event block" UI
-                # action) - keep the old behavior of using the first event-repeat block
-                # template found on this element.
-                event_block_template = block
-                break
-            if block.get("sort_index") == block_sort_index:
-                event_block_template = block
-                break
-
-        if event_block_template is None:
+            if block_sort_index is not None and block.get("sort_index") != block_sort_index:
+                continue
+            event_templates.append(block)
+        if not event_templates:
             raise ValueError("No event repeat block template found for this element")
 
-        # Build event context (same as _event_repeat_contexts output)
+        template = db.get(Template, protocol.template_id)
+        if template is None:
+            raise ValueError("Template not found")
         event_end_date = event.event_end_date or event.event_date
         date_range = (
             event.event_date.strftime("%d.%m.%Y")
             if event_end_date == event.event_date
             else f"{event.event_date.strftime('%d.%m.%Y')} - {event_end_date.strftime('%d.%m.%Y')}"
         )
-        repeat_context: dict[str, object] = {
-            "tokens": {
-                "{title}": event.title or "",
-                "{Titel}": event.title or "",
-                "{description}": event.description or "",
-                "{Beschreibung}": event.description or "",
-                "{event_date}": event.event_date.strftime("%d.%m.%Y"),
-                "{event_end_date}": event_end_date.strftime("%d.%m.%Y"),
-                "{event_date_range}": date_range,
-                "{date}": event.event_date.strftime("%d.%m.%Y"),
-                "{tag}": event.tag or "",
-                "{id}": str(event.id),
+        # Wie _event_repeat_contexts, plus Zyklus-Platzhalter wie beim Anlegen
+        repeat_context = self._with_cycle_tokens(
+            {
+                "tokens": {
+                    "{title}": event.title or "",
+                    "{Titel}": event.title or "",
+                    "{description}": event.description or "",
+                    "{Beschreibung}": event.description or "",
+                    "{event_date}": event.event_date.strftime("%d.%m.%Y"),
+                    "{event_end_date}": event_end_date.strftime("%d.%m.%Y"),
+                    "{event_date_range}": date_range,
+                    "{date}": event.event_date.strftime("%d.%m.%Y"),
+                    "{tag}": event.tag or "",
+                    "{id}": str(event.id),
+                },
+                "source_type": "event",
+                "source_id": event.id,
+                "source_label": event.title or "",
             },
-            "source_type": "event",
-            "source_id": event.id,
-            "source_label": event.title or "",
-        }
+            self._sync_cycle_tokens(db, template, protocol.protocol_date),
+        )
 
-        # Determine next sort index
         max_sort = db.scalar(
-            select(func.max(ProtocolElementBlock.sort_index))
-            .where(ProtocolElementBlock.protocol_element_id == protocol_element_id)
+            select(func.max(ProtocolElementBlock.sort_index)).where(ProtocolElementBlock.protocol_element_id == protocol_element.id)
         ) or 0
-        next_sort_index = int(max_sort) + 10
-
-        block_config = dict(event_block_template.get("configuration_json") or {})
-        behavior = resolve_block_behavior(template_element.configuration_json, event_block_template)
-
-        text_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "text"))
-        static_text_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "static_text"))
-        form_type_id = db.scalar(select(ElementType.id).where(ElementType.code == "form"))
-
-        rendered_default_content = self._render_context_text(event_block_template.get("default_content"), repeat_context) or ""
-        form_snapshot = (
-            self._build_event_repeat_form_snapshot(db, raw_config=block_config, repeat_context=repeat_context, tenant_id=tenant_id, protocol=protocol)
-            if event_block_template["element_type_id"] == form_type_id
-            else {}
+        generated_blocks = [
+            (block, repeat_context, int(max_sort) + 10 * (index + 1)) for index, block in enumerate(event_templates)
+        ]
+        previous_element = self._previous_protocol_element(
+            db, tenant_id=protocol.tenant_id, template_element_id=template_element.id,
+            protocol_date=protocol.protocol_date, current_protocol_id=protocol.id,
         )
-
-        protocol_block = ProtocolElementBlock(
-            protocol_element_id=protocol_element_id,
-            template_element_block_id=None,
-            element_definition_id=definition.id,
-            element_type_id=event_block_template["element_type_id"],
-            render_type_id=event_block_template["render_type_id"],
-            title_snapshot=self._render_context_text(event_block_template["title"], repeat_context) or event_block_template["title"],
-            display_title_snapshot=self._render_context_text(event_block_template.get("title"), repeat_context),
-            description_snapshot=self._render_context_text(event_block_template.get("description"), repeat_context),
-            block_title_snapshot=self._render_context_text(event_block_template.get("block_title"), repeat_context),
-            is_editable_snapshot=behavior["is_editable"],
-            allows_multiple_values_snapshot=event_block_template.get("allows_multiple_values", False),
-            sort_index=next_sort_index,
-            render_order=next_sort_index,
-            is_required_snapshot=False,
-            is_visible_snapshot=behavior["is_visible"],
-            export_visible_snapshot=behavior["export_visible"],
-            latex_template_snapshot=event_block_template.get("latex_template"),
-            configuration_snapshot_json={
-                **block_config,
-                "title_as_subtitle": behavior["title_as_subtitle"],
-                "default_content": rendered_default_content,
-                "copy_from_last_protocol": bool(behavior["copy_from_last_protocol"]),
-                "left_column_heading": block_config.get("left_column_heading") or legacy_repeat_config.get("left_column_heading"),
-                "value_column_heading": block_config.get("value_column_heading") or legacy_repeat_config.get("value_column_heading"),
-                "repeat_context": (repeat_context.get("tokens") or {}),
-                "source_sort_index": event_block_template["sort_index"],
-                "repeat_source_type": "event",
-                "repeat_source_id": event.id,
-                "repeat_source_label": event.title or "",
-                **form_snapshot,
-            },
+        last_completed_element = self._previous_protocol_element(
+            db, tenant_id=protocol.tenant_id, template_element_id=template_element.id,
+            protocol_date=protocol.protocol_date, current_protocol_id=protocol.id, status="abgeschlossen",
         )
-        db.add(protocol_block)
-        db.flush()
-
-        if event_block_template["element_type_id"] in (text_type_id, static_text_type_id):
-            db.add(ProtocolText(
-                protocol_element_block_id=protocol_block.id,
-                content=rendered_default_content,
-            ))
-
+        created = self._materialize_element_blocks(
+            db,
+            protocol=protocol,
+            template=template,
+            template_element=template_element,
+            definition=definition,
+            protocol_element=protocol_element,
+            generated_blocks=generated_blocks,
+            type_ids=self._element_type_ids(db),
+            previous_payloads=self._previous_block_payloads(db, protocol_element_id=previous_element.id) if previous_element is not None else {},
+            last_completed_element=last_completed_element,
+            last_completed_list_snapshots=(
+                self._previous_completed_block_list_snapshots(db, protocol_element_id=last_completed_element.id)
+                if last_completed_element is not None
+                else {}
+            ),
+        )
         db.commit()
-        db.refresh(protocol_block)
-        return protocol_block
+        for block in created:
+            db.refresh(block)
+        return created
 
     # ── Session notes / quick-todos ───────────────────────────────────────────
 

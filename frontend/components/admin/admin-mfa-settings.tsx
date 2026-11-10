@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 
 import { TotpEnrollCard } from "@/components/security/totp-enroll-card";
 import { useMfaEnrollment, formatMfaDate, mfaFactorTypeLabel } from "@/lib/hooks/use-mfa-enrollment";
 import { browserSupportsPasskeys } from "@/lib/webauthn";
+import type { Locale } from "@/i18n/locale-config.generated";
 import { UserMfaOverview } from "@/types/api";
 
 function ShieldIcon({ className }: { className?: string }) {
@@ -54,6 +56,8 @@ type Props = {
 };
 
 export function AdminMfaSettings({ initialOverview }: Props) {
+  const t = useTranslations("admin.mfa");
+  const locale = useLocale() as Locale;
   const [overview, setOverview] = useState<UserMfaOverview>(initialOverview);
   const {
     totpSetup,
@@ -85,10 +89,9 @@ export function AdminMfaSettings({ initialOverview }: Props) {
   return (
     <div className="grid">
       <div>
-        <div className="eyebrow">Zwei-Faktor-Authentifizierung</div>
+        <div className="eyebrow">{t("eyebrow")}</div>
         <p className="muted" style={{ marginTop: "var(--space-2)", maxWidth: "60ch" }}>
-          Platform-Admin-Konten haben systemweiten Zugriff auf alle Mandanten und benötigen deshalb zwingend einen
-          zweiten Faktor. Mindestens ein Faktor muss immer erhalten bleiben.
+          {t("intro")}
         </p>
       </div>
 
@@ -98,15 +101,15 @@ export function AdminMfaSettings({ initialOverview }: Props) {
             <ShieldIcon />
           </div>
           <div className="security-hero-body">
-            <div className="eyebrow">Sicherheitsstatus</div>
-            <div className="security-hero-title">{overview.has_factors ? "MFA ist aktiv" : "Noch kein Faktor eingerichtet"}</div>
-            <div className="muted">Für Platform-Admin-Konten ist MFA verpflichtend.</div>
+            <div className="eyebrow">{t("securityStatus")}</div>
+            <div className="security-hero-title">{overview.has_factors ? t("mfaActive") : t("noFactorYet")}</div>
+            <div className="muted">{t("mandatoryNote")}</div>
           </div>
         </div>
         <div className="status-row">
-          <span className="pill pill-required">Pflicht</span>
-          <span className="pill">{overview.factors.length} Faktor(en)</span>
-          <span className="pill">{passkeysSupported ? "Passkeys verfügbar" : "Kein Passkey-Support im Browser"}</span>
+          <span className="pill pill-required">{t("mandatoryPill")}</span>
+          <span className="pill">{t("factorCount", { count: overview.factors.length })}</span>
+          <span className="pill">{passkeysSupported ? t("passkeysAvailable") : t("passkeysUnavailable")}</span>
         </div>
       </div>
 
@@ -118,19 +121,18 @@ export function AdminMfaSettings({ initialOverview }: Props) {
                 <KeyIcon />
               </div>
               <div>
-                <div className="eyebrow">Option A</div>
-                <h3>Authenticator-App</h3>
+                <div className="eyebrow">{t("optionA")}</div>
+                <h3>{t("authenticatorApp")}</h3>
               </div>
             </div>
-            {hasTotpFactor ? <span className="pill">Eingerichtet</span> : null}
+            {hasTotpFactor ? <span className="pill">{t("setUp")}</span> : null}
           </div>
           <p className="muted">
-            Ein zeitbasierter Code (TOTP) aus einer Authenticator-App wie Bitwarden, 1Password oder Google
-            Authenticator.
+            {t("totpDescription")}
           </p>
           {!totpSetup ? (
             <button type="button" className="button-secondary" disabled={busy} onClick={() => void startTotp()}>
-              TOTP einrichten
+              {t("setUpTotp")}
             </button>
           ) : (
             <TotpEnrollCard
@@ -153,40 +155,39 @@ export function AdminMfaSettings({ initialOverview }: Props) {
                 <FingerprintIcon />
               </div>
               <div>
-                <div className="eyebrow">Option B</div>
-                <h3>Passkey</h3>
+                <div className="eyebrow">{t("optionB")}</div>
+                <h3>{t("passkey")}</h3>
               </div>
             </div>
-            {hasPasskeyFactor ? <span className="pill">Eingerichtet</span> : null}
+            {hasPasskeyFactor ? <span className="pill">{t("setUp")}</span> : null}
           </div>
           <p className="muted">
-            Entsperrung über Face ID, Touch ID, Windows Hello oder einen Sicherheitsschlüssel - schnell und ohne
-            Code abtippen.
+            {t("passkeyDescription")}
           </p>
           {passkeysSupported ? (
             <div className="grid">
               <label className="field-stack">
-                <span className="field-label">Bezeichnung</span>
+                <span className="field-label">{t("designationLabel")}</span>
                 <input
                   value={passkeyLabel}
                   onChange={(event) => setPasskeyLabel(event.target.value)}
-                  placeholder="z.B. YubiKey / MacBook Pro"
+                  placeholder={t("passkeyLabelPlaceholder")}
                 />
               </label>
               <button type="button" className="button-secondary" disabled={busy} onClick={() => void startPasskey()}>
-                {busy ? "Passkey wird vorbereitet…" : "Passkey hinzufügen"}
+                {busy ? t("preparingPasskey") : t("addPasskey")}
               </button>
             </div>
           ) : (
-            <div className="info-note">Dieser Browser unterstützt keine Passkeys.</div>
+            <div className="info-note">{t("passkeyUnsupportedBrowser")}</div>
           )}
         </article>
       </div>
 
       <div className="grid">
-        <div className="field-label">Aktive Faktoren</div>
+        <div className="field-label">{t("activeFactors")}</div>
         <div className="security-factor-list">
-          {!overview.factors.length ? <div className="selection-card muted">Noch keine MFA-Faktoren eingerichtet.</div> : null}
+          {!overview.factors.length ? <div className="selection-card muted">{t("noFactorsYet")}</div> : null}
           {overview.factors.map((factor) => {
             const isLastFactor = overview.factors.length <= 1;
             const isWebauthn = factor.factor_type === "webauthn";
@@ -201,20 +202,20 @@ export function AdminMfaSettings({ initialOverview }: Props) {
                       <strong>{factor.label}</strong>
                       <span className="pill">{mfaFactorTypeLabel(factor.factor_type)}</span>
                     </div>
-                    <div className="muted">Eingerichtet: {formatMfaDate(factor.created_at)}</div>
-                    <div className="muted">Zuletzt verwendet: {formatMfaDate(factor.last_used_at)}</div>
-                    {isLastFactor && <div className="muted">Letzter Faktor kann nicht entfernt werden.</div>}
+                    <div className="muted">{t("setUpAt", { date: formatMfaDate(factor.created_at, locale) })}</div>
+                    <div className="muted">{t("lastUsedAt", { date: formatMfaDate(factor.last_used_at, locale) })}</div>
+                    {isLastFactor && <div className="muted">{t("lastFactorNote")}</div>}
                   </div>
                 </div>
                 <button
                   type="button"
                   className="button-secondary button-danger"
                   disabled={isLastFactor}
-                  title={isLastFactor ? "Platform-Administratoren müssen mindestens einen MFA-Faktor behalten" : undefined}
+                  title={isLastFactor ? t("lastFactorTitle") : undefined}
                   onClick={() => void deleteFactor(factor.id, factor.label)}
                 >
                   <TrashIcon />
-                  Entfernen
+                  {t("remove")}
                 </button>
               </article>
             );

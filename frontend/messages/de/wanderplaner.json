@@ -1,0 +1,235 @@
+{
+  "status": {
+    "draft": "Entwurf",
+    "analyzed": "Automatisch analysiert",
+    "reconnoitered": "Rekognosziert",
+    "approved": "Freigegeben"
+  },
+  "kind": {
+    "START": "Start",
+    "END": "Ziel",
+    "NAVIGATION": "Fixpunkt",
+    "BREAK": "Pausenplatz",
+    "SUMMIT": "Gipfel",
+    "PASS": "Pass",
+    "HUT": "Hütte",
+    "WATER": "Wasser",
+    "DECISION": "Fixpunkt",
+    "EMERGENCY_EXIT": "Notausstieg",
+    "USER_DEFINED": "Fixpunkt"
+  },
+  "routingProfile": {
+    "wanderwege_bevorzugen": "Wanderwege bevorzugen",
+    "schnellste_route": "Schnellste Route",
+    "einfache_route": "Einfache Route"
+  },
+  "verification": {
+    "AUTO_DETECTED": "Automatisch erkannt",
+    "NEEDS_VERIFICATION": "Vor Ort prüfen",
+    "VERIFIED": "Vom Leiter bestätigt",
+    "REJECTED": "Verworfen"
+  },
+  "danger": {
+    "normal": {
+      "label": "Route",
+      "description": "Wanderweg/Bergwanderweg ohne erkannte Gefahrenstelle"
+    },
+    "steep_exposed": {
+      "label": "Steil/ausgesetzt",
+      "description": "Über 40 % Steigung oder über 70 % Gefälle direkt neben dem Weg"
+    },
+    "alpine": {
+      "label": "Alpinwanderweg",
+      "description": "Amtlich als Alpinwanderweg signalisiert"
+    },
+    "badge": {
+      "steep_exposed": "Steil/ausgesetzt",
+      "alpine": "Alpin"
+    }
+  },
+  "units": {
+    "km": "{value} km",
+    "meters": "{value} m",
+    "minutes": "{minutes} min",
+    "hoursMinutes": "{hours}h {minutes}min",
+    "lkm": "{value} Lkm"
+  },
+  "fields": {
+    "title": "Titel",
+    "description": "Beschreibung",
+    "date": "Datum"
+  },
+  "actions": {
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "saving": "Wird gespeichert…",
+    "delete": "Löschen",
+    "remove": "Entfernen",
+    "close": "Schliessen"
+  },
+  "manager": {
+    "title": "Wanderplaner",
+    "subtitle": "Wanderungen planen, Route berechnen und Marschzeittabelle erstellen.",
+    "importGpx": "GPX importieren",
+    "newTour": "Neue Wanderung",
+    "listTitle": "Wanderungen",
+    "columns": {
+      "title": "Titel",
+      "date": "Datum",
+      "status": "Status",
+      "elevationProfile": "Höhenprofil"
+    },
+    "empty": "Noch keine Wanderungen geplant.",
+    "create": {
+      "optional": "Optional.",
+      "startAndEnd": "Start und Ziel",
+      "startAndEndHelp": "Weg, Höhenprofil und automatische Punkte werden beim Erstellen geladen. Für das Höhenprofil wird der Routenverlauf an swisstopo übermittelt.",
+      "setStart": "Start setzen{done, select, true { ✓} other {}}",
+      "setEnd": "Ziel setzen{done, select, true { ✓} other {}}",
+      "clickToSetStart": "Auf die Karte klicken, um den Start zu setzen.",
+      "clickToSetEnd": "Auf die Karte klicken, um das Ziel zu setzen.",
+      "calculating": "Route und Höhenprofil werden berechnet…",
+      "submit": "Wanderung erstellen",
+      "missingStartEnd": "Bitte Start und Ziel auf der Karte setzen",
+      "created": "Wanderung erstellt",
+      "error": "Fehler beim Erstellen"
+    },
+    "gpx": {
+      "help": "Die GPX-Datei dient als Ausgangspunkt einer neuen Wanderung. Weg, Höhenprofil und automatische Punkte werden geladen; der Routenverlauf wird für das Höhenprofil an swisstopo übermittelt.",
+      "file": "GPX-Datei",
+      "importing": "Wird importiert und berechnet…",
+      "submit": "Importieren",
+      "missingFile": "Bitte eine GPX-Datei auswählen",
+      "imported": "GPX-Datei importiert",
+      "error": "GPX-Import fehlgeschlagen"
+    }
+  },
+  "detail": {
+    "noDescription": "Keine Beschreibung",
+    "edit": "Bearbeiten",
+    "reconnaissance": "Rekognoszierung",
+    "print": "Drucken",
+    "exportGpx": "GPX exportieren",
+    "approve": "Freigeben",
+    "approving": "Wird freigegeben…",
+    "toast": {
+      "saved": "Wanderung gespeichert",
+      "saveError": "Fehler beim Speichern",
+      "deleted": "Wanderung gelöscht",
+      "deleteError": "Fehler beim Löschen",
+      "routeSaved": "Wanderung gespeichert und neu berechnet",
+      "routeSaveError": "Änderungen konnten nicht gespeichert werden",
+      "verificationError": "Status konnte nicht geändert werden",
+      "reconnaissanceSaved": "Rekognoszierung gespeichert",
+      "reconnaissanceError": "Rekognoszierung konnte nicht gespeichert werden",
+      "approved": "Wanderung freigegeben",
+      "approveError": "Freigabe fehlgeschlagen",
+      "printCreated": "Druck-PDF erstellt",
+      "printError": "Druck-PDF konnte nicht erstellt werden"
+    },
+    "confirm": {
+      "deleteTour": "Wanderung «{title}» wirklich löschen?",
+      "removeWaypoint": "Punkt «{label}» entfernen?",
+      "approveTour": "Wanderung «{title}» freigeben?"
+    },
+    "route": {
+      "title": "Karte & Route",
+      "description": "Wegpunkte lassen sich per Ziehen verschieben. Änderungen werden erst beim Speichern übernommen; Weg, Höhenprofil und automatische Punkte werden dann neu berechnet.",
+      "routingProfile": "Routingprofil",
+      "savingAndCalculating": "Wird gespeichert und berechnet…",
+      "discardChanges": "Änderungen verwerfen",
+      "addVia": "Via-Punkt hinzufügen",
+      "unsavedHint": "Ungespeicherte Änderungen. Die angezeigte Route und das Höhenprofil entsprechen noch dem letzten gespeicherten Stand.",
+      "swisstopoHint": "Beim Speichern wird der Routenverlauf für das Höhenprofil an swisstopo übermittelt.",
+      "placeViaHint": "Auf die Karte klicken, um den Via-Punkt zu platzieren.",
+      "distance": "Distanz: <strong>{value}</strong>",
+      "ascent": "Aufstieg: <strong>{value}</strong>",
+      "descent": "Abstieg: <strong>{value}</strong>"
+    },
+    "elevation": {
+      "title": "Höhenprofil",
+      "description": "Beim Überfahren markiert das Höhenprofil die Stelle auf der Karte. Die automatische Analyse ergänzt markante Verzweigungen, Querungen und Hütten – ungefähr alle 15 Gehminuten.",
+      "empty": "Noch kein Höhenprofil abgerufen."
+    },
+    "editModal": {
+      "title": "Wanderung bearbeiten"
+    },
+    "reconnaissanceModal": {
+      "reconnoiteredOn": "Rekognosziert am {date}.",
+      "reconnoiteredByOn": "Rekognosziert von {name} am {date}.",
+      "approvedOn": "Freigegeben am {date}.",
+      "approvedByOn": "Freigegeben von {name} am {date}.",
+      "remarks": "Weitere Bemerkungen",
+      "submit": "Als rekognosziert markieren",
+      "checklist": {
+        "trail_condition": "Wegzustand geprüft",
+        "problem_spots": "Problematische Stellen geprüft",
+        "exits": "Ausstiege geprüft",
+        "access_roads": "Zufahrten geprüft",
+        "water_points": "Wasserstellen geprüft",
+        "alternative_route": "Alternativroute geprüft",
+        "decision_points": "Wichtige Entscheidungspunkte geprüft"
+      }
+    },
+    "printModal": {
+      "paper": "Papierformat",
+      "orientation": "Ausrichtung",
+      "portrait": "Hochformat",
+      "landscape": "Querformat",
+      "scale": "Massstab",
+      "scaleOption": "1:{scale}",
+      "result": "PDF mit {count, plural, one {# Kartenblatt} other {# Kartenblättern}} erstellt - <link>PDF herunterladen</link>.",
+      "creating": "Wird erstellt…",
+      "submit": "PDF erstellen"
+    }
+  },
+  "map": {
+    "aria": "Karte",
+    "legendAria": "Legende Gefahreneinschätzung",
+    "legendNone": " (keine)",
+    "waypointInfo": "Wegpunkt-Information",
+    "closeWaypointInfo": "Wegpunkt-Information schliessen",
+    "elevation": "Höhe: {value} m",
+    "break": "Pause: {minutes} min"
+  },
+  "marchTable": {
+    "title": "Wegpunkte & Marschtabelle",
+    "speedFactor": "Geschwindigkeitsfaktor: {value} Lkm/h",
+    "noRoute": "Route berechnen, um Distanzen und Marschzeiten anzuzeigen.",
+    "empty": "Keine Wegpunkte.",
+    "columns": {
+      "index": "#",
+      "name": "Name",
+      "type": "Typ",
+      "elevation": "Höhe",
+      "distance": "Distanz",
+      "cumulativeDistance": "Kum. Distanz",
+      "ascent": "Auf",
+      "descent": "Ab",
+      "lkm": "Lkm",
+      "time": "Zeit",
+      "cumulativeTime": "Kum. Zeit",
+      "arrival": "Ankunft",
+      "break": "Pause",
+      "departure": "Abmarsch",
+      "remarks": "Bemerkungen",
+      "status": "Status",
+      "actions": "Aktionen"
+    },
+    "breakMinutesAria": "Pause in Minuten",
+    "decisionMetrics": "Ab Start: {fromStart} · Bis Ziel: {toEnd} · Zurück: {back}",
+    "nearestExit": " · Nächster Ausstieg: {time}",
+    "summary": {
+      "totalDistance": "Gesamtdistanz: <strong>{value}</strong>",
+      "ascentDescent": "Aufstieg/Abstieg: <strong>{ascent} / {descent} m</strong>",
+      "lkm": "Leistungskilometer: <strong>{value}</strong>",
+      "walkingTime": "Marschzeit: <strong>{value}</strong>",
+      "breaks": "Pausen: <strong>{value}</strong>",
+      "totalTime": "Gesamtzeit: <strong>{value}</strong>"
+    }
+  },
+  "elevationChart": {
+    "distance": "Distanz:",
+    "elevation": "Höhe:"
+  }
+}

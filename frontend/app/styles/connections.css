@@ -1,0 +1,164 @@
+/* Bereichs-CSS, geladen nur von: connections. Siehe design/DESIGN.md Abschnitt 10. */
+
+/* Verknuepfungen (connections-view.tsx): Kalender-Abos fuer Apple/Google, Karten je Kalenderart. */
+.connections-cards {
+  display: grid;
+  /* minmax(0, 1fr): sonst bestimmt die lange Abo-URL die Spaltenbreite und die Seite laeuft mobil seitlich ueber. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  max-width: 760px;
+}
+
+.connections-card {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.connections-page .connections-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.connections-mobile .connections-card {
+  padding: var(--space-4);
+}
+
+.connections-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.connections-card-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.connections-card-heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.connections-card-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.connections-card-description {
+  margin: var(--space-1) 0 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.connections-card-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.connections-subscribe {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.connections-subscribe-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--panel-solid);
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+
+.connections-subscribe-link:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.connections-url {
+  min-width: 0;
+}
+
+.connections-url .wizard-dns-value {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  font-size: var(--text-sm);
+}
+
+.connections-options {
+  gap: var(--space-4);
+}
+
+.connections-options select {
+  max-width: 320px;
+}
+
+.connections-card-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.connections-card-meta {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.connections-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.connections-card-actions button,
+.connections-enable {
+  width: auto;
+}
+
+.connections-howto-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-5);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 640px) {
+  .connections-subscribe-link,
+  .connections-card-actions,
+  .connections-card-actions button,
+  .connections-enable {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .connections-options select {
+    max-width: none;
+  }
+}

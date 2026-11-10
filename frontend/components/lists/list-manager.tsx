@@ -1,20 +1,26 @@
 "use client";
 
-import { FormEvent, useMemo, useRef, useState } from "react";
+import { DocumentExportDialog } from "@/components/documents/export-dialog";
+import { useParticipantSelectable } from "@/contexts/participant-date-context";
+
+import { FormEvent, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { EmptyState } from "@/components/ui/empty-state";
+import { ListValueTypeIcon } from "@/components/lists/list-value-type-icon";
 import { StructuredListTable } from "@/components/lists/structured-list-table";
 import { HistoricalEditConfirmModal, HistoricalViewBanner, ReconstructionBanner } from "@/components/ui/historical-view-banner";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
-import { usePopoverDismiss } from "@/components/ui/popover";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { ActionMenu } from "@/components/ui/action-menu";
+import { Badge } from "@/components/ui/badge";
+import { formatDate } from "@/lib/utils/format";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { useHistoricalList } from "@/lib/hooks/use-historical-list";
 import {
-  DocumentTemplate,
   EventSummary,
   ParticipantSummary,
   StructuredListDefinition,
@@ -27,7 +33,6 @@ type ListManagerProps = {
   initialEntriesByList: Record<string, StructuredListEntry[]>;
   availableParticipants: ParticipantSummary[];
   availableEvents: EventSummary[];
-  documentTemplates?: DocumentTemplate[];
 };
 
 type ListDefinitionFormState = {
@@ -40,22 +45,28 @@ type ListDefinitionFormState = {
   is_active: boolean;
 };
 
-const valueTypeOptions: Array<{ value: StructuredListValueType; label: string }> = [
-  { value: "text", label: "Freier Text" },
-  { value: "participant", label: "Ein Teilnehmer" },
-  { value: "participants", label: "Mehrere Teilnehmer" },
-  { value: "event", label: "Ein Termin" },
-];
+type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
 
-const initialFormState: ListDefinitionFormState = {
-  name: "",
-  description: "",
-  column_one_title: "Spalte 1",
-  column_one_value_type: "text",
-  column_two_title: "Spalte 2",
-  column_two_value_type: "text",
-  is_active: true,
-};
+function valueTypeOptions(t: TFunc): Array<{ value: StructuredListValueType; label: string }> {
+  return [
+    { value: "text", label: t("valueTypes.text") },
+    { value: "participant", label: t("valueTypes.participant") },
+    { value: "participants", label: t("valueTypes.participants") },
+    { value: "event", label: t("valueTypes.event") },
+  ];
+}
+
+function initialFormState(t: TFunc): ListDefinitionFormState {
+  return {
+    name: "",
+    description: "",
+    column_one_title: t("defaultColumnOne"),
+    column_one_value_type: "text",
+    column_two_title: t("defaultColumnTwo"),
+    column_two_value_type: "text",
+    is_active: true,
+  };
+}
 
 function formFromDefinition(definition: StructuredListDefinition): ListDefinitionFormState {
   return {
@@ -69,146 +80,26 @@ function formFromDefinition(definition: StructuredListDefinition): ListDefinitio
   };
 }
 
-function valueTypeLabel(valueType: StructuredListValueType) {
-  return valueTypeOptions.find((option) => option.value === valueType)?.label ?? valueType;
-}
-
 export function ListManager({
   initialLists,
   initialEntriesByList,
   availableParticipants,
   availableEvents,
-  documentTemplates = [],
 }: ListManagerProps) {
+  const isParticipantSelectable = useParticipantSelectable();
+  const t = useTranslations("lists");
   const showToast = useToast();
   const confirm = useConfirm();
   const [lists, setLists] = useState(initialLists);
   const [entriesByList, setEntriesByList] = useState(initialEntriesByList);
   const [selectedListId, setSelectedListId] = useState<string | null>(initialLists[0]?.id ?? null);
   const [search, setSearch] = useState("");
+  const [onlyUnassigned, setOnlyUnassigned] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingListId, setEditingListId] = useState<string | null>(null);
-  const [form, setForm] = useState(initialFormState);
+  const [form, setForm] = useState(() => initialFormState(t));
 
-  // Export modal state
-  const landscapeTemplates = documentTemplates.filter(
-    (t) => t.is_active && (t.configuration_json as { options?: { orientation?: string } })?.options?.orientation === "landscape"
-  );
-  const [exportModalOpen, setExportModalOpen] = useState(false);
-  const [exportTemplateId, setExportTemplateId] = useState<string | "">(landscapeTemplates[0]?.id ?? "");
-  const [exportListId, setExportListId] = useState<string | "">(initialLists[0]?.id ?? "");
-  const [exportGroupBy, setExportGroupBy] = useState<"" | "column_one" | "column_two">("");
-  const [exportSortBy, setExportSortBy] = useState<"" | "column_one" | "column_two">("");
-  const [exportSortDirection, setExportSortDirection] = useState<"asc" | "desc">("asc");
-  const [exportFilterColumn, setExportFilterColumn] = useState<"" | "column_one" | "column_two">("");
-  const [exportFilterParticipantId, setExportFilterParticipantId] = useState<string | "">("");
-  const [exportFilterEventId, setExportFilterEventId] = useState<string | "">("");
-  const [exportFilterText, setExportFilterText] = useState("");
-  const [exportBusy, setExportBusy] = useState(false);
-  const [exportUrl, setExportUrl] = useState<string | null>(null);
-  const [templateDropdownOpen, setTemplateDropdownOpen] = useState(false);
-  const templateDropdownRef = useRef<HTMLDivElement>(null);
-  const [listDropdownOpen, setListDropdownOpen] = useState(false);
-  const [listDropdownSearch, setListDropdownSearch] = useState("");
-  const listDropdownRef = useRef<HTMLDivElement>(null);
-
-  usePopoverDismiss(templateDropdownOpen, () => setTemplateDropdownOpen(false), [templateDropdownRef]);
-
-  usePopoverDismiss(listDropdownOpen, () => { setListDropdownOpen(false); setListDropdownSearch(""); }, [listDropdownRef]);
-
-  const listDropdownFiltered = useMemo(() => {
-    if (!listDropdownSearch.trim()) return lists;
-    const q = listDropdownSearch.toLowerCase();
-    return lists.filter((l) => l.name.toLowerCase().includes(q));
-  }, [lists, listDropdownSearch]);
-
-  function toggleExportSort(col: "column_one" | "column_two") {
-    if (exportSortBy === col) {
-      setExportSortDirection((d) => d === "asc" ? "desc" : "asc");
-    } else {
-      setExportSortBy(col);
-      setExportSortDirection("asc");
-    }
-    clearExportUrl();
-  }
-
-  const exportListDef = useMemo(
-    () => lists.find((l) => l.id === exportListId) ?? null,
-    [lists, exportListId]
-  );
-
-  const exportFilteredEntries = useMemo(() => {
-    if (!exportListId) return [];
-    const entries = entriesByList[exportListId] ?? [];
-    if (!exportFilterColumn || !exportListDef) return entries;
-    const valueType = exportFilterColumn === "column_one" ? exportListDef.column_one_value_type : exportListDef.column_two_value_type;
-    return entries.filter((entry) => {
-      const value = exportFilterColumn === "column_one" ? entry.column_one_value : entry.column_two_value;
-      if (valueType === "participant") {
-        if (!exportFilterParticipantId) return true;
-        return String(value.participant_id) === exportFilterParticipantId;
-      }
-      if (valueType === "participants") {
-        if (!exportFilterParticipantId) return true;
-        const ids = Array.isArray(value.participant_ids) ? (value.participant_ids as unknown[]).map(String) : [];
-        return ids.includes(exportFilterParticipantId);
-      }
-      if (valueType === "event") {
-        if (!exportFilterEventId) return true;
-        return String(value.event_id) === exportFilterEventId;
-      }
-      if (!exportFilterText) return true;
-      return String(value.text_value ?? "").toLowerCase().includes(exportFilterText.toLowerCase());
-    });
-  }, [entriesByList, exportListId, exportFilterColumn, exportFilterParticipantId, exportFilterEventId, exportFilterText, exportListDef]);
-
-  function clearExportUrl() { setExportUrl(null); }
-
-  function triggerDownload(url: string) {
-    const a = document.createElement("a");
-    a.href = `${url}?download=1`;
-    a.target = "_blank";
-    a.rel = "noreferrer";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  }
-
-  async function handlePdfClick() {
-    if (exportBusy || !exportListId || !exportTemplateId) return;
-    if (exportUrl) { triggerDownload(exportUrl); return; }
-    setExportBusy(true);
-    try {
-      const result = await browserApiFetch<{ content_url?: string | null }>("/api/exports/lists", {
-        method: "POST",
-        body: JSON.stringify({
-          template_id: exportTemplateId,
-          list_definition_id: exportListId,
-          group_by: exportGroupBy,
-          sort_by: exportSortBy,
-          sort_direction: exportSortDirection,
-          filter_column: exportFilterColumn,
-          filter_participant_id: exportFilterParticipantId || null,
-          filter_event_id: exportFilterEventId || null,
-          filter_text: exportFilterText || null,
-        }),
-      });
-      const url = result.content_url ?? null;
-      setExportUrl(url);
-      if (url) triggerDownload(url);
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "PDF-Export fehlgeschlagen", "error");
-    } finally {
-      setExportBusy(false);
-    }
-  }
-
-  const filteredLists = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    return lists
-      .filter((definition) => !query || `${definition.name} ${definition.description ?? ""}`.toLowerCase().includes(query))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [lists, search]);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const selectedList = useMemo(
     () => lists.find((definition) => definition.id === selectedListId) ?? null,
@@ -224,9 +115,34 @@ export function ListManager({
   const displayedDefinition = isLive ? selectedList : historical.definition;
   const displayedEntries = isLive ? entriesByList[selectedList?.id ?? ""] ?? [] : historical.entries;
 
+  function isUnassigned(entry: StructuredListEntry) {
+    if (!displayedDefinition) return false;
+    return (["one", "two"] as const).some((column) => {
+      const type = displayedDefinition[`column_${column}_value_type`];
+      const value = entry[`column_${column}_value`];
+      return type === "participant" ? !value.participant_id
+        : type === "participants" ? !Array.isArray(value.participant_ids) || !value.participant_ids.length
+        : type === "event" ? !value.event_id : false;
+    });
+  }
+  const unassignedCount = displayedEntries.filter(isUnassigned).length;
+  const showUnassignedFilter = unassignedCount > 0 || onlyUnassigned;
+  const visibleEntries = displayedEntries.filter((entry) => {
+    if (onlyUnassigned && !isUnassigned(entry)) return false;
+    const query = search.trim().toLocaleLowerCase();
+    if (!query) return true;
+    const searchable = [entry.column_one_value, entry.column_two_value].map((value) => {
+      const ids = Array.isArray(value.participant_ids) ? value.participant_ids : [value.participant_id];
+      return [value.text_value, value.participant_name, ...(Array.isArray(value.participant_names) ? value.participant_names : []),
+        ...availableParticipants.filter((p) => ids.includes(p.id)).map((p) => p.display_name),
+        availableEvents.find((event) => event.id === value.event_id)?.title].join(" ");
+    }).join(" ");
+    return searchable.toLocaleLowerCase().includes(query);
+  });
+
   function openCreate() {
     setEditingListId(null);
-    setForm(initialFormState);
+    setForm(initialFormState(t));
     setModalOpen(true);
   }
 
@@ -265,17 +181,17 @@ export function ListManager({
       setEntriesByList((current) => ({ ...current, [saved.id]: current[saved.id] ?? [] }));
       setSelectedListId(saved.id);
       setModalOpen(false);
-      showToast(editingListId ? "Liste gespeichert" : "Liste erstellt", "success");
+      showToast(editingListId ? t("toasts.listSaved") : t("toasts.listCreated"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Liste konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.listSaveFailed"), "error");
     }
   }
 
   async function deleteDefinition(listId: string) {
     const ok = await confirm({
-      message: "Liste endgültig löschen? Alle Einträge dieser Liste gehen dabei unwiderruflich verloren.",
+      message: t("toasts.deleteListConfirm"),
       tone: "danger",
-      confirmLabel: "Löschen"
+      confirmLabel: t("toasts.deleteLabel")
     });
     if (!ok) return;
     try {
@@ -288,13 +204,13 @@ export function ListManager({
         return next;
       });
       setSelectedListId((current) => (current === listId ? (remainingLists[0]?.id ?? null) : current));
-      showToast("Liste geloescht", "success");
+      showToast(t("toasts.listDeleted"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Liste konnte nicht geloescht werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.listDeleteFailed"), "error");
     }
   }
 
-  async function createEntry(listId: string, payload: { sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }) {
+  async function createEntry(listId: string, payload: { sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }) {  // i18n-ok: TS-Typannotation, kein JSX
     try {
       const created = await browserApiFetch<StructuredListEntry>(`/api/lists/${listId}/entries`, {
         method: "POST",
@@ -304,10 +220,10 @@ export function ListManager({
         ...current,
         [listId]: [...(current[listId] ?? []), created].sort((left, right) => left.sort_index - right.sort_index),
       }));
-      showToast("Eintrag erstellt", "success");
+      showToast(t("toasts.entryCreated"), "success");
       return true;
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Eintrag konnte nicht erstellt werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.entryCreateFailed"), "error");
       return false;
     }
   }
@@ -315,7 +231,7 @@ export function ListManager({
   async function updateEntry(
     listId: string,
     entryId: string,
-    payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>
+    payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>  // i18n-ok: TS-Typannotation, kein JSX
   ) {
     try {
       const updated = await browserApiFetch<StructuredListEntry>(`/api/list-entries/${entryId}`, {
@@ -326,19 +242,19 @@ export function ListManager({
         ...current,
         [listId]: (current[listId] ?? []).map((entry) => (entry.id === entryId ? updated : entry)),
       }));
-      showToast("Eintrag gespeichert", "success");
+      showToast(t("toasts.entrySaved"), "success");
       return true;
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Eintrag konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.entrySaveFailed"), "error");
       return false;
     }
   }
 
   async function deleteEntry(listId: string, entryId: string) {
     const ok = await confirm({
-      message: "Eintrag endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+      message: t("toasts.deleteEntryConfirm"),
       tone: "danger",
-      confirmLabel: "Löschen"
+      confirmLabel: t("toasts.deleteLabel")
     });
     if (!ok) return;
     try {
@@ -347,15 +263,15 @@ export function ListManager({
         ...current,
         [listId]: (current[listId] ?? []).filter((entry) => entry.id !== entryId),
       }));
-      showToast("Eintrag geloescht", "success");
+      showToast(t("toasts.entryDeleted"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Eintrag konnte nicht geloescht werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.entryDeleteFailed"), "error");
     }
   }
 
   async function updateHistoricalEntry(
     entryId: string,
-    payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>
+    payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>  // i18n-ok: TS-Typannotation, kein JSX
   ) {
     if (!historical.editUnlocked) {
       setShowUnlockConfirm(true);
@@ -363,10 +279,10 @@ export function ListManager({
     }
     try {
       await historical.saveHistoricalEntry(entryId, payload);
-      showToast("Historischer Eintrag gespeichert", "success");
+      showToast(t("toasts.historicalEntrySaved"), "success");
       return true;
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Historischer Eintrag konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.historicalEntrySaveFailed"), "error");
       return false;
     }
   }
@@ -377,16 +293,16 @@ export function ListManager({
       return;
     }
     const ok = await confirm({
-      message: "Diesen Eintrag aus der historischen Ansicht entfernen? Dies verändert den historischen Datenstand dauerhaft.",
+      message: t("toasts.deleteHistoricalEntryConfirm"),
       tone: "danger",
-      confirmLabel: "Entfernen"
+      confirmLabel: t("toasts.removeLabel")
     });
     if (!ok) return;
     try {
       await historical.deleteHistoricalEntry(entryId);
-      showToast("Eintrag aus der historischen Ansicht entfernt", "success");
+      showToast(t("toasts.historicalEntryRemoved"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Eintrag konnte nicht entfernt werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.entryRemoveFailed"), "error");
     }
   }
 
@@ -394,7 +310,7 @@ export function ListManager({
   // see useHistoricalList.confirmReconstruction.
   async function updateDraftEntry(
     entryId: string,
-    payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>
+    payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>  // i18n-ok: TS-Typannotation, kein JSX
   ) {
     historical.updateDraftEntry(entryId, payload);
     return true;
@@ -402,9 +318,9 @@ export function ListManager({
 
   async function deleteDraftEntry(entryId: string) {
     const ok = await confirm({
-      message: "Diesen Eintrag aus dem Entwurf entfernen? Er wird beim Bestätigen nicht mit übernommen.",
+      message: t("toasts.deleteDraftEntryConfirm"),
       tone: "danger",
-      confirmLabel: "Entfernen"
+      confirmLabel: t("toasts.removeLabel")
     });
     if (!ok) return;
     historical.deleteDraftEntry(entryId);
@@ -414,9 +330,9 @@ export function ListManager({
     setIsConfirmingReconstruction(true);
     try {
       await historical.confirmReconstruction();
-      showToast("Snapshot für diese Periode erstellt", "success");
+      showToast(t("toasts.snapshotCreated"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Snapshot konnte nicht erstellt werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.snapshotCreateFailed"), "error");
     } finally {
       setIsConfirmingReconstruction(false);
     }
@@ -426,66 +342,41 @@ export function ListManager({
     <div className="grid">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Listen</h1>
-          <p className="muted">{lists.length === 0 ? "Frei definierbare Listen für Material, Ämter oder Anmeldungen." : "Alle Listen dieses Mandanten."}</p>
+          <h1 className="page-title">{t("pageTitle")}</h1>
+          <p className="muted">{lists.length === 0 ? t("pageDescriptionEmpty") : t("pageDescription")}</p>
         </div>
-        {lists.length > 0 ? <button type="button" className="button-secondary" onClick={openCreate}>Neue Liste</button> : null}
+        {lists.length > 0 ? <button type="button" className="button-primary" onClick={openCreate}>{t("newList")}</button> : null}
       </div>
       {lists.length === 0 ? (
         <EmptyState
-          title="Noch keine Liste vorhanden"
-          description="Listen sind frei definierbare Tabellen – etwa Materialausleihe, Ämterverteilung oder Anmeldungen."
+          title={t("emptyState.title")}
+          description={t("emptyState.description")}
           actions={
             <button type="button" className="button-primary" onClick={openCreate}>
-              + Neue Liste
+              {t("newList")}
             </button>
           }
-          hint="Listen können als Quelle für Abgaben verwendet werden."
+          hint={t("emptyState.hint")}
         />
       ) : (
       <div className="list-manager-layout">
 
-        {/* Left sidebar */}
-        <div className="list-manager-sidebar">
-          <div className="list-manager-sidebar-header">
-            <h2 className="list-manager-sidebar-title">Listen</h2>
-            <span className="pill">{lists.length} gesamt</span>
-          </div>
-          <label className="field-stack list-manager-search">
-            <span className="field-label">Suche</span>
-            <SearchInput value={search} onChange={setSearch} placeholder="Listen suchen…" />
-          </label>
-
-          {/* List items — scrollable, fills available height */}
-          <div className="list-manager-items">
-            {filteredLists.length === 0 ? (
-              <span className="muted" style={{ fontSize: "var(--text-base)", padding: "var(--space-2) var(--space-1)", display: "block" }}>Keine Listen</span>
-            ) : filteredLists.map((definition) => {
-              const isSelected = selectedListId === definition.id;
-              const entryCount = (entriesByList[definition.id] ?? []).length;
-              return (
-                <div
-                  key={definition.id}
-                  className="list-manager-item-wrap"
-                >
-                  <button
-                    type="button"
-                    onClick={() => setSelectedListId(definition.id)}
-                    className={`list-manager-item-button${isSelected ? " list-manager-item-button-active" : ""}`}
-                    aria-pressed={isSelected}
-                  >
-                    <span className="list-manager-item-name">{definition.name}</span>
-                    <span className="list-manager-item-count">{entryCount} {entryCount === 1 ? "Eintrag" : "Einträge"}</span>
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-
+        <div className="list-manager-tabs" role="tablist" aria-label={t("pageTitle")}>
+          {lists.map((definition) => (
+            <button type="button" role="tab" key={definition.id}
+              aria-selected={selectedListId === definition.id}
+              aria-controls="list-manager-panel"
+              className={`tabs-trigger${selectedListId === definition.id ? " tabs-trigger-active" : ""}`}
+              onClick={() => { setSelectedListId(definition.id); setSearch(""); setOnlyUnassigned(false); }}>
+              {definition.name} <span className="muted">{(entriesByList[definition.id] ?? []).length}</span>
+              {!definition.is_active && <Badge variant="neutral">{t("inactive")}</Badge>}
+              <span className="list-manager-dot" aria-hidden="true" />
+            </button>
+          ))}
         </div>
 
         {/* Right: content */}
-        <div className="list-manager-content">
+        <div className="list-manager-content" id="list-manager-panel" role="tabpanel">
           {selectedList ? (
             <div className="grid">
 
@@ -513,37 +404,38 @@ export function ListManager({
               {!isLive && !historical.isLoading && !historical.definition ? (
                 <p className="muted">
                   {isReconstructing
-                    ? "Für diese Liste konnten keine Daten gefunden werden - weder aktuell noch in einem anderen Zyklus."
-                    : "Diese Liste existierte in diesem Zyklus noch nicht."}
+                    ? t("noDataForReconstruct")
+                    : t("notFoundInCycle")}
                 </p>
               ) : (
                 displayedDefinition && (
                   <StructuredListTable
                     key={`${selectedList.id}-${historical.mode}-${historical.cycleConfigId}-${historical.cycleYear}`}
                     definition={displayedDefinition}
+                    masterList
                     heading={
-                      <div>
-                        <h2 className="list-manager-title">{displayedDefinition.name}</h2>
-                        <p className="list-manager-description muted">Spalten: {displayedDefinition.column_one_title} · {displayedDefinition.column_two_title}</p>
-                        {displayedDefinition.description && <p className="list-manager-description muted">{displayedDefinition.description}</p>}
+                      <div className="list-manager-filter">
+                        <SearchInput value={search} onChange={setSearch} placeholder={t("searchList", { name: displayedDefinition.name })} />
+                        {showUnassignedFilter && <button type="button" className={`button-secondary${onlyUnassigned ? " list-manager-filter-active" : ""}`} aria-pressed={onlyUnassigned} onClick={() => setOnlyUnassigned((value) => !value)}><span className="list-manager-dot" />{t("unassigned", { count: unassignedCount })}</button>}
+                        <span className="muted">{displayedDefinition.description} · {t("sidebar.entryCount", { count: displayedEntries.length })}{displayedDefinition.updated_at ? ` · ${t("changed", { date: formatDate(displayedDefinition.updated_at) })}` : ""}</span>
                       </div>
                     }
                     headingActions={
                       <>
-                  {historical.availableCycles.length > 0 && (
+                  {(
                     <SearchableSelect
                       options={[
-                        { id: "live", label: "Aktuell", cycle: null },
+                        { id: "live", label: t("currentView"), cycle: null },
                         ...historical.availableCycles.map((cycle) => ({
                           id: `${cycle.cycle_config_id}:${cycle.cycle_year}`,
-                          label: `${cycle.cycle_config_name} ${cycle.cycle_year}${cycle.has_snapshot ? " (historisch)" : " (kein Snapshot)"}`,
+                          label: `${cycle.cycle_config_name} ${cycle.cycle_year}${cycle.has_snapshot ? ` ${t("viewOption.historical")}` : ` ${t("viewOption.noSnapshot")}`}`,
                           cycle,
                         })),
                       ]}
                       getId={(option) => option.id}
                       getLabel={(option) => option.label}
                       value={isLive ? "live" : `${historical.cycleConfigId}:${historical.cycleYear}`}
-                      triggerProps={{ "aria-label": "Ansicht" }}
+                      triggerProps={{ "aria-label": t("viewOption.viewAriaLabel") }}
                       onChange={(option) => {
                         if (!option) return;
                         if (option.cycle) {
@@ -554,18 +446,16 @@ export function ListManager({
                       }}
                     />
                   )}
-                  {isLive && landscapeTemplates.length > 0 && (
-                    <button type="button" className="button-secondary button-ghost" onClick={() => { setExportListId(selectedListId ?? ""); setExportUrl(null); setExportModalOpen(true); }}>
-                      Export
-                    </button>
-                  )}
-                        {isLive && <>
-                        <button type="button" className="button-secondary button-ghost" onClick={() => openEdit(selectedList)}>Bearbeiten</button>
-                        <button type="button" className="button-secondary button-ghost" onClick={() => void deleteDefinition(selectedList.id)}>Liste löschen</button>
-                        </>}
+                  {isLive && <ActionMenu items={[
+                    { label: t("export"), onClick: () => setExportOpen(true) },
+                    { label: t("edit"), onClick: () => openEdit(selectedList) },
+                    { label: t("deleteList"), danger: true, onClick: () => void deleteDefinition(selectedList.id) },
+                  ]} />}
                       </>
                     }
+                    highlightDepartedParticipants={isLive}
                     entries={displayedEntries}
+                    visibleEntryIds={visibleEntries.map((entry) => entry.id)}
                     availableParticipants={availableParticipants}
                     availableEvents={availableEvents}
                     fullWidth
@@ -575,7 +465,7 @@ export function ListManager({
                       isLive
                         ? (payload) => createEntry(selectedList.id, payload)
                         : async () => {
-                            showToast("Es können keine neuen Einträge angelegt werden - nur bestehende bearbeiten oder entfernen", "error");
+                            showToast(t("noNewEntries"), "error");
                             return false;
                           }
                     }
@@ -598,318 +488,62 @@ export function ListManager({
               )}
             </div>
           ) : (
-            <p className="muted">Wähle eine Liste aus oder erstelle eine neue.</p>
+            <p className="muted">{t("selectListPrompt")}</p>
           )}
         </div>
       </div>
       )}
 
-      <Modal
-        open={exportModalOpen}
-        onClose={() => setExportModalOpen(false)}
-        title="Liste exportieren"
-        size="wide"
-      >
-        <div style={{ display: "flex", gap: "var(--space-5)", height: "min(640px, calc(100dvh - 200px))", minHeight: 0 }}>
-          {/* Left: options */}
-          <div style={{ width: 260, flexShrink: 0, display: "flex", flexDirection: "column", gap: "var(--space-5)", overflowY: "auto" }}>
-
-            {/* List dropdown with search */}
-            <div>
-              <div className="field-label" style={{ marginBottom: "var(--space-2)" }}>Liste</div>
-              <div ref={listDropdownRef} style={{ position: "relative" }}>
-                <button
-                  type="button"
-                  onClick={() => { setListDropdownOpen((v) => !v); setListDropdownSearch(""); }}
-                  className="dropdown-trigger"
-                >
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {exportListDef?.name ?? "Liste wählen…"}
-                  </span>
-                  <span style={{ flexShrink: 0, opacity: 0.5 }}>▾</span>
-                </button>
-                {listDropdownOpen && (
-                  <div className="dropdown-panel dropdown-panel-down">
-                    <div className="dropdown-search">
-                      <input
-                        autoFocus
-                        type="text"
-                        placeholder="Suchen…"
-                        value={listDropdownSearch}
-                        onChange={(e) => setListDropdownSearch(e.target.value)}
-                        className="dropdown-search-input"
-                      />
-                    </div>
-                    <div className="dropdown-panel-scroll">
-                      {listDropdownFiltered.length === 0 ? (
-                        <div className="muted" style={{ padding: "var(--space-2) var(--space-3)", fontSize: "var(--text-base)" }}>Keine Listen gefunden</div>
-                      ) : listDropdownFiltered.map((l) => (
-                        <button
-                          key={l.id}
-                          type="button"
-                          onClick={() => { setExportListId(l.id); setExportFilterColumn(""); setExportFilterParticipantId(""); setExportFilterEventId(""); setExportFilterText(""); setExportGroupBy(""); setExportSortBy(""); clearExportUrl(); setListDropdownOpen(false); setListDropdownSearch(""); }}
-                          className={exportListId === l.id ? "dropdown-option dropdown-option-selected" : "dropdown-option"}
-                        >
-                          {l.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Group by */}
-            {exportListDef && (
-              <div>
-                <div className="field-label" style={{ marginBottom: "var(--space-2)" }}>Gruppieren nach</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
-                  {(["", "column_one", "column_two"] as const).map((col) => (
-                    <button
-                      key={col}
-                      type="button"
-                      className={exportGroupBy === col ? "tag-filter-chip tag-filter-chip-active" : "tag-filter-chip"}
-                      style={{ width: "auto", minHeight: 0 }}
-                      onClick={() => { setExportGroupBy(col); clearExportUrl(); }}
-                    >
-                      {col === "" ? "Keine" : col === "column_one" ? exportListDef.column_one_title : exportListDef.column_two_title}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Filter */}
-            {exportListDef && (
-              <div>
-                <div className="field-label" style={{ marginBottom: "var(--space-2)" }}>Filtern nach Spalte</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
-                  {(["", "column_one", "column_two"] as const).map((col) => (
-                    <button
-                      key={col}
-                      type="button"
-                      className={exportFilterColumn === col ? "tag-filter-chip tag-filter-chip-active" : "tag-filter-chip"}
-                      style={{ width: "auto", minHeight: 0 }}
-                      onClick={() => { setExportFilterColumn(col); setExportFilterParticipantId(""); setExportFilterEventId(""); setExportFilterText(""); clearExportUrl(); }}
-                    >
-                      {col === "" ? "Kein Filter" : col === "column_one" ? exportListDef.column_one_title : exportListDef.column_two_title}
-                    </button>
-                  ))}
-                </div>
-                {exportFilterColumn && (() => {
-                  const vtype = exportFilterColumn === "column_one" ? exportListDef.column_one_value_type : exportListDef.column_two_value_type;
-                  if (vtype === "participant" || vtype === "participants") {
-                    return (
-                      <div style={{ marginTop: "var(--space-2)" }}>
-                        <SearchableSelect
-                          options={availableParticipants}
-                          getId={(p) => p.id}
-                          getLabel={(p) => p.display_name}
-                          value={exportFilterParticipantId || null}
-                          nullLabel="Alle"
-                          onChange={(p) => { setExportFilterParticipantId(p ? p.id : ""); clearExportUrl(); }}
-                        />
-                      </div>
-                    );
-                  }
-                  if (vtype === "event") {
-                    return (
-                      <div style={{ marginTop: "var(--space-2)" }}>
-                        <SearchableSelect
-                          options={[...availableEvents].sort((a, b) => a.event_date.localeCompare(b.event_date))}
-                          getId={(e) => e.id}
-                          getLabel={(e) => `${e.event_date} — ${e.title}`}
-                          value={exportFilterEventId || null}
-                          nullLabel="Alle"
-                          onChange={(e) => { setExportFilterEventId(e ? e.id : ""); clearExportUrl(); }}
-                        />
-                      </div>
-                    );
-                  }
-                  return (
-                    <input
-                      className="input"
-                      type="text"
-                      placeholder="Suchbegriff…"
-                      value={exportFilterText}
-                      onChange={(e) => { setExportFilterText(e.target.value); clearExportUrl(); }}
-                      style={{ marginTop: "var(--space-2)" }}
-                    />
-                  );
-                })()}
-              </div>
-            )}
-
-            {/* Action bar pinned to bottom */}
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginTop: "auto", paddingTop: "var(--space-2)" }}>
-              <button
-                type="button"
-                className="pdf-icon-link pdf-icon-link-success"
-                style={{ minWidth: 56, textAlign: "center" }}
-                onClick={() => void handlePdfClick()}
-                disabled={!exportTemplateId || !exportListId}
-              >
-                {exportBusy ? "…" : exportUrl ? "PDF ↓" : "PDF"}
-              </button>
-              <button
-                type="button"
-                className="pdf-icon-link pdf-icon-link-soon"
-                style={{ minWidth: 56, textAlign: "center" }}
-                disabled
-              >
-                MD
-              </button>
-              <div style={{ flex: 1 }} />
-              {landscapeTemplates.length > 1 && (
-                <div ref={templateDropdownRef} style={{ position: "relative" }}>
-                  <button
-                    type="button"
-                    onClick={() => setTemplateDropdownOpen((v) => !v)}
-                    style={{ padding: "var(--space-1) var(--space-3)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", backgroundColor: "transparent", color: "var(--text)", fontSize: "var(--text-base)", cursor: "pointer", minHeight: 0, whiteSpace: "nowrap", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis" }}
-                  >
-                    {landscapeTemplates.find((t) => t.id === exportTemplateId)?.name ?? "Vorlage"} ▾
-                  </button>
-                  {templateDropdownOpen && (
-                    <div className="dropdown-panel dropdown-panel-up" style={{ padding: "var(--space-1) 0", overflow: "visible", minWidth: 160 }}>
-                      {landscapeTemplates.map((t) => (
-                        <button
-                          key={t.id}
-                          type="button"
-                          onClick={() => { setExportTemplateId(t.id); setTemplateDropdownOpen(false); clearExportUrl(); }}
-                          className={exportTemplateId === t.id ? "dropdown-option dropdown-option-selected" : "dropdown-option"}
-                        >
-                          {t.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Right: live preview */}
-          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflowY: "auto", borderLeft: "1px solid var(--border)", paddingLeft: "var(--space-5)" }}>
-            {exportListDef ? (
-              <>
-                <div className="field-label" style={{ marginBottom: "var(--space-3)" }}>
-                  Vorschau · {exportFilteredEntries.length} Einträge
-                </div>
-                <StructuredListTable
-                  definition={exportListDef}
-                  entries={exportFilteredEntries}
-                  availableParticipants={availableParticipants}
-                  availableEvents={availableEvents}
-                  editable={false}
-                  groupByColumn={exportGroupBy}
-                  sortByColumn={exportSortBy}
-                  sortDirection={exportSortDirection}
-                  onHeaderSort={toggleExportSort}
-                  onCreateEntry={async () => false}
-                  onUpdateEntry={async () => false}
-                  onDeleteEntry={async () => {}}
-                />
-              </>
-            ) : (
-              <p className="muted">Wähle eine Liste aus.</p>
-            )}
-          </div>
-        </div>
-      </Modal>
+      {exportOpen && selectedListId && (
+        <DocumentExportDialog open={exportOpen} onClose={() => setExportOpen(false)} context={{ documentType: "list", params: { list_id: selectedListId } }} />
+      )}
 
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={editingListId ? "Liste bearbeiten" : "Liste erstellen"}
-        description="Jede Liste hat genau zwei Spalten. Der Datentyp bestimmt, welche Eingabe spaeter im Tabellenblock und im Protokoll sichtbar ist."
+        title={editingListId ? t("formModal.editTitle") : t("formModal.createTitle")}
+        description={t("formModal.description")}
+        size="wide"
+        className="list-definition-modal"
+        footer={<div className="list-definition-footer">
+          <label className="list-definition-active"><input type="checkbox" role="switch" checked={form.is_active} onChange={(event) => setForm((current) => ({ ...current, is_active: event.target.checked }))} />{t("formModal.active")}</label>
+          <div className="modal-actions"><button type="button" className="button-secondary" onClick={() => setModalOpen(false)}>{t("formModal.cancel")}</button>
+            <button data-modal-save form="list-definition-form" type="submit" className="button-primary" disabled={!form.name.trim() || !form.column_one_title.trim() || !form.column_two_title.trim()}>{editingListId ? t("formModal.save") : t("formModal.create")}</button></div>
+        </div>}
       >
-        <ModalSaveForm className="grid" onSubmit={saveDefinition}>
+        <ModalSaveForm id="list-definition-form" className="grid list-definition-form" onSubmit={saveDefinition}>
           <div className="two-col">
-            <label className="field-stack">
-              <span className="field-label">Listenname</span>
-              <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required />
+            <label className="field-stack"><span className="field-label">{t("formModal.name")}</span>
+              <input value={form.name} placeholder={t("formModal.namePlaceholder")} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required />
             </label>
-            <label className="checkbox-line">
-              <input
-                type="checkbox"
-                checked={form.is_active}
-                onChange={(event) => setForm((current) => ({ ...current, is_active: event.target.checked }))}
-              />
-              Aktiv
+            <label className="field-stack"><span className="field-label">{t("formModal.description2")} · <span className="muted">{t("formModal.optional")}</span></span>
+              <input value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder={t("formModal.descriptionPlaceholder")} />
             </label>
           </div>
-          <label className="field-stack">
-            <span className="field-label">Beschreibung</span>
-            <input
-              value={form.description}
-              onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
-              placeholder="Optional"
-            />
-          </label>
+          <div className="list-definition-section"><strong>{t("formModal.columns")}</strong><span className="muted">{t("formModal.columnsHint")}</span></div>
           <div className="two-col">
-            <div className="card grid">
-              <div className="eyebrow">Spalte 1</div>
-              <label className="field-stack">
-                <span className="field-label">Titel</span>
-                <input
-                  value={form.column_one_title}
-                  onChange={(event) => setForm((current) => ({ ...current, column_one_title: event.target.value }))}
-                  required
-                />
-              </label>
-              <label className="field-stack">
-                <span className="field-label">Datentyp</span>
-                <select
-                  value={form.column_one_value_type}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      column_one_value_type: event.target.value as StructuredListValueType,
-                    }))
-                  }
-                >
-                  {valueTypeOptions.map((option) => (
-                    <option key={`list-column-one-type-${option.value}`} value={option.value}>
-                      {option.label}
-                    </option>
+            {(["one", "two"] as const).map((column, index) => (
+              <fieldset className="list-definition-column" key={column} aria-label={t(index === 0 ? "formModal.column1" : "formModal.column2")}>
+                <label className="list-definition-title"><span className="list-definition-number">{index + 1}</span>
+                  <input aria-label={t(index === 0 ? "formModal.column1" : "formModal.column2")} value={form[`column_${column}_title`]} onChange={(event) => setForm((current) => ({ ...current, [`column_${column}_title`]: event.target.value }))} required />
+                </label>
+                <div className="list-definition-types" role="group" aria-label={t("formModal.dataType")}>
+                  {valueTypeOptions(t).map((option) => (
+                    <button type="button" key={option.value} aria-pressed={form[`column_${column}_value_type`] === option.value}
+                      className={`list-definition-type${form[`column_${column}_value_type`] === option.value ? " list-definition-type-selected" : ""}`}
+                      onClick={() => setForm((current) => ({ ...current, [`column_${column}_value_type`]: option.value }))}>
+                      <span className="list-definition-type-icon" aria-hidden="true"><ListValueTypeIcon type={option.value} /></span>
+                      <span><strong>{option.label}</strong><span className="muted">{t(`typeHints.${option.value}`)}</span></span>
+                    </button>
                   ))}
-                </select>
-              </label>
-            </div>
-            <div className="card grid">
-              <div className="eyebrow">Spalte 2</div>
-              <label className="field-stack">
-                <span className="field-label">Titel</span>
-                <input
-                  value={form.column_two_title}
-                  onChange={(event) => setForm((current) => ({ ...current, column_two_title: event.target.value }))}
-                  required
-                />
-              </label>
-              <label className="field-stack">
-                <span className="field-label">Datentyp</span>
-                <select
-                  value={form.column_two_value_type}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      column_two_value_type: event.target.value as StructuredListValueType,
-                    }))
-                  }
-                >
-                  {valueTypeOptions.map((option) => (
-                    <option key={`list-column-two-type-${option.value}`} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
+                </div>
+              </fieldset>
+            ))}
           </div>
-          <div className="table-toolbar-actions">
-            <button data-modal-save type="submit" className="button-secondary">
-              {editingListId ? "Liste speichern" : "Liste erstellen"}
-            </button>
+          <div className="field-stack"><span className="field-label">{t("formModal.preview")}</span>
+            <div className="list-definition-preview"><table className="data-table"><thead><tr>{(["one", "two"] as const).map((column) => <th key={column}>{form[`column_${column}_title`]} <span className="muted">· {t(`valueTypes.${form[`column_${column}_value_type`]}`)}</span></th>)}</tr></thead>
+              <tbody>{[0, 1].map((row) => <tr key={row}>{(["one", "two"] as const).map((column) => <td key={column}><span className={form[`column_${column}_value_type`] === "text" ? "" : "list-definition-example"}>{t(`previewValues.${form[`column_${column}_value_type`]}.${row}`)}</span></td>)}</tr>)}</tbody>
+            </table></div>
           </div>
         </ModalSaveForm>
       </Modal>

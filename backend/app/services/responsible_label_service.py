@@ -5,7 +5,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import ListDefinition, ListEntry, Participant, ProtocolElement
+from app.models import ListDefinition, ListEntry, Participant, Protocol, ProtocolElement
 
 
 def _responsible_participant_name(participant: Participant | None, *, mode: str, fallback_id: int | None = None) -> str:
@@ -78,6 +78,33 @@ def _resolve_ids_for_assignments(
             seen_ids.add(pid)
             resolved_ids.append(pid)
     return resolved_ids
+
+
+def responsible_list_definition_ids(db: Session, protocol_id: int) -> set[int]:
+    """Tabellen, aus denen die Verantwortlichen der Traktanden dieses Protokolls live gelesen
+    werden (``list_definition_id`` der Zuweisungen). Der Protokoll-Editor beobachtet sie zusätzlich
+    zu den verknüpften Tabellenblöcken (collaboration_ws), damit eine Änderung an der Tabelle die
+    Titel auch im offenen Protokoll nachführt. Nur Tabellen des Protokoll-Mandanten."""
+    rows = db.execute(
+        select(ProtocolElement.responsible_assignments_snapshot, Protocol.tenant_id)
+        .join(Protocol, Protocol.id == ProtocolElement.protocol_id)
+        .where(ProtocolElement.protocol_id == protocol_id, ProtocolElement.responsible_assignments_snapshot.is_not(None))
+    ).all()
+    ids: set[int] = set()
+    tenant_id: int | None = None
+    for assignments, row_tenant_id in rows:
+        tenant_id = row_tenant_id
+        for assignment in assignments or []:
+            if not isinstance(assignment, dict) or not assignment.get("list_entry_id"):
+                continue
+            try:
+                ids.add(int(assignment.get("list_definition_id") or 0))
+            except (TypeError, ValueError):
+                continue
+    ids.discard(0)
+    if not ids:
+        return set()
+    return set(db.scalars(select(ListDefinition.id).where(ListDefinition.id.in_(ids), ListDefinition.tenant_id == tenant_id)))
 
 
 def resolve_responsible_label(

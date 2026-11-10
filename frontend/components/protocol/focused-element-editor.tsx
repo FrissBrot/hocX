@@ -1,22 +1,39 @@
 "use client";
 
-import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
+import { useParticipantSelectable } from "@/contexts/participant-date-context";
+import { useParticipantNameSource } from "@/contexts/participant-directory-context";
+
+import { Dispatch, ReactNode, SetStateAction, memo, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
+import { useEventFieldConfig } from "@/lib/hooks/use-event-field-config";
+import { FinanceTransactionForm } from "@/components/protocol/finance-transaction-form";
+import { TodoTaskInput } from "@/components/protocol/todo-task-input";
 
 import { useConfirm } from "@/contexts/confirm-context";
+import { restoreFine, useFineDelete } from "@/components/finances/fine-delete";
 import { useToast } from "@/contexts/toast-context";
 import { Badge } from "@/components/ui/badge";
+import { ActionIcon } from "@/components/ui/action-icons";
 import { TodoAssigneeMenu } from "@/components/todos/todo-assignee-menu";
 import { StructuredListTable, TrackedEntryInfo } from "@/components/lists/structured-list-table";
+import { TODO_DUE_PRESETS, todoDuePresetDate } from "@/lib/utils/todo-due";
 import { DateInput } from "@/components/ui/date-input";
+import { TimeInput } from "@/components/ui/time-input";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { TrackedChangeHideButton } from "@/components/ui/tracked-change-hide-button";
 import { Modal } from "@/components/ui/modal";
 import { LightboxImage } from "@/components/ui/lightbox-image";
 import { StructuredListEditModal } from "@/components/protocol/planning/structured-list-edit-modal";
 import { EventOverviewModal } from "@/components/protocol/planning/event-overview-modal";
+import { EventCalendarModal } from "@/components/events/event-calendar-modal";
+import { fallbackTagColor } from "@/components/events/event-utils";
 import { CheckboxCandidateModal, CandidateItem } from "@/components/protocol/planning/checkbox-candidate-modal";
 import { EventDetailForm } from "@/components/protocol/planning/event-detail-form";
 import { PlanningIconTrigger } from "@/components/protocol/planning/planning-icon-trigger";
+import { AttendanceBoard } from "@/components/protocol/attendance-board";
+import { EventRemoveDialog, eventTagWithout, matchingEventTags } from "@/components/protocol/planning/event-remove-dialog";
+import { EventSeriesEntry, EventSeriesGroup } from "@/components/protocol/planning/event-series-group";
+import { EventBlockPickerModal } from "@/components/protocol/planning/event-block-picker-modal";
 import { TrackedWordDiff } from "@/components/protocol/tracked-word-diff";
 import { fetchCycleEvents } from "@/lib/api/cycle-events";
 import { TagInput } from "@/components/ui/tag-input";
@@ -28,10 +45,11 @@ import { TagConfig } from "@/lib/hooks/use-tag-config";
 import { browserApiFetch } from "@/lib/api/client";
 import { formatDate, formatDateRange, formatDateTime } from "@/lib/utils/format";
 import { getCycleYear } from "@/lib/utils/cycle";
+import { filterFines, filterTransactions, useBalancesAsOf, useProtocolPeriod } from "@/lib/element-types/period";
+import { applyEventFilter, blockEventFilter, eventFilterTagText, eventMatchesFilter, normalizeEventFilter, splitTags, type EventFilter } from "@/lib/element-types/event-filter";
 import {
   AttendanceFine,
   AttendanceFineListItem,
-  DocumentTemplate,
   EventSummary,
   FinanceAccount,
   FinanceTransaction,
@@ -48,7 +66,6 @@ import {
   WholeListSnapshot,
 } from "@/types/api";
 import {
-  ATTENDANCE_OPTIONS,
   MatrixEmbeddedBlock,
   ProtocolEventDraft,
   TODO_STATUS,
@@ -56,31 +73,48 @@ import {
   TodoMenuSearchList,
   TodoMiniMenu,
   asObject,
-  attendanceParticipants,
-  tallyAttendance,
+  blockEventPublicId,
+  protocolAttendanceParticipants,
   canCreateProtocolEventDraft,
   compareIsoDate,
   createInlineProtocolEventDraft,
   createMatrixEmbeddedBlock,
   createProtocolEventDraft,
   embeddedBlockSummary,
+  eventRowTintStyle,
   formatFinanceAmount,
   formatShortDate,
   readMatrixEmbeddedBlock,
   trimSectionName,
   visibleBlockTitle,
 } from "@/components/protocol/protocol-editor-shared";
+import { attendanceFineConfig, runAttendanceChangeSerialized, syncAttendanceFine } from "@/components/protocol/attendance-fines";
 import { MatrixEmbeddedBlockEditor } from "@/components/protocol/matrix-embedded-block-editor";
+import {
+  MatrixAddColumnCard,
+  MatrixBoardHeader,
+  MatrixEmptyValue,
+  MatrixEventChips,
+  MatrixEventValue,
+  MatrixPeopleChips,
+  MatrixRowLabel,
+  MatrixTableView,
+  MatrixView,
+  matrixColumnColorClass,
+  readStoredMatrixView,
+  storeMatrixView,
+} from "@/components/protocol/matrix-board";
 import { ChartBlockRenderer } from "@/components/protocol/chart-block-renderer";
 import { SessionTodosSection } from "@/components/protocol/session-todos-section";
 
-export function FocusedElementEditor({
+function FocusedElementEditorImpl({
   collab,
   trackChangesActive,
   element,
   elementIndex,
   textDrafts,
   todosByBlock,
+  sessionTodos,
   imagesByBlock,
   newTodoTask,
   browserApiBaseUrl,
@@ -90,6 +124,10 @@ export function FocusedElementEditor({
   availableTemplates,
   availableAccounts,
   financeTransactions,
+  financeVersion = 0,
+  canManageFinances = false,
+  addFinanceTransaction,
+  deleteFinanceTransaction,
   protocolFines,
   setProtocolFines,
   pendingFines,
@@ -101,6 +139,7 @@ export function FocusedElementEditor({
   setSelectedFiles,
   setNewTodoTask,
   saveBlockConfiguration,
+  saveAttendanceStatus,
   updateBlockInState,
   handleTextChange,
   forceEditable,
@@ -112,9 +151,9 @@ export function FocusedElementEditor({
   acceptTrackedListEntry,
   acceptTrackedRow,
   acceptTextTrackedChanges,
-  createEventFromBlock,
-  updateEventFromBlock,
-  deleteEventFromBlock,
+  createEventFromBlock: createEventFromBlockProp,
+  updateEventFromBlock: updateEventFromBlockProp,
+  deleteEventFromBlock: deleteEventFromBlockProp,
   onEventContextMenu,
   uploadImage,
   deleteImage,
@@ -132,34 +171,47 @@ export function FocusedElementEditor({
   setNewTodoTags,
   isPlanningMode,
   unhideEventBlock,
+  hideEventBlock,
   removeEventBlock,
   addEventBlockToElement,
   onQuickTodoCreated,
   pendingTodos,
   onPendingUpdate,
   onPendingDone,
-  documentTemplates,
   isActive = true,
   autoFocusToken = 0,
   tagConfig,
   updateTagColor,
   renameTag,
+  sessionNotes,
+  agendaSlot,
 }: {
+  /** Anliegen dieses Abschnitts (AgendaItemsSection), vom Editor gerendert. */
+  agendaSlot?: ReactNode;
   collab: ReturnType<typeof useProtocolCollaboration>;
   trackChangesActive: boolean;
   element: ProtocolElement;
   elementIndex: number;
   textDrafts: Record<string, string>;
   todosByBlock: Record<string, ProtocolTodo[]>;
+  /** Pendenzen mit dem Tag dieses Punkts (Sitzungsansicht), vom Editor stabil vorberechnet. */
+  sessionTodos: ProtocolTodo[];
   imagesByBlock: Record<string, ProtocolImage[]>;
   newTodoTask: Record<string, string>;
   browserApiBaseUrl: string;
   protocol: ProtocolSummary;
+  /** Aktueller Stand der Sitzungsnotizen (Sitzungspanel), für den Blocktyp session_notes. */
+  sessionNotes?: string;
   availableParticipants: ParticipantSummary[];
   availableEvents: EventSummary[];
   availableTemplates: TemplateSummary[];
   availableAccounts: FinanceAccount[];
   financeTransactions: Record<string, FinanceTransaction[]>;
+  /** Zählt erfasste/gelöschte Transaktionen hoch: Kontostände am Protokolldatum neu laden */
+  financeVersion?: number;
+  canManageFinances?: boolean;
+  addFinanceTransaction?: (accountId: string, values: { transaction_date: string; description: string; amount: number }) => Promise<boolean>;
+  deleteFinanceTransaction?: (accountId: string, transactionId: string) => Promise<void>;
   protocolFines: AttendanceFine[];
   setProtocolFines: Dispatch<SetStateAction<AttendanceFine[]>>;
   pendingFines: AttendanceFineListItem[];
@@ -171,6 +223,7 @@ export function FocusedElementEditor({
   setSelectedFiles: Dispatch<SetStateAction<Record<string, File | null>>>;
   setNewTodoTask: Dispatch<SetStateAction<Record<string, string>>>;
   saveBlockConfiguration: (blockId: string, configurationSnapshotJson: Record<string, unknown>) => Promise<void>;
+  saveAttendanceStatus: (blockId: string, participantId: string, participantName: string, status: string) => Promise<void>;
   updateBlockInState: (blockId: string, updater: (current: ProtocolElement["blocks"][number]) => ProtocolElement["blocks"][number]) => void;
   handleTextChange: (protocolElementBlockId: string, content: string) => void;
   forceEditable: boolean;
@@ -186,12 +239,12 @@ export function FocusedElementEditor({
   updateEventFromBlock: (protocolElementBlockId: string, eventId: string, patch: Partial<EventSummary>) => Promise<boolean>;
   deleteEventFromBlock: (protocolElementBlockId: string, eventId: string) => Promise<void>;
   onEventContextMenu: (nativeEvent: React.MouseEvent, eventRow: EventSummary, protocolElementBlockId: string) => void;
-  uploadImage: (protocolElementBlockId: string) => Promise<void>;
+  uploadImage: (protocolElementBlockId: string, includeGps?: boolean) => Promise<void>;
   deleteImage: (protocolElementBlockId: string, imageId: string) => Promise<void>;
   listDefinitionsById: Map<string, StructuredListDefinition>;
   listEntriesByDefinition: Record<string, StructuredListEntry[]>;
-  createListEntryFromBlock: (protocolElementBlockId: string, listDefinitionId: string, payload: { sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }) => Promise<boolean>;
-  updateListEntryFromBlock: (protocolElementBlockId: string, listDefinitionId: string, entryId: string, payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>) => Promise<boolean>;
+  createListEntryFromBlock: (protocolElementBlockId: string, listDefinitionId: string, payload: { sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }) => Promise<boolean>;  // i18n-ok: TS-Generic-Signatur, kein UI-Text
+  updateListEntryFromBlock: (protocolElementBlockId: string, listDefinitionId: string, entryId: string, payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>) => Promise<boolean>;  // i18n-ok: TS-Generic-Signatur, kein UI-Text
   deleteListEntryFromBlock: (protocolElementBlockId: string, listDefinitionId: string, entryId: string) => Promise<void>;
   refreshBlockListSnapshot: (blockId: string) => Promise<void>;
   undoBlockListSnapshot: (blockId: string) => Promise<void>;
@@ -202,13 +255,13 @@ export function FocusedElementEditor({
   setNewTodoTags: Dispatch<SetStateAction<Record<string, string>>>;
   isPlanningMode: boolean;
   unhideEventBlock: (blockId: string) => Promise<void>;
+  hideEventBlock: (blockId: string) => Promise<void>;
   removeEventBlock: (blockId: string) => Promise<void>;
   addEventBlockToElement: (elementId: string, eventId: string) => Promise<ProtocolElement["blocks"][number] | null>;
   onQuickTodoCreated: (blockId: string, todoId: string, elementId: string) => void | Promise<void>;
   pendingTodos: TodoListItem[];
   onPendingUpdate: (updated: Partial<TodoListItem> & { id: string }) => void;
   onPendingDone: (todoId: string) => void;
-  documentTemplates: DocumentTemplate[];
   /** True while this section is the one currently in focus in the scrollable document (see protocol-editor.tsx's scroll-spy); defaults to true for the legacy single-section "abgeschlossen" view, which always renders exactly one instance. */
   isActive?: boolean;
   /** Bumped by the parent only on an explicit "jump to this section" action (sidebar click, keyboard nav, restored scroll position) so autofocus never fires just because several sections mount at once. */
@@ -217,10 +270,23 @@ export function FocusedElementEditor({
   updateTagColor: (tag: string, color: string) => Promise<void>;
   renameTag: (oldTag: string, newTag: string) => Promise<void>;
 }) {
+  const isParticipantSelectable = useParticipantSelectable();
+  const participantNames = useParticipantNameSource(availableParticipants);
+  const t = useTranslations("protocols");
+  const tBoard = useTranslations("protocols.attendanceBoard");
+  const tTodos = useTranslations("todos");
+  const tTemplates = useTranslations("templates.elementEditor");
+  const eventFieldConfig = useEventFieldConfig();
   const confirm = useConfirm();
   const showToast = useToast();
   const sectionRef = useRef<HTMLElement | null>(null);
   const didMountRef = useRef(false);
+  // Neueste Bussen auch für eine gerade wartende Anwesenheitsänderung derselben Person (siehe
+  // runAttendanceChangeSerialized): wird beim Anlegen/Löschen sofort nachgeführt.
+  const protocolFinesRef = useRef(protocolFines);
+  useEffect(() => {
+    protocolFinesRef.current = protocolFines;
+  }, [protocolFines]);
 
   useEffect(() => {
     if (!didMountRef.current) {
@@ -238,10 +304,26 @@ export function FocusedElementEditor({
   const bulletSkipBlurRef = useRef(false);
   // Planning-mode ("geplant") popups: which block's edit/overview modal is currently open.
   const [listEditModalBlockId, setListEditModalBlockId] = useState<string | null>(null);
+  // «GPS-Daten des Bildes mitsenden» je Bild-Block (Datenschutz-Audit Paket 9.3), Standard an
+  const [imageGpsOff, setImageGpsOff] = useState<Record<string, boolean>>({});
   const [eventOverviewBlockId, setEventOverviewBlockId] = useState<string | null>(null);
   const [matrixPickerBlockId, setMatrixPickerBlockId] = useState<string | null>(null);
+  // Karten oder Tabelle, gilt für alle Matrizen (pro Browser gemerkt)
+  const [matrixView, setMatrixView] = useState<MatrixView>("cards");
+  useEffect(() => setMatrixView(readStoredMatrixView()), []);
+  function changeMatrixView(view: MatrixView) {
+    setMatrixView(view);
+    storeMatrixView(view);
+  }
   // Planning-mode consolidated checkbox popup for "Termine pro Element".
   const [showEventBlockPicker, setShowEventBlockPicker] = useState(false);
+  // «Termin bearbeiten» aus einer Termin-Karte bzw. aus dem Popup «Termine wählen»
+  const [editingSeriesEvent, setEditingSeriesEvent] = useState<{ eventId: string; blockId: string } | null>(null);
+  // «Entfernen» einer Termin-Serie: Rückfrage mit optionalem Entfernen der passenden Tags
+  const [removingSeriesEvent, setRemovingSeriesEvent] = useState<{ title: string; event: EventSummary | null; blockIds: string[]; tags: string[] } | null>(null);
+  const [removingSeriesBusy, setRemovingSeriesBusy] = useState(false);
+  // „Nächster Hock": Kalenderansicht als Date-Picker (Block-ID + heutiges Datum beim Öffnen).
+  const [sessionDatePicker, setSessionDatePicker] = useState<{ blockId: string; todayIso: string } | null>(null);
   const [eventBlockScope, setEventBlockScope] = useState<"current" | "all">("current");
   const [eventBlockCandidates, setEventBlockCandidates] = useState<EventSummary[]>([]);
   const [eventBlockCandidatesLoading, setEventBlockCandidatesLoading] = useState(false);
@@ -251,6 +333,29 @@ export function FocusedElementEditor({
   );
   const [creatingEventBlockNew, setCreatingEventBlockNew] = useState(false);
   const focusedTemplate = availableTemplates.find((t) => t.id === protocol.template_id) ?? null;
+  const [cycleEventPools, setCycleEventPools] = useState<Record<string, EventSummary[]>>({});
+  const [cyclePoolVersion, setCyclePoolVersion] = useState(0);
+  const reloadCycleEventPools = () => setCyclePoolVersion((version) => version + 1);
+  // Finanz-/Bussenblöcke: Vorprotokoll-Datum, Zyklusgrenzen und Saldo zum Protokolldatum.
+  const blockCodes = element.blocks.map((entry) => entry.element_type_code);
+  const protocolPeriod = useProtocolPeriod(protocol.id, blockCodes.includes("finance_transactions") || blockCodes.includes("fine_list"));
+  const balanceAccountIds = element.blocks
+    .filter((entry) => entry.element_type_code === "finance_balance" && asObject(entry.configuration_snapshot_json).finance_balance_date === "protocol_date")
+    .map((entry) => {
+      const stored = asObject(entry.configuration_snapshot_json).finance_account_id;
+      return stored ? entry.public_reference_ids?.finance_accounts?.[String(stored)] ?? String(stored) : null;
+    })
+    .filter((id): id is string => Boolean(id));
+  const balancesAtProtocolDate = useBalancesAsOf(balanceAccountIds, protocol.protocol_date ?? null, financeVersion);
+  // Ungefilterte Bussen; die Bussenliste wendet ihre Block-Optionen darauf an.
+  const allPendingFines = pendingFines;
+  // Löschen mit Begründung wird in diesem Protokoll aufgeführt (MAIN-BE-002).
+  const { requestDelete: requestFineDelete, dialog: fineDeleteDialog } = useFineDelete(protocol.id);
+  const reloadPendingFines = async () => {
+    const latest = await browserApiFetch<AttendanceFineListItem[]>(`/api/protocols/${protocol.id}/pending-fines`);
+    setPendingFines(latest ?? []);
+  };
+  const allProtocolFines = protocolFines;
 
   const currentCycleYear: number | null = protocol.protocol_date && focusedTemplate?.cycle_config
     ? getCycleYear(protocol.protocol_date, focusedTemplate.cycle_config.reset_month, focusedTemplate.cycle_config.reset_day)
@@ -296,7 +401,7 @@ export function FocusedElementEditor({
       })
       .catch((error) => {
         if (!cancelled) {
-          showToast(error instanceof Error ? error.message : "Termine konnten nicht geladen werden", "error");
+          showToast(error instanceof Error ? error.message : t("eventsLoadFailed"), "error");
         }
       })
       .finally(() => {
@@ -316,16 +421,12 @@ export function FocusedElementEditor({
     () => [...availableEvents].sort((left, right) => compareIsoDate(left.event_date, right.event_date)),
     [availableEvents]
   );
-  const eligibleAttendanceParticipants = useMemo(
-    () => attendanceParticipants(availableParticipants),
-    [availableParticipants]
-  );
   const filteredParticipants = useMemo(() => {
     const query = multiParticipantSearch.trim().toLowerCase();
     if (!query) {
-      return availableParticipants;
+      return availableParticipants.filter(isParticipantSelectable);
     }
-    return availableParticipants.filter((participant) => {
+    return availableParticipants.filter(isParticipantSelectable).filter((participant) => {
       const haystack = [
         participant.display_name,
         participant.first_name ?? "",
@@ -336,7 +437,7 @@ export function FocusedElementEditor({
         .toLowerCase();
       return haystack.includes(query);
     });
-  }, [availableParticipants, multiParticipantSearch]);
+  }, [availableParticipants, multiParticipantSearch, isParticipantSelectable]);
 
   useEffect(() => {
     return () => {
@@ -347,19 +448,22 @@ export function FocusedElementEditor({
 
   function dueMenuLabel(todo: ProtocolTodo) {
     if (todo.due_marker === "next_session") {
-      return todo.resolved_due_date ? `${formatShortDate(todo.resolved_due_date)} (Nächste Sitzung)` : "Nächste Sitzung";
+      return todo.resolved_due_date ? t("nextSessionWithDate", { date: formatShortDate(todo.resolved_due_date) }) : t("nextSession");
     }
     if (todo.due_event_id) {
-      const label = todo.resolved_due_label ?? "Termin";
+      const label = todo.resolved_due_label ?? t("eventFallback");
       return todo.resolved_due_date ? `${formatShortDate(todo.resolved_due_date)} (${label})` : label;
     }
     if (todo.due_date) {
       return formatShortDate(todo.due_date);
     }
-    return "Kein Enddatum";
+    return t("noEndDate");
   }
 
   function autoResizeTodoField(target: HTMLTextAreaElement) {
+    // Mit `field-sizing: content` (globals.css, .todo-main-compact) wächst das Feld per CSS,
+    // ohne Reflow pro Taste.
+    if (FIELD_SIZING_SUPPORTED && target.closest(".todo-main-compact")) return;
     target.style.height = "0px";
     target.style.height = `${Math.max(40, target.scrollHeight)}px`;
   }
@@ -398,7 +502,7 @@ export function FocusedElementEditor({
       kind: "matrix",
       blockId,
       rowId: String(row.row_id ?? row.id ?? ""),
-      rowLabel: String(row.label ?? "Teilnehmer"),
+      rowLabel: String(row.label ?? t("participantFallback")),
       selectedIds,
       columnId,
     });
@@ -417,7 +521,7 @@ export function FocusedElementEditor({
       kind: "embedded_form",
       blockId,
       rowId: matrixRowId,
-      rowLabel: `${matrixRowLabel} · ${String(embeddedRow.label ?? "Teilnehmer")}`,
+      rowLabel: `${matrixRowLabel} · ${String(embeddedRow.label ?? t("participantFallback"))}`,
       selectedIds: Array.isArray(embeddedRow.participant_ids) ? embeddedRow.participant_ids.map(String) : [],
       columnId,
       embeddedRowId: String(embeddedRow.id ?? ""),
@@ -447,20 +551,20 @@ export function FocusedElementEditor({
   }
 
   function singleParticipantSummary(participantId: string | null | undefined): string {
-    if (!participantId) return "Teilnehmer waehlen";
-    const p = availableParticipants.find((entry) => entry.id === participantId);
-    return p?.display_name ?? "Teilnehmer waehlen";
+    if (!participantId) return t("chooseParticipant");
+    const p = participantNames.find((entry) => entry.id === participantId);
+    return p?.display_name ?? t("chooseParticipant");
   }
 
   function formatListEntryColumnValue(value: Record<string, any> | null | undefined, valueType: string): string {
     if (!value) return "";
     if (valueType === "participant") {
       const id = String(value.participant_id ?? "");
-      return availableParticipants.find((p) => p.id === id)?.display_name ?? "";
+      return participantNames.find((p) => p.id === id)?.display_name ?? "";
     }
     if (valueType === "participants") {
       const ids = Array.isArray(value.participant_ids) ? value.participant_ids.map(String) : [];
-      return availableParticipants.filter((p) => ids.includes(p.id)).map((p) => p.display_name).join(", ");
+      return participantNames.filter((p) => ids.includes(p.id)).map((p) => p.display_name).join(", ");
     }
     if (valueType === "event") {
       const id = String(value.event_id ?? "");
@@ -496,19 +600,14 @@ export function FocusedElementEditor({
   function multiParticipantSummary(row: Record<string, any>) {
     const selectedIds = Array.isArray(row.participant_ids) ? row.participant_ids.map(String) : [];
     if (!selectedIds.length) {
-      return "Teilnehmer waehlen";
+      return t("chooseParticipant");
     }
-    const selectedParticipants = availableParticipants.filter((participant) => selectedIds.includes(participant.id));
+    const selectedParticipants = participantNames.filter((participant) => selectedIds.includes(participant.id));
     if (!selectedParticipants.length) {
       return `${selectedIds.length} ausgewaehlt`;
     }
-    if (selectedParticipants.length === 1) {
-      return selectedParticipants[0].display_name;
-    }
-    if (selectedParticipants.length === 2) {
-      return `${selectedParticipants[0].display_name}, ${selectedParticipants[1].display_name}`;
-    }
-    return `${selectedParticipants[0].display_name} + ${selectedParticipants.length - 1}`;
+    // Alle Namen ausschreiben; zu lange Listen kürzt das CSS mit Ellipse (voller Text im Tooltip).
+    return selectedParticipants.map((participant) => participant.display_name).join(", ");
   }
 
   function closeParticipantPicker() {
@@ -518,19 +617,7 @@ export function FocusedElementEditor({
   }
 
   function handleFormInputKeyDown(e: React.KeyboardEvent<HTMLElement>) {
-    if (e.key === "Tab") {
-      const container = (e.currentTarget as HTMLElement).closest("[data-form-block-id]");
-      if (!container) return;
-      const inputs = Array.from(container.querySelectorAll<HTMLElement>("[data-form-input]"));
-      const idx = inputs.indexOf(e.currentTarget);
-      if (idx === -1) return;
-      const atLast = !e.shiftKey && idx === inputs.length - 1;
-      const atFirst = e.shiftKey && idx === 0;
-      if (atLast || atFirst) {
-        e.preventDefault();
-        document.querySelector<HTMLElement>(".editor-fixed-actions [data-editor-primary-action]")?.focus();
-      }
-    } else if (e.key === "Enter" && (e.currentTarget as HTMLElement).tagName === "SELECT") {
+    if (e.key === "Enter" && (e.currentTarget as HTMLElement).tagName === "SELECT") {
       const el = e.currentTarget as HTMLElement;
       setTimeout(() => { if (document.activeElement !== el) el.focus(); }, 10);
     }
@@ -578,10 +665,12 @@ export function FocusedElementEditor({
         return;
       }
       const targetColumn = nextColumns[targetColumnIndex];
-      const currentValues = asObject(targetColumn.values);
+      // Zellen stehen in row_values (altes Schema: values) - so liest sie matrixCellValue. Hier
+      // stand bis 2026-11-08 nur `values`, die Auswahl wurde gespeichert, aber nie angezeigt.
+      const currentValues = asObject(targetColumn.row_values ?? targetColumn.values);
       nextColumns[targetColumnIndex] = {
         ...targetColumn,
-        values: {
+        row_values: {
           ...currentValues,
           [picker.rowId]: {
             ...asObject(currentValues[picker.rowId]),
@@ -597,7 +686,7 @@ export function FocusedElementEditor({
         return;
       }
       const targetColumn = nextColumns[targetColumnIndex];
-      const currentValues = asObject(targetColumn.values);
+      const currentValues = asObject(targetColumn.row_values ?? targetColumn.values);
       const targetCell = asObject(currentValues[picker.rowId]);
       const embeddedBlock = readMatrixEmbeddedBlock(targetCell);
       if (!embeddedBlock) {
@@ -615,7 +704,7 @@ export function FocusedElementEditor({
       };
       nextColumns[targetColumnIndex] = {
         ...targetColumn,
-        values: {
+        row_values: {
           ...currentValues,
           [picker.rowId]: {
             ...targetCell,
@@ -634,21 +723,73 @@ export function FocusedElementEditor({
     if (closeAfter) closeParticipantPicker();
   }
 
+  // Termin-Pool für einen Filter: mit Zyklus-Filter die vom Backend geladenen Termine dieses
+  // Zyklus (availableEvents hält nur die neuesten 100 Termine des Mandanten), sonst availableEvents.
+  function cyclePoolKey(filter: EventFilter): string | null {
+    if (!filter.cycle) return null;
+    const configId = filter.cycle.config_id ?? focusedTemplate?.cycle_config_id ?? null;
+    return configId ? `${configId}:${filter.cycle.offset}:${protocol.protocol_date ?? ""}` : null;
+  }
+
+  // Zyklus-Pools sind ein einmal geladener Stand. Änderungen an Terminen (auch von anderen
+  // Bearbeitenden über availableEvents) müssen dort ankommen, sonst springt z. B. die TN-Zahl
+  // einer Matrix-Karte nach der Eingabe auf den geladenen Wert zurück (Bug 2026-11-09).
+  const availableEventsById = useMemo(() => new Map(availableEvents.map((event) => [event.id, event])), [availableEvents]);
+
+  function patchCycleEventPools(eventId: string, change: (event: EventSummary) => EventSummary | null) {
+    setCycleEventPools((current) => {
+      let changed = false;
+      const next: Record<string, EventSummary[]> = {};
+      for (const [key, pool] of Object.entries(current)) {
+        if (!pool.some((event) => event.id === eventId)) {
+          next[key] = pool;
+          continue;
+        }
+        changed = true;
+        next[key] = pool.flatMap((event) => {
+          if (event.id !== eventId) return [event];
+          const updated = change(event);
+          return updated ? [updated] : [];
+        });
+      }
+      return changed ? next : current;
+    });
+  }
+
+  function updateEventFromBlock(protocolElementBlockId: string, eventId: string, patch: Partial<EventSummary>): Promise<boolean> { // i18n-ok: TS-Generic-Signatur, kein UI-Text
+    patchCycleEventPools(eventId, (event) => ({ ...event, ...patch }));
+    return updateEventFromBlockProp(protocolElementBlockId, eventId, patch).then((saved) => {
+      // Fehlgeschlagen: der Editor setzt seinen Stand zurück, die Pools werden neu geladen
+      if (!saved) reloadCycleEventPools();
+      return saved;
+    });
+  }
+
+  async function deleteEventFromBlock(protocolElementBlockId: string, eventId: string): Promise<void> {
+    // Ob das Löschen geklappt hat, meldet der Editor nicht - neu laden statt raten
+    await deleteEventFromBlockProp(protocolElementBlockId, eventId);
+    reloadCycleEventPools();
+  }
+
+  async function createEventFromBlock(
+    protocolElementBlockId: string,
+    blockConfig: Record<string, any>, // i18n-ok: TS-Generic-Signatur, kein UI-Text
+    draftOverride?: ProtocolEventDraft
+  ): Promise<EventSummary | null> {
+    const created = await createEventFromBlockProp(protocolElementBlockId, blockConfig, draftOverride);
+    // Zu welchem Zyklus der neue Termin gehört, entscheidet das Backend
+    if (created) reloadCycleEventPools();
+    return created;
+  }
+
+  function filteredEvents(filter: EventFilter, column?: Record<string, any> | null): EventSummary[] {
+    const key = cyclePoolKey(filter);
+    const pool = key ? (cycleEventPools[key] ?? []).map((event) => availableEventsById.get(event.id) ?? event) : availableEvents;
+    return applyEventFilter(pool, filter, { protocolDate: protocol.protocol_date, column, cycleAlreadyApplied: true });
+  }
+
   function eventRowsForBlock(blockConfig: Record<string, any>) {
-    return [...availableEvents]
-      .filter((eventRow) => {
-        const tagFilters = String(blockConfig.event_tag_filter ?? "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
-        const matchesTag = !tagFilters.length || tagFilters.some((t) => (eventRow.tag ?? "").toLowerCase().includes(t));
-        const effectiveEndDate = eventRow.event_end_date || eventRow.event_date;
-        const matchesDate = !protocol.protocol_date ? true : blockConfig.event_only_before_protocol_date === true ? effectiveEndDate < protocol.protocol_date : blockConfig.event_only_from_protocol_date === false ? true : effectiveEndDate >= protocol.protocol_date;
-        const matchesCycle = blockConfig.event_only_current_cycle !== true || currentCycleYear === null
-          ? true
-          : (eventRow.cycle_assignments ?? []).some(
-              (a) => a.cycle_config_id === focusedTemplate?.cycle_config_id && a.cycle_year === currentCycleYear
-            );
-        return matchesTag && matchesDate && matchesCycle;
-      })
-      .sort((left, right) => compareIsoDate(left.event_date, right.event_date));
+    return filteredEvents(blockEventFilter(blockConfig));
   }
 
   function eventColumnVisibility(blockConfig: Record<string, any>) {
@@ -658,6 +799,8 @@ export function FocusedElementEditor({
       showTitle: blockConfig.event_show_title !== false,
       showDescription: blockConfig.event_show_description !== false,
       showParticipantCount: blockConfig.event_show_participant_count === true,
+      showLocation: blockConfig.event_show_location === true,
+      showOrganizers: blockConfig.event_show_organizers === true,
       showCancelled: blockConfig.event_show_cancelled === true,
     };
     if (!columns.showDate && !columns.showTag && !columns.showTitle && !columns.showDescription && !columns.showParticipantCount) {
@@ -710,6 +853,7 @@ export function FocusedElementEditor({
       tag: forcedTag || nextEventRow.tag || null,
       title: nextEventRow.title,
       description: nextEventRow.description || null,
+      location: nextEventRow.location || null,
       participant_count: Math.max(0, Number(nextEventRow.participant_count ?? 0)),
     };
   }
@@ -741,7 +885,7 @@ export function FocusedElementEditor({
   }
 
   function newEventRowDraft(blockConfig: Record<string, any>) {
-    const forcedTag = String(blockConfig.event_tag_filter ?? "").trim();
+    const forcedTag = eventFilterTagText(blockEventFilter(blockConfig));
     const columns = eventColumnVisibility(blockConfig);
     return createInlineProtocolEventDraft(protocol.protocol_date, forcedTag, columns.showTitle);
   }
@@ -802,7 +946,7 @@ export function FocusedElementEditor({
     }, 500);
   }
 
-  function patchNewEventDraft(blockId: string, blockConfig: Record<string, any>, patch: Partial<ProtocolEventDraft>) {
+  function patchNewEventDraft(blockId: string, blockConfig: Record<string, any>, patch: Partial<ProtocolEventDraft>) {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
     setNewEventDrafts((current) => {
       const base = current[blockId] ?? newEventRowDraft(blockConfig);
       const nextDraft = { ...base, ...patch };
@@ -814,32 +958,19 @@ export function FocusedElementEditor({
     });
   }
 
-  function matrixEventsForRow(row: Record<string, any>, column: Record<string, any>) {
-    // New schema: event filters in row_config; old schema: directly on row
-    const rc = (row.row_config && typeof row.row_config === "object" ? row.row_config : {}) as Record<string, any>;
-    const tagFilters = String(row.event_tag_filter ?? rc.event_tag_filter ?? "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
-    const columnTagFilters = String(column.event_tag_filter ?? "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
-    const titleFilter = String(row.event_title_filter ?? rc.event_title_filter ?? "").trim().toLowerCase();
-    const useColumnTitleAsTag = (row.use_column_title_as_tag ?? rc.use_column_title_as_tag) !== false;
-    const hidePastEvents = (row.hide_past_events ?? rc.hide_past_events) !== false;
-    const columnTitle = String(column.title ?? "").trim().toLowerCase();
-    return [...availableEvents]
-      .filter((event) => {
-        const effectiveEndDate = event.event_end_date || event.event_date;
-        const matchesPast = !hidePastEvents || !protocol.protocol_date || effectiveEndDate >= protocol.protocol_date;
-        const eventTag = (event.tag ?? "").toLowerCase();
-        const matchesTag =
-          (!tagFilters.length || tagFilters.some((t) => eventTag.includes(t))) &&
-          (!columnTagFilters.length || columnTagFilters.some((t) => eventTag.includes(t))) &&
-          (!useColumnTitleAsTag || !columnTitle || eventTag.includes(columnTitle));
-        const matchesTitle = !titleFilter || event.title.toLowerCase().includes(titleFilter);
-        return matchesPast && matchesTag && matchesTitle;
-      })
-      .sort((left, right) => compareIsoDate(left.event_date, right.event_date));
+  // Anzeige-Schalter einer Matrixzeile (row_config.event_show_*), ohne Wert die Vorgabe.
+  function rowConfigFlag(row: Record<string, any>, key: string, fallback: boolean) {
+    const value = asObject(row.row_config)[key];
+    return typeof value === "boolean" ? value : fallback;
+  }
+
+  function matrixEventsForRow(row: Record<string, any>, column: Record<string, any>) {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
+    return filteredEvents(normalizeEventFilter(asObject(row.row_config).event_filter, "future"), column);
   }
 
   function matrixRows(blockConfig: Record<string, any>) {
-    return ((Array.isArray(blockConfig.rows) ? blockConfig.rows : []) as Array<Record<string, any>>).sort(
+    // Kopie sortieren: blockConfig.rows gehört zum State und darf nicht verändert werden.
+    return [...((Array.isArray(blockConfig.rows) ? blockConfig.rows : []) as Array<Record<string, any>>)].sort(
       (left, right) => Number(left.sort_index ?? 0) - Number(right.sort_index ?? 0)
     );
   }
@@ -882,7 +1013,7 @@ export function FocusedElementEditor({
     return String(row.template_value ?? "").trim() ? { text_value: String(row.template_value) } : {};
   }
 
-  function matrixCellValue(column: Record<string, any>, row: Record<string, any>, rowId: string) {
+  function matrixCellValue(column: Record<string, any>, row: Record<string, any>, rowId: string) {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
     // New schema: row_values; old schema: values
     const cellMap = asObject(column.row_values ?? column.values);
     return {
@@ -891,7 +1022,7 @@ export function FocusedElementEditor({
     };
   }
 
-  function matrixEmbeddedBlockForRow(row: Record<string, any>, cell: Record<string, any>) {
+  function matrixEmbeddedBlockForRow(row: Record<string, any>, cell: Record<string, any>) {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
     const existingEmbeddedBlock = readMatrixEmbeddedBlock(cell);
     if (existingEmbeddedBlock) {
       return existingEmbeddedBlock;
@@ -909,19 +1040,72 @@ export function FocusedElementEditor({
     const embeddedConfig = asObject(row.row_config ?? row.embedded_configuration_json);
     return createMatrixEmbeddedBlock(
       configuredElementTypeId,
-      String(row.label ?? "Zeile"),
+      String(row.label ?? t("matrixEditor.defaultRowLabel")),
       protocol,
       availableParticipants,
-      embeddedConfig
+      embeddedConfig,
+      t
     );
   }
 
-  function setMatrixColumnsLocal(blockId: string, blockConfig: Record<string, any>, nextColumns: Array<Record<string, any>>) {
+  function setMatrixColumnsLocal(blockId: string, blockConfig: Record<string, any>, nextColumns: Array<Record<string, any>>) {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
     setBlockConfigLocal(blockId, { ...blockConfig, columns: nextColumns });
   }
 
-  function saveMatrixColumns(blockId: string, blockConfig: Record<string, any>, nextColumns: Array<Record<string, any>>) {
+  function saveMatrixColumns(blockId: string, blockConfig: Record<string, any>, nextColumns: Array<Record<string, any>>) {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
     void saveBlockConfiguration(blockId, { ...blockConfig, columns: nextColumns });
+    writeMatrixChangesToList(blockId, blockConfig, nextColumns);
+  }
+
+  // Wert einer Listenspalte aus einer Matrixzelle; die Form (Person, Personen, Termin, Text)
+  // folgt dem bisherigen Wert des Eintrags, sonst dem Inhalt der Zelle.
+  function listValueFromMatrixCell(current: Record<string, unknown>, cell: Record<string, unknown>): Record<string, unknown> {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
+    const ids = Array.isArray(cell.participant_ids) ? (cell.participant_ids as string[]) : cell.participant_id ? [String(cell.participant_id)] : [];
+    if (Array.isArray(current.participant_ids)) return { ...current, participant_ids: ids };
+    if ("participant_id" in current) return { ...current, participant_id: ids[0] ?? null };
+    if ("event_id" in current) return { ...current, event_id: cell.event_id ?? null };
+    if (Array.isArray(cell.participant_ids)) return { participant_ids: ids };
+    if (cell.participant_id) return { participant_id: String(cell.participant_id) };
+    if (cell.event_id) return { event_id: cell.event_id };
+    return { ...current, text_value: String(cell.text_value ?? "") };
+  }
+
+  // Karten aus einer Liste: Änderungen in Zeilen, die aus der Liste stammen (Spalte 1/2 des
+  // Eintrags), in die Liste zurückschreiben - dort gespeichert, in anderen Protokollen und der
+  // Listenverwaltung sichtbar. Verglichen wird mit dem Stand der Liste, nicht mit dem vorherigen
+  // Blockstand: Texteingaben stehen beim Speichern (onBlur) schon lokal im Block.
+  function writeMatrixChangesToList(blockId: string, blockConfig: Record<string, any>, nextColumns: Array<Record<string, any>>) {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
+    const { source, listId } = matrixAutoSourceInfo(blockConfig);
+    if (source !== "list" || !listId) return;
+    const publicListId = listDefinitionsById.get(listId)?.id ?? listId;
+    const entriesKey = listEntriesByDefinition[publicListId] ? publicListId : listId;
+    const entries = new Map(matrixListPool(blockConfig).map((entry) => [`gen-l-${entry.id}`, entry]));
+    const rows = matrixRows(blockConfig);
+    // Leere Werte ("", null, []) und Leerraum zählen nicht als Änderung
+    const meaningful = (value: unknown) => JSON.stringify(Object.entries(asObject(value))
+      .map(([key, item]) => [key, typeof item === "string" ? item.trim() : item] as const)
+      .filter(([, item]) => !(item == null || item === "" || (Array.isArray(item) && item.length === 0)))
+      .sort(([left], [right]) => left.localeCompare(right)));
+    const same = (left: unknown, right: unknown) => meaningful(left) === meaningful(right);
+    for (const column of nextColumns) {
+      const entry = entries.get(matrixColumnKey(blockId, column));
+      if (!entry) continue;
+      const fromList = buildMatrixColumnForListEntry(rows, entry).row_values;
+      const cells = asObject(column.row_values ?? column.values);
+      const payload: Record<string, Record<string, unknown>> = {};
+      rows.forEach((row, index) => {
+        const field = matrixSourceFieldForRow("list", row);
+        if (field !== "column_one" && field !== "column_two") return;
+        const rowId = String(row.id ?? row.sort_index ?? index);
+        const cell = asObject(cells[rowId]);
+        if (same(cell, fromList[rowId])) return;
+        const key = `${field}_value` as "column_one_value" | "column_two_value";
+        const current = asObject(entry[key]);
+        const next = listValueFromMatrixCell(current, cell);
+        if (!same(next, current)) payload[key] = next;
+      });
+      if (Object.keys(payload).length) void updateListEntryFromBlock(blockId, entriesKey, entry.id, payload);
+    }
   }
 
   function updateMatrixColumn(
@@ -990,20 +1174,31 @@ export function FocusedElementEditor({
     updateMatrixCell(blockId, blockConfig, columnId, rowId, { embedded_block: updater(currentEmbeddedBlock) }, persist);
   }
 
-  function matrixValueSummary(row: Record<string, any>, value: Record<string, any>) {
+  // Kurzfassung einer Zelle für die Tabellenansicht; leer = noch nichts erfasst.
+  function matrixCellText(row: Record<string, any>, rowId: string, column: Record<string, any>): string {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
+    const value = matrixCellValue(column, row, rowId);
+    const embeddedBlock = matrixEmbeddedBlockForRow(row, value);
+    if (embeddedBlock) {
+      return String(embeddedBlockSummary(embeddedBlock, participantNames, availableEvents, protocol, t, column, availableTemplates) ?? "");
+    }
     const rowType = matrixRowType(row);
+    if (rowType === "events") {
+      return matrixEventsForRow(row, column)
+        .map((eventRow) => `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} ${eventRow.title}`)
+        .join(" · ");
+    }
     if (rowType === "participants") {
-      return multiParticipantSummary(value);
+      const ids = Array.isArray(value.participant_ids) ? value.participant_ids.map(String) : [];
+      return participantNames.filter((entry) => ids.includes(entry.id)).map((entry) => entry.display_name).join(", ");
     }
     if (rowType === "participant") {
-      const participant = availableParticipants.find((entry) => entry.id === String(value.participant_id ?? ""));
-      return participant?.display_name ?? "Teilnehmer waehlen";
+      return participantNames.find((entry) => entry.id === String(value.participant_id ?? ""))?.display_name ?? "";
     }
     if (rowType === "event") {
       const eventRow = sortedAvailableEvents.find((entry) => entry.id === String(value.event_id ?? ""));
-      return eventRow ? `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}` : "Termin waehlen";
+      return eventRow ? `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}` : "";
     }
-    return String(value.text_value ?? row.template_value ?? "").trim() || "Kein Inhalt";
+    return String(value.text_value ?? row.template_value ?? "").trim();
   }
 
   function nextMatrixColumnId(currentColumns: Array<Record<string, any>>) {
@@ -1024,7 +1219,7 @@ export function FocusedElementEditor({
     return "";
   }
 
-  function matrixRowCellValue(row: Record<string, any>, textValue: string): Record<string, unknown> {
+  function matrixRowCellValue(row: Record<string, any>, textValue: string): Record<string, unknown> {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
     const rowType = matrixRowType(row);
     if (!textValue && rowType === "participant") return {};
     if (!textValue && rowType === "event") return {};
@@ -1061,9 +1256,23 @@ export function FocusedElementEditor({
       const rowType = matrixRowType(row);
       if (sourceField) {
         let text = "";
+        if (sourceField === "organizers" && (rowType === "participants" || rowType === "participant")) {
+          const ids = (event.organizer_ids ?? []).filter(Boolean);
+          row_values[rowId] = rowType === "participants" ? { participant_ids: ids } : ids[0] ? { participant_id: ids[0] } : {};
+          return;
+        }
         if (sourceField === "title") text = event.title;
         else if (sourceField === "event_date") text = formatDate(event.event_date);
+        else if (sourceField === "event_end_date") text = formatDate(event.event_end_date || event.event_date);
         else if (sourceField === "tag") text = String(event.tag ?? "");
+        else if (sourceField === "location") text = String(event.location ?? "");
+        else if (sourceField === "description") text = String(event.description ?? "");
+        else if (sourceField === "organizers") {
+          text = (event.organizer_ids ?? [])
+            .map((id) => participantNames.find((participant) => participant.id === id)?.display_name)
+            .filter(Boolean)
+            .join(", ");
+        }
         else if (sourceField === "participant_count") text = String(event.participant_count ?? "");
         row_values[rowId] = matrixRowCellValue(row, text);
       } else if (rowType === "event") {
@@ -1107,50 +1316,166 @@ export function FocusedElementEditor({
   }
 
   function matrixAutoSourceInfo(blockConfig: Record<string, any>) {
-    const autoSrc = blockConfig.auto_source;
-    const source = String(
-      (autoSrc && typeof autoSrc === "object" ? autoSrc.type : null) ?? blockConfig.matrix_column_source ?? ""
+    const autoSrc = asObject(blockConfig.auto_source);
+    const source = String(autoSrc.type ?? "");
+    const listId = source === "list" && autoSrc.list_id ? String(autoSrc.list_id) : null;
+    const eventFilter = normalizeEventFilter(autoSrc.event_filter);
+    const sort = String(autoSrc.sort ?? "source");
+    return { source, listId, eventFilter, sort };
+  }
+
+  // Termine für automatische Termin-Spalten (gemeinsamer Filter, siehe event-filter.ts).
+  function matrixEventPool(blockConfig: Record<string, any>): EventSummary[] {
+    const { eventFilter, sort } = matrixAutoSourceInfo(blockConfig);
+    const events = filteredEvents(eventFilter);
+    return sort === "alpha" || sort === "alpha_desc"
+      ? sortByLabel(events, (event) => event.title, sort === "alpha_desc")
+      : events;
+  }
+
+  function sortByLabel<T>(items: T[], label: (item: T) => string, descending = false): T[] {
+    const sorted = [...items].sort((left, right) => label(left).localeCompare(label(right), undefined, { sensitivity: "base" }));
+    return descending ? sorted.reverse() : sorted;
+  }
+
+  // Reihenfolge der automatischen Personen-Spalten (auto_source.sort).
+  function matrixParticipantPool(blockConfig: Record<string, any>) {
+    const { sort } = matrixAutoSourceInfo(blockConfig);
+    const participants = availableParticipants.filter(isParticipantSelectable);
+    if (sort === "last_name") {
+      return sortByLabel(participants, (p) => `${p.last_name ?? ""} ${p.first_name ?? ""} ${p.display_name}`);
+    }
+    if (sort === "alpha" || sort === "alpha_desc") {
+      return sortByLabel(participants, (p) => p.display_name, sort === "alpha_desc");
+    }
+    return participants;
+  }
+
+  function matrixListEntryTitle(entry: StructuredListEntry) {
+    return (
+      String((entry.column_one_value as any)?.text_value ?? "").trim() ||
+      String((entry.column_two_value as any)?.text_value ?? "").trim() ||
+      `Eintrag ${entry.id}`
     );
-    const eventTagFilter = String(
-      (autoSrc && typeof autoSrc === "object" ? autoSrc.event_tag_filter : null) ??
-      blockConfig.matrix_column_source_event_tag ?? ""
-    ).trim().toLowerCase();
-    const rawListId =
-      (autoSrc && typeof autoSrc === "object" ? autoSrc.list_id : null) ??
-      blockConfig.matrix_column_source_list_id ?? null;
-    const listId = rawListId ? String(rawListId) : null;
-    return { source, eventTagFilter, listId };
+  }
+
+  function matrixListPool(blockConfig: Record<string, any>) {
+    const { listId, sort } = matrixAutoSourceInfo(blockConfig);
+    // auto_source.list_id steht aus der Vorlage intern; Einträge sind unter der öffentlichen ID geladen
+    const publicListId = listId ? listDefinitionsById.get(listId)?.id ?? listId : null;
+    const entries = publicListId ? (listEntriesByDefinition[publicListId] ?? listEntriesByDefinition[listId ?? ""] ?? []) : [];
+    return sort === "alpha" || sort === "alpha_desc" ? sortByLabel(entries, matrixListEntryTitle, sort === "alpha_desc") : entries;
   }
 
   function generateMatrixColumns(blockId: string, blockConfig: Record<string, any>) {
-    const { source, eventTagFilter, listId } = matrixAutoSourceInfo(blockConfig);
+    const { source, listId } = matrixAutoSourceInfo(blockConfig);
     const rows = matrixRows(blockConfig);
 
     let nextColumns: Array<Record<string, any>> = [];
 
     if (source === "participants") {
-      nextColumns = availableParticipants.map((participant) => buildMatrixColumnForParticipant(rows, participant));
+      nextColumns = matrixParticipantPool(blockConfig).map((participant) => buildMatrixColumnForParticipant(rows, participant));
     } else if (source === "events") {
-      const filtered = eventTagFilter
-        ? availableEvents.filter((e) => String(e.tag ?? "").toLowerCase() === eventTagFilter)
-        : availableEvents;
-      nextColumns = filtered.map((event) => buildMatrixColumnForEvent(rows, event));
+      nextColumns = matrixEventPool(blockConfig).map((event) => buildMatrixColumnForEvent(rows, event));
     } else if (source === "list") {
-      const entries = listId ? (listEntriesByDefinition[listId] ?? []) : [];
-      nextColumns = entries.map((entry) => buildMatrixColumnForListEntry(rows, entry));
+      nextColumns = matrixListPool(blockConfig).map((entry) => buildMatrixColumnForListEntry(rows, entry));
     }
 
     if (!nextColumns.length) return;
     saveMatrixColumns(blockId, blockConfig, nextColumns);
   }
 
+  // Karten aus einer Liste («gen-l-<Eintrag>»): beim Anlegen des Protokolls mit interner,
+  // im Editor mit öffentlicher Eintrags-ID. Beide auf die öffentliche ID abbilden.
+  function matrixColumnKey(blockId: string, column: Record<string, any>): string {
+    const id = String(column.id ?? "");
+    if (!id.startsWith("gen-l-")) return id;
+    const raw = id.slice("gen-l-".length);
+    const block = element.blocks.find((entry) => entry.id === blockId);
+    return `gen-l-${block?.public_reference_ids?.list_entries?.[raw] ?? raw}`;
+  }
+
+  // Karten aus einer Liste stehen immer in der Reihenfolge der Liste (bzw. ihrer Sortierung),
+  // egal wann sie hinzugekommen sind; übrige Karten behalten ihre Reihenfolge dahinter.
+  function orderMatrixColumns(blockId: string, blockConfig: Record<string, any>, columns: Array<Record<string, any>>) {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
+    if (matrixAutoSourceInfo(blockConfig).source !== "list") return columns;
+    const position = new Map(matrixListPool(blockConfig).map((entry, index) => [`gen-l-${entry.id}`, index]));
+    return columns
+      .map((column, index) => ({ column, index, rank: position.get(matrixColumnKey(blockId, column)) ?? Number.MAX_SAFE_INTEGER }))
+      .sort((left, right) => left.rank - right.rank || left.index - right.index)
+      .map(({ column }) => column);
+  }
+
+  // Abgleich der Listen-Karten mit dem aktuellen Stand der Liste: neue Einträge kommen als
+  // Karte dazu, Titel und Werte der Listenzeilen (auto_source_field) werden übernommen, im
+  // Protokoll erfasste Werte der übrigen Zeilen bleiben. Karten gelöschter Einträge fallen
+  // weg, ausser sie tragen erfasste Werte – dann bleiben sie als «nicht mehr in der Liste».
+  // null, solange die Liste nicht geladen ist oder nichts abzugleichen ist.
+  function matrixListSync(blockId: string, blockConfig: Record<string, any>): Array<Record<string, any>> | null {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
+    const { source, listId } = matrixAutoSourceInfo(blockConfig);
+    if (source !== "list" || !listId) return null;
+    const publicListId = listDefinitionsById.get(listId)?.id ?? listId;
+    if (!listEntriesByDefinition[publicListId] && !listEntriesByDefinition[listId]) return null;
+    const rows = matrixRows(blockConfig);
+    const rowKeys = rows.map((row, rowIndex) => String(row.id ?? row.sort_index ?? rowIndex));
+    const listRowIds = new Set(rowKeys.filter((_, index) => matrixSourceFieldForRow("list", rows[index])));
+    const columns = matrixColumns(blockConfig);
+    const columnByKey = new Map(columns.map((column) => [matrixColumnKey(blockId, column), column]));
+    const sameValue = (left: unknown, right: unknown) => JSON.stringify(left ?? {}) === JSON.stringify(right ?? {});
+    const hasEnteredValue = (column: Record<string, any>) => {
+      const cells = asObject(column.row_values ?? column.values);
+      return rows.some((row, index) => {
+        if (listRowIds.has(rowKeys[index])) return false;
+        const cell = asObject(cells[rowKeys[index]]);
+        const filled = Object.values(cell).some((value) =>
+          Array.isArray(value) ? value.length > 0 : typeof value === "string" ? value.trim() !== "" : value != null
+        );
+        return filled && !sameValue(cell, matrixDefaultCellValue(row));
+      });
+    };
+
+    let changed = false;
+    const usedKeys = new Set<string>();
+    const next: Array<Record<string, any>> = matrixListPool(blockConfig).map((entry) => {
+      const fresh = buildMatrixColumnForListEntry(rows, entry);
+      const existing = columnByKey.get(fresh.id);
+      if (!existing) {
+        changed = true;
+        return fresh;
+      }
+      usedKeys.add(fresh.id);
+      const cells = { ...asObject(existing.row_values ?? existing.values) };
+      for (const rowId of listRowIds) {
+        const freshCell = fresh.row_values[rowId] ?? {};
+        if (!sameValue(cells[rowId], freshCell)) changed = true;
+        cells[rowId] = freshCell;
+      }
+      if (existing.title !== fresh.title || existing.list_removed) changed = true;
+      const { list_removed: _removed, ...rest } = existing;
+      return { ...rest, title: fresh.title, row_values: cells };
+    });
+    for (const column of columns) {
+      const key = matrixColumnKey(blockId, column);
+      if (usedKeys.has(key)) continue;
+      if (!key.startsWith("gen-l-")) {
+        next.push(column);
+      } else if (hasEnteredValue(column)) {
+        if (!column.list_removed) changed = true;
+        next.push({ ...column, list_removed: true });
+      } else {
+        changed = true;
+      }
+    }
+    return changed ? next : null;
+  }
+
   // Non-destructive counterpart to generateMatrixColumns for planning mode: toggling a
   // candidate on/off only adds a column or flips its `hidden` flag, never overwrites or
   // drops existing (possibly manually edited) columns like the bulk "Generieren" button does.
-  function matrixCandidateItems(blockConfig: Record<string, any>): CandidateItem[] {
-    const { source, eventTagFilter, listId } = matrixAutoSourceInfo(blockConfig);
+  function matrixCandidateItems(blockId: string, blockConfig: Record<string, any>): CandidateItem[] {
+    const { source } = matrixAutoSourceInfo(blockConfig);
     const columns = matrixColumns(blockConfig);
-    const columnById = new Map(columns.map((c) => [String(c.id ?? ""), c]));
+    const columnById = new Map(columns.map((c) => [matrixColumnKey(blockId, c), c]));
 
     function toItem(id: string, label: string, sublabel?: string): CandidateItem {
       const existing = columnById.get(id);
@@ -1163,25 +1488,14 @@ export function FocusedElementEditor({
     }
 
     if (source === "participants") {
-      return availableParticipants.map((p) => toItem(`gen-p-${p.id}`, p.display_name));
+      return matrixParticipantPool(blockConfig).map((p) => toItem(`gen-p-${p.id}`, p.display_name));
     }
     if (source === "events") {
-      const filtered = eventTagFilter
-        ? availableEvents.filter((e) => String(e.tag ?? "").toLowerCase() === eventTagFilter)
-        : availableEvents;
-      return filtered
-        .sort((a, b) => a.event_date.localeCompare(b.event_date))
+      return matrixEventPool(blockConfig)
         .map((e) => toItem(`gen-e-${e.id}`, e.title, `${formatDate(e.event_date)}${e.tag ? ` · ${e.tag}` : ""}`));
     }
     if (source === "list") {
-      const entries = listId ? (listEntriesByDefinition[listId] ?? []) : [];
-      return entries.map((entry) => {
-        const titleText =
-          String((entry.column_one_value as any)?.text_value ?? "").trim() ||
-          String((entry.column_two_value as any)?.text_value ?? "").trim() ||
-          `Eintrag ${entry.id}`;
-        return toItem(`gen-l-${entry.id}`, titleText);
-      });
+      return matrixListPool(blockConfig).map((entry) => toItem(`gen-l-${entry.id}`, matrixListEntryTitle(entry)));
     }
     return [];
   }
@@ -1189,13 +1503,13 @@ export function FocusedElementEditor({
   function toggleMatrixColumn(blockId: string, blockConfig: Record<string, any>, candidateId: string, nextChecked: boolean) {
     const { source } = matrixAutoSourceInfo(blockConfig);
     const columns = matrixColumns(blockConfig);
-    const existing = columns.find((c) => String(c.id ?? "") === candidateId);
+    const existing = columns.find((c) => matrixColumnKey(blockId, c) === candidateId);
 
     if (existing) {
       saveMatrixColumns(
         blockId,
         blockConfig,
-        columns.map((c) => (String(c.id ?? "") === candidateId ? { ...c, hidden: !nextChecked } : c))
+        orderMatrixColumns(blockId, blockConfig, columns.map((c) => (c === existing ? { ...c, hidden: !nextChecked } : c)))
       );
       return;
     }
@@ -1206,22 +1520,66 @@ export function FocusedElementEditor({
       const participant = availableParticipants.find((p) => `gen-p-${p.id}` === candidateId);
       if (participant) newColumn = buildMatrixColumnForParticipant(rows, participant);
     } else if (source === "events") {
-      const event = availableEvents.find((e) => `gen-e-${e.id}` === candidateId);
+      const event = matrixEventPool(blockConfig).find((e) => `gen-e-${e.id}` === candidateId);
       if (event) newColumn = buildMatrixColumnForEvent(rows, event);
     } else if (source === "list") {
-      const { listId } = matrixAutoSourceInfo(blockConfig);
-      const entries = listId ? (listEntriesByDefinition[listId] ?? []) : [];
-      const entry = entries.find((e) => `gen-l-${e.id}` === candidateId);
+      const entry = matrixListPool(blockConfig).find((e) => `gen-l-${e.id}` === candidateId);
       if (entry) newColumn = buildMatrixColumnForListEntry(rows, entry);
     }
     if (!newColumn) return;
-    saveMatrixColumns(blockId, blockConfig, [...columns, newColumn]);
+    // An ihren Platz in der Liste, nicht ans Ende
+    saveMatrixColumns(blockId, blockConfig, orderMatrixColumns(blockId, blockConfig, [...columns, newColumn]));
   }
 
+  // Lädt die Termine aller Filter mit Zyklus in diesem Element (Terminliste, Matrix-Automodus,
+  // Matrixzeilen, eingebettete Terminlisten), siehe filteredEvents.
+  const cycleFilters: EventFilter[] = element.blocks.flatMap((block) => {
+    const config = asObject(block.configuration_snapshot_json);
+    const rows = Array.isArray(config.rows) ? (config.rows as Array<Record<string, any>>) : [];
+    return [
+      blockEventFilter(config),
+      matrixAutoSourceInfo(config).eventFilter,
+      ...rows.map((row) => normalizeEventFilter(asObject(row.row_config).event_filter, "future")),
+    ];
+  });
+  const cycleRequests = new Map<string, { configId: string; offset: number }>();
+  for (const filter of cycleFilters) {
+    const key = cyclePoolKey(filter);
+    if (key && filter.cycle) {
+      cycleRequests.set(key, { configId: (filter.cycle.config_id ?? focusedTemplate?.cycle_config_id) as string, offset: filter.cycle.offset });
+    }
+  }
+  const cycleRequestKeys = [...cycleRequests.keys()].sort().join("|");
+  // Neu laden (nach Anlegen/Löschen): alle Pools erneut holen, der alte Stand bleibt bis dahin sichtbar
+  const loadedCyclePoolVersion = useRef(new Map<string, number>());
   useEffect(() => {
+    let cancelled = false;
+    for (const [key, request] of cycleRequests) {
+      if (cycleEventPools[key] && loadedCyclePoolVersion.current.get(key) === cyclePoolVersion) continue;
+      loadedCyclePoolVersion.current.set(key, cyclePoolVersion);
+      fetchCycleEvents(protocol.id, { cycleConfigId: request.configId, cycleOffset: request.offset, limit: 500 })
+        .then((result) => { if (!cancelled) setCycleEventPools((current) => ({ ...current, [key]: result.items })); })
+        .catch((error) => {
+          loadedCyclePoolVersion.current.delete(key);
+          if (!cancelled) showToast(error instanceof Error ? error.message : String(error), "error");
+        });
+    }
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cycleRequestKeys, protocol.id, cyclePoolVersion]);
+
+  // Nur bei Änderungen an den Pendenzen dieses Punkts (todosByBlock gilt für alle Punkte).
+  const ownTodoListsRef = useRef<Array<ProtocolTodo[] | undefined>>([]);
+  const ownTodoLists = element.blocks.map((block) => todosByBlock[block.id]);
+  if (ownTodoLists.length !== ownTodoListsRef.current.length || ownTodoLists.some((list, index) => list !== ownTodoListsRef.current[index])) {
+    ownTodoListsRef.current = ownTodoLists;
+  }
+  const ownTodoListsKey = ownTodoListsRef.current;
+  useEffect(() => {
+    if (FIELD_SIZING_SUPPORTED) return;
     const fields = sectionRef.current?.querySelectorAll<HTMLTextAreaElement>(".todo-main-compact .todo-input") ?? [];
     fields.forEach((field) => autoResizeTodoField(field));
-  }, [element.id, todosByBlock]);
+  }, [element.id, ownTodoListsKey]);
 
   useEffect(() => {
     const section = sectionRef.current;
@@ -1235,8 +1593,105 @@ export function FocusedElementEditor({
     });
   }, [element.id]);
 
+  // Entfernen: Blöcke bleiben unsichtbar mit manually_hidden stehen, daran erkennen
+  // Folgeprotokolle derselben Vorlage den Termin und erzeugen ihn für diesen Punkt nie mehr
+  // (protocol_service._manually_hidden_event_ids). Optional zuerst die Tags vom Termin entfernen.
+  async function confirmRemoveSeriesEvent(removeTags: string[]) {
+    if (!removingSeriesEvent) return;
+    const { title, event, blockIds } = removingSeriesEvent;
+    setRemovingSeriesBusy(true);
+    try {
+      if (event && removeTags.length && blockIds[0]) {
+        const saved = await updateEventFromBlock(blockIds[0], event.id, { tag: eventTagWithout(event.tag, removeTags) });
+        if (!saved) return;
+        refreshEventBlockCandidates();
+      }
+      for (const blockId of blockIds) await hideEventBlock(blockId);
+      setRemovingSeriesEvent(null);
+      showToast(t("eventSeries.removed", { title }), "success");
+    } finally {
+      setRemovingSeriesBusy(false);
+    }
+  }
+
+  // Automatisch pro Termin erzeugte Blöcke (repeat_source_type=event) laufen als eine Gruppe
+  // (EventSeriesGroup): je Termin eine Karte mit den Blöcken dieses Termins. Alle anderen
+  // Blöcke rendern unverändert über ``renderBlock``.
+  function isAutoEventBlock(block: ProtocolElement["blocks"][number]) {
+    const config = asObject(block.configuration_snapshot_json);
+    return config.repeat_source_type === "event" && config.repeat_source_id != null;
+  }
+  function renderBlocksWithSeries(renderBlock: (block: ProtocolElement["blocks"][number], blockIndex: number) => ReactNode): ReactNode[] {
+    const out: ReactNode[] = [];
+    let index = 0;
+    while (index < element.blocks.length) {
+      const first = element.blocks[index];
+      if (!isAutoEventBlock(first)) {
+        out.push(renderBlock(first, index));
+        index += 1;
+        continue;
+      }
+      const groups = new Map<string, { blocks: ProtocolElement["blocks"]; nodes: ReactNode[] }>();
+      while (index < element.blocks.length && isAutoEventBlock(element.blocks[index])) {
+        const block = element.blocks[index];
+        const key = blockEventPublicId(block) ?? `block-${block.id}`;
+        const group = groups.get(key) ?? { blocks: [], nodes: [] };
+        group.blocks.push(block);
+        if (block.is_visible_snapshot) group.nodes.push(renderBlock(block, index));
+        groups.set(key, group);
+        index += 1;
+      }
+      // Entfernte Termine (alle Blöcke manually_hidden/unsichtbar) erscheinen nicht mehr.
+      const entries: EventSeriesEntry[] = [...groups.entries()]
+        .filter(([, group]) => group.blocks.some((b) => b.is_visible_snapshot))
+        .map(([key, group]) => ({
+          key,
+          event: availableEvents.find((e) => e.id === key) ?? null,
+          label: String(asObject(group.blocks[0].configuration_snapshot_json).repeat_source_label ?? t("unknownEvent")),
+          content: group.nodes,
+        }));
+      const blocksOf = (entry: EventSeriesEntry) => groups.get(entry.key)?.blocks ?? [];
+      const seriesFilter = normalizeEventFilter(asObject(first.configuration_snapshot_json).repeat_event_filter);
+      const seriesTag = eventFilterTagText(seriesFilter);
+      const entryTitle = (entry: EventSeriesEntry) => entry.event?.title || entry.label;
+      out.push(
+        <EventSeriesGroup
+          key={`series-${first.id}`}
+          entries={entries}
+          tag={seriesTag}
+          canChoose={isPlanningMode && !isReadOnly}
+          canEdit={!isReadOnly}
+          onChoose={() => setShowEventBlockPicker(true)}
+          onEditEvent={(entry) => setEditingSeriesEvent({ eventId: entry.key, blockId: blocksOf(entry)[0]?.id ?? "" })}
+          // Vertagen: Blöcke löschen - ohne manually_hidden erzeugt das nächste Protokoll sie neu.
+          onPostpone={(entry) => {
+            void (async () => {
+              const title = entryTitle(entry);
+              const ok = await confirm({ message: t("eventSeries.postponeConfirm", { title }), tone: "danger", confirmLabel: t("eventSeries.postponeAction") });
+              if (!ok) return;
+              for (const b of blocksOf(entry)) await removeEventBlock(b.id);
+              showToast(t("eventSeries.postponed", { title }), "success");
+            })();
+          }}
+          onRemove={(entry) => {
+            setRemovingSeriesEvent({
+              title: entryTitle(entry),
+              event: entry.event,
+              blockIds: blocksOf(entry).map((b) => b.id),
+              tags: entry.event ? matchingEventTags(entry.event.tag, seriesFilter.tags) : [],
+            });
+          }}
+        />
+      );
+    }
+    return out;
+  }
+  const editingEvent = editingSeriesEvent ? availableEvents.find((e) => e.id === editingSeriesEvent.eventId) ?? eventBlockCandidates.find((e) => e.id === editingSeriesEvent.eventId) ?? null : null;
+  const editingEventConfig = asObject(element.blocks.find((b) => b.id === editingSeriesEvent?.blockId)?.configuration_snapshot_json);
+
   return (
     <>
+    {fineDeleteDialog}
     <section
       id={`protocol-element-${element.id}`}
       ref={sectionRef}
@@ -1253,27 +1708,28 @@ export function FocusedElementEditor({
         {element.blocks.length === 0 && element.show_when_empty && (
           isPlanningMode ? (
             <div className="editor-block-empty-placeholder-auto">
-              <span>Keine Elemente angezeigt.</span>
+              <span>{t("noElementsShown")}</span>
               <PlanningIconTrigger
-                title="Termine auswählen"
+                title={t("chooseEvents")}
                 icon="☑"
                 onClick={() => setShowEventBlockPicker(true)}
               />
             </div>
           ) : (
-            <div className="element-block-empty-hint">Keine Termine in diesem Zeitraum.</div>
+            <div className="element-block-empty-hint">{t("noEventsInRange")}</div>
           )
         )}
-        {element.blocks.map((block, blockIndex) => {
+        {renderBlocksWithSeries((block, blockIndex) => {
           const blockTitle = visibleBlockTitle(block);
           const elementType = block.element_type_code ?? "unknown";
           const elementTypeLabel: Record<string, string> = {
-            text: "Text", static_text: "Text", display: "Anzeige", form: "Formular",
-            todo: "Aufgaben", image: "Bild", bullet_list: "Aufzählung",
-            event_list: "Termine", attendance: "Anwesenheit", matrix: "Matrix",
-            session_date: "Nächster Hock", finance_balance: "Kontostand",
-            finance_transactions: "Transaktionen", fine_list: "Bussenliste",
-            chart: "Diagramm",
+            text: t("blockTypeText"), static_text: t("blockTypeText"), display: t("blockTypeDisplay"), form: t("blockTypeForm"),
+            todo: t("blockTypeTodo"), image: t("blockTypeImage"), bullet_list: t("blockTypeBulletList"),
+            event_list: t("eventsLabel"), attendance: t("blockTypeAttendance"), matrix: t("blockTypeMatrix"),
+            session_date: t("blockTypeSessionDate"), finance_balance: t("blockTypeFinanceBalance"),
+            finance_transactions: t("blockTypeFinanceTransactions"), fine_list: t("blockTypeFineList"),
+            chart: t("blockTypeChart"), entry_exit: t("blockTypeEntryExit"),
+            session_notes: t("blockTypeSessionNotes"),
           };
           const blockConfig = asObject(block.configuration_snapshot_json);
           // Matrix blocks lock per-cell instead (see cellFieldKey below), so the whole-block
@@ -1287,7 +1743,7 @@ export function FocusedElementEditor({
           const eventListInlineEditable = blockEditable && !isPlanningMode;
           const editableEventRows = elementType === "event_list" ? eventRowsForBlock(blockConfig) : [];
           const editableEventColumns = elementType === "event_list" ? eventColumnVisibility(blockConfig) : null;
-          const forcedEventTag = elementType === "event_list" ? String(blockConfig.event_tag_filter ?? "").trim() : "";
+          const forcedEventTag = elementType === "event_list" ? eventFilterTagText(blockEventFilter(blockConfig)) : "";
           const allowEventEndDate = elementType === "event_list" ? blockConfig.event_allow_end_date === true : false;
           const firstUpcomingIndex = elementType === "event_list" ? editableEventRows.findIndex((row) => {
             const endDate = row.event_end_date || row.event_date;
@@ -1302,7 +1758,7 @@ export function FocusedElementEditor({
           const showNewEventRow = elementType === "event_list" ? openNewEventRows[block.id] === true : false;
           const creatingNewEventRow = elementType === "event_list" ? creatingNewEventRows[block.id] === true : false;
           const allowMatrixColumnManagement =
-            elementType === "matrix" ? blockEditable && (blockConfig.allow_column_management === true || blockConfig.matrix_allow_column_management === true) : false;
+            elementType === "matrix" ? blockEditable && blockConfig.allow_column_management === true : false;
           const matrixAutoSourceType = elementType === "matrix" ? matrixAutoSourceInfo(blockConfig).source : "";
           // Planning mode ("geplant") replaces the inline column toolbar/"Generieren" for
           // auto-sourced matrices with the checkbox popup; manual matrices and "durchgeführt"
@@ -1319,14 +1775,11 @@ export function FocusedElementEditor({
             : [];
           const isAutoEventBlock = blockConfig.repeat_source_type === "event" && blockConfig.repeat_source_id != null;
           const isHidden = !block.is_visible_snapshot;
-          const previousBlock = blockIndex > 0 ? element.blocks[blockIndex - 1] : null;
-          const isFirstInAutoGroup =
-            isPlanningMode &&
-            isAutoEventBlock &&
-            (!previousBlock || asObject(previousBlock.configuration_snapshot_json).repeat_source_type !== "event");
+          // Textblock mit DB-Speicherziel: schreibt jede Änderung in das Feld des Termins
+          const syncsToEvent = isAutoEventBlock && Boolean(String(blockConfig.sync_target_field ?? ""));
           return (
             <section
-              className={`card editor-block-card${elementType === "event_list" ? " editor-block-card-event-list" : ""}${isHidden ? " editor-block-card-hidden" : ""}${blockLockHolder ? " editor-block-card-locked" : ""}${(isPlanningMode && isAutoEventBlock) || matrixPlanningManageable ? " editor-block-card-auto-generated" : ""}`}
+              className={`card editor-block-card${elementType === "event_list" ? " editor-block-card-event-list" : ""}${isHidden ? " editor-block-card-hidden" : ""}${blockLockHolder ? " editor-block-card-locked" : ""}${isAutoEventBlock ? " editor-block-card-in-series" : ""}${matrixPlanningManageable ? " editor-block-card-auto-generated" : ""}`}
               key={block.id}
               onFocusCapture={elementType === "matrix" ? undefined : () => collab.lockField(blockFieldKey)}
               onBlurCapture={
@@ -1339,22 +1792,23 @@ export function FocusedElementEditor({
                     }
               }
             >
-              {isFirstInAutoGroup ? (
-                <>
-                  <span className="editor-block-auto-generated-label">Wiederholt sich pro Termin</span>
-                  <div className="editor-block-auto-generated-icon">
-                    <PlanningIconTrigger
-                      title="Termine auswählen"
-                      icon="☑"
-                      onClick={() => setShowEventBlockPicker(true)}
-                    />
-                  </div>
-                </>
-              ) : null}
               <div className="editor-panel-header">
                 <div>
-                  <div className="eyebrow">{elementTypeLabel[elementType] ?? elementType}{isHidden ? " · ausgeblendet" : ""}</div>
-                  {blockTitle ? <h3>{blockTitle}</h3> : null}
+                  {/* In einer Termin-Karte ist der Blocktitel nur noch das Feldlabel: Termin und
+                      Typ stehen bereits im Kartenkopf. */}
+                  {isAutoEventBlock ? (
+                    <div className="field-label">
+                      {blockTitle || (elementTypeLabel[elementType] ?? elementType)}
+                      {syncsToEvent ? (
+                        <span className="event-series-linked" title={t("eventSeries.linkedTitle")}>
+                          <ActionIcon name="link" /> {t("eventSeries.linked")}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="eyebrow">{elementTypeLabel[elementType] ?? elementType}{isHidden ? ` · ${t("hiddenSuffix")}` : ""}</div>
+                  )}
+                  {blockTitle && !isAutoEventBlock ? <h3>{blockTitle}</h3> : null}
                   {block.description_snapshot ? <p className="muted">{block.description_snapshot}</p> : null}
                   {blockLockHolder ? <LockBadge holder={blockLockHolder} /> : null}
                 </div>
@@ -1366,12 +1820,12 @@ export function FocusedElementEditor({
                     value={textDrafts[block.id] ?? ""}
                     onChange={(md) => handleTextChange(block.id, md)}
                     readOnly={!blockEditable}
-                    placeholder="Text schreiben… Fett mit **text**, kursiv mit *text*, Liste mit - oder 1."
+                    placeholder={t("textPlaceholderMarkdownHint")}
                     trackedBaseline={trackChangesActive && block.tracked_dirty ? block.tracked_baseline_content : undefined}
                   />
                   {trackChangesActive && block.tracked_dirty && block.tracked_baseline_content !== textDrafts[block.id] && (
                     <TrackedChangeHideButton
-                      title="Änderungen in diesem Textblock ausblenden"
+                      title={t("hideTextChanges")}
                       onAccept={() => void acceptTextTrackedChanges(block.id)}
                     />
                   )}
@@ -1392,7 +1846,7 @@ export function FocusedElementEditor({
                         className={`tag-filter-chip${activeTag === null ? " tag-filter-chip-active" : ""}`}
                         onClick={() => setTodoTagFilter((c) => ({ ...c, [block.id]: null }))}
                       >
-                        Alle
+                        {t("allLabel")}
                       </button>
                       {allBlockTags.map((tag) => (
                         <button
@@ -1426,7 +1880,7 @@ export function FocusedElementEditor({
                                 completed_at: isDone ? null : new Date().toISOString(),
                               }).then(bumpStatsCharts)
                             }
-                            aria-label={isDone ? "Reopen todo" : "Mark todo done"}
+                            aria-label={isDone ? t("reopenTodo") : t("markTodoDone")}
                           >
                             {isDone ? "✓" : "○"}
                           </button>
@@ -1434,15 +1888,12 @@ export function FocusedElementEditor({
                             {trackedBeforeTask && (
                               <div className="tracked-strike tracked-before-caption">{trackedBeforeTask}</div>
                             )}
-                            <textarea
+                            <TodoTaskInput
                               className={`todo-input${isPendingDelete ? " tracked-strike" : isTrackedAdded || trackedBeforeTask ? " tracked-underline" : ""}`}
-                              rows={1}
                               value={todo.task}
                               readOnly={!todoEditable}
-                              onInput={(event) => autoResizeTodoField(event.currentTarget)}
-                              onChange={(event) => {
-                                if (!todoEditable) return;
-                                const task = event.target.value;
+                              onResize={autoResizeTodoField}
+                              onSave={(task) => {
                                 setTodosByBlock((current) => ({
                                   ...current,
                                   [block.id]: (current[block.id] ?? []).map((item) =>
@@ -1454,7 +1905,7 @@ export function FocusedElementEditor({
                             />
                             {(isPendingDelete || isTrackedAdded || trackedBeforeTask) && (
                               <TrackedChangeHideButton
-                                title="Änderung an diesem Todo ausblenden"
+                                title={t("hideTodoChange")}
                                 onAccept={() => void acceptTodoTrackedChange(block.id, todo.id)}
                               />
                             )}
@@ -1462,8 +1913,9 @@ export function FocusedElementEditor({
                           {todoEditable && (
                           <div className="todo-inline-meta">
                             <TodoAssigneeMenu
-                              label={todo.assigned_participant_name ?? "Niemand"}
+                              label={todo.assigned_participant_name ?? t("nobody")}
                               participants={availableParticipants}
+                              isOptionSelectable={(option) => isParticipantSelectable(availableParticipants.find((p) => p.id === option.id) ?? {})}
                               activeId={todo.assigned_participant_id}
                               onChange={(option) => {
                                 setTodosByBlock((current) => ({
@@ -1482,15 +1934,23 @@ export function FocusedElementEditor({
                               <>
                               <div className="mini-menu-section">
                                 <TodoMenuOption
-                                  label="Kein Enddatum"
+                                  label={t("noEndDate")}
                                   active={!todo.due_date && !todo.due_event_id && !todo.due_marker}
                                   onClick={() => {
                                     void updateTodo(block.id, todo.id, { due_date: null, due_event_id: null, due_marker: null });
                                     closeMenu();
                                   }}
                                 />
+                                {TODO_DUE_PRESETS.map((preset) => (
+                                  <TodoMenuOption key={preset} label={tTodos(preset)}
+                                    active={todo.due_date === todoDuePresetDate(preset) && !todo.due_event_id && !todo.due_marker}
+                                    onClick={() => {
+                                      void updateTodo(block.id, todo.id, { due_date: todoDuePresetDate(preset), due_event_id: null, due_marker: null });
+                                      closeMenu();
+                                    }} />
+                                ))}
                                 <TodoMenuOption
-                                  label="Freies Datum"
+                                  label={t("freeDate")}
                                   active={!!todo.due_date && !todo.due_event_id && !todo.due_marker}
                                   onClick={() => {
                                     const nextDate = todo.due_date ?? protocol.protocol_date;
@@ -1499,7 +1959,7 @@ export function FocusedElementEditor({
                                   }}
                                 />
                                 <TodoMenuOption
-                                  label="Nächste Sitzung"
+                                  label={t("nextSession")}
                                   active={todo.due_marker === "next_session"}
                                   onClick={() => {
                                     void updateTodo(block.id, todo.id, { due_date: null, due_event_id: null, due_marker: "next_session" });
@@ -1507,11 +1967,16 @@ export function FocusedElementEditor({
                                   }}
                                 />
                               </div>
-                              {todoDueEvents.length ? (
-                                <div className="mini-menu-section">
-                                  <div className="mini-menu-section-title">Termine</div>
+                              {/* Immer mit Suche: smarte Datumsvorschläge auch ohne Termine */}
+                              <div className="mini-menu-section">
+                                  {todoDueEvents.length ? <div className="mini-menu-section-title">{t("eventsLabel")}</div> : null}
                                   <TodoMenuSearchList
                                     items={todoDueEvents}
+                                    searchPlaceholder={tTodos("dueSearchPlaceholder")}
+                                    onPickDate={(date) => {
+                                      void updateTodo(block.id, todo.id, { due_date: date, due_event_id: null, due_marker: null });
+                                      closeMenu();
+                                    }}
                                     getKey={(event) => event.id}
                                     getLabel={(event) => event.title}
                                     getSubtle={(event) => formatDateRange(event.event_date, event.event_end_date)}
@@ -1525,8 +1990,7 @@ export function FocusedElementEditor({
                                       closeMenu();
                                     }}
                                   />
-                                </div>
-                              ) : null}
+                              </div>
                               </>
                               )}
                             </TodoMiniMenu>
@@ -1568,7 +2032,7 @@ export function FocusedElementEditor({
                               className="button-secondary button-danger todo-delete"
                               onClick={() => deleteTodo(block.id, todo.id)}
                             >
-                              Löschen
+                              {t("delete")}
                             </button>
                           )}
                         </article>
@@ -1581,16 +2045,16 @@ export function FocusedElementEditor({
                         value={newTodoTask[block.id] ?? ""}
                         onChange={(event) => setNewTodoTask((current) => ({ ...current, [block.id]: event.target.value }))}
                         onKeyDown={(e) => { if (e.key === "Enter") void addTodo(block.id); }}
-                        placeholder="Neue Aufgabe"
+                        placeholder={t("newTaskPlaceholder")}
                       />
                       <TagInput
                         value={newTodoTags[block.id] ?? ""}
                         onChange={(v) => setNewTodoTags((c) => ({ ...c, [block.id]: v }))}
                         suggestions={allBlockTags}
-                        placeholder="Tags…"
+                        placeholder={t("tagsPlaceholder")}
                       />
                       <button type="button" onClick={() => addTodo(block.id)}>
-                        + Todo
+                        {t("newTodoPlus")}
                       </button>
                     </div>
                   )}
@@ -1652,7 +2116,7 @@ export function FocusedElementEditor({
                             void saveBlockConfiguration(block.id, { ...blockConfig, bullet_items: nextItems });
                           }}
                         >
-                          Löschen
+                          {t("delete")}
                         </button>
                       </article>
                     ))}
@@ -1661,7 +2125,7 @@ export function FocusedElementEditor({
                     <input
                       value=""
                       readOnly
-                      placeholder="Neuen Bulletpoint mit dem Button hinzufügen"
+                      placeholder={t("newBulletPlaceholder")}
                     />
                     <button
                       type="button"
@@ -1670,7 +2134,7 @@ export function FocusedElementEditor({
                         void saveBlockConfiguration(block.id, { ...blockConfig, bullet_items: nextItems });
                       }}
                     >
-                      + Punkt
+                      {t("newBulletPlus")}
                     </button>
                   </div>
                 </div>
@@ -1727,12 +2191,12 @@ export function FocusedElementEditor({
                       <div className="list-snapshot-banner">
                         {isListStale && (
                           <button type="button" className="list-snapshot-refresh-button" onClick={() => void refreshBlockListSnapshot(block.id)}>
-                            ⟳ Daten aktualisieren
+                            {t("refreshDataAction")}
                           </button>
                         )}
                         {hasListUndo && (
                           <button type="button" className="list-snapshot-undo-button" onClick={() => void undoBlockListSnapshot(block.id)}>
-                            Rückgängig
+                            {t("undoAction")}
                           </button>
                         )}
                       </div>
@@ -1746,15 +2210,13 @@ export function FocusedElementEditor({
                         ? blockConfig.linked_list_sort_by
                         : "";
                     const linkedListSortDirection = blockConfig.linked_list_sort_direction === "desc" ? "desc" : "asc";
-                    const listColOptions = [
-                      { value: "column_one", label: linkedListDefinition.column_one_title },
-                      { value: "column_two", label: linkedListDefinition.column_two_title },
-                    ];
+                    // Leere Zeilen hervorheben wird pro Block im Template konfiguriert.
+                    const linkedListProtocolView = { highlightEmpty: Boolean(blockConfig.linked_list_highlight_empty) };
                     if (isPlanningMode) {
                       return (
                         <div className="grid">
                           <div className="editor-planning-toolbar">
-                            <PlanningIconTrigger title="Liste bearbeiten" onClick={() => { void refreshListEntries(linkedListId).then(() => setListEditModalBlockId(block.id)); }} />
+                            <PlanningIconTrigger title={t("editListTitle")} onClick={() => { void refreshListEntries(linkedListId).then(() => setListEditModalBlockId(block.id)); }} />
                           </div>
                           {listSnapshotBanner}
                           <StructuredListTable
@@ -1763,10 +2225,16 @@ export function FocusedElementEditor({
                             availableParticipants={availableParticipants}
                             availableEvents={availableEvents}
                             editable={false}
-                            emptyMessage="Noch keine Eintraege in dieser Liste."
+                            emptyMessage={t("noListEntriesYet")}
                             groupByColumn={linkedListGroupBy}
                             sortByColumn={linkedListSortBy}
                             sortDirection={linkedListSortDirection}
+                            protocolView={linkedListProtocolView}
+                            rowFilter={
+                              (blockConfig.linked_list_filter_column === "column_one" || blockConfig.linked_list_filter_column === "column_two") && blockConfig.linked_list_filter_text
+                                ? { column: blockConfig.linked_list_filter_column, text: String(blockConfig.linked_list_filter_text) }
+                                : null
+                            }
                             entryTrackedStatusById={entryTrackedStatusById}
                             onAcceptTrackedEntry={(entryId) => void acceptTrackedListEntry(block.id, entryId)}
                             onCreateEntry={() => Promise.resolve(false)}
@@ -1796,52 +2264,17 @@ export function FocusedElementEditor({
                     return (
                       <div className="grid">
                         {listSnapshotBanner}
-                        <div className="list-block-config-bar">
-                          <label className="list-block-config-item">
-                            <span className="list-block-config-label">Gruppieren</span>
-                            <SearchableSelect
-                              options={listColOptions}
-                              getId={(o) => o.value}
-                              getLabel={(o) => o.label}
-                              value={linkedListGroupBy || null}
-                              disabled={!blockEditable}
-                              onChange={(o) => void saveBlockConfiguration(block.id, { ...blockConfig, linked_list_group_by: o?.value || null })}
-                              nullLabel="Keine Gruppierung"
-                            />
-                          </label>
-                          <label className="list-block-config-item">
-                            <span className="list-block-config-label">Sortieren</span>
-                            <SearchableSelect
-                              options={listColOptions}
-                              getId={(o) => o.value}
-                              getLabel={(o) => o.label}
-                              value={linkedListSortBy || null}
-                              disabled={!blockEditable}
-                              onChange={(o) => void saveBlockConfiguration(block.id, { ...blockConfig, linked_list_sort_by: o?.value || null, linked_list_sort_direction: o?.value ? linkedListSortDirection : "asc" })}
-                              nullLabel="Manuell"
-                            />
-                          </label>
-                          <label className="list-block-config-item">
-                            <select
-                              value={linkedListSortDirection}
-                              disabled={!blockEditable || !linkedListSortBy}
-                              onChange={(e) => void saveBlockConfiguration(block.id, { ...blockConfig, linked_list_sort_direction: e.target.value })}
-                            >
-                              <option value="asc">A–Z</option>
-                              <option value="desc">Z–A</option>
-                            </select>
-                          </label>
-                        </div>
                         <StructuredListTable
                           definition={displayDefinition}
                           entries={displayEntries}
                           availableParticipants={availableParticipants}
                           availableEvents={availableEvents}
                           editable={blockEditable}
-                          emptyMessage="Noch keine Eintraege in dieser Liste."
+                          emptyMessage={t("noListEntriesYet")}
                           groupByColumn={linkedListGroupBy}
                           sortByColumn={linkedListSortBy}
                           sortDirection={linkedListSortDirection}
+                          protocolView={linkedListProtocolView}
                           entryTrackedStatusById={entryTrackedStatusById}
                           onAcceptTrackedEntry={(entryId) => void acceptTrackedListEntry(block.id, entryId)}
                           onCreateEntry={(payload) => createListEntryFromBlock(block.id, linkedListId, payload)}
@@ -1851,11 +2284,14 @@ export function FocusedElementEditor({
                       </div>
                     );
                   }
-                  const linkedEvent = isAutoEventBlock
-                    ? availableEvents.find((e) => e.id === String(blockConfig.repeat_source_id))
-                    : undefined;
+                  const linkedEventId = isAutoEventBlock ? blockEventPublicId(block) : undefined;
+                  const linkedEvent = linkedEventId ? availableEvents.find((e) => e.id === linkedEventId) : undefined;
+                  // Ausgeblendete Spezialfelder fehlen; ohne eigenes Label im Block gilt der
+                  // Name aus den Mandant-Einstellungen (Alias), sonst der Standardname
                   const configuredEventFields = isAutoEventBlock && Array.isArray(blockConfig.event_fields)
                     ? (blockConfig.event_fields as Array<{ field: string; label: string }>)
+                        .filter((ef) => !eventFieldConfig.hidden(ef.field))
+                        .map((ef) => ({ ...ef, label: ef.label?.trim() || eventFieldConfig.label(ef.field, tTemplates(`eventField.${ef.field}`)) }))
                     : [];
                   return (
                     <div className="grid">
@@ -1879,14 +2315,19 @@ export function FocusedElementEditor({
                             const participantSummary = isParticipantsField
                               ? currentIds.length === 0
                                 ? "Auswählen…"
-                                : availableParticipants
+                                : participantNames
                                     .filter((p) => currentIds.includes(p.id))
                                     .map((p) => p.display_name)
                                     .join(", ") || `${currentIds.length} ausgewählt`
                               : "";
                             return (
                               <div className="form-block-row" key={`${block.id}-ef-${ef.field}`} style={{ borderLeft: "2px solid var(--accent-soft)" }}>
-                                <div className="field-label-inline">{ef.label}</div>
+                                <div className="field-label-inline">
+                                  {ef.label}
+                                  <span className="event-series-linked" title={t("eventSeries.linkedTitle")}>
+                                    <ActionIcon name="link" /> {t("eventSeries.linked")}
+                                  </span>
+                                </div>
                                 {isParticipantsField ? (
                                   <button
                                     type="button"
@@ -1954,12 +2395,12 @@ export function FocusedElementEditor({
                           <div className="list-snapshot-banner">
                             {rowsAreStale && (
                               <button type="button" className="list-snapshot-refresh-button" onClick={() => void refreshBlockListSnapshot(block.id)}>
-                                ⟳ Daten aktualisieren
+                                {t("refreshDataAction")}
                               </button>
                             )}
                             {rowsHaveUndo && (
                               <button type="button" className="list-snapshot-undo-button" onClick={() => void undoBlockListSnapshot(block.id)}>
-                                Rückgängig
+                                {t("undoAction")}
                               </button>
                             )}
                           </div>
@@ -1973,12 +2414,15 @@ export function FocusedElementEditor({
                             const linkedListEntryId = row.linked_list_entry_id ? String(row.linked_list_entry_id) : null;
                             const rowSnapshot = row.list_snapshot as RowListSnapshot | undefined;
                             const liveListDefinition = linkedListId ? listDefinitionsById.get(linkedListId) : undefined;
-                            const liveListEntry = (linkedListId ? listEntriesByDefinition[linkedListId] ?? [] : []).find((entry) => entry.id === linkedListEntryId);
+                            // Aus der Vorlage stehen Liste und Eintrag mit interner ID; Einträge sind nach
+                            // öffentlicher Listen-ID geladen und tragen die öffentliche ID
+                            const publicEntryId = linkedListEntryId ? block.public_reference_ids?.list_entries?.[linkedListEntryId] ?? linkedListEntryId : null;
+                            const liveListEntry = (liveListDefinition ? listEntriesByDefinition[liveListDefinition.id] ?? listEntriesByDefinition[linkedListId ?? ""] ?? [] : []).find((entry) => entry.id === publicEntryId);
                             const entryExists = rowSnapshot ? rowSnapshot.entry_exists : !!liveListDefinition && !!liveListEntry;
                             if (!entryExists) {
                               return (
                                 <div className="form-block-row" key={`${block.id}-form-${index}`}>
-                                  <div className="field-label-inline muted">Verknüpfter Listeneintrag wurde gelöscht</div>
+                                  <div className="field-label-inline muted">{t("linkedListEntryDeleted")}</div>
                                   <div />
                                 </div>
                               );
@@ -2008,7 +2452,7 @@ export function FocusedElementEditor({
                             if (!listDefinition || !listEntry) {
                               return (
                                 <div className="form-block-row" key={`${block.id}-form-${index}`}>
-                                  <div className="field-label-inline muted">Verknüpfter Listeneintrag wurde gelöscht</div>
+                                  <div className="field-label-inline muted">{t("linkedListEntryDeleted")}</div>
                                   <div />
                                 </div>
                               );
@@ -2033,7 +2477,7 @@ export function FocusedElementEditor({
                                   <div className="tracked-strike">
                                     {formatListEntryColumnValue(variableRawValue, variableValueType)}
                                     <TrackedChangeHideButton
-                                      title="Entfernte Zeile ausblenden"
+                                      title={t("hideRemovedRow")}
                                       onAccept={() => void acceptTrackedRow(block.id, String(row.id ?? index))}
                                     />
                                   </div>
@@ -2073,7 +2517,7 @@ export function FocusedElementEditor({
                                         kind: "list_entry",
                                         blockId: block.id,
                                         rowId: String(row.id ?? index),
-                                        rowLabel: aliasOrFixedValue || "Wert",
+                                        rowLabel: aliasOrFixedValue || t("valueFallback"),
                                         selectedIds: variableRawValue?.participant_id ? [String(variableRawValue.participant_id)] : [],
                                         singleSelect: true,
                                         listDefinitionId: linkedListId ?? undefined,
@@ -2082,7 +2526,7 @@ export function FocusedElementEditor({
                                       });
                                     }}
                                   >
-                                    {formatListEntryColumnValue(variableRawValue, "participant") || "Teilnehmer wählen"}
+                                    {formatListEntryColumnValue(variableRawValue, "participant") || t("chooseParticipant")}
                                   </button>
                                 ) : variableValueType === "participants" ? (
                                   <button
@@ -2098,7 +2542,7 @@ export function FocusedElementEditor({
                                         kind: "list_entry",
                                         blockId: block.id,
                                         rowId: String(row.id ?? index),
-                                        rowLabel: aliasOrFixedValue || "Wert",
+                                        rowLabel: aliasOrFixedValue || t("valueFallback"),
                                         selectedIds: Array.isArray(variableRawValue?.participant_ids) ? variableRawValue.participant_ids.map(String) : [],
                                         listDefinitionId: linkedListId ?? undefined,
                                         listEntryId: linkedListEntryId ?? undefined,
@@ -2110,7 +2554,7 @@ export function FocusedElementEditor({
                                   </button>
                                 ) : variableValueType === "event" ? (
                                   <SearchableSelect
-                                    options={[...availableEvents].sort((left, right) => compareIsoDate(left.event_date, right.event_date))}
+                                    options={sortedAvailableEvents}
                                     getId={(eventRow) => eventRow.id}
                                     getLabel={(eventRow) => `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}`}
                                     value={variableRawValue?.event_id ?? null}
@@ -2121,7 +2565,7 @@ export function FocusedElementEditor({
                                         [variableColumnKey]: { event_id: eventRow ? eventRow.id : null },
                                       });
                                     }}
-                                    nullLabel="Termin wählen"
+                                    nullLabel={t("chooseEvent")}
                                     triggerProps={{ "data-form-input": true, onKeyDown: handleFormInputKeyDown }}
                                   />
                                 ) : (
@@ -2183,11 +2627,11 @@ export function FocusedElementEditor({
                                 onKeyDown={handleFormInputKeyDown}
                                 onClick={() => openMultiParticipantPicker(block.id, index, row)}
                               >
-                                {multiParticipantSummary(row)}
+                                <span className="participant-summary-text" title={multiParticipantSummary(row)}>{multiParticipantSummary(row)}</span>
                               </button>
                             ) : rowType === "event" ? (
                               <SearchableSelect
-                                options={[...availableEvents].sort((left, right) => compareIsoDate(left.event_date, right.event_date))}
+                                options={sortedAvailableEvents}
                                 getId={(eventRow) => eventRow.id}
                                 getLabel={(eventRow) => `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}`}
                                 value={row.event_id ?? null}
@@ -2196,7 +2640,7 @@ export function FocusedElementEditor({
                                   nextRows[index] = { ...nextRows[index], event_id: eventRow ? eventRow.id : null };
                                   void saveBlockConfiguration(block.id, { ...blockConfig, rows: nextRows });
                                 }}
-                                nullLabel="Termin wählen"
+                                nullLabel={t("chooseEvent")}
                                 triggerProps={{ "data-form-input": true, onKeyDown: handleFormInputKeyDown }}
                               />
                             ) : (
@@ -2226,275 +2670,290 @@ export function FocusedElementEditor({
                 })()
               )}
 
-              {elementType === "matrix" && (
-                <div className="grid">
-                  {matrixPlanningManageable ? (
-                    <div className="editor-planning-toolbar">
-                      <PlanningIconTrigger
-                        title="Spalten auswählen"
-                        icon="☑"
-                        onClick={() => setMatrixPickerBlockId(block.id)}
-                      />
-                    </div>
-                  ) : matrixInlineColumnManagement ? (
-                    <div className="matrix-block-toolbar">
-                      <button
-                        type="button"
-                        className="button-secondary"
-                        onClick={() => {
-                          const nextColumns = [
-                            ...matrixColumns(blockConfig),
-                            {
-                              id: nextMatrixColumnId(matrixColumns(blockConfig)),
-                              title: "",
-                              row_values: Object.fromEntries(
-                                matrixRows(blockConfig).map((row, rowIndex) => [
-                                  String(row.id ?? rowIndex),
-                                  matrixDefaultCellValue(row),
-                                ])
-                              ),
-                            },
-                          ];
-                          saveMatrixColumns(block.id, blockConfig, nextColumns);
-                        }}
-                      >
-                        + Spalte
-                      </button>
-                      {(blockConfig.auto_source?.type || blockConfig.matrix_column_source) ? (
-                        <button
-                          type="button"
-                          className="button-secondary"
-                          onClick={() => generateMatrixColumns(block.id, blockConfig)}
-                        >
-                          Generieren
-                        </button>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  {/* Wrapping card layout: one card per column, rows stacked inside */}
-                  {(() => {
-                    const cols = matrixColumns(blockConfig).filter((c) => !c?.hidden);
-                    const rows = matrixRows(blockConfig);
-                    if (matrixPlanningManageable && cols.length === 0) {
-                      return (
-                        <div className="editor-block-empty-placeholder-auto">
-                          <span>Keine Elemente angezeigt.</span>
-                          <PlanningIconTrigger
-                            title="Spalten auswählen"
-                            icon="☑"
-                            onClick={() => setMatrixPickerBlockId(block.id)}
-                          />
-                        </div>
-                      );
-                    }
-                    const displayCols = cols.length ? cols : [null, null, null]; // 3 placeholders
+              {elementType === "matrix" && (() => {
+                const cols = orderMatrixColumns(block.id, blockConfig, matrixColumns(blockConfig)).filter((c) => !c?.hidden);
+                const rows = matrixRows(blockConfig);
+                const autoSource = matrixAutoSourceInfo(blockConfig);
+                const sourceLabel =
+                  autoSource.source === "list"
+                    ? t("matrixBoard.sourceList", { name: listDefinitionsById.get(autoSource.listId ?? "")?.name ?? t("matrixBoard.sourceListFallback") })
+                    : autoSource.source === "participants"
+                      ? t("matrixBoard.sourceParticipants")
+                      : autoSource.source === "events"
+                        ? t("matrixBoard.sourceEvents")
+                        : null;
+                const columnName = (column: Record<string, any>, columnIndex: number) =>
+                  String(column.title ?? "").trim() || t("matrixBoard.columnFallback", { index: columnIndex + 1 });
+                const addColumn = () =>
+                  saveMatrixColumns(block.id, blockConfig, [
+                    ...matrixColumns(blockConfig),
+                    {
+                      id: nextMatrixColumnId(matrixColumns(blockConfig)),
+                      title: "",
+                      row_values: Object.fromEntries(
+                        rows.map((row, rowIndex) => [String(row.id ?? rowIndex), matrixDefaultCellValue(row)])
+                      ),
+                    },
+                  ]);
+                const headerActions = matrixPlanningManageable ? (
+                  <PlanningIconTrigger title={t("chooseColumns")} icon="☑" onClick={() => setMatrixPickerBlockId(block.id)} />
+                ) : matrixInlineColumnManagement && blockConfig.auto_source?.type ? (
+                  <button type="button" className="button-secondary button-ghost" onClick={() => generateMatrixColumns(block.id, blockConfig)}>
+                    {t("generateAction")}
+                  </button>
+                ) : null;
+                const listSyncColumns = blockEditable ? matrixListSync(block.id, blockConfig) : null;
+
+                const renderCell = (row: Record<string, any>, rowId: string, column: Record<string, any>, columnId: string, cellEditable: boolean) => {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
+                  const value = matrixCellValue(column, row, rowId);
+                  const embeddedBlock = matrixEmbeddedBlockForRow(row, value);
+                  const rowLabel = String(row.label ?? t("matrixEditor.defaultRowLabel"));
+                  if (embeddedBlock) {
                     return (
-                      <div className="matrix-cards">
-                        {displayCols.map((column, columnIndex) => {
-                          const isPlaceholder = column === null;
-                          const columnId = isPlaceholder ? null : String(column!.id ?? columnIndex);
+                      <MatrixEmbeddedBlockEditor
+                        embeddedBlock={embeddedBlock}
+                        protocol={protocol}
+                        availableParticipants={availableParticipants}
+                        availableEvents={availableEvents}
+                        matrixColumn={column}
+                        editable={cellEditable}
+                        updateEmbeddedBlock={(updater, persist = false) =>
+                          updateMatrixEmbeddedBlock(block.id, blockConfig, columnId, row, rowId, updater, persist)}
+                        openMultiParticipantPicker={(embeddedRow) =>
+                          openEmbeddedFormParticipantPicker(block.id, columnId, rowId, rowLabel, embeddedRow)}
+                        createEvent={(forcedTag, draft) =>
+                          createEventFromBlock(block.id, {
+                            event_filter: { tags: splitTags(forcedTag) },
+                            event_allow_end_date:
+                              asObject(embeddedBlock.configuration_snapshot_json).event_allow_end_date === true,
+                          }, draft)}
+                        updateEvent={(eventId, patch) => updateEventFromBlock(block.id, eventId, patch)}
+                        deleteEvent={(eventId) => deleteEventFromBlock(block.id, eventId)}
+                        filterEvents={filteredEvents}
+                        onEventContextMenu={(nativeEvent, eventRow) => onEventContextMenu(nativeEvent, eventRow, block.id)}
+                        isPlanningMode={isPlanningMode}
+                        knownEventTags={knownEventTags}
+                        tagConfig={tagConfig}
+                        onTagColorChange={updateTagColor}
+                        onTagRename={renameTag}
+                      />
+                    );
+                  }
+                  const rowType = matrixRowType(row);
+                  if (rowType === "events") {
+                    const autoEvents = matrixEventsForRow(row, column);
+                    if (!autoEvents.length) return <span className="matrix-board-dash">{t("noMatchingEvents")}</span>;
+                    return (
+                      <MatrixEventChips
+                        events={autoEvents.map((eventRow) => {
+                          const muted = [
+                            rowConfigFlag(row, "event_show_location", false) ? eventRow.location : null,
+                            rowConfigFlag(row, "event_show_description", true) ? eventRow.description : null,
+                          ].filter(Boolean).join(" · ");
+                          return {
+                            id: eventRow.id,
+                            date: rowConfigFlag(row, "event_show_date", true) ? formatDateRange(eventRow.event_date, eventRow.event_end_date) : null,
+                            label: rowConfigFlag(row, "event_show_title", false) ? eventRow.title : "",
+                            muted: muted || undefined,
+                            past: !!protocol.protocol_date && (eventRow.event_end_date || eventRow.event_date) < protocol.protocol_date,
+                          };
+                        })}
+                      />
+                    );
+                  }
+                  if (rowType === "participant") {
+                    const participantId = value.participant_id ? String(value.participant_id) : null;
+                    const name = participantId ? participantNames.find((entry) => entry.id === participantId)?.display_name : null;
+                    const open = () => {
+                      pickerTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+                      setMultiParticipantSearch("");
+                      setMultiParticipantPicker({
+                        kind: "matrix",
+                        blockId: block.id,
+                        rowId,
+                        rowLabel: String(row.label ?? t("participantFallback")),
+                        selectedIds: participantId ? [participantId] : [],
+                        columnId,
+                        singleSelect: true,
+                      });
+                    };
+                    if (!name) return <MatrixEmptyValue addLabel={cellEditable ? t("matrixBoard.addPerson") : undefined} onAdd={cellEditable ? open : undefined} />;
+                    return <MatrixPeopleChips names={[name]} onEdit={cellEditable ? open : undefined} />;
+                  }
+                  if (rowType === "participants") {
+                    const ids = Array.isArray(value.participant_ids) ? value.participant_ids.map(String) : [];
+                    const names = participantNames.filter((entry) => ids.includes(entry.id)).map((entry) => entry.display_name);
+                    const open = () => openMatrixParticipantPicker(block.id, columnId, { row_id: rowId, label: row.label, ...value });
+                    if (!names.length) return <MatrixEmptyValue addLabel={cellEditable ? t("matrixBoard.addPerson") : undefined} onAdd={cellEditable ? open : undefined} />;
+                    return <MatrixPeopleChips names={names} onEdit={cellEditable ? open : undefined} onAdd={cellEditable ? open : undefined} />;
+                  }
+                  if (rowType === "event") {
+                    const eventRow = sortedAvailableEvents.find((entry) => entry.id === String(value.event_id ?? ""));
+                    const picker = (close: () => void) => (
+                      <SearchableSelect
+                        options={sortedAvailableEvents}
+                        getId={(ev) => ev.id}
+                        getLabel={(ev) => `${formatDateRange(ev.event_date, ev.event_end_date)} · ${ev.title}`}
+                        value={value.event_id ?? null}
+                        onChange={(ev) => {
+                          updateMatrixCell(block.id, blockConfig, columnId, rowId, { event_id: ev ? ev.id : null }, true);
+                          close();
+                        }}
+                        nullLabel={t("chooseEventAlt")}
+                      />
+                    );
+                    if (!eventRow) return cellEditable ? picker(() => undefined) : <MatrixEmptyValue />;
+                    return (
+                      <MatrixEventValue
+                        title={eventRow.title}
+                        date={formatDateRange(eventRow.event_date, eventRow.event_end_date)}
+                        renderPicker={cellEditable ? picker : undefined}
+                      />
+                    );
+                  }
+                  const text = String(value.text_value ?? row.template_value ?? "");
+                  if (!cellEditable) {
+                    return text.trim() ? <div className="matrix-board-text">{text}</div> : <MatrixEmptyValue />;
+                  }
+                  return (
+                    <textarea
+                      rows={1}
+                      className="matrix-board-textarea"
+                      aria-label={rowLabel}
+                      placeholder={t("matrixBoard.notePlaceholder")}
+                      value={text}
+                      onInput={(e) => autoResizeTodoField(e.currentTarget)}
+                      onChange={(e) => updateMatrixCell(block.id, blockConfig, columnId, rowId, { text_value: e.target.value })}
+                      onBlur={() => updateMatrixCell(block.id, blockConfig, columnId, rowId, {}, true)}
+                    />
+                  );
+                };
+
+                return (
+                  <div className="matrix-board">
+                    <MatrixBoardHeader source={sourceLabel} view={matrixView} onViewChange={changeMatrixView} actions={headerActions} />
+                    {listSyncColumns ? (
+                      <div className="list-snapshot-banner">
+                        <span className="muted">{t("matrixBoard.listChanged")}</span>
+                        <button type="button" className="list-snapshot-refresh-button" onClick={() => saveMatrixColumns(block.id, blockConfig, listSyncColumns)}>
+                          {t("refreshDataAction")}
+                        </button>
+                      </div>
+                    ) : null}
+                    {!rows.length ? (
+                      <div className="matrix-board-empty">{t("noRowsConfigured")}</div>
+                    ) : !cols.length && !matrixInlineColumnManagement ? (
+                      <div className="matrix-board-empty">
+                        <span>{t("noElementsShown")}</span>
+                        {matrixPlanningManageable ? (
+                          <PlanningIconTrigger title={t("chooseColumns")} icon="☑" onClick={() => setMatrixPickerBlockId(block.id)} />
+                        ) : null}
+                      </div>
+                    ) : matrixView === "table" ? (
+                      <MatrixTableView
+                        columns={cols.map((column, columnIndex) => ({
+                          id: String(column.id ?? columnIndex),
+                          name: columnName(column, columnIndex),
+                          colorIndex: columnIndex,
+                        }))}
+                        rows={rows.map((row, rowIndex) => {
+                          const rowId = String(row.id ?? rowIndex);
+                          return {
+                            id: rowId,
+                            label: String(row.label ?? t("matrixEditor.defaultRowLabel")),
+                            locked: !forceEditable && !matrixRowEditable(row),
+                            cells: cols.map((column) => matrixCellText(row, rowId, column)),
+                          };
+                        })}
+                      />
+                    ) : (
+                      <div className="matrix-board-cards">
+                        {cols.map((column, columnIndex) => {
+                          const columnId = String(column.id ?? columnIndex);
                           return (
-                            <div key={isPlaceholder ? `ph-${columnIndex}` : String(column!.id ?? columnIndex)}
-                              className={`matrix-card${isPlaceholder ? " matrix-card-placeholder" : ""}`}>
-                              {/* Column header */}
-                              <div className="matrix-card-header">
-                                {isPlaceholder ? (
-                                  <span className="muted">Spalte {columnIndex + 1}</span>
-                                ) : matrixInlineColumnManagement ? (
+                            <article key={columnId} className="matrix-board-card">
+                              <header className="matrix-board-card-head">
+                                <span className={`matrix-board-swatch ${matrixColumnColorClass(columnIndex)}`} aria-hidden="true" />
+                                {matrixInlineColumnManagement ? (
                                   <>
                                     <input
-                                      className="matrix-col-title-input"
-                                      value={String(column!.title ?? "")}
-                                      onChange={(e) => updateMatrixColumn(block.id, blockConfig, columnId!,
+                                      className="matrix-board-card-title-input"
+                                      value={String(column.title ?? "")}
+                                      aria-label={t("matrixBoard.columnNameLabel")}
+                                      onChange={(e) => updateMatrixColumn(block.id, blockConfig, columnId,
                                         (cur) => ({ ...cur, title: e.target.value }))}
-                                      onBlur={() => updateMatrixColumn(block.id, blockConfig, columnId!,
-                                        (cur) => cur, true)}
-                                      placeholder={String(column!.title_placeholder ?? `Spalte ${columnIndex + 1}`)}
+                                      onBlur={() => updateMatrixColumn(block.id, blockConfig, columnId, (cur) => cur, true)}
+                                      placeholder={String(column.title_placeholder ?? t("matrixBoard.columnFallback", { index: columnIndex + 1 }))}
                                     />
-                                    <button type="button" className="matrix-col-remove"
+                                    <button type="button" className="button-icon-soft button-icon-soft-sm button-icon-soft-danger" title={t("removeColumn")} aria-label={t("removeColumn")}
                                       onClick={() => saveMatrixColumns(block.id, blockConfig,
-                                        matrixColumns(blockConfig).filter(e => String(e.id ?? "") !== columnId!))}>
-                                      ×
+                                        matrixColumns(blockConfig).filter((entry) => String(entry.id ?? "") !== columnId))}>
+                                      <ActionIcon name="delete" />
                                     </button>
                                   </>
                                 ) : (
-                                  <span className="matrix-card-title">
-                                    {String(column!.title ?? "").trim() || `Spalte ${columnIndex + 1}`}
-                                  </span>
+                                  <span className="matrix-board-card-title">{columnName(column, columnIndex)}</span>
                                 )}
-                              </div>
-
-                              {/* Row sections */}
-                              {rows.map((row, rowIndex) => {
-                                const rowId = String(row.id ?? rowIndex);
-                                const value = isPlaceholder ? {} : matrixCellValue(column!, row, rowId);
-                                const embeddedBlock = isPlaceholder ? null : matrixEmbeddedBlockForRow(row, value);
-                                const cellFieldKey = `block-${block.id}-cell-${rowId}-${columnId ?? columnIndex}`;
-                                const cellLockHolder = isPlaceholder ? null : collab.isLockedByOther(cellFieldKey);
-                                const cellEditable = !isPlaceholder && blockEditable && !cellLockHolder && (forceEditable || matrixRowEditable(row));
-                                const autoEvents = (!isPlaceholder && !embeddedBlock && matrixRowType(row) === "events")
-                                  ? matrixEventsForRow(row, column!) : [];
-                                return (
-                                  <div key={`${rowId}-${columnIndex}`} className="matrix-card-row">
-                                    <div className={`matrix-card-row-label${(!forceEditable && !matrixRowEditable(row)) ? " matrix-row-locked" : ""}`}>
-                                      {row.label ?? `Zeile ${rowIndex + 1}`}
-                                      {(!forceEditable && !matrixRowEditable(row)) ? <span className="matrix-lock-icon"> 🔒</span> : null}
-                                      {cellLockHolder ? <LockBadge holder={cellLockHolder} /> : null}
-                                    </div>
+                                {column.list_removed ? (
+                                  <Badge variant="warning">{t("matrixBoard.listRemoved")}</Badge>
+                                ) : null}
+                              </header>
+                              <div className="matrix-board-card-rows">
+                                {rows.map((row, rowIndex) => {
+                                  const rowId = String(row.id ?? rowIndex);
+                                  const cellFieldKey = `block-${block.id}-cell-${rowId}-${columnId}`;
+                                  const cellLockHolder = collab.isLockedByOther(cellFieldKey);
+                                  const rowLocked = !forceEditable && !matrixRowEditable(row);
+                                  const cellEditable = blockEditable && !cellLockHolder && !rowLocked;
+                                  return (
                                     <div
-                                      className="matrix-card-row-cell"
-                                      onFocusCapture={isPlaceholder ? undefined : () => collab.lockField(cellFieldKey)}
-                                      onBlurCapture={
-                                        isPlaceholder
-                                          ? undefined
-                                          : (event) => {
-                                              if (!event.currentTarget.contains(event.relatedTarget as Node)) {
-                                                collab.unlockField(cellFieldKey);
-                                              }
-                                            }
-                                      }
+                                      key={rowId}
+                                      className="matrix-board-row"
+                                      onFocusCapture={() => collab.lockField(cellFieldKey)}
+                                      onBlurCapture={(event) => {
+                                        if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+                                          collab.unlockField(cellFieldKey);
+                                        }
+                                      }}
                                     >
-                                      {isPlaceholder ? (
-                                        <div className="matrix-table-placeholder" style={{ height: 40, borderRadius: "var(--radius-sm)" }} />
-                                      ) : embeddedBlock ? (
-                                        <>
-                                          <MatrixEmbeddedBlockEditor
-                                            embeddedBlock={embeddedBlock}
-                                            protocol={protocol}
-                                            availableParticipants={availableParticipants}
-                                            availableEvents={availableEvents}
-                                            matrixColumn={column!}
-                                            editable={cellEditable}
-                                            updateEmbeddedBlock={(updater, persist = false) =>
-                                              updateMatrixEmbeddedBlock(block.id, blockConfig, columnId!, row, rowId, updater, persist)}
-                                            openMultiParticipantPicker={(embeddedRow) =>
-                                              openEmbeddedFormParticipantPicker(block.id, columnId!, rowId,
-                                                String(row.label ?? `Zeile ${rowIndex + 1}`), embeddedRow)}
-                                            createEvent={(forcedTag, draft) =>
-                                              createEventFromBlock(block.id, {
-                                                event_tag_filter: forcedTag,
-                                                event_allow_end_date:
-                                                  asObject(embeddedBlock.configuration_snapshot_json).event_allow_end_date === true,
-                                              }, draft)}
-                                            updateEvent={(eventId, patch) => updateEventFromBlock(block.id, eventId, patch)}
-                                            deleteEvent={(eventId) => deleteEventFromBlock(block.id, eventId)}
-                                            currentCycleYear={currentCycleYear}
-                                            cycleConfigId={focusedTemplate?.cycle_config_id ?? null}
-                                            onEventContextMenu={(nativeEvent, eventRow) => onEventContextMenu(nativeEvent, eventRow, block.id)}
-                                            isPlanningMode={isPlanningMode}
-                                            knownEventTags={knownEventTags}
-                                            tagConfig={tagConfig}
-                                            onTagColorChange={updateTagColor}
-                                            onTagRename={renameTag}
-                                          />
-                                          {cellEditable ? (
-                                            <div className="matrix-row-summary muted">
-                                              {embeddedBlockSummary(embeddedBlock, availableParticipants, availableEvents, protocol, column!, availableTemplates)}
-                                            </div>
-                                          ) : null}
-                                        </>
-                                      ) : matrixRowType(row) === "events" ? (
-                                        autoEvents.length ? (
-                                          <div className="matrix-event-list">
-                                            {autoEvents.map((eventRow) => {
-                                              const isPast = !!protocol.protocol_date &&
-                                                (eventRow.event_end_date || eventRow.event_date) < protocol.protocol_date;
-                                              return (
-                                                <div className={`matrix-event-item${isPast ? " matrix-event-item-past" : ""}`}
-                                                  key={`${columnIndex}-${rowId}-${eventRow.id}`}>
-                                                  <span>{formatDateRange(eventRow.event_date, eventRow.event_end_date)}</span>
-                                                  {eventRow.description ? <span className="muted">({eventRow.description})</span> : null}
-                                                </div>
-                                              );
-                                            })}
-                                          </div>
-                                        ) : <span className="muted">Keine passenden Termine</span>
-                                      ) : (
-                                        <div className="matrix-cell-value">
-                                          {!cellEditable ? (
-                                            <div className="matrix-static-value">{matrixValueSummary(row, value)}</div>
-                                          ) : matrixRowType(row) === "participant" ? (
-                                            <button
-                                              type="button"
-                                              className="button-ghost form-participant-picker-button"
-                                              onClick={(e) => {
-                                                pickerTriggerRef.current = e.currentTarget;
-                                                setMultiParticipantSearch("");
-                                                setMultiParticipantPicker({
-                                                  kind: "matrix",
-                                                  blockId: block.id,
-                                                  rowId: rowId!,
-                                                  rowLabel: String(row.label ?? "Teilnehmer"),
-                                                  selectedIds: value.participant_id ? [String(value.participant_id)] : [],
-                                                  columnId: columnId!,
-                                                  singleSelect: true,
-                                                });
-                                              }}
-                                            >
-                                              {singleParticipantSummary(value.participant_id)}
-                                            </button>
-                                          ) : matrixRowType(row) === "participants" ? (
-                                            <button type="button" className="button-ghost form-participant-picker-button"
-                                              onClick={() => openMatrixParticipantPicker(block.id, columnId!, {
-                                                row_id: rowId, label: row.label, ...value })}>
-                                              {multiParticipantSummary(value)}
-                                            </button>
-                                          ) : matrixRowType(row) === "event" ? (
-                                            <SearchableSelect
-                                              options={sortedAvailableEvents}
-                                              getId={(ev) => ev.id}
-                                              getLabel={(ev) => `${formatDateRange(ev.event_date, ev.event_end_date)} · ${ev.title}`}
-                                              value={value.event_id ?? null}
-                                              onChange={(ev) => updateMatrixCell(block.id, blockConfig, columnId!, rowId,
-                                                { event_id: ev ? ev.id : null }, true)}
-                                              nullLabel="Termin waehlen"
-                                            />
-                                          ) : (
-                                            <textarea rows={1} className="todo-input"
-                                              value={String(value.text_value ?? row.template_value ?? "")}
-                                              onInput={(e) => autoResizeTodoField(e.currentTarget)}
-                                              onChange={(e) => updateMatrixCell(block.id, blockConfig, columnId!, rowId,
-                                                { text_value: e.target.value })}
-                                              onBlur={() => updateMatrixCell(block.id, blockConfig, columnId!, rowId, {}, true)}
-                                            />
-                                          )}
-                                          {cellEditable ? (
-                                            <div className="matrix-row-summary muted">{matrixValueSummary(row, value)}</div>
-                                          ) : null}
-                                        </div>
-                                      )}
+                                      <MatrixRowLabel
+                                        label={String(row.label ?? t("matrixEditor.defaultRowLabel"))}
+                                        locked={rowLocked}
+                                        extra={cellLockHolder ? <LockBadge holder={cellLockHolder} /> : null}
+                                      />
+                                      <div className="matrix-board-row-value">
+                                        {renderCell(row, rowId, column, columnId, cellEditable)}
+                                      </div>
                                     </div>
-                                  </div>
-                                );
-                              })}
-                              {!rows.length ? (
-                                <div className="matrix-table-empty">Keine Zeilen konfiguriert.</div>
-                              ) : null}
-                            </div>
+                                  );
+                                })}
+                              </div>
+                            </article>
                           );
                         })}
+                        {matrixInlineColumnManagement ? <MatrixAddColumnCard onClick={addColumn} /> : null}
                       </div>
-                    );
-                  })()}
-                  {matrixPlanningManageable && (
-                    <CheckboxCandidateModal
-                      open={matrixPickerBlockId === block.id}
-                      onClose={() => setMatrixPickerBlockId(null)}
-                      title="Spalten auswählen"
-                      description="Spalten dieser Matrix an-/abwählen. Werte bleiben beim Abwählen erhalten."
-                      items={matrixCandidateItems(blockConfig)}
-                      onToggle={(item, nextChecked) => toggleMatrixColumn(block.id, blockConfig, item.id, nextChecked)}
-                    />
-                  )}
-                </div>
-              )}
+                    )}
+                    {matrixPlanningManageable && (
+                      <CheckboxCandidateModal
+                        open={matrixPickerBlockId === block.id}
+                        onClose={() => setMatrixPickerBlockId(null)}
+                        title={t("chooseColumns")}
+                        description={t("matrixColumnsToggleDescription")}
+                        items={matrixCandidateItems(block.id, blockConfig)}
+                        onToggle={(item, nextChecked) => toggleMatrixColumn(block.id, blockConfig, item.id, nextChecked)}
+                      />
+                    )}
+                  </div>
+                );
+              })()}
 
               {elementType === "event_list" && (
                 <div className="grid event-list-grid">
                   {isPlanningMode && (
                     <div className="editor-planning-toolbar">
                       <PlanningIconTrigger
-                        title="Terminübersicht öffnen"
+                        title={t("openEventOverview")}
                         icon="🗓"
                         onClick={() => setEventOverviewBlockId(block.id)}
                       />
@@ -2504,19 +2963,21 @@ export function FocusedElementEditor({
                     <table className="data-table event-table event-table-compact">
                       <thead>
                         <tr>
-                          {editableEventColumns?.showDate ? <th>Dat.</th> : null}
-                          {editableEventColumns?.showTag ? <th>Tag</th> : null}
-                          {editableEventColumns?.showTitle ? <th>Titel</th> : null}
-                          {editableEventColumns?.showDescription ? <th>Beschreibung</th> : null}
+                          {editableEventColumns?.showDate ? <th>{t("dateAbbr")}</th> : null}
+                          {editableEventColumns?.showTag ? <th>{t("tagLabel")}</th> : null}
+                          {editableEventColumns?.showTitle ? <th>{t("titleLabel")}</th> : null}
+                          {editableEventColumns?.showDescription ? <th>{t("descriptionLabel")}</th> : null}
+                          {editableEventColumns?.showLocation ? <th>{t("locationLabel")}</th> : null}
+                          {editableEventColumns?.showOrganizers ? <th>{t("organizersLabel")}</th> : null}
                           {editableEventColumns?.showParticipantCount ? <th className="event-column-count">TN</th> : null}
-                          {editableEventColumns?.showCancelled ? <th>Abgesagt</th> : null}
+                          {editableEventColumns?.showCancelled ? <th>{t("cancelledLabel")}</th> : null}
                           {eventListInlineEditable ? (
-                            <th className="event-column-actions" aria-label="Aktionen">
+                            <th className="event-column-actions" aria-label={t("actionsLabel")}>
                               <button
                                 type="button"
                                 className="button-ghost button-icon"
-                                title="Terminzeile hinzufügen"
-                                aria-label="Terminzeile hinzufügen"
+                                title={t("addEventRow")}
+                                aria-label={t("addEventRow")}
                                 disabled={showNewEventRow || creatingNewEventRow}
                                 onClick={() => {
                                   setOpenNewEventRows((current) => ({ ...current, [block.id]: true }));
@@ -2561,7 +3022,7 @@ export function FocusedElementEditor({
                                   value={forcedEventTag || newEventDraft.tag}
                                   onChange={(v) => patchNewEventDraft(block.id, blockConfig, { tag: v })}
                                   suggestions={knownEventTags}
-                                  placeholder="Tag"
+                                  placeholder={t("tagLabel")}
                                   multi={false}
                                   readOnly={Boolean(forcedEventTag) || creatingNewEventRow}
                                   tagConfig={tagConfig}
@@ -2577,7 +3038,7 @@ export function FocusedElementEditor({
                                   value={newEventDraft.title}
                                   disabled={creatingNewEventRow}
                                   onChange={(event) => patchNewEventDraft(block.id, blockConfig, { title: event.target.value })}
-                                  placeholder="Titel"
+                                  placeholder={t("titleLabel")}
                                 />
                               </td>
                             ) : null}
@@ -2588,10 +3049,12 @@ export function FocusedElementEditor({
                                   value={newEventDraft.description}
                                   disabled={creatingNewEventRow}
                                   onChange={(event) => patchNewEventDraft(block.id, blockConfig, { description: event.target.value })}
-                                  placeholder="Beschreibung"
+                                  placeholder={t("descriptionLabel")}
                                 />
                               </td>
                             ) : null}
+                            {editableEventColumns?.showLocation ? <td /> : null}
+                            {editableEventColumns?.showOrganizers ? <td /> : null}
                             {editableEventColumns?.showParticipantCount ? (
                               <td className="event-column-count">
                                 <input
@@ -2602,7 +3065,7 @@ export function FocusedElementEditor({
                                   disabled={creatingNewEventRow}
                                   onChange={(event) => patchNewEventDraft(block.id, blockConfig, { participant_count: event.target.value })}
                                   onFocus={(e) => e.target.select()}
-                                  placeholder="TN"
+                                  placeholder={t("participantCountAbbr")}
                                 />
                               </td>
                             ) : null}
@@ -2613,8 +3076,8 @@ export function FocusedElementEditor({
                                   <button
                                     type="button"
                                     className="button-ghost button-icon button-icon-danger"
-                                    title="Neue Terminzeile verwerfen"
-                                    aria-label="Neue Terminzeile verwerfen"
+                                    title={t("discardNewEventRow")}
+                                    aria-label={t("discardNewEventRow")}
                                     disabled={creatingNewEventRow}
                                     onClick={() => resetNewEventRow(block.id)}
                                   >
@@ -2635,6 +3098,7 @@ export function FocusedElementEditor({
                               <tr
                                 key={eventRow.id}
                                 className={`${isPast && blockConfig.event_gray_past !== false ? "event-row-past" : ""}${showCancelledStyle ? " event-row-cancelled" : ""}`}
+                                style={eventRowTintStyle(eventRow.tag, tagConfig, blockConfig.event_show_tag_colors === true)}
                                 data-upcoming={rowIndex === firstUpcomingIndex ? "true" : undefined}
                                 onContextMenu={(nativeEvent) => onEventContextMenu(nativeEvent, eventRow, block.id)}
                               >
@@ -2682,14 +3146,14 @@ export function FocusedElementEditor({
                                           })
                                         }
                                         suggestions={knownEventTags}
-                                        placeholder="Tag"
+                                        placeholder={t("tagLabel")}
                                         multi={false}
                                         readOnly={Boolean(forcedEventTag)}
                                         tagConfig={tagConfig}
                                         onTagColorChange={updateTagColor}
                                         onTagRename={renameTag}
                                       />
-                                    ) : blockConfig.event_show_tag_colors && eventRow.tag && tagConfig[eventRow.tag]?.color ? (
+                                    ) : eventRow.tag && tagConfig[eventRow.tag]?.color ? ( // Tags immer in ihrer Farbe
                                       <span
                                         className="tag-color-badge"
                                         style={{
@@ -2741,6 +3205,32 @@ export function FocusedElementEditor({
                                     )}
                                   </td>
                                 ) : null}
+                                {editableEventColumns?.showLocation ? (
+                                  <td>
+                                    {eventListInlineEditable ? (
+                                      <input
+                                        className="event-field-description"
+                                        value={editableEventRow.location ?? ""}
+                                        onChange={(event) =>
+                                          queueEventRowSave(block.id, eventRow, { location: event.target.value || null }, {
+                                            forcedTag: forcedEventTag,
+                                            allowEndDate: allowEventEndDate,
+                                          })
+                                        }
+                                      />
+                                    ) : (
+                                      eventRow.location || "—"
+                                    )}
+                                  </td>
+                                ) : null}
+                                {editableEventColumns?.showOrganizers ? (
+                                  <td>
+                                    {(eventRow.organizer_ids ?? [])
+                                      .map((id) => participantNames.find((participant) => participant.id === id)?.display_name)
+                                      .filter(Boolean)
+                                      .join(", ") || "—"}
+                                  </td>
+                                ) : null}
                                 {editableEventColumns?.showParticipantCount ? (
                                   <td className="event-column-count">
                                     {eventListInlineEditable ? (
@@ -2766,7 +3256,7 @@ export function FocusedElementEditor({
                                 ) : null}
                                 {editableEventColumns?.showCancelled ? (
                                   <td>
-                                    {eventRow.is_cancelled ? <Badge variant="danger">Abgesagt</Badge> : <span className="muted">–</span>}
+                                    {eventRow.is_cancelled ? <Badge variant="danger">{t("cancelledLabel")}</Badge> : <span className="muted">–</span>}
                                   </td>
                                 ) : null}
                                 {eventListInlineEditable ? (
@@ -2775,13 +3265,13 @@ export function FocusedElementEditor({
                                       <button
                                         type="button"
                                         className="button-ghost button-icon button-icon-danger"
-                                        title="Termin löschen"
-                                        aria-label="Termin löschen"
+                                        title={t("deleteEvent")}
+                                        aria-label={t("deleteEvent")}
                                         onClick={async () => {
                                           const ok = await confirm({
-                                            message: `Termin "${eventRow.title}" endgültig löschen? Das entfernt ihn aus allen Protokollen.`,
+                                            message: t("deleteEventConfirmNamed", { title: eventRow.title }),
                                             tone: "danger",
-                                            confirmLabel: "Löschen"
+                                            confirmLabel: t("delete")
                                           });
                                           if (!ok) return;
                                           await deleteEventFromBlock(block.id, eventRow.id);
@@ -2797,8 +3287,8 @@ export function FocusedElementEditor({
                           })
                         ) : !showNewEventRow ? (
                           <tr>
-                            <td colSpan={Number(editableEventColumns?.showDate) + Number(editableEventColumns?.showTag) + Number(editableEventColumns?.showTitle) + Number(editableEventColumns?.showDescription) + Number(editableEventColumns?.showParticipantCount) + Number(editableEventColumns?.showCancelled) + Number(eventListInlineEditable)}>
-                              <span className="muted">Keine passenden Termine.</span>
+                            <td colSpan={Number(editableEventColumns?.showDate) + Number(editableEventColumns?.showTag) + Number(editableEventColumns?.showTitle) + Number(editableEventColumns?.showDescription) + Number(editableEventColumns?.showLocation) + Number(editableEventColumns?.showOrganizers) + Number(editableEventColumns?.showParticipantCount) + Number(editableEventColumns?.showCancelled) + Number(eventListInlineEditable)}>
+                              <span className="muted">{t("noMatchingEventsPeriod")}</span>
                             </td>
                           </tr>
                         ) : null}
@@ -2829,15 +3319,17 @@ export function FocusedElementEditor({
 
               {elementType === "attendance" && (() => {
                 const attendanceEntries = Array.isArray(blockConfig.attendance_entries) ? (blockConfig.attendance_entries as Array<Record<string, any>>) : [];
-                const fineAccountId = blockConfig.fine_account_id ? String(blockConfig.fine_account_id) : null;
-                const fineAmountLate = Number(blockConfig.fine_amount_late ?? 0);
-                const fineAmountAbsent = Number(blockConfig.fine_amount_absent ?? 0);
-                const hasFineConfig = fineAccountId != null && (fineAmountLate > 0 || fineAmountAbsent > 0);
+                const eligibleAttendanceParticipants = protocolAttendanceParticipants(availableParticipants, attendanceEntries, protocol);
+                const fineConfig = attendanceFineConfig(blockConfig);
+                const hasFineConfig = fineConfig.enabled;
 
-                async function handleAttendanceChange(participant: ParticipantSummary, newStatus: string) {
-                  const previousEntries = attendanceEntries;
-                  const nextEntries = attendanceEntries.filter((entry) => String(entry.participant_id) !== participant.id);
-                  nextEntries.push({ participant_id: participant.id, participant_name: participant.display_name, status: newStatus });
+                function handleAttendanceChange(participant: ParticipantSummary, newStatus: string) {
+                  return runAttendanceChangeSerialized(`${block.id}:${participant.id}`, () => applyAttendanceChange(participant, newStatus));
+                }
+
+                async function applyAttendanceChange(participant: ParticipantSummary, newStatus: string) {
+                  const previousEntry = attendanceEntries.find((entry) => String(entry.participant_id) === participant.id);
+                  const previousStatus = previousEntry ? String(previousEntry.status) : null;
                   // Explicit lock/unlock around the save, rather than relying only on this
                   // section's onFocusCapture/onBlurCapture (bug found 2026-09-27): clicking a
                   // <button> doesn't reliably move DOM focus in every browser (notably Safari,
@@ -2847,55 +3339,40 @@ export function FocusedElementEditor({
                   // broadcast (see collaboration_ws.py's "lock_not_held" check), leaving every
                   // other viewer's attendance list stale until they reloaded. Sent over the
                   // same WS connection right before the save, so by the time sendFieldUpdate
-                  // follows (inside saveBlockConfiguration), the server has already processed
+                  // follows (inside saveAttendanceStatus), the server has already processed
                   // this lock_request - messages on one connection are handled in order.
                   collab.lockField(blockFieldKey);
                   try {
-                    await saveBlockConfiguration(block.id, { ...blockConfig, attendance_entries: nextEntries });
+                    await saveAttendanceStatus(block.id, participant.id, participant.display_name, newStatus);
 
-                    if (hasFineConfig) {
-                      const existingFine = protocolFines.find(
-                        (f) => f.participant_id === participant.id && (f.fine_type === "late" || f.fine_type === "absent") && f.status === "pending"
-                      );
-
-                      if (newStatus === "late" && fineAmountLate > 0) {
-                        if (!existingFine || existingFine.fine_type !== "late") {
-                          if (existingFine) {
-                            await browserApiFetch(`/api/fines/${existingFine.id}`, { method: "DELETE" });
-                            setProtocolFines((prev) => prev.filter((f) => f.id !== existingFine.id));
-                          }
-                          const created = await browserApiFetch<AttendanceFine>("/api/fines", {
-                            method: "POST",
-                            body: JSON.stringify({ protocol_id: protocol.id, participant_id: participant.id, participant_name_snapshot: participant.display_name, fine_type: "late", amount: fineAmountLate, account_id: fineAccountId }),
-                          });
-                          if (created) setProtocolFines((prev) => [...prev.filter((f) => !(f.participant_id === participant.id && f.status === "pending")), created]);
-                        }
-                      } else if (newStatus === "absent" && fineAmountAbsent > 0) {
-                        if (!existingFine || existingFine.fine_type !== "absent") {
-                          if (existingFine) {
-                            await browserApiFetch(`/api/fines/${existingFine.id}`, { method: "DELETE" });
-                            setProtocolFines((prev) => prev.filter((f) => f.id !== existingFine.id));
-                          }
-                          const created = await browserApiFetch<AttendanceFine>("/api/fines", {
-                            method: "POST",
-                            body: JSON.stringify({ protocol_id: protocol.id, participant_id: participant.id, participant_name_snapshot: participant.display_name, fine_type: "absent", amount: fineAmountAbsent, account_id: fineAccountId }),
-                          });
-                          if (created) setProtocolFines((prev) => [...prev.filter((f) => !(f.participant_id === participant.id && f.status === "pending")), created]);
-                        }
-                      } else {
-                        if (existingFine) {
-                          await browserApiFetch(`/api/fines/${existingFine.id}`, { method: "DELETE" });
-                          setProtocolFines((prev) => prev.filter((f) => f.id !== existingFine.id));
-                        }
-                      }
-                    }
+                    await syncAttendanceFine({
+                      protocolId: protocol.id,
+                      participant,
+                      status: newStatus,
+                      config: fineConfig,
+                      fines: () => protocolFinesRef.current,
+                      onRemoved: (fineId) => {
+                        protocolFinesRef.current = protocolFinesRef.current.filter((f) => f.id !== fineId);
+                        setProtocolFines((prev) => prev.filter((f) => f.id !== fineId));
+                      },
+                      onCreated: (created) => {
+                        const withoutPending = (list: AttendanceFine[]) => list.filter((f) => !(f.participant_id === participant.id && f.status === "pending"));
+                        protocolFinesRef.current = [...withoutPending(protocolFinesRef.current), created];
+                        setProtocolFines((prev) => [...withoutPending(prev), created]);
+                      },
+                    });
 
                     bumpStatsCharts();
                   } catch (error) {
                     // The sequence can fail partway through (attendance saved but fine update
                     // failed, or vice versa) - roll the attendance status back to what it was
                     // before this change so the UI doesn't show a state that never fully applied.
-                    await saveBlockConfiguration(block.id, { ...blockConfig, attendance_entries: previousEntries }).catch(() => {});
+                    // Only possible when there was a previous status to restore; if this was the
+                    // participant's first entry in this block, saveAttendanceStatus has already
+                    // reverted its own failed save and there is nothing further to undo here.
+                    if (previousStatus !== null) {
+                      await saveAttendanceStatus(block.id, participant.id, participant.display_name, previousStatus).catch(() => {});
+                    }
                     showToast(
                       error instanceof Error
                         ? `Anwesenheit/Busse eventuell nicht synchron: ${error.message}`
@@ -2907,48 +3384,30 @@ export function FocusedElementEditor({
                   }
                 }
 
-                const { present: nPresent, late: nLate, excused: nExcused, absent: nAbsent } =
-                  tallyAttendance(availableParticipants, attendanceEntries);
+                const statusById = new Map(
+                  attendanceEntries
+                    .filter((entry) => entry.participant_id != null && entry.status)
+                    .map((entry) => [String(entry.participant_id), String(entry.status)])
+                );
+                const fineAmountById = new Map<string, number>();
+                if (hasFineConfig) {
+                  for (const fine of protocolFines) {
+                    if (fine.status === "pending" && fine.participant_id) fineAmountById.set(fine.participant_id, fine.amount);
+                  }
+                }
                 return (
-                  <>
-                    <div className="attendance-list">
-                      {eligibleAttendanceParticipants.map((participant) => {
-                        const currentEntry = attendanceEntries.find((entry) => String(entry.participant_id) === participant.id);
-                        const selectedStatus = currentEntry?.status ?? null;
-                        const pendingFine = hasFineConfig ? protocolFines.find((f) => f.participant_id === participant.id && f.status === "pending") : null;
-                        return (
-                          <div className="attendance-row" key={`${block.id}-${participant.id}`}>
-                            <span className="attendance-name">
-                              {participant.display_name}
-                              {pendingFine ? <span className="fine-badge" title={`Busse: ${pendingFine.amount} (${pendingFine.fine_type === "late" ? "Verspätet" : "Unentschuldigt"})`}> 💰</span> : null}
-                            </span>
-                            <div className="segment-control attendance-segment-control">
-                              {ATTENDANCE_OPTIONS.map((option) => (
-                                <button
-                                  key={option.value}
-                                  type="button"
-                                  className={`segment-button attendance-segment-button${selectedStatus === option.value ? " segment-button-active" : ""}`}
-                                  disabled={!blockEditable}
-                                  onClick={() => blockEditable && void handleAttendanceChange(participant, option.value)}
-                                >
-                                  {option.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="attendance-summary">
-                      <span>{nPresent} Anwesend</span>
-                      <span>·</span>
-                      <span>{nLate} Verspätet</span>
-                      <span>·</span>
-                      <span>{nExcused} Entschuldigt</span>
-                      <span>·</span>
-                      <span>{nAbsent} Unentschuldigt</span>
-                    </div>
-                  </>
+                  <AttendanceBoard
+                    participants={eligibleAttendanceParticipants}
+                    statusById={statusById}
+                    editable={blockEditable}
+                    fineAmountById={fineAmountById}
+                    onChange={(participant, status) => (blockEditable ? handleAttendanceChange(participant, status) : undefined)}
+                    onMarkOpenPresent={async (open) => {
+                      if (!blockEditable) return;
+                      for (const participant of open) await handleAttendanceChange(participant, "present");
+                      showToast(tBoard("markedOpenPresent", { count: open.length }), "success");
+                    }}
+                  />
                 );
               })()}
 
@@ -2980,7 +3439,7 @@ export function FocusedElementEditor({
                             </span>
                             {blockEditable && (
                               <button type="button" className="entry-exit-toggle" onClick={() => toggleHidden(entry)}>
-                                {entry.hidden ? "Einblenden" : "Ausblenden"}
+                                {entry.hidden ? t("showAction") : t("hideAction")}
                               </button>
                             )}
                           </div>
@@ -2992,25 +3451,65 @@ export function FocusedElementEditor({
 
                 return (
                   <div className="entry-exit-block">
-                    {renderGroup("Eintritte", joins)}
-                    {renderGroup("Austritte", leaves)}
+                    {renderGroup(t("joinsLabel"), joins)}
+                    {renderGroup(t("leavesLabel"), leaves)}
                     {joins.length === 0 && leaves.length === 0 && (
-                      <p className="muted">Keine Ein- oder Austritte seit der letzten Verwendung dieses Blocks.</p>
+                      <p className="muted">{t("noEntryExitSinceLastUse")}</p>
                     )}
                   </div>
+                );
+              })()}
+
+              {elementType === "session_notes" && (() => {
+                // Nur der freie Notiztext aus dem Sitzungspanel - die Sitzungs-Todos bleiben aussen vor.
+                // Bearbeitet wird im Sitzungspanel, hier ist der Block reine Anzeige.
+                const notes = (sessionNotes ?? protocol.session_notes ?? "").trim();
+                return notes ? (
+                  <div className="session-notes-block">{notes}</div>
+                ) : (
+                  <p className="muted">{t("noSessionNotes")}</p>
                 );
               })()}
 
               {elementType === "session_date" && (
                 <div className="session-date-block">
                   <div className="session-date-main">
-                    <span className="session-date-label">Datum</span>
+                    <span className="session-date-label">{t("dateLabel")}</span>
                     <DateInput
                       value={String(blockConfig.selected_date ?? "")}
                       readOnly={!blockEditable}
                       onChange={(value) => { if (blockEditable) patchBlockConfigValue(block.id, "selected_date", value || null, blockConfig); }}
+                      onPickerClick={() => setSessionDatePicker({ blockId: block.id, todayIso: new Date().toISOString().slice(0, 10) })}
                     />
                   </div>
+                  <label className="session-date-main session-date-time">
+                    <span className="session-date-label">{t("timeLabel")}</span>
+                    <TimeInput
+                      value={String(blockConfig.selected_time ?? "")}
+                      readOnly={!blockEditable}
+                      onChange={(value) => { if (blockEditable) patchBlockConfigValue(block.id, "selected_time", value || null, blockConfig); }}
+                    />
+                  </label>
+                  {sessionDatePicker?.blockId === block.id && (() => {
+                    // Tag-Filter aus der Elementvorlage (gemeinsamer Terminfilter, nur Tags).
+                    const sessionFilter = { ...blockEventFilter(blockConfig, "all"), range: { mode: "all" as const, start_days: 0, end_days: 0 }, cycle: null };
+                    const calendarEvents = applyEventFilter(availableEvents, sessionFilter);
+                    return (
+                      <EventCalendarModal
+                        open
+                        onClose={() => setSessionDatePicker(null)}
+                        events={calendarEvents}
+                        todayIso={sessionDatePicker.todayIso}
+                        tagColor={(tag) => tagConfig[tag]?.color ?? fallbackTagColor(tag)}
+                        pick={{
+                          value: blockConfig.selected_date ? String(blockConfig.selected_date) : null,
+                          title: t("sessionDatePickerTitle"),
+                          hint: t("sessionDatePickerHint"),
+                          onPick: (iso) => patchBlockConfigValue(block.id, "selected_date", iso, blockConfig),
+                        }}
+                      />
+                    );
+                  })()}
                   {availableTemplates.filter((t) => t.status !== "archived").length > 1 && (() => {
                     const activeFollowupId = blockConfig.followup_template_id
                       ? String(blockConfig.followup_template_id)
@@ -3018,18 +3517,18 @@ export function FocusedElementEditor({
                     const selectedTemplate = activeFollowupId
                       ? availableTemplates.find((t) => t.id === activeFollowupId)
                       : null;
-                    const triggerLabel = selectedTemplate?.name ?? "Wie dieses Protokoll";
+                    const triggerLabel = selectedTemplate?.name ?? t("sameAsThisProtocol");
                     const otherTemplates = availableTemplates.filter(
                       (t) => t.id !== protocol.template_id && t.status !== "archived",
                     );
                     return (
                       <div className="session-date-template">
-                        <span className="session-date-label">Folge-Template</span>
+                        <span className="session-date-label">{t("followUpTemplate")}</span>
                         <TodoMiniMenu label={triggerLabel} compact>
                           {(close) => (
                             <div className="mini-menu-section">
                               <TodoMenuOption
-                                label="Wie dieses Protokoll"
+                                label={t("sameAsThisProtocol")}
                                 active={!activeFollowupId}
                                 onClick={() => {
                                   patchBlockConfigValue(block.id, "followup_template_id", null, blockConfig);
@@ -3064,36 +3563,45 @@ export function FocusedElementEditor({
                 if (!account) {
                   return (
                     <div className="finance-block-empty">
-                      <span className="muted">Kein Konto ausgewählt. Konfiguriere diesen Block im Template.</span>
+                      <span className="muted">{t("noAccountSelected")}</span>
                     </div>
                   );
                 }
 
                 if (elementType === "finance_balance") {
+                  const atProtocolDate = blockConfig.finance_balance_date === "protocol_date";
+                  const balance = atProtocolDate ? balancesAtProtocolDate[account.id] ?? account.balance : account.balance;
                   return (
                     <div className="finance-balance-block">
-                      <div className={`finance-balance-amount${account.balance < 0 ? " finance-balance-negative" : ""}`}>
-                        {formatFinanceAmount(account.balance, account.currency_label)}
+                      <div className={`finance-balance-amount${balance < 0 ? " finance-balance-negative" : ""}`}>
+                        {formatFinanceAmount(balance, account.currency_label)}
                       </div>
-                      <div className="finance-balance-label">{account.name}</div>
+                      <div className="finance-balance-label">
+                        {account.name}
+                        {atProtocolDate && protocol.protocol_date ? ` · ${t("balanceAsOf", { date: formatDate(protocol.protocol_date) })}` : ""}
+                      </div>
                     </div>
                   );
                 }
 
-                // finance_transactions
-                const filterType = String(blockConfig.finance_filter_type ?? "all");
-                const lastN = Number(blockConfig.finance_last_n ?? 10);
-                const sinceDate = String(blockConfig.finance_since_date ?? protocol.protocol_date ?? "");
-                const thisYear = new Date().getFullYear();
-
-                const filtered = txAll.filter((tx) => {
-                  if (filterType === "since_last_session") return !sinceDate || tx.transaction_date >= sinceDate;
-                  if (filterType === "this_year") return new Date(tx.transaction_date).getFullYear() === thisYear;
-                  return true;
-                }).slice(0, filterType === "last_n" ? lastN : undefined);
+                // finance_transactions - gleiche Regeln wie Mobile und PDF (lib/element-types/period.ts)
+                const filtered = filterTransactions(txAll, blockConfig, protocol.protocol_date ?? null, protocolPeriod);
+                const canAddTransactions = canManageFinances && blockEditable && !!addFinanceTransaction;
+                const addForm = canAddTransactions ? (
+                  <FinanceTransactionForm
+                    defaultDate={protocol.protocol_date ?? new Date().toISOString().slice(0, 10)}
+                    currency={account.currency_label}
+                    onAdd={(values) => addFinanceTransaction!(account.id, values)}
+                  />
+                ) : null;
 
                 if (filtered.length === 0) {
-                  return <p className="muted">Keine Transaktionen für den gewählten Zeitraum.</p>;
+                  return (
+                    <>
+                      <p className="muted">{t("noTransactionsInRange")}</p>
+                      {addForm}
+                    </>
+                  );
                 }
 
                 let running = 0;
@@ -3101,14 +3609,15 @@ export function FocusedElementEditor({
 
                 return (
                   <div className="finance-proto-table">
-                    <div className="finance-proto-header">
-                      <span>Datum</span>
-                      <span>Beschreibung</span>
-                      <span className="finance-tx-cell-right">Betrag</span>
-                      <span className="finance-tx-cell-right">Saldo</span>
+                    <div className={`finance-proto-header${canAddTransactions ? " finance-proto-row-actions" : ""}`}>
+                      <span>{t("dateLabel")}</span>
+                      <span>{t("descriptionLabel")}</span>
+                      <span className="finance-tx-cell-right">{t("amountLabel")}</span>
+                      <span className="finance-tx-cell-right">{t("balanceLabel")}</span>
+                      {canAddTransactions ? <span /> : null}
                     </div>
                     {withBalance.map(({ tx, running: r }) => (
-                      <div key={tx.id} className="finance-proto-row">
+                      <div key={tx.id} className={`finance-proto-row${canAddTransactions ? " finance-proto-row-actions" : ""}`}>
                         <span>{formatDate(tx.transaction_date)}</span>
                         <span>{tx.description}</span>
                         <span className={`finance-tx-cell-right${tx.amount < 0 ? " finance-amount-neg" : " finance-amount-pos"}`}>
@@ -3117,54 +3626,104 @@ export function FocusedElementEditor({
                         <span className={`finance-tx-cell-right${r < 0 ? " finance-balance-negative" : ""}`}>
                           {formatFinanceAmount(r, account.currency_label)}
                         </span>
+                        {canAddTransactions ? (
+                          // Löschen nur für Transaktionen, die in diesem Protokoll erfasst wurden
+                          tx.protocol_id === protocol.id && deleteFinanceTransaction ? (
+                            <button
+                              type="button"
+                              className="button-icon-soft button-icon-soft-danger"
+                              aria-label={t("transactionDelete")}
+                              onClick={async () => {
+                                const ok = await confirm({ message: t("transactionDeleteConfirm"), tone: "danger", confirmLabel: t("transactionDelete") });
+                                if (ok) await deleteFinanceTransaction(account.id, tx.id);
+                              }}
+                            >
+                              <ActionIcon name="delete" />
+                            </button>
+                          ) : <span />
+                        ) : null}
                       </div>
                     ))}
+                    {addForm}
                   </div>
                 );
               })()}
 
               {elementType === "fine_list" && (() => {
                 const fineAccount = (accountId: string) => availableAccounts.find((a) => a.id === accountId);
+                const storedFineAccount = blockConfig.fine_list_account_id ? String(blockConfig.fine_list_account_id) : null;
+                const fineAccountFilter = storedFineAccount ? block.public_reference_ids?.finance_accounts?.[storedFineAccount] ?? storedFineAccount : null;
+                const pendingFines = filterFines(allPendingFines, blockConfig, fineAccountFilter, protocolPeriod, "earlier");
+                const protocolFines = filterFines(allProtocolFines, blockConfig, fineAccountFilter, protocolPeriod, "own");
                 return (
                   <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
                     {/* Pending fines from earlier protocols */}
                     {pendingFines.length > 0 && (
                       <div className="fine-list-block fine-list-block-pending">
-                        <div className="fine-pending-section-header">Offene Bussen aus früheren Protokollen</div>
+                        <div className="fine-pending-section-header">{t("openFinesFromEarlierProtocols")}</div>
                         {pendingFines.map((fine) => {
                           const account = fineAccount(fine.account_id);
                           const cur = account?.currency_label ?? fine.currency_label ?? "";
                           const isCollected = fine.status === "collected";
+                          const isDeleted = fine.status === "deleted";
                           return (
-                            <div key={fine.id} id={`fine-row-${fine.id}`} className={`fine-list-row${isCollected ? " fine-collected" : ""}`}>
+                            <div key={fine.id} id={`fine-row-${fine.id}`} className={`fine-list-row${isCollected || isDeleted ? " fine-collected" : ""}`}>
                               <div>
                                 <span className="fine-participant">{fine.participant_name_snapshot}</span>
                                 <span className="fine-pending-origin" style={{ display: "block" }}>
-                                  {fine.protocol_number ? `Protokoll ${fine.protocol_number}` : ""}
+                                  {fine.protocol_number ? t("protocolNumbered", { number: fine.protocol_number }) : ""}
                                   {fine.protocol_date ? ` · ${formatShortDate(fine.protocol_date)}` : ""}
                                 </span>
                               </div>
-                              <span className="fine-type-label">{fine.fine_type === "late" ? "Verspätet" : "Unentschuldigt"}</span>
+                              <span className="fine-type-label">{fine.fine_type === "late" ? t("fineTypeLate") : t("fineTypeAbsent")}</span>
                               <span className="fine-amount">{fine.amount.toFixed(2)} {cur}</span>
                               <span className="fine-status">
                                 {isCollected && (
                                   <>
-                                    <span className="todo-pending-resolved">Kassiert</span>
+                                    <span className="todo-pending-resolved">{t("collectedLabel")}</span>
                                     {fine.collected_at && (
                                       <span className="fine-collected-note" style={{ display: "block" }}>
                                         {formatDateTime(fine.collected_at)}
-                                        {fine.collected_by_display_name ? ` von ${fine.collected_by_display_name}` : ""}
+                                        {fine.collected_by_display_name ? ` ${t("byName", { name: fine.collected_by_display_name })}` : ""}
                                       </span>
                                     )}
                                   </>
                                 )}
+                                {isDeleted && (
+                                  <>
+                                    <span className="todo-pending-resolved">{t("fineDeletedLabel")}</span>
+                                    <span className="fine-collected-note" style={{ display: "block" }}>
+                                      {fine.deleted_at ? formatDateTime(fine.deleted_at) : ""}
+                                      {fine.deleted_by_display_name ? ` ${t("byName", { name: fine.deleted_by_display_name })}` : ""}
+                                    </span>
+                                    <span className="fine-collected-note" style={{ display: "block" }}>
+                                      {t("fineDeletedReason", { reason: fine.delete_comment ?? "" })}
+                                    </span>
+                                  </>
+                                )}
                               </span>
-                              {!isCollected && !isReadOnly ? (
+                              {isDeleted && fine.can_restore && !isReadOnly ? (
+                                <button
+                                  type="button"
+                                  className="fine-action-btn"
+                                  title={t("restoreFine")}
+                                  aria-label={t("restoreFine")}
+                                  onClick={async () => {
+                                    try {
+                                      await restoreFine(fine.id);
+                                      await reloadPendingFines();
+                                    } catch (error) {
+                                      showToast(error instanceof Error ? error.message : t("fineRestoreFailed"), "error");
+                                    }
+                                  }}
+                                >↺</button>
+                              ) : null}
+                              {!isCollected && !isDeleted && !isReadOnly ? (
                                 <button
                                   type="button"
                                   className="fine-action-btn fine-collect-btn"
-                                  title="Busse kassieren"
-                                  aria-label="Busse kassieren"
+                                  title={t("collectFine")}
+                                  aria-label={t("collectFine")}
                                   onClick={async () => {
                                     try {
                                       const updated = await browserApiFetch<AttendanceFine>(
@@ -3173,33 +3732,30 @@ export function FocusedElementEditor({
                                       );
                                       if (updated) setPendingFines((prev) => prev.map((f) => f.id === updated.id ? { ...f, ...updated } : f));
                                     } catch (error) {
-                                      showToast(error instanceof Error ? error.message : "Busse konnte nicht kassiert werden", "error");
+                                      showToast(error instanceof Error ? error.message : t("fineCollectFailed"), "error");
                                     }
                                   }}
                                 >✓</button>
                               ) : <span />}
-                              {!isCollected && !isReadOnly ? (
+                              {!isCollected && !isDeleted && !isReadOnly ? (
                                 <button
                                   type="button"
                                   className="fine-action-btn fine-delete-btn"
-                                  title="Busse löschen"
-                                  aria-label="Busse löschen"
+                                  title={t("deleteFine")}
+                                  aria-label={t("deleteFine")}
                                   onClick={async () => {
-                                    const ok = await confirm({
-                                      message: "Busse endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
-                                      tone: "danger",
-                                      confirmLabel: "Löschen"
-                                    });
-                                    if (!ok) return;
-                                    try {
-                                      await browserApiFetch(`/api/fines/${fine.id}`, { method: "DELETE" });
-                                      setPendingFines((prev) => prev.filter((f) => f.id !== fine.id));
-                                    } catch (error) {
-                                      showToast(error instanceof Error ? error.message : "Busse konnte nicht gelöscht werden", "error");
+                                    const outcome = await requestFineDelete(fine);
+                                    if (outcome === "hard") setPendingFines((prev) => prev.filter((f) => f.id !== fine.id));
+                                    else if (outcome === "soft") {
+                                      try {
+                                        await reloadPendingFines();
+                                      } catch (error) {
+                                        showToast(error instanceof Error ? error.message : t("fineDeleteFailed"), "error");
+                                      }
                                     }
                                   }}
-                                >✕</button>
-                              ) : <span />}
+                                ><ActionIcon name="delete" /></button>
+                              ) : isDeleted ? null : <span />}
                             </div>
                           );
                         })}
@@ -3208,36 +3764,44 @@ export function FocusedElementEditor({
 
                     {/* Own fines (created in this protocol) */}
                     {protocolFines.length === 0 && pendingFines.length === 0 && (
-                      <p className="muted">Keine Bussen für dieses Protokoll.</p>
+                      <p className="muted">{t("noFinesForProtocol")}</p>
                     )}
                     {protocolFines.length > 0 && <div className="fine-list-block">
                     {protocolFines.map((fine) => {
                       const account = fineAccount(fine.account_id);
                       const cur = account?.currency_label ?? "";
                       const isCollected = fine.status === "collected";
+                      const isDeleted = fine.status === "deleted";
                       const isCollectedElsewhere = isCollected && !!fine.closed_in_protocol_id;
                       return (
-                        <div key={fine.id} id={`fine-row-${fine.id}`} className={`fine-list-row${isCollected ? " fine-collected" : ""}`}>
+                        <div key={fine.id} id={`fine-row-${fine.id}`} className={`fine-list-row${isCollected || isDeleted ? " fine-collected" : ""}`}>
                           <span className="fine-participant">{fine.participant_name_snapshot}</span>
-                          <span className="fine-type-label">{fine.fine_type === "late" ? "Verspätet" : "Unentschuldigt"}</span>
+                          <span className="fine-type-label">{fine.fine_type === "late" ? t("fineTypeLate") : t("fineTypeAbsent")}</span>
                           <span className="fine-amount">{fine.amount.toFixed(2)} {cur}</span>
                           <span className="fine-status">
-                            {isCollectedElsewhere ? (
-                              <span className="todo-closed-elsewhere-badge">Später beglichen</span>
-                            ) : isCollected ? "✓ Kassiert" : "Ausstehend"}
+                            {isDeleted ? (
+                              <span className="todo-closed-elsewhere-badge">{t("fineDeletedLater")}</span>
+                            ) : isCollectedElsewhere ? (
+                              <span className="todo-closed-elsewhere-badge">{t("settledLater")}</span>
+                            ) : isCollected ? t("collectedCheckmark") : t("pendingLabel")}
+                            {isDeleted && (
+                              <span className="fine-collected-note" style={{ display: "block" }}>
+                                {t("fineDeletedReason", { reason: fine.delete_comment ?? "" })}
+                              </span>
+                            )}
                             {isCollected && fine.collected_at && (
                               <span className="fine-collected-note" style={{ display: "block" }}>
                                 {formatDateTime(fine.collected_at)}
-                                {fine.collected_by_display_name ? ` von ${fine.collected_by_display_name}` : ""}
+                                {fine.collected_by_display_name ? ` ${t("byName", { name: fine.collected_by_display_name })}` : ""}
                               </span>
                             )}
                           </span>
-                          {!isCollected && !isReadOnly ? (
+                          {!isCollected && !isDeleted && !isReadOnly ? (
                             <button
                               type="button"
                               className="fine-action-btn fine-collect-btn"
-                              title="Busse kassieren"
-                              aria-label="Busse kassieren"
+                              title={t("collectFine")}
+                              aria-label={t("collectFine")}
                               onClick={async () => {
                                 try {
                                   const updated = await browserApiFetch<AttendanceFine>(
@@ -3246,32 +3810,23 @@ export function FocusedElementEditor({
                                   );
                                   if (updated) setProtocolFines((prev) => prev.map((f) => f.id === updated.id ? updated : f));
                                 } catch (error) {
-                                  showToast(error instanceof Error ? error.message : "Busse konnte nicht kassiert werden", "error");
+                                  showToast(error instanceof Error ? error.message : t("fineCollectFailed"), "error");
                                 }
                               }}
                             >✓</button>
                           ) : <span />}
-                          {!isCollected ? (
+                          {!isCollected && !isDeleted && !isReadOnly ? (
                             <button
                               type="button"
                               className="fine-action-btn fine-delete-btn"
-                              title="Busse löschen"
-                              aria-label="Busse löschen"
+                              title={t("deleteFine")}
+                              aria-label={t("deleteFine")}
                               onClick={async () => {
-                                const ok = await confirm({
-                                  message: "Busse endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
-                                  tone: "danger",
-                                  confirmLabel: "Löschen"
-                                });
-                                if (!ok) return;
-                                try {
-                                  await browserApiFetch(`/api/fines/${fine.id}`, { method: "DELETE" });
-                                  setProtocolFines((prev) => prev.filter((f) => f.id !== fine.id));
-                                } catch (error) {
-                                  showToast(error instanceof Error ? error.message : "Busse konnte nicht gelöscht werden", "error");
-                                }
+                                // Eigene Busse im offenen Protokoll: immer hart (delete_requires_reason ist false).
+                                const outcome = await requestFineDelete(fine);
+                                if (outcome) setProtocolFines((prev) => prev.filter((f) => f.id !== fine.id));
                               }}
-                            >✕</button>
+                            ><ActionIcon name="delete" /></button>
                           ) : <span />}
                         </div>
                       );
@@ -3300,17 +3855,25 @@ export function FocusedElementEditor({
                         setSelectedFiles((current) => ({ ...current, [block.id]: event.target.files?.[0] ?? null }))
                       }
                     />
-                    <button type="button" onClick={() => uploadImage(block.id)} disabled={!selectedFiles[block.id]}>
-                      Upload image
+                    <button type="button" onClick={() => uploadImage(block.id, !imageGpsOff[block.id])} disabled={!selectedFiles[block.id]}>
+                      {t("uploadImageAction")}
                     </button>
                   </div>
+                  <label className="checkbox-row image-upload-gps">
+                    <input
+                      type="checkbox"
+                      checked={!imageGpsOff[block.id]}
+                      onChange={(event) => setImageGpsOff((current) => ({ ...current, [block.id]: !event.target.checked }))}
+                    />
+                    {t("includeImageGps")}
+                  </label>
                   <div className="image-grid">
                     {(imagesByBlock[block.id] ?? []).map((image) => (
                       <div className="card image-card" key={image.id}>
                         <LightboxImage alt={image.title ?? image.original_name} src={`${browserApiBaseUrl}${image.content_url}`} />
                         <p className="muted">{image.original_name}</p>
                         <button type="button" onClick={() => deleteImage(block.id, image.id)}>
-                          Bild löschen
+                          {t("deleteImageAction")}
                         </button>
                       </div>
                     ))}
@@ -3326,100 +3889,80 @@ export function FocusedElementEditor({
       {/* Rendered inside the same <section> (not as a sibling) so it shares this element's
           blur/inert/active state in the scrollable document layout, and is included in the
           section's own bounding box for the scroll-spy's centering calculation. */}
+      {agendaSlot}
       <SessionTodosSection
         sectionTag={trimSectionName(element.section_name_snapshot)}
-        todos={Object.values(todosByBlock).flat().filter((t) => (t.tags ?? []).includes(trimSectionName(element.section_name_snapshot).toLowerCase()))}
+        todos={sessionTodos}
         pendingTodos={pendingTodos.filter((t) => (t.tags ?? []).includes(trimSectionName(element.section_name_snapshot).toLowerCase()))}
         isReadOnly={isReadOnly}
         trackChangesActive={trackChangesActive}
         participants={availableParticipants}
-        dueEvents={[...availableEvents].sort((a, b) => a.event_date.localeCompare(b.event_date))}
+        dueEvents={sortedAvailableEvents}
         protocol={protocol}
         onUpdate={updateTodo}
         onDelete={deleteTodo}
         onPendingUpdate={onPendingUpdate}
         onPendingDone={onPendingDone}
         onAcceptTrackedChange={acceptTodoTrackedChange}
+        onResizeTask={autoResizeTodoField}
       />
     </section>
     {isPlanningMode && (() => {
       const referenceBlock = element.blocks.find((b) => asObject(b.configuration_snapshot_json).repeat_source_type === "event");
       const referenceConfig = referenceBlock ? asObject(referenceBlock.configuration_snapshot_json) : {};
-      const tagFilters = String(referenceConfig.event_tag_filter ?? "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
-      const usedEventIds = new Set(
-        element.blocks
-          .map((b) => asObject(b.configuration_snapshot_json).repeat_source_id)
-          .filter((id) => id != null)
-          .map(String)
-      );
-      const existingItems: CandidateItem[] = element.blocks
-        .filter((b) => asObject(b.configuration_snapshot_json).repeat_source_type === "event")
-        .map((b) => {
-          const config = asObject(b.configuration_snapshot_json);
-          const eventId = String(config.repeat_source_id);
-          const evt = availableEvents.find((e) => e.id === eventId);
-          return {
-            id: `block-${b.id}`,
-            label: String(config.repeat_source_label ?? evt?.title ?? "Unbekannter Termin"),
-            sublabel: evt ? `${formatDate(evt.event_date)}${evt.tag ? ` · ${evt.tag}` : ""}` : undefined,
-            checked: b.is_visible_snapshot,
-            groupLabel: "Bereits vorhanden",
-          };
-        });
-      function toCandidateItem(evt: EventSummary, groupLabel: string): CandidateItem {
-        return {
-          id: `event-${evt.id}`,
-          label: evt.title,
-          sublabel: `${formatDate(evt.event_date)}${evt.tag ? ` · ${evt.tag}` : ""}`,
-          checked: false,
-          groupLabel,
-        };
+      const repeatFilter = normalizeEventFilter(referenceConfig.repeat_event_filter);
+      const eventBlocks = element.blocks.filter((b) => asObject(b.configuration_snapshot_json).repeat_source_type === "event");
+      const blocksByEvent = new Map<string, typeof eventBlocks>();
+      for (const b of eventBlocks) {
+        const key = blockEventPublicId(b) ?? `block-${b.id}`;
+        blocksByEvent.set(key, [...(blocksByEvent.get(key) ?? []), b]);
       }
-      const availableCandidates = eventBlockCandidates
-        .filter((evt) => !usedEventIds.has(evt.id))
-        .sort((a, b) => a.event_date.localeCompare(b.event_date));
-      const matchingCandidates = tagFilters.length
-        ? availableCandidates.filter((evt) => tagFilters.some((t) => (evt.tag ?? "").toLowerCase().includes(t)))
-        : availableCandidates;
-      const otherCandidates = tagFilters.length
-        ? availableCandidates.filter((evt) => !tagFilters.some((t) => (evt.tag ?? "").toLowerCase().includes(t)))
-        : [];
-      const candidateItems: CandidateItem[] = [
-        ...matchingCandidates.map((evt) => toCandidateItem(evt, "Passend zum Filter")),
-        ...otherCandidates.map((evt) => toCandidateItem(evt, "Weitere Termine")),
-      ];
-      function findCandidateEvent(item: CandidateItem): EventSummary | undefined {
-        if (item.id.startsWith("block-")) {
-          const b = element.blocks.find((blk) => `block-${blk.id}` === item.id);
-          const eventId = b ? String(asObject(b.configuration_snapshot_json).repeat_source_id) : undefined;
-          return availableEvents.find((e) => e.id === eventId);
-        }
-        const eventId = item.id.slice("event-".length);
-        return eventBlockCandidates.find((e) => e.id === eventId);
+      const selectedIds = new Set([...blocksByEvent.entries()].filter(([, blocks]) => blocks.some((b) => b.is_visible_snapshot)).map(([key]) => key));
+      // Termine des Popups: geladene Kandidaten plus die Termine bereits vorhandener Blöcke
+      const pickerEvents = [...eventBlockCandidates];
+      for (const key of blocksByEvent.keys()) {
+        if (pickerEvents.some((e) => e.id === key)) continue;
+        const known = availableEvents.find((e) => e.id === key);
+        if (known) pickerEvents.push(known);
       }
-      // Unchecking a "Bereits vorhanden" Termin removes its block outright (not just hides it) so
-      // it visibly leaves this group and becomes an available candidate again — hiding it here left
-      // a confusing unchecked "ghost" entry stuck in "Bereits vorhanden". Note: this deletes the
-      // block's own content (e.g. typed text) — re-checking creates a fresh block, it does not
-      // restore prior text.
-      async function handleToggle(item: CandidateItem, nextChecked: boolean) {
-        if (item.id.startsWith("block-")) {
-          const blockId = item.id.slice("block-".length);
-          if (nextChecked) {
-            await unhideEventBlock(blockId);
-          } else {
-            const ok = await confirm({
-              message: "Termin abwählen? Der Inhalt dieses Blocks (z.B. eingegebener Text) geht dabei verloren und wird beim erneuten Anhaken NICHT wiederhergestellt.",
-              tone: "danger",
-              confirmLabel: "Abwählen"
-            });
-            if (!ok) return;
-            await removeEventBlock(blockId);
-          }
-        } else if (item.id.startsWith("event-") && nextChecked) {
-          const eventId = item.id.slice("event-".length);
+      const unknownSelected = [...blocksByEvent.entries()]
+        .filter(([key, blocks]) => selectedIds.has(key) && !pickerEvents.some((e) => e.id === key) && blocks.length > 0)
+        .map(([key, blocks]) => ({ key, label: String(asObject(blocks[0].configuration_snapshot_json).repeat_source_label ?? t("unknownEvent")) }));
+      // «Passt zum Filter»: Tag/Titel/Beschreibung der Wiederholung, unabhängig vom Zeitraum.
+      const candidateFilter: EventFilter = { ...repeatFilter, range: { ...repeatFilter.range, mode: "all" }, cycle: null };
+      async function selectEvent(eventId: string) {
+        const existing = blocksByEvent.get(eventId);
+        if (existing?.length) {
+          for (const b of existing) await unhideEventBlock(b.id);
+        } else {
           await addEventBlockToElement(element.id, eventId);
         }
+      }
+      async function removeEventBlocks(key: string) {
+        for (const b of blocksByEvent.get(key) ?? []) await removeEventBlock(b.id);
+      }
+      // Abwählen entfernt die Blöcke des Termins (nicht nur ausblenden): der eingegebene Inhalt
+      // geht dabei verloren, deshalb mit Rückfrage. Der Termin selbst bleibt bestehen.
+      async function handleToggle(eventId: string, nextChecked: boolean) {
+        if (nextChecked) {
+          await selectEvent(eventId);
+          return;
+        }
+        const ok = await confirm({ message: t("uncheckEventConfirm"), tone: "danger", confirmLabel: t("uncheckAction") });
+        if (ok) await removeEventBlocks(eventId);
+      }
+      async function handleSelectAllUpcoming() {
+        const upcoming = pickerEvents
+          .filter((evt) => eventMatchesFilter(evt, candidateFilter))
+          .filter((evt) => !protocol.protocol_date || (evt.event_end_date ?? evt.event_date) >= protocol.protocol_date)
+          .filter((evt) => !selectedIds.has(evt.id))
+          .sort((a, b) => a.event_date.localeCompare(b.event_date));
+        for (const evt of upcoming) await selectEvent(evt.id);
+      }
+      async function handleSelectNone() {
+        const ok = await confirm({ message: t("eventSeries.noneConfirm"), tone: "danger", confirmLabel: t("eventSeries.noneConfirmAction") });
+        if (!ok) return;
+        for (const key of blocksByEvent.keys()) await removeEventBlocks(key);
       }
       async function handleCreateNew() {
         if (!eventBlockNewDraft.event_date.trim() || !eventBlockNewDraft.title.trim()) return;
@@ -3427,39 +3970,31 @@ export function FocusedElementEditor({
         const created = await createEventFromBlock(referenceBlock?.id ?? "", referenceConfig, eventBlockNewDraft);
         if (created) {
           await addEventBlockToElement(element.id, created.id);
-          setEventBlockNewDraft(createProtocolEventDraft(protocol.protocol_date, String(referenceConfig.event_tag_filter ?? "").trim()));
+          setEventBlockNewDraft(createProtocolEventDraft(protocol.protocol_date, eventFilterTagText(repeatFilter)));
           setShowEventBlockCreateForm(false);
         }
         setCreatingEventBlockNew(false);
       }
-      const forcedTagForNew = String(referenceConfig.event_tag_filter ?? "").trim();
+      const forcedTagForNew = eventFilterTagText(repeatFilter);
       return (
-        <CheckboxCandidateModal
+        <EventBlockPickerModal
           open={showEventBlockPicker}
           onClose={() => setShowEventBlockPicker(false)}
-          title="Termine auswählen"
-          description="Auf einen Termin klicken, um ihn an-/abzuwählen. Passend zum Filter stehen oben, weitere Termine unten."
-          items={[...existingItems, ...candidateItems]}
+          tag={forcedTagForNew}
+          events={pickerEvents}
+          selectedIds={selectedIds}
+          unknownSelected={unknownSelected}
+          matchesFilter={(evt) => eventMatchesFilter(evt, candidateFilter)}
+          protocolDate={protocol.protocol_date ?? null}
           loading={eventBlockCandidatesLoading}
           onToggle={handleToggle}
-          renderEditForm={(item) => {
-            const evt = findCandidateEvent(item);
-            if (!evt) return null;
-            return (
-              <EventDetailForm
-                event={evt}
-                allowEndDate={referenceConfig.event_allow_end_date === true}
-                availableParticipants={availableParticipants}
-                knownEventTags={knownEventTags}
-                tagConfig={tagConfig}
-                onTagColorChange={updateTagColor}
-                onTagRename={renameTag}
-                onUpdate={(patch) =>
-                  updateEventFromBlock(referenceBlock?.id ?? "", evt.id, patch).then(refreshEventBlockCandidates)
-                }
-              />
-            );
+          onRemoveUnknown={async (key) => {
+            const ok = await confirm({ message: t("uncheckEventConfirm"), tone: "danger", confirmLabel: t("uncheckAction") });
+            if (ok) await removeEventBlocks(key);
           }}
+          onSelectAllUpcoming={handleSelectAllUpcoming}
+          onSelectNone={handleSelectNone}
+          onEditEvent={(evt) => setEditingSeriesEvent({ eventId: evt.id, blockId: referenceBlock?.id ?? "" })}
           topActions={
             <div style={{ display: "grid", gap: "var(--space-3)", width: "100%" }}>
               <div className="list-block-config-bar">
@@ -3468,14 +4003,14 @@ export function FocusedElementEditor({
                   className={`button-toggle${eventBlockScope === "current" ? " button-toggle-active" : ""}`}
                   onClick={() => setEventBlockScope("current")}
                 >
-                  Aktueller Zyklus
+                  {t("currentCycleLabel")}
                 </button>
                 <button
                   type="button"
                   className={`button-toggle${eventBlockScope === "all" ? " button-toggle-active" : ""}`}
                   onClick={() => setEventBlockScope("all")}
                 >
-                  Alle Termine
+                  {t("allEventsLabel")}
                 </button>
               </div>
               {showEventBlockCreateForm ? (
@@ -3492,7 +4027,7 @@ export function FocusedElementEditor({
                     value={forcedTagForNew || eventBlockNewDraft.tag}
                     onChange={(v) => setEventBlockNewDraft((d) => ({ ...d, tag: v }))}
                     suggestions={knownEventTags}
-                    placeholder="Tag"
+                    placeholder={t("tagLabel")}
                     multi={false}
                     readOnly={Boolean(forcedTagForNew) || creatingEventBlockNew}
                     tagConfig={tagConfig}
@@ -3504,14 +4039,14 @@ export function FocusedElementEditor({
                     value={eventBlockNewDraft.title}
                     disabled={creatingEventBlockNew}
                     onChange={(e) => setEventBlockNewDraft((d) => ({ ...d, title: e.target.value }))}
-                    placeholder="Titel"
+                    placeholder={t("titleLabel")}
                   />
                   <div className="modal-actions">
                     <button type="button" className="button-ghost" disabled={creatingEventBlockNew} onClick={() => setShowEventBlockCreateForm(false)}>
-                      Abbrechen
+                      {t("cancel")}
                     </button>
                     <button type="button" className="button-primary" disabled={creatingEventBlockNew} onClick={() => void handleCreateNew()}>
-                      {creatingEventBlockNew ? "…" : "Termin anlegen"}
+                      {creatingEventBlockNew ? "…" : t("createEventAction")}
                     </button>
                   </div>
                 </div>
@@ -3522,7 +4057,7 @@ export function FocusedElementEditor({
                   style={{ justifySelf: "start" }}
                   onClick={() => setShowEventBlockCreateForm(true)}
                 >
-                  + Neuer Termin
+                  {t("newEventPlus")}
                 </button>
               )}
             </div>
@@ -3530,15 +4065,37 @@ export function FocusedElementEditor({
         />
       );
     })()}
+    <EventRemoveDialog
+      open={Boolean(removingSeriesEvent)}
+      title={removingSeriesEvent?.title ?? ""}
+      tags={removingSeriesEvent?.tags ?? []}
+      busy={removingSeriesBusy}
+      onClose={() => setRemovingSeriesEvent(null)}
+      onConfirm={(removeTags) => void confirmRemoveSeriesEvent(removeTags)}
+    />
+    <Modal open={Boolean(editingSeriesEvent && editingEvent)} onClose={() => setEditingSeriesEvent(null)} title={t("eventSeries.edit")} size="wide">
+      {editingSeriesEvent && editingEvent ? (
+        <EventDetailForm
+          event={editingEvent}
+          allowEndDate={editingEventConfig.event_allow_end_date === true}
+          availableParticipants={availableParticipants}
+          knownEventTags={knownEventTags}
+          tagConfig={tagConfig}
+          onTagColorChange={updateTagColor}
+          onTagRename={renameTag}
+          onUpdate={(patch) => updateEventFromBlock(editingSeriesEvent.blockId, editingEvent.id, patch).then(refreshEventBlockCandidates)}
+        />
+      ) : null}
+    </Modal>
     <Modal
       open={Boolean(multiParticipantPicker)}
       onClose={() => closeParticipantPicker()}
-      title={multiParticipantPicker ? `Teilnehmer waehlen: ${multiParticipantPicker.rowLabel}` : "Teilnehmer waehlen"}
-      description={multiParticipantPicker?.singleSelect ? "Teilnehmer auswaehlen." : "Suche nach Teilnehmern und markiere mehrere Eintraege mit Haken."}
+      title={multiParticipantPicker ? t("chooseParticipantNamed", { label: multiParticipantPicker.rowLabel }) : t("chooseParticipant")}
+      description={multiParticipantPicker?.singleSelect ? t("chooseParticipantDescriptionSingle") : t("chooseParticipantDescriptionMulti")}
     >
       <div className="grid">
         <label className="field-stack">
-          <span className="field-label">Suche</span>
+          <span className="field-label">{t("searchLabel")}</span>
           <input
             ref={multiParticipantSearchRef}
             value={multiParticipantSearch}
@@ -3553,7 +4110,7 @@ export function FocusedElementEditor({
                 }
               }
             }}
-            placeholder="Teilnehmer suchen"
+            placeholder={t("searchParticipantsPlaceholder")}
             autoFocus
           />
         </label>
@@ -3595,7 +4152,7 @@ export function FocusedElementEditor({
                 <div>
                   <strong>{participant.display_name}</strong>
                   <div className="muted">
-                    {[participant.first_name, participant.last_name].filter(Boolean).join(" ") || participant.email || "Teilnehmer"}
+                    {[participant.first_name, participant.last_name].filter(Boolean).join(" ") || participant.email || t("participantFallback")}
                   </div>
                 </div>
               </label>
@@ -3607,3 +4164,42 @@ export function FocusedElementEditor({
     </>
   );
 }
+
+type FocusedElementEditorProps = Parameters<typeof FocusedElementEditorImpl>[0];
+
+/** Browser kann Textfelder per CSS an den Inhalt anpassen (Chromium; sonst JS-Fallback). */
+const FIELD_SIZING_SUPPORTED = typeof CSS !== "undefined" && CSS.supports?.("field-sizing", "content") === true;
+
+// Nach Block-ID geschlüsselte Zustände des Editors: ein Punkt vergleicht nur die Einträge seiner
+// eigenen Blöcke. Sonst renderte jeder Tastendruck (textDrafts) alle Punkte des Protokolls neu.
+const PER_BLOCK_PROPS = [
+  "todosByBlock",
+  "textDrafts",
+  "imagesByBlock",
+  "newTodoTask",
+  "newEventDrafts",
+  "selectedFiles",
+  "todoTagFilter",
+  "newTodoTags",
+] as const satisfies readonly (keyof FocusedElementEditorProps)[];
+
+function focusedElementEditorPropsEqual(prev: FocusedElementEditorProps, next: FocusedElementEditorProps): boolean {
+  for (const key of Object.keys(next) as (keyof FocusedElementEditorProps)[]) {
+    if ((PER_BLOCK_PROPS as readonly string[]).includes(key)) continue;
+    // Die Sitzungsnotiz zeigt nur ein Block «Sitzungsnotizen» an.
+    if (key === "sessionNotes" && !next.element.blocks.some((block) => block.element_type_code === "session_notes")) continue;
+    if (!Object.is(prev[key], next[key])) return false;
+  }
+  if (Object.keys(prev).length !== Object.keys(next).length) return false;
+  for (const key of PER_BLOCK_PROPS) {
+    const before = prev[key] as Record<string, unknown>;
+    const after = next[key] as Record<string, unknown>;
+    if (before === after) continue;
+    if (next.element.blocks.some((block) => !Object.is(before[block.id], after[block.id]))) return false;
+  }
+  return true;
+}
+
+/** Ein Punkt des Protokoll-Editors. Memoisiert: der Editor gibt stabile Handler weiter
+ * (useStableCallbacks), daher rendert bei einer Änderung nur der betroffene Punkt neu. */
+export const FocusedElementEditor = memo(FocusedElementEditorImpl, focusedElementEditorPropsEqual);

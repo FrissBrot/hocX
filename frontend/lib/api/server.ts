@@ -1,5 +1,6 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 
 import { backendFetch } from "@/lib/api/client";
 import { SessionInfo, TenantSummary } from "@/types/api";
@@ -19,9 +20,31 @@ export async function backendFetchWithSession<T>(path: string): Promise<T | null
   });
 }
 
-export async function requireSession(): Promise<SessionInfo> {
+// Lädt eine skip/limit-paginierte Liste vollständig. Für Daten, die clientseitig gefiltert
+// werden und dabei mit dem (ungekürzten) PDF-Export übereinstimmen müssen, z. B. Termine im
+// Protokolleditor - der Standard-limit von /api/events (100) hat dort ältere Termine abgeschnitten.
+export async function backendFetchAllPagesWithSession<T>(path: string, pageSize = 500): Promise<T[]> {
+  const separator = path.includes("?") ? "&" : "?";
+  const items: T[] = [];
+  for (let skip = 0; ; skip += pageSize) {
+    const page = await backendFetchWithSession<T[]>(`${path}${separator}skip=${skip}&limit=${pageSize}`);
+    if (!page) break;
+    items.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return items;
+}
+
+// cache(): innerhalb eines Server-Renders teilen sich alle Aufrufer (Seite, Layout, Komponenten)
+// denselben Sitzungsabruf statt je einen eigenen Request an /api/auth/session.
+export const requireSession = cache(async function requireSession(): Promise<SessionInfo> {
   const session = await backendFetchWithSession<SessionInfo>("/api/auth/session");
   if (session === null) {
+    // Volle Wartung: das Backend antwortet mit 503 - Wartungsansicht statt Fehlerseite.
+    const maintenance = await backendFetch<{ active: boolean }>("/api/public/maintenance-status");
+    if (maintenance?.active) {
+      redirect("/maintenance");
+    }
     // backendFetch() konnte das Backend gar nicht erreichen (Netzwerkfehler/Timeout, auch nach
     // eigenem Retry) - das ist NICHT dasselbe wie "nicht eingeloggt" und darf niemals zu /login
     // umleiten: der Browser hat die Session oft schon selbst als gültig geprüft und würde auf
@@ -29,7 +52,7 @@ export async function requireSession(): Promise<SessionInfo> {
     // eigentlichen Login-Loops - hier geht es nur um den verbleibenden Ambiguitäts-Fall). Ein
     // regulärer Error lässt stattdessen die error.tsx-Boundary greifen, die KEINE automatische
     // Weiterleitung auslöst.
-    throw new Error("Sitzungsprüfung fehlgeschlagen (Backend nicht erreichbar)");
+    throw new Error("Sitzungsprüfung fehlgeschlagen (Backend nicht erreichbar)"); // i18n-ok: Server-Log, error.tsx zeigt eigenen Text
   }
   if (!session.authenticated) {
     // Login rendert nie auf einer Mandanten-Custom-Domain — von dort muss serverseitig zur
@@ -43,7 +66,16 @@ export async function requireSession(): Promise<SessionInfo> {
     }
     redirect("/login");
   }
-  return session;
+  return withoutBridgeRedirect(session);
+});
+
+// Der Abruf oben geht über INTERNAL_API_URL (http://backend:8000): das Backend sieht den Host
+// "backend" statt der Domain des Browsers und hielt deshalb jede Seite für die falsche Domain -
+// die App-Shell schickte nach jedem Seitenaufruf auf die Bridge-Bestätigung (Test-Host 2026-11-09).
+// Den Host durchreichen geht nicht (Nodes fetch verwirft einen eigenen Host-Header). Die Bridge
+// prüft deshalb nur der Abruf aus dem Browser (AppShell, einmal je Seitenaufruf).
+export function withoutBridgeRedirect(session: SessionInfo): SessionInfo {
+  return session.bridge_redirect_url ? { ...session, bridge_redirect_url: null } : session;
 }
 
 // Shared by the /tenant-settings/* pages (Allgemein, Domains, Abo & Nutzung each get their own

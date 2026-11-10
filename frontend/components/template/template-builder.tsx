@@ -1,48 +1,68 @@
 "use client";
 
-import { DragEvent, FormEvent, KeyboardEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { useParticipantSelectable } from "@/contexts/participant-date-context";
+
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
-import { DataTable, DataToolbar } from "@/components/ui/data-table";
+import { DataTable } from "@/components/ui/data-table";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
-import { formatDateRange } from "@/lib/utils/format";
-import { ELEMENT_TYPE_LABELS } from "@/lib/constants/element-types";
+import { TemplateFineTariffModal } from "@/components/template/template-fine-tariff-modal";
+import { SessionDesignView } from "@/components/template/session-design-view";
+import { templateDisplayName } from "@/components/documents/studio-labels";
+import { SessionTemplateWorkspace } from "@/components/template/session-template-studio";
+import type { BlockEditorData } from "@/components/template/element-editor/block-editor";
+import { Badge } from "@/components/ui/badge";
+import { Tabs } from "@/components/ui/tabs";
+import { SessionDesign, studioApi } from "@/lib/documents/api";
+import { participantInitials } from "@/lib/utils/avatar";
+import { useTagConfig } from "@/lib/hooks/use-tag-config";
+import { EligibleResponsibleList, eligibleResponsibleList, listParticipantIds, listTextValue } from "@/lib/utils/responsible-lists";
 import {
   CycleConfigSummary,
-  DocumentTemplate,
-  ElementDefinition,
   EventSummary,
+  FinanceAccount,
   ParticipantSummary,
   StructuredListDefinition,
   StructuredListEntry,
   TemplateElement,
-  TemplateElementBehaviorField,
-  TemplateElementBlock,
+  TemplateFineTariff,
   TemplateSummary,
 } from "@/types/api";
+import { Select } from "@/components/ui/select";
 
 type TemplateBuilderProps = {
   initialTemplates: TemplateSummary[];
   availableCycleConfigs: CycleConfigSummary[];
+  // Anlegen, Duplizieren, Archivieren und Löschen: nur Admins (Schreibende passen Vorlagen an)
+  canManage?: boolean;
 };
 
 type TemplateEditorProps = {
   initialTemplate: TemplateSummary;
   initialElements: TemplateElement[];
-  initialDefinitions: ElementDefinition[];
   availableEvents: EventSummary[];
   availableParticipants: ParticipantSummary[];
   availableLists: StructuredListDefinition[];
   initialAssignedParticipants: ParticipantSummary[];
-  availableDocumentTemplates: DocumentTemplate[];
   availableCycleConfigs: CycleConfigSummary[];
+  // Nur mit gebuchten Finanzen (sonst kein Bussentarif, siehe require_feature im Backend).
+  financeAccounts?: FinanceAccount[] | null;
+  // Einstellungen, Teilnehmende und Bussentarif: nur Admins; Traktanden und Gestaltung auch Schreibende
+  canManage?: boolean;
+  knownEventTags?: string[];
 };
+
+type StudioView = "editor" | "pdf" | "invitation";
+
+type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
 
 type TemplateCreateState = {
   name: string;
@@ -53,10 +73,6 @@ type TemplateCreateState = {
   title_pattern: string;
   auto_create_next_protocol: boolean;
   cycle_config_id: string;
-};
-
-type TemplateItemForm = {
-  element_definition_ids: string[];
 };
 
 type TemplateParticipantAssignmentState = {
@@ -78,21 +94,6 @@ type ResponsibilityConfig = {
   assignments: ResponsibilityAssignment[];
 };
 
-type ResponsibilityDisplayGroup = {
-  key: string;
-  participantIds: string[];
-  listDefinitionId: string | null;
-  listEntryId: string | null;
-  locked: boolean;
-};
-
-type EligibleResponsibleList = {
-  definition: StructuredListDefinition;
-  textColumn: "column_one" | "column_two";
-  participantColumn: "column_one" | "column_two";
-  participantValueType: "participant" | "participants";
-};
-
 const initialTemplateCreate: TemplateCreateState = {
   name: "",
   description: "",
@@ -102,10 +103,6 @@ const initialTemplateCreate: TemplateCreateState = {
   title_pattern: "",
   auto_create_next_protocol: false,
   cycle_config_id: "",
-};
-
-const initialTemplateItemForm: TemplateItemForm = {
-  element_definition_ids: []
 };
 
 function normalizeTemplateParticipantAssignments(participants: ParticipantSummary[]): TemplateParticipantAssignmentState[] {
@@ -126,49 +123,8 @@ function resequenceTemplateElements(items: TemplateElement[]) {
   return items.map((item, index) => ({ ...item, sort_index: (index + 1) * 10 }));
 }
 
-function nextTemplateElementSortIndex(items: TemplateElement[]) {
-  const maxSortIndex = items.reduce((max, item) => Math.max(max, item.sort_index), 0);
-  return maxSortIndex + 10;
-}
-
-function definitionTypeSummary(definition: ElementDefinition) {
-  const labels = Array.from(
-    new Set(
-      definition.blocks
-        .map((block) => String(block.configuration_json?.block_type_code ?? block.title ?? "").trim())
-        .filter(Boolean)
-    )
-  );
-  return labels.length ? labels.join(", ") : `${definition.blocks.length} Block${definition.blocks.length === 1 ? "" : "e"}`;
-}
-
 function normalizeMatchText(value: string) {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
-}
-
-function eligibleResponsibleList(definition: StructuredListDefinition): EligibleResponsibleList | null {
-  const firstIsText = definition.column_one_value_type === "text";
-  const secondIsText = definition.column_two_value_type === "text";
-  const firstIsParticipants = definition.column_one_value_type === "participant" || definition.column_one_value_type === "participants";
-  const secondIsParticipants = definition.column_two_value_type === "participant" || definition.column_two_value_type === "participants";
-
-  if (firstIsText && secondIsParticipants) {
-    return {
-      definition,
-      textColumn: "column_one",
-      participantColumn: "column_two",
-      participantValueType: definition.column_two_value_type === "participant" ? "participant" : "participants",
-    };
-  }
-  if (secondIsText && firstIsParticipants) {
-    return {
-      definition,
-      textColumn: "column_two",
-      participantColumn: "column_one",
-      participantValueType: definition.column_one_value_type === "participant" ? "participant" : "participants",
-    };
-  }
-  return null;
 }
 
 function parseResponsibilityConfig(configurationJson: Record<string, unknown> | null | undefined): ResponsibilityConfig {
@@ -233,9 +189,9 @@ function responsibilityConfigsEqual(left: ResponsibilityConfig, right: Responsib
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function participantName(participant: ParticipantSummary | undefined, mode: ResponsibleNameMode) {
+function participantName(participant: ParticipantSummary | undefined, mode: ResponsibleNameMode, t: TFunc) {
   if (!participant) {
-    return "Unbekannter Teilnehmer";
+    return t("unknownParticipant");
   }
   if (mode === "first_name") {
     return participant.first_name?.trim() || participant.display_name;
@@ -246,172 +202,64 @@ function participantName(participant: ParticipantSummary | undefined, mode: Resp
   return participant.display_name;
 }
 
+// Verantwortliche wie im Backend (responsible_label_service._resolve_ids_for_assignments):
+// Zuweisungen mit Tabellenzeile lesen den aktuellen Wert der Zeile, sobald deren Einträge geladen
+// sind; sonst (oder ohne Zeile) gilt die beim Zuweisen gespeicherte Person.
+function liveResponsibleParticipantIds(
+  assignments: ResponsibilityAssignment[],
+  eligibleLists: EligibleResponsibleList[],
+  listEntriesByListId: Record<string, StructuredListEntry[]>
+) {
+  const ids: string[] = [];
+  for (const assignment of assignments) {
+    let resolved = [assignment.participant_id];
+    if (assignment.list_definition_id && assignment.list_entry_id) {
+      const meta = eligibleLists.find((item) => item.definition.id === assignment.list_definition_id);
+      const entry = listEntriesByListId[assignment.list_definition_id]?.find((item) => item.id === assignment.list_entry_id);
+      if (meta && entry) {
+        resolved = listParticipantIds(entry, meta.participantColumn, meta.participantValueType);
+      }
+    }
+    for (const id of resolved) {
+      if (!ids.includes(id)) ids.push(id);
+    }
+  }
+  return ids;
+}
+
 function titleWithResponsibility(
   item: TemplateElement,
   participantsById: Map<string, ParticipantSummary>,
-  fallbackMode: ResponsibleNameMode
+  fallbackMode: ResponsibleNameMode,
+  eligibleLists: EligibleResponsibleList[],
+  listEntriesByListId: Record<string, StructuredListEntry[]>,
+  t: TFunc
 ) {
   const responsibility = parseResponsibilityConfig(item.configuration_json);
   const mode = responsibility.name_display_mode || fallbackMode;
-  const names = responsibility.assignments
-    .map((assignment) => participantName(participantsById.get(assignment.participant_id), mode))
+  const names = liveResponsibleParticipantIds(responsibility.assignments, eligibleLists, listEntriesByListId)
+    .map((participantId) => participantName(participantsById.get(participantId), mode, t))
     .filter(Boolean);
   return names.length ? `${item.title} (${names.join(", ")})` : item.title;
-}
-
-function listTextValue(entry: StructuredListEntry, column: "column_one" | "column_two") {
-  const value = column === "column_one" ? entry.column_one_value : entry.column_two_value;
-  return String(value?.text_value ?? "").trim();
-}
-
-function listParticipantIds(
-  entry: StructuredListEntry,
-  column: "column_one" | "column_two",
-  valueType: "participant" | "participants"
-): string[] {
-  const value = column === "column_one" ? entry.column_one_value : entry.column_two_value;
-  if (valueType === "participant") {
-    const participantId = typeof value?.participant_id === "string" ? value.participant_id : null;
-    return participantId ? [participantId] : [];
-  }
-  return Array.isArray(value?.participant_ids) ? value.participant_ids.filter((id): id is string => typeof id === "string") : [];
 }
 
 function rowOptionLabel(
   entry: StructuredListEntry,
   meta: EligibleResponsibleList,
   participantsById: Map<string, ParticipantSummary>,
-  mode: ResponsibleNameMode
+  mode: ResponsibleNameMode,
+  t: TFunc
 ) {
-  const text = listTextValue(entry, meta.textColumn) || "Leere Zeile";
+  const text = listTextValue(entry, meta.textColumn) || t("emptyRow");
   const names = listParticipantIds(entry, meta.participantColumn, meta.participantValueType)
-    .map((participantId) => participantName(participantsById.get(participantId), mode))
+    .map((participantId) => participantName(participantsById.get(participantId), mode, t))
     .filter(Boolean);
   return names.length ? `${text} -> ${names.join(", ")}` : text;
 }
 
-function ResponsibilityLockIcon({ locked }: { locked: boolean }) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      {locked ? (
-        <>
-          <path d="M8 10V7.5a4 4 0 1 1 8 0V10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-          <rect x="5.5" y="10" width="13" height="10" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
-          <circle cx="12" cy="15" r="1.2" fill="currentColor" />
-        </>
-      ) : (
-        <>
-          <path d="M8 10V7.5a4 4 0 1 1 7 2.65" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M14.5 12.5 18 9" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-          <rect x="5.5" y="10" width="13" height="10" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
-          <circle cx="12" cy="15" r="1.2" fill="currentColor" />
-        </>
-      )}
-    </svg>
-  );
-}
-
-function BehaviorEditableIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M4 20l1-4L15.5 5.5l3 3L8 19l-4 1z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M13.5 7 17 10.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function BehaviorSubtitleIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M5 6h14M12 6v9" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M8 18h8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function BehaviorHistoryIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M4 12a8 8 0 1 1 2.6 5.9" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M4 17v-5h5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function BehaviorEyeIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" strokeWidth="1.8" />
-    </svg>
-  );
-}
-
-function BehaviorExportIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-      <path d="M14 3v5h5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-const BEHAVIOR_ICON_FIELDS: Array<{ field: TemplateElementBehaviorField; label: string; icon: ReactNode }> = [
-  { field: "is_editable", label: "Im Protokoll bearbeitbar", icon: <BehaviorEditableIcon /> },
-  { field: "title_as_subtitle", label: "Blocktitel im PDF als Untertitel rendern", icon: <BehaviorSubtitleIcon /> },
-  { field: "copy_from_last_protocol", label: "Daten aus letzter Sitzung übernehmen", icon: <BehaviorHistoryIcon /> },
-  { field: "is_visible", label: "Im Editor sichtbar", icon: <BehaviorEyeIcon /> },
-  { field: "export_visible", label: "Im Export sichtbar", icon: <BehaviorExportIcon /> },
-];
-
-function blockDisplayLabel(block: TemplateElementBlock): string {
-  const title = block.block_title?.trim() || block.title?.trim();
-  if (title) {
-    return title;
-  }
-  return ELEMENT_TYPE_LABELS[block.element_type_id] ?? "Block";
-}
-
-function blockBehaviorValues(block: TemplateElementBlock): Record<TemplateElementBehaviorField, boolean> {
-  return {
-    is_editable: block.is_editable,
-    is_visible: block.is_visible,
-    export_visible: block.export_visible,
-    copy_from_last_protocol: Boolean(block.copy_from_last_protocol),
-    title_as_subtitle: block.title_as_subtitle,
-  };
-}
-
-function BehaviorIconRow({
-  values,
-  onToggle,
-}: {
-  values: Record<TemplateElementBehaviorField, boolean>;
-  onToggle: (field: TemplateElementBehaviorField) => void;
-}) {
-  return (
-    <div className="behavior-icon-row">
-      {BEHAVIOR_ICON_FIELDS.map(({ field, label, icon }) => {
-        const active = values[field];
-        return (
-          <button
-            key={field}
-            type="button"
-            className={`behavior-icon-button${active ? " behavior-icon-button-active" : ""}`}
-            title={label}
-            aria-pressed={active}
-            onClick={() => onToggle(field)}
-          >
-            {icon}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: TemplateBuilderProps) {
+export function TemplateBuilder({ initialTemplates, availableCycleConfigs, canManage = true }: TemplateBuilderProps) {
   const router = useRouter();
+  const t = useTranslations("templates.builder");
   const showToast = useToast();
   const confirm = useConfirm();
   const [templates, setTemplates] = useState(initialTemplates);
@@ -452,26 +300,26 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
       setTemplates((current) => [created, ...current]);
       setForm(initialTemplateCreate);
       setShowCreateForm(false);
-      showToast(`Vorlage "${created.name}" erstellt`, "success");
+      showToast(t("createdToast", { name: created.name }), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Vorlage konnte nicht erstellt werden", "error");
+      showToast(error instanceof Error ? error.message : t("createFailedToast"), "error");
     }
   }
 
   async function deleteTemplate(templateId: string) {
     const ok = await confirm({
-      message: "Vorlage endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+      message: t("deleteConfirm"),
       tone: "danger",
-      confirmLabel: "Löschen"
+      confirmLabel: t("delete")
     });
     if (!ok) return;
     try {
-      const deletedName = templates.find((template) => template.id === templateId)?.name ?? "Unbenannt";
+      const deletedName = templates.find((template) => template.id === templateId)?.name ?? t("unnamed");
       await browserApiFetch(`/api/templates/${templateId}`, { method: "DELETE" });
       setTemplates((current) => current.filter((template) => template.id !== templateId));
-      showToast(`Vorlage "${deletedName}" gelöscht`, "success");
+      showToast(t("deletedToast", { name: deletedName }), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Vorlage konnte nicht gelöscht werden", "error");
+      showToast(error instanceof Error ? error.message : t("deleteFailedToast"), "error");
     }
   }
 
@@ -483,15 +331,15 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
         body: JSON.stringify({ status: nextStatus }),
       });
       setTemplates((current) => current.map((item) => (item.id === updated.id ? updated : item)));
-      showToast(nextStatus === "archived" ? "Vorlage archiviert" : "Vorlage aus dem Archiv zurückgeholt", "success");
+      showToast(nextStatus === "archived" ? t("archivedToast") : t("unarchivedToast"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Status konnte nicht geändert werden", "error");
+      showToast(error instanceof Error ? error.message : t("statusChangeFailedToast"), "error");
     }
   }
 
   function openDuplicate(template: TemplateSummary) {
     setDuplicateTarget(template);
-    setDuplicateName(`${template.name} (Kopie)`);
+    setDuplicateName(t("duplicateNameSuggestion", { name: template.name }));
   }
 
   async function submitDuplicate(event: FormEvent<HTMLFormElement>) {
@@ -505,9 +353,9 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
       });
       setTemplates((current) => [created, ...current]);
       setDuplicateTarget(null);
-      showToast(`Vorlage "${created.name}" wurde erstellt`, "success");
+      showToast(t("duplicatedToast", { name: created.name }), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Vorlage konnte nicht dupliziert werden", "error");
+      showToast(error instanceof Error ? error.message : t("duplicateFailedToast"), "error");
     } finally {
       setDuplicateBusy(false);
     }
@@ -517,52 +365,54 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
     <div className="grid">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Vorlagen</h1>
-          <p className="muted">Vorlagen sind schlanke Container: sie wählen fertige Elemente aus und legen nur deren Reihenfolge fest.</p>
+          <h1 className="page-title">{t("pageTitle")}</h1>
+          <p className="muted">{t("pageIntro")}</p>
         </div>
-        <button type="button" className="button-secondary" onClick={() => setShowCreateForm((current) => !current)}>
-          {showCreateForm ? "Abbrechen" : "+ Vorlage"}
-        </button>
+        {canManage ? (
+          <button type="button" className={showCreateForm ? "button-ghost" : "button-primary"} onClick={() => setShowCreateForm((current) => !current)}>
+            {showCreateForm ? t("cancel") : t("newTemplateButton")}
+          </button>
+        ) : null}
       </div>
 
       <Modal
         open={showCreateForm}
         onClose={() => setShowCreateForm(false)}
-        title="Vorlage erstellen"
-        description="Legt eine neue leere Vorlage an, der anschliessend wiederverwendbare Elemente zugewiesen werden."
+        title={t("createTitle")}
+        description={t("createDescription")}
       >
         <ModalSaveForm className="grid" onSubmit={createTemplate}>
           <label className="field-stack">
-            <span className="field-label">Vorlagenname</span>
-            <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="Vorlagenname" required />
+            <span className="field-label">{t("nameLabel")}</span>
+            <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder={t("nameLabel")} required />
           </label>
           <label className="field-stack">
-            <span className="field-label">Beschreibung</span>
-            <textarea rows={4} value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder="Beschreibung" />
+            <span className="field-label">{t("descriptionLabel")}</span>
+            <textarea rows={4} value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder={t("descriptionLabel")} />
           </label>
           <div className="two-col">
             <label className="field-stack">
-              <span className="field-label">Protokollnummer-Muster</span>
-              <input value={form.protocol_number_pattern} onChange={(event) => setForm((current) => ({ ...current, protocol_number_pattern: event.target.value }))} placeholder="z.B. Sitzung {n}" />
-              <span className="field-help">Beispiele: Sitzung [n], Sitzung [mm].[n_month], J[yy]-[n_year], V[n_cycle]. Eckige und geschweifte Klammern funktionieren beide.</span>
+              <span className="field-label">{t("protocolNumberPatternLabel")}</span>
+              <input value={form.protocol_number_pattern} onChange={(event) => setForm((current) => ({ ...current, protocol_number_pattern: event.target.value }))} placeholder={t("protocolNumberPatternPlaceholder")} />
+              <span className="field-help">{t("protocolNumberPatternHelp")}</span>
             </label>
             <label className="field-stack">
-              <span className="field-label">Titel-Muster</span>
-              <input value={form.title_pattern} onChange={(event) => setForm((current) => ({ ...current, title_pattern: event.target.value }))} placeholder="z.B. Sitzung {n} - {date:DD.MM.YYYY}" />
-              <span className="field-help">Das Datums-Token verwendet immer das gewählte Protokolldatum, nicht den heutigen Tag.</span>
+              <span className="field-label">{t("titlePatternLabel")}</span>
+              <input value={form.title_pattern} onChange={(event) => setForm((current) => ({ ...current, title_pattern: event.target.value }))} placeholder={t("titlePatternPlaceholder")} />
+              <span className="field-help">{t("titlePatternHelp")}</span>
             </label>
           </div>
           <label className="field-stack">
-            <span className="field-label">Zyklus</span>
+            <span className="field-label">{t("cycleLabel")}</span>
             <SearchableSelect
               options={availableCycleConfigs}
               getId={(cc) => cc.id}
               getLabel={(cc) => cc.name}
               value={form.cycle_config_id || null}
               onChange={(cc) => setForm((current) => ({ ...current, cycle_config_id: cc ? String(cc.id) : "" }))}
-              nullLabel="Kein Zyklus"
+              nullLabel={t("noCycle")}
             />
-            <span className="field-help">Zyklen können unter Struktur → Zyklen verwaltet werden.</span>
+            <span className="field-help">{t("cycleHelp")}</span>
           </label>
           <label className="checkbox-row">
             <input
@@ -570,13 +420,13 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
               checked={form.auto_create_next_protocol}
               onChange={(event) => setForm((current) => ({ ...current, auto_create_next_protocol: event.target.checked }))}
             />
-            <span>Naechstes Protokoll automatisch erstellen, wenn dieses spaeter auf Abgeschlossen gesetzt wird.</span>
+            <span>{t("autoCreateNextProtocolLabel")}</span>
           </label>
           <div className="info-note">
-            Tokens: {"{n}"} = alle Protokolle, {"{n_year}"} = in diesem Jahr, {"{n_month}"} = in diesem Monat, {"{n_cycle}"} = im eigenen Zyklus. Datums-Tokens: {"{date}"}, {"{date:DD.MM.YYYY}"}, {"{dd}"}, {"{mm}"}, {"{yyyy}"}.
+            {t("patternTokensHelp")}
           </div>
           <div className="table-toolbar-actions">
-            <button data-modal-save type="submit" className="button-secondary">Vorlage erstellen</button>
+            <button data-modal-save type="submit" className="button-secondary">{t("createSubmit")}</button>
           </div>
         </ModalSaveForm>
       </Modal>
@@ -584,19 +434,20 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
       <div className="list-filter-row">
         <div />
         <div className="list-filter-search">
-          <SearchInput value={search} onChange={setSearch} placeholder="Vorlagen durchsuchen" />
+          <SearchInput value={search} onChange={setSearch} placeholder={t("searchPlaceholder")} />
         </div>
       </div>
 
-      <DataTable className="data-table-lg" columns={["Vorlage", "Beschreibung", "Version", "Aktionen"]}>
+      <DataTable className="data-table-lg" columns={canManage ? [t("colTemplate"), t("colDescription"), t("colVersion"), t("colActions")] : [t("colTemplate"), t("colDescription"), t("colVersion")]}>
         {filteredTemplates.map((template) => (
           <tr key={template.id} className="table-row-clickable" onClick={() => router.push(`/templates/${template.id}`)}>
             <td>
               <strong>{template.name}</strong>
-              <div className="muted">{template.status === "archived" ? "Archiviert" : "Aktiv"}</div>
+              <div className="muted">{template.status === "archived" ? t("archived") : t("active")}</div>
             </td>
-            <td className="table-cell-wrap">{template.description ?? "Keine Beschreibung"}</td>
+            <td className="table-cell-wrap">{template.description ?? t("noDescription")}</td>
             <td>{template.version}</td>
+            {canManage ? (
             <td>
               <div className="table-actions">
                 <button
@@ -607,7 +458,7 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
                     openDuplicate(template);
                   }}
                 >
-                  Duplizieren
+                  {t("duplicate")}
                 </button>
                 <button
                   type="button"
@@ -617,14 +468,15 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
                     void toggleTemplateArchived(template);
                   }}
                 >
-                  {template.status === "archived" ? "Aus Archiv zurückholen" : "Archivieren"}
+                  {template.status === "archived" ? t("unarchive") : t("archive")}
                 </button>
                 <button type="button" className="button-secondary button-danger" onClick={(event) => {
                   event.stopPropagation();
                   void deleteTemplate(template.id);
-                }}>Löschen</button>
+                }}>{t("delete")}</button>
               </div>
             </td>
+            ) : null}
           </tr>
         ))}
       </DataTable>
@@ -632,17 +484,17 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
       <Modal
         open={duplicateTarget !== null}
         onClose={() => setDuplicateTarget(null)}
-        title={duplicateTarget ? `"${duplicateTarget.name}" duplizieren` : "Vorlage duplizieren"}
-        description="Erstellt eine unabhängige Kopie mit allen Elementen, deren Einstellungen und den zugewiesenen Teilnehmenden."
+        title={duplicateTarget ? t("duplicateTitleNamed", { name: duplicateTarget.name }) : t("duplicateTitle")}
+        description={t("duplicateDescription")}
       >
         <ModalSaveForm className="grid" onSubmit={submitDuplicate}>
           <label className="field-stack">
-            <span className="field-label">Name der neuen Vorlage</span>
+            <span className="field-label">{t("newNameLabel")}</span>
             <input value={duplicateName} onChange={(event) => setDuplicateName(event.target.value)} required />
           </label>
           <div className="table-toolbar-actions">
             <button data-modal-save type="submit" className="button-secondary" disabled={duplicateBusy}>
-              {duplicateBusy ? "Wird dupliziert…" : "Duplizieren"}
+              {duplicateBusy ? t("duplicating") : t("duplicate")}
             </button>
           </div>
         </ModalSaveForm>
@@ -654,17 +506,23 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs }: Tem
 export function TemplateEditor({
   initialTemplate,
   initialElements,
-  initialDefinitions,
   availableEvents,
   availableParticipants,
   availableLists,
   initialAssignedParticipants,
-  availableDocumentTemplates,
   availableCycleConfigs,
+  financeAccounts = null,
+  canManage = true,
+  knownEventTags = [],
 }: TemplateEditorProps) {
   const router = useRouter();
+  const isParticipantSelectable = useParticipantSelectable();
+  const t = useTranslations("templates.editor");
+  const tStudio = useTranslations("templates.studio");
+  const tDocuments = useTranslations("documentStudio");
   const showToast = useToast();
-  const confirm = useConfirm();
+  const { tagConfig } = useTagConfig();
+  const [view, setView] = useState<StudioView>("editor");
   const [template, setTemplate] = useState(initialTemplate);
   const [elements, setElements] = useState(initialElements);
   const [templateMeta, setTemplateMeta] = useState({
@@ -678,23 +536,31 @@ export function TemplateEditor({
     title_pattern: initialTemplate.title_pattern ?? "",
     auto_create_next_protocol: Boolean(initialTemplate.auto_create_next_protocol),
     cycle_config_id: initialTemplate.cycle_config_id ? String(initialTemplate.cycle_config_id) : "",
-    document_template_id: initialTemplate.document_template_id ? String(initialTemplate.document_template_id) : "",
   });
-  const [newItemForm, setNewItemForm] = useState<TemplateItemForm>({
-    ...initialTemplateItemForm
-  });
-  const [showCreateItem, setShowCreateItem] = useState(false);
-  const [elementPickerSearch, setElementPickerSearch] = useState("");
   const [showParticipantModal, setShowParticipantModal] = useState(false);
   const [participantPickerSearch, setParticipantPickerSearch] = useState("");
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showFineTariffModal, setShowFineTariffModal] = useState(false);
+  // Kopf: eigener Bussentarif ja/nein (null = unbekannt bzw. keine Finanzen)
+  const [fineOverride, setFineOverride] = useState<boolean | null>(null);
+  const [sessionDesigns, setSessionDesigns] = useState<SessionDesign[] | null>(null);
+  useEffect(() => {
+    if (!canManage || !financeAccounts) return;
+    browserApiFetch<TemplateFineTariff>(`/api/templates/${template.id}/fine-tariff`)
+      .then((tariff) => setFineOverride(tariff.override))
+      // Ohne Antwort zeigt der Knopf keinen Zusatz
+      .catch(() => setFineOverride(null));
+  }, [canManage, financeAccounts, template.id]);
+  const loadSessionDesigns = useCallback(() => {
+    studioApi
+      .sessionDesigns(template.id)
+      .then((designs) => setSessionDesigns(designs ?? null))
+      // Ohne Zugriff auf das Dokument-Studio keine Hinweise an den Tabs
+      .catch(() => setSessionDesigns(null));
+  }, [template.id]);
+  useEffect(() => loadSessionDesigns(), [loadSessionDesigns]);
   const [showAutoAssignModal, setShowAutoAssignModal] = useState(false);
   const [showResponsibilityModalFor, setShowResponsibilityModalFor] = useState<string | null>(null);
-  const [draggedTemplateElementId, setDraggedTemplateElementId] = useState<string | null>(null);
-  const [activeTemplateDropIndex, setActiveTemplateDropIndex] = useState<number | null>(null);
-  const [expandedTemplateDropIndex, setExpandedTemplateDropIndex] = useState<number | null>(null);
-  const [expandedBehaviorIds, setExpandedBehaviorIds] = useState<Set<string>>(new Set());
-  const [positionDrafts, setPositionDrafts] = useState<Record<string, string>>({});
   const [responsibilityAutoListId, setResponsibilityAutoListId] = useState("");
   const [responsibilityNameMode, setResponsibilityNameMode] = useState<ResponsibleNameMode>(() => {
     const firstConfiguredElement = initialElements.find((item) => Array.isArray((item.configuration_json?.responsibility as { assignments?: unknown } | undefined)?.assignments));
@@ -718,8 +584,8 @@ export function TemplateEditor({
     [availableParticipants]
   );
   const allParticipantIds = useMemo(
-    () => availableParticipants.filter((participant) => participant.is_active).map((participant) => participant.id),
-    [availableParticipants]
+    () => availableParticipants.filter((participant) => participant.is_active && isParticipantSelectable(participant)).map((participant) => participant.id),
+    [availableParticipants, isParticipantSelectable]
   );
   const participantAssignmentsById = useMemo(
     () => new Map(participantAssignments.map((assignment) => [assignment.participant_id, assignment])),
@@ -736,9 +602,9 @@ export function TemplateEditor({
   const filteredPickerParticipants = useMemo(() => {
     const query = participantPickerSearch.trim().toLowerCase();
     if (!query) {
-      return availableParticipants;
+      return availableParticipants.filter(isParticipantSelectable);
     }
-    return availableParticipants.filter((participant) => {
+    return availableParticipants.filter(isParticipantSelectable).filter((participant) => {
       const haystack = [
         participant.display_name,
         participant.first_name ?? "",
@@ -749,7 +615,7 @@ export function TemplateEditor({
         .toLowerCase();
       return haystack.includes(query);
     });
-  }, [availableParticipants, participantPickerSearch]);
+  }, [availableParticipants, participantPickerSearch, isParticipantSelectable]);
   const eligibleResponsibleLists = useMemo(
     () =>
       availableLists
@@ -761,29 +627,10 @@ export function TemplateEditor({
     () => [...elements].sort((left, right) => left.sort_index - right.sort_index),
     [elements]
   );
-  const filteredElementDefinitions = useMemo(() => {
-    const query = elementPickerSearch.trim().toLowerCase();
-    if (!query) {
-      return initialDefinitions;
-    }
-    return initialDefinitions.filter((definition) => {
-      const haystack = [
-        definition.title,
-        definition.description ?? "",
-        definitionTypeSummary(definition),
-        ...definition.blocks.map((block) => String(block.title ?? block.configuration_json?.block_type_code ?? "")),
-      ]
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(query);
-    });
-  }, [elementPickerSearch, initialDefinitions]);
   const responsibilityModalElement = useMemo(
     () => orderedElements.find((item) => item.id === showResponsibilityModalFor) ?? null,
     [orderedElements, showResponsibilityModalFor]
   );
-  const templateDropExpandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const templateDragPreviewRef = useRef<HTMLElement | null>(null);
   // Monotonic sequence guard for persistTemplateOrder: fast repeated drag/drop or position
   // edits can start a new reorder before an in-flight one's PATCH requests resolve. Only the
   // response belonging to the most-recently-started call is allowed to commit `elements`, so a
@@ -791,7 +638,7 @@ export function TemplateEditor({
   const templateOrderSeqRef = useRef(0);
   const filteredResponsibilityParticipants = useMemo(() => {
     const query = responsibilitySearch.trim().toLowerCase();
-    return [...availableParticipants]
+    return availableParticipants.filter(isParticipantSelectable)
       .sort((left, right) => left.display_name.localeCompare(right.display_name, "de", { sensitivity: "base" }))
       .filter((participant) => {
         if (!query) {
@@ -807,30 +654,23 @@ export function TemplateEditor({
           .toLowerCase();
         return haystack.includes(query);
       });
-  }, [availableParticipants, responsibilitySearch]);
+  }, [availableParticipants, responsibilitySearch, isParticipantSelectable]);
   const manualLinkListMeta = useMemo(
     () => eligibleResponsibleLists.find((item) => String(item.definition.id) === manualLinkListId) ?? null,
     [eligibleResponsibleLists, manualLinkListId]
   );
-
-  useEffect(() => {
-    setPositionDrafts(
-      Object.fromEntries(orderedElements.map((item, index) => [item.id, String(index + 1)]))
-    );
-  }, [orderedElements]);
-
-  useEffect(
-    () => () => {
-      if (templateDropExpandTimerRef.current) {
-        clearTimeout(templateDropExpandTimerRef.current);
-      }
-      if (templateDragPreviewRef.current) {
-        templateDragPreviewRef.current.remove();
-        templateDragPreviewRef.current = null;
-      }
-    },
-    []
-  );
+  // Daten für den Baustein-Dialog (Spalten, Zeilen, Terminfilter, Listen)
+  const blockEditorData: BlockEditorData = {
+    participants: availableParticipants,
+    events: availableEvents,
+    lists: availableLists,
+    listEntries: listEntriesByListId,
+    ensureListEntries: (listId: string) => void ensureResponsibleListEntries(listId),
+    knownEventTags,
+    tagConfig,
+    accounts: financeAccounts ?? [],
+    cycleConfigs: availableCycleConfigs,
+  };
 
   useEffect(() => {
     if (!showResponsibilityModalFor || !responsibilityModalElement) {
@@ -879,6 +719,56 @@ export function TemplateEditor({
     });
   }, [responsibilityModalElement]);
 
+  // Tabellen hinter den Verantwortlichen aller Traktanden: beim Öffnen und bei jeder Rückkehr in
+  // den Tab frisch laden, damit die Namen Änderungen an der Tabelle folgen (wie im Protokoll).
+  const responsibleListIdsKey = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          elements.flatMap((item) =>
+            parseResponsibilityConfig(item.configuration_json).assignments
+              .filter((assignment) => assignment.list_definition_id && assignment.list_entry_id)
+              .map((assignment) => assignment.list_definition_id as string)
+          )
+        )
+      )
+        .sort()
+        .join(","),
+    [elements]
+  );
+
+  useEffect(() => {
+    const listIds = responsibleListIdsKey ? responsibleListIdsKey.split(",") : [];
+    if (listIds.length === 0) return;
+    let cancelled = false;
+    async function reload() {
+      const loaded = await Promise.all(
+        listIds.map((listId) =>
+          browserApiFetch<StructuredListEntry[]>(`/api/lists/${listId}/entries`)
+            .then((entries) => [listId, entries ?? []] as const)
+            .catch(() => null) // best-effort: bis zum nächsten Laden gilt die gespeicherte Person
+        )
+      );
+      if (cancelled) return;
+      setListEntriesByListId((current) => {
+        const next = { ...current };
+        for (const item of loaded) if (item) next[item[0]] = item[1];
+        return next;
+      });
+    }
+    function onVisibility() {
+      if (document.visibilityState === "visible") void reload();
+    }
+    void reload();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onVisibility);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onVisibility);
+    };
+  }, [responsibleListIdsKey]);
+
   async function ensureResponsibleListEntries(listDefinitionId: string) {
     if (listEntriesByListId[listDefinitionId]) {
       return listEntriesByListId[listDefinitionId];
@@ -889,7 +779,7 @@ export function TemplateEditor({
       setListEntriesByListId((current) => ({ ...current, [listDefinitionId]: entries ?? [] }));
       return entries ?? [];
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Listeneinträge konnten nicht geladen werden", "error");
+      showToast(error instanceof Error ? error.message : t("listEntriesLoadFailed"), "error");
       return [];
     } finally {
       setLoadingResponsibleListId((current) => (current === listDefinitionId ? null : current));
@@ -903,36 +793,6 @@ export function TemplateEditor({
     });
     setElements((current) => current.map((item) => (item.id === updated.id ? updated : item)));
     return updated;
-  }
-
-  async function updateBlockBehavior(
-    templateElementId: string,
-    scope: "element" | "block",
-    field: TemplateElementBehaviorField,
-    value: boolean,
-    blockId?: number
-  ) {
-    try {
-      const updated = await browserApiFetch<TemplateElement>(`/api/template-elements/${templateElementId}/behavior`, {
-        method: "PATCH",
-        body: JSON.stringify({ scope, block_id: blockId ?? null, [field]: value }),
-      });
-      setElements((current) => current.map((item) => (item.id === updated.id ? updated : item)));
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "Einstellung konnte nicht gespeichert werden", "error");
-    }
-  }
-
-  function toggleBehaviorExpanded(templateElementId: string) {
-    setExpandedBehaviorIds((current) => {
-      const next = new Set(current);
-      if (next.has(templateElementId)) {
-        next.delete(templateElementId);
-      } else {
-        next.add(templateElementId);
-      }
-      return next;
-    });
   }
 
   async function saveElementResponsibility(
@@ -954,8 +814,18 @@ export function TemplateEditor({
     );
   }
 
+  /** Verantwortliche eines Traktandums für Avatare und Liste im Editor (gleiche Auflösung wie
+   * der Titel mit Namen, siehe liveResponsibleParticipantIds). */
+  function responsiblePeople(item: TemplateElement) {
+    const responsibility = parseResponsibilityConfig(item.configuration_json);
+    return liveResponsibleParticipantIds(responsibility.assignments, eligibleResponsibleLists, listEntriesByListId)
+      .map((participantId) => participantsById.get(participantId))
+      .filter((participant): participant is ParticipantSummary => Boolean(participant))
+      .map((participant) => ({ id: participant.id, name: participant.display_name, initials: participantInitials(participant) }));
+  }
+
   function currentResponsibilityTitle(item: TemplateElement) {
-    return titleWithResponsibility(item, participantsById, responsibilityNameMode);
+    return titleWithResponsibility(item, participantsById, responsibilityNameMode, eligibleResponsibleLists, listEntriesByListId, t);
   }
 
   async function applyResponsibilityNameMode(nextMode: ResponsibleNameMode) {
@@ -966,7 +836,7 @@ export function TemplateEditor({
       return currentResponsibility.assignments.length > 0 || "responsibility" in item.configuration_json;
     });
     if (!itemsToUpdate.length) {
-      showToast("Namensformat für Verantwortliche gesetzt", "success");
+      showToast(t("nameFormatSetToast"), "success");
       return;
     }
     setBulkAssignBusy(true);
@@ -977,9 +847,9 @@ export function TemplateEditor({
           name_display_mode: nextMode,
         }));
       }
-      showToast("Namensformat für Verantwortliche gespeichert", "success");
+      showToast(t("nameFormatSavedToast"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Namensformat konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("nameFormatSaveFailed"), "error");
     } finally {
       setBulkAssignBusy(false);
     }
@@ -1045,10 +915,10 @@ export function TemplateEditor({
         });
       }
       if (matchedElementCount) {
-        showToast(`${matchedElementCount} Element${matchedElementCount === 1 ? "" : "e"} wurden automatisch zugeordnet`, "success");
+        showToast(t("autoAssignedToast", { count: matchedElementCount }), "success");
       }
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Automatische Zuordnung konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("autoAssignmentSaveFailed"), "error");
     } finally {
       setBulkAssignBusy(false);
     }
@@ -1071,9 +941,9 @@ export function TemplateEditor({
           assignments: nextAssignments,
         };
       });
-      showToast(enabled ? "Verantwortliche Person zugewiesen" : "Verantwortliche Person entfernt", "success");
+      showToast(enabled ? t("responsibleAssignedToast") : t("responsibleRemovedToast"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Verantwortliche Person konnte nicht aktualisiert werden", "error");
+      showToast(error instanceof Error ? error.message : t("responsibleUpdateFailed"), "error");
     }
   }
 
@@ -1087,36 +957,12 @@ export function TemplateEditor({
             : assignment
         ),
       }));
-      showToast("Tabellen-Verknüpfung aktualisiert", "success");
+      showToast(t("tableLinkUpdatedToast"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Tabellen-Verknüpfung konnte nicht aktualisiert werden", "error");
+      showToast(error instanceof Error ? error.message : t("tableLinkUpdateFailed"), "error");
     }
   }
 
-  async function toggleResponsibilityRowLock(templateElementId: string, listDefinitionId: string, listEntryId: string) {
-    try {
-      await saveElementResponsibility(templateElementId, (current) => {
-        const matchingAssignments = current.assignments.filter(
-          (assignment) => assignment.list_definition_id === listDefinitionId && assignment.list_entry_id === listEntryId
-        );
-        if (!matchingAssignments.length) {
-          return current;
-        }
-        const nextLocked = !matchingAssignments.every((assignment) => assignment.locked);
-        return {
-          name_display_mode: responsibilityNameMode,
-          assignments: current.assignments.map((assignment) =>
-            assignment.list_definition_id === listDefinitionId && assignment.list_entry_id === listEntryId
-              ? { ...assignment, locked: nextLocked }
-              : assignment
-          ),
-        };
-      });
-      showToast("Tabellen-Verknüpfung aktualisiert", "success");
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "Tabellen-Verknüpfung konnte nicht aktualisiert werden", "error");
-    }
-  }
 
   async function linkElementToResponsibleRow() {
     if (!responsibilityModalElement || !manualLinkListMeta || !manualLinkEntryId) {
@@ -1128,12 +974,12 @@ export function TemplateEditor({
       const entries = await ensureResponsibleListEntries(listDefinitionId);
       const selectedEntry = entries.find((entry) => entry.id === entryId);
       if (!selectedEntry) {
-        showToast("Die gewählte Tabellenzeile wurde nicht gefunden", "error");
+        showToast(t("tableRowNotFoundToast"), "error");
         return;
       }
       const participantIds = listParticipantIds(selectedEntry, manualLinkListMeta.participantColumn, manualLinkListMeta.participantValueType);
       if (!participantIds.length) {
-        showToast("Die gewählte Tabellenzeile enthält keine Teilnehmenden", "error");
+        showToast(t("tableRowNoParticipantsToast"), "error");
         return;
       }
       await saveElementResponsibility(responsibilityModalElement.id, (current) => {
@@ -1157,9 +1003,9 @@ export function TemplateEditor({
           assignments: [...nextAssignmentsByParticipant.values()],
         };
       });
-      showToast("Element mit Tabellenzeile verknüpft", "success");
+      showToast(t("elementLinkedToRowToast"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Tabellenzeilen-Verknüpfung konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("tableRowLinkSaveFailed"), "error");
     }
   }
 
@@ -1168,63 +1014,14 @@ export function TemplateEditor({
       return "";
     }
     const listMeta = eligibleResponsibleLists.find((item) => item.definition.id === assignment.list_definition_id);
-    const listName = listMeta?.definition.name ?? "Unbekannte Liste";
+    const listName = listMeta?.definition.name ?? t("unknownList");
     const linkedEntry = listEntriesByListId[assignment.list_definition_id]?.find((entry) => entry.id === assignment.list_entry_id);
     const rowLabel = linkedEntry && listMeta
-      ? listTextValue(linkedEntry, listMeta.textColumn) || "Leere Zeile"
-      : "Unbekannte Zeile";
+      ? listTextValue(linkedEntry, listMeta.textColumn) || t("emptyRow")
+      : t("unknownRow");
     return `${listName} · ${rowLabel}`;
   }
 
-  function responsibilityDisplayGroups(templateElement: TemplateElement) {
-    const responsibility = parseResponsibilityConfig(templateElement.configuration_json);
-    const groups: ResponsibilityDisplayGroup[] = [];
-    const groupIndexes = new Map<string, number>();
-    for (const assignment of responsibility.assignments) {
-      const groupKey =
-        assignment.list_definition_id && assignment.list_entry_id
-          ? `linked:${assignment.list_definition_id}:${assignment.list_entry_id}`
-          : `manual:${assignment.participant_id}`;
-      const existingIndex = groupIndexes.get(groupKey);
-      if (existingIndex === undefined) {
-        groupIndexes.set(groupKey, groups.length);
-        groups.push({
-          key: groupKey,
-          participantIds: [assignment.participant_id],
-          listDefinitionId: assignment.list_definition_id,
-          listEntryId: assignment.list_entry_id,
-          locked: assignment.locked,
-        });
-        continue;
-      }
-      groups[existingIndex] = {
-        ...groups[existingIndex],
-        participantIds: [...groups[existingIndex].participantIds, assignment.participant_id],
-        locked: groups[existingIndex].locked && assignment.locked,
-      };
-    }
-    return groups.map((group) => ({
-      ...group,
-      names: group.participantIds
-        .map((participantId) =>
-          participantName(
-            participantsById.get(participantId),
-            responsibility.name_display_mode || responsibilityNameMode
-          )
-        )
-        .filter(Boolean)
-        .join(", "),
-      tooltip:
-        group.listDefinitionId && group.listEntryId
-          ? responsibilityLinkTooltip({
-              participant_id: group.participantIds[0] ?? "",
-              list_definition_id: group.listDefinitionId,
-              list_entry_id: group.listEntryId,
-              locked: group.locked,
-            })
-          : "",
-    }));
-  }
 
   function isParticipantResponsible(templateElement: TemplateElement, participantId: string) {
     return parseResponsibilityConfig(templateElement.configuration_json).assignments.some(
@@ -1247,15 +1044,14 @@ export function TemplateEditor({
           title_pattern: templateMeta.title_pattern || null,
           auto_create_next_protocol: templateMeta.auto_create_next_protocol,
           cycle_config_id: templateMeta.cycle_config_id ? templateMeta.cycle_config_id : null,
-          document_template_id: templateMeta.document_template_id ? templateMeta.document_template_id : null,
         })
       });
       setTemplate(updated);
-      showToast("Vorlage gespeichert", "success");
+      showToast(t("templateSavedToast"), "success");
       setShowSettingsModal(false);
       router.refresh();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Vorlage konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("templateSaveFailed"), "error");
     }
   }
 
@@ -1270,38 +1066,13 @@ export function TemplateEditor({
           })),
         }),
       });
-      showToast("Teilnehmerzuordnungen gespeichert", "success");
+      showToast(t("participantAssignmentsSavedToast"), "success");
       router.refresh();
       if (closeAfter) {
         setShowParticipantModal(false);
       }
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Teilnehmerzuordnungen konnten nicht gespeichert werden", "error");
-    }
-  }
-
-  async function addElementToTemplate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    try {
-      const createdItems = await Promise.all(
-        newItemForm.element_definition_ids.map((elementDefinitionId, index) =>
-          browserApiFetch<TemplateElement>(`/api/templates/${template.id}/elements`, {
-            method: "POST",
-            body: JSON.stringify({
-              element_definition_id: elementDefinitionId,
-              sort_index: nextTemplateElementSortIndex(elements) + index * 10
-            })
-          })
-        )
-      );
-      setElements((current) => [...current, ...createdItems].sort((left, right) => left.sort_index - right.sort_index));
-      setNewItemForm(initialTemplateItemForm);
-      setElementPickerSearch("");
-      setShowCreateItem(false);
-      showToast(`${createdItems.length} Element${createdItems.length === 1 ? "" : "e"} hinzugefuegt`, "success");
-      router.refresh();
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "Element konnte nicht hinzugefügt werden", "error");
+      showToast(error instanceof Error ? error.message : t("participantAssignmentsSaveFailed"), "error");
     }
   }
 
@@ -1353,260 +1124,141 @@ export function TemplateEditor({
       if (seq === templateOrderSeqRef.current) {
         setElements(previousElements);
       }
-      showToast(error instanceof Error ? error.message : "Template-Reihenfolge konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("orderSaveFailed"), "error");
       return false;
     }
   }
 
-  async function reorderTemplateItems(sourceId: string, targetId: string) {
-    if (sourceId === targetId) {
-      return;
-    }
-    const sourceIndex = orderedElements.findIndex((item) => item.id === sourceId);
-    const targetIndex = orderedElements.findIndex((item) => item.id === targetId);
-    if (sourceIndex === -1 || targetIndex === -1) {
-      return;
-    }
-    const nextOrdered = [...orderedElements];
-    const [moved] = nextOrdered.splice(sourceIndex, 1);
-    nextOrdered.splice(targetIndex, 0, moved);
-    await persistTemplateOrder(nextOrdered, "Template-Reihenfolge gespeichert");
-  }
-
-  async function moveTemplateItemToPosition(templateElementId: string, requestedPosition: number) {
-    const currentIndex = orderedElements.findIndex((item) => item.id === templateElementId);
-    if (currentIndex === -1) {
-      return;
-    }
-    const clampedIndex = Math.min(Math.max(requestedPosition - 1, 0), orderedElements.length - 1);
-    setPositionDrafts((current) => ({ ...current, [templateElementId]: String(clampedIndex + 1) }));
-    if (currentIndex === clampedIndex) {
-      return;
-    }
-    const nextOrdered = [...orderedElements];
-    const [moved] = nextOrdered.splice(currentIndex, 1);
-    nextOrdered.splice(clampedIndex, 0, moved);
-    await persistTemplateOrder(nextOrdered, `Element auf Position ${clampedIndex + 1} verschoben`);
-  }
-
-  function handlePositionSubmit(templateElementId: string, rawValue: string) {
-    const parsed = Number(rawValue);
-    if (!Number.isFinite(parsed) || parsed < 1) {
-      const currentIndex = orderedElements.findIndex((item) => item.id === templateElementId);
-      setPositionDrafts((current) => ({
-        ...current,
-        [templateElementId]: String(currentIndex >= 0 ? currentIndex + 1 : 1),
-      }));
-      return;
-    }
-    void moveTemplateItemToPosition(templateElementId, Math.trunc(parsed));
-  }
-
-  function clearTemplateDropExpansionTimer() {
-    if (templateDropExpandTimerRef.current) {
-      clearTimeout(templateDropExpandTimerRef.current);
-      templateDropExpandTimerRef.current = null;
-    }
-  }
-
-  function clearTemplateDragPreview() {
-    if (templateDragPreviewRef.current) {
-      templateDragPreviewRef.current.remove();
-      templateDragPreviewRef.current = null;
-    }
-  }
-
-  function resetTemplateDragState() {
-    clearTemplateDropExpansionTimer();
-    clearTemplateDragPreview();
-    setDraggedTemplateElementId(null);
-    setActiveTemplateDropIndex(null);
-    setExpandedTemplateDropIndex(null);
-  }
-
-  function scheduleTemplateDropExpansion(dropIndex: number) {
-    clearTemplateDropExpansionTimer();
-    templateDropExpandTimerRef.current = setTimeout(() => {
-      setExpandedTemplateDropIndex(dropIndex);
-    }, 180);
-  }
-
-  function handleTemplateDragStart(event: DragEvent<HTMLElement>, templateElementId: string) {
-    setDraggedTemplateElementId(templateElementId);
-    setActiveTemplateDropIndex(null);
-    setExpandedTemplateDropIndex(null);
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/template-element", String(templateElementId));
-    const rowElement = event.currentTarget.closest(".template-element-row");
-    if (rowElement instanceof HTMLElement) {
-      clearTemplateDragPreview();
-      const preview = rowElement.cloneNode(true) as HTMLElement;
-      preview.style.position = "fixed";
-      preview.style.top = "-1000px";
-      preview.style.left = "-1000px";
-      preview.style.width = `${rowElement.offsetWidth}px`;
-      preview.style.pointerEvents = "none";
-      preview.style.transform = "rotate(-1deg)";
-      preview.style.boxShadow = "0 16px 34px rgba(15, 23, 42, 0.28)";
-      preview.style.opacity = "0.96";
-      preview.classList.add("template-element-drag-preview");
-      document.body.appendChild(preview);
-      templateDragPreviewRef.current = preview;
-      event.dataTransfer.setDragImage(preview, 28, 24);
-    }
-  }
-
-  function handleTemplateDragEnd() {
-    resetTemplateDragState();
-  }
-
-  function templateDropIndexForRow(event: DragEvent<HTMLElement>, rowIndex: number) {
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const midpoint = bounds.top + bounds.height / 2;
-    return event.clientY >= midpoint ? rowIndex + 1 : rowIndex;
-  }
-
-  function handleTemplateDropSlotDragOver(event: DragEvent<HTMLElement>, dropIndex: number) {
-    event.preventDefault();
-    if (!draggedTemplateElementId) {
-      return;
-    }
-    event.dataTransfer.dropEffect = "move";
-    const isSameDropTarget = activeTemplateDropIndex === dropIndex;
-    setActiveTemplateDropIndex((current) => (current === dropIndex ? current : dropIndex));
-    if (!isSameDropTarget) {
-      scheduleTemplateDropExpansion(dropIndex);
-      return;
-    }
-    if (expandedTemplateDropIndex !== dropIndex && !templateDropExpandTimerRef.current) {
-      scheduleTemplateDropExpansion(dropIndex);
-    }
-  }
-
-  function handleTemplateRowDragOver(event: DragEvent<HTMLElement>, rowIndex: number) {
-    if (!draggedTemplateElementId) {
-      return;
-    }
-    handleTemplateDropSlotDragOver(event, templateDropIndexForRow(event, rowIndex));
-  }
-
-  async function handleTemplateDropAtIndex(event: DragEvent<HTMLElement>, dropIndex: number) {
-    event.preventDefault();
-    const transferValue = event.dataTransfer.getData("text/template-element");
-    const sourceId = transferValue || draggedTemplateElementId;
-    if (!sourceId) {
-      resetTemplateDragState();
-      return;
-    }
-    const movedItem = orderedElements.find((item) => item.id === sourceId);
-    const sourceIndex = orderedElements.findIndex((item) => item.id === sourceId);
-    resetTemplateDragState();
-    if (!movedItem) {
-      return;
-    }
-    if (sourceIndex === -1) {
-      return;
-    }
-    const nextOrdered = orderedElements.filter((item) => item.id !== sourceId);
-    const rawIndex = Math.min(Math.max(dropIndex, 0), orderedElements.length);
-    const targetIndex = rawIndex > sourceIndex ? rawIndex - 1 : rawIndex;
-    if (targetIndex === sourceIndex) {
-      return;
-    }
-    nextOrdered.splice(targetIndex, 0, movedItem);
-    await persistTemplateOrder(nextOrdered, `Element auf Position ${targetIndex + 1} verschoben`);
-  }
-
-  async function handleTemplateRowDrop(event: DragEvent<HTMLElement>, rowIndex: number) {
-    await handleTemplateDropAtIndex(event, templateDropIndexForRow(event, rowIndex));
-  }
-
-  async function deleteTemplateItem(templateElementId: string) {
-    const ok = await confirm({
-      title: "Element entfernen?",
-      message: "Das Element wird aus dieser Vorlage entfernt. Es bleibt bestehen und kann jederzeit wieder hinzugefügt werden, die Einstellungen in dieser Vorlage gehen aber verloren.",
-      tone: "danger",
-      confirmLabel: "Entfernen"
-    });
-    if (!ok) return;
-    try {
-      await browserApiFetch(`/api/template-elements/${templateElementId}`, { method: "DELETE" });
-      setElements((current) => current.filter((item) => item.id !== templateElementId));
-      showToast("Element aus Vorlage entfernt", "success");
-      router.refresh();
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "Element konnte nicht entfernt werden", "error");
-    }
-  }
+  // Name der verwendeten Gestaltung je Sitzungsdokument (Hinweis an den Tabs PDF/Einladung)
+  const designNote = (documentType: string) => {
+    const design = sessionDesigns?.find((item) => item.document_type === documentType);
+    return design ? templateDisplayName(tDocuments, { name: design.template_name, origin: design.template_origin, system_key: design.template_system_key }) : null;
+  };
 
   return (
-    <div className="grid">
-      <DataToolbar
-        title={template.name}
-        description="Ziehe Elemente in die gewünschte Reihenfolge."
-        actions={
-          <div className="table-toolbar-actions">
-            <button type="button" className="button-ghost button-secondary" onClick={() => setShowSettingsModal(true)}>
-              Einstellungen
-            </button>
-            <button type="button" className="button-ghost button-secondary" onClick={() => setShowParticipantModal(true)}>
-              Teilnehmer
-            </button>
+    <div className="session-studio">
+      <div className="page-header session-studio-header">
+        <div className="session-studio-header-text">
+          <div className="session-studio-title-row">
+            <h1 className="page-title">{template.name}</h1>
+            {templateMeta.protocol_number_pattern ? (
+              <span className="session-studio-pattern" title={tStudio("numberPattern")}>
+                {templateMeta.protocol_number_pattern}
+              </span>
+            ) : null}
           </div>
-        }
+          <p className="muted">{tStudio("intro")}</p>
+        </div>
+        <div className="session-studio-header-actions">
+          {canManage ? (
+            <button type="button" className="button-secondary" onClick={() => setShowParticipantModal(true)}>
+              {tStudio("participants")}
+              <Badge variant="neutral">{assignedParticipantIds.length}</Badge>
+            </button>
+          ) : null}
+          <button type="button" className="button-secondary" onClick={() => setShowAutoAssignModal(true)}>
+            {tStudio("responsibleMapping")}
+          </button>
+          {canManage && financeAccounts ? (
+            <button type="button" className="button-secondary" onClick={() => setShowFineTariffModal(true)}>
+              {t("fineTariff.button")}
+              {fineOverride !== null ? <Badge variant="neutral">{fineOverride ? tStudio("fineOwn") : tStudio("fineTenant")}</Badge> : null}
+            </button>
+          ) : null}
+          {canManage ? (
+            <button type="button" className="button-secondary" onClick={() => setShowSettingsModal(true)}>
+              {tStudio("settings")}
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <Tabs
+        activeId={view}
+        onChange={(id) => setView(id as StudioView)}
+        tabs={[
+          {
+            id: "editor",
+            label: tStudio("view.editor"),
+            content: (
+              <SessionTemplateWorkspace
+                templateId={template.id}
+                elements={elements}
+                onElementsChange={setElements}
+                onReorder={(next) => persistTemplateOrder(next, t("orderSavedToast"))}
+                onOpenResponsibility={(elementId) => setShowResponsibilityModalFor(elementId)}
+                responsibleFor={responsiblePeople}
+                blockEditorData={blockEditorData}
+                cycleConfigs={availableCycleConfigs}
+                onOpenDesign={() => setView("pdf")}
+              />
+            ),
+          },
+          { id: "pdf", label: tStudio("view.pdf"), note: designNote("protocol"), content: view === "pdf" ? <SessionDesignView sessionTemplate={template} documentType="protocol" onChanged={loadSessionDesigns} /> : null },
+          { id: "invitation", label: tStudio("view.invitation"), note: designNote("invitation"), content: view === "invitation" ? <SessionDesignView sessionTemplate={template} documentType="invitation" onChanged={loadSessionDesigns} /> : null },
+        ]}
       />
+
+      {financeAccounts ? (
+        <TemplateFineTariffModal
+          open={showFineTariffModal}
+          templateId={template.id}
+          accounts={financeAccounts}
+          onClose={() => setShowFineTariffModal(false)}
+          onSaved={(tariff) => setFineOverride(tariff.override)}
+        />
+      ) : null}
 
       <Modal
         open={showSettingsModal}
         onClose={() => setShowSettingsModal(false)}
-        title="Vorlagen-Einstellungen"
-        description="Allgemeine Angaben zu dieser Vorlage und dem verwendeten Dokumentlayout."
+        title={t("settingsTitle")}
+        description={t("settingsDescription")}
         size="wide"
       >
         <ModalSaveForm className="grid" onSubmit={saveTemplate}>
           <label className="field-stack">
-            <span className="field-label">Template name</span>
+            <span className="field-label">{t("nameLabel")}</span>
             <input value={templateMeta.name} onChange={(event) => setTemplateMeta((current) => ({ ...current, name: event.target.value }))} />
           </label>
           <label className="field-stack">
-            <span className="field-label">Description</span>
+            <span className="field-label">{t("descriptionLabel")}</span>
             <textarea rows={4} value={templateMeta.description} onChange={(event) => setTemplateMeta((current) => ({ ...current, description: event.target.value }))} />
           </label>
           <div className="two-col">
             <label className="field-stack">
-              <span className="field-label">Protocol number pattern</span>
-              <input value={templateMeta.protocol_number_pattern} onChange={(event) => setTemplateMeta((current) => ({ ...current, protocol_number_pattern: event.target.value }))} placeholder="e.g. Sitzung {n}" />
-              <span className="field-help">Beispiele: Sitzung [n], Sitzung [mm].[n_month], J[yy]-[n_year], V[n_cycle]. Eckige und geschweifte Klammern funktionieren beide.</span>
+              <span className="field-label">{t("protocolNumberPatternLabel")}</span>
+              <input value={templateMeta.protocol_number_pattern} onChange={(event) => setTemplateMeta((current) => ({ ...current, protocol_number_pattern: event.target.value }))} placeholder={t("protocolNumberPatternPlaceholder")} />
+              <span className="field-help">{t("protocolNumberPatternHelp")}</span>
             </label>
             <label className="field-stack">
-              <span className="field-label">Title pattern</span>
-              <input value={templateMeta.title_pattern} onChange={(event) => setTemplateMeta((current) => ({ ...current, title_pattern: event.target.value }))} placeholder="e.g. Sitzung {n} - {date:DD.MM.YYYY}" />
-              <span className="field-help">Used automatically when a new protocol is created and the title field is left empty.</span>
+              <span className="field-label">{t("titlePatternLabel")}</span>
+              <input value={templateMeta.title_pattern} onChange={(event) => setTemplateMeta((current) => ({ ...current, title_pattern: event.target.value }))} placeholder={t("titlePatternPlaceholder")} />
+              <span className="field-help">{t("titlePatternHelp")}</span>
             </label>
           </div>
           <label className="field-stack">
-            <span className="field-label">Zyklus</span>
+            <span className="field-label">{t("cycleLabel")}</span>
             <SearchableSelect
               options={availableCycleConfigs}
               getId={(cc) => cc.id}
               getLabel={(cc) => cc.name}
               value={templateMeta.cycle_config_id || null}
               onChange={(cc) => setTemplateMeta((current) => ({ ...current, cycle_config_id: cc ? String(cc.id) : "" }))}
-              nullLabel="Kein Zyklus"
+              nullLabel={t("noCycle")}
             />
-            <span className="field-help">Zyklen können unter Struktur → Zyklen verwaltet werden.</span>
+            <span className="field-help">{t("cycleHelp")}</span>
           </label>
           <label className="field-stack">
-            <span className="field-label">Todo-Termin-Tag</span>
+            <span className="field-label">{t("todoEventTagLabel")}</span>
             <SearchableSelect
               options={Array.from(new Set(availableEvents.map((e) => e.tag).filter((tag): tag is string => Boolean(tag)))).sort()}
               getId={(tag) => tag}
               getLabel={(tag) => tag}
               value={templateMeta.todo_due_event_tag || null}
               onChange={(tag) => setTemplateMeta((current) => ({ ...current, todo_due_event_tag: tag ?? "" }))}
-              nullLabel="Alle Termine"
+              nullLabel={t("allEvents")}
             />
-            <span className="field-help">Nur Termine mit diesem Tag werden in der Todo-Fällig-Auswahl angezeigt. Leer = alle Termine.</span>
+            <span className="field-help">{t("todoEventTagHelp")}</span>
           </label>
           <label className="checkbox-row">
             <input
@@ -1616,25 +1268,13 @@ export function TemplateEditor({
                 setTemplateMeta((current) => ({ ...current, auto_create_next_protocol: event.target.checked }))
               }
             />
-            <span>Naechstes Protokoll automatisch erstellen, sobald dieses Protokoll spaeter auf Abgeschlossen gesetzt wird.</span>
+            <span>{t("autoCreateNextProtocolLabel")}</span>
           </label>
           <div className="info-note">
-            Protokollnummer-Tokens: [n] alle, [n_year] pro Jahr, [n_month] pro Monat, [n_cycle] im Zyklus. Zyklusname-Tokens: [cy] = Startjahr, [cy_end] = Endjahr.
+            {t("patternTokensInfo")}
           </div>
-          <label className="field-stack">
-            <span className="field-label">PDF-Layout</span>
-            <SearchableSelect
-              options={availableDocumentTemplates.filter((dt) => dt.is_active)}
-              getId={(dt) => dt.id}
-              getLabel={(dt) => `${dt.name}${dt.is_default ? " (Standard)" : ""}`}
-              value={templateMeta.document_template_id || null}
-              onChange={(dt) => setTemplateMeta((current) => ({ ...current, document_template_id: dt ? String(dt.id) : "" }))}
-              nullLabel="Kein Layout zugewiesen"
-            />
-            <span className="field-help">Wird beim PDF-Export verwendet. Kann in den Einstellungen → Dokumentlayouts konfiguriert werden.</span>
-          </label>
           <div className="table-toolbar-actions">
-            <button data-modal-save type="submit" className="button-secondary">Vorlage speichern</button>
+            <button data-modal-save type="submit" className="button-secondary">{t("saveTemplate")}</button>
           </div>
         </ModalSaveForm>
       </Modal>
@@ -1642,14 +1282,14 @@ export function TemplateEditor({
       <Modal
         open={showParticipantModal}
         onClose={() => setShowParticipantModal(false)}
-        title="Teilnehmer waehlen"
-        description="Mit Haken legst du fest, wer in diesem Template im Protokoll auswählbar ist. Für ausgewählte Teilnehmer kannst du sie hier direkt aus der Anwesenheitskontrolle entfernen."
+        title={t("chooseParticipantsTitle")}
+        description={t("chooseParticipantsDescription")}
         size="fullscreen"
       >
         <div className="grid">
           <label className="field-stack">
-            <span className="field-label">Suche</span>
-            <SearchInput value={participantPickerSearch} onChange={setParticipantPickerSearch} placeholder="Teilnehmer suchen" autoFocus />
+            <span className="field-label">{t("searchLabel")}</span>
+            <SearchInput value={participantPickerSearch} onChange={setParticipantPickerSearch} placeholder={t("searchParticipantsPlaceholder")} autoFocus />
           </label>
           <div className="status-row">
             <span className="pill">{assignedParticipantIds.length} ausgewaehlt</span>
@@ -1695,7 +1335,7 @@ export function TemplateEditor({
                   <div>
                     <strong>{participant.display_name}</strong>
                     <div className="muted">
-                      {[participant.first_name, participant.last_name].filter(Boolean).join(" ") || participant.email || "Teilnehmer"}
+                      {[participant.first_name, participant.last_name].filter(Boolean).join(" ") || participant.email || t("participantFallback")}
                     </div>
                     {checked ? (
                       <span className="checkbox-row" onClick={(event) => event.stopPropagation()}>
@@ -1712,7 +1352,7 @@ export function TemplateEditor({
                             )
                           }
                         />
-                        <span>Aus Anwesenheitskontrolle entfernen</span>
+                        <span>{t("removeFromAttendance")}</span>
                       </span>
                     ) : null}
                   </div>
@@ -1728,489 +1368,234 @@ export function TemplateEditor({
         </div>
       </Modal>
 
-      <article className="card">
-        <DataToolbar
-          title="Elemente"
-          description="Vorlagen sammeln nur fertige Elemente. Wiederholungen und Filter werden direkt in den Blöcken des Elements gepflegt."
-          actions={
-            <div className="table-toolbar-actions">
-              <button type="button" className="button-ghost button-secondary" onClick={() => setShowAutoAssignModal(true)}>
-                Verantwortliche-Zuordnung
-              </button>
+      <Modal
+        open={showAutoAssignModal}
+        onClose={() => setShowAutoAssignModal(false)}
+        title={t("responsibilityTitle")}
+        description={t("responsibilityDescription")}
+        size="wide"
+      >
+        <div className="grid">
+          <div className="three-col">
+            <label className="field-stack">
+              <span className="field-label">{t("nameDisplayLabel")}</span>
+              <Select
+                value={responsibilityNameMode}
+                disabled={bulkAssignBusy}
+                onChange={(event) => void applyResponsibilityNameMode(event.target.value as ResponsibleNameMode)}
+              >
+                <option value="display_name">{t("displayNameOption")}</option>
+                <option value="first_name">{t("firstNameOption")}</option>
+                <option value="last_name">{t("lastNameOption")}</option>
+              </Select>
+              <span className="field-help">{t("nameDisplayHelp")}</span>
+            </label>
+            <label className="field-stack">
+              <span className="field-label">{t("initialListAssignmentLabel")}</span>
+              <SearchableSelect
+                options={eligibleResponsibleLists}
+                getId={(item) => item.definition.id}
+                getLabel={(item) => item.definition.name}
+                value={responsibilityAutoListId || null}
+                disabled={bulkAssignBusy}
+                onChange={(item) => {
+                  const nextValue = item ? item.definition.id : "";
+                  setResponsibilityAutoListId(nextValue);
+                  if (nextValue) {
+                    void autoAssignResponsiblesFromList(nextValue);
+                  }
+                }}
+                nullLabel={t("noListSelected")}
+              />
+              <span className="field-help">{t("initialListAssignmentHelp")}</span>
+            </label>
+            <div className="table-toolbar-actions align-end">
               <button
                 type="button"
-                className="button-secondary"
-                onClick={() => {
-                  setElementPickerSearch("");
-                  setShowCreateItem((current) => !current);
-                }}
+                className="button-ghost button-secondary"
+                disabled={!responsibilityAutoListId || bulkAssignBusy}
+                onClick={() => responsibilityAutoListId && void autoAssignResponsiblesFromList(responsibilityAutoListId)}
               >
-                {showCreateItem ? "Formular schliessen" : "Element hinzufügen"}
+                {bulkAssignBusy ? "…" : t("reconcile")}
               </button>
             </div>
-          }
-        />
-
-        <Modal
-          open={showAutoAssignModal}
-          onClose={() => setShowAutoAssignModal(false)}
-          title="Verantwortliche-Zuordnung"
-          description="Steuert, wie Verantwortliche hinter Elementtiteln angezeigt und automatisch aus einer Liste zugeordnet werden."
-          size="wide"
-        >
-          <div className="grid">
-            <div className="three-col">
-              <label className="field-stack">
-                <span className="field-label">Namensanzeige</span>
-                <select
-                  value={responsibilityNameMode}
-                  disabled={bulkAssignBusy}
-                  onChange={(event) => void applyResponsibilityNameMode(event.target.value as ResponsibleNameMode)}
-                >
-                  <option value="display_name">Anzeigename</option>
-                  <option value="first_name">Vorname</option>
-                  <option value="last_name">Nachname</option>
-                </select>
-                <span className="field-help">Dieses Format wird für die Anzeige der Verantwortlichen hinter dem Elementtitel verwendet.</span>
-              </label>
-              <label className="field-stack">
-                <span className="field-label">Initiale Zuordnung aus Liste</span>
-                <SearchableSelect
-                  options={eligibleResponsibleLists}
-                  getId={(item) => item.definition.id}
-                  getLabel={(item) => item.definition.name}
-                  value={responsibilityAutoListId || null}
-                  disabled={bulkAssignBusy}
-                  onChange={(item) => {
-                    const nextValue = item ? item.definition.id : "";
-                    setResponsibilityAutoListId(nextValue);
-                    if (nextValue) {
-                      void autoAssignResponsiblesFromList(nextValue);
-                    }
-                  }}
-                  nullLabel="Keine Liste ausgewählt"
-                />
-                <span className="field-help">Es werden nur Listen mit genau einer Textspalte und einer Teilnehmer-Spalte angeboten.</span>
-              </label>
-              <div className="table-toolbar-actions align-end">
-                <button
-                  type="button"
-                  className="button-ghost button-secondary"
-                  disabled={!responsibilityAutoListId || bulkAssignBusy}
-                  onClick={() => responsibilityAutoListId && void autoAssignResponsiblesFromList(responsibilityAutoListId)}
-                >
-                  {bulkAssignBusy ? "…" : "Erneut abgleichen"}
-                </button>
-              </div>
-            </div>
-            <div className="info-note">
-              Beim Listenabgleich wird der Freitext der Liste mit dem Elementtitel verglichen. Gefundene Teilnehmende werden einmalig übernommen. Mit dem Schloss fixierst du danach bei Bedarf die Verknüpfung auf eine konkrete Tabellenzeile.
-            </div>
-            <div className="status-row">
-              <span className="pill">
-                {orderedElements.filter((item) => parseResponsibilityConfig(item.configuration_json).assignments.length > 0).length} mit Verantwortlichen
-              </span>
-              <span className="pill">{eligibleResponsibleLists.length} passende Listen</span>
-              {responsibilityAutoListId ? (
-                <span className="pill">
-                  Auto-Liste: {eligibleResponsibleLists.find((item) => String(item.definition.id) === responsibilityAutoListId)?.definition.name ?? "Unbekannte Liste"}
-                </span>
-              ) : null}
-            </div>
           </div>
-        </Modal>
+          <div className="info-note">
+            Beim Listenabgleich wird der Freitext der Liste mit dem Elementtitel verglichen. Gefundene Teilnehmende werden einmalig übernommen. Mit dem Schloss fixierst du danach bei Bedarf die Verknüpfung auf eine konkrete Tabellenzeile.
+          </div>
+          <div className="status-row">
+            <span className="pill">
+              {orderedElements.filter((item) => parseResponsibilityConfig(item.configuration_json).assignments.length > 0).length} mit Verantwortlichen
+            </span>
+            <span className="pill">{eligibleResponsibleLists.length} passende Listen</span>
+            {responsibilityAutoListId ? (
+              <span className="pill">
+                {t("autoListLabel", { name: eligibleResponsibleLists.find((item) => String(item.definition.id) === responsibilityAutoListId)?.definition.name ?? t("unknownList") })}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </Modal>
 
-        <Modal
-          open={showCreateItem}
-          onClose={() => {
-            setElementPickerSearch("");
-            setShowCreateItem(false);
-          }}
-          title="Element zum Template hinzufügen"
-          description="Waehle ein oder mehrere fertige Elemente aus und fuege sie gesammelt zum Template hinzu."
-        >
-          <ModalSaveForm className="grid" onSubmit={addElementToTemplate}>
-            <div className="list-filter-row">
-              <div className="list-filter-search">
-                <SearchInput
-                  value={elementPickerSearch}
-                  onChange={setElementPickerSearch}
-                  placeholder="Elemente durchsuchen"
-                  aria-label="Elemente durchsuchen"
-                  autoFocus
-                />
-              </div>
-              <a href="/elements?create=1" target="_blank" rel="noreferrer" className="button-ghost button-secondary">
-                Neues Element erstellen
-              </a>
-            </div>
-            <DataTable
-              columns={["", "Element", "Typen", "Beschreibung", "Bloecke"]}
-              emptyMessage="Keine passenden Elemente gefunden."
-            >
-              {filteredElementDefinitions.map((definition) => {
-                const checked = newItemForm.element_definition_ids.includes(String(definition.id));
-                return (
-                  <tr
-                    key={definition.id}
-                    className="table-row-clickable"
-                    onClick={() =>
-                      setNewItemForm((current) => ({
-                        ...current,
-                        element_definition_ids: checked
-                          ? current.element_definition_ids.filter((id) => id !== String(definition.id))
-                          : [...current.element_definition_ids, String(definition.id)],
-                      }))
-                    }
-                  >
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => undefined}
-                        aria-label={`Element ${definition.title} auswaehlen`}
-                      />
-                    </td>
-                    <td>
-                      <strong>{definition.title}</strong>
-                    </td>
-                    <td>{definitionTypeSummary(definition)}</td>
-                    <td>{definition.description ?? "Keine Beschreibung"}</td>
-                    <td>{definition.blocks.length}</td>
-                  </tr>
-                );
-              })}
-            </DataTable>
-            <span className="field-help">Neue Elemente werden automatisch hinten angehaengt. Die Reihenfolge kannst du danach per Drag and Drop oder direkt ueber die Positionszahl anpassen.</span>
-            <div className="table-toolbar-actions">
-              <button data-modal-save type="submit" className="button-secondary" disabled={newItemForm.element_definition_ids.length === 0}>Ausgewaehlte Elemente hinzufuegen</button>
-            </div>
-          </ModalSaveForm>
-        </Modal>
+      <Modal
+        open={!!responsibilityModalElement}
+        onClose={() => setShowResponsibilityModalFor(null)}
+        title={responsibilityModalElement ? t("responsibleForNamed", { title: responsibilityModalElement.title }) : t("responsibleTitle")}
+        description={t("assignResponsibilityDescription")}
+        size="fullscreen"
+      >
+        {responsibilityModalElement ? (() => {
+          const responsibility = parseResponsibilityConfig(responsibilityModalElement.configuration_json);
+          const assignments = responsibility.assignments;
+          const availableManualEntries = manualLinkListMeta ? (listEntriesByListId[manualLinkListMeta.definition.id] ?? []) : [];
+          return (
+            <div className="grid section-stack">
+              <article className="card">
+                <div className="eyebrow">{t("titlePreviewLabel")}</div>
+                <h3>{currentResponsibilityTitle(responsibilityModalElement)}</h3>
+                <p className="muted">{t("titlePreviewHelp")}</p>
+                <div className="status-row">
+                  <span className="pill">{assignments.length} zugewiesen</span>
+                  <span className="pill">
+                    {t("displayModeLabel", { mode: responsibilityNameMode === "display_name" ? t("displayNameOption") : responsibilityNameMode === "first_name" ? t("firstNameOption") : t("lastNameOption") })}
+                  </span>
+                </div>
+              </article>
 
-        <Modal
-          open={!!responsibilityModalElement}
-          onClose={() => setShowResponsibilityModalFor(null)}
-          title={responsibilityModalElement ? `Verantwortliche für ${responsibilityModalElement.title}` : "Verantwortliche"}
-          description="Weise diesem Element Teilnehmende zu, verknüpfe sie optional mit einer Listenzeile und fixiere Verbindungen bei Bedarf mit dem Schloss."
-          size="fullscreen"
-        >
-          {responsibilityModalElement ? (() => {
-            const responsibility = parseResponsibilityConfig(responsibilityModalElement.configuration_json);
-            const assignments = responsibility.assignments;
-            const availableManualEntries = manualLinkListMeta ? (listEntriesByListId[manualLinkListMeta.definition.id] ?? []) : [];
-            return (
-              <div className="grid section-stack">
-                <article className="card">
-                  <div className="eyebrow">Titelvorschau</div>
-                  <h3>{currentResponsibilityTitle(responsibilityModalElement)}</h3>
-                  <p className="muted">Wenn Verantwortliche gesetzt sind, werden sie später im Protokoll direkt hinter dem Elementtitel angezeigt.</p>
-                  <div className="status-row">
-                    <span className="pill">{assignments.length} zugewiesen</span>
-                    <span className="pill">
-                      Anzeige: {responsibilityNameMode === "display_name" ? "Anzeigename" : responsibilityNameMode === "first_name" ? "Vorname" : "Nachname"}
-                    </span>
-                  </div>
-                </article>
-
-                <article className="card">
-                  <div className="eyebrow">Aktuelle Verantwortliche</div>
-                  {assignments.length ? (
-                    <div className="responsibility-list">
-                      {assignments.map((assignment) => {
-                        const participant = participantsById.get(assignment.participant_id);
-                        const sourceLabel = assignment.list_definition_id
-                          ? assignment.locked
-                            ? "Fix mit Tabellenzeile verknüpft"
-                            : "Aus Liste erkannt"
-                          : "Manuell zugewiesen";
-                        const lockTitle = responsibilityLinkTooltip(assignment);
-                        return (
-                          <div className="responsibility-card" key={`responsibility-${responsibilityModalElement.id}-${assignment.participant_id}`}>
-                            <div className="responsibility-card-head">
-                              <div>
-                                <strong>{participantName(participant, responsibilityNameMode)}</strong>
-                                <div className="muted">{sourceLabel}</div>
-                              </div>
-                              <div className="responsibility-card-actions">
-                                {assignment.list_definition_id && assignment.list_entry_id ? (
-                                  <button
-                                    type="button"
-                                    className={`responsibility-lock-button${assignment.locked ? " responsibility-lock-button-active" : ""}`}
-                                    title={lockTitle}
-                                    onClick={() => void toggleResponsibilityLock(responsibilityModalElement.id, assignment.participant_id)}
-                                  >
-                                    {assignment.locked ? "🔒" : "🔓"}
-                                  </button>
-                                ) : null}
+              <article className="card">
+                <div className="eyebrow">{t("currentResponsibleLabel")}</div>
+                {assignments.length ? (
+                  <div className="responsibility-list">
+                    {assignments.map((assignment) => {
+                      const participant = participantsById.get(assignment.participant_id);
+                      const sourceLabel = assignment.list_definition_id
+                        ? assignment.locked
+                          ? t("linkedFixedToRow")
+                          : t("detectedFromList")
+                        : t("assignedManually");
+                      const lockTitle = responsibilityLinkTooltip(assignment);
+                      return (
+                        <div className="responsibility-card" key={`responsibility-${responsibilityModalElement.id}-${assignment.participant_id}`}>
+                          <div className="responsibility-card-head">
+                            <div>
+                              <strong>{participantName(participant, responsibilityNameMode, t)}</strong>
+                              <div className="muted">{sourceLabel}</div>
+                            </div>
+                            <div className="responsibility-card-actions">
+                              {assignment.list_definition_id && assignment.list_entry_id ? (
                                 <button
                                   type="button"
-                                  className="button-ghost button-secondary"
-                                  onClick={() => void toggleResponsibleParticipant(responsibilityModalElement.id, assignment.participant_id, false)}
+                                  className={`responsibility-lock-button${assignment.locked ? " responsibility-lock-button-active" : ""}`}
+                                  title={lockTitle}
+                                  onClick={() => void toggleResponsibilityLock(responsibilityModalElement.id, assignment.participant_id)}
                                 >
-                                  Entfernen
+                                  {assignment.locked ? "🔒" : "🔓"}
                                 </button>
-                              </div>
+                              ) : null}
+                              <button
+                                type="button"
+                                className="button-ghost button-secondary"
+                                onClick={() => void toggleResponsibleParticipant(responsibilityModalElement.id, assignment.participant_id, false)}
+                              >
+                                Entfernen
+                              </button>
                             </div>
                           </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="responsibility-empty">Noch keine Verantwortlichen gesetzt.</div>
-                  )}
-                </article>
-
-                <article className="card">
-                  <div className="eyebrow">Mit Tabellenzeile verknüpfen</div>
-                  <div className="two-col">
-                    <label className="field-stack">
-                      <span className="field-label">Liste</span>
-                      <SearchableSelect
-                        options={eligibleResponsibleLists}
-                        getId={(item) => item.definition.id}
-                        getLabel={(item) => item.definition.name}
-                        value={manualLinkListId || null}
-                        onChange={(item) => setManualLinkListId(item ? item.definition.id : "")}
-                        placeholder="Liste wählen"
-                      />
-                    </label>
-                    <label className="field-stack">
-                      <span className="field-label">Zeile</span>
-                      <SearchableSelect
-                        options={manualLinkListMeta ? availableManualEntries : []}
-                        getId={(entry) => entry.id}
-                        getLabel={(entry) => rowOptionLabel(entry, manualLinkListMeta!, participantsById, responsibilityNameMode)}
-                        value={manualLinkEntryId || null}
-                        onChange={(entry) => setManualLinkEntryId(entry ? entry.id : "")}
-                        disabled={!manualLinkListMeta || loadingResponsibleListId === manualLinkListMeta.definition.id}
-                        placeholder={
-                          !manualLinkListMeta
-                            ? "Zuerst Liste wählen"
-                            : loadingResponsibleListId === manualLinkListMeta.definition.id
-                            ? "Zeilen werden geladen..."
-                            : "Zeile wählen"
-                        }
-                      />
-                    </label>
-                  </div>
-                  <div className="table-toolbar-actions">
-                    <button
-                      type="button"
-                      className="button-secondary"
-                      disabled={!manualLinkEntryId}
-                      onClick={() => void linkElementToResponsibleRow()}
-                    >
-                      Zeile verknüpfen
-                    </button>
-                  </div>
-                  <span className="field-help">Diese Aktion setzt die Teilnehmenden der gewählten Zeile für dieses Element und fixiert die Verbindung direkt über die Tabellenzeilen-ID.</span>
-                </article>
-
-                <article className="card">
-                  <div className="eyebrow">Teilnehmende manuell zuweisen</div>
-                  <label className="field-stack">
-                    <span className="field-label">Suchen</span>
-                    <SearchInput value={responsibilitySearch} onChange={setResponsibilitySearch} placeholder="Teilnehmer suchen" />
-                  </label>
-                  <div className="selection-list selection-grid">
-                    {filteredResponsibilityParticipants.map((participant) => {
-                      const checked = isParticipantResponsible(responsibilityModalElement, participant.id);
-                      const linkedAssignment = assignments.find((assignment) => assignment.participant_id === participant.id);
-                      return (
-                        <label
-                          key={`responsibility-participant-${participant.id}`}
-                          className={`selection-card selection-card-checkbox${checked ? " selection-card-active" : ""}`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={(event) => void toggleResponsibleParticipant(responsibilityModalElement.id, participant.id, event.target.checked)}
-                          />
-                          <div>
-                            <strong>{participantName(participant, responsibilityNameMode)}</strong>
-                            <div className="muted">{participant.display_name}</div>
-                            {linkedAssignment?.list_definition_id ? (
-                              <div className="muted">{responsibilityLinkTooltip(linkedAssignment)}</div>
-                            ) : null}
-                          </div>
-                        </label>
+                        </div>
                       );
                     })}
                   </div>
-                  {filteredResponsibilityParticipants.length === 0 ? (
-                    <div className="responsibility-empty">Keine Teilnehmenden für den aktuellen Suchbegriff gefunden.</div>
-                  ) : null}
-                </article>
-              </div>
-            );
-          })() : null}
-        </Modal>
+                ) : (
+                  <div className="responsibility-empty">{t("noResponsibleYet")}</div>
+                )}
+              </article>
 
-        <div
-          className={`template-element-list${draggedTemplateElementId ? " template-element-list-dragging" : ""}`}
-          onDragOver={(event) => event.preventDefault()}
-        >
-          {orderedElements.length === 0 && !draggedTemplateElementId ? (
-            <div className="template-element-empty">Noch keine Elemente im Template.</div>
-          ) : null}
-
-          {orderedElements.map((item, index) => {
-            const responsibility = parseResponsibilityConfig(item.configuration_json);
-            const responsibilityCount = responsibility.assignments.length;
-            const currentPosition = orderedElements.findIndex((entry) => entry.id === item.id) + 1;
-            const displayGroups = responsibilityDisplayGroups(item);
-            return (
-              <div className="template-element-list-item" key={item.id}>
-                <div
-                  className={`template-element-drop-slot${activeTemplateDropIndex === index ? " template-element-drop-slot-active" : ""}${expandedTemplateDropIndex === index ? " template-element-drop-slot-expanded" : ""}`}
-                  onDragOver={(event) => handleTemplateDropSlotDragOver(event, index)}
-                  onDrop={(event) => void handleTemplateDropAtIndex(event, index)}
-                />
-
-                <div
-                  className={`template-element-row${draggedTemplateElementId === item.id ? " template-element-row-dragging" : ""}`}
-                  onDragOver={(event) => handleTemplateRowDragOver(event, index)}
-                  onDrop={(event) => void handleTemplateRowDrop(event, index)}
-                >
-                  <button
-                    type="button"
-                    draggable
-                    className="template-element-drag-handle"
-                    onDragStart={(event) => handleTemplateDragStart(event, item.id)}
-                    onDragEnd={handleTemplateDragEnd}
-                    title="Ziehen zum Umordnen"
-                    aria-label={`Element ${item.title} ziehen`}
-                  >
-                    ⋮⋮
-                  </button>
-
-                  <div className="template-element-row-copy">
-                    <div className="template-element-row-copy-main">
-                      <div className="template-element-title-line">
-                        <strong>{item.title}</strong>
-                        {displayGroups.length ? (
-                          <span className="template-element-inline-responsibility">
-                            (
-                            {displayGroups.map((group, groupIndex) => (
-                              <span className="template-element-inline-responsibility-group" key={`template-element-row-group-${item.id}-${group.key}`}>
-                                {groupIndex > 0 ? <span className="template-element-inline-responsibility-separator">, </span> : null}
-                                <span className="template-element-inline-responsibility-text">{group.names}</span>
-                              </span>
-                            ))}
-                            )
-                          </span>
-                        ) : null}
-                        {displayGroups.some((group) => group.listDefinitionId && group.listEntryId) ? (
-                          <span className="template-element-inline-locks">
-                            {displayGroups
-                              .filter((group) => group.listDefinitionId && group.listEntryId)
-                              .map((group) => (
-                                <button
-                                  key={`template-element-row-lock-${item.id}-${group.key}`}
-                                  type="button"
-                                  className={`template-element-inline-lock${group.locked ? " template-element-inline-lock-locked" : " template-element-inline-lock-unlocked"}`}
-                                  title={group.tooltip}
-                                  onClick={() => void toggleResponsibilityRowLock(item.id, group.listDefinitionId!, group.listEntryId!)}
-                                >
-                                  <ResponsibilityLockIcon locked={group.locked} />
-                                </button>
-                              ))}
-                          </span>
-                        ) : null}
-                      </div>
-                      {item.description ? <span className="muted">{item.description}</span> : null}
-                      <div className="template-element-behavior-row">
-                        <BehaviorIconRow
-                          values={item.behavior}
-                          onToggle={(field) => void updateBlockBehavior(item.id, "element", field, !item.behavior[field])}
-                        />
-                        {item.blocks.length > 1 ? (
-                          <button
-                            type="button"
-                            className="button-ghost button-secondary behavior-expand-toggle"
-                            onClick={() => toggleBehaviorExpanded(item.id)}
-                            aria-expanded={expandedBehaviorIds.has(item.id)}
-                          >
-                            {expandedBehaviorIds.has(item.id) ? "Blöcke einklappen" : `${item.blocks.length} Blöcke einzeln einstellen`}
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="template-element-row-meta">
-                    <span className="pill">{item.blocks.length} {item.blocks.length === 1 ? "Block" : "Blöcke"}</span>
-                    {responsibilityCount ? <span className="pill">{responsibilityCount} Verantwortliche</span> : null}
-                  </div>
-
-                  <label className="table-order-field template-element-position-field">
-                    <span className="muted">Pos.</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={orderedElements.length}
-                      value={positionDrafts[item.id] ?? String(currentPosition)}
-                      onChange={(event) =>
-                        setPositionDrafts((current) => ({ ...current, [item.id]: event.target.value }))
-                      }
-                      onBlur={(event) => handlePositionSubmit(item.id, event.target.value)}
-                      onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          event.currentTarget.blur();
-                        }
-                        if (event.key === "Escape") {
-                          event.preventDefault();
-                          setPositionDrafts((current) => ({ ...current, [item.id]: String(currentPosition) }));
-                        }
-                      }}
-                      aria-label={`Position für ${item.title}`}
+              <article className="card">
+                <div className="eyebrow">{t("linkToTableRow")}</div>
+                <div className="two-col">
+                  <label className="field-stack">
+                    <span className="field-label">{t("listLabel")}</span>
+                    <SearchableSelect
+                      options={eligibleResponsibleLists}
+                      getId={(item) => item.definition.id}
+                      getLabel={(item) => item.definition.name}
+                      value={manualLinkListId || null}
+                      onChange={(item) => setManualLinkListId(item ? item.definition.id : "")}
+                      placeholder={t("chooseListPlaceholder")}
                     />
                   </label>
-
-                  <div className="template-element-row-actions">
-                    <button
-                      type="button"
-                      className="button-secondary button-ghost"
-                      onClick={() => setShowResponsibilityModalFor(item.id)}
-                    >
-                      Verantwortliche
-                    </button>
-                    <button type="button" className="button-secondary button-danger" onClick={() => void deleteTemplateItem(item.id)}>
-                      Entfernen
-                    </button>
-                  </div>
+                  <label className="field-stack">
+                    <span className="field-label">{t("rowLabel")}</span>
+                    <SearchableSelect
+                      options={manualLinkListMeta ? availableManualEntries : []}
+                      getId={(entry) => entry.id}
+                      getLabel={(entry) => rowOptionLabel(entry, manualLinkListMeta!, participantsById, responsibilityNameMode, t)}
+                      value={manualLinkEntryId || null}
+                      onChange={(entry) => setManualLinkEntryId(entry ? entry.id : "")}
+                      disabled={!manualLinkListMeta || loadingResponsibleListId === manualLinkListMeta.definition.id}
+                      placeholder={
+                        !manualLinkListMeta
+                          ? t("chooseListFirst")
+                          : loadingResponsibleListId === manualLinkListMeta.definition.id
+                          ? t("rowsLoading")
+                          : t("chooseRow")
+                      }
+                    />
+                  </label>
                 </div>
+                <div className="table-toolbar-actions">
+                  <button
+                    type="button"
+                    className="button-secondary"
+                    disabled={!manualLinkEntryId}
+                    onClick={() => void linkElementToResponsibleRow()}
+                  >
+                    Zeile verknüpfen
+                  </button>
+                </div>
+                <span className="field-help">{t("linkRowHint")}</span>
+              </article>
 
-                {expandedBehaviorIds.has(item.id) && item.blocks.length > 1 ? (
-                  <div className="template-element-behavior-expanded">
-                    {item.blocks.map((block) => (
-                      <div key={block.id} className="template-element-behavior-expanded-row">
-                        <span className="muted">{blockDisplayLabel(block)}</span>
-                        <BehaviorIconRow
-                          values={blockBehaviorValues(block)}
-                          onToggle={(field) =>
-                            void updateBlockBehavior(item.id, "block", field, !blockBehaviorValues(block)[field], block.id)
-                          }
+              <article className="card">
+                <div className="eyebrow">{t("assignManuallyTitle")}</div>
+                <label className="field-stack">
+                  <span className="field-label">{t("search")}</span>
+                  <SearchInput value={responsibilitySearch} onChange={setResponsibilitySearch} placeholder={t("searchParticipantsPlaceholder")} />
+                </label>
+                <div className="selection-list selection-grid">
+                  {filteredResponsibilityParticipants.map((participant) => {
+                    const checked = isParticipantResponsible(responsibilityModalElement, participant.id);
+                    const linkedAssignment = assignments.find((assignment) => assignment.participant_id === participant.id);
+                    return (
+                      <label
+                        key={`responsibility-participant-${participant.id}`}
+                        className={`selection-card selection-card-checkbox${checked ? " selection-card-active" : ""}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(event) => void toggleResponsibleParticipant(responsibilityModalElement.id, participant.id, event.target.checked)}
                         />
-                      </div>
-                    ))}
-                  </div>
+                        <div>
+                          <strong>{participantName(participant, responsibilityNameMode, t)}</strong>
+                          <div className="muted">{participant.display_name}</div>
+                          {linkedAssignment?.list_definition_id ? (
+                            <div className="muted">{responsibilityLinkTooltip(linkedAssignment)}</div>
+                          ) : null}
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+                {filteredResponsibilityParticipants.length === 0 ? (
+                  <div className="responsibility-empty">{t("noMatchingParticipants")}</div>
                 ) : null}
-              </div>
-            );
-          })}
+              </article>
+            </div>
+          );
+        })() : null}
+      </Modal>
 
-          {orderedElements.length > 0 ? (
-            <div
-              className={`template-element-drop-slot${activeTemplateDropIndex === orderedElements.length ? " template-element-drop-slot-active" : ""}${expandedTemplateDropIndex === orderedElements.length ? " template-element-drop-slot-expanded" : ""}`}
-              onDragOver={(event) => handleTemplateDropSlotDragOver(event, orderedElements.length)}
-              onDrop={(event) => void handleTemplateDropAtIndex(event, orderedElements.length)}
-            />
-          ) : null}
-        </div>
-      </article>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -8,35 +9,53 @@ import {
 import { StatisticsOverview } from "@/types/api";
 import { CHART_COLORS, CHART_PIE_PALETTE } from "@/lib/constants/chart-colors";
 import { browserApiFetch } from "@/lib/api/client";
+import { ChartCycleSelection } from "@/components/protocol/chart-cycle-selection";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { fineCountsByType, fineTotalsByCurrency } from "@/lib/utils/fine-stats";
+import { Select } from "@/components/ui/select";
 
 const STATS_BUMP_EVENT = "hocx:stats-refresh";
+// Hintergrund-Aktualisierung offener Diagramme: nur bei sichtbarem Tab und höchstens einmal pro
+// Minute (Concurrency-Audit CONC-016 - vorher alle 15 s, auch in Hintergrund-Tabs). Wird der Tab
+// wieder sichtbar und ist der letzte Stand älter, sofort nachladen.
+const STATS_POLL_MS = 60_000;
 let _statsVersion = 0;
+let _lastStatsBump = Date.now();
+// Versionen aus der Hintergrund-Aktualisierung dürfen das kurz gecachte Server-Ergebnis nutzen
+// (?cached=1); nach eigenen Änderungen (bumpStatsCharts aus dem Editor) wird frisch gerechnet.
+const _cachedVersions = new Set<number>();
 
-export function bumpStatsCharts() {
+// Wird auch direkt als Promise-Callback benutzt (`.then(bumpStatsCharts)`) - das Argument ist dann
+// ein beliebiger Wert, deshalb nur ein ausdrückliches { allowCached: true } auswerten.
+export function bumpStatsCharts(options?: unknown) {
   _statsVersion++;
+  if (typeof options === "object" && options !== null && (options as { allowCached?: unknown }).allowCached === true) {
+    _cachedVersions.add(_statsVersion);
+  }
+  _lastStatsBump = Date.now();
   window.dispatchEvent(new Event(STATS_BUMP_EVENT));
 }
 
-// Every ChartBlock instance shows the same /api/statistics/overview data (there's no
-// per-block query param), so a page with several chart blocks previously fired one
-// identical request per block, per 15s tick. This module-level cache + a single shared
-// poll timer (ref-counted across mounted instances) makes concurrent instances share one
-// in-flight request/interval instead of each running its own.
-let _statsCache: StatisticsOverview | null = null;
-let _statsCacheVersion = -1;
-// True once a refresh attempt has failed and fallen back to _statsCache - so the chart can
-// still render (better than blanking out on a transient error), but the user is told the
-// numbers on screen may no longer be current instead of that being silent.
-let _statsCacheStale = false;
-let _statsInFlight: { version: number; promise: Promise<{ data: StatisticsOverview | null; stale: boolean }> } | null = null;
+// Diagramme mit derselben Zyklus-Auswahl teilen Cache, Anfrage und Polling.
+type StatsResult = { data: StatisticsOverview | null; stale: boolean };
+const statsCaches = new Map<string, { version: number; result: StatsResult }>();
+const statsRequests = new Map<string, { version: number; promise: Promise<StatsResult> }>();
 let _statsPollInterval: ReturnType<typeof setInterval> | null = null;
 let _statsPollRefCount = 0;
+
+function statsPollTick() {
+  if (document.visibilityState === "visible") bumpStatsCharts({ allowCached: true });
+}
+
+function statsVisibilityChanged() {
+  if (document.visibilityState === "visible" && Date.now() - _lastStatsBump >= STATS_POLL_MS) bumpStatsCharts({ allowCached: true });
+}
 
 function acquireStatsPolling() {
   _statsPollRefCount++;
   if (!_statsPollInterval) {
-    _statsPollInterval = setInterval(() => bumpStatsCharts(), 15_000);
+    _statsPollInterval = setInterval(statsPollTick, STATS_POLL_MS);
+    document.addEventListener("visibilitychange", statsVisibilityChanged);
   }
 }
 
@@ -45,52 +64,54 @@ function releaseStatsPolling() {
   if (_statsPollRefCount === 0 && _statsPollInterval) {
     clearInterval(_statsPollInterval);
     _statsPollInterval = null;
+    document.removeEventListener("visibilitychange", statsVisibilityChanged);
   }
 }
 
-function fetchStatsOverview(version: number): Promise<{ data: StatisticsOverview | null; stale: boolean }> {
-  if (_statsCacheVersion === version) return Promise.resolve({ data: _statsCache, stale: _statsCacheStale });
-  if (_statsInFlight?.version === version) return _statsInFlight.promise;
-  const promise = browserApiFetch<StatisticsOverview>(`/api/statistics/overview?_t=${version}`)
-    .then((d) => {
-      _statsCache = d ?? null;
-      _statsCacheVersion = version;
-      _statsCacheStale = false;
-      return { data: _statsCache, stale: false };
+function fetchStatsOverview(version: number, scope: string): Promise<StatsResult> {
+  const cached = statsCaches.get(scope);
+  if (cached?.version === version) return Promise.resolve(cached.result);
+  const request = statsRequests.get(scope);
+  if (request?.version === version) return request.promise;
+  const cachedParam = _cachedVersions.has(version) ? "&cached=1" : "";
+  const promise = browserApiFetch<StatisticsOverview>(`/api/statistics/overview?_t=${version}${cachedParam}${scope}`)
+    .then((data) => {
+      const result = { data: data ?? null, stale: false };
+      statsCaches.set(scope, { version, result });
+      return result;
     })
-    .catch(() => {
-      _statsCacheStale = _statsCache !== null;
-      return { data: _statsCache, stale: _statsCacheStale };
-    })
-    .finally(() => {
-      if (_statsInFlight?.version === version) _statsInFlight = null;
-    });
-  _statsInFlight = { version, promise };
+    .catch(() => ({ data: cached?.result.data ?? null, stale: !!cached?.result.data }))
+    .finally(() => { if (statsRequests.get(scope)?.version === version) statsRequests.delete(scope); });
+  statsRequests.set(scope, { version, promise });
   return promise;
 }
 
-const CHART_OPTIONS = [
-  { value: "attendance_over_time", label: "Anwesenheit über Zeit" },
-  { value: "attendance_by_participant", label: "Anwesenheit pro Mitglied" },
-  { value: "finance_by_month", label: "Finanzen pro Monat" },
-  { value: "fines_by_participant", label: "Bussen pro Mitglied" },
-  { value: "fines_by_type", label: "Bussen nach Typ" },
-  { value: "groups_sessions", label: "Termine pro Gruppe" },
-  { value: "groups_avg", label: "Ø Teilnehmer pro Gruppe" },
-  { value: "todos", label: "Todos Übersicht" },
-];
+function chartOptions(t: (key: string) => string) {
+  return [
+    { value: "attendance_over_time", label: t("options.attendanceOverTime") },
+    { value: "attendance_by_participant", label: t("options.attendanceByParticipant") },
+    { value: "finance_by_month", label: t("options.financeByMonth") },
+    { value: "fines_by_participant", label: t("options.finesByParticipant") },
+    { value: "fines_by_type", label: t("options.finesByType") },
+    { value: "groups_sessions", label: t("options.groupsSessions") },
+    { value: "groups_avg", label: t("options.groupsAvg") },
+    { value: "todos", label: t("options.todos") },
+  ];
+}
 
 const C = CHART_COLORS;
 const PIE = CHART_PIE_PALETTE;
 
-function fmtMonth(m: string) {
+function fmtMonth(m: string, locale: string) {
   const [y, mo] = m.split("-");
-  return new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString("de-CH", { month: "short", year: "2-digit" });
+  return new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString(`${locale}-CH`, { month: "short", year: "2-digit" });
 }
 
 type Config = {
   chart_type?: string;
   cycle_key?: string;
+  cycle_config_id?: string | null;
+  cycle_offset?: number;
 };
 
 type Props = {
@@ -100,9 +121,12 @@ type Props = {
 };
 
 export function ChartBlock({ config, editable, onSave }: Props) {
-  const [data, setData] = useState<StatisticsOverview | null>(_statsCacheVersion >= 0 ? _statsCache : null);
-  const [stale, setStale] = useState(_statsCacheStale);
-  const [loading, setLoading] = useState(_statsCacheVersion < 0);
+  const t = useTranslations("protocols.chart");
+  const locale = useLocale();
+  const scope = config.cycle_config_id ? `&cycle_config_id=${encodeURIComponent(config.cycle_config_id)}&cycle_offset=${config.cycle_offset ?? 0}` : "";
+  const [data, setData] = useState<StatisticsOverview | null>(null);
+  const [stale, setStale] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(() => _statsVersion);
   const chartType = config.chart_type ?? "";
   const cycleKey = config.cycle_key ?? "all";
@@ -119,8 +143,8 @@ export function ChartBlock({ config, editable, onSave }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    if (_statsCacheVersion !== tick) setLoading(true);
-    fetchStatsOverview(tick).then(({ data: d, stale: s }) => {
+    setLoading(true);
+    fetchStatsOverview(tick, scope).then(({ data: d, stale: s }) => {
       if (cancelled) return;
       setData(d);
       setStale(s);
@@ -129,18 +153,18 @@ export function ChartBlock({ config, editable, onSave }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [tick]);
+  }, [tick, scope]);
 
   function save(partial: Partial<Config>) {
     onSave({ ...config, ...partial });
   }
 
-  if (loading) return <div className="muted" style={{ padding: "var(--space-3) 0" }}>Lade Daten…</div>;
-  if (!data) return <div className="muted" style={{ padding: "var(--space-3) 0" }}>Statistikdaten nicht verfügbar.</div>;
+  if (loading) return <div className="muted" style={{ padding: "var(--space-3) 0" }}>{t("loading")}</div>;
+  if (!data) return <div className="muted" style={{ padding: "var(--space-3) 0" }}>{t("noData")}</div>;
 
   const hasCycles = data.cycles.length > 0;
   const cycleOptions = [
-    { key: "all", label: "Alle Zyklen" },
+    { key: "all", label: t("allCycles") },
     ...data.cycles.map((c) => ({ key: `${c.cycle_config_id}:${c.cycle_year}`, label: c.label })),
   ];
 
@@ -148,18 +172,18 @@ export function ChartBlock({ config, editable, onSave }: Props) {
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
       {editable && (
         <div style={{ display: "flex", gap: "var(--space-3)", flexWrap: "wrap", alignItems: "center" }}>
-          <select
+          <Select
             className="stats-cycle-select"
             value={chartType}
             onChange={(e) => save({ chart_type: e.target.value })}
             style={{ minWidth: 220 }}
           >
-            <option value="">– Diagramm auswählen –</option>
-            {CHART_OPTIONS.map((o) => (
+            <option value="">{t("selectPlaceholder")}</option>
+            {chartOptions(t).map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
-          </select>
-          {hasCycles && (chartType === "groups_sessions" || chartType === "groups_avg") && (
+          </Select>
+          {!config.cycle_config_id && hasCycles && (chartType === "groups_sessions" || chartType === "groups_avg") && (
             <SearchableSelect
               className="stats-cycle-select"
               options={cycleOptions}
@@ -171,25 +195,26 @@ export function ChartBlock({ config, editable, onSave }: Props) {
           )}
         </div>
       )}
+      {editable && <ChartCycleSelection config={config} onChange={(partial) => save({ ...partial, cycle_key: "all" })} />}
       {!editable && !chartType && (
-        <p className="muted">Kein Diagramm ausgewählt.</p>
+        <p className="muted">{t("noChartSelected")}</p>
       )}
       {stale && (
         <p className="muted" style={{ fontSize: "var(--text-xs)" }}>
-          ⚠ Aktualisierung fehlgeschlagen – zeige zwischengespeicherte Daten.
+          ⚠ {t("staleWarning")}
         </p>
       )}
-      {chartType && <ChartPreview chartType={chartType} cycleKey={cycleKey} data={data} />}
+      {chartType && <ChartPreview chartType={chartType} cycleKey={cycleKey} data={data} t={t} locale={locale} />}
     </div>
   );
 }
 
-function ChartPreview({ chartType, cycleKey, data }: { chartType: string; cycleKey: string; data: StatisticsOverview }) {
+function ChartPreview({ chartType, cycleKey, data, t, locale }: { chartType: string; cycleKey: string; data: StatisticsOverview; t: ReturnType<typeof useTranslations>; locale: string }) {
   const h = 220;
 
   if (chartType === "attendance_over_time") {
-    const d = data.attendance_over_time.map((r) => ({ ...r, month: fmtMonth(r.month) }));
-    if (!d.length) return <NoData />;
+    const d = data.attendance_over_time.map((r) => ({ ...r, month: fmtMonth(r.month, locale) }));
+    if (!d.length) return <NoData t={t} />;
     return (
       <ResponsiveContainer width="100%" height={h}>
         <BarChart data={d} barSize={14}>
@@ -198,17 +223,17 @@ function ChartPreview({ chartType, cycleKey, data }: { chartType: string; cycleK
           <YAxis allowDecimals={false} tick={{ fontSize: 10 }} stroke="var(--muted)" width={24} />
           <Tooltip />
           <Legend iconSize={10} wrapperStyle={{ fontSize: "var(--text-xs)" }} />
-          <Bar dataKey="present" name="Anwesend" stackId="a" fill={C.present} />
-          <Bar dataKey="excused" name="Entschuldigt" stackId="a" fill={C.excused} />
-          <Bar dataKey="absent" name="Abwesend" stackId="a" fill={C.absent} radius={[4, 4, 0, 0]} />
+          <Bar dataKey="present" name={t("series.present")} stackId="a" fill={C.present} />
+          <Bar dataKey="excused" name={t("series.excused")} stackId="a" fill={C.excused} />
+          <Bar dataKey="absent" name={t("series.absent")} stackId="a" fill={C.absent} radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     );
   }
 
   if (chartType === "attendance_by_participant") {
-    const d = data.attendance_by_participant.slice(0, 15).map((r) => ({ name: r.name, Anwesend: r.present, Entschuldigt: r.excused, Abwesend: r.absent }));
-    if (!d.length) return <NoData />;
+    const d = data.attendance_by_participant.slice(0, 15).map((r) => ({ name: r.name, present: r.present, excused: r.excused, absent: r.absent }));
+    if (!d.length) return <NoData t={t} />;
     return (
       <ResponsiveContainer width="100%" height={Math.max(h, d.length * 28)}>
         <BarChart layout="vertical" data={d} barSize={10}>
@@ -217,9 +242,9 @@ function ChartPreview({ chartType, cycleKey, data }: { chartType: string; cycleK
           <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 10 }} stroke="var(--muted)" />
           <Tooltip />
           <Legend iconSize={10} wrapperStyle={{ fontSize: "var(--text-xs)" }} />
-          <Bar dataKey="Anwesend" stackId="a" fill={C.present} />
-          <Bar dataKey="Entschuldigt" stackId="a" fill={C.excused} />
-          <Bar dataKey="Abwesend" stackId="a" fill={C.absent} radius={[0, 4, 4, 0]} />
+          <Bar dataKey="present" name={t("series.present")} stackId="a" fill={C.present} />
+          <Bar dataKey="excused" name={t("series.excused")} stackId="a" fill={C.excused} />
+          <Bar dataKey="absent" name={t("series.absent")} stackId="a" fill={C.absent} radius={[0, 4, 4, 0]} />
         </BarChart>
       </ResponsiveContainer>
     );
@@ -232,8 +257,8 @@ function ChartPreview({ chartType, cycleKey, data }: { chartType: string; cycleK
       acc[r.month].expenses += r.expenses;
       return acc;
     }, {});
-    const arr = Object.values(d).sort((a, b) => a.month.localeCompare(b.month)).map((r) => ({ ...r, month: fmtMonth(r.month) }));
-    if (!arr.length) return <NoData />;
+    const arr = Object.values(d).sort((a, b) => a.month.localeCompare(b.month)).map((r) => ({ ...r, month: fmtMonth(r.month, locale) }));
+    if (!arr.length) return <NoData t={t} />;
     return (
       <ResponsiveContainer width="100%" height={h}>
         <BarChart data={arr} barSize={14}>
@@ -242,16 +267,22 @@ function ChartPreview({ chartType, cycleKey, data }: { chartType: string; cycleK
           <YAxis tick={{ fontSize: 10 }} stroke="var(--muted)" width={40} />
           <Tooltip />
           <Legend iconSize={10} wrapperStyle={{ fontSize: "var(--text-xs)" }} />
-          <Bar dataKey="income" name="Einnahmen" fill={C.income} radius={[4, 4, 0, 0]} />
-          <Bar dataKey="expenses" name="Ausgaben" fill={C.expenses} radius={[4, 4, 0, 0]} />
+          <Bar dataKey="income" name={t("series.income")} fill={C.income} radius={[4, 4, 0, 0]} />
+          <Bar dataKey="expenses" name={t("series.expenses")} fill={C.expenses} radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     );
   }
 
   if (chartType === "fines_by_participant") {
-    const d = data.fines_by_participant.slice(0, 10).map((f) => ({ name: f.name, Betrag: f.amount }));
-    if (!d.length) return <NoData />;
+    // Beträge nur in der Hauptwährung (wie der PDF-Export, MAIN-BE-019).
+    const mainCurrency = fineTotalsByCurrency(data.fines_by_participant)[0]?.currency ?? "";
+    const d = data.fines_by_participant
+      .filter((f) => (f.currency ?? "") === mainCurrency)
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 10)
+      .map((f) => ({ name: f.name, amount: f.amount }));
+    if (!d.length) return <NoData t={t} />;
     return (
       <ResponsiveContainer width="100%" height={Math.max(h, d.length * 28)}>
         <BarChart layout="vertical" data={d} barSize={12}>
@@ -259,15 +290,15 @@ function ChartPreview({ chartType, cycleKey, data }: { chartType: string; cycleK
           <XAxis type="number" tick={{ fontSize: 10 }} stroke="var(--muted)" />
           <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 10 }} stroke="var(--muted)" />
           <Tooltip />
-          <Bar dataKey="Betrag" fill={C.fines} radius={[0, 4, 4, 0]} />
+          <Bar dataKey="amount" name={t("series.amount")} fill={C.fines} radius={[0, 4, 4, 0]} />
         </BarChart>
       </ResponsiveContainer>
     );
   }
 
   if (chartType === "fines_by_type") {
-    const d = data.fines_by_type.map((f, i) => ({ name: f.label, value: f.count, color: PIE[i % PIE.length] }));
-    if (!d.length) return <NoData />;
+    const d = fineCountsByType(data.fines_by_type).map((f, i) => ({ name: f.label, value: f.count, color: PIE[i % PIE.length] }));
+    if (!d.length) return <NoData t={t} />;
     return (
       <ResponsiveContainer width="100%" height={h}>
         <PieChart>
@@ -283,8 +314,8 @@ function ChartPreview({ chartType, cycleKey, data }: { chartType: string; cycleK
 
   if (chartType === "todos") {
     const d = [
-      { name: "Erledigt", value: data.todos.done, color: C.done },
-      { name: "Offen", value: data.todos.open, color: C.open },
+      { name: t("series.done"), value: data.todos.done, color: C.done },
+      { name: t("series.open"), value: data.todos.open, color: C.open },
     ];
     return (
       <ResponsiveContainer width="100%" height={h}>
@@ -314,10 +345,10 @@ function ChartPreview({ chartType, cycleKey, data }: { chartType: string; cycleK
       merged[g.group_name].sp += g.session_count_with_participants;
     }
     const d = Object.values(merged).sort((a, b) => b.sessions - a.sessions);
-    if (!d.length) return <NoData />;
+    if (!d.length) return <NoData t={t} />;
 
     if (chartType === "groups_sessions") {
-      const arr = d.map((g) => ({ name: g.name, "Alle Termine": g.sessions, "Mit Teilnehmern": g.sessions_with_p }));
+      const arr = d.map((g) => ({ name: g.name, allSessions: g.sessions, withParticipants: g.sessions_with_p }));
       return (
         <ResponsiveContainer width="100%" height={Math.max(h, d.length * 42)}>
           <BarChart layout="vertical" data={arr} barSize={10} barGap={2}>
@@ -326,14 +357,14 @@ function ChartPreview({ chartType, cycleKey, data }: { chartType: string; cycleK
             <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 10 }} stroke="var(--muted)" />
             <Tooltip />
             <Legend iconSize={10} wrapperStyle={{ fontSize: "var(--text-xs)" }} />
-            <Bar dataKey="Alle Termine" fill={C.sessions} opacity={0.5} radius={[0, 4, 4, 0]} />
-            <Bar dataKey="Mit Teilnehmern" fill={C.sessions} radius={[0, 4, 4, 0]} />
+            <Bar dataKey="allSessions" name={t("series.allSessions")} fill={C.sessions} opacity={0.5} radius={[0, 4, 4, 0]} />
+            <Bar dataKey="withParticipants" name={t("series.withParticipants")} fill={C.sessions} radius={[0, 4, 4, 0]} />
           </BarChart>
         </ResponsiveContainer>
       );
     }
 
-    const arr = d.map((g) => ({ name: g.name, "Ø Teilnehmer": g.sp > 0 ? Math.round(g.weighted / g.sp * 10) / 10 : 0 }));
+    const arr = d.map((g) => ({ name: g.name, avgParticipants: g.sp > 0 ? Math.round(g.weighted / g.sp * 10) / 10 : 0 }));
     return (
       <ResponsiveContainer width="100%" height={Math.max(h, d.length * 32)}>
         <BarChart layout="vertical" data={arr} barSize={14}>
@@ -341,15 +372,15 @@ function ChartPreview({ chartType, cycleKey, data }: { chartType: string; cycleK
           <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} stroke="var(--muted)" />
           <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 10 }} stroke="var(--muted)" />
           <Tooltip />
-          <Bar dataKey="Ø Teilnehmer" fill={C.participants} radius={[0, 4, 4, 0]} />
+          <Bar dataKey="avgParticipants" name={t("series.avgParticipants")} fill={C.participants} radius={[0, 4, 4, 0]} />
         </BarChart>
       </ResponsiveContainer>
     );
   }
 
-  return <NoData />;
+  return <NoData t={t} />;
 }
 
-function NoData() {
-  return <p className="muted" style={{ padding: "var(--space-2) 0" }}>Keine Daten verfügbar.</p>;
+function NoData({ t }: { t: ReturnType<typeof useTranslations> }) {
+  return <p className="muted" style={{ padding: "var(--space-2) 0" }}>{t("noDataGeneric")}</p>;
 }

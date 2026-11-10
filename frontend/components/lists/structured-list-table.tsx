@@ -1,9 +1,18 @@
 "use client";
 
-import { Fragment, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { useParticipantSelectable } from "@/contexts/participant-date-context";
+import { useParticipantNameSource } from "@/contexts/participant-directory-context";
 
+import { Fragment, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
+
+import { ListValueTypeIcon } from "@/components/lists/list-value-type-icon";
+import { Badge } from "@/components/ui/badge";
+import { FilterTabs } from "@/components/ui/filter-tabs";
+import { localDateToday } from "@/lib/utils/participant-membership";
 import { Modal } from "@/components/ui/modal";
-import { SearchableSelect } from "@/components/ui/searchable-select";
+import { ActionIcon } from "@/components/ui/action-icons";
+import { SearchableMultiSelect, SearchableSelect } from "@/components/ui/searchable-select";
 import { TrackedChangeHideButton } from "@/components/ui/tracked-change-hide-button";
 import { formatDate, formatDateRange } from "@/lib/utils/format";
 import {
@@ -29,12 +38,23 @@ type StructuredListTableProps = {
   availableParticipants: ParticipantSummary[];
   availableEvents: EventSummary[];
   editable?: boolean;
+  highlightDepartedParticipants?: boolean;
   /** Independent of `editable` - hides the "add row" control even while existing rows
    * are editable/deletable. Used by the historical-snapshot view: an unlocked
    * historical row can be edited or removed, but new rows were never part of that
    * cycle's data and aren't something the guarded historical-edit API supports adding. */
   allowCreate?: boolean;
   fullWidth?: boolean;
+  /** Kompakte Stammdatenansicht mit Teilnehmerchips und Zeilenaktion im Fuss. */
+  masterList?: boolean;
+  /** Nur die Anzeige filtern; neue Zeilen bleiben hinter dem vollständigen Bestand. */
+  visibleEntryIds?: string[];
+  /** Protokoll-Darstellung eines mit einer Stammliste verknüpften Tabellenblocks: Zeilen
+   * kommen fix aus der Liste, zugeteilte Personen als Chips, Besetzungsgrad oben.
+   * `highlightEmpty` kommt aus der Block-Konfiguration im Template. Gilt nur ohne Gruppierung. */
+  protocolView?: { highlightEmpty?: boolean };
+  /** Nur Zeilen zeigen, deren Wert in `column` den Text enthält (Block-Option der Vorlage). */
+  rowFilter?: { column: StructuredListDisplayColumn; text: string } | null;
   heading?: ReactNode;
   headingActions?: ReactNode;
   emptyMessage?: string;
@@ -123,25 +143,31 @@ function hasValueContent(valueType: StructuredListValueType, rawValue: Structure
   return String(value.text_value ?? "").trim().length > 0;
 }
 
+type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
+
 function valueSummary(
   valueType: StructuredListValueType,
   rawValue: StructuredListValue,
   participants: ParticipantSummary[],
-  events: EventSummary[]
+  events: EventSummary[],
+  t: TFunc
 ) {
   const value = normalizeValueForType(valueType, rawValue);
   if (valueType === "participant") {
     const participant = participants.find((item) => item.id === value.participant_id);
-    return participant?.display_name ?? "—";
+    return typeof rawValue.participant_name === "string" ? rawValue.participant_name : participant?.display_name ?? "—";
   }
   if (valueType === "participants") {
     const selectedIds = Array.isArray(value.participant_ids) ? (value.participant_ids as string[]) : [];
     if (!selectedIds.length) {
       return "—";
     }
+    if (Array.isArray(rawValue.participant_names) && rawValue.participant_names.some(Boolean)) {
+      return rawValue.participant_names.filter(Boolean).join(", ");
+    }
     const selectedParticipants = participants.filter((item) => selectedIds.includes(item.id));
     if (!selectedParticipants.length) {
-      return `${selectedIds.length} ausgewaehlt`;
+      return t("selectedCount", { count: selectedIds.length });
     }
     return selectedParticipants.map((item) => item.display_name).join(", ");
   }
@@ -168,12 +194,15 @@ function valueSortText(
   const value = normalizeValueForType(valueType, rawValue);
   if (valueType === "participant") {
     const participant = participants.find((item) => item.id === value.participant_id);
-    return participant?.display_name ?? "";
+    return typeof rawValue.participant_name === "string" ? rawValue.participant_name : participant?.display_name ?? "";
   }
   if (valueType === "participants") {
     const selectedIds = Array.isArray(value.participant_ids) ? (value.participant_ids as string[]) : [];
     if (!selectedIds.length) {
       return "";
+    }
+    if (Array.isArray(rawValue.participant_names) && rawValue.participant_names.some(Boolean)) {
+      return rawValue.participant_names.filter(Boolean).join(", ");
     }
     return participants
       .filter((item) => selectedIds.includes(item.id))
@@ -193,11 +222,16 @@ export function StructuredListTable({
   availableParticipants,
   availableEvents,
   editable = true,
+  highlightDepartedParticipants = false,
   allowCreate = true,
   fullWidth = false,
+  masterList = false,
+  visibleEntryIds,
+  protocolView,
+  rowFilter = null,
   heading,
   headingActions,
-  emptyMessage = "Noch keine Eintraege.",
+  emptyMessage,
   groupByColumn = "",
   sortByColumn = "",
   sortDirection = "asc",
@@ -208,6 +242,15 @@ export function StructuredListTable({
   onUpdateEntry,
   onDeleteEntry,
 }: StructuredListTableProps) {
+  const isParticipantSelectable = useParticipantSelectable();
+  const participantNames = useParticipantNameSource(availableParticipants);
+  const isPickableParticipant = useCallback((participant: ParticipantSummary) =>
+    isParticipantSelectable(participant) && availableParticipants.some((entry) => entry.id === participant.id),
+  [availableParticipants, isParticipantSelectable]);
+  const t = useTranslations("lists.table");
+  const listT = useTranslations("lists");
+  const today = localDateToday();
+  const resolvedEmptyMessage = emptyMessage ?? t("emptyMessage");
   const sortedEvents = useMemo(
     () => [...availableEvents].sort((left, right) => compareIsoDate(left.event_date, right.event_date)),
     [availableEvents]
@@ -220,6 +263,7 @@ export function StructuredListTable({
   const [creatingNewRow, setCreatingNewRow] = useState(false);
   const [participantPicker, setParticipantPicker] = useState<ParticipantPickerState | null>(null);
   const [participantSearch, setParticipantSearch] = useState("");
+  const [protocolFilter, setProtocolFilter] = useState<"all" | "open" | "changed">("all");
   const rowTimers = useRef<Record<string, number>>({});
   const newRowTimer = useRef<number | null>(null);
 
@@ -330,11 +374,16 @@ export function StructuredListTable({
   }
 
   function rowValue(entry: StructuredListEntry, columnKey: StructuredListColumnKey) {
-    return normalizeValueForType(
-      columnKey === "column_one_value" ? definition.column_one_value_type : definition.column_two_value_type,
-      ((entryDrafts[entry.id] ?? {})[columnKey] as StructuredListValue | undefined) ??
-        (entry[columnKey] as StructuredListValue)
-    );
+    const rawValue = ((entryDrafts[entry.id] ?? {})[columnKey] as StructuredListValue | undefined)
+      ?? (entry[columnKey] as StructuredListValue);
+    // Eingefrorene Namen für Anzeige/Sortierung erhalten; Schreibwerte werden separat normalisiert.
+    return {
+      ...rawValue,
+      ...normalizeValueForType(
+        columnKey === "column_one_value" ? definition.column_one_value_type : definition.column_two_value_type,
+        rawValue,
+      ),
+    };
   }
 
   function displayColumnKey(column: StructuredListDisplayColumn): StructuredListColumnKey {
@@ -347,12 +396,12 @@ export function StructuredListTable({
 
   function entryDisplayText(entry: StructuredListEntry, column: StructuredListDisplayColumn) {
     const columnKey = displayColumnKey(column);
-    return valueSummary(displayColumnType(column), rowValue(entry, columnKey), availableParticipants, sortedEvents);
+    return valueSummary(displayColumnType(column), rowValue(entry, columnKey), participantNames, sortedEvents, t);
   }
 
   function entrySortText(entry: StructuredListEntry, column: StructuredListDisplayColumn) {
     const columnKey = displayColumnKey(column);
-    return valueSortText(displayColumnType(column), rowValue(entry, columnKey), availableParticipants, sortedEvents);
+    return valueSortText(displayColumnType(column), rowValue(entry, columnKey), participantNames, sortedEvents);
   }
 
   function openParticipantPicker(
@@ -388,6 +437,35 @@ export function StructuredListTable({
     });
   }
 
+  function departedParticipant(participantId: unknown) {
+    if (!highlightDepartedParticipants) return undefined;
+    return participantNames.find((participant) => participant.id === participantId
+      && participant.left_at && participant.left_at < today);
+  }
+
+  function departedTitle(participant: ParticipantSummary) {
+    return t("departedParticipant", { date: formatDate(participant.left_at) });
+  }
+
+  function renderValueSummary(valueType: StructuredListValueType, value: StructuredListValue) {
+    const ids = valueType === "participant" ? [value.participant_id]
+      : valueType === "participants" && Array.isArray(value.participant_ids) ? value.participant_ids : [];
+    if (!ids.some((id) => departedParticipant(id))) {
+      return valueSummary(valueType, value, participantNames, sortedEvents, t);
+    }
+    return ids.map((id, index) => {
+      const participant = participantNames.find((item) => item.id === id);
+      const name = participant?.display_name ?? "";
+      const departed = departedParticipant(id);
+      return <Fragment key={String(id)}>
+        {index > 0 ? ", " : null}
+        {departed
+          ? <Badge variant="warning"><span title={departedTitle(departed)}>{name}</span></Badge>
+          : name}
+      </Fragment>;
+    });
+  }
+
   function renderEditableCell(
     entryId: string | null,
     columnKey: StructuredListColumnKey,
@@ -396,14 +474,49 @@ export function StructuredListTable({
     options: { isNewRow: boolean; disabled?: boolean }
   ) {
     if (valueType === "participant") {
+      const departed = departedParticipant(value.participant_id);
+      if (masterList) {
+        // Gleiche Chip-Optik wie bei "Mehrere Teilnehmer": Person als Chip (Klick öffnet Auswahl, × entfernt), leer als "Zuweisen".
+        const id = (value.participant_id as string | null | undefined) ?? null;
+        const save = (nextId: string | null) => {
+          const nextValue = { participant_id: nextId };
+          if (options.isNewRow) patchNewRow({ [columnKey]: nextValue });
+          else if (entryId) queueRowSave(entryId, { [columnKey]: nextValue });
+        };
+        if (!id) {
+          return <div className="list-manager-people">
+            <SearchableSelect options={participantNames} isOptionSelectable={isPickableParticipant}
+              getId={(person) => person.id} getLabel={(person) => person.display_name} value={null}
+              onChange={(person) => save(person ? person.id : null)} disabled={options.disabled}
+              placeholder={listT("assign")} className="list-manager-assign"
+              triggerProps={{ "aria-label": t("participantPickerTitle") }} />
+          </div>;
+        }
+        const participant = participantNames.find((person) => person.id === id);
+        const name = String(value.participant_name || participant?.display_name || t("participantNullLabel"));
+        return <div className="list-manager-people">
+          <span className={`list-manager-person${departed ? " structured-list-departed" : ""}`} title={departed ? departedTitle(departed) : undefined}>
+            <span className="list-manager-avatar">{name.split(/\s+/).map((part) => part[0]).slice(0, 2).join("")}</span>
+            <SearchableSelect options={participantNames} isOptionSelectable={isPickableParticipant}
+              getId={(person) => person.id} getLabel={(person) => person.display_name} value={id}
+              onChange={(person) => save(person ? person.id : null)} disabled={options.disabled}
+              placeholder={name} className="list-manager-person-select"
+              triggerProps={{ "aria-label": t("participantPickerTitle") }} />
+            <button type="button" className="button-icon-soft" disabled={options.disabled} aria-label={listT("removePerson", { name })} onClick={() => save(null)}>×</button>
+          </span>
+        </div>;
+      }
       return (
         <SearchableSelect
-          options={availableParticipants}
+          options={participantNames}
+          className={departed ? "structured-list-departed" : undefined}
+          triggerProps={departed ? { title: departedTitle(departed) } : undefined}
+          isOptionSelectable={isPickableParticipant}
           getId={(participant) => participant.id}
           getLabel={(participant) => participant.display_name}
           value={(value.participant_id as string | null | undefined) ?? null}
           disabled={options.disabled}
-          nullLabel="Teilnehmer"
+          nullLabel={t("participantNullLabel")}
           onChange={(participant) => {
             const nextValue = { participant_id: participant ? participant.id : null };
             if (options.isNewRow) {
@@ -417,6 +530,31 @@ export function StructuredListTable({
     }
 
     if (valueType === "participants") {
+      if (masterList) {
+        const ids = Array.isArray(value.participant_ids) ? value.participant_ids.map(String) : [];
+        const save = (nextIds: string[]) => {
+          const nextValue = { participant_ids: nextIds };
+          if (options.isNewRow) patchNewRow({ [columnKey]: nextValue });
+          else if (entryId) queueRowSave(entryId, { [columnKey]: nextValue });
+        };
+        return <div className="list-manager-people">
+          {ids.map((id, index) => {
+            const participant = participantNames.find((person) => person.id === id);
+            const frozenNames = Array.isArray(value.participant_names) ? value.participant_names : [];
+            const name = String(frozenNames[index] || participant?.display_name || t("participantNullLabel"));
+            const departed = departedParticipant(id);
+            return <span key={id} className={`list-manager-person${departed ? " structured-list-departed" : ""}`} title={departed ? departedTitle(departed) : undefined}>
+              <span className="list-manager-avatar">{name.split(/\s+/).map((part) => part[0]).slice(0, 2).join("")}</span>{name}
+              <button type="button" className="button-icon-soft" disabled={options.disabled} aria-label={listT("removePerson", { name })} onClick={() => save(ids.filter((personId) => personId !== id))}>×</button>
+            </span>;
+          })}
+          <SearchableMultiSelect options={participantNames} isOptionSelectable={isPickableParticipant}
+            getId={(person) => person.id} getLabel={(person) => person.display_name} values={ids}
+            onChange={save} disabled={options.disabled} emptySelectionLabel={listT("assign")}
+            className={ids.length ? "list-manager-add-person" : "list-manager-assign"}
+            triggerProps={{ "aria-label": t("participantPickerTitle") }} />
+        </div>;
+      }
       return (
         <button
           type="button"
@@ -424,7 +562,7 @@ export function StructuredListTable({
           disabled={options.disabled}
           onClick={() => openParticipantPicker(columnKey, value, { entryId: entryId ?? undefined, isNewRow: options.isNewRow })}
         >
-          {valueSummary(valueType, value, availableParticipants, sortedEvents)}
+          {renderValueSummary(valueType, value)}
         </button>
       );
     }
@@ -437,7 +575,7 @@ export function StructuredListTable({
           getLabel={(eventRow) => `${formatDateRange(eventRow.event_date, eventRow.event_end_date)} · ${eventRow.title}`}
           value={(value.event_id as string | null | undefined) ?? null}
           disabled={options.disabled}
-          nullLabel="Termin"
+          nullLabel={t("eventNullLabel")}
           onChange={(eventRow) => {
             const nextValue = { event_id: eventRow ? eventRow.id : null };
             if (options.isNewRow) {
@@ -463,20 +601,20 @@ export function StructuredListTable({
             queueRowSave(entryId, { [columnKey]: nextValue });
           }
         }}
-        placeholder="Wert"
+        placeholder={t("valuePlaceholder")}
       />
     );
   }
 
   const filteredParticipants = useMemo(() => {
     const query = participantSearch.trim().toLowerCase();
-    return availableParticipants.filter((participant) => {
+    return availableParticipants.filter(isParticipantSelectable).filter((participant) => {
       if (!query) {
         return true;
       }
       return participant.display_name.toLowerCase().includes(query);
     });
-  }, [availableParticipants, participantSearch]);
+  }, [availableParticipants, participantSearch, isParticipantSelectable]);
 
   const textCollator = useMemo(
     () => new Intl.Collator("de", { sensitivity: "base", numeric: true }),
@@ -487,7 +625,11 @@ export function StructuredListTable({
     const manualCompare = (left: StructuredListEntry, right: StructuredListEntry) =>
       (left.sort_index - right.sort_index) || compareIsoDate(left.created_at, right.created_at);
 
-    return [...entries].sort((left, right) => {
+    const filterText = rowFilter?.text.trim().toLowerCase() ?? "";
+    return entries
+      .filter((entry) => !visibleEntryIds || visibleEntryIds.includes(entry.id))
+      .filter((entry) => !filterText || !rowFilter || entrySortText(entry, rowFilter.column).toLowerCase().includes(filterText))
+      .sort((left, right) => {
       if (sortByColumn) {
         const leftText = entrySortText(left, sortByColumn).trim();
         const rightText = entrySortText(right, sortByColumn).trim();
@@ -504,7 +646,7 @@ export function StructuredListTable({
       }
       return manualCompare(left, right);
     });
-  }, [entries, entryDrafts, sortByColumn, sortDirection, textCollator, availableParticipants, sortedEvents, definition.column_one_value_type, definition.column_two_value_type]);
+  }, [entries, visibleEntryIds, rowFilter, entryDrafts, sortByColumn, sortDirection, textCollator, participantNames, sortedEvents, definition.column_one_value_type, definition.column_two_value_type]);
 
   const groupedEntries = useMemo(() => {
     if (!groupByColumn) {
@@ -515,8 +657,12 @@ export function StructuredListTable({
 
     sortedEntries.forEach((entry) => {
       const rawLabel = entryDisplayText(entry, groupByColumn);
-      const label = rawLabel !== "—" ? rawLabel : "Ohne Wert";
-      const key = entrySortText(entry, groupByColumn).trim() || "__empty__";
+      const label = rawLabel !== "—" ? rawLabel : t("noValue");
+      // Ohne auflösbaren Namen nach dem Rohwert gruppieren, damit verschiedene (z. B. nicht
+      // geladene) Personen nicht alle in einer gemeinsamen leeren Gruppe landen.
+      const rawGroupValue = rowValue(entry, displayColumnKey(groupByColumn));
+      const key = entrySortText(entry, groupByColumn).trim()
+        || (hasValueContent(displayColumnType(groupByColumn), rawGroupValue) ? `__raw__${JSON.stringify(rawGroupValue)}` : "__empty__");
       const existingIndex = groupIndex.get(key);
       if (existingIndex == null) {
         groupIndex.set(key, groups.length);
@@ -527,7 +673,7 @@ export function StructuredListTable({
     });
 
     return groups;
-  }, [groupByColumn, sortedEntries, entryDrafts, availableParticipants, sortedEvents, definition.column_one_value_type, definition.column_two_value_type]);
+  }, [groupByColumn, sortedEntries, entryDrafts, participantNames, sortedEvents, definition.column_one_value_type, definition.column_two_value_type]);
 
   const groupedDisplayRows = useMemo(() => {
     if (!groupByColumn || editable) {
@@ -560,11 +706,263 @@ export function StructuredListTable({
     groupByColumn,
     groupedEntries,
     entryDrafts,
-    availableParticipants,
+    participantNames,
     sortedEvents,
     definition.column_one_value_type,
     definition.column_two_value_type,
   ]);
+
+  function personRefs(valueType: StructuredListValueType, value: StructuredListValue | undefined) {
+    if (!value) return [];
+    if (valueType === "participant") {
+      const id = typeof value.participant_id === "string" && value.participant_id ? value.participant_id : "";
+      if (!id) return [];
+      const frozenName = typeof value.participant_name === "string" ? value.participant_name : "";
+      const name = frozenName || participantNames.find((person) => person.id === id)?.display_name || t("participantNullLabel");
+      return [{ id, name }];
+    }
+    if (valueType !== "participants" || !Array.isArray(value.participant_ids)) return [];
+    const frozenNames = Array.isArray(value.participant_names) ? value.participant_names : [];
+    return value.participant_ids.map(String).filter(Boolean).map((id, index) => ({
+      id,
+      name: String(frozenNames[index] || participantNames.find((person) => person.id === id)?.display_name || t("participantNullLabel")),
+    }));
+  }
+
+  function personInitials(name: string) {
+    return name.split(/\s+/).filter(Boolean).map((part) => part[0]).slice(0, 2).join("").toUpperCase();
+  }
+
+  function renderProtocolView() {
+    const isPersonType = (valueType: StructuredListValueType) => valueType === "participant" || valueType === "participants";
+    // Die Personen-Spalte bestimmt "besetzt"; die andere Spalte ist die fixe Zeilenbeschriftung.
+    const assignmentColumn: StructuredListDisplayColumn =
+      isPersonType(definition.column_two_value_type) || !isPersonType(definition.column_one_value_type) ? "column_two" : "column_one";
+    const labelColumn: StructuredListDisplayColumn = assignmentColumn === "column_two" ? "column_one" : "column_two";
+    const assignmentKey = displayColumnKey(assignmentColumn);
+    const assignmentType = displayColumnType(assignmentColumn);
+    const labelKey = displayColumnKey(labelColumn);
+    const labelType = displayColumnType(labelColumn);
+    const highlightEmpty = !!protocolView?.highlightEmpty;
+
+    const rows = sortedEntries.map((entry) => {
+      const tracked = entryTrackedStatusById?.[entry.id];
+      const removed = tracked?.status === "removed";
+      return { entry, tracked, removed, filled: !removed && hasValueContent(assignmentType, rowValue(entry, assignmentKey)) };
+    });
+    const activeRows = rows.filter((row) => !row.removed);
+    const filledCount = activeRows.filter((row) => row.filled).length;
+    const openCount = activeRows.length - filledCount;
+    const changedCount = rows.filter((row) => !!row.tracked).length;
+    const activeFilter = protocolFilter === "changed" && !changedCount ? "all" : protocolFilter;
+    const visibleRows = rows.filter((row) =>
+      activeFilter === "open" ? !row.removed && !row.filled : activeFilter === "changed" ? !!row.tracked : true
+    );
+    const showActions = editable || (changedCount > 0 && !!onAcceptTrackedEntry);
+    const percent = activeRows.length ? Math.round((filledCount / activeRows.length) * 100) : 0;
+
+    const saveAssignment = (entryId: string, current: string[], ids: string[]) => {
+      // Einzelperson-Spalte: die neu angeklickte Person ersetzt die bisherige.
+      const nextValue = assignmentType === "participant"
+        ? { participant_id: ids.find((id) => !current.includes(id)) ?? (ids.includes(current[0]) ? current[0] : null) }
+        : { participant_ids: ids };
+      queueRowSave(entryId, { [assignmentKey]: nextValue });
+    };
+
+    function renderPeople(row: (typeof rows)[number]) {
+      const value = rowValue(row.entry, assignmentKey);
+      const current = personRefs(assignmentType, value);
+      const before = row.tracked?.status === "changed" && row.tracked.before
+        ? personRefs(assignmentType, row.tracked.before[assignmentKey])
+        : null;
+      const addedIds = new Set(
+        row.tracked?.status === "added" ? current.map((person) => person.id)
+          : before ? current.filter((person) => !before.some((old) => old.id === person.id)).map((person) => person.id)
+          : []
+      );
+      const removedPeople = row.removed ? current
+        : before ? before.filter((old) => !current.some((person) => person.id === old.id)) : [];
+      const chipsEditable = editable && !row.removed;
+      return (
+        <div className="linked-list-people">
+          {!row.removed && current.map((person) => {
+            const departed = departedParticipant(person.id);
+            const added = addedIds.has(person.id);
+            return (
+              <span
+                key={person.id}
+                className={`linked-list-person${added ? " linked-list-person-added" : ""}${departed ? " structured-list-departed" : ""}`}
+                title={departed ? departedTitle(departed) : added ? t("protocol.addedPerson") : undefined}
+              >
+                <span className="linked-list-avatar" aria-hidden="true">{personInitials(person.name)}</span>
+                <span className="linked-list-person-name">{person.name}</span>
+                {chipsEditable && (
+                  <button
+                    type="button"
+                    className="linked-list-person-remove"
+                    aria-label={listT("removePerson", { name: person.name })}
+                    onClick={() => saveAssignment(row.entry.id, current.map((other) => other.id), current.filter((other) => other.id !== person.id).map((other) => other.id))}
+                  >
+                    ×
+                  </button>
+                )}
+              </span>
+            );
+          })}
+          {removedPeople.map((person) => (
+            <span key={`removed-${person.id}`} className="linked-list-person linked-list-person-removed" title={t("protocol.removedPerson")}>
+              <span className="linked-list-avatar" aria-hidden="true">{personInitials(person.name)}</span>
+              <span className="linked-list-person-name">{person.name}</span>
+            </span>
+          ))}
+          {!row.removed && !current.length && (
+            <span className={highlightEmpty ? "linked-list-empty linked-list-empty-highlight" : "linked-list-empty"}>
+              {editable ? t("protocol.nobodyAssigned") : "—"}
+            </span>
+          )}
+        </div>
+      );
+    }
+
+    function renderOtherValue(row: (typeof rows)[number]) {
+      const value = rowValue(row.entry, assignmentKey);
+      const changed = row.tracked?.status === "changed" && !valuesEqual(value, row.tracked.before?.[assignmentKey]);
+      return (
+        <>
+          {changed && (
+            <div className="tracked-before-caption tracked-strike">
+              {valueSummary(assignmentType, row.tracked?.before?.[assignmentKey] ?? {}, participantNames, sortedEvents, t)}
+            </div>
+          )}
+          {editable && !row.removed
+            ? renderEditableCell(row.entry.id, assignmentKey, assignmentType, value, { isNewRow: false })
+            : <span className={row.removed ? "tracked-strike" : undefined}>{renderValueSummary(assignmentType, value)}</span>}
+        </>
+      );
+    }
+
+    return (
+      <div className="linked-list-block">
+        <div className="linked-list-summary">
+          {/* Besetzungsgrad nur, solange im Protokoll noch zugeteilt werden kann. */}
+          {editable && (
+            <>
+          <div
+            className="linked-list-progress"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={activeRows.length}
+            aria-valuenow={filledCount}
+            aria-label={t("protocol.occupied", { filled: filledCount, total: activeRows.length })}
+          >
+            <span className="linked-list-progress-bar" style={{ width: `${percent}%` }} />
+          </div>
+          <span className="linked-list-count">
+            {t.rich("protocol.occupiedRich", { filled: filledCount, total: activeRows.length, strong: (chunks) => <strong>{chunks}</strong> })}
+          </span>
+            </>
+          )}
+          <FilterTabs
+            value={activeFilter}
+            onChange={setProtocolFilter}
+            options={[
+              { value: "all", label: t("protocol.filterAll"), count: activeRows.length },
+              { value: "open", label: t("protocol.filterOpen"), count: openCount },
+              ...(changedCount ? [{ value: "changed" as const, label: t("protocol.filterChanged"), count: changedCount }] : []),
+            ]}
+          />
+        </div>
+        <div className="linked-list-table-wrap">
+          <table className="data-table linked-list-table">
+            <thead>
+              <tr>
+                <th>{labelColumn === "column_one" ? definition.column_one_title : definition.column_two_title}</th>
+                <th>{assignmentColumn === "column_one" ? definition.column_one_title : definition.column_two_title}</th>
+                {showActions ? <th className="linked-list-actions" aria-label={t("actionsLabel")} /> : null}
+              </tr>
+            </thead>
+            <tbody>
+              {visibleRows.length ? visibleRows.map((row) => {
+                const isOpen = !row.removed && !row.filled;
+                const dotClass = row.removed ? " linked-list-dot-removed"
+                  : row.tracked ? " linked-list-dot-changed"
+                  : isOpen && highlightEmpty ? " linked-list-dot-open"
+                  : "";
+                const labelValue = rowValue(row.entry, labelKey);
+                const labelChanged = row.tracked?.status === "changed" && !valuesEqual(labelValue, row.tracked.before?.[labelKey]);
+                return (
+                  <tr
+                    key={row.entry.id}
+                    className={`${isOpen && highlightEmpty ? "linked-list-row-open" : ""}${row.removed ? " linked-list-row-removed" : ""}`.trim() || undefined}
+                  >
+                    <td className="linked-list-label">
+                      <span className={`linked-list-dot${dotClass}`} aria-hidden="true" />
+                      <span className={row.removed ? "tracked-strike" : undefined}>
+                        {labelChanged && (
+                          <span className="tracked-before-caption tracked-strike linked-list-label-before">
+                            {valueSummary(labelType, row.tracked?.before?.[labelKey] ?? {}, participantNames, sortedEvents, t)}
+                          </span>
+                        )}
+                        {renderValueSummary(labelType, labelValue)}
+                      </span>
+                    </td>
+                    <td>{isPersonType(assignmentType) ? renderPeople(row) : renderOtherValue(row)}</td>
+                    {showActions ? (
+                      <td className="linked-list-actions">
+                        <div className="linked-list-actions-inner">
+                          {row.tracked && onAcceptTrackedEntry && (
+                            <TrackedChangeHideButton
+                              title={row.removed ? t("hideRemovedEntryTitle") : undefined}
+                              onAccept={() => onAcceptTrackedEntry(row.entry.id)}
+                            />
+                          )}
+                          {editable && !row.removed && isPersonType(assignmentType) && (() => {
+                            const currentIds = personRefs(assignmentType, rowValue(row.entry, assignmentKey)).map((person) => person.id);
+                            return (
+                            <SearchableMultiSelect
+                              options={participantNames}
+                              isOptionSelectable={isPickableParticipant}
+                              getId={(person) => person.id}
+                              getLabel={(person) => person.display_name}
+                              values={currentIds}
+                              onChange={(ids) => saveAssignment(row.entry.id, currentIds, ids)}
+                              triggerLabel={t("protocol.addPerson")}
+                              className="linked-list-add-person"
+                              triggerProps={{ "aria-label": t("protocol.addPersonTo", { row: valueSortText(labelType, labelValue, participantNames, sortedEvents) }) }}
+                            />
+                            );
+                          })()}
+                        </div>
+                      </td>
+                    ) : null}
+                  </tr>
+                );
+              }) : (
+                <tr>
+                  <td colSpan={showActions ? 3 : 2}>
+                    <span className="muted">{rows.length ? t("protocol.filterEmpty") : resolvedEmptyMessage}</span>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="linked-list-footer">
+          <span>{t("protocol.source", { name: definition.name })}</span>
+          {changedCount > 0 && (
+            <span className="linked-list-legend">
+              <span><span className="linked-list-dot linked-list-dot-changed" aria-hidden="true" />{t("protocol.legendNew")}</span>
+              <span><span className="linked-list-dot linked-list-dot-removed" aria-hidden="true" />{t("protocol.legendRemoved")}</span>
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (protocolView && !groupByColumn) {
+    return renderProtocolView();
+  }
 
   return (
     <>
@@ -573,7 +971,7 @@ export function StructuredListTable({
           {heading}
           <div className="table-toolbar-actions">
           {headingActions}
-          {editable && allowCreate && (
+          {editable && allowCreate && !masterList && (
             <button
               type="button"
               className="button-secondary"
@@ -583,13 +981,13 @@ export function StructuredListTable({
                 setNewRowDraft(createNewRowDraft(definition));
               }}
             >
-              Neuer Eintrag
+              {t("newEntryButton")}
             </button>
           )}
           </div>
         </div>
       )}
-      <div className={`${heading ? "table-shell" : "event-table-wrap"}${fullWidth ? " structured-list-table-flat" : ""}`} style={fullWidth ? { width: "100%" } : undefined}>
+      <div className={`${heading ? "table-shell" : "event-table-wrap"}${fullWidth ? " structured-list-table-flat" : ""}${masterList ? " list-manager-table-shell" : ""}`} style={fullWidth ? { width: "100%" } : undefined}>
         <table className={`data-table structured-list-table${heading ? " data-table-lg" : " event-table event-table-compact"}`} style={fullWidth ? { width: "100%" } : undefined}>
           <thead>
             <tr>
@@ -598,6 +996,7 @@ export function StructuredListTable({
                 style={onHeaderSort ? { cursor: "pointer", userSelect: "none" } : undefined}
               >
                 {definition.column_one_title}
+                {masterList && <span className="list-manager-column-type"><ListValueTypeIcon type={definition.column_one_value_type} />{listT(`valueTypes.${definition.column_one_value_type}`)}</span>}
                 {onHeaderSort && (
                   <span style={{ marginLeft: "var(--space-1)", opacity: sortByColumn === "column_one" ? 1 : 0.25, fontSize: "0.8em" }}>
                     {sortByColumn === "column_one" ? (sortDirection === "asc" ? "↑" : "↓") : "↕"}
@@ -609,6 +1008,7 @@ export function StructuredListTable({
                 style={onHeaderSort ? { cursor: "pointer", userSelect: "none" } : undefined}
               >
                 {definition.column_two_title}
+                {masterList && <span className="list-manager-column-type"><ListValueTypeIcon type={definition.column_two_value_type} />{listT(`valueTypes.${definition.column_two_value_type}`)}</span>}
                 {onHeaderSort && (
                   <span style={{ marginLeft: "var(--space-1)", opacity: sortByColumn === "column_two" ? 1 : 0.25, fontSize: "0.8em" }}>
                     {sortByColumn === "column_two" ? (sortDirection === "asc" ? "↑" : "↓") : "↕"}
@@ -616,14 +1016,14 @@ export function StructuredListTable({
                 )}
               </th>
               {editable ? (
-                <th className="event-column-actions" aria-label="Aktionen">
-                  {heading ? "Aktionen" : null}
-                  {allowCreate && !heading && (
+                <th className="event-column-actions" aria-label={t("actionsLabel")}>
+                  {heading && !masterList ? t("actionsLabel") : null}
+                  {allowCreate && !heading && !masterList && (
                   <button
                     type="button"
                     className="button-ghost button-icon"
-                    title="Listenzeile hinzufuegen"
-                    aria-label="Listenzeile hinzufuegen"
+                    title={t("addRowTitle")}
+                    aria-label={t("addRowTitle")}
                     disabled={showNewRow || creatingNewRow}
                     onClick={() => {
                       setShowNewRow(true);
@@ -658,8 +1058,8 @@ export function StructuredListTable({
                       <button
                         type="button"
                         className="button-ghost button-icon button-icon-danger"
-                        title="Neue Listenzeile verwerfen"
-                        aria-label="Neue Listenzeile verwerfen"
+                        title={t("discardNewRowTitle")}
+                        aria-label={t("discardNewRowTitle")}
                         disabled={creatingNewRow}
                         onClick={resetNewRow}
                       >
@@ -673,7 +1073,7 @@ export function StructuredListTable({
             {sortedEntries.length ? (
               groupByColumn && !editable ? (
                 groupedDisplayRows.map((row) => (
-                  <tr key={`structured-list-grouped-${row.key}`}>
+                  <tr key={`structured-list-grouped-${row.key}`} className="structured-list-grouped-row">
                     <td>{row.leftValue}</td>
                     <td>{row.rightValue}</td>
                   </tr>
@@ -700,12 +1100,12 @@ export function StructuredListTable({
                       if (trackedInfo?.status === "removed") {
                         return (
                           <tr key={entry.id} className="tracked-removed-row">
-                            <td><span className="tracked-strike">{valueSummary(definition.column_one_value_type, firstValue, availableParticipants, sortedEvents)}</span></td>
+                            <td><span className="tracked-strike">{renderValueSummary(definition.column_one_value_type, firstValue)}</span></td>
                             <td>
-                              <span className="tracked-strike">{valueSummary(definition.column_two_value_type, secondValue, availableParticipants, sortedEvents)}</span>
+                              <span className="tracked-strike">{renderValueSummary(definition.column_two_value_type, secondValue)}</span>
                               {onAcceptTrackedEntry && (
                                 <TrackedChangeHideButton
-                                  title="Entfernten Eintrag ausblenden"
+                                  title={t("hideRemovedEntryTitle")}
                                   onAccept={() => onAcceptTrackedEntry(entry.id)}
                                 />
                               )}
@@ -723,7 +1123,7 @@ export function StructuredListTable({
                           <td className={col1Changed || col1Added ? "tracked-cell" : undefined}>
                             {col1Changed && (
                               <div className="tracked-before-caption tracked-strike">
-                                {valueSummary(definition.column_one_value_type, trackedInfo?.before?.column_one_value ?? {}, availableParticipants, sortedEvents)}
+                                {valueSummary(definition.column_one_value_type, trackedInfo?.before?.column_one_value ?? {}, participantNames, sortedEvents, t)}
                               </div>
                             )}
                             {editable
@@ -731,8 +1131,8 @@ export function StructuredListTable({
                                   isNewRow: false,
                                 })
                               : (col1Changed || col1Added
-                                  ? <span className="tracked-underline">{valueSummary(definition.column_one_value_type, firstValue, availableParticipants, sortedEvents)}</span>
-                                  : valueSummary(definition.column_one_value_type, firstValue, availableParticipants, sortedEvents))}
+                                  ? <span className="tracked-underline">{renderValueSummary(definition.column_one_value_type, firstValue)}</span>
+                                  : renderValueSummary(definition.column_one_value_type, firstValue))}
                             {(col1Changed || col1Added) && onAcceptTrackedEntry && (
                               <TrackedChangeHideButton onAccept={() => onAcceptTrackedEntry(entry.id)} />
                             )}
@@ -740,7 +1140,7 @@ export function StructuredListTable({
                           <td className={col2Changed || col2Added ? "tracked-cell" : undefined}>
                             {col2Changed && (
                               <div className="tracked-before-caption tracked-strike">
-                                {valueSummary(definition.column_two_value_type, trackedInfo?.before?.column_two_value ?? {}, availableParticipants, sortedEvents)}
+                                {valueSummary(definition.column_two_value_type, trackedInfo?.before?.column_two_value ?? {}, participantNames, sortedEvents, t)}
                               </div>
                             )}
                             {editable
@@ -748,8 +1148,8 @@ export function StructuredListTable({
                                   isNewRow: false,
                                 })
                               : (col2Changed || col2Added
-                                  ? <span className="tracked-underline">{valueSummary(definition.column_two_value_type, secondValue, availableParticipants, sortedEvents)}</span>
-                                  : valueSummary(definition.column_two_value_type, secondValue, availableParticipants, sortedEvents))}
+                                  ? <span className="tracked-underline">{renderValueSummary(definition.column_two_value_type, secondValue)}</span>
+                                  : renderValueSummary(definition.column_two_value_type, secondValue))}
                             {(col2Changed || col2Added) && onAcceptTrackedEntry && (
                               <TrackedChangeHideButton onAccept={() => onAcceptTrackedEntry(entry.id)} />
                             )}
@@ -759,12 +1159,12 @@ export function StructuredListTable({
                               <div className="event-row-actions">
                                 <button
                                   type="button"
-                                  className={heading ? "button-secondary button-danger" : "button-ghost button-icon button-icon-danger"}
-                                  title="Listenzeile loeschen"
-                                  aria-label="Listenzeile loeschen"
+                                  className={masterList ? "button-icon-soft button-icon-soft-danger" : heading ? "button-secondary button-danger" : "button-ghost button-icon button-icon-danger"}
+                                  title={t("deleteRowTitle")}
+                                  aria-label={t("deleteRowTitle")}
                                   onClick={() => void onDeleteEntry(entry.id)}
                                 >
-                                  {heading ? "Löschen" : "x"}
+                                  {masterList ? <ActionIcon name="delete" /> : heading ? t("deleteButton") : "x"}
                                 </button>
                               </div>
                             </td>
@@ -778,11 +1178,12 @@ export function StructuredListTable({
             ) : !showNewRow ? (
               <tr>
                 <td colSpan={editable ? 3 : 2}>
-                  <span className="muted">{emptyMessage}</span>
+                  <span className="muted">{resolvedEmptyMessage}</span>
                 </td>
               </tr>
             ) : null}
           </tbody>
+          {masterList && editable && allowCreate && <tfoot><tr><td colSpan={3}><button type="button" className="button-ghost list-manager-add-row" disabled={showNewRow || creatingNewRow} onClick={() => { setShowNewRow(true); setNewRowDraft(createNewRowDraft(definition)); }}>{listT("addEntry")}</button></td></tr></tfoot>}
         </table>
       </div>
 
@@ -792,16 +1193,16 @@ export function StructuredListTable({
           setParticipantPicker(null);
           setParticipantSearch("");
         }}
-        title="Teilnehmer waehlen"
-        description="Mehrfachauswahl fuer dieses Listenfeld."
+        title={t("participantPickerTitle")}
+        description={t("participantPickerDescription")}
       >
         <div className="grid">
           <label className="field-stack">
-            <span className="field-label">Suche</span>
+            <span className="field-label">{t("search")}</span>
             <input
               value={participantSearch}
               onChange={(event) => setParticipantSearch(event.target.value)}
-              placeholder="Teilnehmer filtern"
+              placeholder={t("participantFilterPlaceholder")}
             />
           </label>
           <div className="participant-check-grid">

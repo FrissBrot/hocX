@@ -1,3 +1,5 @@
+import type { Feature, LineString } from "geojson";
+
 import { ElevationProfilePoint, TerrainDangerLevel, TerrainDangerSegment } from "@/types/api";
 
 // Gefahreneinschätzung (siehe wanderplaner-backend/app/core/route_danger.py): gemeinsame Farben
@@ -9,11 +11,17 @@ export const DANGER_COLOR_TOKEN: Record<TerrainDangerLevel, string> = {
   alpine: "--route-alpine",
 };
 
-export const DANGER_LEGEND: { danger: TerrainDangerLevel; label: string; description: string }[] = [
-  { danger: "normal", label: "Route", description: "Wanderweg/Bergwanderweg ohne erkannte Gefahrenstelle" },
-  { danger: "steep_exposed", label: "Steil/ausgesetzt", description: "Über 40 % Steigung oder über 70 % Gefälle direkt neben dem Weg" },
-  { danger: "alpine", label: "Alpinwanderweg", description: "Amtlich als Alpinwanderweg signalisiert" },
-];
+type TFunc = (key: string) => string;
+
+// Funktion statt Konstante: dieses Modul hat keine Komponente für useTranslations(), der
+// Aufrufer übergibt sein `t` (Namespace "wanderplaner"), siehe section-tabs.ts.
+export function dangerLegend(t: TFunc): { danger: TerrainDangerLevel; label: string; description: string }[] {
+  return [
+    { danger: "normal", label: t("danger.normal.label"), description: t("danger.normal.description") },
+    { danger: "steep_exposed", label: t("danger.steep_exposed.label"), description: t("danger.steep_exposed.description") },
+    { danger: "alpine", label: t("danger.alpine.label"), description: t("danger.alpine.description") },
+  ];
+}
 
 /** Profilpunkt an einer Distanz, linear zwischen den Nachbarpunkten interpoliert. */
 function pointAt(profile: ElevationProfilePoint[], distance_m: number): [number, number] {
@@ -36,7 +44,7 @@ function pointAt(profile: ElevationProfilePoint[], distance_m: number): [number,
 export function buildDangerLineFeatures(
   profile: ElevationProfilePoint[],
   segments: TerrainDangerSegment[],
-): GeoJSON.Feature<GeoJSON.LineString, { danger: TerrainDangerLevel }>[] {
+): Feature<LineString, { danger: TerrainDangerLevel }>[] {
   if (profile.length < 2) return [];
   return segments.flatMap((segment) => {
     if (segment.to_m <= segment.from_m) return [];

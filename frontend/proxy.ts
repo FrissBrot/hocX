@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { contentSecurityPolicy, createNonce, NONCE_HEADER } from "@/lib/csp";
+
 // Auth-Gating lief bisher ausschliesslich in den Server-Components selbst (requireSession()/
 // requireAdminSession(), siehe lib/api/server.ts + admin-server.ts) über redirect(). Next.js
 // cached das Ergebnis eines Server-Component-Renders (inkl. eines darin ausgelösten redirect())
@@ -39,12 +41,26 @@ const internalApiUrl = process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_A
 // which made it look like a routing bug in Traefik or the browser instead.
 const adminDomain = process.env.TRAEFIK_ADMIN_DOMAIN;
 
-async function isAuthenticated(cookie: string, sessionPath: string): Promise<boolean | null> {
+// Oeffentliche Website (Landing Page) auf eigener Domain, typischerweise der Hauptdomain:
+// Traefik routet sie auf denselben Frontend-Service, hier wird jeder Pfad analog zur
+// Admin-Domain auf /website umgeschrieben. Die Seite braucht keine Session.
+const websiteDomain = process.env.TRAEFIK_WEBSITE_DOMAIN;
+const WEBSITE_PATH = "/website";
+
+// Ohne Timeout hielt ein haengendes (nicht ablehnendes) Backend jeden Seiten-Request bis zum
+// undici-Default (~300 s) fest, statt in den vorgesehenen null-Pfad zu laufen (Audit MAIN-FE-002).
+export const SESSION_CHECK_TIMEOUT_MS = 5_000;
+
+async function isAuthenticated(cookie: string, sessionPath: string): Promise<boolean | "overloaded" | null> {
   try {
     const res = await fetch(`${internalApiUrl}${sessionPath}`, {
       headers: cookie ? { Cookie: cookie } : undefined,
-      cache: "no-store"
+      cache: "no-store",
+      signal: AbortSignal.timeout(SESSION_CHECK_TIMEOUT_MS)
     });
+    if (res.status === 503 && (await isOverloadedResponse(res))) {
+      return "overloaded";
+    }
     if (!res.ok) {
       return null;
     }
@@ -55,11 +71,40 @@ async function isAuthenticated(cookie: string, sessionPath: string): Promise<boo
   }
 }
 
+// Überlast-Schutz des Backends (db_admission.py): neue Nutzer von Abos mit niedriger Priorität
+// bekommen 503 "overloaded" und sehen /overload, bis wieder Platz ist.
+async function isOverloadedResponse(res: Response): Promise<boolean> {
+  try {
+    return ((await res.json()) as { code?: string }).code === "overloaded";
+  } catch {
+    return false;
+  }
+}
+
 export async function proxy(request: NextRequest) {
+  // Nonce-CSP (MAIN-FE-013): auf Request (für Next und layout.tsx) und Antwort.
+  const nonce = createNonce();
+  const csp = contentSecurityPolicy(nonce);
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set(NONCE_HEADER, nonce);
+  requestHeaders.set("Content-Security-Policy", csp);
+  const response = await route(request, requestHeaders);
+  response.headers.set("Content-Security-Policy", csp);
+  return response;
+}
+
+async function route(request: NextRequest, requestHeaders: Headers) {
   const { pathname, hostname } = request.nextUrl;
 
-  const rewrittenPathname =
-    adminDomain && hostname === adminDomain && !pathname.startsWith("/admin")
+  // Host-Header statt nextUrl.hostname: hinter `HOSTNAME=0.0.0.0` (Dev-Server/standalone) liefert
+  // nextUrl.hostname die Bind-Adresse statt der angefragten Domain.
+  const requestHost = request.headers.get("host")?.split(":")[0] ?? hostname;
+  const isWebsiteHost = !!websiteDomain && requestHost === websiteDomain;
+  const rewrittenPathname = isWebsiteHost
+    ? pathname.startsWith(WEBSITE_PATH)
+      ? pathname
+      : `${WEBSITE_PATH}${pathname === "/" ? "" : pathname}`
+    : adminDomain && requestHost === adminDomain && !pathname.startsWith("/admin")
       ? `/admin${pathname === "/" ? "" : pathname}`
       : pathname;
 
@@ -73,11 +118,32 @@ export async function proxy(request: NextRequest) {
   // admin.hocx.ch/login (so the rewrite above can map it to /admin/login), that exclusion
   // moved in here instead - skip only the auth-redirect check for the login path itself,
   // not the whole middleware, so the hostname rewrite still applies to it.
-  if (rewrittenPathname !== loginPath) {
+  // Öffentliche Freigabe-Links (/share/<token>) sind per Design ohne Login erreichbar - der
+  // Token in der URL IST die Authentifizierung (siehe backend public_share.py). Ohne diese
+  // Ausnahme landeten Empfänger ohne hocX-Konto auf /login statt bei den Fotos.
+  // /maintenance ist die Wartungsansicht - während voller Wartung antwortet das Backend auf die
+  // Sitzungsprüfung ohnehin mit 503, die Seite selbst braucht keine Session.
+  // /auth/bridge: Bestätigung des Domain-Wechsels, der Besucher ist hier per Definition noch
+  // nicht angemeldet (MAIN-SEC-006).
+  // /overload ist die Überlast-Ansicht - die Sitzungsprüfung selbst wird dort abgewiesen.
+  const isPublicPath =
+    rewrittenPathname === "/maintenance" ||
+    rewrittenPathname === "/overload" ||
+    rewrittenPathname === "/auth/bridge" ||
+    rewrittenPathname === "/share" ||
+    rewrittenPathname.startsWith("/share/") ||
+    rewrittenPathname === WEBSITE_PATH ||
+    rewrittenPathname.startsWith(`${WEBSITE_PATH}/`);
+  if (rewrittenPathname !== loginPath && !isPublicPath) {
     const cookie = request.headers.get("cookie") ?? "";
     const authenticated = await isAuthenticated(cookie, sessionPath);
     if (authenticated === false) {
       return NextResponse.redirect(new URL(loginPath, request.url));
+    }
+    if (authenticated === "overloaded") {
+      const overloadUrl = new URL("/overload", request.url);
+      overloadUrl.searchParams.set("from", `${pathname}${request.nextUrl.search}`);
+      return NextResponse.redirect(overloadUrl);
     }
   }
   // true oder null (Backend nicht sicher erreichbar) -> Seite normal rendern lassen; die
@@ -87,9 +153,9 @@ export async function proxy(request: NextRequest) {
     // so any query string on the original request survives the rewrite.
     const rewriteUrl = request.nextUrl.clone();
     rewriteUrl.pathname = rewrittenPathname;
-    return NextResponse.rewrite(rewriteUrl);
+    return NextResponse.rewrite(rewriteUrl, { request: { headers: requestHeaders } });
   }
-  return NextResponse.next();
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = {

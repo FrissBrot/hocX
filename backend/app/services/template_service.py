@@ -2,15 +2,15 @@ import copy
 import uuid
 from datetime import date
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import CycleConfig, DocumentTemplate, Event, Participant, Template, TemplateElement
+from app.models import CycleConfig, DocumentTemplateAssignment, Event, Participant, Template, TemplateElement
 from app.repositories.template_element_repository import TemplateElementRepository
 from app.repositories.template_repository import TemplateRepository
 from app.schemas.participant import TemplateParticipantAssignmentRead
 from app.services import public_id_service
 from app.services.access_service import AccessService
-from app.services.document_template_service import DocumentTemplateService
 from app.schemas.template import TemplateCreate, TemplateUpdate
 
 
@@ -23,7 +23,6 @@ class TemplateService:
         self.repository = repository or TemplateRepository()
         self.template_element_repository = template_element_repository or TemplateElementRepository()
         self.access_service = AccessService()
-        self.document_template_service = DocumentTemplateService()
 
     def list_templates(
         self,
@@ -51,20 +50,18 @@ class TemplateService:
         next_event_id: uuid.UUID | None = None,
         last_event_id: uuid.UUID | None = None,
         cycle_config_id: uuid.UUID | None = None,
-        document_template_id: uuid.UUID | None = None,
     ) -> dict[str, int | None]:
-        """Resolves next_event_id/last_event_id/cycle_config_id/document_template_id from
-        public UUIDs to internal ids, scoped to tenant_id - all four are client-supplied on
-        template create/update, so this also serves as their ownership validation: without
-        it, a writer could point a template at another tenant's Event/CycleConfig/
-        DocumentTemplate, which then leaks into every protocol created from it (title/date
-        snapshots, LaTeX layout, ...)."""
+        """Resolves next_event_id/last_event_id/cycle_config_id from public UUIDs to internal
+        ids, scoped to tenant_id - all three are client-supplied on template create/update, so
+        this also serves as their ownership validation: without it, a writer could point a
+        template at another tenant's Event/CycleConfig, which then leaks into every protocol
+        created from it (title/date snapshots, ...). Dokumentvorlage und Brand-Profil einer
+        Protokollvorlage verwaltet das Document Studio (document_template_assignment)."""
         resolved: dict[str, int | None] = {}
         for label, model, value in (
             ("next_event_id", Event, next_event_id),
             ("last_event_id", Event, last_event_id),
             ("cycle_config_id", CycleConfig, cycle_config_id),
-            ("document_template_id", DocumentTemplate, document_template_id),
         ):
             if value is None:
                 resolved[label] = None
@@ -82,20 +79,9 @@ class TemplateService:
             next_event_id=payload.next_event_id,
             last_event_id=payload.last_event_id,
             cycle_config_id=payload.cycle_config_id,
-            document_template_id=payload.document_template_id,
         )
-        # An explicitly-supplied document_template_id that doesn't belong to this tenant
-        # used to be silently swapped for the tenant's default instead of rejected -
-        # unlike every other reference here (next_event_id/last_event_id/cycle_config_id)
-        # and unlike update_template's identical check just below, which both raise
-        # (audit finding, 2026-08-25). Only an *omitted* document_template_id (None) is a
-        # legitimate default-fill case.
-        document_template_id = refs["document_template_id"]
-        if payload.document_template_id is None:
-            document_template_id = self.document_template_service.default_document_template_id(db, tenant_id)
         template = Template(
             tenant_id=tenant_id,
-            document_template_id=document_template_id,
             next_event_id=refs["next_event_id"],
             last_event_id=refs["last_event_id"],
             name=payload.name,
@@ -123,9 +109,8 @@ class TemplateService:
             next_event_id=values.get("next_event_id"),
             last_event_id=values.get("last_event_id"),
             cycle_config_id=values.get("cycle_config_id"),
-            document_template_id=values.get("document_template_id"),
         )
-        for field in ("next_event_id", "last_event_id", "cycle_config_id", "document_template_id"):
+        for field in ("next_event_id", "last_event_id", "cycle_config_id"):
             if field in values:
                 values[field] = refs[field]
         return self.repository.update(db, template, values)
@@ -134,7 +119,11 @@ class TemplateService:
         template = self.repository.get(db, template_id)
         if template is None:
             return False
+        single_ids = [definition.id for _element, definition in self.template_element_repository.list_for_template(db, template_id) if not definition.is_library]
         self.repository.delete(db, template)
+        from app.services.element_definition_service import ElementDefinitionService
+
+        ElementDefinitionService().delete_unused_singles(db, single_ids)
         return True
 
     def duplicate_template(self, db: Session, template_id: int, *, new_name: str, created_by: int | None) -> Template | None:
@@ -144,7 +133,6 @@ class TemplateService:
 
         duplicate = Template(
             tenant_id=source.tenant_id,
-            document_template_id=source.document_template_id,
             next_event_id=source.next_event_id,
             last_event_id=source.last_event_id,
             todo_due_event_tag=source.todo_due_event_tag,
@@ -157,17 +145,29 @@ class TemplateService:
             version=1,
             status=source.status,
             created_by=created_by,
+            fine_tariff_override=source.fine_tariff_override,
+            fine_account_id=source.fine_account_id,
+            fine_amount_late=source.fine_amount_late,
+            fine_amount_absent=source.fine_amount_absent,
         )
         created = self.repository.create(db, duplicate)
 
         # Elements stay within the same tenant, so element_definition_id and any participant/list
         # references embedded in configuration_json (e.g. responsibility assignments) remain valid
         # as-is - no remapping needed, unlike a cross-tenant clone.
-        for template_element, _definition in self.template_element_repository.list_for_template(db, template_id):
+        # Einzelstücke (Traktanden ohne Bibliotheks-Baustein) werden mitkopiert, damit die Kopie
+        # unabhängig gestaltet werden kann; Bibliotheks-Bausteine bleiben geteilt.
+        from app.services.element_definition_service import ElementDefinitionService
+
+        definition_service = ElementDefinitionService()
+        for template_element, definition in self.template_element_repository.list_for_template(db, template_id):
+            definition_id = template_element.element_definition_id
+            if not definition.is_library:
+                definition_id = definition_service.copy_element_definition(db, definition, is_library=False).id
             db.add(
                 TemplateElement(
                     template_id=created.id,
-                    element_definition_id=template_element.element_definition_id,
+                    element_definition_id=definition_id,
                     sort_index=template_element.sort_index,
                     section_name=template_element.section_name,
                     section_order=template_element.section_order,
@@ -175,6 +175,19 @@ class TemplateService:
                     is_visible=template_element.is_visible,
                     export_visible=template_element.export_visible,
                     configuration_json=copy.deepcopy(template_element.configuration_json or {}),
+                )
+            )
+        # PDF-Vorlage/Brand-Profil der Protokollvorlage (Document Studio) gelten auch für die
+        # Kopie - früher kopierte das Duplizieren den Hausstil mit
+        for assignment in db.scalars(select(DocumentTemplateAssignment).where(DocumentTemplateAssignment.protocol_template_id == source.id)):
+            db.add(
+                DocumentTemplateAssignment(
+                    tenant_id=assignment.tenant_id,
+                    document_type=assignment.document_type,
+                    protocol_template_id=created.id,
+                    document_template_id=assignment.document_template_id,
+                    brand_id=assignment.brand_id,
+                    created_by=created_by,
                 )
             )
         db.commit()
@@ -213,9 +226,8 @@ class TemplateService:
         previous = self.repository.list_participant_assignments(db, template_id)
         current = self.repository.replace_participants(db, template_id, assignments)
         affected_user_ids = {
-            participant.app_user_id
+            participant.id
             for participant, _ in [*previous, *current]
-            if participant.app_user_id is not None
         }
         template = self.repository.get(db, template_id)
         if template is not None:

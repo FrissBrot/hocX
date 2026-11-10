@@ -49,7 +49,7 @@ def _build_rueckblick_template(db, *, sync_target_field: str | None = "descripti
             "default_content": "", "copy_from_last_protocol": False,
             "element_type_id": text_type, "render_type_id": RENDER_TYPE_PARAGRAPH,
             "is_editable": True, "allows_multiple_values": False, "export_visible": True, "is_visible": True,
-            "sort_index": 10, "render_order": 10, "latex_template": None,
+            "sort_index": 10, "render_order": 10,
             "configuration_json": {"repeat_source": "event", "sync_target_field": sync_target_field},
         }],
     )

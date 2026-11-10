@@ -1,0 +1,7 @@
+{
+  "title": "Our servers are currently overloaded",
+  "message": "A very large number of people are using hocX right now. So that nobody who is already working loses anything, we cannot start new sessions at the moment.",
+  "hint": "Please try again in a few minutes. This page checks regularly and takes you back automatically as soon as there is room again.",
+  "retry": "Try again now",
+  "checking": "Checking …"
+}

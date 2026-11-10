@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getExtension, validateUploadFiles } from "./validate-upload";
+import { getExtension, isImageFile, validateUploadFiles } from "./validate-upload";
 
 function fakeFile(name: string, sizeBytes: number): File {
   return new File([new Uint8Array(sizeBytes)], name);
@@ -32,19 +32,28 @@ describe("validateUploadFiles", () => {
     const files = [fakeFile("a.pdf", 100), fakeFile("b.pdf", 100), fakeFile("c.pdf", 100)];
     const result = validateUploadFiles(files, opts);
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toContain("Maximal 2");
+    if (!result.ok) {
+      expect(result.code).toBe("maxFilesTotal");
+      expect(result.params).toEqual({ maxFiles: 2, remaining: 2 });
+    }
   });
 
   it("rejects a disallowed file extension", () => {
     const result = validateUploadFiles([fakeFile("script.exe", 100)], opts);
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toContain("script.exe");
+    if (!result.ok) {
+      expect(result.code).toBe("unsupportedType");
+      expect(result.params).toEqual({ filename: "script.exe" });
+    }
   });
 
   it("rejects a file over the size limit", () => {
     const result = validateUploadFiles([fakeFile("gross.pdf", 6 * 1024 * 1024)], opts);
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toContain("5 MB");
+    if (!result.ok) {
+      expect(result.code).toBe("fileTooLarge");
+      expect(result.params).toEqual({ filename: "gross.pdf", maxFileSizeMb: 5 });
+    }
   });
 
   it("accepts a file exactly at the size limit", () => {
@@ -65,7 +74,10 @@ describe("validateUploadFiles", () => {
   it("accounts for files already uploaded in a previous session (cumulative limit)", () => {
     const result = validateUploadFiles([fakeFile("a.pdf", 100), fakeFile("b.pdf", 100)], { ...opts, alreadyUploaded: 1 });
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toContain("1 noch möglich");
+    if (!result.ok) {
+      expect(result.code).toBe("maxFilesTotal");
+      expect(result.params).toEqual({ maxFiles: 2, remaining: 1 });
+    }
   });
 
   it("accepts exactly the remaining capacity after previous uploads", () => {
@@ -90,4 +102,13 @@ it("allows exactly 150 MiB of payload and rejects one additional byte", () => {
 it("keeps a hard request count even for unlimited assignments", () => {
   const files = Array.from({ length: 51 }, () => ({ name: "a.pdf", size: 1 }) as File);
   expect(validateUploadFiles(files, { maxFiles: null, allowedFileTypes: [], maxFileSizeMb: 100 }).ok).toBe(false);
+});
+
+describe("isImageFile", () => {
+  it("erkennt Bilder per MIME-Typ oder Endung", () => {
+    expect(isImageFile(new File(["x"], "foto.jpg", { type: "image/jpeg" }))).toBe(true);
+    expect(isImageFile(new File(["x"], "IMG_0001.HEIC", { type: "" }))).toBe(true);
+    expect(isImageFile(new File(["x"], "bericht.pdf", { type: "application/pdf" }))).toBe(false);
+    expect(isImageFile(new File(["x"], "tabelle.xlsx", { type: "" }))).toBe(false);
+  });
 });

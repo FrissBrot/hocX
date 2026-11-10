@@ -197,6 +197,10 @@ class PlatformOidcService:
         if not hmac.compare_digest(str(claims.get("nonce") or ""), expected_nonce):
             raise HTTPException(status_code=400, detail="OIDC nonce mismatch")
 
+        admin = self._find_or_link_admin(db, cfg, claims)
+        return redirect_to, admin.id
+
+    def _find_or_link_admin(self, db: Session, cfg: PlatformOidcConfig, claims: dict) -> PlatformAdmin:
         subject = claims.get("sub")
         email = claims.get("email")
         if not subject:
@@ -207,7 +211,12 @@ class PlatformOidcService:
             PlatformAdmin.oidc_subject == subject,
         ).one_or_none()
 
-        if admin is None and email:
+        # Audit MAIN-SEC-005: über die E-Mail nur verknüpfen, wenn der IdP sie ausdrücklich als
+        # bestätigt meldet - sonst übernimmt ein IdP-Konto mit frei gewählter, unbestätigter
+        # Admin-E-Mail das Admin-Konto dauerhaft. Manche IdPs liefern den Claim als String.
+        email_verified = claims.get("email_verified")
+        email_is_verified = email_verified is True or (isinstance(email_verified, str) and email_verified.lower() == "true")
+        if admin is None and email and email_is_verified:
             # Link by email to an EXISTING admin account that has no OIDC identity yet - never
             # auto-provision a brand-new admin account via SSO. An admin account is the most
             # privileged principal in the whole system; it must always be created explicitly
@@ -224,8 +233,7 @@ class PlatformOidcService:
             raise HTTPException(status_code=403, detail="No matching admin account for this SSO identity")
         if not admin.is_active:
             raise HTTPException(status_code=403, detail="Admin account deactivated")
-
-        return redirect_to, admin.id
+        return admin
 
     def _verify_id_token(self, id_token: str, discovery: dict, cfg: PlatformOidcConfig) -> dict:
         jwks_uri = discovery.get("jwks_uri")

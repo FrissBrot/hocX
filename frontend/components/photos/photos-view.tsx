@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import { AlbumReleaseNotice } from "./album-share-release";
-import { GalleryUploadModal } from "./gallery-upload-modal";
+import { GalleryUploadModal, GalleryUploadSession } from "./gallery-upload-modal";
 import { GalleryUploadProgress } from "./gallery-upload-progress";
 import { mergeNewItems } from "./merge-new-items";
 import { PhotoAlbums } from "./photo-albums";
@@ -14,6 +15,7 @@ import { PhotoDateGroups } from "./photo-date-groups";
 import { PhotoSimilarGroups } from "./photo-similar-groups";
 import { PhotoSimilarSeries } from "./photo-similar-series";
 import { PhotoViewer } from "./photo-viewer";
+import { UploadResultsModal, uploadResultsSummary } from "@/components/files/upload-results-modal";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FileDropOverlay } from "@/components/ui/file-drop-overlay";
 import { FilterTabs } from "@/components/ui/filter-tabs";
@@ -21,14 +23,18 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
 import { TagInput } from "@/components/ui/tag-input";
 import { useToast } from "@/contexts/toast-context";
+import { MobileFab, MobileSegmented } from "@/components/mobile/mobile-ui";
 import { browserApiFetch } from "@/lib/api/client";
 import { useFileDrop } from "@/lib/hooks/use-file-drop";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
+import { countUploadResults, jobHintMessages, normalizeResult, resultsFromLegacyJob } from "@/lib/utils/upload-results";
 import {
   AlbumPendingRelease,
   FileOverviewItem,
   GalleryUploadJob,
   GalleryUploadJobDetail,
+  StoredFileMetadata,
+  UploadFileResult,
   PhotoAnalysisProgress as ProgressData,
 } from "@/types/api";
 
@@ -40,13 +46,17 @@ type Tab = "all" | "albums" | "duplicates" | "series";
 
 type SortOption = { id: string; label: string; key: SortKey; dir: "asc" | "desc" };
 
-const SORT_OPTIONS: SortOption[] = [
-  { id: "group_date:desc", label: "Neueste zuerst", key: "group_date", dir: "desc" },
-  { id: "group_date:asc", label: "Älteste zuerst", key: "group_date", dir: "asc" },
-  { id: "sharpness_score:desc", label: "Schärfe (am schärfsten zuerst)", key: "sharpness_score", dir: "desc" },
-  { id: "exposure_score:desc", label: "Belichtung (am besten zuerst)", key: "exposure_score", dir: "desc" },
-  { id: "face_quality_score:desc", label: "Gesichtsqualität (am besten zuerst)", key: "face_quality_score", dir: "desc" },
-];
+type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
+
+function sortOptions(t: TFunc): SortOption[] {
+  return [
+    { id: "group_date:desc", label: t("sortOptions.newest"), key: "group_date", dir: "desc" },
+    { id: "group_date:asc", label: t("sortOptions.oldest"), key: "group_date", dir: "asc" },
+    { id: "sharpness_score:desc", label: t("sortOptions.sharpness"), key: "sharpness_score", dir: "desc" },
+    { id: "exposure_score:desc", label: t("sortOptions.exposure"), key: "exposure_score", dir: "desc" },
+    { id: "face_quality_score:desc", label: t("sortOptions.faceQuality"), key: "face_quality_score", dir: "desc" },
+  ];
+}
 
 type Props = {
   albumId?: string;
@@ -54,16 +64,24 @@ type Props = {
   sharePendingOnly?: boolean;
   // Nach einer Freigabe aus dieser Ansicht (Albumzähler/Hinweis neu laden).
   onReleased?: () => void;
+  // Mobile-Oberflaeche: Kopf kommt von MobilePhotos, Upload als schwebender Plus-Button,
+  // Reiter als Segment, Sortierung/Tag-Filter entfallen (Suche bleibt).
+  mobile?: boolean;
 };
 
-function photoCountLabel(count: number) {
-  return count === 1 ? "1 Foto" : `${count} Fotos`;
-}
-
-export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Props) {
+export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobile = false }: Props) {
+  const t = useTranslations("photos.view");
+  const tFiles = useTranslations("files");
+  // Ein Upload-Vorgang kann aus mehreren Aufträgen (Batches) plus Dateien bestehen, die der
+  // Vorab-Abgleich schon erledigt hat. Die Zusammenfassung erscheint erst, wenn alle Aufträge
+  // des Vorgangs fertig sind - jede Datei zählt dabei genau einmal.
+  const uploadSessionRef = useRef<{ pending: Set<string>; results: UploadFileResult[]; closed: boolean } | null>(null);
+  const [uploadResults, setUploadResults] = useState<UploadFileResult[] | null>(null);
+  const tMobile = useTranslations("mobile");
   const embedded = Boolean(albumId);
   const router = useRouter();
   const showToast = useToast();
+  const SORT_OPTIONS = sortOptions(t);
 
   const [tab, setTab] = useState<Tab>("all");
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
@@ -134,7 +152,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
         setHasMore((next ?? []).length === PAGE_SIZE);
         setSelectedIds(new Set());
       } catch {
-        if (requestIdRef.current === requestId) showToast("Fotos konnten nicht geladen werden.", "error");
+        if (requestIdRef.current === requestId) showToast(t("loadError"), "error");
       } finally {
         if (requestIdRef.current === requestId) setIsReloading(false);
       }
@@ -164,11 +182,11 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
         body: JSON.stringify({ file_ids: ids }),
       });
       const released = result?.released ?? 0;
-      showToast(released > 0 ? `${photoCountLabel(released)} freigegeben.` : "Die Auswahl war bereits freigegeben.", "success");
+      showToast(released > 0 ? t("releasedToast", { count: released }) : t("alreadyReleasedToast"), "success");
       reload();
       onReleased?.();
     } catch {
-      showToast("Fotos konnten nicht freigegeben werden.", "error");
+      showToast(t("releaseError"), "error");
     }
   }
 
@@ -196,7 +214,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
     } catch {
       if (requestId === requestIdRef.current) {
         setLoadMoreFailed(true);
-        showToast("Weitere Fotos konnten nicht geladen werden. Bitte erneut versuchen.", "error");
+        showToast(t("loadMoreError"), "error");
       }
     } finally {
       loadingMoreRef.current = false;
@@ -223,7 +241,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
         setLoadMoreFailed(false);
         setSelectedIds(new Set());
       } catch {
-        if (requestIdRef.current === requestId) showToast("Fotos konnten nicht neu geladen werden.", "error");
+        if (requestIdRef.current === requestId) showToast(t("reloadError"), "error");
       }
     })();
   }
@@ -307,7 +325,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
       });
       setItems((current) => current.map((current_item) => (current_item.id === item.id ? { ...current_item, is_best: nextOverride === "include" } : current_item)));
     } catch {
-      showToast("Best-of-Status konnte nicht geändert werden.", "error");
+      showToast(t("bestError"), "error");
     }
   }
 
@@ -317,7 +335,34 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
       await browserApiFetch(`/api/files/${item.id}/best`, { method: "PATCH", body: JSON.stringify({ best_override: nextOverride }) });
       setItems((current) => current.map((current_item) => (current_item.id === item.id ? { ...current_item, is_best: nextOverride === "include" } : current_item)));
     } catch {
-      showToast("Dieses Foto gehört zu keinem Album - Best-of ist nur innerhalb eines Albums möglich.", "error");
+      showToast(t("bestUnscopedError"), "error");
+    }
+  }
+
+  // Geändertes Schätzdatum: Kachel sofort aktualisieren, neu sortiert/gruppiert wird beim
+  // Schliessen der Detailansicht (solange sie offen ist, darf sich die Reihenfolge nicht ändern).
+  const captureDateChangedRef = useRef(false);
+  function handleCaptureDateSaved(itemId: string, metadata: StoredFileMetadata) {
+    captureDateChangedRef.current = true;
+    setItems((current) =>
+      current.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              estimated_taken_on: metadata.estimated_taken_on ?? null,
+              date_source: item.date_source === "context" ? "context" : metadata.date_source,
+              group_date: item.date_source === "context" ? item.group_date : metadata.effective_date ?? item.group_date,
+            }
+          : item,
+      ),
+    );
+  }
+
+  function closeViewer() {
+    setViewerIndex(null);
+    if (captureDateChangedRef.current) {
+      captureDateChangedRef.current = false;
+      reload();
     }
   }
 
@@ -330,24 +375,76 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
     setQueuedUploadId(job.id);
     // The actual result (imported items/errors) only arrives later, once the background
     // job finishes - see handleGalleryUploadJobDone, wired to GalleryUploadProgress below.
-    showToast("Wird hochgeladen und im Hintergrund verarbeitet…", "info");
+    const session = uploadSessionRef.current;
+    if (!session || session.closed) {
+      uploadSessionRef.current = { pending: new Set([job.id]), results: [], closed: false };
+      showToast(t("uploadQueuedToast"), "info");
+    } else {
+      session.pending.add(job.id);
+    }
+  }
+
+  function showUploadSummary(results: UploadFileResult[]) {
+    const normalized = results.map(normalizeResult);
+    if (normalized.length === 0) return;
+    const counts = countUploadResults(normalized);
+    // Ergänzte Aufnahmedaten können Sortierung und Gruppierung vorhandener Bilder ändern.
+    if (counts.metadataUpdated > 0) reload();
+    const tone = counts.failed > 0 ? (counts.failed === counts.total ? "error" : "info") : "success";
+    showToast(uploadResultsSummary(normalized, tFiles, "images"), tone, {
+      action: { label: tFiles("uploadResults.detailsAction"), onClick: () => setUploadResults(normalized) },
+    });
+  }
+
+  function handleGallerySessionComplete(sessionInfo: GalleryUploadSession) {
+    let session = uploadSessionRef.current;
+    if (!session || session.closed) {
+      session = { pending: new Set(), results: [], closed: false };
+      uploadSessionRef.current = session;
+    }
+    session.results.push(...sessionInfo.precheckResults);
+    session.closed = true;
+    if (session.pending.size === 0) {
+      uploadSessionRef.current = null;
+      showUploadSummary(session.results);
+    }
+  }
+
+  function recordJobResults(job: GalleryUploadJobDetail) {
+    const results = job.file_results?.length
+      ? job.file_results
+      : resultsFromLegacyJob(job.imported_items.map((item) => item.original_name), job.errors);
+    const session = uploadSessionRef.current;
+    if (session && session.pending.has(job.id)) {
+      session.pending.delete(job.id);
+      session.results.push(...results);
+      if (session.closed && session.pending.size === 0) {
+        uploadSessionRef.current = null;
+        showUploadSummary(session.results);
+      }
+      return;
+    }
+    // Auftrag aus einem anderen Tab/vor einem Neuladen: eigene Zusammenfassung.
+    showUploadSummary(results);
   }
 
   function handleGalleryUploadJobDone(job: GalleryUploadJobDetail) {
     const uploaded = job.imported_items;
-    const errors = job.errors;
+    // Duplikate und Fehler stehen in der Zusammenfassung (recordJobResults); als Toast bleiben
+    // nur reine Hinweise (ähnliches Bild, Live-Photo-Video).
+    const errors = jobHintMessages(job.errors, job.file_results ?? []);
     if (uploaded.length > 0) {
       if (albumId) {
         void browserApiFetch(`/api/files/albums/${albumId}/items`, { method: "POST", body: JSON.stringify({ file_ids: uploaded.map((item) => item.id) }) })
           .then(() => syncNewItems())
-          .catch(() => showToast("Bilder hochgeladen, aber Zuordnung zum Album fehlgeschlagen.", "error"));
+          .catch(() => showToast(t("uploadAlbumAssignError"), "error"));
       } else {
         void syncNewItems();
       }
       setTagSuggestions((current) => Array.from(new Set([...current, ...uploaded.flatMap((item) => item.tags)])).sort((a, b) => a.localeCompare(b)));
-      showToast(uploaded.length === 1 ? "1 Bild hochgeladen." : `${uploaded.length} Bilder hochgeladen.`, "success");
     }
-    if (errors.length > 0) showToast(errors.join(" · "), uploaded.length > 0 ? "info" : "error");
+    recordJobResults(job);
+    if (errors.length > 0) showToast(errors.join(" · "), "info");
     if (job.error) showToast(job.error, "error");
     loadPendingReleases();
   }
@@ -357,44 +454,60 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
   const grouped = sortKey === "group_date";
 
   return (
-    <div className="grid grid-tight">
+    <div className="grid grid-tight photos-overview">
       {!embedded && (
         <>
-          <div className="page-header">
+          {!mobile ? (
+          <div className="page-header photos-page-header">
             <div>
-              <h1 className="page-title">Fotos</h1>
+              <h1 className="page-title">{t("pageTitle")}</h1>
               <p className="muted">
-                Alle Fotos dieses Mandanten - aus Protokollen, Abgaben und direkt hochgeladenen Galerie-Bildern.
-                {tab === "all" && ` ${items.length} geladen.`}
+                {t("description")}
+                {tab === "all" && ` ${analysisProgress?.total_images ? t("loadedOfTotal", { count: items.length, total: analysisProgress.total_images }) : t("loadedSuffix", { count: items.length })}`}
               </p>
             </div>
-            <div className="table-toolbar-actions">
+            <div className="table-toolbar-actions photos-header-actions">
               {analysisProgress && analysisProgress.pending_images > 0 && (
-                <span className="pill">Analyse läuft · {analysisProgress.active_job_image_count || analysisProgress.pending_images} Bilder</span>
+                <span className="pill">{t("analysisPill", { count: analysisProgress.active_job_image_count || analysisProgress.pending_images })}</span>
               )}
               {galleryUploadJobs.length > 0 && (
                 <span className="pill">
-                  Galerie-Upload läuft · {galleryUploadJobs.reduce((sum, job) => sum + job.processed_files, 0)}
                   {galleryUploadJobs.every((job) => job.total_files !== null)
-                    ? ` von ${galleryUploadJobs.reduce((sum, job) => sum + (job.total_files ?? 0), 0)}`
-                    : ""}{" "}
-                  Bildern
+                    ? t("uploadPillTotal", {
+                        processed: galleryUploadJobs.reduce((sum, job) => sum + job.processed_files, 0),
+                        total: galleryUploadJobs.reduce((sum, job) => sum + (job.total_files ?? 0), 0),
+                      })
+                    : t("uploadPillNoTotal", { processed: galleryUploadJobs.reduce((sum, job) => sum + job.processed_files, 0) })}
                 </span>
               )}
-              <button type="button" className="button-secondary" onClick={() => {
+              <button type="button" className="button-primary photos-upload-button" onClick={() => {
                 setDroppedFiles([]);
                 setUploadModalOpen(true);
               }}>
-                + Bilder hochladen
+                {t("uploadButton")}
               </button>
             </div>
           </div>
+          ) : (
+            <>
+              {analysisProgress && analysisProgress.pending_images > 0 ? (
+                <span className="pill photos-mobile-pill">{t("analysisPill", { count: analysisProgress.active_job_image_count || analysisProgress.pending_images })}</span>
+              ) : null}
+              <MobileFab
+                label={tMobile("photos.fab")}
+                onClick={() => {
+                  setDroppedFiles([]);
+                  setUploadModalOpen(true);
+                }}
+              />
+            </>
+          )}
           {pendingReleaseTotal > 0 && (
             <AlbumReleaseNotice
               message={
                 pendingReleases.length === 1
-                  ? `${photoCountLabel(pendingReleaseTotal)} im geteilten Album „${pendingReleases[0].album_name}“ ${pendingReleaseTotal === 1 ? "wartet" : "warten"} noch auf deine Freigabe.`
-                  : `${photoCountLabel(pendingReleaseTotal)} in ${pendingReleases.length} geteilten Alben warten noch auf deine Freigabe.`
+                  ? t("singleAlbumNotice", { count: pendingReleaseTotal, albumName: pendingReleases[0].album_name })
+                  : t("multiAlbumNotice", { count: pendingReleaseTotal, albumCount: pendingReleases.length })
               }
             >
               {pendingReleases.slice(0, 3).map((row) => (
@@ -407,33 +520,47 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
                     setOpenAlbumId(row.album_id);
                   }}
                 >
-                  {pendingReleases.length === 1 ? "Prüfen" : `${row.album_name} (${row.pending_count})`}
+                  {pendingReleases.length === 1 ? t("reviewLink") : t("albumLinkWithCount", { name: row.album_name, count: row.pending_count })}
                 </button>
               ))}
               {pendingReleases.length > 3 && (
                 <button type="button" className="album-release-notice-link" onClick={() => setTab("albums")}>
-                  Alle Alben
+                  {t("allAlbumsLink")}
                 </button>
               )}
             </AlbumReleaseNotice>
           )}
-          <div className="list-filter-row list-filter-row-compact">
-            <FilterTabs
-              options={[
-                { value: "all", label: "Alle Fotos" },
-                { value: "albums", label: "Alben" },
-                { value: "duplicates", label: "Duplikate" },
-                { value: "series", label: "Ähnliche" },
-              ]}
-              value={tab}
-              onChange={setTab}
-            />
+          <div className="list-filter-row list-filter-row-compact photos-filter-row">
+            {mobile ? (
+              <MobileSegmented<Tab>
+                ariaLabel={t("pageTitle")}
+                value={tab}
+                onChange={setTab}
+                options={[
+                  { value: "all", label: t("tabs.all") },
+                  { value: "albums", label: t("tabs.albums") },
+                  { value: "duplicates", label: t("tabs.duplicates") },
+                  { value: "series", label: t("tabs.series") },
+                ]}
+              />
+            ) : (
+              <FilterTabs
+                options={[
+                  { value: "all", label: t("tabs.all") },
+                  { value: "albums", label: t("tabs.albums") },
+                  { value: "duplicates", label: t("tabs.duplicates") },
+                  { value: "series", label: t("tabs.series") },
+                ]}
+                value={tab}
+                onChange={setTab}
+              />
+            )}
             {tab !== "albums" && (
               <div className="list-filter-search">
-                <SearchInput value={search} onChange={setSearch} placeholder="Fotos durchsuchen" />
+                <SearchInput value={search} onChange={setSearch} placeholder={t("searchPlaceholder")} />
               </div>
             )}
-            {tab === "all" && (
+            {tab === "all" && !mobile && (
               <SearchableSelect
                 className="files-sort-select"
                 options={SORT_OPTIONS}
@@ -447,9 +574,9 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
                 }}
               />
             )}
-            {tab !== "albums" && (
+            {tab !== "albums" && !mobile && (
               <div className="list-filter-tags">
-                <TagInput value={tagFilter.join(",")} onChange={(value) => setTagFilter(value ? value.split(",").map((t) => t.trim()).filter(Boolean) : [])} suggestions={tagSuggestions} placeholder="Tag wählen oder eingeben…" />
+                <TagInput value={tagFilter.join(",")} onChange={(value) => setTagFilter(value ? value.split(",").map((tag) => tag.trim()).filter(Boolean) : [])} suggestions={tagSuggestions} placeholder={t("tagPlaceholder")} />
               </div>
             )}
           </div>
@@ -471,9 +598,9 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
           {!embedded && <PhotoAnalysisProgress onUpdate={setAnalysisProgress} />}
           {!embedded && <GalleryUploadProgress queuedJobId={queuedUploadId} onUpdate={setGalleryUploadJobs} onJobDone={handleGalleryUploadJobDone} />}
           {embedded && (
-            <div className="list-filter-row list-filter-row-compact">
+            <div className="list-filter-row list-filter-row-compact photos-filter-row">
               <div className="list-filter-search">
-                <SearchInput value={search} onChange={setSearch} placeholder="Fotos durchsuchen" />
+                <SearchInput value={search} onChange={setSearch} placeholder={t("searchPlaceholder")} />
               </div>
               <SearchableSelect
                 className="files-sort-select"
@@ -488,7 +615,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
                 }}
               />
               <div className="list-filter-tags">
-                <TagInput value={tagFilter.join(",")} onChange={(value) => setTagFilter(value ? value.split(",").map((t) => t.trim()).filter(Boolean) : [])} suggestions={tagSuggestions} placeholder="Tag wählen oder eingeben…" />
+                <TagInput value={tagFilter.join(",")} onChange={(value) => setTagFilter(value ? value.split(",").map((tag) => tag.trim()).filter(Boolean) : [])} suggestions={tagSuggestions} placeholder={t("tagPlaceholder")} />
               </div>
             </div>
           )}
@@ -496,6 +623,8 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
           {selectedIds.size > 0 && (
             <PhotoBulkBar
               selectedIds={Array.from(selectedIds)}
+              selectedItems={items.filter((item) => selectedIds.has(item.id))}
+              onSelectAll={() => setSelectedIds(new Set(items.map((item) => item.id)))}
               tagSuggestions={tagSuggestions}
               onClearSelection={() => setSelectedIds(new Set())}
               onDone={() => reload()}
@@ -506,7 +635,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
           )}
 
           {items.length === 0 && isReloading ? (
-            <div className="photo-loading-grid" role="status" aria-label="Fotos werden geladen">
+            <div className="photo-loading-grid" role="status" aria-label={t("loadingAriaLabel")}>
               {Array.from({ length: 18 }, (_, index) => (
                 <div key={index} className="photo-tile" aria-hidden="true">
                   <div className="photo-tile-preview" style={{ aspectRatio: 4 / 3 }} />
@@ -516,8 +645,8 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
           ) : items.length === 0 && !embedded && !search.trim() && tagFilter.length === 0 ? (
             <EmptyState
               icon="image"
-              title="Noch keine Fotos vorhanden"
-              description="Sobald Bilder in Protokollen eingefügt, über eine Abgabebox eingereicht oder hier hochgeladen werden, erscheinen sie in dieser Galerie."
+              title={t("emptyTitle")}
+              description={t("emptyDescription")}
               actions={
                 <>
                   <button
@@ -528,32 +657,32 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
                       setUploadModalOpen(true);
                     }}
                   >
-                    + Bilder hochladen
+                    {t("uploadButton")}
                   </button>
                   <button type="button" className="button-secondary" onClick={() => router.push("/submission-assignments")}>
-                    Abgabebox erstellen
+                    {t("createAssignmentButton")}
                   </button>
                 </>
               }
               hint={
                 <div className="empty-state-sources">
                   <div>
-                    <strong>Aus Protokollen</strong>
-                    <span>Bilder aus dem Protokoll-Editor</span>
+                    <strong>{t("emptyHint.protocolsTitle")}</strong>
+                    <span>{t("emptyHint.protocolsDesc")}</span>
                   </div>
                   <div>
-                    <strong>Aus Abgaben</strong>
-                    <span>Einreichungen über Abgabeboxen</span>
+                    <strong>{t("emptyHint.submissionsTitle")}</strong>
+                    <span>{t("emptyHint.submissionsDesc")}</span>
                   </div>
                   <div>
-                    <strong>Direkt hochgeladen</strong>
-                    <span>Galerie-Upload</span>
+                    <strong>{t("emptyHint.uploadsTitle")}</strong>
+                    <span>{t("emptyHint.uploadsDesc")}</span>
                   </div>
                 </div>
               }
             />
           ) : items.length === 0 ? (
-            <p className="muted">Keine Fotos gefunden.</p>
+            <p className="muted">{t("noResults")}</p>
           ) : (
             <PhotoDateGroups
               items={items}
@@ -568,14 +697,14 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
           {hasMore && (
             <div className="load-more-row" ref={loadMoreSentinelRef}>
               {isLoadingMore ? (
-                <span className="photo-loading-glow" role="status" aria-label="Lädt weitere Fotos">
+                <span className="photo-loading-glow" role="status" aria-label={t("loadingMoreAriaLabel")}>
                   <span aria-hidden="true" />
                   <span aria-hidden="true" />
                   <span aria-hidden="true" />
                 </span>
               ) : (
                 <button type="button" className="button-secondary button-ghost" disabled={isReloading} onClick={() => void loadMore()}>
-                  {loadMoreFailed ? "Erneut versuchen" : `Mehr laden (${items.length} geladen)`}
+                  {loadMoreFailed ? t("retry") : t("loadMore", { count: items.length })}
                 </button>
               )}
             </div>
@@ -588,9 +717,10 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
           items={items}
           index={viewerIndex}
           onIndexChange={setViewerIndex}
-          onClose={() => setViewerIndex(null)}
+          onClose={closeViewer}
           onToggleBest={albumId ? handleAlbumScopedToggleBest : handleUnscopedToggleBest}
           onTagsSaved={handleTagsSaved}
+          onCaptureDateSaved={handleCaptureDateSaved}
         />
       )}
 
@@ -600,10 +730,13 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased }: Pr
           initialFiles={droppedFiles}
           onClose={() => setUploadModalOpen(false)}
           onQueued={handleGalleryUploadQueued}
+          onSessionComplete={handleGallerySessionComplete}
         />
       )}
 
-      <FileDropOverlay active={isFileDragging} title="Zum Hochladen loslassen" hint="Bilder oder ZIP-Dateien - danach stellst du den Upload ein." />
+      {uploadResults && <UploadResultsModal results={uploadResults} noun="images" onClose={() => setUploadResults(null)} />}
+
+      <FileDropOverlay active={isFileDragging} title={t("dropOverlayTitle")} hint={t("dropOverlayHint")} />
     </div>
   );
 }

@@ -6,33 +6,47 @@ import { uniquePng } from "./unique-fixture";
 
 // Storage-quota enforcement (audit fix, 2026-09-17): Tenant.storage_quota_bytes has been
 // computed and *displayed* everywhere (the Speicher page, "Kontingent überschritten") for a
-// long time, but no upload path actually enforced it - an admin's configured limit had zero
-// effect on whether uploads kept succeeding. This is new, real blocking behavior (previously
-// purely cosmetic), and until now was only exercised at the service level against mocked
-// storage (tests/test_upload_pipeline_quota.py calls ingest_file() directly) - never through
-// a real HTTP request. This test drives the real route the "Fotos" gallery upload window
-// itself calls, end to end: platform admin sets the quota, then a tenant writer's upload is
-// rejected once it would exceed it.
-test("rejects a gallery upload once the platform-admin-configured storage quota is exceeded", async () => {
+// long time, but no upload path actually enforced it. This test drives the real route the
+// "Fotos" gallery upload window itself calls, end to end: the platform admin moves the tenant
+// onto a plan whose storage is just above its current usage, then a tenant writer's upload is
+// rejected once it would exceed it. Since 0136 the quota comes only from plan + storage
+// packages (no manual override endpoint any more), hence the temporary plan.
+test("rejects a gallery upload once the tenant's plan storage quota is exceeded", async () => {
   // The accepted upload's ingest is polled up to 60s - the default 45s test timeout
   // (playwright.config.ts) could abort before it finishes.
   test.setTimeout(120_000);
   const writerApi = await playwrightRequest.newContext({ baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: authFiles.writer });
   const adminApi = await playwrightRequest.newContext({ baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: authFiles.platformAdmin });
+  const planCode = `e2e_quota_${Date.now()}`;
   let tenantId: string | undefined;
+  let originalSubscription: Record<string, unknown> | undefined;
   try {
     const session = await (await writerApi.get("/api/auth/session")).json();
     tenantId = session.current_tenant.id as string;
-    // AdminTenantStorageQuotaUpdate requires quota_mb >= 1 (no all-uploads-blocked "0"
-    // option), so instead of relying on the shared demo tenant already having close to 1 MB
-    // stored, this fixture is itself ~1.5 MB (via a padded, spec-valid ancillary PNG chunk -
-    // see the generation note in fixtures/photos/) - bigger than the smallest quota the API
-    // allows, so the check is exceeded on this one file alone regardless of pre-existing
-    // usage.
+    // The fixture is ~1.5 MB (via a padded, spec-valid ancillary PNG chunk - see the generation
+    // note in fixtures/photos/), the temporary plan allows only 1 MB on top of what the tenant
+    // already stores - so this one file exceeds the quota regardless of pre-existing usage.
     // Own bytes per run (a repeated run would otherwise hit the exact-duplicate check first).
     const imageBuffer = uniquePng(await fs.readFile(path.join("e2e/fixtures/photos/sample-oversized.png")));
 
-    const setQuota = await adminApi.patch(`/api/admin/tenants/${tenantId}/storage-quota`, { data: { quota_mb: 1 } });
+    const tenantResponse = await adminApi.get(`/api/admin/tenants/${tenantId}`);
+    expect(tenantResponse.ok(), await tenantResponse.text()).toBeTruthy();
+    const tenant = await tenantResponse.json();
+    originalSubscription = {
+      plan_code: tenant.plan_code,
+      billing_cycle: tenant.billing_cycle,
+      user_limit_override: tenant.user_limit_override,
+      discount_percent: tenant.discount_percent,
+      billing_note: tenant.billing_note,
+      billing_start_date: tenant.billing_start_date,
+    };
+    const createPlan = await adminApi.put(`/api/admin/plans/${planCode}`, {
+      data: { name: "E2E-Kontingent", included_storage_bytes: tenant.storage_used_bytes + 1024 * 1024, is_bookable: false },
+    });
+    expect(createPlan.ok(), await createPlan.text()).toBeTruthy();
+    const setQuota = await adminApi.patch(`/api/admin/tenants/${tenantId}/subscription`, {
+      data: { ...originalSubscription, plan_code: planCode },
+    });
     expect(setQuota.ok(), await setQuota.text()).toBeTruthy();
 
     // The gallery-uploads endpoint reserves the staged bytes against the quota before it
@@ -50,7 +64,7 @@ test("rejects a gallery upload once the platform-admin-configured storage quota 
 
     // Lifting the quota again must let the identical upload through - proves this is real,
     // reversible enforcement rather than a fixture/checksum-dependent fluke.
-    const liftQuota = await adminApi.patch(`/api/admin/tenants/${tenantId}/storage-quota`, { data: { quota_mb: null } });
+    const liftQuota = await adminApi.patch(`/api/admin/tenants/${tenantId}/subscription`, { data: originalSubscription });
     expect(liftQuota.ok(), await liftQuota.text()).toBeTruthy();
 
     // Once admitted, the background ingest loop processes the queued job.
@@ -63,11 +77,12 @@ test("rejects a gallery upload once the platform-admin-configured storage quota 
     const acceptedBody = await (await writerApi.get(`/api/files/gallery-upload-jobs/${job.id}`)).json();
     expect(acceptedBody.imported_items).toHaveLength(1);
   } finally {
-    // Always restore "no quota" - a leftover 0-byte quota would break every other e2e spec
-    // (and the shared demo tenant itself) that uploads anything here afterward.
-    if (tenantId) {
-      await adminApi.patch(`/api/admin/tenants/${tenantId}/storage-quota`, { data: { quota_mb: null } }).catch(() => {});
+    // Always restore the original plan - a leftover tight quota would break every other e2e
+    // spec (and the shared demo tenant itself) that uploads anything here afterward.
+    if (tenantId && originalSubscription) {
+      await adminApi.patch(`/api/admin/tenants/${tenantId}/subscription`, { data: originalSubscription }).catch(() => {});
     }
+    await adminApi.delete(`/api/admin/plans/${planCode}`).catch(() => {});
     await writerApi.dispose();
     await adminApi.dispose();
   }

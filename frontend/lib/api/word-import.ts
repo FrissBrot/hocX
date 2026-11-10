@@ -1,4 +1,4 @@
-import { browserApiFetch } from "@/lib/api/client";
+import { browserApiFetch, LONG_RUNNING_TIMEOUT_MS } from "@/lib/api/client";
 
 export type TableRole = "attendance" | "events" | "list" | "matrix" | "ignore";
 export type EventMatchStatus = "matched" | "changed" | "new";
@@ -367,7 +367,7 @@ export async function analyzeWordImport(
   formData.append("template_id", templateId);
   if (protocolDateHint) formData.append("protocol_date_hint", protocolDateHint);
   if (tableRoles) formData.append("table_roles_json", JSON.stringify(tableRoles));
-  return browserApiFetch<WordImportAnalysis>("/api/tools/word-import/analyze", { method: "POST", body: formData });
+  return browserApiFetch<WordImportAnalysis>("/api/tools/word-import/analyze", { method: "POST", body: formData, timeoutMs: LONG_RUNNING_TIMEOUT_MS });
 }
 
 export type WordImportCommitResult = { id: string; warnings: string[] };
@@ -376,6 +376,7 @@ export async function commitWordImport(payload: WordImportCommitPayload): Promis
   return browserApiFetch<WordImportCommitResult>("/api/tools/word-import/commit", {
     method: "POST",
     body: JSON.stringify(payload),
+    timeoutMs: LONG_RUNNING_TIMEOUT_MS,
   });
 }
 

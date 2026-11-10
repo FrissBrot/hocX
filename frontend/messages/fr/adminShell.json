@@ -1,0 +1,37 @@
+{
+  "title": "Administration de la plateforme",
+  "tagline": "Gérer les organisations et les utilisateurs sur l'ensemble du système.",
+  "groups": {
+    "tenants": "Organisations",
+    "system": "Système",
+    "access": "Accès"
+  },
+  "nav": {
+    "dashboard": "Tableau de bord",
+    "tenants": "Organisations",
+    "pricing": "Tarifs",
+    "cashflow": "Trésorerie",
+    "users": "Utilisateurs",
+    "domains": "Domaines",
+    "systemStatus": "État du système",
+    "errorLogs": "Journal des erreurs",
+    "uploadPipeline": "Pipeline de fichiers",
+    "notifications": "Notifications",
+    "jobs": "Tâches",
+    "admins": "Comptes administrateurs",
+    "sso": "SSO",
+    "security": "Sécurité",
+    "verifications": "Vérifications",
+    "storage": "Stockage",
+    "backups": "Sauvegardes",
+    "maintenance": "Maintenance",
+    "documentTemplates": "Modèles de documents",
+    "auditLog": "Journal d’audit"
+  },
+  "logout": "Se déconnecter",
+  "menuToggleClose": "Fermer",
+  "breadcrumbNav": "Fil d'Ariane",
+  "readOnlyBanner": "Accès en lecture seule (support) : les modifications ne sont pas possibles avec ce compte.",
+  "accountSettings": "Paramètres du compte",
+  "accountSettingsLoadFailed": "Impossible de charger les paramètres du compte."
+}

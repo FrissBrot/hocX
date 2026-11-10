@@ -1,8 +1,11 @@
-export default function NotFound() {
+import { getTranslations } from "next-intl/server";
+
+export default async function NotFound() {
+  const t = await getTranslations("abgabebox.notFound");
   return (
     <div className="card">
-      <h1>Nicht gefunden</h1>
-      <p className="muted">Diese Seite existiert nicht oder ist aktuell nicht verfügbar.</p>
+      <h1>{t("title")}</h1>
+      <p className="muted">{t("hint")}</p>
     </div>
   );
 }

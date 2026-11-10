@@ -1,21 +1,29 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { browserSupportsPasskeys, createPasskeyCredential } from "@/lib/webauthn";
+import type { Locale } from "@/i18n/locale-config.generated";
 import { PasskeyRegistrationStart, TotpEnrollmentStart, UserMfaOverview } from "@/types/api";
 
-export function formatMfaDate(value: string | null) {
-  if (!value) return "Noch nie";
-  return new Intl.DateTimeFormat("de-CH", {
+// `never`/`locale` optional (Default "Noch nie"/de-CH), damit noch nicht auf useLocale()
+// umgestellte Aufrufstellen unveraendert funktionieren.
+export function formatMfaDate(value: string | null, locale?: Locale, never?: string) {
+  if (!value) return never ?? "Noch nie";
+  const intlLocale = locale ? { de: "de-CH", en: "en-CH", fr: "fr-CH", it: "it-CH" }[locale] : "de-CH";
+  return new Intl.DateTimeFormat(intlLocale, {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
 }
 
+// Namen der MFA-Methoden ("TOTP", "Passkey") sind in allen vier Sprachen identisch (etablierte
+// Fachbegriffe/Produktnamen, siehe design/DESIGN.md-Logik fuer Markennamen) - bewusst kein
+// Uebersetzungs-Key noetig.
 export function mfaFactorTypeLabel(type: "totp" | "webauthn") {
   return type === "totp" ? "TOTP" : "Passkey";
 }
@@ -44,6 +52,7 @@ export function useMfaEnrollment(
   overview: UserMfaOverview | null,
   setOverview: (next: UserMfaOverview) => void
 ) {
+  const t = useTranslations("security.mfaEnrollment");
   const showToast = useToast();
   const confirm = useConfirm();
   const [totpSetup, setTotpSetup] = useState<TotpEnrollmentStart | null>(null);
@@ -60,7 +69,7 @@ export function useMfaEnrollment(
       setTotpCode("");
       setTotpLabel("");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "TOTP-Setup konnte nicht gestartet werden", "error");
+      showToast(error instanceof Error ? error.message : t("totpStartFailed"), "error");
     } finally {
       setBusy(false);
     }
@@ -82,9 +91,9 @@ export function useMfaEnrollment(
       setTotpSetup(null);
       setTotpCode("");
       setTotpLabel("");
-      showToast("TOTP erfolgreich eingerichtet", "success");
+      showToast(t("totpSetUp"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "TOTP konnte nicht bestätigt werden", "error");
+      showToast(error instanceof Error ? error.message : t("totpConfirmFailed"), "error");
     } finally {
       setBusy(false);
     }
@@ -92,7 +101,7 @@ export function useMfaEnrollment(
 
   async function startPasskey() {
     if (!browserSupportsPasskeys()) {
-      showToast("Dieser Browser unterstützt keine Passkeys.", "error");
+      showToast(t("passkeyUnsupportedBrowser"), "error");
       return;
     }
     setBusy(true);
@@ -109,9 +118,9 @@ export function useMfaEnrollment(
       });
       setOverview(next);
       setPasskeyLabel("");
-      showToast("Passkey erfolgreich eingerichtet", "success");
+      showToast(t("passkeySetUp"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Passkey konnte nicht eingerichtet werden", "error");
+      showToast(error instanceof Error ? error.message : t("passkeySetupFailed"), "error");
     } finally {
       setBusy(false);
     }
@@ -119,9 +128,9 @@ export function useMfaEnrollment(
 
   async function deleteFactor(factorId: string, label: string) {
     const ok = await confirm({
-      message: `MFA-Faktor "${label}" wirklich entfernen?`,
+      message: t("deleteFactorConfirm", { label }),
       tone: "danger",
-      confirmLabel: "Entfernen",
+      confirmLabel: t("deleteFactorConfirmLabel"),
     });
     if (!ok) return;
     try {
@@ -129,9 +138,9 @@ export function useMfaEnrollment(
         method: "DELETE",
       });
       setOverview(next);
-      showToast("MFA-Faktor entfernt", "success");
+      showToast(t("factorRemoved"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "MFA-Faktor konnte nicht entfernt werden", "error");
+      showToast(error instanceof Error ? error.message : t("factorRemoveFailed"), "error");
     }
   }
 

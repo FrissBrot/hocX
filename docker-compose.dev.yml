@@ -1,11 +1,22 @@
+# Fester Projektname (Audit MAIN-OPS-008): ohne -p ergab der Verzeichnisname `hocX` das Projekt
+# `hocx` - dasselbe wie die Server-Instanz aus docker-compose.yml. Ein versehentlicher Dev-Start
+# haette deren Container mit Demo-Seeding (seed_demo=true) und unsicheren Cookies neu erstellt.
+# Ein explizites -p (scripts/e2e.sh: hocx-e2e) hat weiterhin Vorrang.
+name: hocx-dev
+
 services:
   backend:
     environment:
+      # Dev bleibt immer development, auch wenn die .env (Server-Instanz) production setzt -
+      # sonst brichen validate_for_production (AUTH_SECURE_COOKIES=false unten) den Start ab.
+      HOCX_ENVIRONMENT: development
       # Local development does not run through the HTTPS/Traefik domain. An empty
       # main domain disables the cross-domain auth bridge; otherwise `.env`'s
       # placeholder `localhost` redirects sessions to https://localhost/api/...
       # instead of keeping them on the frontend proxy at localhost:3000.
       TRAEFIK_DOMAIN: ""
+      # Ebenso keine Admin-Domain: Plattform-Admin-Passkeys prüfen lokal gegen den Origin des Requests.
+      TRAEFIK_ADMIN_DOMAIN: ""
       # app/core/security.py sets the session cookie with `secure=settings.
       # auth_secure_cookies`, which defaults to true and is otherwise only ever
       # overridden in docker-compose.release.yml. A real browser exempts localhost/
@@ -20,6 +31,7 @@ services:
 
   frontend:
     environment:
+      HOCX_ENVIRONMENT: development
       NEXT_PUBLIC_API_URL: http://localhost:3000
       INTERNAL_API_URL: http://backend:8000
       FRONTEND_API_PROXY_TARGET: http://backend:8000
@@ -28,6 +40,10 @@ services:
       # this too for the same cross-domain auth bridge check.
       TRAEFIK_DOMAIN: ""
     command: npm run dev
+    # Der Dev-Server (Turbopack) hält alle kompilierten Routen im Speicher. Mit den 1536m aus
+    # docker-compose.yml beendete der Kernel ihn beim Kompilieren von /protocols/[id]
+    # (Cgroup-OOM, nginx meldete 502).
+    mem_limit: 3072m
     ports:
       - "127.0.0.1:3000:3000"
 

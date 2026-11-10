@@ -1,6 +1,41 @@
 services:
+  # Traefik liest die Docker-API nur über diesen Proxy (Audit MAIN-OPS-004): der rohe Socket ist
+  # root-äquivalent, Traefik hängt am Internet. Erlaubt sind nur GET auf Container, Events,
+  # Ping und Version - genau das, was der Docker-Provider braucht (live geprüft 2026-10-16:
+  # Router, später gestartete Container über Events; POST, /info, /secrets, exec -> 403).
+  traefik-socket-proxy:
+    image: lscr.io/linuxserver/socket-proxy:3.4.6-r0-ls101@sha256:362cadf55b3c7920189347d0f4d60b389e2f80e929581bf10793f2371aab41e5
+    restart: unless-stopped
+    mem_limit: 64m
+    cpus: 0.25
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /run
+    environment:
+      CONTAINERS: 1
+      EVENTS: 1
+      PING: 1
+      VERSION: 1
+      POST: 0
+      LOG_LEVEL: warning
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - traefik-docker-api
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   traefik:
-    image: traefik:v3.1
+    # Gleiche Version wie docker-compose.traefik.yml: v3.1 spricht die Docker-API 1.24 fest an
+    # und laedt gegen Docker Engine >= 29 keine Router (Audit MAIN-OPS-007).
+    image: traefik:v3.7.16@sha256:1336e85aaed293bd63d005086e0dd013b04078b26aaeb1c18b26a2f928af7e65
     restart: unless-stopped
     # M28 (Mittel, Audit 2026-08-12): Ceiling gegen einen durchgehenden Container, der den
     # ganzen (knappen) Host mitreisst - keine Zielwerte fuer Normalbetrieb, nur eine Obergrenze.
@@ -14,6 +49,7 @@ services:
     depends_on:
       - frontend
       - backend
+      - traefik-socket-proxy
     environment:
       TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL: ${ACME_EMAIL}
       TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPTDNS_ACME_EMAIL: ${ACME_EMAIL}
@@ -23,8 +59,10 @@ services:
       - "443:443"
       # Nur lokal gebunden: vorgesehen als Ziel fuer den OpenZiti-Host-Tunnel.
       - "127.0.0.1:${TRAEFIK_ADMIN_PORT:-8443}:8443"
+    networks:
+      - default
+      - traefik-docker-api
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./infra/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
       - ./infra/traefik/letsencrypt:/letsencrypt
       # Vom backend generierte Router pro Mandanten-Custom-Domain (siehe traefik_config_service.py)
@@ -33,7 +71,7 @@ services:
       - --configFile=/etc/traefik/traefik.yml
 
   db:
-    image: postgres:16
+    image: postgres:18@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
     restart: unless-stopped
     mem_limit: 768m
     cpus: 1.0
@@ -51,6 +89,11 @@ services:
       - postgres
       - -c
       - shared_preload_libraries=pg_stat_statements
+      # Verbindungsbudget (Concurrency-Audit CONC-010): Backend 2 x 20, Abgabebox 2 x 8, Worker je 5,
+      # job-worker 8, dazu ungepoolte Kurzverbindungen (Kennzahlen, Fehlerprotokoll, Upload-Lock,
+      # pg_dump/pg_restore) - rund 100. Ohne explizite Angabe galt der Default 100.
+      - -c
+      - max_connections=150
       - -c
       - pg_stat_statements.max=5000
       - -c
@@ -80,7 +123,9 @@ services:
       # 0.0.0.0 gebunden und damit ohne Firewall direkt aus dem Internet erreichbar.
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # Ab PostgreSQL 18: Datenverzeichnis /var/lib/postgresql/18/docker, Upgrade aus dem alten
+      # Volume postgres_data (PostgreSQL 16) per scripts/lib/pg_upgrade.sh.
+      - postgres18_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -88,20 +133,61 @@ services:
       retries: 10
 
   redis:
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
     restart: unless-stopped
     mem_limit: 128m
     cpus: 0.5
+    # Unter dem Containerlimit, noeviction wie Release (Schreibfehler statt OOM-Kill, CONC-011).
+    command: ["redis-server", "--maxmemory", "100mb", "--maxmemory-policy", "noeviction"]
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
+    # Eigenes internes Netz nur zwischen Backend und Redis (Audit MAIN-OPS-005): Redis haelt
+    # Domain-Bridge- und MFA-Flow-Tokens sowie Lockout-Zaehler ohne eigene Authentifizierung. Im
+    # Default-Netz haette jeder kompromittierte oeffentliche Dienst (abgabebox, Frontends) daraus
+    # eine Sitzung als beliebiger Nutzer erzeugen koennen.
+    networks:
+      - cache
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 10
+
+  # Nur-Lese-Zugang zur Docker-API für den Systemstatus (/admin/system). Das Backend bekommt nie
+  # den Docker-Socket selbst (Socket = root auf dem Host); der Proxy erlaubt nur GET auf
+  # /containers, /_ping und /version (alles andere 403, getestet 2026-10-11). Eigenes internes Netz
+  # docker-api: nur das Backend erreicht ihn - die öffentlich erreichbaren Dienste (abgabebox,
+  # Frontends) könnten sonst die Umgebungsvariablen aller Container auslesen.
+  docker-socket-proxy:
+    image: lscr.io/linuxserver/socket-proxy:3.4.6-r0-ls101@sha256:362cadf55b3c7920189347d0f4d60b389e2f80e929581bf10793f2371aab41e5
+    restart: unless-stopped
+    mem_limit: 64m
+    cpus: 0.25
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /run
+    environment:
+      CONTAINERS: 1
+      PING: 1
+      VERSION: 1
+      POST: 0
+      LOG_LEVEL: warning
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - docker-api
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   backend:
     build:
@@ -124,13 +210,15 @@ services:
       - path: .env
         required: false
     environment:
-      HOCX_ENVIRONMENT: development
+      # Steuerbar fuer eine Instanz mit Echtdaten aus diesem Stack (Audit MAIN-OPS-009): dort
+      # HOCX_ENVIRONMENT=production in .env setzen, sonst sind /docs und /openapi.json offen und
+      # die Produktionssperren aus. docker-compose.dev.yml pinnt development.
+      HOCX_ENVIRONMENT: ${HOCX_ENVIRONMENT:-development}
       DATABASE_URL: ${DATABASE_URL}
       APP_DATABASE_URL: ${APP_DATABASE_URL}
       APP_DB_PASSWORD: ${APP_DB_PASSWORD}
       PYTHONPATH: /app
       STORAGE_ROOT: /app/storage
-      LATEX_TEMPLATE_ROOT: /app/storage/latex_templates
       EXPORT_ROOT: /app/storage/exports
       UPLOAD_ROOT: /app/storage/uploads
       THUMBNAIL_ROOT: /app/storage-local/thumbnails
@@ -155,12 +243,31 @@ services:
       CLAMAV_HOST: clamav
       REDIS_URL: redis://redis:6379/0
       # Wanderplaner-Fachservice (siehe wanderplaner-backend unten). Gleiches Token auf beiden
-      # Seiten; der Default gilt nur fuer den lokalen Stack, Release setzt es als Secret.
+      # Seiten, ohne festen Fallback (sonst kennte jeder Container im Netz das Token); leer =
+      # Wanderplaner aus. Erzeugt von scripts/lib/env_migrate.sh bzw. scripts/e2e.sh.
       WANDERPLANER_URL: http://wanderplaner-backend:8000
-      WANDERPLANER_INTERNAL_TOKEN: ${WANDERPLANER_INTERNAL_TOKEN:-hocx-local-dev-wanderplaner-token}
+      WANDERPLANER_INTERNAL_TOKEN: ${WANDERPLANER_INTERNAL_TOKEN:-}
+      DOCKER_API_URL: http://docker-socket-proxy:2375
       TRAEFIK_DYNAMIC_CONFIG_DIR: /app/traefik_dynamic
       ROUTER_PREFIX: hocx
       TRAEFIK_MIDDLEWARE_PREFIX: ""
+      # Objektspeicher (docs-site/docs/technik/storage/): Schlüssel für Profil-Zugangsdaten und lokales Garage-S3.
+      STORAGE_CREDENTIALS_KEY: ${STORAGE_CREDENTIALS_KEY:-}
+      # Schlüssel der Mandanten-Exporte; leer ausserhalb der Produktion = aus AUTH_SECRET abgeleitet.
+      EXPORT_ENCRYPTION_KEY: ${EXPORT_ENCRYPTION_KEY:-}
+      STORAGE_WORK_ROOT: /app/storage-local/work
+      LOCAL_S3_ENDPOINT: http://local-s3:3900
+      LOCAL_S3_BUCKET: hocx-main
+      LOCAL_S3_ABGABEBOX_BUCKET: hocx-abgabebox
+      LOCAL_S3_ACCESS_KEY: ${LOCAL_S3_ACCESS_KEY:-}
+      LOCAL_S3_SECRET_KEY: ${LOCAL_S3_SECRET_KEY:-}
+      LOCAL_S3_ABGABEBOX_ACCESS_KEY: ${LOCAL_S3_ABGABEBOX_ACCESS_KEY:-}
+      LOCAL_S3_ABGABEBOX_SECRET_KEY: ${LOCAL_S3_ABGABEBOX_SECRET_KEY:-}
+    networks:
+      - default
+      - docker-api
+      - storage
+      - cache
     depends_on:
       db:
         condition: service_healthy
@@ -175,6 +282,7 @@ services:
       # auch wenn /app/storage spaeter auf ein Netzwerk-/Cloud-Volume umgehaengt wird
       # (siehe FileService.ensure_thumbnail).
       - ./storage-local/thumbnails:/app/storage-local/thumbnails
+      - ./storage-local/work:/app/storage-local/work
       # Zugriff auf die von der Abgabebox geschriebenen Dateien fuer Admin-Downloads
       # und zum Loeschen beim "Wieder aufschalten" (siehe submission_service.py).
       # Read-write, da das Haupt-Backend ohnehin voll vertrauenswuerdig ist - die
@@ -183,7 +291,7 @@ services:
       - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
       # Generiert die Router fuer Mandanten-Custom-Domains, gemeinsam mit Traefik (ro-Mount oben)
       - ./infra/traefik/dynamic:/app/traefik_dynamic
-    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --timeout-keep-alive 75"
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --timeout-keep-alive 75 --ws-max-size 65536 --no-access-log"
     healthcheck:
       # Kein curl im python:3.13-slim-Image (siehe Audit) - urllib aus der Stdlib genuegt fuer
       # einen simplen Liveness-Check gegen den Health-Endpoint aus app/main.py.
@@ -194,13 +302,19 @@ services:
       start_period: 40s
     labels:
       - "traefik.enable=true"
+      # Das Backend hängt zusätzlich im internen Netz docker-api - ohne diese Angabe wählt Traefik
+      # je nach Reihenfolge die dort unerreichbare IP.
+      - "traefik.docker.network=${COMPOSE_PROJECT_NAME}_default"
       # Main API router (all non-auth paths)
       - "traefik.http.routers.hocx-backend.rule=Host(`${TRAEFIK_DOMAIN}`) && ((PathPrefix(`/api`) && !PathPrefix(`/api/admin`)) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`))"
+      - "traefik.http.routers.hocx-backend.middlewares=api-inflight"
       - "traefik.http.routers.hocx-backend.entrypoints=websecure"
       - "traefik.http.routers.hocx-backend.tls.certresolver=letsencrypt"
       - "traefik.http.routers.hocx-backend.priority=100"
       - "traefik.http.routers.hocx-backend.service=hocx-backend"
       - "traefik.http.services.hocx-backend.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.api-inflight.inflightreq.amount=100"
+      - "traefik.http.middlewares.api-inflight.inflightreq.sourcecriterion.ipstrategy.depth=0"
       # Platform-Admin-API: nur auf dem lokal gebundenen OpenZiti-EntryPoint.
       - "traefik.http.routers.hocx-admin-api.rule=Host(`${TRAEFIK_ADMIN_DOMAIN}`) && PathPrefix(`/api/admin`)"
       - "traefik.http.routers.hocx-admin-api.entrypoints=adminsecure"
@@ -307,11 +421,11 @@ services:
       - "traefik.http.middlewares.gallery-upload-inflight.inflightreq.amount=2"
 
   # Wanderplaner: eigene Datenbank (PostGIS + pgRouting) fuer Touren, Wegenetz und OSM-
-  # Umgebungsdaten - getrennt von der hocX-Kerndatenbank, damit diese bei postgres:16 bleibt
+  # Umgebungsdaten - getrennt von der hocX-Kerndatenbank (postgres:18 ohne Geo-Erweiterungen),
   # und das mehrere hundert MB grosse Geodaten-Volumen nicht in Backups/Upgrades der Kern-DB
   # einfliesst. Kein Port nach aussen: nur wanderplaner-backend greift darauf zu.
   wanderplaner-db:
-    image: pgrouting/pgrouting:16-3.5-3.6
+    image: pgrouting/pgrouting:16-3.5-3.6@sha256:2d974c31dfa3b24aee8299a8741b59df5c510ab155b6d9bd7e41a76acc30ad83
     restart: unless-stopped
     mem_limit: 768m
     cpus: 1.0
@@ -335,7 +449,7 @@ services:
     environment:
       POSTGRES_DB: wanderplaner
       POSTGRES_USER: wanderplaner
-      POSTGRES_PASSWORD: ${WANDERPLANER_POSTGRES_PASSWORD:-wanderplaner}
+      POSTGRES_PASSWORD: ${WANDERPLANER_POSTGRES_PASSWORD}
     volumes:
       - wanderplaner_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -361,10 +475,10 @@ services:
         max-size: "10m"
         max-file: "3"
     environment:
-      WANDERPLANER_DATABASE_URL: postgresql+psycopg://wanderplaner:${WANDERPLANER_POSTGRES_PASSWORD:-wanderplaner}@wanderplaner-db:5432/wanderplaner
-      WANDERPLANER_APP_DATABASE_URL: postgresql+psycopg://wanderplaner_app:${WANDERPLANER_APP_DB_PASSWORD:-wanderplaner_app}@wanderplaner-db:5432/wanderplaner
-      WANDERPLANER_APP_DB_PASSWORD: ${WANDERPLANER_APP_DB_PASSWORD:-wanderplaner_app}
-      WANDERPLANER_INTERNAL_TOKEN: ${WANDERPLANER_INTERNAL_TOKEN:-hocx-local-dev-wanderplaner-token}
+      WANDERPLANER_DATABASE_URL: postgresql+psycopg://wanderplaner:${WANDERPLANER_POSTGRES_PASSWORD}@wanderplaner-db:5432/wanderplaner
+      WANDERPLANER_APP_DATABASE_URL: postgresql+psycopg://wanderplaner_app:${WANDERPLANER_APP_DB_PASSWORD}@wanderplaner-db:5432/wanderplaner
+      WANDERPLANER_APP_DB_PASSWORD: ${WANDERPLANER_APP_DB_PASSWORD}
+      WANDERPLANER_INTERNAL_TOKEN: ${WANDERPLANER_INTERNAL_TOKEN:-}
       WANDERPLANER_REDIS_URL: redis://redis:6379/2
       WANDERPLANER_ENVIRONMENT: development
     depends_on:
@@ -404,6 +518,11 @@ services:
     environment:
       PHOTO_WORKER_DATABASE_URL: ${PHOTO_WORKER_DATABASE_URL}
       STORAGE_ROOT: /app/storage
+      ABGABEBOX_STORAGE_ROOT: /app/storage/abgabebox-uploads
+      STORAGE_CREDENTIALS_KEY: ${STORAGE_CREDENTIALS_KEY:-}
+    networks:
+      - default
+      - storage
     depends_on:
       # Waits for the real healthcheck, not just "container started" - backend's `command`
       # runs `alembic upgrade head` before uvicorn, so healthy here means the
@@ -438,6 +557,10 @@ services:
       - path: .env
         required: false
     environment:
+      # Steuerbar fuer eine Instanz mit Echtdaten aus diesem Stack (Audit MAIN-OPS-009): dort
+      # HOCX_ENVIRONMENT=production in .env setzen, sonst sind /docs und /openapi.json offen und
+      # die Produktionssperren aus. docker-compose.dev.yml pinnt development.
+      HOCX_ENVIRONMENT: ${HOCX_ENVIRONMENT:-development}
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
       INTERNAL_API_URL: ${INTERNAL_API_URL}
       # See the backend service's comment above on why this needs to be explicit: without
@@ -446,6 +569,9 @@ services:
       # --env-file actually intended (e2e sets it to "" to disable the bridge entirely).
       TRAEFIK_DOMAIN: ${TRAEFIK_DOMAIN}
       TRAEFIK_ADMIN_DOMAIN: ${TRAEFIK_ADMIN_DOMAIN}
+      TRAEFIK_WEBSITE_DOMAIN: ${TRAEFIK_WEBSITE_DOMAIN:-}
+      WEBSITE_CONTACT_EMAIL: ${WEBSITE_CONTACT_EMAIL:-}
+      HOCX_APP_URL: ${HOCX_APP_URL:-}
     depends_on:
       - backend
     volumes:
@@ -453,7 +579,7 @@ services:
       - /app/node_modules
       - /app/.next
       - ./.git:/app/.git:ro
-    command: sh -c "export HOCX_VERSION=dev-$(git -C /app rev-parse --short HEAD 2>/dev/null || echo unknown) && npm run build && rm -rf .next/standalone/public .next/standalone/.next/static && cp -r public .next/standalone/public && cp -r .next/static .next/standalone/.next/static && HOSTNAME=0.0.0.0 PORT=3000 node .next/standalone/server.js"
+    command: sh -c "export HOCX_VERSION=dev-$(git -C /app rev-parse --short HEAD 2>/dev/null || echo unknown) && npm run build && rm -rf .next/standalone/public .next/standalone/.next/static .next/standalone/messages && cp -r public .next/standalone/public && cp -r .next/static .next/standalone/.next/static && cp -r messages .next/standalone/messages && HOSTNAME=0.0.0.0 PORT=3000 node .next/standalone/server.js"
     healthcheck:
       # "/" liefert bei fehlender Session ein 307 nach /login statt eines 200 - curl -f
       # akzeptiert das (nur >=400 gilt als Fehler), reicht als reiner Liveness-Check.
@@ -467,6 +593,9 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.hocx-frontend.rule=Host(`${TRAEFIK_DOMAIN}`) && !PathPrefix(`/admin`)"
+      - "traefik.http.middlewares.web-inflight.inflightreq.amount=200"
+      - "traefik.http.middlewares.web-inflight.inflightreq.sourcecriterion.ipstrategy.depth=0"
+      - "traefik.http.routers.hocx-frontend.middlewares=web-inflight"
       - "traefik.http.routers.hocx-frontend.entrypoints=websecure"
       - "traefik.http.routers.hocx-frontend.tls.certresolver=letsencrypt"
       - "traefik.http.routers.hocx-frontend.priority=10"
@@ -478,6 +607,16 @@ services:
       - "traefik.http.routers.hocx-admin-frontend.tls.certresolver=letsencryptdns"
       - "traefik.http.routers.hocx-admin-frontend.priority=10"
       - "traefik.http.routers.hocx-admin-frontend.service=hocx-frontend"
+      # Oeffentliche Website (Landing Page) auf der Hauptdomain - proxy.ts schreibt dort jeden
+      # Pfad auf /website um. Ohne TRAEFIK_WEBSITE_DOMAIN greift der Platzhalter nie, und der
+      # Cert-Resolver bleibt leer - sonst versucht Traefik ein ACME-Zertifikat fuer
+      # website.invalid zu holen und loggt bei jedem Start einen Fehler.
+      - "traefik.http.routers.hocx-website-frontend.rule=Host(`${TRAEFIK_WEBSITE_DOMAIN:-website.invalid}`)"
+      - "traefik.http.routers.hocx-website-frontend.middlewares=web-inflight"
+      - "traefik.http.routers.hocx-website-frontend.entrypoints=websecure"
+      - "traefik.http.routers.hocx-website-frontend.tls.certresolver=${TRAEFIK_WEBSITE_DOMAIN:+letsencrypt}"
+      - "traefik.http.routers.hocx-website-frontend.priority=10"
+      - "traefik.http.routers.hocx-website-frontend.service=hocx-frontend"
 
   # Oeffentliche Abgabebox (kein Login) auf eigener Subdomain, eigener Codebase,
   # eigene restricted DB-Rolle (siehe backend/alembic/versions/0020_abgabebox.py).
@@ -502,7 +641,13 @@ services:
       FRIENDLY_CAPTCHA_SITEKEY: ${FRIENDLY_CAPTCHA_SITEKEY}
       FRIENDLY_CAPTCHA_API_KEY: ${FRIENDLY_CAPTCHA_API_KEY}
       ABGABEBOX_CAPTCHA_SESSION_SECRET: ${ABGABEBOX_CAPTCHA_SESSION_SECRET}
+      FRIENDLY_CAPTCHA_VERIFY_URL: ${FRIENDLY_CAPTCHA_VERIFY_URL:-https://api.friendlycaptcha.com/api/v1/siteverify}
+      ABGABEBOX_DEFAULT_PRIVACY_URL: ${ABGABEBOX_DEFAULT_PRIVACY_URL:-}
       CLAMAV_HOST: clamav
+      STORAGE_CREDENTIALS_KEY: ${STORAGE_CREDENTIALS_KEY:-}
+    networks:
+      - default
+      - storage
     depends_on:
       db:
         condition: service_healthy
@@ -511,7 +656,7 @@ services:
     volumes:
       - ./abgabebox-backend:/app
       - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/storage
-    command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"
+    command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --no-access-log"
     healthcheck:
       # Kein curl im python:3.13-slim-Image (siehe Audit), analog zum Haupt-Backend oben.
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)"]
@@ -522,6 +667,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.abgabebox-backend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.abgabebox-backend.middlewares=api-inflight"
       - "traefik.http.routers.abgabebox-backend.entrypoints=websecure"
       - "traefik.http.routers.abgabebox-backend.tls.certresolver=letsencrypt"
       - "traefik.http.routers.abgabebox-backend.priority=100"
@@ -567,14 +713,301 @@ services:
       - "traefik.http.routers.abgabebox-public-get.tls.certresolver=letsencrypt"
       - "traefik.http.routers.abgabebox-public-get.priority=200"
       - "traefik.http.routers.abgabebox-public-get.service=hocx-abgabebox-backend"
-      - "traefik.http.routers.abgabebox-public-get.middlewares=abgabebox-public-ratelimit"
-      - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.average=30"
+      - "traefik.http.routers.abgabebox-public-get.middlewares=abgabebox-public-ratelimit,api-inflight"
+      # Gleicher Wert wie docker-compose.release.yml (Audit MAIN-OPS-014).
+      - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.average=60"
       - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.burst=20"
       - "traefik.http.middlewares.abgabebox-public-ratelimit.ratelimit.period=1m"
+      # Echtheitsprüfung (POST /api/public/verify): eigener Router VOR dem Upload-Router (der
+      # matcht sonst jeden POST unter /api/public mit 151-MiB-Body und In-Flight 2). Der Body ist
+      # nur ein Hash plus optionaler Dokument-ID - 4 KiB reichen weit.
+      - "traefik.http.routers.abgabebox-verify.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && Path(`/api/public/verify`) && Method(`POST`)"
+      - "traefik.http.routers.abgabebox-verify.entrypoints=websecure"
+      - "traefik.http.routers.abgabebox-verify.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.abgabebox-verify.priority=300"
+      - "traefik.http.routers.abgabebox-verify.service=hocx-abgabebox-backend"
+      - "traefik.http.routers.abgabebox-verify.middlewares=abgabebox-verify-ratelimit,abgabebox-verify-body-limit"
+      - "traefik.http.middlewares.abgabebox-verify-ratelimit.ratelimit.average=30"
+      - "traefik.http.middlewares.abgabebox-verify-ratelimit.ratelimit.burst=10"
+      - "traefik.http.middlewares.abgabebox-verify-ratelimit.ratelimit.period=1m"
+      - "traefik.http.middlewares.abgabebox-verify-body-limit.buffering.maxRequestBodyBytes=4096"
+
+  # Lokales S3 (Garage, docs-site/docs/technik/storage/lokales-s3.md). Beim ersten Deployment automatisch
+  # bereitgestellt; nur im internen Netz "storage" erreichbar, keine veröffentlichten Ports.
+  # Ob der Container laufen muss, entscheidet scripts/storage_controller.sh auf dem Host -
+  # gestoppt wird nur, nie gelöscht (Volume local_s3_data bleibt).
+  local-s3:
+    image: dxflrs/garage:v2.5.0@sha256:677e5b758e4425a325b811c425c026bf35a4bf42f7ddbaa773de3f4fd779a5a5
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 1.0
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:-}
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:-}
+    volumes:
+      - ./infra/garage/garage.toml:/etc/garage.toml:ro
+      - local_s3_data:/var/lib/garage
+    networks:
+      - storage
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Richtet Layout, Schlüssel und Buckets idempotent ein (infra/garage/bootstrap.py) und beendet sich.
+  storage-init:
+    build:
+      context: ./backend
+    restart: "no"
+    environment:
+      GARAGE_ADMIN_URL: http://127.0.0.1:3903
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:-}
+      LOCAL_S3_BUCKET: hocx-main
+      LOCAL_S3_ABGABEBOX_BUCKET: hocx-abgabebox
+      LOCAL_S3_ACCESS_KEY: ${LOCAL_S3_ACCESS_KEY:-}
+      LOCAL_S3_SECRET_KEY: ${LOCAL_S3_SECRET_KEY:-}
+      LOCAL_S3_ABGABEBOX_ACCESS_KEY: ${LOCAL_S3_ABGABEBOX_ACCESS_KEY:-}
+      LOCAL_S3_ABGABEBOX_SECRET_KEY: ${LOCAL_S3_ABGABEBOX_SECRET_KEY:-}
+    volumes:
+      - ./infra/garage/bootstrap.py:/bootstrap/bootstrap.py:ro
+    command: ["python3", "/bootstrap/bootstrap.py"]
+    # Admin-API lauscht nur auf 127.0.0.1 im local-s3-Container (infra/garage/garage.toml).
+    network_mode: "service:local-s3"
+    depends_on:
+      local-s3:
+        condition: service_healthy
+
+  # Storage-Migrations-Worker (app/workers/storage_worker.py): gleicher Code wie das Backend,
+  # eigener Prozess mit eigenem Ressourcenbudget. Mehrere Instanzen sind sicher (Lease/Fencing).
+  storage-worker:
+    build:
+      context: ./backend
+    user: "0:0"
+    restart: unless-stopped
+    mem_limit: 1024m
+    cpus: 1.0
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HOCX_PROCESS_KIND: storage-worker
+      # Ein Prozess mit wenigen Threads: kleiner Pool (Concurrency-Audit CONC-010, Verbindungsbudget).
+      DB_POOL_SIZE: "3"
+      DB_MAX_OVERFLOW: "2"
+      HOCX_ENVIRONMENT: development
+      DATABASE_URL: ${DATABASE_URL}
+      APP_DATABASE_URL: ${APP_DATABASE_URL}
+      AUTH_SECRET: ${AUTH_SECRET}
+      ADMIN_AUTH_SECRET: ${ADMIN_AUTH_SECRET}
+      PYTHONPATH: /app
+      STORAGE_ROOT: /app/storage
+      EXPORT_ROOT: /app/storage/exports
+      UPLOAD_ROOT: /app/storage/uploads
+      ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
+      STORAGE_CREDENTIALS_KEY: ${STORAGE_CREDENTIALS_KEY:-}
+      STORAGE_WORK_ROOT: /app/storage-local/work
+    command: ["python", "-m", "app.workers.storage_worker"]
+    volumes:
+      - ./backend:/app
+      - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
+      - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
+      - ./storage-local/work:/app/storage-local/work
+      # Ziel von scripts/backup_storage.sh (Objekt-Backup, siehe docs technik/storage/backup.md)
+      - ./backups/storage:/app/backups/storage
+    networks:
+      - default
+      - storage
+    depends_on:
+      backend:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Backup-Worker (docs-site/docs/technik/backup/). Im Dev-Stack nur mit Profil "backup":
+  #   docker compose --profile backup up -d backup-worker
+  # Repository z. B. lokal: BACKUP_REPOSITORY_URL=/backup-work/dev-repo, BACKUP_PASSPHRASE_FILE in .env.
+  backup-worker:
+    build:
+      context: ./backend
+    user: "0:0"
+    restart: unless-stopped
+    mem_limit: 1536m
+    cpus: 1.0
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HOCX_PROCESS_KIND: backup-worker
+      # Ein Prozess mit wenigen Threads: kleiner Pool (Concurrency-Audit CONC-010, Verbindungsbudget).
+      DB_POOL_SIZE: "3"
+      DB_MAX_OVERFLOW: "2"
+      HOCX_ENVIRONMENT: development
+      DATABASE_URL: ${DATABASE_URL}
+      AUTH_SECRET: ${AUTH_SECRET}
+      ADMIN_AUTH_SECRET: ${ADMIN_AUTH_SECRET}
+      PYTHONPATH: /app
+      STORAGE_ROOT: /app/storage
+      EXPORT_ROOT: /app/storage/exports
+      UPLOAD_ROOT: /app/storage/uploads
+      ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
+      STORAGE_CREDENTIALS_KEY: ${STORAGE_CREDENTIALS_KEY:-}
+      STORAGE_WORK_ROOT: /app/storage-local/work
+      REDIS_URL: redis://redis:6379/0
+      BACKUP_WORK_DIR: /backup-work
+    command: ["python", "-m", "app.workers.backup_worker"]
+    volumes:
+      - ./backend:/app
+      - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
+      - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
+      - ./storage-local/work:/app/storage-local/work
+      - ./backups/borg-work:/backup-work
+    networks:
+      - default
+      - storage
+    depends_on:
+      backend:
+        condition: service_healthy
+    profiles: [backup]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Dokument-Worker (app/workers/document_worker.py): PDF-Konvertierung (LibreOffice) und
+  # Textextraktion hochgeladener Dokumente, gleicher Code wie das Backend. Verarbeitet nicht
+  # vertrauenswürdige Dateien: eigenes, knappes Ressourcenbudget, keine Ports, kein Docker-Socket.
+  # Mehrere Instanzen sind sicher (Lease, FOR UPDATE SKIP LOCKED).
+  document-worker:
+    build:
+      context: ./backend
+    user: "0:0"
+    # Root nur wegen der Bind-Mount-Rechte im Dev-Checkout; ohne Capabilities und ohne
+    # Rechteausweitung, weil hier nicht vertrauenswürdige Dokumente verarbeitet werden.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    mem_limit: 1536m
+    cpus: 1.0
+    pids_limit: 256
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HOCX_ENVIRONMENT: development
+      DATABASE_URL: ${DATABASE_URL}
+      APP_DATABASE_URL: ${APP_DATABASE_URL}
+      # Keine Anmelde-/Admin-Secrets: zufällige Werte je Prozess (SECRETLESS_PROCESS_KINDS).
+      HOCX_PROCESS_KIND: document-worker
+      # Ein Prozess mit wenigen Threads: kleiner Pool (Concurrency-Audit CONC-010, Verbindungsbudget).
+      DB_POOL_SIZE: "3"
+      DB_MAX_OVERFLOW: "2"
+      PYTHONPATH: /app
+      STORAGE_ROOT: /app/storage
+      EXPORT_ROOT: /app/storage/exports
+      UPLOAD_ROOT: /app/storage/uploads
+      ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
+      STORAGE_CREDENTIALS_KEY: ${STORAGE_CREDENTIALS_KEY:-}
+      STORAGE_WORK_ROOT: /app/storage-local/work
+    command: ["python", "-m", "app.workers.document_worker"]
+    volumes:
+      - ./backend:/app
+      - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
+      - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
+      - ./storage-local/work:/app/storage-local/work
+    networks:
+      - default
+      - storage
+    depends_on:
+      backend:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Schwere Hintergrundarbeit ausserhalb der uvicorn-Worker (Concurrency-Audit Paket 10,
+  # app/workers/job_worker.py) - siehe docker-compose.release.yml.
+  job-worker:
+    build:
+      context: ./backend
+    user: "0:0"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    mem_limit: 3072m
+    cpus: 1.0
+    pids_limit: 512
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HOCX_ENVIRONMENT: development
+      DATABASE_URL: ${DATABASE_URL}
+      APP_DATABASE_URL: ${APP_DATABASE_URL}
+      HOCX_PROCESS_KIND: job-worker
+      # Wie beim Backend explizit, damit e2e/tests ihre eigene --env-file durchreichen.
+      # AUTH_SECRET ersetzt der Prozess durch einen Zufallswert (SESSIONLESS_PROCESS_KINDS).
+      ADMIN_AUTH_SECRET: ${ADMIN_AUTH_SECRET}
+      DB_POOL_SIZE: "6"
+      DB_MAX_OVERFLOW: "2"
+      DOCUMENT_RENDER_CONCURRENCY: "2"
+      PYTHONPATH: /app
+      STORAGE_ROOT: /app/storage
+      EXPORT_ROOT: /app/storage/exports
+      UPLOAD_ROOT: /app/storage/uploads
+      THUMBNAIL_ROOT: /app/storage-local/thumbnails
+      ABGABEBOX_STORAGE_ROOT: /app/abgabebox-storage
+      STORAGE_CREDENTIALS_KEY: ${STORAGE_CREDENTIALS_KEY:-}
+      STORAGE_WORK_ROOT: /app/storage-local/work
+      CLAMAV_HOST: clamav
+    command: ["python", "-m", "app.workers.job_worker"]
+    volumes:
+      - ./backend:/app
+      - ${HOCX_STORAGE_PATH:-./storage}:/app/storage
+      - ./storage-local/thumbnails:/app/storage-local/thumbnails
+      - ./storage-local/work:/app/storage-local/work
+      - ${HOCX_STORAGE_PATH:-./storage}/abgabebox-uploads:/app/abgabebox-storage
+    networks:
+      - default
+      - storage
+    depends_on:
+      backend:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   clamav:
-    image: clamav/clamav@sha256:9cb27d7660bdf66e9878c832cb433dd8aa152cfbe16f3c2c0084c80b04ae22b4
+    image: clamav/clamav@sha256:bda39705e291105049c3936e2803ac90b955172af8030f94f05dce1252df6c6d
     restart: unless-stopped
+    # Das Image prueft per Default nur 1x taeglich auf neue Signaturen. Verpasst clamd beim
+    # Containerstart die Reload-Benachrichtigung (Socket noch nicht bereit), bliebe es sonst
+    # bis zum naechsten Tag auf dem alten Stand - mit 12 Checks spaetestens nach 2 Stunden.
+    environment:
+      FRESHCLAM_CHECKS: "12"
     # Grosszuegiger als die anderen Services - die Signaturdatenbank allein braucht schon
     # mehrere hundert MB im Speicher, ein zu enges Limit fuehrt zu Crash-Loops statt Schutz.
     mem_limit: 1536m
@@ -625,13 +1058,14 @@ services:
       # falschem 404 zurueck) - hier war der Fix von damals nie nachgezogen worden.
       INTERNAL_ABGABEBOX_API_URL: https://${TRAEFIK_ABGABEBOX_DOMAIN}
       NEXT_PUBLIC_FRIENDLY_CAPTCHA_SITEKEY: ${FRIENDLY_CAPTCHA_SITEKEY}
+      FRIENDLY_CAPTCHA_PUZZLE_URL: ${FRIENDLY_CAPTCHA_PUZZLE_URL:-https://api.friendlycaptcha.com/api/v1/puzzle}
     depends_on:
       - abgabebox-backend
     volumes:
       - ./abgabebox-frontend:/app
       - /app/node_modules
       - /app/.next
-    command: sh -c "npm run build && rm -rf .next/standalone/public .next/standalone/.next/static && cp -r public .next/standalone/public && cp -r .next/static .next/standalone/.next/static && HOSTNAME=0.0.0.0 PORT=3000 node .next/standalone/server.js"
+    command: sh -c "npm run build && rm -rf .next/standalone/public .next/standalone/.next/static .next/standalone/messages && cp -r public .next/standalone/public && cp -r .next/static .next/standalone/.next/static && cp -r messages .next/standalone/messages && HOSTNAME=0.0.0.0 PORT=3000 node .next/standalone/server.js"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/"]
       interval: 30s
@@ -643,6 +1077,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.abgabebox-frontend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`)"
+      - "traefik.http.routers.abgabebox-frontend.middlewares=web-inflight"
       - "traefik.http.routers.abgabebox-frontend.entrypoints=websecure"
       - "traefik.http.routers.abgabebox-frontend.tls.certresolver=letsencrypt"
       - "traefik.http.routers.abgabebox-frontend.priority=10"
@@ -677,7 +1112,22 @@ services:
       - "traefik.http.routers.hocx-docs.priority=10"
       - "traefik.http.services.hocx-docs.loadbalancer.server.port=80"
 
+networks:
+  # Siehe docker-socket-proxy: internes Netz nur zwischen Backend und Proxy.
+  docker-api:
+    internal: true
+  # Siehe redis: internes Netz nur zwischen Backend und Redis.
+  cache:
+    internal: true
+  # Siehe traefik-socket-proxy: nur Traefik und sein Proxy.
+  traefik-docker-api:
+    internal: true
+  # Objektspeicher: nur Backend, Worker, Abgabebox und Foto-Worker erreichen das lokale S3.
+  storage:
+    internal: true
+
 volumes:
-  postgres_data:
+  postgres18_data:
   wanderplaner_postgres_data:
   clamav_db:
+  local_s3_data:

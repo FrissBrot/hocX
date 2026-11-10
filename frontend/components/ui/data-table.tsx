@@ -18,6 +18,7 @@ type DataTableProps = {
   children: ReactNode;
   emptyMessage?: string;
   className?: string;
+  footer?: ReactNode;
 };
 
 export function DataToolbar({
@@ -40,7 +41,7 @@ export function DataToolbar({
   );
 }
 
-export function DataTable({ columns, children, emptyMessage, className }: DataTableProps) {
+export function DataTable({ columns, children, emptyMessage, className, footer }: DataTableProps) {
   const isEmpty = Children.count(children) === 0;
   return (
     <div className="table-shell">
@@ -70,6 +71,7 @@ export function DataTable({ columns, children, emptyMessage, className }: DataTa
         <tbody>{children}</tbody>
       </table>
       {emptyMessage && isEmpty ? <div className="table-empty muted">{emptyMessage}</div> : null}
+      {footer ? <div className="table-footer">{footer}</div> : null}
     </div>
   );
 }

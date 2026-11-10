@@ -1,4 +1,3 @@
-import asyncio
 from contextlib import asynccontextmanager, contextmanager
 from typing import Iterator
 
@@ -6,9 +5,16 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import NullPool
 
+from app import link_scope  # noqa: F401  registriert den RLS-Hook (after_begin) für alle Sessions
 from app.config import settings
 
-engine = create_engine(settings.database_url, future=True, pool_pre_ping=True)
+# Pool je Worker (Concurrency-Audit CONC-010): Uploads sind über die Annahme begrenzt, der Rest
+# sind kurze Lesezugriffe. pool_timeout kurz -> schnell 503 mit Retry-After (main.py).
+engine = create_engine(
+    settings.database_url, future=True, pool_pre_ping=True, hide_parameters=True,
+    pool_size=5, max_overflow=3, pool_timeout=5,
+    connect_args={"application_name": "hocx-abgabebox-backend"},
+)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
 
@@ -21,9 +27,9 @@ def get_db():
 
 
 # H12 (2026-08-12 Audit): namespace offset for tenant_upload_lock below, kept well clear of the
-# small fixed advisory-lock ids (202600001-202600007) used for the cross-process singleton
-# background loops in this service's and the main backend's main.py, so the two can never
-# collide regardless of tenant_id.
+# small fixed advisory-lock ids (2026000xx, ledger in backend/app/core/background_loops.py) used
+# for the cross-process singleton background loops in this service's and the main backend's
+# main.py, so the two can never collide regardless of tenant_id.
 _TENANT_UPLOAD_LOCK_OFFSET = 300_000_000_000
 
 
@@ -42,7 +48,7 @@ def tenant_upload_lock(tenant_id: int) -> Iterator[None]:
     main backend - checked app/config.py and docker-compose.yml's abgabebox-backend service
     environment first). This mirrors the existing pg_advisory_lock/pg_advisory_unlock pattern
     used for this service's own cross-process singleton background loop
-    (app/main.py:quarantine_cleanup_loop, lock id 202600007) and the main backend's equivalents -
+    (app/main.py:quarantine_cleanup_loop, QUARANTINE_CLEANUP_LOCK_ID) and the main backend's equivalents -
     advisory locks are a plain function call, not a table grant, so they work fine under the
     'hocx_abgabebox' restricted DB role even though it has no SELECT/UPDATE/DELETE on most
     tables (see backend/alembic/versions/0020_abgabebox.py).
@@ -63,7 +69,8 @@ def tenant_upload_lock(tenant_id: int) -> Iterator[None]:
     """
     lock_key = _TENANT_UPLOAD_LOCK_OFFSET + tenant_id
     with engine.begin() as conn:
-        conn.execute(text("SELECT pg_advisory_xact_lock(:lock_key)"), {"lock_key": lock_key})
+        _set_lock_timeout(conn)
+        _acquire(conn, text("SELECT pg_advisory_xact_lock(:lock_key)"), {"lock_key": lock_key})
         yield
 
 
@@ -71,15 +78,41 @@ def tenant_upload_lock(tenant_id: int) -> Iterator[None]:
 # survives the upload log's commits without consuming the request connection pool.
 # Transaction scope releases the lock on errors, cancellation and connection loss.
 UPLOAD_LOCK_NAMESPACE = 909100001
-_upload_lock_engine = create_engine(settings.database_url, poolclass=NullPool)
+_upload_lock_engine = create_engine(
+    settings.database_url, poolclass=NullPool, hide_parameters=True,
+    connect_args={"application_name": "hocx-abgabebox-upload-lock"},
+)
+
+
+# Wartezeit auf den Upload-Lock des Mandanten (Concurrency-Audit CONC-008): vorher wurde ohne
+# Obergrenze alle 50 ms gepollt. Danach antwortet die Route 503 mit Retry-After, das Frontend
+# versucht es erneut.
+UPLOAD_LOCK_TIMEOUT_SECONDS = 30
+
+
+class UploadLockBusy(Exception):
+    """Der Upload-Lock des Mandanten war innerhalb von UPLOAD_LOCK_TIMEOUT_SECONDS nicht frei."""
+
+
+def _set_lock_timeout(conn) -> None:
+    conn.execute(text("SELECT set_config('lock_timeout', :value, true)"), {"value": f"{UPLOAD_LOCK_TIMEOUT_SECONDS}s"})
+
+
+def _acquire(conn, statement, params) -> None:
+    from sqlalchemy.exc import OperationalError
+
+    try:
+        conn.execute(statement, params)
+    except OperationalError as exc:
+        if getattr(getattr(exc, "orig", None), "sqlstate", None) == "55P03":  # lock_not_available
+            raise UploadLockBusy() from exc
+        raise
 
 
 @asynccontextmanager
-async def serialized_upload(tenant_id: int):
+async def serialized_upload(tenant_id: int):  # loop-ok: läuft im Worker-Thread der Upload-Route (app/offload.py)
+    """Blockierend mit Obergrenze - aufgerufen nur aus dem Worker-Thread der Upload-Route."""
     with _upload_lock_engine.begin() as conn:
-        while not conn.scalar(
-            text("SELECT pg_try_advisory_xact_lock(:ns, :tenant_id)"),
-            {"ns": UPLOAD_LOCK_NAMESPACE, "tenant_id": tenant_id},
-        ):
-            await asyncio.sleep(0.05)
+        _set_lock_timeout(conn)
+        _acquire(conn, text("SELECT pg_advisory_xact_lock(:ns, :tenant_id)"), {"ns": UPLOAD_LOCK_NAMESPACE, "tenant_id": tenant_id})
         yield

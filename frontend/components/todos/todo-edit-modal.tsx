@@ -1,15 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useParticipantSelectable } from "@/contexts/participant-date-context";
+
+import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Modal } from "@/components/ui/modal";
+import { ActionIcon } from "@/components/ui/action-icons";
 import { TagInput } from "@/components/ui/tag-input";
-import { TodoAssigneeMenu } from "./todo-assignee-menu";
+import { SearchableMultiSelect } from "@/components/ui/searchable-select";
+import { Badge } from "@/components/ui/badge";
 import { TodoDueMenu, DuePatch } from "./todo-due-menu";
+import { TodoFilePicker } from "./todo-file-picker";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { FileTypeIcon } from "@/components/files/file-type-icon";
 import { TODO_STATUS } from "@/components/protocol/protocol-editor-shared";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
-import { formatDate } from "@/lib/utils/format";
-import type { ParticipantSummary, TodoListItem } from "@/types/api";
+import { formatDate, formatFileSize } from "@/lib/utils/format";
+import type { ParticipantSummary, TodoDetails, TodoListItem } from "@/types/api";
 import { useConfirm } from "@/contexts/confirm-context";
 
 export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onClose, onSaved, onDeleted }: {
@@ -21,14 +29,35 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
   onSaved: (todo: TodoListItem) => void;
   onDeleted: () => void;
 }) {
+  const isParticipantSelectable = useParticipantSelectable(todo.protocol_date);
+  const t = useTranslations("todos");
+  const tCommon = useTranslations("common");
   const [draft, setDraft] = useState(todo);
+  const assignedIds = draft.assigned_participant_ids?.length ? draft.assigned_participant_ids : draft.assigned_participant_id ? [draft.assigned_participant_id] : [];
+  const assignedLabel = assignedIds.map((id) => participants.find((person) => person.id === id)?.display_name).filter(Boolean).join(", ") || draft.assigned_participant_name || t("nobodyLabel");
   const [duePatch, setDuePatch] = useState<DuePatch | null>(null);
   const [busy, setBusy] = useState(false);
+  // Notizen und Dateien kommen aus einem eigenen Endpunkt (nicht Teil der Todo-Liste/Exporte).
+  const [details, setDetails] = useState<TodoDetails | null>(null);
+  const [detailsDraft, setDetailsDraft] = useState<TodoDetails | null>(null);
   const confirm = useConfirm();
   const showToast = useToast();
   const editable = canEdit && !busy;
-  const dueLabel = draft.resolved_due_label || (draft.resolved_due_date ? formatDate(draft.resolved_due_date) : "Kein Enddatum");
+  const dueLabel = draft.resolved_due_label || (draft.resolved_due_date ? formatDate(draft.resolved_due_date) : t("noEndDate"));
   const overdueDays = draft.resolved_due_date ? Math.floor((new Date().setHours(0, 0, 0, 0) - new Date(`${draft.resolved_due_date}T00:00:00`).getTime()) / 86400000) : 0;
+
+  useEffect(() => {
+    let cancelled = false;
+    browserApiFetch<TodoDetails>(`/api/protocol-todos/${todo.id}/details`)
+      .then((loaded) => { if (!cancelled) { setDetails(loaded); setDetailsDraft(loaded); } })
+      .catch((error) => { if (!cancelled) showToast(error instanceof Error ? error.message : t("detailsLoadFailed"), "error"); });
+    return () => { cancelled = true; };
+    // showToast/t bewusst nicht als Abhängigkeit: nur beim Öffnen eines Todos laden
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todo.id]);
+
+  const notesChanged = !!details && !!detailsDraft && detailsDraft.notes.trim() !== details.notes.trim();
+  const filesChanged = !!details && !!detailsDraft && detailsDraft.files.map((file) => file.id).join() !== details.files.map((file) => file.id).join();
 
   async function save() {
     if (!editable || !draft.task.trim()) return;
@@ -36,60 +65,111 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
     try {
       const updated = await browserApiFetch<TodoListItem>(`/api/protocol-todos/${todo.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ task: draft.task.trim(), tags: draft.tags, assigned_participant_id: draft.assigned_participant_id,
+        body: JSON.stringify({ task: draft.task.trim(), tags: draft.tags, assigned_participant_ids: assignedIds,
           ...(!todo.submission_assignment_id ? { todo_status_id: draft.todo_status_id } : {}), ...duePatch }),
       });
+      if (detailsDraft && (notesChanged || filesChanged)) {
+        await browserApiFetch<TodoDetails>(`/api/protocol-todos/${todo.id}/details`, {
+          method: "PUT",
+          body: JSON.stringify({
+            ...(notesChanged ? { notes: detailsDraft.notes } : {}),
+            ...(filesChanged ? { file_ids: detailsDraft.files.map((file) => file.id) } : {}),
+          }),
+        });
+      }
       onSaved({ ...draft, ...updated });
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Todo konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("saveFailed"), "error");
     } finally { setBusy(false); }
   }
 
   async function remove() {
-    if (!await confirm({ message: "Dieses Todo löschen?", tone: "danger", confirmLabel: "Löschen" })) return;
+    if (!await confirm({ message: t("deleteConfirm"), tone: "danger", confirmLabel: tCommon("delete") })) return;
     setBusy(true);
     try {
       const result = await browserApiFetch<{ pending_delete: boolean; todo: TodoListItem | null }>(`/api/protocol-todos/${todo.id}`, { method: "DELETE" });
       if (result.pending_delete && result.todo) onSaved({ ...todo, ...result.todo });
       else onDeleted();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Todo konnte nicht gelöscht werden", "error");
+      showToast(error instanceof Error ? error.message : t("deleteFailed"), "error");
     } finally { setBusy(false); }
   }
 
   return <Modal open title={todo.task} className="todo-edit-modal" hideCloseButton onEscape={canEdit ? save : onClose} onClose={() => { if (!busy) onClose(); }}>
     <header className="todo-edit-heading">
-      <div className="todo-edit-eyebrow">Todo bearbeiten {todo.protocol_number && <><span>·</span><span className="todo-edit-number">{todo.protocol_number}</span></>}</div>
-      <input aria-label="Aufgabe" className="todo-edit-title" value={draft.task} disabled={!editable} onChange={(e) => setDraft({ ...draft, task: e.target.value })} />
-      <button type="button" className="todo-edit-close" aria-label="Schliessen" disabled={busy} onClick={onClose}>×</button>
+      <div className="todo-edit-eyebrow">{t("editEyebrow")} {todo.protocol_number && <><span>·</span><span className="todo-edit-number">{todo.protocol_number}</span></>}</div>
+      <input aria-label={t("colTask")} className="todo-edit-title" value={draft.task} disabled={!editable} onChange={(e) => setDraft({ ...draft, task: e.target.value })} />
+      <button type="button" className="todo-edit-close" title={tCommon("close")} aria-label={tCommon("close")} disabled={busy} onClick={onClose}><ActionIcon name="close" /></button>
     </header>
     <div className="todo-edit-body">
       <div className="todo-edit-main">
-        <div className="field-stack"><span className="field-label" id="todo-status-label">Status</span>
+        <div className="field-stack"><span className="field-label" id="todo-status-label">{t("statusLabel")}</span>
           <div className="todo-edit-status" role="group" aria-labelledby="todo-status-label">
-            {([['open', 'Offen'], ['in_progress', 'In Arbeit'], ['done', 'Erledigt']] as const).map(([code, label]) => <button key={code} type="button" aria-pressed={draft.todo_status_code === code || (code === 'done' && draft.todo_status_code === 'cancelled')} disabled={!editable || !!todo.submission_assignment_id} onClick={() => setDraft({ ...draft, todo_status_code: code, todo_status_id: TODO_STATUS[code] })}>{label}</button>)}
+            {([['open', t("statusOpenLabel")], ['in_progress', t("statusInProgressLabel")], ['done', t("statusDoneLabel")]] as const).map(([code, label]) => <button key={code} type="button" aria-pressed={draft.todo_status_code === code || (code === 'done' && draft.todo_status_code === 'cancelled')} disabled={!editable || !!todo.submission_assignment_id} onClick={() => setDraft({ ...draft, todo_status_code: code, todo_status_id: TODO_STATUS[code] })}>{label}</button>)}
           </div>
-          {todo.submission_assignment_id && <small className="muted">Wird automatisch durch die Abgabe geschlossen.</small>}
+          {todo.submission_assignment_id && <small className="muted">{t("autoClosedHint")}</small>}
         </div>
-        <div className="field-stack"><span className="field-label">Tags</span><TagInput value={draft.tags.join(',')} onChange={(value) => setDraft({ ...draft, tags: value.split(',').map((tag) => tag.trim()).filter(Boolean) })} suggestions={tagSuggestions} alwaysShowPlaceholder placeholder="Tag hinzufügen..." readOnly={!editable} /></div>
-        <div className="field-stack"><span className="field-label">Herkunft</span>
-          {todo.protocol_id ? <a className="todo-edit-source" href={`/protocols/${todo.protocol_id}`}>
+        <div className="field-stack"><span className="field-label">{t("colTags")}</span><TagInput value={draft.tags.join(',')} onChange={(value) => setDraft({ ...draft, tags: value.split(',').map((tag) => tag.trim()).filter(Boolean) })} suggestions={tagSuggestions} alwaysShowPlaceholder placeholder={t("addTagPlaceholder")} readOnly={!editable} /></div>
+        {/* Plain div, kein <label>: der RichTextEditor hat Toolbar-Buttons vor dem Eingabefeld */}
+        <div className="field-stack todo-edit-notes"><span className="field-label">{t("notesLabel")}</span>
+          {detailsDraft ? (canEdit || detailsDraft.notes.trim()
+            ? <RichTextEditor value={detailsDraft.notes} onChange={(notes) => setDetailsDraft((current) => current && { ...current, notes })} readOnly={!canEdit} placeholder={t("notesPlaceholder")} />
+            : <span className="muted">{t("notesEmpty")}</span>)
+            : <span className="muted">{t("filesLoading")}</span>}
+        </div>
+        <div className="field-stack"><span className="field-label">{t("filesLabel")}</span>
+          {detailsDraft && <>
+            {detailsDraft.files.length > 0 ? <ul className="todo-edit-files">
+              {detailsDraft.files.map((file) => <li key={file.id}>
+                <a className="todo-edit-file" href={file.content_url} target="_blank" rel="noreferrer">
+                  <FileTypeIcon name={file.original_name} />
+                  <span className="todo-file-name">{file.original_name}</span>
+                  {file.file_size_bytes != null && <small className="muted">{formatFileSize(file.file_size_bytes)}</small>}
+                </a>
+                {editable && <button type="button" className="button-icon-soft-sm" aria-label={t("removeFile", { name: file.original_name })} title={t("removeFile", { name: file.original_name })}
+                  onClick={() => setDetailsDraft((current) => current && { ...current, files: current.files.filter((item) => item.id !== file.id) })}><ActionIcon name="close" /></button>}
+              </li>)}
+            </ul> : !canEdit && <span className="muted">{t("filesEmpty")}</span>} {/* i18n-ok: JS-Ausdruck, kein UI-Text */}
+            {editable && <TodoFilePicker excludeIds={detailsDraft.files.map((file) => file.id)} onPick={(file) => setDetailsDraft((current) => current && { ...current, files: [...current.files, file] })} />}
+          </>}
+        </div>
+        <div className="field-stack"><span className="field-label">{t("originLabel")}</span>
+          {todo.task_package_name ? (
+            <span title={t("fromPackageTitle")}><Badge variant="info">{todo.task_package_name}</Badge></span>
+          ) : todo.protocol_id ? <a className="todo-edit-source" href={`/protocols/${todo.protocol_id}`}>
             <span className="todo-edit-source-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M6 3h8l4 4v14H6zM14 3v5h4" /></svg></span>
-            <span><strong>{todo.protocol_number}{todo.protocol_title ? ` · ${todo.protocol_title}` : ''}</strong>{todo.block_title && <small>Traktandum: {todo.block_title}</small>}</span><span className="todo-edit-source-arrow" aria-hidden="true">↗</span>
-          </a> : todo.reference_link && /^https?:\/\//i.test(todo.reference_link) ? <a className="todo-edit-source" href={todo.reference_link} target="_blank" rel="noreferrer">Abgabebox <span aria-hidden="true">↗</span></a> : <span className="muted">{todo.submission_assignment_id ? 'Abgabebox' : 'Manuell erstellt'}</span>}
+            <span><strong>{todo.protocol_number}{todo.protocol_title ? ` · ${todo.protocol_title}` : ''}</strong>{todo.block_title && <small>{t("agendaItemNamed", { title: todo.block_title })}</small>}</span><span className="todo-edit-source-arrow" aria-hidden="true">↗</span>
+          </a> : todo.reference_link && /^https?:\/\//i.test(todo.reference_link) ? <a className="todo-edit-source" href={todo.reference_link} target="_blank" rel="noreferrer">{t("submissionBoxLink")} <span aria-hidden="true">↗</span></a> : <span className="muted">{todo.submission_assignment_id ? t("submissionBoxLink") : t("manuallyCreated")}</span>} {/* i18n-ok: JS-Ausdruck, kein UI-Text */}
         </div>
       </div>
       <aside className="todo-edit-sidebar">
-        <div className="field-stack"><span className="field-label">Zugewiesen an</span>{editable ? <TodoAssigneeMenu label={draft.assigned_participant_name || 'Niemand'} participants={participants} activeId={draft.assigned_participant_id} onChange={(option) => setDraft({ ...draft, assigned_participant_id: option.id, assigned_participant_name: option.id ? option.display_name : null })} /> : <span>{draft.assigned_participant_name || 'Niemand'}</span>}</div>
-        <div className="field-stack"><span className="field-label">Fällig</span>{editable && todo.protocol_id ? <TodoDueMenu todoId={todo.id} label={dueLabel} onApply={(patch, label) => { setDuePatch(patch); setDraft({ ...draft, resolved_due_label: label }); }} /> : <span>{dueLabel}</span>}
-          {duePatch && <small className="muted">Wird beim Speichern übernommen.</small>}
-          {!duePatch && overdueDays > 0 && !['done', 'cancelled'].includes(draft.todo_status_code || '') && <small className="todo-edit-overdue">Überfällig seit {overdueDays} {overdueDays === 1 ? 'Tag' : 'Tagen'}</small>}
+        <div className="field-stack">
+          <span className="field-label">{t("assignedToLabel")}</span>
+          {editable ? <SearchableMultiSelect
+            options={participants}
+            getId={(person) => person.id}
+            getLabel={(person) => person.display_name}
+            isOptionSelectable={(person) => assignedIds.includes(person.id) || isParticipantSelectable(person)}
+            values={assignedIds}
+            triggerLabel={assignedLabel}
+            triggerProps={{ "aria-label": t("assignedToLabel") }}
+            onChange={(ids) => setDraft({
+              ...draft,
+              assigned_participant_ids: ids,
+              assigned_participant_id: ids[0] ?? null,
+              assigned_participant_name: ids.map((id) => participants.find((person) => person.id === id)?.display_name).filter(Boolean).join(", ") || null,
+            })}
+          /> : <span>{assignedLabel}</span>}
+        </div>
+        <div className="field-stack"><span className="field-label">{t("dueFieldLabel")}</span>{editable ? <TodoDueMenu todoId={todo.id} label={dueLabel} dueDate={draft.due_date} onApply={(patch, label) => { setDuePatch(patch); setDraft({ ...draft, ...patch, resolved_due_date: patch.due_date ?? null, resolved_due_label: label }); }} /> : <span>{dueLabel}</span>}
+          {duePatch && <small className="muted">{t("appliedOnSaveHint")}</small>}
+          {!duePatch && overdueDays > 0 && !['done', 'cancelled'].includes(draft.todo_status_code || '') && <small className="todo-edit-overdue">{t("overdueSince", { count: overdueDays })}</small>} {/* i18n-ok: JS-Ausdruck, kein UI-Text */}
         </div>
       </aside>
     </div>
     <footer className="todo-edit-footer">
-      {canEdit && <button type="button" className="todo-edit-delete" disabled={busy} onClick={() => void remove()}>Todo löschen</button>}
-      <div className="todo-edit-actions"><button type="button" className="button-secondary" disabled={busy} onClick={onClose}>Abbrechen</button>{canEdit && <button type="button" className="button-primary" disabled={busy || !draft.task.trim()} onClick={() => void save()}>{busy ? 'Wird gespeichert…' : 'Speichern'}</button>}</div>
+      {canEdit && <button type="button" className="todo-edit-delete" disabled={busy} onClick={() => void remove()}>{t("deleteButton")}</button>}
+      <div className="todo-edit-actions"><button type="button" className="button-secondary" disabled={busy} onClick={onClose}>{tCommon("cancel")}</button>{canEdit && <button type="button" className="button-primary" disabled={busy || !draft.task.trim()} onClick={() => void save()}>{busy ? t("savingEllipsis") : t("saveButton")}</button>}</div>
     </footer>
   </Modal>;
 }

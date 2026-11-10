@@ -12,14 +12,29 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from app.models.entities import ElementDefinition, ListDefinition, ListEntry, Participant, Protocol, Template
+from app.models.entities import (
+    ElementDefinition,
+    Event,
+    ListDefinition,
+    ListEntry,
+    Participant,
+    Protocol,
+    ProtocolElement,
+    ProtocolElementBlock,
+    ProtocolTodo,
+    Template,
+)
 from app.services.tenant_clone_service import TenantCloneService
 from tests.factories import (
     make_element_definition,
+    make_event,
     make_list_definition,
     make_list_entry,
     make_participant,
     make_protocol,
+    make_protocol_element,
+    make_protocol_element_block,
+    make_protocol_todo,
     make_template,
     make_tenant,
 )
@@ -121,6 +136,7 @@ def test_clone_full_remaps_matrix_block_list_links(db):
         db, source.id, "Matrix",
         blocks=[{
             "id": 1,
+            "element_type_id": 11,
             "configuration_json": {
                 "mode": "auto",
                 "auto_source": {"type": "list", "list_id": source_list.id, "event_tag_filter": None},
@@ -147,3 +163,147 @@ def test_clone_full_remaps_matrix_block_list_links(db):
     assert row_config["linked_list_entry_id"] == cloned_entry.id
     assert row_config["linked_list_id"] != source_list.id
     assert row_config["linked_list_entry_id"] != source_entry.id
+
+
+def test_clone_full_remaps_responsible_assignments_and_block_repeat_sources(db):
+    """protocol_element.responsible_assignments_snapshot and a block's repeat_source_id
+    (Event or ProtocolTodo) used to be copied verbatim - the clone's protocols kept
+    pointing at the source tenant's participants/list entries/events/todos."""
+    source = make_tenant(db, "Quelle")
+    participant = make_participant(db, source.id, "Anna")
+    definition = make_list_definition(db, source.id, column_one_value_type="participant")
+    entry = make_list_entry(db, definition.id, column_one_value={"participant_id": participant.id})
+    event = make_event(db, source.id, title="Lager")
+    template = make_template(db, source.id)
+    protocol = make_protocol(db, source.id, template.id)
+    element = make_protocol_element(db, protocol.id)
+    element.responsible_assignments_snapshot = [
+        {"participant_id": participant.id, "list_definition_id": definition.id, "list_entry_id": entry.id}
+    ]
+    todo_block = make_protocol_element_block(db, element.id, {}, sort_index=0, element_type_code="todo")
+    todo = make_protocol_todo(db, todo_block.id)
+    make_protocol_element_block(db, element.id, {"repeat_source_type": "event", "repeat_source_id": event.id}, sort_index=1)
+    make_protocol_element_block(db, element.id, {"repeat_source_type": "todo", "repeat_source_id": todo.id}, sort_index=2)
+
+    cloned = TenantCloneService().clone_full(db, source.id, "Quelle (Kopie)")
+
+    cloned_element = db.scalar(select(ProtocolElement).join(Protocol).where(Protocol.tenant_id == cloned.id))
+    cloned_participant = db.scalar(select(Participant).where(Participant.tenant_id == cloned.id))
+    cloned_definition = db.scalar(select(ListDefinition).where(ListDefinition.tenant_id == cloned.id))
+    cloned_entry = db.scalar(select(ListEntry).where(ListEntry.list_definition_id == cloned_definition.id))
+    cloned_event = db.scalar(select(Event).where(Event.tenant_id == cloned.id))
+    cloned_todo = db.scalar(select(ProtocolTodo).where(ProtocolTodo.tenant_id == cloned.id))
+    blocks = db.scalars(
+        select(ProtocolElementBlock).where(ProtocolElementBlock.protocol_element_id == cloned_element.id)
+        .order_by(ProtocolElementBlock.sort_index)
+    ).all()
+    assert cloned_element.responsible_assignments_snapshot == [
+        {"participant_id": cloned_participant.id, "list_definition_id": cloned_definition.id, "list_entry_id": cloned_entry.id}
+    ]
+    assert blocks[1].configuration_snapshot_json["repeat_source_id"] == cloned_event.id != event.id
+    assert blocks[2].configuration_snapshot_json["repeat_source_id"] == cloned_todo.id != todo.id
+
+
+def test_clone_full_rewrites_abgabe_element_refs_to_the_cloned_rows(db):
+    """element_ref stores "event-<public_id>" - every cloned row gets a fresh public_id, so
+    the clone's upload log and todos have to point at the CLONED event."""
+    from app.models.entities import SubmissionAssignment, SubmissionUploadLog, TodoStatus
+
+    source = make_tenant(db, "Quelle")
+    event = make_event(db, source.id, title="Lager")
+    assignment = SubmissionAssignment(
+        tenant_id=source.id, title="Fotos", public_slug="fotos", source_type="events", tag_filter="lager",
+    )
+    db.add(assignment)
+    db.flush()
+    element_ref = f"event-{event.public_id}"
+    db.add_all([
+        SubmissionUploadLog(assignment_id=assignment.id, element_ref=element_ref, status="success"),
+        ProtocolTodo(
+            tenant_id=source.id, task="Fotos hochladen", element_ref=element_ref, submission_assignment_id=assignment.id,
+            todo_status_id=db.scalar(select(TodoStatus.id).where(TodoStatus.code == "open")),
+        ),
+    ])
+    db.flush()
+
+    cloned = TenantCloneService().clone_full(db, source.id, "Quelle (Kopie)")
+
+    cloned_event = db.scalar(select(Event).where(Event.tenant_id == cloned.id))
+    expected = f"event-{cloned_event.public_id}"
+    assert cloned_event.public_id != event.public_id
+    assert db.scalar(
+        select(SubmissionUploadLog.element_ref).join(SubmissionAssignment).where(SubmissionAssignment.tenant_id == cloned.id)
+    ) == expected
+    assert db.scalar(select(ProtocolTodo.element_ref).where(ProtocolTodo.tenant_id == cloned.id)) == expected
+
+
+def test_clone_copies_document_studio_data(db, tmp_path, monkeypatch):
+    """Assets (mit Datei), Brand-Profile samt Revisionen, Mandantenvorlagen samt Revisionen,
+    Komponenten und Zuweisungen reisen beim Klon mit; alle Verweise zeigen danach auf die
+    Kopien, nie auf den Quellmandanten. Systemvorlagen bleiben geteilt."""
+    from app.core.config import settings
+    from app.documents import brand_service, template_service
+    from app.documents.brand import BrandTokens
+    from app.documents.layout import TemplateContent
+    from app.models import DocumentAsset, DocumentBrand, DocumentComponent, DocumentTemplate, DocumentTemplateAssignment, DocumentTemplateRevision, Template
+
+    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
+    source = make_tenant(db, "Stilquelle")
+    template = make_template(db, source.id)
+    logo_file = tmp_path / "document_assets" / "src.png"
+    logo_file.parent.mkdir(parents=True)
+    logo_file.write_bytes(b"logo")
+    logo = DocumentAsset(tenant_id=source.id, kind="image", category="logo", name="Logo", storage_path="document_assets/src.png")
+    db.add(logo)
+    db.flush()
+    brand = brand_service.create_brand(db, source.id, name="Vereinsstil", tokens=BrandTokens.model_validate({"assets": {"logo": str(logo.public_id)}}), is_default=True)
+    component = DocumentComponent(tenant_id=source.id, name="Kopf", schema_version=1, node_json={"type": "image", "id": "k", "source": {"kind": "asset", "asset_id": str(logo.public_id)}})
+    db.add(component)
+    db.flush()
+    content = TemplateContent.model_validate({"masters": [{"id": "default"}], "body": [{"type": "component_ref", "id": "ref", "component_id": str(component.public_id)}]})
+    document_template, _revision = template_service.create_template(db, source.id, name="Jahresbericht", document_type="custom", content=content)
+    template_service.publish(db, document_template, user_id=None)
+    db.add(DocumentTemplateAssignment(tenant_id=source.id, document_type="protocol", protocol_template_id=template.id, brand_id=brand.id))
+    db.flush()
+
+    cloned = TenantCloneService().clone_structure(db, source.id, "Stilquelle (Kopie)")
+
+    new_brand = db.scalar(select(DocumentBrand).where(DocumentBrand.tenant_id == cloned.id))
+    new_logo = db.scalar(select(DocumentAsset).where(DocumentAsset.tenant_id == cloned.id))
+    new_template = db.scalar(select(Template).where(Template.tenant_id == cloned.id))
+    new_component = db.scalar(select(DocumentComponent).where(DocumentComponent.tenant_id == cloned.id))
+    new_document_template = db.scalar(select(DocumentTemplate).where(DocumentTemplate.tenant_id == cloned.id))
+    new_assignment = db.scalar(select(DocumentTemplateAssignment).where(DocumentTemplateAssignment.tenant_id == cloned.id))
+    assert new_brand.id != brand.id and new_brand.is_default
+    assert brand_service.tokens_of(brand_service.current_revision(db, new_brand)).assets.logo == new_logo.public_id != logo.public_id
+    assert (tmp_path / new_logo.storage_path).read_bytes() == b"logo"
+    assert new_component.node_json["source"]["asset_id"] == str(new_logo.public_id)
+    published = db.get(DocumentTemplateRevision, new_document_template.published_revision_id)
+    assert published.template_id == new_document_template.id
+    assert published.content_json["body"][0]["component_id"] == str(new_component.public_id)
+    assert new_assignment.protocol_template_id == new_template.id and new_assignment.brand_id == new_brand.id
+
+
+def test_clone_full_copies_todo_notes_and_file_links(db):
+    from app.models.entities import ProtocolTodoFile, StoredFile
+
+    source = make_tenant(db, "Quelle")
+    template = make_template(db, source.id)
+    protocol = make_protocol(db, source.id, template.id)
+    element = make_protocol_element(db, protocol.id)
+    block = make_protocol_element_block(db, element.id, {}, sort_index=0, element_type_code="todo")
+    todo = make_protocol_todo(db, block.id)
+    todo.notes = "**Notiz**"
+    stored = StoredFile(tenant_id=source.id, original_name="plan.pdf", storage_path="test-clone/plan.pdf")
+    db.add(stored)
+    db.flush()
+    db.add(ProtocolTodoFile(protocol_todo_id=todo.id, stored_file_id=stored.id))
+    db.flush()
+
+    cloned = TenantCloneService().clone_full(db, source.id, "Quelle (Kopie)")
+
+    cloned_todo = db.scalar(select(ProtocolTodo).where(ProtocolTodo.tenant_id == cloned.id))
+    link = db.scalar(select(ProtocolTodoFile).where(ProtocolTodoFile.protocol_todo_id == cloned_todo.id))
+    assert cloned_todo.notes == "**Notiz**"
+    assert link is not None
+    assert db.get(StoredFile, link.stored_file_id).tenant_id == cloned.id

@@ -1,10 +1,11 @@
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlparse, urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.client_ip import client_ip
 from app.core.db import get_db
 from app.core.rate_limit import enforce_rate_limit
 from app.core.security import CurrentUser, get_optional_current_user
@@ -19,7 +20,7 @@ from app.schemas.mfa import (
     TotpEnrollmentStartRead,
     TotpLoginVerifyRequest,
 )
-from app.schemas.user import LoginRequest, SessionRead, TenantByDomainRead
+from app.schemas.user import BridgePreviewRead, BridgeRedeemRequest, LoginRequest, SessionRead, TenantByDomainRead
 from app.services import domain_bridge_service
 from app.services.auth_service import AuthService
 from app.services.tenant_service import build_tenant_profile_image_url
@@ -64,7 +65,7 @@ def _passkey_hostname(request: Request) -> str | None:
 
 @router.post("/login", response_model=LoginResponse)
 def login(payload: LoginRequest, response: Response, request: Request, db: Session = Depends(get_db)):
-    return service.login(db, response, payload, request_host=request.url.hostname)
+    return service.login(db, response, payload, request_host=request.url.hostname, client_address=client_ip(request))
 
 
 @router.post("/mfa/totp/verify", response_model=LoginResponse)
@@ -120,19 +121,6 @@ def verify_login_passkey(
     return service.verify_login_passkey(db, response, payload)
 
 
-def _client_ip(request: Request) -> str:
-    """Best-effort source IP for per-IP rate limiting on unauthenticated public endpoints.
-    Traefik is the only reverse proxy in front of this service and sets X-Forwarded-For to
-    the real client IP on every request; uvicorn isn't run with --proxy-headers here, so
-    request.client.host alone would just be Traefik's own container IP (audit finding,
-    2026-08-27, see tenant_by_domain below). Takes the first (leftmost / original client)
-    hop, not the last, which would be Traefik itself."""
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
-
-
 @router.get("/tenant-by-domain", response_model=TenantByDomainRead)
 def tenant_by_domain(domain: str, request: Request, db: Session = Depends(get_db)):
     """Public lookup used by the login page: resolves a tenant's own custom app domain back to
@@ -140,7 +128,7 @@ def tenant_by_domain(domain: str, request: Request, db: Session = Depends(get_db
     picking their organisation from a dropdown. Deliberately unauthenticated (used pre-login),
     but rate-limited per source IP (audit finding, 2026-08-27) - without a cap this doubled as
     a free domain-enumeration oracle."""
-    enforce_rate_limit(f"tenant-by-domain:{_client_ip(request)}", limit=20, period_seconds=60)
+    enforce_rate_limit(f"tenant-by-domain:{client_ip(request)}", limit=20, period_seconds=60)
     tenant = domain_bridge_service.resolve_tenant_by_app_domain(db, domain)
     if tenant is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown domain")
@@ -161,7 +149,7 @@ def logout(
 
 
 @router.get("/session", response_model=SessionRead)
-def session(request: Request, db: Session = Depends(get_db), user: CurrentUser | None = Depends(get_optional_current_user)):
+def session(request: Request, response: Response, db: Session = Depends(get_db), user: CurrentUser | None = Depends(get_optional_current_user)):
     # bridge_redirect_url is only ever computed for a request on the main domain, for a tenant
     # with a currently-healthy custom domain (see resolve_bridge_redirect) - the frontend is
     # additionally responsible for cooldown-guarding repeated attempts (see
@@ -176,20 +164,41 @@ def session(request: Request, db: Session = Depends(get_db), user: CurrentUser |
             user.current_tenant_id,
             mfa_verified=user.mfa_verified,
         )
-    return service.session(user, bridge_redirect_url)
+    return service.session(user, response, bridge_redirect_url)
 
 
 @router.get("/bridge")
-def bridge(token: str, db: Session = Depends(get_db)):
-    """Cross-domain session handoff: exchanges a one-time token (minted by login/select-tenant
-    on the main domain) for a session cookie scoped to whichever custom domain this request came
-    in on. Never takes a client-controlled redirect target - there is no open-redirect surface."""
-    # Cookies must be set directly on the Response object that actually gets returned - FastAPI
-    # discards Set-Cookie headers from an injected `Response` dependency the moment the route
-    # returns a different Response instance (like RedirectResponse) instead of plain data.
-    redirect = RedirectResponse(url="/", status_code=307)
-    ok = service.redeem_bridge_token(db, redirect, token)
-    if not ok:
-        fallback = f"https://{settings.traefik_domain}/login" if settings.traefik_domain else "/"
-        return RedirectResponse(url=fallback, status_code=302)
-    return redirect
+def bridge(token: str):
+    """Cross-domain session handoff, step 1: never logs in by itself any more (MAIN-SEC-006,
+    login CSRF via a link with an attacker-minted token). Sends the browser to the
+    confirmation page on this same host, which shows whose session it would get and redeems
+    the token only after an explicit click (POST below). Relative redirect, no client-controlled
+    target - there is no open-redirect surface.
+
+    Neue Links zeigen direkt auf die Bestätigungsseite mit dem Token im URL-Fragment (SEC-019,
+    domain_bridge_service.resolve_bridge_redirect); dieser Weg bleibt nur für Links, die vor dem
+    Update ausgestellt wurden, und reicht das Token ebenfalls als Fragment weiter."""
+    return RedirectResponse(url=f"/auth/bridge#{urlencode({'token': token})}", status_code=307)
+
+
+@router.post("/bridge/preview", response_model=BridgePreviewRead)
+def bridge_preview(payload: BridgeRedeemRequest, request: Request, db: Session = Depends(get_db)):
+    """Vorschau für die Bestätigungsseite. POST mit dem Token im Body statt GET mit Query, damit
+    es nicht in Access-Logs landet (SEC-019)."""
+    preview = service.preview_bridge_token(db, payload.token, request.url.hostname)
+    if preview is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Anmeldelink ist ungültig oder abgelaufen")
+    return preview
+
+
+@router.post("/bridge")
+def redeem_bridge(payload: BridgeRedeemRequest, request: Request, response: Response, db: Session = Depends(get_db)):
+    """Step 2, after the user confirmed: exchanges the one-time token for a session cookie on
+    this host. JSON body only (no form posts from foreign sites), and a present Origin header
+    must be this host."""
+    origin = request.headers.get("origin")
+    if origin is not None and urlparse(origin).hostname != request.url.hostname:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Ungültige Herkunft")
+    if not service.redeem_bridge_token(db, response, payload.token, request.url.hostname):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Anmeldelink ist ungültig oder abgelaufen")
+    return {"status": "ok"}

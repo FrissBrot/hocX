@@ -1,0 +1,172 @@
+{
+  "valueTypes": {
+    "text": "Testo libero",
+    "participant": "Un partecipante",
+    "participants": "Più partecipanti",
+    "event": "Un evento"
+  },
+  "defaultColumnOne": "Colonna 1",
+  "defaultColumnTwo": "Colonna 2",
+  "pageTitle": "Liste principali",
+  "pageDescriptionEmpty": "Liste liberamente definibili per materiale, incarichi o iscrizioni.",
+  "pageDescription": "Incarichi, gruppi, sponsor – utilizzabili nei verbali e nelle consegne.",
+  "newList": "+ Nuova lista",
+  "emptyState": {
+    "title": "Nessuna lista ancora presente",
+    "description": "Le liste sono tabelle liberamente definibili – ad es. prestito materiale, assegnazione incarichi o iscrizioni.",
+    "hint": "Le liste possono essere usate come fonte per le consegne."
+  },
+  "sidebar": {
+    "title": "Liste",
+    "totalCount": "{count} totali",
+    "search": "Cerca",
+    "searchPlaceholder": "Cerca liste…",
+    "empty": "Nessuna lista",
+    "entryCount": "{count, plural, one {# voce} other {# voci}}"
+  },
+  "notFoundInCycle": "Questa lista non esisteva ancora in questo ciclo.",
+  "noDataForReconstruct": "Non è stato possibile trovare dati per questa lista - né attualmente né in un altro ciclo.",
+  "columnsLabel": "Colonne: {one} · {two}",
+  "viewOption": {
+    "current": "Attuale",
+    "historical": "(storico)",
+    "noSnapshot": "(nessuno snapshot)",
+    "viewAriaLabel": "Vista"
+  },
+  "export": "Esporta",
+  "edit": "Modifica",
+  "deleteList": "Elimina lista",
+  "noNewEntries": "Non è possibile creare nuove voci - solo modificare o rimuovere quelle esistenti",
+  "selectListPrompt": "Scegli una lista o creane una nuova.",
+  "exportModal": {
+    "title": "Esporta lista",
+    "listLabel": "Lista",
+    "chooseList": "Scegli lista…",
+    "searchPlaceholder": "Cerca…",
+    "noListsFound": "Nessuna lista trovata",
+    "groupBy": "Raggruppa per",
+    "none": "Nessuno",
+    "filterByColumn": "Filtra per colonna",
+    "noFilter": "Nessun filtro",
+    "all": "Tutti",
+    "searchTermPlaceholder": "Termine di ricerca…",
+    "templateFallback": "Modello",
+    "preview": "Anteprima · {count} voci",
+    "selectListPrompt": "Scegli una lista."
+  },
+  "formModal": {
+    "createTitle": "Crea lista",
+    "editTitle": "Modifica lista",
+    "description": "Ogni lista ha esattamente due colonne. Il tipo di dato determina quale input sarà visibile in seguito nel blocco tabella e nel verbale.",
+    "name": "Nome lista",
+    "active": "Attivo",
+    "description2": "Descrizione",
+    "descriptionPlaceholder": "A cosa serve questa lista?",
+    "column1": "Colonna 1",
+    "column2": "Colonna 2",
+    "title": "Titolo",
+    "dataType": "Tipo di dato",
+    "save": "Salva lista",
+    "create": "Crea lista",
+    "namePlaceholder": "ad es. Incarichi",
+    "optional": "facoltativo",
+    "columns": "Colonne",
+    "columnsHint": "Sempre due – titolo e tipo di dati a scelta.",
+    "preview": "Anteprima della lista nel blocco tabella",
+    "cancel": "Annulla"
+  },
+  "toasts": {
+    "pdfExportFailed": "Esportazione PDF non riuscita",
+    "listSaved": "Lista salvata",
+    "listCreated": "Lista creata",
+    "listSaveFailed": "Impossibile salvare la lista",
+    "deleteListConfirm": "Eliminare definitivamente la lista? Tutte le voci di questa lista andranno perse irrimediabilmente.",
+    "deleteLabel": "Elimina",
+    "listDeleted": "Lista eliminata",
+    "listDeleteFailed": "Impossibile eliminare la lista",
+    "entryCreated": "Voce creata",
+    "entryCreateFailed": "Impossibile creare la voce",
+    "entrySaved": "Voce salvata",
+    "entrySaveFailed": "Impossibile salvare la voce",
+    "deleteEntryConfirm": "Eliminare definitivamente la voce? L'operazione non può essere annullata.",
+    "entryDeleted": "Voce eliminata",
+    "entryDeleteFailed": "Impossibile eliminare la voce",
+    "historicalEntrySaved": "Voce storica salvata",
+    "historicalEntrySaveFailed": "Impossibile salvare la voce storica",
+    "removeLabel": "Rimuovi",
+    "deleteHistoricalEntryConfirm": "Rimuovere questa voce dalla vista storica? Questo modifica permanentemente i dati storici.",
+    "historicalEntryRemoved": "Voce rimossa dalla vista storica",
+    "entryRemoveFailed": "Impossibile rimuovere la voce",
+    "deleteDraftEntryConfirm": "Rimuovere questa voce dalla bozza? Non verrà ripresa alla conferma.",
+    "snapshotCreated": "Snapshot creato per questo periodo",
+    "snapshotCreateFailed": "Impossibile creare lo snapshot"
+  },
+  "table": {
+    "departedParticipant": "Uscita il {date}",
+    "newEntryButton": "Nuova voce",
+    "actionsLabel": "Azioni",
+    "addRowTitle": "Aggiungi riga",
+    "discardNewRowTitle": "Scarta nuova riga",
+    "noValue": "Nessun valore",
+    "hideRemovedEntryTitle": "Nascondi voce rimossa",
+    "deleteRowTitle": "Elimina riga",
+    "deleteButton": "Elimina",
+    "emptyMessage": "Ancora nessuna voce.",
+    "selectedCount": "{count} selezionati",
+    "participantPickerTitle": "Scegli partecipanti",
+    "participantPickerDescription": "Selezione multipla per questo campo della lista.",
+    "search": "Cerca",
+    "participantFilterPlaceholder": "Filtra partecipanti",
+    "valuePlaceholder": "Valore",
+    "participantNullLabel": "Partecipante",
+    "eventNullLabel": "Evento",
+    "protocol": {
+      "occupied": "{filled} di {total} assegnati",
+      "occupiedRich": "<strong>{filled}</strong> di {total} assegnati",
+      "filterAll": "Tutti",
+      "filterOpen": "Aperti",
+      "filterChanged": "Modificati",
+      "filterEmpty": "Nessuna riga in questa vista.",
+      "nobodyAssigned": "Ancora nessuno assegnato",
+      "addPerson": "+ Persona",
+      "addPersonTo": "Assegna una persona a «{row}»",
+      "addedPerson": "Appena assegnato",
+      "removedPerson": "Rimosso",
+      "source": "Le righe provengono da Dati di base › Liste di base › {name}",
+      "legendNew": "Nuovo",
+      "legendRemoved": "Rimosso"
+    }
+  },
+  "inactive": "inattiva",
+  "searchList": "Cerca in «{name}»",
+  "unassigned": "{count} non assegnati",
+  "changed": "modificata il {date}",
+  "currentView": "Vista: Attuale",
+  "assign": "+ Assegna",
+  "addEntry": "+ Aggiungi voce",
+  "removePerson": "Rimuovi {name}",
+  "typeHints": {
+    "text": "Inserimento libero",
+    "participant": "Una sola persona",
+    "participants": "Qualsiasi numero di persone",
+    "event": "Collega un evento"
+  },
+  "previewValues": {
+    "text": {
+      "0": "Viaggio di andata",
+      "1": "Cassa del campo"
+    },
+    "participant": {
+      "0": "Noah Durrer",
+      "1": "Elias Imfeld"
+    },
+    "participants": {
+      "0": "Noah Durrer, Elias Imfeld",
+      "1": "Lino Enz, Timo Weber"
+    },
+    "event": {
+      "0": "05.10. · Campo autunnale",
+      "1": "19.12. · Natale nel bosco"
+    }
+  }
+}

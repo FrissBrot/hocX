@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from pathlib import Path
 
 from app.core.config import settings
+from app.core.error_log import record_system_error
 from app.core.cycle_utils import cycle_years_for_offsets
 from app import scanner
-from app.models import CycleConfig, GalleryImage, Event, ListDefinition, ListEntry, Participant, ProtocolTodo, StoredFile, SubmissionAssignment, SubmissionUpload
+from app.core.features_generated import F
+from app.models import CycleConfig, GalleryImage, Event, ListDefinition, ListEntry, Participant, ProtocolTodo, StoredFile, SubmissionAssignment, SubmissionUpload, TenantFeature, TodoStatus, ProtocolTodoFile
 from app.repositories.submission_repository import MANUAL_ELEMENT_REF, SubmissionRepository
 from app.schemas.submission import (
     SubmissionAssignmentCreate,
@@ -22,24 +25,30 @@ from app.schemas.submission import (
     SubmissionUploadLogEntry,
 )
 from app.services import public_id_service, submission_link_service
-from app.services.file_service import _safe_storage_path
+from app.services.task_package_service import set_todo_assignees, todo_assignee_ids
+from app.core.storage import ABGABEBOX, ObjectNotFound, get_object_store, validate_key
 
 
-def _move_from_quarantine(quarantine_rel_path: str, storage_root: str) -> str:
-    """Move a quarantined file to regular storage. Returns the new relative path."""
-    q_full = _safe_storage_path(storage_root, quarantine_rel_path)
+def quarantine_target_key(quarantine_rel_path: str) -> str:
+    """Pfad-Vertrag Quarantäne -> regulärer Speicher (geteilt mit abgabebox-backend, siehe
+    tests/fixtures/quarantine_path_parity.json): das führende "quarantine"-Segment fällt weg."""
+    validate_key(quarantine_rel_path)
     # quarantine/tenant-1/assignment-2/abc.pdf -> tenant-1/assignment-2/abc.pdf
     parts = Path(quarantine_rel_path).parts
-    if not parts or parts[0] != "quarantine":
+    if not parts or parts[0] != "quarantine" or len(parts) < 2:
         # Blindly dropping parts[0] on the (previously unchecked) assumption that it's
         # always "quarantine" silently moved the file to the wrong path - stripping a real
         # tenant-id/assignment-id segment instead - for any path that didn't start with it
         # (audit finding, 2026-08-25). Fail loudly instead.
         raise ValueError(f"Expected a quarantine-prefixed path, got {quarantine_rel_path!r}")
-    new_rel = str(Path(*parts[1:]))
-    new_full = _safe_storage_path(storage_root, new_rel)
-    new_full.parent.mkdir(parents=True, exist_ok=True)
-    q_full.rename(new_full)
+    return validate_key(Path(*parts[1:]).as_posix())
+
+
+def _move_from_quarantine(db: Session, quarantine_rel_path: str) -> str:
+    """Move a quarantined file to regular storage (Namespace "abgabebox"). Returns the new key.
+    Kopieren + Löschen über den Objektspeicher, beides im Journal der aufrufenden Transaktion."""
+    new_rel = quarantine_target_key(quarantine_rel_path)
+    get_object_store().move(db, ABGABEBOX, quarantine_rel_path, new_rel)
     return new_rel
 
 
@@ -51,22 +60,22 @@ def _element_ref(*, event_public_id: uuid.UUID | None, list_entry_public_id: uui
     return MANUAL_ELEMENT_REF
 
 
-def _resolve_event_responsible(event: Event, source: str | None) -> int | None:
+def _resolve_event_responsible(event: Event, source: str | None) -> list[int]:
+    """Alle Personen im Verantwortlichen-Feld des Termins (mehrere = gemeinsam verantwortlich)."""
     if not source:
-        return None
-    ids: list[int] = getattr(event, source, None) or []
-    return ids[0] if len(ids) == 1 else None
+        return []
+    return list(dict.fromkeys(int(pid) for pid in (getattr(event, source, None) or []) if pid))
 
 
-def _resolve_list_responsible(entry: object, source: str | None) -> int | None:
+def _resolve_list_responsible(entry: object, source: str | None) -> list[int]:
     if not source:
-        return None
+        return []
     value_json: dict = (
         getattr(entry, "column_one_value_json", {}) if source == "column_one"
         else getattr(entry, "column_two_value_json", {})
-    )
-    pid = value_json.get("participant_id")
-    return int(pid) if pid else None
+    ) or {}
+    ids = [value_json.get("participant_id")] + list(value_json.get("participant_ids") or [])
+    return list(dict.fromkeys(int(pid) for pid in ids if pid))
 
 
 def _parse_element_ref(db: Session, element_ref: str) -> tuple[int | None, int | None]:
@@ -147,6 +156,7 @@ class SubmissionService:
         )
         entity = SubmissionAssignment(tenant_id=tenant_id, links=links, **values)
         created = self.repository.create_assignment(db, entity)
+        self.sync_todos_if_tracked(db, created)
         return self._assignment_read(created)
 
     def update_assignment(
@@ -165,6 +175,7 @@ class SubmissionService:
                 db.commit()
                 db.refresh(assignment)
                 self.refresh_todo_links(db, assignment)
+                self.sync_todos_if_tracked(db, assignment)
             return self._assignment_read(assignment)
         if "list_definition_id" in values:
             values["list_definition_id"] = self._resolve_list_definition_tenant(
@@ -190,6 +201,7 @@ class SubmissionService:
         updated = self.repository.update_assignment(db, assignment, values)
         if link_ids is not None:
             self.refresh_todo_links(db, updated)
+        self.sync_todos_if_tracked(db, updated)
         return self._assignment_read(updated)
 
     def _resolve_list_definition_tenant(self, db: Session, list_definition_public_id: uuid.UUID | None, *, tenant_id: int) -> int | None:
@@ -234,10 +246,13 @@ class SubmissionService:
         )
 
     def delete_assignment(self, db: Session, assignment_id: int) -> bool:
+        """Löscht die Abgabe samt aller eingereichten Dateien (deletion_service, PRIV-003)."""
+        from app.services import deletion_service
+
         assignment = self.repository.get_assignment(db, assignment_id)
         if assignment is None:
             return False
-        self.repository.delete_assignment(db, assignment)
+        deletion_service.delete_assignment(db, assignment, delete_file_ids=None, actor_user_id=None)
         return True
 
     def _validate_source_fields(self, payload: SubmissionAssignmentCreate) -> None:
@@ -295,7 +310,7 @@ class SubmissionService:
                         (event.event_end_date or event.event_date) + timedelta(days=assignment.offset_days_after)
                         if assignment.offset_days_after is not None else None
                     ),
-                    "responsible_participant_id": _resolve_event_responsible(event, source),
+                    "responsible_participant_ids": _resolve_event_responsible(event, source),
                 }
                 for event in events
             ]
@@ -314,7 +329,7 @@ class SubmissionService:
                     "sort_date": None,
                     "window_start": None,
                     "window_end": assignment.deadline,
-                    "responsible_participant_id": None,
+                    "responsible_participant_ids": [],
                 }
             ]
 
@@ -347,7 +362,7 @@ class SubmissionService:
                 "sort_date": None,
                 "window_start": None,
                 "window_end": assignment.deadline,
-                "responsible_participant_id": _resolve_list_responsible(entry, source),
+                "responsible_participant_ids": _resolve_list_responsible(entry, source),
             }
             for entry in entries
         ]
@@ -465,6 +480,9 @@ class SubmissionService:
             else:
                 status = "open"
 
+            responsible_ids = raw.get("responsible_participant_ids") or []
+            mapping = public_id_service.resolve_public_ids(db, Participant, responsible_ids) if responsible_ids else {}
+            responsible_public_ids = [mapping[pid] for pid in responsible_ids if pid in mapping]
             results.append(
                 SubmissionElementRead(
                     element_ref=element_ref,
@@ -475,9 +493,8 @@ class SubmissionService:
                     submitted_at=submitted_at,
                     upload_id=element_uploads[-1].public_id if element_uploads else None,
                     files=files,
-                    responsible_participant_id=public_id_service.resolve_public_id(db, Participant, raw["responsible_participant_id"])
-                    if raw.get("responsible_participant_id")
-                    else None,
+                    responsible_participant_id=responsible_public_ids[0] if responsible_public_ids else None,
+                    responsible_participant_ids=responsible_public_ids,
                 )
             )
         return results
@@ -533,58 +550,122 @@ class SubmissionService:
         return next(element for element in elements if element.element_ref == element_ref)
 
     def sync_todos_for_event(self, db: Session, event: Event) -> None:
-        if not event.tag:
-            return
-        assignments = self.repository.list_assignments(db, tenant_id=event.tenant_id)
-        for assignment in assignments:
-            if (
-                assignment.source_type == "events"
-                and assignment.tag_filter == event.tag
-                and assignment.responsible_participant_source
-            ):
-                try:
-                    self.sync_submission_todos(db, assignment)
-                except Exception:
-                    pass
+        """Nach Anlegen/Ändern eines Termins. Gleicht alle Abgaben des Mandanten ab, nicht nur
+        die mit dem neuen Tag: bei einem Tag-Wechsel muss auch die Abgabe des alten Tags ihre
+        Pendenz verlieren, und Listen-Abgaben zeigen Termintitel."""
+        self.sync_todos_for_tenant(db, tenant_id=event.tenant_id)
+
+    def sync_todos_for_list(self, db: Session, *, tenant_id: int, list_definition_id: int) -> None:
+        """Nach Änderungen an Einträgen einer Liste: Todos der Listen-Abgaben nachführen, die
+        diese Liste als Quelle haben (Verantwortliche je Eintrag)."""
+        for assignment in self.repository.list_assignments(db, tenant_id=tenant_id):
+            if assignment.source_type == "list" and assignment.list_definition_id == list_definition_id:
+                self.sync_todos_if_tracked(db, assignment)
+
+    def sync_todos_for_tenant(self, db: Session, *, tenant_id: int) -> None:
+        """Alle Abgaben eines Mandanten abgleichen - nach Änderungen, die mehrere Abgaben treffen
+        können (Termin gelöscht, Tag umbenannt, Import)."""
+        for assignment in self.repository.list_assignments(db, tenant_id=tenant_id):
+            if assignment.source_type != "manual":
+                self.sync_todos_if_tracked(db, assignment)
+
+    def sync_all_todos(self, db: Session) -> dict[str, int]:
+        """Job submission_todo_sync: gleicht alle Abgaben aller Mandanten mit gebuchter Abgabebox
+        ab. Fängt auf, was kein direkter Auslöser abdeckt (Zykluswechsel, verknüpfte Dateien aus
+        dem Upload-Import, Änderungen an Wegen ohne eigenen Abgleich). Idempotent."""
+        booked = select(TenantFeature.tenant_id).where(
+            TenantFeature.feature_code == F.ABGABEBOX, TenantFeature.access == "full"
+        )
+        rows = db.execute(
+            select(SubmissionAssignment.id, SubmissionAssignment.tenant_id)
+            .where(SubmissionAssignment.tenant_id.in_(booked), SubmissionAssignment.source_type != "manual")
+            .order_by(SubmissionAssignment.id)
+        ).all()
+        synced = failed = 0
+        for assignment_id, tenant_id in rows:
+            assignment = db.get(SubmissionAssignment, assignment_id)
+            if assignment is None:
+                continue
+            if self.sync_todos_if_tracked(db, assignment):
+                synced += 1
+            else:
+                failed += 1
+        if failed:
+            raise RuntimeError(f"{failed} Abgabe(n) konnten nicht abgeglichen werden")
+        return {"assignments": synced}
+
+    def sync_todos_if_tracked(self, db: Session, assignment: SubmissionAssignment) -> bool:
+        """Automatischer Todo-Abgleich (FAR-010): nach Anlegen/Ändern einer Abgabe, eines
+        Termins oder eines Listeneintrags und periodisch im Job submission_todo_sync.
+
+        Ohne erreichbaren Link gibt es nichts abzugleichen (erwarteter Zustand, kein Fehler).
+        Ein unerwarteter Fehler bricht die auslösende Änderung nicht ab, landet aber im
+        Fehlerprotokoll. Rückgabe False nur bei einem solchen Fehler."""
+        if submission_link_service.preferred_link(assignment) is None:
+            return True
+        tenant_id = assignment.tenant_id
+        try:
+            self.sync_submission_todos(db, assignment)
+        except Exception as exc:
+            # Nur ein Datenbankfehler hinterlässt eine abgebrochene Transaktion; alles andere
+            # lässt die bereits committete auslösende Änderung unberührt.
+            if isinstance(exc, SQLAlchemyError):
+                db.rollback()
+            record_system_error(db, exc=exc, tenant_id=tenant_id)
+            return False
+        return True
 
     def sync_submission_todos(self, db: Session, assignment: SubmissionAssignment) -> dict:
+        """Eine Pendenz je Element mit Verantwortlicher Person; Titel, Person, Frist und Link
+        folgen dem Element. Hat das Element schon Dateien, ist die Pendenz erledigt (auch bei
+        direkt verknüpften Dateien, die den Datenbank-Trigger nicht auslösen).
+
+        Offene Pendenzen, deren Element weggefallen ist (Termin gelöscht, Tag oder Zyklus
+        gewechselt, Verantwortliche entfernt, Abgabe ohne Verantwortlichen-Quelle), werden
+        gelöscht. Erledigte bleiben als Verlauf stehen."""
         link = submission_link_service.preferred_link(assignment)
         if link is None:
             raise ValueError("Die Abgabe ist über keinen Link erreichbar – bitte zuerst einen Link auswählen")
 
-        raw_elements = self._resolve_raw_elements(db, assignment)
+        raw_elements = self._resolve_raw_elements(db, assignment) if assignment.responsible_participant_source else []
+        states = (
+            {element.element_ref: element for element in self.get_assignment_elements(db, assignment)}
+            if raw_elements else {}
+        )
         existing = self.repository.list_todos_for_submission_assignment(db, assignment.id)
         todos_by_ref: dict[str, ProtocolTodo] = {t.element_ref: t for t in existing if t.element_ref}
+        statuses = dict(db.execute(select(TodoStatus.code, TodoStatus.id)).all())
+        open_id, done_id = statuses.get("open", 1), statuses.get("done", 3)
+        cancelled_id = statuses.get("cancelled", done_id)
+        closed_ids = {statuses[code] for code in ("done", "cancelled") if code in statuses}
 
-        created = 0
-        updated = 0
+        created = updated = removed = 0
         base_url = submission_link_service.abgabebox_base_url(db, assignment.tenant_id)
+        current_refs: set[str] = set()
 
         for raw in raw_elements:
-            participant_id = raw.get("responsible_participant_id")
-            if not participant_id:
+            participant_ids = raw.get("responsible_participant_ids") or []
+            if not participant_ids:
                 continue
             element_ref = _element_ref(event_public_id=raw["event_public_id"], list_entry_public_id=raw["list_entry_public_id"])
+            current_refs.add(element_ref)
             url = f"{submission_link_service.link_url(base_url, link)}/{assignment.public_slug}/{element_ref}"
             task = f"{assignment.title}: {raw['label']}"
             due_date = raw.get("window_end")
+            state = states.get(element_ref)
+            # Nur geprüfte Dateien erledigen die Pendenz; Quarantäne/Scanfehler nicht (der Job
+            # holt das nach, sobald der Scan sauber ist)
+            has_files = bool(state and any(file.scan_status == "clean" for file in state.files))
 
-            existing_todo = todos_by_ref.get(element_ref)
-            if existing_todo is not None:
-                existing_todo.task = task
-                existing_todo.assigned_participant_id = participant_id
-                existing_todo.due_date = due_date
-                existing_todo.reference_link = url
-                db.add(existing_todo)
-                updated += 1
-            else:
+            todo = todos_by_ref.get(element_ref)
+            if todo is None:
                 todo = ProtocolTodo(
                     tenant_id=assignment.tenant_id,
                     protocol_element_block_id=None,
                     sort_index=0,
                     task=task,
-                    assigned_participant_id=participant_id,
-                    todo_status_id=1,
+                    assigned_participant_id=participant_ids[0],
+                    todo_status_id=open_id,
                     due_date=due_date,
                     reference_link=url,
                     tags=[],
@@ -592,10 +673,38 @@ class SubmissionService:
                     element_ref=element_ref,
                 )
                 db.add(todo)
+                db.flush()
                 created += 1
+            else:
+                updated += 1
+            todo.task = task
+            todo.due_date = due_date
+            todo.reference_link = url
+            # Alle Verantwortlichen des Elements (mehrere = gemeinsam). Die Anzeige liest
+            # protocol_todo_assignee vor assigned_participant_id, daher immer beide nachführen.
+            if todo_assignee_ids(db, todo.id) != participant_ids or todo.assigned_participant_id != participant_ids[0]:
+                set_todo_assignees(db, todo, participant_ids)
+            if has_files and todo.todo_status_id not in closed_ids:
+                todo.todo_status_id = done_id
+                todo.completed_at = state.submitted_at or datetime.now(UTC)
+            db.add(todo)
+
+        for element_ref, todo in todos_by_ref.items():
+            if element_ref not in current_refs and todo.todo_status_id not in closed_ids:
+                # Von Hand ergänzte Pendenzen (Notizen, Dateien) nicht löschen, nur abbrechen -
+                # fällt das Element nur kurz weg, bleibt die Arbeit erhalten
+                has_details = (todo.notes or "").strip() or db.scalar(
+                    select(ProtocolTodoFile.protocol_todo_id).where(ProtocolTodoFile.protocol_todo_id == todo.id).limit(1)
+                )
+                if has_details:
+                    todo.todo_status_id = cancelled_id
+                    db.add(todo)
+                else:
+                    db.delete(todo)
+                removed += 1
 
         db.commit()
-        return {"created": created, "updated": updated}
+        return {"created": created, "updated": updated, "removed": removed}
 
     def refresh_todo_links(self, db: Session, assignment: SubmissionAssignment) -> None:
         """Points the reference_link of the Abgabe's existing todos at the current preferred
@@ -624,11 +733,14 @@ class SubmissionService:
         pending = self.repository.list_pending_files_for_assignment(db, assignment_id=assignment_id)
         results = {"scanned": len(pending), "clean": 0, "infected": 0, "still_pending": 0}
         for stored_file, element_ref in pending:
-            file_path = _safe_storage_path(settings.abgabebox_storage_root, stored_file.storage_path)
-            result = scanner.scan_file(file_path, host=settings.clamav_host, port=settings.clamav_port)
+            try:
+                with get_object_store().local_copy(ABGABEBOX, stored_file.storage_path) as file_path:
+                    result = scanner.scan_file(file_path, host=settings.clamav_host, port=settings.clamav_port)
+            except ObjectNotFound:
+                result = "error"
             if result == "clean":
                 try:
-                    new_path = _move_from_quarantine(stored_file.storage_path, settings.abgabebox_storage_root)
+                    new_path = _move_from_quarantine(db, stored_file.storage_path)
                 except ValueError:
                     # _move_from_quarantine now rejects a storage_path that doesn't
                     # actually start with "quarantine/" instead of silently mismoving it

@@ -1,7 +1,7 @@
 """Shared aggregation helpers for the statistics dashboard and the PDF chart generator.
 
 Used by both app/api/routes/statistics.py (/statistics/overview API) and
-app/services/chart_service.py (matplotlib PNGs embedded in exported PDFs). The two call
+app/documents/providers/statistics.py (Diagramme und Kennzahlen der Dokument-Engine). The two call
 sites used to implement the attendance/groups/fines/todo aggregation logic independently
 and had already begun to drift (2026-08-12 audit, findings M4/M10/M11/M12) - keep the
 logic here instead, so a rule change only has to be made in one place.
@@ -16,12 +16,13 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
-from sqlalchemy import Row, or_, select, text
+from sqlalchemy import Row, Date, cast, func, select, text
 from sqlalchemy.orm import Session
 
+from app.core.permissions import P
 from app.models.entities import (
     ElementType,
     Protocol,
@@ -36,9 +37,33 @@ from app.models.entities import (
 GROUPS_LIST_NAME = "Gruppen"
 
 
+def chart_cycle_bounds(db: Session, tenant_id: int, config_id, offset: int = 0):
+    """Dieselbe relative Zykluslogik wie bei Abgaben; Bezug ist der heutige Zyklus."""
+    from app.core.cycle_utils import cycle_years_for_offsets, reset_boundary
+    from app.models.entities import CycleConfig
+    from uuid import UUID
+
+    if not config_id:
+        return None
+    config = db.scalar(select(CycleConfig).where(
+        CycleConfig.tenant_id == tenant_id, CycleConfig.public_id == UUID(str(config_id)),
+    ))
+    if config is None:
+        raise ValueError("Zyklus nicht gefunden")
+    year = next(iter(cycle_years_for_offsets(date.today(), config.reset_month, config.reset_day, [offset])))
+    # cycle_year ist das Startjahr, auch bei Kalenderjahren (Reset am 31.12.).
+    boundary_year = year - 1 if config.reset_month == 12 and config.reset_day == 31 else year
+    return (reset_boundary(boundary_year, config.reset_month, config.reset_day) + timedelta(days=1),
+            reset_boundary(boundary_year + 1, config.reset_month, config.reset_day))
+
+
+def _date_conditions(column, bounds):
+    return [] if bounds is None else [column >= bounds[0], column <= bounds[1]]
+
+
 # ── Attendance ────────────────────────────────────────────────────────────────
 
-def fetch_attendance_blocks(db: Session, tenant_id: int) -> list[tuple[date, dict]]:
+def fetch_attendance_blocks(db: Session, tenant_id: int, bounds: tuple[date, date] | None = None) -> list[tuple[date, dict]]:
     """Raw (protocol_date, configuration_snapshot_json) rows for every attendance block
     that counts towards statistics/charts.
 
@@ -59,6 +84,7 @@ def fetch_attendance_blocks(db: Session, tenant_id: int) -> list[tuple[date, dic
             Protocol.tenant_id == tenant_id,
             Protocol.status.in_(["durchgeführt", "abgeschlossen"]),
             ProtocolElementBlock.element_type_id == attendance_type_id,
+            *_date_conditions(Protocol.protocol_date, bounds),
         )
         .order_by(Protocol.protocol_date)
     ).all()
@@ -77,7 +103,7 @@ class AttendanceCounts:
         return self.present + self.late + self.absent + self.excused
 
     def bump(self, status: str) -> None:
-        # Four-value status, matching export_service's counting: "late" is its own
+        # Four-value status, matching the document engine's attendance block: "late" is its own
         # bucket, not lumped into "absent" (a late arrival is not the same as a no-show).
         if status == "present":
             self.present += 1
@@ -135,18 +161,19 @@ def aggregate_attendance(
 
 # ── Todos ─────────────────────────────────────────────────────────────────────
 
-def fetch_todo_rows(db: Session, tenant_id: int) -> list[Row]:
+def fetch_todo_rows(db: Session, tenant_id: int, bounds: tuple[date, date] | None = None) -> list[Row]:
     return db.execute(
         select(TodoStatus.code, ProtocolTodo.completed_at)
         # LEFT JOINs - protocol_element_block_id is nullable (standalone todos and
         # submission-assignment/Abgabebox-generated todos have no block), an INNER JOIN
-        # here silently drops both kinds. Those todos carry their own ProtocolTodo.tenant_id
-        # instead, checked in the WHERE below.
+        # here silently drops both kinds. Der Mandant steht seit Migration 0131 in jedem Todo;
+        # der Protocol-Join liefert nur noch das Protokolldatum.
         .outerjoin(ProtocolElementBlock, ProtocolElementBlock.id == ProtocolTodo.protocol_element_block_id)
         .outerjoin(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
         .outerjoin(Protocol, Protocol.id == ProtocolElement.protocol_id)
         .join(TodoStatus, TodoStatus.id == ProtocolTodo.todo_status_id)
-        .where(or_(Protocol.tenant_id == tenant_id, ProtocolTodo.tenant_id == tenant_id))
+        .where(ProtocolTodo.tenant_id == tenant_id)
+        .where(*_date_conditions(func.coalesce(Protocol.protocol_date, cast(ProtocolTodo.created_at, Date)), bounds))
     ).all()
 
 
@@ -158,7 +185,7 @@ def aggregate_todo_counts(rows: list[Row]) -> tuple[int, int]:
 
 # ── Fines ─────────────────────────────────────────────────────────────────────
 
-def fetch_fines_by_participant(db: Session, tenant_id: int) -> list[Row]:
+def fetch_fines_by_participant(db: Session, tenant_id: int, bounds: tuple[date, date] | None = None) -> list[Row]:
     """SUM() on the DB side over the Numeric(15,2) amount column, instead of repeated
     Python float additions of CHF amounts (audit finding M12) - same pattern already used
     by the finance-by-month report. Returns (name, count, amount) rows with amount as
@@ -169,46 +196,60 @@ def fetch_fines_by_participant(db: Session, tenant_id: int) -> list[Row]:
     a name (e.g. parent/child) aren't merged into one row, and a renamed participant's fines
     aren't split across two rows. Mirrors aggregate_attendance's `id:{pid}`/`name:{name}` key
     convention above. Rows without a participant_id (participant deleted, FK SET NULL) fall
-    back to grouping by the frozen name snapshot, same as before this fix."""
+    back to grouping by the frozen name snapshot, same as before this fix.
+
+    Beträge werden je Währung des Kontos getrennt (MAIN-BE-019) - eine Person mit Bussen in
+    zwei Währungen ergibt zwei Zeilen. Mit Begründung gelöschte Bussen zählen nicht."""
     return db.execute(
         text("""
             SELECT
                 MAX(COALESCE(p2.display_name, af.participant_name_snapshot)) AS name,
+                COALESCE('id:' || af.participant_id::text, 'name:' || af.participant_name_snapshot) AS participant_key,
+                fa.currency_label AS currency,
                 COUNT(*) AS count,
                 SUM(af.amount) AS amount
             FROM attendance_fine af
             JOIN protocol p ON p.id = af.protocol_id
-            LEFT JOIN participant p2 ON p2.id = af.participant_id
+            JOIN finance_account fa ON fa.id = af.account_id
+            LEFT JOIN app_user p2 ON p2.id = af.participant_id
             WHERE p.tenant_id = :tenant_id
-            GROUP BY COALESCE(af.participant_id::text, af.participant_name_snapshot)
+              AND af.status <> 'deleted'
+              AND (CAST(:date_start AS date) IS NULL OR p.protocol_date >= :date_start)
+              AND (CAST(:date_end AS date) IS NULL OR p.protocol_date <= :date_end)
+            GROUP BY COALESCE('id:' || af.participant_id::text, 'name:' || af.participant_name_snapshot), fa.currency_label
         """),
-        {"tenant_id": tenant_id},
+        {"tenant_id": tenant_id, "date_start": bounds[0] if bounds else None, "date_end": bounds[1] if bounds else None},
     ).all()
 
 
-def fetch_fines_by_type(db: Session, tenant_id: int) -> list[Row]:
-    """SUM() on the DB side, see fetch_fines_by_participant. Returns (fine_type, count,
-    amount) rows with amount as Decimal."""
+def fetch_fines_by_type(db: Session, tenant_id: int, bounds: tuple[date, date] | None = None) -> list[Row]:
+    """SUM() on the DB side, see fetch_fines_by_participant. Returns (fine_type, currency,
+    count, amount) rows with amount as Decimal, one row per type and currency."""
     return db.execute(
         text("""
             SELECT
                 af.fine_type AS fine_type,
+                fa.currency_label AS currency,
                 COUNT(*) AS count,
                 SUM(af.amount) AS amount
             FROM attendance_fine af
             JOIN protocol p ON p.id = af.protocol_id
+            JOIN finance_account fa ON fa.id = af.account_id
             WHERE p.tenant_id = :tenant_id
-            GROUP BY af.fine_type
+              AND af.status <> 'deleted'
+              AND (CAST(:date_start AS date) IS NULL OR p.protocol_date >= :date_start)
+              AND (CAST(:date_end AS date) IS NULL OR p.protocol_date <= :date_end)
+            GROUP BY af.fine_type, fa.currency_label
         """),
-        {"tenant_id": tenant_id},
+        {"tenant_id": tenant_id, "date_start": bounds[0] if bounds else None, "date_end": bounds[1] if bounds else None},
     ).all()
 
 
 # ── Finance ───────────────────────────────────────────────────────────────────
 
-def fetch_finance_by_month(db: Session, tenant_id: int) -> list[Row]:
+def fetch_finance_by_month(db: Session, tenant_id: int, bounds: tuple[date, date] | None = None) -> list[Row]:
     """Income/expenses per month, combined across all of the tenant's finance accounts -
-    used by chart_service's "finance_by_month" PNG (one combined bar per month)."""
+    used by the document engine's "finance_by_month" chart (one combined bar per month)."""
     return db.execute(
         text("""
             SELECT to_char(ft.transaction_date, 'YYYY-MM') AS month,
@@ -217,13 +258,15 @@ def fetch_finance_by_month(db: Session, tenant_id: int) -> list[Row]:
             FROM finance_transaction ft
             JOIN finance_account fa ON fa.id = ft.account_id
             WHERE fa.tenant_id = :tenant_id
+              AND (CAST(:date_start AS date) IS NULL OR ft.transaction_date >= :date_start)
+              AND (CAST(:date_end AS date) IS NULL OR ft.transaction_date <= :date_end)
             GROUP BY month ORDER BY month
         """),
-        {"tenant_id": tenant_id},
+        {"tenant_id": tenant_id, "date_start": bounds[0] if bounds else None, "date_end": bounds[1] if bounds else None},
     ).all()
 
 
-def fetch_finance_by_account_month(db: Session, tenant_id: int) -> list[Row]:
+def fetch_finance_by_account_month(db: Session, tenant_id: int, bounds: tuple[date, date] | None = None) -> list[Row]:
     """Same as fetch_finance_by_month but broken down per account - used by the
     /statistics/overview API, which lets the frontend filter/merge by account."""
     return db.execute(
@@ -237,10 +280,12 @@ def fetch_finance_by_account_month(db: Session, tenant_id: int) -> list[Row]:
             FROM finance_transaction ft
             JOIN finance_account fa ON fa.id = ft.account_id
             WHERE fa.tenant_id = :tenant_id
+              AND (CAST(:date_start AS date) IS NULL OR ft.transaction_date >= :date_start)
+              AND (CAST(:date_end AS date) IS NULL OR ft.transaction_date <= :date_end)
             GROUP BY ft.account_id, fa.name, month
             ORDER BY month
         """),
-        {"tenant_id": tenant_id},
+        {"tenant_id": tenant_id, "date_start": bounds[0] if bounds else None, "date_end": bounds[1] if bounds else None},
     ).all()
 
 
@@ -263,7 +308,7 @@ _GROUP_TAGS_SUBQUERY = """
 """
 
 
-def fetch_group_tagged_cycles(db: Session, tenant_id: int) -> list[Row]:
+def fetch_group_tagged_cycles(db: Session, tenant_id: int, bounds: tuple[date, date] | None = None) -> list[Row]:
     """Distinct (cycle_config_id, cycle_year) pairs among events whose tag matches a
     'Gruppen' list entry - powers the cycle filter/list in the statistics UI."""
     return db.execute(
@@ -272,14 +317,16 @@ def fetch_group_tagged_cycles(db: Session, tenant_id: int) -> list[Row]:
             FROM event_cycle ec
             JOIN event e ON e.id = ec.event_id
             WHERE e.tenant_id = :tenant_id
+              AND (CAST(:date_start AS date) IS NULL OR e.event_date >= :date_start)
+              AND (CAST(:date_end AS date) IS NULL OR e.event_date <= :date_end)
               AND e.tag IN ({_GROUP_TAGS_SUBQUERY})
             ORDER BY ec.cycle_config_id, ec.cycle_year
         """),
-        {"tenant_id": tenant_id, "groups_list_name": GROUPS_LIST_NAME},
+        {"tenant_id": tenant_id, "groups_list_name": GROUPS_LIST_NAME, "date_start": bounds[0] if bounds else None, "date_end": bounds[1] if bounds else None},
     ).all()
 
 
-def fetch_group_session_rows(db: Session, tenant_id: int) -> list[Row]:
+def fetch_group_session_rows(db: Session, tenant_id: int, bounds: tuple[date, date] | None = None) -> list[Row]:
     """Session-count / avg-participant-count stats per (event.tag, cycle_config_id,
     cycle_year), restricted to event tags that match a 'Gruppen' list entry."""
     return db.execute(
@@ -294,12 +341,14 @@ def fetch_group_session_rows(db: Session, tenant_id: int) -> list[Row]:
             FROM event e
             LEFT JOIN event_cycle ec ON ec.event_id = e.id
             WHERE e.tenant_id = :tenant_id
+              AND (CAST(:date_start AS date) IS NULL OR e.event_date >= :date_start)
+              AND (CAST(:date_end AS date) IS NULL OR e.event_date <= :date_end)
               AND e.tag IS NOT NULL
               AND e.tag IN ({_GROUP_TAGS_SUBQUERY})
             GROUP BY e.tag, ec.cycle_config_id, ec.cycle_year
             ORDER BY e.tag, ec.cycle_year
         """),
-        {"tenant_id": tenant_id, "groups_list_name": GROUPS_LIST_NAME},
+        {"tenant_id": tenant_id, "groups_list_name": GROUPS_LIST_NAME, "date_start": bounds[0] if bounds else None, "date_end": bounds[1] if bounds else None},
     ).all()
 
 
@@ -340,3 +389,24 @@ def aggregate_group_rows(rows: list[Row], cycle_key: str | None = None) -> list[
         v["avg"] = round(v["weighted"] / v["sessions_with_p"], 1) if v["sessions_with_p"] > 0 else 0.0
         result.append(v)
     return sorted(result, key=lambda x: x["sessions"], reverse=True)
+
+
+# ── Sichtbarkeit je Person (Datenschutz-Audit PRIV-001) ─────────────────────────────────────────
+
+# Bussen und Anwesenheit aller Personen sieht, wer reports.personal hat - dieselbe Regel wie die
+# Bussenliste. Alle anderen sehen in Ranglisten je Person nur sich selbst, ausser der Mandant gibt
+# sie ausdrücklich frei (tenant.statistics_per_person_public).
+
+
+def own_person_key(db: Session, user) -> str | None:
+    """None: der Aufrufer sieht alle Personen. Sonst der Gruppierungsschlüssel der eigenen Person
+    (``id:<app_user.id>``, siehe aggregate_attendance/fetch_fines_by_participant) - Teilnehmer und
+    Konto sind seit 0108 dieselbe Identität. Ohne Benutzer (interne Aufrufe) sind alle sichtbar."""
+    if user is None or user.can(P.REPORTS_PERSONAL):
+        return None
+    from app.models.entities import Tenant
+
+    if db.scalar(select(Tenant.statistics_per_person_public).where(Tenant.id == user.current_tenant_id)):
+        return None
+    return f"id:{user.user_id}"
+

@@ -14,8 +14,12 @@ Drei Umgebungen:
 
 ```bash
 cp .env.example .env
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+docker compose -p hocx-dev -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
+
+Der Overlay setzt das Projekt fest auf `hocx-dev` (auch ohne `-p`). **Nie** auf einem Server mit
+Echtdaten starten: er seedet Demo-Konten (`@hocx.local`/`ChangeMe123!`) und schaltet
+Secure-Cookies ab.
 
 Optional dazu: `--profile scan` (ClamAV), `--profile docs` (Docs auf localhost:3002),
 `--profile edge` (lokaler Traefik).
@@ -65,9 +69,21 @@ vim .env
 # HOCX_VERSION auf den eben gebauten Candidate-Tag setzen, z.B.:
 # HOCX_VERSION=test-20260825-abc1234-r42
 
-./scripts/deploy.sh test
+./scripts/update_deploy_code.sh --deploy   # Skripte/Compose auf den Stand des Candidates, dann deploy.sh test
 ./scripts/verify_release.sh test
 ```
+
+Immer zuerst den Deploy-Code aktualisieren: neue Images brauchen die dazugehörigen Skripte und
+Compose-Dateien (neue Dienste, Secrets, `.env`-Migration). `deploy.sh` bricht deshalb ab, wenn
+der Checkout den Commit eines `test-<datum>-<sha>-r<n>`-Candidates nicht enthält. Ebenso bricht
+es vor jeder Änderung ab, wenn Dateien im Checkout nicht `hocx-deploy` gehören (z. B. nach einem
+`git pull` als root), und gibt den passenden `chown`-Befehl für root aus.
+
+**Host-spezifische Anpassungen** (eigene CA, Port-Bindungen, ...) gehören in
+`docker-compose.local.yml` im Repo-Root (nicht versioniert, Vorlage
+`docker-compose.local.example.yml`), nie in versionierte Dateien: `deploy.sh`,
+`verify_release.sh` und die Hilfsskripte laden sie automatisch zuletzt, und
+`update_deploy_code.sh` bleibt frei von lokalen Änderungen.
 
 `deploy.sh test` macht automatisch: Preflight + exklusiver Deploy-Lock → DB-Backup
 (`backups/`) → Images pullen → Cosign-Signaturen pruefen → Digest-Manifest schreiben →
@@ -80,7 +96,9 @@ jedem Test-Deploy komplett neu auf - Login siehe Skript-Output/-Docstring. Laeuf
 - Backend / Abgabebox-Backend lokal erreichbar
 - Frontend / Docs lokal erreichbar
 - Alembic `current == heads`
-- `https://test...`-Domains antworten ueber Traefik
+- `https://test...`-Domains antworten ueber Traefik (per `curl` vom Host mit dem echten
+  Host-Namen; ohne DNS bzw. bei privater Bindung wird direkt Traefik angesprochen. Eine eigene
+  Test-CA per `HOCX_VERIFY_CA_FILE` in `.env` angeben.)
 
 **Verifizieren** (mit einem Wegwerf-Testaccount, danach wieder löschen):
 - https://test.hocx.ch/login erreichbar, Branding lädt korrekt
@@ -89,6 +107,11 @@ jedem Test-Deploy komplett neu auf - Login siehe Skript-Output/-Docstring. Laeuf
   Abgabebox-Konfiguration existiert)
 - `docker compose -p hocx-test logs backend --tail=50` zeigt keine Fehler, insbesondere
   keine Alembic-Fehler beim Start
+
+**Abnahme durch Claude Code** auf dem Test-Host: Skill `testhost-abnahme`
+(`.claude/skills/testhost-abnahme/SKILL.md`) führt `scripts/testhost/abnahme.sh` aus und wertet
+die Ergebnisse selbst aus: Traefik-Komprimierung, Migrationen, Bereichs-CSS inklusive Dialoge,
+Übersetzungen, Ladezeiten. Zugangsdaten stehen in `~/.hocx-testhost.env`, nie im Repository.
 
 ## 3. Getesteten Candidate zum Release promoten
 
@@ -131,7 +154,7 @@ Auf dem Prod-Server:
 
 ```bash
 vim .env   # HOCX_VERSION auf die neue Version setzen
-./scripts/deploy.sh prod
+./scripts/update_deploy_code.sh --deploy
 ./scripts/verify_release.sh prod
 ```
 
@@ -144,6 +167,29 @@ als `.env.bak-<Zeitstempel>`, siehe `scripts/lib/env_migrate.sh`). Beim Update v
 mehreren Mandanten (`HOCX_SINGLE_TENANT_RESOLUTION=auto`) stehen im CHANGELOG unter
 "Update von 1.0.x auf 1.1.0". Bricht die Migration `0078` ab, ist nichts veraendert: die
 alte Version laeuft weiter, Ursache beheben und `deploy.sh` erneut starten.
+
+### Vor dem Update auf 1.1.10: Vorab-Check Migration 0108
+
+`0108_unified_participants` fuehrt Teilnehmer und Login-Konten zusammen und legt dabei eine
+Check-Constraint (Login-Konto braucht E-Mail und Passwort) sowie einen Unique-Index auf die
+kleingeschriebene Login-E-Mail an. Bestehende Daten, die das verletzen, lassen die Migration
+abbrechen. Vor dem Deploy auf Prod (alter Stand laeuft noch) pruefen:
+
+```bash
+docker compose -p hocx exec -T db psql -U hocx hocx < scripts/precheck_0108.sql
+```
+
+Jede der drei Abfragen muss `(0 rows)` liefern:
+
+| Check | Bedeutung | Bereinigen |
+|---|---|---|
+| `login_ohne_credentials` | Login-Konto ohne E-Mail oder Passwort | E-Mail/Passwort setzen oder Login deaktivieren |
+| `email_kollision` | Login-E-Mails, die sich nur in Gross-/Kleinschreibung oder Leerzeichen unterscheiden | Ein Konto umbenennen oder zusammenfuehren |
+| `teilnehmer_doppelt_verknuepft` | Mehrere Teilnehmer haengen am selben Konto | Teilnehmer zusammenfuehren, bis je Konto hoechstens einer verknuepft ist |
+
+Am sichersten zusaetzlich: das letzte Backup in eine Wegwerf-DB einspielen und dort
+`alembic upgrade head` laufen lassen. Bricht die Migration trotzdem ab, ist nichts
+veraendert (eine Transaktion); die alte Version laeuft weiter.
 
 ## 5. Rollback
 
@@ -162,11 +208,52 @@ vim .env   # HOCX_VERSION auf die vorherige, bekannt gute Version zuruecksetzen
 
 Das rollt den Code zurück. Falls die Migration der neuen Version das Schema
 **destruktiv** verändert hat (Spalte gelöscht, Typ geändert), reicht ein Code-Rollback
-nicht - dann muss zusätzlich das vor dem Update gezogene Backup eingespielt werden:
+nicht - dann muss zusätzlich das vor dem Update gezogene Backup eingespielt werden, und
+zwar **vor** dem Deploy der alten Version:
 
 ```bash
-gunzip -c backups/<timestamp>-pre-vX.Y.Z.sql.gz | docker compose -p hocx exec -T db psql -U hocx hocx
+./scripts/restore_db.sh backups/<timestamp>-pre-vX.Y.Z.sql.gz.gpg   # bzw. .sql.gz ohne Dump-Schlüssel
+vim .env   # HOCX_VERSION auf die vorherige Version (…-pre-vX.Y.Z = Stand vor dem Update auf vX.Y.Z)
+./scripts/deploy.sh prod
+./scripts/verify_release.sh prod
 ```
+
+**Rückweg hinter das PostgreSQL-18-Update (1.2.0 → 1.1.x):** Releases bis 1.1.x betreiben
+PostgreSQL 16 auf dem Volume `<projekt>_postgres_data`, ab 1.2.0 läuft PostgreSQL 18 auf
+`<projekt>_postgres18_data` (Umzug durch `deploy.sh`, `scripts/lib/pg_upgrade.sh`). Der alte
+Deploy-Code startet wieder auf dem alten Volume - solange es noch existiert, also mit dem Stand
+unmittelbar vor dem Update; ein `restore_db.sh` vorab wirkt dann nur auf die 18er-Datenbank und
+ist überflüssig. Ist das alte Volume schon gelöscht, legt PostgreSQL 16 ein leeres an: dann
+**zuerst** den alten Stand deployen und **danach** den Pre-Deploy-Dump mit `restore_db.sh`
+einspielen. Ein Dump von PostgreSQL 18 lässt sich in 16 meist, aber nicht garantiert einspielen;
+für den Rückweg deshalb den Dump *vor* dem Update (`…-pre-v1.2.0…`) nehmen.
+
+Verschlüsselte Dumps (`.sql.gz.gpg`, siehe Abschnitt 10 «Verschlüsselung der Dumps») brauchen den
+privaten Schlüssel aus der Notfallmappe: `BACKUP_DUMP_PRIVATE_KEY_PATH=/pfad/dump-private.asc` vor
+den Aufruf setzen oder den Schlüssel im GPG-Schlüsselbund des Benutzers haben.
+
+`restore_db.sh` fragt zur Bestätigung den Datenbanknamen ab, stoppt `backend`,
+`abgabebox-backend` und `photo-analysis-worker`, sichert den aktuellen Stand als
+`backups/<zeit>-pre-restore.sql.gz`, legt die Datenbank leer neu an und spielt den Dump mit
+`ON_ERROR_STOP=1` in einer einzigen Transaktion ein. Schlägt das fehl, bleibt die Datenbank leer
+und das Skript nennt den Befehl, mit dem sich die eben gezogene Sicherung zurückspielen lässt.
+Die Dienste bleiben gestoppt, bis `deploy.sh` (bzw. auf der Quellcode-Instanz `docker compose up -d`)
+die passende Code-Version startet.
+
+**Nie** einen Dump direkt per `gunzip -c … | psql` in die laufende Datenbank pipen: Die Dumps
+sind Plain-SQL ohne `--clean`; in einer bereits migrierten, gefüllten Datenbank scheitern
+`CREATE`/`COPY` an vorhandenen Objekten, `psql` läuft ohne `ON_ERROR_STOP` weiter und meldet
+Erfolg, obwohl ein Mischzustand entsteht.
+
+Die Dateiablage (`storage/`) ist **nicht** Teil des Dumps (siehe Abschnitt 10; mit Borg-Backup
+siehe unten). Ein Restore
+setzt nur die Datenbank zurück; Dateien, die nach dem Dump hochgeladen wurden, bleiben als
+verwaiste Dateien liegen, nach dem Dump gelöschte Dateien fehlen.
+
+Mit aktivem Borg-Backup (Abschnitt 14) gibt es zusätzlich den geschützten Wiederherstellungspunkt
+«Vor Update auf vX.Y.Z», der Datenbank **und** Dateien desselben Zeitpunkts enthält: System →
+Backups → Wiederherstellung → «Vollständige Wiederherstellung» (zuerst die alte Version deployen,
+damit das Schema passt).
 
 **Deshalb**: bei riskanten Schema-Änderungen (Spalte umbenennen/löschen, Typ ändern)
 über zwei Releases gehen statt in einem Schritt - z.B. neue Spalte hinzufügen und
@@ -226,8 +313,9 @@ sudo -iu hocx-deploy
 gh auth status
 ```
 
-Der Token wird von `gh` im geschuetzten Benutzer-Credential-Speicher verwaltet und
-gehoert nicht in `.env`. Die Deployment-Schreibberechtigung kann ohne einen kuenstlichen
+Der Fine-grained-Token liegt mit Dateirechten 600 in `.tools/github-api-token` im
+Repo-Checkout des Benutzers `hocx-deploy` (siehe `scripts/lib/github.sh`) und gehoert nicht in
+`.env`. Die Deployment-Schreibberechtigung kann ohne einen kuenstlichen
 Testeintrag nicht vorab geprueft werden; sie wird spaetestens beim ersten erfolgreichen
 `verify_release.sh test` real validiert. Scheitert dieser Eintrag, bleibt die
 Prod-Promotion gesperrt.
@@ -278,7 +366,7 @@ Der Updater akzeptiert nur die fest hinterlegte hocX-GitHub-Remote, den Branch `
 einen sauberen tracked Worktree und einen reinen Fast-Forward auf `origin/main`. Vor dem
 Fast-Forward lädt er den zum Commit gehoerenden CI-Nachweis, prueft dessen keyless
 Cosign-Signatur gegen den festen `build-test-images.yml`-Workflow und verifiziert die
-Hashes aller Deploy-Skripte, Compose- und Traefik-Dateien. Damit reicht ein blosses
+Hashes aller Deploy-Skripte, Compose-, Traefik- und Garage-Dateien. Damit reicht ein blosses
 Manipulieren von Git oder `origin/main` nicht mehr aus. Hierfuer wird dieselbe einmalige
 GitHub-Anmeldung wie fuer den Testnachweis benoetigt; fehlt sie, wird der Token auch hier
 verdeckt abgefragt und geprueft. Der Updater nutzt denselben
@@ -287,32 +375,91 @@ ignoriert und werden nicht veraendert.
 
 ## 10. Backup- und Cleanup-Cronjobs
 
+> **Ab dem Borg-Backup (Abschnitt 14) abgelöst:** Sobald `BACKUP_ENABLED=true` gesetzt ist,
+> überspringen `backup_db.sh` und `backup_storage.sh` ihren Lauf, und die Jobs `backup_db`/
+> `backup_storage` verschwinden aus der Job-Übersicht. Ihre Cron-Einträge dann entfernen;
+> `cleanup_storage.sh` bleibt. Die Beschreibung unten gilt für Installationen ohne Borg-Backup.
+
 Zwei eigenständige Skripte in `scripts/`, gedacht für periodische Ausführung per Cron
 (zusätzlich zum automatischen Pre-Deploy-Backup, das `deploy.sh` bei jedem Update ohnehin
 macht). Beide sind idempotent, loggen mit Zeitstempel nach stdout/stderr und brechen bei
 Fehlern mit Exit-Code ≠ 0 ab (wichtig für Cron-Fehlerbenachrichtigung/Monitoring).
 
+Beide Cron-Einträge laufen über `scripts/run_job.sh <jobname> <befehl>`: der Wrapper meldet
+Start, Dauer und Ergebnis (inkl. der letzten Ausgabezeilen bei einem Fehler) an die Job-Übersicht
+im Platform-Admin (`/admin/jobs`) und gibt den Exit-Code des Skripts unverändert zurück. Ein
+fehlgeschlagener Lauf löst darüber eine ntfy-Benachrichtigung aus, ein ausbleibender Lauf (>26 h)
+ebenfalls - siehe Abschnitt 12. Solange die Crons nicht eingerichtet sind, zeigt `/admin/jobs`
+beide Jobs als „Nie gelaufen“ (ohne Alarm). Neue Cronjobs mit ihrem Namen in
+`backend/app/core/job_registry.py` eintragen, sonst erscheinen sie nur als „Nicht registriert“
+und werden bei Ausbleiben nicht gemeldet.
+
 ### `scripts/backup_db.sh`
 
 - **Zweck**: nächtlicher Postgres-Dump, unabhängig vom Deploy-Zyklus. Nutzt denselben
   `pg_dump`-Mechanismus wie der Pre-Deploy-Backup in `deploy.sh` (`docker compose exec db
-  pg_dump ... | gzip`) - ein Cron-Backup lässt sich also genauso zurückspielen wie ein
-  Pre-Deploy-Backup (siehe Abschnitt 4, Rollback).
-- **Braucht**: keine Argumente, läuft immer gegen den Checkout, in dem es liegt (`.env`
-  im Repo-Root muss `POSTGRES_USER`/`POSTGRES_DB` enthalten; der `db`-Container muss
-  laufen, sonst bricht das Skript kontrolliert ab).
-- **Env-Var**: `RETENTION_DAYS` (Default 14) - Dumps, die älter sind, werden nach jedem
-  Lauf automatisch gelöscht.
-- **Schreibt nach**: `backups/<timestamp>-cron.sql.gz` (derselbe Ordner wie die
-  Pre-Deploy-Backups, gut unterscheidbar am `-cron`-Suffix).
-- **Empfohlener Cron-Zeitplan**: täglich 03:15 Uhr, mit Logdatei im selben `backups/`-Ordner:
+  pg_dump ... | gzip`) - ein Cron-Backup lässt sich also genauso mit
+  `scripts/restore_db.sh` zurückspielen wie ein Pre-Deploy-Backup (siehe Abschnitt 5, Rollback).
+- **Welche Instanz**: bestimmt `scripts/lib/stack.sh` mit explizitem Compose-Projekt und
+  -Dateien (wie `deploy.sh`): Host-Markierung `prod` → Release-Stack, Projekt `hocx`;
+  **keine** Markierung → Quellcode-Instanz aus `docker-compose.yml`, Projekt aus
+  `HOCX_COMPOSE_PROJECT` (Default `hocx`; läuft die Instanz über `scripts/dev.sh`,
+  `HOCX_COMPOSE_PROJECT=hocx-dev` in `.env` oder in der Cron-Zeile setzen, dann wird auch
+  `docker-compose.dev.yml` geladen). Auf einem `test`-Host lehnt das Skript ab (nur Demo-Daten).
+  `run_job.sh` und `restore_db.sh` verwenden dieselbe Zuordnung.
+- **Braucht**: keine Argumente (`.env` im Repo-Root muss `POSTGRES_USER`/`POSTGRES_DB`
+  enthalten; der `db`-Container muss laufen, sonst bricht das Skript kontrolliert ab).
+- **Env-Var**: `RETENTION_DAYS` (Default 14) - Cron-Dumps, die älter sind, werden nach jedem
+  Lauf automatisch gelöscht. Pre-Deploy-Dumps rotiert `deploy.sh` selbst: die neuesten
+  `PRE_DEPLOY_BACKUP_KEEP` (Default 10, als Shell-Variable beim Aufruf von `deploy.sh`) bleiben.
+- **Schreibt nach**: `backups/<timestamp>-cron.sql.gz.gpg` (verschlüsselt) bzw. ohne Schlüssel
+  `…-cron.sql.gz` (derselbe Ordner wie die Pre-Deploy-Backups, gut unterscheidbar am
+  `-cron`-Suffix).
+- **Offsite**: Ist `OFFSITE_BACKUP_REMOTE` gesetzt, endet der Lauf mit Exit ≠ 0, wenn die
+  rclone-Kopie fehlschlägt oder `rclone` fehlt (das lokale Backup ist dann trotzdem
+  geschrieben). `run_job.sh` meldet den Lauf damit als Fehler statt als Erfolg. Ein
+  **unverschlüsselter** Dump geht nur auf ein rclone-Remote vom Typ `crypt`, sonst bricht der Lauf
+  ab. Nach jeder Kopie löscht das Skript Offsite-Dumps, die älter als `OFFSITE_RETENTION_DAYS`
+  (Default = `RETENTION_DAYS`) sind - früher blieben sie unbegrenzt liegen.
+
+#### Verschlüsselung der Dumps (Datenschutz-Audit PRIV-009)
+
+`deploy.sh` (Pre-Deploy), `backup_db.sh` (Cron) und `restore_db.sh` (Sicherung vor dem Restore)
+verschlüsseln Dumps mit einem **öffentlichen** GPG-Schlüssel. Auf dem Server liegt nur dieser; den
+privaten Schlüssel gibt es nur in der Notfallmappe. Wer die Dumps kopiert (Fehlkonfiguration,
+Offsite-Speicher, Hardware-Tausch), kann sie damit nicht lesen. Einmalig auf einem Admin-Rechner
+**ausserhalb** des Servers:
+
+```bash
+export GNUPGHOME="$(mktemp -d)"
+gpg --batch --passphrase '' --pinentry-mode loopback \
+  --quick-gen-key "hocx dumps <ops@example.invalid>" future-default default never
+gpg --armor --export > dump-public.asc                      # auf den Server
+gpg --armor --export-secret-keys > dump-private.asc         # nur in die Notfallmappe
+```
+
+`future-default` erzeugt den nötigen Verschlüsselungs-Unterschlüssel (`ed25519` allein reicht
+nicht). Auf dem Server `dump-public.asc` nach `~/.hocx-backup/dump-public.asc` legen (oder
+`BACKUP_DUMP_PUBLIC_KEY_PATH` in `.env`). Fehlt der Schlüssel, schreiben die Skripte wie bisher
+`.sql.gz` und warnen; `HOCX_REQUIRE_DUMP_ENCRYPTION=true` macht ihn zur Pflicht.
+
+Pre-Deploy-Dumps bleiben höchstens `PRE_DEPLOY_BACKUP_MAX_DAYS` Tage (Default 30, Shell-Variable
+beim Aufruf von `deploy.sh`), der neueste immer.
+- **Empfohlener Cron-Zeitplan**: täglich 03:15 Uhr, mit Logdatei im selben `backups/`-Ordner
+  (Pfade an den Checkout anpassen; auf einer über `dev.sh` betriebenen Instanz
+  `HOCX_COMPOSE_PROJECT=hocx-dev` voranstellen):
   ```
-  15 3 * * * /docker/hocX/scripts/backup_db.sh >> /docker/hocX/backups/backup_db.log 2>&1
+  15 3 * * * /docker/hocX/scripts/run_job.sh backup_db /docker/hocX/scripts/backup_db.sh >> /docker/hocX/backups/backup_db.log 2>&1
   ```
+- **Dateiablage (Audit MAIN-OPS-006):** Der Dump enthält nur die Datenbank. Uploads,
+  Abgabebox-Dateien, Vorlagen und Mandanten-Importe/-Klone sichert das Borg-Backup
+  (Abschnitt 14) zusammen mit der Datenbank; ohne Borg das Objekt-Backup `backup_storage`
+  (Abschnitt 13). Umfang und Ausnahmen: `docs-site/docs/technik/backup/architektur.md`,
+  Abschnitt «Umfang der Sicherung».
 - **Manuell testen**: `./scripts/backup_db.sh` direkt im Repo-Root ausführen und danach
   `ls -lh backups/` prüfen.
 - **⚠️ Offenes Risiko: kein Offsite-Backup aktiv (Audit I5, 2026-08-16).** `backups/`
-  liegt auf derselben Partition wie das Docker-Volume der Live-DB (`postgres_data`) -
+  liegt auf derselben Partition wie das Docker-Volume der Live-DB (`postgres18_data`) -
   bei Festplatten- oder Hostausfall sind Live-Daten und alle lokalen Backups gleichzeitig
   weg. Das Skript unterstützt seit diesem Fund einen optionalen rclone-Sync (siehe
   Kommentar am Ende von `backup_db.sh`): `OFFSITE_BACKUP_REMOTE` in `.env` setzen (z.B.
@@ -324,7 +471,7 @@ Fehlern mit Exit-Code ≠ 0 ab (wichtig für Cron-Fehlerbenachrichtigung/Monitor
 
 ### `scripts/cleanup_storage.sh`
 
-- **Zweck**: räumt ausschließlich `storage/exports/` (generierte PDF/LaTeX-Exportdateien)
+- **Zweck**: räumt ausschließlich `storage/exports/` (generierte PDF-Exportdateien)
   nach Alter auf. Bewusst **nicht** angefasst werden `storage/tenant_imports`,
   `storage/tenant_clones` und `storage/abgabebox-uploads` - das sind laut Code- und
   Live-DB-Prüfung permanente Speicherorte für echte Mandantendaten, keine Temp-Dateien
@@ -338,7 +485,7 @@ Fehlern mit Exit-Code ≠ 0 ab (wichtig für Cron-Fehlerbenachrichtigung/Monitor
 - **Empfohlener Cron-Zeitplan**: täglich 03:45 Uhr, also nach `backup_db.sh`, damit ein
   Backup immer vor einer Cleanup-Runde derselben Nacht liegt:
   ```
-  45 3 * * * /docker/hocX/scripts/cleanup_storage.sh >> /docker/hocX/backups/cleanup_storage.log 2>&1
+  45 3 * * * /docker/hocX/scripts/run_job.sh cleanup_storage /docker/hocX/scripts/cleanup_storage.sh >> /docker/hocX/backups/cleanup_storage.log 2>&1
   ```
 - **Manuell testen**: erst `./scripts/cleanup_storage.sh --dry-run` (zeigt betroffene
   Dateien, löscht nichts), danach bei Bedarf ohne Flag fuer den echten Lauf.
@@ -363,7 +510,10 @@ keine Pipeline-Umstellung auf GHCR-Images ist im Rahmen dieses Punkts vorgesehen
 
 1. **Vor jedem Update**: Backup ziehen, unabhängig vom nächtlichen Cron-Lauf aus
    Abschnitt 10 - `./scripts/backup_db.sh` im Repo-Root ausführen und den Erfolg
-   (neue Datei unter `backups/`) prüfen, bevor der Code aktualisiert wird.
+   (neue Datei unter `backups/`) prüfen, bevor der Code aktualisiert wird. Der Host hat
+   keine Markierung in `/etc/hocx/environment`; das Skript sichert deshalb das Compose-Projekt
+   aus `HOCX_COMPOSE_PROJECT` (Default `hocx`). Läuft die Instanz über `scripts/dev.sh`
+   (Projekt `hocx-dev`), `HOCX_COMPOSE_PROJECT=hocx-dev ./scripts/backup_db.sh` verwenden.
 2. **Update durchführen**: `git pull` + `docker compose up -d --build` (Alembic migriert
    die DB dabei automatisch, wie bei den anderen Umgebungen auch).
 3. **Nach dem Update verifizieren** (analog zur Test-Verifikation in Abschnitt 2, mit
@@ -372,5 +522,312 @@ keine Pipeline-Umstellung auf GHCR-Images ist im Rahmen dieses Punkts vorgesehen
    - Login funktioniert, mindestens eine Tabellen-Seite lädt Daten
    - `docker compose logs backend --tail=50` zeigt keine Fehler, insbesondere keine
      Alembic-Fehler beim Start
-4. **Bei Problemen**: Rollback wie in Abschnitt 4 beschrieben, mit dem in Schritt 1
-   frisch gezogenen Backup statt eines älteren Cron-Backups.
+4. **Bei Problemen**: Rollback wie in Abschnitt 5 beschrieben (`scripts/restore_db.sh`), mit
+   dem in Schritt 1 frisch gezogenen Backup statt eines älteren Cron-Backups.
+
+## 12. Monitoring und Benachrichtigungen
+
+Im Platform-Admin unter **System**:
+
+- **Systemstatus** (`/admin/system`): Container (Status, Healthcheck, Neustarts, CPU/RAM,
+  Version) und Dienste (Postgres, Redis, ClamAV inkl. Signaturalter, Speicherplatz,
+  Fehlerrate, Rückstand der Virenprüfung, Bildanalyse-Warteschlange, öffentliche
+  Prüfseite der Dokumente), offene Probleme und
+  die letzten Ereignisse. Gesammelt alle 30 s vom Loop `system_monitor` im Backend
+  (`app/services/system_health_service.py`, Schwellwerte dort oben).
+- **Jobs** (`/admin/jobs`): alle Hintergrund-Loops, der Bildanalyse-Worker und die
+  Host-Cronjobs aus Abschnitt 10.
+- **Benachrichtigungen** (`/admin/notifications`): ntfy-Konfiguration und das Status-Token
+  für Uptime Kuma.
+
+### Container-Übersicht: docker-socket-proxy
+
+Das Backend liest Container-Daten über den Dienst `docker-socket-proxy`
+(`lscr.io/linuxserver/socket-proxy`, per Digest gepinnt) - nur GET auf `/containers`,
+`/_ping`, `/version`; alles andere beantwortet der Proxy mit 403. Er hängt allein mit dem
+Backend im internen Netz `docker-api`, damit die öffentlich erreichbaren Dienste die
+Docker-API (und darüber die Umgebungsvariablen aller Container) nicht erreichen. Das Backend
+hat deshalb zwei Netze; das Label `traefik.docker.network=${COMPOSE_PROJECT_NAME}_default`
+sorgt dafür, dass Traefik die richtige Backend-IP nimmt. Nach dem ersten Deploy mit diesem
+Stand ist `docker compose up -d` nötig (neuer Dienst + Netz), nicht nur ein Neustart.
+
+Ohne `DOCKER_API_URL` zeigt die Seite „Container-Übersicht nicht eingerichtet“; alle übrigen
+Prüfungen laufen trotzdem.
+
+### ntfy einrichten
+
+1. `/admin/notifications` öffnen, Server-URL (z. B. `https://ntfy.example.com`), Topic und
+   - falls der Server Zugriffsschutz hat - ein Access Token (`tk_…`) oder `benutzer:passwort`
+   eintragen. Optional die Adresse des Admin-Portals, dann öffnet ein Tipp auf die Nachricht
+   direkt die passende Seite.
+2. Speichern, dann **Testnachricht senden**. Fehler (falsche URL, 401/403) erscheinen direkt
+   auf der Seite.
+
+Gemeldet wird:
+
+| Ereignis | Priorität |
+|---|---|
+| Neues Problem, erst nach 90 s Bestand (Deploys lösen so keinen Alarm aus) | 3 (Warnung) / 4 (kritisch) |
+| Problem verschärft sich (Warnung → kritisch) | 4 |
+| Problem weiterhin offen (Erinnerung, Standard alle 6 h, 0 = aus) | wie das Problem |
+| Problem behoben | 2 |
+| Container neu gestartet (gleicher Container, neuer Start; ein Deploy zählt nicht) | 3 |
+
+Mehr als fünf Meldungen auf einmal gehen als eine Sammelnachricht raus. Der Token liegt
+verschlüsselt in `platform_notification_settings` (Schlüssel aus `ADMIN_AUTH_SECRET`) - wird
+`ADMIN_AUTH_SECRET` rotiert, das ntfy-Token und das Status-Token neu setzen.
+
+### Uptime Kuma (Überwachung von aussen)
+
+Fällt das Backend oder der ganze Host aus, kann es selbst nichts mehr melden. Dafür:
+
+1. In `/admin/notifications` unter „Überwachung von aussen“ ein Token erzeugen und die
+   angezeigte URL kopieren (`https://<TRAEFIK_DOMAIN>/api/system-status/summary?token=…`).
+2. In Uptime Kuma einen Monitor vom Typ **HTTP(s)** mit dieser URL anlegen, akzeptierte
+   Statuscodes `200-299`, Intervall z. B. 60 s, Benachrichtigung über denselben ntfy-Server.
+
+Der Endpunkt antwortet `200` (`status` = `ok` oder `warning`) bzw. `503` bei einem offenen
+kritischen Problem oder wenn der Systemstatus älter als 3 Minuten ist (`status` = `critical`
+/ `stale`). Die Antwort enthält nur Zähler. Wer auch bei Warnungen alarmiert werden will:
+Monitor-Typ **HTTP(s) - Keyword** mit dem Keyword `"warnings":0`.
+
+Ist die Landing Page aktiv (`TRAEFIK_WEBSITE_DOMAIN` gesetzt), einen zweiten Monitor anlegen:
+Typ **HTTP(s)** auf `https://<TRAEFIK_WEBSITE_DOMAIN>/`, akzeptierte Statuscodes `200-299`,
+**Zertifikatsablauf-Benachrichtigung** aktivieren. Die Website läuft im `frontend`-Container
+mit; der Systemstatus sieht deshalb nur den Container, nicht ein falsches Routing, fehlendes
+DNS oder ein abgelaufenes Zertifikat der Website-Domain.
+
+### Wenn etwas nicht stimmt
+
+- „Systemstatus veraltet“: Backend-Logs auf `Background-Loop system_monitor` prüfen;
+  `/admin/jobs` zeigt den letzten Lauf und Fehler des Loops `system_monitor`.
+- „Container-Status nicht verfügbar“: `docker compose ps docker-socket-proxy`, Logs des
+  Proxys; läuft das Backend im Netz `docker-api`?
+- Virensignaturen veraltet: Logs des `clamav`-Containers (freshclam) prüfen.
+
+## 13. Öffentliche Prüfseite (Echtheit von PDFs)
+
+hocX signiert keine PDFs. Jedes erzeugte PDF wird mit seinem SHA-256 im Dokumentenregister
+erfasst; die öffentliche Prüfseite `https://<TRAEFIK_ABGABEBOX_DOMAIN>/verify` (Abgabebox)
+vergleicht den im Browser berechneten Hash einer Datei mit dem Register. Es gibt keine
+Zertifikate und keine Schlüssel zu verwalten.
+
+### Konfiguration
+
+- `DOCUMENT_VERIFY_BASE_URL` (optional): Prüf-URL, die in jedem PDF steht (Fusszeile, QR-Code,
+  XMP). Leer = `ABGABEBOX_BASE_URL` + `/verify`. Bewusst die Plattform-Domain, nicht eine
+  Mandanten-Domain - gedruckte Links müssen stabil bleiben. Nach einer Änderung tragen nur neue
+  PDFs die neue Adresse; alte Links funktionieren nur, solange die alte Domain auf die Abgabebox
+  zeigt.
+- Traefik: Router `abgabebox-verify` (30 Anfragen/min, Burst 10, Body 4 KiB) ist Teil der
+  Compose-Labels bzw. der generierten Mandanten-Domain-Router; nichts einzurichten.
+- Die Abgabebox-Rolle `hocx_abgabebox` darf nur die Funktion `verify_document` ausführen
+  (Migration 0117), nicht das Register lesen.
+
+### Systemcheck
+
+`/admin/system` → «Öffentliche Prüfseite»: das Backend fragt den Endpoint intern
+(`ABGABEBOX_INTERNAL_URL`, Standard `http://abgabebox-backend:8000`) mit einem Hash ohne Treffer
+ab und erwartet `{"found": false}`. Kritisch heisst: `abgabebox-backend` nicht erreichbar oder die
+Funktion/Rechte fehlen (Migration 0117 gelaufen? `docker compose logs abgabebox-backend`).
+
+### Organisationen verifizieren (Plattform-Admin)
+
+1. Mandanten-Admins beantragen die Verifizierung unter Dokumente → Echtheitsprüfung.
+2. Offene Anträge: Admin-Panel → **Verifizierungen** (oder Mandant öffnen → Tab «Verifizierung»).
+3. Identität prüfen, z. B. Handelsregister/UID-Register, Statuten, Website mit Impressum, Rückruf
+   an eine unabhängig gefundene Nummer. Erst dann **Bestätigen** und in der Notiz festhalten, wie
+   geprüft wurde. Ablehnen nur mit Begründung (der Mandant sieht sie).
+4. Bei Missbrauch: **Verifizierung entziehen** (sofort wirksam auf der Prüfseite).
+
+Eine Namensänderung des Mandanten hebt die Verifizierung automatisch auf (auch durch einen
+Plattform-Admin). Alle Schritte stehen im Audit-Log (`identity_verification.*`,
+`admin.identity_verification_*`).
+
+### Nach dem Update auf die Dokument-Engine / das Document Studio
+
+Migration `0115` übernimmt die alten Dokumentvorlagen, `0118_document_studio` macht daraus
+Brand-Profile (Hausstile → Profile, Rezepte → Vorlagen, Hausstil-Wahl der Protokollvorlagen →
+Zuweisungen) und entfernt die alten Tabellen. Beides läuft beim Deploy automatisch. Vorher ein
+frisches Backup ziehen: `0115` ist nicht umkehrbar, der Downgrade von `0118` stellt nur die
+Struktur wieder her.
+
+Danach die nicht mehr benutzten Vorlagen-Dateien entfernen (erst mit `--dry-run` ansehen):
+
+```bash
+./scripts/cleanup-legacy-document-templates.sh --dry-run "${HOCX_STORAGE_PATH:-./storage}"
+./scripts/cleanup-legacy-document-templates.sh "${HOCX_STORAGE_PATH:-./storage}"
+```
+
+Hochgeladene Logos, Fussbilder und Schriften bleiben erhalten. Bestehende Dateien bleiben unter
+`document_style_assets/` liegen (der Pfad steht in der Datenbank), neue Uploads landen unter
+`document_assets/`. Beide Verzeichnisse gehören ins Backup.
+
+Kontrolle nach dem Deploy:
+
+1. Backend-Log: `ensure_document_studio` gleicht beim Start die mitgelieferten Vorlagen ab
+   (keine Fehler im Admin-Fehlerlog).
+2. Als Mandanten-Admin **Dokumente → Vorlagen** öffnen: alle Dokumenttypen haben Vorlagen mit
+   Vorschaubild. **Corporate Design** zeigt mindestens ein Standardprofil.
+3. Ein Protokoll exportieren (Export-Dialog, PDF erstellen) und auf `/verify` prüfen: «Original».
+
+Ändert sich nach einem Update die Gestaltung einer mitgelieferten Vorlage, entsteht beim Start
+eine neue Revision. Bestehende Exporte behalten ihre Revision (`document_export.template_revision_id`).
+
+## 14. Dateispeicher (S3) und Wartung
+
+Ausführlich: `docs-site/docs/technik/storage/` (Architektur, Betrieb, lokales S3, Migrationen,
+Wartungsmodus, Backup & Recovery).
+
+**Update auf 1.2**: `deploy.sh` ergänzt die neuen Secrets in `.env`, startet `local-s3`,
+`storage-init` und `storage-worker`. Danach ist weiterhin das Dateisystem aktiv - es wird nichts
+verschoben, bis die Erstmigration gestartet wird.
+
+**Cronjob `storage_controller`** richtet `deploy.sh` selbst ein (Marker
+`# hocx-managed:<projekt>:storage_controller` in der crontab von `hocx-deploy`, abschaltbar mit
+`HOCX_MANAGE_CRON=false`). Ein früher von Hand eingetragener `storage_controller`-Job bleibt
+unverändert; ihn entfernen (`crontab -e`), damit der verwaltete Eintrag beim nächsten Deploy
+übernimmt. Ohne Borg-Backup zusätzlich von Hand (`backup_storage` entfällt mit Abschnitt 15):
+
+```cron
+30 3 * * * /docker/hocX/scripts/run_job.sh backup_storage env HOCX_COMPOSE_PROJECT=hocx HOCX_COMPOSE_FILES="docker-compose.release.yml docker-compose.clamav.yml docker-compose.traefik.yml" /docker/hocX/scripts/backup_storage.sh >> /docker/hocX/backups/backup_storage.log 2>&1
+```
+
+**Erste produktive Migration** (Dateisystem → lokales S3):
+
+1. Frisches DB-Backup (`scripts/backup_db.sh`) und Plattenplatz prüfen: das lokale S3 braucht
+   etwa so viel Platz wie `storage/` belegt (die Originale bleiben während der Rückfallfrist liegen).
+2. Wartung ankündigen: System → Wartung → «Wartung planen» (erscheint auf der Anmeldeseite).
+3. System → Storage → Profil «Lokales S3 (Garage)» → «Verbindung testen».
+4. «Migration vorbereiten» → Preflight abwarten → Schätzung prüfen → «Migration starten».
+5. Fortschritt unter System → Storage verfolgen; die Wartung endet automatisch nach
+   bestandener Endprüfung und Beobachtungsphase. Verweist die Datenbank auf fehlende Dateien
+   (abgelaufene Exporte zählen nicht dazu), wartet der Cutover in voller Wartung auf
+   «Umschalten bestätigen» (Liste im Prüfbericht) - Prüfbericht während der Wartung im Blick
+   behalten. Scheitert die Prüfung nach dem Umschalten dreimal in Folge (`rollback_required`):
+   «zur Kenntnis genommen», danach lässt sich die Wartung freigeben, sobald der automatische
+   Healthcheck des aktiven Ziels bestanden ist.
+6. Danach: `docker compose exec backend python -m app.workers.storage_verify --full`.
+
+**Notfall**: Bei Fehlern bleibt die Wartung bestehen und das Dateisystem aktiv. Ursache im
+Migrationsverlauf/Fehlerprotokoll prüfen, Migration fortsetzen oder abbrechen; die Wartung lässt
+sich unter System → Wartung erst beenden, wenn alle Freigabebedingungen erfüllt sind.
+
+## 15. Offsite-Backup (BorgBackup, Hetzner Storage Box)
+
+Ausführlich: `docs-site/docs/technik/backup/` (Architektur, Einrichtung & Betrieb,
+Wiederherstellung, Sicherheit). Kurzfassung:
+
+**Einrichten (einmalig)** – Details und Hetzner-Abnahme in `backup/betrieb.md`:
+
+1. Backup-Schlüssel auf dem Server (`~/.hocx-backup/id_backup`), Wartungsschlüssel **nur** offline.
+2. Host-Key der Box prüfen und als `~/.hocx-backup/known_hosts` ablegen (Fingerprint mit Hetzner
+   vergleichen) – nie ungeprüft akzeptieren.
+3. In `authorized_keys` der Box: Backup-Schlüssel mit `command="borg-1.4 serve --append-only
+   --restrict-to-repository …",restrict`, Wartungsschlüssel ohne `--append-only`. Automatische
+   Snapshots der Box aktivieren.
+4. `.env`: `BACKUP_STORAGEBOX_HOST/USER`, `BACKUP_SSH_KEY_PATH`, `BACKUP_KNOWN_HOSTS_PATH`,
+   `BACKUP_PASSPHRASE` (zufällig, lang), `BACKUP_STORAGEBOX_QUOTA_BYTES`; `BACKUP_ENABLED=false`;
+   `./scripts/deploy.sh prod`.
+5. `docker compose -p hocx exec backup-worker python -m app.backup.cli init --i-understand-this-creates-a-new-repository`,
+   ausgegebene ID als `BACKUP_REPOSITORY_ID` eintragen.
+6. `… python -m app.backup.cli export-key --paper` → mit Passphrase, `.env` und
+   `STORAGE_CREDENTIALS_KEY` in die Notfallmappe (offline, getrennt).
+7. `BACKUP_ENABLED=true`, `./scripts/deploy.sh prod`. Unter System → Backups: erstes Backup
+   erfolgreich, «Restore-Test starten» erfolgreich, Integritätsprüfung erfolgreich.
+8. Cron-Einträge `backup_db` und `backup_storage` entfernen (`crontab -e`). Alte lokale Backups
+   (`backups/*.sql.gz`, `backups/storage/`) erst nach bewusster Entscheidung löschen.
+
+**Betrieb**: Backups alle 6 h (System → Backups → Einstellungen), Integritätsprüfung wöchentlich,
+Restore-Test monatlich; Probleme meldet ntfy (Abschnitt 12). Vor jedem Deploy legt `deploy.sh`
+ein geschütztes Backup an und bricht bei Fehlschlag ab (bewusst überspringen:
+`HOCX_PRE_DEPLOY_BACKUP=skip`). Quartalsweise mit dem Wartungsschlüssel `compact` ausführen
+(gibt durch die Retention freigegebenen Platz frei, siehe `backup/betrieb.md`).
+
+**Notfälle** (Details `backup/restore.md`):
+
+| Situation | Vorgehen |
+|---|---|
+| Mandant versehentlich verändert/gelöscht | System → Backups → Wiederherstellung → «Mandant als Kopie» (neuer Mandant, Original bleibt) |
+| Gesamtzustand muss zurück | «Vollständige Wiederherstellung» (Rettungspunkt, isolierte DB, neue Storage-Generation, Tausch mit automatischem Rücktausch bei Fehler) |
+| Server verloren / Datenbank weg | neuer Server, `.env` aus der Notfallmappe, nur `db` starten, `run --rm --no-deps --entrypoint python backup-worker -m app.backup.cli restore-full …`, dann `swap-database`, Deploy, Wartung freigeben |
+| Storage Box nicht erreichbar | Backups laufen nach Rückkehr automatisch weiter (Retry mit Backoff, Fortsetzung ohne Neuübertragung); Hetzner-Status prüfen |
+| `repository_id_mismatch`, `host_key_mismatch`, `repository_replay` | **nicht** übergehen – möglicher Angriff oder falsches Ziel; Box und Fingerprint manuell prüfen |
+| Worker hängt/abgestürzt | Container startet neu und setzt den Auftrag fort; verwaister Backup-Hold wird automatisch gelöst |
+| Verwaister Borg-Lock nach Absturz | nur wenn sicher kein Worker läuft: `… python -m app.backup.cli break-lock --yes` |
+
+
+## 16. Dokumentverarbeitung (PDF-Ansicht, Textextraktion)
+
+Ausführlich: `docs-site/docs/technik/dokumente.md`.
+
+**Update**: Migration `0115_documents` (neue Tabellen, keine Datenänderung) läuft mit dem
+normalen Deploy (`0116_protocol_export_formats` ist seit der Dokument-Engine ein No-op). Das Backend-Image enthält jetzt LibreOffice, Tesseract und Poppler (grösseres
+Image). `deploy.sh` startet den neuen Dienst `document-worker` automatisch (`up -d`). Keine neuen
+Secrets oder Umgebungsvariablen nötig; Grenzwerte sind optional (`DOCUMENT_*`, siehe Doku).
+
+**Nach dem Deploy**: Der Loop `document_sync` legt Dokumente für bestehende Dateien und Exporte
+in Batches an (alle 2 Minuten, `DOCUMENT_SYNC_BATCH_SIZE`); der Worker verarbeitet sie danach.
+Bei vielen Altdateien läuft das einige Zeit - Fortschritt:
+
+```bash
+docker compose exec backend python -m app.workers.document_admin status
+```
+
+Sofort statt schrittweise: `... document_admin backfill`. Fehlgeschlagene Aufträge nach einer
+Störung erneut einreihen: `... document_admin requeue`. Übernahme pausieren:
+`DOCUMENT_BACKFILL_ENABLED=false` (stoppt auch die Anlage für neue Abgabebox-Uploads).
+
+**Überwachung**: `/admin/jobs` → Kategorie Dokumente (`document_sync`, `document_worker`). Ein
+überfälliger `document_worker` heisst: Container läuft nicht oder hängt
+(`docker compose logs document-worker`). Aufträge mit abgelaufener Lease übernimmt ein neu
+gestarteter Worker automatisch.
+
+
+## 17. Job-Worker und Lastgrenzen (Concurrency-Audit 1.2)
+
+Hintergrund: `ROBUSTNESS_CONCURRENCY_AUDIT.md` (Befunde CONC-001..024), Lasttests unter `loadtest/`.
+
+**Neuer Dienst `job-worker`** (Backend-Image, `python -m app.workers.job_worker`): Galerie-Ingest,
+PDF-Aufträge, Vereinsexport, Qualitäts-Backfill, Album-Sync, Virenscan-Nachprüfung und die grossen
+Aufräumjobs laufen nicht mehr in den uvicorn-Workern. `deploy.sh` startet und prüft ihn automatisch
+(`BACKEND_IMAGE_WORKERS`); ein Rollback auf ein Release ohne Job-Worker stoppt ihn, das ältere
+Backend führt die Jobs dann wieder selbst aus. Ohne laufenden Job-Worker entstehen keine PDFs aus
+Exporten und keine Galerie-Importe - `/admin/jobs` meldet `job_worker` als überfällig,
+`/admin/system` die Prüfung «PDF-Aufträge».
+
+**PDF-Export als Auftrag**: `POST /api/documents/render` prüft Rechte sofort und antwortet 202 mit
+einem Auftrag (`document_render_job`); der Browser fragt `GET /api/documents/render-jobs/{id}` ab.
+Auch das PDF nach dem Abschliessen eines Protokolls ist ein Auftrag (übersteht Neustarts, wird bei
+«Compile-Platz belegt» oder Timeout bis zu dreimal wiederholt). Hängende Aufträge (> 15 min
+`running`) setzt der Worker automatisch zurück.
+
+**Überwachung**:
+- `/admin/system` → «Auslastung der Dienstprozesse» (`runtime`): Event-Loop-Verzögerung,
+  DB-Pool- und Threadpool-Belegung, Pool-Zeitüberschreitungen aller Prozesse der letzten Minute.
+  Warnung ab 1 s Loop-Lag oder vollem Pool, kritisch ab 10 s.
+- `/admin/system` → «PDF-Aufträge» (`render_queue`): Warteschlange älter als 10 min oder
+  gescheiterte Aufträge (24 h).
+- `pg_stat_activity.application_name` unterscheidet `hocx-backend`, `hocx-job-worker`,
+  `hocx-document-worker`, `hocx-abgabebox-backend` usw.
+
+**Stellschrauben** (Umgebung, Defaults in Klammern):
+
+| Variable | Wirkung |
+|---|---|
+| `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` (12/8, Worker kleiner) | DB-Pool je Prozess; bei Erschöpfung nach `DB_POOL_TIMEOUT_SECONDS` (5) Antwort 503 `db_busy` mit Retry-After |
+| `DB_ADMISSION_LIMIT` (leer = Pool + Overflow minus `DB_ADMISSION_RESERVE` 4, also 16; im Release-Stack nur über Pool und Reserve einstellbar) / `DB_ADMISSION_WAIT_SECONDS` (20) | gleichzeitige HTTP-Requests je Backend-Worker; der Rest wartet ohne Thread und Verbindung, danach 503 `db_busy`. Verhindert den Stau aus Threadpool und Pool unter Last (`app/core/db_admission.py`). Wer den Pool vergrössert, vergrössert die Annahme mit |
+| `OVERLOAD_THRESHOLD_LOW` (0.75) / `OVERLOAD_THRESHOLD_NORMAL` (1.0) / `OVERLOAD_ACTIVE_MINUTES` (15) | Überlast-Schutz nach Abo: ab dieser geglätteten Auslastung (Requests in Arbeit + wartend je Platz der Request-Annahme) sehen *neue* Nutzer von Abos mit Priorität „niedrig“ bzw. „normal“ die Überlast-Seite; „hoch“ wird nie vorab abgewiesen. Wer in den letzten 15 Minuten gearbeitet hat, bleibt drin. Die Stufe je Abo steht im Adminportal (Preiskatalog), Abweisungen unter System → Überlast und als Warnung `overload` (ntfy) |
+| `SECURITY_FAILED_LOGINS_WARNING` / `_CRITICAL` (50/200 in 15 min), `SECURITY_FAILED_LOGINS_PER_ACCOUNT` (20 in 15 min), `SECURITY_EXPORTS_PER_HOUR` (3), `SECURITY_ALERT_ADMIN_LOGINS` (false) | Schwellen des Checks «security» in `/admin/system` und ntfy |
+| `GALLERY_UPLOAD_CONCURRENCY` (2) / `GALLERY_UPLOAD_SLOT_WAIT_SECONDS` (60) | gleichzeitige Galerie-Uploads je Backend-Worker, Wartezeit auf einen Platz |
+| `ABGABEBOX_UPLOAD_CONCURRENCY` (2) / `ABGABEBOX_UPLOAD_SLOT_WAIT_SECONDS` (120) | gleichzeitige öffentliche Uploads je Abgabebox-Worker (je bis 150 MiB im Speicher) |
+| `DOCUMENT_RENDER_CONCURRENCY` (2) | Typst-Compiles je Prozess (Backend: Vorschau; Job-Worker: PDF-Aufträge) |
+| `BACKUP_HEAVY_WINDOW_HOURS` (`1-5`) | lokales Zeitfenster (Europe/Zurich) für Backup-Verify und Restore-Test; der Backup-Worker läuft mit niedriger CPU-Priorität |
+
+Teure Monitor-Zählungen (verwaiste Dateien, Belegung des lokalen S3) rechnet `/admin/system` nur noch
+stündlich. Der Admin-Entrypoint hat dieselben Lese-/Schreibfristen (1 h) wie der öffentliche, damit
+grosse Mandantenimporte nicht nach Traefiks Default von 60 s abbrechen; vor dem Entpacken eines
+Imports wird freier Speicher geprüft.
+
+PostgreSQL läuft mit `max_connections=150` (Budget rund 100, siehe Kommentar in der Compose-Datei).
+Wer Pools oder Worker erhöht, rechnet das Budget nach.

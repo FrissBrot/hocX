@@ -1,12 +1,15 @@
 "use client";
 
 import { ButtonHTMLAttributes, KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { Popover } from "@/components/ui/popover";
 import { SearchInput } from "@/components/ui/search-input";
+import { Select } from "@/components/ui/select";
 
 type BaseProps<T> = {
   options: T[];
+  isOptionSelectable?: (option: T) => boolean;
   getLabel: (option: T) => string;
   placeholder?: string;
   searchPlaceholder?: string;
@@ -14,13 +17,13 @@ type BaseProps<T> = {
   disabled?: boolean;
   className?: string;
   /** Extra attributes spread onto the trigger button - e.g. data-form-input/onKeyDown
-   * for a form's custom Tab-order handling, matching what a native <select> replaced
+   * for a form's custom Tab-order handling, matching what a native <Select> replaced
    * by this component could carry directly. */
   triggerProps?: Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type" | "onClick" | "className" | "disabled"> &
     Record<`data-${string}`, unknown>;
 };
 
-type SingleProps<T, Id extends string | number> = BaseProps<T> & {
+type SingleProps<T, Id extends string | number> = BaseProps<T> & { // i18n-ok: TS-Typzeile, kein JSX-Text
   getId: (option: T) => Id;
   value: Id | null;
   onChange: (option: T | null) => void;
@@ -28,29 +31,34 @@ type SingleProps<T, Id extends string | number> = BaseProps<T> & {
   nullLabel?: string;
 };
 
-// Generic searchable dropdown replacing a native <select> whose options are loaded
+// Generic searchable dropdown replacing a native <Select> whose options are loaded
 // dynamically (from an API/DB), so those pickers get the same Popover + search-filter
 // pattern as TodoAssigneeMenu instead of an unsearchable native list. Single-select;
 // see SearchableMultiSelect for the multi-value variant.
 //
 // Id is inferred from getId's return type and pins `value`/onChange's option ids to
 // that same type, so passing e.g. a string filter-state against numeric option ids
-// (an easy mistake - native <select> values are always strings, these aren't) is a
+// (an easy mistake - native <Select> values are always strings, these aren't) is a
 // compile error instead of a silently-never-matching runtime comparison.
 export function SearchableSelect<T, Id extends string | number>({
   options,
+  isOptionSelectable,
   getId,
   getLabel,
   value,
   onChange,
   nullLabel,
-  placeholder = "Auswählen",
-  searchPlaceholder = "Suchen…",
-  emptyLabel = "Keine Ergebnisse",
+  placeholder,
+  searchPlaceholder,
+  emptyLabel,
   disabled,
   className,
   triggerProps,
 }: SingleProps<T, Id>) {
+  const t = useTranslations("common");
+  const resolvedPlaceholder = placeholder ?? t("select");
+  const resolvedSearchPlaceholder = searchPlaceholder ?? t("searchPlaceholder");
+  const resolvedEmptyLabel = emptyLabel ?? t("noResults");
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [highlighted, setHighlighted] = useState(0);
@@ -58,11 +66,12 @@ export function SearchableSelect<T, Id extends string | number>({
   const listRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
 
+  const selectable = isOptionSelectable ? options.filter(isOptionSelectable) : options;
   const filtered = search.trim()
-    ? options.filter((o) => getLabel(o).toLowerCase().includes(search.trim().toLowerCase()))
-    : options;
+    ? selectable.filter((o) => getLabel(o).toLowerCase().includes(search.trim().toLowerCase()))
+    : selectable;
   const selected = options.find((o) => getId(o) === value) ?? null;
-  const triggerLabel = selected ? getLabel(selected) : nullLabel ?? placeholder;
+  const triggerLabel = selected ? getLabel(selected) : nullLabel ?? resolvedPlaceholder;
 
   useEffect(() => {
     setHighlighted(0);
@@ -130,7 +139,7 @@ export function SearchableSelect<T, Id extends string | number>({
         <span className="mini-menu-trigger-icon">⌄</span>
       </button>
       <Popover open={open} onOpenChange={setOpen} anchorRef={triggerRef} className="assignee-popover-portal">
-        <SearchInput ref={searchRef} value={search} onChange={setSearch} placeholder={searchPlaceholder} onKeyDown={handleInputKey} />
+        <SearchInput ref={searchRef} value={search} onChange={setSearch} placeholder={resolvedSearchPlaceholder} onKeyDown={handleInputKey} />
         <div className="menu-list" role="listbox" ref={listRef}>
           {nullLabel ? (
             <button
@@ -146,7 +155,7 @@ export function SearchableSelect<T, Id extends string | number>({
             </button>
           ) : null}
           {filtered.length === 0 && !nullLabel ? (
-            <span className="assignee-empty">{emptyLabel}</span>
+            <span className="assignee-empty">{resolvedEmptyLabel}</span>
           ) : (
             filtered.map((option, index) => {
               const id = getId(option);
@@ -173,12 +182,14 @@ export function SearchableSelect<T, Id extends string | number>({
   );
 }
 
-type MultiProps<T, Id extends string | number> = BaseProps<T> & {
+type MultiProps<T, Id extends string | number> = BaseProps<T> & { // i18n-ok: TS-Typzeile, kein JSX-Text
   getId: (option: T) => Id;
   values: Id[];
   onChange: (ids: Id[]) => void;
   /** Trigger label when nothing is selected. Defaults to `placeholder`. */
   emptySelectionLabel?: string;
+  /** Fixes the trigger label regardless of the selection (e.g. "+ Person" next to chips). */
+  triggerLabel?: string;
 };
 
 // Multi-select counterpart to SearchableSelect: toggles membership on click and keeps
@@ -186,36 +197,46 @@ type MultiProps<T, Id extends string | number> = BaseProps<T> & {
 // SearchableSelect's doc comment for why Id is its own generic parameter.
 export function SearchableMultiSelect<T, Id extends string | number>({
   options,
+  isOptionSelectable,
   getId,
   getLabel,
   values,
   onChange,
-  placeholder = "Auswählen",
+  placeholder,
   emptySelectionLabel,
-  searchPlaceholder = "Suchen…",
-  emptyLabel = "Keine Ergebnisse",
+  triggerLabel: fixedTriggerLabel,
+  searchPlaceholder,
+  emptyLabel,
   disabled,
   className,
   triggerProps,
 }: MultiProps<T, Id>) {
+  const t = useTranslations("common");
+  const resolvedPlaceholder = placeholder ?? t("select");
+  const resolvedSearchPlaceholder = searchPlaceholder ?? t("searchPlaceholder");
+  const resolvedEmptyLabel = emptyLabel ?? t("noResults");
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
 
+  const selectable = isOptionSelectable ? options.filter(isOptionSelectable) : options;
   const filtered = search.trim()
-    ? options.filter((o) => getLabel(o).toLowerCase().includes(search.trim().toLowerCase()))
-    : options;
+    ? selectable.filter((o) => getLabel(o).toLowerCase().includes(search.trim().toLowerCase()))
+    : selectable;
 
   const selectedSet = new Set(values);
-  let triggerLabel = emptySelectionLabel ?? placeholder;
+  let triggerLabel = emptySelectionLabel ?? resolvedPlaceholder;
   if (values.length === 1) {
     const only = options.find((o) => getId(o) === values[0]);
     if (only) {
       triggerLabel = getLabel(only);
     }
   } else if (values.length > 1) {
-    triggerLabel = `${values.length} ausgewählt`;
+    triggerLabel = t("selectedCount", { count: values.length });
+  }
+  if (fixedTriggerLabel) {
+    triggerLabel = fixedTriggerLabel;
   }
 
   useEffect(() => {
@@ -250,10 +271,10 @@ export function SearchableMultiSelect<T, Id extends string | number>({
         <span className="mini-menu-trigger-icon">⌄</span>
       </button>
       <Popover open={open} onOpenChange={setOpen} anchorRef={triggerRef} className="assignee-popover-portal">
-        <SearchInput ref={searchRef} value={search} onChange={setSearch} placeholder={searchPlaceholder} />
+        <SearchInput ref={searchRef} value={search} onChange={setSearch} placeholder={resolvedSearchPlaceholder} />
         <div className="menu-list" role="listbox">
           {filtered.length === 0 ? (
-            <span className="assignee-empty">{emptyLabel}</span>
+            <span className="assignee-empty">{resolvedEmptyLabel}</span>
           ) : (
             filtered.map((option) => {
               const id = getId(option);

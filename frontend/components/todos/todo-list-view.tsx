@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
+import { CalendarLinkHint } from "@/components/connections/calendar-link-hint";
 import { DataTable } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterTabOption, FilterTabs } from "@/components/ui/filter-tabs";
 import { SearchInput } from "@/components/ui/search-input";
 import { TagInput } from "@/components/ui/tag-input";
-import { DateInput } from "@/components/ui/date-input";
-import { TodoEditModal } from "@/components/todos/todo-edit-modal";
+import { DocumentExportButton } from "@/components/documents/export-dialog";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { TODO_STATUS } from "@/components/protocol/protocol-editor-shared";
 import { browserApiFetch } from "@/lib/api/client";
@@ -17,13 +19,12 @@ import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { formatDate } from "@/lib/utils/format";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
-import { usePopoverDismiss } from "@/components/ui/popover";
-import { DocumentTemplate, EventSummary, ParticipantSummary, TodoBlock, TodoListItem } from "@/types/api";
+import { ParticipantSummary, TodoBlock, TodoListItem } from "@/types/api";
 
-const SCOPE_OPTIONS: FilterTabOption<"all" | "my">[] = [
-  { value: "all", label: "Alle" },
-  { value: "my", label: "Meine" },
-];
+// Erst beim Oeffnen laden: das Bearbeiten-Modal zieht den TipTap-Editor mit.
+const TodoEditModal = dynamic(() => import("@/components/todos/todo-edit-modal").then((m) => m.TodoEditModal), {
+  ssr: false,
+});
 
 type SortKey = "task" | "protocol_number" | "assigned_participant_name" | "resolved_due_date" | "todo_status_code";
 
@@ -35,11 +36,10 @@ type Props = {
   canEdit?: boolean;
   todoBlocks?: TodoBlock[];
   participants?: ParticipantSummary[];
-  documentTemplates?: DocumentTemplate[];
-  events?: EventSummary[];
 };
 
-export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [], participants = [], documentTemplates = [], events = [] }: Props) {
+export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [], participants = [] }: Props) {
+  const t = useTranslations("todos");
   const router = useRouter();
   const showToast = useToast();
   const [scope, setScope] = useState<"all" | "my">(allTodos !== null ? "all" : "my");
@@ -56,168 +56,6 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
   const [hasMoreAll, setHasMoreAll] = useState((allTodos?.length ?? 0) === PAGE_SIZE);
   const [hasMoreMy, setHasMoreMy] = useState(myTodos.length === PAGE_SIZE);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-
-  const landscapeTemplates = documentTemplates.filter(
-    (t) => t.is_active && (t.configuration_json as { options?: { orientation?: string } })?.options?.orientation === "landscape"
-  );
-
-  // Export modal state
-  const [exportModalOpen, setExportModalOpen] = useState(false);
-  const [exportTemplateId, setExportTemplateId] = useState<string | "">(landscapeTemplates[0]?.id ?? "");
-  const [exportBusyKind, setExportBusyKind] = useState<"pdf" | "md" | null>(null);
-  const [exportPdfUrl, setExportPdfUrl] = useState<string | null>(null);
-  const [exportMarkdownCopied, setExportMarkdownCopied] = useState(false);
-  const [exportFilter, setExportFilter] = useState<"all" | "open">("open");
-  const [exportPersonMode, setExportPersonMode] = useState<"all" | "filter" | "group">("all");
-  const [exportParticipantId, setExportParticipantId] = useState<string | "">("");
-  const [exportDateMode, setExportDateMode] = useState<"all" | "next-hock" | "until-event" | "custom-date">("all");
-  const [exportUntilEventId, setExportUntilEventId] = useState<string | "">("");
-  const [exportCustomDate, setExportCustomDate] = useState("");
-  const [templateDropdownOpen, setTemplateDropdownOpen] = useState(false);
-  const templateDropdownRef = useRef<HTMLDivElement>(null);
-  const [participantSearch, setParticipantSearch] = useState("");
-  const [participantSuggestions, setParticipantSuggestions] = useState<ParticipantSummary[]>([]);
-
-  usePopoverDismiss(templateDropdownOpen, () => setTemplateDropdownOpen(false), [templateDropdownRef]);
-
-  useEffect(() => {
-    if (!participantSearch.trim()) { setParticipantSuggestions([]); return; }
-    const q = participantSearch.toLowerCase();
-    setParticipantSuggestions(participants.filter((p) => p.display_name.toLowerCase().includes(q)).slice(0, 6));
-  }, [participantSearch, participants]);
-
-  const sortedEvents = useMemo(
-    () => [...events].sort((a, b) => a.event_date.localeCompare(b.event_date)),
-    [events]
-  );
-
-  const nextHockEvent = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    const openTodos = (allTodos ?? []).filter((t) => (t.todo_status_code ?? "open") === "open" || t.todo_status_code === "in_progress");
-    const dueDates = openTodos.map((t) => t.resolved_due_date).filter(Boolean) as string[];
-    if (!dueDates.length) return sortedEvents.find((e) => e.event_date >= today) ?? null;
-    const counts: Record<string, number> = {};
-    dueDates.forEach((d) => { counts[d] = (counts[d] ?? 0) + 1; });
-    const mostCommon = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
-    if (mostCommon && mostCommon >= today) {
-      const matchingEvent = sortedEvents.find((e) => e.event_date === mostCommon);
-      if (matchingEvent) return matchingEvent;
-    }
-    return sortedEvents.find((e) => e.event_date >= today) ?? null;
-  }, [allTodos, sortedEvents]);
-
-  function getUntilDate(): string | null {
-    if (exportDateMode === "all") return null;
-    if (exportDateMode === "next-hock") return nextHockEvent?.event_date ?? null;
-    if (exportDateMode === "until-event" && exportUntilEventId) {
-      return events.find((e) => e.id === exportUntilEventId)?.event_date ?? null;
-    }
-    if (exportDateMode === "custom-date" && exportCustomDate) return exportCustomDate;
-    return null;
-  }
-
-  function triggerDownload(url: string) {
-    const a = document.createElement("a");
-    a.href = `${url}?download=1`;
-    a.target = "_blank";
-    a.rel = "noreferrer";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  }
-
-  function clearExportState() {
-    setExportPdfUrl(null);
-    setExportMarkdownCopied(false);
-  }
-
-  function buildTodoExportPayload() {
-    return {
-      filter: exportFilter,
-      participant_id: exportPersonMode === "filter" && exportParticipantId ? exportParticipantId : null,
-      group_by_person: exportPersonMode === "group",
-      until_date: getUntilDate(),
-    };
-  }
-
-  function getDateSummary(): string | null {
-    if (exportDateMode === "all") return null;
-    if (exportDateMode === "next-hock") {
-      return nextHockEvent ? "Bis nächster Hock" : null;
-    }
-    if (exportDateMode === "until-event" && exportUntilEventId) {
-      const selectedEvent = events.find((event) => event.id === exportUntilEventId);
-      if (!selectedEvent) return null;
-      return selectedEvent.title ? `Bis Termin: ${selectedEvent.title}` : "Bis Termin";
-    }
-    if (exportDateMode === "custom-date" && exportCustomDate) {
-      return "Bis Datum";
-    }
-    return null;
-  }
-
-  async function copyToClipboard(text: string) {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return;
-    }
-
-    const textarea = document.createElement("textarea");
-    textarea.value = text;
-    textarea.setAttribute("readonly", "true");
-    textarea.style.position = "fixed";
-    textarea.style.opacity = "0";
-    textarea.style.pointerEvents = "none";
-    document.body.appendChild(textarea);
-    textarea.focus();
-    textarea.select();
-    const copied = document.execCommand("copy");
-    document.body.removeChild(textarea);
-    if (!copied) {
-      throw new Error("Zwischenablage nicht verfuegbar");
-    }
-  }
-
-  async function handlePdfClick() {
-    if (exportBusyKind) return;
-    if (exportPdfUrl) { triggerDownload(exportPdfUrl); return; }
-    if (!exportTemplateId) return;
-    setExportBusyKind("pdf");
-    try {
-      const result = await browserApiFetch<{ content_url?: string | null }>("/api/exports/todos", {
-        method: "POST",
-        body: JSON.stringify({ template_id: exportTemplateId, ...buildTodoExportPayload() }),
-      });
-      const url = result.content_url ?? null;
-      setExportPdfUrl(url);
-      if (url) triggerDownload(url);
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "PDF-Export fehlgeschlagen", "error");
-    } finally {
-      setExportBusyKind(null);
-    }
-  }
-
-  async function handleMarkdownClick() {
-    if (exportBusyKind) return;
-    setExportBusyKind("md");
-    try {
-      const result = await browserApiFetch<{ content: string }>("/api/exports/todos/markdown", {
-        method: "POST",
-        body: JSON.stringify({
-          ...buildTodoExportPayload(),
-          date_summary: getDateSummary(),
-        }),
-      });
-      await copyToClipboard(result.content);
-      setExportMarkdownCopied(true);
-      showToast("Markdown in die Zwischenablage kopiert", "success");
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "Markdown konnte nicht kopiert werden", "error");
-    } finally {
-      setExportBusyKind(null);
-    }
-  }
 
   const [showCreate, setShowCreate] = useState(false);
   const [createTask, setCreateTask] = useState("");
@@ -243,7 +81,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
         setHasMoreMy(next.length === PAGE_SIZE);
       }
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Weitere Todos konnten nicht geladen werden", "error");
+      showToast(error instanceof Error ? error.message : t("loadMoreFailed"), "error");
     } finally {
       setIsLoadingMore(false);
     }
@@ -345,7 +183,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
       }
       setTodos((prev) => ({ all: applyUpdate(prev.all), my: applyUpdate(prev.my) }));
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Status konnte nicht geändert werden", "error");
+      showToast(error instanceof Error ? error.message : t("statusChangeFailed"), "error");
     } finally {
       setBusy((b) => ({ ...b, [todo.id]: false }));
     }
@@ -371,7 +209,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
       setCreateTags("");
       setShowCreate(false);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Todo konnte nicht erstellt werden", "error");
+      showToast(error instanceof Error ? error.message : t("createFailed"), "error");
     } finally {
       setCreating(false);
     }
@@ -381,7 +219,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
 
   const tagsColumnHeader = (
     <div className="table-th-filter">
-      <span className="table-th-label">Tags</span>
+      <span className="table-th-label">{t("colTags")}</span>
       {allTags.length > 0 && (
         <SearchableSelect
           className="table-th-tag-select"
@@ -390,29 +228,40 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
           getLabel={(tag) => tag}
           value={tagFilter}
           onChange={(tag) => setTagFilter(tag)}
-          nullLabel="Alle"
+          nullLabel={t("allOption")}
         />
       )}
     </div>
   );
 
   const showEmptyState = filtered.length === 0 && !hasMore && statusFilter === "open" && !search.trim() && tagFilter === null;
-  const hasNoTodos = showEmptyState && activeTodos.length === 0;
+  // Filterleiste nur ausblenden, wenn es in keinem Scope Todos gibt – sonst sitzt man
+  // nach einem Wechsel auf das leere „Meine" fest, weil der Scope-Umschalter mit verschwindet.
+  const hasNoTodos =
+    showEmptyState && todos.all.length === 0 && todos.my.length === 0 && !hasMoreAll && !hasMoreMy;
+
+  const scopeOptions: FilterTabOption<"all" | "my">[] = [
+    { value: "all", label: t("scopeAll") },
+    { value: "my", label: t("scopeMine") },
+  ];
 
   return (
-    <div className="grid">
+    <div className="grid todos-overview">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Todos</h1>
-          <p className="muted">Alle offenen und erledigten Todos dieses Mandanten.</p>
+          <h1 className="page-title">{t("pageTitle")}</h1>
+          <p className="muted">{t("pageIntro")}</p>
+          <CalendarLinkHint kind="todos" />
         </div>
         <div className="table-toolbar-actions">
-          <button type="button" className="button-secondary button-ghost" onClick={() => setExportModalOpen(true)}>
-            Export
-          </button>
+          <DocumentExportButton
+            className="button-secondary button-ghost"
+            label={t("exportButton")}
+            context={{ documentType: "todos", params: { status: statusFilter, ...(tagFilter ? { tag: tagFilter } : {}) } }}
+          />
           {canEdit && !showEmptyState && (
             <button type="button" className="button-secondary" onClick={() => setShowCreate(true)}>
-              + Todo
+              {t("addTodoButton")}
             </button>
           )}
         </div>
@@ -421,52 +270,52 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
       {hasNoTodos ? null : (
       <div className="list-filter-row">
         <div className="table-toolbar-actions">
-          {allTodos !== null && <FilterTabs options={SCOPE_OPTIONS} value={scope} onChange={setScope} />}
+          {allTodos !== null && <FilterTabs options={scopeOptions} value={scope} onChange={setScope} />}
           <FilterTabs
             options={[
-              { value: "open", label: "Offen", count: counts.open || undefined },
-              { value: "done", label: "Erledigt", count: counts.done || undefined },
-              { value: "all", label: "Alle" },
+              { value: "open", label: t("statusOpenLabel"), count: counts.open || undefined },
+              { value: "done", label: t("statusDoneLabel"), count: counts.done || undefined },
+              { value: "all", label: t("allOption") },
             ]}
             value={statusFilter}
             onChange={setStatusFilter}
           />
         </div>
         <div className="list-filter-search">
-          <SearchInput value={search} onChange={setSearch} placeholder="Todos durchsuchen" />
+          <SearchInput value={search} onChange={setSearch} placeholder={t("searchPlaceholder")} />
         </div>
       </div>
       )}
 
       {showEmptyState ? (
         <EmptyState
-          title="Keine offenen Todos"
-          description="Todos entstehen direkt in Protokollen oder werden hier manuell erfasst und einer Person zugewiesen."
+          title={t("emptyTitle")}
+          description={t("emptyDescription")}
           actions={
             <>
               {canEdit ? (
                 <button type="button" className="button-primary" onClick={() => setShowCreate(true)}>
-                  + Todo
+                  {t("addTodoButton")}
                 </button>
               ) : null}
               <button type="button" className="button-secondary" onClick={() => setStatusFilter("done")}>
-                Erledigte anzeigen
+                {t("showDoneButton")}
               </button>
             </>
           }
-          hint="Im Protokoll-Editor erfasste Todos erscheinen automatisch in dieser Liste."
+          hint={t("emptyHint")}
         />
       ) : (
       <DataTable
         className="data-table-lg data-table-todos"
         columns={[
           "",
-          { key: "task", label: "Aufgabe", sortable: true, sortDirection: sd("task"), onSort: () => toggleSort("task") },
-          { key: "tags", label: "Tags", header: tagsColumnHeader },
-          { key: "assigned_participant_name" as SortKey, label: "Zugewiesen", sortable: true, sortDirection: sd("assigned_participant_name"), onSort: () => toggleSort("assigned_participant_name") },
-          { key: "resolved_due_date", label: "Fällig", sortable: true, sortDirection: sd("resolved_due_date"), onSort: () => toggleSort("resolved_due_date") },
+          { key: "task", label: t("colTask"), sortable: true, sortDirection: sd("task"), onSort: () => toggleSort("task") },
+          { key: "tags", label: t("colTags"), header: tagsColumnHeader },
+          { key: "assigned_participant_name" as SortKey, label: t("colAssigned"), sortable: true, sortDirection: sd("assigned_participant_name"), onSort: () => toggleSort("assigned_participant_name") },
+          { key: "resolved_due_date", label: t("colDue"), sortable: true, sortDirection: sd("resolved_due_date"), onSort: () => toggleSort("resolved_due_date") },
         ]}
-        emptyMessage="Keine Todos gefunden."
+        emptyMessage={t("noTodosFound")}
       >
         {filtered.map((todo) => {
           const code = todo.todo_status_code ?? "open";
@@ -486,7 +335,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
                     <button
                       type="button"
                       className={`todo-check${isDone ? " todo-check-done" : ""}${lockedClass}`}
-                      title={isAuto ? "Wird automatisch durch Abgabe geschlossen" : !canEdit ? "" : isDone ? "Als offen markieren" : "Als erledigt markieren"}
+                      title={isAuto ? t("autoClosedBySubmission") : !canEdit ? "" : isDone ? t("markOpenTitle") : t("markDoneTitle")}
                       disabled={busy[todo.id] || !canEdit || isAuto}
                       onClick={(event) => {
                         event.stopPropagation();
@@ -550,10 +399,10 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
       {hasMore && (
         <div className="load-more-row" ref={loadMoreSentinelRef}>
           {isLoadingMore ? (
-            <span className="muted">Lädt weitere Todos…</span>
+            <span className="muted">{t("loadingMore")}</span>
           ) : (
             <button type="button" className="button-secondary button-ghost" onClick={() => void loadMore()}>
-              Mehr laden ({activeTodos.length} geladen)
+              {t("loadMoreButton", { count: activeTodos.length })}
             </button>
           )}
         </div>
@@ -561,8 +410,8 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
 
       <Modal
         open={showCreate}
-        title="Todo erstellen"
-        description="Erfasse eine neue Aufgabe und ordne sie bei Bedarf einem Protokoll zu."
+        title={t("createModalTitle")}
+        description={t("createModalDescription")}
         onClose={() => setShowCreate(false)}
       >
         <ModalSaveForm
@@ -574,42 +423,42 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
           }}
         >
           <label className="field-stack">
-            <span className="field-label">Aufgabe</span>
+            <span className="field-label">{t("colTask")}</span>
             <input
               value={createTask}
               onChange={(event) => setCreateTask(event.target.value)}
-              placeholder="Was ist zu erledigen?"
+              placeholder={t("taskPlaceholder")}
               autoFocus
               required
             />
           </label>
 
           <label className="field-stack">
-            <span className="field-label">Tags</span>
+            <span className="field-label">{t("colTags")}</span>
             <TagInput
               value={createTags}
               onChange={setCreateTags}
               suggestions={allTagSuggestions}
-              placeholder="Tags…"
+              placeholder={t("tagsPlaceholder")}
             />
-            <span className="field-help">Optional. Mehrere Tags können hinzugefügt werden.</span>
+            <span className="field-help">{t("tagsHelp")}</span>
           </label>
 
           <div className="field-stack">
-            <span className="field-label">Protokoll</span>
+            <span className="field-label">{t("protocolLabel")}</span>
             <SearchableSelect
               options={todoBlocks}
               getId={(block) => block.block_id}
               getLabel={(block) => `${block.protocol_number}${block.protocol_title ? ` · ${block.protocol_title}` : ""}${block.block_title ? ` — ${block.block_title}` : ""}`}
               value={createBlockId || null}
               onChange={(block) => setCreateBlockId(block ? String(block.block_id) : "")}
-              nullLabel="Kein Protokoll"
+              nullLabel={t("noProtocolOption")}
             />
-            <span className="field-help">Optional. Verknüpft das Todo direkt mit einem Protokollpunkt.</span>
+            <span className="field-help">{t("protocolHelp")}</span>
           </div>
 
           <button data-modal-save type="submit" disabled={creating || !createTask.trim()}>
-            {creating ? "Wird erstellt…" : "Todo erstellen"}
+            {creating ? t("creatingEllipsis") : t("createModalTitle")}
           </button>
         </ModalSaveForm>
       </Modal>
@@ -634,188 +483,6 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
         }}
       />}
 
-      <Modal
-        open={exportModalOpen}
-        title="Todos exportieren"
-        onClose={() => { setExportModalOpen(false); clearExportState(); }}
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)", minWidth: 360, maxWidth: 480 }}>
-
-          {/* Status filter */}
-          <div>
-            <div className="field-label" style={{ marginBottom: "var(--space-2)" }}>Status</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
-              {(["open", "all"] as const).map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  className={exportFilter === f ? "tag-filter-chip tag-filter-chip-active" : "tag-filter-chip"}
-                  style={{ width: "auto", minHeight: 0 }}
-                  onClick={() => { setExportFilter(f); clearExportState(); }}
-                >
-                  {f === "open" ? "Offene Todos" : "Alle Todos"}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Person filter */}
-          <div>
-            <div className="field-label" style={{ marginBottom: "var(--space-2)" }}>Person</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
-              {(["all", "filter", "group"] as const).map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  className={exportPersonMode === mode ? "tag-filter-chip tag-filter-chip-active" : "tag-filter-chip"}
-                  style={{ width: "auto", minHeight: 0 }}
-                  onClick={() => { setExportPersonMode(mode); clearExportState(); if (mode !== "filter") { setExportParticipantId(""); setParticipantSearch(""); } }}
-                >
-                  {mode === "all" ? "Alle" : mode === "filter" ? "Person filtern" : "Nach Person gruppieren"}
-                </button>
-              ))}
-            </div>
-            {exportPersonMode === "filter" && (
-              <div style={{ marginTop: "var(--space-3)", position: "relative" }}>
-                <input
-                  className="input"
-                  type="text"
-                  placeholder="Person suchen…"
-                  value={participantSearch}
-                  onChange={(e) => { setParticipantSearch(e.target.value); if (!e.target.value) setExportParticipantId(""); clearExportState(); }}
-                />
-                {participantSuggestions.length > 0 && (
-                  <div className="dropdown-panel dropdown-panel-down" style={{ padding: "var(--space-1) 0", overflow: "visible" }}>
-                    {participantSuggestions.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        className={exportParticipantId === p.id ? "dropdown-option dropdown-option-selected" : "dropdown-option"}
-                        onClick={() => {
-                          setExportParticipantId(p.id);
-                          setParticipantSearch(p.display_name);
-                          setParticipantSuggestions([]);
-                          clearExportState();
-                        }}
-                      >
-                        {p.display_name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Date filter */}
-          <div>
-            <div className="field-label" style={{ marginBottom: "var(--space-2)" }}>Zeitraum</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
-              {(["all", "next-hock", "until-event", "custom-date"] as const).map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  className={exportDateMode === mode ? "tag-filter-chip tag-filter-chip-active" : "tag-filter-chip"}
-                  style={{ width: "auto", minHeight: 0 }}
-                  onClick={() => { setExportDateMode(mode); clearExportState(); }}
-                >
-                  {mode === "all" ? "Alle" : mode === "next-hock" ? "Nächster Hock" : mode === "until-event" ? "Bis Termin" : "Eigenes Datum"}
-                </button>
-              ))}
-            </div>
-            {exportDateMode === "next-hock" && (
-              <div className="muted" style={{ marginTop: "var(--space-2)", fontSize: "var(--text-base)" }}>
-                {nextHockEvent
-                  ? `Bis ${nextHockEvent.title ?? "Termin"} (${formatDate(nextHockEvent.event_date)})`
-                  : "Kein passender Hock gefunden"}
-              </div>
-            )}
-            {exportDateMode === "until-event" && (
-              <div style={{ marginTop: "var(--space-2)" }}>
-                <SearchableSelect
-                  options={sortedEvents}
-                  getId={(e) => e.id}
-                  getLabel={(e) => `${formatDate(e.event_date)}${e.title ? ` — ${e.title}` : ""}`}
-                  value={exportUntilEventId || null}
-                  onChange={(e) => { setExportUntilEventId(e ? e.id : ""); clearExportState(); }}
-                  nullLabel="Termin wählen…"
-                />
-              </div>
-            )}
-            {exportDateMode === "custom-date" && (
-              <div style={{ marginTop: "var(--space-2)" }}>
-                <DateInput
-                  value={exportCustomDate}
-                  onChange={(value) => { setExportCustomDate(value); clearExportState(); }}
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Action bar */}
-          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginTop: "var(--space-1)" }}>
-            <button
-              type="button"
-              className="pdf-icon-link pdf-icon-link-success"
-              style={{ minWidth: 56, textAlign: "center" }}
-              onClick={() => void handlePdfClick()}
-              disabled={!exportTemplateId}
-            >
-              {exportBusyKind === "pdf" ? "…" : exportPdfUrl ? "PDF ↓" : "PDF"}
-            </button>
-            <button
-              type="button"
-              className="pdf-icon-link"
-              style={{ minWidth: 56, textAlign: "center" }}
-              onClick={() => void handleMarkdownClick()}
-            >
-              {exportBusyKind === "md" ? "…" : exportMarkdownCopied ? "MD OK" : "MD"}
-            </button>
-
-            <div style={{ flex: 1 }} />
-
-            {/* Template dropdown */}
-            {landscapeTemplates.length > 1 && (
-              <div ref={templateDropdownRef} style={{ position: "relative" }}>
-                <button
-                  type="button"
-                  onClick={() => setTemplateDropdownOpen((v) => !v)}
-                  style={{
-                    padding: "var(--space-1) var(--space-3)",
-                    borderRadius: "var(--radius-sm)",
-                    border: "1px solid var(--border)",
-                    backgroundColor: "transparent",
-                    color: "var(--text)",
-                    fontSize: "var(--text-base)",
-                    cursor: "pointer",
-                    minHeight: 0,
-                    whiteSpace: "nowrap",
-                    maxWidth: 180,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {landscapeTemplates.find((t) => t.id === exportTemplateId)?.name ?? "Vorlage"} ▾
-                </button>
-                {templateDropdownOpen && (
-                  <div className="dropdown-panel dropdown-panel-up" style={{ padding: "var(--space-1) 0", overflow: "visible" }}>
-                    {landscapeTemplates.map((t) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => { setExportTemplateId(t.id); setTemplateDropdownOpen(false); clearExportState(); }}
-                        className={exportTemplateId === t.id ? "dropdown-option dropdown-option-selected" : "dropdown-option"}
-                      >
-                        {t.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 }

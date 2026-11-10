@@ -100,7 +100,7 @@ class AdminMfaService:
     def _delete_flow(self, token: str) -> None:
         self._redis().delete(f"{_FLOW_PREFIX}{token}")
 
-    def _list_factors(self, db: Session, admin_id: int, *, factor_type: str | None = None) -> list[UserMfaFactor]:
+    def _list_factors(self, db: Session, admin_id: int, *, factor_type: str | None = None, for_update: bool = False) -> list[UserMfaFactor]:
         statement = (
             select(UserMfaFactor)
             .where(UserMfaFactor.platform_admin_id == admin_id)
@@ -108,6 +108,8 @@ class AdminMfaService:
         )
         if factor_type is not None:
             statement = statement.where(UserMfaFactor.factor_type == factor_type)
+        if for_update:
+            statement = statement.with_for_update()
         return list(db.scalars(statement))
 
     def _get_factor(self, db: Session, *, factor_id: int, admin_id: int) -> UserMfaFactor | None:
@@ -342,7 +344,8 @@ class AdminMfaService:
             available_methods=methods,
             default_factor_type="totp" if has_factor else None,
             default_factor_label="Authenticator-App" if has_factor else None,
-            can_add_totp=True,
+            # Im Login nur bei Ersteinrichtung neue Faktoren anbieten (MAIN-SEC-001).
+            can_add_totp=not has_factor,
             can_add_passkey=False,
         )
 
@@ -358,8 +361,21 @@ class AdminMfaService:
         self._delete_flow(ticket)
         return context
 
+    def _ensure_login_setup_allowed(self, db: Session, admin_id: int) -> None:
+        """Faktor-Einrichtung im Login-Flow nur ohne bestehenden Faktor (Audit MAIN-SEC-001).
+
+        Sonst genügte das Passwort, um einen eigenen TOTP-Faktor zu registrieren und eine
+        Admin-Session mit ``mfa=True`` zu erhalten.
+        """
+        if self._list_factors(db, admin_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Für dieses Konto ist bereits ein MFA-Faktor eingerichtet. Bitte mit diesem anmelden.",
+            )
+
     def start_login_totp_enrollment(self, db: Session, ticket: str) -> TotpEnrollmentStartRead:
         context = self._load_login_ticket(db, ticket)
+        self._ensure_login_setup_allowed(db, context.admin.id)
         secret = generate_totp_secret()
         flow_token = self._create_flow(
             "admin_login_totp_enrollment",
@@ -378,6 +394,7 @@ class AdminMfaService:
         self, db: Session, *, flow_token: str, code: str, label: str | None
     ) -> AdminPendingLoginContext:
         flow = self._load_flow(flow_token, expected_kind="admin_login_totp_enrollment")
+        self._ensure_login_setup_allowed(db, int(flow["admin_id"]))
         self._complete_totp_enrollment(
             db,
             flow_token=flow_token,
@@ -422,6 +439,30 @@ class AdminMfaService:
         db.refresh(factor)
         self._delete_flow(flow_token)
         return factor
+
+    def verify_step_up_totp(self, db: Session, *, admin_id: int, code: str, purpose: str) -> None:
+        """Frische TOTP-Bestätigung für besonders kritische Aktionen (Restore aus dem Backup) -
+        zusätzlich zur bestehenden Sitzung. Gleiche Konto-Sperre wie beim Login; ein Code kann
+        nicht zweimal verwendet werden (totp_last_counter)."""
+        account_lockout_key = f"admin-mfa-account:{admin_id}"
+        check_account_lockout(account_lockout_key, limit=_ACCOUNT_TOTP_ATTEMPT_LIMIT)
+        enforce_rate_limit(f"admin-mfa-step-up:{purpose}:{admin_id}", limit=10, period_seconds=_FLOW_TTL_SECONDS)
+        # FOR UPDATE: zwei parallele Anfragen mit demselben Code werden serialisiert; die zweite
+        # sieht den bereits erhöhten totp_last_counter (Replay-Schutz auch bei Nebenläufigkeit).
+        factors = [factor for factor in self._list_factors(db, admin_id, for_update=True) if factor.secret_encrypted]
+        if not factors:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Für diese Aktion ist ein TOTP-Faktor erforderlich (Konto -> MFA)")
+        for factor in factors:
+            counter = verify_totp_code(decrypt_secret(factor.secret_encrypted), (code or "").strip(), min_counter=factor.totp_last_counter)
+            if counter is None:
+                continue
+            factor.totp_last_counter = counter
+            factor.last_used_at = datetime.now(UTC)
+            db.add(factor)
+            db.commit()
+            return
+        record_failed_attempt(account_lockout_key, period_seconds=_ACCOUNT_TOTP_WINDOW_SECONDS)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Der TOTP-Code ist nicht gültig")
 
     def verify_login_totp(self, db: Session, *, ticket: str, code: str) -> AdminPendingLoginContext:
         context = self._load_login_ticket(db, ticket)

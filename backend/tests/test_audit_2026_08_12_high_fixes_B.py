@@ -58,7 +58,8 @@ def test_h5_due_events_rejects_foreign_tenant_todo(db):
     user_b = make_current_user(tenant_b.id, role="reader", user_id=2)
     with pytest.raises(HTTPException) as exc_info:
         todos_route.get_todo_due_events(todo_a.public_id, db=db, user=user_b)
-    assert exc_info.value.status_code == 403
+    # 404 unter Row-Level-Security (Migration 0132): die fremde Zeile ist dann gar nicht sichtbar.
+    assert exc_info.value.status_code in (403, 404)
 
 
 def test_h5_due_events_still_works_for_same_tenant_user(db):
@@ -84,8 +85,7 @@ def test_h6_reader_can_now_reach_endpoint_for_own_participant(db):
     template2 = make_template(db, tenant.id, name="Template 2")
 
     reader_user = make_app_user(db, email="reader@example.com", tenant_id=tenant.id, role_code="reader")
-    participant_reader = make_participant(db, tenant.id, display_name="Reader Participant")
-    participant_reader.app_user_id = reader_user.id
+    participant_reader = reader_user
     db.flush()
 
     participant_other = make_participant(db, tenant.id, display_name="Other Participant")
@@ -110,8 +110,7 @@ def test_h6_restricted_reader_scoped_when_querying_other_participant(db):
     template2 = make_template(db, tenant.id, name="Template 2")
 
     reader_user = make_app_user(db, email="reader2@example.com", tenant_id=tenant.id, role_code="reader")
-    participant_reader = make_participant(db, tenant.id, display_name="Reader Participant 2")
-    participant_reader.app_user_id = reader_user.id
+    participant_reader = reader_user
     db.flush()
 
     participant_other = make_participant(db, tenant.id, display_name="Other Participant 2")

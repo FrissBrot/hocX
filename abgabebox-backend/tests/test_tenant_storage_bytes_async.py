@@ -65,7 +65,8 @@ def test_tenant_storage_bytes_via_to_thread_does_not_starve_the_event_loop(tmp_p
         # regression via timing alone.
         def slow_tenant_storage_bytes(tenant_id: int) -> int:
             time.sleep(0.2)
-            return tenant_storage_bytes(tenant_id)
+            # Dateisystem-Backend: Verzeichnis-Walk ohne DB-Zugriff (db=None).
+            return tenant_storage_bytes(None, tenant_id)
 
         async def scenario():
             ticks = 0

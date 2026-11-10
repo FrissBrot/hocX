@@ -1,23 +1,32 @@
 "use client";
 
+import { useParticipantSelectable } from "@/contexts/participant-date-context";
+
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { Tabs } from "@/components/ui/tabs";
 import { DateInput } from "@/components/ui/date-input";
 import { TagInput } from "@/components/ui/tag-input";
-import { EventSummary, ParticipantSummary } from "@/types/api";
+import { CycleAssignment, EventSummary, ParticipantSummary } from "@/types/api";
+import { useCycleOptions } from "@/lib/hooks/use-cycle-options";
+import { useEventFieldConfig } from "@/lib/hooks/use-event-field-config";
 import type { TagConfig } from "@/lib/hooks/use-tag-config";
 
 type RoleField = "organizer_ids" | "leadership_ids" | "participant_ids" | "spezial1_ids" | "spezial2_ids" | "spezial3_ids";
 
-const ROLE_FIELDS: { field: RoleField; label: string }[] = [
-  { field: "organizer_ids", label: "Organisatoren" },
-  { field: "leadership_ids", label: "Leitungsteam" },
-  { field: "participant_ids", label: "Teilnehmer" },
-  { field: "spezial1_ids", label: "Spezial 1" },
-  { field: "spezial2_ids", label: "Spezial 2" },
-  { field: "spezial3_ids", label: "Spezial 3" },
-];
+type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
+
+function roleFields(t: TFunc): { field: RoleField; label: string }[] {
+  return [
+    { field: "organizer_ids", label: t("detailForm.organizersLabel") },
+    { field: "leadership_ids", label: t("detailForm.leadershipLabel") },
+    { field: "participant_ids", label: t("detailForm.participantsLabel") },
+    { field: "spezial1_ids", label: t("detailForm.special1Label") },
+    { field: "spezial2_ids", label: t("detailForm.special2Label") },
+    { field: "spezial3_ids", label: t("detailForm.special3Label") },
+  ];
+}
 
 type EventDetailFormProps = {
   event: EventSummary;
@@ -46,12 +55,33 @@ export function EventDetailForm({
   onTagRename,
   onUpdate,
 }: EventDetailFormProps) {
+  const isParticipantSelectable = useParticipantSelectable();
+  const t = useTranslations("events");
+  const tCommon = useTranslations("common");
   const [activeRoleField, setActiveRoleField] = useState<RoleField | null>(null);
   const [roleSearch, setRoleSearch] = useState("");
+  // Spezialfelder: Alias und Ausblenden aus den Mandant-Einstellungen
+  const eventFields = useEventFieldConfig();
+  const ROLE_FIELDS = roleFields(t)
+    .filter((role) => !eventFields.hidden(role.field))
+    .map((role) => ({ ...role, label: eventFields.label(role.field, role.label) }));
+  const specialTexts = (["spezial_text1", "spezial_text2", "spezial_text3"] as const)
+    .map((field, index) => ({ field, label: eventFields.label(field, t(`detailForm.specialText${index + 1}Label`)) }))
+    .filter(({ field }) => !eventFields.hidden(field));
+  const { options: cycleOptions, loading: cyclesLoading } = useCycleOptions();
+  const cycleAssignments: CycleAssignment[] = event.cycle_assignments ?? [];
+
+  function toggleCycle(cycleConfigId: string, cycleYear: number) {
+    const exists = cycleAssignments.some((a) => a.cycle_config_id === cycleConfigId && a.cycle_year === cycleYear);
+    const next = exists
+      ? cycleAssignments.filter((a) => !(a.cycle_config_id === cycleConfigId && a.cycle_year === cycleYear))
+      : [...cycleAssignments, { cycle_config_id: cycleConfigId, cycle_year: cycleYear }];
+    void onUpdate({ cycle_assignments: next });
+  }
 
   function participantNames(ids: string[] | null | undefined) {
     const list = availableParticipants.filter((p) => (ids ?? []).includes(p.id));
-    return list.length ? list.map((p) => p.display_name).join(", ") : "Niemand ausgewählt";
+    return list.length ? list.map((p) => p.display_name).join(", ") : t("detailForm.noneSelected");
   }
 
   function toggleParticipant(field: RoleField, participantId: string) {
@@ -70,17 +100,17 @@ export function EventDetailForm({
       tabs={[
         {
           id: "overview",
-          label: "Übersicht",
+          label: t("detailForm.overviewTab"),
           content: (
             <div className="grid" style={{ gap: "var(--space-4)" }}>
               <div className="two-col">
                 <label className="field-stack">
-                  <span className="field-label">Datum</span>
+                  <span className="field-label">{t("detailForm.dateLabel")}</span>
                   <DateInput value={event.event_date} onChange={(value) => void onUpdate({ event_date: value })} />
                 </label>
                 {allowEndDate ? (
                   <label className="field-stack">
-                    <span className="field-label">Enddatum</span>
+                    <span className="field-label">{t("form.endDate")}</span>
                     <DateInput
                       value={event.event_end_date ?? ""}
                       onChange={(value) => void onUpdate({ event_end_date: value || null })}
@@ -89,7 +119,7 @@ export function EventDetailForm({
                 ) : null}
               </div>
               <label className="field-stack">
-                <span className="field-label">Tag</span>
+                <span className="field-label">{t("form.tag")}</span>
                 <TagInput
                   value={event.tag ?? ""}
                   onChange={(v) => void onUpdate({ tag: v || null })}
@@ -101,23 +131,51 @@ export function EventDetailForm({
                 />
               </label>
               <label className="field-stack">
-                <span className="field-label">Titel</span>
+                <span className="field-label">{t("form.title")}</span>
                 <input value={event.title} onChange={(e) => void onUpdate({ title: e.target.value })} />
               </label>
               <label className="field-stack">
-                <span className="field-label">Beschreibung</span>
+                <span className="field-label">{t("detailForm.descriptionLabel")}</span>
                 <textarea
                   rows={4}
                   value={event.description ?? ""}
                   onChange={(e) => void onUpdate({ description: e.target.value || null })}
                 />
               </label>
+              <div className="field-stack">
+                <span className="field-label">{t("form.cycles")}</span>
+                {cyclesLoading ? (
+                  <span className="muted">{t("form.cyclesLoading")}</span>
+                ) : cycleOptions.length === 0 ? (
+                  <span className="muted">{t("form.noCycles")}</span>
+                ) : (
+                  <div className="cycle-chip-list">
+                    {cycleOptions.map((cycle) => {
+                      const active = cycleAssignments.some(
+                        (a) => a.cycle_config_id === cycle.cycle_config_id && a.cycle_year === cycle.cycle_year
+                      );
+                      return (
+                        <button
+                          key={`${cycle.cycle_config_id}-${cycle.cycle_year}`}
+                          type="button"
+                          className={`cycle-chip${active ? " cycle-chip-active" : ""}`}
+                          aria-pressed={active}
+                          onClick={() => toggleCycle(cycle.cycle_config_id, cycle.cycle_year)}
+                        >
+                          {cycle.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                <span className="field-help">{t("form.cyclesHint")}</span>
+              </div>
             </div>
           ),
         },
         {
           id: "participants",
-          label: "Teilnehmer & Status",
+          label: t("detailForm.participantsTab"),
           content: (
             <div className="grid" style={{ gap: "var(--space-4)" }}>
               <label className="field-radio-option">
@@ -127,14 +185,14 @@ export function EventDetailForm({
                   onChange={(e) => void onUpdate({ is_cancelled: e.target.checked })}
                 />
                 <div>
-                  <strong>Termin abgesagt</strong>
+                  <strong>{t("form.cancelled")}</strong>
                   <div className="muted" style={{ fontSize: "var(--text-sm)" }}>
-                    Markiert den Termin als abgesagt, ohne ihn zu löschen.
+                    {t("detailForm.cancelledHint")}
                   </div>
                 </div>
               </label>
               <label className="field-stack">
-                <span className="field-label">Anzahl Teilnehmer</span>
+                <span className="field-label">{t("form.participantCount")}</span>
                 <input
                   type="number"
                   min="0"
@@ -144,7 +202,7 @@ export function EventDetailForm({
                 />
               </label>
               <div className="field-stack">
-                <span className="field-label">Personen</span>
+                <span className="field-label">{t("form.people")}</span>
                 <div className="two-col" style={{ rowGap: "var(--space-2)" }}>
                   {ROLE_FIELDS.map(({ field, label }) => (
                     <div key={field} className="field-stack" style={{ gap: "var(--space-1)" }}>
@@ -171,19 +229,19 @@ export function EventDetailForm({
                   <div className="editor-planning-toolbar" style={{ justifyContent: "space-between" }}>
                     <strong>{activeRoleLabel}</strong>
                     <button type="button" className="button-ghost" onClick={() => setActiveRoleField(null)}>
-                      Fertig
+                      {t("detailForm.doneButton")}
                     </button>
                   </div>
                   <div className="grid">
                     <input
                       value={roleSearch}
                       onChange={(e) => setRoleSearch(e.target.value)}
-                      placeholder="Suchen…"
+                      placeholder={tCommon("searchPlaceholder")}
                       autoFocus
                     />
                   </div>
                   <div className="participant-check-grid">
-                    {availableParticipants
+                    {availableParticipants.filter(isParticipantSelectable)
                       .filter((p) => p.display_name.toLowerCase().includes(roleSearch.trim().toLowerCase()))
                       .map((p) => {
                         const checked = ((event[activeRoleField] as string[] | null) ?? []).includes(p.id);
@@ -205,36 +263,21 @@ export function EventDetailForm({
         },
         {
           id: "extra",
-          label: "Weitere Felder",
+          label: t("detailForm.extraFieldsTab"),
           content: (
             <div className="grid" style={{ gap: "var(--space-4)" }}>
               <label className="field-stack">
-                <span className="field-label">Standort</span>
+                <span className="field-label">{t("form.location")}</span>
                 <input value={event.location ?? ""} onChange={(e) => void onUpdate({ location: e.target.value || null })} />
               </label>
               <div className="two-col">
-                <label className="field-stack">
-                  <span className="field-label">Spezial Text 1</span>
-                  <input
-                    value={event.spezial_text1 ?? ""}
-                    onChange={(e) => void onUpdate({ spezial_text1: e.target.value || null })}
-                  />
-                </label>
-                <label className="field-stack">
-                  <span className="field-label">Spezial Text 2</span>
-                  <input
-                    value={event.spezial_text2 ?? ""}
-                    onChange={(e) => void onUpdate({ spezial_text2: e.target.value || null })}
-                  />
-                </label>
+                {specialTexts.map(({ field, label }) => (
+                  <label key={field} className="field-stack">
+                    <span className="field-label">{label}</span>
+                    <input value={event[field] ?? ""} onChange={(e) => void onUpdate({ [field]: e.target.value || null })} />
+                  </label>
+                ))}
               </div>
-              <label className="field-stack">
-                <span className="field-label">Spezial Text 3</span>
-                <input
-                  value={event.spezial_text3 ?? ""}
-                  onChange={(e) => void onUpdate({ spezial_text3: e.target.value || null })}
-                />
-              </label>
             </div>
           ),
         },

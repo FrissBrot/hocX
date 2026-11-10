@@ -1,0 +1,27 @@
+{
+  "profileModal": {
+    "title": "Benutzerprofil",
+    "description": "Persönliche Einstellungen, Sprache und Sicherheit deines Kontos.",
+    "tabs": {
+      "profile": "Profil",
+      "security": "Sicherheit",
+      "data": "Meine Daten"
+    },
+    "languageLabel": "Sprache",
+    "wheelLabel": "Rad-Effekt beim Scrollen",
+    "wheelHint": "Punkte neigen sich beim Scrollen weg und kommen zur Mitte hin nach vorne. Alle Punkte bleiben geöffnet. Kann bei grossen Protokollen ruckeln.",
+    "accordionLabel": "Protokollpunkte automatisch einklappen",
+    "accordionHint": "Nur den aktiven Punkt geöffnet anzeigen.",
+    "accordionWheelHint": "Nicht möglich, solange der Rad-Effekt an ist.",
+    "save": "Profil speichern",
+    "logout": "Logout",
+    "saveFailed": "Profil konnte nicht gespeichert werden.",
+    "personalData": {
+      "description": "Lade alle Daten herunter, die hocX über dich gespeichert hat – als passwortgeschützte ZIP-Datei mit einer Excel-Tabelle und einer maschinenlesbaren JSON-Datei.",
+      "download": "Meine Daten herunterladen"
+    }
+  },
+  "logoutFailed": "Abmelden fehlgeschlagen. Bitte erneut versuchen.",
+  "logoutPendingConfirm": "Es gibt noch nicht gespeicherte Änderungen. Beim Abmelden gehen sie auf diesem Gerät verloren.",
+  "logoutAnyway": "Trotzdem abmelden"
+}

@@ -5,8 +5,12 @@ import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
 import { liftListItem } from "prosemirror-schema-list";
 import { useEffect, useRef } from "react";
+import { useTranslations } from "next-intl";
 
 import { TrackedChanges } from "@/components/ui/tracked-changes-extension";
+
+// tiptap-markdown 0.9 ergänzt den (ab Tiptap v3 typisierten) Editor-Storage nicht selbst.
+type MarkdownStorage = { markdown: { getMarkdown: () => string } };
 
 type RichTextEditorProps = {
   value: string;
@@ -20,6 +24,7 @@ type RichTextEditorProps = {
 };
 
 export function RichTextEditor({ value, onChange, readOnly = false, placeholder, trackedBaseline }: RichTextEditorProps) {
+  const t = useTranslations("protocols.richTextEditor");
   // Keep a stable ref so the handleKeyDown closure always sees the current editor
   const editorRef = useRef<ReturnType<typeof useEditor>>(null);
   // Read via ref inside the tracked-changes plugin's decorations() callback so
@@ -45,6 +50,10 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
         blockquote: false,
         horizontalRule: false,
         strike: false,
+        // Ab Tiptap v3 Teil des StarterKit: nicht als Markdown abbildbar (Unterstreichen) bzw.
+        // bisher nicht aktiv (Links) - aus, damit sich Eingabe und gespeichertes Markdown nicht ändern.
+        underline: false,
+        link: false,
       }),
       Markdown.configure({
         html: false,
@@ -56,7 +65,11 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
     content: value,
     editable: !readOnly,
     onUpdate({ editor }) {
-      const markdown = editor.storage.markdown.getMarkdown();
+      const markdown = (editor.storage as unknown as MarkdownStorage).markdown.getMarkdown();
+      // «update» feuert auch ohne Textänderung (z. B. setEditable, Fokus-Transaktionen).
+      // Unveränderter Inhalt löste sonst beim Öffnen ein Speichern aus, das als «Änderungen
+      // noch nicht gespeichert» aufblitzte.
+      if (markdown === lastEmittedRef.current) return;
       lastEmittedRef.current = markdown;
       onChange(markdown);
     },
@@ -115,12 +128,13 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
     if (!editor) return;
     if (value === lastEmittedRef.current) return;
     lastEmittedRef.current = value;
-    editor.commands.setContent(value, false);
+    editor.commands.setContent(value, { emitUpdate: false });
   }, [value, editor]);
 
   // Sync readOnly changes
   useEffect(() => {
-    if (editor) editor.setEditable(!readOnly);
+    // emitUpdate=false: Tiptap meldet sonst ein «update» ohne Textänderung (Default true).
+    if (editor) editor.setEditable(!readOnly, false);
   }, [readOnly, editor]);
 
   // Sync tracked-changes baseline; the ref is read lazily by the plugin, but
@@ -139,7 +153,7 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
             type="button"
             className={`rich-text-btn${editor?.isActive("bold") ? " active" : ""}`}
             onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleBold().run(); }}
-            title="Fett (Ctrl+B)"
+            title={t("bold")}
           >
             <strong>B</strong>
           </button>
@@ -147,7 +161,7 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
             type="button"
             className={`rich-text-btn${editor?.isActive("italic") ? " active" : ""}`}
             onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleItalic().run(); }}
-            title="Kursiv (Ctrl+I)"
+            title={t("italic")}
           >
             <em>I</em>
           </button>
@@ -156,7 +170,7 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
             type="button"
             className={`rich-text-btn${editor?.isActive("bulletList") ? " active" : ""}`}
             onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleBulletList().run(); }}
-            title="Aufzählung"
+            title={t("bulletList")}
           >
             ≡
           </button>
@@ -164,7 +178,7 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
             type="button"
             className={`rich-text-btn${editor?.isActive("orderedList") ? " active" : ""}`}
             onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleOrderedList().run(); }}
-            title="Nummerierte Liste"
+            title={t("orderedList")}
           >
             1≡
           </button>

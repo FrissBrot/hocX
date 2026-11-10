@@ -469,7 +469,7 @@ def test_gallery_upload_matches_tour_and_retains_event_context(db, monkeypatch):
     assert fetched[0].hiking_tour_id == tour_id
 
 
-def test_new_tour_backfills_gps_from_existing_photo(db, monkeypatch):
+def test_new_tour_links_existing_photo(db, monkeypatch):
     from app.services.photo_tour_link_service import sync_photos_for_tours
 
     tenant, tour_id = _wanderplaner_tenant(db, monkeypatch, date(2026, 7, 10))
@@ -480,12 +480,10 @@ def test_new_tour_backfills_gps_from_existing_photo(db, monkeypatch):
     Image.new('RGB', (48, 48)).save(buffer, format='JPEG', exif=exif)
     items, _ = asyncio.run(service.save_gallery_uploads(db, tenant_id=tenant.id, files=[('alt.jpg', buffer.getvalue())], tags=[], created_by=None))
     stored = db.query(StoredFile).filter_by(public_id=items[0].id).one()
-    stored.scan_status = "clean"
-    stored.gps_latitude = stored.gps_longitude = stored.gps_analyzed_at = stored.exif_taken_at = None
+    assert stored.gps_latitude is not None  # aus der Upload-Analyse (image_metadata_service)
     db.query(PhotoAlbumItem).filter_by(file_id=stored.public_id).delete()
     db.flush()
     # Nach dem Anlegen einer Tour gleicht das Gateway alle Fotos des Mandanten ab.
     sync_photos_for_tours(db, tenant.id)
     album = db.query(PhotoAlbum).filter_by(hiking_tour_public_id=tour_id).one()
     assert db.get(PhotoAlbumItem, (album.id, stored.public_id)) is not None
-    assert stored.gps_analyzed_at is not None

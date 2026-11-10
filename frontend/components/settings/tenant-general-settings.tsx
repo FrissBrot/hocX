@@ -1,14 +1,17 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import { initials } from "@/components/protocol/collaboration-presence";
 import { domainStatus, TenantDomainRowContent } from "@/components/settings/tenant-domain-row";
+import { useTenantDomains } from "@/components/settings/tenant-domains-manager";
 import { CopyField } from "@/components/ui/copy-field";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
-import { TenantDomain, TenantSummary } from "@/types/api";
+import { PROFILE_IMAGE_ACCEPT, profileImageProblem } from "@/lib/utils/profile-image";
+import { TenantSummary } from "@/types/api";
 
 type Props = {
   initialTenant: TenantSummary;
@@ -21,7 +24,9 @@ type TenantFormState = {
   profileImageUrl: string | null;
 };
 
-export function TenantGeneralSettings({ initialTenant }: Props) {
+/** Formularzustand und Speichern der Stammdaten - geteilt zwischen Desktop und Mobile. */
+export function useTenantGeneralForm(initialTenant: TenantSummary) {
+  const t = useTranslations("tenantSettings");
   const router = useRouter();
   const showToast = useToast();
   const tenantId = initialTenant.id;
@@ -32,25 +37,12 @@ export function TenantGeneralSettings({ initialTenant }: Props) {
     profileImage: null,
     profileImageUrl: initialTenant.profile_image_url,
   });
-  const [domains, setDomains] = useState<TenantDomain[]>([]);
-  const profileImageInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    void loadDomains();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenantId]);
-
-  async function loadDomains() {
-    try {
-      const rows = await browserApiFetch<TenantDomain[]>(`/api/tenants/${tenantId}/domains`);
-      setDomains(rows);
-    } catch {
-      // keine Domains bzw. Fehler beim Laden — kein Vorschau-Eintrag
-    }
-  }
+  const [saving, setSaving] = useState(false);
+  const { domains } = useTenantDomains(tenantId);
 
   async function submitTenant(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setSaving(true);
     try {
       const formData = new FormData();
       formData.append("name", tenantForm.name);
@@ -66,18 +58,31 @@ export function TenantGeneralSettings({ initialTenant }: Props) {
       });
       setTenantForm((current) => ({ ...current, profileImage: null, profileImageUrl: updated.profile_image_url }));
       router.refresh();
-      showToast("Mandant gespeichert", "success");
+      // Namensänderung hebt eine Verifizierung durch hocX auf (Prüfseite) - darauf hinweisen
+      showToast(updated.identity_verification_revoked ? t("saveSuccessVerificationRevoked") : t("saveSuccess"), updated.identity_verification_revoked ? "info" : "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Mandant konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("saveFailed"), "error");
+    } finally {
+      setSaving(false);
     }
   }
 
   const primaryDomain = domains.find((d) => d.purpose === "app") ?? domains[0] ?? null;
 
+  return { tenantForm, setTenantForm, submitTenant, saving, primaryDomain };
+}
+
+export function TenantGeneralSettings({ initialTenant }: Props) {
+  const t = useTranslations("tenantSettings");
+  const tCommon = useTranslations("common");
+  const showToast = useToast();
+  const { tenantForm, setTenantForm, submitTenant, primaryDomain } = useTenantGeneralForm(initialTenant);
+  const profileImageInputRef = useRef<HTMLInputElement>(null);
+
   return (
     <>
       <section className="card">
-        <div className="eyebrow">Stammdaten</div>
+        <div className="eyebrow">{t("masterDataEyebrow")}</div>
         <form className="grid" onSubmit={submitTenant}>
           <div className="tenant-avatar-row">
             <div className="identity-avatar tenant-avatar-preview">
@@ -89,49 +94,56 @@ export function TenantGeneralSettings({ initialTenant }: Props) {
               )}
             </div>
             <button type="button" className="button-secondary" onClick={() => profileImageInputRef.current?.click()}>
-              Profilbild ändern
+              {t("changeProfileImage")}
             </button>
             <input
               ref={profileImageInputRef}
               type="file"
-              accept="image/*"
+              accept={PROFILE_IMAGE_ACCEPT}
               hidden
-              onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                setTenantForm((current) => ({ ...current, profileImage: event.target.files?.[0] ?? null }))
-              }
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                const file = event.target.files?.[0] ?? null;
+                const problem = file ? profileImageProblem(file) : null;
+                if (problem) {
+                  showToast(tCommon(`profileImage.${problem}`), "error");
+                  event.target.value = "";
+                  return;
+                }
+                setTenantForm((current) => ({ ...current, profileImage: file }));
+              }}
             />
           </div>
           <div className="two-col">
             <label className="field-stack">
-              <span className="field-label">Mandantenname</span>
+              <span className="field-label">{t("tenantNameLabel")}</span>
               <input value={tenantForm.name} onChange={(event) => setTenantForm((current) => ({ ...current, name: event.target.value }))} required />
             </label>
             <label className="field-stack">
-              <span className="field-label">Öffentlicher Slug (Abgabebox-URL)</span>
+              <span className="field-label">{t("publicSlugLabel")}</span>
               <input
                 value={tenantForm.publicSlug}
                 onChange={(event) => setTenantForm((current) => ({ ...current, publicSlug: event.target.value.toLowerCase() }))}
-                placeholder="z.B. musterverein"
+                placeholder={t("publicSlugPlaceholder")}
                 pattern="[a-z0-9-]+"
               />
             </label>
           </div>
           <label className="field-stack">
-            <span className="field-label">Mandanten-ID</span>
-            <CopyField label="Mandanten-ID" value={initialTenant.id} />
-            <span className="field-help">Wird benötigt, um dieser Organisation z.B. ein Fotoalbum freizugeben.</span>
+            <span className="field-label">{t("tenantIdLabel")}</span>
+            <CopyField label={t("tenantIdLabel")} value={initialTenant.id} />
+            <span className="field-help">{t("tenantIdHelp")}</span>
           </label>
           {primaryDomain ? (
             <div className="tenant-domain-row">
               <TenantDomainRowContent domain={primaryDomain} />
               <div className="tenant-domain-row-trailing">
-                <span className={`record-list-row-dot record-list-row-dot-${domainStatus(primaryDomain).variant}`} />
+                <span className={`record-list-row-dot record-list-row-dot-${domainStatus(primaryDomain, t).variant}`} />
               </div>
             </div>
           ) : null}
           <div className="table-actions table-actions-start">
             <button type="submit" className="button-primary">
-              Speichern
+              {tCommon("save")}
             </button>
           </div>
         </form>

@@ -1,7 +1,9 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
+import { useProtocolCreation } from "@/lib/hooks/use-protocol-creation";
 import { useRefreshOnRestore } from "@/lib/hooks/use-refresh-on-restore";
 
 import { Badge } from "@/components/ui/badge";
@@ -14,27 +16,50 @@ import { SearchInput } from "@/components/ui/search-input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
+import { useDeleteWithFiles } from "@/components/ui/delete-with-files-modal";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { usePdfExport, PdfExportResult } from "@/lib/hooks/use-pdf-export";
-import { formatDate, formatDateTime } from "@/lib/utils/format";
-import { ProtocolSummary, TemplateSummary } from "@/types/api";
+import { formatDate, formatDateTime, toIntlLocale } from "@/lib/utils/format";
+import { ProtocolListCycle, ProtocolSummary, ProtocolTemplateSyncResult, TemplateSummary } from "@/types/api";
 import { protocolStatusLabel, protocolStatusVariant } from "@/components/protocol/protocol-status";
+import { ProtocolCycleGroup, groupProtocolsByCycle, visibleCycleGroupCount } from "@/components/protocol/protocol-cycle-groups";
 
 const PAGE_SIZE = 100;
 
-const STATUS_FILTER_OPTIONS: FilterTabOption[] = [
-  { value: "all", label: "Alle" },
-  { value: "geplant", label: "Geplant" },
-  { value: "vorbereitet", label: "Vorbereitet" },
-  { value: "durchgeführt", label: "Durchgeführt" },
-  { value: "abgeschlossen", label: "Abgeschlossen" },
-];
+type TFunc = (key: string, values?: Record<string, string | number>) => string;
+
+function cycleGroupTitle(cycle: ProtocolListCycle | null, t: TFunc): string {
+  if (!cycle) return t("noCycle");
+  return cycle.name ?? t("calendarYear", { year: cycle.cycle_year });
+}
+
+function cycleGroupMeta(group: ProtocolCycleGroup, locale: string, t: TFunc): string {
+  const count = t("protocolCount", { count: group.protocols.length });
+  if (!group.cycle) return count;
+  const month = new Intl.DateTimeFormat(toIntlLocale(locale), { month: "short", year: "numeric" });
+  const range = t("cycleRange", {
+    start: month.format(new Date(`${group.cycle.start_date}T00:00:00`)),
+    end: month.format(new Date(`${group.cycle.end_date}T00:00:00`)),
+  });
+  return `${range} · ${count}`;
+}
+
+function statusFilterOptions(t: (key: string) => string): FilterTabOption[] {
+  return [
+    { value: "all", label: t("builder.filterAll") },
+    { value: "geplant", label: t("status.geplant") },
+    { value: "vorbereitet", label: t("status.vorbereitet") },
+    { value: "durchgeführt", label: t("status.durchgeführt") },
+    { value: "abgeschlossen", label: t("status.abgeschlossen") },
+  ];
+}
 
 type ProtocolBuilderProps = {
   initialProtocols: ProtocolSummary[];
   templates: TemplateSummary[];
   readOnly?: boolean;
+  preferredTemplateId?: string | null;
 };
 
 type ProtocolFormState = {
@@ -44,8 +69,12 @@ type ProtocolFormState = {
   title: string;
 };
 
-export function ProtocolBuilder({ initialProtocols, templates, readOnly = false }: ProtocolBuilderProps) {
+export function ProtocolBuilder({ initialProtocols, templates, readOnly = false, preferredTemplateId }: ProtocolBuilderProps) {
+  const t = useTranslations("protocols.builder");
+  const tRoot = useTranslations("protocols");
+  const locale = useLocale();
   const router = useRouter();
+  const searchParams = useSearchParams();
   useRefreshOnRestore();
   const [protocols, setProtocols] = useState(initialProtocols);
   const [hasMore, setHasMore] = useState(initialProtocols.length === PAGE_SIZE);
@@ -58,14 +87,16 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
   }, [initialProtocols]);
   const showToast = useToast();
   const confirm = useConfirm();
+  const { requestDelete, modal: deleteModal } = useDeleteWithFiles();
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [availableTemplates, setAvailableTemplates] = useState(templates);
   const { busyByProtocol: pdfBusyByProtocol, openOrGeneratePdf } = usePdfExport();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [showOlderCycles, setShowOlderCycles] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [form, setForm] = useState<ProtocolFormState>({
-    template_id: templates[0] ? String(templates[0].id) : "",
+    template_id: templates.find((template) => template.id === preferredTemplateId)?.id ?? templates[0]?.id ?? "",
     protocol_number: "",
     protocol_date: new Date().toISOString().slice(0, 10),
     title: ""
@@ -76,6 +107,16 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
   );
   const autoProtocolNumber = !!selectedTemplate?.protocol_number_pattern?.trim();
   const autoTitle = !!selectedTemplate?.title_pattern?.trim();
+
+  const { preview, previewMessage, rememberTemplate } = useProtocolCreation(showCreateForm, form.template_id, form.protocol_date);
+
+  useEffect(() => {
+    if (readOnly) return;
+    if (searchParams.get("create") === "1") {
+      setShowCreateForm(true);
+      router.replace("/protocols", { scroll: false });
+    }
+  }, [searchParams, readOnly, router]);
 
   const hasNoProtocols = protocols.length === 0 && !hasMore;
 
@@ -89,6 +130,13 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
       })
       .sort((a, b) => (b.protocol_date ?? "").localeCompare(a.protocol_date ?? ""));
   }, [protocols, search, statusFilter]);
+
+  const cycleGroups = useMemo(() => groupProtocolsByCycle(sortedProtocols), [sortedProtocols]);
+  // Beim Suchen/Filtern alles zeigen - sonst verstecken sich Treffer in eingeklappten Zyklen.
+  const isFiltering = !!search || statusFilter !== "all";
+  const visibleGroupCount = showOlderCycles || isFiltering ? cycleGroups.length : visibleCycleGroupCount(cycleGroups);
+  const visibleGroups = cycleGroups.slice(0, visibleGroupCount);
+  const olderGroups = cycleGroups.slice(visibleGroupCount);
 
   useEffect(() => {
     if (!showCreateForm) {
@@ -121,6 +169,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
 
   async function createProtocol(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    rememberTemplate(form.template_id);
 
     try {
       const created = await browserApiFetch<{ id: string }>("/api/protocols/from-template", {
@@ -137,7 +186,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
 
       const full = await browserApiFetch<ProtocolSummary>(`/api/protocols/${created.id}`);
       setProtocols((current) => [full, ...current]);
-      showToast(`Protokoll "${full.title ?? full.protocol_number}" erstellt`, "success");
+      showToast(t("created", { name: full.title ?? full.protocol_number }), "success");
       setForm((current) => ({
         ...current,
         protocol_number: "",
@@ -146,26 +195,27 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
       setShowCreateForm(false);
       router.push(`/protocols/${created.id}`);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Protokoll konnte nicht erstellt werden", "error");
+      showToast(error instanceof Error ? error.message : t("createFailed"), "error");
     }
   }
 
   async function deleteProtocol(protocolId: string) {
-    const ok = await confirm({
-      message: "Protokoll endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
-      tone: "danger",
-      confirmLabel: "Löschen"
-    });
-    if (!ok) return;
     try {
       const deletedProtocol = protocols.find((protocol) => protocol.id === protocolId);
-      const deletedLabel = deletedProtocol?.title ?? deletedProtocol?.protocol_number ?? "Unbenannt";
-      await browserApiFetch<{ message: string }>(`/api/protocols/${protocolId}`, { method: "DELETE" });
+      const deletedLabel = deletedProtocol?.title ?? deletedProtocol?.protocol_number ?? t("unnamed");
+      // Rückfrage mit Auswahl der Protokollbilder (Datenschutz-Audit PRIV-004).
+      const result = await requestDelete({
+        title: t("deleteProtocol"),
+        message: t("deleteConfirmMessage"),
+        previewUrl: `/api/protocols/${protocolId}/deletion-preview`,
+        deleteUrl: `/api/protocols/${protocolId}/delete`,
+      });
+      if (!result) return;
       setProtocols((current) => current.filter((protocol) => protocol.id !== protocolId));
-      showToast(`Protokoll "${deletedLabel}" gelöscht`, "success");
+      showToast(t("deleted", { name: deletedLabel }), "success");
       router.refresh();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Protokoll konnte nicht gelöscht werden", "error");
+      showToast(error instanceof Error ? error.message : t("deleteFailed"), "error");
     }
   }
 
@@ -202,35 +252,159 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
   });
 
   async function revertStatus(protocolId: string) {
+    // Zurücksetzen eines abgeschlossenen Protokolls verwirft die Todo-Momentaufnahme.
+    if (protocols.find((p) => p.id === protocolId)?.status === "abgeschlossen") {
+      const ok = await confirm({
+        title: t("revertClosedConfirmTitle"),
+        message: t("revertClosedConfirmMessage"),
+        tone: "danger",
+        confirmLabel: t("revertClosedConfirmLabel"),
+      });
+      if (!ok) return;
+    }
     try {
       const updated = await browserApiFetch<ProtocolSummary>(`/api/protocols/${protocolId}/revert-status`, { method: "POST" });
-      setProtocols((current) => current.map((p) => (p.id === protocolId ? updated : p)));
-      showToast(`Status: ${protocolStatusLabel(updated.status)}`, "success");
+      // Der Einzel-Endpunkt liefert keinen Listen-Zyklus - den bisherigen behalten.
+      setProtocols((current) => current.map((p) => (p.id === protocolId ? { ...updated, cycle: p.cycle } : p)));
+      showToast(t("statusChanged", { status: protocolStatusLabel(updated.status, tRoot) }), "success");
       router.refresh();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Zurücksetzen fehlgeschlagen", "error");
+      showToast(error instanceof Error ? error.message : t("revertFailed"), "error");
     }
+  }
+
+  // Elemente aus der aktuellen Vorlage neu aufbauen, erfasste Daten bleiben erhalten. Erst
+  // eine Vorschau (dry_run), damit klar ist, was hinzukommt, wegfällt oder stehen bleibt.
+  async function syncWithTemplate(protocolId: string) {
+    const url = `/api/protocols/${protocolId}/sync-template`;
+    try {
+      const preview = await browserApiFetch<ProtocolTemplateSyncResult>(`${url}?dry_run=true`, { method: "POST" });
+      const listFormat = new Intl.ListFormat(toIntlLocale(locale), { style: "long", type: "conjunction" });
+      const message = [
+        t("syncTemplateConfirmMessage", {
+          updated: preview.updated_elements.length,
+          added: preview.added_elements.length,
+          removed: preview.removed_elements.length,
+        }),
+        preview.removed_elements.length
+          ? t("syncTemplateConfirmRemoved", { names: listFormat.format(preview.removed_elements) })
+          : null,
+        preview.kept_elements.length
+          ? t("syncTemplateConfirmKept", { count: preview.kept_elements.length, names: listFormat.format(preview.kept_elements) })
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" ");
+      const ok = await confirm({
+        title: t("syncTemplateConfirmTitle"),
+        message,
+        confirmLabel: t("syncTemplateConfirmLabel"),
+      });
+      if (!ok) return;
+      await browserApiFetch<ProtocolTemplateSyncResult>(url, { method: "POST" });
+      showToast(t("syncTemplateDone"), "success");
+      router.refresh();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : t("syncTemplateFailed"), "error");
+    }
+  }
+
+  function renderProtocolRow(protocol: ProtocolSummary) {
+    const isFinal = protocol.status === "abgeschlossen";
+    const previousStatus = ({
+      vorbereitet: "geplant",
+      durchgeführt: "vorbereitet",
+      abgeschlossen: "durchgeführt",
+    } as Record<string, string>)[protocol.status];
+    const pdfLabel = t("openPdf");
+    const actions: ActionMenuItem[] = [];
+    if (!isFinal && !pdfBusyByProtocol[protocol.id]) {
+      actions.push({
+        label: pdfLabel,
+        onClick: () => void openOrGeneratePdf(protocol, (result) => handlePdfExported(protocol.id, result)),
+      });
+    }
+    if (!isFinal) {
+      actions.push({
+        label: t("syncTemplate"),
+        onClick: () => void syncWithTemplate(protocol.id),
+      });
+    }
+    if (previousStatus) {
+      actions.push({
+        label: t("revertTo", { status: protocolStatusLabel(previousStatus, tRoot) }),
+        onClick: () => void revertStatus(protocol.id),
+      });
+    }
+    actions.push({
+      label: t("deleteProtocol"),
+      danger: true,
+      onClick: () => void deleteProtocol(protocol.id),
+    });
+    const statusVariant = protocolStatusVariant(protocol.status);
+    const subtitle = [
+      protocol.protocol_number,
+      formatDate(protocol.protocol_date) || null,
+      !readOnly ? templates.find((candidate) => candidate.id === protocol.template_id)?.name ?? null : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    return (
+      <div key={protocol.id} className="record-list-row" onClick={() => router.push(`/protocols/${protocol.id}`)}>
+        <span className={`record-list-row-dot record-list-row-dot-${statusVariant}`} aria-hidden="true" />
+        <span className="record-list-row-text">
+          <span className="record-list-row-title">{protocol.title ?? protocol.protocol_number}</span>
+          <span className="record-list-row-sub">{subtitle}</span>
+        </span>
+        <div className="record-list-row-trailing" onClick={(e) => e.stopPropagation()}>
+          {protocol.import_source_filename && (
+            <span title={t("importedFrom", { filename: protocol.import_source_filename })}>
+              <Badge variant="info">{t("imported")}</Badge>
+            </span>
+          )}
+          <Badge variant={statusVariant}>{protocolStatusLabel(protocol.status, tRoot)}</Badge>
+          {isFinal ? (
+            <button
+              type="button"
+              className={`pdf-icon-link pdf-icon-link-success pdf-icon-link-sm${pdfBusyByProtocol[protocol.id] ? " pdf-icon-disabled" : ""}`}
+              onClick={() => openOrGeneratePdf(protocol, (result) => handlePdfExported(protocol.id, result))}
+              aria-label={t("openPdfFor", { number: protocol.protocol_number })}
+              title={pdfLabel}
+              disabled={pdfBusyByProtocol[protocol.id]}
+            >
+              {pdfBusyByProtocol[protocol.id] ? "..." : "PDF"}
+            </button>
+          ) : (
+            <span className="record-list-row-pdf-spacer" aria-hidden="true" />
+          )}
+          {!readOnly && (
+            <ActionMenu items={actions} ariaLabel={t("actionsFor", { number: protocol.protocol_number })} />
+          )}
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="grid">
+      {deleteModal}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Protokolle</h1>
-          <p className="muted">Alle Sitzungsprotokolle dieses Mandanten.</p>
+          <h1 className="page-title">{t("title")}</h1>
+          <p className="muted">{t("description")}</p>
         </div>
         {!readOnly && !hasNoProtocols ? (
-          <button type="button" className="button-secondary" onClick={() => setShowCreateForm((c) => !c)}>
-            {showCreateForm ? "Abbrechen" : "+ Neues Protokoll"}
+          <button type="button" className={showCreateForm ? "button-ghost" : "button-primary"} onClick={() => setShowCreateForm((c) => !c)}>
+            {showCreateForm ? t("cancel") : t("newProtocol")}
           </button>
         ) : null}
       </div>
 
       {hasNoProtocols ? null : (
         <div className="list-filter-row">
-          <FilterTabs options={STATUS_FILTER_OPTIONS} value={statusFilter} onChange={setStatusFilter} />
+          <FilterTabs options={statusFilterOptions(tRoot)} value={statusFilter} onChange={setStatusFilter} />
           <div className="list-filter-search">
-            <SearchInput value={search} onChange={setSearch} placeholder="Protokolle durchsuchen" />
+            <SearchInput value={search} onChange={setSearch} placeholder={t("searchPlaceholder")} />
           </div>
         </div>
       )}
@@ -238,55 +412,67 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
       <Modal
         open={showCreateForm}
         onClose={() => setShowCreateForm(false)}
-        title="Protokoll erstellen"
-        description="Template auswählen und neues Protokoll anlegen."
+        title={t("createTitle")}
+        description={t("createDescription")}
       >
         <ModalSaveForm className="grid" onSubmit={createProtocol}>
           <label className="field-stack">
-            <span className="field-label">Template</span>
+            <span className="field-label">{t("template")}</span>
             <SearchableSelect
               options={availableTemplates}
               getId={(template) => String(template.id)}
               getLabel={(template) => template.name}
               value={form.template_id || null}
-              onChange={(template) => setForm((current) => ({ ...current, template_id: template ? String(template.id) : "" }))}
+              onChange={(template) => {
+                const id = template ? String(template.id) : "";
+                setForm((current) => ({ ...current, template_id: id }));
+                rememberTemplate(id);
+              }}
             />
           </label>
           {selectedTemplate?.protocol_number_pattern || selectedTemplate?.title_pattern ? (
-            <div className="info-note">
-              {selectedTemplate.protocol_number_pattern ? `Nummer: ${selectedTemplate.protocol_number_pattern}` : "Nummer: manuell"}{" · "}
-              {selectedTemplate.title_pattern ? `Titel: ${selectedTemplate.title_pattern}` : "Titel: manuell"}
+            <div className="field-stack">
+              <span className="field-label">{t("preview")}</span>
+              <div className="info-note" aria-live="polite">
+                {preview ? (
+                  <>
+                    {autoProtocolNumber ? t("numberPreview", { preview: preview.protocol_number ?? "" }) : t("numberPreview", { preview: form.protocol_number || t("numberManual") })}
+                    {" · "}
+                    {autoTitle ? t("titlePreview", { preview: preview.title ?? "" }) : t("titlePreview", { preview: form.title || t("titleManual") })}
+                  </>
+                ) : previewMessage}
+              </div>
             </div>
           ) : null}
           <div className="three-col">
             {!autoProtocolNumber ? (
               <label className="field-stack">
-                <span className="field-label">Nummer</span>
+                <span className="field-label">{t("number")}</span>
                 <input
                   value={form.protocol_number}
                   onChange={(event) => setForm((current) => ({ ...current, protocol_number: event.target.value }))}
-                  placeholder="Protokollnummer"
+                  placeholder={t("numberPlaceholder")}
                 />
               </label>
             ) : null}
             <label className="field-stack">
-              <span className="field-label">Datum</span>
+              <span className="field-label">{t("date")}</span>
               <DateInput value={form.protocol_date} onChange={(value) => setForm((current) => ({ ...current, protocol_date: value }))} required />
             </label>
             {!autoTitle ? (
               <label className="field-stack">
-                <span className="field-label">Titel</span>
+                <span className="field-label">{t("protocolTitle")}</span>
                 <input
                   value={form.title}
                   onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-                  placeholder="Optionaler Titel"
+                  placeholder={t("titlePlaceholder")}
                 />
               </label>
             ) : null}
           </div>
           <div className="table-toolbar-actions">
             <button data-modal-save type="submit" className="button-secondary" disabled={!form.template_id}>
-              Erstellen
+              {t("create")}
             </button>
           </div>
         </ModalSaveForm>
@@ -294,137 +480,71 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false 
 
       {hasNoProtocols ? (
         <EmptyState
-          title="Noch keine Protokolle erfasst"
-          description="Erstelle das erste Protokoll aus einer Vorlage oder importiere ein bestehendes Word-Dokument."
+          title={t("emptyTitle")}
+          description={t("emptyDescription")}
           actions={
             readOnly ? null : (
               <>
                 <button type="button" className="button-primary" onClick={() => setShowCreateForm(true)}>
-                  + Neues Protokoll
+                  {t("newProtocol")}
                 </button>
                 <button type="button" className="button-secondary" onClick={() => router.push("/tools/word-import")}>
-                  Word-Dokument importieren
+                  {t("importWord")}
                 </button>
               </>
             )
           }
-          hint="Aus Vorlagen erstellte Protokolle enthalten Traktanden, Anwesenheit und Todos bereits vorbereitet."
+          hint={t("emptyHint")}
         />
       ) : (
-      <article className="card">
-        <div className="record-list">
-          {sortedProtocols.map((protocol) => {
-            const isFinal = protocol.status === "abgeschlossen";
-            const previousStatus = ({
-              vorbereitet: "geplant",
-              durchgeführt: "vorbereitet",
-              abgeschlossen: "durchgeführt",
-            } as Record<string, string>)[protocol.status];
-            const pdfLabel = "PDF öffnen";
-            const actions: ActionMenuItem[] = [];
-            if (!isFinal && !pdfBusyByProtocol[protocol.id]) {
-              actions.push({
-                label: pdfLabel,
-                onClick: () => void openOrGeneratePdf(protocol, (result) => handlePdfExported(protocol.id, result)),
-              });
-            }
-            if (previousStatus) {
-              actions.push({
-                label: `Zurück auf „${protocolStatusLabel(previousStatus)}“`,
-                onClick: () => void revertStatus(protocol.id),
-              });
-            }
-            actions.push({
-              label: "Protokoll löschen",
-              danger: true,
-              onClick: () => void deleteProtocol(protocol.id),
-            });
-            const statusVariant = protocolStatusVariant(protocol.status);
-            const subtitle = [
-              protocol.protocol_number,
-              formatDate(protocol.protocol_date) || null,
-              !readOnly ? templates.find((t) => t.id === protocol.template_id)?.name ?? null : null,
-            ]
-              .filter(Boolean)
-              .join(" · ");
-            return (
-              <div key={protocol.id} className="record-list-row" onClick={() => router.push(`/protocols/${protocol.id}`)}>
-                <span className={`record-list-row-dot record-list-row-dot-${statusVariant}`} aria-hidden="true" />
-                <span className="record-list-row-text">
-                  <span className="record-list-row-title">{protocol.title ?? protocol.protocol_number}</span>
-                  <span className="record-list-row-sub">{subtitle}</span>
-                </span>
-                <div className="record-list-row-trailing" onClick={(e) => e.stopPropagation()}>
-                  {protocol.import_source_filename && (
-                    <span title={`Importiert aus ${protocol.import_source_filename}`}>
-                      <Badge variant="info">Importiert</Badge>
-                    </span>
-                  )}
-                  <Badge variant={statusVariant}>{protocolStatusLabel(protocol.status)}</Badge>
-                  {isFinal ? (
-                    <button
-                      type="button"
-                      className={`pdf-icon-link pdf-icon-link-success pdf-icon-link-sm${pdfBusyByProtocol[protocol.id] ? " pdf-icon-disabled" : ""}`}
-                      onClick={() => openOrGeneratePdf(protocol, (result) => handlePdfExported(protocol.id, result))}
-                      aria-label={`${pdfLabel} für ${protocol.protocol_number}`}
-                      title={pdfLabel}
-                      disabled={pdfBusyByProtocol[protocol.id]}
-                    >
-                      {pdfBusyByProtocol[protocol.id] ? "..." : "PDF"}
-                    </button>
-                  ) : (
-                    <span className="record-list-row-pdf-spacer" aria-hidden="true" />
-                  )}
-                  {!readOnly && (
-                    <ActionMenu items={actions} ariaLabel={`Aktionen für ${protocol.protocol_number}`} />
-                  )}
+      <div className="protocol-cycle-groups">
+        {sortedProtocols.length === 0 ? (
+          <article className="card">
+            <p className="muted record-list-empty">{t("noProtocolsFound")}</p>
+          </article>
+        ) : null}
+        {visibleGroups.map((group) => {
+          const allFinal = group.protocols.every((protocol) => protocol.status === "abgeschlossen");
+          return (
+            <section key={group.key} className="protocol-cycle-group" aria-label={cycleGroupTitle(group.cycle, t)}>
+              <header className="protocol-cycle-header">
+                <h2 className="protocol-cycle-title">{cycleGroupTitle(group.cycle, t)}</h2>
+                {group.cycle?.is_current ? <Badge variant="info">{t("currentCycle")}</Badge> : null}
+                <span className="protocol-cycle-meta">{cycleGroupMeta(group, locale, t)}</span>
+                <span className="protocol-cycle-rule" aria-hidden="true" />
+                {allFinal ? <span className="protocol-cycle-done">{t("allFinalized")}</span> : null}
+              </header>
+              <article className="card">
+                <div className="record-list">
+                  {group.protocols.map((protocol) => renderProtocolRow(protocol))}
                 </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {sortedProtocols.length === 0 ? <p className="muted record-list-empty">Keine Protokolle gefunden.</p> : null}
-      </article>
+              </article>
+            </section>
+          );
+        })}
+        {olderGroups.length > 0 ? (
+          <button type="button" className="protocol-cycle-older" onClick={() => setShowOlderCycles(true)}>
+            <span className="protocol-cycle-older-chevron" aria-hidden="true">›</span>
+            <span className="protocol-cycle-title">{cycleGroupTitle(olderGroups[0].cycle, t)}</span>
+            <span className="protocol-cycle-meta">{cycleGroupMeta(olderGroups[0], locale, t)}</span>
+            <span className="protocol-cycle-older-action">{t("showOlderCycles", { count: olderGroups.length })}</span>
+          </button>
+        ) : null}
+      </div>
       )}
 
       {hasMore && (
         <div className="load-more-row" ref={loadMoreSentinelRef}>
           {isLoadingMore ? (
-            <span className="muted">Lädt weitere Protokolle…</span>
+            <span className="muted">{t("loadingMore")}</span>
           ) : (
             <button type="button" className="button-secondary button-ghost" onClick={() => void loadMore()}>
-              Mehr laden ({protocols.length} geladen)
+              {t("loadMore", { count: protocols.length })}
             </button>
           )}
         </div>
       )}
 
-    </div>
-  );
-}
-
-type ProtocolOverviewProps = {
-  protocol: ProtocolSummary;
-};
-
-export function ProtocolOverview({ protocol }: ProtocolOverviewProps) {
-  return (
-    <div className="grid">
-      <div className="status-row">
-        <span className="pill">{protocol.protocol_number}</span>
-        <Badge variant={protocolStatusVariant(protocol.status)}>Status: {protocolStatusLabel(protocol.status)}</Badge>
-        <span className="pill">Template zugewiesen</span>
-        <span className="pill">Layout aus Vorlagen-Snapshot</span>
-      </div>
-
-      <article className="card">
-        <div className="eyebrow">Übersicht</div>
-        <h3>{protocol.title ?? "Unbenanntes Protokoll"}</h3>
-        <p className="muted">Protokolldatum: {formatDate(protocol.protocol_date) || "unbekannt"}</p>
-        <p className="muted">Vorlagenversion-Snapshot: {protocol.template_version ?? "unbekannt"}</p>
-        <p className="muted">Erstellt am: {formatDateTime(protocol.created_at) || "unbekannt"}</p>
-      </article>
     </div>
   );
 }

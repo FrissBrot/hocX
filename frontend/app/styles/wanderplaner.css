@@ -1,0 +1,292 @@
+/* Wanderplaner (/hiking-planner): Karte, Höhenprofil, Marschtabelle, Tour-Formular. */
+/* Wanderplaner: Wegpunkt-Zeilenaktionen (Tabellenzelle) */
+.wanderplaner-row-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* Wanderplaner: mehrere Badges (Verifikation + Gefahreneinschätzung) in derselben Zelle */
+.wanderplaner-row-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  align-items: center;
+}
+
+/* Wanderplaner: Karte (MapLibre) */
+.wanderplaner-map {
+  width: 100%;
+  height: 480px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.wanderplaner-map-compact {
+  height: 320px;
+}
+
+.wanderplaner-map-marker {
+  min-height: 0;
+  padding: 0;
+  display: block;
+  transition: transform var(--dur-fast) var(--ease-out);
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-pill);
+  background: var(--wanderplaner-marker-color, var(--accent)); /* design-ok: zur Laufzeit per JS gesetzte Laufzeitfarbe je Wegpunkt-Typ (hiking-tour-map.tsx), kein Design-Token */
+  border: 2px solid var(--on-solid);
+  box-shadow: var(--shadow);
+  cursor: grab;
+}
+
+.wanderplaner-map-marker:active {
+  cursor: grabbing;
+}
+
+.wanderplaner-map-marker-highlight {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-pill);
+  background: var(--chart-1);
+  border: 2px solid var(--on-solid);
+  box-shadow: var(--shadow-popover);
+  pointer-events: none;
+}
+
+.wanderplaner-break-input {
+  width: 64px;
+}
+
+.wanderplaner-map-hint {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.wanderplaner-toggle-group {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.wanderplaner-route-summary {
+  display: flex;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+  padding-top: var(--space-3);
+  font-size: var(--text-base);
+  color: var(--muted);
+}
+
+/* Marschtabelle: volle verfügbare Seitenbreite, auf kleinen Geräten scrollbar. */
+.wanderplaner-march-table { min-width: 0; width: 100%; }
+.wanderplaner-march-table .table-shell { max-width: none; width: 100%; }
+.wanderplaner-march-table .wanderplaner-row-actions { flex-wrap: wrap; }
+
+.wanderplaner-elevation-label {
+  font-size: var(--text-xs);
+  fill: var(--text);
+}
+
+.wanderplaner-elevation-leader {
+  stroke: var(--muted);
+  stroke-width: 1;
+  fill: none;
+  pointer-events: none;
+}
+
+.wanderplaner-map-marker:hover:not(:disabled),
+.wanderplaner-map-marker:focus-visible {
+  transform: scale(1.25);
+  background: var(--wanderplaner-marker-color, var(--accent)); /* design-ok: dynamische Wegpunktfarbe wie am Marker */
+}
+
+.wanderplaner-map-frame { position: relative; }
+
+/* Legende der Gefahreneinschätzung unten links auf der Karte (Attribution sitzt unten rechts). */
+.wanderplaner-map-legend {
+  position: absolute;
+  left: var(--space-2);
+  bottom: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  list-style: none;
+  display: grid;
+  gap: var(--space-1);
+  background: var(--panel-solid);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-soft);
+  font-size: var(--text-xs);
+  color: var(--text);
+}
+
+.wanderplaner-map-legend li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.wanderplaner-map-legend-swatch {
+  width: 20px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+}
+
+.wanderplaner-map-legend-normal { background: var(--route-normal); }
+.wanderplaner-map-legend-steep_exposed { background: var(--route-steep); }
+.wanderplaner-map-legend-alpine { background: var(--route-alpine); }
+.wanderplaner-map-legend-none { color: var(--muted); }
+
+.wanderplaner-map-info {
+  position: absolute;
+  top: var(--space-3);
+  right: 56px;
+  width: min(280px, calc(100% - 80px));
+  max-height: calc(100% - 48px);
+  overflow: auto;
+  padding: var(--space-3);
+  background: var(--panel-solid);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-popover);
+  font-size: var(--text-base);
+  overflow-wrap: anywhere;
+}
+
+.wanderplaner-map-info-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.wanderplaner-map-info p { margin: var(--space-2) 0 0; }
+
+.wanderplaner-elevation-preview {
+  display: block;
+  width: 160px;
+  height: 44px;
+}
+
+.wanderplaner-elevation-preview-area { fill: var(--accent-soft); }
+
+.wanderplaner-elevation-preview-line {
+  fill: none;
+  stroke: var(--chart-1);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/* Neue Wanderung: Formular seitlich, Karte nutzt die übrige Dialogfläche. */
+.wanderplaner-create-modal.modal-shell {
+  width: 100%;
+  height: calc(100dvh - 2 * var(--space-5));
+}
+
+.wanderplaner-create-modal .modal-content { overflow: hidden; }
+
+.wanderplaner-create-form {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 0;
+  gap: var(--space-4);
+}
+
+.wanderplaner-create-layout {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: var(--space-5);
+  min-height: 0;
+}
+
+.wanderplaner-create-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  overflow-y: auto;
+}
+
+.wanderplaner-create-map-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: 0;
+}
+
+.wanderplaner-create-map-section .wanderplaner-map-frame {
+  flex: 1;
+  min-height: 0;
+}
+
+.wanderplaner-map.wanderplaner-create-map { height: 100%; }
+
+.wanderplaner-create-form .modal-actions { margin-top: 0; }
+
+@media (max-width: 900px) {
+  .wanderplaner-create-modal.modal-shell {
+    height: calc(100dvh - 2 * var(--space-4));
+  }
+  .wanderplaner-create-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(320px, 1fr);
+    gap: var(--space-4);
+    overflow-y: auto;
+  }
+  .wanderplaner-create-fields { overflow: visible; }
+  .wanderplaner-create-map-section { min-height: 320px; }
+}
+
+/* Rein dekorative Landschaft während der Routenberechnung. */
+.wanderplaner-loading-button {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.wanderplaner-loading-button[aria-busy="true"] {
+  cursor: wait;
+  opacity: 1;
+}
+
+.wanderplaner-loading-landscape {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: inherit;
+}
+
+.wanderplaner-loading-landscape svg {
+  display: block;
+  width: 200%;
+  height: 100%;
+  animation: wanderplaner-landscape-scroll calc(var(--dur-slow) * 25) linear infinite;
+}
+
+.wanderplaner-loading-landscape-area {
+  fill: currentColor;
+  opacity: 0.12;
+}
+
+.wanderplaner-loading-landscape-ridge {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  opacity: 0.25;
+}
+
+.wanderplaner-loading-label {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes wanderplaner-landscape-scroll {
+  to { transform: translateX(-50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wanderplaner-loading-landscape svg { animation: none; }
+}

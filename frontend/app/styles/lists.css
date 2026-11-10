@@ -1,0 +1,184 @@
+/* Bereichs-CSS, geladen nur von: lists. Siehe design/DESIGN.md Abschnitt 10. */
+
+.historical-view-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--warning-bg);
+  color: var(--warning-fg);
+  border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent 70%);
+}
+
+/* ── Listen: sidebar + content split ── */
+.list-manager-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 270px) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.list-manager-content {
+  min-width: 0;
+}
+
+.list-manager-content .structured-list-table {
+  table-layout: fixed;
+}
+
+.list-manager-content .structured-list-table th,
+.list-manager-content .structured-list-table td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  vertical-align: middle;
+}
+
+.list-manager-content .structured-list-table .event-column-actions {
+  width: 150px;
+}
+
+.list-manager-content .event-row-actions .button-secondary {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+.list-manager-content .event-row-actions .button-icon {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+}
+
+.list-manager-content .event-row-actions {
+  justify-content: flex-start;
+}
+
+@media (max-width: 900px) {
+  .list-manager-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+  }
+
+  .list-manager-content .structured-list-table {
+    min-width: 540px;
+  }
+}
+
+@media (max-width: 640px) {
+.lists-page {
+    padding: var(--space-4);
+  }
+}
+
+.mobile-scroll-list {
+  max-height: 40dvh;
+  overflow-y: auto;
+}
+
+/* Stammlisten: Reiter, kompakte Zuordnungen und Spaltenvorschau. */
+.lists-page { background: transparent; border: 0; box-shadow: none; }
+
+.list-manager-layout { display: flex; flex-direction: column; gap: var(--space-4); }
+
+.list-manager-content { width: 100%; }
+
+.list-manager-tabs { display: flex; width: 100%; overflow-x: auto; border-bottom: 1px solid var(--border); gap: var(--space-2); }
+
+.list-manager-tabs .tabs-trigger { display: flex; align-items: center; gap: var(--space-2); white-space: nowrap; }
+
+.list-manager-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--warning); flex-shrink: 0; }
+
+.list-manager-filter { display: flex; align-items: center; gap: var(--space-3); flex: 1; flex-wrap: wrap; }
+
+.list-manager-filter > .search-input { width: 310px; max-width: 100%; }
+
+.list-manager-filter > .muted { font-size: var(--text-sm); }
+
+.list-manager-filter-active { background: var(--warning-bg); color: var(--warning-fg); border-color: var(--warning); }
+
+.list-manager-content .structured-list-table .event-column-actions { width: 56px; }
+
+.list-manager-content .event-row-actions { justify-content: flex-end; }
+
+.list-definition-modal { max-width: 940px; }
+
+.list-definition-form .field-label { text-transform: none; letter-spacing: 0; }
+
+.list-definition-section { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+
+.list-definition-section .muted { font-size: var(--text-sm); }
+
+.list-definition-column { margin: 0; min-width: 0; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--panel); }
+
+.list-definition-title { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
+
+.list-definition-number { display: grid; place-items: center; width: 28px; height: 28px; flex-shrink: 0; background: var(--accent); color: var(--on-solid); border-radius: var(--radius-sm); font-weight: 700; }
+
+.list-definition-types { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+
+.list-definition-type { display: flex; align-items: center; gap: var(--space-2); text-align: left; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel-solid); color: var(--text); min-height: 56px; }
+
+.list-definition-type:hover { background: var(--accent-soft); transform: none; }
+
+.list-definition-type-selected { border-color: var(--accent); box-shadow: var(--focus-ring); background: var(--accent-soft); }
+
+.list-definition-type .muted { display: block; font-size: var(--text-sm); font-weight: 400; }
+
+.list-definition-type-icon { display: grid; place-items: center; width: 32px; height: 32px; flex-shrink: 0; background: var(--neutral-bg); color: var(--neutral-fg); border-radius: var(--radius-sm); }
+
+.list-definition-type-selected .list-definition-type-icon { background: var(--accent); color: var(--on-solid); }
+
+.list-definition-preview { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+
+.list-definition-preview table { width: 100%; table-layout: fixed; }
+
+.list-definition-preview th .muted { font-weight: 400; }
+
+.list-definition-example { display: inline-block; border: 1px solid var(--border); border-radius: var(--radius-pill); padding: var(--space-1) var(--space-2); background: var(--accent-soft); }
+
+.list-definition-footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); width: 100%; }
+
+.list-definition-footer .modal-actions { margin: 0; padding: 0; border: 0; }
+
+.list-definition-active { display: flex; align-items: center; gap: var(--space-2); }
+
+.list-definition-active input { appearance: none; width: 36px; height: 22px; border-radius: var(--radius-pill); background: var(--border-strong); padding: 2px; cursor: pointer; }
+
+.list-definition-active input::before { content: ""; display: block; width: 18px; height: 18px; border-radius: 50%; background: var(--panel-solid); }
+
+.list-definition-active input:checked { background: var(--accent); }
+
+.list-definition-active input:checked::before { transform: translateX(14px); }
+
+@media (max-width: 640px) {
+  .list-definition-section, .list-definition-footer { align-items: flex-start; flex-direction: column; }
+  .list-definition-types { grid-template-columns: minmax(0, 1fr); }
+  .list-definition-footer .modal-actions { width: 100%; }
+}
+
+.list-manager-tabs .badge { font-size: var(--text-xs); }
+
+.list-definition-type { --button-bg: var(--panel-solid); --button-hover-bg: var(--accent-soft); }
+
+.list-definition-type-selected { --button-bg: var(--accent-soft); }
+
+.list-definition-preview .data-table th { text-transform: none; letter-spacing: 0; font-size: var(--text-base); color: var(--text); }
+
+.list-definition-modal .modal-header h2 { font-family: "Canela", "Iowan Old Style", "Palatino Linotype", serif; font-size: var(--text-2xl); }
+
+.list-definition-modal .modal-header { padding-bottom: var(--space-4); border-bottom: 1px solid var(--border); }
+
+.list-definition-form input { background: var(--panel-solid); }
+
+.list-manager-filter .search-input input { border-color: var(--border); background: var(--panel-solid); }
+
+.list-manager-filter .search-input input:focus { border-color: var(--accent); }
+
+.list-manager-layout, .list-manager-tabs { min-width: 0; max-width: 100%; }
+
+.list-manager-tabs .tabs-trigger { flex-shrink: 0; }
+
+.lists-page > .grid { min-width: 0; grid-template-columns: minmax(0, 1fr); }

@@ -6,6 +6,29 @@ ACTION="${1:-all}"
 ENV_FILE="$REPO_DIR/.env.e2e.example"
 DC=(docker compose -p hocx-e2e --env-file "$ENV_FILE" -f "$REPO_DIR/docker-compose.yml" -f "$REPO_DIR/docker-compose.dev.yml" -f "$REPO_DIR/docker-compose.e2e.yml" --project-directory "$REPO_DIR")
 
+# Objektspeicher-Secrets (lokales Garage-S3) stehen bewusst nicht in .env.e2e.example: Garage
+# verlangt Hex-Werte, die der Secret-Scan zu Recht als Leak meldet. Sie werden pro Stack einmal
+# erzeugt (Formate wie scripts/lib/env_migrate.sh) und mit storage-e2e in stop_stack verworfen.
+# Compose bevorzugt exportierte Variablen vor der --env-file.
+load_storage_secrets() {
+  local secrets_file="$REPO_DIR/storage-e2e/.storage-secrets.env" key
+  if [[ ! -f "$secrets_file" ]]; then
+    mkdir -p "$REPO_DIR/storage-e2e"
+    for key in STORAGE_CREDENTIALS_KEY GARAGE_RPC_SECRET GARAGE_ADMIN_TOKEN LOCAL_S3_ACCESS_KEY \
+      LOCAL_S3_SECRET_KEY LOCAL_S3_ABGABEBOX_ACCESS_KEY LOCAL_S3_ABGABEBOX_SECRET_KEY \
+      WANDERPLANER_INTERNAL_TOKEN WANDERPLANER_POSTGRES_PASSWORD WANDERPLANER_APP_DB_PASSWORD; do
+      case "$key" in
+        *_ACCESS_KEY) printf '%s=GK%s\n' "$key" "$(openssl rand -hex 12)" ;;
+        *) printf '%s=%s\n' "$key" "$(openssl rand -hex 32)" ;;
+      esac
+    done > "$secrets_file"
+  fi
+  set -a
+  # shellcheck source=/dev/null
+  . "$secrets_file"
+  set +a
+}
+
 wait_for_url() {
   local url="$1"
   for _ in $(seq 1 90); do
@@ -36,15 +59,23 @@ start_stack() {
   wait_for_url http://127.0.0.1:13001/
 }
 
+# E2E_ARGS (optional): zusätzliche Playwright-Argumente, z. B. E2E_ARGS="rbac-roles.spec.ts"
+# für einen gezielten Lauf (wöchentlicher RBAC-Audit, .github/workflows/rbac-audit.yml).
 run_tests() {
+  local extra=()
+  read -r -a extra <<< "${E2E_ARGS:-}"
   if [[ "${E2E_USE_HOST_PLAYWRIGHT:-0}" == "1" ]]; then
-    (cd "$REPO_DIR/frontend" && PLAYWRIGHT_BASE_URL=http://127.0.0.1:13000 E2E_ABGABEBOX_BASE_URL=http://127.0.0.1:13001 E2E_USER_EMAIL=admin@hocx.local E2E_USER_PASSWORD='ChangeMe123!' npm run test:e2e)
+    (cd "$REPO_DIR/frontend" && PLAYWRIGHT_BASE_URL=http://127.0.0.1:13000 E2E_ABGABEBOX_BASE_URL=http://127.0.0.1:13001 E2E_USER_EMAIL=admin@hocx.local E2E_USER_PASSWORD='ChangeMe123!' npm run test:e2e -- "${extra[@]}")
   else
+    # Image tag must match frontend/package.json's @playwright/test version (perf/version
+    # audit 2026-10-05: this had drifted to v1.55.0 while package-lock.json had long since
+    # resolved to 1.63.0 - a mismatched browser/driver version that silently forces a
+    # redownload or fails outright, not a visible config error) - bump both together.
     docker run --rm --network host -v "$REPO_DIR/frontend:/work" -w /work \
       -e CI="${CI:-}" -e PLAYWRIGHT_BASE_URL=http://127.0.0.1:13000 \
       -e E2E_ABGABEBOX_BASE_URL=http://127.0.0.1:13001 \
-      -e E2E_USER_EMAIL=admin@hocx.local -e E2E_USER_PASSWORD='ChangeMe123!' \
-      mcr.microsoft.com/playwright:v1.55.0-noble sh -c 'npm ci && npm run test:e2e'
+      -e E2E_USER_EMAIL=admin@hocx.local -e E2E_USER_PASSWORD='ChangeMe123!' -e E2E_ARGS="${E2E_ARGS:-}" \
+      mcr.microsoft.com/playwright:v1.64.1-noble sh -c 'npm ci && npm run test:e2e -- $E2E_ARGS'
   fi
 }
 
@@ -57,6 +88,8 @@ stop_stack() {
   # correctness signal, so it must never fail the run under `set -e`.
   { sudo rm -rf "$REPO_DIR/storage-e2e" 2>/dev/null || rm -rf "$REPO_DIR/storage-e2e"; } || true
 }
+
+load_storage_secrets
 
 case "$ACTION" in
   up) start_stack ;;

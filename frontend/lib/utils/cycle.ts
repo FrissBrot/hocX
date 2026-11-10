@@ -21,3 +21,22 @@ export function formatCycleName(pattern: string | null | undefined, cycleYear: n
     .replace(/\[cy_end\]|\{cy_end\}/g, String(cycleYear + 1))
     .replace(/\[cy\]|\{cy\}/g, String(cycleYear));
 }
+
+type CycleFilterConfig = { id: string; reset_month: number; reset_day: number };
+type CycleFilterAssignment = { cycle_config_id: string; cycle_year: number };
+
+/**
+ * Zyklus-Filter für Termine (z. B. automatische Matrix-Spalten): Ein Termin passt, wenn er
+ * dem Zyklus `config` im Zyklusjahr «Zyklus von referenceDate + offset» zugeordnet ist.
+ * Ohne Zyklus (`config` null) wird nicht gefiltert.
+ */
+export function eventMatchesCycleFilter(
+  assignments: CycleFilterAssignment[] | null | undefined,
+  config: CycleFilterConfig | null | undefined,
+  referenceDate: string,
+  offset: number
+): boolean {
+  if (!config) return true;
+  const targetYear = getCycleYear(referenceDate, config.reset_month, config.reset_day) + offset;
+  return (assignments ?? []).some((a) => a.cycle_config_id === config.id && a.cycle_year === targetYear);
+}

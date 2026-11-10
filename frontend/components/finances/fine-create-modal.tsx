@@ -1,13 +1,16 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 
+import { useParticipantSelectable } from "@/contexts/participant-date-context";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
-import { FINE_TYPE_LABEL } from "@/lib/constants/fine-types";
+import { fineTypeLabels } from "@/lib/constants/fine-types";
 import { AttendanceFine, FinanceAccount, ParticipantSummary, ProtocolSummary } from "@/types/api";
+import { Select } from "@/components/ui/select";
 
 type Props = {
   open: boolean;
@@ -19,6 +22,9 @@ type Props = {
 // Manuelle Busse: gleiche API wie die automatische Verbuchung aus der Anwesenheitskontrolle,
 // nur dass Protokoll, Person, Grund und Betrag hier von Hand gewählt werden.
 export function FineCreateModal({ open, accounts, onClose, onCreated }: Props) {
+  const t = useTranslations("finances");
+  const tCommon = useTranslations("common");
+  const fineTypeLabel = fineTypeLabels(t);
   const showToast = useToast();
   const [protocols, setProtocols] = useState<ProtocolSummary[]>([]);
   const [participants, setParticipants] = useState<ParticipantSummary[]>([]);
@@ -47,7 +53,7 @@ export function FineCreateModal({ open, accounts, onClose, onCreated }: Props) {
         setParticipants((loadedParticipants ?? []).filter((participant) => participant.is_active));
       } catch (error) {
         if (!cancelled) {
-          showToast(error instanceof Error ? error.message : "Auswahl konnte nicht geladen werden", "error");
+          showToast(error instanceof Error ? error.message : t("loadOptionsFailed"), "error");
         }
       }
     }
@@ -55,11 +61,12 @@ export function FineCreateModal({ open, accounts, onClose, onCreated }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [open, showToast]);
+  }, [open, showToast, t]);
 
+  const isParticipantSelectable = useParticipantSelectable(protocols.find((p) => p.id === protocolId)?.protocol_date);
   const participant = participants.find((entry) => entry.id === participantId) ?? null;
   const parsedAmount = Number(amount.replace(",", "."));
-  const canSave = !!protocolId && !!participant && !!accountId && Number.isFinite(parsedAmount) && parsedAmount > 0 && !saving;
+  const canSave = !!protocolId && !!participant && isParticipantSelectable(participant) && !!accountId && Number.isFinite(parsedAmount) && parsedAmount > 0 && !saving;
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -79,69 +86,70 @@ export function FineCreateModal({ open, accounts, onClose, onCreated }: Props) {
           account_id: accountId,
         }),
       });
-      showToast("Busse erfasst", "success");
+      showToast(t("createFineSuccess"), "success");
       setParticipantId(null);
       setAmount("");
       onCreated();
       onClose();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Busse konnte nicht erfasst werden", "error");
+      showToast(error instanceof Error ? error.message : t("createFineFailed"), "error");
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Busse erfassen" description="Eine Busse einem Protokoll und einer Person zuordnen.">
+    <Modal open={open} onClose={onClose} title={t("createFineTitle")} description={t("createFineDescription")}>
       <ModalSaveForm className="grid" onSubmit={save}>
         <div className="field-stack">
-          <span className="field-label">Protokoll</span>
+          <span className="field-label">{t("protocolLabel")}</span>
           <SearchableSelect
             options={protocols}
             getId={(protocol) => protocol.id}
             getLabel={(protocol) => protocol.title ? `${protocol.protocol_number} · ${protocol.title}` : protocol.protocol_number}
             value={protocolId}
             onChange={(protocol) => setProtocolId(protocol?.id ?? null)}
-            placeholder="Protokoll wählen"
+            placeholder={t("protocolPlaceholder")}
           />
         </div>
         <div className="field-stack">
-          <span className="field-label">Teilnehmer</span>
+          <span className="field-label">{t("participantLabel")}</span>
           <SearchableSelect
             options={participants}
+            isOptionSelectable={isParticipantSelectable}
             getId={(entry) => entry.id}
             getLabel={(entry) => entry.display_name}
             value={participantId}
             onChange={(entry) => setParticipantId(entry?.id ?? null)}
-            placeholder="Teilnehmer wählen"
+            placeholder={t("participantPlaceholder")}
           />
         </div>
         <label className="field-stack">
-          <span className="field-label">Grund</span>
-          <select value={fineType} onChange={(event) => setFineType(event.target.value as "late" | "absent")}>
-            {Object.entries(FINE_TYPE_LABEL).map(([value, label]) => (
+          <span className="field-label">{t("reasonLabel")}</span>
+          <Select value={fineType} onChange={(event) => setFineType(event.target.value as "late" | "absent")}>
+            {Object.entries(fineTypeLabel).map(([value, label]) => (
               <option key={value} value={value}>{label}</option>
             ))}
-          </select>
+          </Select>
         </label>
         <div className="field-stack">
-          <span className="field-label">Konto</span>
+          <span className="field-label">{t("accountLabel")}</span>
           <SearchableSelect
             options={accounts}
             getId={(account) => account.id}
             getLabel={(account) => account.name}
             value={accountId}
             onChange={(account) => setAccountId(account?.id ?? null)}
-            placeholder="Konto wählen"
+            placeholder={t("accountPlaceholder")}
           />
         </div>
         <label className="field-stack">
-          <span className="field-label">Betrag</span>
+          <span className="field-label">{t("amountLabel")}</span>
           <input inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" />
         </label>
         <div className="modal-actions">
-          <button type="button" className="button-ghost" onClick={onClose}>Abbrechen</button>
-          <button data-modal-save type="submit" className="button-primary" disabled={!canSave}>Erfassen</button>
+          <button type="button" className="button-ghost" onClick={onClose}>{tCommon("cancel")}</button>
+          <button data-modal-save type="submit" className="button-primary" disabled={!canSave}>{t("recordButton")}</button>
         </div>
       </ModalSaveForm>
     </Modal>

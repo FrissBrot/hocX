@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import json
+import time
 
 from redis.asyncio import Redis
 
 LOCK_TTL_SECONDS = 60
 PRESENCE_TTL_SECONDS = 90
+# Index-Sets der Sperren (siehe unten) leben etwas länger als eine Sperre und werden beim Erwerb und
+# Heartbeat verlängert; veraltete Einträge werden beim Lesen und beim Verbindungsende entfernt.
+_INDEX_TTL_SECONDS = 5 * LOCK_TTL_SECONDS
 
 
 def _presence_key(protocol_id: int) -> str:
@@ -20,6 +24,21 @@ def _lock_index_key(protocol_id: int, connection_id: str) -> str:
     return f"hocx:lock-index:{protocol_id}:{connection_id}"
 
 
+def _protocol_locks_key(protocol_id: int) -> str:
+    """Alle Feldschlüssel mit (möglicherweise) gehaltener Sperre in diesem Protokoll - ersetzt das
+    SCAN über den ganzen Redis-Keyspace (Concurrency-Audit CONC-011)."""
+    return f"hocx:locks:{protocol_id}"
+
+
+def _cell_locks_key(protocol_id: int, block_field_key: str) -> str:
+    """Zellsperren (block-<id>-cell-<r>-<c>) eines Matrixblocks."""
+    return f"hocx:lock-cells:{protocol_id}:{block_field_key}"
+
+
+def _block_of(field_key: str) -> str | None:
+    return field_key.split("-cell-", 1)[0] if "-cell-" in field_key else None
+
+
 def protocol_channel(protocol_id: int) -> str:
     return f"hocx:protocol:{protocol_id}:events"
 
@@ -31,6 +50,39 @@ def _parse_lock_payload(raw: str | None) -> dict | None:
         return json.loads(raw)
     except (TypeError, ValueError):
         return None
+
+
+# Sperren atomar (Concurrency-Audit CONC-012): vorher GET-dann-SET/EXPIRE/DEL in mehreren
+# Roundtrips - zwischen Ablauf und Neuvergabe konnten zwei Personen dieselbe Sperre halten bzw.
+# eine fremde, gerade neu vergebene Sperre gelöscht werden.
+_ACQUIRE = """
+local current = redis.call('GET', KEYS[1])
+if current then
+  local ok, holder = pcall(cjson.decode, current)
+  if ok and tostring(holder['user_id']) ~= ARGV[3] then
+    return current
+  end
+end
+redis.call('SET', KEYS[1], ARGV[1], 'EX', tonumber(ARGV[2]))
+return false
+"""
+_REFRESH = """
+local current = redis.call('GET', KEYS[1])
+if not current then return 0 end
+local ok, holder = pcall(cjson.decode, current)
+if not ok or tostring(holder['user_id']) ~= ARGV[1] then return 0 end
+redis.call('EXPIRE', KEYS[1], tonumber(ARGV[2]))
+return 1
+"""
+_RELEASE = """
+local current = redis.call('GET', KEYS[1])
+if not current then return 0 end
+local ok, holder = pcall(cjson.decode, current)
+if not ok or tostring(holder['user_id']) ~= ARGV[1] then return 0 end
+if ARGV[2] ~= '' and holder['connection_id'] ~= ARGV[2] then return 0 end
+redis.call('DEL', KEYS[1])
+return 1
+"""
 
 
 def get_lock_holder_sync(redis_client, protocol_id: int, field_key: str) -> dict | None:
@@ -52,17 +104,21 @@ def conflicting_lock_holder_sync(redis_client, protocol_id: int, field_key: str,
     holder = get_lock_holder_sync(redis_client, protocol_id, field_key)
     if holder is not None and int(holder.get("user_id", -1)) != user_id:
         return holder
-    prefix = _lock_key(protocol_id, f"{field_key}-cell-")
-    for key in redis_client.scan_iter(match=f"{prefix}*"):
-        data = _parse_lock_payload(redis_client.get(key))
-        if data is not None and int(data.get("user_id", -1)) != user_id:
+    cell_keys = sorted(redis_client.smembers(_cell_locks_key(protocol_id, field_key)) or ())
+    if not cell_keys:
+        return None
+    values = redis_client.mget([_lock_key(protocol_id, cell) for cell in cell_keys])
+    for cell, raw in zip(cell_keys, values):
+        data = _parse_lock_payload(raw)
+        if data is None:
+            redis_client.srem(_cell_locks_key(protocol_id, field_key), cell)
+        elif int(data.get("user_id", -1)) != user_id:
             return data
     return None
 
 
 class CollaborationService:
     """Ephemeral Redis-backed presence, field locks and pub/sub for live protocol editing.
-
     Nothing here is persisted to Postgres - state naturally resets if Redis restarts,
     which is acceptable since it's a soft collaborative UX layer, not a source of truth.
     """
@@ -76,24 +132,45 @@ class CollaborationService:
     async def publish(self, protocol_id: int, message: dict) -> None:
         await self.redis.publish(self.channel(protocol_id), json.dumps(message))
 
+    # ── Präsenz ────────────────────────────────────────────────────────────────────────────
+
     async def join(self, protocol_id: int, connection_id: str, user_id: int, display_name: str) -> None:
+        await self.touch(protocol_id, connection_id, user_id, display_name)
+
+    async def touch(self, protocol_id: int, connection_id: str, user_id: int, display_name: str) -> None:
+        """Präsenz dieser Verbindung auffrischen (beim Beitritt und bei jeder Revalidierung).
+        Vorher setzte nur der Beitritt das TTL - 90 s nach dem letzten Beitritt verschwand die
+        ganze Präsenzliste, obwohl alle verbunden waren (CONC-012)."""
         key = _presence_key(protocol_id)
-        await self.redis.hset(key, connection_id, json.dumps({"user_id": user_id, "display_name": display_name}))
-        await self.redis.expire(key, PRESENCE_TTL_SECONDS)
+        payload = json.dumps({"user_id": user_id, "display_name": display_name, "seen": int(time.time())})
+        async with self.redis.pipeline(transaction=True) as pipe:
+            pipe.hset(key, connection_id, payload)
+            pipe.expire(key, PRESENCE_TTL_SECONDS)
+            await pipe.execute()
 
     async def leave(self, protocol_id: int, connection_id: str) -> None:
         await self.redis.hdel(_presence_key(protocol_id), connection_id)
 
     async def presence_snapshot(self, protocol_id: int) -> list[dict]:
-        raw = await self.redis.hgetall(_presence_key(protocol_id))
+        key = _presence_key(protocol_id)
+        raw = await self.redis.hgetall(key)
+        cutoff = int(time.time()) - PRESENCE_TTL_SECONDS
         by_user: dict[int, dict] = {}
-        for value in raw.values():
+        stale: list[str] = []
+        for connection_id, value in raw.items():
             try:
                 data = json.loads(value)
-                by_user[int(data["user_id"])] = data
+                if int(data.get("seen", 0)) < cutoff:
+                    stale.append(connection_id)  # Verbindung ohne Abmeldung verschwunden
+                    continue
+                by_user[int(data["user_id"])] = {"user_id": data["user_id"], "display_name": data.get("display_name")}
             except (TypeError, ValueError, KeyError):
                 continue
+        if stale:
+            await self.redis.hdel(key, *stale)
         return list(by_user.values())
+
+    # ── Feldsperren ────────────────────────────────────────────────────────────────────────
 
     async def try_acquire_lock(
         self, protocol_id: int, field_key: str, connection_id: str, user_id: int, display_name: str
@@ -102,17 +179,19 @@ class CollaborationService:
         current holder info if a *different* user holds it, otherwise None on success."""
         key = _lock_key(protocol_id, field_key)
         payload = json.dumps({"user_id": user_id, "display_name": display_name, "connection_id": connection_id})
-        if await self.redis.set(key, payload, nx=True, ex=LOCK_TTL_SECONDS):
-            await self.redis.sadd(_lock_index_key(protocol_id, connection_id), field_key)
-            return None
-        existing_raw = await self.redis.get(key)
-        existing = json.loads(existing_raw) if existing_raw else None
-        if existing is not None and int(existing.get("user_id", -1)) != user_id:
-            return existing
-        # Either the lock expired in the race between SET and GET, or it's already
-        # owned by this same user (e.g. a second tab) - (re)claim it for this connection.
-        await self.redis.set(key, payload, ex=LOCK_TTL_SECONDS)
-        await self.redis.sadd(_lock_index_key(protocol_id, connection_id), field_key)
+        holder = await self.redis.eval(_ACQUIRE, 1, key, payload, LOCK_TTL_SECONDS, str(user_id))
+        if holder:
+            return _parse_lock_payload(holder)
+        async with self.redis.pipeline(transaction=False) as pipe:
+            pipe.sadd(_lock_index_key(protocol_id, connection_id), field_key)
+            pipe.expire(_lock_index_key(protocol_id, connection_id), _INDEX_TTL_SECONDS)
+            pipe.sadd(_protocol_locks_key(protocol_id), field_key)
+            pipe.expire(_protocol_locks_key(protocol_id), _INDEX_TTL_SECONDS)
+            block = _block_of(field_key)
+            if block is not None:
+                pipe.sadd(_cell_locks_key(protocol_id, block), field_key)
+                pipe.expire(_cell_locks_key(protocol_id, block), _INDEX_TTL_SECONDS)
+            await pipe.execute()
         return None
 
     async def get_lock_holder(self, protocol_id: int, field_key: str) -> dict | None:
@@ -129,62 +208,73 @@ class CollaborationService:
         holder = await self.get_lock_holder(protocol_id, field_key)
         if holder is not None and int(holder.get("user_id", -1)) == user_id:
             return True
-        prefix = _lock_key(protocol_id, f"{field_key}-cell-")
-        async for key in self.redis.scan_iter(match=f"{prefix}*"):
-            data = _parse_lock_payload(await self.redis.get(key))
-            if data is not None and int(data.get("user_id", -1)) == user_id:
-                return True
-        return False
+        cells = sorted(await self.redis.smembers(_cell_locks_key(protocol_id, field_key)) or ())
+        if not cells:
+            return False
+        values = await self.redis.mget([_lock_key(protocol_id, cell) for cell in cells])
+        return any((data := _parse_lock_payload(raw)) is not None and int(data.get("user_id", -1)) == user_id for raw in values)
 
     async def refresh_lock(self, protocol_id: int, field_key: str, user_id: int) -> bool:
-        key = _lock_key(protocol_id, field_key)
-        existing_raw = await self.redis.get(key)
-        if not existing_raw:
-            return False
-        existing = json.loads(existing_raw)
-        if int(existing.get("user_id", -1)) != user_id:
-            return False
-        await self.redis.expire(key, LOCK_TTL_SECONDS)
-        return True
+        refreshed = bool(await self.redis.eval(_REFRESH, 1, _lock_key(protocol_id, field_key), str(user_id), LOCK_TTL_SECONDS))
+        if refreshed:
+            async with self.redis.pipeline(transaction=False) as pipe:
+                pipe.expire(_protocol_locks_key(protocol_id), _INDEX_TTL_SECONDS)
+                block = _block_of(field_key)
+                if block is not None:
+                    pipe.expire(_cell_locks_key(protocol_id, block), _INDEX_TTL_SECONDS)
+                await pipe.execute()
+        return refreshed
+
+    async def connection_lock_count(self, protocol_id: int, connection_id: str) -> int:
+        return int(await self.redis.scard(_lock_index_key(protocol_id, connection_id)) or 0)
 
     async def release_lock(self, protocol_id: int, field_key: str, user_id: int, connection_id: str) -> bool:
-        key = _lock_key(protocol_id, field_key)
-        existing_raw = await self.redis.get(key)
-        if not existing_raw:
-            return False
-        existing = json.loads(existing_raw)
-        if int(existing.get("user_id", -1)) != user_id:
-            return False
-        await self.redis.delete(key)
-        await self.redis.srem(_lock_index_key(protocol_id, connection_id), field_key)
-        return True
+        released = bool(await self.redis.eval(_RELEASE, 1, _lock_key(protocol_id, field_key), str(user_id), ""))
+        if released:
+            await self._forget(protocol_id, connection_id, field_key)
+        return released
+
+    async def _forget(self, protocol_id: int, connection_id: str, field_key: str) -> None:
+        async with self.redis.pipeline(transaction=False) as pipe:
+            pipe.srem(_lock_index_key(protocol_id, connection_id), field_key)
+            pipe.srem(_protocol_locks_key(protocol_id), field_key)
+            block = _block_of(field_key)
+            if block is not None:
+                pipe.srem(_cell_locks_key(protocol_id, block), field_key)
+            await pipe.execute()
 
     async def release_all_for_connection(self, protocol_id: int, connection_id: str) -> list[str]:
         index_key = _lock_index_key(protocol_id, connection_id)
         field_keys = await self.redis.smembers(index_key)
         released: list[str] = []
         for field_key in field_keys:
-            key = _lock_key(protocol_id, field_key)
-            existing_raw = await self.redis.get(key)
-            if not existing_raw:
+            existing = _parse_lock_payload(await self.redis.get(_lock_key(protocol_id, field_key)))
+            if existing is None:
+                # Inzwischen abgelaufen: nur noch die Index-Einträge entfernen.
+                await self._forget(protocol_id, connection_id, field_key)
                 continue
-            existing = json.loads(existing_raw)
-            if existing.get("connection_id") == connection_id:
-                await self.redis.delete(key)
+            if existing.get("connection_id") != connection_id:
+                continue
+            if await self.redis.eval(_RELEASE, 1, _lock_key(protocol_id, field_key), str(existing.get("user_id")), connection_id):
                 released.append(field_key)
+                await self._forget(protocol_id, connection_id, field_key)
         await self.redis.delete(index_key)
         return released
 
     async def locks_snapshot(self, protocol_id: int) -> dict[str, dict]:
-        prefix = _lock_key(protocol_id, "")
+        index = _protocol_locks_key(protocol_id)
+        field_keys = sorted(await self.redis.smembers(index) or ())
+        if not field_keys:
+            return {}
+        values = await self.redis.mget([_lock_key(protocol_id, field_key) for field_key in field_keys])
         result: dict[str, dict] = {}
-        async for key in self.redis.scan_iter(match=f"{prefix}*"):
-            raw = await self.redis.get(key)
-            if not raw:
-                continue
-            field_key = key[len(prefix):]
-            try:
-                result[field_key] = json.loads(raw)
-            except (TypeError, ValueError):
-                continue
+        expired: list[str] = []
+        for field_key, raw in zip(field_keys, values):
+            data = _parse_lock_payload(raw)
+            if data is None:
+                expired.append(field_key)
+            else:
+                result[field_key] = data
+        if expired:
+            await self.redis.srem(index, *expired)
         return result

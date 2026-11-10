@@ -5,9 +5,10 @@ import uuid
 from datetime import date, datetime
 from io import StringIO
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.cycle_utils import format_cycle_name
+from app.core.cycle_utils import format_cycle_name, get_cycle_year
 from app.models import Event, Participant, Protocol
 from app.models.entities import CycleConfig, EventCycle
 from app.repositories.event_repository import EventRepository
@@ -33,6 +34,8 @@ class EventService:
         search: str = "",
         skip: int = 0,
         limit: int = 200,
+        cycle_config_public_id: uuid.UUID | None = None,
+        cycle_offset: int = 0,
     ) -> tuple[list[Event], int, ProtocolCycleInfo | None]:
         """Event pool for the planning-mode "Terminübersicht"/candidate popups.
 
@@ -40,10 +43,32 @@ class EventService:
         CycleConfig + protocol_date); falls back to the full tenant event list
         (cycle=None in the result) if the template has no cycle configured, so
         the popup is never silently empty. scope="all" ignores cycles entirely.
+
+        cycle_config_public_id (optional, überschreibt scope): Termine eines frei gewählten
+        Zyklus, relativ zum Protokolldatum um cycle_offset verschoben (0 = Zyklus des
+        Protokolls, -1 = vorheriger, ...). Genutzt vom Zyklus-Filter automatischer
+        Matrix-Spalten. Ohne Protokolldatum ist der Bezug der heutige Tag.
         """
         event_ids: set[int] | None = None
         cycle_info: ProtocolCycleInfo | None = None
-        if scope == "current":
+        if cycle_config_public_id is not None:
+            cycle_cfg = db.scalar(
+                select(CycleConfig).where(
+                    CycleConfig.tenant_id == protocol.tenant_id,
+                    CycleConfig.public_id == cycle_config_public_id,
+                )
+            )
+            if cycle_cfg is None:
+                raise ValueError("Zyklus nicht gefunden")
+            reference_date = protocol.protocol_date or date.today()
+            cycle_year = get_cycle_year(reference_date, cycle_cfg.reset_month, cycle_cfg.reset_day) + cycle_offset
+            event_ids = list_cycle_event_ids(db, cycle_cfg.id, cycle_year)
+            cycle_info = ProtocolCycleInfo(
+                cycle_config_id=cycle_cfg.public_id,
+                cycle_year=cycle_year,
+                label=format_cycle_name(cycle_cfg.name_pattern, cycle_year),
+            )
+        elif scope == "current":
             resolved = resolve_protocol_cycle(db, protocol)
             if resolved:
                 cycle_cfg, cycle_year = resolved
@@ -129,7 +154,11 @@ class EventService:
         )
         try:
             created = self.repository.create(db, event, commit=False)
-            if payload.cycle_assignments:
+            if payload.cycle_assignments is None:
+                # Ohne explizite Angabe gehört ein Termin standardmässig zu dem Zyklus, in den
+                # sein eigenes Datum fällt (je Zyklus-Definition des Mandanten).
+                self._apply_default_cycle_assignments(db, created.id, created.event_date, tenant_id=tenant_id)
+            elif payload.cycle_assignments:
                 self._set_cycle_assignments(db, created.id, payload.cycle_assignments, tenant_id=tenant_id, commit=False)
         except Exception:
             # Repository used to commit the new Event immediately, before cycle assignment
@@ -158,11 +187,22 @@ class EventService:
             id_lists={field: values[field] for field in self._PARTICIPANT_ID_FIELDS if field in values},
         )
         values.update(resolved_ids)
+        previous_date = event.event_date
+        # Zuordnungen, die noch exakt dem Standard fürs alte Datum entsprechen, gelten als
+        # nicht manuell angepasst und wandern bei einer Datumsänderung mit.
+        follows_default_cycles = (
+            payload.cycle_assignments is None
+            and next_start != previous_date
+            and self._current_cycle_keys(db, event.id) == self._default_cycle_keys(db, previous_date, tenant_id=event.tenant_id)
+        )
         try:
             if values:
                 event = self.repository.update(db, event, values, commit=False)
             if payload.cycle_assignments is not None:
                 self._set_cycle_assignments(db, event.id, payload.cycle_assignments, tenant_id=event.tenant_id, commit=False)
+            elif follows_default_cycles:
+                db.query(EventCycle).filter(EventCycle.event_id == event.id).delete(synchronize_session=False)
+                self._apply_default_cycle_assignments(db, event.id, next_start, tenant_id=event.tenant_id)
         except Exception:
             db.rollback()
             raise
@@ -171,11 +211,30 @@ class EventService:
         return event
 
     def delete_event(self, db: Session, event_id: int) -> bool:
+        """Löscht den Termin. Einreichungen der Abgabebox zu diesem Termin verschwinden per Kaskade -
+        ihre Dateien werden vorher vollständig gelöscht, sonst blieben sie verwaist (PRIV-003)."""
+        from app.services import deletion_service, erasure_journal
+
         event = self.repository.get(db, event_id)
         if event is None:
             return False
+        if deletion_service.erase_uploads_of(db, event_id=event_id):
+            event = self.repository.get(db, event_id)
+        erasure_journal.record(db, "event", event.public_id, tenant_id=event.tenant_id)
         self.repository.delete(db, event)
         return True
+
+    def _default_cycle_keys(self, db: Session, event_date: date, *, tenant_id: int) -> set[tuple[int, int]]:
+        configs = db.query(CycleConfig).filter(CycleConfig.tenant_id == tenant_id).all()
+        return {(config.id, get_cycle_year(event_date, config.reset_month, config.reset_day)) for config in configs}
+
+    def _current_cycle_keys(self, db: Session, event_id: int) -> set[tuple[int, int]]:
+        rows = db.query(EventCycle).filter(EventCycle.event_id == event_id).all()
+        return {(row.cycle_config_id, row.cycle_year) for row in rows}
+
+    def _apply_default_cycle_assignments(self, db: Session, event_id: int, event_date: date, *, tenant_id: int) -> None:
+        for cycle_config_id, cycle_year in self._default_cycle_keys(db, event_date, tenant_id=tenant_id):
+            db.add(EventCycle(event_id=event_id, cycle_config_id=cycle_config_id, cycle_year=cycle_year))
 
     def _set_cycle_assignments(
         self, db: Session, event_id: int, assignments: list[CycleAssignment], *, tenant_id: int, commit: bool = True

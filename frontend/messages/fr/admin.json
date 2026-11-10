@@ -1,0 +1,1345 @@
+{
+  "accountManagement": {
+    "title": "Comptes administrateur",
+    "description": "Accès au panneau d'administration de la plateforme lui-même - distinct de tous les utilisateurs des organisations.",
+    "newAdmin": "Nouvel admin",
+    "columns": {
+      "name": "Nom",
+      "email": "E-mail",
+      "role": "Rôle",
+      "status": "Statut",
+      "actions": "Actions"
+    },
+    "emptyAdmins": "Aucun compte administrateur trouvé.",
+    "you": "Vous",
+    "fullAccess": "Accès complet",
+    "readOnlyAccess": "Accès en lecture seule",
+    "active": "Actif",
+    "deactivated": "Désactivé",
+    "setReadOnly": "Passer en lecture seule",
+    "setFullAccess": "Passer en accès complet",
+    "deactivate": "Désactiver",
+    "activate": "Activer",
+    "newAdminModalTitle": "Nouveau compte administrateur",
+    "newAdminModalDescription": "Crée un accès supplémentaire au panneau d'administration de la plateforme.",
+    "name": "Nom",
+    "email": "E-mail",
+    "password": "Mot de passe",
+    "create": "Créer",
+    "toasts": {
+      "created": "Compte administrateur créé",
+      "createFailed": "Le compte administrateur n'a pas pu être créé",
+      "selfDowngradeConfirm": "Passer votre propre compte en lecture seule ? Vous perdrez immédiatement vous-même l'accès en écriture à ce panneau.",
+      "updated": "Compte administrateur mis à jour",
+      "updateFailed": "Le compte administrateur n'a pas pu être mis à jour",
+      "deactivateConfirm": "Désactiver « {name} » ? Le compte perd immédiatement l'accès au panneau d'administration de la plateforme."
+    }
+  },
+  "uploadPipeline": {
+    "title": "Pipeline de fichiers",
+    "description": "Où en sont les fichiers de toutes les voies de dépôt (image de procès-verbal, galerie, import Word, Abgabebox) - résultat du scan et origine par fichier, actualisé toutes les 15 secondes.",
+    "noUploadsYet": "Aucun dépôt pour le moment.",
+    "tenantLabel": "Organisation",
+    "originLabel": "Origine",
+    "statusLabel": "Statut",
+    "all": "Tous",
+    "columns": {
+      "time": "Horodatage",
+      "tenant": "Organisation",
+      "origin": "Origine",
+      "file": "Fichier",
+      "size": "Taille",
+      "status": "Statut"
+    },
+    "loading": "Chargement…",
+    "emptyFiles": "Aucun fichier trouvé.",
+    "quarantineTitle": "Abgabebox — en cours de vérification",
+    "quarantineDescription": "Fichiers actuellement en quarantaine en attente du scan antivirus, qui n'ont pas encore d'entrée dans l'aperçu des fichiers (cela n'arrive qu'après un scan réussi).",
+    "noQuarantineFiles": "Aucun fichier en cours de vérification.",
+    "quarantineColumns": {
+      "tenant": "Organisation",
+      "submission": "Dépôt",
+      "file": "Fichier",
+      "size": "Taille",
+      "age": "Âge"
+    },
+    "unknown": "Inconnu",
+    "scanStatus": {
+      "clean": "Propre",
+      "pending": "Scan en attente",
+      "error": "Échec du scan",
+      "infected": "Infecté"
+    }
+  },
+  "system": {
+    "title": "État du système",
+    "description": "État de tous les conteneurs et des services dont hocX dépend.",
+    "notificationsLink": "Notifications",
+    "staleSince": "L'état du système n'est plus à jour (dernière actualisation {time}). La surveillance du backend ne fonctionne pas.",
+    "noData": "Pas encore de données - la surveillance les collecte au prochain passage.",
+    "since": "depuis {time}",
+    "checksTitle": "Services",
+    "containersTitle": "Conteneurs",
+    "dockerNotConfigured": "La vue des conteneurs n'est pas configurée (DOCKER_API_URL manquant, voir RUNBOOK).",
+    "dockerUnavailable": "État des conteneurs indisponible : {error}",
+    "containerColumns": {
+      "service": "Service",
+      "status": "Statut",
+      "uptime": "Actif depuis",
+      "cpu": "CPU",
+      "memory": "Mémoire",
+      "version": "Version"
+    },
+    "eventsTitle": "Événements",
+    "eventsDescription": "Les 50 derniers changements d'état - les mêmes que ceux envoyés via ntfy.",
+    "noEvents": "Aucun événement pour l'instant.",
+    "eventKinds": {
+      "problem": "Problème",
+      "resolved": "Résolu",
+      "container_restart": "Redémarrage"
+    },
+    "severity": {
+      "warning": "Avertissement",
+      "critical": "Critique"
+    },
+    "status": {
+      "ok": "OK",
+      "warning": "Avertissement",
+      "critical": "Critique",
+      "unknown": "Inconnu"
+    },
+    "checkError": "Injoignable : {error}",
+    "noDetails": "Aucun détail.",
+    "memoryOfLimit": "{used} sur {limit}",
+    "uptime": {
+      "minutes": "{count, plural, one {# minute} other {# minutes}}",
+      "hours": "{count, plural, one {# heure} other {# heures}}",
+      "days": "{count, plural, one {# jour} other {# jours}}"
+    },
+    "containerReasons": {
+      "not_running": "Arrêté",
+      "unhealthy": "Le contrôle de santé échoue",
+      "oom_killed": "Arrêté (mémoire insuffisante)",
+      "starting": "Démarrage en cours",
+      "memory_high": "Mémoire presque pleine",
+      "not_needed": "Arrêté, inutile (les fichiers sont chez un autre fournisseur)"
+    },
+    "checks": {
+      "postgres": {
+        "title": "Base de données",
+        "detail": "{latencyMs, number} ms · {connections, number}/{maxConnections, number} connexions · {sizeMb, number} Mo",
+        "problem": "Base de données lente ou surchargée"
+      },
+      "redis": {
+        "title": "Redis",
+        "detail": "{latencyMs, number} ms · {usedMb, number} Mo utilisés",
+        "problem": "Mémoire Redis presque pleine"
+      },
+      "clamav": {
+        "title": "Antivirus",
+        "detail": "{version} · {latencyMs, number} ms",
+        "problem": "Antivirus perturbé"
+      },
+      "clamav_signatures": {
+        "title": "Signatures antivirus",
+        "detail": "Version {signatureVersion} · {ageHours, number} h",
+        "problem": "Signatures antivirus obsolètes"
+      },
+      "storage": {
+        "title": "Espace disque",
+        "detail": "{freePercent, number} % libre · {freeGb, number} sur {totalGb, number} Go",
+        "problem": "Espace disque insuffisant"
+      },
+      "error_rate": {
+        "title": "Journal des erreurs",
+        "detail": "{lastHour, number} dans la dernière heure · {lastDay, number} en 24 h",
+        "problem": "Nombreuses entrées dans le journal des erreurs"
+      },
+      "scan_backlog": {
+        "title": "Analyse antivirus",
+        "detail": "{count, number} fichiers en attente depuis plus d'1 h",
+        "problem": "Retard de l'analyse antivirus"
+      },
+      "photo_queue": {
+        "title": "Analyse d'images",
+        "detail": "{queued, number} en file d'attente · le plus ancien {oldestMinutes, number} min",
+        "problem": "La file d'analyse d'images s'engorge"
+      },
+      "document_queue": {
+        "title": "Traitement des documents",
+        "detail": "{queued, number} en attente · le plus ancien {oldestMinutes, number} min · {failed, number} en échec (24 h)",
+        "problem": "Le traitement des documents est en retard ou échoue"
+      },
+      "render_queue": {
+        "title": "Tâches PDF",
+        "detail": "{queued, number} en attente · la plus ancienne {oldestMinutes, number} min · {failed, number} échouées (24 h)",
+        "problem": "Les tâches PDF s’accumulent ou échouent"
+      },
+      "runtime": {
+        "title": "Charge des processus de service",
+        "detail": "{instances, number} processus · boucle d’événements max. {maxLagMs, number} ms · pool BD {poolPeakPercent, number} % · pool de threads {threadPeakPercent, number} % · {poolTimeouts, number} dépassements de délai du pool",
+        "problem": "Processus de service bloqués ou saturés"
+      },
+      "document_verification": {
+        "title": "Page publique de vérification",
+        "detail": "Réponse en {latencyMs, number} ms",
+        "problem": "Page publique de vérification lente"
+      },
+      "object_storage": {
+        "title": "Stockage des fichiers",
+        "detail": "Génération {generation, number} · temps de réponse {latencyMs, number} ms",
+        "problem": "Stockage des fichiers inaccessible"
+      },
+      "storage_migration": {
+        "title": "Migration du stockage",
+        "detail": "{verified, number} objets vérifiés sur {total, number} · {dead, number} en échec définitif",
+        "problem": "La migration du stockage requiert de l'attention"
+      },
+      "backup": {
+        "title": "Sauvegarde",
+        "detail": "{state, select, disabled {Non configurée} never {Aucune sauvegarde réussie} other {Dernière sauvegarde réussie il y a {hours, number} h}} · {points, number} points de restauration",
+        "problem": "Sauvegarde en retard ou non configurée"
+      },
+      "backup_repository": {
+        "title": "Dépôt de sauvegarde",
+        "detail": "{reachable, select, yes {Storage Box accessible} other {Storage Box inaccessible}} · {quota, select, yes {{usedPercent, number} % occupé} other {capacité inconnue}}",
+        "problem": "Dépôt de sauvegarde en panne ou plein"
+      },
+      "backup_verification": {
+        "title": "Contrôles de sauvegarde",
+        "detail": "{verified, select, yes {Vérifiée il y a {verifyDays, number} jours} other {Jamais vérifiée}} · {tested, select, yes {Test de restauration il y a {testDays, number} jours} other {Aucun test de restauration}}",
+        "problem": "Vérification ou test de restauration en retard"
+      },
+      "local_s3": {
+        "title": "S3 local (Garage)",
+        "detail": "{reason, select, active {Stockage actif} initial_target {Cible de la première migration} migration {Partie d'une migration en cours} fallback_period {Délai de retour après une migration} pending_operation {Nettoyage en attente} requested {Demandé manuellement} unverified_objects {Objets pas encore vérifiés} not_needed {Inutile, arrêté} other {Statut inconnu}} · {objects, number} objets · {gb, number} Go",
+        "problem": "S3 local (Garage) non évaluable"
+      },
+      "orphaned_files": {
+        "title": "Fichiers orphelins",
+        "detail": "{count, number} fichiers sans référence",
+        "problem": "Fichiers orphelins dans le stockage"
+      },
+      "security": {
+        "title": "Événements de sécurité",
+        "detail": "{failedLogins, number} échecs de connexion (15 min) · {exports, number} exports (1 h) · {restores, number} restaurations (24 h)",
+        "problem": "Événements de sécurité inhabituels"
+      },
+      "tenant_offboarding": {
+        "title": "Offboarding",
+        "detail": "{count, number} mandants après la fin du contrat (+{days, number} jours)",
+        "problem": "Mandants après la fin du contrat pas encore supprimés"
+      },
+      "captcha_endpoint": {
+        "title": "Point de terminaison captcha",
+        "detail": "{region, select, eu {Point de terminaison UE (traitement dans l’UE)} other {Point de terminaison global – pour un traitement dans l’UE, régler FRIENDLY_CAPTCHA_PUZZLE_URL et _VERIFY_URL sur le point UE}}",
+        "problem": "Point de terminaison captcha injoignable"
+      },
+      "overload": {
+        "title": "Protection contre la surcharge",
+        "detail": "{rejected, number} refus · {users, number} nouveaux utilisateurs · {tenants, number} organisations · charge jusqu’à {pressurePercent, number} % ({minutes, number} dernières min)",
+        "problem": "Surcharge : de nouveaux utilisateurs sont refusés"
+      }
+    },
+    "problems": {
+      "monitor": {
+        "stale": "La surveillance du système ne fournit pas de données",
+        "unavailable": "État des conteneurs indisponible"
+      },
+      "container": {
+        "not_running": "Le conteneur {subject} est arrêté",
+        "unhealthy": "Le conteneur {subject} est en mauvaise santé",
+        "oom_killed": "Le conteneur {subject} a été arrêté (mémoire insuffisante)",
+        "starting": "Le conteneur {subject} reste bloqué au démarrage",
+        "memory_high": "Le conteneur {subject} manque presque de mémoire",
+        "restart_loop": "Le conteneur {subject} redémarre sans cesse"
+      },
+      "check": {
+        "unreachable": "{subject} injoignable"
+      },
+      "job": {
+        "failing": "La tâche {subject} a échoué",
+        "overdue": "La tâche {subject} est en retard",
+        "never_run": "La tâche {subject} n'a jamais été exécutée"
+      }
+    },
+    "events": {
+      "containerRestart": "Le conteneur {subject} a redémarré"
+    },
+    "hero": {
+      "label": "État général",
+      "stale": "État obsolète",
+      "critical": "{critical, plural, one {# problème critique} other {# problèmes critiques}}{warnings, plural, =0 {} one {, # avertissement} other {, # avertissements}}",
+      "warnings": "{count, plural, one {# avertissement} other {# avertissements}}, rien de critique",
+      "allGood": "Tout est en ordre"
+    },
+    "liveBadge": "En direct · état au {time}",
+    "staleBadge": "Obsolète · état au {time}",
+    "tally": {
+      "critical": "critique",
+      "warning": "{count, plural, one {avertissement} other {avertissements}}",
+      "ok": "OK",
+      "unknown": "inconnu"
+    },
+    "noProblems": "Aucun problème ouvert.",
+    "filters": {
+      "all": "Tous",
+      "problems": "Anomalies seulement"
+    },
+    "noIssues": "Aucune anomalie.",
+    "groups": {
+      "infrastructure": "Infrastructure",
+      "security": "Sécurité",
+      "processing": "Traitement",
+      "backup": "Sauvegarde",
+      "other": "Autres"
+    },
+    "groupSummary": "{ok, number}/{total, number} OK",
+    "composeProjectRich": "Projet Compose <mono>{project}</mono>",
+    "containerSummary": "{count, plural, one {# conteneur} other {# conteneurs}} · {restarts, plural, one {# redémarrage} other {# redémarrages}}",
+    "problemLinks": {
+      "jobs": "Jobs →",
+      "storage": "Stockage →",
+      "backups": "Sauvegardes →",
+      "containers": "Conteneurs →"
+    },
+    "containerStates": {
+      "exitedOk": "terminé (init)"
+    },
+    "restartCount": "{count, plural, one {# redémarrage} other {# redémarrages}}",
+    "overload": {
+      "title": "Surcharge",
+      "description": "Nouveaux utilisateurs ayant vu la page de surcharge, par organisation (7 derniers jours). La priorité par abonnement se règle dans le catalogue de prix.",
+      "columns": {
+        "tenant": "Organisation",
+        "plan": "Abonnement",
+        "rejected": "Refus",
+        "users": "Utilisateurs",
+        "last": "Dernier"
+      },
+      "empty": "Personne n’a été refusé pour cause de surcharge au cours des 7 derniers jours.",
+      "unknownTenant": "Organisation inconnue",
+      "noPlan": "Aucun abonnement",
+      "priority": {
+        "0": "basse",
+        "1": "normale",
+        "2": "haute"
+      }
+    }
+  },
+  "jobs": {
+    "title": "Tâches",
+    "description": "Toutes les tâches périodiques en arrière-plan : dernière exécution, durée et erreurs éventuelles. Actualisé toutes les 30 secondes.",
+    "empty": "Aucune tâche signalée pour l'instant.",
+    "loading": "Chargement…",
+    "unregistered": "Non enregistrée",
+    "consecutiveFailures": "{count, plural, one {# échec consécutif} other {# échecs consécutifs}}",
+    "columns": {
+      "job": "Tâche",
+      "service": "Service",
+      "interval": "Fréquence",
+      "lastActivity": "Dernière exécution",
+      "duration": "Durée",
+      "state": "Statut"
+    },
+    "state": {
+      "ok": "OK",
+      "running": "En cours",
+      "failing": "Échec",
+      "overdue": "En retard",
+      "never_run": "Jamais exécutée"
+    },
+    "category": {
+      "virus_scan": "Analyse antivirus",
+      "photo_analysis": "Analyse d'images",
+      "uploads": "Téléversements",
+      "backup": "Sauvegarde",
+      "cleanup": "Nettoyage",
+      "maintenance": "Maintenance",
+      "other": "Autres",
+      "storage": "Stockage",
+      "documents": "Documents"
+    },
+    "service": {
+      "backend": "Backend",
+      "abgabebox-backend": "Backend Abgabebox",
+      "photo-analysis-worker": "Worker d'analyse d'images",
+      "host": "Serveur (cron)",
+      "storage-worker": "Worker de stockage",
+      "document-worker": "Worker de documents",
+      "job-worker": "Worker de tâches",
+      "backup-worker": "Worker de sauvegarde"
+    },
+    "interval": {
+      "onDemand": "À la demande",
+      "seconds": "{count, plural, one {chaque seconde} other {toutes les # secondes}}",
+      "minutes": "{count, plural, one {chaque minute} other {toutes les # minutes}}",
+      "hours": "{count, plural, one {toutes les heures} other {toutes les # heures}}",
+      "days": "{count, plural, one {quotidienne} other {tous les # jours}}"
+    },
+    "details": {
+      "state": "Statut",
+      "interval": "Fréquence",
+      "maxSilence": "Alerte après",
+      "lastSuccess": "Dernier succès",
+      "lastFailure": "Dernier échec",
+      "lastHeartbeat": "Dernier signal de vie",
+      "runs": "Exécutions",
+      "runCounts": "{runs, plural, one {# exécution} other {# exécutions}}, dont {failures, plural, one {# en échec} other {# en échec}}",
+      "lastError": "Dernier message d'erreur"
+    },
+    "history": {
+      "title": "Historique",
+      "description": "Les dernières exécutions. Pour les tâches très fréquentes, uniquement les échecs et le premier succès qui suit.",
+      "empty": "Aucune exécution enregistrée pour l'instant.",
+      "columns": {
+        "finished": "Terminée",
+        "duration": "Durée",
+        "result": "Résultat"
+      },
+      "status": {
+        "success": "Réussie",
+        "failure": "Échec"
+      }
+    },
+    "jobNames": {
+      "upload_pipeline_rescan": {
+        "title": "Nouvelle analyse des téléversements internes",
+        "description": "Analyse à nouveau les images de procès-verbaux, les téléversements de galerie et les imports Word qui n'ont pas pu être analysés lors du téléversement."
+      },
+      "abgabebox_rescan": {
+        "title": "Nouvelle analyse Abgabebox",
+        "description": "Analyse à nouveau les fichiers Abgabebox qui n'ont pas pu être analysés lors du téléversement et libère les fichiers sains."
+      },
+      "gallery_upload_ingest": {
+        "title": "Import de galerie",
+        "description": "Traite les images et archives ZIP de « Téléverser des images » : analyse antivirus, miniatures, stockage."
+      },
+      "photo_analysis_auto_queue": {
+        "title": "Planifier l'analyse d'images",
+        "description": "Planifie la détection de visages pour les nouvelles images, uniquement dans la plage horaire configurée et lorsque la charge du serveur est faible."
+      },
+      "photo_quality_backfill": {
+        "title": "Compléter la qualité d'image",
+        "description": "Calcule la netteté et l'exposition des images pour lesquelles elles manquent encore."
+      },
+      "thumbnail_backfill": {
+        "title": "Compléter les miniatures",
+        "description": "Crée les miniatures des images qui n'en ont pas encore, surtout pour les dépôts Abgabebox."
+      },
+      "photo_album_sync": {
+        "title": "Synchroniser les albums",
+        "description": "Ajoute les nouvelles images Abgabebox aux albums automatiques et retire celles supprimées."
+      },
+      "photo_similarity_refresh": {
+        "title": "Regrouper les doublons et photos similaires",
+        "description": "Calcule en arrière-plan les groupes des onglets « Doublons » et « Similaires » dès que les photos d'une organisation changent."
+      },
+      "photo_analysis_worker": {
+        "title": "Worker d'analyse d'images",
+        "description": "Conteneur séparé qui exécute les analyses d'images planifiées. Surveillé via son signal de vie toutes les quelques secondes."
+      },
+      "domain_health_check": {
+        "title": "Vérification des domaines",
+        "description": "Vérifie que les domaines personnalisés des organisations pointent toujours correctement vers hocX."
+      },
+      "cycle_snapshot": {
+        "title": "Instantanés de cycle",
+        "description": "Crée automatiquement un instantané de tableau à la fin d'un cycle."
+      },
+      "export_cleanup": {
+        "title": "Nettoyer les exports",
+        "description": "Supprime les anciens fichiers d'export générés."
+      },
+      "log_cleanup": {
+        "title": "Nettoyer les journaux",
+        "description": "Supprime les anciennes entrées du journal d'audit, du journal des erreurs, des historiques de tâches et d'événements ainsi que les liens de partage expirés."
+      },
+      "abgabebox_quarantine_cleanup": {
+        "title": "Nettoyer la quarantaine",
+        "description": "Supprime les fichiers restés dans la quarantaine Abgabebox, p. ex. après des téléversements interrompus."
+      },
+      "system_monitor": {
+        "title": "Surveillance du système",
+        "description": "Collecte l'état des conteneurs et des services et envoie des notifications en cas de problème."
+      },
+      "backup_db": {
+        "title": "Sauvegarde de la base de données",
+        "description": "Sauvegarde nocturne de la base de données (tâche cron sur le serveur via scripts/run_job.sh)."
+      },
+      "cleanup_storage": {
+        "title": "Nettoyage du stockage",
+        "description": "Nettoyage nocturne des anciens fichiers d'export dans storage/exports (tâche cron sur le serveur via scripts/run_job.sh)."
+      },
+      "task_package_rollover": {
+        "title": "Mettre à jour les paquets de tâches",
+        "description": "Crée chaque jour les tâches du cycle en cours à partir de tous les paquets actifs (celles du nouveau cycle lors d’un changement) et ajoute les nouvelles répétitions."
+      },
+      "maintenance_supervisor": {
+        "title": "Pilotage de la maintenance",
+        "description": "Démarre les maintenances planifiées, signale les dépassements et met à jour les estimations. Ne termine jamais une maintenance de lui-même."
+      },
+      "storage_journal_cleanup": {
+        "title": "Nettoyage du journal de stockage",
+        "description": "Supprime les anciennes entrées du journal des modifications dont aucune migration ouverte n'a plus besoin."
+      },
+      "storage_purge": {
+        "title": "Purge des objets de stockage supprimés",
+        "description": "Supprime physiquement les fichiers supprimés du stockage dès que la suppression est enregistrée."
+      },
+      "storage_migration_worker": {
+        "title": "Worker de migration du stockage",
+        "description": "Copie, vérifie et bascule le stockage des fichiers (signe de vie de la boucle d'interrogation)."
+      },
+      "storage_controller": {
+        "title": "Pilotage du S3 local",
+        "description": "Tâche cron de l'hôte : démarre ou arrête le service S3 local selon les besoins, sans supprimer de données."
+      },
+      "backup_storage": {
+        "title": "Sauvegarde des fichiers",
+        "description": "Sauvegarde de manière incrémentielle les objets de la génération de stockage active après la sauvegarde de la base de données et vérifie le résultat."
+      },
+      "backup_worker": {
+        "title": "Worker de sauvegarde",
+        "description": "Planifie et exécute sauvegardes, vérifications, tests de restauration et restaurations (conteneur backup-worker)."
+      },
+      "backup_run": {
+        "title": "Sauvegarde (Borg)",
+        "description": "Sauvegarde chiffrée de la base et du stockage de fichiers sur la Storage Box, toutes les 6 heures par défaut."
+      },
+      "backup_retention": {
+        "title": "Conservation des sauvegardes",
+        "description": "Supprime les points et contenus devenus inutiles après vérification de toutes les références."
+      },
+      "backup_verify": {
+        "title": "Vérification d'intégrité",
+        "description": "Vérifie le dépôt, les archives, le dump de la base et un échantillon des fichiers."
+      },
+      "backup_restore_test": {
+        "title": "Test de restauration",
+        "description": "Restaure le dernier point dans une base isolée et vérifie références et application."
+      },
+      "document_sync": {
+        "title": "Synchroniser les documents",
+        "description": "Crée les documents pour les dépôts de la boîte de dépôt et les fichiers existants, et supprime les fichiers de documents orphelins."
+      },
+      "document_worker": {
+        "title": "Worker de documents",
+        "description": "Génère les aperçus PDF et extrait le texte des documents téléversés (signal de vie de la boucle d’interrogation)."
+      },
+      "tenant_data_export": {
+        "title": "Export de l’association",
+        "description": "Crée les exports d’association demandés (ZIP AES avec tableaux, PDF des procès-verbaux et fichiers) et les supprime après 7 jours."
+      },
+      "retention_proposals": {
+        "title": "Délais de conservation",
+        "description": "Crée des propositions selon les délais de chaque association (dépôts, anciens membres, anciennes images de la galerie) et les applique en mode automatique."
+      },
+      "job_worker": {
+        "title": "Worker de tâches",
+        "description": "Exécute les tâches lourdes en arrière-plan (import de galerie, exports PDF, exports de l’association, nouvelles analyses antivirus, nettoyage) - signe de vie chaque minute."
+      },
+      "submission_todo_sync": {
+        "title": "Synchroniser les tâches de dépôt",
+        "description": "Toutes les 15 minutes, aligne les tâches des dépôts sur les événements et les listes : personne, échéance, terminée dès que des fichiers sont déposés, éléments supprimés."
+      }
+    }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "description": "Alertes ntfy pour les problèmes de l'état du système et des tâches - et un point de contrôle pour la surveillance externe (p. ex. Uptime Kuma).",
+    "ntfyTitle": "ntfy",
+    "ntfyDescription": "Notifie lorsqu'un problème apparaît (après 90 secondes, pour que les déploiements ne déclenchent pas d'alerte), s'aggrave, persiste ou est résolu.",
+    "enabledLabel": "Notifications activées",
+    "no": "Non",
+    "yes": "Oui",
+    "serverUrl": "Serveur ntfy",
+    "topic": "Topic",
+    "topicHelp": "Lettres, chiffres, - et _ (64 caractères max.).",
+    "token": "Jeton d'accès",
+    "tokenPlaceholder": "Facultatif",
+    "tokenSetPlaceholder": "Enregistré - laisser vide pour le conserver",
+    "tokenHelp": "Jeton d'accès (tk_…) ou utilisateur:mot_de_passe. Stocké chiffré et jamais réaffiché.",
+    "adminUrl": "Adresse du portail d'administration",
+    "adminUrlHelp": "Facultatif. Un appui sur la notification ouvre alors directement la bonne page.",
+    "reminderHours": "Rappel après (heures)",
+    "reminderHelp": "Signaler à nouveau les problèmes toujours en cours. 0 = aucun rappel.",
+    "lastError": "Dernier envoi échoué ({time}) : {error}",
+    "lastSent": "Dernière notification envoyée : {time}",
+    "removeToken": "Supprimer le jeton",
+    "removeTokenConfirm": "Supprimer le jeton d'accès ntfy ?",
+    "sendTest": "Envoyer un message de test",
+    "save": "Enregistrer",
+    "saveBeforeTest": "Enregistrez d'abord - le message de test utilise les paramètres enregistrés.",
+    "saved": "Paramètres enregistrés.",
+    "saveFailed": "L'enregistrement a échoué.",
+    "testSent": "Message de test envoyé.",
+    "testFailed": "Échec du message de test : {error}",
+    "statusTitle": "Surveillance externe (Uptime Kuma)",
+    "statusDescription": "Répond HTTP 200 tant qu'aucun problème critique n'est en cours, sinon 503 - même si la surveillance elle-même est bloquée ou si ntfy est injoignable.",
+    "createToken": "Créer un jeton",
+    "rotate": "Créer un nouveau jeton",
+    "rotateConfirm": "Créer un nouveau jeton ? L'URL actuelle ne fonctionnera plus - à mettre à jour dans Uptime Kuma.",
+    "rotated": "Nouveau jeton créé.",
+    "statusUrl": "URL pour la sonde HTTP",
+    "statusHelp": "À ajouter dans Uptime Kuma comme sonde de type HTTP(s). Codes acceptés : 200-299. La réponse ne contient que des compteurs, aucun détail.",
+    "noStatusToken": "Aucun jeton créé pour l'instant."
+  },
+  "login": {
+    "title": "Connexion administrateur",
+    "loginWithSso": "Se connecter avec {host}",
+    "or": "ou",
+    "email": "E-mail",
+    "password": "Mot de passe",
+    "submit": "Se connecter",
+    "mandatorySetupEyebrow": "Configuration obligatoire",
+    "mfaRequiredTitle": "La MFA est requise pour les comptes administrateur de la plateforme",
+    "mfaRequiredDescription": "{user} doit fournir un second facteur (application d'authentification) avant de se connecter.",
+    "startTotpSetup": "Démarrer la configuration TOTP",
+    "totpActivateAndLogin": "Activer TOTP et se connecter",
+    "totpActivatingShort": "Activation…",
+    "backToLogin": "Retour à la connexion",
+    "confirmationCodeLabel": "Code de confirmation de votre application d'authentification",
+    "checking": "Vérification…",
+    "confirmButton": "Confirmer",
+    "status": {
+      "loggingIn": "Connexion en cours…",
+      "loginIncomplete": "La connexion n'a pas pu être finalisée.",
+      "loginFailed": "Échec de la connexion",
+      "codeChecking": "Vérification du code…",
+      "codeCheckFailed": "Échec de la vérification du code",
+      "totpSetupPreparing": "Préparation de la configuration TOTP…",
+      "totpSetupStartFailed": "La configuration TOTP n'a pas pu démarrer",
+      "totpActivating": "Activation de TOTP…",
+      "totpActivateFailed": "TOTP n'a pas pu être activé"
+    }
+  },
+  "dashboard": {
+    "eyebrow": "Aperçu",
+    "title": "Tableau de bord",
+    "tenants": "Organisations",
+    "totalUsers": "Total des utilisateurs",
+    "activeLogins": "Avec connexion active"
+  },
+  "roleOptions": {
+    "reader": "Lecteur",
+    "kassier": "Trésorier",
+    "writer": "Rédacteur",
+    "admin": "Admin"
+  },
+  "userManagement": {
+    "toolbarTitle": "Participants",
+    "toolbarDescription": "Tous les participants de toutes les organisations. Chaque compte appartient à exactement une organisation.",
+    "newUser": "Nouvel participant",
+    "searchLabel": "Recherche",
+    "searchPlaceholder": "Rechercher des participants",
+    "columns": {
+      "displayName": "Nom affiché",
+      "email": "E-mail",
+      "tenant": "Organisation",
+      "role": "Rôle",
+      "login": "Connexion",
+      "actions": "Actions"
+    },
+    "loading": "Chargement…",
+    "emptyUsers": "Aucun participant trouvé.",
+    "loginActive": "Actif",
+    "loginDisabled": "Désactivé",
+    "mfaButton": "MFA",
+    "editUserTitle": "Modifier l'participant",
+    "createUserTitle": "Créer un participant",
+    "firstName": "Prénom",
+    "lastName": "Nom",
+    "displayName": "Nom affiché",
+    "email": "E-mail",
+    "newPassword": "Nouveau mot de passe",
+    "password": "Mot de passe",
+    "passwordHelpEdit": "Ne remplir que pour changer le mot de passe. Au moins 12 caractères.",
+    "passwordHelpCreate": "Défini directement ici, au moins 12 caractères. Il n'y a pas d'e-mail d'invitation automatique - communiquez le mot de passe séparément à l'participant.",
+    "language": "Langue",
+    "active": "Actif",
+    "enableLogin": "Activer la connexion",
+    "tenant": "Organisation",
+    "tenantFixedHelp": "L'organisation d'un compte est fixe et ne peut pas être modifiée.",
+    "role": "Rôle",
+    "save": "Enregistrer",
+    "toasts": {
+      "userSaved": "Participant enregistré",
+      "userCreated": "Participant créé",
+      "userSaveFailed": "L'participant n'a pas pu être enregistré"
+    }
+  },
+  "tenantModal": {
+    "close": "Fermer",
+    "saving": "Enregistrement…",
+    "save": "Enregistrer",
+    "planWithoutPrice": "Plan sans prix",
+    "total": "Total {amount} / {unit}",
+    "saveSubscription": "Enregistrer l'abonnement",
+    "title": "Paramètres de l'organisation – {tenant}",
+    "eyebrow": "Paramètres de l'organisation",
+    "mfaTitle": "MFA de {name}",
+    "mfaTitleFallback": "MFA",
+    "cycleUnit": {
+      "monthly": "mois",
+      "yearly": "an"
+    },
+    "tabs": {
+      "masterData": "Données de base",
+      "plan": "Plan & abonnement",
+      "users": "Utilisateurs ({count})",
+      "cleanup": "Nettoyage",
+      "storage": "Stockage",
+      "verification": "Vérification"
+    },
+    "fields": {
+      "tenantName": "Nom de l'organisation",
+      "publicSlug": "Identifiant public (URL Abgabebox)",
+      "publicSlugPlaceholder": "p. ex. club-exemple",
+      "profileImage": "Photo de profil",
+      "profileImageSelected": "{filename} · ",
+      "dragHint": "Glisser une image ici ou ",
+      "chooseOther": "en choisir une autre",
+      "chooseFile": "Choisir un fichier",
+      "imageHint": "PNG ou JPG, carré",
+      "profileImageAria": "Choisir la photo de profil",
+      "discount": "Remise",
+      "discountPrice": "Prix après remise",
+      "discountPriceHelp": "Sans remise {price} par {unit}. Saisissez un pourcentage ou un prix, hocX calcule l’autre.",
+      "discountPriceUnavailable": "Choisissez d’abord un plan avec un prix.",
+      "internalNote": "Note interne",
+      "internalNotePlaceholder": "p. ex. remise association jusqu'en 2027",
+      "billingStart": "Début de l’abonnement",
+      "billingStartHelp": "Dès cette date, des créances par période de facturation apparaissent dans le flux de trésorerie. Vide = date de création ({date}). Une modification recrée les créances ouvertes.",
+      "userLimitOverride": "Remplacer la limite d'utilisateurs",
+      "userLimitPlanLimit": "Limite du plan : {limit}",
+      "userLimitUnlimited": "Limite du plan : illimitée",
+      "userLimitHelp": "Vide = la limite du plan s'applique. Actuellement {count} utilisateur(s){suffix}",
+      "userLimitExceeded": " – limite atteinte ou dépassée.",
+      "showOnWebsite": "Afficher comme client sur le site web",
+      "showOnWebsiteHelp": "Apparaît sur le site web public sous « Ils nous font confiance » (nom uniquement). À activer uniquement avec l’accord de l’association.",
+      "contractEnd": "Fin du contrat",
+      "contractEndHelp": "Vide = sans fin. Après la fin du contrat plus le délai d’export, /admin/system signale que les données du mandant doivent être supprimées."
+    },
+    "meta": {
+      "createdAt": "Créé le",
+      "participants": "Participants"
+    },
+    "plan": {
+      "sectionTitle": "Plan",
+      "ariaLabel": "Plan"
+    },
+    "billing": {
+      "sectionTitle": "Facturation"
+    },
+    "modules": {
+      "sectionTitle": "Modules",
+      "empty": "Aucun module dans le catalogue.",
+      "includedInPlan": "Inclus dans le plan",
+      "addon": "Option · +{price} / mois",
+      "planOnly": "Disponible uniquement dans des plans",
+      "individuallyBooked": "Réservé individuellement",
+      "readOnly": "Lecture seule (après rétrogradation)"
+    },
+    "cost": {
+      "sectionTitle": "Coûts",
+      "plan": "Plan {name}",
+      "discountPercent": "Remise {percent} %",
+      "total": "Total",
+      "totalUndetermined": "Pas encore déterminé",
+      "existingPlanNoPrice": "Plan existant sans prix",
+      "noPlanSelected": "Aucun plan sélectionné",
+      "perUnitExclVat": "par {unit}, hors TVA"
+    },
+    "limits": {
+      "sectionTitle": "Limites après changement",
+      "users": "Utilisateurs",
+      "storage": "Stockage",
+      "unlimited": "illimité"
+    },
+    "sideNote": "L'organisation voit le plan, les modules et le coût estimé sous Paramètres de l'organisation → Abonnement et utilisation.",
+    "table": {
+      "name": "Nom",
+      "email": "E-mail",
+      "role": "Rôle",
+      "mfa": "MFA",
+      "actionAria": "Action",
+      "loginDisabled": "Connexion désactivée",
+      "roleAria": "Rôle de {name}",
+      "show": "Afficher",
+      "delete": "Supprimer",
+      "empty": "Cette organisation n'a pas encore d'utilisateurs."
+    },
+    "usersHint": "Chaque compte appartient à exactement une organisation. Créez de nouveaux utilisateurs sous « Utilisateurs » et choisissez-y l'organisation.",
+    "cleanup": {
+      "warning": "Cette action supprime définitivement des données de la base - impossible de revenir en arrière. L'organisation elle-même, les modèles, les champs de formulaire et les accès utilisateurs sont conservés dans tous les cas.",
+      "whatLabel": "Que faut-il supprimer ?",
+      "allLabel": "Supprimer toutes les données",
+      "allHint": "Sélectionne toutes les catégories ci-dessous en une fois.",
+      "countAvailable": " – {count} présent(s)",
+      "lastDeletedPrefix": "Dernière suppression : ",
+      "nothingDeleted": "rien (0 résultat dans les catégories sélectionnées)",
+      "confirmLabel": "Saisir le nom de l'organisation pour confirmer : « {name} »",
+      "deleting": "Suppression…",
+      "deleteSelected": "Supprimer les données sélectionnées",
+      "confirmMessage": "{count} catégorie(s) de données de « {tenant} » seront définitivement supprimées. Continuer ?",
+      "confirmFinalDelete": "Supprimer définitivement",
+      "categories": {
+        "protocols": {
+          "title": "Procès-verbaux",
+          "description": "Tous les procès-verbaux – créés manuellement et importés – y compris la file d'import Word."
+        },
+        "list_entries": {
+          "title": "Données des listes",
+          "description": "Toutes les entrées de toutes les listes. Les listes elles-mêmes (nom, colonnes) sont conservées."
+        },
+        "lists_full": {
+          "title": "Listes complètes",
+          "description": "Listes y compris leurs entrées. Supprime aussi les configurations Abgabebox liées à l'une de ces listes."
+        },
+        "events": {
+          "title": "Événements",
+          "description": "Tous les événements/occasions."
+        },
+        "todos": {
+          "title": "Tâches",
+          "description": "Tâches autonomes. Les tâches liées à un procès-verbal disparaissent déjà avec « Procès-verbaux »."
+        },
+        "participants": {
+          "title": "Participants sans connexion",
+          "description": "Supprime les participants sans connexion. Les participants avec connexion sont conservés."
+        },
+        "documents": {
+          "title": "Documents téléversés",
+          "description": "Imports Word/PDF et dépôts Abgabebox, y compris les fichiers ainsi orphelins."
+        }
+      }
+    },
+    "storage": {
+      "belegt": "sur {quota} utilisés ({percent})",
+      "noLimit": "utilisés · aucune limite de stockage",
+      "quotaExceeded": "Quota dépassé",
+      "noFiles": "Aucun fichier pour le moment.",
+      "loading": "Chargement…",
+      "noData": "Aucune donnée disponible.",
+      "extraPackagesTitle": "Forfaits de stockage supplémentaires",
+      "noExtraPackages": "Aucun forfait supplémentaire réservé.",
+      "remove": "Retirer",
+      "noPackagesInCatalog": "Aucun forfait de stockage dans le catalogue.",
+      "packageAria": "Forfait de stockage",
+      "addPackage": "+ Ajouter un forfait"
+    },
+    "toasts": {
+      "storagePackageCatalogLoadFailed": "Le catalogue des forfaits de stockage n'a pas pu être chargé",
+      "packageAdded": "Forfait de stockage ajouté",
+      "packageRemoved": "Forfait de stockage retiré",
+      "packagesSaveFailed": "Les forfaits de stockage n'ont pas pu être enregistrés",
+      "featureCatalogLoadFailed": "Le catalogue des fonctionnalités n'a pas pu être chargé",
+      "planCatalogLoadFailed": "Le catalogue des plans n'a pas pu être chargé",
+      "subscriptionSaved": "Abonnement enregistré",
+      "subscriptionSaveFailed": "L'abonnement n'a pas pu être enregistré",
+      "storageLoadFailed": "L'utilisation du stockage n'a pas pu être chargée",
+      "previewLoadFailed": "L'aperçu n'a pas pu être chargé",
+      "cleanupDone": "Organisation nettoyée",
+      "cleanupFailed": "Le nettoyage a échoué",
+      "usersLoadFailed": "Les utilisateurs n'ont pas pu être chargés",
+      "tenantSaved": "Organisation enregistrée",
+      "tenantSaveFailed": "L'organisation n'a pas pu être enregistrée",
+      "roleChanged": "Rôle modifié",
+      "roleChangeFailed": "Le rôle n'a pas pu être modifié",
+      "userDeleteConfirm": "Supprimer définitivement l'utilisateur « {name} » ? Le compte n'appartient qu'à cette organisation et disparaîtra ensuite.",
+      "userDeleted": "Utilisateur supprimé",
+      "userDeleteFailed": "L'utilisateur n'a pas pu être supprimé"
+    }
+  },
+  "plans": {
+    "notBookable": "non réservable",
+    "unlimitedUsers": "Utilisateurs illimités",
+    "userCount": "{count, plural, one {# utilisateur} other {# utilisateurs}}",
+    "noStorageLimit": "pas de limite de stockage",
+    "pricePerCycle": "{price} / {cycle}",
+    "month": "mois",
+    "year": "an",
+    "monthly": "Mensuel",
+    "yearly": "Annuel",
+    "noPlanAssigned": "Aucun plan attribué",
+    "noPriceSet": "Aucun prix défini"
+  },
+  "errorLog": {
+    "title": "Journal des erreurs",
+    "description": "Erreurs backend inattendues de toute l'application (hocX + Abgabebox) - les utilisateurs normaux ne voient jamais plus qu'un message générique.",
+    "tenant": "Organisation",
+    "errorType": "Type d'erreur",
+    "source": "Source",
+    "all": "Toutes",
+    "colTime": "Horodatage",
+    "colType": "Type",
+    "colStatus": "Statut",
+    "colRoute": "Route",
+    "colMessage": "Message",
+    "loading": "Chargement…",
+    "noErrorsFound": "Aucune erreur trouvée.",
+    "triggeredBy": "Déclenché par : {email}"
+  },
+  "domains": {
+    "title": "Domaines",
+    "description": "Tous les domaines personnalisés de toutes les organisations, avec statut et contrôle de santé.",
+    "search": "Recherche",
+    "searchPlaceholder": "Rechercher un domaine ou une organisation",
+    "tenant": "Organisation",
+    "purpose": "Usage",
+    "domain": "Domaine",
+    "status": "Statut",
+    "lastChecked": "Dernière vérification",
+    "actions": "Actions",
+    "purposeApp": "Application hocX",
+    "purposeAbgabebox": "Abgabebox",
+    "statusPending": "En attente",
+    "statusActive": "Actif",
+    "statusUnreachable": "Inaccessible",
+    "loading": "Chargement…",
+    "noDomainsFound": "Aucun domaine trouvé.",
+    "delete": "Supprimer",
+    "deleteConfirmTitle": "Supprimer définitivement « {domain} » ?",
+    "deleteConfirmMessage": "Ce domaine sera retiré de l'organisation « {tenant} ». L'organisation pourra ensuite configurer un nouveau domaine et le revérifier.",
+    "deleted": "Domaine supprimé",
+    "deleteFailed": "Le domaine n'a pas pu être supprimé"
+  },
+  "sso": {
+    "eyebrow": "Authentification unique (SSO) · OpenID Connect",
+    "description": "Configurer la connexion externe (SSO) exclusivement pour la connexion au panneau d'administration de la plateforme. Les utilisateurs des organisations ne sont pas concernés et continuent de se connecter par mot de passe.",
+    "enabledLabel": "SSO activé",
+    "no": "Non",
+    "yes": "Oui",
+    "issuerUrl": "URL de l'émetteur",
+    "clientId": "ID client",
+    "clientSecret": "Secret client",
+    "clientSecretPlaceholder": "Laisser vide = inchangé",
+    "scopes": "Scopes",
+    "save": "Enregistrer",
+    "saved": "Configuration SSO enregistrée",
+    "saveFailed": "Erreur lors de l'enregistrement"
+  },
+  "mfa": {
+    "eyebrow": "Authentification à deux facteurs",
+    "intro": "Les comptes administrateurs de la plateforme ont un accès global à toutes les organisations et nécessitent donc impérativement un second facteur. Au moins un facteur doit toujours être conservé.",
+    "securityStatus": "État de sécurité",
+    "mfaActive": "La MFA est active",
+    "noFactorYet": "Aucun facteur configuré pour le moment",
+    "mandatoryNote": "La MFA est obligatoire pour les comptes administrateurs de la plateforme.",
+    "mandatoryPill": "Obligatoire",
+    "factorCount": "{count, plural, one {# facteur} other {# facteurs}}",
+    "passkeysAvailable": "Clés d'accès disponibles",
+    "passkeysUnavailable": "Aucun support des clés d'accès dans ce navigateur",
+    "optionA": "Option A",
+    "authenticatorApp": "Application d'authentification",
+    "setUp": "Configuré",
+    "totpDescription": "Un code basé sur le temps (TOTP) provenant d'une application d'authentification comme Bitwarden, 1Password ou Google Authenticator.",
+    "setUpTotp": "Configurer TOTP",
+    "optionB": "Option B",
+    "passkey": "Clé d'accès",
+    "passkeyDescription": "Déverrouillage via Face ID, Touch ID, Windows Hello ou une clé de sécurité - rapide et sans saisir de code.",
+    "designationLabel": "Nom",
+    "passkeyLabelPlaceholder": "p. ex. YubiKey / MacBook Pro",
+    "preparingPasskey": "Préparation de la clé d'accès…",
+    "addPasskey": "Ajouter une clé d'accès",
+    "passkeyUnsupportedBrowser": "Ce navigateur ne prend pas en charge les clés d'accès.",
+    "activeFactors": "Facteurs actifs",
+    "noFactorsYet": "Aucun facteur MFA configuré pour le moment.",
+    "setUpAt": "Configuré : {date}",
+    "lastUsedAt": "Dernière utilisation : {date}",
+    "lastFactorNote": "Le dernier facteur ne peut pas être retiré.",
+    "lastFactorTitle": "Les administrateurs de la plateforme doivent conserver au moins un facteur MFA",
+    "remove": "Retirer"
+  },
+  "tenants": {
+    "title": "Organisations",
+    "description": "Toutes les organisations du système. Les nouvelles organisations sont créées ici de manière centralisée.",
+    "importTenant": "Importer une organisation",
+    "newTenant": "+ Nouvelle organisation",
+    "searchPlaceholder": "Rechercher des organisations",
+    "all": "Toutes",
+    "colImage": "Image",
+    "colTenant": "Organisation",
+    "colPlan": "Plan",
+    "discountBadge": "−{percent} % de remise",
+    "colParticipants": "Participants",
+    "colUsers": "Utilisateurs",
+    "colStorage": "Stockage",
+    "colCreatedAt": "Créée le",
+    "loading": "Chargement…",
+    "noTenantsFound": "Aucune organisation trouvée.",
+    "noLimitUsage": "{used} (pas de limite)",
+    "settings": "Paramètres",
+    "clone": "Cloner",
+    "export": "Exporter",
+    "delete": "Supprimer",
+    "newTenantDescription": "Crée une nouvelle organisation avec le modèle de document par défaut.",
+    "tenantName": "Nom de l'organisation",
+    "tenantNamePlaceholder": "p. ex. Club sportif exemple",
+    "publicSlug": "Slug public",
+    "plan": "Plan",
+    "nonBookablePlansHint": "Les plans non réservables (p. ex. pour les organisations existantes) peuvent être attribués ensuite dans les paramètres de l'organisation.",
+    "billing": "Facturation",
+    "cancel": "Annuler",
+    "creating": "Création…",
+    "createTenant": "Créer l'organisation",
+    "cloneTitleNamed": "Cloner « {name} »",
+    "cloneTitle": "Cloner l'organisation",
+    "cloneDescription": "Crée une nouvelle organisation basée sur celle-ci.",
+    "nameOfNewTenant": "Nom de la nouvelle organisation",
+    "scope": "Portée",
+    "cloneStructureOnlyTitle": "Structure et configuration uniquement",
+    "cloneStructureOnlyDescription": "Modèles, champs de formulaire, modèles de documents, cycles, comptes. Sans participants, événements, procès-verbaux ni utilisateurs.",
+    "cloneFullTitle": "Tout (copie complète)",
+    "cloneFullDescription": "En plus : participants, événements, procès-verbaux, amendes, tâches, dépôts et accès utilisateurs — p. ex. pour des tests.",
+    "cloning": "Clonage…",
+    "exportTitleNamed": "Exporter « {name} »",
+    "exportTitle": "Exporter l'organisation",
+    "exportDescription": "Crée un fichier chiffré à télécharger, qui pourra plus tard être réimporté dans le panneau d'administration comme nouvelle organisation. Il contient des identifiants (empreintes de mots de passe, clés MFA, jetons de lien et d'abonnement) et doit être conservé en lieu sûr malgré le chiffrement.",
+    "exportStructureOnlyTitle": "Structure uniquement",
+    "exportStructureOnlyDescription": "Cycles, champs de formulaire, modèles de documents, listes (définition seulement, sans contenu), comptes, rôles utilisateurs et domaines vérifiés (avec code de vérification).",
+    "exportStructureListsTitle": "Structure + contenu des listes",
+    "exportStructureListsDescription": "Comme ci-dessus, plus les entrées des listes. Sans participants/événements - les entrées de liste faisant référence à un participant ou un événement sont reprises sans cette référence.",
+    "exportFullTitle": "Structure + tous les procès-verbaux",
+    "exportFullDescription": "En plus : participants, événements, procès-verbaux, amendes, tâches, fichiers (y compris la galerie photo et les albums), liens de partage, abonnements de calendrier et partages d'albums. Sans Abgabebox.",
+    "exportFullAbgabeboxTitle": "Tout, y compris Abgabebox",
+    "exportFullAbgabeboxDescription": "Comme ci-dessus, plus la configuration Abgabebox, les liens Abgabebox et les fichiers téléversés. Sauvegarde complète de l'organisation.",
+    "importDescription": "Crée une nouvelle organisation à partir d'un fichier précédemment exporté.",
+    "exportFile": "Fichier d'export (.hocxenc ou ancien .zip)",
+    "uploadingAndProcessing": "Téléversement et traitement du fichier…",
+    "uploadAndImportRunning": "Téléversement et import en cours",
+    "mayTakeAMoment": "Cela peut prendre un moment selon la taille du fichier.",
+    "importing": "Importation…",
+    "import": "Importer",
+    "importNotesTitle": "Remarques sur l'import",
+    "importNotesDescription": "L'organisation a été importée, mais certaines lignes ont été ignorées ou ajustées :",
+    "close": "Fermer",
+    "created": "Organisation créée",
+    "createFailed": "L'organisation n'a pas pu être créée",
+    "cloned": "Organisation clonée",
+    "cloneFailed": "L'organisation n'a pas pu être clonée",
+    "exportFailed": "Échec de l'export",
+    "deleteConfirmTitle": "Supprimer « {name} » ?",
+    "deleteConfirmMessage": "{participants} participants, {users} accès utilisateurs ainsi que tous les procès-verbaux, événements et fichiers de cette organisation seront perdus. Cette action est irréversible.",
+    "deletePermanently": "Supprimer définitivement",
+    "deleted": "Organisation supprimée",
+    "deleteFailed": "L'organisation n'a pas pu être supprimée",
+    "importedWithWarnings": "{count, plural, one {Organisation importée avec # remarque} other {Organisation importée avec # remarques}}",
+    "imported": "Organisation importée",
+    "importFailed": "L'organisation n'a pas pu être importée",
+    "exportPasswordLabel": "Mot de passe (facultatif)",
+    "exportPasswordHelp": "Sans mot de passe, le fichier est chiffré avec la clé de ce serveur et ne peut être importé qu'ici. Définissez un mot de passe pour déplacer l'organisation vers un autre serveur.",
+    "exportPasswordConfirmLabel": "Répéter le mot de passe",
+    "exportPasswordTooShort": "Au moins {min, number} caractères.",
+    "exportPasswordMismatch": "Les mots de passe ne correspondent pas.",
+    "importPasswordLabel": "Mot de passe de l'export",
+    "importPasswordHelp": "Nécessaire uniquement si un mot de passe a été défini lors de l'export.",
+    "exportCredentials": "Inclure les identifiants",
+    "exportCredentialsHint": "Hachages de mots de passe, secrets MFA ainsi que jetons de liens et de calendrier. Uniquement pour un déménagement où tous les accès et liens doivent rester valables. Sans cette option, les comptes importés reçoivent un mot de passe aléatoire et les liens une nouvelle URL."
+  },
+  "pricing": {
+    "title": "Tarifs",
+    "description": "Plans et modules attribués aux organisations. Tous les prix en CHF, hors TVA.",
+    "tabPlans": "Plans",
+    "tabModules": "Modules",
+    "tabStoragePackages": "Forfaits de stockage",
+    "noPlansYet": "Aucun plan créé pour le moment.",
+    "bookable": "Réservable",
+    "notBookable": "Non réservable",
+    "month": "mois",
+    "year": "an",
+    "orPerYear": "ou {price} / an",
+    "noPriceSet": "aucun prix défini",
+    "individualPerTenant": "Individuel par organisation",
+    "users": "Utilisateurs",
+    "unlimited": "Illimité",
+    "upTo": "jusqu'à {count}",
+    "storage": "Stockage",
+    "includedPrefix": "Inclus : ",
+    "notIncludedPrefix": "Non inclus : ",
+    "tenantCount": "{count, plural, one {# organisation} other {# organisations}}",
+    "edit": "Modifier",
+    "nonBookablePlansFootnote": "Les plans non réservables n'apparaissent pas sous « Nouvelle organisation », mais peuvent être attribués à des organisations individuelles.",
+    "colModule": "Module",
+    "colAddonPrice": "Prix de l'add-on",
+    "colIncludedIn": "Inclus dans",
+    "colAsAddon": "Comme add-on",
+    "noModulesInCatalog": "Aucun module dans le catalogue.",
+    "perMonth": "{price} / mois",
+    "no": "Non",
+    "coreFeatureFootnote": "Les procès-verbaux, événements, tâches, participants et listes sont des fonctionnalités de base incluses dans chaque plan. Les add-ons sont ajoutés par organisation dans l'onglet « Plan et abonnement » des paramètres de l'organisation.",
+    "colPackage": "Forfait",
+    "colSize": "Taille",
+    "colPricePerYear": "Prix/an",
+    "colPricePerMonth": "Prix/mois",
+    "noPackagesYet": "Aucun forfait de stockage créé pour le moment.",
+    "storagePackagesFootnote": "Forfaits supplémentaires que les organisations peuvent ajouter au quota du plan dans l'onglet « Stockage ».",
+    "newPlan": "Nouveau plan",
+    "editPlanNamed": "Modifier le plan – {name}",
+    "editPlan": "Modifier le plan",
+    "planNamePlaceholder": "Nom du plan",
+    "cancel": "Annuler",
+    "saving": "Enregistrement…",
+    "createPlan": "Créer le plan",
+    "save": "Enregistrer",
+    "basics": "Informations de base",
+    "availability": "Disponibilité",
+    "tenantsCanBookThemselves": "Les organisations peuvent réserver ce plan elles-mêmes.",
+    "onlyAdminCanAssign": "Ce plan ne peut être attribué que par l'administration.",
+    "description2": "Description",
+    "price": "Prix",
+    "priceHelp": "Pas de prix fixe ? Laissez simplement les champs vides. Le prix mensuel est suggéré à partir du prix annuel avec une majoration de 20 %.",
+    "usersAndStorage": "Utilisateurs et stockage",
+    "numberOfUsers": "Nombre d'utilisateurs",
+    "userLimit": "Limite d'utilisateurs",
+    "unlimitedLower": "illimité",
+    "storageGb": "Stockage (Go)",
+    "storageInGb": "Stockage en Go",
+    "storageLimitInGb": "Limite de stockage en Go",
+    "storageLimitHelp": "La limite de stockage est appliquée aux organisations comme quota, en plus des forfaits de stockage réservés.",
+    "includedModules": "Modules inclus",
+    "previewForTenant": "Aperçu pour l'organisation",
+    "monthlyPrice": "Prix mensuel",
+    "notSetYet": "Pas encore défini",
+    "usersShort": "Utilisateurs",
+    "gbValue": "{value} Go",
+    "tenantsWithThisPlan": "Organisations avec ce plan",
+    "notAssignedToAnyTenant": "Pas encore attribué à une organisation.",
+    "loading": "Chargement…",
+    "name": "Nom",
+    "addonPricePerMonth": "Prix de l'add-on par mois (CHF)",
+    "addonPriceHelp": "Vide = non réservable comme add-on, uniquement groupé via un plan.",
+    "editFeatureNamed": "Modifier le module – {name}",
+    "editFeature": "Modifier le module",
+    "createStoragePackage": "Créer un forfait de stockage",
+    "editStoragePackageNamed": "Modifier le forfait de stockage – {name}",
+    "sizeGb": "Taille (Go)",
+    "yearlyPriceChf": "Prix annuel (CHF)",
+    "monthlyPriceChf": "Prix mensuel (CHF)",
+    "planSaved": "Plan enregistré",
+    "planSaveFailed": "Le plan n'a pas pu être enregistré",
+    "featureSaved": "Module enregistré",
+    "featureSaveFailed": "Le module n'a pas pu être enregistré",
+    "packageSaved": "Forfait de stockage enregistré",
+    "packageSaveFailed": "Le forfait de stockage n'a pas pu être enregistré",
+    "featuredBadge": "Le plus populaire",
+    "featuredOnWebsite": "Mettre en avant comme « Le plus populaire » sur le site web",
+    "featuredOnWebsiteHelp": "Un seul plan au maximum – l’enregistrement retire la mise en avant de tous les autres plans. Seuls les plans réservables apparaissent sur le site web.",
+    "downloadConfig": "Télécharger la configuration",
+    "importConfig": "Importer la configuration",
+    "downloadFailed": "Impossible de télécharger la configuration.",
+    "reloadFailed": "Impossible de recharger le catalogue de prix.",
+    "tabRebooking": "À réaffecter",
+    "colAvailability": "Disponibilité",
+    "packageBookableHelp": "Peut être ajouté aux organisations.",
+    "packageNotBookableHelp": "Ne peut plus être ajouté. Les attributions existantes restent et apparaissent sous « À réaffecter ».",
+    "delete": "Supprimer",
+    "deleteConfirm": "Supprimer définitivement « {name} » ?",
+    "deleted": "Offre supprimée",
+    "deleteFailed": "Impossible de supprimer l’offre.",
+    "loadPriority": {
+      "label": "Priorité en cas de surcharge",
+      "option": {
+        "0": "Basse",
+        "1": "Normale",
+        "2": "Haute"
+      },
+      "help": {
+        "0": "Quand la capacité devient insuffisante, les nouveaux utilisateurs de cet abonnement voient en premier la page de surcharge. Les personnes déjà en train de travailler restent connectées.",
+        "1": "Les nouveaux utilisateurs ne sont refusés qu’à pleine charge, après les abonnements à priorité basse.",
+        "2": "Les nouveaux utilisateurs ne sont jamais refusés à l’avance et obtiennent en premier les places libres."
+      },
+      "badge": {
+        "0": "Priorité basse",
+        "2": "Priorité haute"
+      }
+    }
+  },
+  "catalogImport": {
+    "title": "Importer la configuration",
+    "description": "Téléversez un fichier JSON avec les modules, plans et packs de stockage. Toutes les modifications s'affichent avant l'enregistrement.",
+    "file": "Fichier JSON",
+    "fileHelp": "Le plus simple : télécharger la configuration actuelle, la modifier puis la téléverser. Le fichier contient un mode d'emploi.",
+    "invalidJson": "Le fichier n'est pas un objet JSON valide.",
+    "overwrite": "Tout écraser",
+    "mergeHelp": "Désactivé : seuls les entrées et champs du fichier sont créés ou modifiés, le reste est conservé.",
+    "overwriteHelp": "Activé : le catalogue est remplacé par le fichier. Les plans et packs absents sont supprimés, ou rendus non réservables s'ils sont encore attribués à des organisations.",
+    "previewTitle": "Aperçu",
+    "errorsTitle": "{count, plural, one {# erreur} other {# erreurs}} dans le fichier. Veuillez corriger et téléverser à nouveau.",
+    "noChanges": "Aucune modification : le fichier correspond au catalogue actuel.",
+    "colEntry": "Entrée",
+    "colAction": "Action",
+    "colChanges": "Modifications",
+    "tenantCount": "{count, plural, one {# organisation concernée} other {# organisations concernées}}",
+    "cancel": "Annuler",
+    "showPreview": "Afficher l'aperçu",
+    "checking": "Vérification …",
+    "apply": "Appliquer l'import",
+    "applying": "Application …",
+    "applied": "Import appliqué : {count, plural, one {# modification} other {# modifications}}.",
+    "previewFailed": "Impossible de créer l'aperçu.",
+    "applyFailed": "L'import a échoué.",
+    "confirmTitle": "Appliquer l'import avec suppressions ?",
+    "confirmMessage": "{deleted, plural, =0 {Rien ne sera supprimé} one {# entrée sera supprimée} other {# entrées seront supprimées}}, {deactivated, plural, =0 {rien ne sera rendu non réservable} one {# entrée sera rendue non réservable} other {# entrées seront rendues non réservables}}. Les organisations concernées apparaîtront ensuite sous « À réaffecter ».",
+    "summary": {
+      "create": "{count} nouveau(x)",
+      "update": "{count} modifié(s)",
+      "deactivate": "{count} plus réservable(s)",
+      "delete": "{count} supprimé(s)",
+      "unchanged": "{count} inchangé(s)"
+    },
+    "action": {
+      "create": "Nouveau",
+      "update": "Modifié",
+      "deactivate": "Plus réservable",
+      "delete": "Supprimé"
+    },
+    "entity": {
+      "feature": "Module",
+      "plan": "Plan",
+      "storage_package": "Pack de stockage"
+    }
+  },
+  "catalogRebooking": {
+    "colTenant": "Organisation",
+    "colPlan": "Plan",
+    "colPackages": "Packs de stockage",
+    "loading": "Chargement …",
+    "empty": "Toutes les organisations n'ont que des plans et packs réservables.",
+    "packageQuantity": "{name} × {count}",
+    "rebook": "Réaffecter",
+    "footnote": "Organisations avec un plan ou un pack de stockage non réservable (mis en évidence). « Réaffecter » ouvre les paramètres de l'organisation : modifiez le plan dans l'onglet « Plan & abonnement » et les packs dans l'onglet « Stockage »."
+  },
+  "verification": {
+    "title": "Vérification des organisations",
+    "description": "Les organisations confirmées reçoivent le badge « Organisation vérifiée » sur la page publique de vérification (si elles affichent leur nom et leur logo). C’est le nom au moment de la demande qui est confirmé ; un changement de nom révoque la vérification.",
+    "loading": "Chargement …",
+    "empty": "Aucune demande.",
+    "requestedAs": "Demandé sous « {name} »",
+    "filter": {
+      "pending": "Ouvertes",
+      "approved": "Confirmées",
+      "rejected": "Refusées",
+      "withdrawn": "Retirées",
+      "all": "Toutes"
+    },
+    "columns": {
+      "organisation": "Organisation",
+      "message": "Message",
+      "requested": "Demandé",
+      "status": "Statut",
+      "actions": "Actions"
+    },
+    "status": {
+      "pending": "Ouverte",
+      "approved": "Confirmée",
+      "rejected": "Refusée",
+      "withdrawn": "Retirée"
+    },
+    "actions": {
+      "approve": "Confirmer",
+      "reject": "Refuser",
+      "revoke": "Révoquer la vérification"
+    },
+    "modal": {
+      "approveTitle": "Vérifier « {name} »",
+      "rejectTitle": "Refuser la demande de « {name} »",
+      "revokeTitle": "Révoquer la vérification de « {name} »",
+      "approveHint": "Ne confirmer qu’après avoir vérifié l’identité (p. ex. registre du commerce, statuts, rappel à un numéro connu).",
+      "rejectHint": "L’administrateur du mandant voit le motif dans les paramètres.",
+      "revokeHint": "Le badge disparaît immédiatement de la page de vérification.",
+      "note": "Note (comment c’est vérifié)",
+      "reasonRequired": "Motif (obligatoire)",
+      "approvePlaceholder": "p. ex. registre du commerce CHE-123.456.789 vérifié",
+      "rejectPlaceholder": "p. ex. aucune preuve du pouvoir de représentation",
+      "revokePlaceholder": "p. ex. signalement d’abus",
+      "cancel": "Annuler"
+    },
+    "done": {
+      "approve": "« {name} » est vérifiée.",
+      "reject": "Demande de « {name} » refusée.",
+      "revoke": "Vérification de « {name} » révoquée."
+    },
+    "tenant": {
+      "title": "Vérification par hocX",
+      "verified": "Vérifiée depuis le {date}",
+      "notVerified": "Non vérifiée",
+      "by": "par {email}",
+      "note": "Note : {note}",
+      "hidden": "Le mandant n’affiche pas son nom et son logo sur la page de vérification - le badge n’est donc pas visible.",
+      "history": "Demandes",
+      "noRequests": "Aucune demande pour l’instant.",
+      "withdrawnByRename": "Retirée par un changement de nom",
+      "revoked": {
+        "name_changed": "Révoquée le {date} : nom modifié.",
+        "admin": "Révoquée le {date}."
+      }
+    },
+    "errors": {
+      "generic": "L’action a échoué.",
+      "verificationAlreadyVerified": "L’organisation est déjà vérifiée.",
+      "verificationAlreadyPending": "Une demande est déjà en cours.",
+      "verificationNoPending": "Aucune demande n’est en cours.",
+      "verificationNameChanged": "Le nom a changé depuis la demande.",
+      "verificationReasonRequired": "Veuillez indiquer un motif.",
+      "verificationNotVerified": "L’organisation n’est pas vérifiée."
+    }
+  },
+  "documentTemplates": {
+    "title": "Modèles de documents",
+    "description": "Modèles fournis du Document Studio : lesquels sont proposés aux organisations et lequel est le standard de la plateforme par type de document. Leur contenu provient du code et est mis à jour au démarrage.",
+    "filter": {
+      "active": "Actifs",
+      "archived": "Archivés",
+      "all": "Tous"
+    },
+    "columns": {
+      "template": "Modèle",
+      "documentType": "Type de document",
+      "revision": "Version",
+      "usage": "Utilisation",
+      "status": "Statut",
+      "actions": "Actions"
+    },
+    "status": {
+      "active": "Proposé",
+      "archived": "Archivé"
+    },
+    "platformDefault": "Standard de la plateforme",
+    "revision": "Version {revision, number}",
+    "unpublished": "Non publié",
+    "usage": "{copies, plural, =0 {Aucune copie} one {# copie} other {# copies}} · {exports, plural, =0 {aucun export} one {# export} other {# exports}}",
+    "actions": {
+      "makeDefault": "Définir comme standard de la plateforme",
+      "archive": "Archiver",
+      "reactivate": "Proposer à nouveau"
+    },
+    "archiveConfirm": "Archiver « {name} » ? Les organisations ne peuvent plus le choisir ; les attributions à ce modèle reviennent au standard de la plateforme. {copies, plural, =0 {} one {La # copie d’une organisation est conservée.} other {Les # copies des organisations sont conservées.}}",
+    "madeDefault": "« {name} » est désormais le standard de la plateforme",
+    "archived": "« {name} » archivé",
+    "reactivated": "« {name} » est de nouveau proposé",
+    "actionFailed": "L’action a échoué",
+    "empty": "Aucun modèle dans cette vue"
+  },
+  "auditLog": {
+    "title": "Journal d’audit",
+    "description": "Événements de sécurité et de modification de tous les mandants. La source est une empreinte hachée du réseau, pas l’adresse IP.",
+    "filterAll": "Tous",
+    "filterFailures": "Échoués",
+    "tenant": "Mandant",
+    "allTenants": "Tous les mandants",
+    "actionPlaceholder": "Action, p. ex. user.login",
+    "colTime": "Moment",
+    "colAction": "Opération",
+    "colActor": "Par",
+    "colSource": "Source",
+    "colOutcome": "Résultat",
+    "loading": "Chargement …",
+    "empty": "Aucune entrée",
+    "outcome": {
+      "success": "Réussi",
+      "failure": "Échoué"
+    }
+  }
+}

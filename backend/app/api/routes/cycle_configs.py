@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.core.cycle_utils import format_cycle_name, get_cycle_year
 from app.core.db import get_db
-from app.core.security import CurrentUser, get_current_user, require_admin, require_reader
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_permission
 from app.models.entities import CycleConfig, Protocol, SubmissionAssignment, Template
 from app.schemas.cycle_config import CycleConfigCreate, CycleConfigRead, CycleConfigUpdate, CycleInfo
 from app.services import public_id_service
@@ -28,7 +29,7 @@ def list_cycle_configs(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     return db.scalars(
         select(CycleConfig)
         .where(CycleConfig.tenant_id == user.current_tenant_id)
@@ -42,7 +43,7 @@ def create_cycle_config(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_permission(user, P.TEMPLATES_MANAGE)
     obj = CycleConfig(
         tenant_id=user.current_tenant_id,
         name=payload.name,
@@ -66,7 +67,7 @@ def get_cycle_config(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     return _get_owned(db, cycle_config_id, user.current_tenant_id)
 
 
@@ -77,7 +78,7 @@ def update_cycle_config(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_permission(user, P.TEMPLATES_MANAGE)
     obj = _get_owned(db, cycle_config_id, user.current_tenant_id)
     values = payload.model_dump(exclude_unset=True)
     for k, v in values.items():
@@ -97,7 +98,7 @@ def delete_cycle_config(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_permission(user, P.TEMPLATES_MANAGE)
     obj = _get_owned(db, cycle_config_id, user.current_tenant_id)
     # Check if any template is still using this config
     in_use = db.scalar(select(Template.id).where(Template.cycle_config_id == obj.id).limit(1))
@@ -119,7 +120,7 @@ def list_cycles(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     cfg = _get_owned(db, cycle_config_id, user.current_tenant_id)
 
     # Collect all protocol dates for templates using this cycle config

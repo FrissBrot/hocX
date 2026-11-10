@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.db import get_db
-from app.core.security import CurrentUser, get_current_user, require_writer
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_permission
 from app.models import ElementDefinition, ListDefinition, ListEntry, Protocol, ProtocolElement, ProtocolElementBlock
 from app.schemas.list_definition import (
     ListDefinitionCreate,
@@ -19,9 +20,12 @@ from app.schemas.list_definition import (
 )
 from app.services import public_id_service
 from app.services.list_service import ListService
+from app.services.submission_service import SubmissionService
+from app.services.task_package_service import sync_packages_after_change
 
 router = APIRouter()
 service = ListService()
+submission_service = SubmissionService()
 
 
 def _config_references_list(config: dict | None, list_definition_id: int) -> bool:
@@ -83,7 +87,7 @@ def list_definitions(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     return service.list_definitions(db, tenant_id=user.current_tenant_id)
 
 
@@ -93,7 +97,7 @@ def create_definition(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     try:
         return service.create_definition(db, payload, tenant_id=user.current_tenant_id)
     except (SQLAlchemyError, ValueError) as exc:
@@ -125,7 +129,7 @@ def patch_definition(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     current = _get_definition_or_404(db, list_definition_id, user)
     try:
         updated = service.update_definition(db, current.id, payload)
@@ -143,7 +147,7 @@ def delete_definition(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     current = _get_definition_or_404(db, list_definition_id, user)
     if _list_definition_in_use(db, current.id, user.current_tenant_id):
         raise HTTPException(
@@ -166,7 +170,7 @@ def list_entries(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     definition = _get_definition_or_404(db, list_definition_id, user)
     return service.list_entries(db, list_definition_id=definition.id)
 
@@ -178,13 +182,15 @@ def create_entry(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     definition = _get_definition_or_404(db, list_definition_id, user)
     try:
         created = service.create_entry(db, definition.id, payload)
     except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc) if isinstance(exc, ValueError) else "Eintrag konnte nicht erstellt werden") from exc
+    sync_packages_after_change(db, tenant_id=definition.tenant_id, list_definition_id=definition.id)
+    submission_service.sync_todos_for_list(db, tenant_id=definition.tenant_id, list_definition_id=definition.id)
     return created
 
 
@@ -195,7 +201,7 @@ def patch_entry(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     current = _get_entry_or_404(db, list_entry_id, user)
     try:
         updated = service.update_entry(db, current.id, payload)
@@ -204,6 +210,8 @@ def patch_entry(
         raise HTTPException(status_code=400, detail=str(exc) if isinstance(exc, ValueError) else "Eintrag konnte nicht gespeichert werden") from exc
     if updated is None:
         raise HTTPException(status_code=404, detail="Eintrag nicht gefunden")
+    sync_packages_after_change(db, tenant_id=user.current_tenant_id, list_definition_id=current.list_definition_id)
+    submission_service.sync_todos_for_list(db, tenant_id=user.current_tenant_id, list_definition_id=current.list_definition_id)
     return updated
 
 
@@ -213,8 +221,9 @@ def delete_entry(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     current = _get_entry_or_404(db, list_entry_id, user)
+    list_definition_id = current.list_definition_id
     try:
         deleted = service.delete_entry(db, current.id)
     except SQLAlchemyError as exc:
@@ -222,4 +231,5 @@ def delete_entry(
         raise HTTPException(status_code=400, detail="Eintrag konnte nicht geloescht werden") from exc
     if not deleted:
         raise HTTPException(status_code=404, detail="Eintrag nicht gefunden")
+    sync_packages_after_change(db, tenant_id=user.current_tenant_id, list_definition_id=list_definition_id)
     return {"message": "Eintrag geloescht"}

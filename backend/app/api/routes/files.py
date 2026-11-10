@@ -1,32 +1,42 @@
+import json
 import uuid
 import zipfile
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Annotated, Literal
 
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
-from app.models.entities import CycleConfig, Event, GalleryUploadJob, PhotoAlbum, PhotoAlbumItem, SubmissionAssignment
+from app.models.entities import CycleConfig, Event, GalleryUploadJob, PhotoAlbum, PhotoAlbumItem, PhotoAlbumTenantShare, SubmissionAssignment
 from app.schemas.files import PhotoAlbumCreate, PhotoAlbumItemBestUpdate, PhotoAlbumRead, PhotoAlbumItemsUpdate
 from sqlalchemy.orm import Session
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
+from fastapi.responses import FileResponse, Response
 from starlette.background import BackgroundTask
 
-from app.core.db import get_db
+from app.core.db import get_db, release_for_stream
 from app.core.config import settings
-from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
-from app.models import GalleryImage, ProtocolElementBlock, ProtocolImage, StoredFile, Tenant
+from app.core.rate_limit import enforce_rate_limit
+from app.core.permissions import P
+from app.core.features_generated import F
+from app.core.security import CurrentUser, get_current_user, require_feature, require_permission
+from app.models import ElementType, GalleryImage, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolImage, StoredFile, Tenant
 from app.schemas.files import (
     AlbumPendingReleaseRead,
     AlbumReleaseRequest,
     AlbumReleaseResult,
     SharedTargetAlbumRead,
     AlbumShareCreate,
+    AlbumShareUpdate,
+    AlbumMyShareRead,
+    AlbumMyShareUpdate,
     AlbumShareRequestRead,
     AlbumShareRespond,
     AlbumTenantShareStatus,
+    CaptureDateUpdate,
+    ClientImageMetadata,
     DocumentUploadResult,
     FileBulkDelete,
     FileBulkDeleteResult,
@@ -36,18 +46,22 @@ from app.schemas.files import (
     FileStats,
     GalleryUploadJobDetail,
     GalleryUploadJobRead,
-    PhotoAnalysisJobCreate,
-    PhotoAnalysisJobRead,
     PhotoAnalysisProgress,
-    SimilarityGroup,
+    SimilarityGroupList,
     StoredFileMetadata,
     StoredFileTagsUpdate,
+    UploadFileResult,
+    UploadPrecheckRequest,
+    UploadPrecheckResponse,
 )
 from app.schemas.protocol import ProtocolImageRead
-from app.services import photo_album_service, photo_album_share_service, public_id_service
+from app.services import image_export_service, image_metadata_service, photo_album_service, photo_album_share_service, public_id_service
 from app.services.access_service import AccessService
+from app.services import apple_media
 from app.services.apple_media import pair_live_clips, MAX_LIVE_CLIP_BYTES
-from app.services.file_service import MAX_UPLOAD_BYTES, FileService, _safe_storage_path
+from app.core.storage import MAIN, ObjectNotFound, _content_disposition, get_object_store, object_response, read_bytes_or_404, write_object_to_zip
+from app.services.photo_metadata_privacy import MetadataPolicy, sanitize_image
+from app.services.file_service import MAX_UPLOAD_BYTES, FileService
 from app.services import submission_upload_rules
 from app.services.submission_service import SubmissionService, _element_ref, _parse_element_ref
 from app.services.upload_pipeline import GALLERY_DIRECT_IMAGE_MAX_BYTES, GALLERY_ZIP_MAX_BYTES, stage_upload_to_disk, inspect_gallery_zip, _enforce_tenant_storage_quota
@@ -56,6 +70,7 @@ from app.services.upload_lock import acquire_upload_lock
 from starlette.concurrency import run_in_threadpool
 
 from app.gallery_upload_route import GalleryUploadRoute
+from app.core.offload import run_coroutine_in_thread
 
 router = APIRouter(route_class=GalleryUploadRoute)
 service = FileService()
@@ -73,6 +88,9 @@ MAX_GALLERY_UPLOAD_BATCH_BYTES = GALLERY_ZIP_MAX_BYTES
 # haelt einen Batch dafuer kurz im Speicher - deshalb deutlich kleinere Batch-Grenzen als beim
 # Galerie-Upload; eine einzelne Datei bleibt bei MAX_UPLOAD_BYTES.
 MAX_DOCUMENT_UPLOAD_BATCH_FILES = 20
+# Client-Metadaten zum Galerie-Upload (Formularfeld file_metadata, JSON): Obergrenzen gegen
+# uebergrosse Formularfelder - 50 Dateien je Batch, grosszuegig Platz je Eintrag.
+MAX_FILE_METADATA_JSON_BYTES = 512 * 1024
 MAX_DOCUMENT_UPLOAD_BATCH_BYTES = 100 * 1024 * 1024
 
 
@@ -99,10 +117,10 @@ def list_files(
 ):
     """Alle vom Mandanten hochgeladenen Dateien (Protokoll-Bilder, Word-Import-Quelldokumente,
     Abgabebox-Uploads) fuer die "Dateien"- und "Fotos"-Uebersichtsseiten (only_images/
-    exclude_images trennen die beiden). Gleiche Rolle wie "Abgaben" (require_writer): dies
+    exclude_images trennen die beiden). Nur mit files.manage: dies
     ist eine mandantenweite Aggregatsicht ueber alle Protokolle hinweg, nicht scopebar auf
     die feingranulare Pro-Protokoll-Leserechte-Pruefung von ensure_can_read_stored_file."""
-    require_writer(user)
+    require_permission(user, P.FILES_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     album = _get_album(db, user, album_id) if album_id is not None else None
@@ -174,7 +192,7 @@ def list_file_tags(
     """Autocomplete-Quelle fuer den Tag-Filter/-Editor auf der "Dateien"-Seite - jeder Tag,
     der aktuell auf irgendeiner Datei des Mandanten liegt, inklusive der automatischen
     Herkunfts-Tags (siehe FileOverviewItem.origin_tag)."""
-    require_writer(user)
+    require_permission(user, P.FILES_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     return service.list_distinct_tags(db, user.current_tenant_id, query=query, limit=limit)
@@ -184,7 +202,7 @@ def list_file_tags(
 def get_analysis_progress(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     """Tenant-wide summary behind the Fotos page's "Foto-Analyse läuft" progress bar and
     the "Analyse läuft · N Bilder" pill."""
-    require_writer(user)
+    require_permission(user, P.FILES_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     return service.analysis_progress(db, user.current_tenant_id)
@@ -193,33 +211,27 @@ def get_analysis_progress(db: Session = Depends(get_db), user: CurrentUser = Dep
 @router.get("/files/stats", response_model=FileStats)
 def get_file_stats(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     """Backs the Dateien page's Dokumente/Fotos/Speicher stat cards."""
-    require_writer(user)
+    require_permission(user, P.FILES_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     return service.file_stats(db, user.current_tenant_id)
 
 
-@router.get("/files/similarity-groups", response_model=list[SimilarityGroup])
+@router.get("/files/similarity-groups", response_model=SimilarityGroupList)
 def list_similarity_groups(
     source: FileOverviewSource | None = Query(default=None),
     album_id: uuid.UUID | None = Query(default=None),
     search: str | None = Query(default=None),
     tags: list[str] | None = Query(default=None),
-    min_size: int = Query(default=1, ge=1),
     kind: Literal["duplicate", "series"] = Query(default="duplicate"),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    """Photo-culling Phase 2: clustert die (per Filter eingegrenzten) Bilder des Mandanten
-    nach visueller Ähnlichkeit (Perceptual Hash) und markiert pro Gruppe das nach Schärfe/
-    Belichtung beste Bild. Gleiche Filter wie GET /files, aber immer nur Bilder und ohne
-    Pagination - siehe FileService.group_similar_gallery_images für die Grössenbeschränkung.
-    min_size=2 (die "Duplikate"- und "Ähnliche"-Tabs im Frontend) blendet Einzelbilder ohne
-    ähnliches Gegenstück aus - der Default 1 behält das bisherige Verhalten für andere
-    Aufrufer bei. kind unterscheidet die beiden Tabs: "duplicate" (enger Schwellwert, gleiches
-    Bild in anderem Ausschnitt/Qualität) vs. "series" (lockerer Schwellwert, Fotoserie mit
-    mehreren unterschiedlichen Aufnahmen derselben Szene)."""
-    require_writer(user)
+    """Tabs "Duplikate" (kind="duplicate": gleiches Bild in anderem Ausschnitt/Qualität) und
+    "Ähnliche" (kind="series": Fotoserie derselben Szene). Gruppiert wird im Hintergrund
+    (job-worker, FileService.refresh_similarity_results); diese Route liest nur das Ergebnis und
+    filtert es mit denselben Filtern wie GET /files - siehe FileService.list_similarity_groups."""
+    require_permission(user, P.FILES_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     file_ids = None
@@ -229,61 +241,15 @@ def list_similarity_groups(
         if photo_album_share_service.hides_pending_items(album, user.current_tenant_id):
             item_query = item_query.where(PhotoAlbumItem.share_pending.is_(False))
         file_ids = list(db.scalars(item_query))
-    return service.group_similar_gallery_images(
+    return service.list_similarity_groups(
         db,
         user.current_tenant_id,
+        kind=kind,
         source=source,
         search=search,
         tags=tags,
         file_ids=file_ids,
-        min_size=min_size,
-        kind=kind,
     )
-
-
-def _job_to_read(job) -> PhotoAnalysisJobRead:
-    return PhotoAnalysisJobRead(
-        id=job.id,
-        status=job.status,
-        image_count=len(job.stored_file_ids),
-        created_at=job.created_at,
-        started_at=job.started_at,
-        finished_at=job.finished_at,
-        error=job.error,
-    )
-
-
-@router.post("/files/analysis-jobs", response_model=PhotoAnalysisJobRead, status_code=status.HTTP_201_CREATED)
-def create_analysis_job(
-    payload: PhotoAnalysisJobCreate,
-    db: Session = Depends(get_db),
-    user: CurrentUser = Depends(get_current_user),
-):
-    """Photo-culling Phase 3: queues a batch of (filtered) images for the separate
-    photo-analysis-worker container to score. Returns immediately with status "queued" -
-    poll GET .../{id} for progress."""
-    require_writer(user)
-    if user.current_tenant_id is None:
-        raise HTTPException(status_code=400, detail="No active tenant")
-    job = service.create_analysis_job(
-        db,
-        user.current_tenant_id,
-        source=payload.source,
-        search=payload.search,
-        tags=payload.tags,
-        file_ids=payload.file_ids,
-        requested_by=user.user_id,
-    )
-    return _job_to_read(job)
-
-
-@router.get("/files/analysis-jobs/{job_id}", response_model=PhotoAnalysisJobRead)
-def get_analysis_job(job_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_writer(user)
-    if user.current_tenant_id is None:
-        raise HTTPException(status_code=400, detail="No active tenant")
-    job = service.get_analysis_job(db, user.current_tenant_id, job_id)
-    return _job_to_read(job)
 
 
 def _gallery_upload_job_to_read(job: GalleryUploadJob) -> GalleryUploadJobRead:
@@ -367,6 +333,54 @@ def _resolve_upload_target(
     return target
 
 
+def _parse_file_hints(raw: str | None) -> dict[str, dict]:
+    """file_metadata-Formularfeld -> {sha256: {"metadata": {...}}}. Ungueltige Eintraege werden
+    verworfen statt den Upload abzulehnen - die Hinweise sind optional, der Server analysiert
+    jede Datei ohnehin selbst."""
+    if not raw:
+        return {}
+    if len(raw.encode("utf-8")) > MAX_FILE_METADATA_JSON_BYTES:
+        raise HTTPException(status_code=413, detail="Metadaten zum Upload sind zu gross")
+    try:
+        entries = json.loads(raw)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Ungültige Metadaten zum Upload") from None
+    if not isinstance(entries, list):
+        raise HTTPException(status_code=422, detail="Ungültige Metadaten zum Upload")
+    hints: dict[str, dict] = {}
+    for entry in entries[: MAX_GALLERY_UPLOAD_BATCH_FILES * 2]:
+        if not isinstance(entry, dict):
+            continue
+        checksum = str(entry.get("sha256") or "").lower()
+        if len(checksum) != 64 or any(c not in "0123456789abcdef" for c in checksum):
+            continue
+        try:
+            metadata = ClientImageMetadata.model_validate(entry.get("metadata") or {})
+        except ValueError:
+            continue
+        hints[checksum] = {"metadata": metadata.model_dump(mode="json", exclude_none=True)}
+    return hints
+
+
+@router.post("/files/upload-precheck", response_model=UploadPrecheckResponse)
+def precheck_uploads(
+    payload: UploadPrecheckRequest,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """SHA-256-Vorab-Abgleich vor dem eigentlichen Upload (Galerie, Dokumente,
+    Protokollbilder): meldet je Datei, ob sie hochgeladen werden muss oder im eigenen
+    Mandanten schon vorhanden ist, und ergaenzt bei Bildern fehlende Metadaten ohne erneute
+    Uebertragung - siehe upload_precheck_service. Gleiche Rolle wie die Upload-Endpunkte."""
+    require_permission(user, P.FILES_MANAGE)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    if payload.estimated_taken_on is not None and image_metadata_service.valid_estimated_date(payload.estimated_taken_on) is None:
+        raise HTTPException(status_code=422, detail="Ungültiges geschätztes Aufnahmedatum")
+    results = service.precheck_uploads(db, tenant_id=user.current_tenant_id, request=payload, user_id=user.user_id)
+    return UploadPrecheckResponse(results=results)
+
+
 @router.post("/files/gallery-uploads", response_model=GalleryUploadJobRead, status_code=status.HTTP_201_CREATED)
 async def upload_gallery_images(
     files: list[UploadFile] = File(...),
@@ -381,6 +395,14 @@ async def upload_gallery_images(
     # Im Upload-Dialog bestaetigt: Fotos, die dabei in ein geteiltes Auto-Album fallen, sofort
     # freigeben (sonst nur vorgemerkt, siehe photo_album_service.add_items).
     release_to_shared_albums: Annotated[bool, Form()] = False,
+    # Optionales Schaetzdatum aus dem Upload-Popup - gilt nur fuer Bilder, fuer die der Server
+    # kein echtes Aufnahmedatum findet (siehe FileService.save_gallery_uploads).
+    estimated_taken_on: Annotated[date | None, Form()] = None,
+    # Optionale Browser-Analyse je Datei als JSON-Liste [{sha256, metadata}] - reine Hinweise,
+    # angewendet nur bei passendem serverseitigem Hash (siehe _parse_file_hints).
+    file_metadata: Annotated[str | None, Form()] = None,
+    # «GPS-Daten des Bildes mitsenden» (Datenschutz-Audit Paket 9.3), Standard an
+    include_gps: Annotated[bool, Form()] = True,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -393,7 +415,45 @@ async def upload_gallery_images(
     damit ein mehrere GB grosses ZIP nicht die ganze Request-Laufzeit ueber im Speicher
     gehalten werden muss und der Upload-Dialog sofort schliessen kann. Poll GET
     .../gallery-upload-jobs/{id} fuer den Fortschritt."""
-    require_writer(user)
+    # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
+    # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
+    return await run_coroutine_in_thread(_upload_gallery_images_impl, files=files, tags=tags, event_id=event_id, submission_assignment_id=submission_assignment_id, submission_element_ref=submission_element_ref, cycle_config_id=cycle_config_id, release_to_shared_albums=release_to_shared_albums, estimated_taken_on=estimated_taken_on, file_metadata=file_metadata, include_gps=include_gps, db=db, user=user)
+
+
+async def _upload_gallery_images_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
+    files: list[UploadFile] = File(...),
+    tags: str | None = Form(default=None),
+    # Optional target picker: at most one of event_id, (submission_assignment_id +
+    # submission_element_ref) or cycle_config_id - the batch then lands in that Termin's/
+    # Abgabe-Element's/Zyklus' auto-album(s) too (see FileService.process_pending_gallery_upload_jobs).
+    event_id: uuid.UUID | None = Form(default=None),
+    submission_assignment_id: uuid.UUID | None = Form(default=None),
+    submission_element_ref: str | None = Form(default=None),
+    cycle_config_id: uuid.UUID | None = Form(default=None),
+    # Im Upload-Dialog bestaetigt: Fotos, die dabei in ein geteiltes Auto-Album fallen, sofort
+    # freigeben (sonst nur vorgemerkt, siehe photo_album_service.add_items).
+    release_to_shared_albums: Annotated[bool, Form()] = False,
+    # Optionales Schaetzdatum aus dem Upload-Popup - gilt nur fuer Bilder, fuer die der Server
+    # kein echtes Aufnahmedatum findet (siehe FileService.save_gallery_uploads).
+    estimated_taken_on: Annotated[date | None, Form()] = None,
+    # Optionale Browser-Analyse je Datei als JSON-Liste [{sha256, metadata}] - reine Hinweise,
+    # angewendet nur bei passendem serverseitigem Hash (siehe _parse_file_hints).
+    file_metadata: Annotated[str | None, Form()] = None,
+    # «GPS-Daten des Bildes mitsenden» (Datenschutz-Audit Paket 9.3), Standard an
+    include_gps: Annotated[bool, Form()] = True,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Direkter Bild-Upload fuer die "Fotos"-Galerie (nicht an ein Protokoll/Word-Import/
+    Abgabe gebunden) - unterstuetzt einzelne Bilddateien und .zip-Archive, aus denen nur
+    Bilddateien uebernommen werden (siehe iter_gallery_zip_entries). This request only
+    streams the raw upload(s) to disk and queues a gallery_upload_job - Magic-Byte-Pruefung,
+    Virenscan und das eigentliche Speichern laufen danach im Hintergrund (siehe
+    app/main.py's gallery_upload_ingest_loop und FileService.process_pending_gallery_upload_jobs),
+    damit ein mehrere GB grosses ZIP nicht die ganze Request-Laufzeit ueber im Speicher
+    gehalten werden muss und der Upload-Dialog sofort schliessen kann. Poll GET
+    .../gallery-upload-jobs/{id} fuer den Fortschritt."""
+    require_permission(user, P.FILES_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     if len(files) > MAX_GALLERY_UPLOAD_BATCH_FILES:
@@ -438,6 +498,11 @@ async def upload_gallery_images(
             raise HTTPException(status_code=400, detail=problem)
 
     tag_list = [tag.strip() for tag in (tags or "").split(",") if tag.strip()]
+    if estimated_taken_on is not None and image_metadata_service.valid_estimated_date(estimated_taken_on) is None:
+        raise HTTPException(status_code=422, detail="Ungültiges geschätztes Aufnahmedatum")
+    file_hints = _parse_file_hints(file_metadata)
+    if not include_gps:
+        file_hints = {key: {**hint, "metadata": {k: v for k, v in (hint.get("metadata") or {}).items() if k != "gps"}} for key, hint in file_hints.items()}
 
     # Computed per-request, not as a module-level constant - settings.upload_root must be
     # read fresh each time (tests monkeypatch it; production has no reason to assume it's
@@ -494,6 +559,9 @@ async def upload_gallery_images(
         upload_cycle_config_id=upload_cycle_config_id,
         release_to_shared_albums=release_to_shared_albums,
         requested_by=user.user_id,
+        estimated_taken_on=estimated_taken_on,
+        file_hints=file_hints,
+        include_gps=include_gps,
         # A ZIP's matching entries are only known once the ingest loop opens it; a batch
         # of individually-selected images (no ZIP at all) knows its count immediately.
         total_files=None if has_zip else len(staged_paths) - len(clip_positions),
@@ -532,7 +600,30 @@ async def upload_documents(
     Anders als der Galerie-Upload laeuft alles inline: Magic-Byte-Pruefung, Virenscan und
     Speichern passieren in diesem Request, das Ergebnis (gespeicherte Dateien + Einzelfehler)
     kommt direkt zurueck."""
-    require_writer(user)
+    # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
+    # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
+    return await run_coroutine_in_thread(_upload_documents_impl, files=files, tags=tags, event_id=event_id, submission_assignment_id=submission_assignment_id, submission_element_ref=submission_element_ref, cycle_config_id=cycle_config_id, db=db, user=user)
+
+
+async def _upload_documents_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
+    files: list[UploadFile] = File(...),
+    tags: str | None = Form(default=None),
+    # Same optional Bezug picker as upload_gallery_images (at most one of Termin / Abgabe-
+    # Element / Zyklus) - here it is stored on the file itself and shown in the "Bezug"
+    # column of the Dateien page, instead of routing it into an auto-album.
+    event_id: uuid.UUID | None = Form(default=None),
+    submission_assignment_id: uuid.UUID | None = Form(default=None),
+    submission_element_ref: str | None = Form(default=None),
+    cycle_config_id: uuid.UUID | None = Form(default=None),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Direkter Dokument-Upload fuer die "Dateien"-Seite (PDF, Office/OpenDocument, RTF, Text,
+    ZIP - siehe upload_pipeline._sniff_document_mime; Bilder gehoeren auf die "Fotos"-Seite).
+    Anders als der Galerie-Upload laeuft alles inline: Magic-Byte-Pruefung, Virenscan und
+    Speichern passieren in diesem Request, das Ergebnis (gespeicherte Dateien + Einzelfehler)
+    kommt direkt zurueck."""
+    require_permission(user, P.FILES_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     if len(files) > MAX_DOCUMENT_UPLOAD_BATCH_FILES:
@@ -588,6 +679,7 @@ async def upload_documents(
             )
         staged.append((name, content))
 
+    file_results: list[dict] = []
     items, errors = await service.save_document_uploads(
         db,
         tenant_id=user.current_tenant_id,
@@ -599,8 +691,9 @@ async def upload_documents(
         upload_element_ref=submission_element_ref if target.assignment is not None else None,
         upload_element_label=target.element_label,
         upload_cycle_config_id=target.cycle_config_id,
+        file_results=file_results,
     )
-    return DocumentUploadResult(items=items, errors=errors)
+    return DocumentUploadResult(items=items, errors=errors, file_results=[UploadFileResult(**result) for result in file_results])
 
 
 @router.get("/files/gallery-upload-jobs", response_model=list[GalleryUploadJobRead])
@@ -609,7 +702,7 @@ def list_gallery_upload_jobs(db: Session = Depends(get_db), user: CurrentUser = 
     status bar - same tenant-wide-visibility idea as GET /files/analysis-progress (just a
     list here, not one aggregated object), so the bar shows up for any writer in the tenant
     (any tab, after a refresh, ...), not just whoever's browser sent the original request."""
-    require_writer(user)
+    require_permission(user, P.FILES_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     jobs = db.scalars(
@@ -625,7 +718,7 @@ def get_gallery_upload_job(job_id: uuid.UUID, db: Session = Depends(get_db), use
     """Full result for one job - fetched once it's left the active listing above, so the
     frontend can show the same (items, errors) summary the old synchronous response used
     to return directly."""
-    require_writer(user)
+    require_permission(user, P.FILES_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     job = db.get(GalleryUploadJob, job_id)
@@ -645,6 +738,7 @@ def get_gallery_upload_job(job_id: uuid.UUID, db: Session = Depends(get_db), use
         **_gallery_upload_job_to_read(job).model_dump(),
         imported_items=imported_items,
         errors=list(job.errors),
+        file_results=[UploadFileResult(**result) for result in job.file_results or []],
     )
 
 
@@ -654,12 +748,75 @@ def list_images(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     block = public_id_service.get_by_public_id(db, ProtocolElementBlock, protocol_element_block_id)
     if block is None:
         raise HTTPException(status_code=404, detail="Protocol element block not found")
     access_service.ensure_can_read_protocol_block(db, user, block.id)
     return service.list_protocol_images(db, block.id)
+
+
+@router.get("/protocols/{protocol_id}/block-images", response_model=dict[uuid.UUID, list[ProtocolImageRead]])
+def list_protocol_block_images(
+    protocol_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Bilder aller Bildblöcke eines Protokolls in einer Anfrage (Block-public_id -> Liste wie
+    GET /protocol-element-blocks/{id}/images), statt einer Anfrage je Block. Gleiche Prüfungen
+    wie die Einzelroute: meetings.read und Leserecht am Protokoll; fremde oder unbekannte
+    Protokolle ergeben 404."""
+    require_permission(user, P.MEETINGS_READ)
+    protocol = public_id_service.get_by_public_id(db, Protocol, protocol_id, tenant_id=user.current_tenant_id)
+    if protocol is None:
+        raise HTTPException(status_code=404, detail="Protocol not found")
+    access_service.ensure_can_read_protocol(db, user, protocol.id)
+    blocks = db.execute(
+        select(ProtocolElementBlock.id, ProtocolElementBlock.public_id)
+        .join(ProtocolElement, ProtocolElement.id == ProtocolElementBlock.protocol_element_id)
+        .join(ElementType, ElementType.id == ProtocolElementBlock.element_type_id)
+        .where(ProtocolElement.protocol_id == protocol.id, ElementType.code == "image")
+        .order_by(ProtocolElement.sort_index.asc(), ProtocolElementBlock.sort_index.asc(), ProtocolElementBlock.id.asc())
+    ).all()
+    result: dict[uuid.UUID, list[ProtocolImageRead]] = {block_public_id: [] for _, block_public_id in blocks}
+    if not blocks:
+        return result
+    public_id_by_block = {block_id: block_public_id for block_id, block_public_id in blocks}
+    rows = db.execute(
+        select(ProtocolImage, StoredFile)
+        .join(StoredFile, StoredFile.id == ProtocolImage.stored_file_id)
+        .where(ProtocolImage.protocol_element_block_id.in_(list(public_id_by_block)))
+        .order_by(ProtocolImage.protocol_element_block_id.asc(), ProtocolImage.sort_index.asc(), ProtocolImage.id.asc())
+    ).all()
+    # Gleiche Felder wie FileService.list_protocol_images
+    for row in rows:
+        block_public_id = public_id_by_block[row.ProtocolImage.protocol_element_block_id]
+        result[block_public_id].append(
+            ProtocolImageRead(
+                id=row.ProtocolImage.public_id,
+                protocol_element_block_id=block_public_id,
+                stored_file_id=row.StoredFile.public_id,
+                sort_index=row.ProtocolImage.sort_index,
+                title=row.ProtocolImage.title,
+                caption=row.ProtocolImage.caption,
+                original_name=row.StoredFile.original_name,
+                mime_type=row.StoredFile.mime_type,
+                file_size_bytes=row.StoredFile.file_size_bytes,
+                content_url=service.build_content_url(row.StoredFile.public_id),
+            )
+        )
+    return result
+
+
+def _ensure_block_protocol_not_frozen(db: Session, protocol_element_block_id: int) -> None:
+    """Audit MAIN-BE-007: Bilder abgeschlossener Protokolle sind wie alle anderen Inhalte
+    eingefroren (gleiche 409 wie ProtocolService.get_protocol_or_404_not_frozen)."""
+    protocol_id = access_service.repository.protocol_id_for_block(db, protocol_element_block_id=protocol_element_block_id)
+    protocol = db.get(Protocol, protocol_id) if protocol_id else None
+    if protocol is None:
+        raise HTTPException(status_code=404, detail="Protocol not found")
+    if protocol.status == "abgeschlossen":
+        raise HTTPException(status_code=409, detail="Protocol is already abgeschlossen")
 
 
 @router.post("/protocol-element-blocks/{protocol_element_block_id}/images", response_model=ProtocolImageRead)
@@ -668,14 +825,30 @@ async def upload_image(
     file: UploadFile,
     title: str | None = Form(default=None),
     caption: str | None = Form(default=None),
+    include_gps: bool = Form(default=True),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
+    # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
+    return await run_coroutine_in_thread(_upload_image_impl, protocol_element_block_id=protocol_element_block_id, file=file, title=title, caption=caption, include_gps=include_gps, db=db, user=user)
+
+
+async def _upload_image_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
+    protocol_element_block_id: uuid.UUID,
+    file: UploadFile,
+    title: str | None = Form(default=None),
+    caption: str | None = Form(default=None),
+    include_gps: bool = Form(default=True),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_permission(user, P.MEETINGS_EDIT)
     protocol_element_block = public_id_service.get_by_public_id(db, ProtocolElementBlock, protocol_element_block_id)
     if protocol_element_block is None:
         raise HTTPException(status_code=404, detail="Protocol element block not found")
     access_service.ensure_can_read_protocol_block(db, user, protocol_element_block.id)
+    _ensure_block_protocol_not_frozen(db, protocol_element_block.id)
     try:
         return await service.save_protocol_image(
             db,
@@ -684,6 +857,7 @@ async def upload_image(
             title=title,
             caption=caption,
             created_by=user.user_id,
+            include_gps=include_gps,
         )
     except SQLAlchemyError as exc:
         db.rollback()
@@ -696,11 +870,12 @@ def delete_image(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     protocol_image = public_id_service.get_by_public_id(db, ProtocolImage, image_id)
     if protocol_image is None:
         raise HTTPException(status_code=404, detail="Image not found")
     access_service.ensure_can_read_protocol_block(db, user, protocol_image.protocol_element_block_id)
+    _ensure_block_protocol_not_frozen(db, protocol_image.protocol_element_block_id)
     try:
         deleted = service.delete_protocol_image(db, protocol_image.id)
     except SQLAlchemyError as exc:
@@ -711,13 +886,55 @@ def delete_image(
     return {"message": "Image deleted"}
 
 
+# Partner-Mandant ohne Standortfreigabe (IMGMETA-007): nur der Standort fällt weg, Datum und
+# Kamera bleiben wie bisher.
+_WITHOUT_LOCATION = MetadataPolicy(location=False, capture_date=True, camera=True)
+
+
+def _sees_location(user: CurrentUser) -> bool:
+    """GPS nur mit Schreibrecht auf Dateien oder Sitzungen (Datenschutz-Audit Paket 9.4, bisher ab
+    Rolle writer): Leser sehen weder Koordinaten in den Metadaten noch GPS im ausgelieferten
+    Original. Gespeichert bleibt alles unverändert."""
+    return user.can(P.FILES_MANAGE) or user.can(P.MEETINGS_EDIT)
+
+
+def _strips_location(db: Session, user: CurrentUser, stored_file: StoredFile) -> bool:
+    if not _sees_location(user):
+        return True
+    return user.current_tenant_id is not None and not photo_album_share_service.location_shared_with(
+        db, user.current_tenant_id, stored_file.id, stored_file.tenant_id
+    )
+
+
+def _temporary_copy(suffix: str) -> Path:
+    work_dir = Path(settings.upload_root) / "_staging" / "download"
+    work_dir.mkdir(parents=True, exist_ok=True)
+    return work_dir / f"{uuid.uuid4().hex}{suffix}"
+
+
+def _video_without_metadata(key: str) -> Path:
+    """Live-Photo-Clip aus dem Objektspeicher ohne Container-Metadaten als temporäre Datei
+    (ffmpeg braucht einen Pfad); der Aufrufer löscht sie nach dem Senden."""
+    target = _temporary_copy(".mp4")
+    try:
+        with get_object_store().local_copy(MAIN, key, work_dir=target.parent, suffix=".mp4") as source:
+            cleaned = apple_media.clip_without_metadata(source, target)
+    except ObjectNotFound as exc:
+        raise HTTPException(status_code=404, detail="File missing on filesystem") from exc
+    if not cleaned:
+        target.unlink(missing_ok=True)
+        raise HTTPException(status_code=404, detail="Video ist ohne Standortdaten nicht verfügbar")
+    return target
+
+
 @router.get("/stored-files/{stored_file_id}/content")
 def get_stored_file_content(
     stored_file_id: uuid.UUID,
+    request: Request = None,  # type: ignore[assignment]  # None nur bei direktem Aufruf in Tests
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     stored_file = public_id_service.get_by_public_id(db, StoredFile, stored_file_id)
     if stored_file is None:
         raise HTTPException(status_code=404, detail="Stored file not found")
@@ -728,9 +945,6 @@ def get_stored_file_content(
         raise HTTPException(422, "Virenprüfung fehlgeschlagen – Datei ist gesperrt")
     if stored_file.scan_status == "pending":
         raise HTTPException(status_code=425, detail="Datei wird noch auf Schadsoftware geprüft, bitte in Kürze erneut versuchen")
-    file_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="File missing on filesystem")
     # SECURITY: set nosniff so a browser never MIME-sniffs the content and renders it
     # inline against our wishes, mirroring submission_assignments.get_submission_file_content.
     # inline also covers images now, not just PDF (audit finding, 2026-08-25) - protocol
@@ -741,16 +955,39 @@ def get_stored_file_content(
     # for a real image mime type.
     # video/mp4 is the Live Photo clip (see apple_media.py) the Fotos grid plays via <video src>.
     is_inline_safe = stored_file.mime_type in {"application/pdf", "video/mp4"} or (stored_file.mime_type or "").startswith("image/")
-    return FileResponse(
-        path=file_path,
+    # Partner-Mandant ohne Standortfreigabe (IMGMETA-007): Standort aus Bild bzw. Clip entfernen.
+    is_media = stored_file.mime_type == "video/mp4" or (stored_file.mime_type or "").startswith("image/")
+    if is_media and _strips_location(db, user, stored_file):
+        no_store = {"X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"}
+        if stored_file.mime_type == "video/mp4":
+            clean_path = _video_without_metadata(stored_file.storage_path)
+            return release_for_stream(db, FileResponse(
+                path=clean_path,
+                media_type=stored_file.mime_type,
+                filename=stored_file.original_name,
+                content_disposition_type="inline",
+                headers=no_store,
+                background=BackgroundTask(clean_path.unlink, missing_ok=True),
+            ))
+        content = read_bytes_or_404(MAIN, stored_file.storage_path, detail="File missing on filesystem")
+        return Response(
+            content=sanitize_image(content, stored_file.mime_type, _WITHOUT_LOCATION),
+            media_type=stored_file.mime_type,
+            headers={**no_store, **_content_disposition(stored_file.original_name, False)},
+        )
+    return release_for_stream(db, object_response(
+        request,
+        MAIN,
+        stored_file.storage_path,
         media_type=stored_file.mime_type,
         filename=stored_file.original_name,
-        content_disposition_type="inline" if is_inline_safe else "attachment",
+        attachment=not is_inline_safe,
+        not_found_detail="File missing on filesystem",
         # A stored file's bytes never change after upload (a re-upload creates a new id), so the
         # browser cache can keep this for a long time - saves refetching originals opened again
         # from the Fotos viewer/lightbox within the same session.
         headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=604800, immutable"},
-    )
+    ))
 
 
 @router.patch("/stored-files/{stored_file_id}/tags", response_model=list[str])
@@ -760,9 +997,11 @@ def update_stored_file_tags(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
-    stored_file = public_id_service.get_by_public_id(db, StoredFile, stored_file_id)
-    if stored_file is None:
+    require_permission(user, P.FILES_MANAGE)
+    # Nur Dateien des eigenen Mandanten (Security-Audit SEC-003): ensure_can_read_stored_file
+    # erlaubt auch das Lesen von Partner-Fotos aus geteilten Alben - Schreiben darf das nie.
+    stored_file = public_id_service.get_by_public_id(db, StoredFile, stored_file_id, tenant_id=user.current_tenant_id)
+    if stored_file is None or user.current_tenant_id is None:
         raise HTTPException(status_code=404, detail="Stored file not found")
     access_service.ensure_can_read_stored_file(db, user, stored_file.id)
     return service.update_stored_file_tags(db, stored_file, payload.tags)
@@ -774,12 +1013,47 @@ def get_stored_file_metadata(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     stored_file = public_id_service.get_by_public_id(db, StoredFile, stored_file_id)
     if stored_file is None or user.current_tenant_id is None:
         raise HTTPException(status_code=404, detail="Stored file not found")
     access_service.ensure_can_read_stored_file(db, user, stored_file.id)
-    metadata = service.get_stored_file_metadata(db, stored_file, settings.storage_root, user.current_tenant_id)
+    metadata = service.get_stored_file_metadata(
+        db, stored_file, settings.storage_root, user.current_tenant_id, can_edit=_can_edit_capture_date(user, stored_file)
+    )
+    if metadata is None:
+        raise HTTPException(status_code=404, detail="Keine Metadaten verfügbar")
+    if not _sees_location(user):
+        metadata = metadata.model_copy(update={"gps": None})
+    return metadata
+
+
+def _can_edit_capture_date(user: CurrentUser, stored_file: StoredFile) -> bool:
+    """Schreibrecht im eigenen Mandanten - nie fuer Fotos eines Partner-Mandanten aus einem
+    geteilten Album."""
+    return user.can(P.FILES_MANAGE) and stored_file.tenant_id == user.current_tenant_id
+
+
+@router.patch("/stored-files/{stored_file_id}/capture-date", response_model=StoredFileMetadata)
+def update_stored_file_capture_date(
+    stored_file_id: uuid.UUID,
+    payload: CaptureDateUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Geschaetztes Aufnahmedatum setzen, aendern oder (null) entfernen - der einzige Weg,
+    ein vorhandenes Schaetzdatum zu ueberschreiben. Echtes Aufnahmedatum (EXIF) und
+    Uploaddatum bleiben unveraendert."""
+    require_permission(user, P.FILES_MANAGE)
+    stored_file = public_id_service.get_by_public_id(db, StoredFile, stored_file_id)
+    if stored_file is None or user.current_tenant_id is None or stored_file.tenant_id != user.current_tenant_id:
+        raise HTTPException(status_code=404, detail="Stored file not found")
+    access_service.ensure_can_read_stored_file(db, user, stored_file.id)
+    try:
+        service.update_estimated_capture_date(db, stored_file, payload.estimated_taken_on, user_id=user.user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    metadata = service.get_stored_file_metadata(db, stored_file, settings.storage_root, user.current_tenant_id, can_edit=True)
     if metadata is None:
         raise HTTPException(status_code=404, detail="Keine Metadaten verfügbar")
     return metadata
@@ -793,7 +1067,7 @@ def get_stored_file_thumbnail(
 ):
     """Small JPEG preview for the "Dateien" grid, so scrolling it stays fluid instead of every
     tile pulling in a full-size original - same access rules as get_stored_file_content."""
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     stored_file = public_id_service.get_by_public_id(db, StoredFile, stored_file_id)
     if stored_file is None:
         raise HTTPException(status_code=404, detail="Stored file not found")
@@ -807,18 +1081,19 @@ def get_stored_file_thumbnail(
     thumbnail_path = service.ensure_thumbnail(db, stored_file, settings.storage_root)
     if thumbnail_path is None:
         raise HTTPException(status_code=404, detail="Keine Vorschau verfügbar")
-    return FileResponse(
+    return release_for_stream(db, FileResponse(
         path=thumbnail_path,
         media_type="image/jpeg",
         # Same immutability as get_stored_file_content above - once generated, a thumbnail never
         # changes for a given stored_file id, so it's safe to cache far longer than a day.
         headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=604800, immutable"},
-    )
+    ))
 
 
 @router.get("/stored-files/{stored_file_id}/download")
 def download_stored_file(
     stored_file_id: uuid.UUID,
+    request: Request = None,  # type: ignore[assignment]  # None nur bei direktem Aufruf in Tests
     part: Literal["image", "video", "both"] = "image",
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
@@ -827,7 +1102,7 @@ def download_stored_file(
     the caller picks what to get: `image` (the still, default), `video` (the clip as MP4) or `both`
     (a ZIP with IMG_1234.jpg + IMG_1234.mp4 - same names, so it can be uploaded again as a Live
     Photo). An ordinary photo has no clip: `video` is a 404, `both` is just the image."""
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     stored_file = public_id_service.get_by_public_id(db, StoredFile, stored_file_id)
     if stored_file is None:
         raise HTTPException(status_code=404, detail="Stored file not found")
@@ -846,52 +1121,91 @@ def download_stored_file(
     if part == "video" and live_video is None:
         raise HTTPException(status_code=404, detail="Zu diesem Foto gibt es kein Live-Photo-Video")
 
-    image_path = _safe_storage_path(settings.storage_root, stored_file.storage_path)
-    if part != "video" and not image_path.exists():
+    store = get_object_store()
+    if part != "video" and not store.exists(MAIN, stored_file.storage_path):
         raise HTTPException(status_code=404, detail="File missing on filesystem")
     headers = {"X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"}
 
-    if part == "image" or (part == "both" and live_video is None):
-        return FileResponse(
-            path=image_path,
-            media_type=stored_file.mime_type,
-            filename=stored_file.original_name,
-            content_disposition_type="attachment",
-            headers=headers,
-        )
+    # Exportfassung (IMGMETA): geschätztes Aufnahmedatum (und nur in der Datenbank vorhandenes
+    # GPS) in einer Kopie - das gespeicherte Original bleibt unverändert. Partner ohne
+    # Standortfreigabe (IMGMETA-007): Standort danach aus Bild und Clip entfernen, damit kein GPS
+    # aus der Datenbank hineinkommt.
+    strip_location = _strips_location(db, user, stored_file)
+    export_content: bytes | None = None
+    if part != "video":
+        needs_export = image_export_service.needs_export_processing(stored_file)
+        if needs_export or strip_location:
+            original = read_bytes_or_404(MAIN, stored_file.storage_path, detail="File missing on filesystem")
+            export_content = image_export_service.export_bytes(stored_file, original) if needs_export else None
+            if strip_location:
+                export_content = sanitize_image(export_content or original, stored_file.mime_type, _WITHOUT_LOCATION)
 
-    video_path = _safe_storage_path(settings.storage_root, live_video.storage_path)
-    if not video_path.exists():
+    if part == "image" or (part == "both" and live_video is None):
+        if export_content is not None:
+            return Response(
+                content=export_content,
+                media_type=stored_file.mime_type,
+                headers={**headers, **_content_disposition(stored_file.original_name, True)},
+            )
+        return release_for_stream(db, object_response(
+            request, MAIN, stored_file.storage_path, media_type=stored_file.mime_type,
+            filename=stored_file.original_name, attachment=True, headers=headers,
+        ))
+
+    if not store.exists(MAIN, live_video.storage_path):
         raise HTTPException(status_code=404, detail="File missing on filesystem")
+    cleanup_video = _video_without_metadata(live_video.storage_path) if strip_location else None
     if part == "video":
-        return FileResponse(
-            path=video_path,
-            media_type="video/mp4",
-            filename=live_video.original_name,
-            content_disposition_type="attachment",
-            headers=headers,
-        )
+        if cleanup_video is not None:
+            return release_for_stream(db, FileResponse(
+                path=cleanup_video,
+                media_type="video/mp4",
+                filename=live_video.original_name,
+                content_disposition_type="attachment",
+                headers=headers,
+                background=BackgroundTask(cleanup_video.unlink, missing_ok=True),
+            ))
+        return release_for_stream(db, object_response(
+            request, MAIN, live_video.storage_path, media_type="video/mp4",
+            filename=live_video.original_name, attachment=True, headers=headers,
+        ))
 
     # Both: JPEG and MP4 are already compressed, so the ZIP just stores them. Built on disk (not
     # in memory) and removed once the response has been sent.
     work_dir = Path(settings.upload_root) / "_staging" / "download"
     work_dir.mkdir(parents=True, exist_ok=True)
     zip_path = work_dir / f"{uuid.uuid4().hex}.zip"
-    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_STORED) as archive:
-        archive.write(image_path, arcname=Path(stored_file.original_name).name)
-        archive.write(video_path, arcname=Path(live_video.original_name).name)
-    return FileResponse(
+    try:
+        with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_STORED) as archive:
+            if export_content is not None:
+                archive.writestr(Path(stored_file.original_name).name, export_content)
+            else:
+                write_object_to_zip(archive, MAIN, stored_file.storage_path, Path(stored_file.original_name).name)
+            if cleanup_video is not None:
+                archive.write(cleanup_video, arcname=Path(live_video.original_name).name)
+            else:
+                write_object_to_zip(archive, MAIN, live_video.storage_path, Path(live_video.original_name).name)
+    except ObjectNotFound as exc:
+        zip_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=404, detail="File missing on filesystem") from exc
+    finally:
+        if cleanup_video is not None:
+            cleanup_video.unlink(missing_ok=True)
+    return release_for_stream(db, FileResponse(
         path=zip_path,
         media_type="application/zip",
         filename=f"{Path(stored_file.original_name).stem}-live.zip",
         content_disposition_type="attachment",
         headers=headers,
         background=BackgroundTask(zip_path.unlink, missing_ok=True),
-    )
+    ))
+
+
+ALBUM_INVITES_PER_HOUR = 30
 
 
 def _get_album(db: Session, user: CurrentUser, album_id: uuid.UUID):
-    require_writer(user)
+    require_permission(user, P.FILES_MANAGE)
     album = photo_album_share_service.get_accessible_album(db, album_id, user.current_tenant_id)
     if album is None:
         raise HTTPException(status_code=404, detail="Album nicht gefunden")
@@ -900,18 +1214,35 @@ def _get_album(db: Session, user: CurrentUser, album_id: uuid.UUID):
 
 @router.get("/files/albums", response_model=list[PhotoAlbumRead])
 def list_albums(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_writer(user)
+    require_permission(user, P.FILES_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     entries = photo_album_service.list_albums_with_stats(db, service, user.current_tenant_id)
-    shared_ids = photo_album_share_service.shared_album_ids(
-        db, [entry.album.id for entry in entries if entry.album.tenant_id == user.current_tenant_id]
-    )
+    own_album_ids = [entry.album.id for entry in entries if entry.album.tenant_id == user.current_tenant_id]
+    foreign_entries = [entry for entry in entries if entry.album.tenant_id != user.current_tenant_id]
+    shared_ids = photo_album_share_service.shared_album_ids(db, own_album_ids)
+    # Gesammelt statt je Album (vorher drei Abfragen pro Album).
+    shares_by_album = photo_album_share_service.list_shares_for_albums(db, own_album_ids, owner_tenant_id=user.current_tenant_id)
+    owner_names = dict(
+        db.execute(
+            select(Tenant.id, Tenant.name).where(Tenant.id.in_({entry.album.tenant_id for entry in foreign_entries}))
+        ).all()
+    ) if foreign_entries else {}
+    own_shares = {
+        share.album_id: share
+        for share in db.scalars(
+            select(PhotoAlbumTenantShare).where(
+                PhotoAlbumTenantShare.tenant_id == user.current_tenant_id,
+                PhotoAlbumTenantShare.album_id.in_([entry.album.id for entry in foreign_entries]),
+            )
+        )
+    } if foreign_entries else {}
     results = []
     for entry in entries:
         is_owner = entry.album.tenant_id == user.current_tenant_id
         owner_tenant_name = None
         shared_with: list[AlbumTenantShareStatus] = []
+        my_share: AlbumMyShareRead | None = None
         if is_owner:
             shared_with = [
                 AlbumTenantShareStatus(
@@ -921,11 +1252,19 @@ def list_albums(db: Session = Depends(get_db), user: CurrentUser = Depends(get_c
                     status=row.status,
                     invited_at=row.invited_at,
                     responded_at=row.responded_at,
+                    share_location=row.share_location,
+                    partner_public_links=row.partner_public_links,
+                    partner_photos_public=row.partner_photos_public,
                 )
-                for row in photo_album_share_service.list_shares_for_album(db, entry.album.id)
+                for row in shares_by_album.get(entry.album.id, [])
             ]
         else:
-            owner_tenant_name = db.scalar(select(Tenant.name).where(Tenant.id == entry.album.tenant_id))
+            owner_tenant_name = owner_names.get(entry.album.tenant_id)
+            own_share = own_shares.get(entry.album.id)
+            if own_share is not None:
+                my_share = AlbumMyShareRead(
+                    public_links_allowed=own_share.partner_public_links, my_photos_public=own_share.partner_photos_public
+                )
         results.append(
             PhotoAlbumRead(
                 id=entry.album.id,
@@ -936,6 +1275,7 @@ def list_albums(db: Session = Depends(get_db), user: CurrentUser = Depends(get_c
                 cover_thumbnail_urls=entry.cover_thumbnail_urls,
                 owner_tenant_name=owner_tenant_name,
                 shared_with=shared_with,
+                my_share=my_share,
                 is_shared=not is_owner or entry.album.id in shared_ids,
                 pending_share_count=entry.pending_share_count,
             )
@@ -947,7 +1287,7 @@ def list_albums(db: Session = Depends(get_db), user: CurrentUser = Depends(get_c
 def list_album_pending_releases(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     """Eigene geteilte Alben mit automatisch einsortierten, noch nicht freigegebenen Fotos -
     fuer den Hinweis auf der Fotos-Seite."""
-    require_writer(user)
+    require_permission(user, P.FILES_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     return [
@@ -962,7 +1302,7 @@ def release_album_items(
 ):
     """Gibt vorgemerkte Fotos eines eigenen Albums fuer die Partner frei - nur der Besitzer,
     denn nur er sieht die vorgemerkten Fotos."""
-    require_writer(user)
+    require_permission(user, P.FILES_MANAGE)
     album = db.scalar(select(PhotoAlbum).where(PhotoAlbum.id == album_id, PhotoAlbum.tenant_id == user.current_tenant_id))
     if album is None:
         raise HTTPException(status_code=404, detail="Album nicht gefunden")
@@ -981,7 +1321,7 @@ def list_upload_target_shared_albums(
 ):
     """Welche bereits geteilten Alben ein Galerie-Upload mit diesem Bezug fuellen wuerde - der
     Upload-Dialog fragt damit, ob die Fotos gleich freigegeben werden sollen."""
-    require_writer(user)
+    require_permission(user, P.FILES_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     target = _resolve_upload_target(
@@ -1008,7 +1348,7 @@ def list_upload_target_shared_albums(
 def list_album_share_requests(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     """Offene Einladungen ANDERER Mandanten an den eigenen, fuer die "Anfragen"-Sektion auf
     der Fotos-Seite."""
-    require_writer(user)
+    require_permission(user, P.FILES_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     return [
@@ -1026,19 +1366,74 @@ def create_album_share(
     """Laedt einen anderen Mandanten (per public_id) zu diesem - eigenen - Album ein. Nur der
     Besitzer-Mandant darf einladen, daher hier bewusst PhotoAlbum.tenant_id statt _get_album
     (die eingeladene Seite soll das Album ja gerade noch NICHT sehen können)."""
-    require_writer(user)
+    require_permission(user, P.FILES_MANAGE)
+    require_feature(user, F.PHOTO_SHARING, write=True)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     album = db.scalar(select(PhotoAlbum).where(PhotoAlbum.id == album_id, PhotoAlbum.tenant_id == user.current_tenant_id))
     if album is None:
         raise HTTPException(status_code=404, detail="Album nicht gefunden")
+    # Einladungen gehen an beliebige Mandanten-IDs - begrenzen gegen Spam (Security-Audit SEC-014).
+    enforce_rate_limit(f"album-share-invite:{user.current_tenant_id}", limit=ALBUM_INVITES_PER_HOUR, period_seconds=3600)
     target_tenant = public_id_service.get_by_public_id(db, Tenant, payload.target_tenant_public_id)
     if target_tenant is None:
         raise HTTPException(status_code=404, detail="Kein Mandant mit dieser ID gefunden")
     try:
-        photo_album_share_service.invite(db, album, target_tenant_id=target_tenant.id, invited_by=user.user_id)
+        photo_album_share_service.invite(
+            db, album, target_tenant_id=target_tenant.id, invited_by=user.user_id, share_location=payload.share_location
+        )
     except photo_album_share_service.AlbumShareError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
+
+
+@router.patch("/files/albums/{album_id}/shares/{tenant_public_id}", status_code=204)
+def update_album_share(
+    album_id: uuid.UUID,
+    tenant_public_id: uuid.UUID,
+    payload: AlbumShareUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Für einen Partner Standort (GPS) teilen und/oder öffentliche Links auf dieses Album erlauben
+    - nur der Besitzer-Mandant (SEC-002)."""
+    require_permission(user, P.FILES_MANAGE)
+    require_feature(user, F.PHOTO_SHARING, write=True)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    album = db.scalar(select(PhotoAlbum).where(PhotoAlbum.id == album_id, PhotoAlbum.tenant_id == user.current_tenant_id))
+    if album is None:
+        raise HTTPException(status_code=404, detail="Album nicht gefunden")
+    shared_tenant = public_id_service.get_by_public_id(db, Tenant, tenant_public_id)
+    if shared_tenant is None:
+        raise HTTPException(status_code=404, detail="Mandant nicht gefunden")
+    try:
+        photo_album_share_service.update_share_settings(
+            db,
+            album=album,
+            tenant_id=shared_tenant.id,
+            share_location=payload.share_location,
+            partner_public_links=payload.partner_public_links,
+        )
+    except photo_album_share_service.AlbumShareError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+
+
+@router.patch("/files/albums/{album_id}/my-share", status_code=204)
+def update_my_album_share(
+    album_id: uuid.UUID,
+    payload: AlbumMyShareUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Partner-Seite einer Freigabe: eigene Fotos in diesem Album in öffentlichen Links zeigen
+    oder nicht (SEC-002). Nur für die Freigabe des eigenen Mandanten."""
+    require_permission(user, P.FILES_MANAGE)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    try:
+        photo_album_share_service.set_my_photos_public(db, album_id=album_id, tenant_id=user.current_tenant_id, value=payload.my_photos_public)
+    except photo_album_share_service.AlbumShareError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
 
 
 @router.post("/files/albums/{album_id}/respond", status_code=204)
@@ -1051,7 +1446,7 @@ def respond_album_share(
     """Beantwortet eine offene Einladung an den EIGENEN Mandanten - keine tenant_public_id im
     Pfad noetig, da nur der eingeladene Mandant selbst (user.current_tenant_id) je antworten
     darf, siehe photo_album_share_service.respond."""
-    require_writer(user)
+    require_permission(user, P.FILES_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     try:
@@ -1068,13 +1463,13 @@ def delete_album_share(
 ):
     """Besitzer widerruft eine Freigabe, oder der geteilte Mandant verlaesst sie selbst -
     beides die gleiche Operation, siehe photo_album_share_service.revoke."""
-    require_writer(user)
+    require_permission(user, P.FILES_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     album = db.get(PhotoAlbum, album_id)
     if album is None:
         raise HTTPException(status_code=404, detail="Album nicht gefunden")
-    shared_tenant = public_id_service.get_by_public_id(db, Tenant, tenant_public_id)
+    shared_tenant = public_id_service.get_by_public_id(db, Tenant, tenant_public_id)  # nosemgrep: public-id-lookup-without-tenant -- Partner-Mandant der Freigabe, revoke() prüft acting_tenant_id
     if shared_tenant is None:
         raise HTTPException(status_code=404, detail="Mandant nicht gefunden")
     try:
@@ -1091,7 +1486,7 @@ def delete_album_share(
 
 @router.post("/files/albums", response_model=PhotoAlbumRead, status_code=201)
 def create_album(payload: PhotoAlbumCreate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_writer(user)
+    require_permission(user, P.FILES_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     name = payload.name.strip()
@@ -1147,7 +1542,7 @@ def set_file_best_everywhere(
     """Best-of toggle from the unscoped "Alle Fotos" view (no album in context) - applies
     to every album this tenant's photo belongs to, since is_best lives on PhotoAlbumItem,
     not the photo itself. See set_album_item_best for the album-scoped equivalent."""
-    require_writer(user)
+    require_permission(user, P.FILES_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     touched = photo_album_service.set_best_override_everywhere(
@@ -1164,7 +1559,7 @@ def bulk_delete_files(payload: FileBulkDelete, db: Session = Depends(get_db), us
     """Multi-select "Löschen" auf der Fotos-Seite und "Nur beste behalten" im Ähnliche-Tab -
     löscht endgültig, nur Direkt-Uploads (siehe FileService.delete_gallery_images für die
     Begründung; andere Quellen werden als Fehler zurückgemeldet statt gelöscht)."""
-    require_writer(user)
+    require_permission(user, P.FILES_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     ids = list(dict.fromkeys(payload.file_ids))
@@ -1188,7 +1583,7 @@ def bulk_delete_files(payload: FileBulkDelete, db: Session = Depends(get_db), us
 @router.post("/files/bulk-tags", status_code=204)
 def bulk_update_file_tags(payload: FileBulkTagsUpdate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     """Multi-select "Tags hinzufügen" auf der Fotos-Seite."""
-    require_writer(user)
+    require_permission(user, P.FILES_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     ids = list(dict.fromkeys(payload.file_ids))

@@ -2,6 +2,8 @@
 
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslations } from "next-intl";
+import { ActionIcon } from "@/components/ui/action-icons";
 
 import { usePopupEscape, usePopupScrollLock } from "@/lib/hooks/use-popup-escape";
 
@@ -16,6 +18,7 @@ type LightboxImageProps = {
 };
 
 export function LightboxImage({ src, alt, className, previewSrc }: LightboxImageProps) {
+  const tCommon = useTranslations("common");
   const [open, setOpen] = useState(false);
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -48,12 +51,9 @@ export function LightboxImage({ src, alt, className, previewSrc }: LightboxImage
                 type="button"
                 className="image-lightbox-close"
                 onClick={() => setOpen(false)}
-                aria-label="Schliessen"
+                aria-label={tCommon("close")}
               >
-                <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <line x1="3" y1="3" x2="13" y2="13" />
-                  <line x1="13" y1="3" x2="3" y2="13" />
-                </svg>
+                <ActionIcon name="close" width={18} height={18} />
               </button>
             </div>,
             document.body

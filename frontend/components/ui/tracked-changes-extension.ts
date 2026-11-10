@@ -185,6 +185,57 @@ function peekNextNewIndex(ops: ParagraphOp[], fromIndex: number, fallback: numbe
   return fallback;
 }
 
+/** Diff gegen den Ausgangsstand als Dekorationen (Absätze, dann Wörter). */
+function computeTrackedDecorations(doc: ProseMirrorNode, baseline: string): DecorationSet {
+  const baselineParagraphs = extractBaselineParagraphs(baseline);
+  const liveParagraphs = extractLiveParagraphs(doc);
+  const liveTexts = liveParagraphs.map((p) => p.text);
+
+  const identical =
+    baselineParagraphs.length === liveTexts.length && baselineParagraphs.every((text, idx) => text === liveTexts[idx]);
+  if (identical) return DecorationSet.empty;
+
+  const ops = diffParagraphs(baselineParagraphs, liveTexts);
+  const decorations: Decoration[] = [];
+  let i = 0;
+
+  while (i < ops.length) {
+    if (ops[i].op === "equal") {
+      i++;
+      continue;
+    }
+
+    const deleteRun: number[] = [];
+    while (i < ops.length && ops[i].op === "delete") {
+      deleteRun.push(ops[i].oldIndex as number);
+      i++;
+    }
+    const insertRun: number[] = [];
+    while (i < ops.length && ops[i].op === "insert") {
+      insertRun.push(ops[i].newIndex as number);
+      i++;
+    }
+
+    const nextNewIndex = peekNextNewIndex(ops, i, liveParagraphs.length);
+    const fallbackAnchor = nextNewIndex < liveParagraphs.length ? liveParagraphs[nextNewIndex].paraStart : doc.content.size;
+
+    const pairedCount = Math.min(deleteRun.length, insertRun.length);
+    for (let k = 0; k < pairedCount; k++) {
+      diffParagraphWords(baselineParagraphs[deleteRun[k]], liveParagraphs[insertRun[k]], decorations);
+    }
+    for (let k = pairedCount; k < deleteRun.length; k++) {
+      const text = baselineParagraphs[deleteRun[k]];
+      if (text.trim().length === 0) continue;
+      decorations.push(Decoration.widget(fallbackAnchor, () => makeStrikeWidget(text, true), { side: -1 }));
+    }
+    for (let k = pairedCount; k < insertRun.length; k++) {
+      markWholeParagraphInserted(liveParagraphs[insertRun[k]], decorations);
+    }
+  }
+
+  return DecorationSet.create(doc, decorations);
+}
+
 export interface TrackedChangesOptions {
   getBaseline: () => string | null | undefined;
 }
@@ -198,6 +249,7 @@ export const TrackedChanges = Extension.create<TrackedChangesOptions>({
 
   addProseMirrorPlugins() {
     const options = this.options;
+    let cache: { doc: ProseMirrorNode; baseline: string; set: DecorationSet } | null = null;
     return [
       new Plugin({
         key: new PluginKey("trackedChanges"),
@@ -205,54 +257,12 @@ export const TrackedChanges = Extension.create<TrackedChangesOptions>({
           decorations(state) {
             const baseline = options.getBaseline();
             if (!baseline) return DecorationSet.empty;
-
-            const baselineParagraphs = extractBaselineParagraphs(baseline);
-            const liveParagraphs = extractLiveParagraphs(state.doc);
-            const liveTexts = liveParagraphs.map((p) => p.text);
-
-            const identical =
-              baselineParagraphs.length === liveTexts.length && baselineParagraphs.every((text, idx) => text === liveTexts[idx]);
-            if (identical) return DecorationSet.empty;
-
-            const ops = diffParagraphs(baselineParagraphs, liveTexts);
-            const decorations: Decoration[] = [];
-            let i = 0;
-
-            while (i < ops.length) {
-              if (ops[i].op === "equal") {
-                i++;
-                continue;
-              }
-
-              const deleteRun: number[] = [];
-              while (i < ops.length && ops[i].op === "delete") {
-                deleteRun.push(ops[i].oldIndex as number);
-                i++;
-              }
-              const insertRun: number[] = [];
-              while (i < ops.length && ops[i].op === "insert") {
-                insertRun.push(ops[i].newIndex as number);
-                i++;
-              }
-
-              const nextNewIndex = peekNextNewIndex(ops, i, liveParagraphs.length);
-              const fallbackAnchor = nextNewIndex < liveParagraphs.length ? liveParagraphs[nextNewIndex].paraStart : state.doc.content.size;
-
-              const pairedCount = Math.min(deleteRun.length, insertRun.length);
-              for (let k = 0; k < pairedCount; k++) {
-                diffParagraphWords(baselineParagraphs[deleteRun[k]], liveParagraphs[insertRun[k]], decorations);
-              }
-              for (let k = pairedCount; k < deleteRun.length; k++) {
-                const text = baselineParagraphs[deleteRun[k]];
-                if (text.trim().length === 0) continue;
-                decorations.push(Decoration.widget(fallbackAnchor, () => makeStrikeWidget(text, true), { side: -1 }));
-              }
-              for (let k = pairedCount; k < insertRun.length; k++) {
-                markWholeParagraphInserted(liveParagraphs[insertRun[k]], decorations);
-              }
-            }
-
-            return DecorationSet.create(state.doc, decorations);
+            // Nur neu rechnen, wenn sich Dokument oder Ausgangsstand ändern: decorations() läuft
+            // bei jedem View-Update, auch bei reinen Cursorbewegungen und Fokuswechseln.
+            if (cache && cache.doc === state.doc && cache.baseline === baseline) return cache.set;
+            const set = computeTrackedDecorations(state.doc, baseline);
+            cache = { doc: state.doc, baseline, set };
+            return set;
           },
         },
       }),

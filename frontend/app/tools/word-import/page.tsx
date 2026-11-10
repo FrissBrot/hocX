@@ -1,9 +1,14 @@
+import { MobileDesktopOnly } from "@/components/mobile/areas/mobile-misc";
+import { ResponsiveView } from "@/components/mobile/responsive-view";
+import { getTranslations } from "next-intl/server";
+
 import { AppShell } from "@/components/ui/app-shell";
 import { WordImportWizard } from "@/components/tools/word-import-wizard";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { ParticipantSummary, TemplateSummary } from "@/types/api";
 
 export default async function WordImportPage() {
+  const t = await getTranslations("tools.wordImport");
   const session = await requireSession();
   const [templates, participants] = await Promise.all([
     backendFetchWithSession<TemplateSummary[]>("/api/templates"),
@@ -14,15 +19,22 @@ export default async function WordImportPage() {
 
   return (
     <AppShell initialSession={session}>
-      <div className="grid">
-        <div className="page-header">
-          <div>
-            <h1 className="page-title">Word-Protokoll-Import</h1>
-            <p className="muted">Ein altes .docx-Protokoll einlesen, Vorschläge prüfen und als neues Protokoll übernehmen.</p>
+      <ResponsiveView
+        mobile={<MobileDesktopOnly navKey="import" />}
+        desktop={
+          <>
+          <div className="grid">
+            <div className="page-header">
+              <div>
+                <h1 className="page-title">{t("pageTitle")}</h1>
+                <p className="muted">{t("pageIntro")}</p>
+              </div>
+            </div>
+            <WordImportWizard templates={activeTemplates} participants={activeParticipants} />
           </div>
-        </div>
-        <WordImportWizard templates={activeTemplates} participants={activeParticipants} />
-      </div>
+          </>
+        }
+      />
     </AppShell>
   );
 }

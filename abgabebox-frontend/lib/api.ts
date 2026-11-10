@@ -1,3 +1,5 @@
+import type { VerifySite } from "@/lib/verify";
+
 export type AssignmentPublic = {
   public_slug: string;
   title: string;
@@ -11,6 +13,8 @@ export type AssignmentDetailPublic = {
   allowed_file_types: string[];
   max_files_per_element: number | null;
   max_file_size_mb: number;
+  tenant_name?: string | null;
+  privacy_notice_url?: string | null;
 };
 
 export type ElementPublic = {
@@ -28,8 +32,25 @@ export type ElementPublic = {
 // needed (see backendFetch's own comment for why that retry exists there). Pulling both
 // into a shared package would need a monorepo workspace for two intentionally isolated
 // services; not worth it for ~6 lines that differ in what they actually need to do.
+// Voruebergehende Stoerung (Backend-Fehler, Rate-Limit, Timeout) statt "Link existiert nicht":
+// geworfen, damit app/error.tsx "kurzzeitige Stoerung - erneut versuchen" zeigt. Frueher wurde
+// jeder Nicht-OK-Status zu notFound(), Teilnehmende hielten gueltige Links fuer abgelaufen
+// (Audit MAIN-FE-012). Netzwerkfehler (fetch wirft) landen ebenfalls dort.
+export class AbgabeboxUnavailableError extends Error {
+  constructor(public readonly status: number) {
+    super(`Abgabebox-Backend voruebergehend nicht verfuegbar (HTTP ${status})`); // i18n-ok: nur Server-Log, error.tsx zeigt eigenen Text
+  }
+}
+
+function isTransientStatus(status: number): boolean {
+  return status >= 500 || status === 429 || status === 408;
+}
+
 async function fetchJson<T>(url: string): Promise<T | null> {
   const response = await fetch(url, { cache: "no-store" });
+  if (isTransientStatus(response.status)) {
+    throw new AbgabeboxUnavailableError(response.status);
+  }
   if (!response.ok) {
     return null;
   }
@@ -49,6 +70,9 @@ async function fetchLinkResolution<T>(url: string): Promise<LinkResolution<T>> {
   const response = await fetch(url, { cache: "no-store" });
   if (response.status === 403) {
     return { status: "feature_disabled" };
+  }
+  if (isTransientStatus(response.status)) {
+    throw new AbgabeboxUnavailableError(response.status);
   }
   if (!response.ok) {
     return { status: "not_found" };
@@ -86,4 +110,16 @@ export function getElement(linkToken: string, assignmentSlug: string, elementRef
 // das auf jeder Domain (Standard- oder Mandanten-Custom-Domain) automatisch korrekt aufgeloest wird.
 export function publicApiUrl(path: string): string {
   return path;
+}
+
+// Kopf der Prüfseite (SSR): Mandant hinter der Prüf-Domain, über die die Seite aufgerufen wurde.
+// Fehler sind kein Grund, die Prüfung zu blockieren - die Seite fällt dann auf die zentrale
+// Darstellung zurück (null).
+export async function getVerifySite(host: string): Promise<VerifySite | null> {
+  try {
+    const response = await fetch(`${internalBase}/api/public/verify/site?domain=${encodeURIComponent(host)}`, { cache: "no-store" });
+    return response.ok ? ((await response.json()) as VerifySite) : null;
+  } catch {
+    return null;
+  }
 }

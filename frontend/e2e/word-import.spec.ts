@@ -129,7 +129,14 @@ test.describe("Word import testbook", () => {
     await page.goto(`/tools/import/${documents[0].id}`);
     await expect(page.getByRole("button", { name: "14.10.2023", exact: true })).toBeVisible();
     const response = page.waitForResponse((r) => r.url().endsWith(`/documents/${documents[0].id}/reanalyze`) && r.request().method() === "POST");
-    await page.getByRole("button", { name: "Neu analysieren", exact: true }).click();
+    const reanalyzeButtons = page.getByRole("button", { name: "Neu analysieren", exact: true });
+    await reanalyzeButtons.first().click();
+    // Gilt der Stand als bereits geprüft (z. B. im Dev-Stack, wo StrictMode die Effekte doppelt
+    // ausführt), fragt der Assistent per useConfirm nach - dann die Rückfrage bestätigen.
+    const confirmButton = reanalyzeButtons.nth(1);
+    if (await confirmButton.waitFor({ state: "visible", timeout: 3_000 }).then(() => true, () => false)) {
+      await confirmButton.click();
+    }
     const analyzed = await response;
     expect(analyzed.ok(), await analyzed.text()).toBeTruthy();
     expect(analyzed.request().postDataJSON().table_roles["0"].list_definition_id).toBe(seed.list.id);
@@ -165,6 +172,10 @@ test.describe("Word import testbook", () => {
       loadingDocument = false;
       await route.fulfill({ response });
     });
+    // Nach dem Upload laedt router.refresh() die Liste neu; ein Klick mitten in dieses
+    // Re-Rendering loeste die Navigation aus, Playwright sah die Zeile aber als "detached"
+    // und lief in den Timeout.
+    await page.waitForLoadState("networkidle");
     await page.getByRole("row").filter({ hasText: seed.template.name }).getByRole("button", { name: "Prüfen & importieren" }).click();
     await expect(page).toHaveURL(new RegExp(`/tools/import/${document.id}$`));
     await page.getByRole("button", { name: "31.07.2024", exact: true }).click();

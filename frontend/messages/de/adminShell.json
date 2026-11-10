@@ -1,0 +1,37 @@
+{
+  "title": "Platform-Admin",
+  "tagline": "Mandanten und Benutzer über das ganze System verwalten.",
+  "groups": {
+    "tenants": "Mandanten",
+    "system": "System",
+    "access": "Zugang"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "tenants": "Mandanten",
+    "pricing": "Preise",
+    "cashflow": "Cashflow",
+    "users": "Benutzer",
+    "domains": "Domains",
+    "systemStatus": "Systemstatus",
+    "errorLogs": "Fehlerprotokoll",
+    "uploadPipeline": "Datei-Pipeline",
+    "notifications": "Benachrichtigungen",
+    "jobs": "Jobs",
+    "admins": "Admin-Accounts",
+    "sso": "SSO",
+    "security": "Sicherheit",
+    "verifications": "Verifizierungen",
+    "storage": "Storage",
+    "backups": "Backups",
+    "maintenance": "Wartung",
+    "documentTemplates": "Dokumentvorlagen",
+    "auditLog": "Audit-Log"
+  },
+  "logout": "Logout",
+  "menuToggleClose": "Schliessen",
+  "breadcrumbNav": "Brotkrumen",
+  "readOnlyBanner": "Nur-Lesezugriff (support): Änderungen sind mit diesem Account nicht möglich.",
+  "accountSettings": "Account Settings",
+  "accountSettingsLoadFailed": "Die Account-Einstellungen konnten nicht geladen werden."
+}

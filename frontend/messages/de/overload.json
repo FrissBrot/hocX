@@ -1,0 +1,7 @@
+{
+  "title": "Die Server sind gerade überlastet",
+  "message": "Im Moment arbeiten sehr viele Personen gleichzeitig mit hocX. Damit niemand, der bereits arbeitet, etwas verliert, können wir gerade keine neuen Sitzungen starten.",
+  "hint": "Bitte versuche es in einigen Minuten erneut. Diese Seite prüft regelmässig und leitet dich automatisch weiter, sobald wieder Platz ist.",
+  "retry": "Jetzt erneut versuchen",
+  "checking": "Wird geprüft …"
+}

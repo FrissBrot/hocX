@@ -1,13 +1,18 @@
 "use client";
 
+import { participantEligibleOn } from "@/lib/utils/participant-membership";
+
 import { ReactNode, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslations } from "next-intl";
 
 import { TrackedChangeHideButton } from "@/components/ui/tracked-change-hide-button";
 import { usePopoverPosition, usePopoverDismiss } from "@/components/ui/popover";
+import { useSmartDateSuggestions } from "@/components/todos/use-smart-date-suggestions";
 import { SearchInput } from "@/components/ui/search-input";
 import { formatDate } from "@/lib/utils/format";
-import { getCycleYear } from "@/lib/utils/cycle";
+import { applyEventFilter, blockEventFilter, defaultEventFilter } from "@/lib/element-types/event-filter";
+import { elementTypeCode } from "@/lib/element-types/registry";
 import {
   EventSummary,
   ParticipantSummary,
@@ -16,6 +21,11 @@ import {
   ProtocolSummary,
   ProtocolTodo,
 } from "@/types/api";
+// Next-intl Translator-Funktion, durchgereicht an reine Hilfsfunktionen (keine eigenen
+// Komponenten, koennen daher nicht selbst useTranslations() aufrufen) - siehe
+// frontend/components/ui/app-shell-nav.ts::formatRoleLabel(role, t) fuer dasselbe Muster.
+type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
+
 export const TODO_STATUS = {
   open: 1,
   in_progress: 2,
@@ -55,6 +65,10 @@ export function compareIsoDate(left: string | null | undefined, right: string | 
   return left.localeCompare(right);
 }
 
+// NICHT mehr fuer neuen Code verwenden - siehe attendanceOptions(t) unten. Als Konstante
+// erhalten, weil frontend/components/tools/word-import-wizard.tsx (anderer Zustaendigkeits-
+// bereich dieser i18n-Migration) sie noch modul-weit referenziert, ausserhalb einer Komponente
+// und damit ohne Zugriff auf useTranslations().
 export const ATTENDANCE_OPTIONS = [
   { value: "present", label: "Anwesend" },
   { value: "late", label: "Verspaetet" },
@@ -62,8 +76,35 @@ export const ATTENDANCE_OPTIONS = [
   { value: "absent", label: "Unentschuldigt" },
 ] as const;
 
-export function attendanceParticipants(participants: ParticipantSummary[]) {
-  return participants.filter((participant) => !participant.exclude_from_attendance);
+export function attendanceOptions(t: TFunc) {
+  return [
+    { value: "present", label: t("attendance.present") },
+    { value: "late", label: t("attendance.late") },
+    { value: "excused", label: t("attendance.excused") },
+    { value: "absent", label: t("attendance.absent") },
+  ] as const;
+}
+
+export function attendanceParticipants(participants: ParticipantSummary[], asOf?: string) {
+  return participants.filter((participant) => !participant.exclude_from_attendance && (!asOf || participantEligibleOn(participant, asOf)));
+}
+
+/** Abgeschlossene Anwesenheit stammt ausschließlich aus dem eingefrorenen Protokoll. */
+export function protocolAttendanceParticipants(
+  participants: ParticipantSummary[], entries: Array<Record<string, any>>,
+  protocol: Pick<ProtocolSummary, "status" | "protocol_date">,
+): ParticipantSummary[] {
+  if (protocol.status !== "abgeschlossen") return attendanceParticipants(participants, protocol.protocol_date);
+  return entries.filter((entry) => entry.participant_id != null).map((entry) => {
+    const id = String(entry.participant_id);
+    const current = participants.find((participant) => participant.id === id);
+    return {
+      tenant_id: "", first_name: null, last_name: null, email: null, is_active: false,
+      joined_at: null, left_at: null, created_at: "", updated_at: "",
+      ...current, id, display_name: String(entry.participant_name || current?.display_name || ""),
+      exclude_from_attendance: false,
+    };
+  });
 }
 
 export type AttendanceTally = { present: number; late: number; excused: number; absent: number };
@@ -107,14 +148,19 @@ export function findVisibleAttendanceBlock(elements: ProtocolElement[]): Protoco
 
 export function visibleAttendanceTally(
   elements: ProtocolElement[],
-  participants: ParticipantSummary[]
+  participants: ParticipantSummary[],
+  asOf?: string,
+  frozen = false
 ): AttendanceTally | null {
   const attendanceBlock = findVisibleAttendanceBlock(elements);
   if (!attendanceBlock) return null;
   const entries = Array.isArray(attendanceBlock.configuration_snapshot_json.attendance_entries)
     ? (attendanceBlock.configuration_snapshot_json.attendance_entries as Array<Record<string, any>>)
     : [];
-  return tallyAttendance(participants, entries);
+  const roster = frozen
+    ? protocolAttendanceParticipants(participants, entries, { status: "abgeschlossen", protocol_date: asOf })
+    : asOf ? attendanceParticipants(participants, asOf) : participants;
+  return tallyAttendance(roster, entries);
 }
 
 /** Maps a protocol section's dominant block type to an existing app-shell nav icon for the Schnellzugriff sidebar. */
@@ -131,24 +177,28 @@ export function sectionIconKey(element: ProtocolElement): import("@/components/u
   return "documents";
 }
 
-export const EMBEDDED_BLOCK_OPTIONS = [
-  { value: 1, label: "Text" },
-  { value: 6, label: "Tabelle" },
-  { value: 2, label: "Todo" },
-  { value: 3, label: "Bild" },
-  { value: 5, label: "Statischer Text" },
-  { value: 7, label: "Terminliste" },
-  { value: 8, label: "Bulletpoints" },
-  { value: 9, label: "Anwesenheit" },
-  { value: 10, label: "Sitzungsdatum" },
-] as const;
+export function embeddedBlockOptions(t: TFunc) {
+  return [
+    { value: 1, label: t("embeddedBlock.text") },
+    { value: 6, label: t("embeddedBlock.table") },
+    { value: 2, label: t("embeddedBlock.todo") },
+    { value: 3, label: t("embeddedBlock.image") },
+    { value: 5, label: t("embeddedBlock.staticText") },
+    { value: 7, label: t("embeddedBlock.eventList") },
+    { value: 8, label: t("embeddedBlock.bulletPoints") },
+    { value: 9, label: t("embeddedBlock.attendance") },
+    { value: 10, label: t("embeddedBlock.sessionDate") },
+  ] as const;
+}
 
-export const EMBEDDED_FORM_VALUE_OPTIONS = [
-  { value: "text", label: "Freier Text" },
-  { value: "participant", label: "Ein Teilnehmer" },
-  { value: "participants", label: "Mehrere Teilnehmer" },
-  { value: "event", label: "Ein Termin" },
-] as const;
+export function embeddedFormValueOptions(t: TFunc) {
+  return [
+    { value: "text", label: t("embeddedFormValue.freeText") },
+    { value: "participant", label: t("embeddedFormValue.oneParticipant") },
+    { value: "participants", label: t("embeddedFormValue.multipleParticipants") },
+    { value: "event", label: t("embeddedFormValue.oneEvent") },
+  ] as const;
+}
 
 export type MatrixEmbeddedBlock = {
   element_type_id: number;
@@ -178,10 +228,10 @@ export function createProtocolEventDraft(protocolDate: string | undefined, defau
   };
 }
 
-export function createInlineProtocolEventDraft(protocolDate: string | undefined, defaultTag = "", showTitle = true): ProtocolEventDraft {
+export function createInlineProtocolEventDraft(protocolDate: string | undefined, defaultTag = "", showTitle = true, t?: TFunc): ProtocolEventDraft {
   const draft = createProtocolEventDraft(protocolDate, defaultTag);
   if (!showTitle) {
-    draft.title = "Neuer Termin";
+    draft.title = t ? t("newEventTitle") : "Neuer Termin";
   }
   return draft;
 }
@@ -191,26 +241,12 @@ export function canCreateProtocolEventDraft(draft: ProtocolEventDraft) {
 }
 
 export function embeddedBlockKindForElementType(elementTypeId: number | string) {
-  const mapping: Record<string, string> = {
-    "1": "text",
-    "2": "todo",
-    "3": "image",
-    "5": "static_text",
-    "6": "form",
-    "7": "event_list",
-    "8": "bullet_list",
-    "9": "attendance",
-    "10": "session_date",
-    "11": "matrix",
-    "12": "finance_balance",
-    "13": "finance_transactions",
-    "14": "fine_list",
-  };
-  return mapping[String(elementTypeId)] ?? "text";
+  // Code aus der Elementtyp-Registry (element-types/registry.json) statt eigener Tabelle.
+  return elementTypeCode(elementTypeId);
 }
 
-export function embeddedBlockTypeLabel(elementTypeId: number | string) {
-  return EMBEDDED_BLOCK_OPTIONS.find((option) => option.value === Number(elementTypeId))?.label ?? `Block ${elementTypeId}`;
+export function embeddedBlockTypeLabel(elementTypeId: number | string, t: TFunc) {
+  return embeddedBlockOptions(t).find((option) => option.value === Number(elementTypeId))?.label ?? t("embeddedBlock.fallback", { id: elementTypeId });
 }
 
 export function nextEmbeddedItemId(items: Array<Record<string, any>>, prefix: string) {
@@ -239,7 +275,8 @@ export function createMatrixEmbeddedBlock(
   rowLabel: string,
   protocol: ProtocolSummary,
   availableParticipants: ParticipantSummary[],
-  configurationOverride: Record<string, unknown> = {}
+  configurationOverride: Record<string, unknown>,
+  t: TFunc
 ): MatrixEmbeddedBlock {
   const blockKind = embeddedBlockKindForElementType(elementTypeId);
   const override = asObject(configurationOverride);
@@ -247,7 +284,7 @@ export function createMatrixEmbeddedBlock(
   if (elementTypeId === 2) {
     return {
       element_type_id: elementTypeId,
-      title: rowLabel || embeddedBlockTypeLabel(elementTypeId),
+      title: rowLabel || embeddedBlockTypeLabel(elementTypeId, t),
       block_kind: blockKind,
       configuration_snapshot_json: {
         block_kind: blockKind,
@@ -260,7 +297,7 @@ export function createMatrixEmbeddedBlock(
   if (elementTypeId === 3) {
     return {
       element_type_id: elementTypeId,
-      title: rowLabel || embeddedBlockTypeLabel(elementTypeId),
+      title: rowLabel || embeddedBlockTypeLabel(elementTypeId, t),
       block_kind: blockKind,
       configuration_snapshot_json: {
         block_kind: blockKind,
@@ -273,7 +310,7 @@ export function createMatrixEmbeddedBlock(
   if (elementTypeId === 6) {
     return {
       element_type_id: elementTypeId,
-      title: rowLabel || embeddedBlockTypeLabel(elementTypeId),
+      title: rowLabel || embeddedBlockTypeLabel(elementTypeId, t),
       block_kind: blockKind,
       configuration_snapshot_json: {
         block_kind: blockKind,
@@ -286,15 +323,13 @@ export function createMatrixEmbeddedBlock(
   if (elementTypeId === 7) {
     return {
       element_type_id: elementTypeId,
-      title: rowLabel || embeddedBlockTypeLabel(elementTypeId),
+      title: rowLabel || embeddedBlockTypeLabel(elementTypeId, t),
       block_kind: blockKind,
       configuration_snapshot_json: {
         block_kind: blockKind,
-        event_tag_filter: "",
-        event_only_from_protocol_date: true,
+        event_filter: defaultEventFilter("future"),
         event_gray_past: true,
         event_allow_end_date: false,
-        event_use_column_tag_filter: false,
         event_show_date: true,
         event_show_tag: true,
         event_show_title: true,
@@ -308,7 +343,7 @@ export function createMatrixEmbeddedBlock(
   if (elementTypeId === 8) {
     return {
       element_type_id: elementTypeId,
-      title: rowLabel || embeddedBlockTypeLabel(elementTypeId),
+      title: rowLabel || embeddedBlockTypeLabel(elementTypeId, t),
       block_kind: blockKind,
       configuration_snapshot_json: {
         block_kind: blockKind,
@@ -319,10 +354,10 @@ export function createMatrixEmbeddedBlock(
   }
 
   if (elementTypeId === 9) {
-    const eligibleParticipants = attendanceParticipants(availableParticipants);
+    const eligibleParticipants = attendanceParticipants(availableParticipants, protocol.protocol_date);
     return {
       element_type_id: elementTypeId,
-      title: rowLabel || embeddedBlockTypeLabel(elementTypeId),
+      title: rowLabel || embeddedBlockTypeLabel(elementTypeId, t),
       block_kind: blockKind,
       configuration_snapshot_json: {
         block_kind: blockKind,
@@ -339,7 +374,7 @@ export function createMatrixEmbeddedBlock(
   if (elementTypeId === 10) {
     return {
       element_type_id: elementTypeId,
-      title: rowLabel || embeddedBlockTypeLabel(elementTypeId),
+      title: rowLabel || embeddedBlockTypeLabel(elementTypeId, t),
       block_kind: blockKind,
       configuration_snapshot_json: {
         block_kind: blockKind,
@@ -353,7 +388,7 @@ export function createMatrixEmbeddedBlock(
 
   return {
     element_type_id: elementTypeId,
-    title: rowLabel || embeddedBlockTypeLabel(elementTypeId),
+    title: rowLabel || embeddedBlockTypeLabel(elementTypeId, t),
     block_kind: blockKind,
     text_content: "",
     configuration_snapshot_json: {
@@ -365,6 +400,15 @@ export function createMatrixEmbeddedBlock(
 
 export function asObject(value: unknown): Record<string, any> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, any>) : {};
+}
+
+// repeat_source_id in the snapshot is the internal event id; EventSummary.id is the
+// public UUID, so resolve through the block's public_reference_ids.
+export function blockEventPublicId(block: ProtocolElementBlock): string | undefined {
+  const config = asObject(block.configuration_snapshot_json);
+  if (config.repeat_source_type !== "event" || config.repeat_source_id == null) return undefined;
+  const internalId = String(config.repeat_source_id);
+  return block.public_reference_ids?.events?.[internalId] ?? internalId;
 }
 
 export function readMatrixEmbeddedBlock(cell: Record<string, any>): MatrixEmbeddedBlock | null {
@@ -387,6 +431,7 @@ export function embeddedBlockSummary(
   availableParticipants: ParticipantSummary[],
   availableEvents: EventSummary[],
   protocol: ProtocolSummary,
+  t: TFunc,
   matrixColumn?: Record<string, any>,
   availableTemplates?: import("@/types/api").TemplateSummary[]
 ) {
@@ -396,66 +441,58 @@ export function embeddedBlockSummary(
   if (elementTypeId === 2) {
     const items = (Array.isArray(config.todo_items) ? config.todo_items : []) as Array<Record<string, any>>;
     const filledItems = items.filter((item) => String(item.task ?? "").trim());
-    return filledItems.length ? `${filledItems.length} Todo${filledItems.length === 1 ? "" : "s"}` : "Keine Todos";
+    return filledItems.length ? t("summary.todoCount", { count: filledItems.length }) : t("summary.noTodos");
   }
 
   if (elementTypeId === 3) {
     const images = (Array.isArray(config.images) ? config.images : []) as Array<Record<string, any>>;
     const filledImages = images.filter((image) => String(image.url ?? "").trim());
-    return filledImages.length ? `${filledImages.length} Bild${filledImages.length === 1 ? "" : "er"}` : "Kein Bild";
+    return filledImages.length ? t("summary.imageCount", { count: filledImages.length }) : t("summary.noImage");
   }
 
   if (elementTypeId === 6) {
     const rows = (Array.isArray(config.rows) ? config.rows : []) as Array<Record<string, any>>;
-    return rows.length ? `${rows.length} Zeile${rows.length === 1 ? "" : "n"}` : "Leere Tabelle";
+    return rows.length ? t("summary.rowCount", { count: rows.length }) : t("summary.emptyTable");
   }
 
   if (elementTypeId === 7) {
-    const tagFilters = String(config.event_tag_filter ?? "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
-    const columnTagFilters = config.event_use_column_tag_filter === true
-      ? String(matrixColumn?.event_tag_filter || matrixColumn?.title || "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean) : [];
     const summaryTemplate = availableTemplates?.find((t) => t.id === protocol.template_id);
-    const summaryCycleYear = protocol.protocol_date && summaryTemplate?.cycle_config
-      ? getCycleYear(protocol.protocol_date, summaryTemplate.cycle_config.reset_month, summaryTemplate.cycle_config.reset_day)
+    const templateCycle = summaryTemplate?.cycle_config && summaryTemplate.cycle_config_id
+      ? { id: summaryTemplate.cycle_config_id, reset_month: summaryTemplate.cycle_config.reset_month, reset_day: summaryTemplate.cycle_config.reset_day }
       : null;
-    const matchingEvents = availableEvents.filter((event) => {
-      const effectiveEndDate = event.event_end_date || event.event_date;
-      const matchesDate = !protocol.protocol_date ? true : config.event_only_before_protocol_date === true ? effectiveEndDate < protocol.protocol_date : config.event_only_from_protocol_date === false ? true : effectiveEndDate >= protocol.protocol_date;
-      const eventTag = (event.tag ?? "").toLowerCase();
-      const matchesTag = (!tagFilters.length || tagFilters.some((t) => eventTag.includes(t))) &&
-        (!columnTagFilters.length || columnTagFilters.some((t) => eventTag.includes(t)));
-      const matchesCycle = config.event_only_current_cycle !== true || summaryCycleYear === null
-        ? true
-        : (event.cycle_assignments ?? []).some(
-            (a) => a.cycle_config_id === summaryTemplate?.cycle_config_id && a.cycle_year === summaryCycleYear
-          );
-      return matchesDate && matchesTag && matchesCycle;
+    const matchingEvents = applyEventFilter(availableEvents, blockEventFilter(config), {
+      protocolDate: protocol.protocol_date,
+      column: matrixColumn,
+      resolveCycle: (configId) => (configId === null ? templateCycle : null),
     });
-    return matchingEvents.length ? `${matchingEvents.length} Termin${matchingEvents.length === 1 ? "" : "e"}` : "Keine Termine";
+    return matchingEvents.length ? t("summary.eventCount", { count: matchingEvents.length }) : t("summary.noEvents");
   }
 
   if (elementTypeId === 8) {
     const items = (Array.isArray(config.bullet_items) ? config.bullet_items : []) as string[];
     const filledItems = items.filter((item) => String(item).trim());
-    return filledItems.length ? `${filledItems.length} Punkt${filledItems.length === 1 ? "" : "e"}` : "Keine Punkte";
+    return filledItems.length ? t("summary.bulletCount", { count: filledItems.length }) : t("summary.noBullets");
   }
 
   if (elementTypeId === 9) {
     const entries = (Array.isArray(config.attendance_entries) ? config.attendance_entries : []) as Array<Record<string, any>>;
-    const eligibleParticipants = attendanceParticipants(availableParticipants);
+    const eligibleParticipants = protocolAttendanceParticipants(availableParticipants, entries, protocol);
     const presentCount = eligibleParticipants.filter((participant) => {
       const entry = entries.find((currentEntry) => String(currentEntry.participant_id) === participant.id);
       return String(entry?.status ?? "") === "present";
     }).length;
-    return eligibleParticipants.length ? `${presentCount}/${eligibleParticipants.length} anwesend` : "0 Teilnehmer";
+    return eligibleParticipants.length ? t("summary.presentOf", { present: presentCount, total: eligibleParticipants.length }) : t("summary.noParticipants");
   }
 
   if (elementTypeId === 10) {
-    return String(config.selected_date ?? "").trim() ? `Termin ${formatShortDate(String(config.selected_date))}` : "Kein Datum";
+    if (!String(config.selected_date ?? "").trim()) return t("summary.noDate");
+    const date = formatShortDate(String(config.selected_date));
+    const time = String(config.selected_time ?? "").trim();
+    return time ? t("summary.eventOnAt", { date, time }) : t("summary.eventOn", { date });
   }
 
   const text = String(embeddedBlock.text_content ?? "").trim();
-  return text || "Kein Inhalt";
+  return text || t("summary.noContent");
 }
 
 export function visibleBlockTitle(block: {
@@ -520,8 +557,9 @@ export function TodoMiniMenu({
 // whether it also has a "changed" mark from an earlier edit. onAccept, if given, renders
 // a hover-revealed "Ausblenden" icon that accepts this one todo's change.
 export function TrackedTaskText({ todo, trackChangesActive, onAccept }: { todo: ProtocolTodo; trackChangesActive: boolean; onAccept?: () => void }) {
+  const t = useTranslations("protocols.todos");
   if (!trackChangesActive) return <>{todo.task}</>;
-  const hideButton = onAccept ? <TrackedChangeHideButton onAccept={onAccept} title="Änderung an diesem Todo ausblenden" /> : null;
+  const hideButton = onAccept ? <TrackedChangeHideButton onAccept={onAccept} title={t("hideChangeTitle")} /> : null;
   if (todo.pending_delete) {
     return (
       <span className="tracked-run">
@@ -580,8 +618,9 @@ export function TodoMenuSearchList<T>({
   getSubtle,
   isActive,
   onPick,
-  emptyLabel = "Keine Ergebnisse",
-  searchPlaceholder = "Suchen…",
+  emptyLabel,
+  searchPlaceholder,
+  onPickDate,
 }: {
   items: T[];
   getKey: (item: T) => string | number;
@@ -591,16 +630,31 @@ export function TodoMenuSearchList<T>({
   onPick: (item: T) => void;
   emptyLabel?: string;
   searchPlaceholder?: string;
+  /** Fälligkeits-Menüs: smarte Datumsvorschläge zum Getippten (morgen, Freitag, in 3 Wochen …) */
+  onPickDate?: (date: string) => void;
 }) {
+  const tCommon = useTranslations("common");
+  const resolvedEmptyLabel = emptyLabel ?? tCommon("noResults");
+  const resolvedSearchPlaceholder = searchPlaceholder ?? tCommon("searchPlaceholder");
   const [search, setSearch] = useState("");
+  const dateSuggestions = useSmartDateSuggestions(onPickDate ? search : "");
   const filtered = search.trim()
     ? items.filter((item) => getLabel(item).toLowerCase().includes(search.trim().toLowerCase()))
     : items;
   return (
     <>
-      <SearchInput value={search} onChange={setSearch} placeholder={searchPlaceholder} />
+      <SearchInput value={search} onChange={setSearch} placeholder={resolvedSearchPlaceholder} />
+      {dateSuggestions.map((suggestion) => (
+        <TodoMenuOption
+          key={`date-${suggestion.kind}-${suggestion.date}`}
+          label={suggestion.label}
+          subtle={suggestion.subtle}
+          active={false}
+          onClick={() => onPickDate?.(suggestion.date)}
+        />
+      ))}
       {filtered.length === 0 ? (
-        <span className="assignee-empty">{emptyLabel}</span>
+        dateSuggestions.length || (onPickDate && !search.trim()) ? null : <span className="assignee-empty">{resolvedEmptyLabel}</span>
       ) : (
         filtered.map((item) => (
           <TodoMenuOption
@@ -614,4 +668,16 @@ export function TodoMenuSearchList<T>({
       )}
     </>
   );
+}
+
+/** Terminliste mit «Zeilen in Tag-Farbe» (event_show_tag_colors): Zeile hell in der Farbe des
+ * ersten farbigen Tags hinterlegen, wie im PDF (documents/providers/events.py). */
+export function eventRowTintStyle(
+  tag: string | null | undefined,
+  tagConfig: Record<string, { color?: string } | undefined>,
+  enabled: boolean
+): { backgroundColor: string } | undefined {
+  if (!enabled || !tag) return undefined;
+  const color = tag.split(",").map((item) => tagConfig[item.trim()]?.color).find(Boolean);
+  return color ? { backgroundColor: `color-mix(in srgb, ${color} 14%, transparent)` } : undefined;
 }

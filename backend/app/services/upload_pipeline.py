@@ -18,6 +18,7 @@ a plain synchronous function usable from both contexts, instead of forcing a syn
 
 from __future__ import annotations
 
+import logging
 import hashlib
 import io
 import zipfile
@@ -30,15 +31,18 @@ from uuid import uuid4
 import imagehash
 from fastapi import HTTPException, UploadFile
 from PIL import Image, ImageChops, ImageOps
-from sqlalchemy import text, select, func
+from sqlalchemy import event, text, select, func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.storage import MAIN, get_object_store, new_object_key
 from app.models import StoredFile, Tenant
 from app.models.entities import GalleryUploadJob
 from app.repositories.file_repository import StoredFileRepository
 from app.services.apple_media import MAX_LIVE_CLIP_BYTES, is_heic, is_live_clip, pair_live_clips
 from app.services.photo_quality import compute_quality_scores
+
+_logger = logging.getLogger(__name__)
 
 ALLOWED_IMAGE_MIME_TYPES = {
     "image/jpeg",
@@ -309,11 +313,21 @@ def iter_gallery_zip_entries(path: Path) -> Iterator[tuple[str, bytes] | Gallery
 
 
 STAGE_CHUNK_BYTES = 4 * 1024 * 1024  # 4 MB
+# Mindestens so viel Platz bleibt beim Zwischenspeichern frei (gleiche Reserve wie
+# upload_admission). Unbekannte Grössen werden während des Schreibens geprüft statt vorab
+# den Platz für max_bytes (bis 10 GiB) zu verlangen.
+STAGE_DISK_RESERVE_BYTES = 256 * 1024**2
+
+
+def _ensure_free_space(target_dir: Path, needed: int) -> None:
+    import shutil
+
+    if shutil.disk_usage(target_dir).free < needed + STAGE_DISK_RESERVE_BYTES:
+        raise HTTPException(507, "Zu wenig freier Speicher für den Upload")
 
 
 async def stage_upload_to_disk(file: UploadFile, *, target_dir: Path, max_bytes: int, suffix: str) -> Path:
     """Kopiert begrenzt auf Platte und räumt auch bei Abbruch/Plattenfehlern auf."""
-    import shutil
     from starlette.concurrency import run_in_threadpool
 
     if file.size is not None and file.size > max_bytes:
@@ -323,8 +337,7 @@ async def stage_upload_to_disk(file: UploadFile, *, target_dir: Path, max_bytes:
     if isinstance(file.file, GalleryTemporaryFile):
         target_path = target_dir / f"{uuid4().hex}{suffix}"
         return await run_in_threadpool(file.file.adopt, target_path)
-    if shutil.disk_usage(target_dir).free < (file.size or max_bytes) + 256 * 1024**2:
-        raise HTTPException(507, "Zu wenig freier Speicher für den Upload")
+    _ensure_free_space(target_dir, file.size or 0)
     target_path = target_dir / f"{uuid4().hex}{suffix}"
     written = 0
     try:
@@ -333,6 +346,8 @@ async def stage_upload_to_disk(file: UploadFile, *, target_dir: Path, max_bytes:
                 written += len(chunk)
                 if written > max_bytes:
                     raise HTTPException(413, f"{file.filename or 'Datei'}: zu gross (maximal {max_bytes // 1024**2} MiB)")
+                if file.size is None:
+                    _ensure_free_space(target_dir, len(chunk))
                 await run_in_threadpool(handle.write, chunk)
         return target_path
     except BaseException:
@@ -454,6 +469,29 @@ def generate_thumbnail_bytes(content: bytes) -> tuple[bytes, int, int] | None:
 _TENANT_STORAGE_QUOTA_LOCK_NAMESPACE = 909100001
 
 
+class UploadRejected(HTTPException):
+    """Abgelehnte Datei mit maschinenlesbarem Grund (IMGMETA-012) - die Upload-Ergebnisse
+    tragen `code`/`params`, das Frontend übersetzt sie; `detail` bleibt der bisherige deutsche
+    Text für Aufrufer, die die Ausnahme weiterwerfen. Codes: too_large (max_mb), unsupported_format,
+    scan_failed, infected, quota_exceeded."""
+
+    def __init__(self, status_code: int, detail: str, *, code: str, params: dict[str, int | str] | None = None) -> None:
+        super().__init__(status_code=status_code, detail=detail)
+        self.code = code
+        self.params = params or {}
+
+
+def upload_failure(name: str, exc: HTTPException) -> dict:
+    """Ein fehlgeschlagenes Datei-Ergebnis (UploadFileResult) aus einer Ablehnung."""
+    return {
+        "name": name,
+        "status": "failed",
+        "message": str(exc.detail),
+        "code": getattr(exc, "code", None),
+        "params": getattr(exc, "params", None) or {},
+    }
+
+
 def _enforce_tenant_storage_quota(db: Session, *, tenant_id: int, repo: StoredFileRepository, incoming_bytes: int) -> None:
     """Rejects an upload that would push the tenant over its admin-configured
     Tenant.storage_quota_bytes limit. Audit fix, 2026-09-17: this quota is computed and
@@ -485,10 +523,51 @@ def _enforce_tenant_storage_quota(db: Session, *, tenant_id: int, repo: StoredFi
     )
     current_bytes = repo.total_bytes_for_tenant(db, tenant_id) + int(db.scalar(reservations) or 0)
     if current_bytes + incoming_bytes > tenant.storage_quota_bytes:
-        raise HTTPException(
-            status_code=400,
-            detail="Speicherkontingent des Mandanten erreicht - Datei wurde nicht gespeichert.",
+        raise UploadRejected(
+            400,
+            "Speicherkontingent des Mandanten erreicht - Datei wurde nicht gespeichert.",
+            code="quota_exceeded",
         )
+
+
+# Audit MAIN-BE-015: ingest_file schreibt Original und Thumbnail vor dem Commit des Aufrufers.
+# Scheitert dessen Commit (z. B. Sort-Index-Kollision bei parallelen Bild-Uploads), blieben die
+# Dateien als Waisen liegen. Die Pfade werden deshalb an der Session vermerkt: ein Commit gibt
+# sie frei, endet die Wurzel-Transaktion ohne Commit (Rollback/Close), werden sie gelöscht.
+_UNCOMMITTED_UPLOAD_PATHS_KEY = "hocx_uncommitted_upload_paths"
+
+
+def _track_uncommitted_path(db: Session, path: Path) -> None:
+    db.info.setdefault(_UNCOMMITTED_UPLOAD_PATHS_KEY, []).append(path)
+
+
+# Objekte im Objektspeicher (Original) werden sofort geschrieben, ihre Registrierung läuft in der
+# Transaktion des Aufrufers. Ohne Commit bliebe ein unregistriertes Objekt zurück - es wird nach
+# dem Rollback physisch wieder gelöscht (ohne Registereintrag, siehe discard_unregistered).
+_UNCOMMITTED_UPLOAD_OBJECTS_KEY = "hocx_uncommitted_upload_objects"
+
+
+def _track_uncommitted_object(db: Session, namespace: str, key: str) -> None:
+    db.info.setdefault(_UNCOMMITTED_UPLOAD_OBJECTS_KEY, []).append((namespace, key))
+
+
+@event.listens_for(Session, "after_commit")
+def _forget_committed_upload_paths(session: Session) -> None:
+    session.info.pop(_UNCOMMITTED_UPLOAD_PATHS_KEY, None)
+    session.info.pop(_UNCOMMITTED_UPLOAD_OBJECTS_KEY, None)
+
+
+@event.listens_for(Session, "after_transaction_end")
+def _remove_uncommitted_upload_paths(session: Session, transaction) -> None:
+    if transaction.parent is not None:
+        return
+    for path in session.info.pop(_UNCOMMITTED_UPLOAD_PATHS_KEY, None) or ():
+        path.unlink(missing_ok=True)
+    for namespace, key in session.info.pop(_UNCOMMITTED_UPLOAD_OBJECTS_KEY, None) or ():
+        try:
+            get_object_store().discard_unregistered(namespace, key)
+        except Exception:  # noqa: BLE001 - best effort; ein Rest erscheint im Prüfbericht der Migration
+            _logger.warning("Unregistriertes Upload-Objekt %s/%s konnte nicht entfernt werden", namespace, key, exc_info=True)
 
 
 @dataclass(frozen=True)
@@ -541,26 +620,32 @@ def ingest_file(
     repo = stored_file_repository or StoredFileRepository()
 
     if len(content) > max_bytes:
-        raise HTTPException(
-            status_code=413,
-            detail=too_large_message or f"Datei zu gross. Maximum {max_bytes // 1024 // 1024} MB",
+        raise UploadRejected(
+            413,
+            too_large_message or f"Datei zu gross. Maximum {max_bytes // 1024 // 1024} MB",
+            code="too_large",
+            params={"max_mb": max_bytes // 1024 // 1024},
         )
     mime = sniff(content)
     if mime is None:
-        raise HTTPException(status_code=400, detail=unsupported_format_message)
+        raise UploadRejected(400, unsupported_format_message, code="unsupported_format")
     if scan_status == "error":
-        raise HTTPException(422, "Datei konnte nicht auf Schadsoftware geprüft werden (maximal 100 MiB)")
+        raise UploadRejected(422, "Datei konnte nicht auf Schadsoftware geprüft werden (maximal 100 MiB)", code="scan_failed")
     if scan_status == "infected":
-        raise HTTPException(status_code=400, detail=infected_message)
+        raise UploadRejected(400, infected_message, code="infected")
 
     _enforce_tenant_storage_quota(db, tenant_id=tenant_id, repo=repo, incoming_bytes=len(content))
 
-    suffix = Path(original_filename).suffix.lower() or ".bin"
-    storage_dir = Path(settings.upload_root).joinpath(*storage_subdir_parts)
-    storage_dir.mkdir(parents=True, exist_ok=True)
-    target_path = storage_dir / f"{uuid4().hex}{suffix}"
-    target_path.write_bytes(content)
-    relative_path = target_path.relative_to(settings.storage_root)
+    # Key relativ zu STORAGE_ROOT (Namespace "main"), wie bisher storage_path - die Endung wird
+    # nur übernommen, wenn sie harmlos ist (safe_suffix), nie roh aus dem Client-Dateinamen.
+    upload_prefix = Path(settings.upload_root).resolve().relative_to(Path(settings.storage_root).resolve()).as_posix()
+    relative_path = new_object_key(
+        *[part for part in (upload_prefix, *storage_subdir_parts) if part and part != "."],
+        filename=original_filename,
+    )
+    # Schreibt über das Fence-/Journal-Protokoll in der Transaktion des Aufrufers (objstore_client).
+    get_object_store().put_bytes(db, MAIN, relative_path, content, content_type=mime)
+    _track_uncommitted_object(db, MAIN, relative_path)
 
     checksum = hashlib.sha256(content).hexdigest()
     perceptual_hash: str | None = None
@@ -585,14 +670,6 @@ def ingest_file(
         scan_status=scan_status,
     )
     stored_file = repo.create(db, stored_file)  # add + flush, caller commits
-    if mime.startswith("image/"):
-        from datetime import UTC, datetime
-        from app.services.file_service import _extract_image_metadata
-        from app.services.photo_tour_link_service import extract_gps, sync_photos_for_tours_best_effort
-        stored_file.gps_latitude, stored_file.gps_longitude = extract_gps(content)
-        stored_file.gps_analyzed_at = datetime.now(UTC)
-        _, _, stored_file.exif_taken_at, _ = _extract_image_metadata(content)
-        sync_photos_for_tours_best_effort(db, tenant_id, file_ids=[stored_file.public_id])
 
     if tenant_hashes is not None and perceptual_hash is not None:
         tenant_hashes.append((stored_file.id, perceptual_hash))
@@ -608,6 +685,7 @@ def ingest_file(
             thumbnail_root.mkdir(parents=True, exist_ok=True)
             thumbnail_target_path = thumbnail_root.resolve() / f"{stored_file.id}.jpg"
             thumbnail_target_path.write_bytes(thumbnail_bytes)
+            _track_uncommitted_path(db, thumbnail_target_path)
             stored_file.thumbnail_path = thumbnail_target_path.name
             stored_file.width = width
             stored_file.height = height

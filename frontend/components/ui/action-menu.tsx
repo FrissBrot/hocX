@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Popover } from "./popover";
 
 export type ActionMenuItem = {
@@ -9,13 +10,15 @@ export type ActionMenuItem = {
   danger?: boolean;
 };
 
-export function ActionMenu({ items, ariaLabel = "Aktionen" }: { items: ActionMenuItem[]; ariaLabel?: string }) {
+export function ActionMenu({ items, ariaLabel }: { items: ActionMenuItem[]; ariaLabel?: string }) {
+  const t = useTranslations("common");
+  const resolvedAriaLabel = ariaLabel ?? t("actions");
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   return (
     <div className="action-menu-wrap" ref={wrapRef} onClick={(event) => event.stopPropagation()}>
-      <button type="button" className="button-ghost button-icon" title={ariaLabel} aria-label={ariaLabel} onClick={() => setOpen((v) => !v)}>
+      <button type="button" className="button-ghost button-icon" title={resolvedAriaLabel} aria-label={resolvedAriaLabel} onClick={() => setOpen((v) => !v)}>
         ⋮
       </button>
       <Popover open={open} onOpenChange={setOpen} anchorRef={wrapRef} align="end" className="action-menu">

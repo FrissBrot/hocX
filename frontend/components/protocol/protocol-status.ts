@@ -1,15 +1,15 @@
 import { BadgeVariant } from "@/components/ui/badge";
 
-export function protocolStatusLabel(status: string): string {
+export function protocolStatusLabel(status: string, t: (key: string) => string): string {
   switch (status) {
     case "geplant":
-      return "Geplant";
+      return t("status.geplant");
     case "vorbereitet":
-      return "Vorbereitet";
+      return t("status.vorbereitet");
     case "durchgeführt":
-      return "Durchgeführt";
+      return t("status.durchgeführt");
     case "abgeschlossen":
-      return "Abgeschlossen";
+      return t("status.abgeschlossen");
     default:
       return status;
   }

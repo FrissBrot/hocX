@@ -5,13 +5,14 @@ from sqlalchemy.orm import Session
 
 from app.models import (
     GalleryImage,
-    ProtocolExportCache,
+    DocumentExport,
     ProtocolImage,
     StoredFile,
     SubmissionUploadFile,
     Tenant,
     WordImportDocument,
 )
+from app.models.document_entities import DocumentFile
 from app.schemas.storage import StorageCategoryUsage, StorageUsageRead
 
 CATEGORY_LABELS: dict[str, str] = {
@@ -32,8 +33,9 @@ class StorageService:
     only_images vs. exclude_images, i.e. `mime_type LIKE 'image/%'`):
 
     - photos:    uploaded images (protocol images, gallery uploads, image submissions)
-    - files:     every other upload (word-import sources, abgabebox documents, ...)
-    - protocols: generated PDF/LaTeX exports (protocol_export_cache). The "Dateien"
+    - files:     every other upload (word-import sources, abgabebox documents, ...) and the
+                 PDF views generated from them (document_file.is_generated)
+    - protocols: generated PDF exports (document_export). The "Dateien"
                  overview deliberately excludes these (a generated PDF isn't something a
                  user "hochgeladen" hat), but they occupy real disk space and belong in a
                  storage report.
@@ -46,16 +48,22 @@ class StorageService:
 
     def _category_sums(self, db: Session, tenant_id: int | None) -> dict[int, dict[str, int]]:
         """tenant_id=None sums across every tenant at once (admin list), otherwise scoped to one."""
-        is_export = StoredFile.id.in_(select(ProtocolExportCache.generated_file_id))
+        is_export = StoredFile.id.in_(select(DocumentExport.stored_file_id).where(DocumentExport.stored_file_id.is_not(None)))
         is_upload = or_(
             StoredFile.id.in_(select(ProtocolImage.stored_file_id)),
             StoredFile.id.in_(select(GalleryImage.stored_file_id)),
             StoredFile.id.in_(select(WordImportDocument.stored_file_id)),
             StoredFile.id.in_(select(SubmissionUploadFile.stored_file_id)),
         )
+        # Von der Dokumentverarbeitung erzeugte PDF-Ansichten und Vorschaubilder gehören zu den
+        # Dateien, aus denen sie entstanden sind - auch das PNG der Vorschau ist kein Foto.
+        is_generated_document_file = StoredFile.id.in_(
+            select(DocumentFile.stored_file_id).where(DocumentFile.is_generated.is_(True))
+        )
         is_image = StoredFile.mime_type.like("image/%")
         category = case(
             (is_export, "protocols"),
+            (is_generated_document_file, "files"),
             (is_upload & is_image, "photos"),
             (is_upload, "files"),
             else_="other",
@@ -96,20 +104,3 @@ class StorageService:
         tenant = db.get(Tenant, tenant_id)
         quota_bytes = tenant.storage_quota_bytes if tenant is not None else None
         return StorageUsageRead(total_bytes=total, quota_bytes=quota_bytes, categories=categories)
-
-    def set_quota(self, db: Session, tenant_id: int, quota_bytes: int | None) -> Tenant | None:
-        """The Admin panel's manual quota field. A value marks the tenant as a manual override
-        so a later plan/package change (AdminTenantService.recompute_effective_storage_quota)
-        doesn't silently overwrite an admin's individually set limit (e.g. a bespoke enterprise
-        agreement). Clearing the field (quota_bytes=None) instead removes the override - the
-        route then calls recompute_effective_storage_quota so the tenant falls back to its
-        plan/package total, matching the field's "leer = automatische Berechnung" label."""
-        tenant = db.get(Tenant, tenant_id)
-        if tenant is None:
-            return None
-        tenant.storage_quota_bytes = quota_bytes
-        tenant.storage_quota_manual_override = quota_bytes is not None
-        db.add(tenant)
-        db.commit()
-        db.refresh(tenant)
-        return tenant

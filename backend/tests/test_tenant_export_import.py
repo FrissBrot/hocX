@@ -24,9 +24,11 @@ Covers:
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -39,13 +41,31 @@ from app.models.entities import (
     AppUser,
     Event,
     GalleryImage,
+    ListDefinition,
+    ListEntry,
     Participant,
+    PhotoAlbum,
+    PhotoAlbumItem,
     Protocol,
-    ProtocolExportCache,
-    Role,
+    ProtocolElement,
+    ProtocolElementBlock,
+    DocumentExport,
+    DocumentRegistry,
+    DocumentAsset,
+    DocumentBrand,
+    DocumentComponent,
+    DocumentTemplate,
+    DocumentTemplateAssignment,
+    DocumentTemplateRevision,
+    ProtocolTodo,
     StoredFile,
+    SubmissionAssignment,
+    SubmissionUploadLog,
+    TableSnapshot,
     Template,
+    Tenant,
     TenantDomain,
+    TodoStatus,
     UserMfaFactor,
     UserProtocolScroll,
     WordImportDocument,
@@ -54,8 +74,14 @@ from app.models.entities import (
 )
 from app.services.tenant_export_service import TenantExportService
 from app.services.tenant_import_service import TenantImportService
+from app.services.tenant_transfer_common import (
+    WordImportIdMaps,
+    remap_word_import_analysis,
+    remap_word_import_profile_config,
+)
 from tests.factories import (
     make_app_user,
+    make_cycle_config,
     make_element_definition,
     make_event,
     make_list_definition,
@@ -64,6 +90,7 @@ from tests.factories import (
     make_protocol,
     make_protocol_element,
     make_protocol_element_block,
+    make_protocol_todo,
     make_template,
     make_tenant,
 )
@@ -72,6 +99,28 @@ from tests.factories import (
 def _read_manifest(zip_path: Path) -> dict:
     with zipfile.ZipFile(zip_path) as zf:
         return json.loads(zf.read("manifest.json").decode("utf-8"))
+
+
+def _export_import(db, tenant_id: int, scope: str = "full", *, new_name: str = "Import", before_import=None):
+    """Export -> (optional hook, e.g. to simulate a fresh target installation) -> import."""
+    zip_path, _ = TenantExportService().export(db, tenant_id, scope, include_credentials=True)
+    try:
+        if before_import is not None:
+            before_import(zip_path)
+        return TenantImportService().import_zip(db, zip_path, new_name)
+    finally:
+        zip_path.unlink(missing_ok=True)
+
+
+def _rewrite_manifest(zip_path: Path, mutate) -> None:
+    manifest = _read_manifest(zip_path)
+    mutate(manifest)
+    with zipfile.ZipFile(zip_path) as zf:
+        members = {name: zf.read(name) for name in zf.namelist() if name != "manifest.json"}
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.writestr("manifest.json", json.dumps(manifest))
+        for name, content in members.items():
+            zf.writestr(name, content)
 
 
 # --- export: own users only / foreign reference handling -----------------------
@@ -91,15 +140,17 @@ def test_export_bundles_only_own_users_and_nulls_foreign_references(db):
     db.add(template)
     db.flush()
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full", include_credentials=True)
     try:
         manifest = _read_manifest(zip_path)
         app_users = {row["email"]: row for row in manifest["tables"]["app_user"]}
 
-        # The tenant's own user travels with real hash and role code (so they can log in on
-        # the target installation); the source's tenant id is dropped.
+        # The tenant's own user travels with real hash and role references (so they can log in
+        # on the target installation); the source's tenant id is dropped.
         assert app_users["member@a.example"]["password_hash"] == member.password_hash
-        assert app_users["member@a.example"]["role_id"] == "writer"
+        roles_by_id = {row["id"]: row for row in manifest["tables"]["tenant_role"]}
+        assert [roles_by_id[ref]["system_key"] for ref in app_users["member@a.example"]["role_refs"]] == ["writer"]
+        assert "role_id" not in app_users["member@a.example"]
         assert "tenant_id" not in app_users["member@a.example"]
 
         # Another tenant's user is not part of this export at all - neither credentials nor
@@ -108,7 +159,7 @@ def test_export_bundles_only_own_users_and_nulls_foreign_references(db):
         assert "foreign@x.example" not in json.dumps(manifest)
         assert manifest["tables"]["template"][0]["created_by"] is None
         assert "user_tenant_role" not in manifest["tables"]
-        assert manifest["format_version"] == 3
+        assert manifest["format_version"] == 9
     finally:
         zip_path.unlink(missing_ok=True)
 
@@ -122,7 +173,7 @@ def test_export_import_roundtrip_recreates_core_entities_with_new_ids(db):
     protocol = make_protocol(db, tenant_a.id, template.id, protocol_number="P-42")
     participant = make_participant(db, tenant_a.id, display_name="Anna Muster")
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full", include_credentials=True)
     try:
         new_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
     finally:
@@ -179,7 +230,7 @@ def test_export_import_roundtrip_keeps_word_import_document_and_source_file(db, 
     db.add(document)
     db.flush()
 
-    zip_path, _filename = TenantExportService().export(db, tenant.id, "full")
+    zip_path, _filename = TenantExportService().export(db, tenant.id, "full", include_credentials=True)
     try:
         manifest = _read_manifest(zip_path)
         assert manifest["tables"]["word_import_document"][0]["original_filename"] == "Sitzung.docx"
@@ -238,22 +289,67 @@ def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp
             tenant_id=tenant.id, template_id=template.id, signal_type="event_match",
             suggested_score=0.87, was_accepted=True,
         ),
-        ProtocolExportCache(
-            protocol_id=protocol.id, export_format="pdf", latex_source="source",
-            generated_file_id=generated_file.id, generator_version="test-v1",
+        DocumentExport(
+            tenant_id=tenant.id, protocol_id=protocol.id, document_type="protocol", version_label="v0.1",
+            content_hash="ab" * 32, stored_file_id=generated_file.id,
+        ),
+        DocumentRegistry(
+            # Hash der mitgesicherten PDF (TYPST-007: sonst «importiert, nicht verifiziert»)
+            tenant_id=tenant.id, sha256=hashlib.sha256(b"pdf-cache").hexdigest(), document_type="protocol", title="Sitzung", status_code="abgeschlossen",
+            version_major=1, version_minor=0, version_label="v1.0", source_public_id=protocol.public_id,
         ),
         UserProtocolScroll(user_id=user.id, protocol_id=protocol.id, last_element_id=17),
     ])
     db.flush()
+    # Document Studio: Brand-Profil mit hochgeladenem Logo, Mandantenvorlage (Revision verweist
+    # auf Logo und Protokoll), Komponente, Zuweisung für die Protokollvorlage
+    from app.documents import brand_service, template_service
+    from app.documents.brand import BrandTokens
+    from app.documents.layout import TemplateContent
 
-    zip_path, _ = TenantExportService().export(db, tenant.id, "full")
+    logo_path = tmp_path / "document_assets" / "logo.png"
+    logo_path.parent.mkdir(parents=True)
+    logo_path.write_bytes(b"png-logo")
+    logo = DocumentAsset(tenant_id=tenant.id, kind="image", category="logo", name="Logo", storage_path="document_assets/logo.png", mime_type="image/png")
+    db.add(logo)
+    db.flush()
+    brand = brand_service.create_brand(db, tenant.id, name="Verein", tokens=BrandTokens.model_validate({"assets": {"logo": str(logo.public_id)}}), is_default=True)
+    content = TemplateContent.model_validate({"masters": [{"id": "default"}], "body": [
+        {"type": "image", "id": "i", "source": {"kind": "asset", "asset_id": str(logo.public_id)}},
+        {"type": "data_block", "id": "d", "component": "session_notes", "params": {"protocol_id": str(protocol.public_id)}},
+    ]})
+    document_template, revision = template_service.create_template(db, tenant.id, name="Monatsbrief", document_type="custom", content=content)
+    document_template.brand_id = brand.id
+    template_service.publish(db, document_template, user_id=None)
+    db.add(DocumentComponent(tenant_id=tenant.id, name="Kopf", schema_version=1, node_json={"type": "image", "id": "k", "source": {"kind": "asset", "asset_id": str(logo.public_id)}}))
+    db.add(DocumentTemplateAssignment(tenant_id=tenant.id, document_type="protocol", protocol_template_id=template.id, brand_id=brand.id))
+    # STUDIO-010: Export mit Systemvorlage und Brand-Revision behält beide Bezüge
+    from app.documents.system_templates import sync_system_templates
+
+    sync_system_templates(db)
+    system_template = db.scalar(select(DocumentTemplate).where(DocumentTemplate.system_key == "protocol_standard"))
+    db.add(DocumentExport(
+        tenant_id=tenant.id, document_type="protocol", version_label="v0.2", content_hash="ef" * 32,
+        template_id=system_template.id, brand_revision_id=brand_service.current_revision(db, brand).id,
+    ))
+    db.flush()
+
+    zip_path, _ = TenantExportService().export(db, tenant.id, "full", include_credentials=True)
     try:
         manifest = _read_manifest(zip_path)
+        assert len(manifest["tables"]["document_asset"]) == 1
+        assert len(manifest["tables"]["document_brand"]) == 1 and len(manifest["tables"]["document_brand_revision"]) == 1
+        assert len(manifest["tables"]["document_template"]) == 1 and len(manifest["tables"]["document_template_revision"]) == 1
+        assert len(manifest["tables"]["document_component"]) == 1 and len(manifest["tables"]["document_template_assignment"]) == 1
         assert len(manifest["tables"]["word_import_profile"]) == 1
         assert len(manifest["tables"]["word_import_suggestion_outcome"]) == 1
-        assert len(manifest["tables"]["protocol_export_cache"]) == 1
-        assert manifest["tables"]["user_protocol_scroll"][0]["user_id"] == user.email
-        # Fresh target installation: the source account isn't there (see the word import test).
+        assert len(manifest["tables"]["document_export"]) == 2
+        assert len(manifest["tables"]["document_registry"]) == 1
+        assert manifest["tables"]["user_protocol_scroll"][0]["user_id"] == str(user.public_id)
+        # Fresh target installation: the source account isn't there (see the word import test),
+        # and neither is the source tenant's document registry.
+        registry_id = db.scalar(select(DocumentRegistry.public_id).where(DocumentRegistry.tenant_id == tenant.id))
+        db.query(DocumentRegistry).filter(DocumentRegistry.tenant_id == tenant.id).delete()
         db.delete(user)
         db.flush()
         imported_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Complete Backup (Import)")
@@ -264,7 +360,12 @@ def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp
     imported_protocol = db.scalar(select(Protocol).where(Protocol.tenant_id == imported_tenant.id))
     profile = db.scalar(select(WordImportProfile).where(WordImportProfile.tenant_id == imported_tenant.id))
     outcome = db.scalar(select(WordImportSuggestionOutcome).where(WordImportSuggestionOutcome.tenant_id == imported_tenant.id))
-    cache = db.scalar(select(ProtocolExportCache).where(ProtocolExportCache.protocol_id == imported_protocol.id))
+    cache = db.scalar(select(DocumentExport).where(DocumentExport.protocol_id == imported_protocol.id))
+    imported_brand = db.scalar(select(DocumentBrand).where(DocumentBrand.tenant_id == imported_tenant.id, DocumentBrand.name == "Verein"))
+    imported_logo = db.scalar(select(DocumentAsset).where(DocumentAsset.tenant_id == imported_tenant.id))
+    imported_document_template = db.scalar(select(DocumentTemplate).where(DocumentTemplate.tenant_id == imported_tenant.id))
+    imported_assignment = db.scalar(select(DocumentTemplateAssignment).where(DocumentTemplateAssignment.tenant_id == imported_tenant.id))
+    imported_component = db.scalar(select(DocumentComponent).where(DocumentComponent.tenant_id == imported_tenant.id))
     restored_user = db.scalar(select(AppUser).where(AppUser.email == "backup@example.com"))
     scroll = db.get(UserProtocolScroll, (restored_user.id, imported_protocol.id))
 
@@ -273,10 +374,62 @@ def test_full_backup_roundtrip_keeps_remaining_tenant_state(db, monkeypatch, tmp
     assert profile.mapping_config_json == {"learned": {"source": "target"}}
     assert outcome.template_id == imported_template.id
     assert outcome.suggested_score == pytest.approx(0.87)
-    assert cache.generated_file_id is not None
-    assert db.get(StoredFile, cache.generated_file_id).tenant_id == imported_tenant.id
-    assert (tmp_path / db.get(StoredFile, cache.generated_file_id).storage_path).read_bytes() == b"pdf-cache"
+    assert cache.stored_file_id is not None and cache.version_label == "v0.1" and cache.content_hash == "ab" * 32
+    assert db.get(StoredFile, cache.stored_file_id).tenant_id == imported_tenant.id
+    assert (tmp_path / db.get(StoredFile, cache.stored_file_id).storage_path).read_bytes() == b"pdf-cache"
+    assert imported_brand.is_default and imported_logo.category == "logo"
+    assert brand_service.tokens_of(brand_service.current_revision(db, imported_brand)).assets.logo == imported_logo.public_id
+    assert (tmp_path / imported_logo.storage_path).read_bytes() == b"png-logo"
+    assert imported_document_template.brand_id == imported_brand.id
+    published = db.get(DocumentTemplateRevision, imported_document_template.published_revision_id)
+    assert published.status == "published"
+    assert published.content_json["body"][0]["source"]["asset_id"] == str(imported_logo.public_id)
+    assert published.content_json["body"][1]["params"]["protocol_id"] == str(imported_protocol.public_id)
+    assert imported_assignment.protocol_template_id == imported_template.id and imported_assignment.brand_id == imported_brand.id
+    assert imported_component.node_json["source"]["asset_id"] == str(imported_logo.public_id)
+    system_export = db.scalar(select(DocumentExport).where(DocumentExport.tenant_id == imported_tenant.id, DocumentExport.version_label == "v0.2"))
+    assert system_export.template_id == system_template.id
+    assert system_export.brand_revision_id == brand_service.current_revision(db, imported_brand).id
+    registry = db.scalar(select(DocumentRegistry).where(DocumentRegistry.tenant_id == imported_tenant.id))
+    # Dokument-ID bleibt (sie steht im PDF), Quelle zeigt auf das importierte Protokoll
+    assert registry.public_id == registry_id and registry.sha256 == hashlib.sha256(b"pdf-cache").hexdigest() and registry.import_unverified is False
+    assert registry.status_code == "abgeschlossen" and registry.version_label == "v1.0"
+    assert registry.source_public_id == imported_protocol.public_id
     assert scroll.last_element_id == 17
+
+
+def test_import_skips_invalid_document_studio_content(db):
+    """STUDIO-011: Ungültige Studio-Inhalte im Archiv werden beim Import geprüft und gemeldet
+    statt erst Bibliothek und Export scheitern zu lassen."""
+    from app.documents import brand_service, template_service
+    from app.documents.layout import TemplateContent
+
+    tenant = make_tenant(db, "Studio Invalid")
+    brand = brand_service.create_brand(db, tenant.id, name="Verein", is_default=True)
+    document_template, _revision = template_service.create_template(db, tenant.id, name="Gültig", document_type="custom", content=TemplateContent())
+    broken_template, broken_revision = template_service.create_template(db, tenant.id, name="Kaputt", document_type="custom", content=TemplateContent())
+    db.add(DocumentComponent(tenant_id=tenant.id, name="Kaputt", schema_version=1, node_json={"type": "script", "id": "x"}))
+    db.flush()
+    # Direkt in der DB verfälscht (Schema verhindert das sonst beim Speichern)
+    broken_revision.content_json = {"body": [{"type": "script", "id": "x"}]}
+    brand_service.current_revision(db, brand).tokens_json = {"colors": {"primary": "rot"}}
+    db.flush()
+
+    zip_path, _ = TenantExportService().export(db, tenant.id, "full", include_credentials=True)
+    try:
+        imported_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Studio Invalid (Import)")
+    finally:
+        zip_path.unlink(missing_ok=True)
+
+    assert any("Komponente 'Kaputt'" in item for item in warnings)
+    assert any("Dokumentvorlage 'Kaputt'" in item for item in warnings)
+    assert any("Brand-Revision" in item for item in warnings)
+    assert db.scalar(select(DocumentComponent).where(DocumentComponent.tenant_id == imported_tenant.id)) is None
+    templates = {row.name: row for row in db.scalars(select(DocumentTemplate).where(DocumentTemplate.tenant_id == imported_tenant.id))}
+    assert template_service.working_revision(db, templates["Gültig"]) is not None
+    assert template_service.working_revision(db, templates["Kaputt"]) is None
+    imported_brand = db.scalar(select(DocumentBrand).where(DocumentBrand.tenant_id == imported_tenant.id, DocumentBrand.name == "Verein"))
+    assert brand_service.current_revision(db, imported_brand).tokens_json["colors"]["primary"] == "#174B7A"
 
 
 def test_export_import_roundtrip_restores_all_member_mfa_factors(db):
@@ -307,7 +460,7 @@ def test_export_import_roundtrip_restores_all_member_mfa_factors(db):
     ])
     db.flush()
 
-    zip_path, _filename = TenantExportService().export(db, tenant.id, "full")
+    zip_path, _filename = TenantExportService().export(db, tenant.id, "full", include_credentials=True)
     try:
         manifest = _read_manifest(zip_path)
         exported = manifest["tables"]["user_mfa_factor"]
@@ -350,7 +503,7 @@ def test_import_never_links_to_an_account_of_another_tenant_with_the_same_email(
     db.add(template)
     db.flush()
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full", include_credentials=True)
     try:
         new_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
     finally:
@@ -376,7 +529,7 @@ def test_import_creates_the_exported_users_in_the_new_tenant_on_a_fresh_installa
     db.add(template)
     db.flush()
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full", include_credentials=True)
     try:
         # Simulate the fresh target installation: the source account isn't there.
         db.delete(creator)
@@ -389,9 +542,15 @@ def test_import_creates_the_exported_users_in_the_new_tenant_on_a_fresh_installa
     restored = db.scalar(select(AppUser).where(AppUser.email == "restorable@example.com"))
     assert restored.tenant_id == new_tenant.id
     assert restored.password_hash == creator.password_hash
-    assert db.get(Role, restored.role_id).code == "kassier"
+    assert _system_keys(db, restored.id) == ["kassier"]
     imported_template = db.scalar(select(Template).where(Template.tenant_id == new_tenant.id))
     assert imported_template.created_by == restored.id
+
+
+def _system_keys(db, user_id: int) -> list[str | None]:
+    from app.models import TenantRole, UserRole
+
+    return sorted(db.scalars(select(TenantRole.system_key).join(UserRole, UserRole.role_id == TenantRole.id).where(UserRole.user_id == user_id)))
 
 
 def test_import_reads_version_2_archives_with_a_separate_user_tenant_role_table(db, tmp_path):
@@ -417,7 +576,7 @@ def test_import_reads_version_2_archives_with_a_separate_user_tenant_role_table(
 
     member = db.scalar(select(AppUser).where(AppUser.email == "v2-member@example.com"))
     assert member.tenant_id == new_tenant.id
-    assert db.get(Role, member.role_id).code == "admin"
+    assert _system_keys(db, member.id) == ["admin"]
     # A user that was only referenced as metadata was never a member: no tenant to put them in.
     assert db.scalar(select(AppUser).where(AppUser.email == "v2-metadata@example.com")) is None
 
@@ -434,7 +593,7 @@ def test_export_and_import_never_modifies_an_uninvolved_tenant(db):
     bystander_protocol = make_protocol(db, bystander.id, bystander_template.id, protocol_number="BYSTANDER-1")
     bystander_participant = make_participant(db, bystander.id, display_name="Bystander Person")
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full", include_credentials=True)
     try:
         TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
     finally:
@@ -564,6 +723,7 @@ def test_export_import_roundtrip_remaps_matrix_auto_source_list_link(db):
         db, tenant_a.id, "Matrix",
         blocks=[{
             "id": 1,
+            "element_type_id": 11,
             "configuration_json": {
                 "mode": "auto",
                 "auto_source": {"type": "list", "list_id": source_list.id, "event_tag_filter": None},
@@ -571,7 +731,7 @@ def test_export_import_roundtrip_remaps_matrix_auto_source_list_link(db):
         }],
     )
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full", include_credentials=True)
     try:
         new_tenant, _warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
     finally:
@@ -595,6 +755,7 @@ def test_export_import_roundtrip_remaps_matrix_row_list_entry_link(db):
         db, tenant_a.id, "Tabelle",
         blocks=[{
             "id": 1,
+            "element_type_id": 6,
             "configuration_json": {
                 "rows": [{
                     "id": "1",
@@ -605,7 +766,7 @@ def test_export_import_roundtrip_remaps_matrix_row_list_entry_link(db):
         }],
     )
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full", include_credentials=True)
     try:
         new_tenant, _warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
     finally:
@@ -646,7 +807,7 @@ def test_export_import_roundtrip_remaps_protocol_block_row_list_entry_link(db):
         },
     )
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full", include_credentials=True)
     try:
         new_tenant, _warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
     finally:
@@ -695,7 +856,7 @@ def test_export_import_roundtrip_keeps_domain_and_same_verification_token(db, mo
     original_token = domain.verification_token
     original_verified_at = domain.verified_at
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "structure")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "structure", include_credentials=True)
     try:
         manifest = _read_manifest(zip_path)
         assert manifest["tables"]["tenant_domain"][0]["verification_token"] == original_token
@@ -743,7 +904,7 @@ def test_import_skips_domain_already_claimed_by_another_tenant_on_target(db, mon
     db.add(source_domain)
     db.flush()
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "structure")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "structure", include_credentials=True)
     try:
         # `domain` is globally unique - drop the source's own row and give the exact same
         # domain to a DIFFERENT tenant, simulating that it's already claimed on the target
@@ -783,7 +944,7 @@ def test_import_skips_domain_reserved_by_the_installation_itself(db, monkeypatch
     ))
     db.flush()
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "structure")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "structure", include_credentials=True)
     try:
         new_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
     finally:
@@ -809,7 +970,7 @@ def test_export_import_roundtrip_remaps_last_word_import_template_id(db):
     db.add(tenant_a)
     db.flush()
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "structure")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "structure", include_credentials=True)
     try:
         # Must not raise an IntegrityError from a dangling/foreign template id.
         new_tenant, _warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
@@ -845,7 +1006,7 @@ def test_export_import_roundtrip_recreates_gallery_image(db, monkeypatch, tmp_pa
     db.add(GalleryImage(tenant_id=tenant_a.id, stored_file_id=stored_file.id))
     db.flush()
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full", include_credentials=True)
     try:
         new_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
     finally:
@@ -887,7 +1048,7 @@ def test_export_import_roundtrip_remaps_the_live_photo_clip(db, monkeypatch, tmp
     db.add(GalleryImage(tenant_id=tenant_a.id, stored_file_id=photo.id, live_video_stored_file_id=clip.id))
     db.flush()
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full", include_credentials=True)
     try:
         new_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
     finally:
@@ -931,7 +1092,7 @@ def test_export_import_roundtrip_remaps_gallery_image_event_id(db, monkeypatch, 
     db.add(GalleryImage(tenant_id=tenant_a.id, stored_file_id=stored_file.id, event_id=event.id))
     db.flush()
 
-    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full")
+    zip_path, _filename = TenantExportService().export(db, tenant_a.id, "full", include_credentials=True)
     try:
         new_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Tenant A (Import)")
     finally:
@@ -945,3 +1106,706 @@ def test_export_import_roundtrip_remaps_gallery_image_event_id(db, monkeypatch, 
     imported_gallery_image = db.scalar(select(GalleryImage).where(GalleryImage.tenant_id == new_tenant.id))
     assert imported_gallery_image is not None
     assert imported_gallery_image.event_id == imported_event.id
+
+
+# --- links stored outside of plain FK columns (full-backup audit 2026-10-11) -----
+
+
+def _storage(monkeypatch, tmp_path):
+    from app.core.config import settings
+    from app.services import tenant_import_service as import_module
+
+    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
+    monkeypatch.setattr(settings, "abgabebox_storage_root", str(tmp_path))
+    monkeypatch.setattr(import_module.scanner, "scan_file", lambda *args, **kwargs: "clean")
+
+
+def _stored_image(db, tmp_path, tenant_id: int, name: str = "photo.png") -> StoredFile:
+    (tmp_path / name).write_bytes(b"fake-png-bytes")
+    stored_file = StoredFile(
+        tenant_id=tenant_id, original_name=name, mime_type="image/png", storage_path=name, file_size_bytes=14,
+    )
+    db.add(stored_file)
+    db.flush()
+    return stored_file
+
+
+def test_export_import_roundtrip_remaps_submission_assignment_cycle_filter(db):
+    """submission_assignment.cycle_config_id used to be copied unchanged: the imported
+    Abgabe pointed at the SOURCE tenant's Zyklus (and on a fresh installation the FK
+    aborted the whole import)."""
+    make_tenant(db, "Unrelated")  # pushes ids apart so a missing remap can't pass by luck
+    tenant = make_tenant(db, "Abgaben")
+    cycle = make_cycle_config(db, tenant.id, name="Vereinsjahr")
+    db.add(SubmissionAssignment(
+        tenant_id=tenant.id, title="Berichte", public_slug="berichte", source_type="events", tag_filter="lager",
+        cycle_config_id=cycle.id, cycle_offsets=[0],
+    ))
+    db.flush()
+
+    new_tenant, warnings = _export_import(db, tenant.id, "full_abgabebox")
+
+    imported = db.scalar(select(SubmissionAssignment).where(SubmissionAssignment.tenant_id == new_tenant.id))
+    from app.models.entities import CycleConfig
+
+    imported_cycle = db.scalar(select(CycleConfig).where(CycleConfig.tenant_id == new_tenant.id))
+    assert warnings == []
+    assert imported.cycle_config_id == imported_cycle.id != cycle.id
+    assert imported.cycle_offsets == [0]
+
+
+def test_export_import_roundtrip_remaps_responsible_assignments_snapshot(db):
+    """protocol_element.responsible_assignments_snapshot (the protocol's frozen
+    Verantwortliche) embeds participant/list ids - it used to be copied verbatim."""
+    make_tenant(db, "Unrelated")
+    tenant = make_tenant(db, "Verantwortliche")
+    participant = make_participant(db, tenant.id, "Anna")
+    gone = make_participant(db, tenant.id, "Wird geloescht")
+    definition = make_list_definition(db, tenant.id, column_one_value_type="participant")
+    entry = make_list_entry(db, definition.id, column_one_value={"participant_id": participant.id})
+    template = make_template(db, tenant.id)
+    protocol = make_protocol(db, tenant.id, template.id)
+    element = make_protocol_element(db, protocol.id)
+    element.responsible_assignments_snapshot = [
+        {"participant_id": participant.id, "list_definition_id": definition.id, "list_entry_id": entry.id, "locked": True},
+        {"participant_id": gone.id},
+    ]
+    db.flush()
+
+    def drop_second_participant(zip_path):
+        _rewrite_manifest(zip_path, lambda m: m["tables"].update(
+            app_user=[row for row in m["tables"]["app_user"] if row["id"] != gone.id]
+        ))
+
+    new_tenant, _ = _export_import(db, tenant.id, before_import=drop_second_participant)
+
+    new_participant = db.scalar(select(Participant).where(Participant.tenant_id == new_tenant.id))
+    new_definition = db.scalar(select(ListDefinition).where(ListDefinition.tenant_id == new_tenant.id))
+    new_entry = db.scalar(select(ListEntry).where(ListEntry.list_definition_id == new_definition.id))
+    new_element = db.scalar(
+        select(ProtocolElement).join(Protocol).where(Protocol.tenant_id == new_tenant.id)
+    )
+    # The unresolvable assignment is dropped instead of keeping a source-tenant id.
+    assert new_element.responsible_assignments_snapshot == [
+        {"participant_id": new_participant.id, "list_definition_id": new_definition.id, "list_entry_id": new_entry.id, "locked": True},
+    ]
+
+
+def test_export_import_roundtrip_remaps_block_repeat_sources(db):
+    """configuration_snapshot_json.repeat_source_id binds a block to an Event or a
+    ProtocolTodo (and writes back into it) - both used to keep the source id."""
+    make_tenant(db, "Unrelated")
+    tenant = make_tenant(db, "Wiederholen")
+    event = make_event(db, tenant.id, title="Lager")
+    template = make_template(db, tenant.id)
+    protocol = make_protocol(db, tenant.id, template.id)
+    element = make_protocol_element(db, protocol.id)
+    todo_block = make_protocol_element_block(db, element.id, {}, sort_index=0, element_type_code="todo")
+    todo = make_protocol_todo(db, todo_block.id, task="Material")
+    make_protocol_element_block(
+        db, element.id, {"repeat_source_type": "event", "repeat_source_id": event.id}, sort_index=1
+    )
+    make_protocol_element_block(
+        db, element.id, {"repeat_source_type": "todo", "repeat_source_id": todo.id}, sort_index=2
+    )
+
+    new_tenant, warnings = _export_import(db, tenant.id)
+
+    new_event = db.scalar(select(Event).where(Event.tenant_id == new_tenant.id))
+    new_todo = db.scalar(select(ProtocolTodo).where(ProtocolTodo.tenant_id == new_tenant.id))
+    blocks = db.scalars(
+        select(ProtocolElementBlock).join(ProtocolElement).join(Protocol)
+        .where(Protocol.tenant_id == new_tenant.id).order_by(ProtocolElementBlock.sort_index)
+    ).all()
+    assert warnings == []
+    assert blocks[1].configuration_snapshot_json["repeat_source_id"] == new_event.id != event.id
+    assert blocks[2].configuration_snapshot_json["repeat_source_id"] == new_todo.id != todo.id
+
+
+def test_import_drops_unresolvable_event_participant_ids(db):
+    tenant = make_tenant(db, "Termine")
+    participant = make_participant(db, tenant.id, "Anna")
+    event = make_event(db, tenant.id)
+    event.participant_ids = [participant.id, 999_999_999]
+    db.flush()
+
+    new_tenant, _ = _export_import(db, tenant.id)
+
+    new_participant = db.scalar(select(Participant).where(Participant.tenant_id == new_tenant.id))
+    new_event = db.scalar(select(Event).where(Event.tenant_id == new_tenant.id))
+    assert new_event.participant_ids == [new_participant.id]
+
+
+def test_import_keeps_public_ids_on_a_fresh_installation(db, monkeypatch, tmp_path):
+    """A restore onto an installation that doesn't know the tenant keeps every public_id,
+    so links, bookmarks and public_id-based references (element_ref ...) stay valid."""
+    _storage(monkeypatch, tmp_path)
+    tenant = make_tenant(db, "Backup")
+    event = make_event(db, tenant.id, title="Lager")
+    participant = make_participant(db, tenant.id, "Anna")
+    tenant_public_id, event_public_id, participant_public_id = tenant.public_id, event.public_id, participant.public_id
+
+    def delete_source(_zip_path):
+        db.delete(db.get(Tenant, tenant.id))
+        db.flush()
+
+    new_tenant, warnings = _export_import(db, tenant.id, before_import=delete_source)
+
+    assert warnings == []
+    assert new_tenant.public_id == tenant_public_id
+    assert db.scalar(select(Event).where(Event.tenant_id == new_tenant.id)).public_id == event_public_id
+    assert db.scalar(select(Participant).where(Participant.tenant_id == new_tenant.id)).public_id == participant_public_id
+
+
+def test_import_rewrites_public_id_references_when_public_ids_are_taken(db, monkeypatch, tmp_path):
+    """Re-importing while the source still exists: every public_id is taken, so each row
+    gets a fresh one - and every reference stored by public_id (Abgabe element_ref on
+    gallery images, upload logs and todos) has to follow, or it points at the source."""
+    _storage(monkeypatch, tmp_path)
+    tenant = make_tenant(db, "Abgabebox")
+    event = make_event(db, tenant.id, title="Lager")
+    assignment = SubmissionAssignment(
+        tenant_id=tenant.id, title="Fotos", public_slug="fotos", source_type="events", tag_filter="lager",
+    )
+    db.add(assignment)
+    stored_file = _stored_image(db, tmp_path, tenant.id)
+    element_ref = f"event-{event.public_id}"
+    db.add_all([
+        GalleryImage(
+            tenant_id=tenant.id, stored_file_id=stored_file.id,
+            submission_assignment_id=assignment.id, submission_element_ref=element_ref,
+        ),
+        SubmissionUploadLog(assignment_id=assignment.id, element_ref=element_ref, status="success"),
+    ])
+    open_status_id = db.scalar(select(TodoStatus.id).where(TodoStatus.code == "open"))
+    db.add(ProtocolTodo(
+        tenant_id=tenant.id, task="Fotos hochladen", todo_status_id=open_status_id,
+        submission_assignment_id=assignment.id, element_ref=element_ref,
+    ))
+    db.flush()
+
+    new_tenant, warnings = _export_import(db, tenant.id, "full_abgabebox")
+
+    new_event = db.scalar(select(Event).where(Event.tenant_id == new_tenant.id))
+    new_ref = f"event-{new_event.public_id}"
+    assert warnings == []
+    assert new_event.public_id != event.public_id
+    assert db.scalar(select(GalleryImage).where(GalleryImage.tenant_id == new_tenant.id)).submission_element_ref == new_ref
+    assert db.scalar(
+        select(SubmissionUploadLog).join(SubmissionAssignment).where(SubmissionAssignment.tenant_id == new_tenant.id)
+    ).element_ref == new_ref
+    assert db.scalar(select(ProtocolTodo).where(ProtocolTodo.tenant_id == new_tenant.id)).element_ref == new_ref
+
+
+def test_export_import_roundtrip_restores_photo_albums(db, monkeypatch, tmp_path):
+    """photo_album/photo_album_item used to be missing from the export entirely."""
+    _storage(monkeypatch, tmp_path)
+    tenant = make_tenant(db, "Fotos")
+    cycle = make_cycle_config(db, tenant.id)
+    photo = _stored_image(db, tmp_path, tenant.id)
+    foreign_photo = _stored_image(db, tmp_path, make_tenant(db, "Partner").id, "partner.png")
+    manual = PhotoAlbum(tenant_id=tenant.id, name="Highlights")
+    by_cycle = PhotoAlbum(tenant_id=tenant.id, name="2026", kind="cycle", cycle_config_id=cycle.id, cycle_year=2026)
+    db.add_all([manual, by_cycle])
+    db.flush()
+    db.add_all([
+        PhotoAlbumItem(album_id=manual.id, file_id=photo.public_id, is_best=True, best_override="include"),
+        PhotoAlbumItem(album_id=by_cycle.id, file_id=photo.public_id),
+        # A partner tenant's photo in our (shared) album doesn't travel with our export.
+        PhotoAlbumItem(album_id=manual.id, file_id=foreign_photo.public_id),
+    ])
+    db.flush()
+
+    new_tenant, warnings = _export_import(db, tenant.id)
+
+    new_photo = db.scalar(select(StoredFile).where(StoredFile.tenant_id == new_tenant.id))
+    albums = {a.name: a for a in db.scalars(select(PhotoAlbum).where(PhotoAlbum.tenant_id == new_tenant.id))}
+    from app.models.entities import CycleConfig
+
+    new_cycle = db.scalar(select(CycleConfig).where(CycleConfig.tenant_id == new_tenant.id))
+    assert warnings == []
+    assert set(albums) == {"Highlights", "2026"}
+    assert albums["2026"].cycle_config_id == new_cycle.id
+    items = db.scalars(select(PhotoAlbumItem).where(PhotoAlbumItem.album_id == albums["Highlights"].id)).all()
+    assert [(i.file_id, i.is_best, i.best_override) for i in items] == [(new_photo.public_id, True, "include")]
+    assert db.scalar(select(PhotoAlbumItem.file_id).where(PhotoAlbumItem.album_id == albums["2026"].id)) == new_photo.public_id
+
+
+def test_export_import_roundtrip_restores_table_snapshots(db):
+    """Cycle snapshots of the Listen (table_snapshot) were missing from the export; their row
+    copies carry list/participant ids and are remapped like live rows."""
+    make_tenant(db, "Unrelated")
+    tenant = make_tenant(db, "Snapshots")
+    cycle = make_cycle_config(db, tenant.id)
+    participant = make_participant(db, tenant.id, "Anna")
+    definition = make_list_definition(db, tenant.id, column_one_value_type="participant")
+    entry = make_list_entry(db, definition.id, column_one_value={"participant_id": participant.id})
+    deleted_entry_row = {"id": 987_654, "public_id": "0190a000-0000-7000-8000-000000000001",
+                         "list_definition_id": definition.id, "column_one_value_json": {}}
+    db.add_all([
+        TableSnapshot(tenant_id=tenant.id, cycle_config_id=cycle.id, cycle_year=2025, table_name="list_definition",
+                      snapshot_json=[{"id": definition.id, "public_id": str(definition.public_id), "tenant_id": tenant.id}]),
+        TableSnapshot(tenant_id=tenant.id, cycle_config_id=cycle.id, cycle_year=2025, table_name="list_entry",
+                      snapshot_json=[
+                          {"id": entry.id, "public_id": str(entry.public_id), "list_definition_id": definition.id,
+                           "column_one_value_json": {"participant_id": participant.id}},
+                          deleted_entry_row,
+                      ]),
+    ])
+    db.flush()
+
+    new_tenant, warnings = _export_import(db, tenant.id)
+
+    new_definition = db.scalar(select(ListDefinition).where(ListDefinition.tenant_id == new_tenant.id))
+    new_entry = db.scalar(select(ListEntry).where(ListEntry.list_definition_id == new_definition.id))
+    new_participant = db.scalar(select(Participant).where(Participant.tenant_id == new_tenant.id))
+    snapshots = {s.table_name: s for s in db.scalars(select(TableSnapshot).where(TableSnapshot.tenant_id == new_tenant.id))}
+    assert warnings == []
+    assert snapshots["list_definition"].snapshot_json == [
+        {"id": new_definition.id, "public_id": str(new_definition.public_id), "tenant_id": new_tenant.id}
+    ]
+    live_row, deleted_row = snapshots["list_entry"].snapshot_json
+    assert live_row == {
+        "id": new_entry.id, "public_id": str(new_entry.public_id), "list_definition_id": new_definition.id,
+        "column_one_value_json": {"participant_id": new_participant.id},
+    }
+    # A row deleted live since the snapshot keeps its identity, under a placeholder id that
+    # can never collide with a real row.
+    assert deleted_row["id"] == -987_654
+    assert deleted_row["list_definition_id"] == new_definition.id
+
+
+def test_import_drops_plan_unknown_on_target_instead_of_failing(db):
+    tenant = make_tenant(db, "Plan")
+
+    def unknown_plan(zip_path):
+        _rewrite_manifest(zip_path, lambda m: m["tables"]["tenant"].update(plan_code="does-not-exist"))
+
+    new_tenant, warnings = _export_import(db, tenant.id, before_import=unknown_plan)
+
+    assert new_tenant.plan_code is None
+    assert any("does-not-exist" in warning for warning in warnings)
+
+
+_MAPS = WordImportIdMaps(
+    participant_map={1: 101}, event_map={2: 102}, list_definition_map={3: 103},
+    list_entry_map={4: 104}, template_element_map={5: 105}, protocol_map={6: 106},
+)
+
+
+def test_word_import_profile_config_is_remapped():
+    config = {
+        "heading_to_target": {"kurse": {"template_element_id": 5, "block_sort_index": 0}, "alt": {"template_element_id": 9}},
+        "table_roles_by_signature": {"sig": {"role": "list", "list_definition_id": 3, "matrix_key": None},
+                                     "m": {"role": "matrix", "list_definition_id": None, "matrix_key": "5:2"}},
+        "participant_name_overrides": {"anna": 1, "fremd": 77, "total": None},
+        "matrix_column_overrides": {"5:2:jungs": "gen-p-1", "5:2:fix": "col-a", "9:0:x": "col-b"},
+        "rejected_candidates": {
+            "event:2026-01-01|lager": {"rejected": [2, 88], "chosen": 2},
+            "name:anna": {"rejected": [1], "chosen": None},
+            "list_entry:3:zelt": {"rejected": [4], "chosen": 4},
+            "matrix_column:5:2:jungs": {"rejected": ["gen-e-2"], "chosen": "col-a"},
+            "table_role:sig": {"rejected": ["ignore"], "chosen": "list"},
+        },
+        "event_conflict_resolutions": {"2|lager": {"title_source": "doc"}, "88|weg": {"title_source": "doc"}},
+        "new_event_link_resolutions": {"sitzung": {"linked_event_id": 2}},
+        "event_ignored_keys": ["kategorie", "5:2:row1:gen-e-2:lager"],
+        "no_link_names": ["total"],
+    }
+
+    result = remap_word_import_profile_config(config, _MAPS)
+
+    assert result["heading_to_target"] == {"kurse": {"template_element_id": 105, "block_sort_index": 0}}
+    assert result["table_roles_by_signature"] == {
+        "sig": {"role": "list", "list_definition_id": 103, "matrix_key": None},
+        "m": {"role": "matrix", "list_definition_id": None, "matrix_key": "105:2"},
+    }
+    assert result["participant_name_overrides"] == {"anna": 101, "total": None}
+    assert result["matrix_column_overrides"] == {"105:2:jungs": "gen-p-101", "105:2:fix": "col-a"}
+    assert result["rejected_candidates"] == {
+        "event:2026-01-01|lager": {"rejected": [102], "chosen": 102},
+        "name:anna": {"rejected": [101], "chosen": None},
+        "list_entry:103:zelt": {"rejected": [104], "chosen": 104},
+        "matrix_column:105:2:jungs": {"rejected": ["gen-e-102"], "chosen": "col-a"},
+        "table_role:sig": {"rejected": ["ignore"], "chosen": "list"},
+    }
+    assert result["event_conflict_resolutions"] == {"102|lager": {"title_source": "doc"}}
+    assert result["new_event_link_resolutions"] == {"sitzung": {"linked_event_id": 102}}
+    assert result["event_ignored_keys"] == ["kategorie", "105:2:row1:gen-e-102:lager"]
+    assert result["no_link_names"] == ["total"]
+
+
+def test_word_import_analysis_is_remapped():
+    name = {"raw_name": "Anna", "participant_id": 1, "originally_suggested_participant_id": 77,
+            "candidates": [{"participant_id": 1}, {"participant_id": 77}]}
+    analysis = {
+        "tables": [{"index": 0, "list_definition_id": 3, "matrix_key": "5:0"}],
+        "text_mappings": [{"template_element_id": 5, "matched_event_id": 2, "event_candidates": [{"event_id": 2}, {"event_id": 88}],
+                           "form_fields": [{"names": [dict(name)]}], "form_fields_by_target": {"5:1": [{"names": []}], "9:0": []}}],
+        "text_targets": [{"template_element_id": 5}, {"template_element_id": 9}],
+        "attendance_mappings": [{"suggested_participant_id": 1, "candidates": [{"participant_id": 1}]}],
+        "event_mappings": [{"matched_event_id": 2, "candidates": [{"event_id": 2}], "matrix_key": "5:0", "column_key": "gen-e-2"}],
+        "list_definitions": [{"id": 3, "name": "Material"}, {"id": 99, "name": "Fremd"}],
+        "list_mappings": [{"matched_entry_id": 4, "column_one_names": [dict(name)], "column_two_names": [], "candidates": [{"entry_id": 4}]}],
+        "matrix_options": [{"matrix_key": "5:0"}, {"matrix_key": "9:0"}],
+        "matrix_mappings": [{"matrix_key": "5:0", "column_key": "gen-l-4", "column_candidates": [{"column_key": "gen-p-77"}, {"column_key": "fix"}], "names": []},
+                            {"matrix_key": "9:9", "names": []}],
+        "duplicate_protocols": [{"id": 6}, {"id": 66}],
+    }
+
+    result = remap_word_import_analysis(analysis, _MAPS)
+
+    remapped_name = {"raw_name": "Anna", "participant_id": 101, "originally_suggested_participant_id": None, "candidates": [{"participant_id": 101}]}
+    assert result["tables"] == [{"index": 0, "list_definition_id": 103, "matrix_key": "105:0"}]
+    text = result["text_mappings"][0]
+    assert (text["template_element_id"], text["matched_event_id"], text["event_candidates"]) == (105, 102, [{"event_id": 102}])
+    assert text["form_fields"] == [{"names": [remapped_name]}]
+    assert text["form_fields_by_target"] == {"105:1": [{"names": []}]}
+    assert result["text_targets"] == [{"template_element_id": 105}]
+    assert result["attendance_mappings"] == [{"suggested_participant_id": 101, "candidates": [{"participant_id": 101}]}]
+    assert result["event_mappings"] == [{"matched_event_id": 102, "candidates": [{"event_id": 102}], "matrix_key": "105:0", "column_key": "gen-e-102"}]
+    assert result["list_definitions"] == [{"id": 103, "name": "Material"}]
+    assert result["list_mappings"][0]["matched_entry_id"] == 104
+    assert result["list_mappings"][0]["column_one_names"] == [remapped_name]
+    assert result["list_mappings"][0]["candidates"] == [{"entry_id": 104}]
+    assert result["matrix_options"] == [{"matrix_key": "105:0"}]
+    assert result["matrix_mappings"] == [{"matrix_key": "105:0", "column_key": "gen-l-104", "column_candidates": [{"column_key": "fix"}], "names": []}]
+    assert result["duplicate_protocols"] == [{"id": 106}]
+
+
+# --- links, subscriptions, partner relations, tenant settings (full backup) ---------
+
+
+def _delete_tenant(db, tenant_id: int):
+    """Simulates restoring onto an installation where the tenant doesn't exist (anymore)."""
+    from sqlalchemy import delete
+
+    def hook(_zip_path):
+        db.execute(delete(Tenant).where(Tenant.id == tenant_id))
+        db.flush()
+
+    return hook
+
+
+def _make_submission_link(db, tenant_id: int, assignment_id: int, *, name: str, token: str):
+    from app.models.entities import SubmissionLink
+    from app.services import submission_link_service
+
+    link = SubmissionLink(tenant_id=tenant_id, name=name, token=token, is_default=name == "Standard")
+    db.add(link)
+    db.flush()
+    submission_link_service.attach_assignments(db, link, [assignment_id])
+    db.flush()
+    return link
+
+
+def test_full_backup_restores_abgabebox_links_with_their_tokens(db):
+    from app.models.entities import SubmissionLink, submission_assignment_link_table
+
+    tenant = make_tenant(db, "Links")
+    assignment = SubmissionAssignment(tenant_id=tenant.id, title="Berichte", public_slug="berichte", source_type="manual")
+    db.add(assignment)
+    db.flush()
+    _make_submission_link(db, tenant.id, assignment.id, name="Standard", token="token-standard-123")
+    _make_submission_link(db, tenant.id, assignment.id, name="Leiter", token="token-leiter-456")
+
+    new_tenant, warnings = _export_import(db, tenant.id, "full_abgabebox", before_import=_delete_tenant(db, tenant.id))
+
+    links = {link.name: link for link in db.scalars(select(SubmissionLink).where(SubmissionLink.tenant_id == new_tenant.id))}
+    new_assignment = db.scalar(select(SubmissionAssignment).where(SubmissionAssignment.tenant_id == new_tenant.id))
+    attached = set(db.scalars(
+        select(submission_assignment_link_table.c.link_id).where(submission_assignment_link_table.c.assignment_id == new_assignment.id)
+    ))
+    assert warnings == []
+    assert {name: link.token for name, link in links.items()} == {"Standard": "token-standard-123", "Leiter": "token-leiter-456"}
+    assert links["Standard"].is_default is True
+    assert attached == {links["Standard"].id, links["Leiter"].id}
+
+
+def test_reimport_on_same_installation_never_reuses_a_link_token(db):
+    """While the source tenant still exists, its tokens are its credentials - the copy gets
+    fresh ones (and a warning), never a second tenant behind the same URL."""
+    from app.models.entities import SubmissionLink
+
+    tenant = make_tenant(db, "Links")
+    assignment = SubmissionAssignment(tenant_id=tenant.id, title="Berichte", public_slug="berichte", source_type="manual")
+    db.add(assignment)
+    db.flush()
+    _make_submission_link(db, tenant.id, assignment.id, name="Standard", token="token-standard-123")
+
+    new_tenant, warnings = _export_import(db, tenant.id, "full_abgabebox")
+
+    new_link = db.scalar(select(SubmissionLink).where(SubmissionLink.tenant_id == new_tenant.id))
+    assert new_link.token != "token-standard-123"
+    assert any("Token" in warning for warning in warnings)
+
+
+def test_full_backup_restores_share_links_and_calendar_feeds(db, monkeypatch, tmp_path):
+    from app.models.entities import CalendarFeed, ShareLink, ShareLinkFile
+    from app.services import calendar_feed_service
+
+    _storage(monkeypatch, tmp_path)
+    tenant = make_tenant(db, "Freigaben")
+    user = make_app_user(db, email="feed@example.com", tenant_id=tenant.id, role_code="admin")
+    photo = _stored_image(db, tmp_path, tenant.id)
+    album = PhotoAlbum(tenant_id=tenant.id, name="Lager")
+    db.add(album)
+    db.flush()
+    album_link = ShareLink(tenant_id=tenant.id, name="Album", token="share-album-token", album_id=album.id, created_by=user.id)
+    file_link = ShareLink(tenant_id=tenant.id, name="Auswahl", token="share-file-token")
+    db.add_all([album_link, file_link])
+    db.flush()
+    db.add(ShareLinkFile(share_link_id=file_link.id, file_id=photo.public_id))
+    db.add(CalendarFeed(
+        tenant_id=tenant.id, user_id=user.id, kind="events", calendar_name="Termine",
+        token_hash=calendar_feed_service.hash_token("feed-token"),
+        token_encrypted=__import__("app.core.secret_crypto", fromlist=["encrypt_secret"]).encrypt_secret("feed-token"),
+    ))
+    db.flush()
+    album_id, album_link_id = album.id, album_link.id
+
+    new_tenant, warnings = _export_import(db, tenant.id, before_import=_delete_tenant(db, tenant.id))
+
+    links = {link.name: link for link in db.scalars(select(ShareLink).where(ShareLink.tenant_id == new_tenant.id))}
+    new_user = db.scalar(select(AppUser).where(AppUser.email == "feed@example.com"))
+    new_photo = db.scalar(select(StoredFile).where(StoredFile.tenant_id == new_tenant.id))
+    feed = db.scalar(select(CalendarFeed).where(CalendarFeed.tenant_id == new_tenant.id))
+    assert warnings == []
+    # Same ids and tokens: every handed-out URL keeps working after the restore.
+    assert links["Album"].token == "share-album-token"
+    assert links["Album"].id == album_link_id and links["Album"].album_id == album_id
+    assert links["Album"].created_by == new_user.id
+    assert db.scalar(select(ShareLinkFile.file_id).where(ShareLinkFile.share_link_id == links["Auswahl"].id)) == new_photo.public_id
+    assert feed.user_id == new_user.id
+    assert feed.token_hash == calendar_feed_service.hash_token("feed-token")
+    assert calendar_feed_service.token_of(feed) == "feed-token"
+
+
+def test_full_backup_restores_features_storage_packages_and_only_reinvites_partners(db, monkeypatch, tmp_path):
+    from app.core.security import hash_password
+    from app.models.entities import (
+        Feature,
+        PhotoAlbumTenantShare,
+        PlatformAdmin,
+        StoragePackage,
+        TenantFeature,
+        TenantStoragePackage,
+        TenantTrust,
+    )
+    from app.services import photo_album_share_service, tenant_trust_service
+
+    _storage(monkeypatch, tmp_path)
+    admin = PlatformAdmin(email="ops@example.com", password_hash=hash_password("x"), display_name="Ops")
+    package = StoragePackage(code="test-10gb", name="10 GB", bytes=10 * 1024**3)
+    db.add_all([admin, package])
+    db.flush()
+    feature_code = db.scalar(select(Feature.code).limit(1))
+    tenant = make_tenant(db, "Verein", features=())
+    partner = make_tenant(db, "Partnerverein")
+    db.add_all([
+        TenantFeature(tenant_id=tenant.id, feature_code=feature_code, enabled_by_admin_id=admin.id),
+        TenantStoragePackage(tenant_id=tenant.id, package_code="test-10gb", quantity=2, added_by_admin_id=admin.id),
+    ])
+    tenant_trust_service.establish(db, tenant.id, partner.id)
+    own_album = PhotoAlbum(tenant_id=tenant.id, name="Unser Album")
+    partner_album = PhotoAlbum(tenant_id=partner.id, name="Partner-Album")
+    db.add_all([own_album, partner_album])
+    db.flush()
+    our_photo = _stored_image(db, tmp_path, tenant.id)
+    db.add_all([
+        PhotoAlbumTenantShare(album_id=own_album.id, tenant_id=partner.id, status="accepted"),
+        PhotoAlbumTenantShare(album_id=partner_album.id, tenant_id=tenant.id, status="accepted"),
+        PhotoAlbumItem(album_id=partner_album.id, file_id=our_photo.public_id),
+    ])
+    db.flush()
+    own_album_id, partner_album_id = own_album.id, partner_album.id
+
+    new_tenant, warnings = _export_import(db, tenant.id, before_import=_delete_tenant(db, tenant.id))
+
+    feature = db.scalar(select(TenantFeature).where(TenantFeature.tenant_id == new_tenant.id))
+    storage = db.scalar(select(TenantStoragePackage).where(TenantStoragePackage.tenant_id == new_tenant.id))
+    new_photo = db.scalar(select(StoredFile).where(StoredFile.tenant_id == new_tenant.id))
+    assert (feature.feature_code, feature.enabled_by_admin_id) == (feature_code, admin.id)
+    assert (storage.package_code, storage.quantity, storage.added_by_admin_id) == ("test-10gb", 2, admin.id)
+    # Security-Audit SEC-001: ein Archiv belegt keine Zustimmung des Partners. Kein Trust, keine
+    # angenommene Freigabe; eigene Alben gehen als neue Einladung raus, Alben des Partners nicht.
+    low, high = sorted((new_tenant.id, partner.id))
+    assert db.get(TenantTrust, (low, high)) is None
+    new_own_album_id = db.scalar(select(PhotoAlbum.id).where(PhotoAlbum.tenant_id == new_tenant.id, PhotoAlbum.name == "Unser Album"))
+    reinvite = db.get(PhotoAlbumTenantShare, (new_own_album_id, partner.id))
+    assert reinvite is not None and reinvite.status == "pending"
+    assert db.get(PhotoAlbumTenantShare, (partner_album_id, new_tenant.id)) is None
+    # Kein Zugriff auf das Partner-Album: ohne Freigabe sieht der neue Mandant es nicht (der
+    # alte Album-Eintrag stammt hier aus der Roh-SQL-Löschung im Test-Hook; die echte
+    # Mandantenlöschung räumt ihn ab, siehe test_delete_tenant_removes_its_photos_from_partner_albums).
+    assert new_tenant.id not in photo_album_share_service.accessible_tenant_ids_for_album(db, partner_album_id)
+    assert any("Partnerverein" in warning and "Einladung" in warning for warning in warnings)
+    assert any("Alben anderer Mandanten nicht übernommen" in warning for warning in warnings)
+
+
+def test_import_skips_partner_relations_when_partner_is_missing(db):
+    from app.models.entities import TenantTrust
+    from app.services import tenant_trust_service
+
+    tenant = make_tenant(db, "Verein")
+    partner = make_tenant(db, "Partnerverein")
+    tenant_trust_service.establish(db, tenant.id, partner.id)
+    db.flush()
+
+    new_tenant, warnings = _export_import(db, tenant.id, before_import=_delete_tenant(db, partner.id))
+
+    assert db.scalar(
+        select(TenantTrust).where((TenantTrust.tenant_low_id == new_tenant.id) | (TenantTrust.tenant_high_id == new_tenant.id))
+    ) is None
+    assert any("Vertrauensbeziehung" in warning for warning in warnings)
+
+
+def test_import_keeps_registry_with_original_and_never_imports_identity_verification(db):
+    """Ein Archiv, das in dieselbe Installation zurückgespielt wird: der Hash gehört weiter dem
+    Original (Eintrag übersprungen, Warnung). Die Bestätigung der Organisation durch hocX reist nie
+    mit - auch nicht, wenn ein (manipuliertes) Archiv sie behauptet."""
+    tenant = make_tenant(db, "Registerverein")
+    tenant.identity_verified_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    tenant.identity_verification_note = "Handelsregister geprüft"
+    tenant.verify_show_identity = True
+    db.add(DocumentRegistry(tenant_id=tenant.id, sha256="ef" * 32, document_type="todos", title="Pendenzen"))
+    db.flush()
+
+    zip_path, _ = TenantExportService().export(db, tenant.id, "full", include_credentials=True)
+    try:
+        imported_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Registerverein (Kopie)")
+    finally:
+        zip_path.unlink(missing_ok=True)
+
+    assert db.scalar(select(DocumentRegistry.tenant_id).where(DocumentRegistry.sha256 == "ef" * 32)) == tenant.id
+    assert db.scalar(select(DocumentRegistry).where(DocumentRegistry.tenant_id == imported_tenant.id)) is None
+    assert any("Dokumentenregister: 1 Einträge übersprungen" in warning for warning in warnings)
+    assert imported_tenant.identity_verified_at is None and imported_tenant.identity_verification_note is None
+    assert imported_tenant.verify_show_identity is True
+
+
+def test_import_converts_house_styles_and_recipes_of_format_6_archives(db, tmp_path):
+    """Archive der Dokument-Engine vor dem Document Studio: Hausstil → Brand-Profil (Standard
+    bleibt Standard), Rezept → veröffentlichte Mandantenvorlage, Hausstil der Protokollvorlage →
+    Brand-Zuweisung."""
+    import zipfile
+
+    from app.documents import brand_service
+
+    manifest = {
+        "format_version": 6,
+        "scope": "structure",
+        "tables": {
+            "tenant": {"id": 1, "name": "Altarchiv"},
+            "document_style": [
+                {"id": 10, "tenant_id": 1, "name": "Standard", "style_key": "classic", "tokens_json": {"primary_color": "#a83f2f", "title_page": "modern"}, "is_default": True, "version": 1},
+                {"id": 11, "tenant_id": 1, "name": "Jugend", "style_key": "compact", "tokens_json": {}, "is_default": False, "version": 1},
+            ],
+            "document_recipe": [{"id": 5, "tenant_id": 1, "name": "Monatsbrief", "document_type": "custom", "blocks_json": [{"type": "heading", "params": {"text": "Hallo"}}], "options_json": {}, "style_id": 11}],
+            "template": [{"id": 3, "tenant_id": 1, "name": "Jugendvorstand", "status": "active", "version": 1, "document_style_id": 11}],
+        },
+    }
+    zip_path = tmp_path / "alt.zip"
+    with zipfile.ZipFile(zip_path, "w") as archive:
+        archive.writestr("manifest.json", json.dumps(manifest))
+    imported_tenant, warnings = TenantImportService().import_zip(db, zip_path, "Altarchiv (Import)")
+
+    brands = {brand.name: brand for brand in db.scalars(select(DocumentBrand).where(DocumentBrand.tenant_id == imported_tenant.id))}
+    assert set(brands) == {"Standard", "Jugend"} and brands["Standard"].is_default
+    tokens = brand_service.tokens_of(brand_service.current_revision(db, brands["Standard"]))
+    assert tokens.colors.primary == "#A83F2F" and tokens.layout.title_page
+    recipe_template = db.scalar(select(DocumentTemplate).where(DocumentTemplate.tenant_id == imported_tenant.id))
+    assert recipe_template.name == "Monatsbrief" and recipe_template.published_revision_id and recipe_template.brand_id == brands["Jugend"].id
+    assignment = db.scalar(select(DocumentTemplateAssignment).where(DocumentTemplateAssignment.tenant_id == imported_tenant.id))
+    assert assignment.brand_id == brands["Jugend"].id and assignment.document_type == "protocol"
+
+
+def test_import_merges_duplicate_fines_from_old_archives(db):
+    """MAIN-BE-016: Archive von vor Migration 0116 können doppelte Bussen enthalten - der
+    Import führt sie zusammen (kassiert vor offen) statt am Unique-Index abzubrechen."""
+    from decimal import Decimal
+
+    from app.models.entities import AttendanceFine
+    from tests.factories import make_finance_account, make_fine
+
+    tenant = make_tenant(db, "Bussen-Duplikat")
+    template = make_template(db, tenant.id)
+    protocol = make_protocol(db, tenant.id, template.id)
+    account = make_finance_account(db, tenant.id)
+    make_fine(db, protocol_id=protocol.id, account_id=account.id, amount=Decimal("5.00"))
+    db.commit()
+
+    def duplicate_fine(zip_path):
+        def mutate(manifest):
+            original = manifest["tables"]["attendance_fine"][0]
+            copy = {**original, "id": original["id"] + 100000, "status": "collected"}
+            copy.pop("public_id", None)
+            manifest["tables"]["attendance_fine"].append(copy)
+        _rewrite_manifest(zip_path, mutate)
+
+    new_tenant, warnings = _export_import(db, tenant.id, before_import=duplicate_fine)
+
+    fines = db.scalars(
+        select(AttendanceFine).join(Protocol, Protocol.id == AttendanceFine.protocol_id).where(Protocol.tenant_id == new_tenant.id)
+    ).all()
+    assert [fine.status for fine in fines] == ["collected"]
+    assert any("doppelte Busse" in warning for warning in warnings)
+
+
+
+def test_import_marks_registry_entries_without_matching_pdf_as_unverified(db, monkeypatch, tmp_path):
+    """TYPST-007: Ein Register-Eintrag gilt nach dem Import nur als belegt, wenn das Archiv eine
+    PDF mit genau diesem Hash enthält; sonst «importiert, nicht verifiziert". Der Wert aus dem
+    Archiv selbst zählt nicht."""
+    import hashlib
+
+    from sqlalchemy import delete
+
+    _storage(monkeypatch, tmp_path)
+    tenant = make_tenant(db, "Registerprüfung")
+    pdf = b"%PDF-1.7 hocx test"
+    (tmp_path / "export.pdf").write_bytes(pdf)
+    db.add(StoredFile(tenant_id=tenant.id, original_name="export.pdf", mime_type="application/pdf", storage_path="export.pdf", file_size_bytes=len(pdf)))
+    backed = hashlib.sha256(pdf).hexdigest()
+    db.add(DocumentRegistry(tenant_id=tenant.id, sha256=backed, document_type="protocol", title="Mit Datei"))
+    db.add(DocumentRegistry(tenant_id=tenant.id, sha256="ab" * 32, document_type="protocol", title="Ohne Datei"))
+    db.flush()
+
+    def fresh_installation(zip_path):
+        # Auf einer frischen Installation sind die Hashes noch frei (sonst würden sie übersprungen).
+        db.execute(delete(DocumentRegistry).where(DocumentRegistry.tenant_id == tenant.id))
+        _rewrite_manifest(zip_path, lambda manifest: [row.update(import_unverified=False) for row in manifest["tables"]["document_registry"]])
+
+    imported, warnings = _export_import(db, tenant.id, before_import=fresh_installation)
+
+    flags = dict(db.execute(select(DocumentRegistry.sha256, DocumentRegistry.import_unverified).where(DocumentRegistry.tenant_id == imported.id)).all())
+    assert flags == {backed: False, "ab" * 32: True}
+    assert any("nicht verifiziert" in warning for warning in warnings)
+
+
+def test_delete_tenant_removes_its_photos_from_partner_albums(db, monkeypatch, tmp_path):
+    """photo_album_item.file_id hat keinen Fremdschlüssel: ohne Aufräumen blieben die Fotos eines
+    gelöschten Mandanten als Einträge in geteilten Alben anderer Mandanten stehen."""
+    from app.models.entities import PhotoAlbumTenantShare
+    from app.services.admin_tenant_service import AdminTenantService
+
+    _storage(monkeypatch, tmp_path)
+    tenant = make_tenant(db, "Wird gelöscht")
+    partner = make_tenant(db, "Partner mit Album")
+    partner_album = PhotoAlbum(tenant_id=partner.id, name="Partner-Album")
+    db.add(partner_album)
+    db.flush()
+    photo = _stored_image(db, tmp_path, tenant.id)
+    partner_photo = _stored_image(db, tmp_path, partner.id)
+    db.add_all([
+        PhotoAlbumTenantShare(album_id=partner_album.id, tenant_id=tenant.id, status="accepted"),
+        PhotoAlbumItem(album_id=partner_album.id, file_id=photo.public_id),
+        PhotoAlbumItem(album_id=partner_album.id, file_id=partner_photo.public_id),
+    ])
+    db.flush()
+    album_id, photo_public_id, partner_photo_public_id = partner_album.id, photo.public_id, partner_photo.public_id
+
+    assert AdminTenantService().delete_tenant(db, tenant.id)
+
+    assert db.get(PhotoAlbumItem, (album_id, photo_public_id)) is None
+    assert db.get(PhotoAlbumItem, (album_id, partner_photo_public_id)) is not None

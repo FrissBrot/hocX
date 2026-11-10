@@ -4,14 +4,16 @@ BEHAVIOR_FIELDS = ("is_editable", "is_visible", "export_visible", "copy_from_las
 
 
 def block_defaults(block: dict) -> dict:
-    """The behavior values baked into an ElementDefinition block, before any template override."""
-    block_config = block.get("configuration_json") or {}
+    """The behavior values baked into an ElementDefinition block, before any template override.
+
+    Alle fünf Schalter sind Felder des Blocks (title_as_subtitle lag früher in
+    configuration_json, siehe Migration 0113_element_config_schema)."""
     return {
         "is_editable": block.get("is_editable", True),
         "is_visible": block.get("is_visible", True),
         "export_visible": block.get("export_visible", True),
         "copy_from_last_protocol": block.get("copy_from_last_protocol", False),
-        "title_as_subtitle": block_config.get("title_as_subtitle", True),
+        "title_as_subtitle": block.get("title_as_subtitle", True),
     }
 
 

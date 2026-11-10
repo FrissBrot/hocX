@@ -2,21 +2,30 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useLocale, useTranslations } from "next-intl";
 
 import { usePopupEscape, usePopupScrollLock } from "@/lib/hooks/use-popup-escape";
 import { LivePhotoClip } from "@/components/photos/live-photo-clip";
+import { DateInput } from "@/components/ui/date-input";
+import { todayIso } from "@/components/mobile/mobile-utils";
 import { TagInput } from "@/components/ui/tag-input";
+import { PhotoDateMarker } from "@/components/photos/photo-date-marker";
+import { ActionIcon } from "@/components/ui/action-icons";
 import { useDeferredPopupSave } from "@/lib/hooks/use-deferred-popup-save";
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
-import { formatDateTime, formatFileSize, formatWeekdayDate } from "@/lib/utils/format";
+import { formatCaptureDateTime, formatDate, formatDateTime, formatFileSize, formatWeekdayDate } from "@/lib/utils/format";
 import { FileOverviewItem, StoredFileMetadata } from "@/types/api";
 
+type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
+
 // Was ein Live Photo beim Herunterladen liefert - siehe GET /stored-files/{id}/download?part=.
-const LIVE_DOWNLOAD_OPTIONS = [
-  { part: "image", label: "Bild (JPEG)" },
-  { part: "video", label: "Video (MP4)" },
-  { part: "both", label: "Bild und Video (ZIP)" },
-];
+function liveDownloadOptions(t: TFunc) {
+  return [
+    { part: "image", label: t("downloadOptions.image") },
+    { part: "video", label: t("downloadOptions.video") },
+    { part: "both", label: t("downloadOptions.both") },
+  ];
+}
 
 export function PhotoViewer({
   items,
@@ -25,6 +34,7 @@ export function PhotoViewer({
   onClose,
   onToggleBest,
   onTagsSaved,
+  onCaptureDateSaved,
 }: {
   items: FileOverviewItem[];
   index: number;
@@ -32,24 +42,28 @@ export function PhotoViewer({
   onClose: () => void;
   onToggleBest: (item: FileOverviewItem) => void;
   onTagsSaved: (id: string, tags: string[]) => void;
+  // Geschätztes Aufnahmedatum geändert - die Galerie sortiert/gruppiert danach neu.
+  onCaptureDateSaved?: (id: string, metadata: StoredFileMetadata) => void;
 }) {
+  const t = useTranslations("photos.viewer");
+  const locale = useLocale();
   const item = items[index];
   const hasFace = item.face_quality_score !== null;
   const faceMeter = (
     <PhotoMeter
-      label="Gesichtsqualität"
+      label={t("faceQualityLabel")}
       tone="face"
       value={
         item.face_analyzed_at === null
           ? null
           : item.face_quality_score !== null
-            ? describeSharpness(item.face_quality_score)
-            : "Kein Gesicht erkannt"
+            ? describeSharpness(item.face_quality_score, t)
+            : t("noFaceDetected")
       }
       fraction={item.face_quality_score !== null ? sharpnessFraction(item.face_quality_score) : null}
       title={
         item.face_quality_score !== null
-          ? `Rohwert (Schärfe des Gesichtsausschnitts, gewichtet nach Belichtung): ${item.face_quality_score.toFixed(1)}`
+          ? t("faceRawTitle", { score: item.face_quality_score.toFixed(1) })
           : undefined
       }
     />
@@ -107,7 +121,10 @@ export function PhotoViewer({
       const target = event.target as HTMLElement | null;
       const typing =
         !!target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
-      const plainLetter = !typing && !event.ctrlKey && !event.metaKey && !event.altKey;
+      // Beim Tippen (z. B. im Tag-Feld) bewegen die Pfeiltasten den Cursor, nicht das Foto
+      // (Audit MAIN-FE-006).
+      if (typing) return;
+      const plainLetter = !event.ctrlKey && !event.metaKey && !event.altKey;
       const key = event.key.toLowerCase();
       const prev = event.key === "ArrowLeft" || (plainLetter && key === "j");
       const next = event.key === "ArrowRight" || (plainLetter && key === "l");
@@ -129,15 +146,38 @@ export function PhotoViewer({
   useEffect(() => {
     setTagsValue(item.tags.join(","));
     setMetadata(null);
+    // Beim schnellen Blaettern darf eine verspaetete Antwort des vorigen Fotos dessen Metadaten
+    // nicht beim aktuellen anzeigen (Audit MAIN-FE-007).
+    let cancelled = false;
     browserApiFetch<StoredFileMetadata>(item.metadata_url)
-      .then((data) => setMetadata(data))
-      .catch(() => setMetadata(null));
+      .then((data) => { if (!cancelled) setMetadata(data); })
+      .catch(() => { if (!cancelled) setMetadata(null); });
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id]);
 
+  function handleEstimatedDateChange(value: string) {
+    if (!metadata) return;
+    const estimated = value || null;
+    if ((metadata.estimated_taken_on ?? null) === estimated) return;
+    setMetadata({ ...metadata, estimated_taken_on: estimated });
+    const fileId = item.id;
+    schedule(async () => {
+      const saved = await browserApiFetch<StoredFileMetadata>(`/api/stored-files/${fileId}/capture-date`, {
+        method: "PATCH",
+        body: JSON.stringify({ estimated_taken_on: estimated }),
+      });
+      if (!saved) return;
+      setMetadata((current) => (current && current.id === saved.id ? saved : current));
+      onCaptureDateSaved?.(fileId, saved);
+    });
+  }
+
   function handleTagsChange(value: string) {
     setTagsValue(value);
-    const tags = value ? value.split(",").map((t) => t.trim()).filter(Boolean) : [];
+    const tags = value ? value.split(",").map((tag) => tag.trim()).filter(Boolean) : [];
     schedule(async () => {
       const saved = await browserApiFetch<string[]>(item.tags_url, { method: "PATCH", body: JSON.stringify({ tags }) });
       onTagsSaved(item.id, saved ?? tags);
@@ -148,7 +188,7 @@ export function PhotoViewer({
     if (await flush()) onClose();
   }
 
-  const dimensions = metadata?.width && metadata?.height ? `${metadata.width} × ${metadata.height} px` : null;
+  const dimensions = metadata?.width && metadata?.height ? t("dimensionsValue", { width: metadata.width, height: metadata.height }) : null;
   const bezugParts = [item.albums[0]?.name, item.context_label].filter(Boolean);
 
   // Same SSR guard ui/lightbox-image.tsx already has for its own createPortal call -
@@ -164,21 +204,23 @@ export function PhotoViewer({
       {saveError && <p role="alert">{saveError}</p>}
       <div className="photo-viewer-header">
         <div className="photo-viewer-header-left">
-          <button type="button" className="photo-viewer-close" aria-label="Schliessen" onClick={() => void saveAndClose()}>
-            ✕
+          <button type="button" className="photo-viewer-close" aria-label={t("close")} onClick={() => void saveAndClose()}>
+            <ActionIcon name="close" />
           </button>
           <div>
             <div className="photo-viewer-title">{item.original_name}</div>
             <div className="photo-viewer-subtitle">
-              {item.group_date ? `${formatWeekdayDate(item.group_date)} · ` : ""}
+              {item.group_date ? formatWeekdayDate(item.group_date, locale) : ""}
+              {item.group_date && (item.date_source === "estimated" || item.date_source === "upload") ? <PhotoDateMarker kind={item.date_source} /> : null}
+              {item.group_date ? " · " : ""}
               {index + 1}/{items.length}
             </div>
           </div>
         </div>
         <div className="photo-viewer-actions">
-          <button type="button" className="pill" onClick={() => void saveAndClose()}>Galerie</button>
+          <button type="button" className="pill" onClick={() => void saveAndClose()}>{t("galleryPill")}</button>
           <button type="button" className="pill photo-viewer-pill-accent" onClick={() => onToggleBest(item)}>
-            {item.is_best ? "★ Best-of" : "☆ Best-of"}
+            {item.is_best ? t("bestOn") : t("bestOff")}
           </button>
           {item.live_video_url && (
             <div ref={downloadRef} className="photo-viewer-download">
@@ -189,12 +231,12 @@ export function PhotoViewer({
                 aria-expanded={downloadOpen}
                 onClick={() => setDownloadOpen((open) => !open)}
               >
-                Herunterladen ▾
+                {t("downloadButton")}
               </button>
               {downloadOpen && (
                 <div className="dropdown-panel dropdown-panel-down" role="menu">
                   <div className="dropdown-panel-scroll">
-                    {LIVE_DOWNLOAD_OPTIONS.map((option) => (
+                    {liveDownloadOptions(t).map((option) => (
                       <a
                         key={option.part}
                         role="menuitem"
@@ -211,7 +253,7 @@ export function PhotoViewer({
             </div>
           )}
           <a href={fileUrl} target="_blank" rel="noreferrer" className="pill photo-viewer-pill-solid">
-            Original öffnen
+            {t("openOriginal")}
           </a>
         </div>
       </div>
@@ -223,7 +265,7 @@ export function PhotoViewer({
           onMouseLeave={item.live_video_url ? () => setLiveHover(false) : undefined}
         >
           {hasPrev && (
-            <button type="button" className="photo-viewer-nav photo-viewer-nav-prev" aria-label="Vorheriges Foto" onClick={() => onIndexChange(index - 1)}>
+            <button type="button" className="photo-viewer-nav photo-viewer-nav-prev" aria-label={t("prevPhoto")} onClick={() => onIndexChange(index - 1)}>
               ‹
             </button>
           )}
@@ -246,7 +288,7 @@ export function PhotoViewer({
                 type="button"
                 className="photo-viewer-live"
                 aria-pressed={livePinned}
-                aria-label="Live Photo abspielen"
+                aria-label={t("playLivePhoto")}
                 onClick={() => setLivePinned((pinned) => !pinned)}
               >
                 LIVE
@@ -254,12 +296,12 @@ export function PhotoViewer({
             </>
           )}
           {loadingOriginal && (
-            <div className="photo-viewer-loading" role="status" aria-label="Originalbild wird geladen">
+            <div className="photo-viewer-loading" role="status" aria-label={t("originalLoading")}>
               <span className="photo-viewer-loading-spinner" aria-hidden="true" />
             </div>
           )}
           {hasNext && (
-            <button type="button" className="photo-viewer-nav photo-viewer-nav-next" aria-label="Nächstes Foto" onClick={() => onIndexChange(index + 1)}>
+            <button type="button" className="photo-viewer-nav photo-viewer-nav-next" aria-label={t("nextPhoto")} onClick={() => onIndexChange(index + 1)}>
               ›
             </button>
           )}
@@ -267,23 +309,23 @@ export function PhotoViewer({
 
         <div className="photo-viewer-sidebar">
           <div className="photo-viewer-section">
-            <div className="photo-viewer-section-title">Analyse</div>
+            <div className="photo-viewer-section-title">{t("analysisSection")}</div>
             {hasFace && faceMeter}
             <PhotoMeter
-              label={hasFace ? "Schärfe (gesamtes Bild)" : "Schärfe"}
+              label={hasFace ? t("sharpnessFullLabel") : t("sharpnessLabel")}
               tone="sharpness"
-              value={item.sharpness_score !== null ? describeSharpness(item.sharpness_score) : null}
+              value={item.sharpness_score !== null ? describeSharpness(item.sharpness_score, t) : null}
               fraction={item.sharpness_score !== null ? sharpnessFraction(item.sharpness_score) : null}
-              title={item.sharpness_score !== null ? `Rohwert (Laplace-Varianz der schärfsten Bildbereiche): ${item.sharpness_score.toFixed(1)}` : undefined}
+              title={item.sharpness_score !== null ? t("sharpnessRawTitle", { score: item.sharpness_score.toFixed(1) }) : undefined}
             />
             <PhotoMeter
-              label="Belichtung"
+              label={t("exposureLabel")}
               tone="exposure"
-              value={item.exposure_score !== null ? describeExposure(item.exposure_score) : null}
+              value={item.exposure_score !== null ? describeExposure(item.exposure_score, t) : null}
               fraction={item.exposure_score}
               title={
                 item.exposure_score !== null
-                  ? `${Math.round((1 - item.exposure_score) * 100)}% der Pixel sind ausgebrannt oder abgesoffen`
+                  ? t("exposureRawTitle", { percent: Math.round((1 - item.exposure_score) * 100) })
                   : undefined
               }
             />
@@ -291,38 +333,48 @@ export function PhotoViewer({
           </div>
 
           <div className="photo-viewer-section">
-            <div className="photo-viewer-section-title">Details</div>
+            <div className="photo-viewer-section-title">{t("detailsSection")}</div>
+            <CaptureDateBox
+              metadata={metadata}
+              locale={locale}
+              onChange={handleEstimatedDateChange}
+            />
             <dl className="photo-viewer-details">
               {bezugParts.length > 0 && (
-                <div>
-                  <dt>Bezug</dt>
+                <div className="photo-viewer-details-wide">
+                  <dt>{t("refLabel")}</dt>
                   <dd>{bezugParts.join(" · ")}</dd>
                 </div>
               )}
               <div>
-                <dt>Aufgenommen</dt>
-                <dd>{formatDateTime(metadata?.exif_taken_at ?? item.created_at)}</dd>
+                <dt>{t("uploadedLabel")}</dt>
+                <dd>{formatDateTime(item.created_at, locale)}</dd>
               </div>
-              {dimensions && (
-                <div>
-                  <dt>Bildmasse</dt>
-                  <dd>{dimensions}</dd>
-                </div>
-              )}
-              {item.file_size_bytes !== null && item.file_size_bytes !== undefined ? (
-                <div>
-                  <dt>Grösse</dt>
-                  <dd>{formatFileSize(item.file_size_bytes)}</dd>
-                </div>
-              ) : null}
-              {metadata?.exif_camera && (
-                <div>
-                  <dt>Kamera</dt>
-                  <dd>{metadata.exif_camera}</dd>
-                </div>
-              )}
               <div>
-                <dt>Herkunft</dt>
+                <dt>{t("locationLabel")}</dt>
+                <dd>
+                  {metadata?.gps ? (
+                    <>
+                      {t("locationValue", { latitude: metadata.gps.latitude.toFixed(5), longitude: metadata.gps.longitude.toFixed(5) })}
+                      {metadata.gps.altitude_m !== null && metadata.gps.altitude_m !== undefined ? ` · ${t("altitudeValue", { meters: Math.round(metadata.gps.altitude_m) })}` : ""}
+                    </>
+                  ) : "—"}
+                </dd>
+              </div>
+              <div>
+                <dt>{t("dimensionsLabel")}</dt>
+                <dd>{dimensions || "—"}</dd>
+              </div>
+              <div>
+                <dt>{t("sizeLabel")}</dt>
+                <dd>{item.file_size_bytes !== null && item.file_size_bytes !== undefined ? formatFileSize(item.file_size_bytes) : "—"}</dd>
+              </div>
+              <div>
+                <dt>{t("cameraLabel")}</dt>
+                <dd>{metadata?.exif_camera || "—"}</dd>
+              </div>
+              <div>
+                <dt>{t("originLabel")}</dt>
                 <dd>{item.origin_tag}</dd>
               </div>
             </dl>
@@ -330,9 +382,9 @@ export function PhotoViewer({
 
           <div className="photo-viewer-section">
             <div className="photo-viewer-section-title">
-              Tags {saving ? <span className="muted">(speichert…)</span> : null}
+              {t("tagsSection")} {saving ? <span className="muted">{t("savingSuffix")}</span> : null}
             </div>
-            <TagInput value={tagsValue} onChange={handleTagsChange} placeholder="+ Tag" alwaysShowPlaceholder />
+            <TagInput value={tagsValue} onChange={handleTagsChange} placeholder={t("tagPlaceholder")} alwaysShowPlaceholder />
           </div>
         </div>
       </div>
@@ -354,11 +406,12 @@ function PhotoMeter({
   tone: "sharpness" | "exposure" | "face";
   title?: string;
 }) {
+  const t = useTranslations("photos.viewer");
   return (
     <div className="photo-meter-row" title={title}>
       <div className="photo-meter-label-row">
         <span className="photo-meter-label">{label}</span>
-        <span className="photo-meter-value">{value ?? "Analyse ausstehend"}</span>
+        <span className="photo-meter-value">{value ?? t("analysisPending")}</span>
       </div>
       <div className="photo-meter-bar">
         <div
@@ -379,12 +432,64 @@ function sharpnessFraction(score: number): number {
   return Math.min(1, Math.max(0, Math.log10(1 + Math.max(0, score)) / SHARPNESS_LOG_CEILING));
 }
 
-function describeSharpness(score: number): string {
-  const label = score < 50 ? "Unscharf" : score < 300 ? "Mittel" : score < 1500 ? "Scharf" : "Sehr scharf";
-  return `${label} · ${Math.round(sharpnessFraction(score) * 100)}/100`;
+function describeSharpness(score: number, t: TFunc): string {
+  const label = score < 50 ? t("sharpnessLevels.blurry") : score < 300 ? t("sharpnessLevels.medium") : score < 1500 ? t("sharpnessLevels.sharp") : t("sharpnessLevels.verySharp");
+  return t("sharpnessFormat", { label, percent: Math.round(sharpnessFraction(score) * 100) });
 }
 
-function describeExposure(score: number): string {
-  const label = score >= 0.95 ? "Gut" : score >= 0.85 ? "Leichtes Clipping" : "Starkes Clipping";
-  return `${label} · ${Math.round(score * 100)}%`;
+function describeExposure(score: number, t: TFunc): string {
+  const label = score >= 0.95 ? t("exposureLevels.good") : score >= 0.85 ? t("exposureLevels.slight") : t("exposureLevels.strong");
+  return t("exposureFormat", { label, percent: Math.round(score * 100) });
 }
+
+/** Aufnahmedatum als eigener Kasten: echtes Datum aus EXIF, geschätztes Datum (hervorgehoben,
+ * bearbeitbar) oder unbekannt. Das Schätzdatum zählt nur ohne echtes Aufnahmedatum. */
+function CaptureDateBox({ metadata, locale, onChange }: {
+  metadata: StoredFileMetadata | null;
+  locale: string;
+  onChange: (value: string) => void;
+}) {
+  const t = useTranslations("photos.viewer");
+  const [editing, setEditing] = useState(false);
+  if (!metadata) return <div className="photo-date-box">…</div>;
+
+  if (metadata.exif_taken_at) {
+    return (
+      <div className="photo-date-box">
+        <span className="photo-date-box-kicker">{t("dateBox.exifKicker")}</span>
+        <strong className="photo-date-box-value">{formatCaptureDateTime(metadata.exif_taken_at, metadata.exif_taken_offset, locale)}</strong>
+        <span className="photo-date-box-note">{t("dateBox.exifNote")}</span>
+      </div>
+    );
+  }
+
+  const estimated = metadata.estimated_taken_on;
+  const canEdit = metadata.can_edit_capture_date;
+  const showEditor = canEdit && (editing || !estimated);
+  return (
+    <div className={`photo-date-box${estimated ? " photo-date-box-estimated" : ""}`}>
+      <div className="photo-date-box-head">
+        <span className="photo-date-box-kicker">{estimated ? t("estimatedLabel") : t("dateBox.unknownKicker")}</span>
+        {canEdit && estimated ? (
+          <button type="button" className="photo-date-box-action" onClick={() => setEditing((value) => !value)}>
+            {editing ? t("dateBox.done") : t("dateBox.change")}
+          </button>
+        ) : null}
+      </div>
+      {estimated && !editing ? <strong className="photo-date-box-value">{formatDate(estimated)}</strong> : null}
+      {!estimated && !canEdit ? <strong className="photo-date-box-value">{t("takenUnknown")}</strong> : null}
+      {showEditor ? (
+        <div className="photo-viewer-estimate">
+          <DateInput value={estimated ?? ""} onChange={onChange} max={todayIso()} aria-label={t("estimatedLabel")} />
+          {estimated ? (
+            <button type="button" className="button-ghost photo-viewer-estimate-remove" onClick={() => { onChange(""); setEditing(false); }}>
+              {t("estimatedRemove")}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      <span className="photo-date-box-note">{estimated ? t("dateBox.estimatedNote") : t("dateBox.unknownNote")}</span>
+    </div>
+  );
+}
+

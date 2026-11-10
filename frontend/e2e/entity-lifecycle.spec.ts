@@ -22,12 +22,12 @@ test("creates, reads, edits and deletes core entities", async ({ request, page }
 
     const session = await (await request.get("/api/auth/session")).json();
     const tenantId = session.current_tenant.id;
-    const user = await json(request, "post", "/api/users", { first_name: "E2E", last_name: "User", display_name: `E2E User ${suffix}`, email: `user-${suffix}@example.invalid`, password: "E2E-Secure-Password-123!", role_code: "reader" });
+    const user = await json(request, "post", "/api/users", { first_name: "E2E", last_name: "User", display_name: `E2E User ${suffix}`, email: `user-${suffix}@example.invalid`, password: "E2E-Secure-Password-123!" });
     cleanup.push(["user", user.id]);
 
     const templates = await (await request.get("/api/templates")).json();
     expect(templates.length).toBeGreaterThan(0);
-    const duplicate = await json(request, "post", `/api/templates/${templates[0].id}/duplicate`, { name: `E2E Vorlage ${suffix}` });
+    const duplicate = await json(request, "post", `/api/templates/${(templates.find((item: { name: string }) => !item.name.startsWith("E2E")) ?? templates[0]).id}/duplicate`, { name: `E2E Vorlage ${suffix}` });
     cleanup.push(["template", duplicate.id]);
     const protocolResult = await json(request, "post", "/api/protocols/from-template", { template_id: duplicate.id, protocol_date: new Date().toISOString().slice(0, 10), title: `E2E Protokoll ${suffix}` });
     cleanup.push(["protocol", protocolResult.protocol_id]);

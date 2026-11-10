@@ -30,6 +30,7 @@ const album: PhotoAlbum = {
   cover_thumbnail_urls: [],
   owner_tenant_name: null,
   shared_with: [],
+  my_share: null,
   is_shared: false,
   pending_share_count: 0,
 };
@@ -85,7 +86,7 @@ describe("AlbumPhotoPicker", () => {
     render(<AlbumPhotoPicker album={album} onClose={vi.fn()} onAdded={vi.fn()} />);
 
     expect(await screen.findByText("Album · Mitgliederfotos Vereinsheft")).toBeInTheDocument();
-    expect(screen.getByText("2 Fotos")).toBeInTheDocument();
+    expect(await screen.findByText("2 Fotos")).toBeInTheDocument();
     expect(screen.getByText("Im Album")).toBeInTheDocument();
     const contained = screen.getByRole("checkbox", { name: "b1.jpg (bereits im Album)" });
     fireEvent.click(contained);

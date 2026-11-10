@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDangerLineFeatures } from "./hiking-tour-danger";
+import { buildDangerLineFeatures, dangerLegend } from "./hiking-tour-danger";
 import { ElevationProfilePoint } from "@/types/api";
 
 function point(distance_m: number, lon: number): ElevationProfilePoint {
@@ -30,5 +30,13 @@ describe("Gefahrensegmente auf der Karte", () => {
   it("ignoriert leere Segmente und zu kurze Profile", () => {
     expect(buildDangerLineFeatures(profile, [{ from_m: 50, to_m: 50, danger: "alpine" }])).toEqual([]);
     expect(buildDangerLineFeatures([point(0, 8)], [{ from_m: 0, to_m: 10, danger: "alpine" }])).toEqual([]);
+  });
+});
+
+describe("Legende der Gefahreneinschätzung", () => {
+  it("übersetzt Label und Beschreibung jeder Stufe über das übergebene t", () => {
+    const legend = dangerLegend((key) => `[${key}]`);
+    expect(legend.map((entry) => entry.danger)).toEqual(["normal", "steep_exposed", "alpine"]);
+    expect(legend[2]).toEqual({ danger: "alpine", label: "[danger.alpine.label]", description: "[danger.alpine.description]" });
   });
 });

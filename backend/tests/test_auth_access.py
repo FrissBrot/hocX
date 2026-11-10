@@ -69,7 +69,8 @@ def test_login_succeeds_with_correct_password(db):
     assert session.authenticated is True
     assert session.user.email == "alice@example.com"
     assert session.current_tenant.id == tenant.public_id
-    assert session.current_role == "writer"
+    assert [role.system_key for role in session.roles] == ["writer"]
+    assert "meetings.edit" in session.permissions and "access.manage" not in session.permissions
     # A session cookie must actually be issued.
     assert any(h[0] == b"set-cookie" for h in response.raw_headers)
 
@@ -173,7 +174,7 @@ def test_session_always_resolves_to_the_users_own_tenant_and_role(db):
     result = get_optional_current_user(request=None, db=db, session_cookie=legacy_token)
     assert result is not None
     assert result.current_tenant_id == own_tenant.id
-    assert result.current_role == "writer"
+    assert "meetings.edit" in result.permissions and "access.manage" not in result.permissions
 
 
 def test_admin_session_requires_mfa(db):
@@ -254,16 +255,21 @@ def test_unrestricted_reader_cannot_read_template_of_another_tenant(db):
 
 
 def test_unrestricted_reader_can_read_protocol_of_own_tenant(db):
-    """The fix must not regress the legitimate case: an unrestricted reader still has full
-    read access within their own tenant."""
+    """The fix must not regress the legitimate case: an unrestricted reader still reads the
+    finalized protocols of their own tenant - drafts only with meetings.read_drafts (RBAC S-2: the
+    listing hid drafts, the lookup by id did not)."""
     service = AccessService()
     tenant_a = make_tenant(db, "Tenant A")
     template_a = make_template(db, tenant_a.id)
-    protocol_a = make_protocol(db, tenant_a.id, template_a.id)
+    final = make_protocol(db, tenant_a.id, template_a.id, protocol_number="P-1", status="abgeschlossen")
+    draft = make_protocol(db, tenant_a.id, template_a.id, protocol_number="P-2", status="durchgeführt")
 
     reader_in_tenant_a = make_current_user(tenant_a.id, role="reader")
+    kassier_in_tenant_a = make_current_user(tenant_a.id, role="kassier")
 
-    assert service.can_read_protocol(db, reader_in_tenant_a, protocol_a.id) is True
+    assert service.can_read_protocol(db, reader_in_tenant_a, final.id) is True
+    assert service.can_read_protocol(db, reader_in_tenant_a, draft.id) is False
+    assert service.can_read_protocol(db, kassier_in_tenant_a, draft.id) is True
 
 
 def test_get_optional_current_admin_rejects_token_without_mfa_claim(db):
@@ -340,10 +346,11 @@ def test_tenant_by_domain_rate_limited_per_source_ip(db):
 
 
 def test_tenant_by_domain_client_ip_prefers_x_forwarded_for(db):
-    """_client_ip must read the real client IP from X-Forwarded-For (set by Traefik) rather
+    """client_ip must read the real client IP from X-Forwarded-For (set by Traefik) rather
     than request.client.host, which would just be Traefik's own container IP - otherwise every
-    request through the proxy shares a single rate-limit bucket."""
-    from app.api.routes.auth import _client_ip
+    request through the proxy shares a single rate-limit bucket. (Seit MAIN-SEC-007 zentral in
+    app/core/client_ip.py, siehe test_login_lockout_per_ip.py.)"""
+    from app.core.client_ip import client_ip as _client_ip
 
     real_client_ip = f"198.51.100.{uuid.uuid4().hex[:6]}"
     request = _FakeRequest(host="10.0.0.5", forwarded_for=f"{real_client_ip}, 10.0.0.5")

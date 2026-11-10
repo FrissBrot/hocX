@@ -1,0 +1,73 @@
+{
+  "page": {
+    "title": "Verknüpfungen",
+    "description": "Zeige deine Termine und Todos aus hocX in Apple Kalender oder Google Kalender an. Die Kalender aktualisieren sich automatisch – bearbeitet wird weiterhin in hocX."
+  },
+  "status": {
+    "active": "Verknüpft",
+    "invalid": "Ungültig",
+    "off": "Nicht verknüpft"
+  },
+  "events": {
+    "title": "Termine",
+    "description": "Alle Termine von {tenant} als eigener Kalender.",
+    "calendarName": "hocX – Termine ({tenant})"
+  },
+  "todos": {
+    "title": "Todos",
+    "description": "Todos mit Fälligkeitsdatum als ganztägige Einträge – offene mit ☐, erledigte mit ✓.",
+    "calendarName": "hocX – Todos ({tenant})"
+  },
+  "options": {
+    "scope": "Welche Todos",
+    "scopeMine": "Nur meine Todos",
+    "scopeAll": "Alle Todos, die ich sehe",
+    "includeCompleted": "Erledigte Todos anzeigen",
+    "hideDetails": "Nur Titel und Datum übertragen",
+    "hideDetailsHelp": "Ohne Beschreibung, Ort und Namen. Google speichert abonnierte Kalender auf eigenen Servern."
+  },
+  "actions": {
+    "enable": "Verknüpfung erstellen",
+    "apple": "Apple Kalender",
+    "google": "Google Kalender",
+    "regenerate": "Neue URL erzeugen",
+    "remove": "Verknüpfung entfernen",
+    "more": "Weitere Aktionen"
+  },
+  "url": {
+    "label": "Abo-URL",
+    "help": "Diese Adresse ist geheim: Wer sie kennt, kann den Kalender lesen. Bei Verdacht eine neue URL erzeugen."
+  },
+  "meta": {
+    "lastAccess": "Zuletzt abgerufen: {date}",
+    "neverAccessed": "Noch nicht von einer Kalender-App abgerufen"
+  },
+  "invalid": "Diese URL gilt nicht mehr, weil du dich überall abgemeldet oder dein Passwort geändert hast. Erzeuge eine neue URL und richte das Abo neu ein.",
+  "confirm": {
+    "regenerate": "Die bisherige URL funktioniert danach nicht mehr. Bestehende Abos in Apple oder Google musst du neu einrichten.",
+    "regenerateLabel": "Neue URL erzeugen",
+    "remove": "Der Kalender wird in Apple bzw. Google nicht mehr aktualisiert. Entferne das Abo dort zusätzlich von Hand.",
+    "removeLabel": "Entfernen"
+  },
+  "toasts": {
+    "enabled": "Verknüpfung erstellt",
+    "saved": "Gespeichert",
+    "regenerated": "Neue URL erzeugt",
+    "removed": "Verknüpfung entfernt",
+    "failed": "Das hat nicht geklappt. Bitte erneut versuchen."
+  },
+  "howto": {
+    "title": "So richtest du es ein",
+    "apple": "Apple (iPhone, iPad, Mac): „Apple Kalender“ antippen und das Abo bestätigen. Aktualisiert wird etwa stündlich.",
+    "google": "Google: „Google Kalender“ öffnen und hinzufügen. Google lädt abonnierte Kalender nur alle paar Stunden neu – Änderungen erscheinen dort verzögert.",
+    "android": "Android: den Google-Weg nutzen – der Kalender erscheint danach auch in der Kalender-App auf dem Handy.",
+    "readOnly": "Die Verknüpfung funktioniert in eine Richtung: Änderungen machst du in hocX, nicht im Kalender."
+  },
+  "hint": {
+    "events": "Termine in Apple oder Google Kalender anzeigen",
+    "todos": "Todos in Apple oder Google Kalender anzeigen",
+    "action": "Verknüpfen",
+    "linked": "Mit deinem Kalender verknüpft",
+    "manage": "Verwalten"
+  }
+}

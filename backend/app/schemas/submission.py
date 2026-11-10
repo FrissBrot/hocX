@@ -12,6 +12,8 @@ from app.schemas.base import PublicIdModel
 SubmissionSourceType = Literal["events", "list", "manual"]
 SubmissionElementStatus = Literal["open", "submitted", "closed"]
 SubmissionSortOrder = Literal["alphabetical", "date", "proximity"]
+# Wann ein Element nach einer Abgabe automatisch schliesst (siehe SubmissionAssignment.auto_close).
+SubmissionAutoClose = Literal["never", "first_upload", "max_files"]
 
 # 0 = aktueller Zyklus, -1 = vorheriger usw. (siehe SubmissionAssignment.cycle_offsets)
 CycleOffset = Annotated[int, Field(ge=-20, le=0)]
@@ -36,6 +38,7 @@ class SubmissionAssignmentBase(BaseModel):
     max_files_per_element: int | None = Field(default=5, ge=1)
     max_file_size_mb: int = Field(default=20, ge=1, le=100)
     sort_order: SubmissionSortOrder = "date"
+    auto_close: SubmissionAutoClose = "never"
     responsible_participant_source: str | None = None
 
 
@@ -62,6 +65,7 @@ class SubmissionAssignmentUpdate(BaseModel):
     max_files_per_element: int | None = Field(default=None, ge=1)
     max_file_size_mb: int | None = Field(default=None, ge=1, le=100)
     sort_order: SubmissionSortOrder | None = None
+    auto_close: SubmissionAutoClose | None = None
     responsible_participant_source: str | None = None
     # None = Link-Zuordnung unveraendert lassen.
     link_ids: list[uuid.UUID] | None = None
@@ -118,6 +122,8 @@ class SubmissionElementRead(BaseModel):
     upload_id: uuid.UUID | None = None
     files: list[SubmissionFileRead] = Field(default_factory=list)
     responsible_participant_id: uuid.UUID | None = None
+    # Alle Verantwortlichen (mehrere = gemeinsam); responsible_participant_id ist die erste
+    responsible_participant_ids: list[uuid.UUID] = Field(default_factory=list)
 
 
 class SubmissionUploadLogEntry(PublicIdModel):

@@ -1,7 +1,63 @@
 import "@testing-library/jest-dom/vitest";
 
-import { cleanup } from "@testing-library/react";
-import { afterEach } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
+import { cleanup, configure } from "@testing-library/react";
+import { afterEach, vi } from "vitest";
+
+// Default ist 1000ms. Auf einem CI-Runner, der sich wenige Cores mit dem Rest der Suite plus
+// v8-Coverage-Instrumentierung teilt, kann selbst ein sofort aufgeloestes Mock-Fetch (z.B.
+// setTimeout(fn, 0) fuer den Erstladungs-Debounce, siehe album-photo-picker.tsx) laenger als
+// 1000ms Wall-Clock-Zeit brauchen, ohne dass die Komponente oder der Test fehlerhaft ist -
+// verifiziert durch wiederholte isolierte Laeufe (immer gruen) vs. Volllast-Laeufe der ganzen
+// Suite (sporadisch ein anderer Timing-sensitiver Test betroffen).
+configure({ asyncUtilTimeout: 5000 });
+
+// Component tests render UI components directly (no NextIntlClientProvider - they're not
+// exercising the root layout), but most components now call useTranslations()/useLocale()
+// internally. Rather than wrapping every render() call across the whole suite, this mocks
+// next-intl's hooks with its own non-React createTranslator() against the real `de` message
+// catalogs - so existing assertions against specific German strings (e.g. "Widerrufen", "Kein
+// Gesicht erkannt") keep passing unchanged, and newly migrated components "just work" in tests
+// without each one needing a provider wrapper. Dedicated i18n tests (see i18n.test.ts) cover
+// the other locales and the provider wiring itself.
+const messagesDir = path.join(__dirname, "messages", "de");
+const deMessages: Record<string, unknown> = {};
+for (const entry of fs.readdirSync(messagesDir, { withFileTypes: true })) {
+  if (entry.isFile() && entry.name.endsWith(".json")) {
+    deMessages[entry.name.slice(0, -".json".length)] = JSON.parse(
+      fs.readFileSync(path.join(messagesDir, entry.name), "utf-8")
+    );
+  }
+}
+
+vi.mock("next-intl", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("next-intl")>();
+  return {
+    ...actual,
+    useTranslations: (namespace?: string) =>
+      actual.createTranslator({ locale: "de", messages: deMessages, namespace }),
+    useLocale: () => "de",
+  };
+});
+
+// Server Components (async page.tsx without "use client") call getTranslations()/getLocale()
+// from "next-intl/server" instead of the hooks above - that module relies on Next's real RSC
+// request context, which doesn't exist when a test calls such a page function directly (e.g.
+// `render(await SomePage(props))`), surfacing as "getTranslations is not supported in Client
+// Components" even though the page is a perfectly ordinary Server Component. Mocked the same
+// way as the client hooks above, against the same real `de` catalogs.
+vi.mock("next-intl/server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("next-intl/server")>();
+  const { createTranslator } = await import("next-intl");
+  return {
+    ...actual,
+    getTranslations: async (namespace?: string) =>
+      createTranslator({ locale: "de", messages: deMessages, namespace }),
+    getLocale: async () => "de",
+    getMessages: async () => deMessages,
+  };
+});
 
 // Not automatic here: with `globals: true` disabled (see vitest.config.ts), Testing Library's
 // own auto-cleanup never registers (it only self-attaches to a *global* afterEach). Without

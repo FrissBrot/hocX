@@ -11,11 +11,11 @@ async function importFile(request: any, seed: ImportSeed, filename: string, over
     commitPayload(seed, analysis, overrideDate ?? fixture.protocolDate!));
 }
 
-// The list sidebar button's accessible name is "<name> <n> Einträge" (name + entry-count
+// The list tab's accessible name is "<name> <n> Einträge" (name + entry-count
 // spans), so it can't be matched exactly by name alone, and the "Ansicht" picker is a
 // SearchableSelect (button + listbox), not a native <select>.
 async function openHistoricalView(page: Page, seed: ImportSeed) {
-  await page.getByRole("button", { name: seed.list.name }).click();
+  await page.getByRole("tab", { name: seed.list.name }).click();
   await page.getByRole("button", { name: "Ansicht", exact: true }).click();
   await page.getByRole("option", { name: `${seed.cycle.name} 2023 (historisch)` }).click();
 }
@@ -98,7 +98,9 @@ test.describe("Historical list import testbook", () => {
     await expect(page.getByText("Schalttag 2024", { exact: true })).toBeVisible();
     const other = await browser.newContext({ storageState: authFiles.tenantTwo });
     try {
-      expect((await other.request.get(`/api/table-snapshots/${seed.cycle.id}/2023/list_entry`)).status()).toBe(404);
+      // Leser des zweiten Mandanten: Listenstände verlangen meetings.edit (E-12), die Prüfung
+      // greift vor der Mandantenauflösung - fremde Daten bleiben so oder so unerreichbar.
+      expect((await other.request.get(`/api/table-snapshots/${seed.cycle.id}/2023/list_entry`)).status()).toBe(403);
     } finally { await other.close(); }
   });
 });

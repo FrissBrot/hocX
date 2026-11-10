@@ -1,0 +1,466 @@
+/* Bereichs-CSS, geladen nur von: submission-assignments. Siehe design/DESIGN.md Abschnitt 10. */
+
+.subm-clamav {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.subm-clamav-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--border);
+  color: var(--border);
+}
+
+.subm-clamav-online .subm-clamav-dot {
+  background: var(--success);
+  color: var(--success);
+  animation: subm-pulse-dot 2.2s ease-in-out infinite;
+}
+
+.subm-clamav-offline .subm-clamav-dot {
+  background: var(--danger);
+  color: var(--danger);
+}
+
+.subm-new-button {
+  width: auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.subm-sidebar-icon-button {
+  --button-hover-bg: var(--panel-solid);
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  --button-bg: var(--panel-solid);
+  background: var(--button-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--text);
+  font-size: var(--text-xs);
+  min-height: 0;
+  line-height: 1;
+  transition: transform var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+
+.subm-sidebar-icon-button:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent 60%);
+}
+
+.subm-sidebar-icon-button-danger:hover {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent 60%);
+}
+
+/* ── Summary progress bar ── */
+
+.subm-summary {
+  margin-top: var(--space-2);
+}
+
+.subm-summary-list {
+  width: 170px;
+  flex-shrink: 0;
+  margin-top: 0;
+}
+
+.subm-summary-detail {
+  flex: 1;
+  min-width: 0;
+  margin-top: 0;
+}
+
+.subm-summary-detail-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.subm-summary-detail-row .subm-summary-track {
+  flex: 1;
+  height: 10px;
+}
+
+.subm-summary-detail-count {
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: var(--text-md);
+  color: var(--success);
+  white-space: nowrap;
+}
+
+.subm-summary-track {
+  height: 4px;
+  border-radius: var(--radius-xs);
+  background: var(--border);
+  overflow: hidden;
+  display: flex;
+  gap: 1px;
+}
+
+.subm-summary-segment {
+  border-radius: var(--radius-xs);
+  flex-shrink: 0;
+  transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1); /* design-ok: Fortschrittsbalken, laengere Animation */
+}
+
+.subm-summary-segment-clean { background: var(--success); }
+
+.subm-summary-segment-quarantine { background: var(--warning); }
+
+.subm-summary-segment-infected { background: var(--danger); }
+
+.subm-summary-caption {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  margin-top: var(--space-1);
+  display: block;
+}
+
+.subm-pulse {
+  animation: pulse 2s infinite;
+}
+
+/* ── Assignment detail popup ── */
+
+.subm-detail {
+  gap: var(--space-4);
+}
+
+.subm-participant-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.subm-participant-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-2);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background var(--dur-fast) ease;
+  animation: subm-fade-in var(--dur-slow) ease both;
+}
+
+.subm-participant-row:hover {
+  background: color-mix(in srgb, var(--accent) 5%, transparent 95%);
+}
+
+.subm-avatar-lg {
+  width: 34px;
+  height: 34px;
+  font-size: var(--text-sm);
+}
+
+.subm-avatar.subm-avatar-empty {
+  background: transparent;
+  border: 1px dashed var(--border-strong);
+  color: var(--muted);
+}
+
+.subm-participant-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.subm-participant-name {
+  font-weight: 600;
+  font-size: var(--text-md);
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subm-participant-meta {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+.subm-participant-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.subm-detail-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-top: var(--space-1);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.subm-responsible {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text);
+  white-space: nowrap;
+  font-size: var(--text-base);
+}
+
+.subm-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--accent) 18%, transparent 82%);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.subm-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.subm-file-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.subm-file-icon {
+  display: inline-flex;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.subm-file-link {
+  font-size: var(--text-base);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+}
+
+.subm-file-name-muted {
+  color: var(--muted);
+  font-size: var(--text-base);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+}
+
+.subm-file-list-modal .subm-file-row {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 4%, transparent 96%);
+}
+
+.subm-file-list-modal .subm-file-link,
+.subm-file-list-modal .subm-file-name-muted {
+  flex: 1;
+  max-width: none;
+}
+
+.subm-verified {
+  display: inline-flex;
+  color: var(--success);
+  flex-shrink: 0;
+}
+
+.subm-file-download-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  min-height: 0;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  --button-bg: transparent;
+  background: var(--button-bg);
+  --button-hover-bg: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color var(--dur-fast) ease, border-color var(--dur-fast) ease, transform var(--dur-fast) ease;
+}
+
+.subm-file-download-button:hover {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent 60%);
+  transform: translateY(-1px);
+}
+
+.subm-reopen-button { --button-hover-bg: color-mix(in srgb, var(--warning) 12%, transparent 88%);
+  width: auto;
+  min-width: 0;
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 40%, transparent 60%);
+}
+
+.subm-close-button { --button-hover-bg: color-mix(in srgb, var(--danger) 12%, transparent 88%);
+  width: auto;
+  min-width: 0;
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent 60%);
+}
+
+/* ── Loading skeleton ── */
+
+.subm-skeleton-box {
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.subm-skeleton-row {
+  height: 38px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--border) 60%, transparent 40%) 0%,
+    color-mix(in srgb, var(--border) 100%, transparent 0%) 40px,
+    color-mix(in srgb, var(--border) 60%, transparent 40%) 80px
+  );
+  background-size: 200px 100%;
+  animation: subm-shimmer 1.3s ease-in-out infinite, subm-fade-in var(--dur-base) ease both;
+}
+
+/* ── Element detail popup ── */
+
+.subm-element-modal {
+  gap: var(--space-4);
+}
+
+.subm-modal-meta {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--text-base);
+  color: var(--muted);
+}
+
+.subm-modal-section {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.subm-modal-section-title {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.subm-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.subm-log-entry {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-1);
+  border-left: 2px solid var(--border);
+  padding-left: var(--space-4);
+  position: relative;
+}
+
+.subm-log-dot {
+  position: absolute;
+  left: -5px;
+  top: 13px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  border: 2px solid var(--panel-solid);
+}
+
+.subm-log-entry-success .subm-log-dot { background: var(--success); }
+
+.subm-log-entry-warning .subm-log-dot { background: var(--warning); }
+
+.subm-log-entry-error .subm-log-dot { background: var(--danger); }
+
+.subm-log-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.subm-log-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.subm-log-time {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.subm-log-detail {
+  margin-top: var(--space-1);
+  font-size: var(--text-base);
+  color: var(--muted);
+}
+
+.mobile-submission-pill {
+  display: inline-flex;
+  flex: none;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--neutral-bg);
+  color: var(--neutral-fg);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.mobile-submission-pill-submitted { background: var(--success-bg); color: var(--success-fg); }
+
+.mobile-submission-pill-quarantine { background: var(--warning-bg); color: var(--warning-fg); }
+
+.mobile-submission-pill-missed { background: var(--danger-bg); color: var(--danger-fg); }
+
+.mobile-submission-pill-open { background: var(--info-bg); color: var(--info-fg); }
+
+.mobile-submission-pill-closed-filled { background: var(--success-bg); color: var(--success-fg); }
+
+.mobile-clamav {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--success-bg);
+  color: var(--success-fg);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.mobile-clamav-offline { background: var(--warning-bg); color: var(--warning-fg); }

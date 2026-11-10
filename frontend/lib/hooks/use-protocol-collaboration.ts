@@ -60,7 +60,6 @@ export function useProtocolCollaboration(protocolId: string | null | undefined) 
   const fieldUpdateListenersRef = useRef<Set<(event: FieldUpdateEvent) => void>>(new Set());
   const statusChangedListenersRef = useRef<Set<(event: StatusChangedEvent) => void>>(new Set());
   const listChangedListenersRef = useRef<Set<(event: ListChangedEvent) => void>>(new Set());
-  const closedByEffectRef = useRef(false);
 
   const send = useCallback((message: Record<string, unknown>) => {
     const socket = socketRef.current;
@@ -71,17 +70,21 @@ export function useProtocolCollaboration(protocolId: string | null | undefined) 
 
   useEffect(() => {
     if (!protocolId) return;
-    closedByEffectRef.current = false;
+    // Pro Effect-Lauf eigener Zustand (Audit MAIN-FE-008): ein von allen Laeufen geteiltes Ref
+    // setzte der naechste Lauf sofort wieder auf "offen", bevor das asynchrone onclose des alten
+    // Sockets feuerte - das plante dann einen Reconnect, raeumte den Heartbeat des neuen Sockets
+    // ab und liess eine verwaiste Zusatzverbindung offen (in Dev/StrictMode bei jedem Mount).
+    let disposed = false;
 
     function scheduleReconnect() {
-      if (closedByEffectRef.current) return;
+      if (disposed) return;
       if (reconnectTimerRef.current) window.clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = window.setTimeout(connect, reconnectDelayRef.current);
       reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, RECONNECT_MAX_DELAY_MS);
     }
 
     function connect() {
-      if (closedByEffectRef.current || !protocolId) return;
+      if (disposed || !protocolId) return;
       const socket = new WebSocket(wsUrlForProtocol(protocolId));
       socketRef.current = socket;
 
@@ -120,7 +123,9 @@ export function useProtocolCollaboration(protocolId: string | null | undefined) 
             const presenceList = Array.isArray(message.presence) ? (message.presence as CollaboratorInfo[]) : [];
             setPresence(presenceList);
             const serverLocks = (message.locks as Record<string, CollaboratorInfo>) ?? {};
-            setLocks(serverLocks);
+            // Nur fremde Sperren im State: eigene ändern nichts an der Anzeige, würden aber bei
+            // jedem Fokuswechsel das ganze Dokument neu rendern (eigene stehen in ownLocksRef).
+            setLocks(Object.fromEntries(Object.entries(serverLocks).filter(([, holder]) => holder.user_id !== selfId)));
             // Reconciled against the server's authoritative snapshot on every (re)connect,
             // not left as whatever this client last knew locally (audit finding,
             // 2026-08-25) - ownLocksRef otherwise still listed a field this client held
@@ -152,7 +157,17 @@ export function useProtocolCollaboration(protocolId: string | null | undefined) 
               user_id: message.user_id,
               display_name: message.display_name,
             };
-            setLocks((current) => ({ ...current, [message.field_key]: holder }));
+            const fieldKey = message.field_key as string;
+            setLocks((current) => {
+              if (holder.user_id === selfUserIdRef.current) {
+                if (!(fieldKey in current)) return current;
+                const next = { ...current };
+                delete next[fieldKey];
+                return next;
+              }
+              if (current[fieldKey]?.user_id === holder.user_id) return current;
+              return { ...current, [fieldKey]: holder };
+            });
             break;
           }
           case "lock_released": {
@@ -190,10 +205,19 @@ export function useProtocolCollaboration(protocolId: string | null | undefined) 
     connect();
 
     return () => {
-      closedByEffectRef.current = true;
+      disposed = true;
       if (reconnectTimerRef.current) window.clearTimeout(reconnectTimerRef.current);
       if (heartbeatTimerRef.current) window.clearInterval(heartbeatTimerRef.current);
-      socketRef.current?.close();
+      const socket = socketRef.current;
+      if (socket) {
+        // Handler loesen, bevor geschlossen wird: das verspaetete onclose darf weder den
+        // naechsten Effect-Lauf stoeren noch einen Reconnect planen.
+        socket.onopen = null;
+        socket.onclose = null;
+        socket.onerror = null;
+        socket.onmessage = null;
+        socket.close();
+      }
       socketRef.current = null;
       ownLocksRef.current.clear();
       setConnected(false);
@@ -268,21 +292,42 @@ export function useProtocolCollaboration(protocolId: string | null | undefined) 
     [presence, selfUserId]
   );
 
-  return {
-    connected,
-    canEdit,
-    selfUserId,
-    presence,
-    otherPresence,
-    locks,
-    hasOtherActiveEditors,
-    lockField,
-    unlockField,
-    sendFieldUpdate,
-    sendStatusChanged,
-    onFieldUpdate,
-    onStatusChanged,
-    onListChanged,
-    isLockedByOther,
-  };
+  // Stabile Identität: der Protokoll-Editor reicht das Objekt an memoisierte Punkte weiter,
+  // ein neues Objekt pro Render liesse dort jedes Element bei jedem Tastendruck neu rendern.
+  return useMemo(
+    () => ({
+      connected,
+      canEdit,
+      selfUserId,
+      presence,
+      otherPresence,
+      locks,
+      hasOtherActiveEditors,
+      lockField,
+      unlockField,
+      sendFieldUpdate,
+      sendStatusChanged,
+      onFieldUpdate,
+      onStatusChanged,
+      onListChanged,
+      isLockedByOther,
+    }),
+    [
+      connected,
+      canEdit,
+      selfUserId,
+      presence,
+      otherPresence,
+      locks,
+      hasOtherActiveEditors,
+      lockField,
+      unlockField,
+      sendFieldUpdate,
+      sendStatusChanged,
+      onFieldUpdate,
+      onStatusChanged,
+      onListChanged,
+      isLockedByOther,
+    ]
+  );
 }

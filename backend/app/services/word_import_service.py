@@ -69,6 +69,7 @@ from app.schemas.word_import import (
     WordImportTextTarget,
 )
 from app.services import block_field_sync
+from app.services.event_filter import event_matches_filter, normalize_event_filter
 from app.services.event_service import EventService
 from app.services.participant_service import ParticipantService
 from app.services.protocol_service import ProtocolService
@@ -283,7 +284,7 @@ def _extract_dates_with_counts(text: str) -> list[tuple[date, date | None, int |
     with both dates instead of two separate single-day entries - mirrors
     _extract_event_row's own range handling for an ordinary "events"-role table.
     Also captures a trailing "(N)" right after a date (e.g. "18.10.2025 (7)") as that
-    date's participant count - the exact format export_service._matrix_event_row_value
+    date's participant count - the exact format app/documents/providers/protocol.py (_matrix_event_lines)
     itself writes when event_show_participant_count is on, so an old exported/re-
     imported protocol round-trips its attendance counts. Deduplicates by date (first
     occurrence wins) while preserving first-seen order."""
@@ -1543,8 +1544,8 @@ def _template_matrices(db: Session, *, template_id: int, matrix_type_id: int | N
                     "title": definition.title,
                     "mode": config.get("mode") or "manual",
                     "auto_source": config.get("auto_source") or {},
-                    "rows": config.get("rows") or config.get("field_rows") or [],
-                    "columns": config.get("columns") or config.get("matrix_columns") or [],
+                    "rows": config.get("rows") or [],
+                    "columns": config.get("columns") or [],
                 }
             )
     return matrices
@@ -2903,8 +2904,14 @@ class WordImportService:
                         ],
                     )
             elif mode == "auto" and auto_type == "events":
-                tag_filter = str(auto_source.get("event_tag_filter") or "").strip().lower()
-                candidate_events = [event for event in all_events if not tag_filter or (event.tag or "").lower() == tag_filter]
+                # Gleiche Tag-Regel wie der Matrix-Automodus im Editor («enthält», event_filter.py);
+                # Zeitraum/Zyklus spielen für die Zuordnung bestehender Spalten keine Rolle.
+                auto_event_filter = normalize_event_filter(auto_source.get("event_filter"))
+                tag_only_filter = {**auto_event_filter, "title": "", "description": "", "range": {"mode": "all"}, "cycle": None}
+                candidate_events = [
+                    event for event in all_events
+                    if event_matches_filter(event, tag_only_filter, protocol_date=None)
+                ]
                 labeled_col_indices = [col_idx for col_idx, label in enumerate(doc_column_labels) if label]
 
                 def _event_column_score(col_idx: int, event: Event) -> float:
@@ -3093,27 +3100,23 @@ class WordImportService:
                 # row_type "7" is an embedded Terminliste block (element_type_id 7) - the
                 # far more common way this is actually authored in practice (confirmed
                 # against Timo's real template) than the plain named "events" row_type.
-                # Both render through the exact same export_service._matrix_event_row_value
+                # Both render through the exact same app/documents/providers/protocol.py (_matrix_event_lines)
                 # (an embedded cell only ever overrides that with its own stored
                 # `embedded_block` content if one was manually edited in a specific live
                 # protocol - never the case for a freshly imported one) and share the same
-                # row_config shape (event_tag_filter/event_use_column_tag_filter/etc.), so
+                # row_config shape (row_config.event_filter, see event_filter.py), so
                 # both are handled identically here.
                 if row_type in ("events", "7"):
                     # A Matrix "events" row never stores its dates per cell - they're
                     # resolved live at render time by matching an Event's own `tag`
-                    # against the column (see export_service._matrix_events). So there is
+                    # against the column (see app/documents/providers/protocol.py, _matrix_events). So there is
                     # nothing to write into row_values here; instead each date found in a
                     # cell is folded into the SAME event_mappings/Termine review used for
                     # ordinary "events"-role tables (continuing the same row_index
                     # counter), carrying the tag this Event needs so it actually shows up
                     # in this Matrix column once committed.
                     row_config = best_row.get("row_config") or {}
-                    use_column_tag = bool(
-                        best_row.get("event_use_column_tag_filter")
-                        or row_config.get("event_use_column_tag_filter")
-                        or best_row.get("use_column_title_as_tag", row_config.get("use_column_title_as_tag", True))
-                    )
+                    use_column_tag = bool((row_config.get("event_filter") or {}).get("use_column_filter"))
                     for col_idx, column_label_raw in enumerate(doc_column_labels):
                         if not column_label_raw or col_idx + 1 >= len(row_cells):
                             continue
@@ -3364,12 +3367,10 @@ class WordImportService:
                 entry["chosen"] = final_id
 
         template = db.get(Template, payload.template_id)
+        # Importierte Termine bekommen keine explizite Zuordnung: event_service ordnet sie
+        # nach ihrem eigenen Datum zu (früher: Zyklus des Protokolldatums, wodurch z. B.
+        # rückblickend erwähnte Anlässe im neuen Zyklus auftauchten).
         cycle_assignments: list[CycleAssignment] | None = None
-        if template is not None and template.cycle_config_id is not None:
-            cycle_cfg = db.get(CycleConfig, template.cycle_config_id)
-            if cycle_cfg is not None:
-                cycle_year = get_cycle_year(payload.protocol_date, cycle_cfg.reset_month, cycle_cfg.reset_day)
-                cycle_assignments = [CycleAssignment(cycle_config_id=cycle_cfg.public_id, cycle_year=cycle_year)]
 
         protocol_id = protocol_service.create_from_template(
             db,
@@ -4301,4 +4302,8 @@ class WordImportService:
             for participant_id in created_participant_ids:
                 participant_service.delete_participant(db, participant_id, tenant_id=tenant_id)
             raise
+        # Angelegte/geänderte Termine: Abgabe-Pendenzen nachführen
+        from app.services.submission_service import SubmissionService
+
+        SubmissionService().sync_todos_for_tenant(db, tenant_id=tenant_id)
         return WordImportCommitResult(id=protocol_id, warnings=commit_warnings)

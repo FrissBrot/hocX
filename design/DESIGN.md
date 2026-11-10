@@ -38,7 +38,7 @@ Quelle ist `design/tokens.css`. Nach jeder Änderung: `./scripts/sync-design-tok
 
 **Neues Token** nur, wenn keine Stufe passt und der Wert an mehreren Stellen gebraucht wird: in `design/tokens.css` (Light **und** Dark), Sync ausführen, hier dokumentieren.
 
-Bewusst feste Ausnahmen (mit `design-ok`-Kommentar in derselben Zeile): QR-Code-Weiß, Foto-Viewer-Palette `--pv-*`, Dokumentvorlagen-Mockups (`--dt-accent`), Tag-Farbauswahl, Avatar-Farben, Zeilen, deren Padding an `calc(100vh …)` oder ein Icon gekoppelt ist.
+Bewusst feste Ausnahmen (mit `design-ok`-Kommentar in derselben Zeile): QR-Code-Weiß, Foto-Viewer-Palette `--pv-*`, Tag-Farbauswahl, Avatar-Farben, Zeilen, deren Padding an `calc(100vh …)` oder ein Icon gekoppelt ist.
 
 ## 3. Verboten
 
@@ -50,6 +50,7 @@ Bewusst feste Ausnahmen (mit `design-ok`-Kommentar in derselben Zeile): QR-Code-
 - `window.confirm/alert/prompt`. Stattdessen `useConfirm()` / `useToast()`
 - Eigene Overlays/Modals mit `position: fixed`. Stattdessen `Modal`
 - Handgebaute Dropdowns mit Inline-Styles (Abschnitt 5)
+- Rohes `<select>`, `<input type="date|time|color">` in `frontend/` und `abgabebox-frontend/`: `Select`, `DateInput`, `TimeInput`, `ColorInput` (der Checker meldet es)
 - Neue `@media`-Breakpoints außer 640/900
 
 ## 4. Standardbausteine
@@ -66,8 +67,11 @@ Alle in `frontend/components/ui/` (Import: `@/components/ui/<name>`). Erst hier 
 | Status direkt ändern | `PillMenu` | Badge, das ein Menü öffnet |
 | Auswahl aus Liste (Einzel) | `SearchableSelect` | Standard für Auswahl mit Suche, 73 Verwendungen |
 | Auswahl aus Liste (Mehrfach) | `SearchableMultiSelect` | |
-| Kurze feste Auswahl (<7 Optionen, ohne Suche) | natives `<select>` | Kein Nachbau |
+| Kurze feste Auswahl (<7 Optionen, ohne Suche) | `Select` | Echtes `<select>` mit hocX-Liste statt OS-Liste; API wie natives Select (`value`, `onChange`, `<option>`/`<optgroup>`). Auf Touch-Geräten bleibt die native Auswahl. Die Abgabebox führt eine identische Kopie (`abgabebox-frontend/components/ui/select.tsx`, der Checker vergleicht beide) |
+| Uhrzeit | `TimeInput` | Wert `HH:MM`, Eingabe per Tastatur, Liste im Viertelstunden-Takt |
+| Farbe (Daten, z. B. Brand-Farben) | `ColorInput` | Popover mit Fläche, Farbton, Hex und `swatches`; nie `<input type="color">` |
 | Aktionen einer Zeile/Karte | `ActionMenu` (`items: {label, onClick, danger?}[]`) | Kebab-Menü statt vieler Buttons |
+| Filter-/Options-Menü mit Checkboxen (Ansicht, Spalten, Fälligkeit) | CSS-Klassen `.mini-menu-*` aus `globals.css` | Eingebetteter Trigger + Popover mit Sections/Checkboxen, kein Klick-Aktionsmenü für ein Objekt — dafür `ActionMenu` |
 | Tags | `TagInput` | Farben aus `TAG_COLORS` |
 | Datum | `DateInput` | Nie `<input type="date">` roh, Details in Abschnitt 6 |
 | Suche | `SearchInput` | Nie eigenes Suchfeld |
@@ -85,8 +89,9 @@ Entscheidungsbaum, von oben nach unten:
 1. **Auswahl eines Datensatzes aus einer Liste** → `SearchableSelect` / `SearchableMultiSelect`.
 2. **Aktionen zu einem Objekt** → `ActionMenu`.
 3. **Status eines Objekts ändern** → `PillMenu`.
-4. **Wenige feste Werte** → natives `<select>`.
-5. **Autocomplete unter einem Textfeld** (Vorschläge erscheinen beim Tippen) oder eine Liste, die keiner der Bausteine abdeckt → CSS-Klassen `.dropdown-*` aus `globals.css`:
+4. **Checkbox-/Options-Menü** (Filter, Spalten-Auswahl, Ansicht-Einstellungen, Fälligkeit) → CSS-Klassen `.mini-menu-*` aus `globals.css` (Trigger + Popover mit Sections).
+5. **Wenige feste Werte** → `Select` (`@/components/ui/select`).
+6. **Autocomplete unter einem Textfeld** (Vorschläge erscheinen beim Tippen) oder eine Liste, die keiner der Bausteine abdeckt → CSS-Klassen `.dropdown-*` aus `globals.css`:
 
 ```tsx
 <div style={{ position: "relative" }}>            {/* einziger erlaubter Inline-Style */}
@@ -124,7 +129,8 @@ Für **jedes** Datumsfeld: `DateInput` aus `@/components/ui/date-input`. Nie `<i
 ```
 
 - **Anzeige/Eingabe** `TT.MM.JJJJ` per Tastatur, **Wert** immer ISO (`JJJJ-MM-TT`) über `onChange`. Kein eigenes Parsen/Formatieren von Daten in Komponenten, das übernehmen `formatDateInputValue`/`parseDateInputValue` aus `lib/utils/format.ts`.
-- Der runde Kalender-Button rechts öffnet den nativen Picker über `showPicker()`. Er ist Teil von `DateInput` selbst (`.date-input-picker`) und bekommt **keine** eigene Klasse oder Nachbau.
+- Der runde Kalender-Button rechts öffnet den Kalender im hocX-Look (`DatePicker`, Monatsansicht, Woche ab Montag, Namen in der UI-Sprache, Tastatur: Pfeile, Bild auf/ab, Pos1/Ende). Er ist Teil von `DateInput` selbst (`.date-input-picker`) und bekommt **keine** eigene Klasse oder Nachbau.
+- Soll der Button statt des Kalenders etwas Eigenes öffnen (z. B. „Nächster Hock": Kalenderansicht mit Terminen via `EventCalendarModal` mit `pick`), über `onPickerClick` — nicht durch einen zusätzlichen Button daneben.
 - Einschränkungen (kein Datum vor/nach X) über `min`/`max` (ISO-Strings), nicht per Validierung nach dem Speichern.
 - **Zeitraum (von/bis):** zwei eigenständige `DateInput`-Felder nebeneinander in `.two-col`, je mit eigenem `field-label` ("Datum" / "Enddatum" o. ä.). Kein kombiniertes Range-Picker-Widget.
 - **Tabellenzeile/kompakter Kontext:** `DateInput` bleibt gleich, nur der Picker-Button darf über eine Feature-Klasse verschmälert werden (z. B. `.event-field-date .date-input-picker { width: 40px; }`), niemals Inline-Style.
@@ -136,6 +142,7 @@ Für **jedes** Datumsfeld: `DateInput` aus `@/components/ui/date-input`. Nie `<i
 |---|---|
 | `button-primary` | Die **eine** Hauptaktion pro Ansicht/Modal (Speichern, Erstellen) |
 | `button-secondary` | Gleichrangige Aktion mit Rahmen (z. B. „CSV-Import", Filter- und Zusatzaktionen) |
+| `button-secondary button-ghost` | Kompakte, randlose Variante von `button-secondary` (übernimmt dessen Höhe/Abstand, aber `button-ghost`s transparenten Hintergrund) für Toolbar-Nebenaktionen wie CSV-Import/Export |
 | `button-ghost` | Nebenaktion ohne Gewicht (Abbrechen, Schliessen, Zurück) |
 | `button-danger` | Zerstörerische Aktion (Löschen) |
 | `button-toggle` / `-active` | Umschalter mit zwei Zuständen |
@@ -196,7 +203,7 @@ Der Schliessen-Button oben rechts ist immer der Icon-Button (`✕`, `button-icon
 ## 10. Arbeitsablauf bei UI-Änderungen
 
 1. Bestehenden Baustein (Abschnitt 4) oder eine ähnliche Seite suchen und **deren Struktur übernehmen**.
-2. Neue Optik als Klasse in `frontend/app/globals.css` (Tokens verwenden), Klassennamen mit Feature-Präfix (`finance-…`).
+2. Neue Optik als Klasse (Tokens verwenden), Klassennamen mit Feature-Präfix (`finance-…`): bereichsübergreifende Bausteine in `frontend/app/globals.css`, alles, was nur eine Route oder wenige Routen brauchen, in `frontend/app/styles/<bereich>.css`. Diese Dateien importiert nur das Layout der jeweiligen Route, damit nicht jede Seite das ganze CSS lädt. Wird eine Klasse aus einem Bereich neu auch anderswo verwendet: Regel nach `globals.css` verschieben oder das Bundle dort importieren. `python3 scripts/check-css-scopes.py` prüft das über den Importgraphen (läuft mit `check-design-rules.py`).
 3. `python3 scripts/check-design-rules.py` ausführen und alle Meldungen beheben.
 4. Typecheck und Tests: auf dem Host gibt es kein Node, daher im Container: `docker compose exec frontend node_modules/.bin/tsc --noEmit` und `docker compose exec frontend node_modules/.bin/vitest run`.
 5. Bei sichtbaren Änderungen Light **und** Dark bei 1440 und 390 px ansehen (Playwright-Screenshot gegen den E2E-Stack, `scripts/e2e.sh up`).

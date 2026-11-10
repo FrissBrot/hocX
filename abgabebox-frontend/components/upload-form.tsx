@@ -1,38 +1,64 @@
 "use client";
 
 import { ChangeEvent, DragEvent, FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 
 import { CaptchaWidget } from "@/components/captcha-widget";
+import { clearCaptchaSession, readCaptchaSession, storeCaptchaSession } from "@/lib/captcha-session";
+import { useFlowDone } from "@/components/flow-steps";
 import { publicApiUrl } from "@/lib/api";
-import { validateUploadFiles, SUPPORTED_UPLOAD_EXTENSIONS } from "@/lib/validate-upload";
+import { isImageFile, validateUploadFiles, SUPPORTED_UPLOAD_EXTENSIONS } from "@/lib/validate-upload";
+import { MAX_BUSY_RETRIES, isRetryableBusy, retryDelaySeconds } from "@/lib/upload-retry";
 
 type Props = {
   linkToken: string;
   assignmentSlug: string;
   elementRef: string;
+  assignmentTitle: string;
+  elementLabel: string;
   allowedFileTypes: string[];
   maxFiles: number | null;
   maxFileSizeMb: number;
   alreadyUploadedCount: number;
   sitekey: string;
+  puzzleEndpoint?: string;
+  // Datenschutzhinweis vor dem Upload (Datenschutz-Audit E2)
+  tenantName?: string | null;
+  privacyNoticeUrl?: string | null;
 };
 
-export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileTypes, maxFiles, maxFileSizeMb, alreadyUploadedCount, sitekey }: Props) {
+export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTitle, elementLabel, allowedFileTypes, maxFiles, maxFileSizeMb, alreadyUploadedCount, sitekey, puzzleEndpoint, tenantName, privacyNoticeUrl }: Props) {
+  const t = useTranslations("abgabebox.upload");
+  const locale = useLocale();
+  const setFlowDone = useFlowDone();
   const [files, setFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
-  const [captchaSessionToken, setCaptchaSessionToken] = useState<string | null>(null);
+  // Bereits auf dieser Seite bestandene Prüfung (anderes Element desselben Links) weiterverwenden
+  const [captchaSessionToken, setCaptchaSessionToken] = useState<string | null>(() => readCaptchaSession(linkToken));
   const [captchaVerifying, setCaptchaVerifying] = useState(false);
   const [captchaKey, setCaptchaKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [retryNotice, setRetryNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [done, setDone] = useState(false);
+  // Quittung der letzten Abgabe (Anzahl Dateien + Eingangszeit) fuer die Erfolgsansicht.
+  const [receipt, setReceipt] = useState<{ files: number; at: Date } | null>(null);
   const [online, setOnline] = useState(true);
   const [uploadedSoFar, setUploadedSoFar] = useState(alreadyUploadedCount);
+  // «GPS-Daten des Bildes mitsenden» (Paket 9.3): standardmässig an, aus = Server entfernt den Standort
+  const [includeGps, setIncludeGps] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
   // Welche rohe FriendlyCaptcha-Loesung bereits gegen ein Sitzungs-Token eingetauscht wurde -
   // handleSolved kann mehrfach mit derselben Loesung feuern (Callback + DOM-Fallback im Widget).
   const exchangedSolutionRef = useRef<string | null>(null);
+
+  // Schrittanzeige im Seitenrahmen auf "Fertig" stellen, solange die Erfolgsansicht steht.
+  useEffect(() => {
+    setFlowDone(done);
+  }, [done, setFlowDone]);
+  useEffect(() => () => setFlowDone(false), [setFlowDone]);
 
   useEffect(() => {
     const update = () => setOnline(navigator.onLine);
@@ -45,14 +71,14 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
     };
   }, []);
 
-  const accept = (allowedFileTypes.length > 0 ? allowedFileTypes : SUPPORTED_UPLOAD_EXTENSIONS).map((t) => `.${t}`).join(",");
-  const typeLabel = allowedFileTypes.length > 0 ? allowedFileTypes.map((t) => t.toUpperCase()).join(", ") : "Bilder, PDF und Office-Dokumente";
+  const accept = (allowedFileTypes.length > 0 ? allowedFileTypes : SUPPORTED_UPLOAD_EXTENSIONS).map((ext) => `.${ext}`).join(",");
+  const typeLabel = allowedFileTypes.length > 0 ? allowedFileTypes.map((ext) => ext.toUpperCase()).join(", ") : t("typeLabelDefault");
   const remaining = maxFiles === null ? null : Math.max(0, maxFiles - uploadedSoFar);
 
   function validateAndSet(selected: File[]): boolean {
     const result = validateUploadFiles(selected, { maxFiles, allowedFileTypes, maxFileSizeMb, alreadyUploaded: uploadedSoFar });
     if (!result.ok) {
-      setError(result.error);
+      setError(t(`errors.${result.code}`, "params" in result ? result.params : undefined));
       return false;
     }
     setError(null);
@@ -108,6 +134,7 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
         return;
       }
       const result = await response.json();
+      storeCaptchaSession(linkToken, result.session_token, Number(result.expires_in_seconds) || 0);
       setCaptchaSessionToken(result.session_token);
       setCaptchaVerifying(false);
     } catch {
@@ -122,15 +149,16 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
   // captcha_enabled() im Backend). Ist doch ein Sitekey gesetzt, greift stattdessen der echte
   // Widget-Callback oben.
   useEffect(() => {
-    if (!sitekey) {
+    if (!sitekey && !readCaptchaSession(linkToken)) {
       handleSolved("no-friendly-captcha-configured");
     }
-  }, [sitekey, handleSolved]);
+  }, [sitekey, handleSolved, linkToken]);
 
   // Startet einen frischen Sicherheitscheck (z.B. nach abgelaufenem Sitzungs-Token) - der `key`-
   // Wechsel zwingt React, das Widget komplett neu zu montieren, was dank data-start="auto" sofort
   // eine neue Challenge loest, ohne dass ausgewaehlte Dateien verloren gehen.
   function requestFreshCaptcha() {
+    clearCaptchaSession(linkToken);
     setCaptchaSessionToken(null);
     exchangedSolutionRef.current = null;
     setCaptchaKey((k) => k + 1);
@@ -138,11 +166,11 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (files.length === 0) { setError("Bitte mindestens eine Datei auswählen"); return; }
-    if (!navigator.onLine) { setError("Keine Internetverbindung – die ausgewählten Dateien bleiben erhalten. Bitte nach dem Verbinden erneut senden."); return; }
+    if (files.length === 0) { setError(t("errors.noFileSelected")); return; }
+    if (!navigator.onLine) { setError(t("errors.offline")); return; }
 
     if (!captchaSessionToken) {
-      setError("Sicherheitscheck läuft noch – bitte kurz warten und nochmals versuchen");
+      setError(t("errors.captchaPending"));
       return;
     }
 
@@ -150,37 +178,53 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
     setError(null);
     setWarnings([]);
     try {
-      const formData = new FormData();
-      formData.append("captcha_session_token", captchaSessionToken);
-      files.forEach((file) => formData.append("files", file));
-      const response = await fetch(
-        publicApiUrl(
-          `/api/public/${encodeURIComponent(linkToken)}/assignments/${encodeURIComponent(assignmentSlug)}/elements/${encodeURIComponent(elementRef)}/upload`
-        ),
-        { method: "POST", body: formData, signal: AbortSignal.timeout(3 * 60 * 60 * 1000) }
+      const uploadUrl = publicApiUrl(
+        `/api/public/${encodeURIComponent(linkToken)}/assignments/${encodeURIComponent(assignmentSlug)}/elements/${encodeURIComponent(elementRef)}/upload`
       );
+      let response: Response;
+      // Server kurz ausgelastet (503 mit Retry-After, z. B. viele gleichzeitige Uploads kurz vor
+      // einer Frist): selbst erneut senden, die ausgewählten Dateien bleiben erhalten. Wartung
+      // (code "maintenance") wird nicht wiederholt - dafür gibt es das Wartungsbanner.
+      for (let attempt = 0; ; attempt += 1) {
+        const formData = new FormData();
+        formData.append("captcha_session_token", captchaSessionToken);
+        formData.append("include_gps", includeGps ? "true" : "false");
+        files.forEach((file) => formData.append("files", file));
+        response = await fetch(uploadUrl, { method: "POST", body: formData, signal: AbortSignal.timeout(3 * 60 * 60 * 1000) });
+        if (response.status !== 503 || attempt >= MAX_BUSY_RETRIES) break;
+        const busyBody = await response.clone().json().catch(() => null);
+        if (!isRetryableBusy(response.status, busyBody?.code)) break;
+        const waitSeconds = retryDelaySeconds(response.headers.get("Retry-After"));
+        setRetryNotice(t("busyRetry", { seconds: waitSeconds }));
+        await new Promise((resolve) => setTimeout(resolve, waitSeconds * 1000));
+        setRetryNotice(null);
+      }
       if (!response.ok) {
         if (response.status === 429) {
-          throw new Error("Zu viele Versuche – bitte kurz warten und dann nochmals versuchen");
+          throw new Error(t("errors.tooManyRequests"));
         }
         if (response.status === 401) {
           // Sitzungs-Token abgelaufen (siehe ABGABEBOX_CAPTCHA_SESSION_TTL_MINUTES) - Widget fuer
           // eine frische Loesung neu starten, ausgewaehlte Dateien bleiben erhalten.
           requestFreshCaptcha();
-          throw new Error("Sicherheitscheck ist abgelaufen – wird gerade erneuert, bitte kurz warten");
+          throw new Error(t("errors.captchaExpired"));
         }
         const body = await response.json().catch(() => null);
-        throw new Error(body?.detail ?? "Upload fehlgeschlagen");
+        // body?.detail kommt direkt vom Backend (abgabebox-backend liefert aktuell kuratierten
+        // Freitext, keine stabilen Fehlercodes) - kann hier noch nicht lokalisiert werden, siehe
+        // CLAUDE.md Abschnitt i18n Punkt 10 (kein unnoetiger Umbau des Error-Handlings).
+        throw new Error(body?.detail ?? t("errors.uploadFailedGeneric"));
       }
       const result = await response.json().catch(() => null);
       setWarnings(result?.image_duplicate_warnings ?? []);
       setUploadedSoFar((prev) => prev + files.length);
+      setReceipt({ files: files.length, at: new Date() });
       setFiles([]);
       setDone(true);
     } catch (err) {
       setError(navigator.onLine
-        ? (err instanceof Error ? err.message : "Upload fehlgeschlagen")
-        : "Verbindung während des Uploads unterbrochen. Prüfe vor dem erneuten Senden, ob die Abgabe bereits angekommen ist.");
+        ? (err instanceof Error ? err.message : t("errors.uploadFailedGeneric"))
+        : t("errors.connectionLost"));
     } finally {
       // Das Sitzungs-Token bleibt bewusst erhalten (ausser beim 401-Fall oben) - der
       // Sicherheitscheck soll nur einmal pro Seitenaufruf laufen, nicht vor jedem Upload.
@@ -192,13 +236,32 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
   const canUploadMore = remainingAfterSuccess === null || remainingAfterSuccess > 0;
 
   if (done) {
+    const receivedAt = receipt
+      ? new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Zurich" }).format(receipt.at)
+      : "";
+    const rows: [string, string][] = [
+      [t("receipt.assignment"), assignmentTitle],
+      [t("receipt.element"), elementLabel],
+      [t("receipt.files"), String(receipt?.files ?? 0)],
+      [t("receipt.receivedAt"), receivedAt],
+    ];
     return (
-      <div className="upload-success">
-        <div className="upload-success-icon">✓</div>
-        <div className="upload-success-title">Abgabe erfolgreich</div>
-        <div className="upload-success-sub">
-          {uploadedSoFar} Datei{uploadedSoFar === 1 ? "" : "en"} für diese Abgabe hochgeladen.
+      <div className="upload-success" role="status">
+        <span className="upload-success-icon" aria-hidden="true">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M5 13l4 4L19 7" /></svg>
+        </span>
+        <div className="upload-success-text">
+          <h1>{t("successTitle")}</h1>
+          <p className="muted muted-flush">{t("successCount", { count: uploadedSoFar })}</p>
         </div>
+        <dl className="upload-receipt">
+          {rows.map(([label, value]) => (
+            <div key={label} className="upload-receipt-row">
+              <dt>{label}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))}
+        </dl>
         {warnings.length > 0 && (
           <div className="upload-warning-list">
             {warnings.map((warning, i) => (
@@ -206,28 +269,42 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
             ))}
           </div>
         )}
-        {canUploadMore && (
-          <button type="button" className="button" style={{ marginTop: "var(--space-4)" }} onClick={() => setDone(false)}>
-            Weitere Datei hochladen
-          </button>
-        )}
+        <div className="upload-success-actions">
+          {canUploadMore ? (
+            <button type="button" className="button" onClick={() => setDone(false)}>
+              {t("uploadMore")}
+            </button>
+          ) : (
+            <Link href={`/${linkToken}/${assignmentSlug}`} className="button">
+              {t("otherElement")}
+            </Link>
+          )}
+          <Link href={`/${linkToken}`} className="button button-outline">
+            {t("toOverview")}
+          </Link>
+        </div>
       </div>
     );
   }
 
+  const captchaReady = Boolean(captchaSessionToken);
+  const submitDisabled = submitting || files.length === 0;
+
   return (
-    <form onSubmit={handleSubmit}>
-      {!online && <div className="upload-error" role="status">Offline – Uploads sind erst nach Wiederherstellung der Verbindung möglich. Die Auswahl bleibt in diesem Tab erhalten.</div>}
+    <form onSubmit={handleSubmit} className="upload-form">
+      {!online && <div className="upload-error" role="status">{t("offlineNotice")}</div>}
       {uploadedSoFar > 0 && (
         <p className="upload-already-count">
-          Bereits {uploadedSoFar} Datei{uploadedSoFar === 1 ? "" : "en"} für diese Abgabe hochgeladen.
+          {t("alreadyUploaded", { count: uploadedSoFar })}
         </p>
       )}
 
-      {/* Drop zone */}
       <div
         className={`drop-zone${dragging ? " drop-zone-active" : ""}${files.length > 0 ? " drop-zone-filled" : ""}`}
+        role="button"
+        tabIndex={0}
         onClick={() => inputRef.current?.click()}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); inputRef.current?.click(); } }}
         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
         onDrop={handleDrop}
@@ -241,65 +318,124 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, allowedFileT
           onChange={handleFileChange}
           style={{ display: "none" }}
         />
-        <div className="drop-zone-icon">{files.length > 0 ? "📄" : "⬆"}</div>
+        <span className="drop-zone-icon" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
+            <path d="M12 16V4M7 9l5-5 5 5" />
+            <path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
+          </svg>
+        </span>
         <div className="drop-zone-label">
-          {files.length > 0
-            ? `${files.length} Datei${files.length > 1 ? "en" : ""} ausgewählt`
-            : "Datei auswählen oder hierher ziehen"}
+          {dragging ? (
+            t("dropLabelRelease")
+          ) : files.length > 0 ? (
+            t("dropLabelSelected", { count: files.length })
+          ) : (
+            <>
+              {/* Auf Touch-Geraeten gibt es kein Drag & Drop - dort nur "Datei auswaehlen" zeigen. */}
+              <span className="drop-label-pointer">{t("dropLabelEmpty")}</span>
+              <span className="drop-label-touch">{t("dropLabelEmptyTouch")}</span>
+            </>
+          )}
         </div>
         <div className="drop-zone-hint">
-          {typeLabel} · {remaining === null ? "max. 50 Dateien pro Upload" : `max. ${remaining} weitere ${remaining === 1 ? "Datei" : "Dateien"}`} · je {maxFileSizeMb} MiB · insgesamt maximal 150 MiB
+          {typeLabel} · {remaining === null ? t("hintMaxFilesUnbounded") : t("hintMaxFilesRemaining", { count: remaining })} · {t("hintPerFile", { size: maxFileSizeMb })} · {t("hintTotal")}
         </div>
       </div>
 
-      {/* File list */}
       {files.length > 0 && (
         <ul className="file-list">
-          {files.map((file, i) => (
-            <li key={i} className="file-item">
-              <span className="file-name">{file.name}</span>
-              <span className="file-size">{formatSize(file.size)}</span>
-              <button type="button" className="file-remove" onClick={() => removeFile(i)} aria-label="Entfernen">✕</button>
-            </li>
-          ))}
+          {files.map((file, i) => {
+            const ext = fileExtension(file.name);
+            return (
+              <li key={i} className="file-item">
+                <span className={`file-ext file-ext-${extensionTone(ext)}`} aria-hidden="true">{ext || "·"}</span>
+                <span className="file-text">
+                  <span className="file-name">{file.name}</span>
+                  <span className="file-size">{formatSize(file.size)}</span>
+                </span>
+                <button type="button" className="file-remove" onClick={() => removeFile(i)} aria-label={t("removeFile")}>✕</button>
+              </li>
+            );
+          })}
         </ul>
       )}
 
-      {/* Captcha - laeuft einmal beim Laden der Seite, bleibt danach fuer alle weiteren Uploads
-          gueltig (siehe handleSolved oben) - das Widget selbst wird nach erfolgreichem Eintausch
-          ausgeblendet, nur der Status bleibt sichtbar. Ohne Sitekey (kein FriendlyCaptcha
-          konfiguriert) zeigen wir statt des Widgets nur einen Platzhalter - der Eintausch laeuft
-          im Hintergrund trotzdem (siehe useEffect oben), damit der Rest des Formulars unveraendert
-          bleibt. */}
-      {sitekey ? (
-        <div style={{ margin: "var(--space-5) 0 var(--space-1)" }}>
-          {!captchaSessionToken && (
-            <CaptchaWidget key={captchaKey} sitekey={sitekey} onSolved={handleSolved} onExpired={() => { exchangedSolutionRef.current = null; }} />
-          )}
-          <div className={`captcha-status${captchaSessionToken ? " captcha-status-ok" : ""}`}>
-            {captchaSessionToken
-              ? "✓ Sicherheitscheck abgeschlossen"
-              : captchaVerifying
-                ? "Sicherheitscheck wird geprüft…"
-                : "Sicherheitscheck läuft…"}
-          </div>
-        </div>
-      ) : (
-        <div style={{ margin: "var(--space-5) 0 var(--space-1)" }}>
-          <div className="captcha-placeholder">Sicherheitscheck (kein FriendlyCaptcha konfiguriert – Test-/Dev-Betrieb)</div>
-        </div>
+      {error && <p className="error">{error}</p>}
+      {retryNotice && <p className="muted" role="status">{retryNotice}</p>}
+
+      {/* Nur relevant, wenn ein Bild ausgewählt ist: andere Dateien tragen keinen Standort */}
+      {files.some(isImageFile) && (
+        <label className="upload-gps-option">
+          <input type="checkbox" checked={includeGps} onChange={(event) => setIncludeGps(event.target.checked)} />
+          <span>{t("includeGps")}</span>
+        </label>
       )}
 
-      {error && <p className="error">{error}</p>}
+      <p className="upload-privacy-note">
+        {tenantName ? t("privacyResponsible", { tenant: tenantName }) : null}{" "}
+        {privacyNoticeUrl?.startsWith("https://") ? (
+          <a href={privacyNoticeUrl} target="_blank" rel="noopener noreferrer">
+            {t("privacyLink")}
+          </a>
+        ) : null}{" "}
+        {sitekey ? t("privacyCaptcha") : null}
+      </p>
 
-      <button
-        type="submit"
-        className="button"
-        style={{ width: "100%", marginTop: "var(--space-3)" }}
-        disabled={submitting || files.length === 0}
-      >
-        {submitting ? "Wird hochgeladen…" : "Abgeben"}
-      </button>
+      <div className="upload-actions">
+        {/* Captcha - laeuft einmal beim Laden der Seite, bleibt danach fuer alle weiteren Uploads
+            gueltig (siehe handleSolved oben) - das Widget selbst wird nach erfolgreichem Eintausch
+            ausgeblendet, nur der Status bleibt sichtbar. Ohne Sitekey (kein FriendlyCaptcha
+            konfiguriert) zeigen wir statt des Widgets nur einen Platzhalter - der Eintausch laeuft
+            im Hintergrund trotzdem (siehe useEffect oben), damit der Rest des Formulars unveraendert
+            bleibt. */}
+        <div className={`captcha-card${captchaReady ? " captcha-card-ok" : ""}`}>
+          {sitekey && !captchaReady && (
+            <CaptchaWidget key={captchaKey} sitekey={sitekey} puzzleEndpoint={puzzleEndpoint} onSolved={handleSolved} onExpired={() => { exchangedSolutionRef.current = null; }} />
+          )}
+          <div className="captcha-status-row">
+            <span className="captcha-check" aria-hidden="true">
+              {captchaReady && (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M5 13l4 4L19 7" /></svg>
+              )}
+            </span>
+            <span className="captcha-text">
+              <span className="captcha-title">{t("captchaTitle")}</span>
+              <span className="captcha-status">
+                {!sitekey
+                  ? t("captchaPlaceholder")
+                  : captchaReady
+                    ? t("captchaDone")
+                    : captchaVerifying
+                      ? t("captchaVerifying")
+                      : t("captchaRunning")}
+              </span>
+            </span>
+          </div>
+        </div>
+
+        <div className="upload-submit-bar">
+          <button type="submit" className="button upload-submit" disabled={submitDisabled}>
+            {submitting
+              ? t("submitting")
+              : files.length > 0
+                ? t("submitCount", { count: files.length })
+                : t("submit")}
+          </button>
+        </div>
+      </div>
     </form>
   );
+}
+
+function fileExtension(name: string): string {
+  const parts = name.split(".");
+  return parts.length > 1 ? (parts.pop() ?? "").toUpperCase().slice(0, 4) : "";
+}
+
+// Farbton des Dateityp-Kaestchens: PDF rot, Word blau, Bilder/Tabellen gruen, sonst neutral.
+function extensionTone(ext: string): "danger" | "info" | "success" | "neutral" {
+  if (ext === "PDF") return "danger";
+  if (ext === "DOC" || ext === "DOCX" || ext === "ODT") return "info";
+  if (["JPG", "JPEG", "PNG", "HEIC", "HEIF", "WEBP", "GIF", "XLS", "XLSX", "CSV", "ODS"].includes(ext)) return "success";
+  return "neutral";
 }

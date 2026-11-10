@@ -1,12 +1,14 @@
 "use client";
 
+import type { FeatureCollection, LineString } from "geojson";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 
 import { ElevationProfilePoint, HikingTourWaypointKind, TerrainDangerLevel, TerrainDangerSegment } from "@/types/api";
 
-import { buildDangerLineFeatures, DANGER_COLOR_TOKEN, DANGER_LEGEND } from "./hiking-tour-danger";
+import { buildDangerLineFeatures, DANGER_COLOR_TOKEN, dangerLegend } from "./hiking-tour-danger";
 
 // Offizieller swisstopo-Vector-Tile-Style (Auftrag Abschnitt 1/2 - dieselbe Basiskarte wie
 // map.geo.admin.ch, kostenlos, kein API-Key). Attribution ist Pflicht (siehe
@@ -40,12 +42,6 @@ export type MapWaypoint = {
   break_minutes?: number | null;
 };
 
-const KIND_LABEL: Record<HikingTourWaypointKind, string> = {
-  START: "Start", END: "Ziel", NAVIGATION: "Fixpunkt", BREAK: "Pausenplatz",
-  SUMMIT: "Gipfel", PASS: "Pass", HUT: "Hütte", WATER: "Wasser",
-  DECISION: "Fixpunkt", EMERGENCY_EXIT: "Notausstieg", USER_DEFINED: "Fixpunkt",
-};
-
 type Props = {
   waypoints: MapWaypoint[];
   /** [lat, lon]-Paare (Konvention dieser API, siehe RouteLegRead) */
@@ -66,6 +62,12 @@ type Props = {
 };
 
 export function HikingTourMap({ waypoints, routeCoordinates, elevationProfile, dangerSegments, onMapClick, onMarkerDragEnd, highlightPoint, fitSwitzerland = false, className }: Props) {
+  const t = useTranslations("wanderplaner");
+  const kindLabel = (kind: HikingTourWaypointKind) => t(`kind.${kind}`);
+  // Die Marker entstehen imperativ im Effekt unten; die Beschriftung kommt über eine Ref, damit
+  // ein neues `t` nicht jedes Mal alle Marker neu aufbaut.
+  const kindLabelRef = useRef(kindLabel);
+  kindLabelRef.current = kindLabel;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedPoint = waypoints.find((waypoint) => waypoint.id === selectedId);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -118,7 +120,7 @@ export function HikingTourMap({ waypoints, routeCoordinates, elevationProfile, d
       const button = document.createElement("button");
       button.type = "button";
       button.className = "wanderplaner-map-marker";
-      button.setAttribute("aria-label", waypoint.label || KIND_LABEL[waypoint.kind]);
+      button.setAttribute("aria-label", waypoint.label || kindLabelRef.current(waypoint.kind));
       element.appendChild(button);
       let dragged = false;
       button.addEventListener("click", (event) => {
@@ -193,7 +195,7 @@ export function HikingTourMap({ waypoints, routeCoordinates, elevationProfile, d
     // eingefaerbt, sobald sowohl Hoehenprofil als auch Gefahrensegmente vorliegen - sonst bleibt
     // es bei der einfarbigen Linie aus routeCoordinates.
     const dangerFeatures = elevationProfile && dangerSegments ? buildDangerLineFeatures(elevationProfile, dangerSegments) : [];
-    const geojson: GeoJSON.FeatureCollection<GeoJSON.LineString> = {
+    const geojson: FeatureCollection<LineString> = {
       type: "FeatureCollection",
       features: dangerFeatures.length > 0 ? dangerFeatures : [{
         type: "Feature",
@@ -240,32 +242,32 @@ export function HikingTourMap({ waypoints, routeCoordinates, elevationProfile, d
 
   return (
     <div className="wanderplaner-map-frame">
-      <div ref={containerRef} className={`wanderplaner-map${className ? ` ${className}` : ""}`} role="application" aria-label="Karte" />
+      <div ref={containerRef} className={`wanderplaner-map${className ? ` ${className}` : ""}`} role="application" aria-label={t("map.aria")} />
       {elevationProfile && dangerSegments && (
-        <ul className="wanderplaner-map-legend" aria-label="Legende Gefahreneinschätzung">
-          {DANGER_LEGEND.map((entry) => (
+        <ul className="wanderplaner-map-legend" aria-label={t("map.legendAria")}>
+          {dangerLegend(t).map((entry) => (
             <li key={entry.danger} title={entry.description}>
               <span className={`wanderplaner-map-legend-swatch wanderplaner-map-legend-${entry.danger}`} aria-hidden="true" />
               {entry.label}
               {entry.danger !== "normal" && !dangerSegments.some((segment) => segment.danger === entry.danger) && (
-                <span className="wanderplaner-map-legend-none"> (keine)</span>
+                <span className="wanderplaner-map-legend-none">{t("map.legendNone")}</span>
               )}
             </li>
           ))}
         </ul>
       )}
       {selectedPoint && (
-        <aside className="wanderplaner-map-info" aria-label="Wegpunkt-Information" onKeyDown={(event) => {
+        <aside className="wanderplaner-map-info" aria-label={t("map.waypointInfo")} onKeyDown={(event) => {
           if (event.key === "Escape") setSelectedId(null);
         }}>
           <div className="wanderplaner-map-info-header">
-            <strong>{selectedPoint.label || KIND_LABEL[selectedPoint.kind]}</strong>
-            <button type="button" className="button-icon-soft" aria-label="Wegpunkt-Information schliessen" onClick={() => setSelectedId(null)}>✕</button>
+            <strong>{selectedPoint.label || kindLabel(selectedPoint.kind)}</strong>
+            <button type="button" className="button-icon-soft" aria-label={t("map.closeWaypointInfo")} onClick={() => setSelectedId(null)}>✕</button>
           </div>
-          <span className="field-help">{KIND_LABEL[selectedPoint.kind]}</span>
-          {selectedPoint.elevation_m != null && <div>Höhe: {Math.round(selectedPoint.elevation_m)} m</div>}
+          <span className="field-help">{kindLabel(selectedPoint.kind)}</span>
+          {selectedPoint.elevation_m != null && <div>{t("map.elevation", { value: String(Math.round(selectedPoint.elevation_m)) })}</div>}
           <div className="field-help">{selectedPoint.lat.toFixed(5)}, {selectedPoint.lon.toFixed(5)}</div>
-          {selectedPoint.break_minutes != null && selectedPoint.break_minutes > 0 && <div>Pause: {selectedPoint.break_minutes} min</div>}
+          {selectedPoint.break_minutes != null && selectedPoint.break_minutes > 0 && <div>{t("map.break", { minutes: String(selectedPoint.break_minutes) })}</div>}
           {selectedPoint.description && <p>{selectedPoint.description}</p>}
         </aside>
       )}

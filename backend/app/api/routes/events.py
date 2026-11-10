@@ -9,14 +9,17 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from pydantic import BaseModel
 
 from app.core.db import get_db
-from app.core.security import CurrentUser, get_current_user, require_reader, require_writer
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_permission
 from app.schemas.event import EventCreate, EventImportPreview, EventRead, EventUpdate
 from app.services import public_id_service
 from app.services.event_service import EventService
 from app.services.submission_service import SubmissionService
 from app.services.audit_service import AuditService
 from app.services import photo_event_link_service
-from app.models.entities import Event
+from app.services.task_package_service import sync_packages_after_change
+from app.models.entities import Event, SubmissionAssignment
+from app.core.offload import run_coroutine_in_thread
 
 router = APIRouter()
 service = EventService()
@@ -31,7 +34,7 @@ def list_events(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_reader(user)
+    require_permission(user, P.MEETINGS_READ)
     return service.list_events(db, tenant_id=user.current_tenant_id, skip=skip, limit=limit)
 
 
@@ -41,7 +44,7 @@ def create_event(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     try:
         created = service.create_event(db, payload, tenant_id=user.current_tenant_id)
     except (SQLAlchemyError, ValueError) as exc:
@@ -49,6 +52,7 @@ def create_event(
         raise HTTPException(status_code=400, detail="Event could not be created") from exc
     submission_service.sync_todos_for_event(db, created)
     photo_event_link_service.sync_photos_for_event(db, created)
+    sync_packages_after_change(db, tenant_id=user.current_tenant_id, event_tag=created.tag)
     return created
 
 
@@ -71,7 +75,18 @@ async def preview_events_csv(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
+    # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
+    return await run_coroutine_in_thread(_preview_events_csv_impl, file=file, column_map=column_map, db=db, user=user)
+
+
+async def _preview_events_csv_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
+    file: UploadFile = File(...),
+    column_map: str = Form(default=""),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_permission(user, P.MEETINGS_EDIT)
     try:
         content = (await file.read()).decode("utf-8-sig")
         return service.preview_csv(db, content, column_map=_parse_column_map(column_map))
@@ -86,7 +101,18 @@ async def import_events_csv(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
+    # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
+    return await run_coroutine_in_thread(_import_events_csv_impl, file=file, column_map=column_map, db=db, user=user)
+
+
+async def _import_events_csv_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
+    file: UploadFile = File(...),
+    column_map: str = Form(default=""),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_permission(user, P.MEETINGS_EDIT)
     try:
         content = (await file.read()).decode("utf-8-sig")
         created = service.import_csv(db, content, tenant_id=user.current_tenant_id, column_map=_parse_column_map(column_map))
@@ -95,6 +121,10 @@ async def import_events_csv(
         raise HTTPException(status_code=400, detail=str(exc) if isinstance(exc, ValueError) else "CSV import failed") from exc
     for event in created:
         photo_event_link_service.sync_photos_for_event(db, event)
+    if created:
+        submission_service.sync_todos_for_tenant(db, tenant_id=user.current_tenant_id)
+    for tag in sorted({event.tag for event in created if event.tag}):
+        sync_packages_after_change(db, tenant_id=user.current_tenant_id, event_tag=tag)
     return created
 
 
@@ -105,7 +135,7 @@ def patch_event(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     current = public_id_service.get_by_public_id(db, Event, event_id, tenant_id=user.current_tenant_id)
     if current is None:
         raise HTTPException(status_code=404, detail="Event not found")
@@ -118,6 +148,7 @@ def patch_event(
         raise HTTPException(status_code=404, detail="Event not found")
     submission_service.sync_todos_for_event(db, updated)
     photo_event_link_service.sync_photos_for_event(db, updated)
+    sync_packages_after_change(db, tenant_id=user.current_tenant_id, event_tag=updated.tag)
     return updated
 
 
@@ -127,7 +158,7 @@ def delete_event(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     current = public_id_service.get_by_public_id(db, Event, event_id, tenant_id=user.current_tenant_id)
     if current is None:
         raise HTTPException(status_code=404, detail="Event not found")
@@ -140,6 +171,8 @@ def delete_event(
         raise HTTPException(status_code=404, detail="Event not found")
     # Audit S10, 2026-08-16 - see the identical fix in participants.py.
     audit.log(db, action="event.deleted", actor=user, entity_type="event", entity_id=current.id)
+    # Offene Abgabe-Pendenzen des gelöschten Termins fallen weg
+    submission_service.sync_todos_for_tenant(db, tenant_id=user.current_tenant_id)
     return {"message": "Event deleted"}
 
 
@@ -154,11 +187,21 @@ def rename_tag(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_writer(user)
+    require_permission(user, P.MEETINGS_EDIT)
     result = db.execute(
         update(Event)
         .where(Event.tenant_id == user.current_tenant_id, Event.tag == payload.old_tag)
         .values(tag=payload.new_tag or None)
     )
+    # Abgaben mit dem alten Tag als Filter ziehen mit, sonst verlieren sie alle Termine. Ein
+    # Termin-Abgabe braucht einen Tag (ck_submission_assignment_source): beim Entfernen bleibt
+    # der alte Filter stehen und die Abgabe ist leer.
+    if payload.new_tag:
+        db.execute(
+            update(SubmissionAssignment)
+            .where(SubmissionAssignment.tenant_id == user.current_tenant_id, SubmissionAssignment.tag_filter == payload.old_tag)
+            .values(tag_filter=payload.new_tag)
+        )
     db.commit()
+    submission_service.sync_todos_for_tenant(db, tenant_id=user.current_tenant_id)
     return {"updated": result.rowcount}

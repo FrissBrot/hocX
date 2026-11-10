@@ -1,0 +1,16 @@
+# Vorlage fuer host-spezifische Anpassungen. Als docker-compose.local.yml (nicht versioniert)
+# ins Repo-Root kopieren; deploy.sh, verify_release.sh und die Hilfsskripte laden sie
+# automatisch als letzte Compose-Datei. update_deploy_code.sh bleibt dadurch frei von lokalen
+# Aenderungen am Checkout.
+#
+# Beispiel: privater Test-Host mit eigener CA und Admin-Port im LAN statt nur auf Loopback.
+#
+# services:
+#   traefik:
+#     volumes:
+#       - ./.secrets/test-ca:/etc/traefik/certs:ro
+#     ports: !override
+#       - "${TRAEFIK_WEB_BIND:-0.0.0.0}:80:80"
+#       - "${TRAEFIK_WEBSECURE_BIND:-0.0.0.0}:443:443"
+#       - "192.168.1.10:8443:8443"
+services: {}

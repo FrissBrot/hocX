@@ -1,0 +1,172 @@
+{
+  "valueTypes": {
+    "text": "Free text",
+    "participant": "One participant",
+    "participants": "Multiple participants",
+    "event": "One event"
+  },
+  "defaultColumnOne": "Column 1",
+  "defaultColumnTwo": "Column 2",
+  "pageTitle": "Master lists",
+  "pageDescriptionEmpty": "Freely definable lists for materials, roles or registrations.",
+  "pageDescription": "Roles, groups, sponsors – available in minutes and submissions.",
+  "newList": "+ New list",
+  "emptyState": {
+    "title": "No list yet",
+    "description": "Lists are freely definable tables – e.g. equipment loans, role assignments or registrations.",
+    "hint": "Lists can be used as a source for submissions."
+  },
+  "sidebar": {
+    "title": "Lists",
+    "totalCount": "{count} total",
+    "search": "Search",
+    "searchPlaceholder": "Search lists…",
+    "empty": "No lists",
+    "entryCount": "{count, plural, one {# entry} other {# entries}}"
+  },
+  "notFoundInCycle": "This list didn't exist yet in this cycle.",
+  "noDataForReconstruct": "No data could be found for this list - neither currently nor in another cycle.",
+  "columnsLabel": "Columns: {one} · {two}",
+  "viewOption": {
+    "current": "Current",
+    "historical": "(historical)",
+    "noSnapshot": "(no snapshot)",
+    "viewAriaLabel": "View"
+  },
+  "export": "Export",
+  "edit": "Edit",
+  "deleteList": "Delete list",
+  "noNewEntries": "New entries can't be created - only existing ones can be edited or removed",
+  "selectListPrompt": "Choose a list or create a new one.",
+  "exportModal": {
+    "title": "Export list",
+    "listLabel": "List",
+    "chooseList": "Choose list…",
+    "searchPlaceholder": "Search…",
+    "noListsFound": "No lists found",
+    "groupBy": "Group by",
+    "none": "None",
+    "filterByColumn": "Filter by column",
+    "noFilter": "No filter",
+    "all": "All",
+    "searchTermPlaceholder": "Search term…",
+    "templateFallback": "Template",
+    "preview": "Preview · {count} entries",
+    "selectListPrompt": "Choose a list."
+  },
+  "formModal": {
+    "createTitle": "Create list",
+    "editTitle": "Edit list",
+    "description": "Every list has exactly two columns. The data type determines what input is later visible in the table block and in the protocol.",
+    "name": "List name",
+    "active": "Active",
+    "description2": "Description",
+    "descriptionPlaceholder": "What is this list used for?",
+    "column1": "Column 1",
+    "column2": "Column 2",
+    "title": "Title",
+    "dataType": "Data type",
+    "save": "Save list",
+    "create": "Create list",
+    "namePlaceholder": "e.g. Roles",
+    "optional": "optional",
+    "columns": "Columns",
+    "columnsHint": "Always two – choose any title and data type.",
+    "preview": "How the list appears in the table block",
+    "cancel": "Cancel"
+  },
+  "toasts": {
+    "pdfExportFailed": "PDF export failed",
+    "listSaved": "List saved",
+    "listCreated": "List created",
+    "listSaveFailed": "List could not be saved",
+    "deleteListConfirm": "Permanently delete list? All entries in this list will be irrecoverably lost.",
+    "deleteLabel": "Delete",
+    "listDeleted": "List deleted",
+    "listDeleteFailed": "List could not be deleted",
+    "entryCreated": "Entry created",
+    "entryCreateFailed": "Entry could not be created",
+    "entrySaved": "Entry saved",
+    "entrySaveFailed": "Entry could not be saved",
+    "deleteEntryConfirm": "Permanently delete entry? This cannot be undone.",
+    "entryDeleted": "Entry deleted",
+    "entryDeleteFailed": "Entry could not be deleted",
+    "historicalEntrySaved": "Historical entry saved",
+    "historicalEntrySaveFailed": "Historical entry could not be saved",
+    "removeLabel": "Remove",
+    "deleteHistoricalEntryConfirm": "Remove this entry from the historical view? This permanently changes the historical data.",
+    "historicalEntryRemoved": "Entry removed from the historical view",
+    "entryRemoveFailed": "Entry could not be removed",
+    "deleteDraftEntryConfirm": "Remove this entry from the draft? It won't be included when confirming.",
+    "snapshotCreated": "Snapshot created for this period",
+    "snapshotCreateFailed": "Snapshot could not be created"
+  },
+  "table": {
+    "departedParticipant": "Left on {date}",
+    "newEntryButton": "New entry",
+    "actionsLabel": "Actions",
+    "addRowTitle": "Add list row",
+    "discardNewRowTitle": "Discard new list row",
+    "noValue": "No value",
+    "hideRemovedEntryTitle": "Hide removed entry",
+    "deleteRowTitle": "Delete list row",
+    "deleteButton": "Delete",
+    "emptyMessage": "No entries yet.",
+    "selectedCount": "{count} selected",
+    "participantPickerTitle": "Choose participants",
+    "participantPickerDescription": "Multiple selection for this list field.",
+    "search": "Search",
+    "participantFilterPlaceholder": "Filter participants",
+    "valuePlaceholder": "Value",
+    "participantNullLabel": "Participant",
+    "eventNullLabel": "Event",
+    "protocol": {
+      "occupied": "{filled} of {total} assigned",
+      "occupiedRich": "<strong>{filled}</strong> of {total} assigned",
+      "filterAll": "All",
+      "filterOpen": "Open",
+      "filterChanged": "Changed",
+      "filterEmpty": "No rows in this view.",
+      "nobodyAssigned": "Nobody assigned yet",
+      "addPerson": "+ Person",
+      "addPersonTo": "Assign a person to “{row}”",
+      "addedPerson": "Newly assigned",
+      "removedPerson": "Removed",
+      "source": "Rows come from Master data › Master lists › {name}",
+      "legendNew": "New",
+      "legendRemoved": "Removed"
+    }
+  },
+  "inactive": "inactive",
+  "searchList": "Search in “{name}”",
+  "unassigned": "{count} unassigned",
+  "changed": "updated {date}",
+  "currentView": "View: Current",
+  "assign": "+ Assign",
+  "addEntry": "+ Add entry",
+  "removePerson": "Remove {name}",
+  "typeHints": {
+    "text": "Any input",
+    "participant": "Exactly one person",
+    "participants": "Any number of people",
+    "event": "Links an event"
+  },
+  "previewValues": {
+    "text": {
+      "0": "Outbound journey",
+      "1": "Camp funds"
+    },
+    "participant": {
+      "0": "Noah Durrer",
+      "1": "Elias Imfeld"
+    },
+    "participants": {
+      "0": "Noah Durrer, Elias Imfeld",
+      "1": "Lino Enz, Timo Weber"
+    },
+    "event": {
+      "0": "05.10. · Autumn camp",
+      "1": "19.12. · Forest Christmas"
+    }
+  }
+}

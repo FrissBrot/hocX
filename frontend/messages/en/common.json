@@ -1,0 +1,217 @@
+{
+  "meta": {
+    "description": "Protocol and template management workspace"
+  },
+  "save": "Save",
+  "cancel": "Cancel",
+  "delete": "Delete",
+  "edit": "Edit",
+  "create": "Create",
+  "close": "Close",
+  "back": "Back",
+  "next": "Next",
+  "yes": "Yes",
+  "no": "No",
+  "add": "Add",
+  "remove": "Remove",
+  "search": "Search",
+  "searchPlaceholder": "Search…",
+  "loading": "Loading…",
+  "retry": "Try again",
+  "refresh": "Refresh",
+  "download": "Download",
+  "upload": "Upload",
+  "export": "Export",
+  "import": "Import",
+  "actions": "Actions",
+  "select": "Select",
+  "noResults": "No results",
+  "selectedCount": "{count, plural, one {# selected} other {# selected}}",
+  "requiredField": "Required field",
+  "optional": "Optional",
+  "menuToggle": "Menu",
+  "breadcrumbNav": "Breadcrumb",
+  "notificationsRegion": "Notifications",
+  "copyright": "Copyright © {year} hocX Project · All rights reserved.",
+  "build": {
+    "production": "{version}",
+    "test": "{image}",
+    "development": "{branch}@{commit}",
+    "developmentBadge": "DEV",
+    "testBadge": "TEST",
+    "unknown": "unknown",
+    "releaseLinkTitle": "View release on GitHub"
+  },
+  "connectionLost": {
+    "title": "Connection lost",
+    "description": "The server is currently unreachable. Already confirmed data is kept; after reconnecting, check the save status of any open changes."
+  },
+  "pagination": {
+    "range": "{from}–{to} of {total}"
+  },
+  "confirm": {
+    "defaultTitle": "Please confirm",
+    "deleteTitle": "Really delete?",
+    "confirmLabel": "Confirm",
+    "deleteConfirmLabel": "Delete",
+    "cancelLabel": "Cancel"
+  },
+  "dateField": {
+    "invalidFormat": "Please enter the date as DD.MM.YYYY",
+    "chooseDate": "Choose date",
+    "calendar": "Calendar",
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month",
+    "today": "Today"
+  },
+  "copyField": {
+    "copy": "Copy",
+    "copyWithLabel": "Copy {label}"
+  },
+  "tagInput": {
+    "addPlaceholder": "Add tag…",
+    "renameFailed": "Renaming failed. Please try again.",
+    "removeTag": "Remove tag {tag}",
+    "editTag": "Edit tag",
+    "newNamePlaceholder": "New name…",
+    "noColor": "No color",
+    "rename": "Rename",
+    "colorOrRename": "Color / rename",
+    "addNewTag": "+ Add \"{tag}\""
+  },
+  "connectivity": {
+    "offlineWithPending": "{count, plural, one {Offline – # change saved locally} other {Offline – # changes saved locally}}",
+    "offlineIdle": "Offline – monitoring connection",
+    "flushing": "{count, plural, one {Resending # change…} other {Resending # changes…}}",
+    "pendingUnsaved": "{count, plural, one {# change not yet saved} other {# changes not yet saved}}",
+    "reconnected": "Connection restored",
+    "retryButton": "Try again now",
+    "discardBlocked": "{count, plural, one {Discard failed change} other {Discard # failed changes}}",
+    "leaveConfirm": "There are unsaved changes. Leave the page anyway?"
+  },
+  "clientErrors": {
+    "offline": "No internet connection",
+    "timeout": "The server took too long to respond",
+    "unreachable": "Server not reachable",
+    "unreachableStatus": "Server not reachable ({status})",
+    "invalidResponse": "Invalid response from the server",
+    "saveFailed": "Changes could not be saved.",
+    "saveFailedStatus": "Saving failed ({status})",
+    "connectionError": "Connection error",
+    "passkeyCreateCancelled": "Passkey creation was cancelled",
+    "passkeyLoginCancelled": "Passkey sign-in was cancelled",
+    "pdfNotProvided": "The PDF could not be provided.",
+    "pdfReadyClick": "PDF ready – click here to open",
+    "pdfExportFailed": "PDF export failed",
+    "tagColorTransferFailed": "Tag renamed, but its colour could not be transferred",
+    "noHistoricalCycleSelected": "No historical cycle selected",
+    "noDraftToConfirm": "No draft to confirm"
+  },
+  "profileImage": {
+    "invalidType": "Please choose a PNG, JPG, GIF or WebP image (SVG is not supported).",
+    "tooLarge": "The image is too large (max. 5 MB)."
+  },
+  "deleteWithFiles": {
+    "selectedCount": "{selected, number} of {total, number} selected for deletion",
+    "selectAll": "Select all",
+    "selectNone": "Select none",
+    "groups": {
+      "protocol_image": "Images in this protocol",
+      "submission": "Submitted files",
+      "gallery": "Gallery photos for this submission"
+    },
+    "usedElsewhere": "Still used elsewhere – will be kept",
+    "keptHint": "{count, plural, one {One file not selected is} other {# files not selected are}} moved to the gallery.",
+    "cancel": "Cancel",
+    "confirm": "{count, plural, =0 {Delete, keep files} one {Delete with one file} other {Delete with # files}}",
+    "confirmPlain": "Delete"
+  },
+  "auditActions": {
+    "categories": {
+      "admin": "Platform",
+      "backup": "Backup",
+      "calendar_feed": "Calendar feed",
+      "document": "Document",
+      "document_asset": "Document asset",
+      "document_brand": "Brand",
+      "document_settings": "Document settings",
+      "document_template": "Document template",
+      "document_verification": "Authenticity check",
+      "event": "Event",
+      "finance_account": "Account",
+      "finance_transaction": "Transaction",
+      "fine": "Fine",
+      "fine_tariff": "Fine tariff",
+      "identity_verification": "Verification",
+      "participant": "Person",
+      "personal_data": "Data access request",
+      "privacy_settings": "Privacy settings",
+      "protocol": "Protocol",
+      "retention": "Retention",
+      "submission_assignment": "Submission",
+      "submission_file": "Submitted file",
+      "submission_upload": "Upload",
+      "table_snapshot": "Table snapshot",
+      "task_package": "Task package",
+      "template": "Protocol template",
+      "tenant": "Organisation",
+      "todo": "Task",
+      "user": "Account",
+      "role": "Role"
+    },
+    "verbs": {
+      "loginFailed": "Sign-in failed",
+      "mfaFailed": "Second factor wrong",
+      "login": "signed in",
+      "viewed": "viewed",
+      "exported": "exported",
+      "imported": "imported",
+      "deleted": "deleted",
+      "created": "created",
+      "updated": "changed",
+      "restored": "restored",
+      "collected": "collected",
+      "revoked": "withdrawn",
+      "published": "published"
+    }
+  },
+  "protectedExport": {
+    "password": "Password for the ZIP file",
+    "passwordHelp": "At least {min} characters. It is not stored – without the password the file cannot be opened.",
+    "repeat": "Repeat password",
+    "mismatch": "The passwords do not match.",
+    "openHint": "The ZIP file is encrypted with AES-256. Open it with e.g. 7-Zip (Windows), Keka (macOS) or WinRAR.",
+    "cancel": "Cancel",
+    "download": "Download",
+    "working": "Creating …",
+    "done": "Export downloaded.",
+    "failed": "Export failed."
+  },
+  "features": {
+    "finance": "Finances",
+    "abgabebox": "Submission box",
+    "custom_domain": "Custom domain",
+    "verify_domain": "Custom verification domain",
+    "task_packages": "Task packages",
+    "custom_roles": "Custom roles",
+    "photo_sharing": "Photo sharing",
+    "document_designer": "Document designer",
+    "wanderplaner": "Hiking planner"
+  },
+  "featureNotice": {
+    "readOnly": "“{name}” is no longer part of your plan. Existing data stays visible, changes are locked.",
+    "notBooked": "“{name}” is not included in your plan. Your administrators can upgrade the plan."
+  },
+  "timeField": {
+    "chooseTime": "Choose time",
+    "invalidFormat": "Please enter the time as HH:MM."
+  },
+  "colorField": {
+    "choose": "Choose colour",
+    "saturationBrightness": "Saturation and brightness",
+    "saturationBrightnessValue": "Saturation {saturation} %, brightness {brightness} %",
+    "hue": "Hue",
+    "hex": "Hex value",
+    "swatches": "Colour suggestions"
+  }
+}

@@ -144,3 +144,28 @@ def transcode_live_clip(content: bytes) -> bytes | None:
         except OSError:
             return None
     return output or None
+
+
+def clip_without_metadata(source: Path, target: Path) -> bool:
+    """Kopie eines gespeicherten Live-Photo-Clips ohne Container-Metadaten (Standort-Atome der
+    Kamera, Erstellungszeit) - fuer Partner-Mandanten ohne Standortfreigabe (IMGMETA-007). Nur
+    umverpackt (-c copy), nicht neu kodiert. False, wenn ffmpeg fehlt oder scheitert; der
+    Aufrufer liefert das Video dann nicht aus, statt Metadaten mitzuschicken."""
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None:
+        return False
+    command = [
+        ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error",
+        "-protocol_whitelist", "file",
+        "-i", str(source),
+        "-map", "0", "-map_metadata", "-1", "-map_chapters", "-1",
+        "-c", "copy",
+        "-movflags", "+faststart",
+        "-f", "mp4", "-y", str(target),
+    ]
+    try:
+        subprocess.run(command, check=True, capture_output=True, timeout=LIVE_CLIP_TRANSCODE_TIMEOUT_SECONDS)
+    except (subprocess.SubprocessError, OSError):
+        target.unlink(missing_ok=True)
+        return False
+    return target.exists() and target.stat().st_size > 0

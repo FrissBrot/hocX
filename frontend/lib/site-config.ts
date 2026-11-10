@@ -12,5 +12,7 @@ function normalizeUrl(raw: string | null | undefined): string | null {
 }
 
 export function getMainAppUrl(): string | null {
-  return normalizeUrl(process.env.HOCX_APP_URL ?? process.env.TRAEFIK_DOMAIN ?? null);
+  // `||` statt `??`: docker-compose reicht nicht gesetzte Variablen als "" durch
+  // (HOCX_APP_URL: ${HOCX_APP_URL:-}) - ein leerer Wert soll auf TRAEFIK_DOMAIN zurueckfallen.
+  return normalizeUrl(process.env.HOCX_APP_URL?.trim() || process.env.TRAEFIK_DOMAIN?.trim() || null);
 }

@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import { browserApiFetch, browserApiBaseUrl } from "@/lib/api/client";
 import { AdminLoginResponse, AdminSessionInfo, PendingMfaLogin, PlatformOidcConfigPublic, TotpEnrollmentStart } from "@/types/api";
@@ -14,6 +15,7 @@ function sanitizeTotpCode(value: string) {
 }
 
 export default function AdminLoginPage() {
+  const t = useTranslations("admin.login");
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -72,7 +74,7 @@ export default function AdminLoginPage() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
-    setStatusMsg("Anmeldung läuft…");
+    setStatusMsg(t("status.loggingIn"));
     try {
       const result = await browserApiFetch<AdminLoginResponse>("/api/admin/auth/login", {
         method: "POST",
@@ -88,9 +90,9 @@ export default function AdminLoginPage() {
         setStatusMsg("");
         return;
       }
-      setStatusMsg("Login konnte nicht abgeschlossen werden.");
+      setStatusMsg(t("status.loginIncomplete"));
     } catch (error) {
-      setStatusMsg(error instanceof Error ? error.message : "Login fehlgeschlagen");
+      setStatusMsg(error instanceof Error ? error.message : t("status.loginFailed"));
     } finally {
       setLoading(false);
     }
@@ -100,7 +102,7 @@ export default function AdminLoginPage() {
     event.preventDefault();
     if (!pendingMfa) return;
     setLoading(true);
-    setStatusMsg("Code wird geprüft…");
+    setStatusMsg(t("status.codeChecking"));
     try {
       const result = await browserApiFetch<AdminLoginResponse>("/api/admin/auth/mfa/totp/verify", {
         method: "POST",
@@ -110,9 +112,9 @@ export default function AdminLoginPage() {
         finishLogin();
         return;
       }
-      setStatusMsg("Code-Prüfung fehlgeschlagen.");
+      setStatusMsg(t("status.codeCheckFailed"));
     } catch (error) {
-      setStatusMsg(error instanceof Error ? error.message : "Code-Prüfung fehlgeschlagen");
+      setStatusMsg(error instanceof Error ? error.message : t("status.codeCheckFailed"));
     } finally {
       setLoading(false);
     }
@@ -121,7 +123,7 @@ export default function AdminLoginPage() {
   async function startTotpSetup() {
     if (!pendingMfa) return;
     setLoading(true);
-    setStatusMsg("TOTP-Setup wird vorbereitet…");
+    setStatusMsg(t("status.totpSetupPreparing"));
     try {
       const setup = await browserApiFetch<TotpEnrollmentStart>("/api/admin/auth/mfa/totp/setup/start", {
         method: "POST",
@@ -132,7 +134,7 @@ export default function AdminLoginPage() {
       setTotpLabel("");
       setStatusMsg("");
     } catch (error) {
-      setStatusMsg(error instanceof Error ? error.message : "TOTP-Setup konnte nicht gestartet werden");
+      setStatusMsg(error instanceof Error ? error.message : t("status.totpSetupStartFailed"));
     } finally {
       setLoading(false);
     }
@@ -141,7 +143,7 @@ export default function AdminLoginPage() {
   async function completeTotpSetup() {
     if (!totpSetup) return;
     setLoading(true);
-    setStatusMsg("TOTP wird aktiviert…");
+    setStatusMsg(t("status.totpActivating"));
     try {
       const result = await browserApiFetch<AdminLoginResponse>("/api/admin/auth/mfa/totp/setup/complete", {
         method: "POST",
@@ -155,9 +157,9 @@ export default function AdminLoginPage() {
         finishLogin();
         return;
       }
-      setStatusMsg("TOTP konnte nicht aktiviert werden.");
+      setStatusMsg(t("status.totpActivateFailed"));
     } catch (error) {
-      setStatusMsg(error instanceof Error ? error.message : "TOTP konnte nicht aktiviert werden");
+      setStatusMsg(error instanceof Error ? error.message : t("status.totpActivateFailed"));
     } finally {
       setLoading(false);
     }
@@ -169,23 +171,23 @@ export default function AdminLoginPage() {
         {oidcConfig?.enabled && (
           <div className="login-sso">
             <button type="button" className="button-secondary oidc-button" onClick={loginWithOidc}>
-              Mit {new URL(oidcConfig.issuer_url).hostname} anmelden
+              {t("loginWithSso", { host: new URL(oidcConfig.issuer_url).hostname })}
             </button>
-            <div className="login-divider"><span>oder</span></div>
+            <div className="login-divider"><span>{t("or")}</span></div>
           </div>
         )}
 
         <form className="grid" onSubmit={submit}>
           <label className="field-stack">
-            <span className="field-label">E-Mail</span>
+            <span className="field-label">{t("email")}</span>
             <input value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
           </label>
           <label className="field-stack">
-            <span className="field-label">Passwort</span>
+            <span className="field-label">{t("password")}</span>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
           </label>
           <button type="submit" className="button-secondary" disabled={loading}>
-            {loading ? "…" : "Einloggen"}
+            {loading ? "…" : t("submit")}
           </button>
         </form>
       </>
@@ -198,34 +200,33 @@ export default function AdminLoginPage() {
       <div className="grid">
         <div className="security-summary-card">
           <div>
-            <div className="eyebrow">Pflicht-Setup</div>
-            <strong>Für Platform-Admin-Konten ist MFA erforderlich</strong>
-            <div className="muted">{pendingMfa.user_display_name} benötigt vor dem Login einen zweiten Faktor (Authenticator-App).</div>
+            <div className="eyebrow">{t("mandatorySetupEyebrow")}</div>
+            <strong>{t("mfaRequiredTitle")}</strong>
+            <div className="muted">{t("mfaRequiredDescription", { user: pendingMfa.user_display_name })}</div>
           </div>
         </div>
 
         {!totpSetup ? (
           <button type="button" className="button-secondary" onClick={() => void startTotpSetup()} disabled={loading}>
-            TOTP-Setup starten
+            {t("startTotpSetup")}
           </button>
         ) : (
           <TotpEnrollCard
             setup={totpSetup}
             label={totpLabel}
             onLabelChange={setTotpLabel}
-            labelPlaceholder="z.B. Firmenhandy"
             code={totpCode}
             onCodeChange={setTotpCode}
             onSubmit={() => void completeTotpSetup()}
             busy={loading}
-            submitLabel="TOTP aktivieren und anmelden"
-            submitBusyLabel="Wird aktiviert…"
+            submitLabel={t("totpActivateAndLogin")}
+            submitBusyLabel={t("totpActivatingShort")}
           />
         )}
 
         <div className="table-actions table-actions-start">
           <button type="button" className="button-secondary button-ghost login-secondary-button" onClick={resetMfaFlow}>
-            Zurück zum Login
+            {t("backToLogin")}
           </button>
         </div>
       </div>
@@ -241,7 +242,7 @@ export default function AdminLoginPage() {
         </div>
         <form className="grid" onSubmit={verifyTotp}>
           <label className="field-stack">
-            <span className="field-label">Bestätigungscode aus der Authenticator-App</span>
+            <span className="field-label">{t("confirmationCodeLabel")}</span>
             <input
               value={totpCode}
               onChange={(event) => setTotpCode(sanitizeTotpCode(event.target.value))}
@@ -252,12 +253,12 @@ export default function AdminLoginPage() {
             />
           </label>
           <button type="submit" className="button-secondary" disabled={totpCode.length !== 6 || loading}>
-            {loading ? "Prüft…" : "Bestätigen"}
+            {loading ? t("checking") : t("confirmButton")}
           </button>
         </form>
         <div className="table-actions table-actions-start">
           <button type="button" className="button-secondary button-ghost login-secondary-button" onClick={resetMfaFlow}>
-            Zurück zum Login
+            {t("backToLogin")}
           </button>
         </div>
       </div>
@@ -267,8 +268,8 @@ export default function AdminLoginPage() {
   return (
     <main className="login-frame">
       <section className="login-panel">
-        <div className="eyebrow">hocX Platform-Admin</div>
-        <h1>Admin-Anmeldung</h1>
+        <div className="eyebrow">hocX Platform-Admin</div> {/* i18n-ok: Produktname/Bereichsbezeichnung, keine Uebersetzung */}
+        <h1>{t("title")}</h1>
 
         {!pendingMfa ? renderPasswordStep() : pendingMfa.status === "setup_required" ? renderSetupStep() : renderVerifyStep()}
 

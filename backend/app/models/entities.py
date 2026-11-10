@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, time
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
@@ -12,8 +13,10 @@ from sqlalchemy import (
     Computed,
     Date,
     DateTime,
+    FetchedValue,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     Numeric,
@@ -21,6 +24,7 @@ from sqlalchemy import (
     SmallInteger,
     Table,
     Text,
+    Time,
     UniqueConstraint,
     text,
 )
@@ -51,6 +55,8 @@ class Tenant(Base, TimestampMixin):
     profile_image_path: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
     tag_config_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
+    # Alias/Ausblenden der Spezialfelder der Termine (Migration 0165, schemas/event_field_config.py)
+    event_field_config_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
     public_slug: Mapped[str | None] = mapped_column(Text, unique=True)
     # Vorlage, die im Import-Assistenten zuletzt ausgewählt wurde - wird beim nächsten
     # Öffnen der Seite wieder vorausgewählt. SET NULL statt CASCADE, damit das Löschen
@@ -59,9 +65,8 @@ class Tenant(Base, TimestampMixin):
     last_word_import_template_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("template.id", ondelete="SET NULL")
     )
-    # NULL = kein Limit gesetzt (Standard fuer alle bestehenden Mandanten). Vom Adminportal aus
-    # gesetzt (siehe AdminTenantStorageQuotaUpdate), gegen StorageService.breakdown_for_tenant
-    # geprueft.
+    # NULL = kein Limit. Immer Plan + Zusatzpakete (AdminTenantService.
+    # recompute_effective_storage_quota), seit 0136 ohne manuellen Override.
     storage_quota_bytes: Mapped[int | None] = mapped_column(BigInteger)
     # Preismodell (0085_plan_pricing): plan_code ist der aktuelle Vertrag, tenant_feature bleibt
     # aber die alleinige Quelle der Wahrheit fuers Enforcement - ein Plan-Wechsel im Adminportal
@@ -73,15 +78,39 @@ class Tenant(Base, TimestampMixin):
     # Ueberschreibt plan.included_user_limit, wenn gesetzt (analog zu storage_quota_bytes als
     # Override-Mechanismus). NULL = das Limit des Plans gilt.
     user_limit_override: Mapped[int | None] = mapped_column(Integer)
-    # True, sobald ein Admin storage_quota_bytes manuell ueber PATCH .../storage-quota gesetzt
-    # hat (0087_storage_packages) - AdminTenantService.recompute_effective_storage_quota()
-    # ueberspringt den Mandanten dann, statt den manuellen Sonderwert (z.B. eine individuelle
-    # Enterprise-Grenze) bei jedem Plan-/Paketwechsel wieder zu ueberschreiben.
-    storage_quota_manual_override: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
     # Abo-Konditionen aus dem Adminportal (0089_plan_catalog_details): Rabatt in Prozent auf Plan
     # + Zusatzmodule und eine nur intern sichtbare Notiz (z.B. "Vereinsrabatt bis 2027").
-    discount_percent: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("0"))
+    # Vier Nachkommastellen (0161), damit ein über den Preis gesetzter Rabatt rappengenau aufgeht.
+    discount_percent: Mapped[Decimal] = mapped_column(Numeric(7, 4), nullable=False, server_default=text("0"))
     billing_note: Mapped[str | None] = mapped_column(Text)
+    # Auf der oeffentlichen Website unter "Im Einsatz bei" gelistet (0104_tenant_show_on_website).
+    show_on_website: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
+    # Standardsprache erzeugter Dokumente (Dokument-Engine), pro Export überschreibbar.
+    # NULL = Standardsprache aus i18n/locales.json.
+    document_language: Mapped[str | None] = mapped_column(Text)
+    # Öffentliche Prüfseite (Abgabebox /verify): Name und Logo zeigen, auf neuere Versionen
+    # hinweisen. Die Freigabelogik selbst steckt in der View document_verification_public.
+    verify_show_identity: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"), default=False)
+    verify_show_newer_version: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"), default=True)
+    # Bussen und Anwesenheit je Person in der Statistik für alle Mitglieder sichtbar (0138). Standard
+    # aus: Leser sehen dort nur ihre eigene Zeile, wie in der Bussenliste (Datenschutz-Audit PRIV-001).
+    statistics_per_person_public: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"), default=False)
+    # Identität der Organisation durch einen Plattform-Admin bestätigt (Abzeichen auf der
+    # Prüfseite). Eine Namensänderung hebt die Bestätigung auf (revoked_*).
+    identity_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    identity_verified_by_admin_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("platform_admin.id", ondelete="SET NULL"))
+    identity_verification_note: Mapped[str | None] = mapped_column(Text)
+    identity_verification_revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    identity_verification_revoked_reason: Mapped[str | None] = mapped_column(Text)
+    # Cashflow im Adminportal (0127_cashflow): ab diesem Datum entstehen Forderungen je
+    # Abrechnungsperiode (NULL = Erstellungsdatum). billing_charged_until ist der Cursor der
+    # Forderungserzeugung - bis hierhin sind alle Perioden abgerechnet (siehe cashflow_service).
+    billing_start_date: Mapped[date | None] = mapped_column(Date)
+    # Vertragsende für das Offboarding (0146, Check tenant_offboarding in system_health_service)
+    contract_ends_on: Mapped[date | None] = mapped_column(Date)
+    # Datenschutzhinweise des Vereins für die Abgabebox (0147, abgabebox_privacy_notice())
+    privacy_notice_url: Mapped[str | None] = mapped_column(Text)
+    billing_charged_until: Mapped[date | None] = mapped_column(Date)
 
 
 class PlatformOidcConfig(Base, TimestampMixin, UpdatedAtMixin):
@@ -107,8 +136,10 @@ class TenantDomain(Base, TimestampMixin):
     __tablename__ = "tenant_domain"
     __table_args__ = (
         UniqueConstraint("tenant_id", "purpose", name="uq_tenant_domain_tenant_purpose"),
-        UniqueConstraint("domain", name="uq_tenant_domain_domain"),
-        CheckConstraint("purpose IN ('app', 'abgabebox')", name="ck_tenant_domain_purpose"),
+        # Eindeutig nur unter aktiven Domains (Migration 0129, Security-Audit SEC-004): eine
+        # unbestätigte (pending) Domain darf die Domain für andere Mandanten nicht blockieren.
+        Index("uq_tenant_domain_active_domain", "domain", unique=True, postgresql_where=text("status = 'active'")),
+        CheckConstraint("purpose IN ('app', 'abgabebox', 'verify')", name="ck_tenant_domain_purpose"),
         CheckConstraint("status IN ('pending', 'active')", name="ck_tenant_domain_status"),
     )
 
@@ -162,6 +193,13 @@ class Plan(Base):
     # False = erscheint nicht bei "Neuer Mandant", kann aber einzelnen Mandanten zugewiesen
     # werden (z.B. 'legacy' fuer Bestandsmandanten).
     is_bookable: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
+    # Auf der oeffentlichen Website als "Beliebteste Wahl" hervorgehoben (0103_plan_is_featured).
+    # Hoechstens ein Plan - upsert_plan setzt beim Markieren alle anderen zurueck.
+    is_featured: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
+    # Priorität bei Überlast (0151_overload_priority): 0 niedrig, 1 normal, 2 hoch. Wird es knapp,
+    # sehen neue Nutzer von Mandanten mit niedriger Priorität zuerst die Überlast-Seite
+    # (app/core/db_admission.py).
+    load_priority: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("1"), default=1)
 
 
 class PlanFeature(Base):
@@ -185,6 +223,10 @@ class TenantFeature(Base, TimestampMixin):
     feature_code: Mapped[str] = mapped_column(Text, ForeignKey("feature.code", ondelete="CASCADE"), nullable=False)
     enabled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
     enabled_by_admin_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("platform_admin.id", ondelete="SET NULL"))
+    # 'full' = gebucht, 'read_only' = nach Downgrade nur lesend (0158_feature_entitlements)
+    access: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'full'"), default="full")
+    # 'plan' = folgt dem Plan des Mandanten, 'addon' = einzeln gebucht/Bestandsschutz
+    source: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'addon'"), default="addon")
 
 
 class StoragePackage(Base):
@@ -199,13 +241,15 @@ class StoragePackage(Base):
     price_monthly_rp: Mapped[int | None] = mapped_column(Integer)
     price_yearly_rp: Mapped[int | None] = mapped_column(Integer)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    # False = kann keinem Mandanten mehr neu zugebucht werden, bestehende Zuweisungen bleiben
+    # (0106_storage_package_is_bookable, gesetzt u.a. vom Katalog-Import im Überschreiben-Modus).
+    is_bookable: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
 
 
 class TenantStoragePackage(Base):
     """Zuweisung eines Zusatzpakets an einen Mandanten inkl. Menge - geht in
     AdminTenantService.recompute_effective_storage_quota() ein, das Tenant.storage_quota_bytes
-    neu berechnet (Plan-Kontingent + Summe dieser Zeilen), ausser
-    Tenant.storage_quota_manual_override ist gesetzt."""
+    neu berechnet (Plan-Kontingent + Summe dieser Zeilen)."""
 
     __tablename__ = "tenant_storage_package"
     __table_args__ = (
@@ -220,23 +264,73 @@ class TenantStoragePackage(Base):
     added_by_admin_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("platform_admin.id", ondelete="SET NULL"))
 
 
-class Role(Base):
-    __tablename__ = "role"
+class Permission(Base):
+    """Systemdefinierte Permission-Keys (Quelle: permissions/catalog.json, Migration 0156_rbac).
+    Nur für die referenzielle Integrität von tenant_role_permission; Bezeichnungen sind i18n-Keys."""
 
-    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
-    code: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    __tablename__ = "permission"
+
+    key: Mapped[str] = mapped_column(Text, primary_key=True)
+
+
+class TenantRole(Base, TimestampMixin, UpdatedAtMixin):
+    """Rolle eines Mandanten. system_key markiert die vier Standardrollen (admin, writer, kassier,
+    reader); deren name bleibt NULL, solange der Mandant sie nicht umbenennt - die Oberfläche
+    übersetzt sie dann. Die Standardrolle admin hat keine tenant_role_permission-Zeilen und bekommt
+    beim Laden immer alle Permissions (core/permissions.py)."""
+
+    __tablename__ = "tenant_role"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "id", name="uq_tenant_role_tenant_id"),
+        CheckConstraint("system_key IN ('admin', 'writer', 'kassier', 'reader')", name="ck_tenant_role_system_key"),
+        Index("uq_tenant_role_system_key", "tenant_id", "system_key", unique=True, postgresql_where=text("system_key IS NOT NULL")),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str | None] = mapped_column(Text)
     description: Mapped[str | None] = mapped_column(Text)
+    system_key: Mapped[str | None] = mapped_column(Text)
 
 
-class AppUser(Base, TimestampMixin, UpdatedAtMixin):
+class TenantRolePermission(Base):
+    __tablename__ = "tenant_role_permission"
+
+    role_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant_role.id", ondelete="CASCADE"), primary_key=True)
+    permission_key: Mapped[str] = mapped_column(Text, ForeignKey("permission.key", ondelete="CASCADE"), primary_key=True)
+
+
+class UserRole(Base):
+    """Konto -> Rolle (mehrere je Konto). Die zusammengesetzten Fremdschlüssel über tenant_id
+    verhindern in der Datenbank, dass ein Konto eine Rolle eines anderen Mandanten bekommt."""
+
+    __tablename__ = "user_role"
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id", "user_id"], ["app_user.tenant_id", "app_user.id"], ondelete="CASCADE", name="fk_user_role_user"),
+        ForeignKeyConstraint(["tenant_id", "role_id"], ["tenant_role.tenant_id", "tenant_role.id"], ondelete="RESTRICT", name="fk_user_role_role"),
+        Index("idx_user_role_role", "role_id"),
+        Index("idx_user_role_tenant", "tenant_id"),
+    )
+
+    tenant_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    role_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+
+
+class Participant(Base, TimestampMixin, UpdatedAtMixin):
     __tablename__ = "app_user"
     __table_args__ = (
-        UniqueConstraint("email", name="uq_app_user_email"),
+        Index("uq_app_user_login_email", "email", unique=True, postgresql_where=text("login_enabled")),
+        CheckConstraint("NOT login_enabled OR (email IS NOT NULL AND email <> '' AND password_hash IS NOT NULL)", name="ck_app_user_login_credentials"),
         CheckConstraint(
             "preferred_mfa_factor_type IN ('totp', 'webauthn')",
             name="ck_app_user_preferred_mfa_factor_type",
         ),
-        Index("idx_app_user_tenant_role", "tenant_id", "role_id"),
+        UniqueConstraint("tenant_id", "id", name="uq_app_user_tenant_id"),
         Index("idx_app_user_email", "email"),
     )
 
@@ -244,21 +338,28 @@ class AppUser(Base, TimestampMixin, UpdatedAtMixin):
     public_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
     )
-    # A user belongs to exactly one tenant with exactly one role. Deleting the tenant deletes
-    # its users (every other FK into app_user is CASCADE or SET NULL, so this never blocks).
+    # A user belongs to exactly one tenant; roles come from user_role (several per account, see
+    # TenantRole). Deleting the tenant deletes its users (every other FK into app_user is CASCADE
+    # or SET NULL, so this never blocks).
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
-    role_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("role.id", ondelete="RESTRICT"), nullable=False)
-    first_name: Mapped[str] = mapped_column(Text, nullable=False)
-    last_name: Mapped[str] = mapped_column(Text, nullable=False)
+    first_name: Mapped[str | None] = mapped_column(Text)
+    last_name: Mapped[str | None] = mapped_column(Text)
     display_name: Mapped[str] = mapped_column(Text, nullable=False)
     name: Mapped[str] = mapped_column(Text, Computed("display_name", persisted=True))
-    email: Mapped[str] = mapped_column(Text, nullable=False)
-    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    email: Mapped[str | None] = mapped_column(Text)
+    password_hash: Mapped[str | None] = mapped_column(Text)
+    login_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"), default=False)
+    joined_at: Mapped[date | None] = mapped_column(Date)
+    left_at: Mapped[date | None] = mapped_column(Date)
     preferred_language: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'de'"))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
     session_revoke_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     preferred_mfa_factor_type: Mapped[str | None] = mapped_column(Text)
     external_identity_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
+
+
+# Authentifizierung und Teilnahme verwenden denselben Datensatz.
+AppUser = Participant
 
 
 class UserMfaFactor(Base, TimestampMixin, UpdatedAtMixin):
@@ -359,30 +460,6 @@ class Leader(Base, TimestampMixin, UpdatedAtMixin):
     valid_until: Mapped[date | None] = mapped_column(Date)
 
 
-class Participant(Base, TimestampMixin, UpdatedAtMixin):
-    __tablename__ = "participant"
-    __table_args__ = (
-        Index("idx_participant_tenant_active", "tenant_id", "is_active"),
-        Index("idx_participant_app_user_id", "app_user_id"),
-        UniqueConstraint("tenant_id", "display_name", name="uq_participant_tenant_display_name"),
-        UniqueConstraint("tenant_id", "app_user_id", name="uq_participant_tenant_app_user"),
-    )
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    public_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
-    )
-    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
-    app_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
-    first_name: Mapped[str | None] = mapped_column(Text)
-    last_name: Mapped[str | None] = mapped_column(Text)
-    display_name: Mapped[str] = mapped_column(Text, nullable=False)
-    email: Mapped[str | None] = mapped_column(Text)
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
-    joined_at: Mapped[date | None] = mapped_column(Date)
-    left_at: Mapped[date | None] = mapped_column(Date)
-
-
 class EventCategory(Base):
     __tablename__ = "event_category"
 
@@ -407,6 +484,8 @@ class Event(Base, TimestampMixin, UpdatedAtMixin):
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     event_date: Mapped[date] = mapped_column(Date, nullable=False)
     event_end_date: Mapped[date | None] = mapped_column(Date)
+    # Optionale Uhrzeit (z. B. Beginn der nächsten Sitzung), NULL = ganztägig
+    start_time: Mapped[time | None] = mapped_column(Time)
     event_category_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("event_category.id", ondelete="RESTRICT"), nullable=False)
     tag: Mapped[str | None] = mapped_column(Text)
     title: Mapped[str] = mapped_column(Text, nullable=False)
@@ -506,9 +585,8 @@ class WordImportProfile(Base, TimestampMixin, UpdatedAtMixin):
 class WordImportSuggestionOutcome(Base, TimestampMixin):
     """Append-only log of one row per resolved matching decision at
     WordImportService.commit() time (event/participant/table-role/list-entry/matrix-
-    column match) - never mutated after insert. Used to compute per-tenant accept-rate
-    quality stats (see WordImportQualityService) and, from that data, adaptive
-    per-tenant score thresholds (see word_import_thresholds.adaptive_threshold)."""
+    column match) - never mutated after insert. Used to learn adaptive per-tenant score
+    thresholds (see word_import_thresholds.adaptive_threshold)."""
 
     __tablename__ = "word_import_suggestion_outcome"
     __table_args__ = (
@@ -636,36 +714,19 @@ class ListEntry(Base, TimestampMixin, UpdatedAtMixin):
     )
 
 
-class DocumentTemplate(Base, TimestampMixin, UpdatedAtMixin):
-    __tablename__ = "document_template"
+class DocumentAsset(Base, TimestampMixin):
+    """Hochgeladene Datei des Document Studio: Bild (Logo, Briefkopf, Hintergrund, Wasserzeichen,
+    Grafik) oder Schrift. Kein Code. Brand-Profile und Vorlagen referenzieren Assets über ihre
+    ``public_id``; aufgelöst wird immer mandantengebunden."""
+
+    __tablename__ = "document_asset"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "code", "version", name="uq_document_template_tenant_code_version"),
-        CheckConstraint("version >= 1", name="ck_document_template_version_positive"),
-        Index("idx_document_template_tenant_code_version", "tenant_id", "code", "version"),
-    )
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    public_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
-    )
-    tenant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"))
-    code: Mapped[str] = mapped_column(Text, nullable=False)
-    name: Mapped[str] = mapped_column(Text, nullable=False)
-    description: Mapped[str | None] = mapped_column(Text)
-    filesystem_path: Mapped[str] = mapped_column(Text, nullable=False)
-    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
-    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
-    configuration_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
-
-
-class DocumentTemplatePart(Base, TimestampMixin, UpdatedAtMixin):
-    __tablename__ = "document_template_part"
-    __table_args__ = (
-        UniqueConstraint("tenant_id", "code", "version", name="uq_document_template_part_tenant_code_version"),
-        CheckConstraint("version >= 1", name="ck_document_template_part_version_positive"),
-        Index("idx_document_template_part_tenant_type", "tenant_id", "part_type"),
-        Index("idx_document_template_part_active", "tenant_id", "is_active"),
+        CheckConstraint("kind IN ('image', 'font')", name="ck_document_asset_kind"),
+        CheckConstraint(
+            "category IN ('logo', 'letterhead', 'background', 'watermark', 'graphic', 'image', 'font')",
+            name="ck_document_asset_category",
+        ),
+        Index("idx_document_asset_tenant", "tenant_id", "kind"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -673,13 +734,309 @@ class DocumentTemplatePart(Base, TimestampMixin, UpdatedAtMixin):
         PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
     )
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
-    code: Mapped[str] = mapped_column(Text, nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    category: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'image'"), default="image")
     name: Mapped[str] = mapped_column(Text, nullable=False)
-    part_type: Mapped[str] = mapped_column(Text, nullable=False)
-    description: Mapped[str | None] = mapped_column(Text)
+    original_name: Mapped[str | None] = mapped_column(Text)
+    mime_type: Mapped[str | None] = mapped_column(Text)
     storage_path: Mapped[str] = mapped_column(Text, nullable=False)
-    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
+    file_size_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    checksum_sha256: Mapped[str | None] = mapped_column(Text)
+    width_px: Mapped[int | None] = mapped_column(Integer)
+    height_px: Mapped[int | None] = mapped_column(Integer)
+    # Familienname aus der Schriftdatei (nur kind='font')
+    font_family: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+
+
+class DocumentBrand(Base, TimestampMixin, UpdatedAtMixin):
+    """Brand-Profil (Corporate Design) eines Mandanten. Der Inhalt steht in unveränderlichen
+    Revisionen (document_brand_revision); ``current_revision`` ist die gültige. ``lock_version``
+    erkennt parallele Bearbeitung (optimistische Sperre)."""
+
+    __tablename__ = "document_brand"
+    __table_args__ = (
+        CheckConstraint("current_revision >= 1", name="ck_document_brand_revision_positive"),
+        Index("idx_document_brand_tenant", "tenant_id"),
+        Index("uq_document_brand_default", "tenant_id", unique=True, postgresql_where=text("is_default")),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"), default=False)
+    current_revision: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"), default=1)
+    lock_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"), default=1)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    updated_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+
+
+class DocumentBrandRevision(Base):
+    """Unveränderlicher Stand eines Brand-Profils (app.documents.brand.BrandTokens). Jede
+    gespeicherte Änderung erzeugt eine neue Revision; Exporte halten die verwendete fest."""
+
+    __tablename__ = "document_brand_revision"
+    __table_args__ = (UniqueConstraint("brand_id", "revision", name="uq_document_brand_revision"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    brand_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("document_brand.id", ondelete="CASCADE"), nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    tokens_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
+    tokens_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+
+
+class DocumentTemplate(Base, TimestampMixin, UpdatedAtMixin):
+    """Dokumentvorlage des Document Studio. ``tenant_id`` NULL = Systemvorlage von hocX
+    (``system_key``, nie direkt überschreibbar). ``origin``: system / tenant (eigene Vorlage) /
+    copy (angepasste Kopie einer Systemvorlage, ``source_template_id``). Der Inhalt steht in
+    Revisionen; ``published_revision_id`` ist die für Exporte gültige."""
+
+    __tablename__ = "document_template"
+    __table_args__ = (
+        CheckConstraint("origin IN ('system', 'tenant', 'copy')", name="ck_document_template_origin"),
+        CheckConstraint("status IN ('active', 'archived')", name="ck_document_template_status"),
+        CheckConstraint("(tenant_id IS NULL) = (origin = 'system')", name="ck_document_template_system_tenant"),
+        Index("idx_document_template_tenant", "tenant_id", "document_type"),
+        Index("uq_document_template_system_key", "system_key", unique=True, postgresql_where=text("system_key IS NOT NULL")),
+        Index("uq_document_template_platform_default", "document_type", unique=True, postgresql_where=text("tenant_id IS NULL AND is_platform_default")),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    tenant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"))
+    system_key: Mapped[str | None] = mapped_column(Text)
+    origin: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'tenant'"), default="tenant")
+    source_template_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_template.id", ondelete="SET NULL"))
+    source_revision_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_template_revision.id", ondelete="SET NULL", use_alter=True))
+    # Übernommenes Katalog-Design (app.documents.examples), z. B. «alpin»
+    catalog_key: Mapped[str | None] = mapped_column(Text)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    document_type: Mapped[str] = mapped_column(Text, nullable=False)
+    variant: Mapped[str | None] = mapped_column(Text)
+    category: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'general'"), default="general")
+    # Brand-Profil der Vorlage; NULL = Standard-Brand des exportierenden Mandanten
+    brand_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_brand.id", ondelete="SET NULL"))
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'active'"), default="active")
+    published_revision_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_template_revision.id", ondelete="SET NULL", use_alter=True))
+    # Plattform-Standard je Dokumenttyp (nur Systemvorlagen)
+    is_platform_default: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"), default=False)
+    sort_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    updated_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+
+
+class DocumentTemplateRevision(Base):
+    """Revision einer Dokumentvorlage. ``draft`` (höchstens eine je Vorlage, per Autosave
+    bearbeitbar, ``lock_version`` gegen parallele Änderungen), ``published`` (gültig für
+    Exporte) und ``superseded`` (frühere Veröffentlichung). Veröffentlichte und abgelöste
+    Revisionen sind unveränderlich (DB-Trigger ``trg_document_template_revision_immutable``).
+    ``content_json`` folgt app.documents.layout.TemplateContent."""
+
+    __tablename__ = "document_template_revision"
+    __table_args__ = (
+        UniqueConstraint("template_id", "revision_no", name="uq_document_template_revision_no"),
+        CheckConstraint("status IN ('draft', 'published', 'superseded')", name="ck_document_template_revision_status"),
+        CheckConstraint("brand_mode IN ('follow', 'pinned')", name="ck_document_template_revision_brand_mode"),
+        Index("uq_document_template_revision_draft", "template_id", unique=True, postgresql_where=text("status = 'draft'")),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    template_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("document_template.id", ondelete="CASCADE"), nullable=False)
+    revision_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'draft'"), default="draft")
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    content_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    content_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    # follow = aktuelle Revision des Brand-Profils, pinned = beim Veröffentlichen festgehaltene
+    brand_mode: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'follow'"), default="follow")
+    brand_revision_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_brand_revision.id", ondelete="SET NULL"))
+    lock_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"), default=1)
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    updated_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    published_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+
+
+class DocumentComponent(Base, TimestampMixin, UpdatedAtMixin):
+    """Wiederverwendbare Komponente eines Mandanten (ein Layoutknoten mit Kindern, z. B. ein
+    eigener Briefkopf). Vorlagen verweisen über ``component_ref`` darauf."""
+
+    __tablename__ = "document_component"
+    __table_args__ = (Index("idx_document_component_tenant", "tenant_id"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    category: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'general'"), default="general")
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    node_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    lock_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"), default=1)
+    created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    updated_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+
+
+class DocumentTemplateAssignment(Base):
+    """Standardvorlage je Dokumenttyp eines Mandanten, optional nur für eine Protokollvorlage
+    (``protocol_template_id``). Priorität beim Export: explizit gewählt > Zuweisung der
+    Protokollvorlage > Mandanten-Standard > Plattform-Standard (siehe template_service)."""
+
+    __tablename__ = "document_template_assignment"
+    __table_args__ = (
+        CheckConstraint(
+            "document_template_id IS NOT NULL OR brand_id IS NOT NULL", name="ck_document_template_assignment_target"
+        ),
+        Index(
+            "uq_document_template_assignment_tenant",
+            "tenant_id",
+            "document_type",
+            unique=True,
+            postgresql_where=text("protocol_template_id IS NULL"),
+        ),
+        Index(
+            "uq_document_template_assignment_protocol_template",
+            "tenant_id",
+            "document_type",
+            "protocol_template_id",
+            unique=True,
+            postgresql_where=text("protocol_template_id IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    document_type: Mapped[str] = mapped_column(Text, nullable=False)
+    protocol_template_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("template.id", ondelete="CASCADE"))
+    # Vorlage und/oder Brand-Profil (z. B. eigenes Logo für eine Untergruppe); NULL = nächste Stufe
+    document_template_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_template.id", ondelete="CASCADE"))
+    brand_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_brand.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+
+
+class DocumentExport(Base, TimestampMixin):
+    """Ein Datensatz pro erzeugtem PDF. ``public_id`` ist die Dokument-ID im PDF (Fusszeile,
+    XMP). Hält fest, womit das PDF entstand: Inhalts-Hash (fachlicher Inhalt), Design-Hash
+    (Vorlagenrevision, Brand-Revision, Assets), Vorlagen- und Brand-Revision und Sprache."""
+
+    __tablename__ = "document_export"
+    __table_args__ = (
+        Index("idx_document_export_protocol", "protocol_id", "created_at"),
+        Index("idx_document_export_tenant", "tenant_id", "created_at"),
+        Index("idx_document_export_stored_file", "stored_file_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    protocol_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="CASCADE"))
+    document_type: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str | None] = mapped_column(Text)
+    version_label: Mapped[str | None] = mapped_column(Text)
+    version_major: Mapped[int | None] = mapped_column(Integer)
+    version_minor: Mapped[int | None] = mapped_column(Integer)
+    content_hash: Mapped[str | None] = mapped_column(Text)
+    design_hash: Mapped[str | None] = mapped_column(Text)
+    template_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_template.id", ondelete="SET NULL"))
+    template_revision_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_template_revision.id", ondelete="SET NULL"))
+    brand_revision_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_brand_revision.id", ondelete="SET NULL"))
+    options_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
+    language: Mapped[str | None] = mapped_column(Text)
+    stored_file_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("stored_file.id", ondelete="SET NULL"))
+    created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+
+
+
+class DocumentRegistry(Base):
+    """Register aller ausgelieferten PDFs: SHA-256 der exakt ausgelieferten Bytes. Dauerhaft -
+    der Retention-Job löscht nur Dateien, nie Einträge; nur das Löschen des Mandanten entfernt
+    sie. public_id = Dokument-ID im PDF (= document_export.public_id). Öffentlich geprüft wird
+    ausschliesslich über die Funktion verify_document (Migration 0117)."""
+
+    __tablename__ = "document_registry"
+    __table_args__ = (
+        UniqueConstraint("sha256", name="uq_document_registry_sha256"),
+        CheckConstraint("sha256 ~ '^[0-9a-f]{64}$'", name="ck_document_registry_sha256"),
+        Index("idx_document_registry_tenant", "tenant_id", "created_at"),
+        Index("idx_document_registry_source_version", "tenant_id", "source_public_id", "version_major", "version_minor"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    sha256: Mapped[str] = mapped_column(Text, nullable=False)
+    document_type: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str | None] = mapped_column(Text)
+    status_code: Mapped[str | None] = mapped_column(Text)
+    version_major: Mapped[int | None] = mapped_column(Integer)
+    version_minor: Mapped[int | None] = mapped_column(Integer)
+    version_label: Mapped[str | None] = mapped_column(Text)
+    content_hash: Mapped[str | None] = mapped_column(Text)
+    # Design-Hash (Vorlage, Brand, Assets) - nur informativ, geprüft wird über sha256
+    design_hash: Mapped[str | None] = mapped_column(Text)
+    # public_id des Protokolls, bewusst ohne FK (überlebt Löschen und Mandanten-Umzug)
+    source_public_id: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    # TYPST-007: aus einem Archiv importiert, ohne dass dessen PDF diesen Hash belegt hätte
+    # (Migration 0119_registry_import_unverified); die Prüfseite kennzeichnet solche Einträge.
+    import_unverified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    # STUDIO-007: Titel beim Export abweichend vom Protokoll gesetzt (Migration 0120)
+    title_overridden: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+
+
+class IdentityVerificationRequest(Base):
+    """Antrag eines Mandanten-Admins auf Bestätigung der Organisation durch hocX. Ein
+    Plattform-Admin bestätigt (setzt tenant.identity_verified_*) oder lehnt mit Begründung ab.
+    Höchstens ein offener Antrag je Mandant; der Verlauf bleibt erhalten."""
+
+    __tablename__ = "identity_verification_request"
+    __table_args__ = (
+        CheckConstraint("status IN ('pending', 'approved', 'rejected', 'withdrawn')", name="ck_identity_verification_request_status"),
+        Index("uq_identity_verification_request_pending", "tenant_id", unique=True, postgresql_where=text("status = 'pending'")),
+        Index("idx_identity_verification_request_tenant", "tenant_id", "requested_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'pending'"), default="pending")
+    tenant_name: Mapped[str] = mapped_column(Text, nullable=False)
+    message: Mapped[str | None] = mapped_column(Text)
+    requested_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    decided_by_admin_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("platform_admin.id", ondelete="SET NULL"))
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    decision_note: Mapped[str | None] = mapped_column(Text)
 
 
 class ElementType(Base):
@@ -705,9 +1062,10 @@ class Template(Base, TimestampMixin, UpdatedAtMixin):
         CheckConstraint("status IN ('active', 'archived')", name="ck_template_status"),
         Index("idx_template_tenant", "tenant_id"),
         Index("idx_template_status", "status"),
-        Index("idx_template_document_template", "document_template_id"),
         Index("idx_template_created_by", "created_by"),
         Index("idx_template_cycle_config", "cycle_config_id"),
+        CheckConstraint("fine_amount_late >= 0 AND fine_amount_absent >= 0", name="ck_template_fine_amounts"),
+        Index("idx_template_fine_account", "fine_account_id", postgresql_where=text("fine_account_id IS NOT NULL")),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -715,7 +1073,6 @@ class Template(Base, TimestampMixin, UpdatedAtMixin):
         PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
     )
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
-    document_template_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_template.id", ondelete="RESTRICT"))
     next_event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("event.id", ondelete="SET NULL"))
     last_event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("event.id", ondelete="SET NULL"))
     todo_due_event_tag: Mapped[str | None] = mapped_column(Text)
@@ -729,6 +1086,12 @@ class Template(Base, TimestampMixin, UpdatedAtMixin):
     version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'active'"))
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    # Eigener Bussentarif der Vorlage (0137, FAR-002). False = Mandantentarif (FineTariff) gilt;
+    # gelesen in fine_tariff_service.tariff_block_values, live für alle Protokolle der Vorlage.
+    fine_tariff_override: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
+    fine_account_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("finance_account.id", ondelete="SET NULL"))
+    fine_amount_late: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False, server_default=text("0"))
+    fine_amount_absent: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False, server_default=text("0"))
 
 
 class TemplateParticipant(Base, TimestampMixin):
@@ -740,7 +1103,7 @@ class TemplateParticipant(Base, TimestampMixin):
     )
 
     template_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("template.id", ondelete="CASCADE"), nullable=False)
-    participant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("participant.id", ondelete="CASCADE"), nullable=False)
+    participant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False)
     exclude_from_attendance: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
 
 
@@ -792,9 +1155,10 @@ class ElementDefinition(Base, TimestampMixin, UpdatedAtMixin):
     is_editable: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
     allows_multiple_values: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
     export_visible: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
-    latex_template: Mapped[str | None] = mapped_column(Text)
     configuration_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
+    # Wiederverwendbarer «eigener Baustein» (Bibliothek) oder Einzelstück einer Vorlage (0155)
+    is_library: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"), default=True)
 
 
 class TemplateElement(Base, TimestampMixin):
@@ -857,7 +1221,6 @@ class Protocol(Base, TimestampMixin, UpdatedAtMixin):
         Index("idx_protocol_template", "template_id"),
         Index("idx_protocol_event", "event_id"),
         Index("idx_protocol_status", "status"),
-        Index("idx_protocol_document_template", "document_template_id", "document_template_version"),
         Index("idx_protocol_created_by", "created_by"),
     )
 
@@ -868,9 +1231,6 @@ class Protocol(Base, TimestampMixin, UpdatedAtMixin):
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     template_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("template.id", ondelete="RESTRICT"), nullable=False)
     template_version: Mapped[int] = mapped_column(Integer, nullable=False)
-    document_template_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("document_template.id", ondelete="RESTRICT"))
-    document_template_version: Mapped[int | None] = mapped_column(Integer)
-    document_template_path_snapshot: Mapped[str | None] = mapped_column(Text)
     protocol_number: Mapped[str] = mapped_column(Text, nullable=False)
     title: Mapped[str | None] = mapped_column(Text)
     protocol_date: Mapped[date] = mapped_column(Date, nullable=False)
@@ -881,6 +1241,9 @@ class Protocol(Base, TimestampMixin, UpdatedAtMixin):
     version_final_minor: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     session_notes: Mapped[str | None] = mapped_column(Text)
     track_changes_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
+    # Stand aller Todos beim Abschliessen (siehe ProtocolTodoService.build_protocol_snapshot);
+    # NULL solange nicht abgeschlossen bzw. nach dem Zurücksetzen.
+    todos_snapshot_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
 
 
@@ -888,7 +1251,6 @@ class ProtocolElement(Base, TimestampMixin):
     __tablename__ = "protocol_element"
     __table_args__ = (
         UniqueConstraint("protocol_id", "sort_index", name="uq_protocol_element_protocol_sort"),
-        Index("idx_protocol_element_protocol_sort", "protocol_id", "sort_index"),
         Index("idx_protocol_element_template_element", "template_element_id"),
     )
 
@@ -913,9 +1275,7 @@ class ProtocolElementBlock(Base, TimestampMixin):
     __tablename__ = "protocol_element_block"
     __table_args__ = (
         UniqueConstraint("protocol_element_id", "sort_index", name="uq_protocol_element_block_sort"),
-        Index("idx_protocol_element_block_sort", "protocol_element_id", "sort_index"),
         Index("idx_protocol_element_block_type", "element_type_id"),
-        Index("idx_protocol_element_block_configuration_gin", "configuration_snapshot_json", postgresql_using="gin"),
         Index("idx_protocol_element_block_element_definition", "element_definition_id"),
         Index("idx_protocol_element_block_render_type", "render_type_id"),
         Index("idx_protocol_element_block_template_element_block", "template_element_block_id"),
@@ -941,8 +1301,10 @@ class ProtocolElementBlock(Base, TimestampMixin):
     is_required_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
     is_visible_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
     export_visible_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
-    latex_template_snapshot: Mapped[str | None] = mapped_column(Text)
     configuration_snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
+    # Zählt jede Änderung von configuration_snapshot_json (Trigger, Migration 0149) - optimistische
+    # Sperre des Konfigurations-PATCH. FetchedValue: nach jedem UPDATE neu laden.
+    config_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), server_onupdate=FetchedValue())
 
 
 Index("idx_protocol_element_block_render", ProtocolElementBlock.protocol_element_id, text("COALESCE(render_order, sort_index)"))
@@ -961,6 +1323,26 @@ class StoredFile(Base, TimestampMixin):
             "scan_status",
             postgresql_where=text("scan_status <> 'clean'"),
         ),
+        Index("idx_stored_file_tenant_gps", "tenant_id", postgresql_where=text("gps_latitude IS NOT NULL")),
+        Index(
+            "idx_stored_file_metadata_backfill",
+            "id",
+            postgresql_where=text("metadata_scanned_at IS NULL AND mime_type LIKE 'image/%'"),
+        ),
+        CheckConstraint("(gps_latitude IS NULL) = (gps_longitude IS NULL)", name="ck_stored_file_gps_pair"),
+        CheckConstraint(
+            "gps_latitude IS NULL OR (gps_latitude BETWEEN -90 AND 90 AND gps_longitude BETWEEN -180 AND 180)",
+            name="ck_stored_file_gps_range",
+        ),
+        CheckConstraint(
+            "gps_direction_deg IS NULL OR (gps_direction_deg >= 0 AND gps_direction_deg < 360)",
+            name="ck_stored_file_gps_direction",
+        ),
+        CheckConstraint(
+            "(exif_taken_source IS NULL OR exif_taken_source IN ('server', 'client', 'backfill'))"
+            " AND (gps_source IS NULL OR gps_source IN ('server', 'client', 'backfill'))",
+            name="ck_stored_file_metadata_source",
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -971,7 +1353,6 @@ class StoredFile(Base, TimestampMixin):
     original_name: Mapped[str] = mapped_column(Text, nullable=False)
     mime_type: Mapped[str | None] = mapped_column(Text)
     storage_path: Mapped[str] = mapped_column(Text, nullable=False)
-    latex_path: Mapped[str | None] = mapped_column(Text)
     file_size_bytes: Mapped[int | None] = mapped_column(BigInteger)
     checksum_sha256: Mapped[str | None] = mapped_column(Text)
     source_checksum_sha256: Mapped[str | None] = mapped_column(Text)
@@ -1011,9 +1392,39 @@ class StoredFile(Base, TimestampMixin):
     # every file from disk on each request. None for non-images, images PIL couldn't
     # decode, images without EXIF, and files uploaded before this column existed.
     exif_taken_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    gps_analyzed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Konvention (seit 0083): exif_taken_at haelt die lokale Uhrzeit der Kamera, gespeichert
+    # als waere sie UTC ("floating"), damit cast(... AS date) immer den Kalendertag des
+    # Fotografen liefert. Ein vorhandener EXIF-Offset (OffsetTimeOriginal) steht separat hier.
+    exif_taken_offset: Mapped[str | None] = mapped_column(Text)
+    # "server" (Analyse beim Upload), "client" (vom Browser geliefert, nur fuer konvertierte
+    # Bilder ohne serverseitig pruefbares Original) oder "backfill" - siehe image_metadata_service.
+    exif_taken_source: Mapped[str | None] = mapped_column(Text)
+    # Vom Benutzer geschaetztes Aufnahmedatum - bewusst reines Kalenderdatum ohne Uhrzeit oder
+    # Zeitzone, getrennt von exif_taken_at (echt) und created_at (Upload). Prioritaet siehe
+    # capture_date.py: exif_taken_at > estimated_taken_on > created_at.
+    estimated_taken_on: Mapped[date | None] = mapped_column(Date)
+    estimated_taken_set_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    estimated_taken_set_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    # GPS (WGS84, Sued/West negativ) fuer eine spaetere Kartenansicht. Als Wert nur ueber
+    # berechtigte, mandantengebundene Endpunkte lesbar (/metadata). Exportierte Dateikopien
+    # (Download, auch fuer Partner-Mandanten geteilter Alben, und oeffentliche Freigaben, die
+    # den Standort teilen) koennen nur in der DB vorhandenes GPS enthalten, siehe
+    # image_export_service und UPLOAD_DUPLICATES.md §10/§11.
     gps_latitude: Mapped[float | None] = mapped_column(Float)
     gps_longitude: Mapped[float | None] = mapped_column(Float)
+    gps_altitude_m: Mapped[float | None] = mapped_column(Float)
+    gps_direction_deg: Mapped[float | None] = mapped_column(Float)
+    gps_accuracy_m: Mapped[float | None] = mapped_column(Float)
+    gps_timestamp: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    gps_source: Mapped[str | None] = mapped_column(Text)
+    camera_make: Mapped[str | None] = mapped_column(Text)
+    camera_model: Mapped[str | None] = mapped_column(Text)
+    orientation: Mapped[int | None] = mapped_column(SmallInteger)
+    # Letzte serverseitige Metadatenanalyse (Upload oder Backfill) und ihr Ergebnis
+    # ("ok", "no_metadata", "unreadable", "missing_file", "source_unavailable") - NULL heisst
+    # "noch nie analysiert", der Backfill setzt genau dort an.
+    metadata_scanned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    metadata_scan_status: Mapped[str | None] = mapped_column(Text)
     scan_status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'clean'"))
     # User-assigned tags for the "Dateien" overview page's filter/editor - separate from the
     # auto-derived "origin tag" (which protocol/word-import/submission this file came from,
@@ -1073,18 +1484,30 @@ class ProtocolTodo(Base, TimestampMixin, UpdatedAtMixin):
         Index("idx_protocol_todo_assigned_participant", "assigned_participant_id"),
         Index("idx_protocol_todo_closed_in_protocol", "closed_in_protocol_id"),
         Index("idx_protocol_todo_created_by", "created_by"),
+        Index(
+            "uq_protocol_todo_package_occurrence",
+            "task_package_item_id", "cycle_config_id", "cycle_year", "occurrence_key",
+            unique=True,
+            postgresql_where=text("task_package_item_id IS NOT NULL"),
+        ),
+        Index("idx_protocol_todo_cycle", "cycle_config_id", "cycle_year"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     public_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
     )
-    tenant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"))
+    # Jedes Todo gehört fest einem Mandanten (Migration 0131); der Protokollblock ist optional.
+    # Bei Todos mit Block setzt der Trigger trg_protocol_todo_tenant_from_block den Wert aus dem
+    # Protokoll - ohne Angabe lässt das ORM die Spalte im INSERT weg und liest sie danach nach.
+    tenant_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False, server_default=FetchedValue()
+    )
     protocol_element_block_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol_element_block.id", ondelete="CASCADE"))
     sort_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     task: Mapped[str] = mapped_column(Text, nullable=False)
     assigned_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
-    assigned_participant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("participant.id", ondelete="SET NULL"))
+    assigned_participant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
     todo_status_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("todo_status.id", ondelete="RESTRICT"), nullable=False)
     due_date: Mapped[date | None] = mapped_column(Date)
     due_event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("event.id", ondelete="SET NULL"))
@@ -1099,6 +1522,151 @@ class ProtocolTodo(Base, TimestampMixin, UpdatedAtMixin):
     tracked_change: Mapped[str | None] = mapped_column(Text)
     tracked_change_before_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     pending_delete: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    # Instanz einer Paket-Aufgabe (Migration 0111_task_packages): eine Zeile je
+    # (Paket-Aufgabe, Zyklus, Zyklusjahr, Wiederholung). overridden_fields listet die Felder,
+    # die von Hand geändert wurden und die das Paket darum nicht mehr überschreibt.
+    task_package_item_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("task_package_item.id", ondelete="SET NULL"))
+    cycle_config_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("cycle_config.id", ondelete="SET NULL"))
+    cycle_year: Mapped[int | None] = mapped_column(Integer)
+    occurrence_key: Mapped[str | None] = mapped_column(Text)
+    overridden_fields: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
+    # Freier Markdown-Text (Migration 0128) - nur im Todo-Popup, nie in Übersicht oder Export.
+    notes: Mapped[str | None] = mapped_column(Text)
+
+
+class ProtocolTodoAssignee(Base):
+    """Weitere Verantwortliche eines Todos (z. B. alle Personen eines Ämtlis). Die erste Person
+    steht zusätzlich in protocol_todo.assigned_participant_id, damit ältere Leser weiter
+    funktionieren."""
+
+    __tablename__ = "protocol_todo_assignee"
+    __table_args__ = (
+        PrimaryKeyConstraint("protocol_todo_id", "participant_id", name="pk_protocol_todo_assignee"),
+        Index("idx_protocol_todo_assignee_participant", "participant_id"),
+    )
+
+    protocol_todo_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("protocol_todo.id", ondelete="CASCADE"), nullable=False)
+    participant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False)
+    sort_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+
+
+class ProtocolTodoFile(Base, TimestampMixin):
+    """Mit einem Todo verknüpfte, bereits hochgeladene Datei (Migration 0128). Nur im
+    Todo-Popup sichtbar, siehe ProtocolTodoService.get_details."""
+
+    __tablename__ = "protocol_todo_file"
+    __table_args__ = (
+        PrimaryKeyConstraint("protocol_todo_id", "stored_file_id", name="pk_protocol_todo_file"),
+        Index("idx_protocol_todo_file_stored_file", "stored_file_id"),
+    )
+
+    protocol_todo_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("protocol_todo.id", ondelete="CASCADE"), nullable=False)
+    stored_file_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("stored_file.id", ondelete="CASCADE"), nullable=False)
+    sort_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+
+
+class AgendaItem(Base, TimestampMixin, UpdatedAtMixin):
+    """Anliegen für eine kommende Sitzung (Migration 0153). Wartet ohne protocol_id auf das
+    nächste passende Protokoll seiner Vorlage und wird beim Durchführen fest daran gebunden,
+    siehe app/services/agenda_item_service.py."""
+
+    __tablename__ = "agenda_item"
+    __table_args__ = (
+        CheckConstraint("schedule_kind IN ('next_meeting', 'month')", name="ck_agenda_item_schedule_kind"),
+        Index("idx_agenda_item_tenant", "tenant_id"),
+        Index("idx_agenda_item_protocol", "protocol_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    template_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("template.id", ondelete="CASCADE"), nullable=False)
+    template_element_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("template_element.id", ondelete="SET NULL"))
+    protocol_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="SET NULL"))
+    protocol_element_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol_element.id", ondelete="SET NULL"))
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    body: Mapped[str | None] = mapped_column(Text)
+    schedule_kind: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'next_meeting'"))
+    scheduled_month: Mapped[date | None] = mapped_column(Date)
+    earliest_date: Mapped[date] = mapped_column(Date, nullable=False)
+    postponed_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+
+
+class UserAgendaTemplatePreference(Base):
+    """Zuletzt im Anliegen-Popup gewählte Vorlage je Person und Mandant (Migration 0153)."""
+
+    __tablename__ = "user_agenda_template_preference"
+
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), primary_key=True)
+    template_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("template.id", ondelete="SET NULL"))
+
+
+class TaskPackage(Base, TimestampMixin, UpdatedAtMixin):
+    """Aufgabenpaket (z. B. "Sommerlager"): Sammlung wiederkehrender Aufgaben, die pro Zyklus
+    als Todos erzeugt werden. Siehe app/services/task_package_service.py."""
+
+    __tablename__ = "task_package"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "name", name="uq_task_package_tenant_name"),
+        Index("idx_task_package_tenant", "tenant_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"), default=True)
+
+
+class TaskPackageCycle(Base, TimestampMixin, UpdatedAtMixin):
+    """Zuweisung eines Pakets an einen Zyklus ab start_cycle_year (inklusive)."""
+
+    __tablename__ = "task_package_cycle"
+    __table_args__ = (
+        UniqueConstraint("task_package_id", "cycle_config_id", name="uq_task_package_cycle_package_config"),
+        Index("idx_task_package_cycle_config", "cycle_config_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    task_package_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("task_package.id", ondelete="CASCADE"), nullable=False)
+    cycle_config_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("cycle_config.id", ondelete="CASCADE"), nullable=False)
+    start_cycle_year: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class TaskPackageItem(Base, TimestampMixin, UpdatedAtMixin):
+    """Eine Aufgabe im Paket. responsible_json hat dieselbe Form wie die Verantwortlichen im
+    Protokoll: [{"list_definition_id", "list_entry_id"}] (Ämtli, live aufgelöst) oder
+    [{"participant_id"}] (feste Person), jeweils interne IDs."""
+
+    __tablename__ = "task_package_item"
+    __table_args__ = (Index("idx_task_package_item_package_sort", "task_package_id", "sort_index"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    task_package_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("task_package.id", ondelete="CASCADE"), nullable=False)
+    sort_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    task: Mapped[str] = mapped_column(Text, nullable=False)
+    reference_link: Mapped[str | None] = mapped_column(Text)
+    tags: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
+    responsible_json: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
+    recurrence_json: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{\"type\": \"once\"}'::jsonb"), default=lambda: {"type": "once"}
+    )
+    due_rule_json: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{\"type\": \"none\"}'::jsonb"), default=lambda: {"type": "none"}
+    )
 
 
 class ProtocolImage(Base, TimestampMixin):
@@ -1168,25 +1736,6 @@ class GalleryImage(Base, TimestampMixin):
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
 
 
-class ProtocolExportCache(Base, TimestampMixin):
-    __tablename__ = "protocol_export_cache"
-    __table_args__ = (
-        CheckConstraint("export_format IN ('latex', 'pdf')", name="ck_protocol_export_cache_format"),
-        Index("idx_protocol_export_cache_protocol", "protocol_id", "export_format"),
-        Index("idx_protocol_export_cache_generated_file", "generated_file_id"),
-    )
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    public_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
-    )
-    protocol_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="CASCADE"), nullable=False)
-    export_format: Mapped[str] = mapped_column(Text, nullable=False)
-    latex_source: Mapped[str | None] = mapped_column(Text)
-    generated_file_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("stored_file.id", ondelete="SET NULL"))
-    generator_version: Mapped[str | None] = mapped_column(Text)
-
-
 # ── Finance ───────────────────────────────────────────────────────────────────
 
 class FinanceAccount(Base, TimestampMixin, UpdatedAtMixin):
@@ -1222,6 +1771,14 @@ class FinanceTransaction(Base, TimestampMixin):
     protocol_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="SET NULL"))
 
 
+class UserProtocolTemplatePreference(Base):
+    __tablename__ = "user_protocol_template_preference"
+
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("app_user.id", ondelete="CASCADE"), primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), primary_key=True)
+    template_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("template.id", ondelete="SET NULL"))
+
+
 class UserProtocolScroll(Base):
     __tablename__ = "user_protocol_scroll"
     __table_args__ = (
@@ -1235,6 +1792,24 @@ class UserProtocolScroll(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
 
 
+class FineTariff(Base):
+    """Zentraler Bussentarif eines Mandanten (0113_element_config_schema).
+
+    Vorher trug jeder Anwesenheitsblock eigene Beträge und ein eigenes Konto, sodass zwei
+    Vorlagen verschiedene Tarife haben konnten. Der Block wählt jetzt nur noch
+    «Bussen aktiv» (configuration_json.fines_enabled); Konto und Beträge kommen von hier.
+    """
+
+    __tablename__ = "fine_tariff"
+    __table_args__ = (Index("idx_fine_tariff_account", "account_id"),)
+
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), primary_key=True)
+    account_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("finance_account.id", ondelete="SET NULL"))
+    amount_late: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False, server_default=text("0"))
+    amount_absent: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False, server_default=text("0"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+
+
 class AttendanceFine(Base, TimestampMixin):
     __tablename__ = "attendance_fine"
     __table_args__ = (
@@ -1243,6 +1818,23 @@ class AttendanceFine(Base, TimestampMixin):
         Index("idx_attendance_fine_account", "account_id"),
         Index("idx_attendance_fine_collected_by", "collected_by_user_id"),
         Index("idx_attendance_fine_collected_transaction", "collected_transaction_id"),
+        Index("idx_attendance_fine_deleted_by", "deleted_by_user_id"),
+        # Migration 0116 (MAIN-BE-016): eine Busse pro Protokoll, Teilnehmer und Typ.
+        Index(
+            "uq_attendance_fine_participant", "protocol_id", "participant_id", "fine_type",
+            unique=True, postgresql_where=text("participant_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_attendance_fine_name", "protocol_id", "participant_name_snapshot", "fine_type",
+            unique=True, postgresql_where=text("participant_id IS NULL"),
+        ),
+        # Baseline bzw. Migration 0115 (MAIN-BE-002/-016)
+        CheckConstraint("status IN ('pending', 'collected', 'deleted')", name="attendance_fine_status_check"),
+        CheckConstraint("fine_type IN ('late', 'absent')", name="attendance_fine_fine_type_check"),
+        CheckConstraint(
+            "status <> 'deleted' OR (delete_comment IS NOT NULL AND btrim(delete_comment) <> '')",
+            name="ck_attendance_fine_deleted_reason",
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -1250,7 +1842,7 @@ class AttendanceFine(Base, TimestampMixin):
         PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
     )
     protocol_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="CASCADE"), nullable=False)
-    participant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("participant.id", ondelete="SET NULL"))
+    participant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
     participant_name_snapshot: Mapped[str] = mapped_column(Text, nullable=False)
     fine_type: Mapped[str] = mapped_column(Text, nullable=False)
     amount: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
@@ -1260,6 +1852,12 @@ class AttendanceFine(Base, TimestampMixin):
     collected_transaction_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("finance_transaction.id", ondelete="SET NULL"))
     closed_in_protocol_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol.id", ondelete="SET NULL"))
     collected_by_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    # Soft-Delete mit Begründung (MAIN-BE-002, Migration 0115): nur für Bussen, deren
+    # Ursprungsprotokoll abgeschlossen ist; closed_in_protocol_id zeigt dann auf das
+    # Protokoll, in dem die Löschung aufgeführt wird.
+    delete_comment: Mapped[str | None] = mapped_column(Text)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deleted_by_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
 
 
 class SubmissionAssignment(Base, TimestampMixin, UpdatedAtMixin):
@@ -1294,6 +1892,7 @@ class SubmissionAssignment(Base, TimestampMixin, UpdatedAtMixin):
         CheckConstraint("max_files_per_element IS NULL OR max_files_per_element >= 1", name="ck_submission_assignment_max_files"),
         CheckConstraint("max_file_size_mb >= 1", name="ck_submission_assignment_max_size"),
         CheckConstraint("sort_order IN ('alphabetical', 'date', 'proximity')", name="ck_submission_assignment_sort_order"),
+        CheckConstraint("auto_close IN ('never', 'first_upload', 'max_files')", name="ck_submission_assignment_auto_close"),
         Index("idx_submission_assignment_tenant_active", "tenant_id", "is_active"),
         Index("idx_submission_assignment_list_definition", "list_definition_id"),
         Index("idx_submission_assignment_cycle_config", "cycle_config_id"),
@@ -1323,6 +1922,9 @@ class SubmissionAssignment(Base, TimestampMixin, UpdatedAtMixin):
     max_file_size_mb: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("20"))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
     sort_order: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'date'"))
+    # Element nach einer Abgabe ueber die Abgabebox automatisch schliessen: 'never',
+    # 'first_upload' oder 'max_files' (Migration 0099_submission_auto_close).
+    auto_close: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'never'"))
     responsible_participant_source: Mapped[str | None] = mapped_column(Text)
     # Ueber welche Abgabe-Links (SubmissionLink) diese Abgabe oeffentlich erreichbar ist. Ohne
     # Link ist sie ueber die Abgabebox nicht erreichbar.
@@ -1350,6 +1952,8 @@ class SubmissionLink(Base, TimestampMixin, UpdatedAtMixin):
         UniqueConstraint("tenant_id", "name", name="uq_submission_link_tenant_name"),
         # Hoechstens ein Standard-Link je Mandant (wird beim Anlegen einer Abgabe vorausgewaehlt).
         Index("uq_submission_link_tenant_default", "tenant_id", unique=True, postgresql_where=text("is_default")),
+        # «verify» ist die Route der Prüfseite in der Abgabebox (/verify) und nie ein Token.
+        CheckConstraint("lower(token) <> 'verify'", name="ck_submission_link_token_reserved"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -1433,6 +2037,26 @@ class SubmissionUploadFile(Base, TimestampMixin):
     album_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class OverloadRejection(Base):
+    """Abgewiesene neue Nutzer bei Überlast (0151_overload_priority), je Prozess alle ~15 s
+    zusammengefasst. Plattformdaten ohne RLS wie system_error_log - nur /admin/system liest sie."""
+
+    __tablename__ = "overload_rejection"
+    __table_args__ = (
+        Index("idx_overload_rejection_created", "created_at"),
+        Index("idx_overload_rejection_tenant", "tenant_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    instance: Mapped[str] = mapped_column(Text, nullable=False)
+    tenant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"))
+    load_priority: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    rejected: Mapped[int] = mapped_column(Integer, nullable=False)
+    users: Mapped[int] = mapped_column(Integer, nullable=False)
+    pressure_percent: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
 class SubmissionUploadLog(Base):
     __tablename__ = "submission_upload_log"
     __table_args__ = (
@@ -1469,7 +2093,11 @@ class SystemErrorLog(Base):
     )
     source: Mapped[str] = mapped_column(Text, nullable=False)
     tenant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="SET NULL"))
+    # Veraltet (0139): neue Einträge verweisen über actor_user_id/actor_admin_id auf das Konto, damit
+    # nach dem Löschen einer Person keine E-Mail-Adresse im Protokoll zurückbleibt (PRIV-002).
     actor_email: Mapped[str | None] = mapped_column(Text)
+    actor_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    actor_admin_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("platform_admin.id", ondelete="SET NULL"))
     request_method: Mapped[str | None] = mapped_column(Text)
     request_path: Mapped[str | None] = mapped_column(Text)
     status_code: Mapped[int | None] = mapped_column(Integer)
@@ -1479,10 +2107,130 @@ class SystemErrorLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
 
 
+
+class SystemJobStatus(Base):
+    """Aktueller Stand eines periodischen Jobs (Loop, Worker, Host-Cron) für /admin/jobs. Wird
+    nur über die SQL-Funktionen record_job_run/record_job_start/record_job_heartbeat geschrieben
+    (Migration 0105), damit auch die eingeschränkten DB-Rollen melden können - hier nur lesen."""
+
+    __tablename__ = "system_job_status"
+    __table_args__ = (
+        CheckConstraint("last_status IN ('running', 'success', 'failure')", name="ck_system_job_status_last_status"),
+    )
+
+    job_name: Mapped[str] = mapped_column(Text, primary_key=True)
+    last_status: Mapped[str | None] = mapped_column(Text)
+    last_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_failure_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_duration_ms: Mapped[int | None] = mapped_column(Integer)
+    last_error: Mapped[str | None] = mapped_column(Text)
+    consecutive_failures: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    run_count: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"))
+    failure_count: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+
+
+class SystemRuntimeMetric(Base):
+    """Laufzeitkennzahlen je Dienstprozess (core/runtime_metrics.py, Migration 0148). Geschrieben
+    nur über record_runtime_metrics, gelesen von system_health_service._check_runtime."""
+
+    __tablename__ = "system_runtime_metric"
+
+    instance: Mapped[str] = mapped_column(Text, primary_key=True)
+    process_kind: Mapped[str] = mapped_column(Text, nullable=False)
+    reported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    metrics: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+
+class SystemJobRun(Base):
+    """Verlauf der Läufe eines Jobs (siehe SystemJobStatus). Bei hochfrequenten Jobs nur Fehler und
+    der erste Erfolg danach, Aufräumen über log_cleanup_loop."""
+
+    __tablename__ = "system_job_run"
+    __table_args__ = (
+        CheckConstraint("status IN ('success', 'failure')", name="ck_system_job_run_status"),
+        Index("idx_system_job_run_job_id", "job_name", "id"),
+        Index("idx_system_job_run_finished", "finished_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    job_name: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    error: Mapped[str | None] = mapped_column(Text)
+
+
+class SystemAlertState(Base):
+    """Aktuell offenes Problem aus dem Systemmonitoring (siehe app/services/system_alert_service.py)."""
+
+    __tablename__ = "system_alert_state"
+    __table_args__ = (CheckConstraint("severity IN ('warning', 'critical')", name="ck_system_alert_state_severity"),)
+
+    problem_key: Mapped[str] = mapped_column(Text, primary_key=True)
+    severity: Mapped[str] = mapped_column(Text, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    notified_severity: Mapped[str | None] = mapped_column(Text)
+    last_notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SystemHealthEvent(Base):
+    """Verlauf des Systemmonitorings für /admin/system: Problem aufgetreten/behoben, Container neu gestartet."""
+
+    __tablename__ = "system_health_event"
+    __table_args__ = (
+        CheckConstraint("kind IN ('problem', 'resolved', 'container_restart')", name="ck_system_health_event_kind"),
+        CheckConstraint("severity IN ('info', 'warning', 'critical')", name="ck_system_health_event_severity"),
+        Index("idx_system_health_event_created", "created_at"),
+        Index("idx_system_health_event_subject", "subject", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    subject: Mapped[str] = mapped_column(Text, nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
+    severity: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PlatformNotificationSettings(Base):
+    """ntfy-Konfiguration aus /admin/notifications - genau eine Zeile (id = 1, DB-CHECK). Tokens
+    nur verschlüsselt (secret_crypto); status_token_hash prüft der öffentliche Summary-Endpoint."""
+
+    __tablename__ = "platform_notification_settings"
+    __table_args__ = (
+        CheckConstraint("id = 1", name="ck_platform_notification_settings_singleton"),
+        CheckConstraint("reminder_hours BETWEEN 0 AND 168", name="ck_platform_notification_settings_reminder_hours"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ntfy_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
+    ntfy_server_url: Mapped[str | None] = mapped_column(Text)
+    ntfy_topic: Mapped[str | None] = mapped_column(Text)
+    ntfy_token_encrypted: Mapped[str | None] = mapped_column(Text)
+    admin_url: Mapped[str | None] = mapped_column(Text)
+    reminder_hours: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("6"))
+    status_token_hash: Mapped[str | None] = mapped_column(Text)
+    status_token_encrypted: Mapped[str | None] = mapped_column(Text)
+    last_send_error: Mapped[str | None] = mapped_column(Text)
+    last_send_error_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+
 class PhotoAlbum(Base, TimestampMixin):
     """Manuelle Alben und automatische Alben pro Zyklus, Abgabe, Abgabe-Element oder
     Wandertour. Feldbedingungen und partielle eindeutige Indizes sichern jeweils genau
-    ein Album pro Ziel (Migrationen 0068 und 0097_wanderplaner_feature)."""
+    ein Album pro Ziel (Migrationen 0068 und 0168_wanderplaner)."""
 
     __tablename__ = "photo_album"
 
@@ -1539,6 +2287,15 @@ class PhotoAlbumTenantShare(Base, TimestampMixin):
     invited_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
     responded_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
     responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Standort (GPS) der Fotos dieses Albums mit dem Partner teilen - Standard an (Partner
+    # vertrauen sich), vom Besitzer abschaltbar. Aus: Originale und Downloads ohne Standort
+    # (siehe photo_album_share_service.location_shared_with, files.py).
+    share_location: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
+    # Öffentliche Links (Migration 0130, Security-Audit SEC-002) - jede Seite schützt ihre Fotos:
+    # vom Besitzer gesetzt: der Partner darf dieses Album öffentlich verlinken.
+    partner_public_links: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
+    # vom Partner gesetzt: seine Fotos in diesem Album dürfen in öffentlichen Links erscheinen.
+    partner_photos_public: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
 
 
 class TenantTrust(Base, TimestampMixin):
@@ -1574,6 +2331,11 @@ class ShareLink(Base, TimestampMixin):
     # Widerruf ist soft (statt DELETE), damit die Uebersicht "Geteilte Links" auch widerrufene
     # Links mit ihrem Status weiter anzeigen kann.
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Welche Foto-Metadaten oeffentlich mitgehen (siehe photo_metadata_privacy.py) - Standort und
+    # Kamera/Geraet standardmaessig nicht, das Aufnahmedatum schon.
+    share_location: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    share_capture_date: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
+    share_camera: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
 
 
 class ShareLinkFile(Base):
@@ -1585,6 +2347,39 @@ class ShareLinkFile(Base):
 
     share_link_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("share_link.id", ondelete="CASCADE"), primary_key=True)
     file_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
+
+
+class CalendarFeed(Base, TimestampMixin, UpdatedAtMixin):
+    """Abonnierbarer iCal-Feed eines Benutzers ("Verknuepfungen") - je einer fuer Termine und
+    Todos (`kind`). Der Token in der URL ist die Authentifizierung; gespeichert werden nur sein
+    Hash (Nachschlagen) und eine verschluesselte Kopie (erneutes Anzeigen), siehe
+    calendar_feed_service.py und Migration 0102."""
+
+    __tablename__ = "calendar_feed"
+    __table_args__ = (
+        UniqueConstraint("user_id", "kind", name="uq_calendar_feed_user_kind"),
+        CheckConstraint("kind IN ('events', 'todos')", name="ck_calendar_feed_kind"),
+        CheckConstraint("todo_scope IN ('mine', 'all')", name="ck_calendar_feed_todo_scope"),
+        Index("idx_calendar_feed_tenant", "tenant_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    calendar_name: Mapped[str] = mapped_column(Text, nullable=False)
+    token_hash: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    token_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    # Gegen app_user.session_revoke_at geprueft: "ueberall abmelden"/Passwortwechsel macht auch
+    # vorher ausgestellte Feed-URLs ungueltig (wie App-Passwoerter bei Google/Apple).
+    token_created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    todo_scope: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'mine'"), default="mine")
+    include_completed: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    hide_details: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
+    last_accessed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class PhotoAnalysisJob(Base, TimestampMixin):
@@ -1608,6 +2403,26 @@ class PhotoAnalysisJob(Base, TimestampMixin):
     error: Mapped[str | None] = mapped_column(Text)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PhotoSimilarityResult(Base):
+    """Vorberechnete Gruppen der Tabs "Duplikate"/"Ähnliche" je Mandant und Art (Migration 0152).
+    Schreibt der job-worker (FileService.refresh_similarity_results); `groups` sind Listen von
+    public_ids, nur Gruppen mit mindestens zwei Bildern."""
+
+    __tablename__ = "photo_similarity_result"
+    __table_args__ = (
+        CheckConstraint("kind IN ('duplicate', 'series')", name="ck_photo_similarity_result_kind"),
+        CheckConstraint("status IN ('ready', 'incomplete', 'too_many')", name="ck_photo_similarity_result_status"),
+    )
+
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), primary_key=True)
+    kind: Mapped[str] = mapped_column(Text, primary_key=True)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'ready'"), default="ready")
+    fingerprint: Mapped[str] = mapped_column(Text, nullable=False)
+    image_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    groups: Mapped[list[list[str]]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
 
 
 class GalleryUploadJob(Base, TimestampMixin):
@@ -1634,6 +2449,8 @@ class GalleryUploadJob(Base, TimestampMixin):
     # own entries keep their in-archive names instead, see iter_gallery_zip_entries).
     staged_paths: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
     original_filenames: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    # «GPS-Daten des Bildes mitsenden» (0147, Datenschutz-Audit Paket 9.3)
+    include_gps: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     tags: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
     # At most one of these three targets is ever set - mirrors upload_gallery_images' own
     # mutual-exclusion check.
@@ -1665,6 +2482,87 @@ class GalleryUploadJob(Base, TimestampMixin):
     errors: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
     # Fatal/unexpected exception text, distinct from the per-file `errors` above.
     error: Mapped[str | None] = mapped_column(Text)
+    # Im Upload-Popup angegebenes Schaetzdatum - gilt fuer jedes Bild dieses Auftrags, fuer
+    # das der Server kein echtes Aufnahmedatum findet (auch ZIP-Eintraege).
+    estimated_taken_on: Mapped[date | None] = mapped_column(Date)
+    # Clientseitig extrahierte Metadaten je SHA-256 (Browser-Analyse vor dem Upload, nur fuer
+    # HEIC/HEIF). Nur Hinweise: angewendet wird ein Eintrag ausschliesslich, wenn der
+    # serverseitig neu berechnete Hash der Datei passt (siehe FileService._apply_upload_metadata
+    # und _enrich_duplicates). Wird bei Jobende (done/failed) geleert - keine Zweitablage von GPS.
+    file_hints: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
+    # Ergebnis je Datei fuer die Upload-Ergebnisanzeige: {name, status, file_id?, applied?, message?}
+    # mit status in uploaded/skipped/metadata_updated/failed.
+    file_results: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+
+class TenantDataExport(Base):
+    """Vereinsexport (Migration 0145, services/data_export/tenant.py): bestellt vom Mandanten-Admin,
+    gebaut vom Job tenant_data_export, 7 Tage abrufbar. password_encrypted nur bis zum Bau."""
+
+    __tablename__ = "tenant_data_export"
+    __table_args__ = (
+        CheckConstraint("status IN ('queued', 'running', 'done', 'failed', 'expired')", name="ck_tenant_data_export_status"),
+        Index("idx_tenant_data_export_tenant", "tenant_id", text("created_at DESC")),
+        Index("idx_tenant_data_export_status", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()"))
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    requested_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'queued'"))
+    include_files: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    language: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'de'"))
+    password_encrypted: Mapped[str | None] = mapped_column(Text)
+    object_key: Mapped[str | None] = mapped_column(Text)
+    filename: Mapped[str | None] = mapped_column(Text)
+    size_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class TenantRetentionPolicy(Base):
+    """Aufbewahrungsfristen des Vereins (Migration 0146, services/tenant_retention_service.py).
+    NULL = Regel aus."""
+
+    __tablename__ = "tenant_retention_policy"
+    __table_args__ = (
+        CheckConstraint("submissions_months > 0", name="tenant_retention_policy_submissions_months_check"),
+        CheckConstraint("former_members_years > 0", name="tenant_retention_policy_former_members_years_check"),
+        CheckConstraint("unlinked_gallery_years > 0", name="tenant_retention_policy_unlinked_gallery_years_check"),
+    )
+
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), primary_key=True)
+    submissions_months: Mapped[int | None] = mapped_column(SmallInteger)
+    former_members_years: Mapped[int | None] = mapped_column(SmallInteger)
+    unlinked_gallery_years: Mapped[int | None] = mapped_column(SmallInteger)
+    auto_apply: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+
+
+class RetentionProposal(Base):
+    """Vorschlag des Jobs retention_proposals (Migration 0146). subject_id: submission_upload.id,
+    app_user.id bzw. stored_file.id je nach kind."""
+
+    __tablename__ = "retention_proposal"
+    __table_args__ = (
+        CheckConstraint("kind IN ('submission_upload', 'former_member', 'gallery_image')", name="ck_retention_proposal_kind"),
+        CheckConstraint("status IN ('open', 'applied', 'dismissed')", name="ck_retention_proposal_status"),
+        UniqueConstraint("tenant_id", "kind", "subject_id", name="uq_retention_proposal_subject"),
+        Index("idx_retention_proposal_open", "tenant_id", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()"))
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    subject_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    label: Mapped[str | None] = mapped_column(Text)
+    reference_date: Mapped[date | None] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'open'"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    decided_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))

@@ -1,44 +1,27 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { PillMenu } from "@/components/ui/pill-menu";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
 import { HikingTourWaypoint, HikingTourWaypointVerificationStatus, HikingTourWaypointKind, MarchTimeEntry, MarchTimeTable, TerrainDangerSegment } from "@/types/api";
 
-const KIND_LABEL: Record<HikingTourWaypointKind, string> = {
-  START: "Start",
-  END: "Ziel",
-  NAVIGATION: "Fixpunkt",
-  BREAK: "Pausenplatz",
-  SUMMIT: "Gipfel",
-  PASS: "Pass",
-  HUT: "Hütte",
-  WATER: "Wasser",
-  DECISION: "Fixpunkt",
-  EMERGENCY_EXIT: "Notausstieg",
-  USER_DEFINED: "Fixpunkt",
-};
+type TFunc = (key: string, values?: Record<string, string | number>) => string;
 
 function formatHm(time: string | null): string {
   return time ? time.slice(0, 5) : "–";
 }
 
-function formatMinutes(minutes: number): string {
+function formatMinutes(t: TFunc, minutes: number): string {
   const rounded = Math.round(minutes);
   const hours = Math.floor(rounded / 60);
   const rest = rounded % 60;
-  return hours > 0 ? `${hours}h ${rest}min` : `${rest} min`;
+  return hours > 0 ? t("units.hoursMinutes", { hours, minutes: rest }) : t("units.minutes", { minutes: rest });
 }
 
 // Auftrag Abschnitt 11: Verifizierungsstatus automatisch erkannter sicherheitsrelevanter
 // Punkte (Entscheidungspunkte, Notausstiege) - nie als geprüfte Tatsache dargestellt.
-const VERIFICATION_LABEL: Record<HikingTourWaypointVerificationStatus, string> = {
-  AUTO_DETECTED: "Automatisch erkannt",
-  NEEDS_VERIFICATION: "Vor Ort prüfen",
-  VERIFIED: "Vom Leiter bestätigt",
-  REJECTED: "Verworfen",
-};
-
 const VERIFICATION_VARIANT: Record<HikingTourWaypointVerificationStatus, BadgeVariant> = {
   AUTO_DETECTED: "info",
   NEEDS_VERIFICATION: "warning",
@@ -46,20 +29,11 @@ const VERIFICATION_VARIANT: Record<HikingTourWaypointVerificationStatus, BadgeVa
   REJECTED: "danger",
 };
 
-const VERIFICATION_OPTIONS = (Object.keys(VERIFICATION_LABEL) as HikingTourWaypointVerificationStatus[]).map((value) => ({
-  value,
-  label: VERIFICATION_LABEL[value],
-  variant: VERIFICATION_VARIANT[value],
-}));
+const VERIFICATION_STATUSES = Object.keys(VERIFICATION_VARIANT) as HikingTourWaypointVerificationStatus[];
 
 // Gefahreneinschätzung (Auftrag): nur die beiden "echten" Gefahrenstufen bekommen hier ein
 // Badge - "normal" ist der unauffällige Regelfall und braucht keine eigene Markierung.
 type RowDanger = "steep_exposed" | "alpine";
-
-const DANGER_LABEL: Record<RowDanger, string> = {
-  steep_exposed: "Steil/ausgesetzt",
-  alpine: "Alpin",
-};
 
 const DANGER_VARIANT: Record<RowDanger, BadgeVariant> = {
   steep_exposed: "warning",
@@ -90,6 +64,17 @@ type Props = {
 };
 
 export function HikingTourMarchTable({ table, waypoints, canWrite = false, dangerSegments, onUpdateBreakMinutes, onVerificationChange, onDeleteWaypoint }: Props) {
+  const t = useTranslations("wanderplaner");
+  const kindLabel = (kind: HikingTourWaypointKind) => t(`kind.${kind}`);
+  const verificationLabel = (status: HikingTourWaypointVerificationStatus) => t(`verification.${status}`);
+  const verificationOptions = VERIFICATION_STATUSES.map((value) => ({
+    value,
+    label: verificationLabel(value),
+    variant: VERIFICATION_VARIANT[value],
+  }));
+  const duration = (value: number) => formatMinutes(t, value);
+  const km = (meters: number, digits: number) => t("units.km", { value: (meters / 1000).toFixed(digits) });
+  const strong = (chunks: React.ReactNode) => <strong>{chunks}</strong>;
   const entries = new Map(table?.entries.map((entry) => [entry.sequence, entry]) ?? []);
   // Notausstiege stehen direkt nach dem zugehörigen Kontrollpunkt. Alte Analysen
   // kodieren dessen Sequenz im reservierten Bereich ab 500000.
@@ -100,12 +85,19 @@ export function HikingTourMarchTable({ table, waypoints, canWrite = false, dange
   const dash = <span className="muted">–</span>;
   return (
     <div className="wanderplaner-march-table">
-      <DataToolbar title="Wegpunkte & Marschtabelle" description={table
-        ? `Geschwindigkeitsfaktor: ${table.speed_factor_kmh} Lkm/h`
-        : "Route berechnen, um Distanzen und Marschzeiten anzuzeigen."} />
+      <DataToolbar title={t("marchTable.title")} description={table
+        ? t("marchTable.speedFactor", { value: String(table.speed_factor_kmh) })
+        : t("marchTable.noRoute")} />
       <DataTable
-        columns={["#", "Name", "Typ", "Höhe", "Distanz", "Kum. Distanz", "Auf", "Ab", "Lkm", "Zeit", "Kum. Zeit", "Ankunft", "Pause", "Abmarsch", "Bemerkungen", "Status", "Aktionen"]}
-        emptyMessage="Keine Wegpunkte."
+        columns={[
+          t("marchTable.columns.index"), t("marchTable.columns.name"), t("marchTable.columns.type"),
+          t("marchTable.columns.elevation"), t("marchTable.columns.distance"), t("marchTable.columns.cumulativeDistance"),
+          t("marchTable.columns.ascent"), t("marchTable.columns.descent"), t("marchTable.columns.lkm"),
+          t("marchTable.columns.time"), t("marchTable.columns.cumulativeTime"), t("marchTable.columns.arrival"),
+          t("marchTable.columns.break"), t("marchTable.columns.departure"), t("marchTable.columns.remarks"),
+          t("marchTable.columns.status"), t("marchTable.columns.actions"),
+        ]}
+        emptyMessage={t("marchTable.empty")}
       >
         {orderedWaypoints.map((waypoint, index) => {
           const candidate = entries.get(waypoint.sequence);
@@ -121,46 +113,50 @@ export function HikingTourMarchTable({ table, waypoints, canWrite = false, dange
                 {waypoint.label || dash}
                 <div className="field-help">{waypoint.lat.toFixed(4)}, {waypoint.lon.toFixed(4)}</div>
               </td>
-              <td>{KIND_LABEL[waypoint.kind]}</td>
-              <td>{elevation != null ? `${Math.round(elevation)} m` : dash}</td>
-              <td>{entry ? `${(entry.segment_distance_m / 1000).toFixed(2)} km` : dash}</td>
-              <td>{entry ? `${(entry.cumulative_distance_m / 1000).toFixed(2)} km` : dash}</td>
-              <td>{entry ? `${Math.round(entry.segment_ascent_m)} m` : dash}</td>
-              <td>{entry ? `${Math.round(entry.segment_descent_m)} m` : dash}</td>
+              <td>{kindLabel(waypoint.kind)}</td>
+              <td>{elevation != null ? t("units.meters", { value: String(Math.round(elevation)) }) : dash}</td>
+              <td>{entry ? km(entry.segment_distance_m, 2) : dash}</td>
+              <td>{entry ? km(entry.cumulative_distance_m, 2) : dash}</td>
+              <td>{entry ? t("units.meters", { value: String(Math.round(entry.segment_ascent_m)) }) : dash}</td>
+              <td>{entry ? t("units.meters", { value: String(Math.round(entry.segment_descent_m)) }) : dash}</td>
               <td>{entry ? entry.segment_lkm.toFixed(2) : dash}</td>
-              <td>{entry ? formatMinutes(entry.segment_duration_minutes) : dash}</td>
-              <td>{entry ? formatMinutes(entry.cumulative_duration_minutes) : dash}</td>
+              <td>{entry ? duration(entry.segment_duration_minutes) : dash}</td>
+              <td>{entry ? duration(entry.cumulative_duration_minutes) : dash}</td>
               <td>{formatHm(entry?.planned_arrival ?? null)}</td>
               <td>{canWrite && onUpdateBreakMinutes ? (
                 <input key={`${waypoint.id}-${waypoint.break_minutes ?? 0}`} type="number" min={0}
-                  defaultValue={waypoint.break_minutes ?? 0} aria-label="Pause in Minuten"
+                  defaultValue={waypoint.break_minutes ?? 0} aria-label={t("marchTable.breakMinutesAria")}
                   className="wanderplaner-break-input" onBlur={(event) => {
                     const minutes = Number(event.target.value) || 0;
                     if (minutes !== (waypoint.break_minutes ?? 0)) onUpdateBreakMinutes(waypoint, minutes);
                   }} />
-              ) : waypoint.break_minutes ? `${waypoint.break_minutes} min` : dash}</td>
+              ) : waypoint.break_minutes ? t("units.minutes", { minutes: String(waypoint.break_minutes) }) : dash}</td>
               <td>{formatHm(entry?.planned_departure ?? null)}</td>
               <td>
                 {waypoint.description || entry?.remarks || dash}
                 {waypoint.description && entry?.remarks && entry.remarks !== waypoint.description && <div className="field-help">{entry.remarks}</div>}
                 {metrics && <div className="field-help">
-                  Ab Start: {formatMinutes(metrics.time_from_start_minutes)} · Bis Ziel: {formatMinutes(metrics.time_to_end_minutes)} · Zurück: {formatMinutes(metrics.time_back_minutes)}
-                  {metrics.nearest_exit_label && metrics.time_to_exit_minutes !== null && <> · Nächster Ausstieg: {formatMinutes(metrics.time_to_exit_minutes)}</>}
+                  {t("marchTable.decisionMetrics", {
+                    fromStart: duration(metrics.time_from_start_minutes),
+                    toEnd: duration(metrics.time_to_end_minutes),
+                    back: duration(metrics.time_back_minutes),
+                  })}
+                  {metrics.nearest_exit_label && metrics.time_to_exit_minutes !== null && t("marchTable.nearestExit", { time: duration(metrics.time_to_exit_minutes) })}
                 </div>}
               </td>
               <td>{verificationStatus || danger ? (
                 <div className="wanderplaner-row-badges">
-                  {danger && <Badge variant={DANGER_VARIANT[danger]}>{DANGER_LABEL[danger]}</Badge>}
+                  {danger && <Badge variant={DANGER_VARIANT[danger]}>{t(`danger.badge.${danger}`)}</Badge>}
                   {verificationStatus && (canWrite && onVerificationChange ? (
-                    <PillMenu value={verificationStatus} options={VERIFICATION_OPTIONS}
+                    <PillMenu value={verificationStatus} options={verificationOptions}
                       onChange={(status) => onVerificationChange(waypoint, status)} />
-                  ) : <Badge variant={VERIFICATION_VARIANT[verificationStatus]}>{VERIFICATION_LABEL[verificationStatus]}</Badge>)}
+                  ) : <Badge variant={VERIFICATION_VARIANT[verificationStatus]}>{verificationLabel(verificationStatus)}</Badge>)}
                 </div>
               ) : dash}</td>
               <td>
                 <div className="wanderplaner-row-actions">
                 {canWrite && onDeleteWaypoint && (waypoint.kind === "USER_DEFINED" || waypoint.auto_generated) && (
-                  <button type="button" className="button-secondary button-ghost" onClick={() => onDeleteWaypoint(waypoint)}>Entfernen</button>
+                  <button type="button" className="button-secondary button-ghost" onClick={() => onDeleteWaypoint(waypoint)}>{t("actions.remove")}</button>
                 )}
                 </div>
               </td>
@@ -169,24 +165,18 @@ export function HikingTourMarchTable({ table, waypoints, canWrite = false, dange
         })}
       </DataTable>
       {table && <div className="wanderplaner-route-summary">
+        <span>{t.rich("marchTable.summary.totalDistance", { value: km(table.summary.total_distance_m, 1), strong })}</span>
         <span>
-          Gesamtdistanz: <strong>{(table.summary.total_distance_m / 1000).toFixed(1)} km</strong>
+          {t.rich("marchTable.summary.ascentDescent", {
+            ascent: String(Math.round(table.summary.total_ascent_m)),
+            descent: String(Math.round(table.summary.total_descent_m)),
+            strong,
+          })}
         </span>
-        <span>
-          Aufstieg/Abstieg: <strong>{Math.round(table.summary.total_ascent_m)} / {Math.round(table.summary.total_descent_m)} m</strong>
-        </span>
-        <span>
-          Leistungskilometer: <strong>{table.summary.total_lkm.toFixed(1)} Lkm</strong>
-        </span>
-        <span>
-          Marschzeit: <strong>{formatMinutes(table.summary.walking_duration_minutes)}</strong>
-        </span>
-        <span>
-          Pausen: <strong>{formatMinutes(table.summary.break_duration_minutes)}</strong>
-        </span>
-        <span>
-          Gesamtzeit: <strong>{formatMinutes(table.summary.total_duration_minutes)}</strong>
-        </span>
+        <span>{t.rich("marchTable.summary.lkm", { value: t("units.lkm", { value: table.summary.total_lkm.toFixed(1) }), strong })}</span>
+        <span>{t.rich("marchTable.summary.walkingTime", { value: duration(table.summary.walking_duration_minutes), strong })}</span>
+        <span>{t.rich("marchTable.summary.breaks", { value: duration(table.summary.break_duration_minutes), strong })}</span>
+        <span>{t.rich("marchTable.summary.totalTime", { value: duration(table.summary.total_duration_minutes), strong })}</span>
       </div>}
     </div>
   );

@@ -29,6 +29,7 @@ function makeAlbum(overrides: Partial<PhotoAlbum> = {}): PhotoAlbum {
     cover_thumbnail_urls: [],
     owner_tenant_name: null,
     shared_with: [],
+    my_share: null,
     is_shared: false,
     pending_share_count: 0,
     ...overrides,

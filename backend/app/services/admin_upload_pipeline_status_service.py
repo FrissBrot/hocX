@@ -6,6 +6,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.storage import ABGABEBOX, get_object_store
 from app.models import Tenant
 from app.repositories.file_repository import StoredFileRepository
 from app.schemas.admin import (
@@ -87,28 +88,21 @@ class AdminUploadPipelineStatusService:
         exists to validate untrusted *input* paths, not to walk a trusted directory tree
         the app itself controls) is enough; a segment that doesn't parse just shows as None
         rather than failing the whole view."""
-        quarantine_root = Path(settings.abgabebox_storage_root) / "quarantine"
-        if not quarantine_root.is_dir():
-            return []
-
+        # Liste über den Objektspeicher (Dateisystem oder S3, je nach aktivem Profil).
+        prefix = f"quarantine/tenant-{tenant_id}/" if tenant_id is not None else "quarantine/"
         now = time.time()
         raw: list[tuple[int | None, int | None, str, int, float]] = []
         parsed_tenant_ids: set[int] = set()
-        for path in quarantine_root.rglob("*"):
-            if not path.is_file():
-                continue
-            parts = path.relative_to(quarantine_root).parts
-            parsed_tenant_id = _parse_prefixed_int(parts[0], "tenant-") if len(parts) > 0 else None
-            parsed_assignment_id = _parse_prefixed_int(parts[1], "assignment-") if len(parts) > 1 else None
+        for info in get_object_store().list(ABGABEBOX, prefix):
+            parts = info.key.split("/")[1:]
+            parsed_tenant_id = _parse_prefixed_int(parts[0], "tenant-") if len(parts) > 1 else None
+            parsed_assignment_id = _parse_prefixed_int(parts[1], "assignment-") if len(parts) > 2 else None
             if tenant_id is not None and parsed_tenant_id != tenant_id:
                 continue
             if parsed_tenant_id is not None:
                 parsed_tenant_ids.add(parsed_tenant_id)
-            try:
-                stat = path.stat()
-            except OSError:
-                continue
-            raw.append((parsed_tenant_id, parsed_assignment_id, path.name, stat.st_size, now - stat.st_mtime))
+            modified = info.last_modified.timestamp() if info.last_modified is not None else now
+            raw.append((parsed_tenant_id, parsed_assignment_id, parts[-1] if parts else info.key, max(info.size, 0), now - modified))
 
         tenant_names: dict[int, tuple[object, str]] = {}
         if parsed_tenant_ids:

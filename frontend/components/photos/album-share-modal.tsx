@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 
 import { initials } from "@/components/protocol/collaboration-presence";
 import { Badge, BadgeVariant } from "@/components/ui/badge";
@@ -8,9 +9,14 @@ import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
+import { toIntlLocale } from "@/lib/utils/format";
 import { AlbumTenantShareStatus, PhotoAlbum, TenantLookup } from "@/types/api";
 
-const STATUS_LABEL: Record<AlbumTenantShareStatus["status"], string> = { pending: "Einladung offen", accepted: "Hat Zugriff", declined: "Abgelehnt" };
+type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
+
+function statusLabel(t: TFunc): Record<AlbumTenantShareStatus["status"], string> {
+  return { pending: t("status.pending"), accepted: t("status.accepted"), declined: t("status.declined") };
+}
 const STATUS_VARIANT: Record<AlbumTenantShareStatus["status"], BadgeVariant> = { pending: "warning", accepted: "success", declined: "danger" };
 // Getönte Avatar-Flächen aus den Status-Tokens, damit sie in beiden Themes stimmen.
 const AVATAR_TONES = ["danger", "info", "warning", "success"] as const;
@@ -24,16 +30,16 @@ function avatarTone(name: string) {
   return AVATAR_TONES[Math.abs(hash) % AVATAR_TONES.length];
 }
 
-function formatShareDate(input: string | null | undefined) {
+function formatShareDate(input: string | null | undefined, locale: string) {
   const date = input ? new Date(input) : null;
   if (!date || Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("de-CH", { day: "numeric", month: "short", year: "numeric" }).format(date);
+  return new Intl.DateTimeFormat(toIntlLocale(locale), { day: "numeric", month: "short", year: "numeric" }).format(date);
 }
 
-function shareMeta(share: AlbumTenantShareStatus) {
-  if (share.status === "pending") return `eingeladen am ${formatShareDate(share.invited_at)}`;
+function shareMeta(share: AlbumTenantShareStatus, t: TFunc, locale: string) {
+  if (share.status === "pending") return t("invitedOn", { date: formatShareDate(share.invited_at, locale) });
   const since = share.responded_at ?? share.invited_at;
-  return share.status === "accepted" ? `seit ${formatShareDate(since)}` : `abgelehnt am ${formatShareDate(since)}`;
+  return share.status === "accepted" ? t("since", { date: formatShareDate(since, locale) }) : t("declinedOn", { date: formatShareDate(since, locale) });
 }
 
 /** Profilbild, Initialen (bekannter Mandant ohne Bild) oder generisches Symbol (ohne Trust). */
@@ -62,6 +68,8 @@ export function AlbumShareModal({
   onClose: () => void;
   onChanged: () => void;
 }) {
+  const t = useTranslations("photos.shareModal");
+  const locale = useLocale();
   const confirm = useConfirm();
   const toast = useToast();
   const [query, setQuery] = useState("");
@@ -69,6 +77,9 @@ export function AlbumShareModal({
   const [lookupError, setLookupError] = useState("");
   const [suggestions, setSuggestions] = useState<TenantLookup[] | null>(null);
   const [busy, setBusy] = useState(false);
+  // Standort (GPS) mit dem Partner teilen - Standard an (Partner vertrauen sich, IMGMETA-007).
+  const [shareLocation, setShareLocation] = useState(true);
+  const [locationBusy, setLocationBusy] = useState<string | null>(null);
   const requestIdRef = useRef(0);
 
   const trimmed = query.trim();
@@ -86,9 +97,9 @@ export function AlbumShareModal({
         .then((tenant) => {
           if (requestIdRef.current !== requestId) return;
           if (tenant) setPreview(tenant);
-          else setLookupError("Kein Mandant mit dieser ID gefunden.");
+          else setLookupError(t("lookupNotFound"));
         })
-        .catch(() => { if (requestIdRef.current === requestId) setLookupError("Kein Mandant mit dieser ID gefunden."); });
+        .catch(() => { if (requestIdRef.current === requestId) setLookupError(t("lookupNotFound")); });
       return;
     }
     if (trimmed.length < 2) return;
@@ -117,16 +128,47 @@ export function AlbumShareModal({
     try {
       await browserApiFetch(`/api/files/albums/${album.id}/shares`, {
         method: "POST",
-        body: JSON.stringify({ target_tenant_public_id: preview.id }),
+        body: JSON.stringify({ target_tenant_public_id: preview.id, share_location: shareLocation }),
       });
-      toast(preview.name ? `Einladung an ${preview.name} gesendet.` : "Einladung gesendet.", "success");
+      toast(preview.name ? t("invitedToast", { name: preview.name }) : t("invitedToastNoName"), "success");
       setQuery("");
       setPreview(null);
+      setShareLocation(true);
       onChanged();
     } catch (error) {
-      toast(error instanceof Error ? error.message : "Einladung konnte nicht gesendet werden.", "error");
+      toast(error instanceof Error ? error.message : t("inviteError"), "error");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function toggleLocation(share: AlbumTenantShareStatus, value: boolean) {
+    setLocationBusy(share.tenant_public_id);
+    try {
+      await browserApiFetch(`/api/files/albums/${album.id}/shares/${share.tenant_public_id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ share_location: value }),
+      });
+      onChanged();
+    } catch {
+      toast(t("locationError"), "error");
+    } finally {
+      setLocationBusy(null);
+    }
+  }
+
+  async function togglePublicLinks(share: AlbumTenantShareStatus, value: boolean) {
+    setLocationBusy(share.tenant_public_id);
+    try {
+      await browserApiFetch(`/api/files/albums/${album.id}/shares/${share.tenant_public_id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ partner_public_links: value }),
+      });
+      onChanged();
+    } catch {
+      toast(t("publicLinksError"), "error");
+    } finally {
+      setLocationBusy(null);
     }
   }
 
@@ -136,51 +178,51 @@ export function AlbumShareModal({
       tone: "danger",
       message: share.tenant_name
         ? pending
-          ? `Einladung an „${share.tenant_name}“ zurückziehen?`
-          : `„${share.tenant_name}“ den Zugriff auf dieses Album entziehen?`
+          ? t("revokeConfirmNamedPending", { name: share.tenant_name })
+          : t("revokeConfirmNamedActive", { name: share.tenant_name })
         : pending
-          ? "Einladung an diesen Mandanten zurückziehen?"
-          : "Diesem Mandanten den Zugriff auf dieses Album entziehen?",
-      confirmLabel: pending ? "Zurückziehen" : "Entfernen",
+          ? t("revokeConfirmGenericPending")
+          : t("revokeConfirmGenericActive"),
+      confirmLabel: pending ? t("withdrawLabel") : t("removeLabel"),
     });
     if (!ok) return;
     try {
       await browserApiFetch(`/api/files/albums/${album.id}/shares/${share.tenant_public_id}`, { method: "DELETE" });
-      toast(pending ? "Einladung zurückgezogen." : "Freigabe beendet.", "success");
+      toast(pending ? t("withdrawnToast") : t("endedToast"), "success");
       onChanged();
     } catch {
-      toast("Freigabe konnte nicht beendet werden.", "error");
+      toast(t("revokeError"), "error");
     }
   }
 
   return (
     <Modal
       open={open}
-      title="Mit anderem Mandanten teilen"
+      title={t("title")}
       className="album-share-modal"
       onClose={onClose}
       header={
         <div>
-          <div className="eyebrow">Album teilen</div>
-          <h2>Mit anderem Mandanten teilen</h2>
+          <div className="eyebrow">{t("eyebrow")}</div>
+          <h2>{t("title")}</h2>
           <p className="muted">
-            Der Mandant erhält eine Einladung. Nach dem Annehmen erscheint «{album.name}» bei ihm unter Alben.
+            {t("description", { albumName: album.name })}
           </p>
         </div>
       }
       footer={
         <div className="modal-footer-actions">
-          <button type="button" className="button-ghost" onClick={onClose}>Abbrechen</button>
+          <button type="button" className="button-ghost" onClick={onClose}>{t("cancel")}</button>
           <button type="submit" form={FORM_ID} className="button-primary" disabled={!preview || busy}>
-            {busy ? "Wird eingeladen…" : preview?.name ? `${preview.name} einladen` : "Einladen"}
+            {busy ? t("inviting") : preview?.name ? t("inviteNamed", { name: preview.name }) : t("invite")}
           </button>
         </div>
       }
     >
       <ModalSaveForm id={FORM_ID} className="grid album-share-form" onSubmit={invite}>
         <div className="album-share-field-head">
-          <label className="field-label" htmlFor="album-share-tenant-id">Mandanten-ID oder Name</label>
-          <span className="album-share-field-hint">ID unter Mandant-Einstellungen → Allgemein</span>
+          <label className="field-label" htmlFor="album-share-tenant-id">{t("fieldLabel")}</label>
+          <span className="album-share-field-hint">{t("fieldHint")}</span>
         </div>
         <div className="album-share-input">
           <input
@@ -188,12 +230,12 @@ export function AlbumShareModal({
             className={isId ? "album-share-input-id" : undefined}
             value={query}
             onChange={(event) => changeQuery(event.target.value)}
-            placeholder="Mandanten-ID einfügen"
+            placeholder={t("inputPlaceholder")}
             autoComplete="off"
             spellCheck={false}
           />
           {query && (
-            <button type="button" className="album-share-input-clear" aria-label="Eingabe leeren" onClick={() => changeQuery("")}>
+            <button type="button" className="album-share-input-clear" aria-label={t("clearAriaLabel")} onClick={() => changeQuery("")}>
               <svg viewBox="0 0 16 16" width="12" height="12" fill="none" aria-hidden="true">
                 <path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
               </svg>
@@ -208,26 +250,26 @@ export function AlbumShareModal({
                 <>
                   <strong>{preview.name}</strong>
                   <span className="album-share-entry-meta">
-                    {[preview.slug, preview.participant_count !== null ? `${preview.participant_count} Teilnehmer` : null].filter(Boolean).join(" · ")}
+                    {[preview.slug, preview.participant_count !== null ? t("participantsSuffix", { count: preview.participant_count }) : null].filter(Boolean).join(" · ")}
                   </span>
                 </>
               ) : (
                 <>
-                  <strong>Mandant gefunden</strong>
-                  <span className="album-share-entry-meta">Name und Profilbild werden sichtbar, sobald er eine Einladung angenommen hat.</span>
+                  <strong>{t("foundGeneric")}</strong>
+                  <span className="album-share-entry-meta">{t("foundGenericHint")}</span>
                 </>
               )}
             </span>
-            <span className="album-share-found-mark">✓ Gefunden</span>
+            <span className="album-share-found-mark">{t("foundMark")}</span>
           </div>
         ) : lookupError ? (
           <p className="status-banner status-error" role="alert">{lookupError}</p>
         ) : suggestions === null ? null : suggestions.length === 0 ? (
           <p className="album-share-field-hint">
-            Kein bekannter Mandant mit diesem Namen. Neue Mandanten findest du nur über ihre Mandanten-ID.
+            {t("noSuggestionsHint")}
           </p>
         ) : (
-          <ul className="album-share-list" aria-label="Bekannte Mandanten">
+          <ul className="album-share-list" aria-label={t("suggestionsAriaLabel")}>
             {suggestions.map((tenant) => (
               <li key={tenant.id}>
                 <button type="button" className="album-share-entry album-share-suggestion" onClick={() => choose(tenant)}>
@@ -241,37 +283,72 @@ export function AlbumShareModal({
             ))}
           </ul>
         )}
+        <label className="share-metadata-option">
+          <input type="checkbox" role="switch" checked={shareLocation} onChange={(event) => setShareLocation(event.target.checked)} />
+          <span className="album-picker-switch-track" aria-hidden="true" />
+          <span className="share-metadata-text">
+            <span>{t("shareLocationLabel")}</span>
+            <span className="field-help">{t("shareLocationHelp")}</span>
+          </span>
+        </label>
       </ModalSaveForm>
 
       {album.shared_with.length > 0 && (
         <section className="album-share-list-section">
-          <h3 className="field-label">Geteilt mit</h3>
+          <h3 className="field-label">{t("sharedWithTitle")}</h3>
           <ul className="album-share-list">
             {album.shared_with.map((share) => {
               const pending = share.status === "pending";
-              const displayName = share.tenant_name ?? "Unbekannter Mandant";
+              const displayName = share.tenant_name ?? t("unknownTenant");
               return (
                 <li key={share.tenant_public_id} className="album-share-entry">
                   <TenantAvatar name={share.tenant_name} imageUrl={share.tenant_profile_image_url} />
                   <span className="album-share-entry-text">
                     <strong>{displayName}</strong>
+                    {!share.partner_photos_public && (
+                      <span className="album-share-entry-meta">{t("partnerPhotosHidden")}</span>
+                    )}
                     <span className="album-share-entry-meta">
-                      {share.tenant_name ? shareMeta(share) : (
+                      {share.tenant_name ? shareMeta(share, t, locale) : (
                         <>
                           <span className="album-share-entry-id" title={share.tenant_public_id}>{share.tenant_public_id.slice(0, 8)}…</span>
-                          {" · "}{shareMeta(share)}
+                          {" · "}{shareMeta(share, t, locale)}
                         </>
                       )}
                     </span>
                   </span>
-                  <Badge variant={STATUS_VARIANT[share.status]}>{STATUS_LABEL[share.status]}</Badge>
+                  <label className="album-picker-switch album-share-location-switch">
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      checked={share.share_location}
+                      disabled={locationBusy === share.tenant_public_id}
+                      onChange={(event) => void toggleLocation(share, event.target.checked)}
+                      aria-label={t("locationAriaLabel", { name: displayName })}
+                    />
+                    <span className="album-picker-switch-track" aria-hidden="true" />
+                    <span>{t("locationShort")}</span>
+                  </label>
+                  <label className="album-picker-switch album-share-location-switch">
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      checked={share.partner_public_links}
+                      disabled={locationBusy === share.tenant_public_id}
+                      onChange={(event) => void togglePublicLinks(share, event.target.checked)}
+                      aria-label={t("publicLinksAriaLabel", { name: displayName })}
+                    />
+                    <span className="album-picker-switch-track" aria-hidden="true" />
+                    <span>{t("publicLinksShort")}</span>
+                  </label>
+                  <Badge variant={STATUS_VARIANT[share.status]}>{statusLabel(t)[share.status]}</Badge>
                   <button
                     type="button"
                     className="button-ghost album-share-entry-action"
-                    aria-label={`${pending ? "Einladung an" : "Freigabe für"} ${share.tenant_name ?? share.tenant_public_id} ${pending ? "zurückziehen" : "entfernen"}`}
+                    aria-label={pending ? t("actionAriaLabelPending", { name: share.tenant_name ?? share.tenant_public_id }) : t("actionAriaLabelActive", { name: share.tenant_name ?? share.tenant_public_id })}
                     onClick={() => void revoke(share)}
                   >
-                    {pending ? "Zurückziehen" : "Entfernen"}
+                    {pending ? t("withdrawLabel") : t("removeLabel")}
                   </button>
                 </li>
               );

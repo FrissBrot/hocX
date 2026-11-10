@@ -1,0 +1,217 @@
+{
+  "meta": {
+    "description": "Area di lavoro per verbali e modelli"
+  },
+  "save": "Salva",
+  "cancel": "Annulla",
+  "delete": "Elimina",
+  "edit": "Modifica",
+  "create": "Crea",
+  "close": "Chiudi",
+  "back": "Indietro",
+  "next": "Avanti",
+  "yes": "Sì",
+  "no": "No",
+  "add": "Aggiungi",
+  "remove": "Rimuovi",
+  "search": "Cerca",
+  "searchPlaceholder": "Cerca…",
+  "loading": "Caricamento…",
+  "retry": "Riprova",
+  "refresh": "Aggiorna",
+  "download": "Scarica",
+  "upload": "Carica",
+  "export": "Esporta",
+  "import": "Importa",
+  "actions": "Azioni",
+  "select": "Seleziona",
+  "noResults": "Nessun risultato",
+  "selectedCount": "{count, plural, one {# selezionato} other {# selezionati}}",
+  "requiredField": "Campo obbligatorio",
+  "optional": "Facoltativo",
+  "menuToggle": "Menu",
+  "breadcrumbNav": "Percorso di navigazione",
+  "notificationsRegion": "Notifiche",
+  "copyright": "Copyright © {year} hocX Project · Tutti i diritti riservati.",
+  "build": {
+    "production": "{version}",
+    "test": "{image}",
+    "development": "{branch}@{commit}",
+    "developmentBadge": "DEV",
+    "testBadge": "TEST",
+    "unknown": "sconosciuto",
+    "releaseLinkTitle": "Visualizza la versione su GitHub"
+  },
+  "connectionLost": {
+    "title": "Connessione interrotta",
+    "description": "Il server non è al momento raggiungibile. I dati già confermati vengono conservati; dopo la riconnessione controlla lo stato di salvataggio delle modifiche in corso."
+  },
+  "pagination": {
+    "range": "{from}–{to} di {total}"
+  },
+  "confirm": {
+    "defaultTitle": "Conferma richiesta",
+    "deleteTitle": "Eliminare davvero?",
+    "confirmLabel": "Conferma",
+    "deleteConfirmLabel": "Elimina",
+    "cancelLabel": "Annulla"
+  },
+  "dateField": {
+    "invalidFormat": "Inserisci la data nel formato GG.MM.AAAA",
+    "chooseDate": "Scegli la data",
+    "calendar": "Calendario",
+    "previousMonth": "Mese precedente",
+    "nextMonth": "Mese successivo",
+    "today": "Oggi"
+  },
+  "copyField": {
+    "copy": "Copia",
+    "copyWithLabel": "Copia {label}"
+  },
+  "tagInput": {
+    "addPlaceholder": "Aggiungi tag…",
+    "renameFailed": "Ridenominazione non riuscita. Riprova.",
+    "removeTag": "Rimuovi il tag {tag}",
+    "editTag": "Modifica tag",
+    "newNamePlaceholder": "Nuovo nome…",
+    "noColor": "Nessun colore",
+    "rename": "Rinomina",
+    "colorOrRename": "Colore / rinomina",
+    "addNewTag": "+ Aggiungi \"{tag}\""
+  },
+  "connectivity": {
+    "offlineWithPending": "{count, plural, one {Offline – # modifica salvata localmente} other {Offline – # modifiche salvate localmente}}",
+    "offlineIdle": "Offline – connessione monitorata",
+    "flushing": "{count, plural, one {Nuovo invio di # modifica…} other {Nuovo invio di # modifiche…}}",
+    "pendingUnsaved": "{count, plural, one {# modifica non ancora salvata} other {# modifiche non ancora salvate}}",
+    "reconnected": "Connessione ripristinata",
+    "retryButton": "Riprova ora",
+    "discardBlocked": "{count, plural, one {Scarta la modifica non riuscita} other {Scarta # modifiche non riuscite}}",
+    "leaveConfirm": "Ci sono modifiche non salvate. Lasciare comunque la pagina?"
+  },
+  "clientErrors": {
+    "offline": "Nessuna connessione a Internet",
+    "timeout": "Il server impiega troppo tempo a rispondere",
+    "unreachable": "Server non raggiungibile",
+    "unreachableStatus": "Server non raggiungibile ({status})",
+    "invalidResponse": "Risposta non valida dal server",
+    "saveFailed": "Non è stato possibile salvare le modifiche.",
+    "saveFailedStatus": "Salvataggio non riuscito ({status})",
+    "connectionError": "Errore di connessione",
+    "passkeyCreateCancelled": "La creazione della passkey è stata annullata",
+    "passkeyLoginCancelled": "L'accesso con passkey è stato annullato",
+    "pdfNotProvided": "Non è stato possibile fornire il PDF.",
+    "pdfReadyClick": "PDF pronto – clicca qui per aprirlo",
+    "pdfExportFailed": "Esportazione PDF non riuscita",
+    "tagColorTransferFailed": "Tag rinominato, ma non è stato possibile trasferirne il colore",
+    "noHistoricalCycleSelected": "Nessun ciclo storico selezionato",
+    "noDraftToConfirm": "Nessuna bozza da confermare"
+  },
+  "profileImage": {
+    "invalidType": "Scegli un'immagine PNG, JPG, GIF o WebP (SVG non è supportato).",
+    "tooLarge": "L'immagine è troppo grande (max. 5 MB)."
+  },
+  "deleteWithFiles": {
+    "selectedCount": "{selected, number} di {total, number} selezionati per l'eliminazione",
+    "selectAll": "Seleziona tutto",
+    "selectNone": "Deseleziona tutto",
+    "groups": {
+      "protocol_image": "Immagini in questo verbale",
+      "submission": "File consegnati",
+      "gallery": "Foto della galleria per questa consegna"
+    },
+    "usedElsewhere": "Ancora usato altrove – viene mantenuto",
+    "keptHint": "{count, plural, one {Un file non selezionato viene spostato} other {# file non selezionati vengono spostati}} nella galleria.",
+    "cancel": "Annulla",
+    "confirm": "{count, plural, =0 {Elimina, mantieni i file} one {Elimina con un file} other {Elimina con # file}}",
+    "confirmPlain": "Elimina"
+  },
+  "auditActions": {
+    "categories": {
+      "admin": "Piattaforma",
+      "backup": "Backup",
+      "calendar_feed": "Abbonamento calendario",
+      "document": "Documento",
+      "document_asset": "Risorsa documento",
+      "document_brand": "Identità visiva",
+      "document_settings": "Impostazioni documenti",
+      "document_template": "Modello di documento",
+      "document_verification": "Verifica di autenticità",
+      "event": "Appuntamento",
+      "finance_account": "Conto",
+      "finance_transaction": "Registrazione",
+      "fine": "Multa",
+      "fine_tariff": "Tariffa multe",
+      "identity_verification": "Verifica",
+      "participant": "Persona",
+      "personal_data": "Richiesta di accesso",
+      "privacy_settings": "Impostazioni privacy",
+      "protocol": "Verbale",
+      "retention": "Conservazione",
+      "submission_assignment": "Consegna",
+      "submission_file": "File consegnato",
+      "submission_upload": "Invio",
+      "table_snapshot": "Istantanea tabella",
+      "task_package": "Pacchetto di attività",
+      "template": "Modello di verbale",
+      "tenant": "Organizzazione",
+      "todo": "Attività",
+      "user": "Account",
+      "role": "Ruolo"
+    },
+    "verbs": {
+      "loginFailed": "Accesso non riuscito",
+      "mfaFailed": "Secondo fattore errato",
+      "login": "accesso eseguito",
+      "viewed": "visualizzato",
+      "exported": "esportato",
+      "imported": "importato",
+      "deleted": "eliminato",
+      "created": "creato",
+      "updated": "modificato",
+      "restored": "ripristinato",
+      "collected": "incassato",
+      "revoked": "ritirato",
+      "published": "pubblicato"
+    }
+  },
+  "protectedExport": {
+    "password": "Password per il file ZIP",
+    "passwordHelp": "Almeno {min} caratteri. Non viene salvata – senza password il file non si può più aprire.",
+    "repeat": "Ripeti la password",
+    "mismatch": "Le password non coincidono.",
+    "openHint": "Il file ZIP è cifrato con AES-256. Aprirlo ad es. con 7-Zip (Windows), Keka (macOS) o WinRAR.",
+    "cancel": "Annulla",
+    "download": "Scarica",
+    "working": "Creazione in corso …",
+    "done": "Esportazione scaricata.",
+    "failed": "Esportazione non riuscita."
+  },
+  "features": {
+    "finance": "Finanze",
+    "abgabebox": "Casella di consegna",
+    "custom_domain": "Dominio proprio",
+    "verify_domain": "Dominio di verifica proprio",
+    "task_packages": "Pacchetti di attività",
+    "custom_roles": "Ruoli personalizzati",
+    "photo_sharing": "Condivisione di foto",
+    "document_designer": "Designer di documenti",
+    "wanderplaner": "Pianificatore escursioni"
+  },
+  "featureNotice": {
+    "readOnly": "«{name}» non fa più parte del suo abbonamento. I dati esistenti restano visibili, le modifiche sono bloccate.",
+    "notBooked": "«{name}» non è incluso nel suo abbonamento. La sua amministrazione può estendere l’abbonamento."
+  },
+  "timeField": {
+    "chooseTime": "Scegli l'ora",
+    "invalidFormat": "Inserisci l'ora nel formato HH:MM."
+  },
+  "colorField": {
+    "choose": "Scegli un colore",
+    "saturationBrightness": "Saturazione e luminosità",
+    "saturationBrightnessValue": "Saturazione {saturation} %, luminosità {brightness} %",
+    "hue": "Tonalità",
+    "hex": "Valore esadecimale",
+    "swatches": "Proposte di colori"
+  }
+}

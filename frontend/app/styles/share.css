@@ -1,0 +1,227 @@
+/* Bereichs-CSS, geladen nur von: share. Siehe design/DESIGN.md Abschnitt 10. */
+
+.public-share-unavailable {
+  width: 100%;
+  max-width: 480px;
+}
+
+.public-share-topbar {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+}
+
+.public-share-sender {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.public-share-sender-text .muted {
+  font-size: var(--text-sm);
+}
+
+.public-share-download {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  text-decoration: none;
+}
+
+.public-share-hero {
+  margin-bottom: var(--space-6);
+}
+
+.public-share-eyebrow {
+  margin: 0 0 var(--space-3);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.public-share-title {
+  margin: 0;
+  font-family: "Canela", "Iowan Old Style", "Palatino Linotype", serif;
+  font-size: clamp(2rem, 4.5vw, 3.4rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.public-share-masonry {
+  columns: 4 260px;
+  column-gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.public-share-tile-wrap {
+  break-inside: avoid;
+  margin-bottom: var(--space-3);
+}
+
+.public-share-tile {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--panel-solid);
+  color: var(--text);
+  cursor: zoom-in;
+  text-align: left;
+}
+
+.public-share-masonry-selecting .public-share-tile {
+  cursor: pointer;
+}
+
+.public-share-tile-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+  transition: transform var(--dur-slow) var(--ease-out), opacity var(--dur-base) ease-out;
+}
+
+.public-share-tile:hover .public-share-tile-img {
+  transform: scale(1.02);
+}
+
+.public-share-tile-selected {
+  box-shadow: 0 0 0 3px var(--accent);
+}
+
+.public-share-tile-selected .public-share-tile-img {
+  opacity: 0.82;
+}
+
+.public-share-tile-file-name {
+  max-width: 100%;
+  color: var(--text);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.public-share-tile-selected .public-share-tile-check {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.public-share-footer {
+  border-top: 1px solid var(--border);
+}
+
+.public-share-footer-inner p {
+  margin: 0;
+}
+
+.public-share-brand {
+  color: var(--text);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.public-share-brand:hover {
+  text-decoration: underline;
+}
+
+.public-share-viewer-info span {
+  color: var(--psv-muted);
+  font-size: var(--text-sm);
+}
+
+.public-share-viewer-download {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--psv-fg);
+  color: var(--psv-ink);
+  font-size: var(--text-base);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.public-share-viewer-round:hover {
+  background: var(--button-hover-bg);
+}
+
+.public-share-viewer-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.public-share-viewer-prev {
+  left: var(--space-4);
+}
+
+.public-share-viewer-next {
+  right: var(--space-4);
+}
+
+.public-share-viewer-img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: var(--radius-sm);
+  object-fit: contain;
+  box-shadow: var(--shadow-overlay);
+  cursor: default;
+}
+
+@media (max-width: 640px) {
+  .public-share-topbar-inner,
+  .public-share-main,
+  .public-share-footer-inner {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+  }
+
+  .public-share-actions {
+    width: 100%;
+  }
+
+  .public-share-main {
+    padding-top: var(--space-6);
+    padding-bottom: var(--space-6);
+  }
+
+  .public-share-masonry {
+    columns: 2;
+    column-gap: var(--space-2);
+  }
+
+  .public-share-tile-wrap {
+    margin-bottom: var(--space-2);
+  }
+
+  .public-share-viewer {
+    padding: 72px var(--space-2) 80px;
+  }
+
+  .public-share-viewer-nav {
+    top: auto;
+    bottom: var(--space-4);
+    transform: none;
+  }
+
+  .public-share-viewer-download {
+    padding: 0 var(--space-3);
+  }
+}

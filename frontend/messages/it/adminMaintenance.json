@@ -1,0 +1,214 @@
+{
+  "title": "Manutenzione",
+  "description": "Pianificare e avviare finestre di manutenzione e terminarle dopo il superamento dei controlli di sicurezza. Le migrazioni di dati in corso e i blocchi di scrittura non possono essere aggirati qui.",
+  "duration": {
+    "minutes": "{count, plural, one {# minuto} other {# minuti}}",
+    "hours": "{count, plural, one {# ora} other {# ore}}"
+  },
+  "confirm": {
+    "release": "Terminare ora la manutenzione? Il server verifica di nuovo le condizioni di sblocco.",
+    "start": "Avviare ora la manutenzione? hocX verrà bloccato per gli utenti; le richieste in corso vengono prima completate.",
+    "cancel": "Annullare la manutenzione pianificata?"
+  },
+  "actions": {
+    "release": "Termina manutenzione",
+    "start": "Avvia",
+    "cancel": "Annulla",
+    "plan": "Pianifica manutenzione",
+    "startNow": "Avvia ora",
+    "edit": "Modifica",
+    "editMessage": "Modifica messaggio",
+    "close": "Chiudi",
+    "save": "Salva",
+    "more": "Altre azioni",
+    "cancelPlanned": "Annulla manutenzione"
+  },
+  "toast": {
+    "release": "Manutenzione terminata",
+    "start": "Manutenzione avviata",
+    "cancel": "Manutenzione annullata",
+    "failed": "Azione non riuscita",
+    "started": "Avvio della manutenzione",
+    "planned": "Manutenzione pianificata",
+    "saved": "Messaggio salvato"
+  },
+  "banner": {
+    "fullActive": "Manutenzione completa attiva: hocX è bloccato per tutti gli utenti. Il portale di amministrazione resta raggiungibile.",
+    "partialActive": "Manutenzione parziale attiva: alcune funzioni sono bloccate.",
+    "overdue": "La durata stimata è stata superata. Il blocco resta attivo finché le condizioni di sblocco non sono soddisfatte."
+  },
+  "current": {
+    "title": "Manutenzione in corso",
+    "empty": "Nessuna manutenzione in corso."
+  },
+  "scheduled": {
+    "title": "Manutenzioni pianificate",
+    "empty": "Nessuna manutenzione pianificata.",
+    "meta": "Mostrato da subito sulla pagina di accesso",
+    "metaBy": "Mostrato da subito sulla pagina di accesso · pianificata da {email}"
+  },
+  "history": {
+    "title": "Cronologia",
+    "empty": "Ancora nessuna manutenzione conclusa."
+  },
+  "columns": {
+    "start": "Inizio",
+    "end": "Fine",
+    "kind": "Tipo",
+    "message": "Messaggio",
+    "actions": "Azioni",
+    "reason": "Motivo",
+    "state": "Stato",
+    "duration": "Durata",
+    "estimate": "Stima",
+    "period": "Periodo",
+    "durationEstimate": "Durata · stimata"
+  },
+  "kind": {
+    "full": "Manutenzione completa",
+    "partial": "Manutenzione parziale"
+  },
+  "scope": {
+    "all": "Tutto bloccato",
+    "writes": "Scritture bloccate",
+    "uploads": "Caricamenti bloccati"
+  },
+  "defaultMessage": "Testo predefinito",
+  "reason": {
+    "manual": "Manutenzione manuale",
+    "storage_initial_migration": "Migrazione iniziale dell'archivio",
+    "storage_cutover": "Passaggio dell'archivio",
+    "other": "Processo di sistema",
+    "backup_restore": "Ripristino dal backup"
+  },
+  "state": {
+    "scheduled": "Pianificata",
+    "preparing": "Preparazione",
+    "active": "Attiva",
+    "verifying": "Verifica",
+    "completed": "Terminata",
+    "failed": "Non riuscita",
+    "overdue": "In ritardo",
+    "cancelled": "Annullata"
+  },
+  "facts": {
+    "job": "Causata da",
+    "started": "Inizio",
+    "runtime": "Durata trascorsa",
+    "estimatedEnd": "Fine stimata",
+    "originalEnd": "Stima iniziale",
+    "reserve": "Margine di sicurezza",
+    "features": "Aree interessate",
+    "estimating": "In fase di calcolo"
+  },
+  "job": {
+    "storage_initial_migration": "Migrazione iniziale dell'archivio",
+    "storage_cutover": "Passaggio dell'archivio",
+    "other": "Processo di sistema",
+    "manual": "Amministratore",
+    "backup_restore": "Ripristino completo (backup)",
+    "backup_restore_cli": "Ripristino tramite CLI di recupero"
+  },
+  "feature": {
+    "all": "Intera applicazione",
+    "login": "Accesso",
+    "app": "Applicazione",
+    "writes": "Salvataggio",
+    "uploads": "Caricamenti",
+    "downloads": "Download",
+    "abgabebox": "Casella di consegna",
+    "background_jobs": "Processi in background"
+  },
+  "progress": {
+    "label": "{verified} di {total} oggetti verificati ({copied} copiati)",
+    "aria": "Avanzamento della verifica"
+  },
+  "conditions": {
+    "title": "Controlli di sicurezza prima della fine",
+    "met": "Soddisfatta",
+    "unmet": "Aperta",
+    "blockedHint": "Possibile solo quando le condizioni di sblocco sono soddisfatte",
+    "keys": {
+      "storage_migration_settled": "Migrazione dei dati completata e verificata, oppure origine dimostrabilmente ancora attiva e invariata",
+      "storage_not_fenced": "Nessun blocco di scrittura dell'archivio attivo",
+      "no_open_storage_migration_cutover": "Nessun passaggio di archivio in corso"
+    },
+    "reasons": {
+      "ok": "Soddisfatto",
+      "fenced": "Lo storage è ancora bloccato in scrittura",
+      "cutover_open": "Un passaggio dello storage è ancora aperto",
+      "migration_missing": "La migrazione associata non è stata trovata",
+      "integrity_not_confirmed": "Controllo d’integrità finale non ancora confermato",
+      "target_verified": "Nuova destinazione dello storage verificata e attiva",
+      "target_unverified": "Nuova destinazione dello storage non ancora verificata",
+      "source_consistent": "Storage precedente ancora attivo e invariato",
+      "inconsistent": "Stato dello storage incoerente – verificare",
+      "migration_running": "Migrazione dei dati ancora in corso"
+    }
+  },
+  "form": {
+    "message": "Messaggio pubblico ({locale})",
+    "messageHelp": "Lascia vuoto per il testo predefinito. Mostrato nella pagina di accesso.",
+    "kind": "Tipo",
+    "scope": "Bloccato",
+    "startNow": "Avvia subito in modo controllato",
+    "startDate": "Inizio (data)",
+    "startTime": "Inizio (ora, HH:MM)",
+    "endDate": "Fine prevista (data)",
+    "endTime": "Fine prevista (ora, HH:MM)",
+    "endHelp": "La fine è solo un annuncio. La manutenzione termina solo quando la termini tu dopo controlli superati.",
+    "note": "Nota interna"
+  },
+  "plan": {
+    "title": "Pianifica manutenzione",
+    "description": "Le manutenzioni pianificate vengono annunciate in anticipo nella pagina di accesso e iniziano automaticamente all'orario scelto."
+  },
+  "edit": {
+    "title": "Modifica messaggio di manutenzione"
+  },
+  "idle": {
+    "title": "hocX è disponibile normalmente",
+    "next": "Prossima manutenzione {countdown} · {start}",
+    "viewLogin": "Vedi l’avviso sulla pagina di accesso →",
+    "viewLoginShort": "Vedi pagina di accesso"
+  },
+  "running": {
+    "kicker": "{state, select, preparing {Manutenzione in preparazione} verifying {Manutenzione in verifica} overdue {Manutenzione in ritardo} other {Manutenzione in corso}} · {kind}",
+    "started": "Avviata alle {time}",
+    "notStarted": "Non ancora avviata",
+    "until": "prevista fino alle {time} · ancora circa {remaining}",
+    "overdue": "prevista fino alle {time} · superata",
+    "job": "avviata da {job}"
+  },
+  "kindLabel": {
+    "full": "Manutenzione completa",
+    "writes": "Blocco scritture",
+    "uploads": "Blocco caricamenti"
+  },
+  "kindDescription": {
+    "full": "hocX non è raggiungibile, viene mostrato solo l’avviso.",
+    "writes": "La lettura resta possibile, le modifiche sono bloccate.",
+    "uploads": "Tutto resta utilizzabile, solo i caricamenti sono bloccati."
+  },
+  "kindHint": {
+    "full": "Durante la manutenzione completa hocX reindirizza tutte le richieste alla pagina di manutenzione. Il portale di amministrazione resta raggiungibile.",
+    "writes": "Durante un blocco scritture hocX resta consultabile. Il salvataggio mostra questo avviso.",
+    "uploads": "Durante un blocco caricamenti hocX resta utilizzabile. I caricamenti mostrano questo avviso."
+  },
+  "countdown": {
+    "due": "imminente",
+    "minutes": "tra {count, plural, one {# minuto} other {# minuti}}",
+    "hours": "tra {count, plural, one {# ora} other {# ore}}",
+    "days": "tra {count, plural, one {# giorno} other {# giorni}}"
+  },
+  "preview": {
+    "title": "Anteprima pagina di accesso",
+    "now": "Da subito",
+    "range": "{start} – ca. {end}",
+    "noDate": "Inizio non ancora scelto",
+    "kickerRunning": "Manutenzione in corso",
+    "kickerPlanned": "Manutenzione pianificata"
+  },
+  "quoted": "«{message}»",
+  "defaultMessageHint": "Testo standard della pagina di accesso"
+}

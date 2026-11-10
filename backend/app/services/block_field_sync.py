@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Event, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolTodo
+from app.models import Event, ProtocolTodo
 
 SYNC_TARGET_FIELDS: dict[str, tuple[str, ...]] = {
     "event": ("description", "location", "spezial_text1", "spezial_text2", "spezial_text3"),
@@ -12,19 +11,9 @@ SYNC_TARGET_FIELDS: dict[str, tuple[str, ...]] = {
 
 
 def _todo_tenant_id(db: Session, todo: ProtocolTodo) -> int | None:
-    """ProtocolTodo.tenant_id is only populated for standalone todos (see
-    create_standalone_todo) - a block-attached todo's tenant has to be resolved through its
-    block's protocol instead."""
-    if todo.tenant_id is not None:
-        return todo.tenant_id
-    if todo.protocol_element_block_id is None:
-        return None
-    return db.scalar(
-        select(Protocol.tenant_id)
-        .join(ProtocolElement, ProtocolElement.protocol_id == Protocol.id)
-        .join(ProtocolElementBlock, ProtocolElementBlock.protocol_element_id == ProtocolElement.id)
-        .where(ProtocolElementBlock.id == todo.protocol_element_block_id)
-    )
+    """Seit Migration 0131_todo_tenant_id trägt jedes Todo seine tenant_id selbst (bei Todos mit
+    Block aus dem Protokoll gesetzt)."""
+    return todo.tenant_id
 
 
 def apply_text_sync(

@@ -227,7 +227,7 @@ class WordImportEventMapping(BaseModel):
     tag: str | None = None
     # Only set for rows extracted from a Matrix "events" row when a trailing "(N)" was
     # found right after the date (e.g. "18.10.2025 (7)") - the exact format
-    # export_service._matrix_event_row_value writes for event_show_participant_count,
+    # app/documents/providers/protocol.py (_matrix_event_lines) writes for event_show_participant_count,
     # so a previously exported/re-imported protocol round-trips its attendance counts.
     participant_count: int | None = None
     # Matrix/row/column context, only set alongside `tag` (Matrix-sourced rows) - lets
@@ -610,21 +610,6 @@ class WordImportLastTemplate(BaseModel):
     template_id: int | None = None
 
 
-class WordImportQualityBucket(BaseModel):
-    """Accept-rate of one signal_type's suggestions within one 0.1-wide score band
-    (e.g. signal_type="event_match", score_bucket=0.8 covers suggested_score in
-    [0.8, 0.9)) - see WordImportQualityService.accept_rate_stats."""
-
-    signal_type: str
-    score_bucket: float
-    sample_count: int
-    accept_rate: float
-
-
-class WordImportQualityStats(BaseModel):
-    buckets: list[WordImportQualityBucket] = Field(default_factory=list)
-
-
 # ---------------------------------------------------------------------------
 # "Public" mirror models - identical shape to the internal (int-id) models
 # above, except every entity-referencing id field is a UUID public_id instead
@@ -636,8 +621,7 @@ class WordImportQualityStats(BaseModel):
 # _encode_*/_decode_* functions.
 #
 # Models with zero entity-id fields (WordImportFormRow, WordImportMatrixOption,
-# WordImportMatrixColumnCandidate, WordImportQualityBucket, WordImportQualityStats,
-# WordImportDraftSave, WordImportDocumentReanalyzeRequest, WordImportEventIgnore)
+# WordImportMatrixColumnCandidate, WordImportDraftSave, WordImportDocumentReanalyzeRequest, WordImportEventIgnore)
 # have no Public mirror - they're reused as-is on both sides of the boundary.
 # ---------------------------------------------------------------------------
 

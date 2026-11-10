@@ -1,33 +1,63 @@
+import { getTranslations } from "next-intl/server";
 import { AppShell } from "@/components/ui/app-shell";
+import { AreaIntlProvider } from "@/components/i18n/area-intl-provider";
 import { RouteTabs } from "@/components/ui/route-tabs";
-import { DASHBOARD_TABS } from "@/components/ui/section-tabs";
+import { dashboardTabs } from "@/components/ui/section-tabs";
 import { DashboardView } from "@/components/dashboard/dashboard-view";
+import { MobileDashboard } from "@/components/mobile/mobile-dashboard";
+import { dashboardPermissions } from "@/components/dashboard/dashboard-permissions";
+import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { AttendanceFineListItem, NextSessionInfo, ProtocolSummary, TodoListItem } from "@/types/api";
+import "@/app/styles/home.css";
 
 export default async function HomePage() {
   const session = await requireSession();
-  const canExcuse = ["admin", "writer"].includes(session.current_role ?? "");
+  const t = await getTranslations("nav");
+  const access = { permissions: session.permissions ?? [], features: session.current_tenant?.enabled_features ?? [] };
+  const permissions = dashboardPermissions(access);
 
-  const [todos, fines, nextSession, protocols] = await Promise.all([
+  // Bussen nur laden, wenn Finanzen gebucht sind (sonst 403). Limit 200 = Backend-Maximum, damit
+  // Summe und Personenzahl der offenen Bussen nicht nach 50 Eintraegen abbrechen.
+  const [todos, fines, upcomingSessions, protocols] = await Promise.all([
     backendFetchWithSession<TodoListItem[]>("/api/todos"),
-    backendFetchWithSession<AttendanceFineListItem[]>("/api/fines"),
-    backendFetchWithSession<NextSessionInfo>("/api/protocols/next-session"),
+    permissions.hasFinance ? backendFetchWithSession<AttendanceFineListItem[]>("/api/fines?limit=200") : Promise.resolve([]),
+    backendFetchWithSession<NextSessionInfo[]>("/api/protocols/upcoming-sessions"),
     backendFetchWithSession<ProtocolSummary[]>("/api/protocols?limit=1"),
   ]);
 
+  const hasProtocols = (protocols ?? []).length > 0;
+
+  // Die Startseite liegt direkt unter dem Root-Layout (kein eigenes layout.tsx moeglich), daher
+  // liefert sie ihre Uebersetzungs-Namespaces hier selbst nach (lib/i18n/message-scopes.ts).
   return (
-    <AppShell initialSession={session}>
-      <RouteTabs tabs={DASHBOARD_TABS} activeHref="/" />
-      <DashboardView
-        todos={todos ?? []}
-        fines={fines ?? []}
-        nextSession={nextSession ?? { protocol: null, attendance_block_id: null, entries: [] }}
-        canExcuse={canExcuse}
-        canWrite={canExcuse}
-        canConfigure={session.current_role === "admin"}
-        hasProtocols={(protocols ?? []).length > 0}
-      />
-    </AppShell>
+    <AreaIntlProvider area="dashboard">
+      <AppShell initialSession={session}>
+        <ResponsiveView
+          mobile={
+            <MobileDashboard
+              todos={todos ?? []}
+              fines={fines ?? []}
+              upcomingSessions={upcomingSessions ?? []}
+              access={access}
+              hasProtocols={hasProtocols}
+            />
+          }
+          desktop={
+            <>
+              <RouteTabs tabs={dashboardTabs(t)} activeHref="/" />
+              <DashboardView
+                todos={todos ?? []}
+                fines={fines ?? []}
+                upcomingSessions={upcomingSessions ?? []}
+                access={access}
+                hasProtocols={hasProtocols}
+                userName={session.user?.first_name || session.user?.display_name || ""}
+              />
+            </>
+          }
+        />
+      </AppShell>
+    </AreaIntlProvider>
   );
 }

@@ -1,0 +1,235 @@
+{
+  "status": {
+    "draft": "Bozza",
+    "analyzed": "Analizzato automaticamente",
+    "reconnoitered": "Ricognizione effettuata",
+    "approved": "Approvato"
+  },
+  "kind": {
+    "START": "Partenza",
+    "END": "Arrivo",
+    "NAVIGATION": "Punto fisso",
+    "BREAK": "Luogo di sosta",
+    "SUMMIT": "Vetta",
+    "PASS": "Passo",
+    "HUT": "Capanna",
+    "WATER": "Acqua",
+    "DECISION": "Punto fisso",
+    "EMERGENCY_EXIT": "Via di fuga",
+    "USER_DEFINED": "Punto fisso"
+  },
+  "routingProfile": {
+    "wanderwege_bevorzugen": "Preferire i sentieri escursionistici",
+    "schnellste_route": "Percorso più rapido",
+    "einfache_route": "Percorso facile"
+  },
+  "verification": {
+    "AUTO_DETECTED": "Rilevato automaticamente",
+    "NEEDS_VERIFICATION": "Da verificare sul posto",
+    "VERIFIED": "Confermato dal capo",
+    "REJECTED": "Scartato"
+  },
+  "danger": {
+    "normal": {
+      "label": "Percorso",
+      "description": "Sentiero escursionistico o di montagna senza pericoli rilevati"
+    },
+    "steep_exposed": {
+      "label": "Ripido/esposto",
+      "description": "Oltre il 40 % di salita o oltre il 70 % di pendenza direttamente accanto al sentiero"
+    },
+    "alpine": {
+      "label": "Sentiero alpino",
+      "description": "Segnalato ufficialmente come sentiero escursionistico alpino"
+    },
+    "badge": {
+      "steep_exposed": "Ripido/esposto",
+      "alpine": "Alpino"
+    }
+  },
+  "units": {
+    "km": "{value} km",
+    "meters": "{value} m",
+    "minutes": "{minutes} min",
+    "hoursMinutes": "{hours} h {minutes} min",
+    "lkm": "{value} km-sforzo"
+  },
+  "fields": {
+    "title": "Titolo",
+    "description": "Descrizione",
+    "date": "Data"
+  },
+  "actions": {
+    "cancel": "Annulla",
+    "save": "Salva",
+    "saving": "Salvataggio…",
+    "delete": "Elimina",
+    "remove": "Rimuovi",
+    "close": "Chiudi"
+  },
+  "manager": {
+    "title": "Pianificatore di escursioni",
+    "subtitle": "Pianificare escursioni, calcolare il percorso e creare la tabella di marcia.",
+    "importGpx": "Importa GPX",
+    "newTour": "Nuova escursione",
+    "listTitle": "Escursioni",
+    "columns": {
+      "title": "Titolo",
+      "date": "Data",
+      "status": "Stato",
+      "elevationProfile": "Profilo altimetrico"
+    },
+    "empty": "Nessuna escursione ancora pianificata.",
+    "create": {
+      "optional": "Facoltativo.",
+      "startAndEnd": "Partenza e arrivo",
+      "startAndEndHelp": "Il tracciato, il profilo altimetrico e i punti automatici vengono caricati alla creazione. Per il profilo altimetrico il tracciato del percorso viene trasmesso a swisstopo.",
+      "setStart": "Imposta partenza{done, select, true { ✓} other {}}",
+      "setEnd": "Imposta arrivo{done, select, true { ✓} other {}}",
+      "clickToSetStart": "Clicca sulla mappa per impostare la partenza.",
+      "clickToSetEnd": "Clicca sulla mappa per impostare l’arrivo.",
+      "calculating": "Calcolo di percorso e profilo altimetrico…",
+      "submit": "Crea escursione",
+      "missingStartEnd": "Imposta partenza e arrivo sulla mappa",
+      "created": "Escursione creata",
+      "error": "Errore durante la creazione"
+    },
+    "gpx": {
+      "help": "Il file GPX serve come punto di partenza per una nuova escursione. Il tracciato, il profilo altimetrico e i punti automatici vengono caricati; per il profilo altimetrico il tracciato del percorso viene trasmesso a swisstopo.",
+      "file": "File GPX",
+      "importing": "Importazione e calcolo…",
+      "submit": "Importa",
+      "missingFile": "Seleziona un file GPX",
+      "imported": "File GPX importato",
+      "error": "Importazione GPX non riuscita"
+    }
+  },
+  "detail": {
+    "noDescription": "Nessuna descrizione",
+    "edit": "Modifica",
+    "reconnaissance": "Ricognizione",
+    "print": "Stampa",
+    "exportGpx": "Esporta GPX",
+    "approve": "Approva",
+    "approving": "Approvazione…",
+    "toast": {
+      "saved": "Escursione salvata",
+      "saveError": "Errore durante il salvataggio",
+      "deleted": "Escursione eliminata",
+      "deleteError": "Errore durante l’eliminazione",
+      "routeSaved": "Escursione salvata e ricalcolata",
+      "routeSaveError": "Impossibile salvare le modifiche",
+      "verificationError": "Impossibile modificare lo stato",
+      "reconnaissanceSaved": "Ricognizione salvata",
+      "reconnaissanceError": "Impossibile salvare la ricognizione",
+      "approved": "Escursione approvata",
+      "approveError": "Approvazione non riuscita",
+      "printCreated": "PDF di stampa creato",
+      "printError": "Impossibile creare il PDF di stampa"
+    },
+    "confirm": {
+      "deleteTour": "Eliminare davvero l’escursione «{title}»?",
+      "removeWaypoint": "Rimuovere il punto «{label}»?",
+      "approveTour": "Approvare l’escursione «{title}»?"
+    },
+    "route": {
+      "title": "Mappa e percorso",
+      "description": "I punti di passaggio possono essere spostati trascinandoli. Le modifiche vengono applicate solo al salvataggio; il tracciato, il profilo altimetrico e i punti automatici vengono quindi ricalcolati.",
+      "routingProfile": "Profilo di percorso",
+      "savingAndCalculating": "Salvataggio e calcolo…",
+      "discardChanges": "Annulla modifiche",
+      "addVia": "Aggiungi punto intermedio",
+      "unsavedHint": "Modifiche non salvate. Il percorso e il profilo altimetrico visualizzati corrispondono ancora all’ultimo stato salvato.",
+      "swisstopoHint": "Al salvataggio, il tracciato del percorso viene trasmesso a swisstopo per il profilo altimetrico.",
+      "placeViaHint": "Clicca sulla mappa per posizionare il punto intermedio.",
+      "distance": "Distanza: <strong>{value}</strong>",
+      "ascent": "Salita: <strong>{value}</strong>",
+      "descent": "Discesa: <strong>{value}</strong>"
+    },
+    "elevation": {
+      "title": "Profilo altimetrico",
+      "description": "Passando sopra il profilo altimetrico, la posizione viene evidenziata sulla mappa. L’analisi automatica aggiunge bivi, attraversamenti e capanne significativi – circa ogni 15 minuti di cammino.",
+      "empty": "Nessun profilo altimetrico ancora recuperato."
+    },
+    "editModal": {
+      "title": "Modifica escursione"
+    },
+    "reconnaissanceModal": {
+      "reconnoiteredOn": "Ricognizione effettuata il {date}.",
+      "reconnoiteredByOn": "Ricognizione effettuata da {name} il {date}.",
+      "approvedOn": "Approvata il {date}.",
+      "approvedByOn": "Approvata da {name} il {date}.",
+      "remarks": "Altre osservazioni",
+      "submit": "Segna ricognizione come effettuata",
+      "checklist": {
+        "trail_condition": "Stato del sentiero verificato",
+        "problem_spots": "Punti problematici verificati",
+        "exits": "Vie di fuga verificate",
+        "access_roads": "Vie d’accesso verificate",
+        "water_points": "Punti d’acqua verificati",
+        "alternative_route": "Percorso alternativo verificato",
+        "decision_points": "Punti decisionali importanti verificati"
+      }
+    },
+    "printModal": {
+      "paper": "Formato carta",
+      "orientation": "Orientamento",
+      "portrait": "Verticale",
+      "landscape": "Orizzontale",
+      "scale": "Scala",
+      "scaleOption": "1:{scale}",
+      "result": "PDF con {count, plural, one {# foglio di carta} other {# fogli di carta}} creato - <link>Scarica PDF</link>.",
+      "creating": "Creazione…",
+      "submit": "Crea PDF"
+    }
+  },
+  "map": {
+    "aria": "Mappa",
+    "legendAria": "Legenda valutazione dei pericoli",
+    "legendNone": " (nessuno)",
+    "waypointInfo": "Informazioni sul punto di passaggio",
+    "closeWaypointInfo": "Chiudi informazioni sul punto di passaggio",
+    "elevation": "Altitudine: {value} m",
+    "break": "Pausa: {minutes} min"
+  },
+  "marchTable": {
+    "title": "Punti di passaggio e tabella di marcia",
+    "speedFactor": "Fattore di velocità: {value} km-sforzo/h",
+    "noRoute": "Calcola il percorso per visualizzare distanze e tempi di marcia.",
+    "empty": "Nessun punto di passaggio.",
+    "columns": {
+      "index": "#",
+      "name": "Nome",
+      "type": "Tipo",
+      "elevation": "Altitudine",
+      "distance": "Distanza",
+      "cumulativeDistance": "Distanza cum.",
+      "ascent": "Salita",
+      "descent": "Discesa",
+      "lkm": "km-sforzo",
+      "time": "Tempo",
+      "cumulativeTime": "Tempo cum.",
+      "arrival": "Arrivo",
+      "break": "Pausa",
+      "departure": "Partenza",
+      "remarks": "Osservazioni",
+      "status": "Stato",
+      "actions": "Azioni"
+    },
+    "breakMinutesAria": "Pausa in minuti",
+    "decisionMetrics": "Dalla partenza: {fromStart} · All’arrivo: {toEnd} · Ritorno: {back}",
+    "nearestExit": " · Via di fuga più vicina: {time}",
+    "summary": {
+      "totalDistance": "Distanza totale: <strong>{value}</strong>",
+      "ascentDescent": "Salita/discesa: <strong>{ascent} / {descent} m</strong>",
+      "lkm": "Chilometri-sforzo: <strong>{value}</strong>",
+      "walkingTime": "Tempo di marcia: <strong>{value}</strong>",
+      "breaks": "Pause: <strong>{value}</strong>",
+      "totalTime": "Tempo totale: <strong>{value}</strong>"
+    }
+  },
+  "elevationChart": {
+    "distance": "Distanza:",
+    "elevation": "Altitudine:"
+  }
+}

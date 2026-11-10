@@ -1,5 +1,3 @@
-import uuid
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -12,23 +10,27 @@ from app.models import (
     ProtocolText,
     RenderType,
     TemplateElement,
+    TemplateElementBlock,
 )
-from app.services import public_id_service
 
 
 class ProtocolElementRepository:
     def list_for_protocol(self, db: Session, protocol_id: int):
+        """Elemente eines Protokolls mit show_when_empty der Elementdefinition und der public_id
+        des Vorlagenelements (per JOIN statt einer Einzelabfrage je Element). Aus der
+        Konfiguration wird nur der eine Schlüssel gelesen, nicht das ganze JSON."""
         rows = db.execute(
             select(
                 ProtocolElement,
-                ElementDefinition.configuration_json.label("element_definition_configuration_json"),
+                ElementDefinition.configuration_json["show_when_empty"].label("show_when_empty"),
+                TemplateElement.public_id.label("template_element_public_id"),
             )
             .outerjoin(TemplateElement, TemplateElement.id == ProtocolElement.template_element_id)
             .outerjoin(ElementDefinition, ElementDefinition.id == TemplateElement.element_definition_id)
             .where(ProtocolElement.protocol_id == protocol_id)
             .order_by(ProtocolElement.sort_index.asc(), ProtocolElement.id.asc())
         ).all()
-        return [(row.ProtocolElement, bool((row.element_definition_configuration_json or {}).get("show_when_empty", False))) for row in rows]
+        return [(row.ProtocolElement, bool(row.show_when_empty), row.template_element_public_id) for row in rows]
 
     def list_blocks_for_elements(self, db: Session, protocol_element_ids: list[int]):
         if not protocol_element_ids:
@@ -43,13 +45,16 @@ class ProtocolElementRepository:
                 ProtocolText.tracked_baseline_content.label("tracked_baseline_content"),
                 ProtocolDisplaySnapshot.compiled_text.label("display_compiled_text"),
                 ProtocolDisplaySnapshot.snapshot_json.label("display_snapshot_json"),
-                ElementDefinition.configuration_json.label("element_definition_configuration_json"),
+                # public_ids der Bezüge per JOIN (vorher je Block ein db.get samt ganzer Zeile)
+                ElementDefinition.public_id.label("element_definition_public_id"),
+                TemplateElementBlock.public_id.label("template_element_block_public_id"),
             )
             .join(ElementType, ElementType.id == ProtocolElementBlock.element_type_id)
             .join(RenderType, RenderType.id == ProtocolElementBlock.render_type_id)
             .outerjoin(ProtocolText, ProtocolText.protocol_element_block_id == ProtocolElementBlock.id)
             .outerjoin(ProtocolDisplaySnapshot, ProtocolDisplaySnapshot.protocol_element_block_id == ProtocolElementBlock.id)
             .outerjoin(ElementDefinition, ElementDefinition.id == ProtocolElementBlock.element_definition_id)
+            .outerjoin(TemplateElementBlock, TemplateElementBlock.id == ProtocolElementBlock.template_element_block_id)
             .where(ProtocolElementBlock.protocol_element_id.in_(protocol_element_ids))
             .order_by(ProtocolElementBlock.protocol_element_id.asc(), ProtocolElementBlock.sort_index.asc(), ProtocolElementBlock.id.asc())
         )
@@ -57,11 +62,6 @@ class ProtocolElementRepository:
 
     def get(self, db: Session, protocol_element_id: int) -> ProtocolElement | None:
         return db.get(ProtocolElement, protocol_element_id)
-
-    def get_by_public_id(self, db: Session, public_id: uuid.UUID) -> ProtocolElement | None:
-        # No tenant_id column of its own (scoped via protocol_id) - callers must verify
-        # tenant/access on the resolved row's protocol, same as for the numeric-id path.
-        return public_id_service.get_by_public_id(db, ProtocolElement, public_id)
 
     def update(self, db: Session, protocol_element: ProtocolElement, values: dict) -> ProtocolElement:
         for key, value in values.items():
@@ -75,11 +75,6 @@ class ProtocolElementRepository:
 class ProtocolElementBlockRepository:
     def get(self, db: Session, protocol_element_block_id: int) -> ProtocolElementBlock | None:
         return db.get(ProtocolElementBlock, protocol_element_block_id)
-
-    def get_by_public_id(self, db: Session, public_id: uuid.UUID) -> ProtocolElementBlock | None:
-        # No tenant_id column of its own (scoped via protocol_element_id -> protocol) -
-        # callers must verify tenant/access on the resolved row, same as for numeric ids.
-        return public_id_service.get_by_public_id(db, ProtocolElementBlock, public_id)
 
     def update(self, db: Session, protocol_element_block: ProtocolElementBlock, values: dict) -> ProtocolElementBlock:
         for key, value in values.items():

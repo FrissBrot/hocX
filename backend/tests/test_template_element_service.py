@@ -6,7 +6,7 @@ import uuid
 
 import pytest
 
-from app.schemas.template import TemplateElementCreate, TemplateElementUpdate
+from app.schemas.template import TemplateElementBehaviorUpdate, TemplateElementCreate, TemplateElementUpdate
 from app.services.template_element_service import TemplateElementService
 from tests.factories import (
     make_element_definition,
@@ -110,3 +110,21 @@ def test_update_template_element_accepts_same_tenant_linked_list(db):
     result = service.update_template_element(db, template_element.id, payload)
 
     assert result.configuration_json.get("linked_list_id") == own_list.public_id
+
+
+def test_element_wide_behavior_toggle_overrides_single_blocks(db):
+    """Der Element-Schalter gilt für alle Blöcke: ein einzeln übersteuerter Block folgt ihm."""
+    tenant = make_tenant(db, "Tenant H")
+    template = make_template(db, tenant.id)
+    blocks = _form_blocks() + [{**_form_blocks()[0], "id": 2, "sort_index": 20}]
+    definition = make_element_definition(db, tenant.id, "Formular", blocks, element_type_id_=6, render_type_id=5)
+    template_element = make_template_element(db, template.id, definition.id, 10, "Formular")
+    service = TemplateElementService()
+
+    service.update_block_behavior(db, template_element.id, TemplateElementBehaviorUpdate(scope="block", block_id=1, export_visible=False, is_visible=False))
+    result = service.update_block_behavior(db, template_element.id, TemplateElementBehaviorUpdate(scope="element", export_visible=True))
+
+    assert [block.export_visible for block in result.blocks] == [True, True]
+    # Andere Felder des Blocks bleiben einzeln übersteuert.
+    assert [block.is_visible for block in result.blocks] == [False, True]
+    assert result.configuration_json["block_overrides"] == {"1": {"is_visible": False}}

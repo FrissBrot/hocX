@@ -32,6 +32,9 @@ function makeLink(overrides: Partial<ShareLink> = {}): ShareLink {
     expires_at: null,
     revoked_at: null,
     status: "active",
+    share_location: false,
+    share_capture_date: true,
+    share_camera: false,
     ...overrides,
   };
 }

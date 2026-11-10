@@ -1,0 +1,352 @@
+{
+  "title": "Storage",
+  "loadFailed": "Die Speicherübersicht konnte nicht geladen werden.",
+  "description": "Speicherprofile verwalten und Dateien zwischen Speichern migrieren. Umgeschaltet wird erst, wenn jede Datei kopiert und geprüft ist.",
+  "actions": {
+    "newProfile": "Profil anlegen",
+    "startMigration": "Migration vorbereiten",
+    "requestLocal": "Lokales S3 bereitstellen",
+    "test": "Verbindung testen",
+    "edit": "Bearbeiten",
+    "delete": "Löschen",
+    "purge": "Bereinigen",
+    "report": "Prüfbericht",
+    "start": "Migration starten",
+    "confirmCutover": "Umschalten bestätigen",
+    "resume": "Fortsetzen",
+    "pause": "Pausieren",
+    "retryFailed": "Fehlgeschlagene erneut versuchen",
+    "acceptMissing": "Fehlende bestätigen",
+    "acknowledgeRollback": "Zur Kenntnis genommen",
+    "cancel": "Abbrechen",
+    "close": "Schliessen",
+    "save": "Speichern",
+    "prepareMigration": "Vorprüfung starten"
+  },
+  "toast": {
+    "failed": "Aktion fehlgeschlagen",
+    "testOk": "Verbindungstest erfolgreich",
+    "testFailed": "Verbindungstest fehlgeschlagen: {error}",
+    "deleted": "Profil gelöscht",
+    "localRequested": "Lokales S3 angefordert - der Server startet es in wenigen Minuten",
+    "profileSaved": "Profil gespeichert",
+    "migrationCreated": "Migration angelegt - die Vorprüfung läuft",
+    "purgeRequested": "Bereinigung angefordert",
+    "start": "Migration gestartet",
+    "confirmCutover": "Umschalten bestätigt",
+    "resume": "Migration fortgesetzt",
+    "pause": "Migration pausiert",
+    "retryFailed": "Objekte werden erneut versucht",
+    "acceptMissing": "Fehlende Objekte bestätigt",
+    "acknowledgeRollback": "Zur Kenntnis genommen",
+    "cancel": "Abbruch angefordert"
+  },
+  "confirm": {
+    "deleteProfile": "Profil «{name}» löschen? Gespeicherte Daten im Bucket bleiben unberührt.",
+    "startInitial": "Erstmigration starten? hocX geht dafür in die volle Wartung und ist für Benutzer gesperrt, bis alle Dateien kopiert und geprüft sind.",
+    "startLive": "Live-Migration starten? hocX bleibt während des Kopierens normal nutzbar.",
+    "cutover": "Auf den neuen Speicher umschalten? Schreibvorgänge werden dafür kurz gesperrt, danach arbeitet hocX mit dem neuen Speicher.",
+    "resume": "Migration fortsetzen?",
+    "pause": "Migration pausieren? Bereits kopierte Objekte bleiben erhalten.",
+    "retryFailed": "Alle fehlgeschlagenen Objekte erneut versuchen?",
+    "acceptMissing": "Objekte, die bereits in der Quelle fehlen, als fehlend bestätigen? Sie werden im Prüfbericht ausgewiesen und nicht übernommen.",
+    "acknowledgeRollback": "Bestätigen, dass du den Zustand geprüft hast? Aktiv bleibt der neue Speicher; zurück geht es nur über eine neue Migration.",
+    "cancel": "Migration kontrolliert abbrechen? Die Quelle bleibt aktiv, nichts wird gelöscht."
+  },
+  "banner": {
+    "noCredentialsKey": "STORAGE_CREDENTIALS_KEY ist nicht gesetzt - S3-Zugangsdaten können nicht sicher gespeichert werden.",
+    "fenced": "Schreibvorgänge sind gerade gesperrt (Cutover oder Wartung)."
+  },
+  "active": {
+    "title": "Aktiver Speicher",
+    "profile": "Profil",
+    "generation": "Generation",
+    "location": "Ort",
+    "localS3": "Lokales S3",
+    "filesystem": "Lokales Dateisystem (bisheriger Bestand)",
+    "extent": "Umfang"
+  },
+  "provider": {
+    "filesystem": "Dateisystem",
+    "garage_local": "Lokales S3 (Garage)",
+    "aws_s3": "AWS S3",
+    "hetzner": "Hetzner Object Storage",
+    "s3_compatible": "S3-kompatibel"
+  },
+  "localS3": {
+    "needed": "Wird benötigt",
+    "notNeeded": "Nicht benötigt",
+    "notConfigured": "Nicht eingerichtet",
+    "reason": {
+      "active": "aktiver Speicher",
+      "initial_target": "Ziel der Erstmigration",
+      "requested": "von einem Administrator angefordert",
+      "migration": "von einer Migration verwendet",
+      "fallback_period": "Rückfallfrist läuft",
+      "pending_operation": "Bereinigung oder Vorbereitung offen",
+      "unverified_objects": "nicht verifizierte Objekte",
+      "not_needed": "kann gestoppt werden (Daten bleiben erhalten)",
+      "no_local_profile": "kein lokales Profil",
+      "db_unavailable": "Status unbekannt"
+    }
+  },
+  "profiles": {
+    "title": "Speicherprofile",
+    "description": "Zugangsdaten werden verschlüsselt gespeichert und nie wieder angezeigt.",
+    "empty": "Noch keine Profile."
+  },
+  "columns": {
+    "name": "Name",
+    "location": "Ort",
+    "status": "Status",
+    "lastTest": "Letzter Test",
+    "actions": "Aktionen",
+    "generation": "Generation",
+    "profile": "Profil",
+    "size": "Umfang",
+    "retainUntil": "Aufbewahren bis",
+    "created": "Angelegt",
+    "route": "Von → Nach",
+    "objects": "Objekte",
+    "time": "Zeit",
+    "event": "Ereignis",
+    "actor": "Durch"
+  },
+  "status": {
+    "active": "Aktiv",
+    "builtin": "Eingebaut",
+    "disabled": "Deaktiviert",
+    "inMigration": "In Migration",
+    "pinned": "Daten in Rückfallfrist",
+    "sharedCredentials": "Abgabebox ohne eigene Zugangsdaten",
+    "encrypted": "Verschlüsselt"
+  },
+  "test": {
+    "ok": "OK",
+    "failed": "Fehler",
+    "never": "Noch nie getestet"
+  },
+  "generations": {
+    "title": "Speichergenerationen",
+    "description": "Jede Migration schreibt in eine neue Generation. Abgelöste Generationen bleiben bis zur bewussten Bereinigung erhalten.",
+    "empty": "Keine Generationen.",
+    "size": "{count, plural, one {# Objekt} other {# Objekte}}, {size}",
+    "since": "seit {date}",
+    "retainUntil": "aufbewahren bis {date}",
+    "next": "Entsteht bei der nächsten Migration",
+    "nextMeta": "Wird auf dem Zielprofil angelegt"
+  },
+  "generationStatus": {
+    "preparing": "In Vorbereitung",
+    "active": "Aktiv",
+    "retained": "Rückfallfrist",
+    "abandoned": "Verworfen",
+    "purge_requested": "Bereinigung angefordert",
+    "purging": "Wird bereinigt",
+    "purged": "Bereinigt"
+  },
+  "history": {
+    "title": "Letzte Migrationen",
+    "empty": "Noch keine Migrationen.",
+    "objects": "{verified} von {total} geprüft",
+    "created": "Angelegt {date}",
+    "copied": "{copied} / {total} Objekte",
+    "checked": "{verified} geprüft · {failed} fehlgeschlagen",
+    "emptyHint": "Die erste Migration verschiebt den bisherigen Bestand in ein S3-Profil."
+  },
+  "state": {
+    "pending": "Angelegt",
+    "preflight": "Vorprüfung",
+    "awaiting_confirmation": "Wartet auf Start",
+    "inventory": "Inventur",
+    "copying": "Kopieren",
+    "catching_up": "Änderungen nachführen",
+    "verifying": "Prüfen",
+    "ready_for_cutover": "Bereit zum Umschalten",
+    "cutting_over": "Umschalten",
+    "observing": "Beobachtung",
+    "completed": "Abgeschlossen",
+    "paused": "Pausiert",
+    "retrying": "Neuer Versuch",
+    "failed": "Fehlgeschlagen",
+    "cancelled": "Abgebrochen",
+    "rollback_required": "Rollback erforderlich"
+  },
+  "estimate": {
+    "unknown": "Wird ermittelt",
+    "minutes": "{low}–{high} Minuten",
+    "hours": "{low}–{high} Stunden"
+  },
+  "migration": {
+    "title": "{source} → {target}",
+    "initialHint": "Erstmigration: hocX ist während der Migration in voller Wartung.",
+    "liveHint": "Live-Migration: hocX bleibt nutzbar, nur das Umschalten sperrt Schreibvorgänge kurz.",
+    "confirmInitial": "Vorprüfung bestanden. Erwartete Wartungsdauer: {range}.",
+    "confirmLive": "Vorprüfung bestanden. Erwartete Kopierdauer: {range}, Unterbrechung beim Umschalten: {cutover}.",
+    "heartbeatStale": "Der Storage-Worker meldet sich nicht mehr. Bitte den Container storage-worker prüfen - die Migration wird nach seinem Neustart fortgesetzt.",
+    "copyProgress": "{copied} von {total} kopiert",
+    "copyAria": "Kopierfortschritt",
+    "verifyProgress": "{verified} von {total} Objekten geprüft",
+    "verifyAria": "Prüffortschritt",
+    "cutoverWithMissing": "{count, plural, one {# Datenbank-Verweis zeigt auf eine fehlende Datei (siehe Prüfbericht). Umschalten nur nach Bestätigung.} other {# Datenbank-Verweise zeigen auf fehlende Dateien (siehe Prüfbericht). Umschalten nur nach Bestätigung.}}",
+    "cutoverReady": "Alle Objekte sind kopiert und geprüft. Das Umschalten wartet auf deine Bestätigung.",
+    "rollbackRequired": "Die Prüfung nach dem Umschalten ist fehlgeschlagen. Aktiv ist der neue Speicher; ein automatischer Rückfall findet bewusst nicht statt. Bitte Prüfbericht ansehen und bei Bedarf eine Migration zurück starten."
+  },
+  "facts": {
+    "objects": "Objekte",
+    "objectCounts": "{total} gesamt · {copied} kopiert · {verified} geprüft · {failed} fehlgeschlagen",
+    "started": "Gestartet",
+    "runtime": "Laufzeit",
+    "averageRate": "Durchschnittliche Rate",
+    "currentRate": "Aktuelle Rate",
+    "rate": "{value}/s",
+    "remaining": "Verbleibend (geschätzt)",
+    "heartbeat": "Letztes Lebenszeichen",
+    "workerActive": "Worker aktiv",
+    "checkpoint": "Letzter Checkpoint",
+    "generation": "Generation",
+    "references": "Referenzen",
+    "referenceCounts": "{missing} fehlend · {unreferenced} unreferenziert"
+  },
+  "events": {
+    "title": "Verlauf ({count})",
+    "empty": "Keine Ereignisse.",
+    "worker": "Storage-Worker"
+  },
+  "profileForm": {
+    "editTitle": "Speicherprofil bearbeiten",
+    "newTitle": "Speicherprofil anlegen",
+    "locationLocked": "Der Speicherort dieses Profils ist gesperrt, weil es aktiv ist oder noch benötigte Daten enthält. Für einen neuen Ort ein neues Profil anlegen und migrieren.",
+    "name": "Anzeigename",
+    "provider": "Anbieter",
+    "endpoint": "Endpoint",
+    "endpointHelp": "Bei AWS leer lassen, bei Hetzner wird er aus der Region abgeleitet.",
+    "region": "Region",
+    "bucket": "Bucket",
+    "abgabeboxBucket": "Bucket für die Abgabebox",
+    "abgabeboxBucketHelp": "Empfohlen: eigener Bucket mit eigenen, eingeschränkten Zugangsdaten.",
+    "prefix": "Präfix / Namespace",
+    "prefixHelp": "Darf sich mit keinem anderen Profil im selben Bucket überschneiden.",
+    "addressing": "Adressierung",
+    "accessKey": "Access Key",
+    "secretKey": "Secret Key",
+    "keepSecret": "Leer lassen, um die gespeicherten Zugangsdaten zu behalten.",
+    "restrictedAccessKey": "Access Key (Abgabebox, eingeschränkt)",
+    "restrictedSecretKey": "Secret Key (Abgabebox, eingeschränkt)",
+    "restrictedHelp": "Die öffentlich erreichbare Abgabebox nutzt diese Zugangsdaten. Ohne sie verwendet sie die Hauptzugangsdaten.",
+    "tlsVerify": "TLS-Zertifikat prüfen",
+    "caBundle": "Eigenes CA-Zertifikat (PEM, optional)",
+    "caBundleStored": "Ein CA-Zertifikat ist hinterlegt",
+    "enabled": "Profil aktiviert",
+    "serverSideEncryption": "Serverseitige Verschlüsselung (AES-256)",
+    "serverSideEncryptionHelp": "Jedes Objekt wird beim Anbieter verschlüsselt gespeichert; der Verbindungstest prüft das.",
+    "dataLocation": "Datenstandort",
+    "dataLocationChoose": "Bitte wählen",
+    "dataLocationHelp": "Bei AWS und Hetzner aus der Region abgeleitet. Bestimmt, ob Daten der Vereine die Schweiz bzw. die EU verlassen.",
+    "transferBasis": "Grundlage der Übermittlung",
+    "transferBasisHelp": "z. B. Standardvertragsklauseln und Auftragsverarbeitungsvertrag vom …",
+    "locationConfirm": "Auslandübermittlung geprüft, Vereine informiert"
+  },
+  "addressing": {
+    "auto": "Automatisch",
+    "path": "Path-Style",
+    "virtual": "Virtual-Host-Style"
+  },
+  "startForm": {
+    "title": "Migration vorbereiten",
+    "initialHint": "Erstmigration vom Dateisystem: hocX geht nach deiner Startbestätigung in die volle Wartung, bis alle Dateien kopiert und geprüft sind.",
+    "liveHint": "Live-Migration: hocX bleibt während des Kopierens nutzbar. Änderungen werden laufend nachgeführt.",
+    "target": "Ziel",
+    "needsTest": "Dieses Profil braucht zuerst einen erfolgreichen Verbindungstest.",
+    "parallelism": "Parallele Übertragungen",
+    "bandwidth": "Bandbreite (Mbit/s)",
+    "bandwidthHelp": "0 = unbegrenzt",
+    "verifyMode": "Prüfung",
+    "autoCutover": "Nach erfolgreicher Prüfung automatisch umschalten",
+    "nextStep": "Zuerst läuft eine Vorprüfung mit Zeitschätzung. Gestartet wird erst nach deiner Bestätigung.",
+    "to": "Nach",
+    "newGeneration": "{generation} · neu",
+    "flow": "Ablauf",
+    "advanced": "Erweiterte Optionen",
+    "retention": "Die abgelöste Generation bleibt erhalten und wird nie automatisch bereinigt.",
+    "test": {
+      "ok": {
+        "title": "Verbindung zum Ziel erfolgreich",
+        "text": "Schreiben, Lesen und Löschen eines Testobjekts funktioniert."
+      },
+      "missing": {
+        "title": "Zielprofil noch nicht getestet",
+        "text": "Ohne erfolgreichen Test kann die Migration nicht starten."
+      },
+      "failed": {
+        "title": "Letzter Verbindungstest fehlgeschlagen",
+        "text": "Ohne erfolgreichen Test kann die Migration nicht starten."
+      }
+    },
+    "from": "Von",
+    "confirmThirdCountry": "Das Ziel liegt in einem Drittland – Übermittlung geprüft, Vereine informiert"
+  },
+  "verifyMode": {
+    "full": "Vollständig (Inhalt neu lesen und SHA-256 prüfen)",
+    "head": "Schnell (Grösse und gespeicherter SHA-256)"
+  },
+  "purge": {
+    "title": "Generation {generation} bereinigen",
+    "warning": "Löscht die Daten dieser Generation im Profil «{profile}» endgültig. Die aktive Generation ist davon nicht betroffen.",
+    "label": "Zur Bestätigung «{expected}» eingeben"
+  },
+  "hero": {
+    "initialPending": "Erstmigration ausstehend",
+    "target": "Ziel: {name}",
+    "noTarget": "Noch kein Zielprofil",
+    "noTargetText": "Für die Erstmigration braucht es ein aktiviertes S3-Profil.",
+    "initialText": "Der bisherige Bestand liegt noch im Dateisystem. Für die Erstmigration ist das Profil «{name}» vorgesehen.",
+    "tested": {
+      "ok": "Verbindung erfolgreich getestet.",
+      "failed": "Der letzte Verbindungstest ist fehlgeschlagen.",
+      "never": "Die Verbindung wurde noch nie getestet."
+    },
+    "switched": "Umgeschaltet am {date}",
+    "switchedObjects": "{count, plural, one {# Objekt} other {# Objekte}} kopiert und geprüft",
+    "retained": "Die abgelöste Generation {generation} bleibt bis {date} erhalten und kann danach bewusst bereinigt werden.",
+    "noMigration": "Keine Migration offen. Ein anderes Profil wird nur über eine Migration aktiv.",
+    "progress": "{copied} von {total} Objekten kopiert"
+  },
+  "steps": {
+    "prepare": {
+      "title": "Vorbereiten",
+      "description": "Ziel testen, neue Generation anlegen"
+    },
+    "copy": {
+      "title": "Kopieren",
+      "description": "Alle Objekte in die neue Generation"
+    },
+    "verify": {
+      "title": "Prüfen",
+      "description": "Grösse und SHA-256 je Objekt vergleichen"
+    },
+    "switch": {
+      "title": "Umschalten",
+      "description": "Neue Generation wird aktiv"
+    }
+  },
+  "profileCard": {
+    "endpoint": "Endpoint",
+    "bucket": "Bucket / Präfix",
+    "abgabeboxBucket": "Abgabebox-Bucket",
+    "credentials": "Zugangsdaten",
+    "credentialsStored": "•••••• verschlüsselt hinterlegt",
+    "credentialsMissing": "Nicht hinterlegt",
+    "noTestNeeded": "Kein Test nötig – lokaler Pfad",
+    "lastTestOk": "Zuletzt getestet {time} · erfolgreich",
+    "lastTestFailed": "Zuletzt getestet {time} · fehlgeschlagen",
+    "testing": "Verbindung wird geprüft …",
+    "retest": "Erneut testen"
+  },
+  "location": {
+    "ch": "Schweiz",
+    "eu_eea": "EU/EWR",
+    "adequate": "Angemessenes Land",
+    "third_country": "Drittland"
+  }
+}

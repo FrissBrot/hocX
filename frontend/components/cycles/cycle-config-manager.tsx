@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { useConfirm } from "@/contexts/confirm-context";
+import { ActionIcon } from "@/components/ui/action-icons";
 import { browserApiFetch } from "@/lib/api/client";
 import { CycleConfigSummary } from "@/types/api";
 import { formatCycleName } from "@/lib/utils/cycle";
-
-const MONTH_NAMES = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
 
 type CycleConfigForm = {
   name: string;
@@ -32,9 +32,9 @@ function cyclePreview(form: CycleConfigForm): string {
   return form.name_pattern ? formatCycleName(form.name_pattern, year) : `${year}/${year + 1}`;
 }
 
-function resetLabel(day: string, month: string): string {
+function resetLabel(day: string, month: string, locale: string): string {
   const m = Number(month);
-  const monthName = MONTH_NAMES[(m - 1) % 12] ?? "";
+  const monthName = new Intl.DateTimeFormat(`${locale}-CH`, { month: "short" }).format(new Date(2000, (m - 1) % 12, 1));
   return `${day}. ${monthName}`;
 }
 
@@ -55,23 +55,25 @@ function CycleForm({
   saving: boolean;
   onCancel?: () => void;
 }) {
+  const t = useTranslations("cycles");
+  const tCommon = useTranslations("common");
   return (
     <form onSubmit={(e) => void onSubmit(e)}>
       <div className="grid">
         <label className="field-stack">
-          <span className="field-label">Name</span>
+          <span className="field-label">{t("nameLabel")}</span>
           <input
             required
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="z.B. Scharjahr"
+            placeholder={t("namePlaceholder")}
           />
-          <span className="field-help">Interne Bezeichnung dieser Zyklus-Konfiguration.</span>
+          <span className="field-help">{t("nameHelp")}</span>
         </label>
 
         <div className="two-col" style={{ gridTemplateColumns: "1fr 1fr" }}>
           <label className="field-stack">
-            <span className="field-label">Reset-Monat</span>
+            <span className="field-label">{t("resetMonthLabel")}</span>
             <input
               type="number"
               min={1}
@@ -82,7 +84,7 @@ function CycleForm({
             />
           </label>
           <label className="field-stack">
-            <span className="field-label">Reset-Tag</span>
+            <span className="field-label">{t("resetDayLabel")}</span>
             <input
               type="number"
               min={1}
@@ -94,20 +96,20 @@ function CycleForm({
           </label>
         </div>
         <p className="field-help" style={{ marginTop: "calc(-1 * var(--space-2))" }}>
-          Neuer Zyklus beginnt nach diesem Datum — z.&nbsp;B. 31.&nbsp;Juli → Start 1.&nbsp;August.
+          {t("resetHelp")}
         </p>
 
         <label className="field-stack">
-          <span className="field-label">Namens-Muster</span>
+          <span className="field-label">{t("patternLabel")}</span>
           <input
             value={form.name_pattern}
             onChange={(e) => setForm({ ...form, name_pattern: e.target.value })}
-            placeholder="z.B. Scharjahr [cy]/[cy_end]"
+            placeholder={t("patternPlaceholder")}
           />
           <span className="field-help">
-            <code style={{ fontSize: "0.82em" }}>[cy]</code> = Startjahr,{" "}
-            <code style={{ fontSize: "0.82em" }}>[cy_end]</code> = Endjahr. Ohne Muster: 2025/2026.
-            &nbsp;Vorschau: <strong>{cyclePreview(form)}</strong>
+            <code style={{ fontSize: "0.82em" }}>[cy]</code> {t("patternHelpCy")}{" "}{/* i18n-ok: literales Muster-Platzhaltersyntax, keine Prosa */}
+            <code style={{ fontSize: "0.82em" }}>[cy_end]</code> {t("patternHelpCyEnd")}{/* i18n-ok: literales Muster-Platzhaltersyntax, keine Prosa */}
+            &nbsp;{t("patternHelpPreviewLabel")} <strong>{cyclePreview(form)}</strong>
           </span>
         </label>
 
@@ -124,11 +126,11 @@ function CycleForm({
         >
           {onCancel && (
             <button type="button" className="button-ghost" onClick={onCancel}>
-              Abbrechen
+              {tCommon("cancel")}
             </button>
           )}
           <button type="submit" className="button-secondary" disabled={saving}>
-            {saving ? "Wird gespeichert…" : submitLabel}
+            {saving ? t("saving") : submitLabel}
           </button>
         </div>
       </div>
@@ -137,6 +139,9 @@ function CycleForm({
 }
 
 export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleConfigSummary[] }) {
+  const t = useTranslations("cycles");
+  const tCommon = useTranslations("common");
+  const locale = useLocale();
   const confirm = useConfirm();
   const [configs, setConfigs] = useState(initialConfigs);
   const [showCreate, setShowCreate] = useState(false);
@@ -183,7 +188,7 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
       setCreateForm(emptyForm);
       setShowCreate(false);
     } catch (err: unknown) {
-      setCreateError(err instanceof Error ? err.message : "Fehler beim Erstellen");
+      setCreateError(err instanceof Error ? err.message : t("createFailed"));
     } finally {
       setSaving(false);
     }
@@ -209,7 +214,7 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
       );
       setEditId(null);
     } catch (err: unknown) {
-      setEditError(err instanceof Error ? err.message : "Fehler beim Speichern");
+      setEditError(err instanceof Error ? err.message : t("saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -218,9 +223,9 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
   async function handleDelete(id: string) {
     if (
       !(await confirm({
-        message: "Zyklus-Konfiguration löschen? Nur möglich solange kein Template zugeordnet ist.",
+        message: t("deleteConfirm"),
         tone: "danger",
-        confirmLabel: "Löschen"
+        confirmLabel: tCommon("delete")
       }))
     )
       return;
@@ -230,7 +235,7 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
       setConfigs((prev) => prev.filter((c) => c.id !== id));
       if (editId === id) setEditId(null);
     } catch (err: unknown) {
-      setDeleteError(err instanceof Error ? err.message : "Fehler beim Löschen");
+      setDeleteError(err instanceof Error ? err.message : t("deleteFailedGeneric"));
     }
   }
 
@@ -238,19 +243,19 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
     <div className="grid">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Zyklen</h1>
-          <p className="muted">Zyklus-Definitionen verwalten und Protokoll-Templates zuordnen.</p>
+          <h1 className="page-title">{t("pageTitle")}</h1>
+          <p className="muted">{t("pageDescription")}</p>
         </div>
         {!showCreate && editId === null ? (
           <button
             type="button"
-            className="button-secondary"
+            className="button-primary"
             onClick={() => {
               setShowCreate(true);
               setCreateError(null);
             }}
           >
-            + Neuer Zyklus
+            {t("newCycle")}
           </button>
         ) : null}
       </div>
@@ -258,12 +263,12 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
       {/* Create form */}
       {showCreate && (
         <div className="card">
-          <div className="eyebrow">Neuer Zyklus</div>
+          <div className="eyebrow">{t("newCycleEyebrow")}</div>
           <CycleForm
             form={createForm}
             setForm={setCreateForm}
             onSubmit={handleCreate}
-            submitLabel="Zyklus erstellen"
+            submitLabel={t("createCycle")}
             error={createError}
             saving={saving}
             onCancel={() => {
@@ -288,7 +293,7 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
             textAlign: "center",
           }}
         >
-          Noch keine Zyklen konfiguriert.
+          {t("noCycles")}
         </div>
       ) : (
         <div className="responsibility-list">
@@ -296,12 +301,12 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
             <div key={cfg.id} className="responsibility-card">
               {editId === cfg.id ? (
                 <>
-                  <div className="eyebrow">Zyklus bearbeiten</div>
+                  <div className="eyebrow">{t("editCycleEyebrow")}</div>
                   <CycleForm
                     form={editForm}
                     setForm={setEditForm}
                     onSubmit={handleSave}
-                    submitLabel="Speichern"
+                    submitLabel={tCommon("save")}
                     error={editError}
                     saving={saving}
                     onCancel={cancelEdit}
@@ -321,10 +326,10 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
                         color: "var(--muted)",
                       }}
                     >
-                      <span>Reset {resetLabel(String(cfg.reset_day), String(cfg.reset_month))}</span>
+                      <span>{t("resetLabel", { date: resetLabel(String(cfg.reset_day), String(cfg.reset_month), locale) })}</span>
                       <span style={{ opacity: 0.4 }}>·</span>
                       <span>
-                        Aktuell:{" "}
+                        {t("currentLabel")}{" "}
                         <strong style={{ color: "var(--text)", fontWeight: 600 }}>
                           {/* Was hardcoded getFullYear() - 1 regardless of reset_month/day
                               (audit finding, 2026-08-25) - showed the wrong, previous cycle
@@ -354,26 +359,15 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
                   </div>
                   <div className="responsibility-card-actions">
                     <button className="button-ghost" onClick={() => openEdit(cfg)}>
-                      Bearbeiten
+                      {t("editButton")}
                     </button>
                     <button
                       className="button-ghost button-icon button-icon-danger"
-                      title="Löschen"
-                      aria-label="Löschen"
+                      title={tCommon("delete")}
+                      aria-label={tCommon("delete")}
                       onClick={() => void handleDelete(cfg.id)}
                     >
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 9a1 1 0 001 1h6a1 1 0 001-1l1-9" />
-                      </svg>
+                      <ActionIcon name="delete" />
                     </button>
                   </div>
                 </div>

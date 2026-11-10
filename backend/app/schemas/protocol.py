@@ -6,7 +6,7 @@ from typing import ClassVar, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.models.entities import AppUser, DocumentTemplate, Event, Template, Tenant
+from app.models.entities import AppUser, Event, Template, Tenant
 from app.schemas.base import PublicIdModel
 from app.schemas.event import EventRead
 
@@ -32,7 +32,6 @@ class ProtocolCreateFromTemplate(BaseModel):
     # UUIDs as received from the client - the router resolves these to internal ids
     # (see app.services.public_id_service) before calling into ProtocolService.
     template_id: uuid.UUID
-    document_template_id: uuid.UUID | None = None
     protocol_number: str | None = None
     protocol_date: date
     title: str | None = None
@@ -44,17 +43,28 @@ class ProtocolUpdate(BaseModel):
     protocol_date: date | None = None
     event_id: uuid.UUID | None = None
     status: ProtocolStatus | None = None
-    document_template_id: uuid.UUID | None = None
     session_notes: str | None = None
     expected_session_notes: str | None = None
     track_changes_enabled: bool | None = None
+
+
+class ProtocolListCycle(BaseModel):
+    """Zyklus, in den ein Protokoll fuer die Gruppierung der Protokoll-Liste faellt - bestimmt
+    ueber die CycleConfig seiner Vorlage. Ohne CycleConfig: Kalenderjahr (name = None, das
+    Frontend beschriftet es dann selbst)."""
+
+    key: str
+    name: str | None = None
+    cycle_year: int
+    start_date: date
+    end_date: date
+    is_current: bool = False
 
 
 class ProtocolRead(PublicIdModel):
     _fk_models: ClassVar[dict[str, type]] = {
         "tenant_id": Tenant,
         "template_id": Template,
-        "document_template_id": DocumentTemplate,
         "event_id": Event,
         "created_by": AppUser,
     }
@@ -63,8 +73,6 @@ class ProtocolRead(PublicIdModel):
     tenant_id: uuid.UUID
     template_id: uuid.UUID
     template_version: int
-    document_template_id: uuid.UUID | None = None
-    document_template_version: int | None = None
     protocol_number: str
     title: str | None = None
     protocol_date: date
@@ -83,6 +91,8 @@ class ProtocolRead(PublicIdModel):
     # lets the UI show an "Importiert" badge + a link back to the source .docx/.pdf.
     import_source_filename: str | None = None
     import_source_url: str | None = None
+    # Nur in der Liste (GET /api/protocols) gesetzt, siehe _build_protocol_reads.
+    cycle: ProtocolListCycle | None = None
 
 
 class NextSessionAttendanceEntry(BaseModel):
@@ -109,8 +119,27 @@ class ProtocolCycleEventsRead(BaseModel):
     cycle: ProtocolCycleInfo | None = None
 
 
+class ProtocolTemplateSyncRead(BaseModel):
+    """Ergebnis von POST /protocols/{id}/sync-template (bei dry_run nur die Vorschau)."""
+
+    applied: bool
+    added_elements: list[str] = Field(default_factory=list)
+    updated_elements: list[str] = Field(default_factory=list)
+    removed_elements: list[str] = Field(default_factory=list)
+    # Nicht mehr in der Vorlage, enthalten aber Daten - bleiben am Ende des Protokolls.
+    kept_elements: list[str] = Field(default_factory=list)
+    added_blocks: int = 0
+    removed_blocks: int = 0
+    kept_blocks: int = 0
+
+
 class AttendanceExcusePayload(BaseModel):
     excused: bool = True
+
+
+# Mirrors frontend/components/protocol/protocol-editor-shared.tsx's ATTENDANCE_OPTIONS.
+class AttendanceStatusUpdate(BaseModel):
+    status: Literal["present", "late", "excused", "absent"]
 
 
 class ProtocolElementBlockRead(BaseModel):
@@ -138,9 +167,12 @@ class ProtocolElementBlockRead(BaseModel):
     is_required_snapshot: bool
     is_visible_snapshot: bool
     export_visible_snapshot: bool
-    latex_template_snapshot: str | None = None
     configuration_snapshot_json: dict
+    # Optimistische Sperre der Konfiguration (Migration 0149): beim PATCH als expected_config_version mitsenden.
+    config_version: int = 0
     public_reference_ids: dict[str, dict[str, uuid.UUID]] = Field(default_factory=dict)
+    # Gespeicherter Personenwert (UUID/Zahl) -> Name, siehe snapshot_reference_ids.participant_display_names
+    participant_names: dict[str, str] = Field(default_factory=dict)
     text_content: str | None = None
     display_compiled_text: str | None = None
     display_snapshot_json: dict | None = None
@@ -182,6 +214,10 @@ class ProtocolElementBlockUpdate(BaseModel):
     is_visible_snapshot: bool | None = None
     export_visible_snapshot: bool | None = None
     configuration_snapshot_json: dict | None = None
+    # Stand, von dem der Client ausging (ProtocolElementBlockRead.config_version). Weicht er ab,
+    # antwortet die API 409 config_conflict mit dem aktuellen Stand. Fehlt er (ältere Clients),
+    # wird wie bisher ohne Prüfung geschrieben.
+    expected_config_version: int | None = None
 
 
 class ProtocolElementBlockFromEventCreate(BaseModel):
@@ -218,12 +254,15 @@ class ProtocolTodoCreate(BaseModel):
     due_marker: str | None = None
     reference_link: str | None = None
     tags: list[str] = []
+    # Veraltet und ignoriert (Audit MAIN-SEC-010): der Ersteller kommt serverseitig vom
+    # angemeldeten Benutzer. Feld bleibt, damit ältere Clients ({"created_by": null}) gültig bleiben.
     created_by: uuid.UUID | None = None
 
     _validate_reference_link = field_validator("reference_link")(_validate_reference_link)
 
 
 class ProtocolTodoUpdate(BaseModel):
+    assigned_participant_ids: list[uuid.UUID] | None = None
     task: str | None = None
     assigned_user_id: uuid.UUID | None = None
     assigned_participant_id: uuid.UUID | None = None
@@ -249,6 +288,9 @@ class ProtocolTodoRead(BaseModel):
     assigned_user_id: uuid.UUID | None = None
     assigned_participant_id: uuid.UUID | None = None
     assigned_participant_name: str | None = None
+    # Alle Verantwortlichen (z. B. mehrere Personen eines Ämtlis). Leer bei Todos mit nur
+    # assigned_participant_id.
+    assigned_participant_ids: list[uuid.UUID] = []
     todo_status_id: int
     todo_status_code: str | None = None
     due_date: date | None = None
@@ -268,6 +310,11 @@ class ProtocolTodoRead(BaseModel):
     tracked_change: str | None = None
     tracked_change_before_json: dict | None = None
     pending_delete: bool = False
+    # Herkunft aus einem Aufgabenpaket (siehe task_package_service)
+    task_package_id: uuid.UUID | None = None
+    task_package_name: str | None = None
+    cycle_year: int | None = None
+    overridden_fields: list[str] = []
 
     _validate_reference_link_read = field_validator("reference_link")(_validate_reference_link)
 
@@ -281,6 +328,27 @@ class TodoListItem(ProtocolTodoRead):
     block_title: str | None = None
     submission_assignment_id: uuid.UUID | None = None
     element_ref: str | None = None
+
+
+class TodoDetailFile(BaseModel):
+    id: uuid.UUID
+    original_name: str
+    mime_type: str | None = None
+    file_size_bytes: int | None = None
+    content_url: str
+
+
+class TodoDetails(BaseModel):
+    """Notizen und verknüpfte Dateien eines Todos - nur für das Todo-Popup, darum bewusst nicht
+    Teil von ProtocolTodoRead (Übersicht, Momentaufnahmen, Exporte)."""
+
+    notes: str = ""
+    files: list[TodoDetailFile] = []
+
+
+class TodoDetailsUpdate(BaseModel):
+    notes: str | None = Field(default=None, max_length=100_000)
+    file_ids: list[uuid.UUID] | None = Field(default=None, max_length=200)
 
 
 class ProtocolImageRead(BaseModel):

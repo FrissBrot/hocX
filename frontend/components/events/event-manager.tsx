@@ -1,144 +1,97 @@
 "use client";
 
-import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { DocumentExportButton } from "@/components/documents/export-dialog";
+import { ChangeEvent, Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import dynamic from "next/dynamic";
+import { useLocale, useTranslations } from "next-intl";
 
+import { CalendarLinkHint } from "@/components/connections/calendar-link-hint";
+import { EventIcon } from "@/components/events/event-icons";
+import { effectiveEndDate, fallbackTagColor, isoToUtcDate } from "@/components/events/event-utils";
+import { ActionMenu } from "@/components/ui/action-menu";
 import { Badge } from "@/components/ui/badge";
-import { DataTable, DataToolbar } from "@/components/ui/data-table";
-import { DateInput } from "@/components/ui/date-input";
+import { DataTable } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterTabs } from "@/components/ui/filter-tabs";
-import { Modal, ModalSaveForm } from "@/components/ui/modal";
+import { Modal } from "@/components/ui/modal";
 import { computePopoverPosition, Popover, usePopoverDismiss } from "@/components/ui/popover";
 import { SearchInput } from "@/components/ui/search-input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { EventDetailForm } from "@/components/protocol/planning/event-detail-form";
-import { browserApiFetch } from "@/lib/api/client";
+import { browserApiFetch, LONG_RUNNING_TIMEOUT_MS } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
-import { useTableSort } from "@/lib/hooks/use-table-sort";
-import { useTagConfig } from "@/lib/hooks/use-tag-config";
-import { getCycleYear } from "@/lib/utils/cycle";
-import { formatDate, formatDateRange } from "@/lib/utils/format";
+import { sortTagsByImportance, useTagConfig } from "@/lib/hooks/use-tag-config";
+import { formatCycleName, getCycleYear } from "@/lib/utils/cycle";
+import { formatDate, formatDateRange, toIntlLocale } from "@/lib/utils/format";
 import {
-  CycleAssignment,
   CycleConfigSummary,
-  CycleInfo,
-  DocumentTemplate,
   EventImportPreview,
   EventSummary,
   ParticipantSummary,
-  TemplateSummary,
 } from "@/types/api";
+
+// Erst beim Oeffnen laden.
+const EventCreateModal = dynamic(() => import("@/components/events/event-create-modal").then((m) => m.EventCreateModal), {
+  ssr: false,
+});
+const EventCalendarModal = dynamic(
+  () => import("@/components/events/event-calendar-modal").then((m) => m.EventCalendarModal),
+  { ssr: false }
+);
 
 const PAGE_SIZE = 100;
 
 type CsvTargetField = "event_date" | "event_end_date" | "tag" | "title" | "description" | "participant_count";
+type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
 
-const CSV_TARGET_FIELDS: { field: CsvTargetField; label: string; required?: boolean }[] = [
-  { field: "event_date", label: "Startdatum", required: true },
-  { field: "event_end_date", label: "Enddatum" },
-  { field: "tag", label: "Tag" },
-  { field: "title", label: "Titel", required: true },
-  { field: "description", label: "Beschreibung" },
-  { field: "participant_count", label: "Teilnehmerzahl" },
-];
+function csvTargetFields(t: TFunc): { field: CsvTargetField; label: string; required?: boolean }[] {
+  return [
+    { field: "event_date", label: t("form.startDate"), required: true },
+    { field: "event_end_date", label: t("form.endDate") },
+    { field: "tag", label: t("form.tag") },
+    { field: "title", label: t("form.title"), required: true },
+    { field: "description", label: t("columns.description") },
+    { field: "participant_count", label: t("columns.participantCount") },
+  ];
+}
 
-type OptionalColumnKey =
-  | "is_cancelled"
-  | "participant_count"
-  | "location"
-  | "organizer_ids"
-  | "leadership_ids"
-  | "participant_ids"
-  | "spezial1_ids"
-  | "spezial2_ids"
-  | "spezial3_ids"
-  | "spezial_text1"
-  | "spezial_text2"
-  | "spezial_text3";
+// Felder, die in der Terminzeile zusätzlich angezeigt werden können (Menü „Ansicht").
+type RowFieldKey = "description" | "location" | "participant_count" | "organizer_ids";
 
-const OPTIONAL_COLUMNS: { key: OptionalColumnKey; label: string }[] = [
-  { key: "is_cancelled", label: "Abgesagt" },
-  { key: "participant_count", label: "Teilnehmerzahl" },
-  { key: "location", label: "Standort" },
-  { key: "organizer_ids", label: "Organisatoren" },
-  { key: "leadership_ids", label: "Leitungsteam" },
-  { key: "participant_ids", label: "Teilnehmer (Liste)" },
-  { key: "spezial1_ids", label: "Spezial 1" },
-  { key: "spezial2_ids", label: "Spezial 2" },
-  { key: "spezial3_ids", label: "Spezial 3" },
-  { key: "spezial_text1", label: "Spezial Text 1" },
-  { key: "spezial_text2", label: "Spezial Text 2" },
-  { key: "spezial_text3", label: "Spezial Text 3" },
-];
+const DEFAULT_ROW_FIELDS: RowFieldKey[] = ["description", "location", "participant_count"];
+const ROW_FIELDS_STORAGE_KEY = "hocx.events.rowFields";
+
+function rowFieldOptions(t: TFunc): { key: RowFieldKey; label: string }[] {
+  return [
+    { key: "description", label: t("columns.description") },
+    { key: "location", label: t("columns.location") },
+    { key: "participant_count", label: t("columns.participantCount") },
+    { key: "organizer_ids", label: t("columns.organizers") },
+  ];
+}
+
+type TimeFilter = "upcoming" | "all" | "past";
+
+// Sidebar-Eintrag für Termine ohne Tag.
+const NO_TAG_FILTER = "__no_tag__";
+
+// Zyklus-Filter: aktuelle Periode aller Zyklen oder nur eines bestimmten (Zyklus-ID).
+const ALL_CYCLES_FILTER = "all";
 
 type Props = {
   initialEvents: EventSummary[];
-  documentTemplates?: DocumentTemplate[];
   availableParticipants?: ParticipantSummary[];
+  tenantName?: string | null;
 };
 
-type ParticipantPickerField = "organizer_ids" | "leadership_ids" | "participant_ids" | "spezial1_ids" | "spezial2_ids" | "spezial3_ids";
-
-const PARTICIPANT_ROLE_FIELDS: { field: ParticipantPickerField; label: string }[] = [
-  { field: "organizer_ids", label: "Organisatoren" },
-  { field: "leadership_ids", label: "Leitungsteam" },
-  { field: "participant_ids", label: "Teilnehmer" },
-  { field: "spezial1_ids", label: "Spezial 1" },
-  { field: "spezial2_ids", label: "Spezial 2" },
-  { field: "spezial3_ids", label: "Spezial 3" },
-];
-
-type FlatCycle = CycleInfo & { cycle_config_id: string; config_name: string };
-
-type EventFormState = {
-  id?: string;
-  event_date: string;
-  event_end_date: string;
-  tag: string;
-  title: string;
-  description: string;
-  participant_count: string;
-  is_cancelled: boolean;
-  cycle_assignments: CycleAssignment[];
-  organizer_ids: string[];
-  leadership_ids: string[];
-  participant_ids: string[];
-  spezial1_ids: string[];
-  spezial2_ids: string[];
-  spezial3_ids: string[];
-  location: string;
-  spezial_text1: string;
-  spezial_text2: string;
-  spezial_text3: string;
-};
-
-function emptyForm(): EventFormState {
-  return {
-    event_date: new Date().toISOString().slice(0, 10),
-    event_end_date: "",
-    tag: "",
-    title: "",
-    description: "",
-    participant_count: "0",
-    is_cancelled: false,
-    cycle_assignments: [],
-    organizer_ids: [],
-    leadership_ids: [],
-    participant_ids: [],
-    spezial1_ids: [],
-    spezial2_ids: [],
-    spezial3_ids: [],
-    location: "",
-    spezial_text1: "",
-    spezial_text2: "",
-    spezial_text3: "",
-  };
-}
-
-export function EventManager({ initialEvents, documentTemplates = [], availableParticipants = [] }: Props) {
+export function EventManager({ initialEvents, availableParticipants = [], tenantName }: Props) {
+  const t = useTranslations("events");
+  const locale = useLocale();
+  const CSV_TARGET_FIELDS = useMemo(() => csvTargetFields(t), [t]);
+  const ROW_FIELD_OPTIONS = useMemo(() => rowFieldOptions(t), [t]);
   const showToast = useToast();
   const confirm = useConfirm();
   const [events, setEvents] = useState(initialEvents);
@@ -146,22 +99,17 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [search, setSearch] = useState("");
   const [tagFilter, setTagFilter] = useState("all");
-  const [showPast, setShowPast] = useState(true);
-  const { sortKey, sortDirection, toggleSort, sortIndicator } = useTableSort<"event_date" | "title" | "tag" | "description" | "participant_count">("event_date");
-  const [visibleColumns, setVisibleColumns] = useState<Set<OptionalColumnKey>>(new Set());
-  const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState<EventFormState>(emptyForm);
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>("all");
+  const [rowFields, setRowFields] = useState<Set<RowFieldKey>>(() => new Set(DEFAULT_ROW_FIELDS));
+  const [createDate, setCreateDate] = useState<string | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [todayIso, setTodayIso] = useState("0000-01-01");
   const [detailEvent, setDetailEvent] = useState<EventSummary | null>(null);
-  const { tagConfig, updateTagColor, renameTag } = useTagConfig();
+  const { tagConfig, updateTagColor, toggleTagImportant, renameTag } = useTagConfig();
   const [cycleConfigs, setCycleConfigs] = useState<CycleConfigSummary[]>([]);
   const [showAllPeriods, setShowAllPeriods] = useState(false);
-  const [availableCycles, setAvailableCycles] = useState<FlatCycle[]>([]);
-  const [cyclesLoading, setCyclesLoading] = useState(false);
-  const cyclesLoadedRef = useRef(false);
+  const [cycleFilter, setCycleFilter] = useState(ALL_CYCLES_FILTER);
 
-  const [pickerField, setPickerField] = useState<ParticipantPickerField | null>(null);
-  const [pickerSearch, setPickerSearch] = useState("");
 
   const [eventContextMenu, setEventContextMenu] = useState<{ x: number; y: number; event: EventSummary } | null>(null);
 
@@ -176,96 +124,23 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
   const [importCommitting, setImportCommitting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
 
-  const landscapeTemplates = documentTemplates.filter(
-    (t) => t.is_active && (t.configuration_json as { options?: { orientation?: string } })?.options?.orientation === "landscape"
-  );
-
-  // Export modal state
-  const [exportModalOpen, setExportModalOpen] = useState(false);
-  const [exportTemplateId, setExportTemplateId] = useState<string | "">(landscapeTemplates[0]?.id ?? "");
-  const [exportBusy, setExportBusy] = useState(false);
-  const [exportUrl, setExportUrl] = useState<string | null>(null);
-  const [templateDropdownOpen, setTemplateDropdownOpen] = useState(false);
-  const templateDropdownRef = useRef<HTMLDivElement>(null);
-
-  usePopoverDismiss(templateDropdownOpen, () => setTemplateDropdownOpen(false), [templateDropdownRef]);
-  const [exportTagFilters, setExportTagFilters] = useState<string[]>([]);
-  const [exportTagSearch, setExportTagSearch] = useState("");
-  const [exportDateMode, setExportDateMode] = useState<"all" | "next-session" | "until-event">("all");
-  const [exportUntilEventId, setExportUntilEventId] = useState<string | "">("");
-
-  const knownExportTags = useMemo(() => {
-    const set = new Set<string>();
-    events.forEach((e) => { if (e.tag) set.add(e.tag); });
-    return Array.from(set).sort();
-  }, [events]);
-
-  const tagSuggestions = useMemo(() => {
-    if (!exportTagSearch.trim()) return [];
-    const q = exportTagSearch.toLowerCase();
-    return knownExportTags.filter((t) => t.toLowerCase().includes(q) && !exportTagFilters.includes(t));
-  }, [exportTagSearch, knownExportTags, exportTagFilters]);
-
-  const nextSessionEvent = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    return events.find((e) => e.event_date >= today && e.tag?.toLowerCase().includes("sitzung")) ?? null;
-  }, [events]);
-
-  const sortedEvents = useMemo(() => [...events].sort((a, b) => a.event_date.localeCompare(b.event_date)), [events]);
-
-  function toggleExportTag(tag: string) {
-    setExportTagFilters((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-    );
-    setExportUrl(null);
-  }
-
-  function getUntilDate(): string | null {
-    if (exportDateMode === "all") return null;
-    if (exportDateMode === "next-session") return nextSessionEvent?.event_date ?? null;
-    if (exportDateMode === "until-event" && exportUntilEventId) {
-      const ev = events.find((e) => e.id === exportUntilEventId);
-      return ev?.event_date ?? null;
-    }
-    return null;
-  }
-
-  function triggerDownload(url: string) {
-    const a = document.createElement("a");
-    a.href = `${url}?download=1`;
-    a.target = "_blank";
-    a.rel = "noreferrer";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  }
-
-  async function handlePdfClick() {
-    if (exportBusy) return;
-    if (exportUrl) { triggerDownload(exportUrl); return; }
-    if (!exportTemplateId) return;
-    setExportBusy(true);
-    try {
-      const result = await browserApiFetch<{ content_url?: string | null }>("/api/exports/events", {
-        method: "POST",
-        body: JSON.stringify({
-          template_id: exportTemplateId,
-          tag_filters: exportTagFilters,
-          until_date: getUntilDate(),
-        }),
-      });
-      const url = result.content_url ?? null;
-      setExportUrl(url);
-      if (url) triggerDownload(url);
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "PDF-Export fehlgeschlagen", "error");
-    } finally {
-      setExportBusy(false);
-    }
-  }
-
   useEffect(() => {
     setTodayIso(new Date().toISOString().slice(0, 10));
+  }, []);
+
+  // Zeilen-Ansicht ist eine reine Komfort-Einstellung pro Browser.
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(ROW_FIELDS_STORAGE_KEY);
+      if (!stored) return;
+      const parsed: unknown = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        const allowed = new Set<string>(["description", "location", "participant_count", "organizer_ids"]);
+        setRowFields(new Set(parsed.filter((key): key is RowFieldKey => typeof key === "string" && allowed.has(key))));
+      }
+    } catch {
+      // Ohne Speicher gilt die Standardansicht.
+    }
   }, []);
 
   useEffect(() => {
@@ -290,28 +165,6 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     return () => document.removeEventListener("scroll", onScroll, true);
   }, [eventContextMenu]);
 
-  async function ensureCyclesLoaded() {
-    if (cyclesLoadedRef.current) return;
-    cyclesLoadedRef.current = true;
-    setCyclesLoading(true);
-    try {
-      const configs = cycleConfigs.length > 0 ? cycleConfigs : await browserApiFetch<CycleConfigSummary[]>("/api/cycle-configs");
-      const cycleGroups = await Promise.all(
-        (configs ?? []).map((cfg) =>
-          browserApiFetch<CycleInfo[]>(`/api/cycle-configs/${cfg.id}/cycles`).then((cycles) =>
-            (cycles ?? []).map((c) => ({ ...c, cycle_config_id: cfg.id, config_name: cfg.name }))
-          ).catch(() => [] as FlatCycle[])
-        )
-      );
-      setAvailableCycles(cycleGroups.flat());
-    } catch (error) {
-      cyclesLoadedRef.current = false;
-      showToast(error instanceof Error ? error.message : "Zyklen konnten nicht geladen werden", "error");
-    } finally {
-      setCyclesLoading(false);
-    }
-  }
-
   const knownTags = useMemo(
     () =>
       Array.from(
@@ -323,59 +176,194 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
       ).sort((left, right) => left.localeCompare(right)),
     [events]
   );
+  // Zyklen, deren aktuelle Periode gilt: standardmässig alle, im Filter wählbar ein einzelner.
+  const activeCycles = useMemo(() => {
+    const selected = cycleConfigs.filter((config) => cycleFilter === ALL_CYCLES_FILTER || config.id === cycleFilter);
+    return (selected.length > 0 ? selected : cycleConfigs).map((config) => ({
+      config,
+      currentYear: getCycleYear(todayIso, config.reset_month, config.reset_day),
+    }));
+  }, [cycleConfigs, cycleFilter, todayIso]);
+
+  // Ein Termin gehört zur aktuellen Periode, wenn er zeitlich in sie fällt (auch mehrtägig
+  // überlappend) oder ausdrücklich mit ihr verknüpft ist.
   function isInCurrentPeriod(event: EventSummary): boolean {
-    if (!event.cycle_assignments || event.cycle_assignments.length === 0 || cycleConfigs.length === 0) {
-      return true;
-    }
-    return event.cycle_assignments.some((assignment) => {
-      const config = cycleConfigs.find((c) => c.id === assignment.cycle_config_id);
-      if (!config) return true;
-      return assignment.cycle_year === getCycleYear(todayIso, config.reset_month, config.reset_day);
+    if (activeCycles.length === 0) return true;
+    return activeCycles.some(({ config, currentYear }) => {
+      const startYear = getCycleYear(event.event_date, config.reset_month, config.reset_day);
+      const endYear = getCycleYear(effectiveEndDate(event), config.reset_month, config.reset_day);
+      if (startYear <= currentYear && currentYear <= endYear) return true;
+      return (event.cycle_assignments ?? []).some(
+        (assignment) => assignment.cycle_config_id === config.id && assignment.cycle_year === currentYear
+      );
     });
   }
 
+  // Basis für Sidebar-Zähler und Liste: nur der Zyklus-Filter, noch ohne Tag/Zeit/Suche.
+  const periodEvents = useMemo(
+    () => (showAllPeriods ? events : events.filter((event) => isInCurrentPeriod(event))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeCycles, events, showAllPeriods]
+  );
+
+  const tagCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    let untagged = 0;
+    periodEvents.forEach((event) => {
+      const tag = (event.tag ?? "").trim();
+      if (tag) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+      else untagged += 1;
+    });
+    const tags = sortTagsByImportance(Array.from(counts.entries()), tagConfig, ([tag]) => tag);
+    return { tags, untagged };
+  }, [periodEvents, tagConfig]);
+
+  // Verschwindet der gewählte Tag durch einen Zykluswechsel aus der Seitenleiste, wieder alle zeigen.
+  useEffect(() => {
+    if (tagFilter === "all") return;
+    const stillListed =
+      tagFilter === NO_TAG_FILTER ? tagCounts.untagged > 0 : tagCounts.tags.some(([tag]) => tag === tagFilter);
+    if (!stillListed) setTagFilter("all");
+  }, [tagCounts, tagFilter]);
+
+  const upcomingCount = useMemo(() => events.filter((event) => effectiveEndDate(event) >= todayIso).length, [events, todayIso]);
+
   const filteredEvents = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return [...events]
+    return periodEvents
       .filter((event) => {
-        if (!showPast) {
-          const effectiveEndDate = event.event_end_date || event.event_date;
-          if (effectiveEndDate < todayIso) {
-            return false;
-          }
-        }
-        if (!showAllPeriods && !isInCurrentPeriod(event)) {
-          return false;
-        }
-        if (tagFilter !== "all" && (event.tag ?? "") !== tagFilter) {
+        const isPast = effectiveEndDate(event) < todayIso;
+        if (timeFilter === "upcoming" && isPast) return false;
+        if (timeFilter === "past" && !isPast) return false;
+        const tag = (event.tag ?? "").trim();
+        if (tagFilter === NO_TAG_FILTER ? tag !== "" : tagFilter !== "all" && tag !== tagFilter) {
           return false;
         }
         if (!query) {
           return true;
         }
-        const haystack = `${event.title} ${event.tag ?? ""} ${event.description ?? ""}`.toLowerCase();
+        const haystack = `${event.title} ${event.tag ?? ""} ${event.description ?? ""} ${event.location ?? ""}`.toLowerCase();
         return haystack.includes(query);
       })
-      .sort((left, right) => {
-        const direction = sortDirection === "asc" ? 1 : -1;
-        if (sortKey === "event_date") {
-          const leftValue = left.event_date;
-          const rightValue = right.event_date;
-          return leftValue.localeCompare(rightValue) * direction;
-        }
-        if (sortKey === "participant_count") {
-          return ((left.participant_count ?? 0) - (right.participant_count ?? 0)) * direction;
-        }
-        const leftValue = String(left[sortKey] ?? "").toLowerCase();
-        const rightValue = String(right[sortKey] ?? "").toLowerCase();
-        return leftValue.localeCompare(rightValue) * direction;
-      });
-  }, [cycleConfigs, events, search, showAllPeriods, showPast, sortDirection, sortKey, tagFilter, todayIso]);
+      .sort((left, right) => left.event_date.localeCompare(right.event_date) || left.title.localeCompare(right.title));
+  }, [periodEvents, search, tagFilter, timeFilter, todayIso]);
 
-  function openCreate() {
-    setForm(emptyForm());
-    void ensureCyclesLoaded();
-    setModalOpen(true);
+  const monthFormatter = useMemo(
+    () => new Intl.DateTimeFormat(toIntlLocale(locale), { month: "long", year: "numeric", timeZone: "UTC" }),
+    [locale]
+  );
+  const weekdayFormatter = useMemo(
+    () => new Intl.DateTimeFormat(toIntlLocale(locale), { weekday: "short", timeZone: "UTC" }),
+    [locale]
+  );
+  const todayFormatter = useMemo(
+    () => new Intl.DateTimeFormat(toIntlLocale(locale), { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }),
+    [locale]
+  );
+
+  const monthGroups = useMemo(() => {
+    const groups: { key: string; label: string; items: EventSummary[] }[] = [];
+    filteredEvents.forEach((event) => {
+      const key = event.event_date.slice(0, 7);
+      const last = groups[groups.length - 1];
+      if (last && last.key === key) {
+        last.items.push(event);
+      } else {
+        groups.push({ key, label: monthFormatter.format(isoToUtcDate(event.event_date)), items: [event] });
+      }
+    });
+    return groups;
+  }, [filteredEvents, monthFormatter]);
+
+  // Die „Heute"-Linie trennt vergangene und kommende Termine, nur wenn beide sichtbar sind.
+  const todayMarkerEventId = useMemo(() => {
+    if (timeFilter !== "all") return null;
+    const index = filteredEvents.findIndex((event) => effectiveEndDate(event) >= todayIso);
+    return index > 0 ? filteredEvents[index].id : null;
+  }, [filteredEvents, timeFilter, todayIso]);
+
+  // Auf dem Desktop scrollt nur die Terminliste: sie reicht vom eigenen oberen Rand bis zum
+  // Fensterende. Der Abstand nach oben hängt von Kopfzeile/Toolbar ab und wird deshalb gemessen.
+  const eventListRef = useRef<HTMLDivElement | null>(null);
+  const [eventListTop, setEventListTop] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const list = eventListRef.current;
+    if (!list) return;
+    function measure() {
+      if (!list) return;
+      setEventListTop(Math.round(list.getBoundingClientRect().top + window.scrollY));
+    }
+    measure();
+    const observer = new ResizeObserver(measure);
+    if (list.parentElement) observer.observe(list.parentElement);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [events.length === 0 && !hasMore]);
+
+  // Beim ersten Anzeigen und nach jedem Filterwechsel (Tag, Zeit, Zyklus) so scrollen, dass die
+  // „Heute"-Linie mit etwas Abstand oben steht: darunter die kommenden, darüber die vergangenen
+  // Termine. Den Abstand liefert `scroll-margin-top` der Linie (globals.css).
+  const todayMarkerRef = useRef<HTMLDivElement | null>(null);
+  const scrolledFilterKeyRef = useRef<string | null>(null);
+  // Datum und Zyklen kommen erst nach dem ersten Rendern an und zählen deshalb ebenfalls als Wechsel.
+  const scrollFilterKey = `${todayIso}|${cycleConfigs.length}|${tagFilter}|${timeFilter}|${showAllPeriods}|${cycleFilter}`;
+  useLayoutEffect(() => {
+    const list = eventListRef.current;
+    // Erst nach dem Messen, sonst hat die Liste noch keine Höhenbegrenzung.
+    if (scrolledFilterKeyRef.current === scrollFilterKey || eventListTop === null || !list) return;
+    if (filteredEvents.length === 0) return;
+    scrolledFilterKeyRef.current = scrollFilterKey;
+    const marker = todayMarkerEventId ? todayMarkerRef.current : null;
+    const listScrolls = list.scrollHeight > list.clientHeight;
+    if (marker) {
+      if (listScrolls) {
+        // Desktop: nur die Liste scrollt, nicht die Seite.
+        const margin = parseFloat(window.getComputedStyle(marker).scrollMarginTop) || 0;
+        const offset = marker.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+        list.scrollTop = Math.max(0, offset - margin);
+      } else {
+        marker.scrollIntoView({ block: "start" });
+      }
+    } else if (listScrolls) {
+      // Ohne Linie: nur Vergangenes → ans Ende (neueste zuerst sichtbar), sonst an den Anfang.
+      const allPast = timeFilter !== "upcoming" && filteredEvents.every((event) => effectiveEndDate(event) < todayIso);
+      list.scrollTop = allPast ? list.scrollHeight : 0;
+    }
+  }, [scrollFilterKey, todayMarkerEventId, eventListTop, filteredEvents, timeFilter, todayIso]);
+
+  function renderTodayMarker() {
+    return (
+      <div ref={todayMarkerRef} className="event-today-marker">
+        <span>{t("list.today", { date: todayFormatter.format(isoToUtcDate(todayIso)) })}</span>
+      </div>
+    );
+  }
+
+  function tagColor(tag: string): string {
+    return tagConfig[tag]?.color ?? fallbackTagColor(tag);
+  }
+
+  const hasActiveFilter = tagFilter !== "all" || search.trim().length > 0;
+
+  function resetFilters() {
+    setTagFilter("all");
+    setSearch("");
+  }
+
+  function filterSummary(): string {
+    const count = filteredEvents.length;
+    const query = search.trim();
+    const tag = tagFilter === NO_TAG_FILTER ? t("noTag") : tagFilter;
+    if (tagFilter !== "all" && query) return t("list.summaryTagQuery", { count, tag, query });
+    if (tagFilter !== "all") return t("list.summaryTag", { count, tag });
+    return t("list.summaryQuery", { count, query });
+  }
+
+  function openCreate(date?: string) {
+    setCreateDate(date ?? todayIso);
   }
 
   async function updateEventDetail(eventId: string, patch: Partial<EventSummary>) {
@@ -387,133 +375,40 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
         body: JSON.stringify(patch),
       });
       setEvents((current) => current.map((event) => (event.id === eventId ? updated : event)));
+      // Nur die Zyklen aus dem Server-Stand übernehmen (wandern beim Datumswechsel mit); übrige
+      // Felder bleiben lokal, damit langsame Antworten keine laufende Eingabe überschreiben.
+      setDetailEvent((current) =>
+        current && current.id === eventId ? { ...current, cycle_assignments: updated.cycle_assignments } : current
+      );
     } catch (error) {
       if (previous) {
         setEvents((current) => current.map((event) => (event.id === eventId ? previous : event)));
       }
-      showToast(error instanceof Error ? error.message : "Termin konnte nicht aktualisiert werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.eventUpdateFailed"), "error");
     }
   }
 
-  function openParticipantPicker(field: ParticipantPickerField) {
-    setPickerField(field);
-    setPickerSearch("");
-  }
-
-  function togglePickerParticipant(field: ParticipantPickerField, participantId: string) {
-    setForm((current) => {
-      const selected = current[field] as string[];
-      return {
-        ...current,
-        [field]: selected.includes(participantId)
-          ? selected.filter((id) => id !== participantId)
-          : [...selected, participantId],
-      };
-    });
-  }
-
-  function participantLabel(ids: string[]): string {
-    if (!ids.length) return "Auswählen…";
+  function organizerNames(ids: string[] | null | undefined): string | null {
+    if (!ids || ids.length === 0) return null;
     const names = ids
       .map((id) => availableParticipants.find((p) => p.id === id)?.display_name)
       .filter(Boolean);
-    return names.length ? names.join(", ") : `${ids.length} ausgewählt`;
-  }
-
-  function formatParticipantNames(ids: string[] | null | undefined): ReactNode {
-    if (!ids || ids.length === 0) return <span className="muted">–</span>;
-    const names = ids
-      .map((id) => availableParticipants.find((p) => p.id === id)?.display_name)
-      .filter(Boolean);
-    return names.length ? names.join(", ") : <span className="muted">{ids.length} ausgewählt</span>;
-  }
-
-  const optionalColumnRenderers: Record<OptionalColumnKey, (item: EventSummary) => ReactNode> = {
-    is_cancelled: (item) =>
-      item.is_cancelled ? <Badge variant="danger">Abgesagt</Badge> : <span className="muted">–</span>,
-    participant_count: (item) => item.participant_count ?? 0,
-    location: (item) => item.location || <span className="muted">–</span>,
-    organizer_ids: (item) => formatParticipantNames(item.organizer_ids),
-    leadership_ids: (item) => formatParticipantNames(item.leadership_ids),
-    participant_ids: (item) => formatParticipantNames(item.participant_ids),
-    spezial1_ids: (item) => formatParticipantNames(item.spezial1_ids),
-    spezial2_ids: (item) => formatParticipantNames(item.spezial2_ids),
-    spezial3_ids: (item) => formatParticipantNames(item.spezial3_ids),
-    spezial_text1: (item) => item.spezial_text1 || <span className="muted">–</span>,
-    spezial_text2: (item) => item.spezial_text2 || <span className="muted">–</span>,
-    spezial_text3: (item) => item.spezial_text3 || <span className="muted">–</span>,
-  };
-
-  const activeOptionalColumns = OPTIONAL_COLUMNS.filter((column) => visibleColumns.has(column.key));
-
-  function toggleCycle(cycleConfigId: string, cycleYear: number) {
-    setForm((current) => {
-      const exists = current.cycle_assignments.some(
-        (a) => a.cycle_config_id === cycleConfigId && a.cycle_year === cycleYear
-      );
-      const next = exists
-        ? current.cycle_assignments.filter((a) => !(a.cycle_config_id === cycleConfigId && a.cycle_year === cycleYear))
-        : [...current.cycle_assignments, { cycle_config_id: cycleConfigId, cycle_year: cycleYear }];
-      return { ...current, cycle_assignments: next };
-    });
-  }
-
-  async function saveEvent(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    try {
-      const payload = {
-        event_date: form.event_date,
-        event_end_date: form.event_end_date || null,
-        tag: form.tag || null,
-        title: form.title,
-        description: form.description || null,
-        participant_count: Math.max(0, Number(form.participant_count || "0")),
-        is_cancelled: form.is_cancelled,
-        cycle_assignments: form.cycle_assignments,
-        organizer_ids: form.organizer_ids,
-        leadership_ids: form.leadership_ids,
-        participant_ids: form.participant_ids,
-        spezial1_ids: form.spezial1_ids,
-        spezial2_ids: form.spezial2_ids,
-        spezial3_ids: form.spezial3_ids,
-        location: form.location || null,
-        spezial_text1: form.spezial_text1 || null,
-        spezial_text2: form.spezial_text2 || null,
-        spezial_text3: form.spezial_text3 || null,
-      };
-      const saved = form.id
-        ? await browserApiFetch<EventSummary>(`/api/events/${form.id}`, {
-            method: "PATCH",
-            body: JSON.stringify(payload),
-          })
-        : await browserApiFetch<EventSummary>("/api/events", {
-            method: "POST",
-            body: JSON.stringify(payload),
-          });
-
-      setEvents((current) =>
-        form.id ? current.map((item) => (item.id === saved.id ? saved : item)) : [saved, ...current]
-      );
-      setModalOpen(false);
-      showToast(form.id ? "Termin gespeichert" : "Termin erstellt", "success");
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "Termin konnte nicht gespeichert werden", "error");
-    }
+    return names.length ? names.join(", ") : t("selectedCount", { count: ids.length });
   }
 
   async function deleteEvent(eventId: string) {
     const ok = await confirm({
-      message: "Termin endgültig löschen? Das entfernt ihn aus allen Protokollen.",
+      message: t("toasts.deleteConfirmMessage"),
       tone: "danger",
-      confirmLabel: "Löschen"
+      confirmLabel: t("toasts.deleteConfirmLabel")
     });
     if (!ok) return;
     try {
       await browserApiFetch(`/api/events/${eventId}`, { method: "DELETE" });
       setEvents((current) => current.filter((event) => event.id !== eventId));
-      showToast("Termin gelöscht", "success");
+      showToast(t("toasts.deleted"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Termin konnte nicht gelöscht werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.deleteFailed"), "error");
     }
   }
 
@@ -527,7 +422,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
       });
     } catch (error) {
       setEvents((current) => current.map((event) => (event.id === item.id ? { ...event, is_cancelled: item.is_cancelled } : event)));
-      showToast(error instanceof Error ? error.message : "Termin konnte nicht aktualisiert werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.eventUpdateFailed"), "error");
     }
   }
 
@@ -544,7 +439,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
       setEvents((current) => [...current, ...next]);
       setHasMore(next.length === PAGE_SIZE);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Weitere Termine konnten nicht geladen werden", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.loadMoreFailed"), "error");
     } finally {
       setIsLoadingMore(false);
     }
@@ -556,16 +451,99 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     onLoadMore: () => void loadMore(),
   });
 
-  function toggleColumn(key: OptionalColumnKey) {
-    setVisibleColumns((current) => {
+  function toggleRowField(key: RowFieldKey) {
+    setRowFields((current) => {
       const next = new Set(current);
       if (next.has(key)) {
         next.delete(key);
       } else {
         next.add(key);
       }
+      try {
+        window.localStorage.setItem(ROW_FIELDS_STORAGE_KEY, JSON.stringify(Array.from(next)));
+      } catch {
+        // Nicht speicherbar (z. B. privates Fenster): Einstellung gilt nur für diese Sitzung.
+      }
       return next;
     });
+  }
+
+  function renderEventRow(item: EventSummary, isFirstInMonth: boolean) {
+    const isPast = effectiveEndDate(item) < todayIso;
+    const tag = (item.tag ?? "").trim();
+    const startDate = isoToUtcDate(item.event_date);
+    const organizers = rowFields.has("organizer_ids") ? organizerNames(item.organizer_ids) : null;
+    const participantCount = item.participant_count ?? 0;
+    const rowClass = `event-list-row${isPast ? " event-list-row-past" : ""}${item.is_cancelled ? " event-list-row-cancelled" : ""}`;
+
+    return (
+      <Fragment key={item.id}>
+        {item.id === todayMarkerEventId && !isFirstInMonth ? renderTodayMarker() : null}
+        <div className={rowClass} onClick={() => setDetailEvent(item)} onContextMenu={(event) => openEventContextMenu(event, item)}>
+          <div className="event-date-tile" aria-hidden="true">
+            <span className="event-date-tile-weekday">{weekdayFormatter.format(startDate).replace(/\.$/, "")}</span>
+            <span className="event-date-tile-day">{startDate.getUTCDate()}</span>
+          </div>
+          <div className="event-list-row-body">
+            <button
+              type="button"
+              className="event-list-row-title"
+              onClick={(clickEvent) => {
+                clickEvent.stopPropagation();
+                setDetailEvent(item);
+              }}
+            >
+              {item.title}
+            </button>
+            <div className="event-list-row-meta">
+              {tag ? (
+                <span className="badge event-tag-badge" style={{ "--tag-color": tagColor(tag) } as React.CSSProperties}>
+                  <span className="badge-dot" />
+                  {tag}
+                </span>
+              ) : null}
+              {item.is_cancelled ? <Badge variant="danger">{t("columns.cancelled")}</Badge> : null}
+              {item.event_end_date && item.event_end_date !== item.event_date ? (
+                <span className="event-list-meta-item">{formatDateRange(item.event_date, item.event_end_date)}</span>
+              ) : null}
+              {rowFields.has("description") && item.description ? (
+                <span className="event-list-meta-item event-list-meta-description">{item.description}</span>
+              ) : null}
+              {rowFields.has("location") && item.location ? (
+                <span className="event-list-meta-item">
+                  <EventIcon name="pin" width={14} height={14} />
+                  {item.location}
+                </span>
+              ) : null}
+              {organizers ? (
+                <span className="event-list-meta-item">
+                  <EventIcon name="user" width={14} height={14} />
+                  {organizers}
+                </span>
+              ) : null}
+            </div>
+          </div>
+          <div className="event-list-row-aside">
+            {rowFields.has("participant_count") && participantCount > 0 ? (
+              <span className="event-list-count" title={t("columns.participantCount")}>
+                <EventIcon name="users" width={15} height={15} />
+                {participantCount}
+              </span>
+            ) : null}
+            <ActionMenu
+              items={[
+                { label: t("list.open"), onClick: () => setDetailEvent(item) },
+                {
+                  label: item.is_cancelled ? t("contextMenu.uncancel") : t("contextMenu.markCancelled"),
+                  onClick: () => void toggleCancelled(item),
+                },
+                { label: t("delete"), onClick: () => void deleteEvent(item.id), danger: true },
+              ]}
+            />
+          </div>
+        </div>
+      </Fragment>
+    );
   }
 
   function openImportModal() {
@@ -594,7 +572,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
         setImportColumnMap(preview.resolved_map as Partial<Record<CsvTargetField, string>>);
       }
     } catch (error) {
-      setImportError(error instanceof Error ? error.message : "Vorschau fehlgeschlagen");
+      setImportError(error instanceof Error ? error.message : t("toasts.previewFailed"));
       setImportPreview(null);
     } finally {
       setImportPreviewLoading(false);
@@ -628,12 +606,13 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
       const imported = await browserApiFetch<EventSummary[]>("/api/events/import-csv", {
         method: "POST",
         body,
+        timeoutMs: LONG_RUNNING_TIMEOUT_MS,
       });
       setEvents((current) => [...imported, ...current]);
-      showToast(`${imported.length} Termine importiert`, "success");
+      showToast(t("toasts.importedCount", { count: imported.length }), "success");
       setShowImportModal(false);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "CSV-Import fehlgeschlagen", "error");
+      showToast(error instanceof Error ? error.message : t("toasts.csvImportFailed"), "error");
     } finally {
       setImportCommitting(false);
     }
@@ -645,186 +624,281 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
     <div className="grid">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Termine</h1>
-          <p className="muted">{hasNoEvents ? "Alle Termine und Anlässe dieses Mandanten." : "Alle Termine dieses Mandanten."}</p>
+          <h1 className="page-title">{t("pageTitle")}</h1>
+          <p className="muted">
+            {hasNoEvents ? t("pageDescriptionEmpty") : t("pageSummary", { total: events.length, upcoming: upcomingCount })}
+          </p>
+          <CalendarLinkHint kind="events" />
         </div>
         {hasNoEvents ? null : (
-        <div className="table-toolbar-actions">
-          <button type="button" className="button-secondary button-ghost" onClick={openImportModal}>
-            CSV Import
-          </button>
-          {landscapeTemplates.length > 0 && (
-            <button type="button" className="button-secondary button-ghost" onClick={() => setExportModalOpen(true)}>
-              Export
+          <div className="event-header-actions">
+            <button type="button" className="button-secondary button-ghost event-calendar-button" onClick={() => setCalendarOpen(true)}>
+              <EventIcon name="calendar" />
+              {t("calendar.open")}
             </button>
-          )}
-          <div className="mini-menu mini-menu-compact mini-menu-end">
-            <button
-              ref={viewMenuTriggerRef}
-              type="button"
-              className={`mini-menu-trigger${viewMenuOpen ? " mini-menu-trigger-open" : ""}`}
-              onClick={() => setViewMenuOpen((value) => !value)}
-              aria-haspopup="menu"
-              aria-expanded={viewMenuOpen}
-            >
-              <span className="mini-menu-trigger-label">Ansicht</span>
-              <span className="mini-menu-trigger-icon">⌄</span>
+            <div className="event-button-group">
+              <button type="button" className="button-secondary button-ghost" onClick={openImportModal}>
+                <EventIcon name="upload" />
+                {t("csvImport")}
+              </button>
+              <DocumentExportButton className="button-secondary button-ghost" label={t("export")} context={{ documentType: "events" }} />
+            </div>
+            <button type="button" className="button-primary event-new-button" onClick={() => openCreate()}>
+              <EventIcon name="plus" />
+              {t("newEvent")}
             </button>
-            <Popover open={viewMenuOpen} onOpenChange={setViewMenuOpen} anchorRef={viewMenuTriggerRef} align="end" className="mini-menu-popover-portal">
-              <div className="mini-menu-section">
-                <div className="mini-menu-section-title">Filter</div>
-                <label className="mini-menu-option">
-                  <span>Vergangene Termine anzeigen</span>
-                  <input type="checkbox" checked={showPast} onChange={(event) => setShowPast(event.target.checked)} />
-                </label>
-                {cycleConfigs.length > 0 && (
-                  <label className="mini-menu-option">
-                    <span>Alle Zyklus-Perioden anzeigen</span>
-                    <input
-                      type="checkbox"
-                      checked={showAllPeriods}
-                      onChange={(event) => setShowAllPeriods(event.target.checked)}
-                    />
-                  </label>
-                )}
-              </div>
-              <div className="mini-menu-section">
-                <div className="mini-menu-section-title">Zusätzliche Spalten</div>
-                {OPTIONAL_COLUMNS.map((column) => (
-                  <label key={column.key} className="mini-menu-option">
-                    <span>{column.label}</span>
-                    <input
-                      type="checkbox"
-                      checked={visibleColumns.has(column.key)}
-                      onChange={() => toggleColumn(column.key)}
-                    />
-                  </label>
-                ))}
-              </div>
-            </Popover>
           </div>
-          <button type="button" className="button-secondary" onClick={openCreate}>
-            Neuer Termin
-          </button>
-        </div>
         )}
       </div>
 
       {hasNoEvents ? (
         <EmptyState
-          title="Keine Termine geplant"
-          description="Trage Anlässe ein, damit sie in Protokollen, Abgaben und im Dashboard erscheinen."
+          title={t("emptyState.title")}
+          description={t("emptyState.description")}
           actions={
-            <button type="button" className="button-primary" onClick={openCreate}>
-              + Termin
+            <button type="button" className="button-primary" onClick={() => openCreate()}>
+              {t("emptyState.add")}
             </button>
           }
-          hint="Termine lassen sich einem Zyklus zuordnen – so bleiben Vereinsjahre sauber getrennt."
+          hint={t("emptyState.hint")}
         />
       ) : (
-      <>
-      <div className="list-filter-row">
-        <FilterTabs
-          options={[{ value: "all", label: "Alle" }, ...knownTags.map((tag) => ({ value: tag, label: tag }))]}
-          value={tagFilter}
-          onChange={setTagFilter}
-        />
-        <div className="list-filter-search">
-          <SearchInput value={search} onChange={setSearch} placeholder="Termine durchsuchen" />
-        </div>
-      </div>
-
-      <DataTable
-        className="data-table-lg"
-        columns={[
-          { key: "event_date", label: "Datum", sortable: true, sortDirection: sortIndicator("event_date"), onSort: () => toggleSort("event_date") },
-          { key: "title", label: "Titel", sortable: true, sortDirection: sortIndicator("title"), onSort: () => toggleSort("title") },
-          { key: "tag", label: "Tag", sortable: true, sortDirection: sortIndicator("tag"), onSort: () => toggleSort("tag") },
-          ...activeOptionalColumns.map((column) =>
-            column.key === "participant_count"
-              ? {
-                  key: column.key,
-                  label: column.label,
-                  sortable: true,
-                  sortDirection: sortIndicator("participant_count"),
-                  onSort: () => toggleSort("participant_count"),
-                }
-              : { key: column.key, label: column.label }
-          ),
-          { key: "description", label: "Beschreibung", sortable: true, sortDirection: sortIndicator("description"), onSort: () => toggleSort("description") },
-          "Aktionen",
-        ]}
-      >
-        {filteredEvents.map((item) => (
-          <tr
-            key={item.id}
-            className={`table-row-clickable${visibleColumns.has("is_cancelled") && item.is_cancelled ? " table-row-cancelled" : ""}`}
-            onClick={() => setDetailEvent(item)}
-            onContextMenu={(event) => openEventContextMenu(event, item)}
-          >
-            <td>{formatDateRange(item.event_date, item.event_end_date)}</td>
-            <td>
-              <strong>{item.title}</strong>
-            </td>
-            <td>{item.tag ? <span className="pill">{item.tag}</span> : <span className="muted">Kein Tag</span>}</td>
-            {activeOptionalColumns.map((column) => (
-              <td key={column.key}>{optionalColumnRenderers[column.key](item)}</td>
-            ))}
-            <td className="table-cell-wrap">{item.description ?? <span className="muted">Keine Beschreibung</span>}</td>
-            <td>
-              <div className="table-actions table-actions-start">
+        <div className="event-layout">
+          <aside className="event-tag-sidebar" aria-label={t("tagSidebar.title")}>
+            <div className="event-tag-sidebar-title">{t("tagSidebar.title")}</div>
+            <div className="event-tag-sidebar-list">
+              <button
+                type="button"
+                className={`event-tag-sidebar-item${tagFilter === "all" ? " event-tag-sidebar-item-active" : ""}`}
+                aria-pressed={tagFilter === "all"}
+                onClick={() => setTagFilter("all")}
+              >
+                <span className="event-tag-dot event-tag-dot-all" />
+                <span className="event-tag-sidebar-label">{t("tagSidebar.all")}</span>
+                <span className="event-tag-sidebar-count">{periodEvents.length}</span>
+              </button>
+              {tagCounts.tags.map(([tag, count]) => {
+                const important = !!tagConfig[tag]?.important;
+                return (
+                  <div
+                    key={tag}
+                    className={`event-tag-sidebar-row${tagFilter === tag ? " event-tag-sidebar-row-active" : ""}${important ? " event-tag-sidebar-row-important" : ""}`}
+                  >
+                    <button
+                      type="button"
+                      className={`event-tag-sidebar-item${tagFilter === tag ? " event-tag-sidebar-item-active" : ""}`}
+                      aria-pressed={tagFilter === tag}
+                      onClick={() => setTagFilter(tag)}
+                    >
+                      <span className="event-tag-dot" style={{ "--tag-color": tagColor(tag) } as React.CSSProperties} />
+                      <span className="event-tag-sidebar-label">{tag}</span>
+                      <span className="event-tag-sidebar-count">{count}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="event-tag-star"
+                      aria-pressed={important}
+                      aria-label={important ? t("tagSidebar.unmarkImportant") : t("tagSidebar.markImportant")}
+                      title={important ? t("tagSidebar.unmarkImportant") : t("tagSidebar.markImportant")}
+                      onClick={() => void toggleTagImportant(tag)}
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                        <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />
+                      </svg>
+                    </button>
+                  </div>
+                );
+              })}
+              {tagCounts.untagged > 0 && (
                 <button
                   type="button"
-                  className="button-secondary button-danger"
-                  onClick={(clickEvent) => {
-                    clickEvent.stopPropagation();
-                    void deleteEvent(item.id);
-                  }}
+                  className={`event-tag-sidebar-item${tagFilter === NO_TAG_FILTER ? " event-tag-sidebar-item-active" : ""}`}
+                  aria-pressed={tagFilter === NO_TAG_FILTER}
+                  onClick={() => setTagFilter(NO_TAG_FILTER)}
                 >
-                  Löschen
+                  <span className="event-tag-dot event-tag-dot-none" />
+                  <span className="event-tag-sidebar-label">{t("noTag")}</span>
+                  <span className="event-tag-sidebar-count">{tagCounts.untagged}</span>
+                </button>
+              )}
+            </div>
+          </aside>
+
+          <div className="event-main">
+            <div className="event-toolbar">
+              <div className="event-toolbar-search">
+                <SearchInput value={search} onChange={setSearch} placeholder={t("searchPlaceholder")} />
+              </div>
+              <FilterTabs<TimeFilter>
+                options={[
+                  { value: "upcoming", label: t("timeFilter.upcoming") },
+                  { value: "all", label: t("timeFilter.all") },
+                  { value: "past", label: t("timeFilter.past") },
+                ]}
+                value={timeFilter}
+                onChange={setTimeFilter}
+              />
+              <button
+                ref={viewMenuTriggerRef}
+                type="button"
+                className={`button-secondary button-ghost event-view-trigger${viewMenuOpen ? " event-view-trigger-open" : ""}`}
+                onClick={() => setViewMenuOpen((value) => !value)}
+                aria-haspopup="menu"
+                aria-expanded={viewMenuOpen}
+              >
+                <EventIcon name="sliders" />
+                {t("view")}
+              </button>
+              <Popover
+                open={viewMenuOpen}
+                onOpenChange={setViewMenuOpen}
+                anchorRef={viewMenuTriggerRef}
+                align="end"
+                className="mini-menu-popover-portal event-view-popover"
+              >
+                {cycleConfigs.length > 0 && (
+                  <div className="mini-menu-section">
+                    <div className="mini-menu-section-title">{t("filterSection")}</div>
+                    <label className="mini-menu-option mini-menu-switch-option">
+                      <span>{t("showAllPeriods")}</span>
+                      <input
+                        type="checkbox"
+                        className="mini-menu-switch-input"
+                        checked={showAllPeriods}
+                        onChange={(event) => setShowAllPeriods(event.target.checked)}
+                      />
+                      <span className="mini-menu-switch" aria-hidden="true" />
+                    </label>
+                  </div>
+                )}
+                {cycleConfigs.length > 1 && !showAllPeriods && (
+                  <div className="mini-menu-section" role="radiogroup" aria-label={t("cycleFilter.title")}>
+                    <div className="mini-menu-section-title">{t("cycleFilter.title")}</div>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={cycleFilter === ALL_CYCLES_FILTER}
+                      className={`mini-menu-option${cycleFilter === ALL_CYCLES_FILTER ? " mini-menu-option-active" : ""}`}
+                      onClick={() => setCycleFilter(ALL_CYCLES_FILTER)}
+                    >
+                      <span>{t("cycleFilter.all")}</span>
+                    </button>
+                    {cycleConfigs.map((config) => (
+                      <button
+                        key={config.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={cycleFilter === config.id}
+                        className={`mini-menu-option${cycleFilter === config.id ? " mini-menu-option-active" : ""}`}
+                        onClick={() => setCycleFilter(config.id)}
+                      >
+                        <span>{config.name}</span>
+                        <span className="mini-menu-option-subtle">
+                          {formatCycleName(config.name_pattern, getCycleYear(todayIso, config.reset_month, config.reset_day))}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="mini-menu-section">
+                  <div className="mini-menu-section-title">{t("rowFieldsSection")}</div>
+                  {ROW_FIELD_OPTIONS.map((option) => (
+                    <label key={option.key} className="mini-menu-option mini-menu-switch-option">
+                      <span>{option.label}</span>
+                      <input
+                        type="checkbox"
+                        className="mini-menu-switch-input"
+                        checked={rowFields.has(option.key)}
+                        onChange={() => toggleRowField(option.key)}
+                      />
+                      <span className="mini-menu-switch" aria-hidden="true" />
+                    </label>
+                  ))}
+                </div>
+              </Popover>
+            </div>
+
+            {hasActiveFilter && filteredEvents.length > 0 && (
+              <div className="event-filter-summary">
+                <span>{filterSummary()}</span>
+                <button type="button" className="event-link-button" onClick={resetFilters}>
+                  {t("list.resetFilters")}
                 </button>
               </div>
-            </td>
-          </tr>
-        ))}
-      </DataTable>
-      </>
-      )}
+            )}
 
-      {hasMore && (
-        <div className="load-more-row" ref={loadMoreSentinelRef}>
-          {isLoadingMore ? (
-            <span className="muted">Lädt weitere Termine…</span>
-          ) : (
-            <button type="button" className="button-secondary button-ghost" onClick={() => void loadMore()}>
-              Mehr laden ({events.length} geladen)
-            </button>
-          )}
+            <div
+              ref={eventListRef}
+              className="event-list"
+              style={eventListTop !== null ? ({ "--event-list-top": `${eventListTop}px` } as React.CSSProperties) : undefined}
+            >
+              {monthGroups.length === 0 ? (
+                <div className="event-list-empty">
+                  <strong className="event-list-empty-title">{t("list.emptyTitle")}</strong>
+                  {hasActiveFilter || timeFilter !== "all" ? (
+                    <button
+                      type="button"
+                      className="event-link-button"
+                      onClick={() => {
+                        resetFilters();
+                        setTimeFilter("all");
+                      }}
+                    >
+                      {t("list.resetFilters")}
+                    </button>
+                  ) : null}
+                </div>
+              ) : (
+                monthGroups.map((group) => (
+                  <section key={group.key} className="event-month-group">
+                    {/* Beginnt der Monat mit dem ersten kommenden Termin, steht „Heute" vor der Monatsüberschrift. */}
+                    {group.items[0].id === todayMarkerEventId ? renderTodayMarker() : null}
+                    <h2 className="event-month-heading">
+                      {group.label}
+                      <span className="event-month-count">{t("list.monthCount", { count: group.items.length })}</span>
+                    </h2>
+                    {group.items.map((item, index) => renderEventRow(item, index === 0))}
+                  </section>
+                ))
+              )}
+              {hasMore && (
+                <div className="load-more-row" ref={loadMoreSentinelRef}>
+                  {isLoadingMore ? (
+                    <span className="muted">{t("loadingMore")}</span>
+                  ) : (
+                    <button type="button" className="button-secondary button-ghost" onClick={() => void loadMore()}>
+                      {t("loadMore", { count: events.length })}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
       <Modal
         open={showImportModal}
         onClose={() => setShowImportModal(false)}
-        title="Termine aus CSV importieren"
-        description="Ordne die Spalten deiner Datei den Termin-Feldern zu und prüfe die Vorschau, bevor du importierst."
+        title={t("importModal.title")}
+        description={t("importModal.description")}
         size="wide"
       >
         <div className="grid" style={{ gap: "var(--space-4)" }}>
           {!importFile ? (
             <label className="csv-import-dropzone" style={{ cursor: "pointer" }}>
-              <strong>CSV-Datei auswählen</strong>
-              <span className="muted">Pflichtspalten: Startdatum und Titel. Trennzeichen Komma, Semikolon oder Tab.</span>
+              <strong>{t("importModal.selectFile")}</strong>
+              <span className="muted">{t("importModal.requiredColumnsHint")}</span>
               <input type="file" accept=".csv,text/csv" onChange={handleImportFileChange} hidden />
             </label>
           ) : (
             <div className="csv-import-file-row">
               <span>
                 <strong>{importFile.name}</strong>
-                <span className="muted"> · {importPreview ? `${importPreview.rows.length} Zeile(n) erkannt` : "wird gelesen…"}</span>
+                <span className="muted"> · {importPreview ? t("importModal.rowsDetected", { count: importPreview.rows.length }) : t("importModal.reading")}</span>
               </span>
               <label className="button-secondary button-ghost" style={{ width: "auto", minHeight: 0, padding: "var(--space-2) var(--space-4)", cursor: "pointer" }}>
-                Andere Datei
+                {t("importModal.otherFile")}
                 <input type="file" accept=".csv,text/csv" onChange={handleImportFileChange} hidden />
               </label>
             </div>
@@ -832,13 +906,12 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
 
           <details className="card import-help-card">
             <summary className="import-help-summary">
-              <span>CSV-Format anzeigen</span>
-              <span className="muted">Pflicht: Startdatum und Titel</span>
+              <span>{t("importModal.showFormat")}</span>
+              <span className="muted">{t("importModal.requiredFields")}</span>
             </summary>
             <div className="import-help-body">
               <p className="muted">
-                Unterstützte Spalten sind z. B. `Startdatum` oder `Datum`, optional `Enddatum`, `Tag`, `Titel`, `Beschreibung` und `Teilnehmerzahl`.
-                Die Spaltennamen müssen nicht exakt passen – ordne sie unten einfach den passenden Termin-Feldern zu.
+                {t("importModal.formatHelp")}
               </p>
               <pre>{`Startdatum;Enddatum;Tag;Titel;Beschreibung;Teilnehmerzahl
 2026-04-29;;Sitzung;Leiterrunde;Planung Sommerlager;8
@@ -864,20 +937,29 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                       getLabel={(column) => column}
                       value={importColumnMap[target.field] ?? null}
                       onChange={(column) => updateColumnMapping(target.field, column ?? "")}
-                      nullLabel="– nicht zuordnen –"
+                      nullLabel={t("importModal.doNotMap")}
                     />
                   </label>
                 ))}
               </div>
 
               <div className="status-row">
-                <Badge variant="success">{importPreview.valid_count} gültig</Badge>
-                {importPreview.error_count > 0 && <Badge variant="danger">{importPreview.error_count} mit Fehlern</Badge>}
-                <span className="pill">{importPreview.rows.length} Zeile(n) gesamt</span>
-                {importPreviewLoading && <span className="muted">Aktualisiere Vorschau…</span>}
+                <Badge variant="success">{t("importModal.valid", { count: importPreview.valid_count })}</Badge>
+                {importPreview.error_count > 0 && <Badge variant="danger">{t("importModal.withErrors", { count: importPreview.error_count })}</Badge>}
+                <span className="pill">{t("importModal.totalRows", { count: importPreview.rows.length })}</span>
+                {importPreviewLoading && <span className="muted">{t("importModal.updatingPreview")}</span>}
               </div>
 
-              <DataTable columns={["#", "Startdatum", "Enddatum", "Tag", "Titel", "Beschreibung", "Teilnehmer", "Status"]}>
+              <DataTable columns={[
+                t("importModal.previewColumns.number"),
+                t("importModal.previewColumns.startDate"),
+                t("importModal.previewColumns.endDate"),
+                t("importModal.previewColumns.tag"),
+                t("importModal.previewColumns.title"),
+                t("importModal.previewColumns.description"),
+                t("importModal.previewColumns.participants"),
+                t("importModal.previewColumns.status"),
+              ]}>
                 {importPreview.rows.map((row) => (
                   <tr key={row.row_number} className={row.error ? "table-row-error" : undefined}>
                     <td>{row.row_number}</td>
@@ -891,7 +973,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                       {row.error ? (
                         <Badge variant="danger">{row.error}</Badge>
                       ) : (
-                        <Badge variant="success">Gültig</Badge>
+                        <Badge variant="success">{t("importModal.rowValid")}</Badge>
                       )}
                     </td>
                   </tr>
@@ -900,7 +982,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
 
               <div className="table-actions" style={{ justifyContent: "flex-end" }}>
                 <button type="button" className="button-secondary button-ghost" onClick={() => setShowImportModal(false)}>
-                  Abbrechen
+                  {t("importModal.cancel")}
                 </button>
                 <button
                   type="button"
@@ -913,7 +995,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
                   }
                   onClick={() => void confirmImport()}
                 >
-                  {importCommitting ? "Importiert…" : `${importPreview.valid_count} Termine importieren`}
+                  {importCommitting ? t("importModal.importing") : t("importModal.importRows", { count: importPreview.valid_count })}
                 </button>
               </div>
             </>
@@ -921,138 +1003,35 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
         </div>
       </Modal>
 
-      <Modal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title={form.id ? "Termin bearbeiten" : "Termin erstellen"}
-        description="Der Tag hilft spaeter beim Verknuepfen mit passenden Protokollpunkten."
-      >
-        <ModalSaveForm className="grid" onSubmit={saveEvent}>
-          <div className="two-col">
-            <label className="field-stack">
-              <span className="field-label">Startdatum</span>
-              <DateInput value={form.event_date} onChange={(value) => setForm((current) => ({ ...current, event_date: value }))} required />
-            </label>
-            <label className="field-stack">
-              <span className="field-label">Enddatum</span>
-              <DateInput value={form.event_end_date} onChange={(value) => setForm((current) => ({ ...current, event_end_date: value }))} />
-              <span className="field-help">Leer lassen fuer einen einzelnen Tag.</span>
-            </label>
-          </div>
-          <div className="two-col">
-            <label className="field-stack">
-              <span className="field-label">Tag</span>
-              <input
-                value={form.tag}
-                onChange={(event) => setForm((current) => ({ ...current, tag: event.target.value }))}
-                placeholder="z. B. Sitzung, Lager, Elternabend"
-                list="event-tag-suggestions"
-              />
-              <datalist id="event-tag-suggestions">
-                {knownTags.map((tag) => (
-                  <option key={tag} value={tag} />
-                ))}
-              </datalist>
-            </label>
-            <label className="field-stack">
-              <span className="field-label">Titel</span>
-              <input value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} required />
-            </label>
-          </div>
-          <label className="field-stack">
-            <span className="field-label">Anzahl Teilnehmer</span>
-            <input
-              type="number"
-              min="0"
-              value={form.participant_count}
-              onChange={(event) => setForm((current) => ({ ...current, participant_count: event.target.value }))}
-            />
-          </label>
-          <label className="checkbox-row">
-            <input
-              type="checkbox"
-              checked={form.is_cancelled}
-              onChange={(event) => setForm((current) => ({ ...current, is_cancelled: event.target.checked }))}
-            />
-            Termin abgesagt
-          </label>
-          <label className="field-stack">
-            <span className="field-label">Beschreibung</span>
-            <textarea rows={5} value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} />
-          </label>
-          <label className="field-stack">
-            <span className="field-label">Standort</span>
-            <input value={form.location} onChange={(e) => setForm((current) => ({ ...current, location: e.target.value }))} placeholder="z. B. Gemeinschaftshaus, Sportplatz" />
-          </label>
-          <div className="two-col">
-            <label className="field-stack">
-              <span className="field-label">Spezial Text 1</span>
-              <input value={form.spezial_text1} onChange={(e) => setForm((current) => ({ ...current, spezial_text1: e.target.value }))} />
-            </label>
-            <label className="field-stack">
-              <span className="field-label">Spezial Text 2</span>
-              <input value={form.spezial_text2} onChange={(e) => setForm((current) => ({ ...current, spezial_text2: e.target.value }))} />
-            </label>
-          </div>
-          <label className="field-stack">
-            <span className="field-label">Spezial Text 3</span>
-            <input value={form.spezial_text3} onChange={(e) => setForm((current) => ({ ...current, spezial_text3: e.target.value }))} />
-          </label>
-          {availableParticipants.length > 0 && (
-            <div className="field-stack">
-              <span className="field-label">Personen</span>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-2)" }}>
-                {PARTICIPANT_ROLE_FIELDS.map(({ field, label }) => (
-                  <div key={field} className="field-stack" style={{ gap: "var(--space-1)" }}>
-                    <span className="field-label" style={{ fontSize: "var(--text-xs)" }}>{label}</span>
-                    <button
-                      type="button"
-                      className="button-ghost structured-list-picker"
-                      onClick={() => openParticipantPicker(field)}
-                      style={{ textAlign: "left", minHeight: 36, padding: "var(--space-2) var(--space-3)", fontSize: "var(--text-base)" }}
-                    >
-                      {participantLabel(form[field] as string[])}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          <div className="field-stack">
-            <span className="field-label">Zyklen</span>
-            {cyclesLoading ? (
-              <span className="muted" style={{ fontSize: "var(--text-base)" }}>Zyklen werden geladen…</span>
-            ) : availableCycles.length === 0 ? (
-              <span className="muted" style={{ fontSize: "var(--text-base)" }}>Keine Zyklen verfügbar (Zyklen unter Struktur → Zyklen anlegen)</span>
-            ) : (
-              <div className="cycle-chip-list">
-                {availableCycles.map((cycle) => {
-                  const active = form.cycle_assignments.some(
-                    (a) => a.cycle_config_id === cycle.cycle_config_id && a.cycle_year === cycle.cycle_year
-                  );
-                  return (
-                    <button
-                      key={`${cycle.cycle_config_id}-${cycle.cycle_year}`}
-                      type="button"
-                      className={`cycle-chip${active ? " cycle-chip-active" : ""}`}
-                      onClick={() => toggleCycle(cycle.cycle_config_id, cycle.cycle_year)}
-                    >
-                      {cycle.name}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            <span className="field-help">Zyklen, denen dieser Termin zugeordnet werden soll. Optional.</span>
-          </div>
-          <button data-modal-save type="submit">{form.id ? "Termin speichern" : "Termin erstellen"}</button>
-        </ModalSaveForm>
-      </Modal>
+      {createDate !== null ? (
+        <EventCreateModal
+          open
+          onClose={() => setCreateDate(null)}
+          initialDate={createDate}
+          knownTags={knownTags}
+          availableParticipants={availableParticipants}
+          cycleConfigs={cycleConfigs}
+          tenantName={tenantName}
+          onCreated={(saved) => setEvents((current) => [saved, ...current])}
+        />
+      ) : null}
+
+      {calendarOpen ? (
+        <EventCalendarModal
+          open
+          onClose={() => setCalendarOpen(false)}
+          events={events}
+          todayIso={todayIso}
+          tagColor={tagColor}
+          onOpenEvent={setDetailEvent}
+          onCreateForDate={(iso) => openCreate(iso)}
+        />
+      ) : null}
 
       <Modal
         open={Boolean(detailEvent)}
         onClose={() => setDetailEvent(null)}
-        title={detailEvent?.title || "Termin"}
+        title={detailEvent?.title || t("detailModal.fallbackTitle")}
         description={detailEvent ? formatDateRange(detailEvent.event_date, detailEvent.event_end_date) : undefined}
         size="wide"
       >
@@ -1073,190 +1052,6 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
         ) : null}
       </Modal>
 
-      <Modal
-        open={Boolean(pickerField)}
-        onClose={() => setPickerField(null)}
-        title={PARTICIPANT_ROLE_FIELDS.find((r) => r.field === pickerField)?.label ?? "Teilnehmer wählen"}
-        description="Mehrfachauswahl"
-      >
-        <div className="grid">
-          <label className="field-stack">
-            <span className="field-label">Suche</span>
-            <input
-              value={pickerSearch}
-              onChange={(e) => setPickerSearch(e.target.value)}
-              placeholder="Teilnehmer filtern"
-            />
-          </label>
-          <div className="participant-check-grid">
-            {availableParticipants
-              .filter((p) => !pickerSearch.trim() || p.display_name.toLowerCase().includes(pickerSearch.toLowerCase()))
-              .map((p) => {
-                const checked = pickerField ? (form[pickerField] as string[]).includes(p.id) : false;
-                return (
-                  <label key={p.id} className={`participant-check-card${checked ? " participant-check-card-active" : ""}`}>
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => pickerField && togglePickerParticipant(pickerField, p.id)}
-                    />
-                    <span>{p.display_name}</span>
-                  </label>
-                );
-              })}
-          </div>
-        </div>
-      </Modal>
-
-      <Modal open={exportModalOpen} title="Termine exportieren" onClose={() => setExportModalOpen(false)}>
-        <div style={{ display: "grid", gap: "var(--space-5)" }}>
-
-          {knownExportTags.length > 0 && (
-            <div className="field-stack">
-              <span className="field-label">Tags</span>
-              <div style={{ position: "relative" }}>
-                <input
-                  className="dropdown-search-input"
-                  placeholder="Tag suchen…"
-                  value={exportTagSearch}
-                  onChange={(e) => setExportTagSearch(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Tab" && tagSuggestions.length > 0) {
-                      e.preventDefault();
-                      toggleExportTag(tagSuggestions[0]);
-                      setExportTagSearch("");
-                    } else if (e.key === "Enter" && tagSuggestions.length > 0) {
-                      toggleExportTag(tagSuggestions[0]);
-                      setExportTagSearch("");
-                    } else if (e.key === "Escape") {
-                      setExportTagSearch("");
-                    }
-                  }}
-                />
-                {tagSuggestions.length > 0 && (
-                  <div className="dropdown-panel dropdown-panel-down">
-                    {tagSuggestions.map((tag, i) => (
-                      <button
-                        key={tag}
-                        type="button"
-                        onMouseDown={(e) => { e.preventDefault(); toggleExportTag(tag); setExportTagSearch(""); }}
-                        className={i === 0 ? "dropdown-option dropdown-option-active dropdown-option-row" : "dropdown-option dropdown-option-row"}
-                      >
-                        <span>{tag}</span>
-                        {i === 0 && <span className="dropdown-hint">Tab</span>}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="tag-filter-bar">
-                {exportTagFilters.map((tag) => (
-                  <button key={tag} type="button" className="tag-filter-chip tag-filter-chip-active"
-                    onClick={() => toggleExportTag(tag)}
-                    style={{ width: "auto", minHeight: 0, padding: "var(--space-1) var(--space-3)", display: "inline-flex", fontSize: "var(--text-base)" }}
-                  >{tag} ×</button>
-                ))}
-                {knownExportTags.filter((t) => !exportTagFilters.includes(t)).map((tag) => (
-                  <button key={tag} type="button" className="tag-filter-chip"
-                    onClick={() => toggleExportTag(tag)}
-                    style={{ width: "auto", minHeight: 0, padding: "var(--space-1) var(--space-3)", display: "inline-flex", fontSize: "var(--text-base)" }}
-                  >{tag}</button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="field-stack">
-            <span className="field-label">Zeitraum</span>
-            <div className="filter-pill-row">
-              {(["all", "next-session", "until-event"] as const).map((mode) => {
-                const label = mode === "all" ? "Alle Termine" : mode === "next-session" ? "Nächste Sitzung" : "Bis Termin";
-                return (
-                  <button key={mode} type="button"
-                    className={`button-pill${exportDateMode === mode ? " button-pill-active" : ""}`}
-                    onClick={() => { setExportDateMode(mode); setExportUrl(null); }}
-                  >{label}</button>
-                );
-              })}
-            </div>
-            {exportDateMode === "next-session" && (
-              <span className="muted" style={{ fontSize: "var(--text-sm)", paddingLeft: "2px" }}>
-                {nextSessionEvent
-                  ? `Bis ${nextSessionEvent.title} · ${formatDate(nextSessionEvent.event_date)}`
-                  : "Keine Sitzung gefunden"}
-              </span>
-            )}
-            {exportDateMode === "until-event" && (
-              <SearchableSelect
-                options={sortedEvents}
-                getId={(ev) => ev.id}
-                getLabel={(ev) => `${formatDate(ev.event_date)}${ev.tag ? ` · ${ev.tag}` : ""} — ${ev.title}`}
-                value={exportUntilEventId === "" ? null : exportUntilEventId}
-                onChange={(ev) => { setExportUntilEventId(ev ? ev.id : ""); setExportUrl(null); }}
-                nullLabel="— Termin wählen —"
-              />
-            )}
-          </div>
-
-          <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid var(--border)", paddingTop: "var(--space-5)" }}>
-            <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "center" }}>
-            <button
-              type="button"
-              className={`pdf-icon-link pdf-icon-link-success${exportBusy || (!exportUrl && (!exportTemplateId || (exportDateMode === "until-event" && !exportUntilEventId) || (exportDateMode === "next-session" && !nextSessionEvent))) ? " pdf-icon-disabled" : ""}`}
-              disabled={exportBusy || (!exportUrl && (!exportTemplateId || (exportDateMode === "until-event" && !exportUntilEventId) || (exportDateMode === "next-session" && !nextSessionEvent)))}
-              onClick={() => void handlePdfClick()}
-              title={exportUrl ? "PDF erneut herunterladen" : "PDF generieren"}
-              style={{ width: "auto", minWidth: "56px", minHeight: 0, padding: "0 var(--space-4)", display: "inline-flex", justifyContent: "center" }}
-            >
-              {exportBusy ? "..." : "PDF"}
-            </button>
-            <button
-              type="button"
-              className="pdf-icon-link pdf-icon-link-soon"
-              disabled
-              title="Markdown-Export – kommt bald"
-              style={{ width: "auto", minWidth: "56px", minHeight: 0, padding: "0 var(--space-4)", display: "inline-flex", justifyContent: "center" }}
-            >
-              MD
-            </button>
-            </div>
-            {landscapeTemplates.length > 0 && (
-              <div ref={templateDropdownRef} style={{ position: "relative" }}>
-                <button
-                  type="button"
-                  onClick={() => setTemplateDropdownOpen((v) => !v)}
-                  style={{
-                    width: "auto", minHeight: 0, height: "42px", padding: "0 var(--space-6) 0 var(--space-3)",
-                    borderRadius: "var(--radius-md)", fontSize: "var(--text-sm)",
-                    border: "1px solid var(--border)", backgroundColor: "transparent",
-                    color: "var(--text)", display: "flex", alignItems: "center", whiteSpace: "nowrap",
-                    backgroundImage: "linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%)",
-                    backgroundPosition: "calc(100% - 14px) calc(50% - 2px), calc(100% - 8px) calc(50% - 2px)",
-                    backgroundSize: "6px 6px, 6px 6px", backgroundRepeat: "no-repeat",
-                  }}
-                >
-                  {landscapeTemplates.find((t) => t.id === exportTemplateId)?.name ?? "Vorlage"}
-                </button>
-                {templateDropdownOpen && (
-                  <div className="dropdown-panel dropdown-panel-up" style={{ minWidth: "100%" }}>
-                    {landscapeTemplates.map((t, i) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onMouseDown={() => { setExportTemplateId(t.id); setExportUrl(null); setTemplateDropdownOpen(false); }}
-                        className={t.id === exportTemplateId ? "dropdown-option dropdown-option-selected" : "dropdown-option"}
-                      >
-                        {t.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-        </div>
-      </Modal>
 
       {eventContextMenu && typeof document !== "undefined" && createPortal(
         <div
@@ -1274,7 +1069,7 @@ export function EventManager({ initialEvents, documentTemplates = [], availableP
               setEventContextMenu(null);
             }}
           >
-            {eventContextMenu.event.is_cancelled ? "Absage aufheben" : "Als abgesagt markieren"}
+            {eventContextMenu.event.is_cancelled ? t("contextMenu.uncancel") : t("contextMenu.markCancelled")}
           </button>
         </div>,
         document.body

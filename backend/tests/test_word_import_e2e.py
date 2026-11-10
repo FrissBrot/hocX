@@ -97,7 +97,7 @@ def _build_template(db):
             "default_content": "", "copy_from_last_protocol": False,
             "element_type_id": attendance_type, "render_type_id": RENDER_TYPE_KEY_VALUE,
             "is_editable": True, "allows_multiple_values": False, "export_visible": True, "is_visible": True,
-            "sort_index": 10, "render_order": 10, "latex_template": None,
+            "sort_index": 10, "render_order": 10,
             "configuration_json": {},
         }],
     )
@@ -110,7 +110,7 @@ def _build_template(db):
             "default_content": "", "copy_from_last_protocol": False,
             "element_type_id": form_type, "render_type_id": RENDER_TYPE_KEY_VALUE,
             "is_editable": True, "allows_multiple_values": False, "export_visible": True, "is_visible": True,
-            "sort_index": 10, "render_order": 10, "latex_template": None,
+            "sort_index": 10, "render_order": 10,
             "configuration_json": {"linked_list_id": amtli.id, "rows": []},
         }],
     )
@@ -123,7 +123,7 @@ def _build_template(db):
             "default_content": "", "copy_from_last_protocol": False,
             "element_type_id": form_type, "render_type_id": RENDER_TYPE_KEY_VALUE,
             "is_editable": True, "allows_multiple_values": False, "export_visible": True, "is_visible": True,
-            "sort_index": 10, "render_order": 10, "latex_template": None,
+            "sort_index": 10, "render_order": 10,
             "configuration_json": {
                 "linked_list_id": None,
                 "rows": [
@@ -143,7 +143,7 @@ def _build_template(db):
             "default_content": "", "copy_from_last_protocol": False,
             "element_type_id": text_type, "render_type_id": RENDER_TYPE_PARAGRAPH,
             "is_editable": True, "allows_multiple_values": False, "export_visible": True, "is_visible": True,
-            "sort_index": 10, "render_order": 10, "latex_template": None,
+            "sort_index": 10, "render_order": 10,
             "configuration_json": {"repeat_source": "event"},
         }],
     )
@@ -156,7 +156,7 @@ def _build_template(db):
             "default_content": "", "copy_from_last_protocol": False,
             "element_type_id": matrix_type, "render_type_id": RENDER_TYPE_KEY_VALUE,
             "is_editable": True, "allows_multiple_values": False, "export_visible": True, "is_visible": True,
-            "sort_index": 10, "render_order": 10, "latex_template": None,
+            "sort_index": 10, "render_order": 10,
             "configuration_json": {
                 "mode": "manual",
                 "auto_source": {},
@@ -471,7 +471,7 @@ def test_manual_text_assignment_is_remembered_even_when_heading_differs_from_tar
             "default_content": "", "copy_from_last_protocol": False,
             "element_type_id": text_type, "render_type_id": RENDER_TYPE_PARAGRAPH,
             "is_editable": True, "allows_multiple_values": False, "export_visible": True, "is_visible": True,
-            "sort_index": 10, "render_order": 10, "latex_template": None,
+            "sort_index": 10, "render_order": 10,
             "configuration_json": {},
         }],
     )

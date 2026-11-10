@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 
 from app.core.rate_limit import check_account_lockout, enforce_rate_limit, record_failed_attempt
 from app.core.secret_crypto import decrypt_secret, encrypt_secret
-from app.core.security import CurrentUser, build_current_user, require_admin
+from app.core.permissions import P, requires_mfa
+from app.core.security import CurrentUser, build_current_user, load_role_permissions, require_permission
 from app.core.totp import build_totp_uri, generate_totp_secret, verify_totp_code
 from app.core.webauthn import (
     RegisteredCredential,
@@ -26,7 +27,8 @@ from app.core.webauthn import (
 )
 from app.core.config import settings
 from app.core.redis_client import get_redis_sync
-from app.models import AppUser, Role, UserMfaFactor
+from app.models import AppUser, UserMfaFactor
+from app.services.role_service import ensure_can_manage_account
 from app.schemas.mfa import (
     MfaFactorRead,
     MfaPendingLoginMethodRead,
@@ -47,7 +49,7 @@ _ISSUER = "hocX"
 # password login, so the pre-existing per-ticket limit (mfa-login-totp:{ticket}, 10/10min)
 # only capped guesses within a single ticket - an attacker who already has valid credentials
 # could mint unlimited tickets and get 10 more TOTP guesses each, with no ceiling on the
-# account as a whole. Mirrors the password lockout in auth_service.py (_ACCOUNT_LOGIN_ATTEMPT_LIMIT).
+# account as a whole. Mirrors the password lockout (app/core/rate_limit.py, LOGIN_LOCKOUT_*).
 _ACCOUNT_TOTP_ATTEMPT_LIMIT = 10
 _ACCOUNT_TOTP_WINDOW_SECONDS = 15 * 60
 
@@ -94,15 +96,10 @@ class MfaService:
         return db.scalar(select(UserMfaFactor).where(UserMfaFactor.id == factor_id, UserMfaFactor.user_id == user_id))
 
     def user_requires_mfa(self, db: Session, user_id: int) -> bool:
-        """MFA is mandatory for tenant admins."""
-        return bool(
-            db.scalar(
-                select(func.count())
-                .select_from(AppUser)
-                .join(Role, Role.id == AppUser.role_id)
-                .where(AppUser.id == user_id, Role.code == "admin")
-            )
-        )
+        """MFA ist Pflicht, sobald das Konto eine Administrations-Permission hat (requires_mfa im
+        Katalog) - mit den Standardrollen genau die bisherige Regel "nur admin"."""
+        permissions, _ = load_role_permissions(db, user_id)
+        return requires_mfa(permissions)
 
     def can_add_passkey_here(self, request_host: str | None) -> bool:
         if not request_host:
@@ -192,10 +189,12 @@ class MfaService:
         )
 
     def _managed_user(self, db: Session, actor: CurrentUser, user_id: int) -> AppUser:
-        require_admin(actor)
+        require_permission(actor, P.ACCESS_MANAGE)
         user = db.get(AppUser, user_id)
         if user is None or user.tenant_id != actor.current_tenant_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        # Keine Konto-Übernahme Höherberechtigter über einen MFA-Reset (RBAC-Schutzregel E.4.1).
+        ensure_can_manage_account(db, actor, user.id)
         return user
 
     def get_managed_user_overview(self, db: Session, actor: CurrentUser, user_id: int) -> UserMfaRead:
@@ -248,6 +247,10 @@ class MfaService:
         if factor is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="MFA-Faktor nicht gefunden")
         db.delete(factor)
+        # Fremd gelöschter Faktor beendet alle Sessions des Kontos (Security-Audit SEC-010): wer
+        # den zweiten Faktor zurücksetzt, soll keine bestehende Anmeldung weiterlaufen lassen.
+        user.session_revoke_at = datetime.now(UTC)
+        db.add(user)
         db.commit()
         self._sync_preferred_factor_type(db, user, self._list_factors(db, user.id))
         return self.get_managed_user_overview(db, actor, user.id)
@@ -260,6 +263,10 @@ class MfaService:
         if factor is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="MFA-Faktor nicht gefunden")
         db.delete(factor)
+        # Fremd gelöschter Faktor beendet alle Sessions des Kontos (Security-Audit SEC-010): wer
+        # den zweiten Faktor zurücksetzt, soll keine bestehende Anmeldung weiterlaufen lassen.
+        user.session_revoke_at = datetime.now(UTC)
+        db.add(user)
         db.commit()
         self._sync_preferred_factor_type(db, user, self._list_factors(db, user.id))
         return self.get_platform_admin_user_overview(db, user.id)
@@ -310,8 +317,23 @@ class MfaService:
             expected_user_id=actor.user_id,
         )
 
+    def _ensure_login_setup_allowed(self, db: Session, user_id: int) -> None:
+        """Faktor-Einrichtung im Login-Flow nur, solange das Konto noch keinen Faktor hat.
+
+        Audit MAIN-SEC-001: Ein Login-Ticket entsteht schon nach korrektem Passwort, auch im
+        Status ``verification_required``. Ohne diese Prüfung könnte jemand mit dem Passwort
+        einen eigenen Faktor registrieren und erhielte eine voll MFA-geprüfte Session.
+        Weitere Faktoren gibt es nur über die authentifizierten ``/users/me/mfa/*``-Endpunkte.
+        """
+        if self._list_factors(db, user_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Für dieses Konto ist bereits ein MFA-Faktor eingerichtet. Bitte mit diesem anmelden.",
+            )
+
     def start_login_totp_enrollment(self, db: Session, ticket: str) -> TotpEnrollmentStartRead:
         context = self._load_login_ticket(db, ticket)
+        self._ensure_login_setup_allowed(db, context.user.id)
         secret = generate_totp_secret()
         flow_token = self._create_flow(
             "login_totp_enrollment",
@@ -328,6 +350,7 @@ class MfaService:
 
     def complete_login_totp_enrollment(self, db: Session, *, flow_token: str, code: str, label: str | None) -> PendingLoginContext:
         flow = self._load_flow(flow_token, expected_kind="login_totp_enrollment")
+        self._ensure_login_setup_allowed(db, int(flow["user_id"]))
         factor = self._complete_totp_enrollment(
             db,
             flow_token=flow_token,
@@ -406,6 +429,7 @@ class MfaService:
         request_origin: str,
     ) -> PasskeyRegistrationStartRead:
         context = self._load_login_ticket(db, ticket)
+        self._ensure_login_setup_allowed(db, context.user.id)
         return self._start_passkey_registration(
             db,
             user=context.user,
@@ -491,6 +515,7 @@ class MfaService:
         credential: dict[str, Any],
     ) -> PendingLoginContext:
         flow = self._load_flow(flow_token, expected_kind="login_passkey_registration")
+        self._ensure_login_setup_allowed(db, int(flow["user_id"]))
         self._complete_passkey_registration(
             db,
             flow_token=flow_token,
@@ -625,8 +650,10 @@ class MfaService:
             available_methods=methods,
             default_factor_type=default_factor_type,  # type: ignore[arg-type]
             default_factor_label=method_labels.get(default_factor_type) if default_factor_type else None,
-            can_add_totp=True,
-            can_add_passkey=can_add_passkey,
+            # Im Login nur bei Ersteinrichtung (keine Faktoren) neue Faktoren anbieten
+            # (MAIN-SEC-001).
+            can_add_totp=not factors,
+            can_add_passkey=can_add_passkey and not factors,
         )
 
     def _load_login_ticket(self, db: Session, ticket: str) -> PendingLoginContext:
@@ -634,7 +661,7 @@ class MfaService:
         user = db.get(AppUser, int(flow["user_id"]))
         if user is None or not user.is_active:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Benutzerkonto ist nicht mehr aktiv")
-        if (user.external_identity_json or {}).get("login_enabled") is False:
+        if not user.login_enabled:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Login ist für dieses Konto deaktiviert")
         current_user = build_current_user(db, user, mfa_verified=False)
         return PendingLoginContext(user=user, current_user=current_user, request_host=flow.get("request_host"))
@@ -671,6 +698,12 @@ class MfaService:
             db.commit()
             return self._consume_login_ticket(db, ticket)
         record_failed_attempt(account_lockout_key, period_seconds=_ACCOUNT_TOTP_WINDOW_SECONDS)
+        from app.services.audit_service import AuditService
+
+        AuditService().log(
+            db, action="user.mfa_failed", outcome="failure", tenant_id=context.user.tenant_id,
+            actor_user_id=context.user.id, details={"factor": "totp"},
+        )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Der TOTP-Code ist nicht gültig")
 
     def start_login_passkey_assertion(

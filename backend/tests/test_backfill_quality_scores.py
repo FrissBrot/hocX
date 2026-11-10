@@ -91,3 +91,24 @@ def test_backfill_ignores_an_already_analyzed_file(db, monkeypatch, tmp_path):
     assert updated == 0
     db.refresh(stored_file)
     assert stored_file.sharpness_score == first_sharpness
+
+
+def test_backfill_commits_in_batches(db, monkeypatch, tmp_path):
+    """CONC-006: Ergebnisse in Batches festschreiben - eine Transaktion über bis zu 2000 Bilder
+    lief in den Idle-Timeout der Rolle und verlor dann alles."""
+    from app.core.config import settings
+    from app.services import file_service as module
+
+    monkeypatch.setattr(settings, "storage_root", str(tmp_path))
+    monkeypatch.setattr(module, "QUALITY_BACKFILL_COMMIT_EVERY", 2)
+    tenant = make_tenant(db)
+    for _ in range(5):
+        _make_pending_stored_file(db, tenant.id, tmp_path, write_content=None)
+    commits = []
+    original_commit = db.commit
+    monkeypatch.setattr(db, "commit", lambda: (commits.append(1), original_commit()))
+
+    service.backfill_missing_quality_scores(db)
+
+    # 5 Bilder in Zweierbatches: nach dem 2. und 4. Bild plus Abschluss.
+    assert len(commits) >= 3

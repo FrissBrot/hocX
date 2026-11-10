@@ -1,11 +1,11 @@
-FROM node:22-bookworm AS deps
+FROM node:24-bookworm@sha256:df02654fe43f6c43191e9eed5b3a54246d41dae8366028893c195b7fc00c745b AS deps
 
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
 RUN npm ci
 
-FROM node:22-bookworm AS build
+FROM node:24-bookworm@sha256:df02654fe43f6c43191e9eed5b3a54246d41dae8366028893c195b7fc00c745b AS build
 
 WORKDIR /app
 
@@ -14,7 +14,7 @@ RUN mkdir -p public
 COPY . .
 RUN npm run build
 
-FROM node:22-bookworm-slim AS run
+FROM node:24-bookworm-slim@sha256:be8204d4bd327363357f532187b752ff62759c31bedf98e9e18fc08c9cbd605c AS run
 
 WORKDIR /app
 ENV NODE_ENV=production
@@ -24,6 +24,11 @@ ENV HOSTNAME=0.0.0.0
 COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
+# next-intl Namespace-Kataloge (frontend/i18n/request.ts liest sie zur Laufzeit per fs von
+# <cwd>/messages) - wie public/ und .next/static oben nicht Teil des von "next build" erzeugten
+# Standalone-Traces (das verfolgt nur statisch importierte/require()te Dateien), muss also
+# ebenfalls von Hand kopiert werden.
+COPY --from=build --chown=node:node /app/messages ./messages
 
 USER node
 

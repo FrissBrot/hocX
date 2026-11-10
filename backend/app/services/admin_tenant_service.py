@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 import shutil
 import unicodedata
@@ -7,12 +8,16 @@ import uuid
 from pathlib import Path
 
 from fastapi import UploadFile
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.storage import ABGABEBOX, MAIN, StorageError, delete_prefix, get_object_store
+from app.core.features_generated import FEATURES, MODULES, F
+from app.core.error_log import record_system_error
 from app.models import (
     AppUser,
+    DocumentAsset,
     Feature,
     Participant,
     Plan,
@@ -43,13 +48,17 @@ from app.schemas.admin import (
     AdminTenantStoragePackageRead,
     AdminTenantSubscriptionUpdate,
 )
+from app.schemas.public_catalog import PublicCustomerRead, PublicFeatureRead, PublicPlanComparisonRead, PublicPlanFeature, PublicPlanRead
 from app.schemas.user import TenantUpdate
-from app.services.document_template_service import DocumentTemplateService
 from app.services.file_service import _safe_storage_path
-from app.services import submission_link_service
+from app.services import cashflow_service, identity_verification_service, photo_album_service, submission_link_service, traefik_config_service, user_limit_service
 from app.services.storage_service import StorageService
 from app.services.tenant_service import apply_tenant_profile_image
 
+_logger = logging.getLogger(__name__)
+
+
+_logger = logging.getLogger(__name__)
 
 def build_admin_tenant_profile_image_url(tenant_public_id: uuid.UUID, profile_image_path: str | None) -> str | None:
     if not profile_image_path:
@@ -57,11 +66,15 @@ def build_admin_tenant_profile_image_url(tenant_public_id: uuid.UUID, profile_im
     return f"/api/admin/tenants/{tenant_public_id}/profile-image"
 
 
+# Features, deren Buchung bestimmt, ob Traefik Mandanten-Domains bedient
+# (traefik_config_service.FEATURE_BY_PURPOSE)
+_DOMAIN_FEATURES = frozenset(traefik_config_service.FEATURE_BY_PURPOSE.values())
+
+
 class AdminTenantService:
     """Cross-tenant tenant management for the platform-admin panel - unscoped by design."""
 
     def __init__(self) -> None:
-        self.document_template_service = DocumentTemplateService()
         self.storage_service = StorageService()
 
     def _read_model(
@@ -71,23 +84,25 @@ class AdminTenantService:
         *,
         storage_used_bytes: int | None = None,
         enabled_features: list[str] | None = None,
+        read_only_features: list[str] | None = None,
+        addon_features: list[str] | None = None,
         plans_by_code: dict[str, Plan] | None = None,
         assigned_storage_packages: list[AdminTenantStoragePackageRead] | None = None,
     ) -> AdminTenantRead:
         participant_count = int(
             db.scalar(select(func.count(Participant.id)).where(Participant.tenant_id == tenant.id)) or 0
         )
-        user_count = int(
-            db.scalar(select(func.count(AppUser.id)).where(AppUser.tenant_id == tenant.id, AppUser.is_active.is_(True))) or 0
-        )
+        # Benutzer im Sinn des Abos: aktive Konten mit Login (user_limit_service)
+        user_count = user_limit_service.login_account_count(db, tenant.id)
         # Single-tenant callers (get_tenant, create/update/clone/import) don't have a
         # prefetched totals dict - fall back to one query for just this tenant.
         if storage_used_bytes is None:
             storage_used_bytes = self.storage_service.total_bytes_by_tenant(db).get(tenant.id, 0)
-        if enabled_features is None:
-            enabled_features = sorted(
-                db.scalars(select(TenantFeature.feature_code).where(TenantFeature.tenant_id == tenant.id))
-            )
+        if enabled_features is None or read_only_features is None or addon_features is None:
+            rows = db.execute(select(TenantFeature.feature_code, TenantFeature.access, TenantFeature.source).where(TenantFeature.tenant_id == tenant.id)).all()
+            enabled_features = sorted(row.feature_code for row in rows if row.access == "full")
+            read_only_features = sorted(row.feature_code for row in rows if row.access == "read_only")
+            addon_features = sorted(row.feature_code for row in rows if row.access == "full" and row.source == "addon")
         if assigned_storage_packages is None:
             assigned_storage_packages = self._assigned_storage_packages(db, tenant.id)
         plan: Plan | None = None
@@ -109,6 +124,8 @@ class AdminTenantService:
             storage_used_bytes=storage_used_bytes,
             storage_quota_bytes=tenant.storage_quota_bytes,
             enabled_features=enabled_features,
+            read_only_features=read_only_features,
+            addon_features=addon_features,
             plan_code=tenant.plan_code,
             plan_name=plan.name if plan is not None else None,
             billing_cycle=tenant.billing_cycle,
@@ -117,10 +134,12 @@ class AdminTenantService:
             plan_storage_bytes=plan.included_storage_bytes if plan is not None else None,
             package_storage_bytes=package_storage_bytes,
             effective_storage_quota_bytes=tenant.storage_quota_bytes,
-            storage_quota_manual_override=tenant.storage_quota_manual_override,
             assigned_storage_packages=assigned_storage_packages,
             discount_percent=tenant.discount_percent,
             billing_note=tenant.billing_note,
+            billing_start_date=tenant.billing_start_date,
+            contract_ends_on=tenant.contract_ends_on,
+            show_on_website=tenant.show_on_website,
         )
 
     def _assigned_storage_packages(self, db: Session, tenant_id: int) -> list[AdminTenantStoragePackageRead]:
@@ -136,7 +155,14 @@ class AdminTenantService:
         ]
 
     def list_tenants(
-        self, db: Session, *, limit: int | None = None, offset: int = 0, q: str | None = None, plan_code: str | None = None
+        self,
+        db: Session,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+        q: str | None = None,
+        plan_code: str | None = None,
+        needs_rebooking: bool = False,
     ) -> AdminTenantPage:
         query = db.query(Tenant).order_by(Tenant.name.asc())
         # Applied before the offset/limit slice (audit A1, 2026-08-16) - the frontend used
@@ -148,6 +174,17 @@ class AdminTenantService:
         # Plan-Filter der Mandantenliste (Chips "Alle / <Plan>") - ebenfalls vor der Paginierung.
         if plan_code:
             query = query.filter(Tenant.plan_code == plan_code)
+        # Übersicht "Umbuchen" im Preiskatalog: Mandanten auf einem nicht (mehr) buchbaren Plan
+        # oder mit einem nicht buchbaren Speicherpaket, z.B. nach einem Katalog-Import mit
+        # Überschreiben (catalog_config_service).
+        if needs_rebooking:
+            non_bookable_plan = select(Plan.code).where(Plan.is_bookable.is_(False))
+            non_bookable_package_tenants = (
+                select(TenantStoragePackage.tenant_id)
+                .join(StoragePackage, StoragePackage.code == TenantStoragePackage.package_code)
+                .where(StoragePackage.is_bookable.is_(False))
+            )
+            query = query.filter(or_(Tenant.plan_code.in_(non_bookable_plan), Tenant.id.in_(non_bookable_package_tenants)))
         total = query.count()
         query = query.offset(offset)
         if limit is not None:
@@ -158,8 +195,12 @@ class AdminTenantService:
         # `le=500` cap).
         storage_totals = self.storage_service.total_bytes_by_tenant(db)
         features_by_tenant: dict[int, list[str]] = {}
-        for tenant_id, feature_code in db.execute(select(TenantFeature.tenant_id, TenantFeature.feature_code)).all():
-            features_by_tenant.setdefault(tenant_id, []).append(feature_code)
+        read_only_by_tenant: dict[int, list[str]] = {}
+        addons_by_tenant: dict[int, list[str]] = {}
+        for tenant_id, feature_code, access, source in db.execute(select(TenantFeature.tenant_id, TenantFeature.feature_code, TenantFeature.access, TenantFeature.source)).all():
+            (features_by_tenant if access == "full" else read_only_by_tenant).setdefault(tenant_id, []).append(feature_code)
+            if access == "full" and source == "addon":
+                addons_by_tenant.setdefault(tenant_id, []).append(feature_code)
         plans_by_code = {plan.code: plan for plan in db.query(Plan).all()}
         packages_by_tenant: dict[int, list[AdminTenantStoragePackageRead]] = {}
         package_rows = db.execute(
@@ -184,6 +225,8 @@ class AdminTenantService:
                     tenant,
                     storage_used_bytes=storage_totals.get(tenant.id, 0),
                     enabled_features=sorted(features_by_tenant.get(tenant.id, [])),
+                    read_only_features=sorted(read_only_by_tenant.get(tenant.id, [])),
+                    addon_features=sorted(addons_by_tenant.get(tenant.id, [])),
                     plans_by_code=plans_by_code,
                     assigned_storage_packages=packages_by_tenant.get(tenant.id, []),
                 )
@@ -234,6 +277,8 @@ class AdminTenantService:
             feature_codes=feature_codes,
             description=plan.description,
             is_bookable=plan.is_bookable,
+            is_featured=plan.is_featured,
+            load_priority=plan.load_priority,
             tenant_count=tenant_count,
         )
 
@@ -251,6 +296,75 @@ class AdminTenantService:
         )
         return [self._plan_read_model(db, plan, tenant_count=int(tenant_counts.get(plan.code, 0))) for plan in plans]
 
+    def set_tenant_website_listing(self, db: Session, tenant_id: int, show_on_website: bool) -> AdminTenantRead | None:
+        tenant = db.get(Tenant, tenant_id)
+        if tenant is None:
+            return None
+        tenant.show_on_website = show_on_website
+        db.commit()
+        return self.get_tenant(db, tenant_id)
+
+    def list_public_customers(self, db: Session) -> list[PublicCustomerRead]:
+        """Fuer die Website freigegebene Mandanten, alphabetisch."""
+        names = db.scalars(select(Tenant.name).where(Tenant.show_on_website.is_(True)).order_by(func.lower(Tenant.name)))
+        return [PublicCustomerRead(name=name) for name in names]
+
+    def list_public_plans(self, db: Session) -> list[PublicPlanRead]:
+        """Buchbare Plaene fuer die oeffentliche Website, gleiche Reihenfolge wie im Adminportal
+        (guenstigster zuerst). Feature-Namen kommen aus dem Katalog, damit Umbenennungen im
+        Adminportal ebenfalls direkt sichtbar sind."""
+        plans = (
+            db.query(Plan)
+            .filter(Plan.is_bookable.is_(True))
+            .order_by(
+                Plan.price_yearly_rp.asc().nulls_last(), Plan.price_monthly_rp.asc().nulls_last(), Plan.code.asc()
+            )
+            .all()
+        )
+        features_by_plan: dict[str, list[PublicPlanFeature]] = {}
+        rows = db.execute(
+            select(PlanFeature.plan_code, Feature.code, Feature.name)
+            .join(Feature, Feature.code == PlanFeature.feature_code)
+            .order_by(Feature.name.asc())
+        ).all()
+        for plan_code, feature_code, feature_name in rows:
+            features_by_plan.setdefault(plan_code, []).append(PublicPlanFeature(code=feature_code, name=feature_name))
+        return [
+            PublicPlanRead(
+                code=plan.code,
+                name=plan.name,
+                description=plan.description,
+                price_monthly_rp=plan.price_monthly_rp,
+                price_yearly_rp=plan.price_yearly_rp,
+                included_user_limit=plan.included_user_limit,
+                included_storage_bytes=plan.included_storage_bytes,
+                is_featured=plan.is_featured,
+                features=features_by_plan.get(plan.code, []),
+            )
+            for plan in plans
+        ]
+
+    def public_plan_comparison(self, db: Session) -> PublicPlanComparisonRead:
+        """Vergleichstabelle der Website: buchbare Abos (wie die Preiskarten) und alle Features,
+        die in einem davon stecken oder einzeln zubuchbar sind - nach Produktmodul, dann Name.
+        Features, die weder enthalten noch zubuchbar sind, kann man nicht kaufen und fehlen."""
+        plans = self.list_public_plans(db)
+        in_plans = {feature.code for plan in plans for feature in plan.features}
+        module_order = {module: index for index, module in enumerate(MODULES)}
+        features = [
+            PublicFeatureRead(
+                code=feature.code,
+                name=feature.name,
+                description=feature.description,
+                module=FEATURES[F(feature.code)].module if feature.code in FEATURES else "other",
+                standalone_price_monthly_rp=feature.standalone_price_monthly_rp,
+            )
+            for feature in db.query(Feature).all()
+            if feature.code in in_plans or feature.standalone_price_monthly_rp is not None
+        ]
+        features.sort(key=lambda item: (module_order.get(item.module, len(module_order)), item.name.lower()))
+        return PublicPlanComparisonRead(plans=plans, features=features)
+
     @staticmethod
     def _generate_code(db: Session, model: type, name: str) -> str:
         """Katalog-Code (PK) aus dem Namen ableiten - im Adminportal wird kein Code mehr
@@ -261,6 +375,27 @@ class AdminTenantService:
         while db.get(model, code) is not None:
             code, suffix = f"{base}_{suffix}", suffix + 1
         return code
+
+    def delete_plan(self, db: Session, code: str) -> bool:
+        # Sperre verhindert eine neue FK-Zuweisung zwischen Prüfung und Löschen.
+        plan = db.scalar(select(Plan).where(Plan.code == code).with_for_update())
+        if plan is None:
+            return False
+        if db.scalar(select(Tenant.id).where(Tenant.plan_code == code).limit(1)) is not None:
+            raise ValueError("Plan is still assigned to an organization")
+        db.delete(plan)
+        db.commit()
+        return True
+
+    def delete_storage_package(self, db: Session, code: str) -> bool:
+        package = db.scalar(select(StoragePackage).where(StoragePackage.code == code).with_for_update())
+        if package is None:
+            return False
+        if db.scalar(select(TenantStoragePackage.tenant_id).where(TenantStoragePackage.package_code == code).limit(1)) is not None:
+            raise ValueError("Storage package is still assigned to an organization")
+        db.delete(package)
+        db.commit()
+        return True
 
     def create_plan(self, db: Session, payload: AdminPlanWrite) -> AdminPlanRead:
         """Legt einen neuen Plan an. Ein vorgegebener Code darf noch nicht existieren (ValueError),
@@ -283,8 +418,12 @@ class AdminTenantService:
         plan.sort_order = payload.sort_order
         plan.description = (payload.description or "").strip() or None
         plan.is_bookable = payload.is_bookable
+        plan.is_featured = payload.is_featured
+        plan.load_priority = payload.load_priority
         db.add(plan)
         db.flush()
+        if plan.is_featured:
+            db.execute(update(Plan).where(Plan.code != code, Plan.is_featured.is_(True)).values(is_featured=False))
 
         wanted = set(payload.feature_codes)
         current = {
@@ -314,40 +453,74 @@ class AdminTenantService:
         tenant.user_limit_override = payload.user_limit_override
         tenant.discount_percent = payload.discount_percent
         tenant.billing_note = (payload.billing_note or "").strip() or None
+        tenant.contract_ends_on = payload.contract_ends_on
+        if payload.billing_start_date != tenant.billing_start_date:
+            tenant.billing_start_date = payload.billing_start_date
+            # Offene Forderungen ab dem neuen Abo-Start neu erzeugen lassen (Cashflow).
+            cashflow_service.reset_open_charges(db, tenant)
         db.add(tenant)
         db.flush()
 
-        # Ein Plan-Wechsel traegt nur eine Baseline ein - bereits gebuchte Zusatzmodule, die
-        # nicht Teil des neuen Plans sind, bleiben unangetastet (siehe Tenant.plan_code-Kommentar
-        # in entities.py). Kein Feature wird hier je entfernt.
+        # Planwechsel (docs/FEATURE_ENTITLEMENT_ARCHITECTURE.md, Abschnitt Up-/Downgrade):
+        # Features des neuen Plans werden voll gebucht. Features, die aus dem bisherigen Plan
+        # kamen und im neuen fehlen, wechseln je permissions/features.json in «nur lesen» (Daten
+        # bleiben lesbar) oder fallen weg (Domains). Einzeln gebuchte Zusatzmodule und
+        # Bestandsschutz (source 'addon') bleiben unangetastet.
+        changed: set[str] = set()
         if payload.plan_code is not None:
-            plan_feature_codes = set(
-                db.scalars(select(PlanFeature.feature_code).where(PlanFeature.plan_code == payload.plan_code))
-            )
-            already_booked = set(
-                db.scalars(select(TenantFeature.feature_code).where(TenantFeature.tenant_id == tenant_id))
-            )
-            for feature_code in plan_feature_codes - already_booked:
-                db.add(TenantFeature(tenant_id=tenant_id, feature_code=feature_code, enabled_by_admin_id=admin_id))
+            changed = self._apply_plan_features(db, tenant_id, payload.plan_code, admin_id=admin_id)
         db.commit()
+        if _DOMAIN_FEATURES & changed:
+            traefik_config_service.regenerate(db)
         self.recompute_effective_storage_quota(db, tenant_id)
         return self._read_model(db, tenant)
+
+    def _apply_plan_features(self, db: Session, tenant_id: int, plan_code: str, *, admin_id: int | None) -> set[str]:
+        """Feature-Stand eines Mandanten an seinen Plan angleichen; Rückgabe: geänderte Codes."""
+        plan_codes = set(db.scalars(select(PlanFeature.feature_code).where(PlanFeature.plan_code == plan_code)))
+        rows = {row.feature_code: row for row in db.scalars(select(TenantFeature).where(TenantFeature.tenant_id == tenant_id))}
+        changed: set[str] = set()
+        for code in plan_codes:
+            row = rows.get(code)
+            if row is None:
+                db.add(TenantFeature(tenant_id=tenant_id, feature_code=code, enabled_by_admin_id=admin_id, access="full", source="plan"))
+                changed.add(code)
+            elif row.access != "full" or row.source != "plan":
+                row.access, row.source = "full", "plan"
+                changed.add(code)
+        for code, row in rows.items():
+            if code in plan_codes or row.source != "plan":
+                continue
+            definition = FEATURES.get(code)
+            if definition is not None and definition.downgrade == "read_only":
+                if row.access != "read_only":
+                    row.access = "read_only"
+                    changed.add(code)
+            else:
+                db.delete(row)
+                changed.add(code)
+        db.flush()
+        return changed
 
     def recompute_effective_storage_quota(self, db: Session, tenant_id: int) -> None:
         """effective = plan.included_storage_bytes + sum(package.bytes * quantity) - called
         after a plan change or a storage-package assignment change (0087_storage_packages).
-        Skipped when storage_quota_manual_override is set, so an admin's individually set
-        quota (e.g. a bespoke enterprise limit) survives the next plan/package change instead
-        of being silently overwritten.
+        There is no manual override any more (0136_drop_manual_storage_quota).
 
         If the plan has no storage limit (included_storage_bytes is NULL, e.g. the 'legacy'
         plan) and no packages are assigned, the quota is left at NULL (unlimited) rather than
         0 - upload_pipeline.py's _enforce_tenant_storage_quota treats NULL as "no limit" and 0
         as "no uploads allowed at all", and naively defaulting a NULL plan limit to 0 would
         silently lock out every tenant on a plan without a storage cap."""
+        if self.apply_effective_storage_quota(db, tenant_id):
+            db.commit()
+
+    def apply_effective_storage_quota(self, db: Session, tenant_id: int) -> bool:
+        """Wie recompute_effective_storage_quota, aber ohne Commit - für Aufrufer, die mehrere
+        Mandanten in einer Transaktion nachführen (Katalog-Import). True, wenn etwas gesetzt wurde."""
         tenant = db.get(Tenant, tenant_id)
-        if tenant is None or tenant.storage_quota_manual_override:
-            return
+        if tenant is None:
+            return False
         plan = db.get(Plan, tenant.plan_code) if tenant.plan_code is not None else None
         plan_bytes = plan.included_storage_bytes if plan is not None else None
         package_bytes = int(
@@ -361,13 +534,32 @@ class AdminTenantService:
         )
         tenant.storage_quota_bytes = None if plan_bytes is None and package_bytes == 0 else (plan_bytes or 0) + package_bytes
         db.add(tenant)
-        db.commit()
+        return True
 
     def list_storage_packages(self, db: Session) -> list[AdminStoragePackageRead]:
         packages = db.query(StoragePackage).order_by(StoragePackage.bytes.asc(), StoragePackage.code.asc()).all()
-        return [self._storage_package_read_model(package) for package in packages]
+        tenant_counts = dict(
+            db.execute(
+                select(TenantStoragePackage.package_code, func.count(TenantStoragePackage.tenant_id)).group_by(
+                    TenantStoragePackage.package_code
+                )
+            ).all()
+        )
+        return [
+            self._storage_package_read_model(db, package, tenant_count=int(tenant_counts.get(package.code, 0)))
+            for package in packages
+        ]
 
-    def _storage_package_read_model(self, package: StoragePackage) -> AdminStoragePackageRead:
+    def _storage_package_read_model(
+        self, db: Session, package: StoragePackage, *, tenant_count: int | None = None
+    ) -> AdminStoragePackageRead:
+        if tenant_count is None:
+            tenant_count = int(
+                db.scalar(
+                    select(func.count(TenantStoragePackage.tenant_id)).where(TenantStoragePackage.package_code == package.code)
+                )
+                or 0
+            )
         return AdminStoragePackageRead(
             code=package.code,
             name=package.name,
@@ -375,6 +567,8 @@ class AdminTenantService:
             price_monthly_rp=package.price_monthly_rp,
             price_yearly_rp=package.price_yearly_rp,
             sort_order=package.sort_order,
+            is_bookable=package.is_bookable,
+            tenant_count=tenant_count,
         )
 
     def create_storage_package(self, db: Session, payload: AdminStoragePackageWrite) -> AdminStoragePackageRead:
@@ -389,9 +583,10 @@ class AdminTenantService:
         package.price_monthly_rp = payload.price_monthly_rp
         package.price_yearly_rp = payload.price_yearly_rp
         package.sort_order = payload.sort_order
+        package.is_bookable = payload.is_bookable
         db.add(package)
         db.commit()
-        return self._storage_package_read_model(package)
+        return self._storage_package_read_model(db, package)
 
     def update_tenant_storage_packages(
         self, db: Session, tenant_id: int, items: list[AdminTenantStoragePackageItem], *, admin_id: int
@@ -421,22 +616,42 @@ class AdminTenantService:
         return self._read_model(db, tenant)
 
     def update_tenant_features(
-        self, db: Session, tenant_id: int, enabled_codes: list[str], *, admin_id: int
+        self, db: Session, tenant_id: int, enabled_codes: list[str], *, admin_id: int, read_only_codes: list[str] | None = None
     ) -> AdminTenantRead | None:
         tenant = db.get(Tenant, tenant_id)
         if tenant is None:
             return None
         wanted = set(enabled_codes)
+        read_only = set(read_only_codes or ()) - wanted
+        blocked = sorted(code for code in read_only if (definition := FEATURES.get(code)) is None or definition.downgrade != "read_only")
+        if blocked:
+            raise ValueError(f"Kein Nur-Lesen-Zustand für: {', '.join(blocked)}")
+        plan_codes = set(db.scalars(select(PlanFeature.feature_code).where(PlanFeature.plan_code == tenant.plan_code))) if tenant.plan_code else set()
         current = {
             row.feature_code: row
             for row in db.query(TenantFeature).filter(TenantFeature.tenant_id == tenant_id).all()
         }
+        before = {code for code, row in current.items() if row.access == "full"}
         for code, row in current.items():
-            if code not in wanted:
+            if code in wanted:
+                row.access = "full"
+            elif code in read_only:
+                row.access = "read_only"
+            else:
                 db.delete(row)
-        for code in wanted - current.keys():
-            db.add(TenantFeature(tenant_id=tenant_id, feature_code=code, enabled_by_admin_id=admin_id))
+        for code in (wanted | read_only) - current.keys():
+            db.add(TenantFeature(
+                tenant_id=tenant_id, feature_code=code, enabled_by_admin_id=admin_id,
+                access="full" if code in wanted else "read_only", source="plan" if code in plan_codes else "addon",
+            ))
         db.commit()
+        if _DOMAIN_FEATURES & (before ^ wanted):
+            # security-audit FEAT-01: regenerate() only runs at startup and after domain
+            # create/verify/delete - without this call, revoking the feature here would leave
+            # an already-active domain routed until one of those unrelated events happens to
+            # trigger a regenerate. Ebenso beim Wieder-Zubuchen: eine noch aktive Domain soll
+            # sofort wieder bedient werden, nicht erst beim nächsten Start.
+            traefik_config_service.regenerate(db)
         return self._read_model(db, tenant)
 
     def get_tenant(self, db: Session, tenant_id: int) -> AdminTenantRead | None:
@@ -457,7 +672,11 @@ class AdminTenantService:
         db.add(tenant)
         db.commit()
         db.refresh(tenant)
-        self.document_template_service.ensure_default_template_for_tenant(db, tenant.id, tenant.name)
+        from app.documents import brand_service
+
+        # Jeder Mandant startet mit einem Standard-Brand-Profil (Document Studio).
+        brand_service.ensure_default_brand(db, tenant.id)
+        db.commit()
         # Every new tenant starts with a default Abgabe link (preselected for new Abgaben).
         submission_link_service.create_default_link(db, tenant.id)
         if payload.plan_code is not None:
@@ -473,28 +692,32 @@ class AdminTenantService:
                 return result
         return self._read_model(db, tenant)
 
-    async def update_tenant(
+    async def update_tenant(  # loop-ok: nur im Worker-Thread (core/offload.run_coroutine_in_thread bzw. Galerie-Ingest)
         self,
         db: Session,
         tenant_id: int,
         payload: TenantUpdate,
         profile_image: UploadFile | None = None,
+        *,
+        admin_email: str | None = None,
     ) -> AdminTenantRead | None:
         tenant = db.get(Tenant, tenant_id)
         if tenant is None:
             return None
+        old_name = tenant.name
         if payload.name is not None:
             tenant.name = payload.name
+        identity_verification_service.handle_rename(db, tenant, old_name, actor_email=admin_email)
         if payload.public_slug is not None:
             tenant.public_slug = payload.public_slug
         if profile_image is not None:
-            await apply_tenant_profile_image(tenant, profile_image)
+            await apply_tenant_profile_image(db, tenant, profile_image)
         db.add(tenant)
         db.commit()
         db.refresh(tenant)
         return self._read_model(db, tenant)
 
-    def delete_tenant(self, db: Session, tenant_id: int) -> bool:
+    def delete_tenant(self, db: Session, tenant_id: int) -> dict | None:
         """Deletes a tenant and everything under it.
 
         Plain `DELETE FROM tenant` would fail: several tenant-scoped tables have an
@@ -506,13 +729,13 @@ class AdminTenantService:
         first (each cascading its own dependents in one self-contained statement) clears every
         such RESTRICT before the final tenant delete ever touches its cascade targets:
         - protocol: takes protocol_element/_block/_image/_text/... and attendance_fine with it,
-          clearing protocol_image's restrict into stored_file and protocol's own restricts into
-          template/document_template.
+          clearing protocol_image's restrict into stored_file and protocol's own restrict into
+          template.
         - submission_assignment: takes submission_upload/_file with it, clearing
           submission_upload_file's restrict into stored_file and its own restrict into
           list_definition.
         - template: takes template_element/_block with it, clearing their restrict into
-          element_definition, and its own restrict into document_template.
+          element_definition, and its own restricts.
         - word_import_document: has its own (non-nullable) restricts straight into template
           and stored_file - it doesn't cascade from protocol/submission_assignment/template
           (its protocol_id link is SET NULL, not CASCADE), so it must be cleared explicitly
@@ -520,11 +743,11 @@ class AdminTenantService:
         """
         tenant = db.get(Tenant, tenant_id)
         if tenant is None:
-            return False
+            return None
 
         # Captured before any DB delete below (audit finding, 2026-08-25): this method
         # only ever removed DB rows - not one unlink() for protocol images, document
-        # template parts, abgabebox uploads, or the tenant's profile image. Every full
+        # style assets, abgabebox uploads, or the tenant's profile image. Every full
         # tenant delete permanently leaked every physical file the tenant ever had,
         # exactly the failure class behind this app's two prior real disk-full outages.
         # stored_file cascades from tenant_id (ondelete="CASCADE"), so every row for this
@@ -542,13 +765,42 @@ class AdminTenantService:
             if upload_ids
             else set()
         )
-        stored_files = db.execute(select(StoredFile.storage_path, StoredFile.id).where(StoredFile.tenant_id == tenant_id)).all()
+        stored_files = db.execute(
+            select(StoredFile.storage_path, StoredFile.id, StoredFile.thumbnail_path).where(StoredFile.tenant_id == tenant_id)
+        ).all()
         stored_file_paths = [
-            (row.storage_path, settings.abgabebox_storage_root if row.id in abgabebox_stored_file_ids else settings.storage_root)
+            (row.storage_path, ABGABEBOX if row.id in abgabebox_stored_file_ids else MAIN)
             for row in stored_files
         ]
+        # Vorschaubilder liegen getrennt im thumbnail_root (Audit MAIN-BE-005); nur die eigene
+        # "<id>.jpg" löschen - ein übernommener Fremdname gehört einer anderen Datei.
+        thumbnail_paths = [row.thumbnail_path for row in stored_files if row.thumbnail_path == f"{row.id}.jpg"]
         profile_image_path = tenant.profile_image_path
+        # Studio-Assets einzeln merken: aus alten Dokumentvorlagen übernommene (Migration 0115,
+        # von 0118 als document_asset weitergeführt) liegen weiter unter document_template_parts/.
+        style_asset_paths = list(db.scalars(select(DocumentAsset.storage_path).where(DocumentAsset.tenant_id == tenant_id)))
 
+        # Album-Einträge in Alben ANDERER Mandanten (geteilte Alben) haben keinen Fremdschlüssel auf
+        # die Datei (photo_album_item.file_id = public_id) und überlebten die Kaskade - ein später
+        # importierter Mandant mit derselben public_id hing dann wieder im fremden Album
+        # (Security-Audit release/1.2.0, Nachtrag zu SEC-001).
+        own_file_public_ids = list(db.scalars(select(StoredFile.public_id).where(StoredFile.tenant_id == tenant_id)))
+        if upload_ids:
+            own_file_public_ids += list(db.scalars(select(SubmissionUploadFile.public_id).where(SubmissionUploadFile.upload_id.in_(upload_ids))))
+        photo_album_service.drop_items_for_files(db, own_file_public_ids)
+
+        # Löschbericht (PRIV-023) und E-Mail-Adressen der Konten aus dem Audit-Log entfernen.
+        from app.services.audit_service import AuditService
+
+        report = {
+            "users": db.scalar(select(func.count()).select_from(AppUser).where(AppUser.tenant_id == tenant_id)) or 0,
+            "stored_files": len(stored_files),
+            "object_delete_errors": 0,
+        }
+        AuditService().forget_tenant(db, tenant_id)
+        from app.services import erasure_journal
+
+        erasure_journal.record(db, "tenant", tenant.public_id, tenant_public_id=tenant.public_id)
         db.execute(delete(WordImportDocument).where(WordImportDocument.tenant_id == tenant_id))
         db.execute(delete(Protocol).where(Protocol.tenant_id == tenant_id))
         db.execute(delete(SubmissionAssignment).where(SubmissionAssignment.tenant_id == tenant_id))
@@ -556,22 +808,98 @@ class AdminTenantService:
         db.delete(tenant)
         db.commit()
 
-        # Only after the DB transaction has actually committed - an unlink can't be rolled
-        # back, so it must never run ahead of the delete it depends on succeeding.
-        for storage_path, root in stored_file_paths:
-            self._unlink_quietly(root, storage_path)
+        # Only after the DB transaction has actually committed - a deletion can't be rolled
+        # back, so it must never run ahead of the delete it depends on succeeding. Die
+        # Löschungen laufen in einer eigenen Transaktion über den Objektspeicher (Journal), damit
+        # eine laufende Storage-Migration sie übernimmt.
+        for storage_path, namespace in stored_file_paths:
+            if not self._delete_object_quietly(db, namespace, storage_path):
+                report["object_delete_errors"] += 1
         if profile_image_path:
-            self._unlink_quietly(settings.storage_root, profile_image_path)
+            self._delete_object_quietly(db, MAIN, profile_image_path)
+        for thumbnail_path in thumbnail_paths:
+            self._unlink_quietly(settings.thumbnail_root, thumbnail_path)
+        for storage_path in style_asset_paths:
+            self._delete_object_quietly(db, MAIN, storage_path)
+        self._remove_tenant_directories(db, tenant_id)
+        self._delete_wanderplaner_data(db, tenant_id)
+        return report
+
+    @staticmethod
+    def _delete_wanderplaner_data(db: Session, tenant_id: int) -> None:
+        """Touren liegen in der eigenen Wanderplaner-Datenbank, ohne Fremdschlüssel auf tenant -
+        sie werden deshalb hier explizit mitgelöscht, für jeden Weg über delete_tenant (Admin-Route,
+        Erasure-Replay nach einem Restore, Aufräumen eines halben Imports). Der Mandant ist schon
+        weg; ein Fehler bricht das Löschen nicht ab, landet aber in system_error_log, damit die
+        verwaisten Touren auffallen."""
+        from app.services import wanderplaner_client
+
+        if not wanderplaner_client.is_configured():
+            return
+        try:
+            wanderplaner_client.delete_tenant_data(tenant_id)
+        except Exception as exc:
+            record_system_error(db, exc=exc)
+
+    def _remove_tenant_directories(self, db: Session, tenant_id: int) -> None:
         for relative_dir in (
-            f"document_templates/tenant-{tenant_id}",
+            # Document-Studio-Assets (ältere Uploads liegen noch unter document_style_assets)
+            f"document_assets/tenant-{tenant_id}",
+            f"document_style_assets/tenant-{tenant_id}",
             f"document_template_parts/tenant-{tenant_id}",
-            f"document_template_snapshots/tenant-{tenant_id}",
+            f"document_thumbnails/tenant-{tenant_id}",
             f"tenant_imports/tenant-{tenant_id}",
+            f"tenant_clones/tenant-{tenant_id}",
         ):
+            try:
+                delete_prefix(db, MAIN, relative_dir)
+                db.commit()
+            except StorageError as exc:
+                db.rollback()
+                _logger.warning("Objekte unter %s konnten nicht gelöscht werden: %s", relative_dir, exc)
+            # Lokale Caches (materialisierte Vorlagen) ebenfalls entfernen.
             directory = _safe_storage_path(settings.storage_root, relative_dir)
             if directory.exists():
                 shutil.rmtree(directory, ignore_errors=True)
-        return True
+        # Import und Klon legen Abgabebox-Dateien unter dem Abgabebox-Root ab (MAIN-BE-006).
+        for relative_dir in (f"tenant_imports/tenant-{tenant_id}", f"tenant_clones/tenant-{tenant_id}"):
+            directory = _safe_storage_path(settings.abgabebox_storage_root, relative_dir)
+            if directory.exists():
+                shutil.rmtree(directory, ignore_errors=True)
+
+    def cleanup_partial_tenant(self, db: Session, tenant_id: int, *, original: BaseException) -> None:
+        """Räumt einen halb importierten/geklonten Mandanten ab (Audit MAIN-BE-006).
+
+        Nutzt delete_tenant (RESTRICT-Reihenfolge, Dateien, Thumbnails, Verzeichnisse) statt
+        eines nackten DELETE FROM tenant. Scheitert das Aufräumen selbst, wird dieser Fehler
+        protokolliert (system_error_log), die ursprüngliche Exception bleibt aber die, die der
+        Aufrufer weiterwirft.
+        """
+        try:
+            db.rollback()
+            if not self.delete_tenant(db, tenant_id):
+                # Mandantenzeile schon weg (z. B. nichts committet) - kopierte Dateien liegen
+                # trotzdem in den Mandantenverzeichnissen.
+                self._remove_tenant_directories(db, tenant_id)
+        except Exception as cleanup_exc:
+            db.rollback()
+            _logger.exception(
+                "Aufräumen des unvollständigen Mandanten %s ist fehlgeschlagen (Ursache: %r)", tenant_id, original
+            )
+            # tenant_id bewusst None: die Zeile kann halb gelöscht sein (FK auf tenant).
+            record_system_error(db, exc=cleanup_exc)
+
+    def _delete_object_quietly(self, db: Session, namespace: str, key: str) -> bool:
+        """Best effort wie bisher _unlink_quietly: eine verbliebene Datei ist danach ein
+        unreferenziertes Objekt, das der Prüfbericht der nächsten Migration ausweist."""
+        try:
+            get_object_store().delete(db, namespace, key)
+            db.commit()
+            return True
+        except (StorageError, ValueError) as exc:
+            db.rollback()
+            _logger.warning("Objekt %s/%s konnte nicht gelöscht werden: %s", namespace, key, exc)
+            return False
 
     def _unlink_quietly(self, root: str, relative_path: str) -> None:
         try:

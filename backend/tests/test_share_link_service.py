@@ -5,8 +5,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from app.models.entities import PhotoAlbum, PhotoAlbumItem, ShareLinkFile, StoredFile
-from app.services import share_link_service
+from app.models.entities import PhotoAlbum, PhotoAlbumItem, PhotoAlbumTenantShare, ShareLinkFile, StoredFile
+from app.services import photo_album_share_service, share_link_service
 from tests.factories import make_tenant
 
 
@@ -143,3 +143,44 @@ def test_status_for_reflects_active_expired_and_revoked(db):
     assert share_link_service.status_for(active) == "active"
     assert share_link_service.status_for(expired) == "expired"
     assert share_link_service.status_for(revoked) == "revoked"
+
+
+def _shared_album(db, owner_id: int, partner_id: int) -> PhotoAlbum:
+    album = PhotoAlbum(tenant_id=owner_id, name="Gemeinsam", kind="manual")
+    db.add(album)
+    db.flush()
+    db.add(PhotoAlbumTenantShare(album_id=album.id, tenant_id=partner_id, status="accepted"))
+    db.flush()
+    return album
+
+
+def test_album_link_hides_photos_of_a_partner_who_switched_public_links_off(db):
+    """Album-Freigabe-Schalter (Migration 0130): ein Partner kann seine Fotos aus öffentlichen
+    Links des gemeinsamen Albums nehmen; die Fotos des Besitzers bleiben drin."""
+    owner, partner = make_tenant(db, "Besitzer"), make_tenant(db, "Partner")
+    album = _shared_album(db, owner.id, partner.id)
+    own_photo, partner_photo = _make_file(db, owner.id, "eigen.png"), _make_file(db, partner.id, "partner.png")
+    db.add_all([PhotoAlbumItem(album_id=album.id, file_id=own_photo.public_id), PhotoAlbumItem(album_id=album.id, file_id=partner_photo.public_id)])
+    db.commit()
+    link = share_link_service.create_for_album(db, tenant_id=owner.id, name="Link", album=album, expires_at=None, created_by=None)
+    assert set(share_link_service.file_ids_for_link(db, link)) == {own_photo.public_id, partner_photo.public_id}
+
+    photo_album_share_service.set_my_photos_public(db, album_id=album.id, tenant_id=partner.id, value=False)
+
+    assert share_link_service.file_ids_for_link(db, link) == [own_photo.public_id]
+
+
+def test_partner_album_link_needs_the_owners_permission(db):
+    """Standardmässig darf der Partner das gemeinsame Album verlinken; schaltet der Besitzer das
+    ab, gilt ein bestehender Partner-Link nicht mehr."""
+    owner, partner = make_tenant(db, "Besitzer"), make_tenant(db, "Partner")
+    album = _shared_album(db, owner.id, partner.id)
+    assert photo_album_share_service.may_create_public_link(db, album, partner.id)
+    link = share_link_service.create_for_album(db, tenant_id=partner.id, name="Partner-Link", album=album, expires_at=None, created_by=None)
+    assert share_link_service.resolve_active(db, link.token) is not None
+
+    photo_album_share_service.update_share_settings(db, album=album, tenant_id=partner.id, partner_public_links=False)
+
+    assert not photo_album_share_service.may_create_public_link(db, album, partner.id)
+    assert photo_album_share_service.may_create_public_link(db, album, owner.id)
+    assert share_link_service.resolve_active(db, link.token) is None

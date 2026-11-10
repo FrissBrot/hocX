@@ -21,6 +21,7 @@ from sqlalchemy.sql import Select
 
 from app.core.cycle_utils import get_cycle_year
 from app.models.entities import CycleConfig, ListDefinition, ListEntry, TableSnapshot
+from app.services.snapshot_list_references import snapshot_list_rows
 from app.services.table_snapshot_config import SNAPSHOT_TABLES, TRANSITIVE_SNAPSHOT_SCOPE
 from app.services.tenant_transfer_common import row_to_dict
 
@@ -123,6 +124,9 @@ class TableSnapshotService:
             rows = db.scalars(query).all()
             payload: list[dict[str, Any]] = [row_to_dict(row) for row in rows]
 
+            if table_name == "list_entry":
+                payload = snapshot_list_rows(db, payload, tenant_id)
+
             snapshot = TableSnapshot(
                 tenant_id=tenant_id,
                 cycle_config_id=cycle_config.id,
@@ -192,6 +196,7 @@ class TableSnapshotService:
                 "column_two_value_json": payload.get("column_two_value_json", {}),
             })
 
+        entry_rows = snapshot_list_rows(db, entry_rows, tenant_id)
         now = datetime.now(UTC)
         _upsert_snapshot_rows(
             db, tenant_id=tenant_id, cycle_config_id=cycle_config.id, cycle_year=cycle_year,

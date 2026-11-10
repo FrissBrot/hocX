@@ -1,16 +1,20 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { FileOverviewItem, SimilarityGroup } from "@/types/api";
+import type { FileOverviewItem, SimilarityGroup, SimilarityGroupList } from "@/types/api";
 
 const browserApiFetchMock = vi.fn();
 const showToastMock = vi.fn();
 const confirmMock = vi.fn();
 
-vi.mock("@/lib/api/client", () => ({
-  browserApiBaseUrl: "",
-  browserApiFetch: (...args: unknown[]) => browserApiFetchMock(...args),
-}));
+vi.mock("@/lib/api/client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/client")>();
+  return {
+    ApiError: actual.ApiError,
+    browserApiBaseUrl: "",
+    browserApiFetch: (...args: unknown[]) => browserApiFetchMock(...args),
+  };
+});
 
 vi.mock("@/contexts/toast-context", () => ({
   useToast: () => showToastMock,
@@ -21,6 +25,11 @@ vi.mock("@/contexts/confirm-context", () => ({
 }));
 
 import { PhotoSimilarGroups } from "./photo-similar-groups";
+import { clearSimilarityGroupsCache } from "./use-similarity-groups";
+
+function ready(groups: SimilarityGroup[]): SimilarityGroupList {
+  return { status: "ready", computed_at: "2026-10-24T09:00:00Z", groups };
+}
 
 function makeItem(overrides: Partial<FileOverviewItem> = {}): FileOverviewItem {
   const id = overrides.id ?? `file-${Math.random().toString(36).slice(2)}`;
@@ -64,6 +73,7 @@ function makeGroup(): SimilarityGroup {
 
 describe("PhotoSimilarGroups", () => {
   beforeEach(() => {
+    clearSimilarityGroupsCache();
     browserApiFetchMock.mockReset();
     showToastMock.mockReset();
     confirmMock.mockReset();
@@ -75,7 +85,7 @@ describe("PhotoSimilarGroups", () => {
 
   it("requests the looser series threshold, not the tight duplicate one", async () => {
     browserApiFetchMock.mockImplementation((url: string) =>
-      Promise.resolve(url.startsWith("/api/files/similarity-groups") ? [] : null)
+      Promise.resolve(url.startsWith("/api/files/similarity-groups") ? ready([]) : null)
     );
     render(<PhotoSimilarGroups search="" tagFilter={[]} />);
 
@@ -87,7 +97,7 @@ describe("PhotoSimilarGroups", () => {
   it("preselects only the best image to keep, and toggling it back off is a no-op", async () => {
     const group = makeGroup();
     browserApiFetchMock.mockImplementation((url: string) =>
-      Promise.resolve(url.startsWith("/api/files/similarity-groups") ? [group] : null)
+      Promise.resolve(url.startsWith("/api/files/similarity-groups") ? ready([group]) : null)
     );
     render(<PhotoSimilarGroups search="" tagFilter={[]} />);
 
@@ -104,7 +114,7 @@ describe("PhotoSimilarGroups", () => {
   it("deletes only the images that stayed unchecked, keeping the checked ones", async () => {
     const group = makeGroup();
     browserApiFetchMock.mockImplementation((url: string, options?: { method?: string; body?: string }) => {
-      if (url.startsWith("/api/files/similarity-groups")) return Promise.resolve([group]);
+      if (url.startsWith("/api/files/similarity-groups")) return Promise.resolve(ready([group]));
       if (url === "/api/files/bulk-delete" && options?.method === "POST") {
         return Promise.resolve({ deleted_ids: JSON.parse(options.body!).file_ids, errors: [] });
       }
@@ -131,7 +141,7 @@ describe("PhotoSimilarGroups", () => {
   it("keeps the group visible with the remaining images after a delete, instead of dismissing it", async () => {
     const group = makeGroup();
     browserApiFetchMock.mockImplementation((url: string, options?: { method?: string; body?: string }) => {
-      if (url.startsWith("/api/files/similarity-groups")) return Promise.resolve([group]);
+      if (url.startsWith("/api/files/similarity-groups")) return Promise.resolve(ready([group]));
       if (url === "/api/files/bulk-delete" && options?.method === "POST") {
         return Promise.resolve({ deleted_ids: JSON.parse(options.body!).file_ids, errors: [] });
       }
@@ -154,7 +164,7 @@ describe("PhotoSimilarGroups", () => {
   it("reports the actually deleted ids to the gallery via onDeleted", async () => {
     const group = makeGroup();
     browserApiFetchMock.mockImplementation((url: string) => {
-      if (url.startsWith("/api/files/similarity-groups")) return Promise.resolve([group]);
+      if (url.startsWith("/api/files/similarity-groups")) return Promise.resolve(ready([group]));
       if (url === "/api/files/bulk-delete") return Promise.resolve({ deleted_ids: ["other-1"], errors: ["other-2 fehlgeschlagen"] });
       return Promise.resolve(null);
     });
@@ -170,7 +180,7 @@ describe("PhotoSimilarGroups", () => {
   it("hiding the series just dismisses the card without any request", async () => {
     const group = makeGroup();
     browserApiFetchMock.mockImplementation((url: string) => {
-      if (url.startsWith("/api/files/similarity-groups")) return Promise.resolve([group]);
+      if (url.startsWith("/api/files/similarity-groups")) return Promise.resolve(ready([group]));
       return Promise.resolve(null);
     });
     render(<PhotoSimilarGroups search="" tagFilter={[]} />);
@@ -185,7 +195,7 @@ describe("PhotoSimilarGroups", () => {
     const group = makeGroup();
     group.images.forEach((image, index) => { image.original_name = `serie-${index}.jpg`; });
     browserApiFetchMock.mockImplementation((url: string) =>
-      Promise.resolve(url.startsWith("/api/files/similarity-groups") ? [group] : null)
+      Promise.resolve(url.startsWith("/api/files/similarity-groups") ? ready([group]) : null)
     );
     render(<PhotoSimilarGroups search="" tagFilter={[]} />);
 

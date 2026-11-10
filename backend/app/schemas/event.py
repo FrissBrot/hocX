@@ -90,6 +90,7 @@ class EventUpdate(BaseModel):
 class EventRead(PublicIdModel, EventBase):
     _fk_models: ClassVar[dict[str, type]] = {"tenant_id": Tenant}
     _fk_list_models: ClassVar[dict[str, type]] = {field: Participant for field in _PARTICIPANT_ID_FIELDS}
+    _relationship_fields: ClassVar[tuple[str, ...]] = ("cycle_assignments",)
 
     id: uuid.UUID
     tenant_id: uuid.UUID

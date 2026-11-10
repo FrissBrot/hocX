@@ -1,6 +1,25 @@
+import { isLocale, type Locale } from "@/i18n/locale-config.generated";
+
 const APP_TIME_ZONE = "Europe/Zurich";
 const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 const DISPLAY_DATE_PATTERN = /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/;
+
+// Mandatsgebiet ist/bleibt die Schweiz (CHF, Europe/Zurich) unabhaengig von der UI-Sprache -
+// nur die Schreibweise von Wochentags-/Monatsnamen, Tausendertrennzeichen etc. soll der
+// jeweiligen Sprache folgen, daher immer die "-CH"-Variante der Locale fuer Intl.
+const INTL_LOCALE_BY_APP_LOCALE: Record<Locale, string> = {
+  de: "de-CH",
+  en: "en-CH",
+  fr: "fr-CH",
+  it: "it-CH",
+};
+
+// `locale` kommt oft direkt aus next-intl's useLocale() (Rueckgabetyp dort ist das generische
+// `string`, nicht das engere Locale-Union-Type) - isLocale() validiert statt eines TS-Cast, der
+// eine zur Laufzeit unbekannte/falsche Locale stillschweigend durchgereicht haette.
+export function toIntlLocale(locale: string | undefined): string {
+  return isLocale(locale) ? INTL_LOCALE_BY_APP_LOCALE[locale] : INTL_LOCALE_BY_APP_LOCALE.de;
+}
 
 function isValidIsoDateParts(year: number, month: number, day: number) {
   if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
@@ -82,7 +101,10 @@ export function formatDateRange(start: string | null | undefined, end?: string |
   return `${formattedStart} - ${formattedEnd}`;
 }
 
-export function formatDateTime(input: string | null | undefined) {
+// `locale` ist optional und faellt auf Deutsch/de-CH zurueck, damit noch nicht auf
+// useLocale() umgestellte Aufrufstellen unveraendert funktionieren - siehe CLAUDE.md,
+// Abschnitt i18n: neue/berührte Aufrufstellen sollen die aktuelle UI-Locale durchreichen.
+export function formatDateTime(input: string | null | undefined, locale?: string) {
   if (!input) {
     return "";
   }
@@ -92,7 +114,7 @@ export function formatDateTime(input: string | null | undefined) {
     return formatDate(input);
   }
 
-  return new Intl.DateTimeFormat("de-CH", {
+  return new Intl.DateTimeFormat(toIntlLocale(locale), {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -103,7 +125,30 @@ export function formatDateTime(input: string | null | undefined) {
   }).format(parsed);
 }
 
-export function formatWeekdayDate(input: string | null | undefined) {
+// Aufnahmezeit aus EXIF: das Backend speichert die lokale Kamerazeit "schwebend" als UTC
+// (siehe StoredFile.exif_taken_at) - deshalb in UTC formatieren, sonst verschöbe die
+// App-Zeitzone die Uhrzeit. Ein bekannter Offset wird angehängt ("14.07.2023, 10:30 (+02:00)").
+export function formatCaptureDateTime(input: string | null | undefined, offset?: string | null, locale?: string) {
+  if (!input) {
+    return "";
+  }
+  const parsed = new Date(input);
+  if (Number.isNaN(parsed.getTime())) {
+    return formatDate(input);
+  }
+  const formatted = new Intl.DateTimeFormat(toIntlLocale(locale), {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone: "UTC",
+  }).format(parsed);
+  return offset ? `${formatted} (${offset})` : formatted;
+}
+
+export function formatWeekdayDate(input: string | null | undefined, locale?: string) {
   if (!input) {
     return "";
   }
@@ -113,7 +158,7 @@ export function formatWeekdayDate(input: string | null | undefined) {
   if (Number.isNaN(parsed.getTime())) {
     return formatDate(input);
   }
-  return new Intl.DateTimeFormat("de-CH", {
+  return new Intl.DateTimeFormat(toIntlLocale(locale), {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -122,7 +167,7 @@ export function formatWeekdayDate(input: string | null | undefined) {
   }).format(parsed);
 }
 
-export function formatTime(input: string | null | undefined) {
+export function formatTime(input: string | null | undefined, locale?: string) {
   if (!input) {
     return "";
   }
@@ -130,12 +175,55 @@ export function formatTime(input: string | null | undefined) {
   if (Number.isNaN(parsed.getTime())) {
     return "";
   }
-  return new Intl.DateTimeFormat("de-CH", {
+  return new Intl.DateTimeFormat(toIntlLocale(locale), {
     hour: "2-digit",
     minute: "2-digit",
     hourCycle: "h23",
     timeZone: APP_TIME_ZONE,
   }).format(parsed);
+}
+
+// Lange Schreibweise mit ausgeschriebenem Monat ("14.–28. Juli 2026"), z. B. für den
+// Aufnahmezeitraum auf der öffentlichen Freigabeseite. formatRange fasst gleiche Monate/Jahre
+// sprachgerecht zusammen.
+export function formatLongDateRange(start: string | null | undefined, end: string | null | undefined, locale?: string) {
+  const from = start ? new Date(start) : null;
+  const to = end ? new Date(end) : null;
+  const formatter = new Intl.DateTimeFormat(toIntlLocale(locale), { day: "numeric", month: "long", year: "numeric", timeZone: APP_TIME_ZONE });
+  if (from && !Number.isNaN(from.getTime()) && to && !Number.isNaN(to.getTime())) {
+    return formatter.formatRange(from, to);
+  }
+  const single = from ?? to;
+  return single && !Number.isNaN(single.getTime()) ? formatter.format(single) : "";
+}
+
+// Kurzes Datum mit abgekürztem Monat ("31. Okt. 2026").
+export function formatShortMonthDate(input: string | null | undefined, locale?: string) {
+  const parsed = input ? new Date(input) : null;
+  if (!parsed || Number.isNaN(parsed.getTime())) return "";
+  return new Intl.DateTimeFormat(toIntlLocale(locale), { day: "numeric", month: "short", year: "numeric", timeZone: APP_TIME_ZONE }).format(parsed);
+}
+
+// Monat und Jahr ("November 2026"), z. B. für den Termin eines Anliegens. `input` ist ein
+// ISO-Datum (Monatserster); gerechnet wird ohne Zeitzone, damit der Monat nie kippt.
+export function formatMonthYear(input: string | null | undefined, locale?: string) {
+  const match = /^(\d{4})-(\d{2})/.exec(String(input ?? ""));
+  if (!match) return "";
+  const parsed = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 15));
+  return new Intl.DateTimeFormat(toIntlLocale(locale), { month: "long", year: "numeric", timeZone: "UTC" }).format(parsed);
+}
+
+// Teile einer Datums-Kachel ("18" / "Mi" / "Nov.") für ein ISO-Datum, ohne Zeitzone gerechnet.
+export function formatDateTileParts(input: string | null | undefined, locale?: string): { day: string; weekday: string; month: string } {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(input ?? ""));
+  if (!match) return { day: "", weekday: "", month: "" };
+  const parsed = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  const intlLocale = toIntlLocale(locale);
+  return {
+    day: match[3],
+    weekday: new Intl.DateTimeFormat(intlLocale, { weekday: "short", timeZone: "UTC" }).format(parsed),
+    month: new Intl.DateTimeFormat(intlLocale, { month: "short", timeZone: "UTC" }).format(parsed),
+  };
 }
 
 export function formatFileSize(bytes: number | null | undefined) {
@@ -158,9 +246,14 @@ export function formatFileSize(bytes: number | null | undefined) {
 // Preise werden als Rappen (Integer) gespeichert, nie als Franken/Float (Rundungsfehler) -
 // siehe design/DESIGN.md-Nachbarschaft in tokens.css gibt es dafuer keinen Token, das ist reine
 // Zahlendarstellung. null = kein Preis hinterlegt.
-export function formatRappen(rp: number | null | undefined): string {
+export function formatRappen(rp: number | null | undefined, locale?: string): string {
   if (rp === null || rp === undefined || Number.isNaN(rp)) {
     return "–";
   }
-  return new Intl.NumberFormat("de-CH", { style: "currency", currency: "CHF" }).format(rp / 100);
+  return new Intl.NumberFormat(toIntlLocale(locale), { style: "currency", currency: "CHF" }).format(rp / 100);
+}
+
+/** Prozentzahl (z.B. Rabatt) mit höchstens zwei Nachkommastellen, ohne Prozentzeichen. */
+export function formatPercentNumber(value: number, locale?: string): string {
+  return new Intl.NumberFormat(toIntlLocale(locale), { maximumFractionDigits: 2 }).format(value);
 }

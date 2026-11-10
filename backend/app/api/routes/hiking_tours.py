@@ -5,7 +5,7 @@ wanderplaner-backend mit eigener Datenbank. Diese Routen behalten die bisherigen
 /api/hiking-tours, damit das Frontend unveraendert bleibt, und erledigen alles, was zu hocX
 gehoert:
 
-- Login, Mandant, Rolle und Feature-Gating (require_wanderplaner_read/_write)
+- Login, Mandant, Berechtigung (hiking.read/hiking.manage) und Feature-Gating (wanderplaner)
 - Ablage des Druck-PDFs als StoredFile im Mandanten-Speicher
 - Audit-Eintraege
 - Abgleich der Fotoalben pro Tour (photo_tour_link_service)
@@ -16,6 +16,7 @@ Alles andere wird unveraendert an den Service weitergereicht (wanderplaner_clien
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 import uuid
 from pathlib import Path
@@ -28,7 +29,10 @@ from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
 from app.core.db import get_db
-from app.core.security import CurrentUser, get_current_user, require_wanderplaner_read, require_wanderplaner_write
+from app.core.features_generated import F
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, require_feature, require_permission
+from app.core.storage import MAIN, StorageError, get_object_store, key_from_legacy_path, validate_key
 from app.models.entities import StoredFile
 from app.schemas.hiking_tour import PrintResponse
 from app.services import wanderplaner_client
@@ -37,6 +41,7 @@ from app.services.photo_tour_link_service import sync_photos_for_tours_best_effo
 
 router = APIRouter()
 audit = AuditService()
+logger = logging.getLogger(__name__)
 
 # GPX-Import (5 MB, siehe wanderplaner-backend/app/core/gpx.py) plus Multipart-Overhead.
 MAX_FORWARD_BODY_BYTES = 6 * 1024 * 1024
@@ -109,28 +114,44 @@ async def _read_body(request: Request) -> bytes | None:
     return bytes(body) or None
 
 
-def _store_print_pdf(db: Session, *, tenant_id: int, content: bytes, original_name: str) -> StoredFile:
-    """Gleiche Ablage wie ExportService._store_generated_file (EXPORT_ROOT/generated, von
-    dessen Aufbewahrungs-Sweep mit aufgeraeumt), nur direkt aus den Bytes des Service."""
-    target_dir = Path(settings.export_root) / "generated"
-    target_dir.mkdir(parents=True, exist_ok=True)
-    target_path = target_dir / f"{uuid4().hex}-wanderplaner.pdf"
-    target_path.write_bytes(content)
+def _require_read(user: CurrentUser) -> None:
+    require_permission(user, P.HIKING_READ)
+    require_feature(user, F.WANDERPLANER, write=False)
+
+
+def _require_manage(user: CurrentUser) -> None:
+    require_permission(user, P.HIKING_MANAGE)
+    require_feature(user, F.WANDERPLANER, write=True)
+
+
+def _store_print_pdf(db: Session, *, tenant_id: int, user_id: int, content: bytes, original_name: str) -> StoredFile:
+    """Gleiche Ablage wie die Dokument-Engine (documents/service.py::_store_pdf): Objektspeicher
+    unter EXPORT_ROOT/generated, von deren Aufbewahrungs-Sweep mit aufgeräumt."""
+    prefix = key_from_legacy_path(str(Path(settings.export_root) / "generated"))
+    key = validate_key(f"{prefix}/{uuid4().hex}-wanderplaner.pdf")
+    store = get_object_store()
+    store.put_bytes(db, MAIN, key, content, content_type="application/pdf")
     stored_file = StoredFile(
         tenant_id=tenant_id,
         original_name=original_name,
         mime_type="application/pdf",
-        storage_path=str(target_path.relative_to(settings.storage_root)),
+        storage_path=key,
         file_size_bytes=len(content),
         checksum_sha256=hashlib.sha256(content).hexdigest(),
-        created_by=None,
+        created_by=user_id,
     )
     try:
         db.add(stored_file)
         db.flush()
+        db.commit()
     except Exception:
-        target_path.unlink(missing_ok=True)
+        db.rollback()
+        try:
+            store.discard_unregistered(MAIN, key)
+        except StorageError as exc:
+            logger.warning("Objekt %s eines abgebrochenen Kartendrucks nicht entfernt: %s", key, exc)
         raise
+    db.refresh(stored_file)
     return stored_file
 
 
@@ -149,7 +170,7 @@ async def print_hiking_tour(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Kartendruck-PDF: der Service rendert, hocX legt das PDF als StoredFile ab."""
-    require_wanderplaner_write(user)
+    _require_manage(user)
     body = await _read_body(request)
     upstream = await run_in_threadpool(
         _call_service,
@@ -162,10 +183,13 @@ async def print_hiking_tour(
     )
     if upstream.status != 200:
         return _passthrough(upstream)
-    stored_file = _store_print_pdf(db, tenant_id=user.current_tenant_id, content=upstream.body, original_name=_download_name(upstream))
-    db.commit()
-    db.refresh(stored_file)
-    audit.log(db, action="hiking_tour.printed", actor=user, entity_type="hiking_tour", details={"hiking_tour_id": str(tour_id)})
+    stored_file = await run_in_threadpool(
+        _store_print_pdf, db, tenant_id=user.current_tenant_id, user_id=user.user_id,
+        content=upstream.body, original_name=_download_name(upstream),
+    )
+    await run_in_threadpool(
+        audit.log, db, action="hiking_tour.printed", actor=user, entity_type="hiking_tour", details={"hiking_tour_id": str(tour_id)}
+    )
     return PrintResponse(
         generated_file_id=stored_file.public_id,
         content_url=f"/api/stored-files/{stored_file.public_id}/content",
@@ -174,35 +198,60 @@ async def print_hiking_tour(
     )
 
 
-@router.api_route("/hiking-tours", methods=["GET", "POST"])
-async def forward_hiking_tour_collection(
+# Je Methode eine eigene Route (statt api_route), damit Inventar-Test und Rechte-Übersicht
+# (permissions/route-map.json) jede Weiterleitung mit ihrer Prüfung sehen.
+@router.get("/hiking-tours")
+async def list_hiking_tours(
     request: Request,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
+    _require_read(user)
     return await _forward(request, "", db, user)
 
 
-@router.api_route("/hiking-tours/{subpath:path}", methods=["GET", "POST", "PATCH", "DELETE"])
-async def forward_hiking_tour_request(
+@router.post("/hiking-tours")
+async def create_hiking_tour(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    _require_manage(user)
+    return await _forward(request, "", db, user)
+
+
+@router.get("/hiking-tours/{subpath:path}")
+async def read_hiking_tour_resource(
     subpath: str,
     request: Request,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
+    _require_read(user)
+    if not _SAFE_SUBPATH.match(subpath):
+        raise HTTPException(status_code=404, detail="Not Found")
+    return await _forward(request, subpath, db, user)
+
+
+@router.post("/hiking-tours/{subpath:path}")
+@router.patch("/hiking-tours/{subpath:path}")
+@router.delete("/hiking-tours/{subpath:path}")
+async def change_hiking_tour_resource(
+    subpath: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    _require_manage(user)
     if not _SAFE_SUBPATH.match(subpath):
         raise HTTPException(status_code=404, detail="Not Found")
     return await _forward(request, subpath, db, user)
 
 
 async def _forward(request: Request, subpath: str, db: Session, user: CurrentUser) -> Response:
-    """Alle uebrigen Wanderplaner-Aufrufe: Rechte pruefen, weiterleiten, danach Audit und
-    Foto-Abgleich. Lesend = jede Rolle, schreibend = writer/admin (wie bisher)."""
+    """Alle uebrigen Wanderplaner-Aufrufe weiterleiten, danach Audit und Foto-Abgleich. Die
+    Rechte prueft die aufrufende Route (lesend hiking.read, schreibend hiking.manage)."""
     method = request.method
-    if method == "GET":
-        require_wanderplaner_read(user)
-    else:
-        require_wanderplaner_write(user)
 
     match = _TOUR_PATH.match(subpath)
     tour_id = match.group("tour_id") if match else None
@@ -223,12 +272,14 @@ async def _forward(request: Request, subpath: str, db: Session, user: CurrentUse
     if upstream.status < 400:
         audit_action = _AUDIT_ACTIONS.get((method, action))
         if audit_action is not None:
-            audit.log(db, action=audit_action, actor=user, entity_type="hiking_tour", details={"hiking_tour_id": tour_id})
+            await run_in_threadpool(
+                audit.log, db, action=audit_action, actor=user, entity_type="hiking_tour", details={"hiking_tour_id": tour_id}
+            )
         if (method, action) in _PHOTO_SYNC_ACTIONS:
             await run_in_threadpool(_sync_photos, db, user)
     return _passthrough(upstream)
 
 
 def _sync_photos(db: Session, user: CurrentUser) -> None:
-    sync_photos_for_tours_best_effort(db, user.current_tenant_id, actor_email=user.email)
+    sync_photos_for_tours_best_effort(db, user.current_tenant_id, actor_user_id=user.user_id)
     db.commit()

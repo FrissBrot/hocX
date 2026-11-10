@@ -9,8 +9,8 @@ set -euo pipefail
 #   storage/abgabebox-uploads), only storage/exports turned out to be safe to sweep by
 #   age. This was verified against the actual code and the live DB, not assumed:
 #
-#   - storage/exports (PDF/LaTeX build output, see export_service.py): every export run
-#     writes into a brand-new uuid-suffixed file/directory (never overwrites or reuses an
+#   - storage/exports (generated PDFs, see backend/app/documents/service.py): every export
+#     run writes into a brand-new uuid-suffixed file (never overwrites or reuses an
 #     old one) and the download route (GET /api/stored-files/{id}/content in
 #     api/routes/files.py) already returns a clean 404 ("File missing on filesystem") if
 #     the underlying file is gone rather than erroring - and any protocol/global PDF can

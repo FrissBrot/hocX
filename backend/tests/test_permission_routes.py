@@ -90,8 +90,7 @@ def test_fine_delete_http_permission_matrix(db, role, expected_status):
 def test_reader_fines_http_listing_only_returns_own_participant_fines(db):
     tenant = make_tenant(db, "Reader Own Fines")
     user = make_app_user(db, email="reader-fines@example.com", tenant_id=tenant.id)
-    own_participant = make_participant(db, tenant.id, display_name="Own Person")
-    own_participant.app_user_id = user.id
+    own_participant = user
     other_participant = make_participant(db, tenant.id, display_name="Other Person")
     template = make_template(db, tenant.id)
     protocol = make_protocol(db, tenant.id, template.id)
@@ -119,6 +118,18 @@ def test_tag_config_patch_http_permission_matrix(db, role, expected_status):
 
     response = client.patch("/api/tag-config", json={"Vorstand": {"color": "#112233"}})
     assert response.status_code == expected_status
+
+
+def test_tag_config_patch_merges_fields_per_tag(db):
+    tenant = make_tenant(db, "Tag Config Merge")
+    client = _tenant_client(db, make_current_user(tenant.id, role="admin"))
+
+    client.patch("/api/tag-config", json={"Vorstand": {"color": "#112233"}})
+    response = client.patch("/api/tag-config", json={"Vorstand": {"important": True}})
+    assert response.json()["Vorstand"] == {"color": "#112233", "important": True}
+
+    response = client.patch("/api/tag-config", json={"Vorstand": {}})
+    assert response.json()["Vorstand"] == {}
 
 
 def _platform_client(db, role: str):
@@ -150,3 +161,45 @@ def test_support_cannot_read_sensitive_platform_routes(db, path):
 )
 def test_owner_can_read_sensitive_platform_routes(db, path):
     assert _platform_client(db, "owner").get(path).status_code == 200
+
+
+@pytest.mark.parametrize("kind", ["plans", "storage-packages"])
+@pytest.mark.parametrize("role", ["support", "owner"])
+def test_catalog_delete_requires_write_access(db, kind, role):
+    from app.models.entities import Plan, StoragePackage
+    from app.schemas.admin import AdminPlanWrite, AdminStoragePackageWrite
+    from app.services.admin_tenant_service import AdminTenantService
+
+    service = AdminTenantService()
+    code = "test_delete_permission"
+    if kind == "plans":
+        service.upsert_plan(db, code, AdminPlanWrite(name="Delete permission"))
+        model = Plan
+    else:
+        service.upsert_storage_package(db, code, AdminStoragePackageWrite(name="Delete permission", bytes=1024))
+        model = StoragePackage
+    client = _platform_client(db, role)
+    response = client.delete(f"/api/admin/{kind}/{code}")
+    assert response.status_code == (204 if role == "owner" else 403)
+    assert (db.get(model, code) is None) == (role == "owner")
+    if role == "owner":
+        assert client.delete(f"/api/admin/{kind}/{code}").status_code == 404
+
+
+@pytest.mark.parametrize("kind", ["plans", "storage-packages"])
+def test_catalog_delete_returns_conflict_for_assigned_entry(db, kind):
+    from app.models.entities import TenantStoragePackage
+    from app.schemas.admin import AdminPlanWrite, AdminStoragePackageWrite, AdminTenantSubscriptionUpdate
+    from app.services.admin_tenant_service import AdminTenantService
+
+    service = AdminTenantService()
+    tenant = make_tenant(db)
+    code = "test_delete_conflict"
+    if kind == "plans":
+        service.upsert_plan(db, code, AdminPlanWrite(name="Assigned plan"))
+        service.update_tenant_subscription(db, tenant.id, AdminTenantSubscriptionUpdate(plan_code=code), admin_id=None)
+    else:
+        service.upsert_storage_package(db, code, AdminStoragePackageWrite(name="Assigned package", bytes=1024))
+        db.add(TenantStoragePackage(tenant_id=tenant.id, package_code=code, quantity=1))
+        db.commit()
+    assert _platform_client(db, "owner").delete(f"/api/admin/{kind}/{code}").status_code == 409

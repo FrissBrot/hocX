@@ -1,0 +1,235 @@
+"""Gestaltungsbeispiele (Katalog-Designs): gültig und ohne Hardcode-Texte. Übernehmen legt eine
+Vorlage an, die sich ihre Herkunft merkt, und bringt das CD des Designs (Bilder, Farben, Schrift)
+als eigenes, verknüpftes Brand-Profil mit (nie Standardprofil, nur mit Recht auf das
+Erscheinungsbild). Ohne CD folgt die Vorlage dem Erscheinungsbild des Vereins. Mandantengebunden,
+umstellbar auf das eigene CI und exportiert mit echten Daten."""
+from __future__ import annotations
+
+import asyncio
+import json
+
+import pytest
+from fastapi import HTTPException
+from pydantic import ValidationError
+from sqlalchemy import select
+
+from app.api.routes import document_studio as studio
+from app.documents import brand_service, service
+from app.documents.compiler import validate_template
+from app.documents.doc_types import DOCUMENT_TYPES
+from app.documents.appearance import APPEARANCE_BASES, APPEARANCE_VARIANTS, DESIGN_KEYS
+from app.documents.examples import ASSET_DIR, EXAMPLES, build_example_content, example_tokens, thumbnail_path
+from app.documents.layout import all_node_lists, iter_nodes
+from app.documents.service import DocumentRequest
+from app.documents.strings import strings_for
+from app.documents.system_templates import SYSTEM_TEMPLATE_KEYS
+from app.models import DocumentAsset, DocumentBrand, DocumentTemplate
+from tests.factories import (
+    make_app_user, make_current_user, make_participant, make_protocol, make_protocol_element,
+    make_protocol_element_block, make_protocol_text, make_protocol_todo, make_template, make_tenant,
+)
+
+
+class _NoDb:
+    def get(self, *args, **kwargs):
+        return None
+
+
+@pytest.fixture(autouse=True)
+def _clean_scanner(db, monkeypatch):
+    from app import scanner
+
+    async def clean(contents, **kwargs):
+        return ["clean" for _ in contents]
+
+    monkeypatch.setattr(scanner, "scan_many", clean)
+    monkeypatch.setattr(db, "rollback", lambda: None)
+
+
+@pytest.mark.parametrize("example", EXAMPLES, ids=lambda item: item.key)
+def test_example_is_valid_and_uses_text_keys(example):
+    content = build_example_content(example)
+    diagnostics = validate_template(_NoDb(), None, content, document_type=example.document_type)
+    assert [item for item in diagnostics if item.severity == "error"] == []
+    keys: set[str] = set()
+    for _area, nodes in all_node_lists(content):
+        for node, _depth in iter_nodes(nodes):
+            stack = list(json.loads(node.model_dump_json(exclude={"children"})).values())
+            while stack:
+                item = stack.pop()
+                if isinstance(item, dict):
+                    if item.get("t") == "key":
+                        keys.add(item["key"])
+                    if item.get("t") == "text":
+                        assert item["v"].strip() in ("", ":", ",", "-", "–", "/", "·", "§"), (example.key, item["v"])
+                    stack.extend(item.values())
+                elif isinstance(item, list):
+                    stack.extend(item)
+    from app.core.locale_config_generated import SUPPORTED_LOCALES
+
+    for language in SUPPORTED_LOCALES:
+        assert [item for item in keys if item not in strings_for(language)] == [], language
+
+
+@pytest.mark.parametrize("example", EXAMPLES, ids=lambda item: item.key)
+def test_example_brand_images_and_thumbnail_are_bundled(example):
+    tokens = example_tokens(example)
+    assert tokens.organization.name and tokens.assets.logo is None
+    for filename in example.images.values():
+        assert (ASSET_DIR / filename).read_bytes().startswith(b"\x89PNG")
+    assert thumbnail_path(example).read_bytes().startswith(b"\x89PNG")
+
+
+@pytest.mark.parametrize("example", EXAMPLES, ids=lambda item: item.key)
+def test_example_is_a_design_with_every_element_kind(example):
+    """Jedes Beispiel ist ein Design: Grundstil mit eigener Darstellung für jede Elementart,
+    Seitenaufbau aus dem Design."""
+    base = APPEARANCE_BASES[example.appearance]
+    assert example.appearance in DESIGN_KEYS and not base.get("legacy")
+    assert set(base["elements"]) == set(APPEARANCE_VARIANTS) - {"heading", "table"}
+    for kind, variant in base["elements"].items():
+        assert variant in APPEARANCE_VARIANTS[kind], (example.key, kind)
+    tokens = example_tokens(example)
+    assert tokens.appearance.base == example.appearance and not tokens.appearance.elements
+    assert tokens.layout.heading_style == base["layout"]["heading_style"] and tokens.layout.radius == base["layout"]["radius"]
+
+
+def test_examples_are_not_system_templates(db):
+    assert not {item.key for item in EXAMPLES} & set(SYSTEM_TEMPLATE_KEYS)
+    assert db.scalar(select(DocumentTemplate.id).where(DocumentTemplate.system_key.in_([item.key for item in EXAMPLES]))) is None
+
+
+@pytest.fixture
+def world(db):
+    tenant = make_tenant(db, "Beispiel-Verein")
+    other = make_tenant(db, "Fremder Verein")
+    users = {role: make_app_user(db, email=f"{role}@beispiel.example", tenant_id=tenant.id, role_code=role) for role in ("reader", "writer", "admin")}
+    return {
+        "tenant": tenant,
+        "other": other,
+        **{role: make_current_user(tenant.id, role=role, user_id=user.id) for role, user in users.items()},
+    }
+
+
+def _import(db, user, key="alpin", name="Alpin", with_brand=True):
+    return asyncio.run(studio._import_design_example_impl(key, studio.ExampleImport(name=name, with_brand=with_brand), db=db, user=user))
+
+
+def test_list_and_thumbnail_for_every_reader(db, world):
+    listed = studio.list_design_examples(user=world["reader"])
+    assert [item.key for item in listed] == [item.key for item in sorted(EXAMPLES, key=lambda item: item.sort_index)]
+    response = studio.get_design_example_thumbnail("fokus", user=world["reader"])
+    assert response.media_type == "image/png" and response.body.startswith(b"\x89PNG")
+    with pytest.raises(HTTPException) as excinfo:
+        studio.get_design_example_thumbnail("../system_templates", user=world["reader"])
+    assert excinfo.value.status_code == 404
+
+
+def test_import_creates_template_linked_to_the_design_brand(db, world):
+    tenant_id = world["tenant"].id
+    imported = _import(db, world["admin"])
+    template = db.scalar(select(DocumentTemplate).where(DocumentTemplate.public_id == imported.id))
+    assert template.tenant_id == tenant_id and template.origin == "tenant" and template.document_type == "protocol"
+    assert template.catalog_key == "alpin" and imported.catalog_key == "alpin"
+    assert imported.draft_revision is not None and imported.published_revision is None
+    # Der Aufbau des Designs steckt in der Vorlage (bleibt beim Umstellen auf das eigene CI)
+    assert imported.content["settings"]["brand_overrides"]["appearance_base"] == "alpin"
+
+    # Das CD des Designs kommt als eigenes, verknüpftes Profil mit, nie als Standardprofil
+    brand = db.scalar(select(DocumentBrand).where(DocumentBrand.public_id == imported.brand_id))
+    assert brand.tenant_id == tenant_id and brand.name == "Alpin" and not brand.is_default
+    default = brand_service.default_brand(db, tenant_id)
+    assert default is not None and default.id != brand.id
+    tokens = brand_service.tokens_of(brand_service.current_revision(db, brand))
+    assert tokens.colors.primary == "#0A600B" and tokens.organization.name
+    logo = db.scalar(select(DocumentAsset).where(DocumentAsset.public_id == tokens.assets.logo))
+    footer = db.scalar(select(DocumentAsset).where(DocumentAsset.public_id == tokens.assets.footer_image))
+    assert logo.tenant_id == tenant_id and footer.tenant_id == tenant_id
+
+    # Ein zweites Übernehmen legt ein weiteres Paar an und ändert nichts am ersten
+    again = _import(db, world["admin"])
+    assert again.id != imported.id and again.brand_id != imported.brand_id
+
+
+def test_import_without_brand_follows_the_club_brand(db, world):
+    tenant_id = world["tenant"].id
+    imported = _import(db, world["writer"], with_brand=False)
+    assert imported.brand_id is None and imported.catalog_key == "alpin"
+    assert [brand.is_default for brand in db.scalars(select(DocumentBrand).where(DocumentBrand.tenant_id == tenant_id))] == [True]
+    assert db.scalar(select(DocumentAsset.id).where(DocumentAsset.tenant_id == tenant_id)) is None
+
+
+def test_design_brand_can_be_replaced_by_the_club_brand_and_deleted(db, world):
+    imported = _import(db, world["admin"])
+    design_brand = imported.brand_id
+    # Solange die Vorlage das Design-CD nutzt, bleibt es geschützt
+    with pytest.raises(HTTPException) as excinfo:
+        studio.delete_document_brand(design_brand, db=db, user=world["admin"])
+    assert excinfo.value.status_code == 422
+    studio.update_document_template(imported.id, studio.TemplateMetaUpdate(clear_brand=True), db=db, user=world["admin"])
+    studio.delete_document_brand(design_brand, db=db, user=world["admin"])
+    assert db.scalar(select(DocumentBrand.id).where(DocumentBrand.public_id == design_brand)) is None
+    template = studio.get_document_template(imported.id, db=db, user=world["admin"])
+    assert template.brand_id is None and template.content["settings"]["brand_overrides"]["appearance_base"] == "alpin"
+
+
+def test_import_needs_template_rights_and_known_example(db, world):
+    with pytest.raises(HTTPException) as excinfo:
+        _import(db, world["reader"], with_brand=False)
+    assert excinfo.value.status_code == 403
+    # Das Design-CD anzulegen verlangt das Recht auf das Erscheinungsbild
+    with pytest.raises(HTTPException) as excinfo:
+        _import(db, world["writer"])
+    assert excinfo.value.status_code == 403
+    assert db.scalar(select(DocumentTemplate.id).where(DocumentTemplate.tenant_id == world["tenant"].id)) is None
+    with pytest.raises(ValidationError):
+        studio.ExampleImport(name="   ")
+    with pytest.raises(HTTPException) as excinfo:
+        _import(db, world["admin"], key="protocol_standard")
+    assert excinfo.value.status_code == 404
+
+
+def test_imported_example_stays_in_its_tenant(db, world):
+    imported = _import(db, world["admin"])
+    foreign = make_current_user(world["other"].id, role="admin", user_id=make_app_user(db, email="admin@fremd.example", tenant_id=world["other"].id, role_code="admin").id)
+    with pytest.raises(HTTPException) as excinfo:
+        studio.get_document_template(imported.id, db=db, user=foreign)
+    assert excinfo.value.status_code == 404
+
+
+def test_every_example_compiles_with_its_brand_and_images(db, world):
+    tenant_id = world["tenant"].id
+    template = make_template(db, tenant_id, name="Hock")
+    protocol = make_protocol(db, tenant_id, template.id, protocol_number="2026.2", status="durchgeführt")
+    people = [make_participant(db, tenant_id, name) for name in ("Anna Muster", "Ben Beispiel")]
+    element = make_protocol_element(db, protocol.id, section_name="Begrüssung")
+    block = make_protocol_element_block(db, element.id, {"attendance_entries": [{"participant_id": p.id, "participant_name": p.display_name, "status": "present"} for p in people]}, element_type_code="attendance")
+    text_block = make_protocol_element_block(db, element.id, {}, element_type_code="text", sort_index=1)
+    make_protocol_text(db, text_block.id, "Die Sitzung wird **eröffnet**.")
+    todo_block = make_protocol_element_block(db, element.id, {}, element_type_code="todo", sort_index=2)
+    make_protocol_todo(db, todo_block.id, task="Saal reservieren")
+    assert block.id
+    for example in EXAMPLES:
+        imported = _import(db, world["admin"], key=example.key, name=example.key)
+        needs_protocol = DOCUMENT_TYPES[example.document_type].needs_protocol
+        request = DocumentRequest(document_type=example.document_type, template_id=imported.id, revision_id=imported.draft_revision.id, protocol_id=protocol.public_id if needs_protocol else None, data_mode="sample")
+        prepared = service.prepare(db, world["admin"], tenant_id, request, preview=True)
+        assert [item for item in prepared.compiled.diagnostics if item.severity == "error"] == [], example.key
+        assert prepared.compiled.data["brand"]["colors"]["primary"] == example.tokens["colors"]["primary"], example.key
+        assert len([name for name in prepared.compiled.files if name.endswith(".png")]) >= len(example.images), example.key
+
+
+def test_every_design_has_an_example_for_each_document_type():
+    """Kreide, Signal, Fokus, Siegel und Atlas gibt es für alle Dokumenttypen (Projekt
+    «Dokumenttypen»); jedes Beispiel bringt das CD seines Protokoll-Designs mit."""
+    from app.documents import example_types
+
+    by_key = {item.key: item for item in EXAMPLES}
+    assert len(EXAMPLES) == len(set(by_key))
+    for design in example_types.DESIGNS:
+        protocol = by_key[design]
+        for doc_type in set(DOCUMENT_TYPES) - {"protocol"}:
+            example = by_key[f"{design}-{doc_type}"]
+            assert example.document_type == doc_type and example.appearance == design
+            assert example.tokens == protocol.tokens and example.images == protocol.images
+

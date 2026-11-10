@@ -19,6 +19,10 @@ from app.schemas.finance import (
 )
 
 
+class FinanceConflictError(ValueError):
+    """Erwartete, kuratierte Ablehnung einer Finanzmutation (Route: 409)."""
+
+
 class FinanceRepository:
     # ── Accounts ──────────────────────────────────────────────────────────────
 
@@ -124,9 +128,23 @@ class FinanceRepository:
         )
         if account is None:
             return False
+        # Audit MAIN-BE-009: Buchungen und Bussen hängen per ON DELETE CASCADE am Konto - ein
+        # Löschen hätte die ganze Finanzhistorie (auch abgeschlossener Protokolle) mitgenommen.
+        transaction_count = db.scalar(select(func.count()).select_from(FinanceTransaction).where(FinanceTransaction.account_id == account.id)) or 0
+        fine_count = db.scalar(select(func.count()).select_from(AttendanceFine).where(AttendanceFine.account_id == account.id)) or 0
+        if transaction_count or fine_count:
+            raise FinanceConflictError(
+                f"Das Konto hat noch {transaction_count} Buchung(en) und {fine_count} Busse(n) und kann nicht gelöscht werden."
+            )
         db.delete(account)
         db.commit()
         return True
+
+    def balance_as_of(self, db: Session, account_id: int, as_of=None) -> float:
+        statement = select(func.coalesce(func.sum(FinanceTransaction.amount), 0)).where(FinanceTransaction.account_id == account_id)
+        if as_of is not None:
+            statement = statement.where(FinanceTransaction.transaction_date <= as_of)
+        return float(db.scalar(statement) or 0)
 
     def _account_with_balance(self, db: Session, account: FinanceAccount) -> FinanceAccountRead:
         result = db.execute(
@@ -168,7 +186,21 @@ class FinanceRepository:
             .offset(skip)
             .limit(limit)
         ).all()
-        return [self._tx_read(db, row.FinanceTransaction, running_balance=row.running_balance) for row in rows]
+        # public_ids gesammelt auflösen statt pro Zeile (Audit MAIN-BE-017).
+        account_public_ids = public_id_service.resolve_public_ids(db, FinanceAccount, [account_id])
+        protocol_public_ids = public_id_service.resolve_public_ids(
+            db, Protocol, list({row.FinanceTransaction.protocol_id for row in rows if row.FinanceTransaction.protocol_id is not None})
+        )
+        return [
+            self._tx_read(
+                db,
+                row.FinanceTransaction,
+                running_balance=row.running_balance,
+                account_public_ids=account_public_ids,
+                protocol_public_ids=protocol_public_ids,
+            )
+            for row in rows
+        ]
 
     def _get_transaction_scoped(self, db: Session, tx_id: int, tenant_id: int) -> FinanceTransaction | None:
         return db.scalar(
@@ -221,6 +253,7 @@ class FinanceRepository:
             protocol = db.get(Protocol, tx.protocol_id)
             if protocol is not None and protocol.status == "abgeschlossen":
                 return None
+        self._ensure_not_fine_transaction(db, tx.id)
         if payload.amount is not None:
             tx.amount = payload.amount
         if payload.description is not None:
@@ -240,18 +273,40 @@ class FinanceRepository:
             protocol = db.get(Protocol, tx.protocol_id)
             if protocol is not None and protocol.status == "abgeschlossen":
                 return False
+        self._ensure_not_fine_transaction(db, tx.id)
         db.delete(tx)
         db.commit()
         return True
 
-    def _tx_read(self, db: Session, tx: FinanceTransaction, running_balance: Decimal | None = None) -> FinanceTransactionRead:
+    def _ensure_not_fine_transaction(self, db: Session, tx_id: int) -> None:
+        """Audit MAIN-BE-008: Die Buchung einer einkassierten Busse gehört zur Busse - ändern
+        oder löschen nur über "Busse wiedereröffnen", sonst laufen Busse und Saldo auseinander."""
+        linked = db.scalar(select(AttendanceFine.id).where(AttendanceFine.collected_transaction_id == tx_id).limit(1))
+        if linked is not None:
+            raise FinanceConflictError(
+                "Diese Buchung gehört zu einer einkassierten Busse. Bitte die Busse wiedereröffnen statt die Buchung zu ändern."
+            )
+
+    def _tx_read(
+        self,
+        db: Session,
+        tx: FinanceTransaction,
+        running_balance: Decimal | None = None,
+        *,
+        account_public_ids: dict[int, uuid.UUID] | None = None,
+        protocol_public_ids: dict[int, uuid.UUID] | None = None,
+    ) -> FinanceTransactionRead:
+        account_public_id = (account_public_ids or {}).get(tx.account_id) or public_id_service.resolve_public_id(db, FinanceAccount, tx.account_id)
+        protocol_public_id = None
+        if tx.protocol_id is not None:
+            protocol_public_id = (protocol_public_ids or {}).get(tx.protocol_id) or public_id_service.resolve_public_id(db, Protocol, tx.protocol_id)
         return FinanceTransactionRead(
             id=tx.public_id,
-            account_id=public_id_service.resolve_public_id(db, FinanceAccount, tx.account_id),
+            account_id=account_public_id,
             amount=tx.amount,
             description=tx.description,
             transaction_date=tx.transaction_date,
-            protocol_id=public_id_service.resolve_public_id(db, Protocol, tx.protocol_id) if tx.protocol_id is not None else None,
+            protocol_id=protocol_public_id,
             created_at=tx.created_at,
             running_balance=running_balance,
         )

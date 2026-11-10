@@ -1,6 +1,8 @@
 "use client";
 
-function base64urlToUint8Array(value: string): Uint8Array {
+import { clientMessage } from "@/lib/i18n/client-messages";
+
+function base64urlToUint8Array(value: string): Uint8Array<ArrayBuffer> {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
   const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
   const binary = window.atob(padded);
@@ -75,7 +77,7 @@ export async function createPasskeyCredential(publicKey: Record<string, unknown>
     publicKey: normalizeCreationOptions(publicKey),
   })) as PublicKeyCredential | null;
   if (!credential) {
-    throw new Error("Passkey-Erstellung wurde abgebrochen");
+    throw new Error(clientMessage("passkeyCreateCancelled"));
   }
   const response = credential.response as AuthenticatorAttestationResponse;
   return {
@@ -95,7 +97,7 @@ export async function getPasskeyAssertion(publicKey: Record<string, unknown>) {
     publicKey: normalizeAssertionOptions(publicKey),
   })) as PublicKeyCredential | null;
   if (!credential) {
-    throw new Error("Passkey-Anmeldung wurde abgebrochen");
+    throw new Error(clientMessage("passkeyLoginCancelled"));
   }
   const response = credential.response as AuthenticatorAssertionResponse;
   return {

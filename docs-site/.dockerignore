@@ -1,0 +1,5 @@
+# Lokale Artefakte nicht in Image/Build-Cache (Audit MAIN-OPS-017).
+site
+__pycache__
+.env
+.env.*

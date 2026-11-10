@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
 import { DataTable, DataToolbar } from "@/components/ui/data-table";
@@ -23,6 +24,7 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 export function AdminErrorLog({ initialPage, initialFilterOptions, tenants }: Props) {
+  const t = useTranslations("admin.errorLog");
   const [page, setPage] = useState(initialPage);
   const [filterOptions] = useState(initialFilterOptions);
   const [tenantId, setTenantId] = useState<string>("");
@@ -68,51 +70,51 @@ export function AdminErrorLog({ initialPage, initialFilterOptions, tenants }: Pr
   return (
     <div className="grid">
       <DataToolbar
-        title="Fehlerprotokoll"
-        description="Unerwartete Backend-Fehler aus der ganzen Anwendung (hocX + Abgabebox) - normale Nutzer sehen davon nie mehr als eine generische Meldung."
+        title={t("title")}
+        description={t("description")}
       />
 
       <article className="card">
         <div className="filter-row" style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
           <label className="field-stack">
-            <span className="field-label">Mandant</span>
+            <span className="field-label">{t("tenant")}</span>
             <SearchableSelect
               options={tenants}
-              getId={(t) => String(t.id)}
-              getLabel={(t) => t.name}
+              getId={(item) => String(item.id)}
+              getLabel={(item) => item.name}
               value={tenantId || null}
-              onChange={(t) => resetAndSet(setTenantId)(t ? String(t.id) : "")}
-              nullLabel="Alle"
+              onChange={(item) => resetAndSet(setTenantId)(item ? String(item.id) : "")}
+              nullLabel={t("all")}
             />
           </label>
           <label className="field-stack">
-            <span className="field-label">Fehlertyp</span>
+            <span className="field-label">{t("errorType")}</span>
             <SearchableSelect
               options={filterOptions.error_types}
-              getId={(t) => t}
-              getLabel={(t) => t}
+              getId={(item) => item}
+              getLabel={(item) => item}
               value={errorType || null}
-              onChange={(t) => resetAndSet(setErrorType)(t ?? "")}
-              nullLabel="Alle"
+              onChange={(item) => resetAndSet(setErrorType)(item ?? "")}
+              nullLabel={t("all")}
             />
           </label>
           <label className="field-stack">
-            <span className="field-label">Quelle</span>
+            <span className="field-label">{t("source")}</span>
             <SearchableSelect
               options={filterOptions.sources}
               getId={(s) => s}
               getLabel={(s) => SOURCE_LABELS[s] ?? s}
               value={source || null}
               onChange={(s) => resetAndSet(setSource)(s ?? "")}
-              nullLabel="Alle"
+              nullLabel={t("all")}
             />
           </label>
         </div>
       </article>
 
       <DataTable
-        columns={["Zeitpunkt", "Mandant", "Quelle", "Typ", "Status", "Route", "Nachricht"]}
-        emptyMessage={loading ? "Wird geladen…" : "Keine Fehler gefunden."}
+        columns={[t("colTime"), t("tenant"), t("source"), t("colType"), t("colStatus"), t("colRoute"), t("colMessage")]}
+        emptyMessage={loading ? t("loading") : t("noErrorsFound")}
       >
         {page.items.map((entry) => (
           <ErrorRow key={entry.id} entry={entry} expanded={expandedId === entry.id} onToggle={() => setExpandedId(expandedId === entry.id ? null : entry.id)} />
@@ -125,10 +127,12 @@ export function AdminErrorLog({ initialPage, initialFilterOptions, tenants }: Pr
 }
 
 function ErrorRow({ entry, expanded, onToggle }: { entry: SystemErrorLogEntry; expanded: boolean; onToggle: () => void }) {
+  const t = useTranslations("admin.errorLog");
+  const locale = useLocale();
   return (
     <>
       <tr className="table-row-clickable" onClick={onToggle}>
-        <td className="muted">{new Date(entry.created_at).toLocaleString("de-CH")}</td>
+        <td className="muted">{new Date(entry.created_at).toLocaleString(locale)}</td>
         <td>{entry.tenant_name ?? <span className="muted">—</span>}</td>
         <td>{SOURCE_LABELS[entry.source] ?? entry.source}</td>
         <td>
@@ -146,7 +150,7 @@ function ErrorRow({ entry, expanded, onToggle }: { entry: SystemErrorLogEntry; e
           <td colSpan={7}>
             <div className="grid" style={{ gap: "0.5rem" }}>
               {entry.actor_email && (
-                <div className="muted">Ausgelöst von: {entry.actor_email}</div>
+                <div className="muted">{t("triggeredBy", { email: entry.actor_email })}</div>
               )}
               {entry.traceback && (
                 <pre style={{ whiteSpace: "pre-wrap", fontSize: "var(--text-sm)", overflowX: "auto" }}>{entry.traceback}</pre>

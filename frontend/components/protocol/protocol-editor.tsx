@@ -1,30 +1,39 @@
 "use client";
 
+import { eventFilterTagText, normalizeEventFilter } from "@/lib/element-types/event-filter";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { runSerializedByKey } from "@/lib/utils/serialize-by-key";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
+import { formatDateTime } from "@/lib/utils/format";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 
+import { ParticipantDateContext } from "@/contexts/participant-date-context";
+import { ParticipantDirectoryContext } from "@/contexts/participant-directory-context";
 import { SessionPanel, SessionPanelHandle } from "@/components/protocol/session-panel";
 import { Modal } from "@/components/ui/modal";
 import { Badge } from "@/components/ui/badge";
 import { NavIcon } from "@/components/ui/nav-icons";
 import { QuickActionsPill } from "@/components/protocol/quick-actions-pill";
+import { ATTENDANCE_SEARCH_ATTR } from "@/components/protocol/attendance-board";
 import { bumpStatsCharts } from "@/components/protocol/chart-block";
 import { CollaborationPresenceBar } from "@/components/protocol/collaboration-presence";
 import { computePopoverPosition, usePopoverDismiss } from "@/components/ui/popover";
 import { useProtocolCollaboration } from "@/lib/hooks/use-protocol-collaboration";
 import { useTagConfig } from "@/lib/hooks/use-tag-config";
+import { useStableCallbacks } from "@/lib/hooks/use-stable-callbacks";
 import { usePdfExport } from "@/lib/hooks/use-pdf-export";
+import { DocumentExportButton } from "@/components/documents/export-dialog";
 import { ApiError, browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
+import { isAlreadyUploaded } from "@/lib/image-analysis/precheck";
 import { clearDraft, discardMutation, queueMutation, readDraft, removeMutation, saveDraft } from "@/lib/offline-store";
 import { getCycleYear } from "@/lib/utils/cycle";
 import { protocolStatusVariant } from "@/components/protocol/protocol-status";
 import {
   AttendanceFine,
   AttendanceFineListItem,
-  DocumentTemplate,
   EventSummary,
   FinanceAccount,
   FinanceTransaction,
@@ -38,6 +47,7 @@ import {
   StructuredListEntry,
   TemplateSummary,
   TodoListItem,
+  ProtocolAgendaItem,
 } from "@/types/api";
 import {
   ProtocolEventDraft,
@@ -50,11 +60,26 @@ import {
   sectionIconKey,
   trimSectionName,
   visibleAttendanceTally,
-  visibleBlockTitle,
 } from "@/components/protocol/protocol-editor-shared";
 import { CollaborationStatusPanel } from "@/components/protocol/collaboration-status-panel";
 import { FocusedElementEditor } from "@/components/protocol/focused-element-editor";
+import { AgendaItemsSection } from "@/components/protocol/agenda-items-section";
+import { AgendaQuickCreateModal } from "@/components/protocol/agenda-quick-create-modal";
+import { AgendaPostponeModal } from "@/components/agenda/agenda-item-modal";
 import { ProtocolSearchModal } from "@/components/protocol/protocol-search";
+import {
+  animateScroll,
+  applyWheelFrame,
+  measureSections,
+  type SectionLayout,
+  offsetTopWithin,
+  passiveSnapTarget,
+  prefersReducedMotion,
+  revealSection,
+  sectionScrollTarget,
+  SPY_HYSTERESIS,
+  WHEEL_HOLD_MS,
+} from "@/components/protocol/document-scroll";
 
 type ProtocolEditorProps = {
   protocol: ProtocolSummary;
@@ -62,6 +87,7 @@ type ProtocolEditorProps = {
   initialTodos: Record<string, ProtocolTodo[]>;
   initialImages: Record<string, ProtocolImage[]>;
   availableParticipants: ParticipantSummary[];
+  participantDirectory?: ParticipantSummary[];
   availableEvents: EventSummary[];
   availableLists: StructuredListDefinition[];
   initialListEntries: Record<string, StructuredListEntry[]>;
@@ -69,11 +95,22 @@ type ProtocolEditorProps = {
   availableAccounts: FinanceAccount[];
   initialFinanceTransactions: Record<string, FinanceTransaction[]>;
   initialPendingTodos?: TodoListItem[];
-  documentTemplates?: DocumentTemplate[];
   forceReadOnly?: boolean;
   canViewFines?: boolean;
+  /** Transaktionen direkt im Block «Transaktionen» erfassen (finances.manage) */
+  canManageFinances?: boolean;
   accordionEnabled?: boolean;
+  /** Rad-Effekt beim Scrollen (Profileinstellung); an = Akkordeon aus */
+  wheelEnabled?: boolean;
 };
+
+const EMPTY_AGENDA_ITEMS: ProtocolAgendaItem[] = [];
+const EMPTY_TODOS: ProtocolTodo[] = [];
+
+/** Gleiche Einträge in gleicher Reihenfolge (Identität), für stabile abgeleitete Arrays. */
+function sameItems<T>(left: readonly T[], right: readonly T[]) {
+  return left === right || (left.length === right.length && left.every((item, index) => item === right[index]));
+}
 
 export function ProtocolEditor({
   protocol,
@@ -81,6 +118,7 @@ export function ProtocolEditor({
   initialTodos,
   initialImages,
   availableParticipants,
+  participantDirectory = [],
   availableEvents,
   availableLists,
   initialListEntries,
@@ -88,11 +126,19 @@ export function ProtocolEditor({
   availableAccounts,
   initialFinanceTransactions,
   initialPendingTodos = [],
-  documentTemplates = [],
   forceReadOnly = false,
   canViewFines = true,
-  accordionEnabled = true,
+  canManageFinances = false,
+  accordionEnabled: accordionPreference = true,
+  wheelEnabled = false,
 }: ProtocolEditorProps) {
+  // Design «Protokoll-Editor v2»: mit Rad-Effekt bleiben alle Punkte offen (kein Akkordeon)
+  const accordionEnabled = accordionPreference && !wheelEnabled;
+  const t = useTranslations("protocols.editor");
+  const tRoot = useTranslations("protocols");
+  const tAgenda = useTranslations("agenda");
+  const tCommon = useTranslations("common");
+  const locale = useLocale();
   const router = useRouter();
   const [elements, setElements] = useState(initialElements);
   const [events, setEvents] = useState(availableEvents);
@@ -121,9 +167,16 @@ export function ProtocolEditor({
     : null;
   const [listEntriesByDefinition, setListEntriesByDefinition] = useState<Record<string, StructuredListEntry[]>>(initialListEntries);
   const [todosByBlock, setTodosByBlock] = useState<Record<string, ProtocolTodo[]>>(initialTodos);
+  // Aktueller Stand für asynchrone Antworten: eine spät eintreffende Speicher-Antwort darf nicht
+  // auf dem Stand vom Zeitpunkt des Aufrufs aufbauen (überschriebe neuere Änderungen).
+  const todosByBlockRef = useRef(todosByBlock);
+  todosByBlockRef.current = todosByBlock;
   const [pendingTodos, setPendingTodos] = useState<TodoListItem[]>(initialPendingTodos);
   const [imagesByBlock, setImagesByBlock] = useState<Record<string, ProtocolImage[]>>(initialImages);
   const [financeTransactions, setFinanceTransactions] = useState<Record<string, FinanceTransaction[]>>(initialFinanceTransactions);
+  // Kontostände ändern sich mit Transaktionen, die im Protokoll erfasst werden
+  const [accounts, setAccounts] = useState<FinanceAccount[]>(availableAccounts);
+  const [financeVersion, setFinanceVersion] = useState(0);
   const [protocolFines, setProtocolFines] = useState<AttendanceFine[]>([]);
   const [pendingFines, setPendingFines] = useState<AttendanceFineListItem[]>([]);
   // Refresh chart blocks whenever fines change (add/delete)
@@ -153,6 +206,10 @@ export function ProtocolEditor({
   // visible but nothing new gets marked, exactly as requested.
   const trackChangesActive = protocolStatus === "geplant" && trackChangesEnabled;
   const [sessionNotes, setSessionNotes] = useState(protocol.session_notes ?? "");
+  // Neu geladenes Protokoll (z. B. nach Refresh) übernimmt den Server-Stand, wie im Sitzungspanel.
+  useEffect(() => {
+    setSessionNotes(protocol.session_notes ?? "");
+  }, [protocol.id, protocol.session_notes]);
   const [transitioningStatus, setTransitioningStatus] = useState(false);
   const showToast = useToast();
   const confirm = useConfirm();
@@ -163,12 +220,27 @@ export function ProtocolEditor({
   const prevBlockStatusRef = useRef<Record<string, SaveState>>({});
   const collab = useProtocolCollaboration(protocol.id);
   const [showStatusChangeWarning, setShowStatusChangeWarning] = useState(false);
+  // Anliegen (agenda_item): ohne eigenen Block unter ihrem Traktandum, siehe
+  // backend app/services/agenda_item_service.py. Geladen im Client, neu bei Collab-Meldung.
+  const [agendaItems, setAgendaItems] = useState<ProtocolAgendaItem[]>([]);
+  const [agendaCreateOpen, setAgendaCreateOpen] = useState(false);
+  const [agendaPostponeItem, setAgendaPostponeItem] = useState<ProtocolAgendaItem | null>(null);
+  const reloadAgendaItems = useCallback(async () => {
+    try {
+      setAgendaItems(await browserApiFetch<ProtocolAgendaItem[]>(`/api/protocols/${protocol.id}/agenda-items`));
+    } catch {
+      // Best effort: ohne Anliegen bleibt der Editor voll nutzbar.
+    }
+  }, [protocol.id]);
+  useEffect(() => {
+    void reloadAgendaItems();
+  }, [reloadAgendaItems, protocolStatus]);
 
   useEffect(
     () =>
       collab.onStatusChanged(({ status, display_name }) => {
         setProtocolStatus(status);
-        showToast(`Status wurde von ${display_name} zu "${protocolStatusLabel(status)}" geändert.`);
+        showToast(t("statusChangedByOtherToast", { name: display_name, status: protocolStatusLabel(status, tRoot) }));
         // The backend already cleared every tracked-change mark server-side on this same
         // transition - refetch so a viewer who stays on this page (not the one who
         // triggered the transition, which navigates away right after) doesn't keep
@@ -182,9 +254,21 @@ export function ProtocolEditor({
 
   useEffect(
     () =>
-      collab.onFieldUpdate(({ field_key, patch }) => {
+      collab.onFieldUpdate(({ field_key, patch, display_name }) => {
+        // Vorlagen-Abgleich (Protokollliste, "Elemente aus Vorlage neu laden") ersetzt und
+        // ergänzt Blöcke - der lokale Stand (Entwürfe, Todos/Bilder je Block) passt dann
+        // nicht mehr, deshalb die Seite neu laden statt einzelne Blöcke zu patchen.
+        if (field_key === "template-synced") {
+          showToast(t("templateSyncedByOther", { name: display_name }), "info");
+          window.setTimeout(() => window.location.reload(), 1500);
+          return;
+        }
         if (field_key === "element-titles") {
           void refreshElementTitles();
+          return;
+        }
+        if (field_key === "agenda-items") {
+          void reloadAgendaItems();
           return;
         }
         if (field_key === "track-changes-toggle") {
@@ -238,6 +322,10 @@ export function ProtocolEditor({
         const incomingText = (patch as { text_content?: unknown }).text_content;
         if (typeof incomingText === "string") {
           setTextDrafts((current) => ({ ...current, [blockId]: incomingText }));
+          // Keep the optimistic-concurrency baseline (see textBaselineRef's declaration) in
+          // step with this genuinely new server content, so this client's next save doesn't
+          // send a now-stale expected_content for a change it never made itself.
+          textBaselineRef.current[blockId] = incomingText;
         }
       }),
     [collab.onFieldUpdate]
@@ -247,12 +335,15 @@ export function ProtocolEditor({
   // known content_version so the stale-hint comparison in focused-element-editor.tsx picks
   // it up on the next render, even while this protocol stays open without a reload. Never
   // touches list_snapshot data itself - that only ever changes via an explicit refresh/sync.
+  // Die Verantwortlichen in den Traktandentiteln dagegen liest das Backend live aus der
+  // Tabelle (resolve_display_section_title) - deshalb hier die Titel neu laden.
   useEffect(
     () =>
       collab.onListChanged(({ list_definition_id, content_version }) => {
         setLists((current) =>
           current.map((list) => (list.id === list_definition_id ? { ...list, content_version } : list))
         );
+        void refreshElementTitles();
       }),
     [collab.onListChanged]
   );
@@ -272,14 +363,24 @@ export function ProtocolEditor({
     browserApiFetch<{ element_id: string | null }>(`/api/protocols/${protocol.id}/scroll-position`)
       .then((data) => {
         isRestoringRef.current = false;
-        if (!data?.element_id) return;
-        const id = data.element_id;
-        if (initialElements.some((e) => e.id === id)) {
-          shouldScrollToElementRef.current = true;
+        // Always land on a section when opening the protocol: the remembered one if it
+        // still exists, otherwise the first visible one (selected by the effect below).
+        // Without this the document pane stays at scrollTop 0, i.e. on the empty
+        // accordion spacer above the first heading.
+        isInitialScrollRef.current = true;
+        shouldScrollToElementRef.current = true;
+        const id = data?.element_id;
+        if (id && initialElements.some((e) => e.id === id)) {
           setSelectedElementId(id);
         }
+        setScrollRequestId((current) => current + 1);
       })
-      .catch(() => { isRestoringRef.current = false; });
+      .catch(() => {
+        isRestoringRef.current = false;
+        isInitialScrollRef.current = true;
+        shouldScrollToElementRef.current = true;
+        setScrollRequestId((current) => current + 1);
+      });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [protocol.id]);
 
@@ -308,19 +409,16 @@ export function ProtocolEditor({
   // Matrix-Auto-Spalten) is available in every status except "abgeschlossen", where isReadOnly
   // already blocks all editing.
   const isPlanningMode = !isReadOnly;
-  // Scrollable-document layout (all sections mounted, non-active ones blurred) for every
-  // status except "abgeschlossen", which keeps the original single-section-at-a-time view.
-  const useDocumentLayout = protocolStatus !== "abgeschlossen";
   // Lifted here (was previously called once per FocusedElementEditor instance) so it fires
   // once regardless of how many sections are simultaneously mounted in the document layout.
   const { tagConfig, updateTagColor, renameTag } = useTagConfig();
   const { busyByProtocol: pdfBusyByProtocol, openOrGeneratePdf } = usePdfExport();
 
   const workflowMeta: Record<string, { modeLabel: string; ctaLabel: string; nextStatus: string }> = {
-    geplant:       { modeLabel: "Vorbereitungsmodus",   ctaLabel: "Vorbereitung abschliessen", nextStatus: "vorbereitet" },
-    vorbereitet:   { modeLabel: "Sitzungsmodus",         ctaLabel: "Sitzung abschliessen",      nextStatus: "durchgeführt" },
-    durchgeführt:  { modeLabel: "Nachbearbeitungsmodus", ctaLabel: "Protokoll abschliessen",    nextStatus: "abgeschlossen" },
-    abgeschlossen: { modeLabel: "Abgeschlossen",         ctaLabel: "",                          nextStatus: "" },
+    geplant:       { modeLabel: t("workflowPreparationMode"),   ctaLabel: t("workflowFinishPreparation"), nextStatus: "vorbereitet" },
+    vorbereitet:   { modeLabel: t("workflowSessionMode"),       ctaLabel: t("workflowFinishSession"),     nextStatus: "durchgeführt" },
+    durchgeführt:  { modeLabel: t("workflowPostProcessingMode"), ctaLabel: t("workflowFinishProtocol"),   nextStatus: "abgeschlossen" },
+    abgeschlossen: { modeLabel: t("workflowDone"),              ctaLabel: "",                             nextStatus: "" },
   };
 
 
@@ -373,8 +471,35 @@ export function ProtocolEditor({
     router.push("/protocols");
   };
   const timers = useRef<Record<string, number>>({});
+  // Per text block: the content the server is known to hold right now - the
+  // optimistic-concurrency baseline sent as expected_content (see handleTextChange). Only
+  // ever set from a confirmed server state (save response, conflict refresh, another user's
+  // collab update), never from merely typed text. An earlier version advanced it on every
+  // keystroke; since the save is debounced, intermediate keystrokes are never sent, so the
+  // next real save claimed a baseline the server had never seen -> 409 on practically every
+  // edit of more than one character, and the conflict handler replaced the just-typed text
+  // with the server version even though nobody else was editing.
+  const textBaselineRef = useRef<Record<string, string>>({});
+  // Per text block: the currently running save. Saves of the same block are serialized so a
+  // save never reads the baseline before the previous save's response has updated it.
+  const textSaveChainRef = useRef<Record<string, Promise<void>>>({});
   const shouldScrollToElementRef = useRef(false);
-  const passiveScrollTargetRef = useRef<string | null>(null);
+  // Separate from shouldScrollToElementRef: only an explicit jump (sidebar/keyboard/search,
+  // set in focusElement below) should steal focus into a field. Restoring the remembered
+  // scroll position on page load must still land the view there (so returning users keep
+  // their place), but doing that right after opening the page - without the user asking for
+  // it - must not also autofocus a form field (usability-audit finding F9, 2026-10-01: a
+  // freshly opened protocol jumped straight into an input with the cursor already blinking).
+  const shouldAutoFocusRef = useRef(false);
+  // The first scroll after opening jumps instantly instead of animating from the top.
+  const isInitialScrollRef = useRef(false);
+  // Akkordeon: Lage des neu aktiven Abschnitts VOR dem Auf-/Zuklappen (relativ zum sichtbaren
+  // Bereich). Nach dem Umbau des Layouts wird er genau dort gehalten - nach unten scrollend die
+  // Oberkante, nach oben scrollend die Unterkante. Dadurch springt beim passiven Wechsel nichts.
+  const passiveSnapRef = useRef<{ id: string; top: number; bottom: number; up: boolean } | null>(null);
+  // Bis hierhin wird Mausrad nach unten abgefangen (Rest-Schwung nach dem Betreten eines Punkts)
+  const holdWheelRef = useRef({ until: 0, up: false });
+  const cancelScrollAnimationRef = useRef<(() => void) | null>(null);
   // True while a programmatic smooth scroll (search, nav click, Ctrl+Enter) is in flight.
   // The scroll-spy must stay passive during that time - otherwise it selects every section
   // the scroll passes, and in accordion mode its instant anchor scroll aborts the smooth
@@ -384,8 +509,6 @@ export function ProtocolEditor({
   const [scrollRequestId, setScrollRequestId] = useState(0);
   const selectedElementIdRef = useRef(selectedElementId);
   selectedElementIdRef.current = selectedElementId;
-  const navRef = useRef<HTMLElement | null>(null);
-  const panelRef = useRef<HTMLElement | null>(null);
   const documentRef = useRef<HTMLElement | null>(null);
   const sessionPanelRef = useRef<SessionPanelHandle | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
@@ -420,7 +543,7 @@ export function ProtocolEditor({
       for (const [blockId, draft] of restoredDrafts) next[blockId] = draft;
       return next;
     });
-    showToast(`${restoredDrafts.length} lokaler Textentwurf wurde wiederhergestellt.`, "info");
+    showToast(t("draftsRestoredToast", { count: restoredDrafts.length }), "info");
   // Initial server values are deliberately compared exactly once per mounted protocol.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [protocol.id]);
@@ -468,28 +591,101 @@ export function ProtocolEditor({
     }
   }, [blockStatus]);
 
-  const visibleElements = useMemo(
-    () =>
-      [...elements]
-        .filter((element) => element.is_visible_snapshot)
-        .map((element) => ({
+  // Abgeleitete Punkte je Quell-Objekt zwischenspeichern: ein unveränderter Punkt behält seine
+  // Identität, und der memoisierte FocusedElementEditor rendert nur den geänderten neu.
+  const derivedElementsRef = useRef(new WeakMap<ProtocolElement, ProtocolElement>());
+  const derivedPlanningModeRef = useRef(isPlanningMode);
+  const visibleElements = useMemo(() => {
+    if (derivedPlanningModeRef.current !== isPlanningMode) {
+      derivedElementsRef.current = new WeakMap();
+      derivedPlanningModeRef.current = isPlanningMode;
+    }
+    const cache = derivedElementsRef.current;
+    return [...elements]
+      .filter((element) => element.is_visible_snapshot)
+      .map((element) => {
+        const cached = cache.get(element);
+        if (cached) return cached;
+        const derived = {
           ...element,
           blocks: [...element.blocks]
             .filter((block) => (isPlanningMode || block.is_visible_snapshot) && block.element_type_code !== "display")
             .sort((left, right) => left.sort_index - right.sort_index)
-        }))
-        .filter((element) => element.blocks.length > 0 || element.show_when_empty)
-        .sort((left, right) => left.sort_index - right.sort_index),
-    [elements, isPlanningMode]
-  );
+        };
+        cache.set(element, derived);
+        return derived;
+      })
+      .filter((element) => element.blocks.length > 0 || element.show_when_empty)
+      .sort((left, right) => left.sort_index - right.sort_index);
+  }, [elements, isPlanningMode]);
+
+  const visibleElementIdsKey = visibleElements.map((element) => element.id).join(",");
 
   const selectedElement = useMemo(
     () => visibleElements.find((element) => element.id === selectedElementId) ?? null,
     [selectedElementId, visibleElements]
   );
-  const listPublicIds = useMemo(() => Object.assign({}, ...elements.flatMap((element) =>
+  const agendaByElement = useMemo(() => {
+    const visibleIds = new Set(visibleElementIdsKey.split(",").filter(Boolean));
+    const byElement: Record<string, ProtocolAgendaItem[]> = {};
+    const other: ProtocolAgendaItem[] = [];
+    for (const item of agendaItems) {
+      if (item.protocol_element_id && visibleIds.has(item.protocol_element_id)) {
+        (byElement[item.protocol_element_id] ??= []).push(item);
+      } else {
+        other.push(item);
+      }
+    }
+    return { byElement, other };
+  }, [agendaItems, visibleElementIdsKey]);
+  const agendaSectionHandlers = useMemo(() => ({
+    onChanged: (updated: ProtocolAgendaItem) => setAgendaItems((current) => current.map((item) => (item.id === updated.id ? updated : item))),
+    onRemoved: (itemId: string) => setAgendaItems((current) => current.filter((item) => item.id !== itemId)),
+    onPostpone: (item: ProtocolAgendaItem) => setAgendaPostponeItem(item),
+  }), []);
+  // Je Punkt ein fertiges Element mit stabiler Identität, damit memoisierte Punkte nicht wegen
+  // eines neuen agendaSlot-Elements neu rendern.
+  // Ein Slot wird nur neu gebaut, wenn sich die Anliegen dieses Punkts (oder isReadOnly) ändern.
+  const agendaSlotCacheRef = useRef(new Map<string, { items: ProtocolAgendaItem[]; isReadOnly: boolean; node: React.ReactNode }>());
+  const agendaSlots = useMemo(() => {
+    const cache = agendaSlotCacheRef.current;
+    const slots: Record<string, React.ReactNode> = {};
+    for (const elementId of visibleElementIdsKey.split(",").filter(Boolean)) {
+      const items = agendaByElement.byElement[elementId] ?? EMPTY_AGENDA_ITEMS;
+      const cached = cache.get(elementId);
+      if (cached && cached.isReadOnly === isReadOnly && sameItems(cached.items, items)) {
+        slots[elementId] = cached.node;
+        continue;
+      }
+      const node = <AgendaItemsSection items={items} isReadOnly={isReadOnly} {...agendaSectionHandlers} />;
+      cache.set(elementId, { items, isReadOnly, node });
+      slots[elementId] = node;
+    }
+    return slots;
+  }, [visibleElementIdsKey, agendaByElement, isReadOnly, agendaSectionHandlers]);
+  // Pendenzen je Punkt für die Sitzungsansicht (Tag = Punktname). Unveränderte Listen behalten
+  // ihre Identität, damit eine Pendenz-Änderung nur die betroffenen Punkte neu rendert.
+  const sessionTodoCacheRef = useRef(new Map<string, ProtocolTodo[]>());
+  const sessionTodosByElement = useMemo(() => {
+    const allTodos = Object.values(todosByBlock).flat();
+    const cache = sessionTodoCacheRef.current;
+    const result: Record<string, ProtocolTodo[]> = {};
+    for (const element of visibleElements) {
+      const tag = trimSectionName(element.section_name_snapshot).toLowerCase();
+      const todos = allTodos.filter((todo) => (todo.tags ?? []).includes(tag));
+      const previous = cache.get(element.id);
+      const stable = previous && sameItems(previous, todos) ? previous : todos.length ? todos : EMPTY_TODOS;
+      cache.set(element.id, stable);
+      result[element.id] = stable;
+    }
+    return result;
+  }, [todosByBlock, visibleElements]);
+  // Über den Inhalt stabil: ändert sich nur ein Block, bleibt das Objekt (und damit
+  // listDefinitionsById) gleich und die übrigen Punkte rendern nicht neu.
+  const listPublicIdsKey = JSON.stringify(Object.assign({}, ...elements.flatMap((element) =>
     element.blocks.map((block) => block.public_reference_ids?.lists ?? {})
-  )) as Record<string, string>, [elements]);
+  )));
+  const listPublicIds = useMemo(() => JSON.parse(listPublicIdsKey) as Record<string, string>, [listPublicIdsKey]);
   const listDefinitionsById = useMemo(() => {
     const definitions = new Map(lists.map((definition) => [definition.id, definition]));
     for (const [internalId, publicId] of Object.entries(listPublicIds)) {
@@ -498,13 +694,9 @@ export function ProtocolEditor({
     }
     return definitions;
   }, [lists, listPublicIds]);
-  const selectedElementIndex = useMemo(
-    () => visibleElements.findIndex((element) => element.id === selectedElementId),
-    [selectedElementId, visibleElements]
-  );
   const attendanceTally = useMemo(
-    () => visibleAttendanceTally(elements, availableParticipants),
-    [elements, availableParticipants]
+    () => visibleAttendanceTally(elements, availableParticipants, protocol.protocol_date, protocolStatus === "abgeschlossen"),
+    [elements, availableParticipants, protocol.protocol_date, protocolStatus]
   );
   const [collabStatusPanelOpen, setCollabStatusPanelOpen] = useState(false);
   const collabHoverCloseTimerRef = useRef<number | undefined>(undefined);
@@ -525,14 +717,88 @@ export function ProtocolEditor({
     }, 300);
   }, [cancelCollabHoverClose]);
 
+  // Stabile Handler/Werte für die schwebenden Sitzungs-Bedienelemente (memoisiert), damit sie
+  // nicht bei jeder Taste im Dokument mit neu rendern.
+  const quickActionHandlers = useMemo(() => ({
+    onNotesClick: () => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openNotes(); },
+    onNotesHover: () => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openNotes(false); },
+    onTodosClick: () => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openTodo(); },
+    onTodosHover: () => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openTodo(false); },
+    onAgendaClick: () => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.close(); setAgendaCreateOpen(true); },
+    onHoverLeave: () => {
+      sessionPanelRef.current?.scheduleClose();
+      scheduleCollabHoverClose();
+    },
+    onCollabClick: () => {
+      cancelCollabHoverClose();
+      collabOpenedByHoverRef.current = false;
+      sessionPanelRef.current?.close();
+      setCollabStatusPanelOpen(true);
+    },
+    onCollabHover: () => {
+      cancelCollabHoverClose();
+      collabOpenedByHoverRef.current = true;
+      sessionPanelRef.current?.close();
+      setCollabStatusPanelOpen(true);
+    },
+  }), [cancelCollabHoverClose, scheduleCollabHoverClose]);
+  const sessionDueEvents = useMemo(() => {
+    const tpl = availableTemplates.find((template) => template.id === protocol.template_id);
+    const tag = tpl?.todo_due_event_tag?.trim().toLowerCase();
+    const today = new Date().toISOString().slice(0, 10);
+    const upcoming = events.filter((event) => event.event_date >= today);
+    return tag ? upcoming.filter((event) => (event.tag ?? "").toLowerCase().includes(tag)) : upcoming;
+  }, [availableTemplates, protocol.template_id, events]);
+
   useEffect(() => () => cancelCollabHoverClose(), [cancelCollabHoverClose]);
 
   function setStatus(protocolElementBlockId: string, status: SaveState) {
-    setBlockStatus((current) => ({ ...current, [protocolElementBlockId]: status }));
+    // Unveränderten Status nicht neu setzen: beim Tippen kam sonst pro Taste ein zusätzlicher Render
+    setBlockStatus((current) => (current[protocolElementBlockId] === status ? current : { ...current, [protocolElementBlockId]: status }));
   }
+
+  // Programmatisches Scrollen des Dokuments (Sprung, Verankerung). Solange es läuft, bleibt der
+  // Scroll-Spy passiv - sonst wählt er jeden überflogenen Punkt aus und bricht im Akkordeon den
+  // Sprung mit seiner eigenen Verankerung ab.
+  const scrollDocumentTo = useCallback(
+    (
+      container: HTMLElement,
+      target: number,
+      behavior: "smooth" | "instant",
+      options: { duration?: number; cancelOnWheel?: boolean } = {}
+    ) => {
+      cancelScrollAnimationRef.current?.();
+      cancelScrollAnimationRef.current = null;
+      programmaticScrollRef.current = true;
+      window.clearTimeout(programmaticScrollTimerRef.current);
+      const release = () => {
+        window.clearTimeout(programmaticScrollTimerRef.current);
+        programmaticScrollRef.current = false;
+      };
+      if (behavior === "instant" || Math.abs(target - container.scrollTop) < 1) {
+        container.scrollTop = target;
+        // Das scroll-Event dieses Sprungs kommt asynchron - erst danach wieder mitlesen
+        programmaticScrollTimerRef.current = window.setTimeout(release, 80);
+        return;
+      }
+      // Sicherheitsnetz, falls die Animation nie endet (Tab im Hintergrund)
+      programmaticScrollTimerRef.current = window.setTimeout(release, 1500);
+      cancelScrollAnimationRef.current = animateScroll(container, target, {
+        ...options,
+        onDone: () => {
+          cancelScrollAnimationRef.current = null;
+          release();
+        },
+      });
+    },
+    []
+  );
+
+  useEffect(() => () => cancelScrollAnimationRef.current?.(), []);
 
   function focusElement(protocolElementId: string) {
     shouldScrollToElementRef.current = true;
+    shouldAutoFocusRef.current = true;
     setSelectedElementId(protocolElementId);
     // Also re-run the scroll effect when the target is already the selected element
     // (e.g. search hit on the current section after the user scrolled away from it).
@@ -555,63 +821,29 @@ export function ProtocolEditor({
     }
 
     shouldScrollToElementRef.current = false;
+    const scrollBehavior = (isInitialScrollRef.current ? "instant" : "smooth") as ScrollBehavior;
+    isInitialScrollRef.current = false;
 
     window.requestAnimationFrame(() => {
-      // Scroll panel to top (new element replaces old one)
-      const panel = panelRef.current;
-      if (panel) {
-        panel.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
-      } else {
-        // Document layout: scroll only .protocol-document itself (never section.
-        // scrollIntoView() - that walks up and re-scrolls every clipping ancestor it
-        // passes on the way, including the outer .app-frame-writing shell that's
-        // deliberately pinned to the viewport via overflow:hidden - overflow:hidden
-        // still counts as a "scrolling box" for scrollIntoView purposes even though it
-        // never shows a scrollbar or responds to wheel input, so it silently absorbed
-        // part of the scroll too, leaving the pinned shell offset from the viewport
-        // with a matching dead strip of blank space at its bottom edge). The division
-        // below undoes .protocol-document-shell's zoom, which scales visual
-        // pixels (getBoundingClientRect) relative to scrollTop's own unscaled space.
+        // Scroll only .protocol-document itself (never section.scrollIntoView() - that walks
+        // up and re-scrolls every clipping ancestor, including the outer .app-frame-writing
+        // shell pinned via overflow:hidden, leaving it offset from the viewport). Positions
+        // come from offsetTop (scrollTop's own unzoomed space, unaffected by the wheel
+        // effect's transforms), see document-scroll.ts.
         const container = documentRef.current;
         const section = document.getElementById(`protocol-element-${selectedElementId}`);
         if (container && section) {
-          const zoomHost = container.closest<HTMLElement>(".protocol-document-shell");
-          const zoom = zoomHost ? parseFloat(getComputedStyle(zoomHost).zoom) || 1 : 1;
-          const containerRect = container.getBoundingClientRect();
-          const sectionRect = section.getBoundingClientRect();
-          const safeInset = 16 * zoom;
-          const isTallSection = sectionRect.height >= containerRect.height - safeInset * 2;
-          const delta = isTallSection
-            ? (sectionRect.top - containerRect.top - safeInset) / zoom
-            : (
-                sectionRect.top + sectionRect.height / 2
-                - (containerRect.top + containerRect.height / 2)
-              ) / zoom;
-          programmaticScrollRef.current = true;
-          window.clearTimeout(programmaticScrollTimerRef.current);
-          const release = () => {
-            container.removeEventListener("scrollend", release);
-            window.clearTimeout(programmaticScrollTimerRef.current);
-            programmaticScrollRef.current = false;
-          };
-          container.addEventListener("scrollend", release);
-          // Fallback for browsers without `scrollend` and for no-op scrolls (delta ~ 0).
-          programmaticScrollTimerRef.current = window.setTimeout(release, 1200);
-          container.scrollTo({ top: container.scrollTop + delta, behavior: "smooth" });
+          const target = sectionScrollTarget({
+            top: offsetTopWithin(section, container),
+            height: section.offsetHeight,
+            viewport: container.clientHeight,
+            scrollHeight: container.scrollHeight,
+            // Der erste Punkt steht oben statt mittig - sonst zeigt das Öffnen eines Protokolls
+            // zuerst den leeren Scrollraum (.protocol-document-spaced::before) darüber.
+            first: container.querySelector(".protocol-doc-section") === section,
+          });
+          scrollDocumentTo(container, target, scrollBehavior === "smooth" && !prefersReducedMotion() ? "smooth" : "instant");
         }
-      }
-
-      // Center active nav item
-      const nav = navRef.current;
-      if (nav) {
-        const activeItem = nav.querySelector<HTMLElement>(".editor-nav-item-active");
-        if (activeItem) {
-          const navRect = nav.getBoundingClientRect();
-          const itemRect = activeItem.getBoundingClientRect();
-          const target = nav.scrollTop + itemRect.top - navRect.top - (nav.clientHeight - activeItem.clientHeight) / 2;
-          nav.scrollTo({ top: target, behavior: "smooth" });
-        }
-      }
 
       // Safety net: on the locked document-mode desktop layout the outer page must
       // never itself scroll (see the cascading-scrollIntoView note above - focus() below
@@ -619,58 +851,85 @@ export function ProtocolEditor({
       // there may be other browser-driven scroll-restoration sources beyond these two).
       // Confirmed live that leaving this unset does drift the pinned shell off the
       // viewport top with blank space appearing at its bottom to match.
-      if (!panelRef.current && window.matchMedia("(min-width: 901px)").matches) {
+      if (window.matchMedia("(min-width: 901px)").matches) {
         window.scrollTo(0, 0);
       }
 
       window.setTimeout(() => {
-        const section = document.getElementById(`protocol-element-${selectedElementId}`);
-        if (!section) return;
-        const firstEditable = section.querySelector<HTMLElement>(
-          '[data-form-input], textarea:not([readonly]), input:not([readonly]):not([type="file"])'
-        );
-        firstEditable?.focus({ preventScroll: true });
-        if (!panelRef.current && window.matchMedia("(min-width: 901px)").matches) {
+        const shouldAutoFocus = shouldAutoFocusRef.current;
+        shouldAutoFocusRef.current = false;
+        if (shouldAutoFocus) {
+          const section = document.getElementById(`protocol-element-${selectedElementId}`);
+          const firstEditable = section?.querySelector<HTMLElement>(
+            '[data-form-input], textarea:not([readonly]), input:not([readonly]):not([type="file"])'
+          );
+          firstEditable?.focus({ preventScroll: true });
+        }
+        if (window.matchMedia("(min-width: 901px)").matches) {
           window.scrollTo(0, 0);
         }
       }, 120);
     });
   }, [selectedElementId, scrollRequestId]);
 
-  const visibleElementIdsKey = visibleElements.map((element) => element.id).join(",");
-
-  // Collapsing the previously active accordion section can remove hundreds of pixels above
-  // the viewport. Preserve the newly selected section as the visual anchor so that moving
-  // past a long section lands on its immediate neighbour instead of skipping several points.
-  // useLayoutEffect runs after React changed the open section but before the browser paints
-  // that layout, avoiding a visible jump. This is only used for passive scroll-spy changes;
-  // clicks and keyboard navigation already have their own smooth-scroll path above.
+  // Akkordeon, passiver Wechsel (Scroll-Spy): der neu aktive Abschnitt wird dort gehalten, wo
+  // er vor dem Auf-/Zuklappen stand (passiveSnapRef). Nach unten scrollend holt eine kurze
+  // Animation seinen Anfang an den oberen Rand und der Rest-Schwung des Mausrads wird kurz
+  // abgefangen, damit man nicht über den Anfang hinausrutscht. useLayoutEffect: läuft nach dem
+  // Umbau des Layouts, aber bevor der Browser zeichnet - kein sichtbarer Sprung. Klicks und
+  // Tastatur haben ihren eigenen Weg (Effekt oben).
   useLayoutEffect(() => {
+    const snap = passiveSnapRef.current;
+    if (!snap || snap.id !== selectedElementId) return;
+    passiveSnapRef.current = null;
     if (!accordionEnabled) return;
-    if (passiveScrollTargetRef.current !== selectedElementId) return;
-    passiveScrollTargetRef.current = null;
 
     const container = documentRef.current;
-    const section = selectedElementId
-      ? document.getElementById(`protocol-element-${selectedElementId}`)
-      : null;
+    const section = document.getElementById(`protocol-element-${selectedElementId}`);
     if (!container || !section) return;
 
-    const zoomHost = container.closest<HTMLElement>(".protocol-document-shell");
-    const zoom = zoomHost ? parseFloat(getComputedStyle(zoomHost).zoom) || 1 : 1;
-    const containerRect = container.getBoundingClientRect();
-    const sectionRect = section.getBoundingClientRect();
-    const safeInset = 16 * zoom;
-    const isTallSection = sectionRect.height >= containerRect.height - safeInset * 2;
-    const delta = isTallSection
-      ? sectionRect.top - containerRect.top - safeInset
-      : sectionRect.top + sectionRect.height / 2 - (containerRect.top + containerRect.height / 2);
+    const top = offsetTopWithin(section, container);
+    const height = section.offsetHeight;
+    const viewport = container.clientHeight;
+    const max = container.scrollHeight - viewport;
+    const anchored = snap.up ? top + height - snap.bottom : top - snap.top;
+    scrollDocumentTo(container, Math.max(0, Math.min(anchored, max)), "instant");
+    revealSection(section, snap.up);
 
-    container.scrollTo({
-      top: container.scrollTop + delta / zoom,
-      behavior: "instant" as ScrollBehavior,
-    });
-  }, [accordionEnabled, selectedElementId]);
+    // Nach unten beginnt ein Punkt oben (Anfang am oberen Rand), nach oben unten (Ende am
+    // unteren Rand). Ein kurzer Punkt wird nur so weit verschoben, dass er ganz im Bild steht.
+    const target = Math.max(0, Math.min(passiveSnapTarget({ top, height, viewport, scrollTop: container.scrollTop, up: snap.up }), max));
+    holdWheelRef.current = { until: performance.now() + WHEEL_HOLD_MS, up: snap.up };
+    if (Math.abs(target - container.scrollTop) > 1) {
+      scrollDocumentTo(container, target, prefersReducedMotion() ? "instant" : "smooth", { duration: 300, cancelOnWheel: false });
+    }
+  }, [accordionEnabled, selectedElementId, scrollDocumentTo]);
+
+  // Rest-Schwung abfangen (siehe oben): nur in der Richtung, in der der Punkt betreten wurde,
+  // nur kurz danach.
+  useEffect(() => {
+    const container = documentRef.current;
+    if (!container) return;
+    function onWheel(event: WheelEvent) {
+      const hold = holdWheelRef.current;
+      if (performance.now() < hold.until && (hold.up ? event.deltaY < 0 : event.deltaY > 0)) event.preventDefault(); // i18n-ok: Vergleich, kein UI-Text
+    }
+    container.addEventListener("wheel", onWheel, { passive: false });
+    return () => container.removeEventListener("wheel", onWheel);
+  }, []);
+
+  // Rad-Effekt nach jeder Änderung von Auswahl oder Punkten neu anwenden (bzw. entfernen)
+  // Ohne Effekt nur einmal zurücksetzen: applyWheelFrame misst alle Abschnitte, und
+  // visibleElements ändert sich bei jedem Tastendruck in Formularen/Matrix.
+  const wheelAppliedRef = useRef(false);
+  useLayoutEffect(() => {
+    const container = documentRef.current;
+    if (!container) return;
+    const enabled = wheelEnabled && !prefersReducedMotion();
+    if (!enabled && !wheelAppliedRef.current) return;
+    applyWheelFrame(container, enabled);
+    wheelAppliedRef.current = enabled;
+  }, [wheelEnabled, selectedElementId, visibleElements]);
 
   // Scroll-spy for the continuous document layout: tracks whichever section is closest to
   // the visual centre of .protocol-document. Uses plain
@@ -682,45 +941,85 @@ export function ProtocolEditor({
   // Deliberately avoids focusElement/shouldScrollToElementRef so passive scrolling never
   // focuses a form field. The layout effect above only anchors the newly opened neighbour.
   useEffect(() => {
-    if (!useDocumentLayout) return;
     const container = documentRef.current;
     if (!container) return;
 
     let rafId: number | null = null;
+    const wheel = wheelEnabled && !prefersReducedMotion();
+    // Positionen der Abschnitte zwischenspeichern: sie ändern sich nur mit Grösse oder Inhalt
+    // (ResizeObserver/resize unten verwerfen den Stand). Vorher las jeder Scroll-Frame alle
+    // Abschnitte zweimal (Rad-Effekt und Spy), bei langen Protokollen ein grosser Teil des Frames.
+    let layout: SectionLayout[] | null = null;
+    const visibleIds = new Set(visibleElementIdsKey.split(",").filter(Boolean));
 
     function computeActiveSection() {
       rafId = null;
+      const root = container!;
+      layout ??= measureSections(root);
+      applyWheelFrame(root, wheel, layout);
       if (programmaticScrollRef.current) return;
-      const containerRect = container!.getBoundingClientRect();
-      const centerY = containerRect.top + containerRect.height / 2;
-      const sections = visibleElementIdsKey
-        .split(",")
-        .filter(Boolean)
-        .map((id) => document.getElementById(`protocol-element-${id}`))
-        .filter((section): section is HTMLElement => Boolean(section));
+      const sections = layout.filter((item) => visibleIds.has(item.section.id.replace("protocol-element-", "")));
       if (!sections.length) return;
 
-      let bestId: string | null = null;
-      let bestDistance = Infinity;
-      for (const section of sections) {
-        const rect = section.getBoundingClientRect();
-        const id = section.id.replace("protocol-element-", "");
-        if (rect.top <= centerY && rect.bottom >= centerY) {
-          bestId = id;
-          break;
+      const scrollTop = root.scrollTop;
+      const centerY = scrollTop + root.clientHeight / 2;
+      const ids = sections.map((item) => item.section.id.replace("protocol-element-", ""));
+      const tops = sections.map((item) => item.top);
+      const heights = sections.map((item) => item.height);
+
+      // Steht der erste Punkt noch ganz im Bild (Anfang des Dokuments, z. B. nach dem Öffnen),
+      // ist er aktiv, auch wenn die Mittellinie schon auf einen kurzen Folgepunkt fällt. Nur
+      // solange noch kein späterer Punkt aktiv ist: von unten kommend wären sonst alle
+      // zugeklappten Punkte über dem aktiven auf einen Schlag übersprungen.
+      const currentIndex = selectedElementIdRef.current ? ids.indexOf(selectedElementIdRef.current) : -1;
+      const atDocumentStart = tops[0] >= scrollTop && currentIndex <= 0; // i18n-ok: Vergleich, kein UI-Text
+      let bestIndex = atDocumentStart ? 0 : -1;
+      if (!atDocumentStart) {
+        // Hysterese: der aktive Punkt bleibt, bis die Mittellinie 32px über seine Kante hinaus
+        // ist - kein Flackern an der Grenze zweier Punkte.
+        if (
+          currentIndex >= 0 &&
+          tops[currentIndex] - SPY_HYSTERESIS <= centerY &&
+          tops[currentIndex] + heights[currentIndex] + SPY_HYSTERESIS >= centerY
+        ) {
+          return;
         }
-        const sectionCenter = rect.top + rect.height / 2;
-        const distance = Math.abs(sectionCenter - centerY);
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          bestId = id;
+        let bestDistance = Infinity;
+        for (let index = 0; index < sections.length; index += 1) {
+          if (tops[index] <= centerY && tops[index] + heights[index] >= centerY) {
+            bestIndex = index;
+            break;
+          }
+          const distance = Math.abs(tops[index] + heights[index] / 2 - centerY);
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            bestIndex = index;
+          }
         }
       }
-      if (bestId !== null && selectedElementIdRef.current !== bestId) {
-        passiveScrollTargetRef.current = accordionEnabled ? bestId : null;
-        selectedElementIdRef.current = bestId;
-        setSelectedElementId(bestId);
+      if (bestIndex < 0) return;
+      // Akkordeon: zugeklappte Punkte sind so kurz, dass ein Mausrad-Schritt die Mittellinie
+      // über einen hinwegschiebt - dann käme der übernächste dran. Liegt der Nachbar höchstens
+      // eine Bildschirmhöhe ausserhalb (weiter schiebt kein Mausrad-Schritt), ist er der nächste
+      // Punkt; weite Sprünge (Scrollbalken ziehen) bleiben möglich.
+      if (accordionEnabled && currentIndex >= 0 && Math.abs(bestIndex - currentIndex) > 1) {
+        const neighbour = currentIndex + Math.sign(bestIndex - currentIndex);
+        const viewport = root.clientHeight;
+        if (tops[neighbour] < scrollTop + 2 * viewport && tops[neighbour] + heights[neighbour] > scrollTop - viewport) bestIndex = neighbour;
       }
+      const bestId = ids[bestIndex];
+      if (selectedElementIdRef.current === bestId) return;
+      // Am Dokumentanfang nicht verankern: der erste Punkt bleibt oben stehen
+      passiveSnapRef.current = accordionEnabled && !atDocumentStart
+        ? {
+            id: bestId,
+            top: tops[bestIndex] - scrollTop,
+            bottom: tops[bestIndex] - scrollTop + heights[bestIndex],
+            up: currentIndex > bestIndex,
+          }
+        : null;
+      selectedElementIdRef.current = bestId;
+      setSelectedElementId(bestId);
     }
 
     function scheduleCompute() {
@@ -728,15 +1027,27 @@ export function ProtocolEditor({
       rafId = window.requestAnimationFrame(computeActiveSection);
     }
 
+    function relayout() {
+      layout = null;
+      scheduleCompute();
+    }
+
     computeActiveSection();
     container.addEventListener("scroll", scheduleCompute, { passive: true });
-    window.addEventListener("resize", scheduleCompute);
+    window.addEventListener("resize", relayout);
+    // Inhalte ändern ihre Höhe (Tippen, Laden von Bildern): Positionen neu messen, Rad-Effekt und
+    // Spy nachführen. Beobachtet werden alle direkten Kinder des Dokuments, damit auch eine
+    // Höhenänderung oberhalb eines Abschnitts (z. B. Anliegen) dessen Position aktualisiert.
+    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(relayout);
+    Array.from(container.children).forEach((child) => resizeObserver?.observe(child));
+    container.querySelectorAll(".protocol-doc-section").forEach((section) => resizeObserver?.observe(section));
     return () => {
       container.removeEventListener("scroll", scheduleCompute);
-      window.removeEventListener("resize", scheduleCompute);
+      window.removeEventListener("resize", relayout);
+      resizeObserver?.disconnect();
       if (rafId !== null) window.cancelAnimationFrame(rafId);
     };
-  }, [accordionEnabled, useDocumentLayout, visibleElementIdsKey]);
+  }, [accordionEnabled, wheelEnabled, visibleElementIdsKey]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -744,9 +1055,18 @@ export function ProtocolEditor({
       const inFormField = target && (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) || target.isContentEditable);
 
       // Ctrl+F → Kapitel-/Volltextsuche öffnen (statt der nativen Browsersuche), auch
-      // während in einem Textfeld getippt wird.
+      // während in einem Textfeld getippt wird. Ist eine Anwesenheitskontrolle im aktiven
+      // Punkt, fokussiert das erste Ctrl+F deren Personensuche, ein weiteres (Fokus schon dort)
+      // öffnet die globale Suche.
       if (event.key.toLowerCase() === "f" && (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey) {
         event.preventDefault();
+        const activeSection = selectedElementId ? document.getElementById(`protocol-element-${selectedElementId}`) : null;
+        const attendanceSearch = activeSection?.querySelector<HTMLInputElement>(`[${ATTENDANCE_SEARCH_ATTR}]`);
+        if (attendanceSearch && document.activeElement !== attendanceSearch) {
+          attendanceSearch.focus();
+          attendanceSearch.select();
+          return;
+        }
         setSearchOpen(true);
         return;
       }
@@ -867,16 +1187,17 @@ export function ProtocolEditor({
         });
         return next;
       });
-      showToast(err instanceof Error ? err.message : "Reihenfolge konnte nicht gespeichert werden", "error");
+      showToast(err instanceof Error ? err.message : t("orderSaveFailed"), "error");
     }
   }
 
   function updateBlockInState(blockId: string, updater: (current: ProtocolElement["blocks"][number]) => ProtocolElement["blocks"][number]) {
     setElements((current) =>
-      current.map((element) => ({
-        ...element,
-        blocks: element.blocks.map((block) => (block.id === blockId ? updater(block) : block))
-      }))
+      current.map((element) =>
+        element.blocks.some((block) => block.id === blockId)
+          ? { ...element, blocks: element.blocks.map((block) => (block.id === blockId ? updater(block) : block)) }
+          : element
+      )
     );
   }
 
@@ -945,6 +1266,7 @@ export function ProtocolEditor({
         tracked_baseline_content: freshBlock.tracked_baseline_content,
       }));
       setTextDrafts((current) => ({ ...current, [blockId]: freshBlock.text_content ?? "" }));
+      textBaselineRef.current[blockId] = freshBlock.text_content ?? "";
       setStatus(blockId, "saved");
     } catch {
       // best-effort - the conflict toast already told the user to reload manually if this
@@ -952,37 +1274,122 @@ export function ProtocolEditor({
     }
   }
 
+  function currentConfigVersion(blockId: string): number | undefined {
+    return elements.flatMap((element) => element.blocks).find((block) => block.id === blockId)?.config_version;
+  }
+
+  // 409 config_conflict: jemand anderes hat die Blockkonfiguration inzwischen gespeichert. Der
+  // Server liefert seinen Stand mit - übernehmen und darauf hinweisen (Concurrency-Audit
+  // CONC-005: vorher überschrieb das ganze JSON still die Änderung der anderen Person).
+  function applyConfigConflict(blockId: string, err: unknown): boolean {
+    if (!(err instanceof ApiError) || err.status !== 409) return false;
+    const detail = err.detail as { code?: string; configuration_snapshot_json?: Record<string, unknown>; config_version?: number } | undefined;
+    if (detail?.code !== "config_conflict" || !detail.configuration_snapshot_json) return false;
+    updateBlockInState(blockId, (block) => ({
+      ...block,
+      configuration_snapshot_json: detail.configuration_snapshot_json!,
+      config_version: detail.config_version,
+    }));
+    setStatus(blockId, "saved");
+    showToast(t("configConflictReloaded"), "info");
+    return true;
+  }
+
   async function saveBlockConfiguration(blockId: string, configurationSnapshotJson: Record<string, unknown>) {
     setStatus(blockId, "saving");
+    const expectedVersion = currentConfigVersion(blockId);
     updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: configurationSnapshotJson }));
     try {
       const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(`/api/protocol-element-blocks/${blockId}`, {
         method: "PATCH",
-        body: JSON.stringify({ configuration_snapshot_json: configurationSnapshotJson }),
+        body: JSON.stringify({ configuration_snapshot_json: configurationSnapshotJson, expected_config_version: expectedVersion }),
       });
       updateBlockInState(blockId, (block) => ({
         ...block,
         configuration_snapshot_json: updated.configuration_snapshot_json,
+        config_version: updated.config_version,
       }));
       setStatus(blockId, "saved");
-      collab.sendFieldUpdate(`block-${blockId}`, { configuration_snapshot_json: updated.configuration_snapshot_json });
+      collab.sendFieldUpdate(`block-${blockId}`, { configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version });
     } catch (err: unknown) {
+      if (applyConfigConflict(blockId, err)) return;
       setStatus(blockId, "error");
-      showToast(err instanceof Error ? err.message : "Änderung konnte nicht gespeichert werden", "error");
+      showToast(err instanceof Error ? err.message : t("changeSaveFailed"), "error");
     }
+  }
+
+  // Dedicated atomic single-participant save for the attendance block's status buttons - see
+  // backend ProtocolElementService.set_attendance_status. saveBlockConfiguration above PATCHes
+  // the whole configuration_snapshot_json; building attendance_entries through that generic
+  // path round-trips the *entire* array taken from a local snapshot, so a second status click
+  // fired before the first save's response/re-render had landed (the same person clicking
+  // quickly through the list, or two people taking attendance together) based its "whole
+  // array" on a stale copy and silently erased whoever was just saved. This talks to a
+  // server-side merge endpoint instead, so each click only ever touches its own entry - and
+  // unlike saveBlockConfiguration, failures are rethrown so callers (the fine-creation logic in
+  // focused-element-editor.tsx) don't keep going as though the save had succeeded.
+  async function saveAttendanceStatus(blockId: string, participantId: string, participantName: string, status: string) {
+    const block = elements.flatMap((element) => element.blocks).find((b) => b.id === blockId);
+    const previousEntry = (Array.isArray(block?.configuration_snapshot_json?.attendance_entries)
+      ? (block!.configuration_snapshot_json.attendance_entries as Array<Record<string, unknown>>)
+      : []
+    ).find((entry) => String(entry.participant_id) === participantId);
+    // Optimistisch auf dem aktuellen State aufbauen (nicht auf ``elements`` dieses Renders):
+    // «Übrige auf anwesend» speichert mehrere Personen nacheinander mit derselben Closure.
+    updateBlockInState(blockId, (b) => {
+      const current = Array.isArray(b.configuration_snapshot_json?.attendance_entries)
+        ? (b.configuration_snapshot_json.attendance_entries as Array<Record<string, unknown>>)
+        : [];
+      return {
+        ...b,
+        configuration_snapshot_json: {
+          ...b.configuration_snapshot_json,
+          attendance_entries: [
+            ...current.filter((entry) => String(entry.participant_id) !== participantId),
+            { participant_id: participantId, participant_name: participantName, status },
+          ],
+        },
+      };
+    });
+    try {
+      const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(
+        `/api/protocol-element-blocks/${blockId}/attendance/${participantId}`,
+        { method: "POST", body: JSON.stringify({ status }) }
+      );
+      updateBlockInState(blockId, (b) => ({ ...b, configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version }));
+      collab.sendFieldUpdate(`block-${blockId}`, { configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version });
+    } catch (err: unknown) {
+      // Nur den Eintrag dieser Person zurücksetzen, gleichzeitige Änderungen anderer bleiben.
+      updateBlockInState(blockId, (b) => {
+        const current = Array.isArray(b.configuration_snapshot_json?.attendance_entries)
+          ? (b.configuration_snapshot_json.attendance_entries as Array<Record<string, unknown>>)
+          : [];
+        const others = current.filter((entry) => String(entry.participant_id) !== participantId);
+        return {
+          ...b,
+          configuration_snapshot_json: { ...b.configuration_snapshot_json, attendance_entries: previousEntry ? [...others, previousEntry] : others },
+        };
+      });
+      throw err;
+    }
+  }
+
+  // See textBaselineRef's declaration.
+  function knownServerText(protocolElementBlockId: string) {
+    return (
+      textBaselineRef.current[protocolElementBlockId] ??
+      (elements.flatMap((element) => element.blocks).find((block) => block.id === protocolElementBlockId)?.text_content ?? "")
+    );
   }
 
   function handleTextChange(protocolElementBlockId: string, content: string) {
     const mutationKey = `protocol-text:${protocolElementBlockId}`;
-    const expectedContent = elements
-      .flatMap((element) => element.blocks)
-      .find((block) => block.id === protocolElementBlockId)?.text_content ?? "";
     saveDraft(mutationKey, content);
     queueMutation({
       key: mutationKey,
       path: `/api/protocol-element-blocks/${protocolElementBlockId}/text`,
       method: "PUT",
-      body: JSON.stringify({ content, expected_content: expectedContent }),
+      body: JSON.stringify({ content, expected_content: knownServerText(protocolElementBlockId) }),
     });
     setTextDrafts((current) => ({ ...current, [protocolElementBlockId]: content }));
     setStatus(protocolElementBlockId, "saving");
@@ -991,59 +1398,75 @@ export function ProtocolEditor({
       window.clearTimeout(timers.current[protocolElementBlockId]);
     }
 
-    timers.current[protocolElementBlockId] = window.setTimeout(async () => {
-      try {
-        const result = await browserApiFetch<{ tracked_dirty: boolean; tracked_baseline_content: string | null }>(
-          `/api/protocol-element-blocks/${protocolElementBlockId}/text`,
-          { method: "PUT", body: JSON.stringify({ content, expected_content: expectedContent }) }
-        );
-        updateBlockInState(protocolElementBlockId, (block) => ({
-          ...block,
-          text_content: content,
-          tracked_dirty: result.tracked_dirty,
-          tracked_baseline_content: result.tracked_baseline_content,
-        }));
+    timers.current[protocolElementBlockId] = window.setTimeout(() => {
+      const previousSave = textSaveChainRef.current[protocolElementBlockId] ?? Promise.resolve();
+      textSaveChainRef.current[protocolElementBlockId] = previousSave.then(() => sendTextSave(protocolElementBlockId, content));
+    }, 700);
+  }
+
+  // Runs serialized per block (see textSaveChainRef), so expected_content is read only after
+  // any previous save of this block has landed and updated the baseline.
+  async function sendTextSave(protocolElementBlockId: string, content: string) {
+    const mutationKey = `protocol-text:${protocolElementBlockId}`;
+    const expectedContent = knownServerText(protocolElementBlockId);
+    // The user may have kept typing while this save was waiting/in flight; that newer text
+    // has its own draft, outbox entry and pending save, which this one must not clobber.
+    const isLatestEdit = () => readDraft(mutationKey) === content;
+    try {
+      const result = await browserApiFetch<{ tracked_dirty: boolean; tracked_baseline_content: string | null }>(
+        `/api/protocol-element-blocks/${protocolElementBlockId}/text`,
+        { method: "PUT", body: JSON.stringify({ content, expected_content: expectedContent }) }
+      );
+      textBaselineRef.current[protocolElementBlockId] = content;
+      updateBlockInState(protocolElementBlockId, (block) => ({
+        ...block,
+        text_content: content,
+        tracked_dirty: result.tracked_dirty,
+        tracked_baseline_content: result.tracked_baseline_content,
+      }));
+      if (isLatestEdit()) {
         setStatus(protocolElementBlockId, "saved");
         clearDraft(mutationKey);
         removeMutation(mutationKey);
-        collab.sendFieldUpdate(`block-${protocolElementBlockId}`, {
-          text_content: content,
-          tracked_dirty: result.tracked_dirty,
-          tracked_baseline_content: result.tracked_baseline_content,
-        });
-      } catch (err: unknown) {
-        setStatus(protocolElementBlockId, "error");
-        if (err instanceof ApiError && err.kind === "conflict") {
-          // A real edit conflict, not a connectivity problem: someone else already saved a
-          // newer version of this exact text since we last loaded it. `content` here is
-          // already-rejected - re-queueing it (the generic path below) would just keep
-          // losing to the same 409 on every future flush with the misleading "will save
-          // automatically once back online" toast. Instead: drop it from the outbox so it
-          // stops being retried (fix for the outbox-stall issue above applies to this item
-          // too - it must end up explicitly discarded, not silently stuck), pull in the
-          // current server content, and tell the user plainly what happened. Their locally
-          // typed text isn't lost - saveDraft() above already wrote it to
-          // `protocol-text:${id}` in localStorage as a fallback; it's just not queued for
-          // silent resend anymore.
-          discardMutation(mutationKey);
-          void refreshBlockTextFromServer(protocolElementBlockId);
-          showToast(
-            "Konflikt: Diese Stelle wurde inzwischen von jemand anderem gespeichert. Die aktuelle Version wurde geladen – Ihre letzte Änderung wurde nicht übernommen, ist aber als lokaler Entwurf gesichert.",
-            "error",
-            { onMessageClick: () => void refreshBlockTextFromServer(protocolElementBlockId) }
-          );
-          return;
-        }
-        queueMutation({
-          key: mutationKey,
-          path: `/api/protocol-element-blocks/${protocolElementBlockId}/text`,
-          method: "PUT",
-          body: JSON.stringify({ content, expected_content: expectedContent }),
-          lastError: err instanceof Error ? err.message : "Text konnte nicht gespeichert werden",
-        });
-        showToast("Text lokal gesichert – wird nach Wiederherstellung der Verbindung automatisch gespeichert.", "error");
       }
-    }, 700);
+      collab.sendFieldUpdate(`block-${protocolElementBlockId}`, {
+        text_content: content,
+        tracked_dirty: result.tracked_dirty,
+        tracked_baseline_content: result.tracked_baseline_content,
+      });
+    } catch (err: unknown) {
+      setStatus(protocolElementBlockId, "error");
+      if (err instanceof ApiError && err.kind === "conflict") {
+        // A real edit conflict, not a connectivity problem: someone else already saved a
+        // newer version of this exact text since we last loaded it. `content` here is
+        // already-rejected - re-queueing it (the generic path below) would just keep
+        // losing to the same 409 on every future flush with the misleading "will save
+        // automatically once back online" toast. Instead: drop it from the outbox so it
+        // stops being retried (fix for the outbox-stall issue above applies to this item
+        // too - it must end up explicitly discarded, not silently stuck), pull in the
+        // current server content, and tell the user plainly what happened. Their locally
+        // typed text isn't lost - saveDraft() above already wrote it to
+        // `protocol-text:${id}` in localStorage as a fallback; it's just not queued for
+        // silent resend anymore.
+        discardMutation(mutationKey);
+        void refreshBlockTextFromServer(protocolElementBlockId);
+        showToast(
+          t("conflictToast"),
+          "error",
+          { onMessageClick: () => void refreshBlockTextFromServer(protocolElementBlockId) }
+        );
+        return;
+      }
+      if (!isLatestEdit()) return;
+      queueMutation({
+        key: mutationKey,
+        path: `/api/protocol-element-blocks/${protocolElementBlockId}/text`,
+        method: "PUT",
+        body: JSON.stringify({ content, expected_content: expectedContent }),
+        lastError: err instanceof Error ? err.message : t("textSaveFailed"),
+      });
+      showToast(t("textSavedLocallyOffline"), "error");
+    }
   }
 
   // "Ausblenden" for a text block's red tracked-change highlight (whole block at once -
@@ -1081,7 +1504,7 @@ export function ProtocolEditor({
         method: "POST",
         body: JSON.stringify({ task, tags: parsedTags, todo_status_id: TODO_STATUS.open, created_by: null })
       });
-      const next = [...(todosByBlock[protocolElementBlockId] ?? []), created].sort((left, right) => left.sort_index - right.sort_index);
+      const next = [...(todosByBlockRef.current[protocolElementBlockId] ?? []), created].sort((left, right) => left.sort_index - right.sort_index);
       setTodosByBlock((current) => ({ ...current, [protocolElementBlockId]: next }));
       collab.sendFieldUpdate(`block-${protocolElementBlockId}-todos`, next);
       setNewTodoTask((current) => ({ ...current, [protocolElementBlockId]: "" }));
@@ -1089,7 +1512,7 @@ export function ProtocolEditor({
       setStatus(protocolElementBlockId, "saved");
     } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
-      showToast(err instanceof Error ? err.message : "Todo konnte nicht erstellt werden", "error");
+      showToast(err instanceof Error ? err.message : t("todoCreateFailed"), "error");
     }
   }
 
@@ -1100,33 +1523,33 @@ export function ProtocolEditor({
         method: "PATCH",
         body: JSON.stringify(patch)
       });
-      const next = (todosByBlock[protocolElementBlockId] ?? []).map((todo) => (todo.id === todoId ? updated : todo));
+      const next = (todosByBlockRef.current[protocolElementBlockId] ?? []).map((todo) => (todo.id === todoId ? updated : todo));
       setTodosByBlock((current) => ({ ...current, [protocolElementBlockId]: next }));
       collab.sendFieldUpdate(`block-${protocolElementBlockId}-todos`, next);
       setStatus(protocolElementBlockId, "saved");
     } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
-      showToast(err instanceof Error ? err.message : "Todo konnte nicht gespeichert werden", "error");
+      showToast(err instanceof Error ? err.message : t("todoSaveFailed"), "error");
     }
   }
 
   async function deleteTodo(protocolElementBlockId: string, todoId: string) {
     const ok = await confirm({
-      message: "Todo endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+      message: t("todoDeleteConfirm"),
       tone: "danger",
-      confirmLabel: "Löschen"
+      confirmLabel: tCommon("delete")
     });
     if (!ok) return;
     setStatus(protocolElementBlockId, "saving");
     try {
       await browserApiFetch(`/api/protocol-todos/${todoId}`, { method: "DELETE" });
-      const next = (todosByBlock[protocolElementBlockId] ?? []).filter((todo) => todo.id !== todoId);
+      const next = (todosByBlockRef.current[protocolElementBlockId] ?? []).filter((todo) => todo.id !== todoId);
       setTodosByBlock((current) => ({ ...current, [protocolElementBlockId]: next }));
       collab.sendFieldUpdate(`block-${protocolElementBlockId}-todos`, next);
       setStatus(protocolElementBlockId, "saved");
     } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
-      showToast(err instanceof Error ? err.message : "Todo konnte nicht gelöscht werden", "error");
+      showToast(err instanceof Error ? err.message : t("todoDeleteFailed"), "error");
     }
   }
 
@@ -1150,13 +1573,21 @@ export function ProtocolEditor({
     }
   }
 
-  async function uploadImage(protocolElementBlockId: string) {
+  async function uploadImage(protocolElementBlockId: string, includeGps = true) {
     const file = selectedFiles[protocolElementBlockId];
     if (!file) return;
     setStatus(protocolElementBlockId, "saving");
     try {
+      // Vorab-Abgleich per SHA-256: ein im Mandanten schon vorhandenes Bild würde der Server
+      // ohnehin als Duplikat ablehnen - dann gar nicht erst übertragen.
+      if (await isAlreadyUploaded(file, "protocol_image")) {
+        setStatus(protocolElementBlockId, "error");
+        showToast(t("imageAlreadyExists"), "error");
+        return;
+      }
       const body = new FormData();
       body.append("file", file);
+      if (!includeGps) body.append("include_gps", "false");
       const created = await browserApiFetch<ProtocolImage>(`/api/protocol-element-blocks/${protocolElementBlockId}/images`, {
         method: "POST",
         body
@@ -1169,15 +1600,15 @@ export function ProtocolEditor({
       if (created.duplicate_warning) showToast(created.duplicate_warning, "info");
     } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
-      showToast(err instanceof Error ? err.message : "Bild konnte nicht hochgeladen werden", "error");
+      showToast(err instanceof Error ? err.message : t("imageUploadFailed"), "error");
     }
   }
 
   async function deleteImage(protocolElementBlockId: string, imageId: string) {
     const ok = await confirm({
-      message: "Bild endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+      message: t("imageDeleteConfirm"),
       tone: "danger",
-      confirmLabel: "Löschen"
+      confirmLabel: tCommon("delete")
     });
     if (!ok) return;
     setStatus(protocolElementBlockId, "saving");
@@ -1189,12 +1620,13 @@ export function ProtocolEditor({
       setStatus(protocolElementBlockId, "saved");
     } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
-      showToast(err instanceof Error ? err.message : "Bild konnte nicht gelöscht werden", "error");
+      showToast(err instanceof Error ? err.message : t("imageDeleteFailed"), "error");
     }
   }
 
-  async function createEventFromBlock(protocolElementBlockId: string, blockConfig: Record<string, any>, draftOverride?: ProtocolEventDraft): Promise<EventSummary | null> {
-    const configuredTag = String(blockConfig.event_tag_filter ?? "").trim();
+  async function createEventFromBlock(protocolElementBlockId: string, blockConfig: Record<string, any>, draftOverride?: ProtocolEventDraft): Promise<EventSummary | null> { // i18n-ok: TS-Generic-Signatur, kein UI-Text
+    // Tag aus dem Filter des Blocks (Terminliste: event_filter, Wiederholung: repeat_event_filter).
+    const configuredTag = eventFilterTagText(normalizeEventFilter(blockConfig.event_filter ?? blockConfig.repeat_event_filter));
     const allowEndDate = blockConfig.event_allow_end_date === true;
     const draft = draftOverride ?? newEventDrafts[protocolElementBlockId] ?? createProtocolEventDraft(protocol.protocol_date, configuredTag);
     if (!draft.event_date.trim() || !draft.title.trim()) {
@@ -1202,16 +1634,6 @@ export function ProtocolEditor({
       return null;
     }
     setStatus(protocolElementBlockId, "saving");
-    const cycleAssignments: { cycle_config_id: string; cycle_year: number }[] = [];
-    if (currentCycleYear !== null && currentTemplate?.cycle_config_id && currentTemplate.cycle_config) {
-      cycleAssignments.push({ cycle_config_id: currentTemplate.cycle_config_id, cycle_year: currentCycleYear });
-      const eventCycleYear = draft.event_date
-        ? getCycleYear(draft.event_date, currentTemplate.cycle_config.reset_month, currentTemplate.cycle_config.reset_day)
-        : null;
-      if (eventCycleYear !== null && eventCycleYear !== currentCycleYear) {
-        cycleAssignments.push({ cycle_config_id: currentTemplate.cycle_config_id, cycle_year: eventCycleYear });
-      }
-    }
     try {
       const created = await browserApiFetch<EventSummary>("/api/events", {
         method: "POST",
@@ -1222,7 +1644,7 @@ export function ProtocolEditor({
           title: draft.title,
           description: draft.description || null,
           participant_count: Math.max(0, Number(draft.participant_count || "0")),
-          cycle_assignments: cycleAssignments,
+          // Keine cycle_assignments: das Backend ordnet den Termin nach seinem eigenen Datum zu.
         }),
       });
       setEvents((current) => [...current, created]);
@@ -1237,27 +1659,64 @@ export function ProtocolEditor({
       return created;
     } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
-      showToast(err instanceof Error ? err.message : "Termin konnte nicht erstellt werden", "error");
+      showToast(err instanceof Error ? err.message : t("eventCreateFailed"), "error");
       return null;
     }
   }
 
-  async function updateEventFromBlock(protocolElementBlockId: string, eventId: string, patch: Partial<EventSummary>) {
+  // Terminänderungen aus Terminübersicht/Detailformular kommen pro Tastendruck. Parallel
+  // abgeschickt konnte eine ältere Anfrage die neuere überholen - auf dem Server und beim
+  // Übernehmen der Antwort -, die Eingabe ging dann teilweise verloren (Bug 2026-11-08). Darum
+  // je Termin: sofort lokal anzeigen, nacheinander speichern, und was während einer laufenden
+  // Anfrage dazukommt, in einer einzigen Folgeanfrage zusammenfassen.
+  const queuedEventPatches = useRef(new Map<string, Partial<EventSummary>>());
+  const queuedEventSaves = useRef(new Map<string, Promise<boolean>>());
+  const confirmedEvents = useRef(new Map<string, EventSummary>());
+
+  function updateEventFromBlock(protocolElementBlockId: string, eventId: string, patch: Partial<EventSummary>): Promise<boolean> {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
+    setEvents((current) => current.map((event) => {
+      if (event.id !== eventId) return event;
+      if (!confirmedEvents.current.has(eventId)) confirmedEvents.current.set(eventId, event);
+      return { ...event, ...patch };
+    }));
     setStatus(protocolElementBlockId, "saving");
-    try {
-      const updated = await browserApiFetch<EventSummary>(`/api/events/${eventId}`, {
-        method: "PATCH",
-        body: JSON.stringify(patch),
-      });
-      setEvents((current) => current.map((event) => (event.id === eventId ? updated : event)));
-      collab.sendFieldUpdate("event-updated", updated);
-      setStatus(protocolElementBlockId, "saved");
-      return true;
-    } catch (err: unknown) {
-      setStatus(protocolElementBlockId, "error");
-      showToast(err instanceof Error ? err.message : "Termin konnte nicht gespeichert werden", "error");
-      return false;
-    }
+    const queued = queuedEventPatches.current.get(eventId);
+    queuedEventPatches.current.set(eventId, { ...(queued ?? {}), ...patch });
+    const pending = queuedEventSaves.current.get(eventId);
+    if (queued && pending) return pending;
+    const save = runSerializedByKey(`event:${eventId}`, async () => {
+      const body = queuedEventPatches.current.get(eventId) ?? {};
+      queuedEventPatches.current.delete(eventId);
+      if (queuedEventSaves.current.get(eventId) === save) queuedEventSaves.current.delete(eventId);
+      try {
+        const updated = await browserApiFetch<EventSummary>(`/api/events/${eventId}`, {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        });
+        // Steht schon die nächste Änderung an, bleibt die lokale (neuere) Fassung stehen.
+        if (!queuedEventPatches.current.has(eventId)) {
+          confirmedEvents.current.delete(eventId);
+          setEvents((current) => current.map((event) => (event.id === eventId ? updated : event)));
+        } else {
+          confirmedEvents.current.set(eventId, updated);
+        }
+        collab.sendFieldUpdate("event-updated", updated);
+        setStatus(protocolElementBlockId, "saved");
+        return true;
+      } catch (err: unknown) {
+        setStatus(protocolElementBlockId, "error");
+        showToast(err instanceof Error ? err.message : t("eventSaveFailed"), "error");
+        // Lokal schon angezeigte Änderung auf den zuletzt bestätigten Stand zurücksetzen
+        const confirmed = confirmedEvents.current.get(eventId);
+        if (confirmed && !queuedEventPatches.current.has(eventId)) {
+          confirmedEvents.current.delete(eventId);
+          setEvents((list) => list.map((event) => (event.id === eventId ? confirmed : event)));
+        }
+        return false;
+      }
+    });
+    queuedEventSaves.current.set(eventId, save);
+    return save;
   }
 
   async function deleteEventFromBlock(protocolElementBlockId: string, eventId: string) {
@@ -1269,7 +1728,7 @@ export function ProtocolEditor({
       setStatus(protocolElementBlockId, "saved");
     } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
-      showToast(err instanceof Error ? err.message : "Termin konnte nicht gelöscht werden", "error");
+      showToast(err instanceof Error ? err.message : t("eventDeleteFailed"), "error");
     }
   }
 
@@ -1303,7 +1762,7 @@ export function ProtocolEditor({
         `/api/protocol-element-blocks/${blockId}/list-snapshot/refresh`,
         { method: "POST" }
       );
-      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json }));
+      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version }));
       void refreshElementTitles();
       collab.sendFieldUpdate("element-titles", null);
     } catch (err: unknown) {
@@ -1317,7 +1776,7 @@ export function ProtocolEditor({
         `/api/protocol-element-blocks/${blockId}/list-snapshot/undo`,
         { method: "POST" }
       );
-      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json }));
+      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version }));
       void refreshElementTitles();
       collab.sendFieldUpdate("element-titles", null);
     } catch (err: unknown) {
@@ -1332,7 +1791,7 @@ export function ProtocolEditor({
         `/api/protocol-element-blocks/${blockId}/list-snapshot/entries/${entryId}/accept-tracked-change`,
         { method: "POST" }
       );
-      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json }));
+      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version }));
     } catch (err: unknown) {
       if (err instanceof Error) showToast(err.message);
     }
@@ -1344,7 +1803,7 @@ export function ProtocolEditor({
         `/api/protocol-element-blocks/${blockId}/rows/${rowId}/accept-tracked-change`,
         { method: "POST" }
       );
-      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json }));
+      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version }));
     } catch (err: unknown) {
       if (err instanceof Error) showToast(err.message);
     }
@@ -1361,7 +1820,7 @@ export function ProtocolEditor({
         `/api/protocol-element-blocks/${blockId}/list-snapshot/sync`,
         { method: "POST" }
       );
-      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json }));
+      updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version }));
       void refreshElementTitles();
       collab.sendFieldUpdate("element-titles", null);
     } catch {
@@ -1405,7 +1864,7 @@ export function ProtocolEditor({
   async function createListEntryFromBlock(
     protocolElementBlockId: string,
     listDefinitionId: string,
-    payload: { sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }
+    payload: { sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> } // i18n-ok: TS-Generic-Signatur, kein UI-Text
   ) {
     setStatus(protocolElementBlockId, "saving");
     try {
@@ -1425,7 +1884,7 @@ export function ProtocolEditor({
       return true;
     } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
-      showToast(err instanceof Error ? err.message : "Eintrag konnte nicht erstellt werden", "error");
+      showToast(err instanceof Error ? err.message : t("entryCreateFailed"), "error");
       return false;
     }
   }
@@ -1455,16 +1914,16 @@ export function ProtocolEditor({
       return true;
     } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
-      showToast(err instanceof Error ? err.message : "Eintrag konnte nicht gespeichert werden", "error");
+      showToast(err instanceof Error ? err.message : t("entrySaveFailed"), "error");
       return false;
     }
   }
 
   async function deleteListEntryFromBlock(protocolElementBlockId: string, listDefinitionId: string, entryId: string) {
     const ok = await confirm({
-      message: "Eintrag endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+      message: t("entryDeleteConfirm"),
       tone: "danger",
-      confirmLabel: "Löschen"
+      confirmLabel: tCommon("delete")
     });
     if (!ok) return;
     setStatus(protocolElementBlockId, "saving");
@@ -1478,24 +1937,38 @@ export function ProtocolEditor({
       void syncBlockListSnapshot(protocolElementBlockId);
     } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
-      showToast(err instanceof Error ? err.message : "Eintrag konnte nicht gelöscht werden", "error");
+      showToast(err instanceof Error ? err.message : t("entryDeleteFailed"), "error");
     }
   }
 
-  async function unhideEventBlock(blockId: string) {
+  // Termin einer Serie entfernen bzw. wieder anhaken. ``manually_hidden`` merkt sich die Wahl:
+  // ein entfernter Termin bleibt als unsichtbarer Block stehen und wird in Folgeprotokollen
+  // derselben Vorlage für diesen Punkt nicht neu erzeugt (protocol_service._manually_hidden_event_ids),
+  // ein wieder angehakter schon. Vertagen löscht die Blöcke dagegen (removeEventBlock).
+  async function setEventBlockVisible(blockId: string, visible: boolean) {
     const block = elements.flatMap((e) => e.blocks).find((b) => b.id === blockId);
     if (!block) return;
-    const newConfig = { ...(block.configuration_snapshot_json ?? {}), manually_hidden: false };
-    updateBlockInState(blockId, (b) => ({ ...b, is_visible_snapshot: true, configuration_snapshot_json: newConfig }));
+    const newConfig = { ...(block.configuration_snapshot_json ?? {}), manually_hidden: !visible };
+    updateBlockInState(blockId, (b) => ({ ...b, is_visible_snapshot: visible, configuration_snapshot_json: newConfig }));
     try {
-      await browserApiFetch(`/api/protocol-element-blocks/${blockId}`, {
+      const updated = await browserApiFetch<ProtocolElement["blocks"][number]>(`/api/protocol-element-blocks/${blockId}`, {
         method: "PATCH",
-        body: JSON.stringify({ is_visible_snapshot: true, configuration_snapshot_json: newConfig }),
+        body: JSON.stringify({ is_visible_snapshot: visible, configuration_snapshot_json: newConfig, expected_config_version: block.config_version }),
       });
+      updateBlockInState(blockId, (b) => ({ ...b, config_version: updated.config_version }));
     } catch (err: unknown) {
-      updateBlockInState(blockId, (b) => ({ ...b, is_visible_snapshot: false, configuration_snapshot_json: block.configuration_snapshot_json }));
-      showToast(err instanceof Error ? err.message : "Termin konnte nicht eingeblendet werden", "error");
+      if (applyConfigConflict(blockId, err)) return;
+      updateBlockInState(blockId, (b) => ({ ...b, is_visible_snapshot: block.is_visible_snapshot, configuration_snapshot_json: block.configuration_snapshot_json }));
+      showToast(err instanceof Error ? err.message : t(visible ? "eventShowFailed" : "eventHideFailed"), "error");
     }
+  }
+
+  function unhideEventBlock(blockId: string) {
+    return setEventBlockVisible(blockId, true);
+  }
+
+  function hideEventBlock(blockId: string) {
+    return setEventBlockVisible(blockId, false);
   }
 
   async function removeEventBlock(blockId: string) {
@@ -1525,7 +1998,7 @@ export function ProtocolEditor({
           })
         );
       }
-      showToast(err instanceof Error ? err.message : "Termin konnte nicht entfernt werden", "error");
+      showToast(err instanceof Error ? err.message : t("eventRemoveFailed"), "error");
     }
   }
 
@@ -1556,9 +2029,49 @@ export function ProtocolEditor({
     }
   }
 
+  // Transaktion im Block «Transaktionen» erfassen: verknüpft mit diesem Protokoll, Liste und
+  // Kontostand (auch «am Protokolldatum») werden sofort nachgeführt
+  async function addFinanceTransaction(
+    accountId: string,
+    values: { transaction_date: string; description: string; amount: number }
+  ): Promise<boolean> {
+    try {
+      const created = await browserApiFetch<FinanceTransaction>(`/api/finance/accounts/${accountId}/transactions`, {
+        method: "POST",
+        body: JSON.stringify({ ...values, protocol_id: protocol.id }),
+      });
+      setFinanceTransactions((current) => ({
+        ...current,
+        [accountId]: [created, ...(current[accountId] ?? [])].sort((a, b) => b.transaction_date.localeCompare(a.transaction_date)),
+      }));
+      setAccounts((current) => current.map((account) => (account.id === accountId ? { ...account, balance: account.balance + created.amount } : account)));
+      setFinanceVersion((value) => value + 1);
+      showToast(tRoot("transactionAdded"), "success");
+      return true;
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : tRoot("transactionAddFailed"), "error");
+      return false;
+    }
+  }
+
+  async function deleteFinanceTransaction(accountId: string, transactionId: string) {
+    const transaction = (financeTransactions[accountId] ?? []).find((tx) => tx.id === transactionId);
+    try {
+      await browserApiFetch(`/api/finance/transactions/${transactionId}`, { method: "DELETE" });
+      setFinanceTransactions((current) => ({ ...current, [accountId]: (current[accountId] ?? []).filter((tx) => tx.id !== transactionId) }));
+      if (transaction) {
+        setAccounts((current) => current.map((account) => (account.id === accountId ? { ...account, balance: account.balance - transaction.amount } : account)));
+      }
+      setFinanceVersion((value) => value + 1);
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : tRoot("transactionDeleteFailed"), "error");
+    }
+  }
+
   async function addEventBlockToElement(elementId: string, eventId: string): Promise<ProtocolElement["blocks"][number] | null> {
     try {
-      const newBlock = await browserApiFetch<ProtocolElement["blocks"][number]>(
+      // Alle Blöcke, die das Element pro Termin vorsieht (Vorlagen pro Termin)
+      const newBlocks = await browserApiFetch<ProtocolElement["blocks"]>(
         `/api/protocol-elements/${elementId}/blocks/from-event`,
         {
           method: "POST",
@@ -1568,70 +2081,135 @@ export function ProtocolEditor({
       setElements((current) =>
         current.map((element) =>
           element.id === elementId
-            ? { ...element, blocks: [...element.blocks, newBlock] }
+            ? { ...element, blocks: [...element.blocks, ...newBlocks] }
             : element
         )
       );
-      return newBlock;
+      return newBlocks[0] ?? null;
     } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : "Termin konnte nicht hinzugefügt werden", "error");
+      showToast(err instanceof Error ? err.message : t("eventAddFailed"), "error");
       return null;
     }
   }
 
+  // Stabile Handler fuer die memoisierten Punkte (FocusedElementEditor): ohne sie bekäme jeder
+  // Punkt bei jedem Render neue Funktionen und renderte bei jedem Tastendruck mit.
+  // Personen, auf die gespeicherte Formular-/Matrixwerte verweisen, die aber weder in der Vorlage
+  // noch im Verzeichnis stehen: Namen liefert der Server je Block mit (participant_names), sonst
+  // erschien nur «N ausgewählt». Über einen Schlüssel stabil gehalten, damit Tippen (neue
+  // elements) nicht jedes Mal alle Leser des Kontexts neu rendert.
+  const snapshotNamesKey = useMemo(() => {
+    const names: Record<string, string> = {};
+    for (const element of elements) {
+      for (const block of element.blocks) Object.assign(names, block.participant_names ?? {});
+    }
+    return JSON.stringify(Object.entries(names).sort(([a], [b]) => a.localeCompare(b)));
+  }, [elements]);
+  const directoryWithSnapshotNames = useMemo(() => {
+    const extra = (JSON.parse(snapshotNamesKey) as Array<[string, string]>)
+      .filter(([id]) => !participantDirectory.some((participant) => participant.id === id))
+      .map(([id, display_name]): ParticipantSummary => ({
+        id, tenant_id: protocol.tenant_id ?? "", first_name: null, last_name: null, display_name, email: null,
+        is_active: false, joined_at: null, left_at: null, created_at: "", updated_at: "",
+      }));
+    return extra.length ? [...participantDirectory, ...extra] : participantDirectory;
+  }, [snapshotNamesKey, participantDirectory, protocol.tenant_id]);
+
+  const elementHandlers = useStableCallbacks({
+    saveBlockConfiguration,
+    saveAttendanceStatus,
+    updateBlockInState,
+    handleTextChange,
+    addTodo,
+    updateTodo,
+    deleteTodo,
+    acceptTodoTrackedChange,
+    acceptTrackedListEntry,
+    acceptTrackedRow,
+    acceptTextTrackedChanges,
+    createEventFromBlock,
+    updateEventFromBlock,
+    deleteEventFromBlock,
+    uploadImage,
+    deleteImage,
+    createListEntryFromBlock,
+    updateListEntryFromBlock,
+    deleteListEntryFromBlock,
+    refreshBlockListSnapshot,
+    refreshListEntries,
+    undoBlockListSnapshot,
+    unhideEventBlock,
+    hideEventBlock,
+    removeEventBlock,
+    addEventBlockToElement,
+    addFinanceTransaction,
+    deleteFinanceTransaction,
+    openEventContextMenu,
+    handleQuickTodoCreated,
+    onPendingUpdate: (updated: Partial<TodoListItem> & { id: string }) => setPendingTodos((prev) => prev.map((t) => t.id === updated.id ? { ...t, ...updated } : t)),
+    onPendingDone: (todoId: string) => setPendingTodos((prev) => prev.filter((t) => t.id !== todoId)),
+  });
+
   return (
+    <ParticipantDateContext.Provider value={protocol.protocol_date ?? null}>
+    <ParticipantDirectoryContext.Provider value={directoryWithSnapshotNames}>
     <div className="grid" ref={editorRef}>
-      {useDocumentLayout && (
-        <div className="protocol-document-header">
-          <a href="/protocols" className="button-secondary protocol-document-back">← Zurück zu Protokollen</a>
-          <Badge variant={protocolStatusVariant(protocolStatus)} className="protocol-document-badge">
-            {protocolStatusLabel(protocolStatus)}
-          </Badge>
-          <h1 className="protocol-document-title">{protocol.title || protocol.protocol_number}</h1>
-          <div className="protocol-document-actions">
-            <button type="button" className="button-ghost protocol-document-search-trigger" onClick={() => setSearchOpen(true)}>
-              Suchen <span className="dropdown-hint">Strg+F</span>
-            </button>
+      <div className="protocol-document-header">
+        <a href="/protocols" className="button-secondary protocol-document-back">{t("backToProtocols")}</a>
+        <Badge variant={protocolStatusVariant(protocolStatus)} className="protocol-document-badge">
+          {protocolStatusLabel(protocolStatus, tRoot)}
+        </Badge>
+        <h1 className="protocol-document-title">{protocol.title || protocol.protocol_number}</h1>
+        <div className="protocol-document-actions">
+          <button type="button" className="button-ghost protocol-document-search-trigger" onClick={() => setSearchOpen(true)}>
+            {t("searchButton")} <span className="dropdown-hint">{t("ctrlFHint")}</span>
+          </button>
+          <button
+            type="button"
+            className="button-ghost"
+            disabled={pdfBusyByProtocol[protocol.id]}
+            onClick={() => openOrGeneratePdf(protocol)}
+          >
+            {pdfBusyByProtocol[protocol.id] ? "…" : t("exportPdfButton")}
+          </button>
+          <DocumentExportButton className="button-ghost" context={{ documentType: "protocol", protocolId: protocol.id }} />
+          {!isReadOnly && workflowMeta[protocolStatus]?.ctaLabel && (
             <button
               type="button"
-              className="button-ghost"
-              disabled={pdfBusyByProtocol[protocol.id]}
-              onClick={() => openOrGeneratePdf(protocol)}
+              className="button-primary"
+              disabled={transitioningStatus}
+              onClick={transitionStatus}
             >
-              {pdfBusyByProtocol[protocol.id] ? "…" : "PDF exportieren"}
+              {transitioningStatus ? "…" : workflowMeta[protocolStatus]?.ctaLabel}
             </button>
-            {!isReadOnly && workflowMeta[protocolStatus]?.ctaLabel && (
-              <button
-                type="button"
-                className="button-primary"
-                disabled={transitioningStatus}
-                onClick={transitionStatus}
-              >
-                {transitioningStatus ? "…" : workflowMeta[protocolStatus]?.ctaLabel}
-              </button>
-            )}
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
       <div className="status-row">
         <span className="pill">{protocol.protocol_number}</span>
-        <span className="pill">{workflowMeta[protocolStatus]?.modeLabel ?? protocolStatusLabel(protocolStatus)}</span>
+        <span className="pill">{workflowMeta[protocolStatus]?.modeLabel ?? protocolStatusLabel(protocolStatus, tRoot)}</span>
+        {protocol.created_at && (
+          <span className="pill">{t("createdAtPill", { date: formatDateTime(protocol.created_at, locale) })}</span>
+        )}
+        {protocol.template_version != null && (
+          <span className="pill">{t("templateVersionPill", { version: protocol.template_version })}</span>
+        )}
         {protocol.import_source_url && (
           <a
             className="pill"
             href={protocol.import_source_url}
             title={protocol.import_source_filename ?? undefined}
           >
-            Original-Dokument öffnen
+            {t("openOriginalDocument")}
           </a>
         )}
         {protocolStatus === "geplant" && !isReadOnly && (
-          <TodoMiniMenu label={trackChangesEnabled ? "Änderungen nachverfolgen: An" : "Änderungen nachverfolgen: Aus"} compact>
+          <TodoMiniMenu label={trackChangesEnabled ? t("trackChangesOn") : t("trackChangesOff")} compact>
             {(close) => (
               <>
-                <TodoMenuOption label="An" active={trackChangesEnabled} onClick={() => { void setTrackChangesEnabled(true); close(); }} />
-                <TodoMenuOption label="Aus" active={!trackChangesEnabled} onClick={() => { void setTrackChangesEnabled(false); close(); }} />
+                <TodoMenuOption label={t("onLabel")} active={trackChangesEnabled} onClick={() => { void setTrackChangesEnabled(true); close(); }} />
+                <TodoMenuOption label={t("offLabel")} active={!trackChangesEnabled} onClick={() => { void setTrackChangesEnabled(false); close(); }} />
               </>
             )}
           </TodoMiniMenu>
@@ -1641,13 +2219,13 @@ export function ProtocolEditor({
 
       <Modal
         open={showStatusChangeWarning}
-        title="Andere Person bearbeitet gerade"
-        description="Mindestens eine andere Person bearbeitet dieses Protokoll gerade aktiv. Der Statuswechsel wird für alle sofort übernommen."
+        title={t("otherEditorWarningTitle")}
+        description={t("otherEditorWarningDescription")}
         onClose={() => setShowStatusChangeWarning(false)}
       >
         <div className="modal-actions">
           <button type="button" className="button-ghost" onClick={() => setShowStatusChangeWarning(false)}>
-            Abbrechen
+            {tCommon("cancel")}
           </button>
           <button
             type="button"
@@ -1657,222 +2235,59 @@ export function ProtocolEditor({
               void performStatusTransition();
             }}
           >
-            Trotzdem wechseln
+            {t("switchAnywayButton")}
           </button>
         </div>
       </Modal>
 
-      {showSavedIndicator && <div className="save-indicator">✓ Gespeichert</div>}
+      {showSavedIndicator && <div className="save-indicator">{t("savedIndicator")}</div>}
 
-      {useDocumentLayout ? (
-        <div className="protocol-document-shell">
-          <article
-            className={`protocol-document${accordionEnabled ? " protocol-document-accordion" : ""}`}
-            ref={documentRef}
-          >
-            {visibleElements.length === 0 && (
-              <div className="editor-panel-empty">
-                <div>
-                  <div className="eyebrow">Keine Punkte</div>
-                  <h3>Dieses Protokoll hat noch keine sichtbaren Abschnitte</h3>
-                </div>
+      <div className="protocol-document-shell">
+        <article
+          className={`protocol-document${accordionEnabled ? " protocol-document-accordion" : ""}${accordionEnabled || wheelEnabled ? " protocol-document-spaced" : ""}${wheelEnabled ? " protocol-document-wheel" : ""}`}
+          ref={documentRef}
+        >
+          {!wheelEnabled && <div className="protocol-document-fade-edge protocol-document-fade-top" aria-hidden="true" />}
+          {visibleElements.length === 0 && (
+            <div className="editor-panel-empty">
+              <div>
+                <div className="eyebrow">{t("noItemsEyebrow")}</div>
+                <h3>{t("noVisibleSectionsMessage")}</h3>
               </div>
-            )}
-            {visibleElements.map((element, index) => (
-              <div
-                key={element.id}
-                className="protocol-doc-section-wrap"
-                onClick={selectedElementId === element.id ? undefined : () => focusElement(element.id)}
-              >
-              <FocusedElementEditor
-                isActive={selectedElementId === element.id}
-                tagConfig={tagConfig}
-                updateTagColor={updateTagColor}
-                renameTag={renameTag}
-                collab={collab}
-                trackChangesActive={trackChangesActive}
-                element={element}
-                elementIndex={index}
-                textDrafts={textDrafts}
-                todosByBlock={todosByBlock}
-                imagesByBlock={imagesByBlock}
-                newTodoTask={newTodoTask}
-                browserApiBaseUrl={browserApiBaseUrl}
-                protocol={protocol}
-                availableParticipants={availableParticipants}
-                availableEvents={events}
-                availableTemplates={availableTemplates}
-                availableAccounts={availableAccounts}
-                financeTransactions={financeTransactions}
-                protocolFines={protocolFines}
-                setProtocolFines={setProtocolFines}
-                pendingFines={pendingFines}
-                setPendingFines={setPendingFines}
-                newEventDrafts={newEventDrafts}
-                selectedFiles={selectedFiles}
-                setTodosByBlock={setTodosByBlock}
-                setNewEventDrafts={setNewEventDrafts}
-                setSelectedFiles={setSelectedFiles}
-                setNewTodoTask={setNewTodoTask}
-                saveBlockConfiguration={saveBlockConfiguration}
-                updateBlockInState={updateBlockInState}
-                handleTextChange={handleTextChange}
-                forceEditable={forceEditable}
-                isReadOnly={isReadOnly}
-                addTodo={addTodo}
-                updateTodo={updateTodo}
-                deleteTodo={deleteTodo}
-                acceptTodoTrackedChange={acceptTodoTrackedChange}
-                acceptTrackedListEntry={acceptTrackedListEntry}
-                acceptTrackedRow={acceptTrackedRow}
-                acceptTextTrackedChanges={acceptTextTrackedChanges}
-                createEventFromBlock={createEventFromBlock}
-                updateEventFromBlock={updateEventFromBlock}
-                deleteEventFromBlock={deleteEventFromBlock}
-                onEventContextMenu={openEventContextMenu}
-                uploadImage={uploadImage}
-                deleteImage={deleteImage}
-                listDefinitionsById={listDefinitionsById}
-                listEntriesByDefinition={listEntriesByDefinition}
-                createListEntryFromBlock={createListEntryFromBlock}
-                updateListEntryFromBlock={updateListEntryFromBlock}
-                deleteListEntryFromBlock={deleteListEntryFromBlock}
-                refreshBlockListSnapshot={refreshBlockListSnapshot}
-                refreshListEntries={refreshListEntries}
-                undoBlockListSnapshot={undoBlockListSnapshot}
-                todoTagFilter={todoTagFilter}
-                setTodoTagFilter={setTodoTagFilter}
-                newTodoTags={newTodoTags}
-                setNewTodoTags={setNewTodoTags}
-                isPlanningMode={isPlanningMode}
-                unhideEventBlock={unhideEventBlock}
-                removeEventBlock={removeEventBlock}
-                addEventBlockToElement={addEventBlockToElement}
-                onQuickTodoCreated={handleQuickTodoCreated}
-                pendingTodos={pendingTodos}
-                onPendingUpdate={(updated) => setPendingTodos((prev) => prev.map((t) => t.id === updated.id ? { ...t, ...updated } : t))}
-                onPendingDone={(todoId) => setPendingTodos((prev) => prev.filter((t) => t.id !== todoId))}
-                documentTemplates={documentTemplates}
-              />
-              </div>
-            ))}
-          </article>
-
-          <aside className="protocol-quicknav" ref={navRef}>
-            <div className="card protocol-quicknav-section">
-              <div className="eyebrow">Schnellzugriff</div>
-              <nav className="protocol-quicknav-list">
-                {visibleElements.map((element) => (
-                  <div
-                    className={`editor-nav-section${draggedElementId === element.id ? " editor-nav-section-dragging" : ""}`}
-                    key={element.id}
-                    draggable={!isReadOnly}
-                    onDragStart={isReadOnly ? undefined : () => setDraggedElementId(element.id)}
-                    onDragEnd={isReadOnly ? undefined : () => setDraggedElementId(null)}
-                    onDragOver={isReadOnly ? undefined : (event) => event.preventDefault()}
-                    onDrop={isReadOnly ? undefined : (event) => {
-                      event.preventDefault();
-                      const sourceId = draggedElementId;
-                      setDraggedElementId(null);
-                      if (sourceId) {
-                        void reorderElements(sourceId, element.id);
-                      }
-                    }}
-                  >
-                    <button
-                      type="button"
-                      className={`protocol-quicknav-item${selectedElementId === element.id ? " protocol-quicknav-item-active" : ""}`}
-                      onClick={() => focusElement(element.id)}
-                      title={element.section_name_snapshot}
-                    >
-                      <span className="protocol-quicknav-icon-badge"><NavIcon name={sectionIconKey(element)} /></span>
-                      <span className="protocol-quicknav-item-label">{element.section_name_snapshot}</span>
-                    </button>
-                  </div>
-                ))}
-              </nav>
             </div>
-
-            {attendanceTally && (
-              <div className="card protocol-quicknav-attendance">
-                <div className="eyebrow">Anwesenheit</div>
-                <div className="protocol-quicknav-stat-row">
-                  <span>Anwesend</span>
-                  <strong>{attendanceTally.present}</strong>
-                </div>
-                <div className="protocol-quicknav-stat-row">
-                  <span>Entschuldigt</span>
-                  <strong>{attendanceTally.excused}</strong>
-                </div>
-                <div className="protocol-quicknav-stat-row protocol-quicknav-stat-danger">
-                  <span>Unentschuldigt</span>
-                  <strong>{attendanceTally.absent}</strong>
-                </div>
-              </div>
-            )}
-
-            {!isReadOnly && <p className="protocol-quicknav-autosave muted">Änderungen werden automatisch gespeichert.</p>}
-          </aside>
-        </div>
-      ) : (
-      <>
-      <div className="editor-shell">
-        <aside className="editor-nav" ref={navRef}>
-          {visibleElements.map((element) => (
+          )}
+          {visibleElements.map((element, index) => (
             <div
-              className={`editor-nav-section${draggedElementId === element.id ? " editor-nav-section-dragging" : ""}`}
               key={element.id}
-              draggable={!isReadOnly}
-              onDragStart={isReadOnly ? undefined : () => setDraggedElementId(element.id)}
-              onDragEnd={isReadOnly ? undefined : () => setDraggedElementId(null)}
-              onDragOver={isReadOnly ? undefined : (event) => event.preventDefault()}
-              onDrop={isReadOnly ? undefined : (event) => {
-                event.preventDefault();
-                const sourceId = draggedElementId;
-                setDraggedElementId(null);
-                if (sourceId) {
-                  void reorderElements(sourceId, element.id);
-                }
-              }}
+              className="protocol-doc-section-wrap"
+              onClick={selectedElementId === element.id ? undefined : () => focusElement(element.id)}
             >
-              <button
-                type="button"
-                tabIndex={-1}
-                className={`editor-nav-item editor-nav-item-group${selectedElementId === element.id ? " editor-nav-item-active" : ""}`}
-                onClick={() => focusElement(element.id)}
-                title={element.section_name_snapshot}
-              >
-                <span className="editor-nav-index">{visibleElements.findIndex((item) => item.id === element.id) + 1}</span>
-                <strong className="editor-nav-label">{element.section_name_snapshot}</strong>
-                <span className="muted editor-nav-subtitle">
-                  {element.blocks.map((block) => visibleBlockTitle(block)).filter(Boolean).join(" · ")}
-                </span>
-              </button>
-            </div>
-          ))}
-        </aside>
-
-        <article className="editor-panel" ref={panelRef}>
-          {selectedElement ? (
             <FocusedElementEditor
+              isActive={selectedElementId === element.id}
               tagConfig={tagConfig}
               updateTagColor={updateTagColor}
               renameTag={renameTag}
               collab={collab}
               trackChangesActive={trackChangesActive}
-              element={selectedElement}
-              elementIndex={selectedElementIndex}
+              element={element}
+              elementIndex={index}
               textDrafts={textDrafts}
               todosByBlock={todosByBlock}
+              sessionTodos={sessionTodosByElement[element.id] ?? EMPTY_TODOS}
               imagesByBlock={imagesByBlock}
               newTodoTask={newTodoTask}
               browserApiBaseUrl={browserApiBaseUrl}
               protocol={protocol}
+              sessionNotes={sessionNotes}
               availableParticipants={availableParticipants}
               availableEvents={events}
               availableTemplates={availableTemplates}
-              availableAccounts={availableAccounts}
+              availableAccounts={accounts}
               financeTransactions={financeTransactions}
+              financeVersion={financeVersion}
+              canManageFinances={canManageFinances}
+              addFinanceTransaction={elementHandlers.addFinanceTransaction}
+              deleteFinanceTransaction={elementHandlers.deleteFinanceTransaction}
               protocolFines={protocolFines}
               setProtocolFines={setProtocolFines}
               pendingFines={pendingFines}
@@ -1883,158 +2298,157 @@ export function ProtocolEditor({
               setNewEventDrafts={setNewEventDrafts}
               setSelectedFiles={setSelectedFiles}
               setNewTodoTask={setNewTodoTask}
-              saveBlockConfiguration={saveBlockConfiguration}
-              updateBlockInState={updateBlockInState}
-              handleTextChange={handleTextChange}
+              saveBlockConfiguration={elementHandlers.saveBlockConfiguration}
+              saveAttendanceStatus={elementHandlers.saveAttendanceStatus}
+              updateBlockInState={elementHandlers.updateBlockInState}
+              handleTextChange={elementHandlers.handleTextChange}
               forceEditable={forceEditable}
               isReadOnly={isReadOnly}
-              addTodo={addTodo}
-              updateTodo={updateTodo}
-              deleteTodo={deleteTodo}
-              acceptTodoTrackedChange={acceptTodoTrackedChange}
-              acceptTrackedListEntry={acceptTrackedListEntry}
-              acceptTrackedRow={acceptTrackedRow}
-              acceptTextTrackedChanges={acceptTextTrackedChanges}
-              createEventFromBlock={createEventFromBlock}
-              updateEventFromBlock={updateEventFromBlock}
-              deleteEventFromBlock={deleteEventFromBlock}
-              onEventContextMenu={openEventContextMenu}
-              uploadImage={uploadImage}
-              deleteImage={deleteImage}
+              addTodo={elementHandlers.addTodo}
+              updateTodo={elementHandlers.updateTodo}
+              deleteTodo={elementHandlers.deleteTodo}
+              acceptTodoTrackedChange={elementHandlers.acceptTodoTrackedChange}
+              acceptTrackedListEntry={elementHandlers.acceptTrackedListEntry}
+              acceptTrackedRow={elementHandlers.acceptTrackedRow}
+              acceptTextTrackedChanges={elementHandlers.acceptTextTrackedChanges}
+              createEventFromBlock={elementHandlers.createEventFromBlock}
+              updateEventFromBlock={elementHandlers.updateEventFromBlock}
+              deleteEventFromBlock={elementHandlers.deleteEventFromBlock}
+              onEventContextMenu={elementHandlers.openEventContextMenu}
+              uploadImage={elementHandlers.uploadImage}
+              deleteImage={elementHandlers.deleteImage}
               listDefinitionsById={listDefinitionsById}
               listEntriesByDefinition={listEntriesByDefinition}
-              createListEntryFromBlock={createListEntryFromBlock}
-              updateListEntryFromBlock={updateListEntryFromBlock}
-              deleteListEntryFromBlock={deleteListEntryFromBlock}
-              refreshBlockListSnapshot={refreshBlockListSnapshot}
-              refreshListEntries={refreshListEntries}
-              undoBlockListSnapshot={undoBlockListSnapshot}
+              createListEntryFromBlock={elementHandlers.createListEntryFromBlock}
+              updateListEntryFromBlock={elementHandlers.updateListEntryFromBlock}
+              deleteListEntryFromBlock={elementHandlers.deleteListEntryFromBlock}
+              refreshBlockListSnapshot={elementHandlers.refreshBlockListSnapshot}
+              refreshListEntries={elementHandlers.refreshListEntries}
+              undoBlockListSnapshot={elementHandlers.undoBlockListSnapshot}
               todoTagFilter={todoTagFilter}
               setTodoTagFilter={setTodoTagFilter}
               newTodoTags={newTodoTags}
               setNewTodoTags={setNewTodoTags}
               isPlanningMode={isPlanningMode}
-              unhideEventBlock={unhideEventBlock}
-              removeEventBlock={removeEventBlock}
-              addEventBlockToElement={addEventBlockToElement}
-              onQuickTodoCreated={handleQuickTodoCreated}
+              unhideEventBlock={elementHandlers.unhideEventBlock}
+              hideEventBlock={elementHandlers.hideEventBlock}
+              removeEventBlock={elementHandlers.removeEventBlock}
+              addEventBlockToElement={elementHandlers.addEventBlockToElement}
+              onQuickTodoCreated={elementHandlers.handleQuickTodoCreated}
               pendingTodos={pendingTodos}
-              onPendingUpdate={(updated) => setPendingTodos((prev) => prev.map((t) => t.id === updated.id ? { ...t, ...updated } : t))}
-              onPendingDone={(todoId) => setPendingTodos((prev) => prev.filter((t) => t.id !== todoId))}
-              documentTemplates={documentTemplates}
+              onPendingUpdate={elementHandlers.onPendingUpdate}
+              onPendingDone={elementHandlers.onPendingDone}
+              agendaSlot={agendaSlots[element.id]}
             />
-          ) : (
-            <div className="editor-panel-empty">
-              <div>
-                <div className="eyebrow">Kein Punkt ausgewählt</div>
-                <h3>Wähle einen Punkt aus dem Navigator</h3>
-                <p>Jeder Punkt gruppiert alle Blöcke eines Elements, sodass Text, Todos und Bilder zusammenbleiben.</p>
+            </div>
+          ))}
+          <AgendaItemsSection
+            items={agendaByElement.other}
+            isReadOnly={isReadOnly}
+            heading={tAgenda("editor.otherTitle")}
+            {...agendaSectionHandlers}
+          />
+          {!wheelEnabled && <div className="protocol-document-fade-edge protocol-document-fade-bottom" aria-hidden="true" />}
+        </article>
+
+        <aside className="protocol-quicknav">
+          <div className="card protocol-quicknav-section">
+            <div className="eyebrow">{t("quickAccessEyebrow")}</div>
+            <nav className="protocol-quicknav-list">
+              {visibleElements.map((element) => (
+                <div
+                  className={`editor-nav-section${draggedElementId === element.id ? " editor-nav-section-dragging" : ""}`}
+                  key={element.id}
+                  draggable={!isReadOnly}
+                  onDragStart={isReadOnly ? undefined : () => setDraggedElementId(element.id)}
+                  onDragEnd={isReadOnly ? undefined : () => setDraggedElementId(null)}
+                  onDragOver={isReadOnly ? undefined : (event) => event.preventDefault()}
+                  onDrop={isReadOnly ? undefined : (event) => {
+                    event.preventDefault();
+                    const sourceId = draggedElementId;
+                    setDraggedElementId(null);
+                    if (sourceId) {
+                      void reorderElements(sourceId, element.id);
+                    }
+                  }}
+                >
+                  <button
+                    type="button"
+                    className={`protocol-quicknav-item${selectedElementId === element.id ? " protocol-quicknav-item-active" : ""}`}
+                    onClick={() => focusElement(element.id)}
+                    title={element.section_name_snapshot}
+                  >
+                    <span className="protocol-quicknav-icon-badge"><NavIcon name={sectionIconKey(element)} /></span>
+                    <span className="protocol-quicknav-item-label">{element.section_name_snapshot}</span>
+                  </button>
+                </div>
+              ))}
+            </nav>
+          </div>
+
+          {attendanceTally && (
+            <div className="card protocol-quicknav-attendance">
+              <div className="eyebrow">{t("attendanceEyebrow")}</div>
+              <div className="protocol-quicknav-stat-row">
+                <span>{t("presentLabel")}</span>
+                <strong>{attendanceTally.present}</strong>
+              </div>
+              <div className="protocol-quicknav-stat-row">
+                <span>{t("excusedLabel")}</span>
+                <strong>{attendanceTally.excused}</strong>
+              </div>
+              <div className="protocol-quicknav-stat-row protocol-quicknav-stat-danger">
+                <span>{t("unexcusedLabel")}</span>
+                <strong>{attendanceTally.absent}</strong>
               </div>
             </div>
           )}
-        </article>
+
+          {!isReadOnly && <p className="protocol-quicknav-autosave muted">{t("autosaveNotice")}</p>}
+        </aside>
       </div>
 
-
-      <div className="editor-fixed-actions">
-        {!isReadOnly && selectedElementIndex >= 0 && selectedElementIndex < visibleElements.length - 1 ? (
-          <>
-            <button type="button" className="button-ghost editor-fixed-actions-close" onClick={closeProtocol}>
-              Schliessen
-            </button>
-            <button
-              type="button"
-              className="button-primary"
-              data-editor-primary-action
-              onClick={() => {
-                const nextElement = visibleElements[selectedElementIndex + 1];
-                if (nextElement) focusElement(nextElement.id);
-              }}
-              onKeyDown={(e) => {
-                if (e.key !== "Tab") return;
-                const inputs = document.querySelectorAll<HTMLElement>("[data-form-input]");
-                if (!inputs.length) return;
-                e.preventDefault();
-                if (e.shiftKey) {
-                  inputs[inputs.length - 1].focus();
-                } else {
-                  inputs[0].focus();
-                }
-              }}
-            >
-              Weiter →
-            </button>
-          </>
-        ) : !isReadOnly && workflowMeta[protocolStatus]?.ctaLabel ? (
-          <>
-            <button type="button" className="button-ghost editor-fixed-actions-close" onClick={closeProtocol}>
-              Schliessen
-            </button>
-            <button
-              type="button"
-              className="button-primary"
-              data-editor-primary-action
-              disabled={transitioningStatus}
-              onClick={transitionStatus}
-            >
-              {transitioningStatus ? "…" : workflowMeta[protocolStatus]?.ctaLabel}
-            </button>
-          </>
-        ) : (
-          <a href="/protocols" className="button-secondary">← Zurück zu den Protokollen</a>
-        )}
-      </div>
-      </>
+      {agendaCreateOpen && (
+        <AgendaQuickCreateModal
+          protocolId={protocol.id}
+          sections={visibleElements
+            .filter((element) => trimSectionName(element.section_name_snapshot).toLowerCase() !== "sitzungsnotizen") // i18n-ok: fester Elementname aus dem Backend
+            .map((element) => ({ id: element.id, name: element.section_name_snapshot }))}
+          defaultSectionId={selectedElement?.id ?? null}
+          onClose={() => setAgendaCreateOpen(false)}
+          onCreated={(created) => setAgendaItems((current) => [...current.filter((item) => item.id !== created.id), created])}
+        />
+      )}
+      {agendaPostponeItem && (
+        <AgendaPostponeModal
+          item={agendaPostponeItem}
+          onClose={() => setAgendaPostponeItem(null)}
+          onPostponed={() => void reloadAgendaItems()}
+        />
       )}
 
-      {/* Floating session panel — only during active session */}
-      {protocolStatus === "vorbereitet" && !forceReadOnly && (
+      {/* Schnellmenü (Notizen, Pendenzen, Anliegen, Zusammenarbeit): in allen bearbeitbaren
+          Modi - Vorbereiten, Sitzung und Überarbeiten -, nicht im abgeschlossenen Protokoll */}
+      {!isReadOnly && (
         <SessionPanel
           ref={sessionPanelRef}
           protocol={protocol}
           participants={availableParticipants}
-          dueEvents={(() => {
-            const tpl = availableTemplates.find((t) => t.id === protocol.template_id);
-            const tag = tpl?.todo_due_event_tag?.trim().toLowerCase();
-            const today = new Date().toISOString().slice(0, 10);
-            const upcoming = events.filter((e) => e.event_date >= today);
-            return tag ? upcoming.filter((e) => (e.tag ?? "").toLowerCase().includes(tag)) : upcoming;
-          })()}
+          dueEvents={sessionDueEvents}
           currentSectionName={selectedElement ? trimSectionName(selectedElement.section_name_snapshot) : null}
-          onSessionNotesChange={(notes) => setSessionNotes(notes)}
-          onQuickTodoCreated={(blockId, todoId, elementId) => void handleQuickTodoCreated(blockId, todoId, elementId)}
+          onSessionNotesChange={setSessionNotes}
+          onQuickTodoCreated={elementHandlers.handleQuickTodoCreated}
         />
       )}
 
-      {protocolStatus === "vorbereitet" && !forceReadOnly && (
+      {!isReadOnly && (
         <>
-          <QuickActionsPill
-            onNotesClick={() => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openNotes(); }}
-            onNotesHover={() => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openNotes(false); }}
-            onTodosClick={() => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openTodo(); }}
-            onTodosHover={() => { setCollabStatusPanelOpen(false); sessionPanelRef.current?.openTodo(false); }}
-            onHoverLeave={() => {
-              sessionPanelRef.current?.scheduleClose();
-              scheduleCollabHoverClose();
-            }}
-            onCollabClick={() => {
-              cancelCollabHoverClose();
-              collabOpenedByHoverRef.current = false;
-              sessionPanelRef.current?.close();
-              setCollabStatusPanelOpen(true);
-            }}
-            onCollabHover={() => {
-              cancelCollabHoverClose();
-              collabOpenedByHoverRef.current = true;
-              sessionPanelRef.current?.close();
-              setCollabStatusPanelOpen(true);
-            }}
-          />
+          <QuickActionsPill {...quickActionHandlers} />
           <CollaborationStatusPanel
             open={collabStatusPanelOpen}
             onClose={() => setCollabStatusPanelOpen(false)}
             protocolNumber={protocol.protocol_number}
-            modeLabel={workflowMeta[protocolStatus]?.modeLabel ?? protocolStatusLabel(protocolStatus)}
+            modeLabel={workflowMeta[protocolStatus]?.modeLabel ?? protocolStatusLabel(protocolStatus, tRoot)}
             attendanceTally={attendanceTally}
             otherPresence={collab.otherPresence}
             connected={collab.connected}
@@ -2059,7 +2473,7 @@ export function ProtocolEditor({
           role="menu"
         >
           <button type="button" className="mini-menu-option" onClick={() => void toggleEventCancelledFromContextMenu()}>
-            {eventContextMenu.eventRow.is_cancelled ? "Absage aufheben" : "Als abgesagt markieren"}
+            {eventContextMenu.eventRow.is_cancelled ? t("uncancelEventOption") : t("markAsCancelledOption")}
           </button>
         </div>,
         document.body
@@ -2075,5 +2489,7 @@ export function ProtocolEditor({
         protocolNumber={protocol.protocol_number}
       />
     </div>
+    </ParticipantDirectoryContext.Provider>
+    </ParticipantDateContext.Provider>
   );
 }

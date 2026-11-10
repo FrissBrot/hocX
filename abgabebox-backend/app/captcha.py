@@ -13,7 +13,11 @@ _logger = logging.getLogger(__name__)
 
 
 def _session_scope(link_token: str, assignment_slug: str, element_ref: str) -> str:
-    return f"{link_token}:{assignment_slug}:{element_ref}"
+    # Gilt für den ganzen Abgabe-Link (alle Aufträge/Elemente dahinter): wer auf einer Seite
+    # die Prüfung bestanden hat, muss sie beim Wechsel zu einem anderen Element nicht erneut
+    # lösen. Bindung an Link, IP und Ablaufzeit bleibt (siehe mint_captcha_session_token).
+    del assignment_slug, element_ref
+    return f"link:{link_token}"
 
 
 def captcha_configured() -> bool:
@@ -95,8 +99,9 @@ def _ip_fingerprint(client_ip: str | None) -> str | None:
 def mint_captcha_session_token(link_token: str, assignment_slug: str, element_ref: str, client_ip: str | None = None) -> str:
     """Issued once after a real FriendlyCaptcha solve passes verify_captcha() below - lets the
     frontend prove "a human already passed the bot-check on this page" for subsequent uploads
-    without re-running the widget each time. Scoped to the exact link/assignment/element so a
-    token minted for one upload page can't be replayed against another, and (client_ip) to the
+    without re-running the widget each time. Scoped to the link (all its assignments/elements -
+    since 2026-11-08, so switching elements doesn't re-run the check) so a token minted for one
+    link can't be replayed against another, and (client_ip) to the
     IP that solved the captcha - without that, this 120-minute-TTL bearer token was reusable
     from any number of different IPs, which quietly defeated the assumption that Traefik's
     per-IP rate limit on this endpoint (5/min) meaningfully bounds abuse per person: rotating

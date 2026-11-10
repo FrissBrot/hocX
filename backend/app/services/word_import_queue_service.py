@@ -4,7 +4,7 @@ import logging
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import delete, or_, select, update
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.error_log import record_system_error
@@ -20,6 +20,11 @@ logger = logging.getLogger(__name__)
 # protocols uploaded together), high enough that a single anomalous document's own
 # idiosyncratic (mis-)match can't skew every other document in the batch.
 _BATCH_CONSENSUS_MIN_DOCS = 3
+
+
+# Ein Claim ("importiert" ohne protocol_id und ohne imported_at) gilt nach dieser Zeit als
+# abgebrochen (Worker-Kill/Timeout mitten im Import) und wird wieder freigegeben.
+_ABANDONED_CLAIM_AFTER = timedelta(minutes=30)
 
 
 def _header_signature(header_cells: list[str]) -> str:
@@ -225,9 +230,37 @@ class WordImportQueueService:
         db.add(document)
         db.commit()
 
+    def release_orphaned_imports(self, db: Session, *, tenant_id: int) -> int:
+        """Gibt "importiert"-Dokumente ohne Protokoll wieder frei (Audit MAIN-BE-014).
+
+        Zwei Fälle: das erzeugte Protokoll wurde gelöscht (protocol_id per SET NULL weg,
+        imported_at gesetzt), oder ein Import brach nach dem Claim ab, bevor das except lief
+        (imported_at leer, Claim älter als _ABANDONED_CLAIM_AFTER). Solche Dokumente waren
+        bisher weder lösch- noch erneut importierbar. Ein laufender Import (frischer Claim)
+        bleibt unangetastet.
+        """
+        cutoff = datetime.now(timezone.utc) - _ABANDONED_CLAIM_AFTER
+        released = db.execute(
+            update(WordImportDocument)
+            .where(
+                WordImportDocument.tenant_id == tenant_id,
+                WordImportDocument.status == "importiert",
+                WordImportDocument.protocol_id.is_(None),
+                or_(
+                    WordImportDocument.imported_at.is_not(None),
+                    and_(WordImportDocument.imported_at.is_(None), WordImportDocument.updated_at < cutoff),
+                ),
+            )
+            .values(status="eingelesen", imported_at=None, imported_by=None)
+        )
+        if released.rowcount:
+            db.commit()
+        return released.rowcount or 0
+
     def list_documents(
         self, db: Session, *, tenant_id: int, status: str | None = None
     ) -> list[tuple[WordImportDocument, str, list[WordImportDocument]]]:
+        self.release_orphaned_imports(db, tenant_id=tenant_id)
         statement = (
             select(WordImportDocument, Template.name)
             .join(Template, Template.id == WordImportDocument.template_id)
@@ -345,10 +378,12 @@ class WordImportQueueService:
         # concurrent request can ever flip an "eingelesen" row, and delete_document's
         # matching atomic conditional DELETE (see below) can never remove a row this claim
         # already flipped.
+        self.release_orphaned_imports(db, tenant_id=tenant_id)
         claim = db.execute(
             update(WordImportDocument)
             .where(WordImportDocument.id == document.id, WordImportDocument.status == "eingelesen")
-            .values(status="importiert")
+            # updated_at = Claim-Zeitpunkt, damit ein abgebrochener Claim erkennbar ist (MAIN-BE-014).
+            .values(status="importiert", updated_at=func.now())
         )
         db.commit()
         if claim.rowcount == 0:
@@ -381,6 +416,7 @@ class WordImportQueueService:
         return result
 
     def delete_document(self, db: Session, *, tenant_id: int, document_id: int) -> bool:
+        self.release_orphaned_imports(db, tenant_id=tenant_id)
         document = self.get_document(db, tenant_id=tenant_id, document_id=document_id)
         if document is None:
             return False

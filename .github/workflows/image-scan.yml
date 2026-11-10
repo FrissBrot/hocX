@@ -1,0 +1,47 @@
+name: Image-Scan (wöchentlich)
+
+# Security-Audit release/1.2.0, SEC-017: Die produktiven Images werden nur beim Release gebaut; neue
+# OS-Schwachstellen in den Basis-Images fallen sonst erst beim nächsten Release auf. Dieser Lauf
+# prüft jede Woche die aktuellen `latest`-Images und schlägt fehl, sobald es kritische oder hohe
+# Schwachstellen mit verfügbarem Fix gibt - das Signal, die Images neu zu bauen.
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - backend
+          - frontend
+          - abgabebox-backend
+          - abgabebox-frontend
+          - docs
+          - photo-analysis-worker
+    steps:
+      - name: Scan latest image (Trivy)
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          SERVICE: ${{ matrix.service }}
+        run: |
+          set -uo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/hocx-${SERVICE}:latest"
+          {
+            echo "### Trivy: ${SERVICE}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa \
+            image --quiet --scanners vuln --ignore-unfixed --severity HIGH,CRITICAL --exit-code 1 --format table "$image" \
+            | tee -a "$GITHUB_STEP_SUMMARY" && status=0 || status=$?
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"

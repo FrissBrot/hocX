@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { Badge, BadgeVariant } from "@/components/ui/badge";
+import { ActionIcon } from "@/components/ui/action-icons";
 import { DataTable } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Modal } from "@/components/ui/modal";
@@ -13,11 +15,13 @@ import {
   cycleOffsetLabel,
   formFromAssignment,
   initialForm,
+  assignmentPayload,
 } from "@/components/submission-assignments/submission-assignment-form";
 import { SubmissionLinkManager } from "@/components/submission-assignments/submission-link-manager";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
+import { useDeleteWithFiles } from "@/components/ui/delete-with-files-modal";
 import {
   AssignmentSummary,
   CycleConfigSummary,
@@ -26,26 +30,31 @@ import {
   StructuredListDefinition,
   SubmissionAssignment,
   SubmissionElementStatusEntry,
+  SubmissionFile,
   SubmissionLink,
   SubmissionUploadLogEntry,
 } from "@/types/api";
 
-const LOG_STATUS_LABEL: Record<string, string> = {
-  upload_received: "Datei empfangen",
-  quarantined: "In Quarantäne gespeichert",
-  moved_to_storage: "In Abgabe verschoben",
-  submitted: "Freigegeben",
-  captcha_failed: "Bot-Check fehlgeschlagen",
-  validation_failed: "Validierungsfehler",
-  element_closed: "Element geschlossen",
-  upload_error: "Upload-Fehler",
-  scan_clean: "Scan: Sauber",
-  scan_pending: "Scan: Ausstehend (Quarantäne)",
-  scan_infected: "Scan: Schadware",
-  rescan_clean: "Rescan: Sauber",
-  rescan_infected: "Rescan: Schadware",
-  rescan_pending: "Rescan: ClamAV offline",
-};
+type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
+
+function logStatusLabel(t: TFunc): Record<string, string> {
+  return {
+    upload_received: t("logUploadReceived"),
+    quarantined: t("logQuarantined"),
+    moved_to_storage: t("logMovedToStorage"),
+    submitted: t("logSubmitted"),
+    captcha_failed: t("logCaptchaFailed"),
+    validation_failed: t("logValidationFailed"),
+    element_closed: t("logElementClosed"),
+    upload_error: t("logUploadError"),
+    scan_clean: t("logScanClean"),
+    scan_pending: t("logScanPending"),
+    scan_infected: t("logScanInfected"),
+    rescan_clean: t("logRescanClean"),
+    rescan_infected: t("logRescanInfected"),
+    rescan_pending: t("logRescanPending"),
+  };
+}
 
 const LOG_STATUS_VARIANT: Record<string, BadgeVariant> = {
   upload_received: "neutral",
@@ -64,12 +73,14 @@ const LOG_STATUS_VARIANT: Record<string, BadgeVariant> = {
   rescan_pending: "warning",
 };
 
-const SCAN_STATUS_LABEL: Record<string, string> = {
-  clean: "Geprüft",
-  pending: "Quarantäne",
-  error: "Prüfung fehlgeschlagen",
-  infected: "Schadware",
-};
+function scanStatusLabel(t: TFunc): Record<string, string> {
+  return {
+    clean: t("scanClean"),
+    pending: t("scanPending"),
+    error: t("scanError"),
+    infected: t("scanInfected"),
+  };
+}
 
 const SCAN_STATUS_VARIANT: Record<string, BadgeVariant> = {
   clean: "success",
@@ -86,34 +97,43 @@ type Props = {
   availableParticipants: ParticipantSummary[];
   availableCycleConfigs: CycleConfigSummary[];
   tenantName?: string | null;
+  /** Öffnet diese Abgabe beim Laden (``?assignment=`` aus der Dateiübersicht). */
+  initialSelectedId?: string | null;
 };
 
-function statusLabel(element: SubmissionElementStatusEntry): string {
-  if (element.status === "closed") return "Geschlossen";
+function statusLabel(element: SubmissionElementStatusEntry, t: TFunc): string {
+  if (element.status === "closed") return t("statusClosed");
   if (element.status === "submitted") {
-    if (element.files.some((f) => f.scan_status === "error")) return "Prüfung fehlgeschlagen";
-    if (element.files.some((f) => f.scan_status === "pending")) return "In Quarantäne";
-    return "Abgegeben";
+    if (element.files.some((f) => f.scan_status === "error")) return t("scanError");
+    if (element.files.some((f) => f.scan_status === "pending")) return t("statusInQuarantine");
+    return t("statusSubmitted");
   }
   const now = new Date();
   const end = element.window_end ? new Date(element.window_end) : null;
   const start = element.window_start ? new Date(element.window_start) : null;
-  if (end && now > end) return "Nicht abgegeben";
-  if (start && now < start) return "Ausstehend";
-  return "Offen";
+  if (end && now > end) return t("statusNotSubmitted");
+  if (start && now < start) return t("statusPending");
+  return t("statusOpen");
 }
 
-function statusVariant(element: SubmissionElementStatusEntry): BadgeVariant | null {
-  if (element.status === "closed") return "neutral";
-  if (element.status === "submitted") {
-    if (element.files.some((f) => f.scan_status === "error")) return "danger";
-    if (element.files.some((f) => f.scan_status === "pending")) return "warning";
-    return "success";
-  }
-  return null;
+// Jeder Zustand hat eine eigene Farbe: grün = abgegeben, gelb = in Prüfung, blau = läuft,
+// grau = noch nicht gestartet oder ohne Abgabe geschlossen, rot = Frist vorbei ohne Abgabe bzw.
+// Scanfehler.
+function statusVariant(element: SubmissionElementStatusEntry): BadgeVariant {
+  if (element.files.some((f) => f.scan_status === "error")) return "danger";
+  if (element.files.some((f) => f.scan_status === "pending")) return "warning";
+  if (element.status === "submitted") return "success";
+  if (element.status === "closed") return element.files.length ? "success" : "neutral";
+  const now = new Date();
+  const end = element.window_end ? new Date(element.window_end) : null;
+  const start = element.window_start ? new Date(element.window_start) : null;
+  if (end && now > end) return "danger";
+  if (start && now < start) return "neutral";
+  return "info";
 }
 
 function SummaryBar({ summary, size = "row" }: { summary: AssignmentSummary | undefined; size?: "row" | "detail" }) {
+  const t = useTranslations("submissionAssignments");
   const isDetail = size === "detail";
   const wrapClass = `subm-summary ${isDetail ? "subm-summary-detail" : "subm-summary-list"}`;
 
@@ -135,7 +155,7 @@ function SummaryBar({ summary, size = "row" }: { summary: AssignmentSummary | un
     return (
       <div className={wrapClass}>
         <div className="subm-summary-track" />
-        <span className="subm-summary-caption">Noch keine Abgaben</span>
+        <span className="subm-summary-caption">{t("noSubmissionsYet")}</span>
       </div>
     );
   }
@@ -145,10 +165,10 @@ function SummaryBar({ summary, size = "row" }: { summary: AssignmentSummary | un
   const infPct = Math.min(100 - cleanPct - qPct, (infected / denom) * 100);
   const missingPct = Math.max(0, 100 - cleanPct - qPct - infPct);
 
-  const countLabel = known ? `${sum} von ${total}` : `${sum}`;
+  const countLabel = known ? t("countOfTotal", { count: sum, total }) : `${sum}`;
   const extraParts = [
-    quarantine > 0 ? `${quarantine} Quarantäne` : null,
-    infected > 0 ? `${infected} Schadware` : null,
+    quarantine > 0 ? t("quarantineCount", { count: quarantine }) : null,
+    infected > 0 ? t("infectedCount", { count: infected }) : null,
   ].filter((v): v is string => Boolean(v));
 
   const track = (
@@ -176,7 +196,7 @@ function SummaryBar({ summary, size = "row" }: { summary: AssignmentSummary | un
     <div className={wrapClass}>
       {track}
       <span className="subm-summary-caption">
-        {countLabel} eingereicht{extraParts.length > 0 ? ` · ${extraParts.join(" · ")}` : ""}
+        {t("submittedCount", { label: countLabel })}{extraParts.length > 0 ? ` · ${extraParts.join(" · ")}` : ""}
       </span>
     </div>
   );
@@ -189,31 +209,36 @@ function initials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-const MONTHS_DE = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
-
-function formatDateShort(iso: string): string {
-  const d = new Date(`${iso}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return iso;
-  return `${String(d.getDate()).padStart(2, "0")}. ${MONTHS_DE[d.getMonth()]} ${d.getFullYear()}`;
+function monthAbbrs(t: TFunc): string[] {
+  return [
+    t("monthJan"), t("monthFeb"), t("monthMar"), t("monthApr"), t("monthMay"), t("monthJun"),
+    t("monthJul"), t("monthAug"), t("monthSep"), t("monthOct"), t("monthNov"), t("monthDec"),
+  ];
 }
 
-function relativeTime(iso: string): string {
+function formatDateShort(iso: string, t: TFunc): string {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return `${String(d.getDate()).padStart(2, "0")}. ${monthAbbrs(t)[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function relativeTime(iso: string, t: TFunc): string {
   const diffMs = Date.now() - new Date(iso).getTime();
   const minute = 60_000;
   const hour = 3_600_000;
   const day = 86_400_000;
-  if (diffMs < minute) return "gerade eben";
+  if (diffMs < minute) return t("justNow");
   if (diffMs < hour) {
     const m = Math.max(1, Math.round(diffMs / minute));
-    return `vor ${m} Minute${m === 1 ? "" : "n"}`;
+    return t("minutesAgo", { count: m });
   }
   if (diffMs < day) {
     const h = Math.round(diffMs / hour);
-    return `vor ${h} Stunde${h === 1 ? "" : "n"}`;
+    return t("hoursAgo", { count: h });
   }
   const d = Math.round(diffMs / day);
-  if (d <= 1) return "gestern";
-  return `vor ${d} Tagen`;
+  if (d <= 1) return t("yesterday");
+  return t("daysAgo", { count: d });
 }
 
 function DownloadIcon() {
@@ -221,14 +246,6 @@ function DownloadIcon() {
     <svg viewBox="0 0 24 24" aria-hidden="true" width="14" height="14">
       <path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function PlusIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" width="14" height="14">
-      <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }
@@ -255,9 +272,16 @@ function VerifiedIcon() {
   );
 }
 
-export function SubmissionAssignmentManager({ initialAssignments, initialLinks, availableLists, availableEvents, availableParticipants, availableCycleConfigs, tenantName = null }: Props) {
+export function SubmissionAssignmentManager({ initialAssignments, initialLinks, availableLists, availableEvents, availableParticipants, availableCycleConfigs, tenantName = null, initialSelectedId = null }: Props) {
+  const t = useTranslations("submissionAssignments");
   const showToast = useToast();
   const confirm = useConfirm();
+  const { requestDelete, modal: deleteModal } = useDeleteWithFiles();
+  // Alle Verantwortlichen eines Elements (mehrere = gemeinsam), leer = niemand
+  const responsibleNames = (element: SubmissionElementStatusEntry) => {
+    const ids = element.responsible_participant_ids?.length ? element.responsible_participant_ids : element.responsible_participant_id ? [element.responsible_participant_id] : [];
+    return ids.map((id) => availableParticipants.find((p) => p.id === id)?.display_name ?? t("unknownParticipant")).join(", ");
+  };
   const [assignments, setAssignments] = useState(initialAssignments);
   const [links, setLinks] = useState(initialLinks);
   const [linksModalOpen, setLinksModalOpen] = useState(false);
@@ -375,8 +399,8 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
         if (result.clean > 0 || result.infected > 0) {
           showToast(
             result.infected > 0
-              ? `Virenscan: ${result.infected} infizierte Datei(en) gefunden`
-              : `Virenscan: ${result.clean} Datei(en) freigegeben`,
+              ? t("virusScanInfectedFound", { count: result.infected })
+              : t("virusScanClean", { count: result.clean }),
             result.infected > 0 ? "error" : "success"
           );
         }
@@ -397,38 +421,26 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
         scheduleAutoRescan(assignmentId, 5000);
       }
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Elemente konnten nicht geladen werden", "error");
+      showToast(error instanceof Error ? error.message : t("elementsLoadFailed"), "error");
     } finally {
       setElementsLoading(false);
     }
   }
+
+  // Direkt geöffnete Abgabe (?assignment=), nur beim ersten Laden
+  useEffect(() => {
+    if (initialSelectedId && initialAssignments.some((assignment) => assignment.id === initialSelectedId)) {
+      void loadElements(initialSelectedId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     return () => clearRescanTimer();
   }, []);
 
   async function submit() {
-    const isEvents = form.source_type === "events";
-    const payload = {
-      title: form.title.trim(),
-      description: form.description || null,
-      public_slug: form.public_slug,
-      source_type: form.source_type,
-      // Nur was zur gewählten Verknüpfung gehört, wird gesendet – der Rest wird beim Wechsel geleert.
-      tag_filter: isEvents ? form.tag_filter : null,
-      offset_days_before: isEvents && form.offset_days_before !== "" ? Number(form.offset_days_before) : null,
-      offset_days_after: isEvents && form.offset_days_after !== "" ? Number(form.offset_days_after) : null,
-      cycle_config_id: isEvents ? form.cycle_config_id || null : null,
-      cycle_offsets: isEvents && form.cycle_config_id ? form.cycle_offsets : [],
-      list_definition_id: form.source_type === "list" ? form.list_definition_id || null : null,
-      deadline: isEvents ? null : form.deadline || null,
-      allowed_file_types: form.allowed_file_types,
-      max_files_per_element: form.max_files_per_element === "" ? null : Number(form.max_files_per_element),
-      max_file_size_mb: Number(form.max_file_size_mb),
-      sort_order: form.sort_order,
-      responsible_participant_source: form.source_type === "manual" ? null : form.responsible_participant_source || null,
-      link_ids: form.link_ids,
-    };
+    const payload = assignmentPayload(form);
 
     try {
       const saved = editingId
@@ -448,29 +460,45 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
         setSummaries((prev) => ({ ...prev, [saved.id]: { submitted: 0, quarantine: 0, infected: 0, total: null } }));
       }
       setModalOpen(false);
-      showToast(editingId ? "Abgabe gespeichert" : "Abgabe erstellt", "success");
+      showToast(editingId ? t("assignmentSavedToast") : t("assignmentCreatedToast"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Abgabe konnte nicht gespeichert werden", "error");
+      showToast(error instanceof Error ? error.message : t("assignmentSaveFailed"), "error");
     }
   }
 
   async function deleteAssignment(id: string) {
-    const ok = await confirm({
-      message: "Abgabe wirklich löschen? Alle zugehörigen Elemente und Verweise werden entfernt.",
-      tone: "danger",
-    });
-    if (!ok) return;
     try {
-      await browserApiFetch(`/api/submission-assignments/${id}`, { method: "DELETE" });
+      // Rückfrage mit Auswahl der eingereichten Dateien (Datenschutz-Audit PRIV-003).
+      const result = await requestDelete({
+        title: t("deleteAssignmentTitle"),
+        message: t("deleteAssignmentConfirm"),
+        previewUrl: `/api/submission-assignments/${id}/deletion-preview`,
+        deleteUrl: `/api/submission-assignments/${id}/delete`,
+      });
+      if (!result) return;
       setAssignments((current) => current.filter((item) => item.id !== id));
       setSummaries((prev) => { const n = { ...prev }; delete n[id]; return n; });
       if (selectedId === id) {
         setSelectedId(null);
         setElements([]);
       }
-      showToast("Abgabe gelöscht", "success");
+      showToast(t("assignmentDeletedToast"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Abgabe konnte nicht gelöscht werden", "error");
+      showToast(error instanceof Error ? error.message : t("assignmentDeleteFailed"), "error");
+    }
+  }
+
+  // Eine eingereichte Datei endgültig löschen, z. B. auf Wunsch der einreichenden Person (PRIV-003).
+  async function deleteSubmittedFile(file: SubmissionFile) {
+    const ok = await confirm({ message: t("deleteFileConfirm", { name: file.original_name }), tone: "danger", confirmLabel: t("delete") });
+    if (!ok || !selectedId) return;
+    try {
+      await browserApiFetch(file.content_url.replace(/\/content$/, ""), { method: "DELETE" });
+      const data = await refreshElements(selectedId);
+      setElementModal((current) => (current ? data.find((el) => el.element_ref === current.element_ref) ?? null : null));
+      showToast(t("fileDeletedToast"), "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : t("fileDeleteFailed"), "error");
     }
   }
 
@@ -491,7 +519,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
       a.click();
       URL.revokeObjectURL(url);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Download fehlgeschlagen", "error");
+      showToast(error instanceof Error ? error.message : t("downloadFailed"), "error");
     } finally {
       setZipLoading(false);
     }
@@ -511,7 +539,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
       a.click();
       URL.revokeObjectURL(blobUrl);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Download fehlgeschlagen", "error");
+      showToast(error instanceof Error ? error.message : t("downloadFailed"), "error");
     }
   }
 
@@ -525,7 +553,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
       );
       setLogEntries(data);
     } catch {
-      showToast("Log konnte nicht geladen werden", "error");
+      showToast(t("logLoadFailed"), "error");
     } finally {
       setLogLoading(false);
     }
@@ -539,9 +567,9 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
       );
       setElements((current) => current.map((el) => (el.element_ref === elementRef ? updated : el)));
       setElementModal((current) => (current?.element_ref === elementRef ? updated : current));
-      showToast("Element wieder aufgeschaltet", "success");
+      showToast(t("elementReopenedToast"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Element konnte nicht wieder aufgeschaltet werden", "error");
+      showToast(error instanceof Error ? error.message : t("elementReopenFailed"), "error");
     }
   }
 
@@ -553,9 +581,9 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
       );
       setElements((current) => current.map((el) => (el.element_ref === elementRef ? updated : el)));
       setElementModal((current) => (current?.element_ref === elementRef ? updated : current));
-      showToast("Element geschlossen", "success");
+      showToast(t("elementClosedToast"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Element konnte nicht geschlossen werden", "error");
+      showToast(error instanceof Error ? error.message : t("elementCloseFailed"), "error");
     }
   }
 
@@ -566,49 +594,53 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
     if (assignment.source_type === "events") {
       const cycleConfig = availableCycleConfigs.find((c) => c.id === assignment.cycle_config_id);
       const cycles = cycleConfig
-        ? ` (${cycleConfig.name}: ${[...assignment.cycle_offsets].sort((a, b) => b - a).map(cycleOffsetLabel).join(", ")})`
+        ? ` (${cycleConfig.name}: ${[...assignment.cycle_offsets].sort((a, b) => b - a).map((offset) => cycleOffsetLabel(offset, t)).join(", ")})`
         : "";
-      const source = (assignment.tag_filter ? `Termin „${assignment.tag_filter}“` : "Termine") + cycles;
+      const source = (assignment.tag_filter ? t("sourceEventTagged", { tag: assignment.tag_filter }) : t("sourceEvents")) + cycles;
       const before = assignment.offset_days_before;
       const after = assignment.offset_days_after;
       const windowParts = [
-        before !== null ? `ab ${before} Tage vorher` : null,
-        after !== null ? `bis ${after} Tage danach` : null,
+        before !== null ? t("fromDaysBefore", { count: before }) : null,
+        after !== null ? t("untilDaysAfter", { count: after }) : null,
       ].filter((v): v is string => Boolean(v));
-      const window = windowParts.length > 0 ? windowParts.join(", ") : "kein Zeitfenster (offen bis manuell geschlossen)";
-      return `Quelle: ${source} · ${window}`;
+      const window = windowParts.length > 0 ? windowParts.join(", ") : t("noWindowOpenUntilClosed");
+      return t("sourceSummary", { source, window });
     }
     if (assignment.source_type === "manual") {
-      const deadline = assignment.deadline ? `Deadline ${formatDateShort(assignment.deadline)}` : "Kein Stichtag (offen bis manuell geschlossen)";
-      return `Quelle: Manuell · ${deadline}`;
+      const deadline = assignment.deadline ? t("deadlineNamed", { date: formatDateShort(assignment.deadline, t) }) : t("noDeadlineOpenUntilClosed");
+      return t("sourceSummaryManual", { deadline });
     }
     const list = availableLists.find((l) => l.id === assignment.list_definition_id);
-    const source = list ? `Liste „${list.name}“` : "Liste";
-    const deadline = assignment.deadline ? `Deadline ${formatDateShort(assignment.deadline)}` : "Kein Stichtag (offen bis manuell geschlossen)";
-    return `Quelle: ${source} · ${deadline}`;
+    const source = list ? t("sourceListNamed", { name: list.name }) : t("sourceList");
+    const deadline = assignment.deadline ? t("deadlineNamed", { date: formatDateShort(assignment.deadline, t) }) : t("noDeadlineOpenUntilClosed");
+    return t("sourceSummary", { source, window: deadline });
   }
 
   const hasNoAssignments = assignments.length === 0;
 
   return (
     <div className="grid subm-root">
+      {deleteModal}
       {/* Header — always visible, including ClamAV status */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Abgaben</h1>
-          <p className="muted">{hasNoAssignments ? "Öffentliche Abgabeboxen für Dokumente und Formulare." : "Externe Abgaben ohne Anmeldung — gekoppelt an Termine oder eine Liste, oder manuell."}</p>
+          <h1 className="page-title">{t("pageTitle")}</h1>
+          <p className="muted">{hasNoAssignments ? t("pageIntroEmpty") : t("pageIntro")}</p>
         </div>
-        <div className="subm-toolbar-actions">
-          <span className={`subm-clamav subm-clamav-${clamavStatus}`}>
+        <div className="table-toolbar-actions">
+          <span
+            className={`subm-clamav subm-clamav-${clamavStatus}`}
+            title={clamavStatus === "offline" ? t("clamavOfflineHint") : undefined}
+          >
             <span className="subm-clamav-dot" />
-            ClamAV {clamavStatus === "online" ? "Online" : clamavStatus === "offline" ? "Offline" : "…"}
+            {clamavStatus === "online" ? t("clamavActive") : clamavStatus === "offline" ? t("clamavOffline") : t("clamavChecking")}
           </span>
           <button type="button" className="button-ghost" onClick={() => setLinksModalOpen(true)}>
-            Links ({links.length})
+            {t("linksCount", { count: links.length })}
           </button>
           {hasNoAssignments ? null : (
-            <button type="button" className="button-secondary subm-new-button" onClick={openCreate}>
-              <PlusIcon /> Abgabe
+            <button type="button" className="button-primary subm-new-button" onClick={openCreate}>
+              {t("newAssignmentPlus")}
             </button>
           )}
         </div>
@@ -616,28 +648,28 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
 
       {hasNoAssignments ? (
         <EmptyState
-          title="Keine Abgaben eingerichtet"
-          description="Mit einer Abgabebox sammelst du Dokumente und Bilder über einen öffentlichen Link – ohne Login für die Einreichenden."
+          title={t("noAssignmentsSetUp")}
+          description={t("noAssignmentsDescription")}
           actions={
             <button type="button" className="button-primary" onClick={openCreate}>
-              + Abgabe
+              {t("newAssignmentPlus")}
             </button>
           }
-          hint="Eingereichte Bilder landen automatisch in der Fotogalerie, Dokumente unter Dateien."
+          hint={t("emptyStateHint")}
         />
       ) : (
       <>
       <div className="list-filter-row">
         <div />
         <div className="list-filter-search">
-          <SearchInput value={search} onChange={setSearch} placeholder="Abgaben suchen…" />
+          <SearchInput value={search} onChange={setSearch} placeholder={t("searchAssignmentsPlaceholder")} />
         </div>
       </div>
 
       <DataTable
         className="data-table-lg"
-        columns={["Titel", "Quelle / Zeitraum", "Fortschritt", "Aktionen"]}
-        emptyMessage="Keine Treffer"
+        columns={[t("colTitle"), t("colSourcePeriod"), t("colProgress"), t("colActions")]}
+        emptyMessage={t("noMatches")}
       >
           {filteredAssignments.map((assignment) => (
             <tr
@@ -660,19 +692,19 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
                     type="button"
                     className="subm-sidebar-icon-button"
                     onClick={(e) => { e.stopPropagation(); openEdit(assignment); }}
-                    aria-label="Bearbeiten"
-                    title="Bearbeiten"
+                    aria-label={t("editAction")}
+                    title={t("editAction")}
                   >
-                    ✎
+                    <ActionIcon name="edit" />
                   </button>
                   <button
                     type="button"
                     className="subm-sidebar-icon-button subm-sidebar-icon-button-danger"
                     onClick={(e) => { e.stopPropagation(); void deleteAssignment(assignment.id); }}
-                    aria-label="Löschen"
-                    title="Löschen"
+                    aria-label={t("delete")}
+                    title={t("delete")}
                   >
-                    ×
+                    <ActionIcon name="delete" />
                   </button>
                 </div>
               </td>
@@ -696,11 +728,11 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
 
             {hasPendingFiles && (
               <Badge variant="warning" className="subm-pulse">
-                Dateien in Quarantäne
+                {t("filesInQuarantine")}
               </Badge>
             )}
 
-            <div className="subm-modal-section-title">{selectedAssignment?.source_type === "manual" ? "Abgabe" : "Teilnehmer"}</div>
+            <div className="subm-modal-section-title">{selectedAssignment?.source_type === "manual" ? t("assignmentLabel") : selectedAssignment?.source_type === "events" ? t("eventElementsLabel") : t("listElementsLabel")}</div>
 
             {elementsLoading ? (
               <div className="subm-skeleton-box">
@@ -709,20 +741,24 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
                 ))}
               </div>
             ) : elements.length === 0 ? (
-              <p className="muted">Keine Elemente gefunden.</p>
+              <p className="muted">{t("noElementsFound")}</p>
             ) : (
               <div className="subm-participant-list">
                 {elements.map((element, rowIndex) => {
-                  const responsibleName = element.responsible_participant_id
-                    ? (availableParticipants.find((p) => p.id === element.responsible_participant_id)?.display_name ?? "Unbekannter Teilnehmer")
-                    : null;
-                  const displayName = responsibleName ?? element.label;
+                  const responsibleName = responsibleNames(element) || null;
+                  // Titel ist immer das Element (Termin/Listeneintrag), die verantwortliche Person steht in der Metazeile
+                  // - auch "Niemand zugewiesen", sofern die Abgabe überhaupt eine Verantwortlichen-Quelle hat.
+                  const tracksResponsible = Boolean(selectedAssignment?.responsible_participant_source);
                   const hasFiles = element.files.length > 0;
                   const variant = statusVariant(element);
-                  const label = statusLabel(element);
-                  const meta = hasFiles
-                    ? `${element.files.length} Datei${element.files.length === 1 ? "" : "en"}${element.submitted_at ? ` · ${relativeTime(element.submitted_at)}` : ""}`
-                    : "Noch nicht eingereicht";
+                  const label = statusLabel(element, t);
+                  const status = hasFiles
+                    ? `${t("fileCount", { count: element.files.length })}${element.submitted_at ? ` · ${relativeTime(element.submitted_at, t)}` : ""}`
+                    : t("notSubmittedYet");
+                  const responsible = responsibleName
+                    ? t("responsibleMeta", { name: responsibleName })
+                    : tracksResponsible ? t("noResponsibleAssigned") : null;
+                  const meta = responsible ? `${responsible} · ${status}` : status;
                   return (
                     <div
                       key={element.element_ref}
@@ -730,13 +766,17 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
                       style={{ animationDelay: `${Math.min(rowIndex, 14) * 25}ms` }}
                       onClick={() => void openElementModal(selectedId, element)}
                     >
-                      <span className="subm-avatar subm-avatar-lg">{initials(displayName)}</span>
+                      {responsibleName ? (
+                        <span className="subm-avatar subm-avatar-lg" title={responsibleName}>{initials(responsibleName)}</span>
+                      ) : (
+                        <span className={`subm-avatar subm-avatar-lg${tracksResponsible ? " subm-avatar-empty" : ""}`}>{tracksResponsible ? "?" : initials(element.label)}</span>
+                      )}
                       <div className="subm-participant-info">
-                        <div className="subm-participant-name">{displayName}</div>
+                        <div className="subm-participant-name">{element.label}</div>
                         <div className="subm-participant-meta">{meta}</div>
                       </div>
                       <div className="subm-participant-status">
-                        <Badge variant={variant ?? "neutral"}>
+                        <Badge variant={variant}>
                           {hasFiles ? <DownloadIcon /> : null} {label}
                         </Badge>
                       </div>
@@ -752,12 +792,12 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
                 className="button-ghost button-secondary"
                 onClick={() => void downloadZip(selectedId)}
                 disabled={zipLoading}
-                title="Alle geprüften Dateien als ZIP herunterladen"
+                title={t("downloadAllZipTitle")}
               >
-                <DownloadIcon /> {zipLoading ? "…" : "Alle Dateien (.zip)"}
+                <DownloadIcon /> {zipLoading ? "…" : t("allFilesZip")}
               </button>
               <button type="button" className="button-secondary" onClick={() => setSelectedId(null)}>
-                Schliessen
+                {t("close")}
               </button>
             </div>
           </div>
@@ -768,25 +808,20 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
       <Modal
         open={elementModal !== null}
         onClose={() => setElementModal(null)}
-        title={elementModal?.label ?? "Element"}
+        title={elementModal?.label ?? t("elementFallback")}
         size="wide"
       >
         {elementModal ? (
           <div className="grid subm-element-modal">
             <div className="status-row">
-              {statusVariant(elementModal) ? (
-                <Badge variant={statusVariant(elementModal)!}>{statusLabel(elementModal)}</Badge>
-              ) : (
-                <Badge variant="neutral">{statusLabel(elementModal)}</Badge>
-              )}
+              <Badge variant={statusVariant(elementModal)}>{statusLabel(elementModal, t)}</Badge>
               {elementModal.window_start && elementModal.window_end ? (
                 <span className="subm-modal-meta">{elementModal.window_start} – {elementModal.window_end}</span>
               ) : elementModal.window_end ? (
-                <span className="subm-modal-meta">Frist: {elementModal.window_end}</span>
+                <span className="subm-modal-meta">{t("deadlineColon")} {elementModal.window_end}</span>
               ) : null}
-              {elementModal.responsible_participant_id ? (() => {
-                const name = availableParticipants.find((p) => p.id === elementModal.responsible_participant_id)?.display_name
-                  ?? "Unbekannter Teilnehmer";
+              {responsibleNames(elementModal) ? (() => {
+                const name = responsibleNames(elementModal);
                 return (
                   <span className="subm-responsible">
                     <span className="subm-avatar">{initials(name)}</span>
@@ -797,9 +832,9 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
             </div>
 
             <div className="subm-modal-section">
-              <div className="subm-modal-section-title">Dateien</div>
+              <div className="subm-modal-section-title">{t("filesLabel")}</div>
               {elementModal.files.length === 0 ? (
-                <p className="muted">Keine Dateien vorhanden.</p>
+                <p className="muted">{t("noFilesPresent")}</p>
               ) : (
                 <div className="subm-file-list subm-file-list-modal">
                   {elementModal.files.map((file) => (
@@ -814,13 +849,13 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
                       )}
                       {file.scan_status === "clean" ? (
                         <>
-                          <span className="subm-verified" title="Geprüft">
+                          <span className="subm-verified" title={t("verified")}>
                             <VerifiedIcon />
                           </span>
                           <button
                             type="button"
                             className="subm-file-download-button"
-                            title="Datei herunterladen"
+                            title={t("downloadFileTitle")}
                             onClick={() => void downloadFile(file.content_url, file.original_name)}
                           >
                             <DownloadIcon />
@@ -828,9 +863,18 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
                         </>
                       ) : (
                         <Badge variant={SCAN_STATUS_VARIANT[file.scan_status] ?? "neutral"}>
-                          {SCAN_STATUS_LABEL[file.scan_status] ?? file.scan_status}
+                          {scanStatusLabel(t)[file.scan_status] ?? file.scan_status}
                         </Badge>
                       )}
+                      <button
+                        type="button"
+                        className="button-icon-soft button-icon-soft-danger"
+                        aria-label={t("deleteFileAction")}
+                        title={t("deleteFileAction")}
+                        onClick={() => void deleteSubmittedFile(file)}
+                      >
+                        <ActionIcon name="delete" />
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -844,7 +888,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
                   className="button-ghost button-secondary subm-reopen-button"
                   onClick={() => selectedId && void reopenElement(selectedId, elementModal.element_ref)}
                 >
-                  Wieder aufschalten
+                  {t("reopenAction")}
                 </button>
               ) : (
                 <button
@@ -852,17 +896,17 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
                   className="button-ghost button-secondary subm-close-button"
                   onClick={() => selectedId && void closeElement(selectedId, elementModal.element_ref)}
                 >
-                  Element schliessen
+                  {t("closeElementAction")}
                 </button>
               )}
             </div>
 
             <div className="subm-modal-section">
-              <div className="subm-modal-section-title">Log</div>
+              <div className="subm-modal-section-title">{t("logLabel")}</div>
               {logLoading ? (
-                <p className="muted">Lädt…</p>
+                <p className="muted">{t("loadingEllipsis")}</p>
               ) : logEntries.length === 0 ? (
-                <p className="muted">Keine Einträge vorhanden.</p>
+                <p className="muted">{t("noEntriesPresent")}</p>
               ) : (
                 <div className="subm-log-list">
                   {logEntries.map((entry) => {
@@ -873,7 +917,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
                         <span className="subm-log-dot" />
                         <div className="subm-log-body">
                           <div className="subm-log-header">
-                            <Badge variant={variant}>{LOG_STATUS_LABEL[entry.status] ?? entry.status}</Badge>
+                            <Badge variant={variant}>{logStatusLabel(t)[entry.status] ?? entry.status}</Badge>
                             <span className="subm-log-time">{new Date(entry.created_at).toLocaleString("de-CH")}</span>
                           </div>
                           {entry.error_message ? <div className="subm-log-detail">{entry.error_message}</div> : null}
@@ -892,8 +936,8 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
       <Modal
         open={linksModalOpen}
         onClose={closeLinksModal}
-        title="Abgabe-Links"
-        description="Über diese Links ist die öffentliche Abgabebox erreichbar."
+        title={t("submissionLinksTitle")}
+        description={t("submissionLinksDescription")}
       >
         <SubmissionLinkManager links={links} onLinksChange={setLinks} onLinkRemoved={handleLinkRemoved} />
       </Modal>

@@ -25,6 +25,20 @@ env_file_value() {
   )
 }
 
+# Setzt KEY auf VALUE: steht KEY leer in der Datei (z. B. "KEY=" aus .env.example), wird diese
+# Zeile ersetzt - weitere leere Zeilen desselben Schluessels entfallen -, sonst wird KEY
+# angehaengt. Frueher stand der Schluessel danach doppelt in der .env (leer und gesetzt).
+set_empty_env_placeholder() {
+  local env_file="$1" key="$2" value="$3"
+  awk -v key="$key" -v line="$key='$value'" '
+    BEGIN { pattern = "^[[:space:]]*(export[[:space:]]+)?" key "=[[:space:]]*(\x27\x27|\"\")?[[:space:]]*$" }
+    $0 ~ pattern { if (!done) { print line; done = 1 } next }
+    { print }
+    END { if (!done) print line }
+  ' "$env_file" > "$env_file.next"
+  mv "$env_file.next" "$env_file"
+}
+
 migrate_env_file() {
   local env_file="$1"
   local tmp_file backup_file key password photo_url
@@ -81,6 +95,75 @@ migrate_env_file() {
     printf "PHOTO_WORKER_DATABASE_URL='postgresql+psycopg://hocx_photo_worker:%s@db:5432/%s'\n" \
       "$password" "$(env_file_value "$env_file" POSTGRES_DB)" >> "$tmp_file"
     notes+=("ergaenzt: PHOTO_WORKER_DATABASE_URL")
+    changed=true
+  fi
+
+  # 1.2.0: Objektspeicher (lokales Garage-S3, verschluesselte Profil-Zugangsdaten). Fehlende
+  # Werte werden einmalig erzeugt; vorhandene bleiben unveraendert (sonst waeren gespeicherte
+  # Zugangsdaten nicht mehr entschluesselbar bzw. das lokale S3 nicht mehr erreichbar).
+  local storage_key storage_value
+  # EXPORT_ENCRYPTION_KEY (Security-Audit release/1.2.0): X25519-Schlüssel der Mandanten-Exporte,
+  # 64 Hex-Zeichen; ein Neuerzeugen machte ohne Passwort erstellte Exporte unlesbar.
+  for storage_key in STORAGE_CREDENTIALS_KEY EXPORT_ENCRYPTION_KEY GARAGE_RPC_SECRET GARAGE_ADMIN_TOKEN \
+    LOCAL_S3_ACCESS_KEY LOCAL_S3_SECRET_KEY LOCAL_S3_ABGABEBOX_ACCESS_KEY LOCAL_S3_ABGABEBOX_SECRET_KEY \
+    WANDERPLANER_INTERNAL_TOKEN WANDERPLANER_POSTGRES_PASSWORD WANDERPLANER_APP_DB_PASSWORD; do
+    if [ -n "$(env_file_value "$tmp_file" "$storage_key")" ]; then
+      continue
+    fi
+    command -v openssl > /dev/null 2>&1 || {
+      rm -f "$tmp_file"
+      umask "$umask_before"
+      echo "openssl wird zum sicheren Erzeugen der Secrets benoetigt." >&2
+      return 1
+    }
+    case "$storage_key" in
+      # Garage erwartet Access Keys im Format GK + 24 Hex-Zeichen, Secrets mit 64 Hex-Zeichen.
+      *_ACCESS_KEY) storage_value="GK$(openssl rand -hex 12)" ;;
+      *) storage_value="$(openssl rand -hex 32)" ;;
+    esac
+    set_empty_env_placeholder "$tmp_file" "$storage_key" "$storage_value"
+    notes+=("ergaenzt: $storage_key (neu erzeugt)")
+    changed=true
+  done
+
+  # MAIN-OPS-005: Redis verlangt im Release-Stack ein Passwort (requirepass).
+  if [ -z "$(env_file_value "$env_file" REDIS_PASSWORD)" ]; then
+    command -v openssl > /dev/null 2>&1 || {
+      rm -f "$tmp_file"
+      umask "$umask_before"
+      echo "openssl wird zum sicheren Erzeugen der Secrets benoetigt." >&2
+      return 1
+    }
+    grep -Ev "^[[:space:]]*(export[[:space:]]+)?REDIS_PASSWORD=" "$tmp_file" > "$tmp_file.next" || true
+    mv "$tmp_file.next" "$tmp_file"
+    printf "REDIS_PASSWORD='%s'\n" "$(openssl rand -hex 32)" >> "$tmp_file"
+    notes+=("ergaenzt: REDIS_PASSWORD (neu erzeugt)")
+    changed=true
+  fi
+
+  # Nur Testumgebung: fester TOTP-Seed fuer die Demo-Konten und die Plattform-Admins
+  # (backend/scripts/seed_test_tenant.py). Einmal erzeugt bleibt er, damit derselbe
+  # Authenticator-Eintrag nach jedem Test-Deploy weiter funktioniert.
+  if [ "$(env_file_value "$env_file" HOCX_ENVIRONMENT)" = test ] && [ -z "$(env_file_value "$tmp_file" DEMO_TOTP_SEED)" ]; then
+    if ! command -v openssl > /dev/null 2>&1 || ! command -v base32 > /dev/null 2>&1; then
+      rm -f "$tmp_file"
+      umask "$umask_before"
+      echo "openssl und base32 werden zum Erzeugen von DEMO_TOTP_SEED benoetigt." >&2
+      return 1
+    fi
+    set_empty_env_placeholder "$tmp_file" DEMO_TOTP_SEED "$(openssl rand 20 | base32 | tr -d '=\n')"
+    notes+=("ergaenzt: DEMO_TOTP_SEED (neu erzeugt, nur Testumgebung)")
+    changed=true
+  fi
+
+  # MAIN-OPS-001: deploy.sh hat frueher HOCX_ENVIRONMENT='prod' (Host-Name) geschrieben. Die
+  # Anwendung erkennt den Produktionsmodus am kanonischen Wert 'production' (Backend und Frontend
+  # akzeptieren 'prod' zwar als Alias, die .env wird aber auf den kanonischen Wert gebracht).
+  if [ "$(env_file_value "$env_file" HOCX_ENVIRONMENT)" = prod ]; then
+    grep -Ev "^[[:space:]]*(export[[:space:]]+)?HOCX_ENVIRONMENT=" "$tmp_file" > "$tmp_file.next" || true
+    mv "$tmp_file.next" "$tmp_file"
+    printf "HOCX_ENVIRONMENT='production'\n" >> "$tmp_file"
+    notes+=("geaendert: HOCX_ENVIRONMENT prod -> production")
     changed=true
   fi
 

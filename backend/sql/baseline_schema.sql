@@ -45,199 +45,6 @@ COMMENT ON EXTENSION pgcrypto IS 'cryptographic functions';
 
 
 --
--- Name: create_protocol_from_template(bigint, bigint, text, date, bigint, text, bigint); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.create_protocol_from_template(p_tenant_id bigint, p_template_id bigint, p_protocol_number text, p_protocol_date date, p_created_by bigint, p_title text DEFAULT NULL::text, p_event_id bigint DEFAULT NULL::bigint) RETURNS bigint
-    LANGUAGE plpgsql
-    AS $$
-DECLARE
-    v_protocol_id BIGINT;
-    v_template_version INTEGER;
-    v_document_template_id BIGINT;
-    v_document_template_version INTEGER;
-    v_document_template_path TEXT;
-    v_section RECORD;
-    v_block RECORD;
-    v_protocol_element_id BIGINT;
-    v_protocol_element_block_id BIGINT;
-    v_text_type_id SMALLINT;
-    v_display_type_id SMALLINT;
-    v_static_text_type_id SMALLINT;
-BEGIN
-    SELECT t.version, t.document_template_id, dt.version, dt.filesystem_path
-    INTO v_template_version, v_document_template_id, v_document_template_version, v_document_template_path
-    FROM template t
-    LEFT JOIN document_template dt ON dt.id = t.document_template_id
-    WHERE t.id = p_template_id
-      AND t.tenant_id = p_tenant_id;
-
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'Template % not found for tenant %', p_template_id, p_tenant_id;
-    END IF;
-
-    SELECT id INTO v_text_type_id FROM element_type WHERE code = 'text';
-    SELECT id INTO v_display_type_id FROM element_type WHERE code = 'display';
-    SELECT id INTO v_static_text_type_id FROM element_type WHERE code = 'static_text';
-
-    INSERT INTO protocol (
-        tenant_id,
-        template_id,
-        template_version,
-        document_template_id,
-        document_template_version,
-        document_template_path_snapshot,
-        protocol_number,
-        title,
-        protocol_date,
-        event_id,
-        status,
-        created_by
-    )
-    VALUES (
-        p_tenant_id,
-        p_template_id,
-        v_template_version,
-        v_document_template_id,
-        v_document_template_version,
-        v_document_template_path,
-        p_protocol_number,
-        p_title,
-        p_protocol_date,
-        p_event_id,
-        'geplant',
-        p_created_by
-    )
-    RETURNING id INTO v_protocol_id;
-
-    FOR v_section IN
-        SELECT
-            te.id,
-            te.sort_index,
-            te.section_name,
-            te.section_order,
-            te.is_required,
-            te.is_visible,
-            te.export_visible
-        FROM template_element te
-        WHERE te.template_id = p_template_id
-        ORDER BY te.sort_index
-    LOOP
-        INSERT INTO protocol_element (
-            protocol_id,
-            template_element_id,
-            sort_index,
-            section_name_snapshot,
-            section_order_snapshot,
-            is_required_snapshot,
-            is_visible_snapshot,
-            export_visible_snapshot
-        )
-        VALUES (
-            v_protocol_id,
-            v_section.id,
-            v_section.sort_index,
-            v_section.section_name,
-            v_section.section_order,
-            v_section.is_required,
-            v_section.is_visible,
-            v_section.export_visible
-        )
-        RETURNING id INTO v_protocol_element_id;
-
-        FOR v_block IN
-            SELECT
-                teb.id AS template_element_block_id,
-                teb.sort_index,
-                teb.render_order,
-                teb.block_title,
-                teb.is_required,
-                teb.is_visible,
-                teb.export_visible,
-                teb.configuration_override_json,
-                ed.id AS element_definition_id,
-                ed.element_type_id,
-                ed.render_type_id,
-                ed.title,
-                ed.display_title,
-                ed.description,
-                ed.is_editable,
-                ed.allows_multiple_values,
-                ed.export_visible AS ed_export_visible,
-                ed.latex_template,
-                ed.configuration_json
-            FROM template_element_block teb
-            JOIN element_definition ed ON ed.id = teb.element_definition_id
-            WHERE teb.template_element_id = v_section.id
-            ORDER BY teb.sort_index
-        LOOP
-            INSERT INTO protocol_element_block (
-                protocol_element_id,
-                template_element_block_id,
-                element_definition_id,
-                element_type_id,
-                render_type_id,
-                title_snapshot,
-                display_title_snapshot,
-                description_snapshot,
-                block_title_snapshot,
-                is_editable_snapshot,
-                allows_multiple_values_snapshot,
-                sort_index,
-                render_order,
-                is_required_snapshot,
-                is_visible_snapshot,
-                export_visible_snapshot,
-                latex_template_snapshot,
-                configuration_snapshot_json
-            )
-            VALUES (
-                v_protocol_element_id,
-                v_block.template_element_block_id,
-                v_block.element_definition_id,
-                v_block.element_type_id,
-                v_block.render_type_id,
-                v_block.title,
-                v_block.display_title,
-                v_block.description,
-                v_block.block_title,
-                v_block.is_editable,
-                v_block.allows_multiple_values,
-                v_block.sort_index,
-                v_block.render_order,
-                v_block.is_required,
-                v_block.is_visible,
-                (v_section.export_visible AND v_block.ed_export_visible AND v_block.export_visible),
-                v_block.latex_template,
-                COALESCE(v_block.configuration_json, '{}'::jsonb) || COALESCE(v_block.configuration_override_json, '{}'::jsonb)
-            )
-            RETURNING id INTO v_protocol_element_block_id;
-
-            IF v_block.element_type_id = v_text_type_id THEN
-                INSERT INTO protocol_text (protocol_element_block_id, content)
-                VALUES (v_protocol_element_block_id, '');
-            ELSIF v_block.element_type_id = v_display_type_id THEN
-                INSERT INTO protocol_display_snapshot (
-                    protocol_element_block_id,
-                    source_type,
-                    source_id,
-                    compiled_text,
-                    snapshot_json
-                )
-                VALUES (v_protocol_element_block_id, NULL, NULL, NULL, '{}'::jsonb);
-            ELSIF v_block.element_type_id = v_static_text_type_id THEN
-                INSERT INTO protocol_text (protocol_element_block_id, content)
-                VALUES (v_protocol_element_block_id, COALESCE(v_block.description, ''));
-            END IF;
-        END LOOP;
-    END LOOP;
-
-    RETURN v_protocol_id;
-END;
-$$;
-
-
---
 -- Name: set_updated_at(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -572,7 +379,6 @@ CREATE TABLE public.element_definition (
     is_editable boolean DEFAULT true NOT NULL,
     allows_multiple_values boolean DEFAULT false NOT NULL,
     export_visible boolean DEFAULT true NOT NULL,
-    latex_template text,
     configuration_json jsonb DEFAULT '{}'::jsonb NOT NULL,
     is_active boolean DEFAULT true NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
@@ -1164,7 +970,6 @@ CREATE TABLE public.protocol_element_block (
     is_required_snapshot boolean DEFAULT false NOT NULL,
     is_visible_snapshot boolean DEFAULT true NOT NULL,
     export_visible_snapshot boolean DEFAULT true NOT NULL,
-    latex_template_snapshot text,
     configuration_snapshot_json jsonb DEFAULT '{}'::jsonb NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     public_id uuid DEFAULT public.uuidv7() NOT NULL
@@ -1217,12 +1022,11 @@ CREATE TABLE public.protocol_export_cache (
     id bigint NOT NULL,
     protocol_id bigint NOT NULL,
     export_format text NOT NULL,
-    latex_source text,
     generated_file_id bigint,
     generator_version text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     public_id uuid DEFAULT public.uuidv7() NOT NULL,
-    CONSTRAINT protocol_export_cache_export_format_check CHECK ((export_format = ANY (ARRAY['latex'::text, 'pdf'::text])))
+    CONSTRAINT protocol_export_cache_export_format_check CHECK ((export_format = 'pdf'::text))
 );
 
 
@@ -1457,7 +1261,6 @@ CREATE TABLE public.stored_file (
     original_name text NOT NULL,
     mime_type text,
     storage_path text NOT NULL,
-    latex_path text,
     file_size_bytes bigint,
     checksum_sha256 text,
     created_by bigint,

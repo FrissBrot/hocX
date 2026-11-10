@@ -1,6 +1,7 @@
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import ElementDefinition, Event, ListDefinition, Participant, Tenant
+from app.models import ElementDefinition, Event, ListDefinition, Participant, TemplateElement, Tenant
 from app.repositories.element_definition_repository import ElementDefinitionRepository
 from app.schemas.template import (
     ElementDefinitionCreate,
@@ -8,28 +9,14 @@ from app.schemas.template import (
     ElementDefinitionUpdate,
 )
 from app.services import public_id_service
+from app.core.element_types import allows_multiple_values, is_known_element_type, render_type_id
 from app.services.block_config_ids import decode_block_config, encode_block_config
+from app.services.element_config import upgrade_definition_block, validate_block_config
 
 
 class ElementDefinitionService:
     def __init__(self, repository: ElementDefinitionRepository | None = None) -> None:
         self.repository = repository or ElementDefinitionRepository()
-
-    def _render_type_for_element_type(self, element_type_id: int) -> int:
-        mapping = {
-            1: 2,  # text -> paragraph
-            2: 3,  # todo -> todo_list
-            3: 4,  # image -> image
-            4: 6,  # display -> plain_text (ProtocolDisplaySnapshot.compiled_text is plain rendered text, same as static_text)
-            5: 6,  # static_text -> plain_text
-            6: 5,  # form -> key_value
-            7: 5,  # event_list -> key_value
-            8: 2,  # bullet_list -> paragraph
-            9: 5,  # attendance -> key_value
-            10: 6,  # session_date -> plain_text
-            11: 5,  # matrix -> key_value
-        }
-        return mapping.get(element_type_id, 2)
 
     def _referenced_list_definition_ids(self, config: dict | None) -> set[int]:
         """Collects both whole-list `linked_list_id` and any row-link `rows[].linked_list_id`
@@ -49,18 +36,13 @@ class ElementDefinitionService:
         return ids
 
     def _referenced_auto_source_list_ids(self, config: dict | None) -> set[int]:
-        """Matrix-Automodus: a block's configuration_json can carry auto_source.list_id (or
-        the legacy matrix_column_source_list_id) instead of linked_list_id - the id that
-        drives the "auto" column generation in ProtocolService.create_from_template."""
+        """Matrix-Automodus: a block's configuration_json can carry auto_source.list_id
+        instead of linked_list_id - the id that drives the "auto" column generation in
+        ProtocolService.create_from_template."""
         config = config or {}
-        ids: set[int] = set()
         auto_source = config.get("auto_source")
-        old_list_id = config.get("matrix_column_source_list_id")
         list_id = (auto_source or {}).get("list_id") if isinstance(auto_source, dict) else None
-        for candidate in (list_id, old_list_id):
-            if candidate:
-                ids.add(int(candidate))
-        return ids
+        return {int(list_id)} if list_id else set()
 
     def _referenced_participant_and_event_ids(self, config: dict | None) -> tuple[set[int], set[int]]:
         """template_participant_id/template_participant_ids/template_event_id are embedded
@@ -121,22 +103,37 @@ class ElementDefinitionService:
     def _normalize_blocks(self, db: Session, blocks: list[dict], *, tenant_id: int) -> list[dict]:
         normalized: list[dict] = []
         for block in blocks:
-            next_block = dict(block)
-            element_type_id = int(next_block.get("element_type_id", 1))
-            next_block["element_type_id"] = element_type_id
-            next_block["render_type_id"] = self._render_type_for_element_type(element_type_id)
-            next_block["allows_multiple_values"] = element_type_id in {2, 3}
-            config = dict(next_block.get("configuration_json") or {})
-            config.setdefault("title_as_subtitle", True)
+            element_type_id = int(block.get("element_type_id", 1))
+            if not is_known_element_type(element_type_id):
+                raise ValueError(f"Unbekannter Elementtyp {element_type_id}")
+            # Altformate (z. B. von einem älteren Client oder einer Kopie) auf das aktuelle
+            # Schema heben und Schlüssel entfernen, die der Typ nicht kennt.
+            next_block = upgrade_definition_block({**block, "element_type_id": element_type_id})
+            # Render-Typ und Mehrfachwerte kommen aus der Registry, nicht vom Client.
+            next_block["render_type_id"] = render_type_id(element_type_id)
+            next_block["allows_multiple_values"] = allows_multiple_values(element_type_id)
             # The client sends this JSON with public ids embedded (linked_list_id,
             # template_participant_id(s), template_event_id, ...) - decode back to
             # internal ints before _validate_linked_lists/storage, see block_config_ids.py.
-            config = decode_block_config(db, config, tenant_id=tenant_id)
+            config = decode_block_config(db, next_block["configuration_json"], tenant_id=tenant_id)
+            validate_block_config(element_type_id, config)
             next_block["configuration_json"] = config
             normalized.append(next_block)
         return normalized
 
-    def _read_model(self, db: Session, entity: ElementDefinition) -> ElementDefinitionRead:
+    @staticmethod
+    def usage_counts(db: Session, definition_ids: list[int]) -> dict[int, int]:
+        """Anzahl Vorlagen-Traktanden je Elementdefinition (eine Abfrage für die ganze Liste)."""
+        if not definition_ids:
+            return {}
+        rows = db.execute(
+            select(TemplateElement.element_definition_id, func.count())
+            .where(TemplateElement.element_definition_id.in_(definition_ids))
+            .group_by(TemplateElement.element_definition_id)
+        )
+        return {definition_id: count for definition_id, count in rows}
+
+    def _read_model(self, db: Session, entity: ElementDefinition, usage_count: int | None = None) -> ElementDefinitionRead:
         config = entity.configuration_json or {}
         # Each block's own configuration_json is stored with internal ints embedded
         # (linked_list_id, ...) - encode to public ids for this API response, see
@@ -151,13 +148,17 @@ class ElementDefinitionService:
             title=entity.title,
             description=entity.description,
             is_active=entity.is_active,
+            is_library=entity.is_library,
+            usage_count=usage_count if usage_count is not None else self.usage_counts(db, [entity.id]).get(entity.id, 0),
             blocks=blocks,
             created_at=entity.created_at,
             updated_at=entity.updated_at,
         )
 
-    def list_element_definitions(self, db: Session, *, tenant_id: int):
-        return [self._read_model(db, entity) for entity in self.repository.list(db, tenant_id=tenant_id)]
+    def list_element_definitions(self, db: Session, *, tenant_id: int, library_only: bool = False):
+        entities = [entity for entity in self.repository.list(db, tenant_id=tenant_id) if entity.is_library or not library_only]
+        counts = self.usage_counts(db, [entity.id for entity in entities])
+        return [self._read_model(db, entity, counts.get(entity.id, 0)) for entity in entities]
 
     def get_element_definition(self, db: Session, element_definition_id: int):
         entity = self.repository.get(db, element_definition_id)
@@ -176,9 +177,9 @@ class ElementDefinitionService:
             is_editable=False,
             allows_multiple_values=False,
             export_visible=True,
-            latex_template=None,
             configuration_json={"blocks": normalized_blocks},
             is_active=payload.is_active,
+            is_library=payload.is_library,
         )
         created = self.repository.create(db, entity)
         return self._read_model(db, created)
@@ -199,6 +200,43 @@ class ElementDefinitionService:
             return self._read_model(db, entity)
         updated = self.repository.update(db, entity, values)
         return self._read_model(db, updated)
+
+    def copy_element_definition(self, db: Session, source: ElementDefinition, *, is_library: bool = False) -> ElementDefinition:
+        """Eigenständige Kopie (gleiche Block-IDs, damit Vorlagen-Übersteuerungen weiter passen)."""
+        entity = ElementDefinition(
+            tenant_id=source.tenant_id,
+            element_type_id=source.element_type_id,
+            render_type_id=source.render_type_id,
+            title=source.title,
+            display_title=source.display_title,
+            description=source.description,
+            is_editable=source.is_editable,
+            allows_multiple_values=source.allows_multiple_values,
+            export_visible=source.export_visible,
+            configuration_json=dict(source.configuration_json or {}),
+            is_active=source.is_active,
+            is_library=is_library,
+        )
+        db.add(entity)
+        db.flush()
+        return entity
+
+    def delete_unused_singles(self, db: Session, definition_ids: list[int]) -> None:
+        """Einzelstücke einer Vorlage (nicht in der Bibliothek) entfernen, sobald kein Traktandum
+        sie mehr verwendet. Protokolle behalten ihren Schnappschuss (FK auf SET NULL)."""
+        from app.models import TemplateElementBlock
+
+        counts = self.usage_counts(db, definition_ids)
+        # Alte Vorlagenblöcke (template_element_block, nur noch Altbestand) halten sie ebenfalls
+        legacy = set(db.scalars(select(TemplateElementBlock.element_definition_id).where(TemplateElementBlock.element_definition_id.in_(definition_ids)))) if definition_ids else set()
+        removed = False
+        for definition_id in set(definition_ids):
+            entity = db.get(ElementDefinition, definition_id)
+            if entity is not None and not entity.is_library and not counts.get(definition_id) and definition_id not in legacy:
+                db.delete(entity)
+                removed = True
+        if removed:
+            db.commit()
 
     def delete_element_definition(self, db: Session, element_definition_id: int) -> bool:
         entity = self.repository.get(db, element_definition_id)

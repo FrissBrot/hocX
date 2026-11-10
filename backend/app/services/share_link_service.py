@@ -11,11 +11,12 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.models.entities import AppUser, PhotoAlbum, PhotoAlbumItem, ShareLink, ShareLinkFile
+from app.models.entities import AppUser, PhotoAlbum, PhotoAlbumItem, ShareLink, ShareLinkFile, StoredFile
 from app.services import photo_album_share_service
+from app.services.photo_metadata_privacy import MetadataPolicy
 
 # 24 Bytes = 192 Bit Entropie, als URL-safe Base64 (32 Zeichen) - nicht erratbar. Gleiches Mass
 # wie submission_link_service.generate_token().
@@ -30,12 +31,32 @@ class ShareLinkError(Exception):
     """Raised for create() preconditions - the route turns this into a 422."""
 
 
+DEFAULT_METADATA_POLICY = MetadataPolicy(location=False, capture_date=True, camera=False)
+
+
+def _metadata_columns(policy: MetadataPolicy) -> dict[str, bool]:
+    return {"share_location": policy.location, "share_capture_date": policy.capture_date, "share_camera": policy.camera}
+
+
+def metadata_policy_for(link: ShareLink) -> MetadataPolicy:
+    return MetadataPolicy(location=link.share_location, capture_date=link.share_capture_date, camera=link.share_camera)
+
+
 def create_for_files(
-    db: Session, *, tenant_id: int, name: str, file_ids: list[uuid.UUID], expires_at: datetime | None, created_by: int | None
+    db: Session,
+    *,
+    tenant_id: int,
+    name: str,
+    file_ids: list[uuid.UUID],
+    expires_at: datetime | None,
+    created_by: int | None,
+    metadata: MetadataPolicy = DEFAULT_METADATA_POLICY,
 ) -> ShareLink:
     if not file_ids or len(file_ids) > 200:
         raise ShareLinkError("Bitte 1 bis 200 Dateien auswählen.")
-    link = ShareLink(tenant_id=tenant_id, name=name, token=generate_token(), expires_at=expires_at, created_by=created_by)
+    link = ShareLink(
+        tenant_id=tenant_id, name=name, token=generate_token(), expires_at=expires_at, created_by=created_by, **_metadata_columns(metadata)
+    )
     db.add(link)
     db.flush()
     db.add_all([ShareLinkFile(share_link_id=link.id, file_id=file_id) for file_id in dict.fromkeys(file_ids)])
@@ -45,10 +66,25 @@ def create_for_files(
 
 
 def create_for_album(
-    db: Session, *, tenant_id: int, name: str, album: PhotoAlbum, expires_at: datetime | None, created_by: int | None
+    db: Session,
+    *,
+    tenant_id: int,
+    name: str,
+    album: PhotoAlbum,
+    expires_at: datetime | None,
+    created_by: int | None,
+    metadata: MetadataPolicy = DEFAULT_METADATA_POLICY,
 ) -> ShareLink:
     photo_album_share_service.release_stale_pending(db, album.id)
-    link = ShareLink(tenant_id=tenant_id, name=name, token=generate_token(), album_id=album.id, expires_at=expires_at, created_by=created_by)
+    link = ShareLink(
+        tenant_id=tenant_id,
+        name=name,
+        token=generate_token(),
+        album_id=album.id,
+        expires_at=expires_at,
+        created_by=created_by,
+        **_metadata_columns(metadata),
+    )
     db.add(link)
     db.commit()
     db.refresh(link)
@@ -68,17 +104,42 @@ def resolve_active(db: Session, token: str) -> ShareLink | None:
         return None
     if link.expires_at is not None and link.expires_at <= datetime.now(UTC):
         return None
+    # Audit MAIN-SEC-003: Ein Album-Link gilt nur, solange der anlegende Mandant das Album
+    # noch sehen darf (Besitzer oder angenommene Freigabe). Sonst überlebte der Link eines
+    # Partners den Widerruf der Album-Freigabe.
+    if link.album_id is not None and link.tenant_id not in photo_album_share_service.accessible_tenant_ids_for_album(db, link.album_id):
+        return None
+    # SEC-002: Partner-Links gelten nur, solange der Besitzer öffentliche Links erlaubt.
+    if link.album_id is not None:
+        album = db.get(PhotoAlbum, link.album_id)
+        if album is None or not photo_album_share_service.may_create_public_link(db, album, link.tenant_id):
+            return None
     return link
+
+
+def can_manage(db: Session, link: ShareLink, tenant_id: int) -> bool:
+    """Anlegender Mandant oder Besitzer des verlinkten Albums (MAIN-SEC-003: der Besitzer
+    muss Links von Partnern auf sein Album sehen und widerrufen können)."""
+    if link.tenant_id == tenant_id:
+        return True
+    if link.album_id is None:
+        return False
+    return db.scalar(select(PhotoAlbum.tenant_id).where(PhotoAlbum.id == link.album_id)) == tenant_id
 
 
 def file_ids_for_link(db: Session, link: ShareLink) -> list[uuid.UUID]:
     if link.album_id is not None:
-        # Noch nicht freigegebene Fotos (share_pending) gehoeren nicht in den oeffentlichen Link.
-        return list(
-            db.scalars(
-                select(PhotoAlbumItem.file_id).where(PhotoAlbumItem.album_id == link.album_id, PhotoAlbumItem.share_pending.is_(False))
+        # Noch nicht freigegebene Fotos (share_pending) gehoeren nicht in den oeffentlichen Link,
+        # ebenso Fotos von Partnern, die das fuer ihre Fotos abgeschaltet haben (SEC-002).
+        statement = select(PhotoAlbumItem.file_id).where(PhotoAlbumItem.album_id == link.album_id, PhotoAlbumItem.share_pending.is_(False))
+        hidden_tenant_ids = photo_album_share_service.tenants_hidden_from_public_links(db, link.album_id, link.tenant_id)
+        if hidden_tenant_ids:
+            statement = statement.where(
+                ~select(StoredFile.id)
+                .where(StoredFile.public_id == PhotoAlbumItem.file_id, StoredFile.tenant_id.in_(hidden_tenant_ids))
+                .exists()
             )
-        )
+        return list(db.scalars(statement))
     return list(db.scalars(select(ShareLinkFile.file_id).where(ShareLinkFile.share_link_id == link.id)))
 
 
@@ -91,7 +152,15 @@ class ShareLinkOverviewRow:
 
 
 def list_for_tenant(db: Session, tenant_id: int) -> list[ShareLinkOverviewRow]:
-    links = list(db.scalars(select(ShareLink).where(ShareLink.tenant_id == tenant_id).order_by(ShareLink.created_at.desc())))
+    # Eigene Links plus Links von Partnern auf eigene Alben (MAIN-SEC-003).
+    owned_album_ids = select(PhotoAlbum.id).where(PhotoAlbum.tenant_id == tenant_id)
+    links = list(
+        db.scalars(
+            select(ShareLink)
+            .where(or_(ShareLink.tenant_id == tenant_id, ShareLink.album_id.in_(owned_album_ids)))
+            .order_by(ShareLink.created_at.desc())
+        )
+    )
     if not links:
         return []
 

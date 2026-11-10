@@ -2,10 +2,8 @@
 (wanderplaner-backend/tests/test_photo_match_service.py); hier wird geprueft, wie hocX mit
 dessen Ergebnis die Alben pflegt."""
 from datetime import UTC, date, datetime
-from io import BytesIO
 from uuid import uuid4
 
-from PIL import Image
 from sqlalchemy import select
 
 from app.models.entities import GalleryImage, PhotoAlbum, PhotoAlbumItem, StoredFile, TenantFeature
@@ -19,7 +17,7 @@ DAY = date(2026, 7, 10)
 def photo(db, tenant, *, lat=47.0512, lon=8.5478, day=DAY):
     file = StoredFile(tenant_id=tenant.id, original_name='test.jpg', mime_type='image/jpeg', storage_path='missing.jpg',
         exif_taken_at=datetime.combine(day, datetime.min.time(), tzinfo=UTC), gps_latitude=lat, gps_longitude=lon,
-        gps_analyzed_at=datetime.now(UTC))
+        metadata_scanned_at=datetime.now(UTC))
     db.add(file)
     db.flush()
     db.add(GalleryImage(tenant_id=tenant.id, stored_file_id=file.id))
@@ -132,15 +130,15 @@ def test_best_effort_logs_service_errors_without_failing(db, monkeypatch):
     assert db.get(StoredFile, file.id) is not None
 
 
-def test_extract_gps_real_exif_and_invalid_data():
-    image = Image.new('RGB', (2, 2))
-    exif = Image.Exif()
-    exif[0x8825] = {1: 'N', 2: (47.0, 3.0, 0.0), 3: 'E', 4: (8.0, 30.0, 0.0)}
-    out = BytesIO()
-    image.save(out, format='JPEG', exif=exif)
-    assert svc.extract_gps(out.getvalue()) == (47.05, 8.5)
-    assert svc.extract_gps(b'invalid') == (None, None)
-    exif[0x8825] = {1: 'N', 2: (95.0, 0.0, 0.0), 3: 'E', 4: (8.0, 0.0, 0.0)}
-    out = BytesIO()
-    image.save(out, format='JPEG', exif=exif)
-    assert svc.extract_gps(out.getvalue()) == (None, None)
+def test_best_effort_skips_read_only_feature(db, monkeypatch):
+    """Nach einem Downgrade (access='read_only') bleiben die Alben unverändert."""
+    tenant = make_tenant(db)
+    db.add(TenantFeature(tenant_id=tenant.id, feature_code='wanderplaner', access='read_only'))
+    db.flush()
+    photo(db, tenant)
+    fake = _matcher(monkeypatch)
+    monkeypatch.setattr(wanderplaner_client, "is_configured", lambda: True)
+
+    svc.sync_photos_for_tours_best_effort(db, tenant.id)
+
+    assert fake.requests == []

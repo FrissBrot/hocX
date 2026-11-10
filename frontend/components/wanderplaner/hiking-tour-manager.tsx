@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
@@ -15,13 +16,6 @@ import { useToast } from "@/contexts/toast-context";
 import { formatDate } from "@/lib/utils/format";
 import { HikingTour, HikingTourSummary } from "@/types/api";
 
-const STATUS_LABEL: Record<string, string> = {
-  draft: "Entwurf",
-  analyzed: "Automatisch analysiert",
-  reconnoitered: "Rekognosziert",
-  approved: "Freigegeben",
-};
-
 const STATUS_VARIANT: Record<string, BadgeVariant> = {
   draft: "neutral",
   analyzed: "info",
@@ -32,6 +26,7 @@ const STATUS_VARIANT: Record<string, BadgeVariant> = {
 type LatLon = { lat: number; lon: number };
 
 export function HikingTourManager({ initialTours, canWrite }: { initialTours: HikingTourSummary[]; canWrite: boolean }) {
+  const t = useTranslations("wanderplaner");
   const router = useRouter();
   const showToast = useToast();
   const [tours, setTours] = useState(initialTours);
@@ -69,7 +64,7 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
   async function handleCreate(event: FormEvent) {
     event.preventDefault();
     if (!start || !end) {
-      showToast("Bitte Start und Ziel auf der Karte setzen", "error");
+      showToast(t("manager.create.missingStartEnd"), "error");
       return;
     }
     setSaving(true);
@@ -93,10 +88,10 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
       ]);
       setShowCreate(false);
       resetCreateForm();
-      showToast("Wanderung erstellt", "success");
+      showToast(t("manager.create.created"), "success");
       router.push(`/hiking-planner/${created.id}`);
     } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : "Fehler beim Erstellen", "error");
+      showToast(err instanceof Error ? err.message : t("manager.create.error"), "error");
     } finally {
       setSaving(false);
     }
@@ -105,7 +100,7 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
   async function handleGpxImport(event: FormEvent) {
     event.preventDefault();
     if (!gpxFile) {
-      showToast("Bitte eine GPX-Datei auswählen", "error");
+      showToast(t("manager.gpx.missingFile"), "error");
       return;
     }
     setImportingGpx(true);
@@ -117,10 +112,10 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
       setShowGpxImport(false);
       setGpxTitle("");
       setGpxFile(null);
-      showToast("GPX-Datei importiert", "success");
+      showToast(t("manager.gpx.imported"), "success");
       router.push(`/hiking-planner/${created.id}`);
     } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : "GPX-Import fehlgeschlagen", "error");
+      showToast(err instanceof Error ? err.message : t("manager.gpx.error"), "error");
     } finally {
       setImportingGpx(false);
     }
@@ -135,30 +130,33 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
     <div className="grid">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Wanderplaner</h1>
-          <p className="muted">Wanderungen planen, Route berechnen und Marschzeittabelle erstellen.</p>
+          <h1 className="page-title">{t("manager.title")}</h1>
+          <p className="muted">{t("manager.subtitle")}</p>
         </div>
         {canWrite && (
           <div className="page-header-actions">
             <button type="button" className="button-secondary" onClick={() => setShowGpxImport(true)}>
-              GPX importieren
+              {t("manager.importGpx")}
             </button>
             <button type="button" className="button-primary" onClick={() => setShowCreate(true)}>
-              Neue Wanderung
+              {t("manager.newTour")}
             </button>
           </div>
         )}
       </div>
 
       <div>
-        <DataToolbar title="Wanderungen" />
-        <DataTable columns={["Titel", "Datum", "Status", "Höhenprofil"]} emptyMessage="Noch keine Wanderungen geplant.">
+        <DataToolbar title={t("manager.listTitle")} />
+        <DataTable
+          columns={[t("manager.columns.title"), t("manager.columns.date"), t("manager.columns.status"), t("manager.columns.elevationProfile")]}
+          emptyMessage={t("manager.empty")}
+        >
           {tours.map((tour) => (
             <tr key={tour.id} className="table-row-clickable" onClick={() => router.push(`/hiking-planner/${tour.id}`)}>
               <td>{tour.title}</td>
               <td>{tour.tour_date ? formatDate(tour.tour_date) : <span className="muted">–</span>}</td>
               <td>
-                <Badge variant={STATUS_VARIANT[tour.status] ?? "neutral"}>{STATUS_LABEL[tour.status] ?? tour.status}</Badge>
+                <Badge variant={STATUS_VARIANT[tour.status] ?? "neutral"}>{STATUS_VARIANT[tour.status] ? t(`status.${tour.status}`) : tour.status}</Badge>
               </td>
               <td><HikingTourElevationPreview points={tour.elevation_preview} /></td>
             </tr>
@@ -168,7 +166,7 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
 
       <Modal
         open={showCreate}
-        title="Neue Wanderung"
+        title={t("manager.newTour")}
         onClose={() => {
           setShowCreate(false);
           resetCreateForm();
@@ -180,22 +178,22 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
           <div className="wanderplaner-create-layout">
             <div className="wanderplaner-create-fields">
               <label className="field-stack">
-                <span className="field-label">Titel</span>
+                <span className="field-label">{t("fields.title")}</span>
                 <input required value={title} onChange={(event) => setTitle(event.target.value)} />
               </label>
               <label className="field-stack">
-                <span className="field-label">Beschreibung</span>
+                <span className="field-label">{t("fields.description")}</span>
                 <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={2} />
               </label>
               <label className="field-stack">
-                <span className="field-label">Datum</span>
+                <span className="field-label">{t("fields.date")}</span>
                 <DateInput value={tourDate} onChange={setTourDate} />
-                <span className="field-help">Optional.</span>
+                <span className="field-help">{t("manager.create.optional")}</span>
               </label>
             </div>
             <div className="wanderplaner-create-map-section">
-              <span className="field-label">Start und Ziel</span>
-              <span className="field-help">Weg, Höhenprofil und automatische Punkte werden beim Erstellen geladen. Für das Höhenprofil wird der Routenverlauf an swisstopo übermittelt.</span>
+              <span className="field-label">{t("manager.create.startAndEnd")}</span>
+              <span className="field-help">{t("manager.create.startAndEndHelp")}</span>
               <div className="wanderplaner-map-hint">
                 <div className="wanderplaner-toggle-group">
                   <button
@@ -203,18 +201,18 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
                     className={pendingField === "start" ? "button-toggle button-toggle-active" : "button-toggle"}
                     onClick={() => setPendingField("start")}
                   >
-                    Start setzen{start ? " ✓" : ""}
+                    {t("manager.create.setStart", { done: start ? "true" : "false" })}
                   </button>
                   <button
                     type="button"
                     className={pendingField === "end" ? "button-toggle button-toggle-active" : "button-toggle"}
                     onClick={() => setPendingField("end")}
                   >
-                    Ziel setzen{end ? " ✓" : ""}
+                    {t("manager.create.setEnd", { done: end ? "true" : "false" })}
                   </button>
                 </div>
                 <span className="field-help">
-                  Auf die Karte klicken, um {pendingField === "start" ? "den Start" : "das Ziel"} zu setzen.
+                  {pendingField === "start" ? t("manager.create.clickToSetStart") : t("manager.create.clickToSetEnd")}
                 </span>
               </div>
               <HikingTourMap waypoints={mapWaypoints} onMapClick={handleMapClick} className="wanderplaner-create-map" fitSwitzerland />
@@ -229,11 +227,11 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
                 resetCreateForm();
               }}
             >
-              Abbrechen
+              {t("actions.cancel")}
             </button>
             <button type="submit" className="button-primary wanderplaner-loading-button" disabled={saving || !start || !end} aria-busy={saving}>
               {saving && <HikingTourLoadingLandscape />}
-              <span className="wanderplaner-loading-label">{saving ? "Route und Höhenprofil werden berechnet…" : "Wanderung erstellen"}</span>
+              <span className="wanderplaner-loading-label">{saving ? t("manager.create.calculating") : t("manager.create.submit")}</span>
             </button>
           </div>
         </form>
@@ -241,7 +239,7 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
 
       <Modal
         open={showGpxImport}
-        title="GPX importieren"
+        title={t("manager.importGpx")}
         onClose={() => {
           setShowGpxImport(false);
           setGpxFile(null);
@@ -249,13 +247,13 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
       >
         <form onSubmit={(event) => void handleGpxImport(event)}>
           <div className="grid">
-            <p className="field-help">Die GPX-Datei dient als Ausgangspunkt einer neuen Wanderung. Weg, Höhenprofil und automatische Punkte werden geladen; der Routenverlauf wird für das Höhenprofil an swisstopo übermittelt.</p>
+            <p className="field-help">{t("manager.gpx.help")}</p>
             <label className="field-stack">
-              <span className="field-label">Titel</span>
+              <span className="field-label">{t("fields.title")}</span>
               <input value={gpxTitle} onChange={(event) => setGpxTitle(event.target.value)} placeholder={gpxFile?.name.replace(/\.gpx$/i, "") ?? ""} />
             </label>
             <label className="field-stack">
-              <span className="field-label">GPX-Datei</span>
+              <span className="field-label">{t("manager.gpx.file")}</span>
               <input type="file" accept=".gpx" required onChange={(event) => setGpxFile(event.target.files?.[0] ?? null)} />
             </label>
           </div>
@@ -268,11 +266,11 @@ export function HikingTourManager({ initialTours, canWrite }: { initialTours: Hi
                 setGpxFile(null);
               }}
             >
-              Abbrechen
+              {t("actions.cancel")}
             </button>
             <button type="submit" className="button-primary wanderplaner-loading-button" disabled={importingGpx || !gpxFile} aria-busy={importingGpx}>
               {importingGpx && <HikingTourLoadingLandscape />}
-              <span className="wanderplaner-loading-label">{importingGpx ? "Wird importiert und berechnet…" : "Importieren"}</span>
+              <span className="wanderplaner-loading-label">{importingGpx ? t("manager.gpx.importing") : t("manager.gpx.submit")}</span>
             </button>
           </div>
         </form>

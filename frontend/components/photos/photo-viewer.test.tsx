@@ -227,4 +227,35 @@ describe("PhotoViewer Live Photo", () => {
     render(<PhotoViewer items={[makeItem()]} index={0} onIndexChange={vi.fn()} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
     expect(screen.queryByRole("button", { name: /Herunterladen/ })).not.toBeInTheDocument();
   });
+
+  it("navigates with arrow keys, but not while typing in the tag field (Audit MAIN-FE-006)", () => {
+    const onIndexChange = vi.fn();
+    const items = [makeItem({ id: "a" }), makeItem({ id: "b" }), makeItem({ id: "c" })];
+    render(<PhotoViewer items={items} index={1} onIndexChange={onIndexChange} onClose={vi.fn()} onToggleBest={vi.fn()} onTagsSaved={vi.fn()} />);
+
+    const input = screen.getAllByRole("textbox")[0];
+    input.focus();
+    fireEvent.keyDown(input, { key: "ArrowLeft" });
+    fireEvent.keyDown(input, { key: "ArrowRight" });
+    expect(onIndexChange).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(window, { key: "ArrowLeft" });
+    expect(onIndexChange).toHaveBeenCalledWith(0);
+  });
+
+  it("ignores a late metadata response of the previous photo (Audit MAIN-FE-007)", async () => {
+    const pending: Record<string, (value: unknown) => void> = {};
+    browserApiFetchMock.mockImplementation((url: string) => new Promise((resolve) => { pending[url] = resolve; }));
+    const a = makeItem({ id: "a" });
+    const b = makeItem({ id: "b" });
+    const props = { onIndexChange: vi.fn(), onClose: vi.fn(), onToggleBest: vi.fn(), onTagsSaved: vi.fn() };
+    const { rerender } = render(<PhotoViewer items={[a, b]} index={0} {...props} />);
+    rerender(<PhotoViewer items={[a, b]} index={1} {...props} />);
+
+    await act(async () => { pending[b.metadata_url]({ exif_camera: "Kamera B" }); });
+    await act(async () => { pending[a.metadata_url]({ exif_camera: "Kamera A" }); });
+
+    expect(screen.getByText("Kamera B")).toBeInTheDocument();
+    expect(screen.queryByText("Kamera A")).not.toBeInTheDocument();
+  });
 });

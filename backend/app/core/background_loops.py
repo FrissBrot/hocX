@@ -13,13 +13,21 @@ silent production incident."""
 from __future__ import annotations
 
 import asyncio
+import logging
+import random
 from collections.abc import Callable
+from datetime import datetime, timezone
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal, engine
 from app.core.error_log import record_system_error
+from app.core.job_runs import format_job_error, record_job_run
+
+_logger = logging.getLogger(__name__)
+
+_MAX_START_JITTER_SECONDS = 10.0
 
 BACKGROUND_LOCK_IDS: dict[str, int] = {
     "domain_health_check": 202600003,
@@ -42,13 +50,47 @@ BACKGROUND_LOCK_IDS: dict[str, int] = {
     "photo_quality_backfill": 202600013,
     "photo_album_sync": 202600014,
     "gallery_upload_ingest": 202600015,
+    "system_monitor": 202600017,
+    "task_package_rollover": 202600018,
+    "maintenance_supervisor": 202600019,
+    "storage_journal_cleanup": 202600020,
+    # 202600026 statt 202600023: diese ID hält storage_migration_service.create_migration als
+    # Transaktions-Lock (gegenseitiges Blockieren bzw. übersprungene Ticks).
+    "document_sync": 202600026,
+    "storage_purge": 202600025,
+    "tenant_data_export": 202600027,
+    "retention_proposals": 202600028,
+    "thumbnail_backfill": 202600029,
+    "photo_similarity_refresh": 202600030,
+    "submission_todo_sync": 202600031,
 }
-assert len(BACKGROUND_LOCK_IDS) == len(set(BACKGROUND_LOCK_IDS.values())), "duplicate background lock id in BACKGROUND_LOCK_IDS"
+
+# Lock-IDs anderer Dienste auf derselben Datenbank - Advisory Locks gelten datenbankweit, nicht
+# pro Dienst. abgabebox-backend/app/main.py::quarantine_cleanup_loop lief bis 2026-10-11 mit
+# 202600007 und hat sich damit Ticks mit export_cleanup geteilt, weil diese Liste nur das Backend
+# kannte. Hier eintragen, damit die Eindeutigkeitsprüfung unten auch dienstübergreifend greift.
+EXTERNAL_LOCK_IDS: dict[str, int] = {
+    "abgabebox_quarantine_cleanup": 202600016,  # abgabebox-backend: QUARANTINE_CLEANUP_LOCK_ID
+}
+
+# Einmalige Advisory-Locks (Startup-Seeds, Storage-Worker), damit auch sie in die
+# Eindeutigkeitsprüfung eingehen.
+RESERVED_LOCK_IDS: dict[str, int] = {
+    "startup_seed_data": 202600004,
+    "startup_local_storage_profile": 202600021,
+    "storage_worker_claim": 202600022,
+    "storage_migration_create": 202600023,  # storage_migration_service.create_migration
+    # Backup-Worker: genau ein Schreiber auf Repository und Inhaltsindex (app/workers/backup_worker.py).
+    "backup_worker_repository": 202600024,
+}
+
+_ALL_LOCK_IDS = [*BACKGROUND_LOCK_IDS.values(), *EXTERNAL_LOCK_IDS.values(), *RESERVED_LOCK_IDS.values()]
+assert len(_ALL_LOCK_IDS) == len(set(_ALL_LOCK_IDS)), "duplicate advisory lock id in BACKGROUND_LOCK_IDS/EXTERNAL_LOCK_IDS"
 
 
 async def run_advisory_locked_loop(
     *,
-    lock_id: int,
+    name: str,
     interval_seconds: float,
     task: Callable[[Session], object],
     should_run: Callable[[], bool] | None = None,
@@ -78,26 +120,97 @@ async def run_advisory_locked_loop(
     should_run, if given, is checked before even trying the lock - for a loop that must
     skip a tick entirely rather than acquire-then-no-op (e.g. a low-traffic-window/host-load
     gate that shouldn't fire just because it's due). Optional so callers with no such gate
-    don't pay for the extra check."""
+    don't pay for the extra check.
+
+    name ist der Schlüssel in BACKGROUND_LOCK_IDS und zugleich der Jobname in job_registry.py:
+    jeder Tick, der den Lock gewinnt, landet mit Dauer und Ergebnis in system_job_status
+    (/admin/jobs). Übersprungene Ticks (should_run False oder Lock bei einem anderen Worker)
+    werden bewusst nicht gemeldet - sie sind kein Lauf."""
+    # Lazy: job_registry importiert BACKGROUND_LOCK_IDS aus diesem Modul.
+    from app.core.job_registry import JOBS_BY_NAME
+
+    from app.services.maintenance_service import current_effective_state
+
+    lock_id = BACKGROUND_LOCK_IDS[name]
+    keep_history = JOBS_BY_NAME[name].keep_history
+    runs_during_maintenance = JOBS_BY_NAME[name].runs_during_maintenance
+    # Startversatz: beim Hochfahren tickten sonst alle Loops im selben Moment, jeder mit
+    # Lock-Verbindung + Session - bei 11 Loops 22 Verbindungen für einen Pool von 15. Die
+    # Nachzügler warteten bis zum 30-s-Pool-Timeout (2026-10-11 im Dev-Stack gemessen: fast
+    # alle ersten Ticks ~30 s, system_monitor bekam gar keine Verbindung).
+    await asyncio.sleep(random.uniform(0, min(_MAX_START_JITTER_SECONDS, interval_seconds)))
+    def run_tick() -> tuple[str, datetime, datetime, str | None] | None:
+        """Ein kompletter Tick inklusive Lock-Verbindung - läuft per asyncio.to_thread
+        (Audit MAIN-BE-018): Checkout und Lock-Abfrage liefen vorher synchron auf dem
+        Event-Loop und blockierten bei erschöpftem Pool den ganzen Worker bis zum
+        Pool-Timeout."""
+        # Während voller Wartung pausieren alle nicht ausgenommenen Loops (Tick ohne Meldung,
+        # wie ein übersprungener Tick - die Job-Übersicht zeigt die Wartung separat).
+        if not runs_during_maintenance and current_effective_state().full_active:
+            return None
+        if should_run is not None and not should_run():
+            return None
+        with engine.begin() as lock_conn:
+            # Die Lock-Verbindung ist während des Ticks untätig in ihrer Transaktion. Ohne das
+            # beendete PostgreSQL sie nach idle_in_transaction_session_timeout der Rolle (30 min,
+            # Migration 0135) - der Lock wäre frei und der Job liefe auf dem anderen Worker ein
+            # zweites Mal (Concurrency-Audit CONC-006, nachgemessen).
+            lock_conn.execute(text("SET LOCAL idle_in_transaction_session_timeout = 0"))
+            acquired = lock_conn.execute(
+                text("SELECT pg_try_advisory_xact_lock(:lock_id)"),
+                {"lock_id": lock_id},
+            ).scalar()
+            if not acquired:
+                return None
+            with SessionLocal() as db:
+                started_at = datetime.now(timezone.utc)
+                try:
+                    task(db)
+                except Exception as exc:
+                    db.rollback()
+                    result = ("failure", started_at, datetime.now(timezone.utc), format_job_error(exc))
+                    # source defaults to "backend" - system_error_log.source has a
+                    # CHECK constraint allowing only "backend"/"abgabebox-backend"
+                    # (see SystemErrorLog in app/models/entities.py); "background_loop"
+                    # violated it, so every write here silently failed inside
+                    # record_system_error's own try/except and never reached the
+                    # admin panel (found while auditing why central error logging
+                    # "didn't always work").
+                    record_system_error(db, exc=exc)
+                    return result
+                return ("success", started_at, datetime.now(timezone.utc), None)
+
     while True:
-        if should_run is None or should_run():
-            with engine.begin() as lock_conn:
-                acquired = lock_conn.execute(
-                    text("SELECT pg_try_advisory_xact_lock(:lock_id)"),
-                    {"lock_id": lock_id},
-                ).scalar()
-                if acquired:
-                    with SessionLocal() as db:
-                        try:
-                            await asyncio.to_thread(task, db)
-                        except Exception as exc:
-                            db.rollback()
-                            # source defaults to "backend" - system_error_log.source has a
-                            # CHECK constraint allowing only "backend"/"abgabebox-backend"
-                            # (see SystemErrorLog in app/models/entities.py); "background_loop"
-                            # violated it, so every write here silently failed inside
-                            # record_system_error's own try/except and never reached the
-                            # admin panel (found while auditing why central error logging
-                            # "didn't always work").
-                            record_system_error(db, exc=exc)
+        outcome: tuple[str, datetime, datetime, str | None] | None = None
+        try:
+            outcome = await asyncio.to_thread(run_tick)
+        except Exception as exc:
+            # Fehler ausserhalb von task(db) - Lock-Verbindung nicht zu bekommen (Pool erschöpft,
+            # DB weg), should_run() wirft, ... Ohne dieses except beendete so ein Fehler den
+            # Loop für immer, und zwar lautlos: lifespan() hält die Task-Referenz, also meldet
+            # asyncio nicht einmal "exception was never retrieved" (2026-10-11: system_monitor
+            # lief im Dev-Stack nach einem Neustart nie). Jetzt zählt das als fehlgeschlagener Tick.
+            _logger.exception("Background-Loop %s: Tick ausserhalb der Aufgabe fehlgeschlagen", name)
+            now = datetime.now(timezone.utc)
+            outcome = ("failure", now, now, format_job_error(exc))
+            try:
+                with SessionLocal() as error_db:
+                    record_system_error(error_db, exc=exc)
+            except Exception:
+                _logger.exception("Background-Loop %s: Fehler konnte nicht protokolliert werden", name)
+        # Erst melden, nachdem Lock-Verbindung und Session zurück im Pool sind: ein Tick hält
+        # sonst drei Verbindungen gleichzeitig, und wenn beim Start alle Loops zugleich ticken,
+        # warten sie gegenseitig auf den erschöpften Pool (QueuePool-Timeout, 2026-10-11 im
+        # Dev-Stack beobachtet).
+        if outcome is not None:
+            status, started_at, finished_at, error = outcome
+            await asyncio.to_thread(
+                record_job_run,
+                name,
+                status=status,
+                started_at=started_at,
+                finished_at=finished_at,
+                error=error,
+                keep_history=keep_history,
+            )
         await asyncio.sleep(interval_seconds)

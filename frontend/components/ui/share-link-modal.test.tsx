@@ -27,6 +27,9 @@ function makeLink(overrides: Partial<ShareLink> = {}): ShareLink {
     expires_at: null,
     revoked_at: null,
     status: "active",
+    share_location: false,
+    share_capture_date: true,
+    share_camera: false,
     ...overrides,
   };
 }
@@ -53,6 +56,24 @@ describe("ShareLinkModal", () => {
 
     expect(await screen.findByText(`${window.location.origin}/share/tok-abc123`)).toBeTruthy();
     expect(onCreated).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends the chosen photo metadata with private defaults", async () => {
+    browserApiFetchMock.mockResolvedValue(makeLink());
+
+    render(<ShareLinkModal open onClose={() => {}} fileIds={["file-1"]} defaultName="1 Foto" />);
+
+    expect(screen.getByRole("switch", { name: /Standort \(GPS\)/ })).not.toBeChecked();
+    expect(screen.getByRole("switch", { name: /Aufnahmedatum/ })).toBeChecked();
+    expect(screen.getByRole("switch", { name: /Kamera & Gerät/ })).not.toBeChecked();
+
+    fireEvent.click(screen.getByRole("switch", { name: /Standort \(GPS\)/ }));
+    fireEvent.click(screen.getByRole("switch", { name: /Aufnahmedatum/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Link erstellen" }));
+
+    await waitFor(() => expect(browserApiFetchMock).toHaveBeenCalledTimes(1));
+    const body = JSON.parse((browserApiFetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(body).toMatchObject({ share_location: true, share_capture_date: false, share_camera: false });
   });
 
   it("creates an album share link with album_id instead of file_ids", async () => {

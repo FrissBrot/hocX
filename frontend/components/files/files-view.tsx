@@ -2,9 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Route } from "next";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import { DocumentUploadModal } from "./document-upload-modal";
+import { UploadResultsModal, uploadResultsSummary } from "./upload-results-modal";
+import { countUploadResults } from "@/lib/utils/upload-results";
 import { FileDetailModal } from "./file-detail-modal";
 import { FilesTable } from "./files-table";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -18,43 +22,52 @@ import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { useFileDrop } from "@/lib/hooks/use-file-drop";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
-import { DocumentUploadResult, FileOverviewItem, FileOverviewSource } from "@/types/api";
+import { DocumentUploadResult, FileOverviewItem, FileOverviewSource, UploadFileResult } from "@/types/api";
 
 const PAGE_SIZE = 60;
 
 type SourceFilter = "all" | FileOverviewSource;
 type SortKey = "created_at" | "original_name" | "file_size_bytes";
 
-const SOURCE_OPTIONS: { value: SourceFilter; label: string }[] = [
-  { value: "all", label: "Alle Quellen" },
-  { value: "protocol_image", label: "Protokolle" },
-  { value: "word_import", label: "Word-Import" },
-  { value: "submission_upload", label: "Abgaben" },
-  { value: "gallery_upload", label: "Uploads" },
-];
+type TFunc = (key: string) => string;
+
+function sourceOptions(t: TFunc): { value: SourceFilter; label: string }[] {
+  return [
+    { value: "all", label: t("sourceOptions.all") },
+    { value: "protocol_image", label: t("sourceOptions.protocols") },
+    { value: "word_import", label: t("sourceOptions.wordImport") },
+    { value: "submission_upload", label: t("sourceOptions.submissions") },
+    { value: "gallery_upload", label: t("sourceOptions.uploads") },
+    { value: "protocol_export", label: t("sourceOptions.protocolExports") },
+  ];
+}
 
 type SortOption = { id: string; label: string; key: SortKey; dir: "asc" | "desc" };
 
-const SORT_OPTIONS: SortOption[] = [
-  { id: "created_at:desc", label: "Neueste zuerst", key: "created_at", dir: "desc" },
-  { id: "created_at:asc", label: "Älteste zuerst", key: "created_at", dir: "asc" },
-  { id: "original_name:asc", label: "Name (A-Z)", key: "original_name", dir: "asc" },
-  { id: "original_name:desc", label: "Name (Z-A)", key: "original_name", dir: "desc" },
-  { id: "file_size_bytes:desc", label: "Grösse (gross-klein)", key: "file_size_bytes", dir: "desc" },
-  { id: "file_size_bytes:asc", label: "Grösse (klein-gross)", key: "file_size_bytes", dir: "asc" },
-];
+function sortOptions(t: TFunc): SortOption[] {
+  return [
+    { id: "created_at:desc", label: t("sortOptions.newestFirst"), key: "created_at", dir: "desc" },
+    { id: "created_at:asc", label: t("sortOptions.oldestFirst"), key: "created_at", dir: "asc" },
+    { id: "original_name:asc", label: t("sortOptions.nameAsc"), key: "original_name", dir: "asc" },
+    { id: "original_name:desc", label: t("sortOptions.nameDesc"), key: "original_name", dir: "desc" },
+    { id: "file_size_bytes:desc", label: t("sortOptions.sizeDesc"), key: "file_size_bytes", dir: "desc" },
+    { id: "file_size_bytes:asc", label: t("sortOptions.sizeAsc"), key: "file_size_bytes", dir: "asc" },
+  ];
+}
 
 type Props = {
   initialItems: FileOverviewItem[];
 };
 
 export function FilesView({ initialItems }: Props) {
+  const t = useTranslations("files");
   const router = useRouter();
   const showToast = useToast();
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [search, setSearch] = useState("");
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
+  const [uploadResults, setUploadResults] = useState<UploadFileResult[] | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [items, setItems] = useState<FileOverviewItem[]>(initialItems);
@@ -107,7 +120,7 @@ export function FilesView({ initialItems }: Props) {
         setItems(next ?? []);
         setHasMore((next ?? []).length === PAGE_SIZE);
       } catch {
-        if (requestIdRef.current === requestId) showToast("Dateien konnten nicht geladen werden.", "error");
+        if (requestIdRef.current === requestId) showToast(t("view.loadError"), "error");
       } finally {
         if (requestIdRef.current === requestId) setIsReloading(false);
       }
@@ -125,7 +138,7 @@ export function FilesView({ initialItems }: Props) {
       setItems(next ?? []);
       setHasMore((next ?? []).length === PAGE_SIZE);
     } catch {
-      if (requestIdRef.current === requestId) showToast("Dateien konnten nicht geladen werden.", "error");
+      if (requestIdRef.current === requestId) showToast(t("view.loadError"), "error");
     } finally {
       if (requestIdRef.current === requestId) setIsReloading(false);
     }
@@ -133,9 +146,18 @@ export function FilesView({ initialItems }: Props) {
 
   function handleDocumentsUploaded(result: DocumentUploadResult) {
     const uploaded = result.items;
-    void reloadFromStart();
+    if (uploaded.length > 0) void reloadFromStart();
     setTagSuggestions((current) => Array.from(new Set([...current, ...uploaded.flatMap((item) => item.tags)])).sort((a, b) => a.localeCompare(b)));
-    showToast(uploaded.length === 1 ? "1 Datei hochgeladen." : `${uploaded.length} Dateien hochgeladen.`, "success");
+    const results = result.file_results ?? [];
+    if (results.length > 0) {
+      // Je Datei: hochgeladen / übersprungen (schon vorhanden) / fehlgeschlagen.
+      const failed = countUploadResults(results).failed;
+      showToast(uploadResultsSummary(results, t), failed > 0 ? "info" : "success", {
+        action: { label: t("uploadResults.detailsAction"), onClick: () => setUploadResults(results) },
+      });
+      return;
+    }
+    showToast(t("view.uploadedToast", { count: uploaded.length }), "success");
     if (result.errors.length > 0) showToast(result.errors.join(" · "), "info");
   }
 
@@ -178,20 +200,20 @@ export function FilesView({ initialItems }: Props) {
   }
 
   return (
-    <div className="grid grid-tight">
-      <div className="page-header">
+    <div className="grid files-overview">
+      <div className="page-header files-page-header">
         <div>
-          <h1 className="page-title">Dateien</h1>
+          <h1 className="page-title">{t("view.title")}</h1>
           <p className="muted">
             {hasNoFiles
-              ? "Alle Dokumente dieses Mandanten."
-              : "Alle hochgeladenen Nicht-Bild-Dateien dieses Mandanten - aus Protokollen, Word-Importen, Abgaben und direkten Uploads. Fotos siehe die separate \"Fotos\"-Seite."}
+              ? t("view.descriptionEmpty")
+              : t.rich("view.descriptionLinked", { photos: (chunks) => <Link href="/photos">{chunks}</Link> })}
           </p>
         </div>
         {hasNoFiles ? null : (
           <div className="table-toolbar-actions">
-            <button type="button" className="button-secondary" onClick={openUpload}>
-              + Dateien hochladen
+            <button type="button" className="button-primary" onClick={openUpload}>
+              {t("view.uploadButton")}
             </button>
           </div>
         )}
@@ -199,25 +221,25 @@ export function FilesView({ initialItems }: Props) {
 
       {hasNoFiles ? (
         <EmptyState
-          title="Noch keine Dateien vorhanden"
-          description="Dokumente aus Protokollen und Abgaben sammeln sich hier – oder lade sie direkt hoch."
+          title={t("view.emptyTitle")}
+          description={t("view.emptyDescription")}
           actions={
             <button type="button" className="button-primary" onClick={openUpload}>
-              + Dateien hochladen
+              {t("view.uploadButton")}
             </button>
           }
-          hint="Jede Datei wird beim Upload automatisch auf Viren geprüft."
+          hint={t("view.emptyHint")}
         />
       ) : (
-      <>
-      <div className="list-filter-row list-filter-row-compact">
-        <FilterTabs options={SOURCE_OPTIONS} value={sourceFilter} onChange={(value) => setSourceFilter(value as SourceFilter)} />
+      <div className="files-card">
+      <div className="list-filter-row list-filter-row-compact photos-filter-row files-toolbar">
+        <FilterTabs options={sourceOptions(t)} value={sourceFilter} onChange={(value) => setSourceFilter(value as SourceFilter)} />
         <div className="list-filter-search">
-          <SearchInput value={search} onChange={setSearch} placeholder="Dateien durchsuchen" />
+          <SearchInput value={search} onChange={setSearch} placeholder={t("view.searchPlaceholder")} />
         </div>
         <SearchableSelect
           className="files-sort-select"
-          options={SORT_OPTIONS}
+          options={sortOptions(t)}
           getId={(option) => option.id}
           getLabel={(option) => option.label}
           value={`${sortKey}:${sortDir}`}
@@ -230,25 +252,25 @@ export function FilesView({ initialItems }: Props) {
         <div className="list-filter-tags">
           <TagInput
             value={tagFilter.join(",")}
-            onChange={(value) => setTagFilter(value ? value.split(",").map((t) => t.trim()).filter(Boolean) : [])}
+            onChange={(value) => setTagFilter(value ? value.split(",").map((tag) => tag.trim()).filter(Boolean) : [])}
             suggestions={tagSuggestions}
-            placeholder="Tag wählen oder eingeben…"
+            placeholder={t("view.tagPlaceholder")}
           />
         </div>
-        <span className="muted list-filter-count">{items.length} {items.length === 1 ? "Datei" : "Dateien"}</span>
+        <span className="muted list-filter-count">{t("view.countFiles", { count: items.length })}</span>
       </div>
 
       <FilesTable items={items} onOpenDetail={setDetailItem} onNavigate={(href) => router.push(href as Route)} onShare={setShareItem} />
-      </>
+      </div>
       )}
 
       {hasMore && (
         <div className="load-more-row" ref={loadMoreSentinelRef}>
           {isLoadingMore ? (
-            <span className="muted">Lädt weitere Dateien…</span>
+            <span className="muted">{t("view.loadMoreLoading")}</span>
           ) : (
             <button type="button" className="button-secondary button-ghost" onClick={() => void loadMore()}>
-              Mehr laden ({items.length} geladen)
+              {t("view.loadMore", { count: items.length })}
             </button>
           )}
         </div>
@@ -263,7 +285,9 @@ export function FilesView({ initialItems }: Props) {
         />
       )}
 
-      <FileDropOverlay active={isFileDragging} title="Zum Hochladen loslassen" hint="Danach stellst du den Upload ein." />
+      {uploadResults && <UploadResultsModal results={uploadResults} onClose={() => setUploadResults(null)} />}
+
+      <FileDropOverlay active={isFileDragging} title={t("view.dropOverlayTitle")} hint={t("view.dropOverlayHint")} />
 
       <ShareLinkModal
         open={shareItem !== null}

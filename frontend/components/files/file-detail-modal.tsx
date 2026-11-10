@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 
+import { DocumentDetails, DocumentPreview, useDocumentDetail } from "./document-panel";
 import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { TagInput } from "@/components/ui/tag-input";
@@ -10,11 +12,14 @@ import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { formatDate, formatDateTime, formatFileSize } from "@/lib/utils/format";
 import { FileOverviewItem, FileOverviewSource, StoredFileMetadata } from "@/types/api";
 
-const SOURCE_LABEL: Record<FileOverviewSource, string> = {
-  protocol_image: "Protokoll",
-  word_import: "Word-Import",
-  submission_upload: "Abgabe",
-  gallery_upload: "Upload",
+// Uebersetzt ueber den "files"-Namespace (source.*) - die Werte hier sind next-intl-Keys, kein
+// fertiger Text, siehe Aufrufstellen (useSourceLabel-artige t("source." + item.source) unten).
+const SOURCE_KEY: Record<FileOverviewSource, string> = {
+  protocol_image: "protocol",
+  word_import: "wordImport",
+  submission_upload: "submission",
+  gallery_upload: "upload",
+  protocol_export: "protocolExport",
 };
 
 const SOURCE_BADGE_VARIANT: Record<FileOverviewSource, BadgeVariant> = {
@@ -22,6 +27,7 @@ const SOURCE_BADGE_VARIANT: Record<FileOverviewSource, BadgeVariant> = {
   word_import: "neutral",
   submission_upload: "success",
   gallery_upload: "warning",
+  protocol_export: "info",
 };
 
 export function FileDetailModal({
@@ -30,18 +36,24 @@ export function FileDetailModal({
   onClose,
   onNavigate,
   onTagsSaved,
+  onShare,
 }: {
   item: FileOverviewItem;
   tagSuggestions: string[];
   onClose: () => void;
   onNavigate: (href: string) => void;
   onTagsSaved: (tags: string[]) => void;
+  /** Optional: "Link teilen" direkt im Dialog (Mobile - dort gibt es keine Tabellen-Aktionen). */
+  onShare?: () => void;
 }) {
+  const t = useTranslations("files");
   const [metadata, setMetadata] = useState<StoredFileMetadata | null>(null);
   const [loadingMetadata, setLoadingMetadata] = useState(true);
   const [tagsValue, setTagsValue] = useState(item.tags.join(","));
   const { schedule, flush, saving, saveError } = useDeferredPopupSave();
   const [previewFailed, setPreviewFailed] = useState(false);
+  // Logisches Dokument: PDF-Ansicht als Vorschau, Original/Text/Versionen in den Details.
+  const documentState = useDocumentDetail(item.document);
 
 
   const fileUrl = `${browserApiBaseUrl}${item.content_url}`;
@@ -51,10 +63,15 @@ export function FileDetailModal({
     setMetadata(null);
     setPreviewFailed(false);
     setLoadingMetadata(true);
+    // Verspaetete Antworten einer vorher angezeigten Datei verwerfen (Audit MAIN-FE-007).
+    let cancelled = false;
     browserApiFetch<StoredFileMetadata>(item.metadata_url)
-      .then((data) => setMetadata(data))
-      .catch(() => setMetadata(null))
-      .finally(() => setLoadingMetadata(false));
+      .then((data) => { if (!cancelled) setMetadata(data); })
+      .catch(() => { if (!cancelled) setMetadata(null); })
+      .finally(() => { if (!cancelled) setLoadingMetadata(false); });
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id]);
 
@@ -80,6 +97,9 @@ export function FileDetailModal({
       {saveError && <p role="alert">{saveError}</p>}
       <div className="file-detail">
         <div className="file-detail-preview">
+          {item.document ? (
+            <DocumentPreview detail={documentState.detail} name={item.original_name} />
+          ) : (
           <a href={fileUrl} target="_blank" rel="noreferrer" className={isImage ? "file-detail-preview-link" : "file-detail-preview-icon"}>
             {isImage ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -90,23 +110,24 @@ export function FileDetailModal({
                   <FileTypeIcon />
                   {extension ? <span className="file-detail-preview-ext">{extension}</span> : null}
                 </span>
-                <span className="file-detail-preview-cta">Original öffnen</span>
+                <span className="file-detail-preview-cta">{t("detail.openOriginal")}</span>
               </>
             )}
           </a>
+          )}
         </div>
 
         <div className="file-detail-meta">
           <section className="file-detail-section">
-            <h3 className="file-detail-section-title">Details</h3>
+            <h3 className="file-detail-section-title">{t("detail.detailsTitle")}</h3>
             <dl className="file-detail-meta-list">
               <div>
-                <dt>Quelle</dt>
-                <dd><Badge variant={SOURCE_BADGE_VARIANT[item.source]}>{SOURCE_LABEL[item.source]}</Badge></dd>
+                <dt>{t("detail.source")}</dt>
+                <dd><Badge variant={SOURCE_BADGE_VARIANT[item.source]}>{t(`source.${SOURCE_KEY[item.source]}`)}</Badge></dd>
               </div>
               {item.ref_label && (
                 <div>
-                  <dt>Bezug</dt>
+                  <dt>{t("detail.reference")}</dt>
                   <dd className="file-detail-ref">
                     {item.ref_href ? (
                       <button type="button" className="file-card-ref" onClick={() => onNavigate(item.ref_href!)}>
@@ -120,54 +141,69 @@ export function FileDetailModal({
                 </div>
               )}
               <div>
-                <dt>Hochgeladen</dt>
+                <dt>{t("detail.uploadedAt")}</dt>
                 <dd>{formatDateTime(item.created_at)}</dd>
               </div>
               {metadata?.uploaded_by_name && (
                 <div>
-                  <dt>Hochgeladen von</dt>
+                  <dt>{t("detail.uploadedBy")}</dt>
                   <dd>{metadata.uploaded_by_name}</dd>
                 </div>
               )}
               <div>
-                <dt>Dateityp</dt>
-                <dd>{item.mime_type ?? "Unbekannt"}</dd>
+                <dt>{t("detail.fileType")}</dt>
+                <dd>{item.mime_type ?? t("detail.unknown")}</dd>
               </div>
               {item.file_size_bytes ? (
                 <div>
-                  <dt>Grösse</dt>
+                  <dt>{t("detail.size")}</dt>
                   <dd>{formatFileSize(item.file_size_bytes)}</dd>
                 </div>
               ) : null}
               {loadingMetadata ? (
                 <div>
-                  <dt>Bildmasse</dt>
-                  <dd className="muted">Lädt…</dd>
+                  <dt>{t("detail.dimensions")}</dt>
+                  <dd className="muted">{t("detail.loading")}</dd>
                 </div>
               ) : dimensions ? (
                 <div>
-                  <dt>Bildmasse</dt>
+                  <dt>{t("detail.dimensions")}</dt>
                   <dd>{dimensions}</dd>
                 </div>
               ) : null}
             </dl>
           </section>
 
+          {item.document ? (
+            <DocumentDetails detail={documentState.detail} loadFailed={documentState.loadFailed} onReload={documentState.reload} />
+          ) : null}
+
           <section className="file-detail-section">
-            <h3 className="file-detail-section-title">Herkunft</h3>
+            <h3 className="file-detail-section-title">{t("detail.originTitle")}</h3>
             <span className="tag-chip tag-chip-sm tag-chip-origin">{item.origin_tag}</span>
           </section>
 
           <section className="file-detail-section file-detail-tags">
             <h3 className="file-detail-section-title">
-              Tags {saving ? <span className="file-detail-saving">Speichert…</span> : null}
+              {t("detail.tagsTitle")} {saving ? <span className="file-detail-saving">{t("detail.saving")}</span> : null}
             </h3>
-            <TagInput value={tagsValue} onChange={handleTagsChange} suggestions={tagSuggestions} placeholder="Tag hinzufügen…" />
+            <TagInput value={tagsValue} onChange={handleTagsChange} suggestions={tagSuggestions} placeholder={t("detail.tagPlaceholder")} />
           </section>
 
-          <a href={fileUrl} target="_blank" rel="noreferrer" className="button-secondary button-ghost file-detail-open">
-            Original in neuem Tab öffnen
-          </a>
+          {item.document?.pdf_url ? (
+            <a href={`${browserApiBaseUrl}${item.document.pdf_url}`} target="_blank" rel="noreferrer" className="button-secondary button-ghost file-detail-open">
+              {t("document.openPdfNewTab")}
+            </a>
+          ) : (
+            <a href={fileUrl} target="_blank" rel="noreferrer" className="button-secondary button-ghost file-detail-open">
+              {t("detail.openOriginalNewTab")}
+            </a>
+          )}
+          {onShare ? (
+            <button type="button" className="button-secondary file-detail-open" onClick={onShare}>
+              {t("detail.shareLink")}
+            </button>
+          ) : null}
         </div>
       </div>
     </Modal>
@@ -189,4 +225,4 @@ function FileTypeIcon() {
   );
 }
 
-export { SOURCE_LABEL, SOURCE_BADGE_VARIANT };
+export { SOURCE_KEY, SOURCE_BADGE_VARIANT };

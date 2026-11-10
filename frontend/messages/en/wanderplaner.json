@@ -1,0 +1,235 @@
+{
+  "status": {
+    "draft": "Draft",
+    "analyzed": "Automatically analysed",
+    "reconnoitered": "Reconnoitred",
+    "approved": "Approved"
+  },
+  "kind": {
+    "START": "Start",
+    "END": "Destination",
+    "NAVIGATION": "Checkpoint",
+    "BREAK": "Rest stop",
+    "SUMMIT": "Summit",
+    "PASS": "Pass",
+    "HUT": "Hut",
+    "WATER": "Water",
+    "DECISION": "Checkpoint",
+    "EMERGENCY_EXIT": "Emergency exit",
+    "USER_DEFINED": "Checkpoint"
+  },
+  "routingProfile": {
+    "wanderwege_bevorzugen": "Prefer hiking trails",
+    "schnellste_route": "Fastest route",
+    "einfache_route": "Easy route"
+  },
+  "verification": {
+    "AUTO_DETECTED": "Automatically detected",
+    "NEEDS_VERIFICATION": "Check on site",
+    "VERIFIED": "Confirmed by leader",
+    "REJECTED": "Rejected"
+  },
+  "danger": {
+    "normal": {
+      "label": "Route",
+      "description": "Hiking or mountain trail without detected hazards"
+    },
+    "steep_exposed": {
+      "label": "Steep/exposed",
+      "description": "Over 40 % incline or over 70 % drop directly beside the trail"
+    },
+    "alpine": {
+      "label": "Alpine trail",
+      "description": "Officially signposted as an alpine hiking trail"
+    },
+    "badge": {
+      "steep_exposed": "Steep/exposed",
+      "alpine": "Alpine"
+    }
+  },
+  "units": {
+    "km": "{value} km",
+    "meters": "{value} m",
+    "minutes": "{minutes} min",
+    "hoursMinutes": "{hours}h {minutes}min",
+    "lkm": "{value} effort km"
+  },
+  "fields": {
+    "title": "Title",
+    "description": "Description",
+    "date": "Date"
+  },
+  "actions": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving…",
+    "delete": "Delete",
+    "remove": "Remove",
+    "close": "Close"
+  },
+  "manager": {
+    "title": "Hiking planner",
+    "subtitle": "Plan hikes, calculate routes and create march tables.",
+    "importGpx": "Import GPX",
+    "newTour": "New hike",
+    "listTitle": "Hikes",
+    "columns": {
+      "title": "Title",
+      "date": "Date",
+      "status": "Status",
+      "elevationProfile": "Elevation profile"
+    },
+    "empty": "No hikes planned yet.",
+    "create": {
+      "optional": "Optional.",
+      "startAndEnd": "Start and destination",
+      "startAndEndHelp": "The trail, elevation profile and automatic points are loaded when the hike is created. The route is sent to swisstopo for the elevation profile.",
+      "setStart": "Set start{done, select, true { ✓} other {}}",
+      "setEnd": "Set destination{done, select, true { ✓} other {}}",
+      "clickToSetStart": "Click on the map to set the start.",
+      "clickToSetEnd": "Click on the map to set the destination.",
+      "calculating": "Calculating route and elevation profile…",
+      "submit": "Create hike",
+      "missingStartEnd": "Please set start and destination on the map",
+      "created": "Hike created",
+      "error": "Error while creating"
+    },
+    "gpx": {
+      "help": "The GPX file serves as the starting point for a new hike. The trail, elevation profile and automatic points are loaded; the route is sent to swisstopo for the elevation profile.",
+      "file": "GPX file",
+      "importing": "Importing and calculating…",
+      "submit": "Import",
+      "missingFile": "Please select a GPX file",
+      "imported": "GPX file imported",
+      "error": "GPX import failed"
+    }
+  },
+  "detail": {
+    "noDescription": "No description",
+    "edit": "Edit",
+    "reconnaissance": "Reconnaissance",
+    "print": "Print",
+    "exportGpx": "Export GPX",
+    "approve": "Approve",
+    "approving": "Approving…",
+    "toast": {
+      "saved": "Hike saved",
+      "saveError": "Error while saving",
+      "deleted": "Hike deleted",
+      "deleteError": "Error while deleting",
+      "routeSaved": "Hike saved and recalculated",
+      "routeSaveError": "Changes could not be saved",
+      "verificationError": "Status could not be changed",
+      "reconnaissanceSaved": "Reconnaissance saved",
+      "reconnaissanceError": "Reconnaissance could not be saved",
+      "approved": "Hike approved",
+      "approveError": "Approval failed",
+      "printCreated": "Print PDF created",
+      "printError": "Print PDF could not be created"
+    },
+    "confirm": {
+      "deleteTour": "Really delete hike “{title}”?",
+      "removeWaypoint": "Remove point “{label}”?",
+      "approveTour": "Approve hike “{title}”?"
+    },
+    "route": {
+      "title": "Map & route",
+      "description": "Waypoints can be moved by dragging. Changes only take effect when you save; the trail, elevation profile and automatic points are then recalculated.",
+      "routingProfile": "Routing profile",
+      "savingAndCalculating": "Saving and calculating…",
+      "discardChanges": "Discard changes",
+      "addVia": "Add via point",
+      "unsavedHint": "Unsaved changes. The route and elevation profile shown still reflect the last saved state.",
+      "swisstopoHint": "When saving, the route is sent to swisstopo for the elevation profile.",
+      "placeViaHint": "Click on the map to place the via point.",
+      "distance": "Distance: <strong>{value}</strong>",
+      "ascent": "Ascent: <strong>{value}</strong>",
+      "descent": "Descent: <strong>{value}</strong>"
+    },
+    "elevation": {
+      "title": "Elevation profile",
+      "description": "Hovering over the elevation profile marks the position on the map. The automatic analysis adds notable junctions, crossings and huts – roughly every 15 minutes of walking.",
+      "empty": "No elevation profile retrieved yet."
+    },
+    "editModal": {
+      "title": "Edit hike"
+    },
+    "reconnaissanceModal": {
+      "reconnoiteredOn": "Reconnoitred on {date}.",
+      "reconnoiteredByOn": "Reconnoitred by {name} on {date}.",
+      "approvedOn": "Approved on {date}.",
+      "approvedByOn": "Approved by {name} on {date}.",
+      "remarks": "Further remarks",
+      "submit": "Mark as reconnoitred",
+      "checklist": {
+        "trail_condition": "Trail condition checked",
+        "problem_spots": "Problem spots checked",
+        "exits": "Exits checked",
+        "access_roads": "Access roads checked",
+        "water_points": "Water points checked",
+        "alternative_route": "Alternative route checked",
+        "decision_points": "Key decision points checked"
+      }
+    },
+    "printModal": {
+      "paper": "Paper size",
+      "orientation": "Orientation",
+      "portrait": "Portrait",
+      "landscape": "Landscape",
+      "scale": "Scale",
+      "scaleOption": "1:{scale}",
+      "result": "PDF with {count, plural, one {# map sheet} other {# map sheets}} created - <link>Download PDF</link>.",
+      "creating": "Creating…",
+      "submit": "Create PDF"
+    }
+  },
+  "map": {
+    "aria": "Map",
+    "legendAria": "Hazard assessment legend",
+    "legendNone": " (none)",
+    "waypointInfo": "Waypoint information",
+    "closeWaypointInfo": "Close waypoint information",
+    "elevation": "Elevation: {value} m",
+    "break": "Break: {minutes} min"
+  },
+  "marchTable": {
+    "title": "Waypoints & march table",
+    "speedFactor": "Speed factor: {value} effort km/h",
+    "noRoute": "Calculate the route to show distances and march times.",
+    "empty": "No waypoints.",
+    "columns": {
+      "index": "#",
+      "name": "Name",
+      "type": "Type",
+      "elevation": "Elevation",
+      "distance": "Distance",
+      "cumulativeDistance": "Cum. distance",
+      "ascent": "Up",
+      "descent": "Down",
+      "lkm": "Effort km",
+      "time": "Time",
+      "cumulativeTime": "Cum. time",
+      "arrival": "Arrival",
+      "break": "Break",
+      "departure": "Departure",
+      "remarks": "Remarks",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "breakMinutesAria": "Break in minutes",
+    "decisionMetrics": "From start: {fromStart} · To destination: {toEnd} · Back: {back}",
+    "nearestExit": " · Nearest exit: {time}",
+    "summary": {
+      "totalDistance": "Total distance: <strong>{value}</strong>",
+      "ascentDescent": "Ascent/descent: <strong>{ascent} / {descent} m</strong>",
+      "lkm": "Effort kilometres: <strong>{value}</strong>",
+      "walkingTime": "Walking time: <strong>{value}</strong>",
+      "breaks": "Breaks: <strong>{value}</strong>",
+      "totalTime": "Total time: <strong>{value}</strong>"
+    }
+  },
+  "elevationChart": {
+    "distance": "Distance:",
+    "elevation": "Elevation:"
+  }
+}

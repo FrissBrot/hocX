@@ -1,10 +1,25 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from app.core.locale_config_generated import SUPPORTED_LOCALES
+from app.schemas.role import RoleRef
+
+# Standardrollen je Mandant (tenant_role.system_key, permissions/catalog.json).
+SystemRoleKey = Literal["admin", "writer", "kassier", "reader"]
+
+
+def _validate_preferred_language(value: str | None) -> str | None:
+    # ValueError ist hier bewusst die kuratierte Konvention (siehe CLAUDE.md, Abschnitt
+    # "Zentrale Fehlererfassung"): eine unbekannte Locale ist ein erwarteter Validierungsfehler,
+    # kein unerwarteter Serverfehler, und landet deshalb nicht in system_error_log.
+    if value is not None and value not in SUPPORTED_LOCALES:
+        raise ValueError(f"Unbekannte Sprache: {value!r} (unterstuetzt: {sorted(SUPPORTED_LOCALES)})")
+    return value
 
 class TenantRead(BaseModel):
     # Built via explicit keyword construction (tenant_service.py, auth_service.session())
@@ -18,6 +33,11 @@ class TenantRead(BaseModel):
     updated_at: datetime | None = None
     tag_config_json: dict[str, Any] = {}
     enabled_features: list[str] = []
+    # Nach Downgrade nur noch lesend gebuchte Features (permissions/features.json)
+    read_only_features: list[str] = []
+    # Nur in der Antwort auf eine Änderung: die Namensänderung hat die Bestätigung der
+    # Organisation durch hocX aufgehoben (Hinweis im UI).
+    identity_verification_revoked: bool = False
 
 
 class TenantLookupRead(BaseModel):
@@ -62,35 +82,51 @@ class TenantSubscriptionRead(BaseModel):
     storage_quota_bytes: int | None = None
     # Aufschluesselung des Kontingents (0087_storage_packages): included_storage_bytes oben ist
     # bereits der Plan-Anteil, package_storage_bytes die Summe der zugewiesenen Zusatzpakete.
-    # storage_quota_manual_override zeigt an, dass ein Platform-Admin storage_quota_bytes von
-    # Hand gesetzt hat - dann stimmt included_storage_bytes + package_storage_bytes nicht mehr
-    # mit storage_quota_bytes ueberein, das ist kein Fehler.
     package_storage_bytes: int = 0
-    storage_quota_manual_override: bool = False
     features: list[TenantSubscriptionFeatureRead] = []
     # None, wenn der Plan selbst keinen Preis hat (z.B. 'legacy') und keine zusaetzlichen
     # bepreisten Features gebucht sind - dann gibt es schlicht nichts zu beziffern.
     estimated_monthly_cost_rp: int | None = None
     estimated_yearly_cost_rp: int | None = None
+    # Rabatt aus dem Adminportal (Prozent, bis 4 Nachkommastellen) und die Kosten davor -
+    # estimated_* oben sind bereits rabattiert.
+    discount_percent: float = 0
+    list_monthly_cost_rp: int | None = None
+    list_yearly_cost_rp: int | None = None
 
 
 class UserBase(BaseModel):
-    first_name: str
-    last_name: str
-    display_name: str
-    email: str
+    first_name: str | None = None
+    last_name: str | None = None
+    display_name: str = Field(min_length=1)
+    email: str | None = None
+    joined_at: date | None = None
+    left_at: date | None = None
     preferred_language: str = "de"
     is_active: bool = True
     external_identity_json: dict[str, Any] = Field(default_factory=dict)
 
+    _validate_preferred_language = field_validator("preferred_language")(_validate_preferred_language)
+
 
 class UserCreate(UserBase):
-    password: str = Field(min_length=12)
-    role_code: str = "reader"
+    password: str | None = Field(default=None, min_length=12)
+    # Rollen des Mandanten (public_id). system_role: genau eine Standardrolle (Plattform-Admin-
+    # Panel). Ohne beides: Standardrolle reader ("Mitglied").
+    role_ids: list[uuid.UUID] | None = Field(default=None, max_length=50)
+    system_role: SystemRoleKey | None = None
     # Only the platform-admin panel picks the tenant; a tenant admin always creates users in
     # their own tenant (a differing tenant_id is rejected there).
     tenant_id: uuid.UUID | None = None
-    login_enabled: bool = True
+    login_enabled: bool = False
+
+    @model_validator(mode="after")
+    def _login_credentials(self) -> "UserCreate":
+        if self.login_enabled and (not self.email or not self.email.strip() or not self.password):
+            raise ValueError("E-Mail-Adresse und Passwort sind für einen Login erforderlich")
+        if self.joined_at and self.left_at and self.left_at < self.joined_at:
+            raise ValueError("left_at must not be before joined_at")
+        return self
 
 
 class UserUpdate(BaseModel):
@@ -98,17 +134,26 @@ class UserUpdate(BaseModel):
     last_name: str | None = None
     display_name: str | None = None
     email: str | None = None
+    joined_at: date | None = None
+    left_at: date | None = None
     preferred_language: str | None = None
     is_active: bool | None = None
     password: str | None = Field(default=None, min_length=12)
     external_identity_json: dict[str, Any] | None = None
-    role_code: str | None = None
+    # Setzt die Rollen vollständig (siehe UserCreate).
+    role_ids: list[uuid.UUID] | None = Field(default=None, max_length=50)
+    system_role: SystemRoleKey | None = None
     login_enabled: bool | None = None
+
+    _validate_preferred_language = field_validator("preferred_language")(_validate_preferred_language)
 
 
 class UserSelfUpdate(BaseModel):
     preferred_language: str | None = None
     protocol_accordion_enabled: bool | None = None
+    protocol_wheel_enabled: bool | None = None
+
+    _validate_preferred_language = field_validator("preferred_language")(_validate_preferred_language)
 
 
 class UserPasswordChange(BaseModel):
@@ -126,9 +171,8 @@ class UserRead(UserBase):
     id: uuid.UUID
     tenant_id: uuid.UUID
     tenant_name: str
-    role_code: str
+    roles: list[RoleRef] = Field(default_factory=list)
     login_enabled: bool = True
-    is_participant_account: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -146,20 +190,36 @@ class TenantByDomainRead(BaseModel):
 
 class SessionUserRead(BaseModel):
     id: uuid.UUID
-    first_name: str
-    last_name: str
+    first_name: str | None
+    last_name: str | None
     display_name: str
     email: str
     preferred_language: str
     protocol_accordion_enabled: bool = True
+    protocol_wheel_enabled: bool = False
 
 
 class SessionRead(BaseModel):
     authenticated: bool
     user: SessionUserRead | None = None
     current_tenant: TenantRead | None = None
-    current_role: str | None = None
+    # Effektive Berechtigungen (inkl. Implikationen, ohne Feature-Filter - das Frontend prüft
+    # Feature und Permission gemeinsam, siehe frontend/lib/permissions.ts) und Rollen des Kontos.
+    permissions: list[str] = Field(default_factory=list)
+    roles: list[RoleRef] = Field(default_factory=list)
     bridge_redirect_url: str | None = None
+
+
+class BridgePreviewRead(BaseModel):
+    """Bestätigungsseite des Domain-Wechsels (MAIN-SEC-006): wer würde angemeldet."""
+
+    display_name: str
+    email: str
+    tenant_name: str
+
+
+class BridgeRedeemRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=200)
 
 
 class TenantUpdate(BaseModel):
@@ -168,7 +228,7 @@ class TenantUpdate(BaseModel):
 
 
 class TenantDomainCreate(BaseModel):
-    purpose: str = Field(pattern=r"^(app|abgabebox)$")
+    purpose: str = Field(pattern=r"^(app|abgabebox|verify)$")
     domain: str = Field(min_length=1, max_length=253)
 
 

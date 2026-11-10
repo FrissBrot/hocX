@@ -21,8 +21,11 @@ flowchart LR
 | [Finanzen & Bussen](finanzen.md) | Vereinskonto, Buchungen, Bussenverwaltung |
 | [Listen](listen.md) | Frei konfigurierbare Listen (z. B. Vorstand, Inventar) |
 | [Todos](todos.md) | Aufgaben aus Protokollen nachverfolgen |
+| [Anliegen](anliegen.md) | Punkte für kommende Sitzungen sammeln |
 | [Abgabebox](abgabebox.md) | Öffentlicher, anmeldefreier Datei-Upload für Externe |
 | [Word-Import](word-import.md) | Altprotokolle (.docx/.pdf) als neue Protokolle importieren |
+| [Dokumente & Document Studio](dokumente.md) | PDFs exportieren, Vorlagen gestalten, Corporate Design festlegen |
+| [Echtheit prüfen](echtheit.md) | Prüfen, ob ein PDF unverändert aus hocX stammt; Name, Logo und Verifizierung auf der Prüfseite |
 
 ## Rollen
 
