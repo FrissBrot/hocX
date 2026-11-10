@@ -2331,8 +2331,14 @@
     "done": "{count, plural, =0 {No template archived} one {# template archived} other {# templates archived}}"
   },
   "pdfLoading": {
-    "title": "Creating PDF…",
-    "message": "One moment, the document is being typeset.",
-    "hint": "The PDF will appear in this tab automatically."
+    "tabTitle": "Creating PDF – hocX",
+    "title": "Your PDF is being created",
+    "steps": {
+      "collect": "Collecting pages …",
+      "layout": "Setting the layout …",
+      "press": "Pressing the document …",
+      "almost": "Almost done …"
+    },
+    "hint": "Please keep this window open. The PDF will open automatically."
   }
 }

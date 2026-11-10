@@ -1,84 +1,204 @@
-/* Platzhalter-Tab «PDF wird erstellt» (app/pdf-loading): ein Blatt, dessen Zeilen nacheinander
-   gesetzt werden, darüber ein Lichtstreifen, darunter ein unbestimmter Fortschrittsbalken.
-   Nur transform/opacity (Compositor), ohne JavaScript. */
+/* Platzhalter-Tab «PDF wird erstellt» (app/pdf-loading), nach Claude-Design «hocX PDF wird
+   erstellt»: Eine Presse fährt herunter, drei Blätter fliegen ein, werden gepresst, gestempelt
+   und steigen als fertiges PDF auf (Zyklus 4 s). Farben aus den Tokens (Hell und Dunkel), nur
+   transform/opacity, ohne JavaScript. */
 .pdf-wait {
+  position: relative;
   min-height: 100vh;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: var(--space-6);
-  padding: var(--space-5);
+  padding: var(--space-6);
   background: var(--bg);
   color: var(--text);
   text-align: center;
 }
 
-.pdf-wait-sheet {
+/* ── Presse ── */
+.pdf-wait-press {
   position: relative;
-  overflow: hidden;
-  width: 132px;
-  height: 180px;
+  width: 240px;
+  height: 250px;
+}
+
+.pdf-wait-beam,
+.pdf-wait-base {
+  position: absolute;
+  background: var(--primary);
+}
+
+.pdf-wait-beam {
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 8px;
+  border-radius: var(--radius-xs);
+}
+
+.pdf-wait-base {
+  left: 20px;
+  right: 20px;
+  top: 234px;
+  height: 6px;
+  border-radius: var(--radius-xs);
+}
+
+.pdf-wait-post {
+  position: absolute;
+  top: 8px;
+  width: 6px;
+  height: 226px;
+  background: var(--border-strong);
+  border-radius: 0 0 var(--radius-xs) var(--radius-xs);
+}
+
+.pdf-wait-post-left { left: 34px; }
+.pdf-wait-post-right { right: 34px; }
+
+.pdf-wait-plate {
+  position: absolute;
+  left: 50px;
+  top: 56px;
+  width: 140px;
+  height: 20px;
+  animation: pdf-wait-plate 4s cubic-bezier(0.6, 0, 0.3, 1) infinite;
+}
+
+.pdf-wait-stem {
+  position: absolute;
+  left: 62px;
+  bottom: 100%;
+  width: 16px;
+  height: 60px;
+  background: var(--primary-strong);
+}
+
+.pdf-wait-plate-face {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-xs);
+  background: var(--primary);
+  border-bottom: 4px solid var(--primary-strong);
+}
+
+/* ── Blätter ── */
+.pdf-wait-stack {
+  position: absolute;
+  left: 58px;
+  top: 80px;
+  width: 124px;
+  height: 152px;
+  transform-origin: 50% 100%;
+  animation: pdf-wait-squash 4s ease-out infinite;
+}
+
+.pdf-wait-sheet {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: var(--space-5) var(--space-4);
+  padding: var(--space-4) var(--space-3);
   background: var(--panel-solid);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow);
-  animation: pdf-wait-float 2.4s var(--ease-out) infinite alternate;
+  border-radius: var(--radius-xs);
+  box-shadow: var(--shadow-soft);
+  animation: 4s cubic-bezier(0.2, 0.7, 0.3, 1) infinite;
 }
 
-/* Gefaltete Ecke oben rechts */
-.pdf-wait-sheet::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 22px;
-  height: 22px;
-  background: linear-gradient(225deg, var(--bg) 50%, var(--border) 50%);
-  border-bottom-left-radius: var(--radius-xs);
-}
+.pdf-wait-sheet-a { animation-name: pdf-wait-sheet-a; }
+.pdf-wait-sheet-b { animation-name: pdf-wait-sheet-b; }
+.pdf-wait-sheet-c { animation-name: pdf-wait-sheet-c; box-shadow: var(--shadow); }
 
 .pdf-wait-line {
   display: block;
-  height: 6px;
-  border-radius: var(--radius-pill);
-  background: var(--border-strong);
-  transform-origin: left center;
-  transform: scaleX(0);
-  animation: pdf-wait-type 2.8s var(--ease-out) infinite;
+  height: 5px;
+  border-radius: var(--radius-xs);
+  background: var(--neutral-bg);
 }
 
-.pdf-wait-line-title {
-  width: 62%;
-  height: 10px;
+.pdf-wait-line-strong { background: var(--border); }
+.pdf-wait-sheet-c .pdf-wait-line { background: var(--border); }
+
+.pdf-wait-w62 { width: 62%; }
+.pdf-wait-w70 { width: 70%; }
+.pdf-wait-w76 { width: 76%; }
+.pdf-wait-w82 { width: 82%; }
+.pdf-wait-w86 { width: 86%; }
+.pdf-wait-w90 { width: 90%; }
+.pdf-wait-w92 { width: 92%; }
+.pdf-wait-w94 { width: 94%; }
+
+.pdf-wait-image {
+  display: block;
+  height: 28px;
   margin-bottom: var(--space-1);
-  background: var(--accent);
+  border-radius: var(--radius-xs);
+  background: var(--accent-soft);
 }
 
-.pdf-wait-line-short {
-  width: 55%;
+.pdf-wait-heading {
+  display: block;
+  width: 58%;
+  height: 8px;
+  margin-bottom: var(--space-1);
+  border-radius: var(--radius-xs);
+  background: var(--primary);
 }
 
-.pdf-wait-line:nth-child(2) { animation-delay: 0.15s; }
-.pdf-wait-line:nth-child(3) { animation-delay: 0.3s; }
-.pdf-wait-line:nth-child(4) { animation-delay: 0.45s; }
-.pdf-wait-line:nth-child(5) { animation-delay: 0.6s; }
-.pdf-wait-line:nth-child(6) { animation-delay: 0.75s; }
-.pdf-wait-line:nth-child(7) { animation-delay: 0.9s; }
+/* Unterschrift, erscheint mit dem Stempel */
+.pdf-wait-ink {
+  display: block;
+  width: 40px;
+  height: 4px;
+  margin-top: auto;
+  border-radius: var(--radius-xs);
+  background: var(--success);
+  animation: pdf-wait-ink 4s linear infinite;
+}
 
-.pdf-wait-scan {
+.pdf-wait-seal {
   position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, transparent 0%, var(--accent-soft) 50%, transparent 100%);
-  opacity: 0.7;
-  transform: translateY(-100%);
-  animation: pdf-wait-scan 2.8s ease-in-out infinite;
+  right: -16px;
+  bottom: 10px;
+  width: 52px;
+  height: 52px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 3px solid var(--panel-solid);
+  outline: 1px solid var(--primary);
+  background: var(--primary);
+  color: var(--primary-contrast);
+  box-shadow: var(--shadow);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  animation: pdf-wait-seal 4s cubic-bezier(0.3, 1.4, 0.5, 1) infinite;
 }
 
+/* ── Funken beim Pressen ── */
+.pdf-wait-spark {
+  position: absolute;
+  top: 86px;
+  width: 18px;
+  height: 3px;
+  border-radius: var(--radius-xs);
+  background: var(--warning);
+  opacity: 0;
+}
+
+.pdf-wait-spark-low { top: 98px; width: 12px; }
+.pdf-wait-spark-left { left: 38px; transform-origin: 100% 50%; animation: pdf-wait-spark-left 4s ease-out infinite; }
+.pdf-wait-spark-right { right: 38px; transform-origin: 0 50%; animation: pdf-wait-spark-right 4s ease-out infinite; }
+
+/* ── Text ── */
 .pdf-wait-text {
   display: flex;
   flex-direction: column;
@@ -89,42 +209,136 @@
 
 .pdf-wait-title {
   margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
   font-size: var(--text-xl);
-  font-weight: 700;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
 }
 
-.pdf-wait-text p {
-  margin: 0;
+.pdf-wait-steps {
+  position: relative;
+  width: 280px;
+  height: 20px;
+  font-size: var(--text-base);
+  color: var(--muted);
 }
+
+.pdf-wait-step {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  animation: pdf-wait-step 4s linear infinite;
+}
+
+.pdf-wait-step-layout { animation-delay: 1s; }
+.pdf-wait-step-press { animation-delay: 2s; }
+.pdf-wait-step-almost { animation-delay: 3s; }
 
 .pdf-wait-bar {
   position: relative;
   overflow: hidden;
-  width: 200px;
-  height: 4px;
-  margin: var(--space-2) 0;
-  border-radius: var(--radius-pill);
-  background: var(--accent-soft);
+  width: 180px;
+  height: 3px;
+  margin-top: var(--space-2);
+  border-radius: var(--radius-xs);
+  background: var(--border);
 }
 
 .pdf-wait-bar span {
   position: absolute;
   inset: 0;
   width: 40%;
-  border-radius: var(--radius-pill);
-  background: var(--accent);
-  animation: pdf-wait-bar 1.4s ease-in-out infinite;
+  border-radius: var(--radius-xs);
+  background: var(--primary);
+  animation: pdf-wait-bar 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
-@keyframes pdf-wait-type {
-  0% { transform: scaleX(0); opacity: 1; }
-  35%, 80% { transform: scaleX(1); opacity: 1; }
-  100% { transform: scaleX(1); opacity: 0; }
+.pdf-wait-hint {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--muted);
+  text-wrap: pretty;
 }
 
-@keyframes pdf-wait-scan {
-  0% { transform: translateY(-100%); }
-  100% { transform: translateY(100%); }
+.pdf-wait-brand {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 22px;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+/* ── Abläufe (aus dem Design) ── */
+@keyframes pdf-wait-sheet-a {
+  0% { transform: translate(-190px, -30px) rotate(-28deg); opacity: 0; }
+  6% { opacity: 1; }
+  24% { transform: translate(-3px, 2px) rotate(-4deg); }
+  34%, 88% { transform: translate(0, 0) rotate(0); opacity: 1; }
+  96%, 100% { transform: translate(0, -14px); opacity: 0; }
+}
+
+@keyframes pdf-wait-sheet-b {
+  0%, 6% { transform: translate(200px, -50px) rotate(30deg); opacity: 0; }
+  12% { opacity: 1; }
+  30% { transform: translate(4px, -1px) rotate(5deg); }
+  38%, 88% { transform: translate(0, 0) rotate(0); opacity: 1; }
+  96%, 100% { transform: translate(0, -14px); opacity: 0; }
+}
+
+@keyframes pdf-wait-sheet-c {
+  0%, 12% { transform: translate(10px, -230px) rotate(-10deg); opacity: 0; }
+  18% { opacity: 1; }
+  36% { transform: translate(-2px, 3px) rotate(-2deg); }
+  42%, 88% { transform: translate(0, 0) rotate(0); opacity: 1; }
+  96%, 100% { transform: translate(0, -14px); opacity: 0; }
+}
+
+@keyframes pdf-wait-plate {
+  0%, 42% { transform: translateY(-54px); }
+  50%, 56% { transform: translateY(0); }
+  66%, 100% { transform: translateY(-54px); }
+}
+
+@keyframes pdf-wait-squash {
+  0%, 49% { transform: scale(1, 1); }
+  52%, 56% { transform: scale(1.05, 0.9); }
+  62%, 100% { transform: scale(1, 1); }
+}
+
+@keyframes pdf-wait-spark-left {
+  0%, 49% { transform: translateX(0) scaleX(0); opacity: 0; }
+  52% { transform: translateX(-10px) scaleX(1); opacity: 1; }
+  60%, 100% { transform: translateX(-26px) scaleX(0.4); opacity: 0; }
+}
+
+@keyframes pdf-wait-spark-right {
+  0%, 49% { transform: translateX(0) scaleX(0); opacity: 0; }
+  52% { transform: translateX(10px) scaleX(1); opacity: 1; }
+  60%, 100% { transform: translateX(26px) scaleX(0.4); opacity: 0; }
+}
+
+@keyframes pdf-wait-seal {
+  0%, 62% { transform: scale(0) rotate(-40deg); opacity: 0; }
+  68% { transform: scale(1.25) rotate(-8deg); opacity: 1; }
+  72%, 88% { transform: scale(1) rotate(-12deg); opacity: 1; }
+  96%, 100% { transform: scale(1) rotate(-12deg) translateY(-14px); opacity: 0; }
+}
+
+@keyframes pdf-wait-ink {
+  0%, 60% { opacity: 0; }
+  68%, 88% { opacity: 1; }
+  96%, 100% { opacity: 0; }
+}
+
+@keyframes pdf-wait-step {
+  0% { transform: translateY(6px); opacity: 0; }
+  3%, 22% { transform: translateY(0); opacity: 1; }
+  25%, 100% { transform: translateY(-6px); opacity: 0; }
 }
 
 @keyframes pdf-wait-bar {
@@ -132,24 +346,16 @@
   100% { transform: translateX(250%); }
 }
 
-@keyframes pdf-wait-float {
-  0% { transform: translateY(0); }
-  100% { transform: translateY(-6px); }
-}
-
+/* Wie im Design: bei reduzierter Bewegung dreimal langsamer statt gar nicht (die Statustexte
+   tragen die Information) */
 @media (prefers-reduced-motion: reduce) {
-  .pdf-wait-sheet,
-  .pdf-wait-scan,
-  .pdf-wait-bar span {
-    animation: none;
+  .pdf-wait *,
+  .pdf-wait *::before,
+  .pdf-wait *::after {
+    animation-duration: 12s !important;
   }
 
-  .pdf-wait-scan {
-    display: none;
-  }
-
-  .pdf-wait-line {
-    animation: none;
-    transform: none;
-  }
+  .pdf-wait-step-layout { animation-delay: 3s; }
+  .pdf-wait-step-press { animation-delay: 6s; }
+  .pdf-wait-step-almost { animation-delay: 9s; }
 }

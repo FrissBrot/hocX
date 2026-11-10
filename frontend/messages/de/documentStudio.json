@@ -2331,8 +2331,14 @@
     "done": "{count, plural, =0 {Keine Vorlage archiviert} one {# Vorlage archiviert} other {# Vorlagen archiviert}}"
   },
   "pdfLoading": {
-    "title": "PDF wird erstellt…",
-    "message": "Einen Moment, das Dokument wird gesetzt.",
-    "hint": "Das PDF erscheint automatisch in diesem Tab."
+    "tabTitle": "PDF wird erstellt – hocX",
+    "title": "Ihr PDF wird erstellt",
+    "steps": {
+      "collect": "Seiten werden gesammelt …",
+      "layout": "Layout wird gesetzt …",
+      "press": "Dokument wird gepresst …",
+      "almost": "Fast fertig …"
+    },
+    "hint": "Bitte dieses Fenster offen lassen. Das PDF öffnet sich automatisch."
   }
 }
