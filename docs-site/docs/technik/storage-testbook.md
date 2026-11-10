@@ -73,7 +73,7 @@ Testdateien unter `backend/tests/`, sofern nicht anders angegeben.
 
 | ID | Durchführung | Erwartung |
 |---|---|---|
-| STO-M1 | Upgrade einer 1.2.x-Testinstanz mit abgeschlossener Erstmigration und Dateisystem-Generation in der Rückfallfrist: `deploy.sh` einmal mit «N», dann mit «j» (bzw. `HOCX_SKIP_STORAGE_FALLBACK=1`) | «N» bricht ab, altes Release läuft weiter; «j» bereinigt die Dateisystem-Generation, danach läuft `0168_s3_only` durch; System → Storage zeigt das Dateisystem-Profil deaktiviert ohne Aktionen, App voll nutzbar |
+| STO-M1 | Upgrade einer 1.2.2-Testinstanz mit abgeschlossener Erstmigration und Dateisystem-Generation in der Rückfallfrist: `deploy.sh` einmal mit «N», dann mit «j» (bzw. `HOCX_SKIP_STORAGE_FALLBACK=1`) | «N» bricht ab, altes Release läuft weiter; «j» bereinigt die Dateisystem-Generation, danach läuft `0168_s3_only` durch; System → Storage zeigt das Dateisystem-Profil deaktiviert ohne Aktionen, App voll nutzbar |
 | STO-M2 | Live-Migration lokales S3 → externes S3 bei laufender Nutzung (Uploads, Exporte) | kein Datenverlust, Cutover kurz, Fortschritt/Restzeit plausibel |
 | STO-M3 | Externes S3 kurz sperren | Check «Dateispeicher» kritisch mit ntfy, Uploads 503 mit Hinweis, nach Freigabe «behoben» |
 | STO-M4 | Wartungsfenster planen, starten, beenden | Anmeldeseite und Abgabebox zeigen den Hinweis, Freigabe erst bei erfüllten Bedingungen |

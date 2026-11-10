@@ -138,7 +138,7 @@ export function AdminStorage({ initialOverview }: { initialOverview: StorageOver
   const active = overview.active_profile;
   const migration = overview.open_migration;
   const activeGeneration = overview.generations.find((generation) => generation.status === "active" && generation.generation === overview.active_generation) ?? null;
-  // Dateisystem-Profile (bis 1.2) gibt es nur noch als deaktivierte Historie: ihre Generationen bekommen keine Aktionen.
+  // Dateisystem-Profile (bis 1.2.2) gibt es nur noch als deaktivierte Historie: ihre Generationen bekommen keine Aktionen.
   const legacyProfileIds = new Set(overview.profiles.filter(isLegacyProfile).map((profile) => profile.id));
   const lastCompleted = history.find((entry) => entry.state === "completed") ?? null;
   const retained = overview.generations.find((generation) => generation.status === "retained" && generation.retain_until) ?? null;

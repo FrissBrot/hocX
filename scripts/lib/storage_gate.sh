@@ -58,7 +58,7 @@ storage_upgrade_gate() {
     has_tenant="$(storage_gate_sql "SELECT to_regclass('public.tenant') IS NOT NULL")" || return 1
     if [ "$has_tenant" = t ]; then
       echo "Upgrade gesperrt: diese Instanz läuft noch auf einem Release vor 1.2 (ohne Objektspeicher)." >&2
-      echo "Zuerst auf 1.2.x aktualisieren und dort die Erstmigration auf S3 ausführen, dann erneut deployen." >&2
+      echo "Zuerst auf 1.2.2 aktualisieren und dort die Erstmigration auf S3 ausführen, dann erneut deployen." >&2
       return 1
     fi
     return 0

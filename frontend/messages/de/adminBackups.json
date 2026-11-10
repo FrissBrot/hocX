@@ -368,7 +368,7 @@
     "storage_migration_open": "Es läuft eine Storage-Migration.",
     "target_profile_invalid": "Das Zielprofil ist ungültig (deaktiviert oder kein S3-Profil).",
     "name_missing": "Bitte einen Namen für den neuen Mandanten angeben.",
-    "backup_pre_s3": "Das Backup stammt aus der Zeit vor der S3-Migration – mit hocX 1.2.x wiederherstellen."
+    "backup_pre_s3": "Das Backup stammt aus der Zeit vor der S3-Migration – mit hocX 1.2.2 wiederherstellen."
   },
   "confirm": {
     "cancelJob": "Auftrag wirklich abbrechen? Ein Backup wird sauber beendet, bereits gesicherte Inhalte bleiben erhalten.",
@@ -478,6 +478,6 @@
     "borg_borg_error": "Borg meldet einen Fehler.",
     "borg_disabled": "Das Backup-System ist nicht eingerichtet.",
     "borg_configuration": "Die Backup-Konfiguration ist ungültig.",
-    "backup_pre_s3": "Das Backup stammt aus der Zeit vor der S3-Migration – mit hocX 1.2.x wiederherstellen."
+    "backup_pre_s3": "Das Backup stammt aus der Zeit vor der S3-Migration – mit hocX 1.2.2 wiederherstellen."
   }
 }

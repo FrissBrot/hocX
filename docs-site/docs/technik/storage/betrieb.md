@@ -22,7 +22,7 @@
     Ohne diesen Schlüssel lassen sich gespeicherte S3-Zugangsdaten nicht mehr entschlüsseln.
     Er gehört in das gleiche Secret-Backup wie `.env`.
 
-Vor einem Update von 1.2.x prüft `deploy.sh`, ob die Instanz bereits vollständig auf S3 läuft,
+Vor einem Update von 1.2.0 bis 1.2.2 prüft `deploy.sh`, ob die Instanz bereits vollständig auf S3 läuft,
 und bereinigt bei Bedarf den alten Dateisystem-Bestand – siehe
 [Upgrade auf S3-only](migration.md#upgrade-auf-s3-only).
 

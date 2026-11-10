@@ -168,7 +168,7 @@ def upgrade() -> None:
         if not _is_fresh(conn):
             raise S3OnlyUpgradeBlocked(
                 "Upgrade gesperrt: hocX speichert ab dieser Version nur noch in S3, die Dateien liegen aber noch im "
-                "Dateisystem. Zuerst mit dem bisherigen Release (1.2.x) die Erstmigration ausführen "
+                "Dateisystem. Zuerst mit dem bisherigen Release (1.2.2) die Erstmigration ausführen "
                 "(Adminportal → System → Storage → Migration vorbereiten, Ziel «Lokales S3»), dann erneut deployen."
             )
         _bootstrap_local_s3(conn, active.id)
