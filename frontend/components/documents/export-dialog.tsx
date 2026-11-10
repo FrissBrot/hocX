@@ -253,7 +253,7 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
 
   async function createPdf() {
     // Noch im Klick öffnen, damit der Browser das neue Fenster nicht blockiert
-    const pdfWindow = window.open("about:blank", "_blank");
+    const pdfWindow = window.open("/pdf-loading", "_blank");
     if (pdfWindow) pdfWindow.opener = null;
     try {
       const result = await renderDocument(request);

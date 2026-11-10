@@ -15,6 +15,8 @@ Installationen aktualisieren können.
   flüssig weiter (CSS-Animation auf der Grafik, Sprünge über das sanfte Scrollen des
   Browsers). Der Effekt ersetzt den bisherigen und bleibt im Profil ein- und ausschaltbar;
   er setzt die eingeklappten Punkte (Akkordeon) voraus.
+- **PDF öffnen mit Ladeanimation.** Der neue Tab bleibt nicht mehr leer und weiss, sondern
+  zeigt sofort «PDF wird erstellt…» mit einer Animation, bis das PDF erscheint.
 
 ### Behoben
 

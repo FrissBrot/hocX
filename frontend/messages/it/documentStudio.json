@@ -2329,5 +2329,10 @@
     "footnote": "L’archiviazione si può annullare in qualsiasi momento.",
     "submit": "{count, plural, one {Archivia #} other {Archivia #}}",
     "done": "{count, plural, =0 {Nessun modello archiviato} one {# modello archiviato} other {# modelli archiviati}}"
+  },
+  "pdfLoading": {
+    "title": "Creazione del PDF…",
+    "message": "Un momento, il documento è in fase di impaginazione.",
+    "hint": "Il PDF apparirà automaticamente in questa scheda."
   }
 }

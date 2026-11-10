@@ -2329,5 +2329,10 @@
     "footnote": "L’archivage peut être annulé à tout moment.",
     "submit": "{count, plural, one {Archiver #} other {Archiver #}}",
     "done": "{count, plural, =0 {Aucun modèle archivé} one {# modèle archivé} other {# modèles archivés}}"
+  },
+  "pdfLoading": {
+    "title": "Création du PDF…",
+    "message": "Un instant, le document est en cours de mise en page.",
+    "hint": "Le PDF s’affichera automatiquement dans cet onglet."
   }
 }

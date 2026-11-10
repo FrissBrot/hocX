@@ -2329,5 +2329,10 @@
     "footnote": "Archiving can be undone at any time.",
     "submit": "{count, plural, one {Archive #} other {Archive #}}",
     "done": "{count, plural, =0 {No template archived} one {# template archived} other {# templates archived}}"
+  },
+  "pdfLoading": {
+    "title": "Creating PDF…",
+    "message": "One moment, the document is being typeset.",
+    "hint": "The PDF will appear in this tab automatically."
   }
 }

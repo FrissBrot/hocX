@@ -1,0 +1,155 @@
+/* Platzhalter-Tab «PDF wird erstellt» (app/pdf-loading): ein Blatt, dessen Zeilen nacheinander
+   gesetzt werden, darüber ein Lichtstreifen, darunter ein unbestimmter Fortschrittsbalken.
+   Nur transform/opacity (Compositor), ohne JavaScript. */
+.pdf-wait {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  padding: var(--space-5);
+  background: var(--bg);
+  color: var(--text);
+  text-align: center;
+}
+
+.pdf-wait-sheet {
+  position: relative;
+  overflow: hidden;
+  width: 132px;
+  height: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-4);
+  background: var(--panel-solid);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  animation: pdf-wait-float 2.4s var(--ease-out) infinite alternate;
+}
+
+/* Gefaltete Ecke oben rechts */
+.pdf-wait-sheet::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 22px;
+  height: 22px;
+  background: linear-gradient(225deg, var(--bg) 50%, var(--border) 50%);
+  border-bottom-left-radius: var(--radius-xs);
+}
+
+.pdf-wait-line {
+  display: block;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--border-strong);
+  transform-origin: left center;
+  transform: scaleX(0);
+  animation: pdf-wait-type 2.8s var(--ease-out) infinite;
+}
+
+.pdf-wait-line-title {
+  width: 62%;
+  height: 10px;
+  margin-bottom: var(--space-1);
+  background: var(--accent);
+}
+
+.pdf-wait-line-short {
+  width: 55%;
+}
+
+.pdf-wait-line:nth-child(2) { animation-delay: 0.15s; }
+.pdf-wait-line:nth-child(3) { animation-delay: 0.3s; }
+.pdf-wait-line:nth-child(4) { animation-delay: 0.45s; }
+.pdf-wait-line:nth-child(5) { animation-delay: 0.6s; }
+.pdf-wait-line:nth-child(6) { animation-delay: 0.75s; }
+.pdf-wait-line:nth-child(7) { animation-delay: 0.9s; }
+
+.pdf-wait-scan {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 0%, var(--accent-soft) 50%, transparent 100%);
+  opacity: 0.7;
+  transform: translateY(-100%);
+  animation: pdf-wait-scan 2.8s ease-in-out infinite;
+}
+
+.pdf-wait-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 360px;
+}
+
+.pdf-wait-title {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 700;
+}
+
+.pdf-wait-text p {
+  margin: 0;
+}
+
+.pdf-wait-bar {
+  position: relative;
+  overflow: hidden;
+  width: 200px;
+  height: 4px;
+  margin: var(--space-2) 0;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+}
+
+.pdf-wait-bar span {
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  animation: pdf-wait-bar 1.4s ease-in-out infinite;
+}
+
+@keyframes pdf-wait-type {
+  0% { transform: scaleX(0); opacity: 1; }
+  35%, 80% { transform: scaleX(1); opacity: 1; }
+  100% { transform: scaleX(1); opacity: 0; }
+}
+
+@keyframes pdf-wait-scan {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+@keyframes pdf-wait-bar {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+
+@keyframes pdf-wait-float {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-6px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pdf-wait-sheet,
+  .pdf-wait-scan,
+  .pdf-wait-bar span {
+    animation: none;
+  }
+
+  .pdf-wait-scan {
+    display: none;
+  }
+
+  .pdf-wait-line {
+    animation: none;
+    transform: none;
+  }
+}

@@ -2329,5 +2329,10 @@
     "footnote": "Archivieren lässt sich jederzeit rückgängig machen.",
     "submit": "{count, plural, one {# archivieren} other {# archivieren}}",
     "done": "{count, plural, =0 {Keine Vorlage archiviert} one {# Vorlage archiviert} other {# Vorlagen archiviert}}"
+  },
+  "pdfLoading": {
+    "title": "PDF wird erstellt…",
+    "message": "Einen Moment, das Dokument wird gesetzt.",
+    "hint": "Das PDF erscheint automatisch in diesem Tab."
   }
 }

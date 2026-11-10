@@ -41,7 +41,7 @@ export function usePdfExport() {
     // Gespeicherte Datei-URLs sind Momentaufnahmen und können bereits veraltet sein.
     let pdfWindow: Window | null = null;
     try {
-      pdfWindow = window.open("about:blank", "_blank");
+      pdfWindow = window.open("/pdf-loading", "_blank");
       if (pdfWindow) pdfWindow.opener = null;
 
       const result = await renderDocument({ protocol_id: protocolId, document_type: "protocol" });

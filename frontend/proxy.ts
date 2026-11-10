@@ -126,8 +126,11 @@ async function route(request: NextRequest, requestHeaders: Headers) {
   // /auth/bridge: Bestätigung des Domain-Wechsels, der Besucher ist hier per Definition noch
   // nicht angemeldet (MAIN-SEC-006).
   // /overload ist die Überlast-Ansicht - die Sitzungsprüfung selbst wird dort abgewiesen.
+  // /pdf-loading ist der Platzhalter im neuen Tab, bis ein PDF fertig ist (use-pdf-export.ts):
+  // ohne Daten, deshalb ohne Sitzungsprüfung (erscheint sofort, keine Last während des Renderns).
   const isPublicPath =
     rewrittenPathname === "/maintenance" ||
+    rewrittenPathname === "/pdf-loading" ||
     rewrittenPathname === "/overload" ||
     rewrittenPathname === "/auth/bridge" ||
     rewrittenPathname === "/share" ||
