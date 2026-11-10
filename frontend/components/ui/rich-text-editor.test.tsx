@@ -24,3 +24,16 @@ it("does not emit onChange for an empty block", async () => {
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
   expect(onChange).not.toHaveBeenCalled();
 });
+
+// Nackte Links erscheinen als Link (Dekoration), ohne das gespeicherte Markdown zu ändern.
+it("shows bare urls and mail addresses as links without saving anything", async () => {
+  const onChange = vi.fn();
+  const { container } = render(
+    <RichTextEditor value={"Mail: scharleitung@example.ch\n\n**Link OneDrive:** https://example.sharepoint.com/:f:/g/Eu_Dk?e=1."} onChange={onChange} />
+  );
+  await waitFor(() => expect(container.querySelectorAll(".rich-text-autolink")).toHaveLength(2));
+  const links = [...container.querySelectorAll(".rich-text-autolink")].map((node) => node.textContent);
+  expect(links).toEqual(["scharleitung@example.ch", "https://example.sharepoint.com/:f:/g/Eu_Dk?e=1"]);
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+  expect(onChange).not.toHaveBeenCalled();
+});

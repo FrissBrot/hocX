@@ -380,6 +380,7 @@
     "bold": "Fett (Ctrl+B)",
     "bulletList": "Aufzählung",
     "italic": "Kursiv (Ctrl+I)",
+    "openLink": "Strg/Cmd+Klick öffnet den Link",
     "orderedList": "Nummerierte Liste"
   },
   "sameAsThisProtocol": "Wie dieses Protokoll",

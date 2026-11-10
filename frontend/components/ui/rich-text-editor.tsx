@@ -8,6 +8,7 @@ import { useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
 
 import { TrackedChanges } from "@/components/ui/tracked-changes-extension";
+import { Autolink } from "@/components/ui/autolink-extension";
 
 // tiptap-markdown 0.9 ergänzt den (ab Tiptap v3 typisierten) Editor-Storage nicht selbst.
 type MarkdownStorage = { markdown: { getMarkdown: () => string } };
@@ -61,6 +62,7 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
         transformCopiedText: false,
       }),
       TrackedChanges.configure({ getBaseline: () => baselineRef.current }),
+      Autolink.configure({ openHint: t("openLink") }),
     ],
     content: value,
     editable: !readOnly,

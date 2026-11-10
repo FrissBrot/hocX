@@ -4090,6 +4090,17 @@ input[type="color"]::-moz-color-swatch {
   margin: 0 var(--space-1);
 }
 
+/* Erkannte nackte Links im Editor (autolink-extension.ts): nur Darstellung, Strg/Cmd+Klick öffnet */
+.rich-text-autolink {
+  color: var(--accent-strong);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.rich-text-autolink:hover {
+  cursor: pointer;
+}
+
 .rich-text-editor-content {
   padding: var(--space-3) var(--space-4);
   min-height: 120px;

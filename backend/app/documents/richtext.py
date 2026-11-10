@@ -8,6 +8,7 @@ dadurch wirkungslos. Rohes HTML im Markdown wird als Text übernommen, nicht int
 """
 from __future__ import annotations
 
+import re
 from typing import Any
 from urllib.parse import urlparse
 
@@ -31,6 +32,14 @@ _ALLOWED_LINK_SCHEMES = {"http", "https", "mailto"}
 _MD = MarkdownIt("commonmark", {"html": False}).enable("strikethrough")
 _MD_BREAKS = MarkdownIt("commonmark", {"html": False, "breaks": True}).enable("strikethrough")
 
+# Nackte Links im Text (wie frontend/lib/utils/autolink.ts): http(s)-URLs, «www.»-Adressen und
+# E-Mail-Adressen. Satzzeichen am Ende gehören nicht dazu (siehe _trim_link).
+_AUTOLINK = re.compile(
+    r"(?P<url>\b(?:https?://|www\.)[^\s<>\"]+)"
+    r"|(?P<mail>\b[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b)"
+)
+_TRAILING = ".,;:!?'\"»«"
+
 # Tiefe der Verschachtelung begrenzen (Listen in Listen …), damit bösartige Eingaben den
 # Compile nicht mit extrem tiefen Bäumen belasten.
 _MAX_DEPTH = 8
@@ -50,6 +59,58 @@ def safe_href(href: str | None) -> str | None:
     if parsed.scheme.lower() != "mailto" and not parsed.netloc:
         return None
     return value
+
+
+def _trim_link(candidate: str) -> str:
+    """Satzzeichen am Ende abschneiden; eine schliessende Klammer nur, wenn sie keine öffnende
+    im Link schliesst (Wikipedia-Links mit «(…)»)."""
+    while candidate:
+        last = candidate[-1]
+        if last in _TRAILING:
+            candidate = candidate[:-1]
+        elif last == ")" and candidate.count(")") > candidate.count("("):
+            candidate = candidate[:-1]
+        else:
+            break
+    return candidate
+
+
+def find_links(text: str) -> list[tuple[int, int, str]]:
+    """Nackte Links in Klartext: (Start, Ende, href). ``www.`` bekommt https://, E-Mail mailto:."""
+    links: list[tuple[int, int, str]] = []
+    for match in _AUTOLINK.finditer(text):
+        start = match.start()
+        if match.group("url"):
+            value = _trim_link(match.group("url"))
+            href = value if value.lower().startswith(("http://", "https://")) else f"https://{value}"
+        else:
+            value = match.group("mail")
+            href = f"mailto:{value}"
+        href = safe_href(href)
+        if href and len(value) > len("www."):
+            links.append((start, start + len(value), href))
+    return links
+
+
+def autolink(nodes: list[Any]) -> list[Any]:
+    """Nackte Links in Textstücken ohne eigenen Link (und ausserhalb von Code) zu Links machen;
+    Auszeichnungen (fett, kursiv …) bleiben erhalten."""
+    out: list[Any] = []
+    for node in nodes:
+        if not isinstance(node, TextSpan) or node.href or node.code or node.key:
+            out.append(node)
+            continue
+        position = 0
+        for start, end, href in find_links(node.v):
+            if start > position:
+                out.append(node.model_copy(update={"v": node.v[position:start]}))
+            out.append(node.model_copy(update={"v": node.v[start:end], "href": href}))
+            position = end
+        if position == 0:
+            out.append(node)
+        elif position < len(node.v):
+            out.append(node.model_copy(update={"v": node.v[position:]}))
+    return out
 
 
 def markdown_to_rich(text: str | None, *, hard_breaks: bool = False) -> list[Any]:
@@ -78,7 +139,7 @@ def plain_to_rich(text: str | None) -> list[Any]:
             if index:
                 inlines.append(LineBreak())
             if line:
-                inlines.append(TextSpan(v=line))
+                inlines.extend(autolink([TextSpan(v=line)]))
         if any(isinstance(node, TextSpan) and node.v.strip() for node in inlines):
             paragraphs.append(Paragraph(c=inlines))
     return paragraphs
@@ -206,4 +267,4 @@ def _inlines(children: list) -> list[Any]:
     # Abschliessende Umbrüche sind unsichtbar und würden nur Leerraum erzeugen.
     while out and isinstance(out[-1], LineBreak):
         out.pop()
-    return out
+    return autolink(out)

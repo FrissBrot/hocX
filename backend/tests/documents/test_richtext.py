@@ -133,3 +133,44 @@ def test_deep_nesting_is_bounded():
             break
         node = nested[0]
     assert depth <= 9
+
+
+# ── Nackte Links (autolink) ────────────────────────────────────────────────────
+
+
+def _spans(text: str):
+    from app.documents.richtext import markdown_to_rich
+
+    [paragraph] = markdown_to_rich(text)
+    return [(span.v, span.href, span.b) for span in paragraph.c]
+
+
+def test_bare_urls_and_mail_become_links():
+    assert _spans("Mailadresse Scharleitung: scharleitung@example.ch") == [
+        ("Mailadresse Scharleitung: ", None, False),
+        ("scharleitung@example.ch", "mailto:scharleitung@example.ch", False),
+    ]
+    assert _spans("**Link OneDrive:** https://example.sharepoint.com/:f:/g/EuD1h7d_Pcrt-9Dk?e=1") == [
+        ("Link OneDrive:", None, True),
+        (" ", None, False),
+        ("https://example.sharepoint.com/:f:/g/EuD1h7d_Pcrt-9Dk?e=1", "https://example.sharepoint.com/:f:/g/EuD1h7d_Pcrt-9Dk?e=1", False),
+    ]
+
+
+def test_autolink_trims_punctuation_and_adds_scheme():
+    assert _spans("Siehe www.example.ch.") == [("Siehe ", None, False), ("www.example.ch", "https://www.example.ch", False), (".", None, False)]
+    assert _spans("(mehr: https://de.wikipedia.org/wiki/Sachseln_(OW))") == [
+        ("(mehr: ", None, False),
+        ("https://de.wikipedia.org/wiki/Sachseln_(OW)", "https://de.wikipedia.org/wiki/Sachseln_(OW)", False),
+        (")", None, False),
+    ]
+
+
+def test_autolink_keeps_explicit_links_code_and_plain_text():
+    assert _spans("[Website](https://example.ch) und `https://code.example`") == [
+        ("Website", "https://example.ch", False),
+        (" und ", None, False),
+        ("https://code.example", None, False),
+    ]
+    assert _spans("Passwort: jw$ach3ln-1958, Version 1.2.3") == [("Passwort: jw$ach3ln-1958, Version 1.2.3", None, False)]
+    assert _spans("javascript:alert(1)") == [("javascript:alert(1)", None, False)]

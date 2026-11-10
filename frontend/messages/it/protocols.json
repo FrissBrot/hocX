@@ -380,6 +380,7 @@
     "bold": "Grassetto (Ctrl+B)",
     "bulletList": "Elenco puntato",
     "italic": "Corsivo (Ctrl+I)",
+    "openLink": "Ctrl/Cmd+clic apre il link",
     "orderedList": "Elenco numerato"
   },
   "sameAsThisProtocol": "Come questo verbale",
