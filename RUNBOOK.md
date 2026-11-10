@@ -346,24 +346,30 @@ Prod-Promotion gesperrt.
 
 ## 9. Deploy-Code kontrolliert aktualisieren
 
-Ein normaler `deploy.sh`-Lauf aktualisiert Skripte und Compose-Dateien niemals selbst.
-Als `hocx-deploy` wird ein Update bewusst separat ausgefuehrt:
+Ab 1.2.4 aktualisiert `deploy.sh` den Deploy-Code vor jedem Lauf selbst: es ruft
+`update_deploy_code.sh` auf und startet sich danach mit dem neuen Stand neu (Schleifenschutz
+über `HOCX_DEPLOY_CODE_UPDATED`). Beim Update auf 1.2.3 hatte sonst ein veraltetes `deploy.sh`
+das neue Release ausgerollt. Scheitert das Update (kein Netz, keine GitHub-Anmeldung, lokale
+Änderungen), bricht der Deploy ab und das bisherige Release läuft weiter. Bewusst mit dem
+vorhandenen Code deployen:
+
+```bash
+HOCX_SKIP_DEPLOY_CODE_UPDATE=1 ./scripts/deploy.sh prod  # auf dem Testhost entsprechend: test
+```
+
+Nur den Code aktualisieren (ohne Deploy) bzw. aktualisieren und deployen geht weiterhin direkt:
 
 ```bash
 cd /docker/hocX
 ./scripts/update_deploy_code.sh
-./scripts/deploy.sh prod  # auf dem Testhost entsprechend: test
-```
-
-Optional kann das erfolgreiche Fast-Forward-Update direkt den an den Host gebundenen
-Deploy starten:
-
-```bash
 ./scripts/update_deploy_code.sh --deploy
 ```
 
 Der Updater akzeptiert nur die fest hinterlegte hocX-GitHub-Remote, den Branch `main`,
-einen sauberen tracked Worktree und einen reinen Fast-Forward auf `origin/main`. Vor dem
+einen sauberen tracked Worktree und einen reinen Fast-Forward auf den neuesten Commit von
+`origin/main` mit erfolgreichem `build-test-images.yml`-Lauf. Hat der neueste Commit keinen
+eigenen Build (z. B. ein reiner Changelog-Commit), nimmt er den neuesten signierten Vorgänger,
+nie einen älteren Stand als den aktuellen. Vor dem
 Fast-Forward lädt er den zum Commit gehoerenden CI-Nachweis, prueft dessen keyless
 Cosign-Signatur gegen den festen `build-test-images.yml`-Workflow und verifiziert die
 Hashes aller Deploy-Skripte, Compose-, Traefik- und Garage-Dateien. Damit reicht ein blosses

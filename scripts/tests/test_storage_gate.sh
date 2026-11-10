@@ -12,6 +12,7 @@ trap 'rm -rf "$TEST_DIR"' EXIT
 source "$REPO_DIR/scripts/lib/storage_gate.sh"
 POSTGRES_USER=hocx
 POSTGRES_DB=hocx
+PROJECT_DIR=/srv/hocx
 STORAGE_GATE_POLL_SECONDS=0
 DC=(fake_dc)
 
@@ -22,6 +23,7 @@ assert_no_update() {
 reset_scenario() {
   DB_RUNNING=1 HAS_STORAGE=t HAS_TENANT=t ACTIVE=garage_local OPEN_MIGRATION="" HAS_FILES=t
   FS_ROWS="" PURGE_AFTER_POLLS=1 PURGE_ERROR=""
+  WORKER_RUNNING=1 UNWRITABLE="" FIND_STATUS=0
   : > "$TEST_DIR/sql.log"
   echo 0 > "$TEST_DIR/polls"
   unset HOCX_SKIP_STORAGE_FALLBACK
@@ -29,8 +31,17 @@ reset_scenario() {
 
 fake_dc() {
   if [ "$1" = ps ]; then
-    [ "$DB_RUNNING" = 1 ] && echo container-id
+    if [ "$2" = storage-worker ]; then
+      [ "$WORKER_RUNNING" = 1 ] && echo container-id
+    else
+      [ "$DB_RUNNING" = 1 ] && echo container-id
+    fi
     return 0
+  fi
+  if [ "$1 $2 $3" = "exec -T storage-worker" ]; then
+    echo "find $*" >> "$TEST_DIR/sql.log"
+    [ -z "$UNWRITABLE" ] || printf '%s\n' "$UNWRITABLE"
+    return "$FIND_STATUS"
   fi
   local sql="${*: -1}" polls
   echo "$sql" >> "$TEST_DIR/sql.log"
@@ -131,5 +142,34 @@ reset_scenario; FS_ROWS=$'0|purge_requested|f|\n'; PURGE_AFTER_POLLS=999; PURGE_
 if HOCX_STORAGE_PURGE_TIMEOUT=0 storage_upgrade_gate < /dev/null 2> "$TEST_DIR/err"; then echo "Timeout hätte abbrechen müssen" >&2; exit 1; fi
 grep -q "OSError" "$TEST_DIR/err"
 grep -q "nicht fertig" "$TEST_DIR/err"
+
+
+# Schreibrechte: nicht beschreibbare Verzeichnisse im storage-worker - Abbruch vor der Rückfrage,
+# mit root-Befehl für den Host-Pfad, nichts geändert.
+reset_scenario; FS_ROWS=$'0|retained|t|24.11.2026 10:00\n'; export HOCX_SKIP_STORAGE_FALLBACK=1
+UNWRITABLE=$'/app/storage/abgabebox-uploads/alt\n/app/storage/abgabebox-uploads/alt/2024'
+if storage_upgrade_gate < /dev/null > "$TEST_DIR/out" 2>&1; then echo "fehlende Schreibrechte hätten sperren müssen" >&2; exit 1; fi
+grep -q "/app/storage/abgabebox-uploads/alt/2024" "$TEST_DIR/out"
+grep -q "chgrp -R 5001 '/srv/hocx/storage'" "$TEST_DIR/out"
+if grep -q "WARNUNG\|Rückfallfrist wird beendet" "$TEST_DIR/out"; then echo "Prüfung muss vor der Rückfrage kommen" >&2; exit 1; fi
+assert_no_update "fehlende Schreibrechte"
+
+# «Permission denied» beim Durchsuchen (find mit Fehlerstatus) und eigener HOCX_STORAGE_PATH.
+reset_scenario; FS_ROWS=$'0|retained|f|01.11.2026 10:00\n'; UNWRITABLE="find: '/app/storage/x': Permission denied"; FIND_STATUS=1
+if HOCX_STORAGE_PATH=/data/hocx-storage storage_upgrade_gate < /dev/null > "$TEST_DIR/out" 2>&1; then echo "Permission denied hätte sperren müssen" >&2; exit 1; fi
+grep -q "Permission denied" "$TEST_DIR/out"
+grep -q "chgrp -R 5001 '/data/hocx-storage'" "$TEST_DIR/out"
+assert_no_update "Permission denied"
+
+# storage-worker läuft nicht: niemand könnte bereinigen - sofort abbrechen statt bis zum Timeout warten.
+reset_scenario; FS_ROWS=$'0|retained|f|01.11.2026 10:00\n'; WORKER_RUNNING=0
+if storage_upgrade_gate < /dev/null > "$TEST_DIR/out" 2>&1; then echo "ohne storage-worker hätte sperren müssen" >&2; exit 1; fi
+grep -q "storage-worker des bisherigen Releases läuft nicht" "$TEST_DIR/out"
+assert_no_update "storage-worker läuft nicht"
+
+# Nichts zu bereinigen: keine Rechteprüfung nötig.
+reset_scenario
+storage_upgrade_gate < /dev/null > /dev/null
+if grep -q "^find" "$TEST_DIR/sql.log"; then echo "ohne Bestand keine Rechteprüfung" >&2; exit 1; fi
 
 echo "storage gate tests: ok"

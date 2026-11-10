@@ -10,12 +10,14 @@ Installationen aktualisieren können.
 
 Rückmeldungen aus dem Testbetrieb von 1.2.3: flüssigeres Scrollen im Protokoll mit einem neuen
 Rad-Effekt, eine Ladeanimation beim Öffnen von PDFs, klickbare Links und mehrere Korrekturen am
-PDF (Abstände zwischen Traktanden, entfernte Termine). Keine neuen Migrationen, keine Breaking
-Changes.
+PDF (Abstände zwischen Traktanden, entfernte Termine). Dazu Lehren aus dem Deploy von 1.2.3:
+`deploy.sh` aktualisiert sich vor jedem Lauf selbst, und das Upgrade-Tor prüft die Schreibrechte
+im Dateispeicher. Keine neuen Migrationen, keine Breaking Changes.
 
 ### Update
 
-- Von **1.2.3** wie gewohnt über `deploy.sh`.
+- Von **1.2.3** wie gewohnt: `./scripts/update_deploy_code.sh --deploy` (der Code von 1.2.3
+  aktualisiert sich noch nicht selbst). Ab 1.2.4 reicht `./scripts/deploy.sh <test|prod>`.
 - Von **1.2.0 bis 1.2.2** gelten dieselben Voraussetzungen wie für 1.2.3 (abgeschlossene
   Erstmigration auf S3, siehe dort); das Upgrade-Tor `0168_s3_only` prüft das weiterhin.
 - Nach dem Update sehen neu erzeugte PDFs anders aus, wo «Abstand vor Abschnitten» bisher
@@ -35,6 +37,23 @@ Changes.
   dargestellt (Strg/Cmd+Klick öffnet sie), im PDF klickbar.
 - **Matrix: vergangene Termine ausgegraut.** Terminzeilen haben im Matrix-Dialog den Schalter
   «Vergangene Termine ausgegraut» (Standard an); im PDF erscheinen sie grau wie im Editor.
+
+### Deploy
+
+- **`deploy.sh` aktualisiert zuerst den Deploy-Code.** Vor jedem Lauf holt es den neuesten
+  signierten Stand von `origin/main` (`update_deploy_code.sh`, Signatur- und Hash-Prüfung wie
+  bisher) und startet sich damit neu. Beim Update auf 1.2.3 hatte ein veraltetes `deploy.sh` das
+  neue Release ausgerollt. Scheitert das Update, bricht der Deploy ab und das bisherige Release
+  läuft weiter; bewusst mit dem vorhandenen Code: `HOCX_SKIP_DEPLOY_CODE_UPDATE=1`.
+- **`update_deploy_code.sh` nimmt den neuesten signierten Stand.** Hat der neueste Commit auf
+  `origin/main` keinen eigenen Testimage-Build (z. B. ein reiner Changelog-Commit), gilt der
+  neueste signierte Vorgänger statt eines Abbruchs - nie ein älterer Stand als der aktuelle.
+- **Upgrade-Tor prüft die Schreibrechte vor der Rückfrage.** Muss der Dateisystem-Bestand
+  bereinigt werden, prüft `deploy.sh` zuerst im laufenden `storage-worker`, ob er überall im
+  Dateispeicher schreiben darf. Sonst bricht es sofort ab, nennt die betroffenen Verzeichnisse
+  und den root-Befehl (`chgrp -R 5001 …`); bisher hing die Bereinigung bis zum Timeout an
+  «Permission denied» (Dateien von vor 1.2.0). Läuft der `storage-worker` nicht, bricht es
+  ebenfalls sofort ab.
 
 ### Behoben
 

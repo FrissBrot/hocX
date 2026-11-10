@@ -158,7 +158,23 @@ fi
 grep -q 'Deployments als root sind fuer hocX gesperrt' scripts/deploy.sh
 grep -q 'DEPLOY_USER="hocx-deploy"' scripts/provision_deploy_user.sh
 grep -q 'Usage:.*provision_deploy_user.sh.*test|prod' scripts/provision_deploy_user.sh
-grep -q 'git merge --ff-only refs/remotes/origin/main' scripts/update_deploy_code.sh
+# Deploy-Code nur per Fast-Forward auf einen signierten Vorfahren von origin/main, nie zurück
+grep -q 'git merge --ff-only "$NEW_COMMIT"' scripts/update_deploy_code.sh
+grep -q 'git merge-base --is-ancestor "$sha" "$tip"' scripts/update_deploy_code.sh
+grep -q 'git merge-base --is-ancestor "$OLD_COMMIT" "$sha"' scripts/update_deploy_code.sh
+grep -q 'build-test-images\[.\]yml@refs/heads/main' scripts/update_deploy_code.sh
+# deploy.sh aktualisiert zuerst seinen Code (mit Schleifenschutz und Opt-out), vor der Deploy-Sperre
+grep -q 'HOCX_DEPLOY_CODE_UPDATE_FROM_DEPLOY=1 "$REPO_DIR/scripts/update_deploy_code.sh"' scripts/deploy.sh
+grep -q 'exec env HOCX_DEPLOY_CODE_UPDATED=1 "$REPO_DIR/scripts/deploy.sh" "$ENVIRONMENT"' scripts/deploy.sh
+grep -q 'exec env HOCX_DEPLOY_CODE_UPDATED=1 "$REPO_DIR/scripts/deploy.sh" "$HOST_ENVIRONMENT"' scripts/update_deploy_code.sh
+grep -q 'HOCX_SKIP_DEPLOY_CODE_UPDATE' scripts/deploy.sh
+update_line="$(grep -n 'scripts/update_deploy_code.sh"; then' scripts/deploy.sh | head -1 | cut -d: -f1)"
+lock_line="$(grep -n '^exec 9> "$PROJECT_DIR/.deploy.lock"' scripts/deploy.sh | cut -d: -f1)"
+root_line="$(grep -n 'Deployments als root sind fuer hocX gesperrt' scripts/deploy.sh | cut -d: -f1)"
+if [ -z "$update_line" ] || [ "$update_line" -ge "$lock_line" ] || [ "$update_line" -le "$root_line" ]; then
+  echo "deploy.sh muss den Deploy-Code nach der root-Sperre und vor der Deploy-Sperre aktualisieren." >&2
+  exit 1
+fi
 grep -q 'require_unprovisioned_dev_host' scripts/dev.sh
 grep -q 'alembic -x seed_demo=true upgrade head' docker-compose.dev.yml
 if grep -q 'seed_demo=true' docker-compose.release.yml scripts/deploy.sh; then

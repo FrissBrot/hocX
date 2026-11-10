@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Kontrolliertes Update des Deploy-Checkouts. Absichtlich getrennt von deploy.sh:
-# ein normaler Deploy veraendert seinen eigenen Code niemals stillschweigend.
+# Kontrolliertes Update des Deploy-Checkouts auf den neuesten signierten Stand von origin/main
+# (Candidate-Build von build-test-images.yml). deploy.sh ruft es ab 1.2.4 vor jedem Deploy selbst
+# auf (sichtbar, mit Signaturpruefung; Opt-out HOCX_SKIP_DEPLOY_CODE_UPDATE=1), damit nie ein
+# veraltetes deploy.sh ein neues Release ausrollt.
 # Usage: scripts/update_deploy_code.sh [--deploy]
 
 if [ "${HOCX_UPDATE_HELPER_COPY:-0}" != 1 ]; then
@@ -97,23 +99,41 @@ fi
 
 OLD_COMMIT="$(git rev-parse HEAD)"
 NEW_COMMIT="$(git rev-parse refs/remotes/origin/main)"
+NEW_RUN_ID=""
 
-verify_signed_deploy_code() {
-  local run_id proof_dir tree_dir signed_commit identity
-
+# Neuester Commit auf origin/main mit erfolgreichem Candidate-Build. Reine Doku-Commits (z. B.
+# Changelog) bekommen keinen eigenen Build; dann gilt der neueste signierte Vorgaenger - er muss
+# aber mindestens so neu sein wie der aktuelle Stand (kein Zurueckgehen).
+select_signed_commit() {
+  local tip="$NEW_COMMIT" run_id sha
   ensure_github_auth
-  run_id="$(gh run list \
+  while IFS=' ' read -r run_id sha; do
+    [ -n "$sha" ] || continue
+    git cat-file -e "$sha^{commit}" 2> /dev/null || continue
+    git merge-base --is-ancestor "$sha" "$tip" || continue
+    git merge-base --is-ancestor "$OLD_COMMIT" "$sha" || continue
+    NEW_COMMIT="$sha"
+    NEW_RUN_ID="$run_id"
+    break
+  done < <(gh run list \
     --repo FrissBrot/hocX \
     --workflow build-test-images.yml \
-    --commit "$NEW_COMMIT" \
+    --branch main \
     --status success \
-    --limit 1 \
-    --json databaseId \
-    --jq '.[0].databaseId')"
-  [ -n "$run_id" ] || {
-    echo "Kein erfolgreicher Candidate-Build fuer Commit $NEW_COMMIT gefunden." >&2
+    --limit 50 \
+    --json databaseId,headSha \
+    --jq '.[] | "\(.databaseId) \(.headSha)"')
+  [ -n "$NEW_RUN_ID" ] || {
+    echo "Kein erfolgreicher Candidate-Build auf origin/main gefunden, der neuer als ${OLD_COMMIT:0:12} ist." >&2
     return 1
   }
+  if [ "$NEW_COMMIT" != "$tip" ]; then
+    echo "    origin/main (${tip:0:12}) hat keinen eigenen Candidate-Build; neuester signierter Stand: ${NEW_COMMIT:0:12}"
+  fi
+}
+
+verify_signed_deploy_code() {
+  local run_id="$NEW_RUN_ID" proof_dir tree_dir signed_commit identity
 
   proof_dir="$(mktemp -d /tmp/hocx-deploy-proof.XXXXXX)"
   tree_dir="$(mktemp -d /tmp/hocx-deploy-tree.XXXXXX)"
@@ -125,7 +145,7 @@ verify_signed_deploy_code() {
 
   signed_commit="$(tr -d '\r\n' < "$proof_dir/deploy-code.commit")"
   [ "$signed_commit" = "$NEW_COMMIT" ] || {
-    echo "Signierter Commit ($signed_commit) stimmt nicht mit origin/main ($NEW_COMMIT) ueberein." >&2
+    echo "Signierter Commit ($signed_commit) stimmt nicht mit dem Ziel ($NEW_COMMIT) ueberein." >&2
     return 1
   }
 
@@ -145,6 +165,7 @@ verify_signed_deploy_code() {
 }
 
 echo "==> [$HOST_ENVIRONMENT] Verifiziere freigegebenen Deploy-Code"
+select_signed_commit
 verify_signed_deploy_code
 
 if [ "$OLD_COMMIT" = "$NEW_COMMIT" ]; then
@@ -152,7 +173,7 @@ if [ "$OLD_COMMIT" = "$NEW_COMMIT" ]; then
 else
   echo "    Aktualisiere ${OLD_COMMIT:0:12} -> ${NEW_COMMIT:0:12}"
   git log --oneline --no-decorate "$OLD_COMMIT..$NEW_COMMIT"
-  git merge --ff-only refs/remotes/origin/main
+  git merge --ff-only "$NEW_COMMIT"
 fi
 
 bash -n \
@@ -166,14 +187,17 @@ bash -n \
   "$REPO_DIR/scripts/run_job.sh" \
   "$REPO_DIR/scripts/storage_controller.sh" \
   "$REPO_DIR/scripts/verify_release.sh" \
-  "$REPO_DIR/scripts/update_deploy_code.sh"
+  "$REPO_DIR/scripts/update_deploy_code.sh" \
+  "$REPO_DIR/scripts/lib/storage_gate.sh"
 echo "==> Deploy-Code erfolgreich aktualisiert und geprueft"
 
 if [ "$DEPLOY_AFTER_UPDATE" = true ]; then
   flock -u 9
   rm -f "$HELPER_PATH"
   trap - EXIT
-  exec "$REPO_DIR/scripts/deploy.sh" "$HOST_ENVIRONMENT"
+  # Der Code ist eben aktualisiert: deploy.sh soll das nicht noch einmal tun (Schleifenschutz).
+  exec env HOCX_DEPLOY_CODE_UPDATED=1 "$REPO_DIR/scripts/deploy.sh" "$HOST_ENVIRONMENT"
 fi
 
-echo "Naechster Schritt: $REPO_DIR/scripts/deploy.sh $HOST_ENVIRONMENT"
+# Aufruf aus deploy.sh: das startet sich danach selbst neu, kein Hinweis noetig
+[ "${HOCX_DEPLOY_CODE_UPDATE_FROM_DEPLOY:-0}" = 1 ] || echo "Naechster Schritt: $REPO_DIR/scripts/deploy.sh $HOST_ENVIRONMENT"

@@ -25,6 +25,11 @@ set -euo pipefail
 # Mandant existieren (Migration 0078, siehe CHANGELOG). Ohne den Wert bricht die Migration
 # in dem Fall ab und listet die Konten auf; die Datenbank bleibt dabei unveraendert.
 #
+# Deploy-Code zuerst aktualisieren (ab 1.2.4): deploy.sh holt sich vor jedem Lauf den neuesten
+# signierten Stand von origin/main (scripts/update_deploy_code.sh) und startet sich damit neu.
+# Beim Update auf 1.2.3 rollte sonst ein veraltetes deploy.sh das neue Release aus. Überspringen:
+# HOCX_SKIP_DEPLOY_CODE_UPDATE=1 (z. B. ohne Netz oder für einen bewusst älteren Stand).
+#
 # Nur noch S3 (Migration 0168_s3_only): Update nur, wenn die Dateien schon in S3 liegen. Ist der
 # bisherige Dateisystem-Bestand noch in der Rückfallfrist, fragt das Skript, ob sie übersprungen
 # werden soll (nicht interaktiv: HOCX_SKIP_STORAGE_FALLBACK=1), siehe scripts/lib/storage_gate.sh.
@@ -88,6 +93,25 @@ if [ "$EUID" -eq 0 ]; then
 fi
 
 require_host_environment "$ENVIRONMENT"
+
+# Vor der Deploy-Sperre: update_deploy_code.sh nimmt dieselbe Sperre. HOCX_DEPLOY_CODE_UPDATED
+# setzt der Neustart unten (bzw. update_deploy_code.sh --deploy) - Schleifenschutz.
+case "${HOCX_SKIP_DEPLOY_CODE_UPDATE:-}" in
+  1|true|yes|ja)
+    echo "==> [$ENVIRONMENT] Deploy-Code-Update übersprungen (HOCX_SKIP_DEPLOY_CODE_UPDATE)"
+    ;;
+  *)
+    if [ "${HOCX_DEPLOY_CODE_UPDATED:-0}" != 1 ]; then
+      echo "==> [$ENVIRONMENT] Deploy-Code zuerst aktualisieren (überspringen: HOCX_SKIP_DEPLOY_CODE_UPDATE=1)"
+      if ! HOCX_DEPLOY_CODE_UPDATE_FROM_DEPLOY=1 "$REPO_DIR/scripts/update_deploy_code.sh"; then
+        echo "Deploy abgebrochen: Deploy-Code-Update fehlgeschlagen; es laeuft weiter das bisherige Release." >&2
+        echo "Bewusst mit dem vorhandenen Code deployen: HOCX_SKIP_DEPLOY_CODE_UPDATE=1 $0 $ENVIRONMENT" >&2
+        exit 1
+      fi
+      exec env HOCX_DEPLOY_CODE_UPDATED=1 "$REPO_DIR/scripts/deploy.sh" "$ENVIRONMENT"
+    fi
+    ;;
+esac
 
 if ! command -v flock > /dev/null 2>&1; then
   echo "flock wird fuer den Schutz vor parallelen Deployments benoetigt." >&2

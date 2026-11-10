@@ -9,10 +9,12 @@
 # - Dateisystem noch aktiv und Dateien vorhanden, oder eine Storage-Migration offen: Abbruch.
 # - Dateisystem-Generation in der Rückfallfrist: Warnung, Frage «Frist jetzt beenden?»;
 #   nicht interaktiv nur mit HOCX_SKIP_STORAGE_FALLBACK=1. Frist abgelaufen: ohne Frage.
+#   Vor der Frage: Schreibrechte im storage-worker prüfen (storage_gate_check_writable) - ohne
+#   sie hinge die Bereinigung an «Permission denied», bis die Wartezeit abläuft.
 #   Dann Bereinigung anfordern und warten, bis der storage-worker des bisherigen Releases sie
 #   erledigt hat (entfernt nur Dateien, deren Kopie die Erstmigration verifiziert hat).
 #
-# Erwartet: DC (Compose-Aufruf als Array), POSTGRES_USER, POSTGRES_DB.
+# Erwartet: DC (Compose-Aufruf als Array), POSTGRES_USER, POSTGRES_DB, PROJECT_DIR.
 
 STORAGE_GATE_POLL_SECONDS="${STORAGE_GATE_POLL_SECONDS:-10}"
 
@@ -37,6 +39,31 @@ storage_gate_confirm() {
     j|J|ja|Ja|JA|y|Y|yes) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+# Die Bereinigung löscht Dateien im Dateispeicher des storage-workers (uid 5000, Gruppe 5001);
+# dafür braucht er Schreibrecht auf jedes Verzeichnis. Dateien von vor 1.2.0 (2755/0644, andere
+# Gruppe) liessen sie beim Update auf 1.2.3 bis zum Timeout an «Permission denied» hängen. Geprüft
+# wird im laufenden Container, also mit genau den Rechten, mit denen er später löscht.
+storage_gate_check_writable() {
+  if [ -z "$("${DC[@]}" ps storage-worker --status running -q 2> /dev/null)" ]; then
+    echo "Update abgebrochen: der storage-worker des bisherigen Releases läuft nicht; er muss den" >&2
+    echo "Dateisystem-Bestand vor dem Update bereinigen. Zuerst starten (docker compose ... up -d storage-worker)." >&2
+    return 1
+  fi
+  local output
+  if output="$("${DC[@]}" exec -T storage-worker find /app/storage /app/abgabebox-storage -type d ! -writable 2>&1)" && [ -z "$output" ]; then
+    echo "    Schreibrechte im Dateispeicher: ok"
+    return 0
+  fi
+  local host_path="${HOCX_STORAGE_PATH:-./storage}"
+  [[ "$host_path" == /* ]] || host_path="$PROJECT_DIR/${host_path#./}"
+  echo "Update abgebrochen: der storage-worker kann im Dateispeicher nicht überall schreiben, die" >&2
+  echo "Bereinigung würde an «Permission denied» scheitern. Betroffen (Pfade im Container, max. 10):" >&2
+  printf '%s\n' "$output" | head -n 10 | sed 's/^/      /' >&2
+  echo "Einmalig als root beheben, dann erneut deployen:" >&2
+  echo "  chgrp -R 5001 '$host_path' && chmod -R g+rwX,o-rwx '$host_path' && find '$host_path' -type d -exec chmod g+s {} +" >&2
+  return 1
 }
 
 storage_upgrade_gate() {
@@ -89,6 +116,7 @@ storage_upgrade_gate() {
   local rows
   rows="$(storage_gate_sql "SELECT g.generation, g.status, (g.status = 'retained' AND g.retain_until IS NOT NULL AND g.retain_until > NOW()), COALESCE(to_char(g.retain_until AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24:MI'), '') FROM storage_generation g JOIN storage_profile p ON p.id = g.profile_id WHERE p.provider = 'filesystem' AND g.status NOT IN ('purged', 'abandoned') ORDER BY g.generation")" || return 1
   [ -n "$rows" ] || return 0
+  storage_gate_check_writable || return 1
 
   # Zeilen zuerst einlesen: die Rückfrage in der Schleife braucht stdin (Terminal) - ein
   # «while read ... <<< $rows» hätte ihr den Here-String als stdin untergeschoben.
