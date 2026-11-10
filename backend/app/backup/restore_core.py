@@ -55,7 +55,7 @@ def load_restore_point(view: RepositoryView, archive: str) -> dict[str, Any]:
 
 
 BACKUP_PRE_S3_CODE = "backup_pre_s3"
-BACKUP_PRE_S3_MESSAGE = "Backup stammt aus der Zeit vor der S3-Migration – mit hocX 1.2.x wiederherstellen"
+BACKUP_PRE_S3_MESSAGE = "Backup stammt aus der Zeit vor der S3-Migration – mit hocX 1.2.2 wiederherstellen"
 
 
 def is_pre_s3_backup(metadata: dict[str, Any]) -> bool:

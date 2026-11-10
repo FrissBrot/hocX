@@ -683,14 +683,14 @@ hocX speichert Dateien nur noch in S3; eine Neuinstallation startet direkt auf d
 (Garage). `deploy.sh` ergänzt die nötigen Secrets in `.env` und startet `local-s3`,
 `storage-init` und `storage-worker`.
 
-**Update von 1.2.x (S3-only)**: Voraussetzung ist eine abgeschlossene Erstmigration auf S3 und
+**Update auf 1.2.3 (S3-only)**: Voraussetzung ist eine abgeschlossene Erstmigration auf S3 und
 keine offene Storage-Migration, sonst bricht `deploy.sh` mit «Upgrade gesperrt» ab (das bisherige
 Release läuft weiter). Liegt der alte Dateisystem-Bestand noch in der Rückfallfrist, fragt
 `deploy.sh` «Rückfallfrist jetzt beenden und den Dateisystem-Bestand bereinigen? [j/N]»
 (nicht interaktiv: `HOCX_SKIP_STORAGE_FALLBACK=1`) und wartet, bis der `storage-worker` des
 bisherigen Releases bereinigt hat (`HOCX_STORAGE_PURGE_TIMEOUT`, Default 3600 s). Bereinigt werden
 nur Dateien, deren Kopie die Erstmigration verifiziert hat. Danach gibt es keinen Weg zurück auf
-das Dateisystem; Backups von vor der S3-Migration lassen sich nur mit 1.2.x wiederherstellen.
+das Dateisystem; Backups von vor der S3-Migration lassen sich nur mit 1.2.2 wiederherstellen.
 Details: `docs-site/docs/technik/storage/migration.md`, Abschnitt «Upgrade auf S3-only».
 
 **Cronjob `storage_controller`** richtet `deploy.sh` selbst ein (Marker

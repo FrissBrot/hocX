@@ -5,7 +5,7 @@ Eine Neuinstallation startet direkt auf dem eingebauten lokalen S3 (Garage, Prof
 (Garage)»). Der Speicher lässt sich im laufenden Betrieb zwischen beliebigen S3-Profilen (lokal,
 AWS, Hetzner, andere S3-kompatible Anbieter) migrieren.
 
-Den Dateisystem-Speicher von 1.2 (Generation 0) gibt es nicht mehr. Wer von 1.2.x aktualisiert,
+Den Dateisystem-Speicher bis 1.2.2 (Generation 0) gibt es nicht mehr. Wer von 1.2.0 bis 1.2.2 aktualisiert,
 liest zuerst [Upgrade auf S3-only](migration.md#upgrade-auf-s3-only).
 
 | Seite | Inhalt |

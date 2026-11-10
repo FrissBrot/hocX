@@ -368,7 +368,7 @@
     "storage_migration_open": "A storage migration is running.",
     "target_profile_invalid": "The target profile is invalid (disabled or not an S3 profile).",
     "name_missing": "Please enter a name for the new tenant.",
-    "backup_pre_s3": "The backup dates from before the S3 migration – restore it with hocX 1.2.x."
+    "backup_pre_s3": "The backup dates from before the S3 migration – restore it with hocX 1.2.2."
   },
   "confirm": {
     "cancelJob": "Really cancel this job? A backup is stopped cleanly; contents already saved are kept.",
@@ -478,6 +478,6 @@
     "borg_borg_error": "Borg reported an error.",
     "borg_disabled": "The backup system is not set up.",
     "borg_configuration": "The backup configuration is invalid.",
-    "backup_pre_s3": "The backup dates from before the S3 migration – restore it with hocX 1.2.x."
+    "backup_pre_s3": "The backup dates from before the S3 migration – restore it with hocX 1.2.2."
   }
 }

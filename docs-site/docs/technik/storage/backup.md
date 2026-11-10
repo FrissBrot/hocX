@@ -64,7 +64,7 @@ Das lokale Garage-S3 unterstützt keine Versionierung – sein Schutz ist das Ob
 
 !!! warning "Backups von vor der S3-Migration"
     Ein Backup aus der Zeit, in der die Dateien noch im Dateisystem lagen (vor der Erstmigration in
-    1.2), lässt sich nur mit einem **1.2.x**-Release wiederherstellen – siehe
+    1.2), lässt sich nur mit einem Release bis **1.2.2** wiederherstellen – siehe
     [Upgrade auf S3-only](migration.md#kein-weg-zuruck).
 
 **Restore-Probe** (Pflicht für «verifiziert»): mindestens quartalsweise den Ablauf gegen den

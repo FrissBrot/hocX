@@ -98,7 +98,7 @@ bestätigen» und hält das Ziel bis dahin aktuell.
 
 ## Upgrade auf S3-only
 
-Ab der Version nach 1.2.x speichert hocX Dateien nur noch in S3. Den Dateisystem-Speicher
+Ab 1.2.3 speichert hocX Dateien nur noch in S3. Den Dateisystem-Speicher
 (Provider `filesystem`, Generation 0), die Erstmigration Dateisystem → lokales S3 und die
 Rückfallfrist der Dateisystem-Generation gibt es nicht mehr. Das Upgrade-Tor besteht aus zwei
 Prüfungen mit denselben Bedingungen: `scripts/deploy.sh` (`scripts/lib/storage_gate.sh`) prüft vor
@@ -107,8 +107,8 @@ beim Update noch einmal und bricht mit einer Erklärung ab, ohne die Datenbank z
 
 ### Voraussetzungen
 
-- Die Instanz läuft auf **1.2.x**, und die **Erstmigration** auf S3 ist dort abgeschlossen. Eine
-  Instanz vor 1.2 (ohne Objektspeicher) zuerst auf 1.2.x aktualisieren und die Erstmigration
+- Die Instanz läuft auf **1.2.0 bis 1.2.2**, und die **Erstmigration** auf S3 ist dort abgeschlossen. Eine
+  Instanz vor 1.2 (ohne Objektspeicher) zuerst auf 1.2.2 aktualisieren und die Erstmigration
   ausführen (Adminportal → System → Storage → Migration vorbereiten, Ziel «Lokales S3»).
 - **Keine Storage-Migration offen** – eine laufende Migration im Adminportal abschliessen oder
   abbrechen.
@@ -151,14 +151,14 @@ Die Daten im aktiven S3-Profil sind nicht betroffen.
 ### Kein Weg zurück
 
 - Eine Rückkehr auf das Dateisystem gibt es nicht – weder per Migration noch durch ein
-  Zurückgehen auf 1.2.x, denn der Dateisystem-Bestand ist bereinigt. Nach dem Update läuft hocX
+  Zurückgehen auf 1.2.2, denn der Dateisystem-Bestand ist bereinigt. Nach dem Update läuft hocX
   nur noch mit S3; ein anderer Speicherort ist immer ein anderes S3-Profil.
 - Das bisherige Dateisystem-Profil bleibt als deaktivierte Historie stehen: System → Storage zeigt
-  es als «Dateisystem (bis 1.2, nicht mehr unterstützt)» ohne Aktionen, seine Generationen als
-  bereinigt bzw. verworfen und die Erstmigration im Verlauf als «Erstmigration (bis 1.2)».
+  es als «Dateisystem (bis 1.2.2, nicht mehr unterstützt)» ohne Aktionen, seine Generationen als
+  bereinigt bzw. verworfen und die Erstmigration im Verlauf als «Erstmigration (bis 1.2.2)».
 - **Backups von vor der S3-Migration** (Dateien noch im Dateisystem) lassen sich nur mit einem
-  **1.2.x**-Release wiederherstellen; die Wiederherstellung lehnt sie mit `backup_pre_s3` ab.
-  Für einen solchen Restore 1.2.x installieren, das Backup
+  Release bis **1.2.2** wiederherstellen; die Wiederherstellung lehnt sie mit `backup_pre_s3` ab.
+  Für einen solchen Restore 1.2.2 installieren, das Backup
   dort zurückspielen, die Erstmigration ausführen und danach wie oben aktualisieren.
 
 ### Neuinstallation
@@ -168,7 +168,7 @@ Profil «Lokales S3 (Garage)» aus `LOCAL_S3_*` an (von `deploy.sh` erzeugt, sie
 [Installation](betrieb.md#installation)) und aktiviert Generation 1. Fehlen die `LOCAL_S3_*`-Werte,
 bricht die Migration ab.
 
-!!! note "Erstmigration (bis 1.2)"
+!!! note "Erstmigration (bis 1.2.2)"
     Die einmalige Erstmigration Dateisystem → lokales S3 mit voller Wartung ist in der
-    Dokumentation von 1.2 beschrieben (Git-Tag `v1.2.3`,
+    Dokumentation von 1.2.2 beschrieben (Git-Tag `v1.2.2`,
     `docs-site/docs/technik/storage/migration.md`, Abschnitt «Erstmigration»).

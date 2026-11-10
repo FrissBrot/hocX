@@ -368,7 +368,7 @@
     "storage_migration_open": "Une migration du stockage est en cours.",
     "target_profile_invalid": "Le profil cible n'est pas valide (désactivé ou pas un profil S3).",
     "name_missing": "Veuillez saisir un nom pour le nouveau mandant.",
-    "backup_pre_s3": "La sauvegarde date d'avant la migration S3 – la restaurer avec hocX 1.2.x."
+    "backup_pre_s3": "La sauvegarde date d'avant la migration S3 – la restaurer avec hocX 1.2.2."
   },
   "confirm": {
     "cancelJob": "Vraiment annuler cette tâche ? Une sauvegarde est arrêtée proprement, les contenus déjà sauvegardés sont conservés.",
@@ -478,6 +478,6 @@
     "borg_borg_error": "Borg signale une erreur.",
     "borg_disabled": "Le système de sauvegarde n'est pas configuré.",
     "borg_configuration": "La configuration de sauvegarde est invalide.",
-    "backup_pre_s3": "La sauvegarde date d'avant la migration S3 – la restaurer avec hocX 1.2.x."
+    "backup_pre_s3": "La sauvegarde date d'avant la migration S3 – la restaurer avec hocX 1.2.2."
   }
 }

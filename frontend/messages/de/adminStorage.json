@@ -62,11 +62,11 @@
     "generation": "Generation",
     "location": "Ort",
     "localS3": "Lokales S3",
-    "filesystem": "Lokales Dateisystem (bis 1.2, nur noch Verlauf)",
+    "filesystem": "Lokales Dateisystem (bis 1.2.2, nur noch Verlauf)",
     "extent": "Umfang"
   },
   "provider": {
-    "filesystem": "Dateisystem (bis 1.2, nicht mehr unterstützt)",
+    "filesystem": "Dateisystem (bis 1.2.2, nicht mehr unterstützt)",
     "garage_local": "Lokales S3 (Garage)",
     "aws_s3": "AWS S3",
     "hetzner": "Hetzner Object Storage",
@@ -149,7 +149,7 @@
     "copied": "{copied} / {total} Objekte",
     "checked": "{verified} geprüft · {failed} fehlgeschlagen",
     "emptyHint": "Eine Migration verschiebt alle Dateien in ein anderes S3-Profil.",
-    "kindInitial": "Erstmigration (bis 1.2)"
+    "kindInitial": "Erstmigration (bis 1.2.2)"
   },
   "state": {
     "pending": "Angelegt",

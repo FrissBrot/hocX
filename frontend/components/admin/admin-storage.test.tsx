@@ -123,13 +123,13 @@ describe("AdminStorage", () => {
 
     // Der Name steht auch in der Generationenliste - die Profilkarte ist das <article>.
     const card = screen.getAllByText("Lokales Dateisystem").map((element) => element.closest("article")).find(Boolean) as HTMLElement;
-    expect(within(card).getByText("Dateisystem (bis 1.2, nicht mehr unterstützt)")).toBeTruthy();
+    expect(within(card).getByText("Dateisystem (bis 1.2.2, nicht mehr unterstützt)")).toBeTruthy();
     expect(within(card).getByText("Nicht mehr nutzbar – nur Verlauf")).toBeTruthy();
     expect(within(card).queryByRole("button")).toBeNull();
     // Die verworfene Dateisystem-Generation lässt sich nicht mehr bereinigen.
     expect(screen.queryByRole("button", { name: "Bereinigen" })).toBeNull();
     // Die Erstmigration erscheint nur noch als Eintrag im Verlauf.
-    expect(await screen.findByText("Erstmigration (bis 1.2)")).toBeTruthy();
+    expect(await screen.findByText("Erstmigration (bis 1.2.2)")).toBeTruthy();
   });
 
   it("ordnet Migrationszustände den vier Schritten zu", () => {

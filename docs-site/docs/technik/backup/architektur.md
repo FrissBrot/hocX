@@ -121,7 +121,7 @@ daher Inhalte verlieren, auf die der Dump verweist.
 
 Lösung **Backup-Hold mit Copy-on-Write** (anbieterunabhängig, braucht keine S3-Versionierung):
 
-0. Registereinträge ohne SHA-256 (Altbestand aus der Erstmigration bis 1.2) werden vorher einmalig
+0. Registereinträge ohne SHA-256 (Altbestand aus der Erstmigration bis 1.2.2) werden vorher einmalig
    nachgehasht (`backfill_registry_hashes`, nur solange der Eintrag noch keinen Hash hat).
    Copy-on-Write braucht den Hash als Namen der Kopie; ohne ihn würde ein danach überschriebenes
    Altobjekt mit dem neuen Inhalt gesichert.
@@ -153,7 +153,7 @@ Generationen mit aktivem Hold. Folgebackups arbeiten automatisch mit der neuen G
 Gesichert werden immer Objekte aus S3. Sicherungspunkte aus der Zeit, in der die Dateien noch
 im Dateisystem lagen (vor der Erstmigration in 1.2), lehnt die Wiederherstellung ab: die
 Vorschau zeigt den Blocker `backup_pre_s3`, ein trotzdem gestarteter Auftrag endet mit demselben
-Fehlercode. Solche Backups lassen sich nur mit einem 1.2.x-Release wiederherstellen (siehe
+Fehlercode. Solche Backups lassen sich nur mit einem Release bis 1.2.2 wiederherstellen (siehe
 [Upgrade auf S3-only](../storage/migration.md#upgrade-auf-s3-only)).
 
 ## Retention und Garbage Collection

@@ -116,7 +116,7 @@ Repository-Zugang und die Notfallmappe (Passphrase, Borg-Schlüssel-Export, `.en
    Papier-Export (siehe Borg-Doku).
 4. Wiederherstellen in eine **neue** Datenbank und ein S3-Ziel nach Wahl (ein Dateisystem-Ziel
    gibt es nicht mehr; Backups von vor der S3-Migration lehnt die Wiederherstellung mit
-   `backup_pre_s3` ab - sie lassen sich nur mit 1.2.x wiederherstellen, siehe
+   `backup_pre_s3` ab - sie lassen sich nur mit 1.2.2 wiederherstellen, siehe
    [Upgrade auf S3-only](../storage/migration.md#kein-weg-zuruck)):
 
    ```bash

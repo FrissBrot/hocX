@@ -23,7 +23,7 @@ flowchart LR
   importieren). `--check` prüft in CI, dass die Kopien aktuell sind.
 - **Backend**: nur noch `S3Backend` (boto3, Path- oder Virtual-Host-Adressierung, eigene CA,
   Timeouts, adaptive Retries, Multipart ab 16 MiB, Bandbreitenbegrenzung). Den Dateisystem-Speicher
-  von 1.2 (Generation 0) gibt es nicht mehr, siehe [Upgrade auf S3-only](migration.md#upgrade-auf-s3-only).
+  bis 1.2.2 (Generation 0) gibt es nicht mehr, siehe [Upgrade auf S3-only](migration.md#upgrade-auf-s3-only).
 - **Operationen**: `put_bytes`/`put_file`, `get_bytes`/`iter_bytes` (Streaming, Byte-Ranges),
   `delete`, `exists`/`head`, `list`, `copy`/`move`, `verify` (Grösse + SHA-256, optional
   vollständiges Nachlesen), `local_copy` (temporäre Datei für Bibliotheken, die Pfade brauchen).
