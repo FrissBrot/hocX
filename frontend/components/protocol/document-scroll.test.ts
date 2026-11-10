@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { passiveSnapTarget, scrollDuration, sectionScrollTarget, wheelStyle } from "./document-scroll";
+import { nativeSmoothScroll, passiveSnapTarget, scrollDuration, sectionScrollTarget, wheelVars } from "./document-scroll";
 
 describe("sectionScrollTarget", () => {
   const base = { viewport: 800, scrollHeight: 5000, first: false };
@@ -32,32 +32,52 @@ describe("passiveSnapTarget", () => {
   });
 });
 
-describe("wheelStyle", () => {
-  const view = { scrollTop: 0, viewport: 1000 };
-
-  it("lässt den Punkt auf der Mittellinie unverändert", () => {
-    expect(wheelStyle({ ...view, top: 400, height: 300 }).transform).toBe("");
+describe("wheelVars", () => {
+  it("lässt den aktiven Punkt und weit entfernte Punkte flach", () => {
+    expect(wheelVars(0)).toBeNull();
+    expect(wheelVars(11)).toBeNull();
+    expect(wheelVars(-11)).toBeNull();
+    expect(wheelVars(Number.NaN)).toBeNull();
   });
 
-  it("kippt Punkte unterhalb nach hinten und oberhalb nach vorne weg", () => {
-    const below = wheelStyle({ ...view, top: 800, height: 100 });
-    expect(below.transformOrigin).toBe("50% 0%");
-    expect(below.transform).toMatch(/rotateX\(-/);
-    const above = wheelStyle({ ...view, top: 0, height: 100 });
-    expect(above.transformOrigin).toBe("50% 100%");
-    expect(above.transform).toMatch(/rotateX\(\d/);
+  it("legt Punkte darüber und darunter auf die Walze, zunehmend bis vier Punkte Abstand", () => {
+    expect(wheelVars(-1)).toEqual({ "--wheel-dir": "-1", "--wheel-depth": "0.156" });
+    expect(wheelVars(2)).toEqual({ "--wheel-dir": "1", "--wheel-depth": "0.500" });
+    expect(wheelVars(4)).toEqual({ "--wheel-dir": "1", "--wheel-depth": "1.000" });
+    expect(wheelVars(-10)).toEqual({ "--wheel-dir": "-1", "--wheel-depth": "1.000" });
+  });
+});
+
+describe("nativeSmoothScroll", () => {
+  it("meldet das Ende bei scrollend genau einmal", () => {
+    const container = document.createElement("div");
+    container.scrollTo = vi.fn() as unknown as HTMLElement["scrollTo"];
+    const onDone = vi.fn();
+    const stop = nativeSmoothScroll(container, 300, { onDone });
+    expect(container.scrollTo).toHaveBeenCalledWith({ top: 300, behavior: "smooth" });
+    container.dispatchEvent(new Event("scrollend"));
+    stop();
+    expect(onDone).toHaveBeenCalledTimes(1);
   });
 
-  it("erreicht ab 60 % der Höhe die volle Stärke", () => {
-    const far = wheelStyle({ ...view, top: 1200, height: 100 });
-    expect(far.transform).toBe("perspective(1400px) rotateX(-24.00deg) scale(0.8800)");
-    expect(far.opacity).toBe("0.400");
-    expect(far.filter).toBe("");
-  });
+  it("hält beim Abbruch an und meldet das Ende auch ohne scrollend", () => {
+    vi.useFakeTimers();
+    try {
+      const container = document.createElement("div");
+      container.scrollTo = vi.fn() as unknown as HTMLElement["scrollTo"];
+      const onDone = vi.fn();
+      nativeSmoothScroll(container, 300, { onDone });
+      vi.advanceTimersByTime(1300);
+      expect(onDone).toHaveBeenCalledTimes(1);
 
-  it("lässt Punkte weit ausserhalb des Bildes flach", () => {
-    expect(wheelStyle({ ...view, top: 2100, height: 100 }).transform).toBe("");
-    expect(wheelStyle({ scrollTop: 3000, viewport: 1000, top: 0, height: 1500 }).transform).toBe("");
+      const other = vi.fn();
+      const stop = nativeSmoothScroll(container, 500, { onDone: other });
+      stop();
+      expect(container.scrollTo).toHaveBeenLastCalledWith({ top: 0, behavior: "instant" });
+      expect(other).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

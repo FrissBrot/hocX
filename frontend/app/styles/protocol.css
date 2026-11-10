@@ -446,13 +446,30 @@
   background: linear-gradient(to top, color-mix(in srgb, var(--panel) 75%, transparent 25%), transparent);
 }
 
-/* Rad-Effekt: gekippte Abschnitte als eigene Ebene, damit transform/opacity beim Scrollen nur
-   neu zusammengesetzt statt neu gezeichnet werden. Nur Abschnitte in Bildnähe sind gekippt
-   (document-scroll.ts setzt .protocol-doc-section-wheel), sonst wären es bei langen Protokollen
-   Dutzende Ebenen. Der aktive Punkt bleibt bewusst ohne
-   (will-change: transform würde ihn wie transform selbst zum Bezugsrahmen für position:fixed machen). */
-.protocol-document-wheel .protocol-doc-section-wheel:not(.protocol-doc-section-active) {
-  will-change: transform, opacity;
+/* Rad-Effekt im Akkordeon: die eingeklappten Punkte liegen wie auf einer Walze um den aktiven
+   Punkt. protocol-editor.tsx setzt je Punkt nur --wheel-dir (-1 darüber, 1 darunter) und
+   --wheel-depth (0..1, Abstand in Punkten) - beim Wechsel des aktiven Punkts, nie pro
+   Scroll-Frame. Die Transition dreht die Walze auf dem Compositor (nur transform/opacity, kleine
+   Kacheln). Der aktive Punkt bekommt keine Variablen und bleibt ohne Transform: transform macht
+   ein Element zum Bezugsrahmen für position:fixed (Menüs, Auswahllisten darin). */
+.protocol-document-wheel .protocol-doc-section-wrap {
+  /* Standardwerte (flach); je Punkt per style übersteuert */
+  --wheel-dir: 0;
+  --wheel-depth: 0;
+  transition:
+    transform var(--dur-slow) var(--ease-out),
+    transform-origin var(--dur-slow) var(--ease-out),
+    opacity var(--dur-slow) var(--ease-out);
+}
+
+.protocol-document-wheel .protocol-doc-section-wrap[style*="--wheel-depth"] {
+  transform-origin: 50% calc(50% - var(--wheel-dir) * 50%);
+  transform:
+    perspective(900px)
+    translateY(calc(var(--wheel-dir) * var(--wheel-depth) * -10px))
+    rotateX(calc(var(--wheel-dir) * var(--wheel-depth) * -26deg))
+    scale(calc(1 - var(--wheel-depth) * 0.1));
+  opacity: calc(1 - var(--wheel-depth) * 0.5);
 }
 
 /* The active section is marked with an accent ring instead of blurring everything else -

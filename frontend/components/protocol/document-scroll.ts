@@ -1,5 +1,5 @@
-// Scrollverhalten des Protokoll-Dokuments (Design «Protokoll-Editor v2»): Rad-Effekt, Ziel-
-// berechnung für Sprünge und eine eigene Easing-Kurve. Alle Masse im Scrollraum von
+// Scrollverhalten des Protokoll-Dokuments (Design «Protokoll-Editor v2»): Rad-Effekt im
+// Akkordeon, Zielberechnung für Sprünge und sanftes Scrollen. Alle Masse im Scrollraum von
 // .protocol-document (offsetTop/scrollTop, also ungezoomt und unabhängig von den Transforms
 // des Rad-Effekts - getBoundingClientRect würde die gekippten Abschnitte verzerrt messen).
 
@@ -7,8 +7,10 @@
 export const SCROLL_INSET = 16;
 /** Der aktive Abschnitt bleibt, bis die Mittellinie so weit über seine Kante hinaus ist. */
 export const SPY_HYSTERESIS = 32;
-/** Nach dem Betreten eines Abschnitts nach unten den Rest-Schwung des Mausrads so lange abfangen. */
-export const WHEEL_HOLD_MS = 520;
+/** Rest-Schwung des Mausrads nach dem Ende eines Akkordeon-Wechsels noch so lange abfangen. */
+export const WHEEL_HOLD_AFTER_SNAP_MS = 150;
+/** Obergrenze, falls das Ende des Wechsels nie gemeldet wird. */
+export const WHEEL_HOLD_MAX_MS = 900;
 
 /** Oberkante eines Elements im Scrollinhalt des Containers. */
 export function offsetTopWithin(el: HTMLElement, container: HTMLElement): number {
@@ -47,48 +49,23 @@ export function passiveSnapTarget(
   return Math.min(Math.max(scrollTop, showEnd), showStart);
 }
 
-export type WheelStyle ={ transform: string; transformOrigin: string; opacity: string; filter: string };
+/** Weiter als so viele Punkte vom aktiven entfernt bleibt ein Punkt flach (keine eigene Ebene).
+ * Eingeklappte Punkte sind rund 90 px hoch: so weit weg liegen sie ausserhalb des Bildes. */
+export const WHEEL_RANGE = 10;
 
-const NO_WHEEL: WheelStyle = { transform: "", transformOrigin: "", opacity: "", filter: "" };
+export type WheelVars = { "--wheel-dir": string; "--wheel-depth": string };
 
-/** Rad-Effekt eines Abschnitts: je weiter von der Mittellinie entfernt, desto stärker kippt er
- * nach hinten weg, wird kleiner und blasser. Nur transform/opacity - kein Layout, die
- * Scrollposition bleibt exakt, und beides rechnet der Compositor ohne Neuzeichnen. Bewusst
- * kein filter (blur/grayscale): der zeichnet grosse Abschnitte auf breiten Bildschirmen in
- * jedem Frame neu und liess das Scrollen ruckeln. */
-export function wheelStyle(
-  { top, height, scrollTop, viewport }: { top: number; height: number; scrollTop: number; viewport: number }
-): WheelStyle {
-  const centerY = scrollTop + viewport / 2;
-  const reach = viewport * 0.6;
-  if (reach <= 0) return NO_WHEEL;
-  const bottom = top + height;
-  // Weit ausserhalb des Bildes (mehr als eine Bildschirmhöhe): flach lassen. Unsichtbar ist der
-  // Effekt dort ohnehin, aber jede gekippte Ebene kostet den Compositor in jedem Frame Zeit
-  // (bei ~50 Punkten war das der grösste Posten beim Scrollen und Tippen).
-  if (top > scrollTop + viewport * 2 || bottom < scrollTop - viewport) return NO_WHEEL;
-  let distance = 0;
-  let below = false;
-  if (top > centerY) {
-    distance = (top - centerY) / reach;
-    below = true;
-  } else if (bottom < centerY) {
-    distance = (centerY - bottom) / reach;
-  }
-  const d = Math.min(1, distance);
-  const e = d * d * (3 - 2 * d);
-  if (e <= 0.001) return NO_WHEEL;
-  return {
-    transformOrigin: below ? "50% 0%" : "50% 100%",
-    transform: `perspective(1400px) rotateX(${((below ? -1 : 1) * e * 24).toFixed(2)}deg) scale(${(1 - 0.12 * e).toFixed(4)})`,
-    opacity: (1 - 0.6 * e).toFixed(3),
-    filter: "",
-  };
+/** Rad-Effekt im Akkordeon: Lage eines (eingeklappten) Punkts auf der Walze, abhängig nur vom
+ * Abstand zum aktiven Punkt in Punkten (offset < 0: darüber). Die Werte gehen als CSS-Variablen
+ * an den Abschnitt; Neigung, Grösse und Deckkraft rechnet protocol.css daraus, eine
+ * CSS-Transition dreht beim Wechsel auf dem Compositor - kein JavaScript pro Scroll-Frame.
+ * null: aktiver Punkt oder zu weit weg (flach, ohne Transform). */
+export function wheelVars(offset: number): WheelVars | null {
+  if (!Number.isFinite(offset) || offset === 0 || Math.abs(offset) > WHEEL_RANGE) return null;
+  const d = Math.min(1, Math.abs(offset) / 4);
+  const depth = d * d * (3 - 2 * d);
+  return { "--wheel-dir": offset < 0 ? "-1" : "1", "--wheel-depth": depth.toFixed(3) };
 }
-
-// Zuletzt geschriebener Stil je Abschnitt: unveränderte (z. B. weit entfernte, voll gekippte)
-// Abschnitte werden nicht in jedem Frame neu gesetzt.
-const appliedWheel = new WeakMap<HTMLElement, string>();
 
 export type SectionLayout = { section: HTMLElement; top: number; height: number };
 
@@ -101,33 +78,6 @@ export function measureSections(container: HTMLElement): SectionLayout[] {
     top: offsetTopWithin(section, container),
     height: section.offsetHeight,
   }));
-}
-
-/** Rad-Effekt auf alle Abschnitte anwenden (enabled=false entfernt ihn wieder). Erst alle
- * Positionen lesen, dann schreiben - sonst erzwingt jeder Abschnitt eine eigene Neuberechnung. */
-export function applyWheelFrame(container: HTMLElement, enabled: boolean, layout: SectionLayout[] = measureSections(container)) {
-  const sections = layout.map((item) => item.section);
-  const scrollTop = container.scrollTop;
-  const viewport = container.clientHeight;
-  // Der aktive Punkt bleibt immer flach: transform/filter machen ein Element zum Bezugsrahmen
-  // für position:fixed, Menüs und Auswahllisten darin stünden sonst verschoben.
-  const styles = layout.map(({ section, top, height }) =>
-    enabled && !section.classList.contains("protocol-doc-section-active")
-      ? wheelStyle({ top, height, scrollTop, viewport })
-      : NO_WHEEL
-  );
-  sections.forEach((section, index) => {
-    const style = styles[index];
-    const key = `${style.transform}|${style.opacity}`;
-    if (appliedWheel.get(section) === key) return;
-    appliedWheel.set(section, key);
-    // Eigene Ebene (will-change) nur, solange der Abschnitt tatsächlich gekippt ist
-    section.classList.toggle("protocol-doc-section-wheel", style.transform !== "");
-    section.style.transformOrigin = style.transformOrigin;
-    section.style.transform = style.transform;
-    section.style.opacity = style.opacity;
-    section.style.filter = style.filter;
-  });
 }
 
 const easeOutQuart = (t: number) => 1 - Math.pow(1 - t, 4);
@@ -168,6 +118,36 @@ export function animateScroll(
   };
   frame = window.requestAnimationFrame(step);
   return stop;
+}
+
+/** Der Browser kann sanft scrollen und meldet das Ende (scrollend). Dann scrollt er auch selbst,
+ * auf dem Compositor-Thread - flüssig, selbst wenn der Hauptthread gerade beschäftigt ist. */
+export function supportsNativeSmoothScroll(): boolean {
+  return typeof window !== "undefined" && "onscrollend" in window;
+}
+
+/** Sanft scrollen über den Browser (scrollTo smooth). onDone läuft genau einmal: bei scrollend,
+ * nach dem Sicherheits-Timeout oder beim Abbruch (der Rückgabewert hält an der aktuellen Stelle an). */
+export function nativeSmoothScroll(container: HTMLElement, target: number, { onDone }: { onDone: () => void }): () => void {
+  let finished = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(timer);
+    container.removeEventListener("scrollend", finish);
+    onDone();
+  };
+  container.addEventListener("scrollend", finish);
+  // Ohne Bewegung (schon am Ziel, Rand des Scrollbereichs) kommt kein scrollend
+  timer = setTimeout(finish, 1200);
+  container.scrollTo({ top: target, behavior: "smooth" });
+  return () => {
+    if (finished) return;
+    // Laufende Browser-Animation an der aktuellen Stelle anhalten
+    container.scrollTo({ top: container.scrollTop, behavior: "instant" });
+    finish();
+  };
 }
 
 export function prefersReducedMotion(): boolean {

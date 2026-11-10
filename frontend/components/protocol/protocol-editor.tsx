@@ -1,7 +1,7 @@
 "use client";
 
 import { eventFilterTagText, normalizeEventFilter } from "@/lib/element-types/event-filter";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { runSerializedByKey } from "@/lib/utils/serialize-by-key";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
@@ -69,8 +69,8 @@ import { AgendaPostponeModal } from "@/components/agenda/agenda-item-modal";
 import { ProtocolSearchModal } from "@/components/protocol/protocol-search";
 import {
   animateScroll,
-  applyWheelFrame,
   measureSections,
+  nativeSmoothScroll,
   type SectionLayout,
   offsetTopWithin,
   passiveSnapTarget,
@@ -78,7 +78,10 @@ import {
   revealSection,
   sectionScrollTarget,
   SPY_HYSTERESIS,
-  WHEEL_HOLD_MS,
+  supportsNativeSmoothScroll,
+  WHEEL_HOLD_AFTER_SNAP_MS,
+  WHEEL_HOLD_MAX_MS,
+  wheelVars,
 } from "@/components/protocol/document-scroll";
 
 type ProtocolEditorProps = {
@@ -100,7 +103,7 @@ type ProtocolEditorProps = {
   /** Transaktionen direkt im Block «Transaktionen» erfassen (finances.manage) */
   canManageFinances?: boolean;
   accordionEnabled?: boolean;
-  /** Rad-Effekt beim Scrollen (Profileinstellung); an = Akkordeon aus */
+  /** Rad-Effekt beim Scrollen (Profileinstellung); wirkt nur zusammen mit dem Akkordeon */
   wheelEnabled?: boolean;
 };
 
@@ -132,8 +135,12 @@ export function ProtocolEditor({
   accordionEnabled: accordionPreference = true,
   wheelEnabled = false,
 }: ProtocolEditorProps) {
-  // Design «Protokoll-Editor v2»: mit Rad-Effekt bleiben alle Punkte offen (kein Akkordeon)
-  const accordionEnabled = accordionPreference && !wheelEnabled;
+  const accordionEnabled = accordionPreference;
+  // Rad-Effekt nur im Akkordeon: gekippt werden die eingeklappten Punkte (kleine Kacheln), nie
+  // offene Abschnitte - das hielt den Effekt früher auf grossen Protokollen nicht flüssig.
+  const [reducedMotion, setReducedMotion] = useState(false);
+  useEffect(() => setReducedMotion(prefersReducedMotion()), []);
+  const wheelActive = wheelEnabled && accordionEnabled && !reducedMotion;
   const t = useTranslations("protocols.editor");
   const tRoot = useTranslations("protocols");
   const tAgenda = useTranslations("agenda");
@@ -620,6 +627,7 @@ export function ProtocolEditor({
   }, [elements, isPlanningMode]);
 
   const visibleElementIdsKey = visibleElements.map((element) => element.id).join(",");
+  const selectedIndex = selectedElementId ? visibleElements.findIndex((element) => element.id === selectedElementId) : -1;
 
   const selectedElement = useMemo(
     () => visibleElements.find((element) => element.id === selectedElementId) ?? null,
@@ -765,7 +773,7 @@ export function ProtocolEditor({
       container: HTMLElement,
       target: number,
       behavior: "smooth" | "instant",
-      options: { duration?: number; cancelOnWheel?: boolean } = {}
+      options: { duration?: number; cancelOnWheel?: boolean; onDone?: () => void } = {}
     ) => {
       cancelScrollAnimationRef.current?.();
       cancelScrollAnimationRef.current = null;
@@ -779,17 +787,21 @@ export function ProtocolEditor({
         container.scrollTop = target;
         // Das scroll-Event dieses Sprungs kommt asynchron - erst danach wieder mitlesen
         programmaticScrollTimerRef.current = window.setTimeout(release, 80);
+        options.onDone?.();
         return;
       }
       // Sicherheitsnetz, falls die Animation nie endet (Tab im Hintergrund)
       programmaticScrollTimerRef.current = window.setTimeout(release, 1500);
-      cancelScrollAnimationRef.current = animateScroll(container, target, {
-        ...options,
-        onDone: () => {
-          cancelScrollAnimationRef.current = null;
-          release();
-        },
-      });
+      const onDone = () => {
+        cancelScrollAnimationRef.current = null;
+        release();
+        options.onDone?.();
+      };
+      // Wo möglich scrollt der Browser selbst (Compositor-Thread): flüssig auch dann, wenn der
+      // Hauptthread gerade mit dem Editor beschäftigt ist. Sonst die eigene Animation.
+      cancelScrollAnimationRef.current = supportsNativeSmoothScroll()
+        ? nativeSmoothScroll(container, target, { onDone })
+        : animateScroll(container, target, { duration: options.duration, cancelOnWheel: options.cancelOnWheel, onDone });
     },
     []
   );
@@ -899,9 +911,17 @@ export function ProtocolEditor({
     // Nach unten beginnt ein Punkt oben (Anfang am oberen Rand), nach oben unten (Ende am
     // unteren Rand). Ein kurzer Punkt wird nur so weit verschoben, dass er ganz im Bild steht.
     const target = Math.max(0, Math.min(passiveSnapTarget({ top, height, viewport, scrollTop: container.scrollTop, up: snap.up }), max));
-    holdWheelRef.current = { until: performance.now() + WHEEL_HOLD_MS, up: snap.up };
+    // Rest-Schwung nur abfangen, bis der Wechsel steht (plus ein kurzer Nachlauf) - eine feste
+    // Sperre ab dem Start fühlte sich an, als bliebe das Mausrad hängen.
+    const up = snap.up;
+    holdWheelRef.current = { until: performance.now() + WHEEL_HOLD_MAX_MS, up };
+    const releaseHold = () => {
+      holdWheelRef.current = { until: performance.now() + WHEEL_HOLD_AFTER_SNAP_MS, up };
+    };
     if (Math.abs(target - container.scrollTop) > 1) {
-      scrollDocumentTo(container, target, prefersReducedMotion() ? "instant" : "smooth", { duration: 300, cancelOnWheel: false });
+      scrollDocumentTo(container, target, prefersReducedMotion() ? "instant" : "smooth", { duration: 300, cancelOnWheel: false, onDone: releaseHold });
+    } else {
+      releaseHold();
     }
   }, [accordionEnabled, selectedElementId, scrollDocumentTo]);
 
@@ -918,19 +938,6 @@ export function ProtocolEditor({
     return () => container.removeEventListener("wheel", onWheel);
   }, []);
 
-  // Rad-Effekt nach jeder Änderung von Auswahl oder Punkten neu anwenden (bzw. entfernen)
-  // Ohne Effekt nur einmal zurücksetzen: applyWheelFrame misst alle Abschnitte, und
-  // visibleElements ändert sich bei jedem Tastendruck in Formularen/Matrix.
-  const wheelAppliedRef = useRef(false);
-  useLayoutEffect(() => {
-    const container = documentRef.current;
-    if (!container) return;
-    const enabled = wheelEnabled && !prefersReducedMotion();
-    if (!enabled && !wheelAppliedRef.current) return;
-    applyWheelFrame(container, enabled);
-    wheelAppliedRef.current = enabled;
-  }, [wheelEnabled, selectedElementId, visibleElements]);
-
   // Scroll-spy for the continuous document layout: tracks whichever section is closest to
   // the visual centre of .protocol-document. Uses plain
   // getBoundingClientRect() math (rAF-throttled on scroll/resize)
@@ -945,19 +952,16 @@ export function ProtocolEditor({
     if (!container) return;
 
     let rafId: number | null = null;
-    const wheel = wheelEnabled && !prefersReducedMotion();
     // Positionen der Abschnitte zwischenspeichern: sie ändern sich nur mit Grösse oder Inhalt
-    // (ResizeObserver/resize unten verwerfen den Stand). Vorher las jeder Scroll-Frame alle
-    // Abschnitte zweimal (Rad-Effekt und Spy), bei langen Protokollen ein grosser Teil des Frames.
+    // (ResizeObserver/resize unten verwerfen den Stand) - nicht in jedem Scroll-Frame neu lesen.
     let layout: SectionLayout[] | null = null;
     const visibleIds = new Set(visibleElementIdsKey.split(",").filter(Boolean));
 
     function computeActiveSection() {
       rafId = null;
       const root = container!;
-      layout ??= measureSections(root);
-      applyWheelFrame(root, wheel, layout);
       if (programmaticScrollRef.current) return;
+      layout ??= measureSections(root);
       const sections = layout.filter((item) => visibleIds.has(item.section.id.replace("protocol-element-", "")));
       if (!sections.length) return;
 
@@ -1035,8 +1039,8 @@ export function ProtocolEditor({
     computeActiveSection();
     container.addEventListener("scroll", scheduleCompute, { passive: true });
     window.addEventListener("resize", relayout);
-    // Inhalte ändern ihre Höhe (Tippen, Laden von Bildern): Positionen neu messen, Rad-Effekt und
-    // Spy nachführen. Beobachtet werden alle direkten Kinder des Dokuments, damit auch eine
+    // Inhalte ändern ihre Höhe (Tippen, Laden von Bildern): Positionen neu messen, Spy nachführen.
+    // Beobachtet werden alle direkten Kinder des Dokuments, damit auch eine
     // Höhenänderung oberhalb eines Abschnitts (z. B. Anliegen) dessen Position aktualisiert.
     const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(relayout);
     Array.from(container.children).forEach((child) => resizeObserver?.observe(child));
@@ -1047,7 +1051,7 @@ export function ProtocolEditor({
       resizeObserver?.disconnect();
       if (rafId !== null) window.cancelAnimationFrame(rafId);
     };
-  }, [accordionEnabled, wheelEnabled, visibleElementIdsKey]);
+  }, [accordionEnabled, visibleElementIdsKey]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -2244,10 +2248,10 @@ export function ProtocolEditor({
 
       <div className="protocol-document-shell">
         <article
-          className={`protocol-document${accordionEnabled ? " protocol-document-accordion" : ""}${accordionEnabled || wheelEnabled ? " protocol-document-spaced" : ""}${wheelEnabled ? " protocol-document-wheel" : ""}`}
+          className={`protocol-document${accordionEnabled ? " protocol-document-accordion protocol-document-spaced" : ""}${wheelActive ? " protocol-document-wheel" : ""}`}
           ref={documentRef}
         >
-          {!wheelEnabled && <div className="protocol-document-fade-edge protocol-document-fade-top" aria-hidden="true" />}
+          <div className="protocol-document-fade-edge protocol-document-fade-top" aria-hidden="true" />
           {visibleElements.length === 0 && (
             <div className="editor-panel-empty">
               <div>
@@ -2260,6 +2264,8 @@ export function ProtocolEditor({
             <div
               key={element.id}
               className="protocol-doc-section-wrap"
+              // Rad-Effekt: Lage auf der Walze als CSS-Variablen (Transition in protocol.css)
+              style={wheelActive && selectedIndex >= 0 ? ((wheelVars(index - selectedIndex) as CSSProperties | null) ?? undefined) : undefined}
               onClick={selectedElementId === element.id ? undefined : () => focusElement(element.id)}
             >
             <FocusedElementEditor
@@ -2348,7 +2354,7 @@ export function ProtocolEditor({
             heading={tAgenda("editor.otherTitle")}
             {...agendaSectionHandlers}
           />
-          {!wheelEnabled && <div className="protocol-document-fade-edge protocol-document-fade-bottom" aria-hidden="true" />}
+          <div className="protocol-document-fade-edge protocol-document-fade-bottom" aria-hidden="true" />
         </article>
 
         <aside className="protocol-quicknav">

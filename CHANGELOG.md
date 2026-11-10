@@ -8,6 +8,14 @@ Installationen aktualisieren können.
 
 ## [Unreleased]
 
+### Geändert
+
+- **Protokoll: neuer Rad-Effekt.** Statt bei jedem Scroll-Bild zu rechnen, liegen die
+  eingeklappten Punkte wie auf einer Walze um den aktiven Punkt und drehen beim Wechsel
+  flüssig weiter (CSS-Animation auf der Grafik, Sprünge über das sanfte Scrollen des
+  Browsers). Der Effekt ersetzt den bisherigen und bleibt im Profil ein- und ausschaltbar;
+  er setzt die eingeklappten Punkte (Akkordeon) voraus.
+
 ### Behoben
 
 - **PDF: «Abstand vor Abschnitten» wirkt.** Der Wert aus dem Corporate Design kam nie im PDF an:

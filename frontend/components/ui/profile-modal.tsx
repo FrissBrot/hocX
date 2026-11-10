@@ -76,28 +76,29 @@ export function ProfileModal({
                 </label>
                 <label className="profile-toggle">
                   <span className="profile-toggle-text">
-                    <span>{t("wheelLabel")}</span>
-                    <span className="field-help">{t("wheelHint")}</span>
+                    <span>{t("accordionLabel")}</span>
+                    <span className="field-help">{t("accordionHint")}</span>
                   </span>
                   <input
                     type="checkbox"
                     role="switch"
-                    checked={protocolWheelEnabled}
-                    onChange={(event) => onProtocolWheelChange(event.target.checked)}
+                    checked={protocolAccordionEnabled}
+                    onChange={(event) => onProtocolAccordionChange(event.target.checked)}
                   />
                   <span className="album-picker-switch-track" aria-hidden="true" />
                 </label>
+                {/* Der Rad-Effekt dreht die eingeklappten Punkte und braucht deshalb das Akkordeon */}
                 <label className="profile-toggle">
                   <span className="profile-toggle-text">
-                    <span>{t("accordionLabel")}</span>
-                    <span className="field-help">{protocolWheelEnabled ? t("accordionWheelHint") : t("accordionHint")}</span>
+                    <span>{t("wheelLabel")}</span>
+                    <span className="field-help">{protocolAccordionEnabled ? t("wheelHint") : t("wheelAccordionHint")}</span>
                   </span>
                   <input
                     type="checkbox"
                     role="switch"
-                    checked={protocolAccordionEnabled && !protocolWheelEnabled}
-                    disabled={protocolWheelEnabled}
-                    onChange={(event) => onProtocolAccordionChange(event.target.checked)}
+                    checked={protocolWheelEnabled && protocolAccordionEnabled}
+                    disabled={!protocolAccordionEnabled}
+                    onChange={(event) => onProtocolWheelChange(event.target.checked)}
                   />
                   <span className="album-picker-switch-track" aria-hidden="true" />
                 </label>
