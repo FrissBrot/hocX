@@ -159,16 +159,23 @@ grep -q 'Deployments als root sind fuer hocX gesperrt' scripts/deploy.sh
 grep -q 'DEPLOY_USER="hocx-deploy"' scripts/provision_deploy_user.sh
 grep -q 'Usage:.*provision_deploy_user.sh.*test|prod' scripts/provision_deploy_user.sh
 # Deploy-Code nur per Fast-Forward auf einen signierten Vorfahren von origin/main, nie zurück
+# shellcheck disable=SC2016  # literales Suchmuster
 grep -q 'git merge --ff-only "$NEW_COMMIT"' scripts/update_deploy_code.sh
+# shellcheck disable=SC2016  # literales Suchmuster
 grep -q 'git merge-base --is-ancestor "$sha" "$tip"' scripts/update_deploy_code.sh
+# shellcheck disable=SC2016  # literales Suchmuster
 grep -q 'git merge-base --is-ancestor "$OLD_COMMIT" "$sha"' scripts/update_deploy_code.sh
 grep -q 'build-test-images\[.\]yml@refs/heads/main' scripts/update_deploy_code.sh
 # deploy.sh aktualisiert zuerst seinen Code (mit Schleifenschutz und Opt-out), vor der Deploy-Sperre
+# shellcheck disable=SC2016  # literales Suchmuster
 grep -q 'HOCX_DEPLOY_CODE_UPDATE_FROM_DEPLOY=1 "$REPO_DIR/scripts/update_deploy_code.sh"' scripts/deploy.sh
+# shellcheck disable=SC2016  # literales Suchmuster
 grep -q 'exec env HOCX_DEPLOY_CODE_UPDATED=1 "$REPO_DIR/scripts/deploy.sh" "$ENVIRONMENT"' scripts/deploy.sh
+# shellcheck disable=SC2016  # literales Suchmuster
 grep -q 'exec env HOCX_DEPLOY_CODE_UPDATED=1 "$REPO_DIR/scripts/deploy.sh" "$HOST_ENVIRONMENT"' scripts/update_deploy_code.sh
 grep -q 'HOCX_SKIP_DEPLOY_CODE_UPDATE' scripts/deploy.sh
 update_line="$(grep -n 'scripts/update_deploy_code.sh"; then' scripts/deploy.sh | head -1 | cut -d: -f1)"
+# shellcheck disable=SC2016  # literales Suchmuster
 lock_line="$(grep -n '^exec 9> "$PROJECT_DIR/.deploy.lock"' scripts/deploy.sh | cut -d: -f1)"
 root_line="$(grep -n 'Deployments als root sind fuer hocX gesperrt' scripts/deploy.sh | cut -d: -f1)"
 if [ -z "$update_line" ] || [ "$update_line" -ge "$lock_line" ] || [ "$update_line" -le "$root_line" ]; then
