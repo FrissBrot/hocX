@@ -19,6 +19,7 @@
       if node.at("b", default: false) { body = text(weight: "bold", body) }
       if node.at("i", default: false) { body = text(style: "italic", body) }
       if node.at("s", default: false) { body = strike(body) }
+      if node.at("muted", default: false) and ctx != none { body = text(fill: ctx.c.muted, body) }
       let href = node.at("href", default: none)
       if href != none {
         body = link(href, text(fill: ctx.c.accent_strong, underline(body)))

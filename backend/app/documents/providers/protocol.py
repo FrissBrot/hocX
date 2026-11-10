@@ -306,6 +306,14 @@ def _hidden_from_invitation(ctx: BuildContext, elements: list) -> set[int]:
     return {element.id for element in elements if element.template_element_id in hidden}
 
 
+def removed_in_editor(block: ProtocolElementBlock) -> bool:
+    """Im Editor entfernter Termin einer Serie («Termin entfernen», protocol-editor.tsx
+    setEventBlockVisible): der Block bleibt als Merker stehen (manually_hidden, damit Folgeprotokolle
+    ihn nicht neu erzeugen), ``export_visible_snapshot`` aber unverändert - ohne diese Prüfung
+    erschien er mit seinen leeren Vorgaben im PDF."""
+    return bool((block.configuration_snapshot_json or {}).get("manually_hidden"))
+
+
 def _template_rows(ctx: BuildContext, template_element_ids: set[int]) -> dict[int, tuple[Any, Any]]:
     """TemplateElement-ID → (TemplateElement, ElementDefinition) der Vorlage des Protokolls."""
     from app.models import ElementDefinition, TemplateElement
@@ -373,7 +381,7 @@ def element_blocks(ctx: BuildContext, protocol: Protocol | None, *, element_ref:
         template_element, definition = template_rows.get(element.template_element_id, (None, None))
         children = []
         for block in repository.list_element_blocks(ctx.db, element.id):
-            if not block.export_visible_snapshot:
+            if not block.export_visible_snapshot or removed_in_editor(block):
                 continue
             source = (block.configuration_snapshot_json or {}).get("source_sort_index")
             mapped = _with_source(map_block(ctx, protocol, block), template_element, _definition_block_id(definition, source))
@@ -496,7 +504,10 @@ def session_template_blocks(ctx: BuildContext, protocol: Protocol | None, *, inc
                 continue
             matches = existing.get(block.get("sort_index"), [])
             if matches and protocol is not None:
+                # Auch wenn alle Termine entfernt wurden: kein Platzhalter für den Baustein
                 for match in matches:
+                    if removed_in_editor(match):
+                        continue
                     mapped = _with_source(map_block(ctx, protocol, match), template_element, block.get("id"))
                     if mapped is not None:
                         children.append(mapped)
@@ -576,7 +587,7 @@ def _matrix_event_lines(ctx: BuildContext, protocol: Protocol, row: dict, column
             continue
         if spans:
             spans.append(LineBreak())
-        spans.append(TextSpan(v=line, i=bool(gray_past and end < protocol.protocol_date)))
+        spans.append(TextSpan(v=line, muted=bool(gray_past and end < protocol.protocol_date)))
     return [Paragraph(c=spans)] if spans else []
 
 
@@ -604,9 +615,18 @@ def _embedded_block(ctx: BuildContext, protocol: Protocol, embedded: dict, colum
         rows = [[row.label, " ".join(span.v for node in row.value for span in getattr(node, "c", []) if isinstance(span, TextSpan))] for row in block.rows]
         return [InlineTable(rows=rows)] if rows else []
     if code == "event_list":
+        # Je Termin eine Zeile; vergangene gedämpft wie in der Terminliste (event_gray_past)
         block = _event_list_block(ctx, protocol, config, {}, column)
-        lines = [" · ".join(cell.v for cell in row.cells if cell.v and cell.v != "–") for group in block.table.groups for row in group.rows]
-        return _rich_lines("\n".join(lines))
+        spans: list[Any] = []
+        for group in block.table.groups:
+            for row in group.rows:
+                line = " · ".join(cell.v for cell in row.cells if cell.v and cell.v != "–")
+                if not line:
+                    continue
+                if spans:
+                    spans.append(LineBreak())
+                spans.append(TextSpan(v=line, muted=row.muted))
+        return [Paragraph(c=spans)] if spans else []
     if code == "bullet_list":
         items = [str(item).strip() for item in (config.get("bullet_items") or []) if str(item or "").strip()]
         return [BulletList(items=[[Paragraph(c=[TextSpan(v=item)])] for item in items])] if items else []

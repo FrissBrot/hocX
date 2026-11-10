@@ -46,6 +46,9 @@ class TextSpan(_Strict):
     s: bool = False
     code: bool = False
     href: str | None = None
+    # Gedämpft (Farbe muted): vergangene Termine in einer Matrixzelle (Option «Vergangene Termine
+    # ausgegraut»), wie TableRow.muted in der Terminliste
+    muted: bool = False
     # Fester Text (Schlüssel aus documentPdf), z. B. ein Status in einer Matrixzelle. Ersetzt
     # ``v`` in der Darstellung; so bleibt der Inhalt sprachneutral.
     key: str | None = None

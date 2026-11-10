@@ -296,6 +296,15 @@ export function RowInspector({
               defaults={EVENTS_ROW_DISPLAY_DEFAULTS}
             />
           )}
+          {/* Wie im Baustein «Terminliste»: Standard an (Editor und PDF lesen event_gray_past !== false) */}
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={row.row_config.event_gray_past !== false}
+              onChange={(event) => patchConfig({ event_gray_past: event.target.checked })}
+            />
+            {t("eventList.grayPast")}
+          </label>
         </div>
       ) : null}
 
