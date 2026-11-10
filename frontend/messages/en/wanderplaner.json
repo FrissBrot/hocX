@@ -231,5 +231,109 @@
   "elevationChart": {
     "distance": "Distance:",
     "elevation": "Elevation:"
+  },
+  "mobile": {
+    "back": "Back",
+    "backToList": "Back to hikes",
+    "startAt": "Start {time}",
+    "dangerLength": "{label} {length}",
+    "elevationRange": "{low} – {high} m",
+    "routingProfileShort": {
+      "wanderwege_bevorzugen": "Trails",
+      "schnellste_route": "Fastest",
+      "einfache_route": "Easiest"
+    },
+    "actions": {
+      "marchTable": "March table",
+      "reconnaissance": "Recce",
+      "print": "Print",
+      "gpx": "GPX"
+    },
+    "startNavigation": "Start navigation",
+    "noRoute": {
+      "title": "No route calculated yet",
+      "hint": "Plan the route and waypoints on a computer; navigation will then be available here."
+    },
+    "stats": {
+      "distance": "Distance",
+      "lkm": "Effort km",
+      "duration": "incl. breaks",
+      "descent": "↓ {value} m"
+    },
+    "table": {
+      "start": "Start",
+      "speed": "Pace",
+      "kmh": "{value} km/h",
+      "breaks": "Breaks",
+      "leg": "{kind} · {distance} · ↑ {ascent} m · {lkm} effort km",
+      "break": "{minutes} min break",
+      "dangerAfter": "Next: {label}",
+      "totalsDistance": "{distance} · ↑ {ascent} m",
+      "totalsBreaks": "incl. {duration} break",
+      "arrival": "Arrival at destination"
+    },
+    "reko": {
+      "count": "{done}/{total}",
+      "approvedLocked": "This tour is approved. The reconnaissance can no longer be changed.",
+      "checked": "Checked on site",
+      "verify": "Check automatically detected points",
+      "verifyEmpty": "No automatically detected points.",
+      "reject": "Reject {label}",
+      "confirm": "Confirm {label}",
+      "openPoints": "{count, plural, one {# point not yet checked} other {# points not yet checked}}",
+      "allChecked": "All points checked",
+      "reconnoiteredBy": "Reconnoitred by {name}"
+    },
+    "nav": {
+      "offRoute": {
+        "title": "Off route",
+        "text": "{distance} away from the planned route"
+      },
+      "dangerInside": {
+        "title": "You are in a section: {label}",
+        "text": "{distance} to go · keep your distance, stow your poles"
+      },
+      "dangerAhead": {
+        "title": "In {distance}: {label}",
+        "text": "{length} long · {description}"
+      },
+      "geoError": {
+        "denied": "Location access not allowed – enable it in your browser settings.",
+        "unavailable": "No GPS signal – still searching for your position.",
+        "unsupported": "This device does not provide a location."
+      },
+      "searching": "Searching for GPS signal …",
+      "paused": "Navigation paused",
+      "arrived": "Arrived",
+      "toWaypoint": "to {label}",
+      "planned": "planned {time}",
+      "privacy": "Your location stays on this device.",
+      "onSchedule": "On schedule",
+      "behindSchedule": "Schedule +{minutes} min",
+      "aheadOfSchedule": "Schedule −{minutes} min",
+      "accuracy": "±{value} m",
+      "recenter": "Center on my location",
+      "exit": {
+        "title": "Nearest emergency exit",
+        "close": "Close emergency exit",
+        "ahead": "{label} · {distance} ahead on the route,",
+        "behind": "{label} · {distance} back on the route,",
+        "then": "then {distance} to the road (approx. {time}).",
+        "unverified": "Not yet checked on site.",
+        "none": "No emergency exits are recorded for this tour.",
+        "emergency": "In an accident: Rega 1414 or 112.",
+        "show": "Show on map",
+        "callRega": "Rega 1414"
+      },
+      "remaining": "remaining",
+      "arrival": "Arrival",
+      "ascent": "Ascent",
+      "walked": "{distance} · {duration} underway",
+      "elevationNow": "{value} m a.s.l.",
+      "pause": "Pause",
+      "resume": "Resume",
+      "emergencyExit": "Emergency exit",
+      "end": "End"
+    }
   }
 }

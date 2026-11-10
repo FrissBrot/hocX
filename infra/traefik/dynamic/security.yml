@@ -68,6 +68,10 @@ http:
         contentTypeNosniff: true
         frameDeny: true
         referrerPolicy: "strict-origin-when-cross-origin"
-        # Security-Audit SEC-012: keine der Oberflächen nutzt Kamera, Mikrofon, Standort, Zahlungen
-        # oder USB per Browser-API (Fotos kommen über Datei-Inputs). WebAuthn bleibt erlaubt.
-        permissionsPolicy: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()"
+        # Security-Audit SEC-012: keine der Oberflächen nutzt Kamera, Mikrofon, Zahlungen oder USB
+        # per Browser-API (Fotos kommen über Datei-Inputs). WebAuthn bleibt erlaubt.
+        # Standort nur für den eigenen Origin: die Live-Navigation des Wanderplaners (Mobile) liest
+        # die Position im Browser und rechnet sie dort auf die Route - an hocX wird sie nie
+        # geschickt (nur die Kartenkacheln des angezeigten Ausschnitts kommen wie sonst auch von
+        # swisstopo). Fremde Frames bekommen keinen Zugriff (frameDeny bleibt).
+        permissionsPolicy: "camera=(), microphone=(), geolocation=(self), payment=(), usb=(), browsing-topics=()"

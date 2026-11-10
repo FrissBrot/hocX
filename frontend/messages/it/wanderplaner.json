@@ -231,5 +231,109 @@
   "elevationChart": {
     "distance": "Distanza:",
     "elevation": "Altitudine:"
+  },
+  "mobile": {
+    "back": "Indietro",
+    "backToList": "Torna alle escursioni",
+    "startAt": "Partenza {time}",
+    "dangerLength": "{label} {length}",
+    "elevationRange": "{low} – {high} m",
+    "routingProfileShort": {
+      "wanderwege_bevorzugen": "Sentieri",
+      "schnellste_route": "Più veloce",
+      "einfache_route": "Più facile"
+    },
+    "actions": {
+      "marchTable": "Tabella di marcia",
+      "reconnaissance": "Ricognizione",
+      "print": "Stampa",
+      "gpx": "GPX"
+    },
+    "startNavigation": "Avvia navigazione",
+    "noRoute": {
+      "title": "Nessun percorso calcolato",
+      "hint": "Pianifica percorso e punti di passaggio al computer; poi qui sarà disponibile la navigazione."
+    },
+    "stats": {
+      "distance": "Distanza",
+      "lkm": "km-sforzo",
+      "duration": "pause incl.",
+      "descent": "↓ {value} m"
+    },
+    "table": {
+      "start": "Partenza",
+      "speed": "Andatura",
+      "kmh": "{value} km/h",
+      "breaks": "Pause",
+      "leg": "{kind} · {distance} · ↑ {ascent} m · {lkm} km-sforzo",
+      "break": "{minutes} min di pausa",
+      "dangerAfter": "Poi: {label}",
+      "totalsDistance": "{distance} · ↑ {ascent} m",
+      "totalsBreaks": "di cui {duration} di pausa",
+      "arrival": "Arrivo a destinazione"
+    },
+    "reko": {
+      "count": "{done}/{total}",
+      "approvedLocked": "L’escursione è approvata. La ricognizione non può più essere modificata.",
+      "checked": "Verificato sul posto",
+      "verify": "Verifica i punti rilevati automaticamente",
+      "verifyEmpty": "Nessun punto rilevato automaticamente.",
+      "reject": "Scarta {label}",
+      "confirm": "Conferma {label}",
+      "openPoints": "{count, plural, one {# punto non ancora verificato} other {# punti non ancora verificati}}",
+      "allChecked": "Tutti i punti verificati",
+      "reconnoiteredBy": "Ricognizione di {name}"
+    },
+    "nav": {
+      "offRoute": {
+        "title": "Fuori percorso",
+        "text": "A {distance} dal percorso pianificato"
+      },
+      "dangerInside": {
+        "title": "Sei in un tratto: {label}",
+        "text": "Ancora {distance} · mantieni la distanza, riponi i bastoncini"
+      },
+      "dangerAhead": {
+        "title": "Tra {distance}: {label}",
+        "text": "Lungo {length} · {description}"
+      },
+      "geoError": {
+        "denied": "Accesso alla posizione non consentito – abilitalo nelle impostazioni del browser.",
+        "unavailable": "Nessun segnale GPS – ricerca della posizione in corso.",
+        "unsupported": "Questo dispositivo non fornisce la posizione."
+      },
+      "searching": "Ricerca del segnale GPS …",
+      "paused": "Navigazione in pausa",
+      "arrived": "Arrivato",
+      "toWaypoint": "fino a {label}",
+      "planned": "previsto {time}",
+      "privacy": "La tua posizione resta su questo dispositivo.",
+      "onSchedule": "In orario",
+      "behindSchedule": "Orario +{minutes} min",
+      "aheadOfSchedule": "Orario −{minutes} min",
+      "accuracy": "±{value} m",
+      "recenter": "Centra sulla mia posizione",
+      "exit": {
+        "title": "Uscita d’emergenza più vicina",
+        "close": "Chiudi uscita d’emergenza",
+        "ahead": "{label} · {distance} più avanti sul percorso,",
+        "behind": "{label} · {distance} indietro sul percorso,",
+        "then": "poi {distance} fino alla strada (ca. {time}).",
+        "unverified": "Non ancora verificata sul posto.",
+        "none": "Per questa escursione non sono registrate uscite d’emergenza.",
+        "emergency": "In caso di incidente: Rega 1414 o 112.",
+        "show": "Mostra sulla mappa",
+        "callRega": "Rega 1414"
+      },
+      "remaining": "rimanenti",
+      "arrival": "Arrivo",
+      "ascent": "Salita",
+      "walked": "{distance} · {duration} in cammino",
+      "elevationNow": "{value} m s.l.m.",
+      "pause": "Pausa",
+      "resume": "Riprendi",
+      "emergencyExit": "Uscita d’emergenza",
+      "end": "Fine"
+    }
   }
 }

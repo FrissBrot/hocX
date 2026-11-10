@@ -9,11 +9,11 @@ import { HikingTourWaypoint, HikingTourWaypointVerificationStatus, HikingTourWay
 
 type TFunc = (key: string, values?: Record<string, string | number>) => string;
 
-function formatHm(time: string | null): string {
+export function formatHm(time: string | null): string {
   return time ? time.slice(0, 5) : "–";
 }
 
-function formatMinutes(t: TFunc, minutes: number): string {
+export function formatMinutes(t: TFunc, minutes: number): string {
   const rounded = Math.round(minutes);
   const hours = Math.floor(rounded / 60);
   const rest = rounded % 60;
@@ -33,7 +33,7 @@ const VERIFICATION_STATUSES = Object.keys(VERIFICATION_VARIANT) as HikingTourWay
 
 // Gefahreneinschätzung (Auftrag): nur die beiden "echten" Gefahrenstufen bekommen hier ein
 // Badge - "normal" ist der unauffällige Regelfall und braucht keine eigene Markierung.
-type RowDanger = "steep_exposed" | "alpine";
+export type RowDanger = "steep_exposed" | "alpine";
 
 const DANGER_VARIANT: Record<RowDanger, BadgeVariant> = {
   steep_exposed: "warning",
@@ -43,7 +43,7 @@ const DANGER_VARIANT: Record<RowDanger, BadgeVariant> = {
 /** Abschnitt dieser Zeile (vom vorherigen bis zu diesem Wegpunkt) gegen die Gefahrensegmente
  * prüfen - "alpine" hat Vorrang, falls beide in diesem Abschnitt vorkommen (gleiche Priorität
  * wie app/core/route_danger.py::merge_with_official_status). */
-function rowDanger(entry: MarchTimeEntry | undefined, segments: TerrainDangerSegment[] | undefined): RowDanger | null {
+export function rowDanger(entry: MarchTimeEntry | undefined, segments: TerrainDangerSegment[] | undefined): RowDanger | null {
   if (!entry || !segments?.length) return null;
   const from = entry.cumulative_distance_m - entry.segment_distance_m;
   const to = entry.cumulative_distance_m;
@@ -51,6 +51,18 @@ function rowDanger(entry: MarchTimeEntry | undefined, segments: TerrainDangerSeg
   if (overlapping.some((segment) => segment.danger === "alpine")) return "alpine";
   if (overlapping.some((segment) => segment.danger === "steep_exposed")) return "steep_exposed";
   return null;
+}
+
+/** Sequenz des Kontrollpunkts auf der Route, an dem ein Notausstieg abzweigt. Alte Analysen
+ * kodieren sie im reservierten Bereich ab 500000. */
+export function exitSourceSequence(waypoint: HikingTourWaypoint): number {
+  return waypoint.exit_metrics_json?.source_sequence ?? (waypoint.sequence >= 500000 ? waypoint.sequence - 500000 : waypoint.sequence);
+}
+
+/** Notausstiege stehen direkt nach dem zugehörigen Kontrollpunkt. */
+export function orderWaypoints(waypoints: HikingTourWaypoint[]): HikingTourWaypoint[] {
+  const position = (waypoint: HikingTourWaypoint) => waypoint.kind === "EMERGENCY_EXIT" ? exitSourceSequence(waypoint) + 0.5 : waypoint.sequence;
+  return [...waypoints].sort((a, b) => position(a) - position(b));
 }
 
 type Props = {
@@ -76,12 +88,7 @@ export function HikingTourMarchTable({ table, waypoints, canWrite = false, dange
   const km = (meters: number, digits: number) => t("units.km", { value: (meters / 1000).toFixed(digits) });
   const strong = (chunks: React.ReactNode) => <strong>{chunks}</strong>;
   const entries = new Map(table?.entries.map((entry) => [entry.sequence, entry]) ?? []);
-  // Notausstiege stehen direkt nach dem zugehörigen Kontrollpunkt. Alte Analysen
-  // kodieren dessen Sequenz im reservierten Bereich ab 500000.
-  const position = (waypoint: HikingTourWaypoint) => waypoint.kind === "EMERGENCY_EXIT"
-    ? (waypoint.exit_metrics_json?.source_sequence ?? (waypoint.sequence >= 500000 ? waypoint.sequence - 500000 : waypoint.sequence)) + 0.5
-    : waypoint.sequence;
-  const orderedWaypoints = [...waypoints].sort((a, b) => position(a) - position(b));
+  const orderedWaypoints = orderWaypoints(waypoints);
   const dash = <span className="muted">–</span>;
   return (
     <div className="wanderplaner-march-table">

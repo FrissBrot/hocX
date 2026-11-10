@@ -231,5 +231,109 @@
   "elevationChart": {
     "distance": "Distanz:",
     "elevation": "Höhe:"
+  },
+  "mobile": {
+    "back": "Zurück",
+    "backToList": "Zurück zu den Wanderungen",
+    "startAt": "Start {time}",
+    "dangerLength": "{label} {length}",
+    "elevationRange": "{low} – {high} m",
+    "routingProfileShort": {
+      "wanderwege_bevorzugen": "Wanderwege",
+      "schnellste_route": "Schnellste",
+      "einfache_route": "Einfachste"
+    },
+    "actions": {
+      "marchTable": "Marschtabelle",
+      "reconnaissance": "Reko",
+      "print": "Drucken",
+      "gpx": "GPX"
+    },
+    "startNavigation": "Navigation starten",
+    "noRoute": {
+      "title": "Noch keine Route berechnet",
+      "hint": "Route und Wegpunkte am Computer planen, danach steht hier die Navigation bereit."
+    },
+    "stats": {
+      "distance": "Distanz",
+      "lkm": "Lkm",
+      "duration": "inkl. Pausen",
+      "descent": "↓ {value} m"
+    },
+    "table": {
+      "start": "Start",
+      "speed": "Tempo",
+      "kmh": "{value} km/h",
+      "breaks": "Pausen",
+      "leg": "{kind} · {distance} · ↑ {ascent} m · {lkm} Lkm",
+      "break": "{minutes} min Pause",
+      "dangerAfter": "Danach: {label}",
+      "totalsDistance": "{distance} · ↑ {ascent} m",
+      "totalsBreaks": "inkl. {duration} Pause",
+      "arrival": "Ankunft Ziel"
+    },
+    "reko": {
+      "count": "{done}/{total}",
+      "approvedLocked": "Die Tour ist freigegeben. Die Rekognoszierung kann nicht mehr geändert werden.",
+      "checked": "Vor Ort geprüft",
+      "verify": "Automatisch erkannte Punkte prüfen",
+      "verifyEmpty": "Keine automatisch erkannten Punkte.",
+      "reject": "{label} verwerfen",
+      "confirm": "{label} bestätigen",
+      "openPoints": "{count, plural, one {# Punkt noch ungeprüft} other {# Punkte noch ungeprüft}}",
+      "allChecked": "Alle Punkte geprüft",
+      "reconnoiteredBy": "Rekognosziert von {name}"
+    },
+    "nav": {
+      "offRoute": {
+        "title": "Abseits der Route",
+        "text": "{distance} neben der geplanten Route"
+      },
+      "dangerInside": {
+        "title": "Du bist im Abschnitt {label}",
+        "text": "Noch {distance} · Abstand halten, Stöcke verstauen"
+      },
+      "dangerAhead": {
+        "title": "In {distance}: {label}",
+        "text": "{length} lang · {description}"
+      },
+      "geoError": {
+        "denied": "Standortzugriff nicht erlaubt – in den Browser-Einstellungen freigeben.",
+        "unavailable": "Kein GPS-Signal – Position wird weiter gesucht.",
+        "unsupported": "Dieses Gerät liefert keinen Standort."
+      },
+      "searching": "GPS-Signal wird gesucht …",
+      "paused": "Navigation pausiert",
+      "arrived": "Angekommen",
+      "toWaypoint": "bis {label}",
+      "planned": "geplant {time}",
+      "privacy": "Dein Standort bleibt auf diesem Gerät.",
+      "onSchedule": "Im Zeitplan",
+      "behindSchedule": "Zeitplan +{minutes} min",
+      "aheadOfSchedule": "Zeitplan −{minutes} min",
+      "accuracy": "±{value} m",
+      "recenter": "Auf Standort zentrieren",
+      "exit": {
+        "title": "Nächster Notausstieg",
+        "close": "Notausstieg schliessen",
+        "ahead": "{label} · {distance} voraus auf der Route,",
+        "behind": "{label} · {distance} zurück auf der Route,",
+        "then": "dann {distance} bis zur Strasse (ca. {time}).",
+        "unverified": "Noch nicht vor Ort geprüft.",
+        "none": "Für diese Tour sind keine Notausstiege erfasst.",
+        "emergency": "Bei Unfall: Rega 1414 oder 112.",
+        "show": "Auf Karte zeigen",
+        "callRega": "Rega 1414"
+      },
+      "remaining": "verbleibend",
+      "arrival": "Ankunft",
+      "ascent": "Aufstieg",
+      "walked": "{distance} · {duration} unterwegs",
+      "elevationNow": "{value} m ü. M.",
+      "pause": "Pause",
+      "resume": "Weiter",
+      "emergencyExit": "Notausstieg",
+      "end": "Ende"
+    }
   }
 }

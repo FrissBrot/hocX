@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 
+import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { AppShell } from "@/components/ui/app-shell";
 import { HikingTourDetail } from "@/components/wanderplaner/hiking-tour-detail";
+import { HikingTourMobile } from "@/components/wanderplaner/hiking-tour-mobile";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { can } from "@/lib/permissions";
 import { HikingTour } from "@/types/api";
@@ -20,7 +22,10 @@ export default async function WanderplanerTourPage({ params }: { params: Promise
 
   return (
     <AppShell initialSession={session}>
-      <HikingTourDetail initialTour={tour} canWrite={canWrite} />
+      <ResponsiveView
+        mobile={<HikingTourMobile initialTour={tour} canWrite={canWrite} />}
+        desktop={<HikingTourDetail initialTour={tour} canWrite={canWrite} />}
+      />
     </AppShell>
   );
 }

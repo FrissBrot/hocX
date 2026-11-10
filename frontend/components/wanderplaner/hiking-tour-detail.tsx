@@ -2,7 +2,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useMemo, useState } from "react";
 
 import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { DataToolbar } from "@/components/ui/data-table";
@@ -13,21 +13,19 @@ import { HikingTourElevationChart } from "@/components/wanderplaner/hiking-tour-
 import { HikingTourLoadingLandscape } from "@/components/wanderplaner/hiking-tour-loading-landscape";
 import { HikingTourMap } from "@/components/wanderplaner/hiking-tour-map";
 import { HikingTourMarchTable } from "@/components/wanderplaner/hiking-tour-march-table";
+import { HikingTourPrintModal } from "@/components/wanderplaner/hiking-tour-print-modal";
+import { useHikingTourData } from "@/components/wanderplaner/use-hiking-tour-data";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { toIntlLocale } from "@/lib/utils/format";
 import {
-  ElevationProfile,
   ElevationProfilePoint,
   HikingTour,
-  HikingTourPrintResult,
   HikingTourRoutingProfile,
   HikingTourWaypoint,
   HikingTourWaypointKind,
   HikingTourWaypointVerificationStatus,
-  MarchTimeTable,
-  TerrainDanger,
 } from "@/types/api";
 
 // Auftrag Abschnitt 17 - dieselbe feste Item-Liste wie RECONNAISSANCE_CHECKLIST_ITEMS im
@@ -41,12 +39,6 @@ const RECONNAISSANCE_CHECKLIST_ITEMS = [
   "alternative_route",
   "decision_points",
 ] as const;
-
-// Auftrag Abschnitt 15 - dieselben Werte wie PAPER_SIZES_MM/DEFAULT_SCALES im Backend
-// (app/core/print_layout.py); Architektur ist dort fuer weitere Massstaebe offen, hier nur
-// die drei geforderten Presets.
-const PRINT_PAPER_OPTIONS = ["A4", "A3", "A2", "A1"] as const;
-const PRINT_SCALE_OPTIONS = [10_000, 25_000, 50_000] as const;
 
 const STATUS_VARIANT: Record<string, BadgeVariant> = {
   draft: "neutral",
@@ -89,10 +81,8 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
   const [saving, setSaving] = useState(false);
   const [savingRoute, setSavingRoute] = useState(false);
   const [draftWaypoints, setDraftWaypoints] = useState(initialTour.waypoints);
-  const [elevationProfile, setElevationProfile] = useState<ElevationProfile | null>(null);
-  const [terrainDanger, setTerrainDanger] = useState<TerrainDanger | null>(null);
   const [marchTableRevision, setMarchTableRevision] = useState(0);
-  const [marchTable, setMarchTable] = useState<MarchTimeTable | null>(null);
+  const { elevationProfile, terrainDanger, marchTable } = useHikingTourData(tour, marchTableRevision);
   const [hoveredPoint, setHoveredPoint] = useState<ElevationProfilePoint | null>(null);
   const [showReconnaissance, setShowReconnaissance] = useState(false);
   const [checklistDraft, setChecklistDraft] = useState<Record<string, boolean>>(tour.reconnaissance_checklist);
@@ -100,9 +90,6 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
   const [savingReconnaissance, setSavingReconnaissance] = useState(false);
   const [approving, setApproving] = useState(false);
   const [showPrint, setShowPrint] = useState(false);
-  const [printForm, setPrintForm] = useState({ paper: "A4", orientation: "landscape", scale: 25_000 });
-  const [printing, setPrinting] = useState(false);
-  const [printResult, setPrintResult] = useState<HikingTourPrintResult | null>(null);
 
   async function handleEditSave(event: FormEvent) {
     event.preventDefault();
@@ -214,60 +201,6 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
     }
   }
 
-  useEffect(() => {
-    if (tour.route_legs.length === 0) {
-      setMarchTable(null);
-      return;
-    }
-    let cancelled = false;
-    browserApiFetch<MarchTimeTable>(`/api/hiking-tours/${tour.id}/march-table`)
-      .then((table) => {
-        if (!cancelled) setMarchTable(table);
-      })
-      .catch(() => {
-        if (!cancelled) setMarchTable(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [tour.id, tour.route_computed_at, tour.route_legs.length, marchTableRevision]);
-
-  useEffect(() => {
-    if (!tour.elevation_profile_fetched_at) {
-      setElevationProfile(null);
-      return;
-    }
-    let cancelled = false;
-    browserApiFetch<ElevationProfile>(`/api/hiking-tours/${tour.id}/elevation-profile`)
-      .then((profile) => {
-        if (!cancelled) setElevationProfile(profile);
-      })
-      .catch(() => {
-        if (!cancelled) setElevationProfile(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [tour.id, tour.elevation_profile_fetched_at]);
-
-  useEffect(() => {
-    if (!tour.terrain_danger_computed_at) {
-      setTerrainDanger(null);
-      return;
-    }
-    let cancelled = false;
-    browserApiFetch<TerrainDanger>(`/api/hiking-tours/${tour.id}/terrain-danger`)
-      .then((danger) => {
-        if (!cancelled) setTerrainDanger(danger);
-      })
-      .catch(() => {
-        if (!cancelled) setTerrainDanger(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [tour.id, tour.terrain_danger_computed_at]);
-
   async function handleVerificationChange(waypoint: HikingTourWaypoint, status: HikingTourWaypointVerificationStatus) {
     try {
       const updated = await browserApiFetch<HikingTourWaypoint>(`/api/hiking-tours/${tour.id}/waypoints/${waypoint.id}/verification`, {
@@ -313,35 +246,6 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
     }
   }
 
-  async function handlePrint(event: FormEvent) {
-    event.preventDefault();
-    setPrinting(true);
-    setPrintResult(null);
-    try {
-      const result = await browserApiFetch<HikingTourPrintResult>(`/api/hiking-tours/${tour.id}/print`, {
-        method: "POST",
-        body: JSON.stringify({
-          paper: printForm.paper,
-          orientation: printForm.orientation,
-          scale: printForm.scale,
-        }),
-        // browserApiFetch's Standard-Timeout (15s) reicht nicht: WMTS-Kachelabruf + pdflatex-
-        // Kompilierung dauern je nach Blattanzahl/Massstab real 20-60+ Sekunden (siehe
-        // hiking_tour_print_service.py - der Backend-seitige pdflatex-Timeout selbst ist schon
-        // 120s). Ohne diese Ueberschreibung brach der Request client-seitig ab, waehrend der
-        // Server noch am Rechnen war (gefunden per echtem E2E-Test gegen den echten
-        // swisstopo-Dienst, nicht nur durch gemockte Unit-Tests).
-        signal: AbortSignal.timeout(180_000),
-      });
-      setPrintResult(result);
-      showToast(t("detail.toast.printCreated"), "success");
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : t("detail.toast.printError"), "error");
-    } finally {
-      setPrinting(false);
-    }
-  }
-
   const mapWaypoints = useMemo(
     () => draftWaypoints.map((wp) => ({ id: wp.id, kind: wp.kind, lat: wp.lat, lon: wp.lon, label: wp.label, description: wp.description, elevation_m: wp.elevation_m, break_minutes: wp.break_minutes })),
     [draftWaypoints]
@@ -368,7 +272,7 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
               {t("detail.reconnaissance")}
             </button>
             {tour.route_legs.length > 0 && (
-              <button type="button" className="button-secondary" onClick={() => { setPrintResult(null); setShowPrint(true); }} disabled={savingRoute}>
+              <button type="button" className="button-secondary" onClick={() => setShowPrint(true)} disabled={savingRoute}>
                 {t("detail.print")}
               </button>
             )}
@@ -551,65 +455,7 @@ export function HikingTourDetail({ initialTour, canWrite }: { initialTour: Hikin
         </form>
       </Modal>
 
-      <Modal open={showPrint} title={t("detail.print")} onClose={() => setShowPrint(false)}>
-        <form onSubmit={(event) => void handlePrint(event)}>
-          <div className="grid two-col">
-            <label className="field-stack">
-              <span className="field-label">{t("detail.printModal.paper")}</span>
-              <Select value={printForm.paper} onChange={(event) => setPrintForm((prev) => ({ ...prev, paper: event.target.value }))}>
-                {PRINT_PAPER_OPTIONS.map((paper) => (
-                  <option key={paper} value={paper}>
-                    {paper}
-                  </option>
-                ))}
-              </Select>
-            </label>
-            <label className="field-stack">
-              <span className="field-label">{t("detail.printModal.orientation")}</span>
-              <Select
-                value={printForm.orientation}
-                onChange={(event) => setPrintForm((prev) => ({ ...prev, orientation: event.target.value }))}
-              >
-                <option value="portrait">{t("detail.printModal.portrait")}</option>
-                <option value="landscape">{t("detail.printModal.landscape")}</option>
-              </Select>
-            </label>
-            <label className="field-stack">
-              <span className="field-label">{t("detail.printModal.scale")}</span>
-              <Select
-                value={printForm.scale}
-                onChange={(event) => setPrintForm((prev) => ({ ...prev, scale: Number(event.target.value) }))}
-              >
-                {PRINT_SCALE_OPTIONS.map((scale) => (
-                  <option key={scale} value={scale}>
-                    {t("detail.printModal.scaleOption", { scale: scale.toLocaleString(intlLocale) })}
-                  </option>
-                ))}
-              </Select>
-            </label>
-          </div>
-          {printResult && (
-            <p className="field-help">
-              {t.rich("detail.printModal.result", {
-                count: printResult.sheet_count,
-                link: (chunks) => (
-                  <a href={printResult.content_url} target="_blank" rel="noreferrer">
-                    {chunks}
-                  </a>
-                ),
-              })}
-            </p>
-          )}
-          <div className="modal-actions">
-            <button type="button" className="button-ghost" onClick={() => setShowPrint(false)}>
-              {t("actions.close")}
-            </button>
-            <button type="submit" className="button-primary" disabled={printing}>
-              {printing ? t("detail.printModal.creating") : t("detail.printModal.submit")}
-            </button>
-          </div>
-        </form>
-      </Modal>
+      <HikingTourPrintModal tourId={tour.id} open={showPrint} onClose={() => setShowPrint(false)} />
     </div>
   );
 }

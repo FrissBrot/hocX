@@ -17,7 +17,7 @@ import { buildDangerLineFeatures, DANGER_COLOR_TOKEN, dangerLegend } from "./hik
 const SWISSTOPO_STYLE_URL = "https://vectortiles.geo.admin.ch/styles/ch.swisstopo.basemap.vt/style.json";
 const SWITZERLAND_CENTER: [number, number] = [8.2275, 46.8182];
 
-const KIND_COLOR_TOKEN: Record<HikingTourWaypointKind, string> = {
+export const KIND_COLOR_TOKEN: Record<HikingTourWaypointKind, string> = {
   START: "--success",
   END: "--danger",
   USER_DEFINED: "--accent",
@@ -40,7 +40,11 @@ export type MapWaypoint = {
   description?: string | null;
   elevation_m?: number | null;
   break_minutes?: number | null;
+  /** Automatisch erkannt und noch nicht bestätigt: gestrichelter Rand (nie als geprüft darstellen). */
+  unverified?: boolean;
 };
+
+export type MapUserPosition = { lat: number; lon: number; heading?: number | null };
 
 type Props = {
   waypoints: MapWaypoint[];
@@ -59,9 +63,21 @@ type Props = {
   /** Startansicht an die Kartengrösse anpassen, mit der Schweiz im Zentrum. */
   fitSwitzerland?: boolean;
   className?: string;
+  /** Mobile-Ansicht: Karte füllt die Fläche, ohne Zoom-Knöpfe und Legende (stehen im Sheet). */
+  variant?: "default" | "mobile";
+  /** Abstand der Tour zum Rand beim ersten Einpassen (z. B. Platz für ein Bottom-Sheet). */
+  fitPadding?: { top: number; right: number; bottom: number; left: number };
+  /** Eigener Standort (Live-Navigation) - bleibt im Browser, wird nirgends gespeichert. */
+  userPosition?: MapUserPosition | null;
+  /** Karte folgt dem Standort, bis der Nutzer sie selbst verschiebt (onUserPan). */
+  followUser?: boolean;
+  onUserPan?: () => void;
+  /** Einmalig auf diesen Punkt fliegen (z. B. Notausstieg). */
+  focusPoint?: { lat: number; lon: number } | null;
 };
 
-export function HikingTourMap({ waypoints, routeCoordinates, elevationProfile, dangerSegments, onMapClick, onMarkerDragEnd, highlightPoint, fitSwitzerland = false, className }: Props) {
+export function HikingTourMap({ waypoints, routeCoordinates, elevationProfile, dangerSegments, onMapClick, onMarkerDragEnd, highlightPoint, fitSwitzerland = false, className, variant = "default", fitPadding, userPosition, followUser = false, onUserPan, focusPoint }: Props) {
+  const mobile = variant === "mobile";
   const t = useTranslations("wanderplaner");
   const kindLabel = (kind: HikingTourWaypointKind) => t(`kind.${kind}`);
   // Die Marker entstehen imperativ im Effekt unten; die Beschriftung kommt über eine Ref, damit
@@ -77,6 +93,11 @@ export function HikingTourMap({ waypoints, routeCoordinates, elevationProfile, d
   const highlightMarkerRef = useRef<maplibregl.Marker | null>(null);
   const onMapClickRef = useRef(onMapClick);
   onMapClickRef.current = onMapClick;
+  const onUserPanRef = useRef(onUserPan);
+  onUserPanRef.current = onUserPan;
+  const fitPaddingRef = useRef(fitPadding);
+  fitPaddingRef.current = fitPadding;
+  const userMarkerRef = useRef<maplibregl.Marker | null>(null);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -91,8 +112,12 @@ export function HikingTourMap({ waypoints, routeCoordinates, elevationProfile, d
       } : {}),
       attributionControl: { compact: true },
     });
-    map.addControl(new maplibregl.NavigationControl(), "top-right");
+    if (!mobile) map.addControl(new maplibregl.NavigationControl(), "top-right");
     map.on("click", (event) => onMapClickRef.current?.(event.lngLat.lat, event.lngLat.lng));
+    // Nur echte Gesten (originalEvent) beenden das Mitführen, nicht das eigene easeTo.
+    map.on("dragstart", (event) => {
+      if (event.originalEvent) onUserPanRef.current?.();
+    });
     mapRef.current = map;
     fittedWaypointsRef.current = false;
     // Das Popup kann nach der Initialisierung seine endgültige Grösse erhalten.
@@ -103,6 +128,8 @@ export function HikingTourMap({ waypoints, routeCoordinates, elevationProfile, d
       observer.disconnect();
       highlightMarkerRef.current?.remove();
       highlightMarkerRef.current = null;
+      userMarkerRef.current?.remove();
+      userMarkerRef.current = null;
       map.remove();
       mapRef.current = null;
     };
@@ -119,7 +146,7 @@ export function HikingTourMap({ waypoints, routeCoordinates, elevationProfile, d
       element.className = "wanderplaner-map-marker-anchor";
       const button = document.createElement("button");
       button.type = "button";
-      button.className = "wanderplaner-map-marker";
+      button.className = waypoint.unverified ? "wanderplaner-map-marker wanderplaner-map-marker-unverified" : "wanderplaner-map-marker";
       button.setAttribute("aria-label", waypoint.label || kindLabelRef.current(waypoint.kind));
       element.appendChild(button);
       let dragged = false;
@@ -151,7 +178,7 @@ export function HikingTourMap({ waypoints, routeCoordinates, elevationProfile, d
         (acc, wp) => acc.extend([wp.lon, wp.lat]),
         new maplibregl.LngLatBounds([waypoints[0].lon, waypoints[0].lat], [waypoints[0].lon, waypoints[0].lat])
       );
-      map.fitBounds(bounds, { padding: 64, maxZoom: 15, duration: 300 });
+      map.fitBounds(bounds, { padding: fitPaddingRef.current ?? 64, maxZoom: 15, duration: 300 });
     }
 
     return () => {
@@ -178,6 +205,38 @@ export function HikingTourMap({ waypoints, routeCoordinates, elevationProfile, d
     }
     highlightMarkerRef.current.setLngLat([highlightPoint.lon, highlightPoint.lat]);
   }, [highlightPoint]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (!userPosition) {
+      userMarkerRef.current?.remove();
+      userMarkerRef.current = null;
+      return;
+    }
+    if (!userMarkerRef.current) {
+      const element = document.createElement("div");
+      element.className = "wanderplaner-map-user";
+      const cone = document.createElement("span");
+      cone.className = "wanderplaner-map-user-heading";
+      const dot = document.createElement("span");
+      dot.className = "wanderplaner-map-user-dot";
+      element.append(cone, dot);
+      userMarkerRef.current = new maplibregl.Marker({ element }).setLngLat([userPosition.lon, userPosition.lat]).addTo(map);
+    }
+    const element = userMarkerRef.current.getElement();
+    const hasHeading = userPosition.heading !== null && userPosition.heading !== undefined && Number.isFinite(userPosition.heading);
+    element.classList.toggle("wanderplaner-map-user-has-heading", hasHeading);
+    if (hasHeading) element.style.setProperty("--wanderplaner-heading", `${userPosition.heading}deg`);
+    userMarkerRef.current.setLngLat([userPosition.lon, userPosition.lat]);
+    if (followUser) map.easeTo({ center: [userPosition.lon, userPosition.lat], zoom: Math.max(map.getZoom(), 15), duration: 600 });
+  }, [userPosition, followUser]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !focusPoint) return;
+    map.flyTo({ center: [focusPoint.lon, focusPoint.lat], zoom: Math.max(map.getZoom(), 15) });
+  }, [focusPoint]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -241,9 +300,9 @@ export function HikingTourMap({ waypoints, routeCoordinates, elevationProfile, d
   }, [routeCoordinates, elevationProfile, dangerSegments]);
 
   return (
-    <div className="wanderplaner-map-frame">
-      <div ref={containerRef} className={`wanderplaner-map${className ? ` ${className}` : ""}`} role="application" aria-label={t("map.aria")} />
-      {elevationProfile && dangerSegments && (
+    <div className={mobile ? "wanderplaner-map-frame wanderplaner-map-frame-mobile" : "wanderplaner-map-frame"}>
+      <div ref={containerRef} className={`wanderplaner-map${mobile ? " wanderplaner-map-mobile" : ""}${className ? ` ${className}` : ""}`} role="application" aria-label={t("map.aria")} />
+      {!mobile && elevationProfile && dangerSegments && (
         <ul className="wanderplaner-map-legend" aria-label={t("map.legendAria")}>
           {dangerLegend(t).map((entry) => (
             <li key={entry.danger} title={entry.description}>
