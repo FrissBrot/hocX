@@ -6,7 +6,20 @@ Versionierung nach [SemVer](https://semver.org/lang/de/). Die Beta-Historie
 ist der erste offiziell unterstützte Stand und muss keine älteren
 Installationen aktualisieren können.
 
-## [Unreleased]
+## [1.2.4] - 2026-11-10
+
+Rückmeldungen aus dem Testbetrieb von 1.2.3: flüssigeres Scrollen im Protokoll mit einem neuen
+Rad-Effekt, eine Ladeanimation beim Öffnen von PDFs, klickbare Links und mehrere Korrekturen am
+PDF (Abstände zwischen Traktanden, entfernte Termine). Keine neuen Migrationen, keine Breaking
+Changes.
+
+### Update
+
+- Von **1.2.3** wie gewohnt über `deploy.sh`.
+- Von **1.2.0 bis 1.2.2** gelten dieselben Voraussetzungen wie für 1.2.3 (abgeschlossene
+  Erstmigration auf S3, siehe dort); das Upgrade-Tor `0168_s3_only` prüft das weiterhin.
+- Nach dem Update sehen neu erzeugte PDFs anders aus, wo «Abstand vor Abschnitten» bisher
+  ignoriert wurde (siehe «Behoben»); bereits erstellte PDFs bleiben unverändert.
 
 ### Geändert
 
