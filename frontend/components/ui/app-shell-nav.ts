@@ -33,7 +33,7 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
         { href: "/todos", labelKey: "todos", icon: "todos" },
         { href: "/agenda", labelKey: "agenda", icon: "agenda" },
         ...(can(session, "submissions.manage") ? [{ href: "/submission-assignments", labelKey: "submissions", icon: "submissions" as const }] : []),
-        ...(can(session, "finances.read") ? [{ href: "/finances", labelKey: "finances", icon: "finances" as const, match: ["/fines"] }] : []),
+        ...(can(session, "finances.read") ? [{ href: "/finances", labelKey: "finances", icon: "finances" as const, match: ["/fines", "/todo-fines"] }] : []),
       ],
     },
   ];

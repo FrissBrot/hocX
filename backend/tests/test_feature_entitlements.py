@@ -41,7 +41,8 @@ def _subscribe(db, tenant_id: int, plan_code: str) -> None:
 
 
 def test_catalog_lists_every_feature_with_downgrade_rule():
-    assert {feature.value for feature in F} == {"finance", "abgabebox", "custom_domain", "verify_domain", "task_packages", "custom_roles", "photo_sharing", "document_designer"}
+    assert {feature.value for feature in F} == {"finance", "abgabebox", "custom_domain", "verify_domain", "task_packages", "custom_roles", "photo_sharing", "document_designer", "todo_fines"}
+    assert FEATURES[F.TODO_FINES].requires == ("finance",)
     assert FEATURES[F.FINANCE].read_permissions == frozenset({"finances.read"})
     assert FEATURES[F.CUSTOM_DOMAIN].downgrade == "blocked"
 

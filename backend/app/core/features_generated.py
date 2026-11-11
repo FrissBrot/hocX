@@ -15,6 +15,7 @@ class F(StrEnum):
     CUSTOM_ROLES = "custom_roles"
     PHOTO_SHARING = "photo_sharing"
     DOCUMENT_DESIGNER = "document_designer"
+    TODO_FINES = "todo_fines"
 
 
 @dataclass(frozen=True)
@@ -37,4 +38,5 @@ FEATURES: dict[F, FeatureDef] = {
     F.CUSTOM_ROLES: FeatureDef(module="people", downgrade="read_only", read_permissions=frozenset(), requires=()),
     F.PHOTO_SHARING: FeatureDef(module="media", downgrade="read_only", read_permissions=frozenset(), requires=()),
     F.DOCUMENT_DESIGNER: FeatureDef(module="documents", downgrade="read_only", read_permissions=frozenset(), requires=()),
+    F.TODO_FINES: FeatureDef(module="finance", downgrade="read_only", read_permissions=frozenset({"finances.read"}), requires=("finance", )),
 }

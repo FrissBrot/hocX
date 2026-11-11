@@ -116,6 +116,7 @@ from app.models.entities import (
     submission_assignment_link_table,
 )
 from app.core.storage import get_object_store, namespace_for_root, write_object_to_zip
+from app.services import todo_fine_transfer
 from app.services.tenant_transfer_common import (
     LOOKUP_COLUMNS,
     USER_ID_COLUMNS,
@@ -598,6 +599,9 @@ class TenantExportService:
             else [],
             "protocol_todo_file",
         )
+        # Pendenzen-Bussen (0169): Tarife, Regeln samt Filtern/Beträgen und fixierte Bussen
+        for table, rows in todo_fine_transfer.export_rows(db, tenant_id).items():
+            tables[table] = self._rows(rows, table)
         # Anliegen (0153): Bezüge auf Vorlage/-punkt, Protokoll und -element über die ID-Maps des Imports.
         tables["agenda_item"] = self._rows(
             db.scalars(select(AgendaItem).where(AgendaItem.tenant_id == tenant_id)).all(), "agenda_item"

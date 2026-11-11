@@ -356,6 +356,8 @@ class Participant(Base, TimestampMixin, UpdatedAtMixin):
     session_revoke_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     preferred_mfa_factor_type: Mapped[str | None] = mapped_column(Text)
     external_identity_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
+    # Bussentarif der Person für Pendenzen-Bussen (Migration 0169); NULL = Standardtarif.
+    fine_tariff_group_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("fine_tariff_group.id", ondelete="SET NULL"))
 
 
 # Authentifizierung und Teilnahme verwenden denselben Datensatz.
@@ -1532,6 +1534,12 @@ class ProtocolTodo(Base, TimestampMixin, UpdatedAtMixin):
     overridden_fields: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
     # Freier Markdown-Text (Migration 0128) - nur im Todo-Popup, nie in Übersicht oder Export.
     notes: Mapped[str | None] = mapped_column(Text)
+    # Busse bei Verspätung (Migration 0169): auto = Regeln, rule = feste Regel, fixed = fixer
+    # Betrag, none = keine Busse. Siehe app/services/todo_fine_service.py.
+    fine_mode: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'auto'"), default="auto")
+    fine_rule_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("todo_fine_rule.id", ondelete="SET NULL"))
+    fine_fixed_amount: Mapped[Decimal | None] = mapped_column(Numeric(15, 2))
+    fine_split_mode: Mapped[str | None] = mapped_column(Text)
 
 
 class ProtocolTodoAssignee(Base):
@@ -1855,6 +1863,148 @@ class AttendanceFine(Base, TimestampMixin):
     # Soft-Delete mit Begründung (MAIN-BE-002, Migration 0115): nur für Bussen, deren
     # Ursprungsprotokoll abgeschlossen ist; closed_in_protocol_id zeigt dann auf das
     # Protokoll, in dem die Löschung aufgeführt wird.
+    delete_comment: Mapped[str | None] = mapped_column(Text)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deleted_by_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+
+
+class FineTariffGroup(Base, TimestampMixin, UpdatedAtMixin):
+    """Bussentarif für Pendenzen-Bussen (Migration 0169), z. B. "Lernende" oder "Vollverdiener".
+    Jede Regel hat je Tarif eigene Beträge; Personen ohne Tarif zahlen nach dem Standardtarif."""
+
+    __tablename__ = "fine_tariff_group"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "name", name="uq_fine_tariff_group_tenant_name"),
+        Index("uq_fine_tariff_group_default", "tenant_id", unique=True, postgresql_where=text("is_default")),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()"))
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    sort_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+
+
+class TodoFineRule(Base, TimestampMixin, UpdatedAtMixin):
+    """Regel für Bussen auf zu spät erledigte Pendenzen (Migration 0169).
+
+    Filter: Tags (filter_tags), Aufgabenpakete, Verantwortliche und Rollen (Untertabellen). Innerhalb
+    einer Art genügt ein Treffer, alle gesetzten Arten müssen passen; eine leere Art schränkt nicht
+    ein. Betrag je Person: Grundbetrag + (volle Intervalle seit Fälligkeit) x Intervallbetrag.
+    """
+
+    __tablename__ = "todo_fine_rule"
+    __table_args__ = (
+        Index("idx_todo_fine_rule_tenant", "tenant_id", "sort_index"),
+        Index("idx_todo_fine_rule_account", "account_id"),
+        CheckConstraint("interval_days BETWEEN 1 AND 365", name="ck_todo_fine_rule_interval"),
+        CheckConstraint("split_mode IN ('each', 'split')", name="ck_todo_fine_rule_split_mode"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()"))
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    sort_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
+    applies_from: Mapped[date] = mapped_column(Date, nullable=False, server_default=text("CURRENT_DATE"))
+    interval_days: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"), default=1)
+    split_mode: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'each'"), default="each")
+    account_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("finance_account.id", ondelete="SET NULL"))
+    filter_tags: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
+
+
+class TodoFineRuleRate(Base):
+    __tablename__ = "todo_fine_rule_rate"
+    __table_args__ = (
+        PrimaryKeyConstraint("rule_id", "tariff_group_id", name="todo_fine_rule_rate_pkey"),
+        Index("idx_todo_fine_rule_rate_group", "tariff_group_id"),
+    )
+
+    rule_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("todo_fine_rule.id", ondelete="CASCADE"), nullable=False)
+    tariff_group_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("fine_tariff_group.id", ondelete="CASCADE"), nullable=False)
+    base_amount: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False, server_default=text("0"))
+    interval_amount: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False, server_default=text("0"))
+
+
+class TodoFineRuleTaskPackage(Base):
+    __tablename__ = "todo_fine_rule_task_package"
+    __table_args__ = (
+        PrimaryKeyConstraint("rule_id", "task_package_id", name="todo_fine_rule_task_package_pkey"),
+        Index("idx_todo_fine_rule_task_package_target", "task_package_id"),
+    )
+
+    rule_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("todo_fine_rule.id", ondelete="CASCADE"), nullable=False)
+    task_package_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("task_package.id", ondelete="CASCADE"), nullable=False)
+
+
+class TodoFineRuleParticipant(Base):
+    __tablename__ = "todo_fine_rule_participant"
+    __table_args__ = (
+        PrimaryKeyConstraint("rule_id", "participant_id", name="todo_fine_rule_participant_pkey"),
+        Index("idx_todo_fine_rule_participant_target", "participant_id"),
+    )
+
+    rule_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("todo_fine_rule.id", ondelete="CASCADE"), nullable=False)
+    participant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False)
+
+
+class TodoFineRuleRole(Base):
+    __tablename__ = "todo_fine_rule_role"
+    __table_args__ = (
+        PrimaryKeyConstraint("rule_id", "role_id", name="todo_fine_rule_role_pkey"),
+        Index("idx_todo_fine_rule_role_target", "role_id"),
+    )
+
+    rule_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("todo_fine_rule.id", ondelete="CASCADE"), nullable=False)
+    role_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant_role.id", ondelete="CASCADE"), nullable=False)
+
+
+class TodoFine(Base, TimestampMixin, UpdatedAtMixin):
+    """Beim Erledigen eingefrorene Busse einer Person für eine verspätete Pendenz (Migration 0169).
+    Offene Pendenzen haben keine Zeile; ihre laufende Busse rechnet todo_fine_service jedes Mal."""
+
+    __tablename__ = "todo_fine"
+    __table_args__ = (
+        Index(
+            "uq_todo_fine_todo_participant", "protocol_todo_id", "participant_id", unique=True,
+            postgresql_where=text("protocol_todo_id IS NOT NULL AND participant_id IS NOT NULL"),
+        ),
+        Index("idx_todo_fine_tenant_id", "tenant_id"),
+        Index("idx_todo_fine_protocol_todo_id", "protocol_todo_id"),
+        Index("idx_todo_fine_rule_id", "rule_id"),
+        Index("idx_todo_fine_participant_id", "participant_id"),
+        Index("idx_todo_fine_account_id", "account_id"),
+        Index("idx_todo_fine_collected_transaction_id", "collected_transaction_id"),
+        Index("idx_todo_fine_collected_by_user_id", "collected_by_user_id"),
+        Index("idx_todo_fine_deleted_by_user_id", "deleted_by_user_id"),
+        CheckConstraint("status IN ('pending', 'collected', 'deleted')", name="ck_todo_fine_status"),
+        CheckConstraint(
+            "status <> 'deleted' OR (delete_comment IS NOT NULL AND btrim(delete_comment) <> '')",
+            name="ck_todo_fine_deleted_reason",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()"))
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    protocol_todo_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("protocol_todo.id", ondelete="SET NULL"))
+    rule_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("todo_fine_rule.id", ondelete="SET NULL"))
+    participant_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    participant_name_snapshot: Mapped[str] = mapped_column(Text, nullable=False)
+    task_snapshot: Mapped[str] = mapped_column(Text, nullable=False)
+    rule_name_snapshot: Mapped[str | None] = mapped_column(Text)
+    tariff_name_snapshot: Mapped[str | None] = mapped_column(Text)
+    due_date: Mapped[date] = mapped_column(Date, nullable=False)
+    completed_on: Mapped[date] = mapped_column(Date, nullable=False)
+    days_late: Mapped[int] = mapped_column(Integer, nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
+    account_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("finance_account.id", ondelete="SET NULL"))
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'pending'"), default="pending")
+    collected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    collected_transaction_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("finance_transaction.id", ondelete="SET NULL"))
+    collected_by_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
     delete_comment: Mapped[str | None] = mapped_column(Text)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_by_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))

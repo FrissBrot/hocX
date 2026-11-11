@@ -460,7 +460,8 @@
       "security": "Accesso e abbonamenti",
       "activity": "Attività recenti",
       "mentions": "Menzioni",
-      "agenda_items": "Argomenti"
+      "agenda_items": "Argomenti",
+      "todo_fines": "Multe per compiti"
     },
     "col": {
       "first_name": "Nome",
@@ -515,7 +516,12 @@
       "description": "Descrizione",
       "assignees": "Responsabili",
       "text": "Testo",
-      "month": "Mese"
+      "month": "Mese",
+      "days_late": "Giorni di ritardo",
+      "rule": "Regola",
+      "tariff": "Tariffa",
+      "completed_on": "Completato il",
+      "fine_tariff": "Tariffa multe"
     },
     "file": {
       "workbook": "Rapporto dati",
@@ -541,7 +547,8 @@
         "attendance": "Presenze",
         "fines": "Multe",
         "finances": "Finanze",
-        "todos": "Compiti"
+        "todos": "Compiti",
+        "todoFines": "Multe per compiti"
       },
       "folder": {
         "lists": "Liste",

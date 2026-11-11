@@ -460,7 +460,8 @@
       "security": "Connexion et abonnements",
       "activity": "Activité",
       "mentions": "Mentions",
-      "agenda_items": "Sujets"
+      "agenda_items": "Sujets",
+      "todo_fines": "Amendes pour tâches"
     },
     "col": {
       "first_name": "Prénom",
@@ -515,7 +516,12 @@
       "description": "Description",
       "assignees": "Responsables",
       "text": "Texte",
-      "month": "Mois"
+      "month": "Mois",
+      "days_late": "Jours de retard",
+      "rule": "Règle",
+      "tariff": "Tarif",
+      "completed_on": "Terminée le",
+      "fine_tariff": "Tarif d'amendes"
     },
     "file": {
       "workbook": "Rapport de données",
@@ -541,7 +547,8 @@
         "attendance": "Présences",
         "fines": "Amendes",
         "finances": "Finances",
-        "todos": "Tâches"
+        "todos": "Tâches",
+        "todoFines": "Amendes pour tâches"
       },
       "folder": {
         "lists": "Listes",

@@ -460,7 +460,8 @@
       "security": "Anmeldung und Abos",
       "activity": "Aktivität",
       "mentions": "Erwähnungen",
-      "agenda_items": "Anliegen"
+      "agenda_items": "Anliegen",
+      "todo_fines": "Pendenzen-Bussen"
     },
     "col": {
       "first_name": "Vorname",
@@ -515,7 +516,12 @@
       "description": "Beschreibung",
       "assignees": "Zuständig",
       "text": "Text",
-      "month": "Monat"
+      "month": "Monat",
+      "days_late": "Tage zu spät",
+      "rule": "Regel",
+      "tariff": "Tarif",
+      "completed_on": "Erledigt am",
+      "fine_tariff": "Bussentarif"
     },
     "file": {
       "workbook": "Auskunft",
@@ -541,7 +547,8 @@
         "attendance": "Anwesenheit",
         "fines": "Bussen",
         "finances": "Finanzen",
-        "todos": "Aufgaben"
+        "todos": "Aufgaben",
+        "todoFines": "Pendenzen-Bussen"
       },
       "folder": {
         "lists": "Listen",

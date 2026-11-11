@@ -30,7 +30,7 @@ export default async function FinesPage() {
         mobile={<MobileFines initialFines={fines} accounts={accounts} canWrite={canWrite} ownOnly={!can(session, "reports.personal")} />}
         desktop={
           <>
-          <RouteTabs tabs={financeTabs(t)} activeHref="/fines" />
+          <RouteTabs tabs={financeTabs(t, { todoFines: featureAccess(session, "todo_fines") !== "none" })} activeHref="/fines" />
           <section className="panel">
             <FinesView initialFines={fines} accounts={accounts} canWrite={canWrite} ownOnly={!can(session, "reports.personal")} />
           </section>

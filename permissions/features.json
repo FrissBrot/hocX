@@ -9,6 +9,7 @@
     {"code": "task_packages", "module": "meetings", "downgrade": "read_only", "read_permissions": [], "requires": []},
     {"code": "custom_roles", "module": "people", "downgrade": "read_only", "read_permissions": [], "requires": []},
     {"code": "photo_sharing", "module": "media", "downgrade": "read_only", "read_permissions": [], "requires": []},
-    {"code": "document_designer", "module": "documents", "downgrade": "read_only", "read_permissions": [], "requires": []}
+    {"code": "document_designer", "module": "documents", "downgrade": "read_only", "read_permissions": [], "requires": []},
+    {"code": "todo_fines", "module": "finance", "downgrade": "read_only", "read_permissions": ["finances.read"], "requires": ["finance"]}
   ]
 }

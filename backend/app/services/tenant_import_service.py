@@ -110,6 +110,7 @@ from app.models.entities import (
     ShareLinkFile,
     submission_assignment_link_table,
 )
+from app.services import todo_fine_transfer
 from app.services import (
     calendar_feed_service,
     domain_verification_service,
@@ -480,6 +481,7 @@ class TenantImportService:
             task_package_item_map=task_package_item_map, cycle_config_map=cycle_config_map,
         )
         self._import_protocol_todo_assignees(todo_map, participant_map)
+        self._import_todo_fines(new_tenant.id, participant_map, finance_account_map, todo_map, finance_transaction_map)
         self._import_protocol_todo_files(todo_map, stored_file_map)
         self._remap_todo_repeat_sources(todo_map)
         self._restore_todo_snapshots(protocol_map, protocol_element_block_map)
@@ -636,7 +638,8 @@ class TenantImportService:
                 continue
             role_code = legacy_roles[email] if legacy_roles is not None else row.get("role_id")
             role_ids = self._roles_for_user(row, new_tenant_id, role_code)
-            overrides: dict[str, Any] = {"tenant_id": new_tenant_id, "login_enabled": login_enabled}
+            # Tarif der Pendenzen-Bussen trägt todo_fine_transfer.restore nach (neue Tarif-IDs)
+            overrides: dict[str, Any] = {"tenant_id": new_tenant_id, "login_enabled": login_enabled, "fine_tariff_group_id": None}
             if login_enabled and email:
                 overrides["email"] = email.strip().lower()
             if not login_enabled:
@@ -688,7 +691,7 @@ class TenantImportService:
             user_id = self.user_cache.id_for(row.get("app_user_id"))
             user = self.db.get(AppUser, user_id) if user_id is not None else None
             if user is None:
-                user = self._build(AppUser, row, {"tenant_id": tenant_id, "login_enabled": False, "password_hash": None})
+                user = self._build(AppUser, row, {"tenant_id": tenant_id, "login_enabled": False, "password_hash": None, "fine_tariff_group_id": None})
                 self.db.add(user)
                 self.db.flush()
                 role_service.assign_default_role(self.db, user)
@@ -1650,6 +1653,7 @@ class TenantImportService:
 
     def _import_task_packages(self, new_tenant_id, *, cycle_config_map, participant_map, list_definition_map, list_entry_map) -> dict[int, int]:
         package_map = self._import_simple(TaskPackage, self._t("task_package"), "task_package", {"tenant_id": new_tenant_id})
+        self._task_package_map = package_map
         for row in self._t("task_package_cycle"):
             package_id = package_map.get(row["task_package_id"])
             cycle_config_id = cycle_config_map.get(row["cycle_config_id"])
@@ -1717,12 +1721,35 @@ class TenantImportService:
                 "closed_in_protocol_id": protocol_map.get(data["closed_in_protocol_id"]) if data.get("closed_in_protocol_id") else None,
                 "submission_assignment_id": submission_assignment_map.get(data["submission_assignment_id"]) if data.get("submission_assignment_id") else None,
                 "element_ref": self._remap_public_refs(data.get("element_ref")),
+                "fine_rule_id": None,
             })
             self.db.add(new_row)
             self.db.flush()
             id_map[row["id"]] = new_row.id
         self.db.commit()
         return id_map
+
+    def _import_todo_fines(self, new_tenant_id, participant_map, finance_account_map, todo_map, finance_transaction_map) -> None:
+        """Pendenzen-Bussen (Format mit 0169): Tarife, Regeln, Tarif je Person, Regel je Todo und
+        fixierte Bussen. Ältere Archive haben keine dieser Tabellen."""
+        users = self._t("app_user" if self.format_version >= 4 else "participant")
+        todo_fine_transfer.restore(
+            self.db, new_tenant_id,
+            groups=self._t("fine_tariff_group"),
+            rules=self._t("todo_fine_rule"),
+            children={table: self._t(table) for table in todo_fine_transfer.CHILD_MODELS},
+            fines=[self._resolve_row("todo_fine", row) for row in self._t("todo_fine")],
+            person_groups={row["id"]: row.get("fine_tariff_group_id") for row in users if row.get("fine_tariff_group_id")},
+            todo_rules={row["id"]: row.get("fine_rule_id") for row in self._t("protocol_todo") if row.get("fine_rule_id")},
+            build=lambda model, data, overrides: self._build(model, data, overrides),
+            participant_map=participant_map,
+            finance_account_map=finance_account_map,
+            task_package_map=getattr(self, "_task_package_map", {}),
+            role_map=getattr(self, "_role_map", {}),
+            todo_map=todo_map,
+            finance_transaction_map=finance_transaction_map,
+            user_map=lambda value: value,
+        )
 
     def _import_agenda_items(
         self, new_tenant_id: int, template_map: dict[int, int], template_element_map: dict[int, int],

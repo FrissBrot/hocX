@@ -1774,6 +1774,31 @@
         "meetings.read"
       ]
     },
+    "GET /api/protocol-todos/{todo_id}/fine": {
+      "handler": "todo_fines.get_todo_fine",
+      "requires": [
+        "meetings.read"
+      ],
+      "features": [
+        "todo_fines (lesen)"
+      ],
+      "branches": [
+        "finances.manage",
+        "reports.personal"
+      ]
+    },
+    "PUT /api/protocol-todos/{todo_id}/fine": {
+      "handler": "todo_fines.put_todo_fine",
+      "requires": [
+        "finances.manage"
+      ],
+      "features": [
+        "todo_fines"
+      ],
+      "branches": [
+        "reports.personal"
+      ]
+    },
     "GET /api/protocols": {
       "handler": "protocols.list_protocols",
       "requires": [
@@ -2641,6 +2666,170 @@
     "GET /api/tenants/{tenant_id}/subscription": {
       "handler": "tenants.get_tenant_subscription",
       "note": "TenantService (settings.manage)"
+    },
+    "GET /api/todo-fines": {
+      "handler": "todo_fines.list_todo_fines",
+      "features": [
+        "todo_fines (lesen)"
+      ],
+      "branches": [
+        "reports.personal"
+      ],
+      "note": "eigene Pendenzen-Bussen; alle nur mit reports.personal (im Rumpf)"
+    },
+    "GET /api/todo-fines/filter-options": {
+      "handler": "todo_fines.get_filter_options",
+      "requires": [
+        "finances.manage"
+      ],
+      "features": [
+        "todo_fines"
+      ]
+    },
+    "GET /api/todo-fines/rules": {
+      "handler": "todo_fines.list_rules",
+      "requires": [
+        "finances.read"
+      ],
+      "features": [
+        "todo_fines (lesen)"
+      ]
+    },
+    "POST /api/todo-fines/rules": {
+      "handler": "todo_fines.create_rule",
+      "requires": [
+        "finances.manage"
+      ],
+      "features": [
+        "todo_fines"
+      ]
+    },
+    "PUT /api/todo-fines/rules/order": {
+      "handler": "todo_fines.order_rules",
+      "requires": [
+        "finances.manage"
+      ],
+      "features": [
+        "todo_fines"
+      ]
+    },
+    "DELETE /api/todo-fines/rules/{rule_id}": {
+      "handler": "todo_fines.delete_rule",
+      "requires": [
+        "finances.manage"
+      ],
+      "features": [
+        "todo_fines"
+      ]
+    },
+    "PUT /api/todo-fines/rules/{rule_id}": {
+      "handler": "todo_fines.update_rule",
+      "requires": [
+        "finances.manage"
+      ],
+      "features": [
+        "todo_fines"
+      ]
+    },
+    "GET /api/todo-fines/tariff-members": {
+      "handler": "todo_fines.list_tariff_members",
+      "requires": [
+        "finances.manage"
+      ],
+      "features": [
+        "todo_fines"
+      ]
+    },
+    "PUT /api/todo-fines/tariff-members/{participant_id}": {
+      "handler": "todo_fines.assign_tariff",
+      "requires": [
+        "finances.manage"
+      ],
+      "features": [
+        "todo_fines"
+      ]
+    },
+    "GET /api/todo-fines/tariffs": {
+      "handler": "todo_fines.list_tariffs",
+      "requires": [
+        "finances.read"
+      ],
+      "features": [
+        "todo_fines (lesen)"
+      ]
+    },
+    "POST /api/todo-fines/tariffs": {
+      "handler": "todo_fines.create_tariff",
+      "requires": [
+        "finances.manage"
+      ],
+      "features": [
+        "todo_fines"
+      ]
+    },
+    "PUT /api/todo-fines/tariffs/order": {
+      "handler": "todo_fines.order_tariffs",
+      "requires": [
+        "finances.manage"
+      ],
+      "features": [
+        "todo_fines"
+      ]
+    },
+    "DELETE /api/todo-fines/tariffs/{tariff_id}": {
+      "handler": "todo_fines.delete_tariff",
+      "requires": [
+        "finances.manage"
+      ],
+      "features": [
+        "todo_fines"
+      ]
+    },
+    "PUT /api/todo-fines/tariffs/{tariff_id}": {
+      "handler": "todo_fines.update_tariff",
+      "requires": [
+        "finances.manage"
+      ],
+      "features": [
+        "todo_fines"
+      ]
+    },
+    "POST /api/todo-fines/{fine_id}/collect": {
+      "handler": "todo_fines.collect_todo_fine",
+      "requires": [
+        "finances.manage"
+      ],
+      "features": [
+        "finance",
+        "todo_fines"
+      ]
+    },
+    "POST /api/todo-fines/{fine_id}/reopen": {
+      "handler": "todo_fines.reopen_todo_fine",
+      "requires": [
+        "finances.manage"
+      ],
+      "features": [
+        "todo_fines"
+      ]
+    },
+    "POST /api/todo-fines/{fine_id}/restore": {
+      "handler": "todo_fines.restore_todo_fine",
+      "requires": [
+        "finances.manage"
+      ],
+      "features": [
+        "todo_fines"
+      ]
+    },
+    "POST /api/todo-fines/{fine_id}/waive": {
+      "handler": "todo_fines.waive_todo_fine",
+      "requires": [
+        "finances.manage"
+      ],
+      "features": [
+        "todo_fines"
+      ]
     },
     "GET /api/todos": {
       "handler": "todos.list_all_todos",

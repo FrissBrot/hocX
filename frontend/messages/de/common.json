@@ -195,7 +195,8 @@
     "task_packages": "Aufgabenpakete",
     "custom_roles": "Eigene Rollen",
     "photo_sharing": "Teilen von Fotos",
-    "document_designer": "Dokument-Designer"
+    "document_designer": "Dokument-Designer",
+    "todo_fines": "Pendenzen-Bussen"
   },
   "featureNotice": {
     "readOnly": "«{name}» ist nicht mehr in Ihrem Abo. Bestehende Daten bleiben sichtbar, Änderungen sind gesperrt.",

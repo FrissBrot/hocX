@@ -195,7 +195,8 @@
     "task_packages": "Pacchetti di attività",
     "custom_roles": "Ruoli personalizzati",
     "photo_sharing": "Condivisione di foto",
-    "document_designer": "Designer di documenti"
+    "document_designer": "Designer di documenti",
+    "todo_fines": "Multe per compiti"
   },
   "featureNotice": {
     "readOnly": "«{name}» non fa più parte del suo abbonamento. I dati esistenti restano visibili, le modifiche sono bloccate.",

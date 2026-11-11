@@ -121,7 +121,7 @@ Preiskarten und Vergleichstabelle (`frontend/components/website/`). Keine intern
 ## 7. Abhängigkeitsmanagement
 
 `requires` in `features.json` wird beim Generieren validiert (bekannte Codes, keine Selbstreferenz).
-Heute hat kein Feature eine harte Abhängigkeit. Weiche Abhängigkeiten (z. B. Abgabebox-Domain braucht
+Einzige harte Abhängigkeit: `todo_fines` braucht `finance` (Einkassieren bucht auf ein Finanzkonto, die Route prüft beide Features). Weiche Abhängigkeiten (z. B. Abgabebox-Domain braucht
 `abgabebox`) bleiben fachlich in den Services. Erst wenn ein Feature ohne ein anderes technisch nicht
 funktioniert, wird `requires` gesetzt und im Admin-Service beim Buchen geprüft (Roadmap).
 
@@ -135,6 +135,7 @@ funktioniert, wird `requires` gesetzt und im Admin-Service beim Buchen geprüft 
 | `custom_roles` | bleiben | ja | nein (Anlegen/Ändern) | – | Rollen wirken weiter | sofort |
 | `photo_sharing` | bleiben | ja | keine neuen Links/Einladungen | – | bestehende Links gültig | sofort |
 | `document_designer` | bleiben | ja | nein | ja (bestehende Vorlagen rendern) | – | sofort |
+| `todo_fines` | bleiben (Regeln, Tarife, fixierte Bussen) | ja | nein; Einkassieren braucht zusätzlich `finance` | – | es werden keine Bussen mehr fixiert | sofort; nur neu erledigte Pendenzen |
 | `custom_domain` / `verify_domain` | Domain-Eintrag bleibt | – | nein | – | Routing sofort aus | Routing sofort wieder |
 | Speicher (Limit) | bleiben | ja | neue Uploads abgelehnt | ja | – | bei mehr Kontingent |
 | Konten (Limit) | bleiben | ja | keine weiteren Logins aktivierbar | ja | bestehende Logins aktiv | bei höherem Limit |

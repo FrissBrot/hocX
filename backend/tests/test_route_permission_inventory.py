@@ -51,6 +51,7 @@ ALLOWED = {
     "calendar_feeds.list_calendar_feeds": "eigene Kalender-Abos",
     "calendar_feeds.delete_calendar_feed": "eigene Kalender-Abos",
     "fines.list_fines": "eigene Bussen; alle nur mit reports.personal (im Rumpf)",
+    "todo_fines.list_todo_fines": "eigene Pendenzen-Bussen; alle nur mit reports.personal (im Rumpf)",
     # Prüfung im Service (dort mit require_permission, Tests in test_user_service.py usw.).
     "users.list_users": "UserService (access.manage)",
     "users.create_user": "UserService (access.manage)",

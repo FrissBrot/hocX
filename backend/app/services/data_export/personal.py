@@ -50,6 +50,8 @@ def collect(db: Session, person: AppUser) -> dict[str, list[dict[str, Any]]]:
         "email": person.email, "role": role, "login_enabled": person.login_enabled, "is_active": person.is_active,
         "joined_at": person.joined_at, "left_at": person.left_at, "preferred_language": person.preferred_language,
         "created_at": person.created_at,
+        "fine_tariff": db.scalar(sql("SELECT name FROM fine_tariff_group WHERE id = :gid AND tenant_id = :tenant_id"),
+                                 {"gid": person.fine_tariff_group_id, "tenant_id": tenant_id}) if person.fine_tariff_group_id else None,
     }]
 
     # Anwesenheit: nur die eigene Zeile aus jedem Anwesenheitsblock
@@ -85,6 +87,15 @@ def collect(db: Session, person: AppUser) -> dict[str, list[dict[str, Any]]]:
         FROM attendance_fine f JOIN protocol p ON p.id = f.protocol_id JOIN finance_account a ON a.id = f.account_id
         WHERE p.tenant_id = :tenant_id AND f.participant_id = :pid
         ORDER BY p.protocol_date, f.id
+    """, params)]
+
+    # Pendenzen-Bussen (0169): nur fixierte Bussen - laufende sind berechnet, nicht gespeichert
+    data["todo_fines"] = [dict(row) for row in _rows(db, """
+        SELECT f.task_snapshot AS task, f.due_date, f.completed_on, f.days_late, f.rule_name_snapshot AS rule,
+               f.tariff_name_snapshot AS tariff, f.amount, a.currency_label AS currency, f.status, f.collected_at, f.delete_comment
+        FROM todo_fine f LEFT JOIN finance_account a ON a.id = f.account_id
+        WHERE f.tenant_id = :tenant_id AND f.participant_id = :pid
+        ORDER BY f.completed_on, f.id
     """, params)]
 
     data["todos"] = [dict(row) for row in _rows(db, """
@@ -195,10 +206,11 @@ def _mentions(db: Session, person: AppUser) -> list[dict[str, Any]]:
 
 # Spalten je Bereich (Schlüssel -> Übersetzung dataExport.col.<key>)
 _SECTIONS: dict[str, list[str]] = {
-    "person": ["first_name", "last_name", "display_name", "email", "role", "login_enabled", "is_active", "joined_at", "left_at", "preferred_language", "created_at"],
+    "person": ["first_name", "last_name", "display_name", "email", "role", "login_enabled", "is_active", "joined_at", "left_at", "preferred_language", "created_at", "fine_tariff"],
     "attendance": ["protocol", "title", "date", "status"],
     "membership_changes": ["protocol", "type", "date"],
     "fines": ["protocol", "date", "type", "amount", "currency", "status", "collected_at", "delete_comment"],
+    "todo_fines": ["task", "due_date", "completed_on", "days_late", "rule", "tariff", "amount", "currency", "status", "collected_at", "delete_comment"],
     "todos": ["task", "due_date", "status", "completed_at", "protocol", "notes"],
     "responsibilities": ["protocol", "date", "element"],
     "agenda_items": ["title", "text", "template", "month", "protocol", "created_at"],

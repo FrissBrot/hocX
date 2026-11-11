@@ -2407,3 +2407,99 @@ export type ProtocolAgendaItem = {
   can_edit: boolean;
 };
 export type AgendaTemplateOption = { id: string; name: string; points: { id: string; name: string }[] };
+
+// ── Pendenzen-Bussen (backend/app/schemas/todo_fines.py) ─────────────
+
+export type FineSplitMode = "each" | "split";
+export type TodoFineMode = "auto" | "rule" | "fixed" | "none";
+
+export type FineTariffGroup = {
+  id: string;
+  name: string;
+  sort_index: number;
+  is_default: boolean;
+  member_count: number;
+};
+
+export type FineTariffMember = {
+  participant_id: string;
+  display_name: string;
+  tariff_group_id: string | null;
+  is_active: boolean;
+};
+
+export type TodoFineRuleRate = {
+  tariff_group_id: string;
+  base_amount: number;
+  interval_amount: number;
+};
+
+export type TodoFineRuleFilter = {
+  tags: string[];
+  task_package_ids: string[];
+  participant_ids: string[];
+  role_ids: string[];
+};
+
+export type TodoFineRule = {
+  id: string;
+  name: string;
+  sort_index: number;
+  is_active: boolean;
+  applies_from: string;
+  interval_days: number;
+  split_mode: FineSplitMode;
+  account_id: string | null;
+  filter: TodoFineRuleFilter;
+  rates: TodoFineRuleRate[];
+};
+
+export type TodoFineRuleRef = { id: string; name: string };
+
+export type TodoFineStatus = "running" | "conflict" | "pending" | "collected" | "deleted";
+
+export type TodoFineListItem = {
+  id: string | null;
+  status: TodoFineStatus;
+  todo_id: string | null;
+  task: string;
+  participant_id: string | null;
+  participant_name: string | null;
+  tariff_name: string | null;
+  rule_name: string | null;
+  matching_rules: TodoFineRuleRef[];
+  due_date: string | null;
+  completed_on: string | null;
+  days_late: number;
+  amount: number;
+  account_id: string | null;
+  currency_label: string | null;
+  collected_at: string | null;
+  collected_by_display_name: string | null;
+  delete_comment: string | null;
+  deleted_at: string | null;
+  deleted_by_display_name: string | null;
+  can_reopen: boolean;
+};
+
+export type TodoFineEvaluationState =
+  | "ok" | "conflict" | "no_rule" | "rule_missing" | "none" | "cancelled" | "no_due_date" | "on_time" | "no_assignee";
+
+export type TodoFineEvaluation = {
+  state: TodoFineEvaluationState;
+  fine_mode: TodoFineMode;
+  fine_rule_id: string | null;
+  fine_fixed_amount: number | null;
+  fine_split_mode: FineSplitMode | null;
+  rule_id: string | null;
+  rule_name: string | null;
+  matching_rules: TodoFineRuleRef[];
+  due_date: string | null;
+  days_late: number;
+  running: boolean;
+  frozen: boolean;
+  split_mode: FineSplitMode | null;
+  lines: { participant_id: string | null; participant_name: string; tariff_name: string | null; amount: number }[];
+  total: number;
+  can_manage: boolean;
+};

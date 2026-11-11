@@ -67,6 +67,7 @@ USER_ID_COLUMNS: dict[str, list[str]] = {
     "protocol_todo": ["assigned_user_id", "created_by"],
     "agenda_item": ["created_by"],
     "attendance_fine": ["collected_by_user_id", "deleted_by_user_id"],
+    "todo_fine": ["collected_by_user_id", "deleted_by_user_id"],
     "user_template_access": ["user_id"],
     "user_protocol_access": ["user_id"],
     "user_protocol_scroll": ["user_id"],

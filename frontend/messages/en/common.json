@@ -195,7 +195,8 @@
     "task_packages": "Task packages",
     "custom_roles": "Custom roles",
     "photo_sharing": "Photo sharing",
-    "document_designer": "Document designer"
+    "document_designer": "Document designer",
+    "todo_fines": "Task fines"
   },
   "featureNotice": {
     "readOnly": "“{name}” is no longer part of your plan. Existing data stays visible, changes are locked.",

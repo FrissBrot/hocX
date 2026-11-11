@@ -460,7 +460,8 @@
       "security": "Sign-in and feeds",
       "activity": "Activity",
       "mentions": "Mentions",
-      "agenda_items": "Topics"
+      "agenda_items": "Topics",
+      "todo_fines": "Task fines"
     },
     "col": {
       "first_name": "First name",
@@ -515,7 +516,12 @@
       "description": "Description",
       "assignees": "Assigned to",
       "text": "Text",
-      "month": "Month"
+      "month": "Month",
+      "days_late": "Days late",
+      "rule": "Rule",
+      "tariff": "Tariff",
+      "completed_on": "Completed on",
+      "fine_tariff": "Fine tariff"
     },
     "file": {
       "workbook": "Data report",
@@ -541,7 +547,8 @@
         "attendance": "Attendance",
         "fines": "Fines",
         "finances": "Finances",
-        "todos": "Tasks"
+        "todos": "Tasks",
+        "todoFines": "Task fines"
       },
       "folder": {
         "lists": "Lists",

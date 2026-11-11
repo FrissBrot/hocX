@@ -58,6 +58,7 @@ from app.models import (
     Tenant,
 )
 from app.models.entities import submission_assignment_link_table
+from app.services import todo_fine_transfer
 from app.services import submission_link_service
 from app.core.storage import ABGABEBOX, MAIN, ObjectNotFound, get_object_store, new_object_key, safe_suffix, validate_key
 from app.services.tenant_transfer_common import (
@@ -193,6 +194,10 @@ class TenantCloneService:
             db, source.id, new_tenant.id,
             cycle_config_map=cycle_config_map, participant_map={}, list_definition_map=list_definition_map, list_entry_map={},
         )
+        todo_fine_transfer.clone(
+            db, source.id, new_tenant.id, copy_row=_copy_row, participant_map={}, finance_account_map=finance_account_map,
+            todo_map={}, finance_transaction_map={}, with_fines=False,
+        )
         self._clone_document_templates(
             db, source.id, new_tenant.id,
             protocol_template_map=structure_template_map,
@@ -314,6 +319,10 @@ class TenantCloneService:
             cycle_config_map=cycle_config_map,
         )
         self._clone_protocol_todo_assignees(db, todo_map=todo_map, participant_map=participant_map)
+        todo_fine_transfer.clone(
+            db, source.id, new_tenant.id, copy_row=_copy_row, participant_map=participant_map,
+            finance_account_map=finance_account_map, todo_map=todo_map, finance_transaction_map=finance_transaction_map, with_fines=True,
+        )
         self._clone_protocol_todo_files(db, todo_map=todo_map, stored_file_map=stored_file_map)
         self._remap_todo_repeat_sources(db, protocol_element_block_map=protocol_element_block_map, todo_map=todo_map)
         self._clone_agenda_items(
@@ -682,7 +691,7 @@ class TenantCloneService:
         rows = db.scalars(select(Participant).where(Participant.tenant_id == source_tenant_id)).all()
         id_map: dict[int, int] = {}
         for row in rows:
-            new_row = _copy_row(row, {"tenant_id": new_tenant_id, "login_enabled": False, "password_hash": None, "external_identity_json": {}})
+            new_row = _copy_row(row, {"tenant_id": new_tenant_id, "login_enabled": False, "password_hash": None, "external_identity_json": {}, "fine_tariff_group_id": None})
             db.add(new_row)
             db.flush()
             id_map[row.id] = new_row.id
@@ -1133,6 +1142,8 @@ class TenantCloneService:
                 "closed_in_protocol_id": protocol_map.get(row.closed_in_protocol_id) if row.closed_in_protocol_id else None,
                 "submission_assignment_id": submission_assignment_map.get(row.submission_assignment_id) if row.submission_assignment_id else None,
                 "element_ref": replace_public_ids(row.element_ref, self._element_ref_public_ids),
+                # Regel des Quellmandanten - todo_fine_transfer.clone trägt die neue nach
+                "fine_rule_id": None,
             })
             db.add(new_row)
             db.flush()

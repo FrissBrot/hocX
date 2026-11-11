@@ -19,9 +19,12 @@ import { useToast } from "@/contexts/toast-context";
 import { formatDate, formatFileSize } from "@/lib/utils/format";
 import type { ParticipantSummary, TodoDetails, TodoListItem } from "@/types/api";
 import { useConfirm } from "@/contexts/confirm-context";
+import { TodoFineSection } from "@/components/finances/todo-fine-section";
 
-export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onClose, onSaved, onDeleted }: {
+export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onClose, onSaved, onDeleted, showFine = false }: {
   todo: TodoListItem;
+  /** Pendenzen-Bussen gebucht (Feature todo_fines): Abschnitt «Busse» anzeigen */
+  showFine?: boolean;
   canEdit: boolean;
   participants: ParticipantSummary[];
   tagSuggestions: string[];
@@ -165,6 +168,7 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
           {duePatch && <small className="muted">{t("appliedOnSaveHint")}</small>}
           {!duePatch && overdueDays > 0 && !['done', 'cancelled'].includes(draft.todo_status_code || '') && <small className="todo-edit-overdue">{t("overdueSince", { count: overdueDays })}</small>} {/* i18n-ok: JS-Ausdruck, kein UI-Text */}
         </div>
+        {showFine && <TodoFineSection todoId={todo.id} />}
       </aside>
     </div>
     <footer className="todo-edit-footer">

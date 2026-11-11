@@ -77,7 +77,7 @@ export const AREA_NAMESPACES = {
   taskPackages: ["files", "photos", "protocols", "sharedLinks", "taskPackages"],
   templates: ["documentPdf", "documentStudio", "finances", "protocols", "submissionAssignments", "templates"],
   tenantSettings: ["cycles", "documents", "protocols", "roles", "sharedLinks", "storage", "tenantSettings", "users"],
-  todos: ["connections", "documentStudio", "protocols", "todos"],
+  todos: ["connections", "documentStudio", "finances", "protocols", "todos"],
   tools: ["files", "photos", "protocols", "sharedLinks", "templates", "todos", "tools"],
   website: ["website"],
 } as const satisfies Record<string, readonly string[]>;

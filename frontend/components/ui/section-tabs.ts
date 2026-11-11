@@ -15,10 +15,12 @@ export function dashboardTabs(t: TFunc): RouteTab[] {
   ];
 }
 
-export function financeTabs(t: TFunc): RouteTab[] {
+/** `todoFines`: Tab «Pendenzen-Bussen» nur, wenn das Feature todo_fines gebucht ist. */
+export function financeTabs(t: TFunc, options: { todoFines?: boolean } = {}): RouteTab[] {
   return [
     { href: "/finances", label: t("financeAccounts") },
     { href: "/fines", label: t("fines") },
+    ...(options.todoFines ? [{ href: "/todo-fines", label: t("todoFines") }] : []),
   ];
 }
 

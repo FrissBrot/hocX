@@ -6,6 +6,35 @@ Versionierung nach [SemVer](https://semver.org/lang/de/). Die Beta-Historie
 ist der erste offiziell unterstützte Stand und muss keine älteren
 Installationen aktualisieren können.
 
+## [Unreleased]
+
+### Neu: Pendenzen-Bussen (eigenes Modul `todo_fines`)
+
+- Bussen für Pendenzen, die zu spät erledigt werden. Das Modul ist ein eigenes buchbares
+  Feature (Modul Finanzen, braucht `finance`). Die Plattform-Administration schaltet es je
+  Mandant im Feature-Tab ein oder aus. Bei bestehenden Mandanten ist es aus. Ausgeschaltet
+  bleibt alles lesbar, es entstehen aber keine neuen Bussen.
+- **Regeln** wirken per Filter automatisch: Tags, Aufgabenpakete, Verantwortliche und Rollen.
+  Jede Regel hat einen Grundbetrag und einen Zusatz pro N Tage Verspätung (pro Tag, alle 2 Tage
+  usw.), dazu ein Startdatum, ein Konto und eine Einstellung für mehrere Verantwortliche: jede
+  Person zahlt voll, oder der Betrag wird aufgeteilt.
+- **Tarife** (z. B. Lernende, Nicht-Verdiener, Vollverdiener) werden je Person eingetragen.
+  Jede Regel hat pro Tarif eigene Beträge. Personen ohne Tarif zahlen nach dem Standardtarif.
+- Am Todo legt die Kasse die Busse von Hand fest: automatisch, eine bestimmte Regel, ein fixer
+  Betrag oder keine Busse. Passen mehrere Regeln, zeigen Todo-Popup und Bussenliste eine Warnung,
+  und die Busse muss von Hand zugewiesen werden.
+- Solange ein Todo offen ist, läuft die Busse und wächst. Beim Erledigen (auch automatisch über
+  die Abgabebox) wird der Betrag je Person fixiert und kann einkassiert (Buchung aufs Konto) oder
+  mit Begründung erlassen werden. Wird das Todo wieder geöffnet, verschwinden die offenen
+  fixierten Bussen.
+- Neue Seite «Pendenzen-Bussen» unter Finanzen mit den Bereichen Bussen, Regeln und Tarife.
+  Ohne `reports.personal` sieht man nur die eigenen Bussen. Den Tarif je Person sieht nur, wer
+  `finances.manage` hat.
+- Mandanten-Export, -Import und -Klon übernehmen Tarife, Regeln und Bussen. Der
+  Datenschutz-Export enthält die eigenen Bussen und den Tarif der Person, der Datenexport des
+  Mandanten ein eigenes Blatt.
+- Migration `0169_todo_fines`.
+
 ## [1.2.4] - 2026-11-11
 
 Rückmeldungen aus dem Testbetrieb von 1.2.3: flüssigeres Scrollen im Protokoll mit einem neuen

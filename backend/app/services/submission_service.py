@@ -24,7 +24,7 @@ from app.schemas.submission import (
     SubmissionFileRead,
     SubmissionUploadLogEntry,
 )
-from app.services import public_id_service, submission_link_service
+from app.services import public_id_service, submission_link_service, todo_fine_service
 from app.services.task_package_service import set_todo_assignees, todo_assignee_ids
 from app.core.storage import ABGABEBOX, ObjectNotFound, get_object_store, validate_key
 
@@ -687,6 +687,10 @@ class SubmissionService:
             if has_files and todo.todo_status_id not in closed_ids:
                 todo.todo_status_id = done_id
                 todo.completed_at = state.submitted_at or datetime.now(UTC)
+                db.add(todo)
+                db.flush()
+                # Zu spät abgegeben: Pendenzen-Busse einfrieren (todo_fine_service).
+                todo_fine_service.sync_todo(db, todo)
             db.add(todo)
 
         for element_ref, todo in todos_by_ref.items():

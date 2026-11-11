@@ -29,12 +29,14 @@ from app.schemas.protocol import (
     TodoDetailsUpdate,
     TodoListItem,
 )
-from app.services import public_id_service, task_package_service
+from app.services import public_id_service, task_package_service, todo_fine_service
 
 # Status codes that count as "closed"/completed for completed_at purposes - mirrors the
 # closed_status_ids grouping used elsewhere (e.g. ProtocolService._open_todos_for_template_block)
 # and the "done" bucket the statistics/chart services derive from completed_at.
 _COMPLETED_STATUS_CODES = ("done", "cancelled")
+# Felder, die die Busse eines verspäteten Todos ändern (app/services/todo_fine_service.py).
+_FINE_RELEVANT_FIELDS = ("todo_status_id", "due_date", "due_event_id", "due_marker", "tags", "assigned_participant_id")
 
 
 class ProtocolTodoService:
@@ -419,7 +421,14 @@ class ProtocolTodoService:
         elif "assigned_participant_id" in values and (todo.task_package_item_id is not None or task_package_service.todo_assignee_ids(db, todo.id)):
             participant_id = values["assigned_participant_id"]
             task_package_service.set_todo_assignees(db, todo, [participant_id] if participant_id else [])
-        return self.repository.update(db, todo, values)
+        fine_relevant = assignee_ids is not None or any(key in values for key in _FINE_RELEVANT_FIELDS)
+        todo = self.repository.update(db, todo, values)
+        if fine_relevant:
+            # Pendenzen-Bussen: beim Erledigen einfrieren, beim Wiedereröffnen offene entfernen,
+            # bei Änderungen an Fälligkeit/Verantwortlichen/Tags eines erledigten Todos neu rechnen.
+            todo_fine_service.sync_todo(db, todo)
+            db.commit()
+        return todo
 
     def accept_tracked_change(self, db: Session, todo_id: int) -> tuple[bool, int | None] | None:
         """'Ausblenden' for one todo's tracked-change highlight: permanently accepts its

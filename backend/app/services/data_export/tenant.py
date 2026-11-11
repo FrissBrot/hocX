@@ -172,7 +172,7 @@ def _write_contents(db: Session, archive: EncryptedZip, job: TenantDataExport, l
         "members": [_members(db, tenant_id, lang)],
         "events": [_events(db, tenant_id, lang, names)],
         "attendance": [_attendance(db, tenant_id, lang, names)],
-        "fines": [_fines(db, tenant_id, lang, names)],
+        "fines": [_fines(db, tenant_id, lang, names), _todo_fines(db, tenant_id, lang, names)],
         "finances": _finances(db, tenant_id, lang),
         "todos": [_todos(db, tenant_id, lang, names)],
     }
@@ -314,6 +314,24 @@ def _fines(db: Session, tenant_id: int, lang: str, names: dict[int, str]) -> wor
     return _sheet(lang, "fines", columns, [
         [names.get(r["participant_id"]) or r["participant_name_snapshot"], _fmt_date(r["protocol_date"]), r["protocol_number"],
          _t(lang, f"tenant.fineType.{r['fine_type']}"), float(r["amount"]) if r["amount"] is not None else None, r["currency_label"],
+         _t(lang, f"tenant.fineStatus.{r['status']}"), _fmt_date(r["collected_at"]), r["delete_comment"]]
+        for r in rows
+    ])
+
+
+def _todo_fines(db: Session, tenant_id: int, lang: str, names: dict[int, str]) -> workbook.Sheet:
+    """Fixierte Pendenzen-Bussen (Migration 0169); laufende sind berechnet, nicht gespeichert."""
+    rows = _rows(db, """
+        SELECT f.participant_id, f.participant_name_snapshot, f.task_snapshot, f.due_date, f.completed_on, f.days_late,
+               f.rule_name_snapshot, f.tariff_name_snapshot, f.amount, a.currency_label, f.status, f.collected_at, f.delete_comment
+        FROM todo_fine f LEFT JOIN finance_account a ON a.id = f.account_id
+        WHERE f.tenant_id = :t ORDER BY f.completed_on, f.id
+    """, {"t": tenant_id})
+    columns = ["name", "task", "due_date", "completed_on", "days_late", "rule", "tariff", "amount", "currency", "status", "collected_at", "delete_comment"]
+    return _sheet(lang, "todoFines", columns, [
+        [names.get(r["participant_id"]) or r["participant_name_snapshot"], r["task_snapshot"], _fmt_date(r["due_date"]),
+         _fmt_date(r["completed_on"]), r["days_late"], r["rule_name_snapshot"], r["tariff_name_snapshot"],
+         float(r["amount"]) if r["amount"] is not None else None, r["currency_label"],
          _t(lang, f"tenant.fineStatus.{r['status']}"), _fmt_date(r["collected_at"]), r["delete_comment"]]
         for r in rows
     ])

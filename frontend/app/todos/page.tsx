@@ -4,7 +4,7 @@ import { MobileTodos } from "@/components/mobile/mobile-todos";
 import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { ParticipantSummary, TodoBlock, TodoListItem } from "@/types/api";
-import { can } from "@/lib/permissions";
+import { can, featureAccess } from "@/lib/permissions";
 
 export default async function TodosPage() {
   const session = await requireSession();
@@ -31,6 +31,7 @@ export default async function TodosPage() {
               canEdit={canEdit}
               todoBlocks={todoBlocks ?? []}
               participants={participants ?? []}
+              finesEnabled={featureAccess(session, "todo_fines") !== "none"}
             />
           </section>
         }

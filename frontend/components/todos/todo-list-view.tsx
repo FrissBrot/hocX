@@ -36,9 +36,11 @@ type Props = {
   canEdit?: boolean;
   todoBlocks?: TodoBlock[];
   participants?: ParticipantSummary[];
+  /** Feature todo_fines gebucht: Busse im Todo-Popup */
+  finesEnabled?: boolean;
 };
 
-export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [], participants = [] }: Props) {
+export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [], participants = [], finesEnabled = false }: Props) {
   const t = useTranslations("todos");
   const router = useRouter();
   const showToast = useToast();
@@ -469,6 +471,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
         canEdit={canEdit}
         participants={participants}
         tagSuggestions={allTagSuggestions}
+        showFine={finesEnabled}
         onClose={() => setEditTodoId(null)}
         onSaved={(updated) => {
           setTodos((prev) => ({

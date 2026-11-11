@@ -326,6 +326,11 @@
       "css_gzip_kb": 46,
       "css_raw_kb": 292
     },
+    "/todo-fines": {
+      "js_gzip_kb": 248,
+      "css_gzip_kb": 43,
+      "css_raw_kb": 277
+    },
     "/todos": {
       "js_gzip_kb": 266,
       "css_gzip_kb": 45,
