@@ -8,6 +8,25 @@ Installationen aktualisieren können.
 
 ## [Unreleased]
 
+Zwei neue Bereiche: Pendenzen-Bussen als eigenes, buchbares Modul unter Finanzen und
+E-Mail-Benachrichtigungen für Aufgaben (Sammelmails für neue Aufgaben und Erinnerungen). Zwei
+neue Migrationen, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
+
+### Update
+
+- Von **1.2.4**: `./scripts/deploy.sh <test|prod>`. Von älteren Ständen gelten die Hinweise
+  von 1.2.4 (und das Upgrade-Tor `0168_s3_only`).
+- Migrationen `0169_todo_fines` und `0170_notifications` legen nur neue Tabellen und Spalten mit
+  Standardwerten an (bestehende Daten werden nicht umgeschrieben) und lassen sich zurückrollen.
+- Nach dem Update ist nichts automatisch aktiv: Das Modul `todo_fines` ist für bestehende
+  Mandanten aus, der Mailversand bleibt aus, bis er unter `/admin/notifications` mit SMTP
+  eingerichtet und eingeschaltet wird. Bis dahin vorgemerkte Benachrichtigungen verfallen nach
+  7 Tagen. Erinnerungen gelten nur für Aufgaben, die genau in 3 Tagen fällig oder seit gestern
+  überfällig sind; alte überfällige Aufgaben lösen beim Einschalten keine Mailflut aus.
+- Der job-worker übernimmt zwei neue Hintergrundjobs (`notification_dispatch`,
+  `todo_reminders`); für den SMTP-Versand muss der Server ausgehend den konfigurierten
+  SMTP-Port erreichen.
+
 ### Neu: Pendenzen-Bussen (eigenes Modul `todo_fines`)
 
 - Bussen für Pendenzen, die zu spät erledigt werden. Das Modul ist ein eigenes buchbares
