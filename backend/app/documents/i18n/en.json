@@ -400,6 +400,24 @@
     "render": "The document could not be created. Please try again later.",
     "timeout": "The document is too large and could not be created in time."
   },
+  "eventField": {
+    "description": "Description",
+    "event_date": "Date",
+    "event_end_date": "End date",
+    "leadership_ids": "Leadership team",
+    "location": "Location",
+    "organizer_ids": "Organisers",
+    "participant_count": "Number of participants",
+    "participant_ids": "Participants",
+    "spezial1_ids": "Special 1",
+    "spezial2_ids": "Special 2",
+    "spezial3_ids": "Special 3",
+    "spezial_text1": "Special text 1",
+    "spezial_text2": "Special text 2",
+    "spezial_text3": "Special text 3",
+    "tag": "Tag",
+    "title": "Title"
+  },
   "fineStatus": {
     "collected": "Collected",
     "collectedHere": "Collected (from {origin})",

@@ -400,6 +400,24 @@
     "render": "Le document n’a pas pu être créé. Veuillez réessayer plus tard.",
     "timeout": "Le document est trop volumineux et n’a pas pu être créé à temps."
   },
+  "eventField": {
+    "description": "Description",
+    "event_date": "Date",
+    "event_end_date": "Date de fin",
+    "leadership_ids": "Équipe de direction",
+    "location": "Lieu",
+    "organizer_ids": "Organisateurs",
+    "participant_count": "Nombre de participants",
+    "participant_ids": "Participants",
+    "spezial1_ids": "Spécial 1",
+    "spezial2_ids": "Spécial 2",
+    "spezial3_ids": "Spécial 3",
+    "spezial_text1": "Texte spécial 1",
+    "spezial_text2": "Texte spécial 2",
+    "spezial_text3": "Texte spécial 3",
+    "tag": "Tag",
+    "title": "Titre"
+  },
   "fineStatus": {
     "collected": "Encaissé",
     "collectedHere": "Encaissé (de {origin})",

@@ -8,9 +8,12 @@ Installationen aktualisieren können.
 
 ## [Unreleased]
 
+## [1.2.5] - 2026-11-11
+
 Zwei neue Bereiche: Pendenzen-Bussen als eigenes, buchbares Modul unter Finanzen und
-E-Mail-Benachrichtigungen für Aufgaben (Sammelmails für neue Aufgaben und Erinnerungen). Zwei
-neue Migrationen, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
+E-Mail-Benachrichtigungen für Aufgaben (Sammelmails für neue Aufgaben und Erinnerungen). Dazu als
+Hotfix: Felder aus dem Termin erscheinen wieder im PDF. Zwei neue Migrationen, keine neuen Secrets
+oder Umgebungsvariablen, keine Breaking Changes.
 
 ### Update
 
@@ -72,6 +75,11 @@ neue Migrationen, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Ch
 
 ### Behoben
 
+- **PDF: Felder aus dem Termin fehlten.** In Formularblöcken «Pro Termin» kamen die mit dem
+  Termin verknüpften Felder («aus Termin» im Editor, z. B. Organisatoren, Leitungsteam,
+  Teilnehmende, Spezialfelder) nicht ins PDF, nur die eingetippten Zeilen. Jetzt stehen sie wie im
+  Editor vor den übrigen Zeilen, mit dem Namen aus dem Block bzw. dem Alias der Spezialfelder;
+  leere und ausgeblendete Felder fehlen weiterhin. Gilt für neu erzeugte PDFs.
 - Fotos, «Ähnliche»: Wer direkt nach dem Laden ein weiteres Bild zum Behalten anhakte, verlor
   diese Auswahl unter Umständen wieder, und «Auswahl löschen» hätte auch dieses Bild gelöscht.
   Das beste Bild gilt jetzt auch in diesem Moment als behalten, der Haken bleibt stehen.

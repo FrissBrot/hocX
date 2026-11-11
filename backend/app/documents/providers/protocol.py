@@ -65,7 +65,9 @@ from app.documents.providers import statistics as statistics_provider
 from app.documents.providers import todos as todo_provider
 from app.documents.providers.common import PROTOCOL_STATUS_CODES, spec_fields, text_cell
 from app.documents.richtext import markdown_to_rich, plain_to_rich
-from app.models import FinanceAccount, FinanceTransaction, ListDefinition, Protocol, ProtocolElementBlock, StoredFile
+from app.documents.strings import text as pdf_text
+from app.models import Event, FinanceAccount, FinanceTransaction, ListDefinition, Participant, Protocol, ProtocolElementBlock, StoredFile, Tenant
+from app.schemas.event_field_config import EventFieldConfig
 from app.services.element_config import parse_session_time
 from app.services.event_filter import filter_events, normalize_event_filter
 from app.core.storage import MAIN, InvalidObjectKey, ObjectNotFound, get_object_store
@@ -146,12 +148,60 @@ def _image_ref(ctx: BuildContext, stored_file: StoredFile, caption: str | None):
     return ImageRef(path="assets/missing.png", caption=caption or stored_file.original_name, missing=True)
 
 
+def _linked_event(ctx: BuildContext, config: dict) -> Event | None:
+    """Termin eines Blocks aus «Pro Termin» (repeat_source_type «event»), nur aus dem eigenen Mandanten."""
+    if config.get("repeat_source_type") != "event" or not str(config.get("repeat_source_id") or "").isdigit():
+        return None
+    event = ctx.db.get(Event, int(config["repeat_source_id"]))
+    return event if event is not None and event.tenant_id == ctx.tenant_id else None
+
+
+def _event_field_rows(ctx: BuildContext, config: dict) -> list[FormRow]:
+    """Mit dem Termin verknüpfte Felder («aus Termin» im Editor) - wie im Editor zuerst, mit
+    eigenem Label des Blocks, sonst dem Alias der Spezialfelder (Mandant) oder dem Standardnamen.
+    Ausgeblendete Spezialfelder fehlen, leere Werte ebenso (wie bei den übrigen Formularzeilen)."""
+    event = _linked_event(ctx, config)
+    event_fields = [item for item in config.get("event_fields") or [] if isinstance(item, dict) and item.get("field")]
+    if event is None or not event_fields:
+        return []
+    special = ctx.memo(("event_field_config", ctx.tenant_id), lambda: EventFieldConfig.from_stored(
+        ctx.db.scalar(select(Tenant.event_field_config_json).where(Tenant.id == ctx.tenant_id))
+    ))
+    person_ids = {
+        int(pid) for item in event_fields if str(item["field"]).endswith("_ids")
+        for pid in (getattr(event, str(item["field"]), None) or []) if str(pid).isdigit()
+    }
+    names = dict(ctx.db.execute(
+        select(Participant.id, Participant.display_name).where(Participant.id.in_(person_ids), Participant.tenant_id == ctx.tenant_id)
+    ).all()) if person_ids else {}
+    rows: list[FormRow] = []
+    for item in event_fields:
+        field = str(item["field"])
+        if not hasattr(Event, field) or field in {"id", "tenant_id"}:
+            continue
+        setting = getattr(special, field, None)
+        if setting is not None and setting.hidden:
+            continue
+        raw = getattr(event, field, None)
+        if field.endswith("_ids"):
+            value = ", ".join(names[int(pid)] for pid in (raw or []) if str(pid).isdigit() and int(pid) in names)
+        elif field in ("event_date", "event_end_date"):
+            value = format_date(raw)
+        else:
+            value = "" if raw is None else str(raw)
+        if not value.strip():
+            continue
+        label = str(item.get("label") or "").strip() or (setting.label.strip() if setting is not None and setting.label else "") or pdf_text(ctx.language, f"eventField.{field}")
+        rows.append(FormRow(label=label, value=plain_to_rich(value)))
+    return rows
+
+
 def _form_block(ctx: BuildContext, config: dict, fields: dict):
     linked_list_id = ctx.ref_to_internal_id(ListDefinition, config.get("linked_list_id"))
     if linked_list_id:
         table = list_provider.list_table(ctx, linked_list_id, config)
         return ListTableBlock(**fields, table=table or TableData(columns=[TableColumn(key="column_one")]))
-    rows: list[FormRow] = []
+    rows: list[FormRow] = _event_field_rows(ctx, config)
     for row in config.get("rows") or []:
         if not isinstance(row, dict):
             continue

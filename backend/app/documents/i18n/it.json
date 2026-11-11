@@ -400,6 +400,24 @@
     "render": "Impossibile creare il documento. Riprova più tardi.",
     "timeout": "Il documento è troppo grande e non è stato possibile crearlo in tempo."
   },
+  "eventField": {
+    "description": "Descrizione",
+    "event_date": "Data",
+    "event_end_date": "Data di fine",
+    "leadership_ids": "Team di direzione",
+    "location": "Luogo",
+    "organizer_ids": "Organizzatori",
+    "participant_count": "Numero di partecipanti",
+    "participant_ids": "Partecipanti",
+    "spezial1_ids": "Speciale 1",
+    "spezial2_ids": "Speciale 2",
+    "spezial3_ids": "Speciale 3",
+    "spezial_text1": "Testo speciale 1",
+    "spezial_text2": "Testo speciale 2",
+    "spezial_text3": "Testo speciale 3",
+    "tag": "Tag",
+    "title": "Titolo"
+  },
   "fineStatus": {
     "collected": "Incassata",
     "collectedHere": "Incassata (da {origin})",

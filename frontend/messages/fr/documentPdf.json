@@ -603,5 +603,23 @@
       "subject": "hocX : e-mail de test",
       "body": "Cet e-mail de test confirme que l'envoi d'e-mails de hocX fonctionne."
     }
+  },
+  "eventField": {
+    "title": "Titre",
+    "description": "Description",
+    "event_date": "Date",
+    "event_end_date": "Date de fin",
+    "tag": "Tag",
+    "participant_count": "Nombre de participants",
+    "organizer_ids": "Organisateurs",
+    "leadership_ids": "Équipe de direction",
+    "participant_ids": "Participants",
+    "spezial1_ids": "Spécial 1",
+    "spezial2_ids": "Spécial 2",
+    "spezial3_ids": "Spécial 3",
+    "location": "Lieu",
+    "spezial_text1": "Texte spécial 1",
+    "spezial_text2": "Texte spécial 2",
+    "spezial_text3": "Texte spécial 3"
   }
 }
