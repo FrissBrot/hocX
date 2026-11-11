@@ -14,7 +14,6 @@ from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.element_types import element_type_code
-from app.documents import repository
 from app.documents.appearance import block_source
 from app.documents.catalog import (
     BlockSpec,
@@ -252,14 +251,14 @@ def map_block(ctx: BuildContext, protocol: Protocol, block: ProtocolElementBlock
     spec = BlockSpec(type="chart", title=title, level=2)
 
     if code == "text":
-        text = repository.get_protocol_text(ctx.db, block.id)
+        text = ctx.protocol_content(protocol).text(block.id)
         return RichTextBlock(**fields, content=markdown_to_rich(text.content if text else ""))
     if code == "todo":
-        return _todo_block(list(repository.list_block_todos(ctx.db, protocol, block.id)), fields)
+        return _todo_block(ctx.protocol_content(protocol).block_todos(block.id), fields)
     if code == "image":
         images = [
             _image_ref(ctx, row.StoredFile, row.ProtocolImage.caption or row.ProtocolImage.title or row.StoredFile.original_name)
-            for row in repository.list_protocol_images(ctx.db, block.id)
+            for row in ctx.protocol_content(protocol).images(block.id)
         ]
         return ImageGalleryBlock(**fields, images=images, columns=1)
     if code == "form":
@@ -356,7 +355,8 @@ def element_blocks(ctx: BuildContext, protocol: Protocol | None, *, element_ref:
         return session_template_blocks(ctx, protocol, include_session_todos=include_session_todos, invitation_only=invitation_only)
     if protocol is None:
         raise DocumentNotFoundError("Protocol")
-    elements = repository.list_protocol_elements(ctx.db, protocol.id)
+    content = ctx.protocol_content(protocol)
+    elements = list(content.elements)
     if element_ref is not None:
         from app.models import ProtocolElement
 
@@ -380,23 +380,24 @@ def element_blocks(ctx: BuildContext, protocol: Protocol | None, *, element_ref:
             continue
         template_element, definition = template_rows.get(element.template_element_id, (None, None))
         children = []
-        for block in repository.list_element_blocks(ctx.db, element.id):
+        for block in content.blocks(element.id):
             if not block.export_visible_snapshot or removed_in_editor(block):
                 continue
             source = (block.configuration_snapshot_json or {}).get("source_sort_index")
             mapped = _with_source(map_block(ctx, protocol, block), template_element, _definition_block_id(definition, source))
             if mapped is not None:
+                mapped.origin = str(block.public_id)
                 children.append(mapped)
         # Anliegen (agenda_item) erscheinen ohne eigenen Block unter ihrem Punkt.
         children.extend(agenda_by_element.get(element.id, []))
         # Dynamische Sitzungs-Todos: Todos mit dem Abschnittsnamen als Tag.
         tag = trim_section_name(section_title).lower()
         if include_session_todos and tag:
-            rows = list(repository.list_todos_by_tag(ctx.db, protocol, tag))
+            rows = content.todos_by_tag(tag)
             if rows:
                 children.append(_todo_block(rows, {"title": None, "title_key": "label.sessionTodos", "level": 2}))
         title_plain, responsible = _split_responsible(element, section_title)
-        result.append(ElementModel(title=section_title, title_plain=title_plain, responsible=responsible, level=1, children=children))
+        result.append(ElementModel(title=section_title, title_plain=title_plain, responsible=responsible, level=1, children=children, origin=str(element.public_id)))
     if element_ref is None and agenda_other:
         result.append(ElementModel(title=None, title_key="label.agendaOther", level=1, children=agenda_other))
     return result
@@ -480,7 +481,8 @@ def session_template_blocks(ctx: BuildContext, protocol: Protocol | None, *, inc
         .where(TemplateElement.template_id == template.id, ElementDefinition.tenant_id == template.tenant_id)
         .order_by(TemplateElement.sort_index.asc(), TemplateElement.id.asc())
     ))
-    elements = repository.list_protocol_elements(ctx.db, protocol.id) if protocol is not None else []
+    content = ctx.protocol_content(protocol) if protocol is not None else None
+    elements = list(content.elements) if content is not None else []
     by_template_element = {element.template_element_id: element for element in elements if element.template_element_id is not None}
     titles = resolve_display_section_titles_batch(ctx.db, elements, protocol.status, protocol.tenant_id) if protocol is not None else {}
     agenda_by_element, agenda_other = _agenda_blocks(ctx, protocol) if protocol is not None else ({}, [])
@@ -494,7 +496,7 @@ def session_template_blocks(ctx: BuildContext, protocol: Protocol | None, *, inc
             continue
         existing: dict[Any, list[ProtocolElementBlock]] = {}
         if element is not None:
-            for block in repository.list_element_blocks(ctx.db, element.id):
+            for block in content.blocks(element.id):
                 source = (block.configuration_snapshot_json or {}).get("source_sort_index", block.sort_index)
                 existing.setdefault(source, []).append(block)
         children: list[Any] = []
@@ -510,6 +512,7 @@ def session_template_blocks(ctx: BuildContext, protocol: Protocol | None, *, inc
                         continue
                     mapped = _with_source(map_block(ctx, protocol, match), template_element, block.get("id"))
                     if mapped is not None:
+                        mapped.origin = str(match.public_id)
                         children.append(mapped)
                 continue
             code = element_type_code(block["element_type_id"])
@@ -524,7 +527,7 @@ def session_template_blocks(ctx: BuildContext, protocol: Protocol | None, *, inc
             children.extend(agenda_by_element.get(element.id, []))
             tag = trim_section_name(section_title).lower()
             if include_session_todos and tag and protocol is not None:
-                todo_rows = list(repository.list_todos_by_tag(ctx.db, protocol, tag))
+                todo_rows = content.todos_by_tag(tag)
                 if todo_rows:
                     children.append(_todo_block(todo_rows, {"title": None, "title_key": "label.sessionTodos", "level": 2}))
         title_plain, responsible = _split_responsible(element, section_title) if element is not None else (None, None)
@@ -755,6 +758,7 @@ def _refresh_membership(ctx: BuildContext, protocol: Protocol) -> None:
     from app.services.protocol_service import ProtocolService
 
     ProtocolService().refresh_membership_blocks(ctx.db, protocol.id, commit=False)
+    ctx.forget_protocol_content(protocol.id)
 
 
 def provide_session_date(ctx: BuildContext, spec: BlockSpec, params: SessionDateParams):
@@ -763,10 +767,12 @@ def provide_session_date(ctx: BuildContext, spec: BlockSpec, params: SessionDate
     if params.protocol_id is None and ctx.protocol is None:
         return [SessionDateBlock(**spec_fields(spec), label=params.label, date=None)]
     protocol = resolve_protocol(ctx, params.protocol_id)
-    for element in repository.list_protocol_elements(ctx.db, protocol.id):
-        for block in repository.list_element_blocks(ctx.db, element.id):
+    content = ctx.protocol_content(protocol)
+    for element in content.elements:
+        for block in content.blocks(element.id):
             if element_type_code(block.element_type_id) == "session_date":
                 result = _session_date_block(block.configuration_snapshot_json or {}, spec_fields(spec))
+                result.origin = str(block.public_id)
                 if params.label:
                     result.label = params.label
                 return [result]
@@ -798,7 +804,7 @@ def provide_matrix(ctx: BuildContext, spec: BlockSpec, params: ProtocolBlockRefP
     if element_type_code(block.element_type_id) != "matrix":
         raise DocumentNotFoundError("ProtocolElementBlock")
     title = spec.title if spec.title is not None else (block.block_title_snapshot or block.title_snapshot)
-    return [MatrixBlock(**spec_fields(spec, title=title), tables=matrix_tables(ctx, protocol, block.configuration_snapshot_json or {}))]
+    return [MatrixBlock(**spec_fields(spec, title=title), tables=matrix_tables(ctx, protocol, block.configuration_snapshot_json or {}), origin=str(block.public_id))]
 
 
 def provide_image(ctx: BuildContext, spec: BlockSpec, params: ImageParams):
@@ -826,9 +832,10 @@ def provide_image_gallery(ctx: BuildContext, spec: BlockSpec, params: ImageGalle
                 images.append(image)
     elif params.protocol_id is not None or ctx.protocol is not None:
         protocol = resolve_protocol(ctx, params.protocol_id)
-        for element in repository.list_protocol_elements(ctx.db, protocol.id):
-            for block in repository.list_element_blocks(ctx.db, element.id):
+        content = ctx.protocol_content(protocol)
+        for element in content.elements:
+            for block in content.blocks(element.id):
                 if element_type_code(block.element_type_id) == "image" and block.export_visible_snapshot:
-                    for row in repository.list_protocol_images(ctx.db, block.id):
+                    for row in content.images(block.id):
                         images.append(_image_ref(ctx, row.StoredFile, row.ProtocolImage.caption or row.ProtocolImage.title))
     return [ImageGalleryBlock(**spec_fields(spec), images=images, columns=params.columns)]

@@ -569,5 +569,15 @@
   "transactionAddFailed": "Impossibile registrare la transazione",
   "transactionDelete": "Elimina transazione",
   "transactionDeleteConfirm": "Eliminare questa transazione? Il saldo del conto verrà adeguato.",
-  "transactionDeleteFailed": "Impossibile eliminare la transazione"
+  "transactionDeleteFailed": "Impossibile eliminare la transazione",
+  "pdfCoverage": {
+    "notInPdf": "Non nel PDF",
+    "reason": {
+      "element_not_exported": "Questo punto è escluso dall’esportazione PDF nel modello di seduta.",
+      "session_notes": "Le note della seduta non compaiono mai nel PDF.",
+      "block_not_exported": "Questo blocco è escluso dall’esportazione PDF nel modello di seduta.",
+      "omitted_by_layout": "Il modello PDF (Documenti) non include questo blocco, ad es. a causa di un filtro dei contenuti.",
+      "image_unavailable": "{count, plural, one {Un’immagine non è ancora stata verificata o non è disponibile e appare come segnaposto nel PDF.} other {# immagini non sono ancora state verificate o non sono disponibili e appaiono come segnaposto nel PDF.}}"
+    }
+  }
 }

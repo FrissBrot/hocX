@@ -1897,6 +1897,12 @@
         "finance"
       ]
     },
+    "GET /api/protocols/{protocol_id}/pdf-coverage": {
+      "handler": "protocols.get_protocol_pdf_coverage",
+      "requires": [
+        "meetings.read"
+      ]
+    },
     "GET /api/protocols/{protocol_id}/pending-fines": {
       "handler": "fines.list_pending_fines",
       "requires": [

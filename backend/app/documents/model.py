@@ -228,6 +228,9 @@ class BlockBase(_Strict):
     appearance: dict[str, Any] | None = None
     # Herkunft in der Sitzungsvorlage (appearance.block_source), Schlüssel der Darstellung
     source: str | None = None
+    # Herkunft im Protokoll (public_id des Protokollblocks bzw. -elements): Grundlage der
+    # PDF-Abdeckung (export_coverage.py). Kein Inhalt, nicht im Inhalts-Hash (hashing.py).
+    origin: str | None = None
 
     def is_empty(self) -> bool:  # pragma: no cover - jede Unterklasse überschreibt
         return False

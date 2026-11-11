@@ -569,5 +569,15 @@
   "transactionAddFailed": "La transaction n'a pas pu être saisie",
   "transactionDelete": "Supprimer la transaction",
   "transactionDeleteConfirm": "Supprimer cette transaction ? Le solde du compte sera ajusté.",
-  "transactionDeleteFailed": "La transaction n'a pas pu être supprimée"
+  "transactionDeleteFailed": "La transaction n'a pas pu être supprimée",
+  "pdfCoverage": {
+    "notInPdf": "Pas dans le PDF",
+    "reason": {
+      "element_not_exported": "Ce point est exclu de l’export PDF dans le modèle de séance.",
+      "session_notes": "Les notes de séance n’apparaissent jamais dans le PDF.",
+      "block_not_exported": "Ce bloc est exclu de l’export PDF dans le modèle de séance.",
+      "omitted_by_layout": "Le modèle PDF (Documents) n’inclut pas ce bloc, p. ex. à cause d’un filtre de contenu.",
+      "image_unavailable": "{count, plural, one {Une image n’a pas encore été vérifiée ou n’est pas disponible et apparaît comme espace réservé dans le PDF.} other {# images n’ont pas encore été vérifiées ou ne sont pas disponibles et apparaissent comme espaces réservés dans le PDF.}}"
+    }
+  }
 }

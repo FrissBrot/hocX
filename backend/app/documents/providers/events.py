@@ -33,14 +33,19 @@ EVENT_COLUMN_ORDER = ["date", "tag", "title", "description", "participant_count"
 
 
 def tenant_events(ctx: BuildContext) -> list[Event]:
+    """Alle Termine des Mandanten, einmal je Aufbau geladen (jede Terminliste filtert daraus)."""
     has_protocol = exists().where(Protocol.event_id == Event.id)
-    return list(
-        ctx.db.scalars(
-            select(Event)
-            .where(Event.tenant_id == ctx.tenant_id, or_(Event.is_session_marker.is_(False), has_protocol))
-            .order_by(Event.event_date.asc(), Event.id.asc())
-        )
+    events = ctx.memo(
+        ("tenant_events", ctx.tenant_id),
+        lambda: list(
+            ctx.db.scalars(
+                select(Event)
+                .where(Event.tenant_id == ctx.tenant_id, or_(Event.is_session_marker.is_(False), has_protocol))
+                .order_by(Event.event_date.asc(), Event.id.asc())
+            )
+        ),
     )
+    return list(events)
 
 
 def tag_config(ctx: BuildContext) -> dict:

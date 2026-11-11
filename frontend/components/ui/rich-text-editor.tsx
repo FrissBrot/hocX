@@ -1,17 +1,13 @@
 "use client";
 
 import { useEditor, EditorContent } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import { Markdown } from "tiptap-markdown";
 import { liftListItem } from "prosemirror-schema-list";
 import { useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
 
 import { TrackedChanges } from "@/components/ui/tracked-changes-extension";
 import { Autolink } from "@/components/ui/autolink-extension";
-
-// tiptap-markdown 0.9 ergänzt den (ab Tiptap v3 typisierten) Editor-Storage nicht selbst.
-type MarkdownStorage = { markdown: { getMarkdown: () => string } };
+import { richTextMarkdownExtensions, type MarkdownStorage } from "@/components/ui/rich-text-markdown";
 
 type RichTextEditorProps = {
   value: string;
@@ -44,23 +40,7 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
     // the editor's contenteditable DOM unattached (looks rendered, but not editable).
     immediatelyRender: false,
     extensions: [
-      StarterKit.configure({
-        heading: false,
-        code: false,
-        codeBlock: false,
-        blockquote: false,
-        horizontalRule: false,
-        strike: false,
-        // Ab Tiptap v3 Teil des StarterKit: nicht als Markdown abbildbar (Unterstreichen) bzw.
-        // bisher nicht aktiv (Links) - aus, damit sich Eingabe und gespeichertes Markdown nicht ändern.
-        underline: false,
-        link: false,
-      }),
-      Markdown.configure({
-        html: false,
-        transformPastedText: true,
-        transformCopiedText: false,
-      }),
+      ...richTextMarkdownExtensions(),
       TrackedChanges.configure({ getBaseline: () => baselineRef.current }),
       Autolink.configure({ openHint: t("openLink") }),
     ],

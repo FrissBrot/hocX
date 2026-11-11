@@ -30,13 +30,14 @@ def _dumps(payload: Any) -> str:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
-_DESIGN_KEYS = frozenset({"appearance", "source"})
+_DESIGN_KEYS = frozenset({"appearance", "source", "origin"})
 
 
 def _without_design(value: Any) -> Any:
     """Darstellung einzelner Blöcke (``appearance``) ist Gestaltung, kein Inhalt, und ihre
-    Herkunft (``source``) nur deren Schlüssel: beides aus dem Inhalts-Hash entfernt, damit er
-    für bestehende Protokolle gleich bleibt."""
+    Herkunft (``source``) nur deren Schlüssel, ``origin`` nur der Verweis auf den Protokollblock
+    (PDF-Abdeckung): alles aus dem Inhalts-Hash entfernt, damit er für bestehende Protokolle
+    gleich bleibt."""
     if isinstance(value, dict):
         return {key: _without_design(item) for key, item in value.items() if key not in _DESIGN_KEYS}
     if isinstance(value, list):

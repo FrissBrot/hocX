@@ -262,7 +262,11 @@ def prepare(
     today: date | None = None,
     preview: bool = False,
     render_info: RenderInfo | None = None,
+    assets: AssetCollector | None = None,
+    skip_version: bool = False,
 ) -> PreparedDocument:
+    """``assets``/``skip_version`` nur für die PDF-Abdeckung (export_coverage.py): Bilder nicht
+    laden, keine Versionsvergabe und keinen kanonischen Hash berechnen."""
     if not preview and request.is_studio_preview():
         raise ValueError("previewOnly")
     tenant = db.get(Tenant, tenant_id)
@@ -326,7 +330,10 @@ def prepare(
 
     language = normalize_language(content.settings.language or request.language or (tenant.document_language if tenant else None))
     strings = strings_for(language)
-    ctx = BuildContext(db=db, tenant_id=tenant_id, language=language, user=user, today=today or date.today(), protocol=protocol, public_base_url=_public_base_url(), session_template=session_template)
+    ctx = BuildContext(
+        db=db, tenant_id=tenant_id, language=language, user=user, today=today or date.today(), protocol=protocol,
+        public_base_url=_public_base_url(), session_template=session_template, assets=assets if assets is not None else AssetCollector(),
+    )
     if protocol is not None:
         ctx.ensure_can_read_protocol(protocol.id)
 
@@ -365,7 +372,7 @@ def prepare(
 
     version = None
     protocol_hash = None
-    if protocol is not None and document_type == "protocol" and not sample:
+    if protocol is not None and document_type == "protocol" and not sample and not skip_version:
         protocol_hash = canonical_protocol_hash(ctx, protocol, strings, tenant_name)
         version = next_version(db, protocol, protocol_hash)
         major, minor, final_minor = version

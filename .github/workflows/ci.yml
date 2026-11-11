@@ -476,6 +476,13 @@ jobs:
         working-directory: ${{ matrix.app }}
         run: npm run build
 
+      # Performance-Audit (nur Erkennung): JS/CSS je Route gegen frontend/bundle-budget.json.
+      # Bewusste Vergrösserung: scripts/check-bundle-budget.py --update, im Commit begründen.
+      # Das Abfragebudget der Endpunkte prüft backend/tests/test_query_budget.py (backend-tests).
+      - name: Bundle-Budget
+        if: matrix.app == 'frontend'
+        run: python3 scripts/check-bundle-budget.py
+
   e2e-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 30

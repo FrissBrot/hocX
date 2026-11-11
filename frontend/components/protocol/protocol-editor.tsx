@@ -63,6 +63,7 @@ import {
 } from "@/components/protocol/protocol-editor-shared";
 import { CollaborationStatusPanel } from "@/components/protocol/collaboration-status-panel";
 import { FocusedElementEditor } from "@/components/protocol/focused-element-editor";
+import { pdfCoverageSignature, usePdfCoverage } from "@/components/protocol/use-pdf-coverage";
 import { AgendaItemsSection } from "@/components/protocol/agenda-items-section";
 import { AgendaQuickCreateModal } from "@/components/protocol/agenda-quick-create-modal";
 import { AgendaPostponeModal } from "@/components/agenda/agenda-item-modal";
@@ -2119,6 +2120,13 @@ export function ProtocolEditor({
     return extra.length ? [...participantDirectory, ...extra] : participantDirectory;
   }, [snapshotNamesKey, participantDirectory, protocol.tenant_id]);
 
+  // «Nicht im PDF»: neu abfragen, wenn sich Struktur, Exportschalter oder Leer/Gefüllt ändern
+  const pdfCoverageKey = useMemo(
+    () => pdfCoverageSignature(elements, textDrafts, todosByBlock, imagesByBlock),
+    [elements, textDrafts, todosByBlock, imagesByBlock]
+  );
+  const pdfCoverage = usePdfCoverage(protocol.id, pdfCoverageKey);
+
   const elementHandlers = useStableCallbacks({
     saveBlockConfiguration,
     saveAttendanceStatus,
@@ -2270,6 +2278,8 @@ export function ProtocolEditor({
             >
             <FocusedElementEditor
               isActive={selectedElementId === element.id}
+              pdfElementCoverage={pdfCoverage.elements[element.id]}
+              pdfBlockCoverage={pdfCoverage.blocks}
               tagConfig={tagConfig}
               updateTagColor={updateTagColor}
               renameTag={renameTag}

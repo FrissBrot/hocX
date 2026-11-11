@@ -1,0 +1,370 @@
+{
+  "_hinweis": "Erzeugt mit scripts/check-bundle-budget.py --update (Messwert + 10 % Reserve, KB; rohes CSS höchstens 400). Anheben nur begründet im Commit.",
+  "routes": {
+    "/": {
+      "js_gzip_kb": 262,
+      "css_gzip_kb": 45,
+      "css_raw_kb": 285
+    },
+    "/_global-error": {
+      "js_gzip_kb": 188,
+      "css_gzip_kb": 0,
+      "css_raw_kb": 0
+    },
+    "/_not-found": {
+      "js_gzip_kb": 205,
+      "css_gzip_kb": 43,
+      "css_raw_kb": 275
+    },
+    "/admin": {
+      "js_gzip_kb": 232,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 314
+    },
+    "/admin/admins": {
+      "js_gzip_kb": 235,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 314
+    },
+    "/admin/audit": {
+      "js_gzip_kb": 237,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 314
+    },
+    "/admin/backups": {
+      "js_gzip_kb": 246,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 314
+    },
+    "/admin/cashflow": {
+      "js_gzip_kb": 246,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 314
+    },
+    "/admin/document-templates": {
+      "js_gzip_kb": 235,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 314
+    },
+    "/admin/domains": {
+      "js_gzip_kb": 233,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 314
+    },
+    "/admin/error-logs": {
+      "js_gzip_kb": 235,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 314
+    },
+    "/admin/jobs": {
+      "js_gzip_kb": 236,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 314
+    },
+    "/admin/login": {
+      "js_gzip_kb": 220,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 314
+    },
+    "/admin/maintenance": {
+      "js_gzip_kb": 241,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 314
+    },
+    "/admin/notifications": {
+      "js_gzip_kb": 237,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 314
+    },
+    "/admin/plans": {
+      "js_gzip_kb": 247,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 314
+    },
+    "/admin/security": {
+      "js_gzip_kb": 232,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 314
+    },
+    "/admin/sso": {
+      "js_gzip_kb": 234,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 314
+    },
+    "/admin/storage": {
+      "js_gzip_kb": 245,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 314
+    },
+    "/admin/system": {
+      "js_gzip_kb": 237,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 314
+    },
+    "/admin/tenants": {
+      "js_gzip_kb": 242,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 314
+    },
+    "/admin/upload-pipeline": {
+      "js_gzip_kb": 241,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 314
+    },
+    "/admin/users": {
+      "js_gzip_kb": 253,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 314
+    },
+    "/admin/verifications": {
+      "js_gzip_kb": 235,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 314
+    },
+    "/agenda": {
+      "js_gzip_kb": 237,
+      "css_gzip_kb": 43,
+      "css_raw_kb": 275
+    },
+    "/auth/bridge": {
+      "js_gzip_kb": 207,
+      "css_gzip_kb": 43,
+      "css_raw_kb": 275
+    },
+    "/connections": {
+      "js_gzip_kb": 239,
+      "css_gzip_kb": 44,
+      "css_raw_kb": 278
+    },
+    "/cycles": {
+      "js_gzip_kb": 246,
+      "css_gzip_kb": 43,
+      "css_raw_kb": 275
+    },
+    "/documents": {
+      "js_gzip_kb": 287,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 357
+    },
+    "/documents/assets": {
+      "js_gzip_kb": 281,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 357
+    },
+    "/documents/brand": {
+      "js_gzip_kb": 289,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 357
+    },
+    "/documents/components": {
+      "js_gzip_kb": 205,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 357
+    },
+    "/documents/exports": {
+      "js_gzip_kb": 280,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 357
+    },
+    "/documents/protocols": {
+      "js_gzip_kb": 205,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 357
+    },
+    "/documents/templates/[id]": {
+      "js_gzip_kb": 336,
+      "css_gzip_kb": 59,
+      "css_raw_kb": 357
+    },
+    "/elements": {
+      "js_gzip_kb": 498,
+      "css_gzip_kb": 55,
+      "css_raw_kb": 335
+    },
+    "/events": {
+      "js_gzip_kb": 265,
+      "css_gzip_kb": 49,
+      "css_raw_kb": 304
+    },
+    "/files": {
+      "js_gzip_kb": 257,
+      "css_gzip_kb": 51,
+      "css_raw_kb": 312
+    },
+    "/finances": {
+      "js_gzip_kb": 249,
+      "css_gzip_kb": 45,
+      "css_raw_kb": 284
+    },
+    "/fines": {
+      "js_gzip_kb": 249,
+      "css_gzip_kb": 43,
+      "css_raw_kb": 275
+    },
+    "/lists": {
+      "js_gzip_kb": 265,
+      "css_gzip_kb": 46,
+      "css_raw_kb": 290
+    },
+    "/login": {
+      "js_gzip_kb": 226,
+      "css_gzip_kb": 44,
+      "css_raw_kb": 279
+    },
+    "/maintenance": {
+      "js_gzip_kb": 209,
+      "css_gzip_kb": 43,
+      "css_raw_kb": 275
+    },
+    "/overload": {
+      "js_gzip_kb": 208,
+      "css_gzip_kb": 43,
+      "css_raw_kb": 275
+    },
+    "/participants": {
+      "js_gzip_kb": 264,
+      "css_gzip_kb": 46,
+      "css_raw_kb": 288
+    },
+    "/pdf-loading": {
+      "js_gzip_kb": 205,
+      "css_gzip_kb": 45,
+      "css_raw_kb": 283
+    },
+    "/photos": {
+      "js_gzip_kb": 275,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 311
+    },
+    "/protocols": {
+      "js_gzip_kb": 251,
+      "css_gzip_kb": 62,
+      "css_raw_kb": 384
+    },
+    "/protocols/[id]": {
+      "js_gzip_kb": 673,
+      "css_gzip_kb": 62,
+      "css_raw_kb": 384
+    },
+    "/settings": {
+      "js_gzip_kb": 205,
+      "css_gzip_kb": 43,
+      "css_raw_kb": 275
+    },
+    "/settings/verification": {
+      "js_gzip_kb": 205,
+      "css_gzip_kb": 43,
+      "css_raw_kb": 275
+    },
+    "/share/[token]": {
+      "js_gzip_kb": 210,
+      "css_gzip_kb": 44,
+      "css_raw_kb": 279
+    },
+    "/shared-links": {
+      "js_gzip_kb": 245,
+      "css_gzip_kb": 43,
+      "css_raw_kb": 275
+    },
+    "/statistics": {
+      "js_gzip_kb": 254,
+      "css_gzip_kb": 44,
+      "css_raw_kb": 282
+    },
+    "/submission-assignments": {
+      "js_gzip_kb": 272,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 310
+    },
+    "/task-packages": {
+      "js_gzip_kb": 284,
+      "css_gzip_kb": 51,
+      "css_raw_kb": 314
+    },
+    "/templates": {
+      "js_gzip_kb": 532,
+      "css_gzip_kb": 56,
+      "css_raw_kb": 345
+    },
+    "/templates/[id]": {
+      "js_gzip_kb": 532,
+      "css_gzip_kb": 56,
+      "css_raw_kb": 345
+    },
+    "/tenant-settings": {
+      "js_gzip_kb": 257,
+      "css_gzip_kb": 46,
+      "css_raw_kb": 292
+    },
+    "/tenant-settings/abo": {
+      "js_gzip_kb": 255,
+      "css_gzip_kb": 46,
+      "css_raw_kb": 292
+    },
+    "/tenant-settings/activity": {
+      "js_gzip_kb": 246,
+      "css_gzip_kb": 46,
+      "css_raw_kb": 292
+    },
+    "/tenant-settings/domains": {
+      "js_gzip_kb": 255,
+      "css_gzip_kb": 46,
+      "css_raw_kb": 292
+    },
+    "/tenant-settings/privacy": {
+      "js_gzip_kb": 245,
+      "css_gzip_kb": 46,
+      "css_raw_kb": 292
+    },
+    "/tenant-settings/retention": {
+      "js_gzip_kb": 245,
+      "css_gzip_kb": 46,
+      "css_raw_kb": 292
+    },
+    "/tenant-settings/verification": {
+      "js_gzip_kb": 246,
+      "css_gzip_kb": 46,
+      "css_raw_kb": 292
+    },
+    "/todos": {
+      "js_gzip_kb": 266,
+      "css_gzip_kb": 45,
+      "css_raw_kb": 284
+    },
+    "/tools": {
+      "js_gzip_kb": 205,
+      "css_gzip_kb": 52,
+      "css_raw_kb": 320
+    },
+    "/tools/import": {
+      "js_gzip_kb": 278,
+      "css_gzip_kb": 52,
+      "css_raw_kb": 320
+    },
+    "/tools/import/[id]": {
+      "js_gzip_kb": 299,
+      "css_gzip_kb": 52,
+      "css_raw_kb": 320
+    },
+    "/tools/word-import": {
+      "js_gzip_kb": 299,
+      "css_gzip_kb": 52,
+      "css_raw_kb": 320
+    },
+    "/users": {
+      "js_gzip_kb": 247,
+      "css_gzip_kb": 43,
+      "css_raw_kb": 275
+    },
+    "/users/roles": {
+      "js_gzip_kb": 237,
+      "css_gzip_kb": 43,
+      "css_raw_kb": 275
+    },
+    "/website": {
+      "js_gzip_kb": 211,
+      "css_gzip_kb": 49,
+      "css_raw_kb": 306
+    }
+  }
+}

@@ -1,0 +1,142 @@
+name: PDF-Integrität
+
+# Audit bei jeder Änderung an Protokoll-Editor oder PDF-Erzeugung: was im Editor steht, muss im
+# PDF ankommen - oder der Editor markiert es als «Nicht im PDF». Erkennt nur, korrigiert nichts.
+#
+# 1. editor-markdown: das Markdown, das der Rich-Text-Editor speichert, entspricht dem Korpus,
+#    den das Backend prüft (frontend/components/ui/rich-text-markdown.test.ts), und verliert beim
+#    Speichern und Laden keinen Text.
+#    Dazu der Terminfilter: Editor (TypeScript) und PDF (Python) wählen für jeden Fall des
+#    gemeinsamen Katalogs backend/tests/fixtures/event_filter_parity.json dieselben Termine.
+# 2. pdf-export: die ganze Dokument-Suite im Backend-Testimage, darunter der Integritäts-Audit
+#    (backend/tests/documents/test_pdf_integrity.py: Korpus und alle Blocktypen echt als PDF
+#    gerendert, jede Zeile im PDF-Text gesucht; Abdeckung «Nicht im PDF») und die Golden-Bilder.
+#
+# Die normale CI (ci.yml) führt dieselben Tests bei jedem Push ebenfalls aus; dieser Lauf ist
+# der eigene, schnell sichtbare Check für Änderungen in diesen Bereichen.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend/app/documents/**"
+      - "backend/app/services/protocol*.py"
+      - "backend/app/services/agenda_item_service.py"
+      - "backend/app/services/block_behavior.py"
+      - "backend/app/services/element_config.py"
+      - "backend/app/services/event_filter.py"
+      - "backend/app/services/responsible_label_service.py"
+      - "backend/app/api/routes/protocol*.py"
+      - "backend/app/api/routes/documents.py"
+      - "backend/app/api/routes/document_studio.py"
+      - "backend/app/models/**"
+      - "backend/tests/documents/**"
+      - "backend/tests/test_protocol_pdf_coverage_route.py"
+      - "backend/tests/test_event_filter_parity.py"
+      - "backend/tests/fixtures/event_filter_parity.json"
+      - "frontend/lib/element-types/event-filter*"
+      - "backend/requirements*.txt"
+      - "backend/Dockerfile.test"
+      - "frontend/components/protocol/**"
+      - "frontend/components/ui/rich-text*"
+      - "frontend/components/ui/*-extension.ts"
+      - "frontend/components/documents/**"
+      - "frontend/lib/hooks/use-pdf-export.ts"
+      - "frontend/package.json"
+      - "frontend/package-lock.json"
+      - "docker-compose.tests.yml"
+      - ".github/workflows/pdf-integrity.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/app/documents/**"
+      - "backend/app/services/protocol*.py"
+      - "backend/app/services/agenda_item_service.py"
+      - "backend/app/services/block_behavior.py"
+      - "backend/app/services/element_config.py"
+      - "backend/app/services/event_filter.py"
+      - "backend/app/services/responsible_label_service.py"
+      - "backend/app/api/routes/protocol*.py"
+      - "backend/app/api/routes/documents.py"
+      - "backend/app/api/routes/document_studio.py"
+      - "backend/app/models/**"
+      - "backend/tests/documents/**"
+      - "backend/tests/test_protocol_pdf_coverage_route.py"
+      - "backend/tests/test_event_filter_parity.py"
+      - "backend/tests/fixtures/event_filter_parity.json"
+      - "frontend/lib/element-types/event-filter*"
+      - "backend/requirements*.txt"
+      - "backend/Dockerfile.test"
+      - "frontend/components/protocol/**"
+      - "frontend/components/ui/rich-text*"
+      - "frontend/components/ui/*-extension.ts"
+      - "frontend/components/documents/**"
+      - "frontend/lib/hooks/use-pdf-export.ts"
+      - "frontend/package.json"
+      - "frontend/package-lock.json"
+      - "docker-compose.tests.yml"
+      - ".github/workflows/pdf-integrity.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pdf-integrity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  editor-markdown:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Editor-Markdown gegen den PDF-Korpus
+        working-directory: frontend
+        run: >-
+          npx vitest run
+          components/ui/rich-text-markdown.test.ts
+          components/ui/rich-text-editor.test.tsx
+          components/protocol/use-pdf-coverage.test.ts
+          lib/element-types/event-filter-parity.test.ts
+          lib/element-types/event-filter.test.ts
+
+  pdf-export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      COMPOSE: docker compose -p hocx-pdf-integrity -f docker-compose.tests.yml --project-directory . --profile tests
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Backend-Testimage bauen
+        run: $COMPOSE build backend-test test-migrations
+      - name: PDF-Integrität und Dokument-Suite
+        run: >-
+          mkdir -p "$RUNNER_TEMP/golden-diffs" && chmod 777 "$RUNNER_TEMP/golden-diffs" &&
+          $COMPOSE run --rm -e DOCUMENT_GOLDEN_DIFF_DIR=/app/golden-diffs -v "$RUNNER_TEMP/golden-diffs:/app/golden-diffs"
+          backend-test python -m pytest
+          tests/documents
+          tests/test_protocol_pdf_coverage_route.py
+          tests/test_event_filter_parity.py
+          -q
+      - name: Golden-Diffs hochladen
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pdf-integrity-golden-diffs
+          path: ${{ runner.temp }}/golden-diffs
+          if-no-files-found: ignore
+      - name: Test-Stack entfernen
+        if: always()
+        run: $COMPOSE down --volumes

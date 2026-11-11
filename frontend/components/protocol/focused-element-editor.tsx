@@ -106,6 +106,8 @@ import {
 } from "@/components/protocol/matrix-board";
 import { ChartBlockRenderer } from "@/components/protocol/chart-block-renderer";
 import { SessionTodosSection } from "@/components/protocol/session-todos-section";
+import { PdfOmittedHint } from "@/components/protocol/pdf-omitted-hint";
+import type { PdfCoverageEntry } from "@/components/protocol/use-pdf-coverage";
 
 function FocusedElementEditorImpl({
   collab,
@@ -185,9 +187,14 @@ function FocusedElementEditorImpl({
   renameTag,
   sessionNotes,
   agendaSlot,
+  pdfElementCoverage,
+  pdfBlockCoverage,
 }: {
   /** Anliegen dieses Abschnitts (AgendaItemsSection), vom Editor gerendert. */
   agendaSlot?: ReactNode;
+  /** «Nicht im PDF»: Abdeckung dieses Punkts bzw. aller Bausteine (use-pdf-coverage.ts). */
+  pdfElementCoverage?: PdfCoverageEntry;
+  pdfBlockCoverage: Record<string, PdfCoverageEntry>;
   collab: ReturnType<typeof useProtocolCollaboration>;
   trackChangesActive: boolean;
   element: ProtocolElement;
@@ -1700,7 +1707,7 @@ function FocusedElementEditorImpl({
     >
       <div className="editor-panel-header">
         <div>
-          <div className="eyebrow">Punkt {elementIndex + 1}</div>
+          <div className="eyebrow">Punkt {elementIndex + 1}<PdfOmittedHint entry={pdfElementCoverage} /></div>
           <h2>{element.section_name_snapshot}</h2>
         </div>
       </div>
@@ -1799,6 +1806,7 @@ function FocusedElementEditorImpl({
                   {isAutoEventBlock ? (
                     <div className="field-label">
                       {blockTitle || (elementTypeLabel[elementType] ?? elementType)}
+                      <PdfOmittedHint entry={pdfBlockCoverage[block.id]} />
                       {syncsToEvent ? (
                         <span className="event-series-linked" title={t("eventSeries.linkedTitle")}>
                           <ActionIcon name="link" /> {t("eventSeries.linked")}
@@ -1806,7 +1814,7 @@ function FocusedElementEditorImpl({
                       ) : null}
                     </div>
                   ) : (
-                    <div className="eyebrow">{elementTypeLabel[elementType] ?? elementType}{isHidden ? ` · ${t("hiddenSuffix")}` : ""}</div>
+                    <div className="eyebrow">{elementTypeLabel[elementType] ?? elementType}{isHidden ? ` · ${t("hiddenSuffix")}` : ""}<PdfOmittedHint entry={pdfBlockCoverage[block.id]} /></div>
                   )}
                   {blockTitle && !isAutoEventBlock ? <h3>{blockTitle}</h3> : null}
                   {block.description_snapshot ? <p className="muted">{block.description_snapshot}</p> : null}
@@ -4181,6 +4189,7 @@ const PER_BLOCK_PROPS = [
   "selectedFiles",
   "todoTagFilter",
   "newTodoTags",
+  "pdfBlockCoverage",
 ] as const satisfies readonly (keyof FocusedElementEditorProps)[];
 
 function focusedElementEditorPropsEqual(prev: FocusedElementEditorProps, next: FocusedElementEditorProps): boolean {

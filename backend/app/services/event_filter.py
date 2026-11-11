@@ -174,9 +174,12 @@ def _matches_range(event: Any, event_range: dict, protocol_date: date | None) ->
 
 
 def sort_and_limit(events: list[Any], event_filter: dict) -> list[Any]:
+    # Bei gleichem Datum nach public_id wie der Editor (event-filter.ts kennt nur sie): sonst
+    # wählte «höchstens N Termine» im PDF andere Termine als im Editor
+    # (tests/fixtures/event_filter_parity.json, «limit_bei_gleichem_datum»).
     ordered = sorted(
         events,
-        key=lambda event: (getattr(event, "event_date", None) or date.min, getattr(event, "id", 0) or 0),
+        key=lambda event: (getattr(event, "event_date", None) or date.min, str(getattr(event, "public_id", None) or ""), getattr(event, "id", 0) or 0),
         reverse=event_filter.get("sort") == "desc",
     )
     limit = event_filter.get("limit")

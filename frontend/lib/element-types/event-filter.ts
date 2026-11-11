@@ -150,8 +150,14 @@ export function eventMatchesFilter(event: FilterableEvent, filter: EventFilter, 
   return true;
 }
 
+// Wie sort_and_limit im Backend: Datum, dann public_id. Einfacher Zeichenvergleich statt
+// localeCompare, damit die Reihenfolge nicht von der Sprache des Browsers abhängt.
+function compareText(left: string, right: string) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function compareEvents(left: FilterableEvent, right: FilterableEvent) {
-  return left.event_date.localeCompare(right.event_date) || String(left.id).localeCompare(String(right.id));
+  return compareText(left.event_date, right.event_date) || compareText(String(left.id), String(right.id));
 }
 
 /** Filtert, sortiert und begrenzt Termine. */

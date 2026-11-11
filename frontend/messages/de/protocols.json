@@ -569,5 +569,15 @@
   "transactionAddFailed": "Transaktion konnte nicht erfasst werden",
   "transactionDelete": "Transaktion löschen",
   "transactionDeleteConfirm": "Diese Transaktion löschen? Der Kontostand wird angepasst.",
-  "transactionDeleteFailed": "Transaktion konnte nicht gelöscht werden"
+  "transactionDeleteFailed": "Transaktion konnte nicht gelöscht werden",
+  "pdfCoverage": {
+    "notInPdf": "Nicht im PDF",
+    "reason": {
+      "element_not_exported": "Dieser Punkt ist in der Sitzungsvorlage vom PDF-Export ausgenommen.",
+      "session_notes": "Sitzungsnotizen erscheinen nie im PDF.",
+      "block_not_exported": "Dieser Baustein ist in der Sitzungsvorlage vom PDF-Export ausgenommen.",
+      "omitted_by_layout": "Die PDF-Vorlage (Dokumente) setzt diesen Baustein nicht, z. B. wegen eines Inhaltsfilters.",
+      "image_unavailable": "{count, plural, one {Ein Bild ist noch nicht geprüft oder nicht verfügbar und erscheint im PDF als Platzhalter.} other {# Bilder sind noch nicht geprüft oder nicht verfügbar und erscheinen im PDF als Platzhalter.}}"
+    }
+  }
 }

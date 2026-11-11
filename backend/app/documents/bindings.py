@@ -366,7 +366,6 @@ def _status_label(strings: dict[str, str], prefix: str, code: str | None) -> str
 
 def _load_protocol(resolver: BindingResolver) -> dict[str, Any]:
     from app.core.element_types import element_type_code
-    from app.documents import repository
     from app.documents.providers import people as people_provider
     from app.documents.providers import protocol as protocol_provider
     from app.documents.providers import todos as todo_provider
@@ -393,8 +392,9 @@ def _load_protocol(resolver: BindingResolver) -> dict[str, Any]:
     counts = {status: sum(1 for item in participants if item["status_code"] == status) for status in ("present", "late", "excused", "absent")}
 
     next_session = None
-    for element in repository.list_protocol_elements(ctx.db, protocol.id):
-        for block in repository.list_element_blocks(ctx.db, element.id):
+    content = ctx.protocol_content(protocol)
+    for element in content.elements:
+        for block in content.blocks(element.id):
             if element_type_code(block.element_type_id) == "session_date":
                 config = block.configuration_snapshot_json or {}
                 next_session = config.get("selected_date") or config.get("session_date") or config.get("date") or next_session

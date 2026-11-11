@@ -6,13 +6,16 @@ Versionierung nach [SemVer](https://semver.org/lang/de/). Die Beta-Historie
 ist der erste offiziell unterstützte Stand und muss keine älteren
 Installationen aktualisieren können.
 
-## [1.2.4] - 2026-11-10
+## [1.2.4] - 2026-11-11
 
 Rückmeldungen aus dem Testbetrieb von 1.2.3: flüssigeres Scrollen im Protokoll mit einem neuen
 Rad-Effekt, eine Ladeanimation beim Öffnen von PDFs, klickbare Links und mehrere Korrekturen am
 PDF (Abstände zwischen Traktanden, entfernte Termine). Dazu Lehren aus dem Deploy von 1.2.3:
 `deploy.sh` aktualisiert sich vor jedem Lauf selbst, und das Upgrade-Tor prüft die Schreibrechte
-im Dateispeicher. Keine neuen Migrationen, keine Breaking Changes.
+im Dateispeicher. Neu sichert ein Integritäts-Audit, dass Editor und PDF übereinstimmen (nichts
+fehlt, nichts zu viel); der Editor markiert, was nicht ins PDF kommt. Die PDF-Erzeugung braucht
+unabhängig von der Länge des Protokolls gleich viele Datenbankabfragen, und die CI prüft
+Bundle-Grössen und Abfragezahlen. Keine neuen Migrationen, keine Breaking Changes.
 
 ### Update
 
@@ -23,8 +26,29 @@ im Dateispeicher. Keine neuen Migrationen, keine Breaking Changes.
 - Nach dem Update sehen neu erzeugte PDFs anders aus, wo «Abstand vor Abschnitten» bisher
   ignoriert wurde (siehe «Behoben»); bereits erstellte PDFs bleiben unverändert.
 
+### Hinzugefügt
+
+- **Protokoll: «Nicht im PDF».** Hat ein Punkt oder Baustein Inhalt, der nicht im PDF erscheint,
+  markiert der Editor das dezent; der Grund steht im Tooltip (in der Sitzungsvorlage vom Export
+  ausgenommen, Sitzungsnotizen, von der PDF-Vorlage weggelassen, Bild noch im Virenscan).
+  Grundlage ist dieselbe Prüfung wie beim Export (`GET /api/protocols/{id}/pdf-coverage`).
+- **CI: PDF-Integrität.** Bei jeder Änderung an Editor oder PDF-Erzeugung prüft ein eigener
+  Workflow, dass jede Zeile aus dem Editor im gerenderten PDF ankommt: das Markdown des
+  Rich-Text-Editors wird gegen einen Korpus geprüft, den das Backend echt als PDF rendert und
+  im PDF-Text wiederfinden muss. Ebenso geprüft wird, dass nichts zu viel im PDF steht: im
+  Editor weggefilterte Termine, entfernte oder ausgeschlossene Inhalte; Aufgaben im PDF sind
+  genau die des Editors. Editor und PDF filtern Termine über einen gemeinsamen Prüfkatalog.
+- **CI: Performance-Audit (nur Erkennung).** Grössenbudget für JS und CSS je Route nach dem
+  Frontend-Build (`frontend/bundle-budget.json`) und ein Abfragebudget für die wichtigsten
+  Endpunkte (`backend/tests/query_budget.json`, gemessen bei 1 und 20 Einträgen). Mehr als
+  erlaubt lässt die CI scheitern.
+
 ### Geändert
 
+- **PDF-Erzeugung mit fester Zahl Datenbankabfragen.** Blöcke, Texte, Aufgaben und Bilder eines
+  Protokolls und die Termine des Mandanten werden je Export gesammelt geladen statt je
+  Traktandum und Block: ein Protokoll mit 20 Traktanden braucht für den Inhalt 13 statt 147
+  Abfragen, die Markierung «Nicht im PDF» 44 statt 314. Das PDF selbst bleibt unverändert.
 - **Protokoll: neuer Rad-Effekt.** Statt bei jedem Scroll-Bild zu rechnen, liegen die
   eingeklappten Punkte wie auf einer Walze um den aktiven Punkt und drehen beim Wechsel
   flüssig weiter (CSS-Animation auf der Grafik, Sprünge über das sanfte Scrollen des
@@ -64,6 +88,12 @@ im Dateispeicher. Keine neuen Migrationen, keine Breaking Changes.
   nächsten Traktandum übersteuerte. Jetzt gilt zwischen Traktanden genau der eingestellte Wert,
   vor anderen Abschnitten mit Titel (z. B. Todos) mindestens 12 pt. Dokumente mit dem
   Standardwert (8 mm) werden dadurch sichtbar luftiger.
+- **Terminlisten: PDF und Editor gleich sortiert.** Bei Terminen am selben Tag sortierte das
+  PDF anders als der Editor; mit «höchstens N Termine» konnten so im PDF andere Termine stehen.
+  Beide sortieren jetzt nach Datum und dann gleich. Bestehende PDFs ändern sich nur, wenn
+  mehrere Termine am selben Tag in einer Liste stehen.
+- **Editor: getippte HTML-Entitäten.** Ein wörtlich getipptes `&amp;` oder `&lt;` wurde nach
+  dem Speichern und Neuladen zu `&` bzw. `<`.
 
 ## [1.2.3] - 2026-11-10
 

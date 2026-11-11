@@ -569,5 +569,15 @@
   "transactionAddFailed": "Transaction could not be added",
   "transactionDelete": "Delete transaction",
   "transactionDeleteConfirm": "Delete this transaction? The account balance will be adjusted.",
-  "transactionDeleteFailed": "Transaction could not be deleted"
+  "transactionDeleteFailed": "Transaction could not be deleted",
+  "pdfCoverage": {
+    "notInPdf": "Not in PDF",
+    "reason": {
+      "element_not_exported": "This item is excluded from the PDF export in the meeting template.",
+      "session_notes": "Session notes never appear in the PDF.",
+      "block_not_exported": "This block is excluded from the PDF export in the meeting template.",
+      "omitted_by_layout": "The PDF template (Documents) does not include this block, e.g. because of a content filter.",
+      "image_unavailable": "{count, plural, one {One image has not been checked yet or is unavailable and appears as a placeholder in the PDF.} other {# images have not been checked yet or are unavailable and appear as placeholders in the PDF.}}"
+    }
+  }
 }

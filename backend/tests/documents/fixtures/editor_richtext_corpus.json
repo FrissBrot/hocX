@@ -1,0 +1,108 @@
+[
+  {
+    "name": "umlaute",
+    "markdown": "Grüezi mitenand: äöü ÄÖÜ ß, «Zitat» und „Anführung“ – 100 % für CHF 12.50.",
+    "lines": [
+      "Grüezi mitenand: äöü ÄÖÜ ß, «Zitat» und „Anführung“ – 100 % für CHF 12.50."
+    ]
+  },
+  {
+    "name": "typst_zeichen",
+    "markdown": "Preis $5 # Nummer @label &lt;tag&gt; = gleich + plus / slash \\~ tilde \\[eckig\\] {geschweift} ^ dach",
+    "lines": [
+      "Preis $5 # Nummer @label <tag> = gleich + plus / slash ~ tilde [eckig] {geschweift} ^ dach"
+    ]
+  },
+  {
+    "name": "markdown_zeichen",
+    "markdown": "Sternchen \\*nicht kursiv\\* und \\_unterstrichen\\_ und \\`backtick\\` und \\\\ backslash C:\\\\Daten\\\\",
+    "lines": [
+      "Sternchen *nicht kursiv* und _unterstrichen_ und `backtick` und \\ backslash C:\\Daten\\"
+    ]
+  },
+  {
+    "name": "zeilenanfaenge",
+    "markdown": "\\# Kein Titel Zeilenanfang\n\n&gt; Kein Zitat Zeilenanfang\n\n\\- Kein Punkt Zeilenanfang\n\n1\\. Keine Nummer Zeilenanfang\n\n\\+ Plus Zeilenanfang\n\n\\--- Keine Linie Zeilenanfang\n\n| Spalte A | Spalte B |\n\n\\[x\\] Erledigt Kästchen und \\[ \\] Offen Kästchen",
+    "lines": [
+      "# Kein Titel Zeilenanfang",
+      "> Kein Zitat Zeilenanfang",
+      "- Kein Punkt Zeilenanfang",
+      "1. Keine Nummer Zeilenanfang",
+      "+ Plus Zeilenanfang",
+      "--- Keine Linie Zeilenanfang",
+      "| Spalte A | Spalte B |",
+      "[x] Erledigt Kästchen und [ ] Offen Kästchen"
+    ]
+  },
+  {
+    "name": "html",
+    "markdown": "&lt;b&gt;nicht fett&lt;/b&gt; &amp;amp; &amp;lt;Zeichen&amp;gt; &lt;script&gt;kein Skript&lt;/script&gt;",
+    "lines": [
+      "<b>nicht fett</b> &amp; &lt;Zeichen&gt; <script>kein Skript</script>"
+    ]
+  },
+  {
+    "name": "auszeichnung",
+    "markdown": "Normal **Fett gesetzt** und *Kursiv gesetzt* und ***Beides zusammen*** Ende.",
+    "lines": [
+      "Normal Fett gesetzt und Kursiv gesetzt und Beides zusammen Ende."
+    ]
+  },
+  {
+    "name": "zeilenumbruch",
+    "markdown": "Erste Zeile im Absatz\\\nZweite Zeile im Absatz\\\nDritte Zeile im Absatz",
+    "lines": [
+      "Erste Zeile im Absatz",
+      "Zweite Zeile im Absatz",
+      "Dritte Zeile im Absatz"
+    ]
+  },
+  {
+    "name": "aufzaehlung",
+    "markdown": "- Punkt Eins oben\n- Punkt Zwei oben\n  - Unterpunkt Zwei A\n  - Unterpunkt Zwei B\n- Punkt Drei mit **Fett**",
+    "lines": [
+      "Punkt Eins oben",
+      "Punkt Zwei oben",
+      "Unterpunkt Zwei A",
+      "Unterpunkt Zwei B",
+      "Punkt Drei mit Fett"
+    ]
+  },
+  {
+    "name": "nummerierung",
+    "markdown": "3. Dritter Schritt Liste\n4. Vierter Schritt Liste",
+    "lines": [
+      "Dritter Schritt Liste",
+      "Vierter Schritt Liste"
+    ]
+  },
+  {
+    "name": "links",
+    "markdown": "Siehe https://example.org/pfad?x=1&y=2 und www.example.net sowie kontakt@example.com.",
+    "lines": [
+      "Siehe https://example.org/pfad?x=1&y=2 und www.example.net sowie kontakt@example.com."
+    ]
+  },
+  {
+    "name": "emoji",
+    "markdown": "Fest 🎉 mit Grill 🔥 und Häkchen ✓ sowie Pfeil →",
+    "lines": [
+      "Fest 🎉 mit Grill 🔥 und Häkchen ✓ sowie Pfeil →"
+    ]
+  },
+  {
+    "name": "lang",
+    "markdown": "Donaudampfschifffahrtsgesellschaftskapitänsmützenhalterung ist ein langes Wort ohne Trennung im Satz.",
+    "lines": [
+      "Donaudampfschifffahrtsgesellschaftskapitänsmützenhalterung ist ein langes Wort ohne Trennung im Satz."
+    ]
+  },
+  {
+    "name": "leerabsatz",
+    "markdown": "Vor dem leeren Absatz\n\nNach dem leeren Absatz",
+    "lines": [
+      "Vor dem leeren Absatz",
+      "Nach dem leeren Absatz"
+    ]
+  }
+]

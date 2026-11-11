@@ -295,6 +295,23 @@ def get_protocol(protocol_id: uuid.UUID, db: Session = Depends(get_db), user: Cu
     return _build_protocol_reads(db, [protocol])[0]
 
 
+@router.get("/protocols/{protocol_id}/pdf-coverage")
+def get_protocol_pdf_coverage(protocol_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Was im Editor Inhalt hat, aber nicht im PDF erscheint (Markierung im Editor,
+    app/documents/export_coverage.py). Liest nur; der Savepoint wird zurückgerollt."""
+    from app.documents.context import DocumentPermissionError
+    from app.documents.export_coverage import protocol_pdf_coverage
+
+    require_permission(user, P.MEETINGS_READ)
+    protocol = _get_protocol_or_404(db, protocol_id, user)
+    access_service.ensure_can_read_protocol(db, user, protocol.id)
+    try:
+        coverage = protocol_pdf_coverage(db, user, user.current_tenant_id, protocol)
+    except DocumentPermissionError as exc:
+        raise HTTPException(status_code=403, detail="Not allowed") from exc
+    return coverage.as_dict()
+
+
 @router.patch("/protocols/{protocol_id}", response_model=ProtocolRead)
 def patch_protocol(
     protocol_id: uuid.UUID,

@@ -45,7 +45,7 @@ def pdf_pages(pdf: bytes) -> list[str]:
 
 def normalize(text: str) -> str:
     """Silbentrennung und Leerraum entfernen, damit Zeilenumbrüche im PDF nicht stören."""
-    text = re.sub(r"-\n", "", text)
+    text = re.sub(r"[-\u00ad]\n", "", text).replace("\u00ad", "")
     return re.sub(r"\s+", "", text)
 
 

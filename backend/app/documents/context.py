@@ -179,6 +179,29 @@ class BuildContext:
     # Vorschau im Vorlagen-Editor: Traktanden und Bausteine kommen aus der Konfiguration dieser
     # Sitzungsvorlage (Reihenfolge, Sichtbarkeit, Darstellung), Inhalte aus ``protocol``.
     session_template: Any | None = None
+    # Je Aufbau gesammelt geladene Daten (protocol_content, memo): eine feste Zahl Abfragen statt
+    # einer je Punkt und Block
+    _protocol_contents: dict[int, Any] = field(default_factory=dict, repr=False)
+    _memo: dict[Any, Any] = field(default_factory=dict, repr=False)
+
+    def protocol_content(self, protocol: Any):
+        """Alle Inhalte eines Protokolls (repository.ProtocolContent), einmal je Aufbau."""
+        from app.documents.repository import ProtocolContent
+
+        content = self._protocol_contents.get(protocol.id)
+        if content is None:
+            content = self._protocol_contents[protocol.id] = ProtocolContent(self.db, protocol)
+        return content
+
+    def forget_protocol_content(self, protocol_id: int) -> None:
+        """Nach Änderungen an Blöcken (Mitgliedschaftsblöcke nachführen) neu laden."""
+        self._protocol_contents.pop(protocol_id, None)
+
+    def memo(self, key: Any, loader: Any) -> Any:
+        """Wert einmal je Aufbau berechnen (z. B. alle Termine des Mandanten)."""
+        if key not in self._memo:
+            self._memo[key] = loader()
+        return self._memo[key]
 
     # Rechte ------------------------------------------------------------------
 

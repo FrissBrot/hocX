@@ -130,3 +130,87 @@ def list_todos_by_tag(db: Session, protocol: Protocol, tag: str):
         .where(ProtocolTodo.tags.op("@>")(func.jsonb_build_array(tag)))
         .order_by(ProtocolTodo.sort_index.asc())
     ).all()
+
+
+class ProtocolContent:
+    """Alle Inhalte eines Protokolls für einen PDF-Aufbau, in einer festen Zahl von Abfragen:
+    Punkte, Blöcke, Texte, Bilder und Aufgaben (live oder aus dem eingefrorenen Stand). Vorher
+    fragten die Provider je Punkt und Block einzeln (N+1, tests/test_query_budget.py).
+
+    Gleiche Ergebnisse wie die Einzelfunktionen oben (list_element_blocks, get_protocol_text,
+    list_protocol_images, list_block_todos, list_todos_by_tag); ein Block, der nicht zu diesem
+    Protokoll gehört, fällt auf die Einzelabfrage zurück. Gültig für einen Aufbau
+    (BuildContext.protocol_content); wer Blöcke ändert, verwirft ihn (forget_protocol_content)."""
+
+    def __init__(self, db: Session, protocol: Protocol):
+        self.db = db
+        self.protocol = protocol
+        self.elements = list_protocol_elements(db, protocol.id)
+        self._blocks: dict[int, list[ProtocolElementBlock]] = {element.id: [] for element in self.elements}
+        if self._blocks:
+            for block in db.scalars(
+                select(ProtocolElementBlock)
+                .where(ProtocolElementBlock.protocol_element_id.in_(list(self._blocks)))
+                .order_by(ProtocolElementBlock.sort_index.asc(), ProtocolElementBlock.id.asc())
+            ):
+                self._blocks[block.protocol_element_id].append(block)
+        self._block_ids = {block.id for blocks in self._blocks.values() for block in blocks}
+        self._texts: dict[int, ProtocolText] | None = None
+        self._images: dict[int, list] | None = None
+        self._todos: list | None = None
+
+    def blocks(self, element_id: int) -> list[ProtocolElementBlock]:
+        if element_id not in self._blocks:
+            return list_element_blocks(self.db, element_id)
+        return list(self._blocks[element_id])
+
+    def _known(self, block_id: int | None) -> bool:
+        return block_id is not None and block_id in self._block_ids
+
+    def text(self, block_id: int | None) -> ProtocolText | None:
+        if block_id is None:
+            return None
+        if not self._known(block_id):
+            return get_protocol_text(self.db, block_id)
+        if self._texts is None:
+            self._texts = {
+                text.protocol_element_block_id: text
+                for text in self.db.scalars(select(ProtocolText).where(ProtocolText.protocol_element_block_id.in_(self._block_ids)))
+            }
+        return self._texts.get(block_id)
+
+    def images(self, block_id: int | None) -> list:
+        if block_id is None:
+            return []
+        if not self._known(block_id):
+            return list_protocol_images(self.db, block_id)
+        if self._images is None:
+            self._images = {}
+            for row in self.db.execute(
+                select(ProtocolImage, StoredFile)
+                .join(StoredFile, StoredFile.id == ProtocolImage.stored_file_id)
+                .where(ProtocolImage.protocol_element_block_id.in_(self._block_ids))
+                .order_by(ProtocolImage.sort_index.asc(), ProtocolImage.id.asc())
+            ).all():
+                self._images.setdefault(row.ProtocolImage.protocol_element_block_id, []).append(row)
+        return list(self._images.get(block_id, []))
+
+    def _live_todos(self) -> list:
+        if self._todos is None:
+            self._todos = self.db.execute(
+                _todo_query().where(Protocol.id == self.protocol.id).order_by(ProtocolTodo.sort_index.asc(), ProtocolTodo.id.asc())
+            ).all()
+        return self._todos
+
+    def block_todos(self, block_id: int | None) -> list:
+        if block_id is None:
+            return []
+        if _frozen_todo_snapshot(self.protocol) is not None or not self._known(block_id):
+            return list(list_block_todos(self.db, self.protocol, block_id))
+        return [row for row in self._live_todos() if row.ProtocolTodo.protocol_element_block_id == block_id]
+
+    def todos_by_tag(self, tag: str) -> list:
+        if _frozen_todo_snapshot(self.protocol) is not None:
+            return list(list_todos_by_tag(self.db, self.protocol, tag))
+        # wie ProtocolTodo.tags @> [tag]: exakt dieses Element der Liste
+        return [row for row in self._live_todos() if tag in (row.ProtocolTodo.tags or [])]

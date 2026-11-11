@@ -1,0 +1,283 @@
+{
+  "_hinweis": "Gemeinsamer Prüfkatalog für den Terminfilter: Editor (frontend/lib/element-types/event-filter.ts, Test event-filter-parity.test.ts) und PDF (backend/app/services/event_filter.py, Test tests/test_event_filter_parity.py) müssen für jeden Fall genau diese Termine in dieser Reihenfolge liefern. id = interne ID, uuid = public_id (Editor).",
+  "protocol_date": "2026-06-15",
+  "events": [
+    {
+      "id": 1,
+      "uuid": "0190a000-0000-7000-8000-000000000010",
+      "event_date": "2026-06-01",
+      "event_end_date": null,
+      "title": "Hock Mai",
+      "tag": "Hock",
+      "description": "Rückblick"
+    },
+    {
+      "id": 2,
+      "uuid": "0190a000-0000-7000-8000-000000000020",
+      "event_date": "2026-06-14",
+      "event_end_date": "2026-06-16",
+      "title": "Sommerlager Aufbau",
+      "tag": "Lager, Leitung",
+      "description": null
+    },
+    {
+      "id": 3,
+      "uuid": "0190a000-0000-7000-8000-000000000030",
+      "event_date": "2026-06-15",
+      "event_end_date": null,
+      "title": "Sitzung Juni",
+      "tag": "Sitzung",
+      "description": ""
+    },
+    {
+      "id": 4,
+      "uuid": "0190a000-0000-7000-8000-000000000040",
+      "event_date": "2026-06-20",
+      "event_end_date": null,
+      "title": "Grillabend",
+      "tag": "Hock",
+      "description": "Mit Familien"
+    },
+    {
+      "id": 5,
+      "uuid": "0190a000-0000-7000-8000-000000000050",
+      "event_date": "2026-06-20",
+      "event_end_date": null,
+      "title": "Lagerputz",
+      "tag": "Lager",
+      "description": null
+    },
+    {
+      "id": 6,
+      "uuid": "0190a000-0000-7000-8000-000000000060",
+      "event_date": "2026-07-10",
+      "event_end_date": "2026-07-24",
+      "title": "Sommerlager",
+      "tag": "lager",
+      "description": "Zwei Wochen"
+    },
+    {
+      "id": 7,
+      "uuid": "0190a000-0000-7000-8000-000000000070",
+      "event_date": "2026-09-01",
+      "event_end_date": null,
+      "title": "Herbstwanderung",
+      "tag": null,
+      "description": null
+    },
+    {
+      "id": 8,
+      "uuid": "0190a000-0000-7000-8000-000000000045",
+      "event_date": "2026-06-20",
+      "event_end_date": null,
+      "title": "Elternabend",
+      "tag": "Info",
+      "description": null
+    }
+  ],
+  "cases": [
+    {
+      "name": "alle",
+      "filter": {},
+      "column": null,
+      "expected": [
+        1,
+        2,
+        3,
+        4,
+        8,
+        5,
+        6,
+        7
+      ]
+    },
+    {
+      "name": "zukunft",
+      "filter": {
+        "range": {
+          "mode": "future"
+        }
+      },
+      "column": null,
+      "expected": [
+        2,
+        3,
+        4,
+        8,
+        5,
+        6,
+        7
+      ]
+    },
+    {
+      "name": "vergangen",
+      "filter": {
+        "range": {
+          "mode": "past"
+        }
+      },
+      "column": null,
+      "expected": [
+        1
+      ]
+    },
+    {
+      "name": "fenster_14_tage",
+      "filter": {
+        "range": {
+          "mode": "window",
+          "start_days": 0,
+          "end_days": 14
+        }
+      },
+      "column": null,
+      "expected": [
+        2,
+        3,
+        4,
+        8,
+        5
+      ]
+    },
+    {
+      "name": "fenster_rueckwaerts",
+      "filter": {
+        "range": {
+          "mode": "window",
+          "start_days": -5,
+          "end_days": -20
+        }
+      },
+      "column": null,
+      "expected": [
+        1
+      ]
+    },
+    {
+      "name": "tag_lager",
+      "filter": {
+        "tags": [
+          "lager"
+        ]
+      },
+      "column": null,
+      "expected": [
+        2,
+        5,
+        6
+      ]
+    },
+    {
+      "name": "tags_kommagetrennt_zukunft",
+      "filter": {
+        "tags": "Hock, Info",
+        "range": {
+          "mode": "future"
+        }
+      },
+      "column": null,
+      "expected": [
+        4,
+        8
+      ]
+    },
+    {
+      "name": "titel",
+      "filter": {
+        "title": "LAGER"
+      },
+      "column": null,
+      "expected": [
+        2,
+        5,
+        6
+      ]
+    },
+    {
+      "name": "beschreibung",
+      "filter": {
+        "description": "familien"
+      },
+      "column": null,
+      "expected": [
+        4
+      ]
+    },
+    {
+      "name": "absteigend_limit",
+      "filter": {
+        "range": {
+          "mode": "future"
+        },
+        "sort": "desc",
+        "limit": 2
+      },
+      "column": null,
+      "expected": [
+        7,
+        6
+      ]
+    },
+    {
+      "name": "limit_bei_gleichem_datum",
+      "filter": {
+        "range": {
+          "mode": "future"
+        },
+        "limit": 4
+      },
+      "column": null,
+      "expected": [
+        2,
+        3,
+        4,
+        8
+      ]
+    },
+    {
+      "name": "spalte_titel",
+      "filter": {
+        "use_column_filter": true
+      },
+      "column": {
+        "title": "Lager"
+      },
+      "expected": [
+        2,
+        5,
+        6
+      ]
+    },
+    {
+      "name": "spalte_eigener_tag",
+      "filter": {
+        "use_column_filter": true
+      },
+      "column": {
+        "title": "Lager",
+        "event_tag_filter": "Hock"
+      },
+      "expected": [
+        1,
+        4
+      ]
+    },
+    {
+      "name": "spalte_ohne_schalter",
+      "filter": {},
+      "column": {
+        "title": "Lager"
+      },
+      "expected": [
+        1,
+        2,
+        3,
+        4,
+        8,
+        5,
+        6,
+        7
+      ]
+    }
+  ]
+}
