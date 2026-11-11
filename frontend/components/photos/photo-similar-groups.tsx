@@ -51,7 +51,8 @@ export function PhotoSimilarGroups({
 
   function toggleKeep(groupId: string, imageId: string) {
     setKeepIds((current) => {
-      const set = new Set(current[groupId] ?? [imageId]);
+      // Ohne Startauswahl (Effekt noch nicht gelaufen) gilt wie dort das beste Bild als behalten.
+      const set = new Set(current[groupId] ?? [groupId]);
       if (set.has(imageId)) {
         if (set.size <= 1) return current; // mindestens ein Bild muss behalten bleiben
         set.delete(imageId);

@@ -70,6 +70,12 @@ neue Migrationen, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Ch
   Datenschutz-Export enthält das Versandprotokoll (90 Tage aufbewahrt).
 - Migration `0170_notifications`.
 
+### Behoben
+
+- Fotos, «Ähnliche»: Wer direkt nach dem Laden ein weiteres Bild zum Behalten anhakte, verlor
+  diese Auswahl unter Umständen wieder, und «Auswahl löschen» hätte auch dieses Bild gelöscht.
+  Das beste Bild gilt jetzt auch in diesem Moment als behalten, der Haken bleibt stehen.
+
 ## [1.2.4] - 2026-11-11
 
 Rückmeldungen aus dem Testbetrieb von 1.2.3: flüssigeres Scrollen im Protokoll mit einem neuen
