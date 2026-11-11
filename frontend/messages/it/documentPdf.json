@@ -602,6 +602,36 @@
     "test": {
       "subject": "hocX: e-mail di prova",
       "body": "Questa e-mail di prova conferma che l'invio di e-mail da hocX funziona."
+    },
+    "account": {
+      "resetSubject": "hocX: reimposta la password",
+      "resetIntro": "È stata richiesta una nuova password per il tuo account presso {tenant}.",
+      "resetValidity": "Il link è valido per {minutes} minuti e funziona una sola volta.",
+      "resetIgnore": "Non l’hai richiesta tu? Ignora questa e-mail. La tua password resta invariata.",
+      "resetAction": "Imposta una nuova password",
+      "inviteSubject": "{tenant}: invito a hocX",
+      "inviteIntro": "{tenant} ti invita a hocX. Imposta una password per configurare il tuo account.",
+      "inviteValidity": "Il link è valido per {days} giorni e funziona una sola volta.",
+      "inviteAction": "Configura account",
+      "linkFallback": "Se il pulsante non funziona, apri questo link: {url}"
+    },
+    "security": {
+      "subject": "{tenant}: avviso di sicurezza sul tuo account",
+      "intro": "Sul tuo account presso {tenant} è stato modificato quanto segue:",
+      "passwordChanged": "Password modificata ({at})",
+      "passwordChangedByAdmin": "Password reimpostata dall’amministrazione dell’associazione ({at})",
+      "mfaAdded": "Secondo fattore aggiunto ({at})",
+      "mfaRemoved": "Secondo fattore rimosso ({at})",
+      "mfaRemovedByAdmin": "Secondo fattore rimosso dall’amministrazione dell’associazione ({at})",
+      "hint": "Non sei stato tu? Contatta subito {tenant}.",
+      "mandatory": "Gli avvisi di sicurezza vengono sempre inviati e non si possono disattivare."
+    },
+    "export": {
+      "subjectReady": "{tenant}: esportazione dati pronta",
+      "subjectFailed": "{tenant}: esportazione dati non riuscita",
+      "ready": "L’esportazione dati «{filename}» è pronta. Puoi scaricarla in hocX in Impostazioni associazione > Protezione dei dati.",
+      "failed": "Non è stato possibile creare l’esportazione dati. Richiedila di nuovo in hocX in Impostazioni associazione > Protezione dei dati.",
+      "openButton": "Apri esportazione"
     }
   },
   "eventField": {

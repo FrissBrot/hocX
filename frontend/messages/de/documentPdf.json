@@ -602,6 +602,36 @@
     "test": {
       "subject": "hocX: Test-E-Mail",
       "body": "Diese Test-E-Mail bestätigt, dass der E-Mail-Versand von hocX funktioniert."
+    },
+    "account": {
+      "resetSubject": "hocX: Passwort zurücksetzen",
+      "resetIntro": "Für dein Konto bei {tenant} wurde ein neues Passwort angefordert.",
+      "resetValidity": "Der Link ist {minutes} Minuten gültig und funktioniert nur einmal.",
+      "resetIgnore": "Hast du das nicht angefordert? Dann ignoriere diese E-Mail. Dein Passwort bleibt unverändert.",
+      "resetAction": "Neues Passwort festlegen",
+      "inviteSubject": "{tenant}: Einladung zu hocX",
+      "inviteIntro": "{tenant} lädt dich zu hocX ein. Lege ein Passwort fest, um dein Konto einzurichten.",
+      "inviteValidity": "Der Link ist {days} Tage gültig und funktioniert nur einmal.",
+      "inviteAction": "Konto einrichten",
+      "linkFallback": "Falls die Schaltfläche nicht funktioniert, öffne diesen Link: {url}"
+    },
+    "security": {
+      "subject": "{tenant}: Sicherheitshinweis zu deinem Konto",
+      "intro": "An deinem Konto bei {tenant} wurde Folgendes geändert:",
+      "passwordChanged": "Passwort geändert ({at})",
+      "passwordChangedByAdmin": "Passwort durch die Vereinsverwaltung neu gesetzt ({at})",
+      "mfaAdded": "Zweiter Faktor hinzugefügt ({at})",
+      "mfaRemoved": "Zweiter Faktor entfernt ({at})",
+      "mfaRemovedByAdmin": "Zweiter Faktor durch die Vereinsverwaltung entfernt ({at})",
+      "hint": "Warst du das nicht? Melde dich sofort bei {tenant}.",
+      "mandatory": "Sicherheitshinweise bekommst du immer, sie lassen sich nicht abbestellen."
+    },
+    "export": {
+      "subjectReady": "{tenant}: Datenexport bereit",
+      "subjectFailed": "{tenant}: Datenexport fehlgeschlagen",
+      "ready": "Der Datenexport «{filename}» ist fertig. Du kannst ihn in hocX unter Vereinseinstellungen > Datenschutz herunterladen.",
+      "failed": "Der Datenexport konnte nicht erstellt werden. Bitte bestelle ihn in hocX unter Vereinseinstellungen > Datenschutz erneut.",
+      "openButton": "Export öffnen"
     }
   },
   "eventField": {

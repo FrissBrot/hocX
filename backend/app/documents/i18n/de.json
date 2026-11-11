@@ -336,9 +336,39 @@
     "nextSession": "nächste Sitzung"
   },
   "email": {
+    "account": {
+      "inviteAction": "Konto einrichten",
+      "inviteIntro": "{tenant} lädt dich zu hocX ein. Lege ein Passwort fest, um dein Konto einzurichten.",
+      "inviteSubject": "{tenant}: Einladung zu hocX",
+      "inviteValidity": "Der Link ist {days} Tage gültig und funktioniert nur einmal.",
+      "linkFallback": "Falls die Schaltfläche nicht funktioniert, öffne diesen Link: {url}",
+      "resetAction": "Neues Passwort festlegen",
+      "resetIgnore": "Hast du das nicht angefordert? Dann ignoriere diese E-Mail. Dein Passwort bleibt unverändert.",
+      "resetIntro": "Für dein Konto bei {tenant} wurde ein neues Passwort angefordert.",
+      "resetSubject": "hocX: Passwort zurücksetzen",
+      "resetValidity": "Der Link ist {minutes} Minuten gültig und funktioniert nur einmal."
+    },
+    "export": {
+      "failed": "Der Datenexport konnte nicht erstellt werden. Bitte bestelle ihn in hocX unter Vereinseinstellungen > Datenschutz erneut.",
+      "openButton": "Export öffnen",
+      "ready": "Der Datenexport «{filename}» ist fertig. Du kannst ihn in hocX unter Vereinseinstellungen > Datenschutz herunterladen.",
+      "subjectFailed": "{tenant}: Datenexport fehlgeschlagen",
+      "subjectReady": "{tenant}: Datenexport bereit"
+    },
     "footer": "Diese Nachricht kommt von {tenant} über hocX.",
     "greeting": "Hallo {name}",
     "noLoginHint": "Fragen zu dieser Nachricht? Wende dich an {tenant}.",
+    "security": {
+      "hint": "Warst du das nicht? Melde dich sofort bei {tenant}.",
+      "intro": "An deinem Konto bei {tenant} wurde Folgendes geändert:",
+      "mandatory": "Sicherheitshinweise bekommst du immer, sie lassen sich nicht abbestellen.",
+      "mfaAdded": "Zweiter Faktor hinzugefügt ({at})",
+      "mfaRemoved": "Zweiter Faktor entfernt ({at})",
+      "mfaRemovedByAdmin": "Zweiter Faktor durch die Vereinsverwaltung entfernt ({at})",
+      "passwordChanged": "Passwort geändert ({at})",
+      "passwordChangedByAdmin": "Passwort durch die Vereinsverwaltung neu gesetzt ({at})",
+      "subject": "{tenant}: Sicherheitshinweis zu deinem Konto"
+    },
     "settingsHint": "Welche E-Mails du bekommst, stellst du in deinen Einstellungen ein: {url}",
     "test": {
       "body": "Diese Test-E-Mail bestätigt, dass der E-Mail-Versand von hocX funktioniert.",

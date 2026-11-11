@@ -251,3 +251,14 @@
 @media (max-width: 640px) {
   .login-panel-wide .maintenance-banner { margin: calc(-1 * var(--space-5)) calc(-1 * var(--space-5)) 0; }
 }
+
+/* «Passwort vergessen?» unter dem Login (nur wenn der E-Mail-Versand eingerichtet ist) */
+.login-forgot-link {
+  justify-self: center;
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.login-forgot-link:hover {
+  color: var(--accent);
+}

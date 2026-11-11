@@ -595,61 +595,77 @@
         "meetings.edit"
       ]
     },
+    "POST /api/auth/account-link/complete": {
+      "handler": "auth.account_link_complete",
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
+    },
+    "POST /api/auth/account-link/preview": {
+      "handler": "auth.account_link_preview",
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
+    },
     "GET /api/auth/bridge": {
       "handler": "auth.bridge",
-      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge"
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
     },
     "POST /api/auth/bridge": {
       "handler": "auth.redeem_bridge",
-      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge"
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
     },
     "POST /api/auth/bridge/preview": {
       "handler": "auth.bridge_preview",
-      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge"
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
     },
     "POST /api/auth/login": {
       "handler": "auth.login",
-      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge"
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
     },
     "POST /api/auth/logout": {
       "handler": "auth.logout",
-      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge"
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
     },
     "POST /api/auth/mfa/passkeys/assertion/start": {
       "handler": "auth.start_login_passkey_assertion",
-      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge"
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
     },
     "POST /api/auth/mfa/passkeys/assertion/verify": {
       "handler": "auth.verify_login_passkey",
-      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge"
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
     },
     "POST /api/auth/mfa/passkeys/setup/complete": {
       "handler": "auth.complete_login_passkey_setup",
-      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge"
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
     },
     "POST /api/auth/mfa/passkeys/setup/start": {
       "handler": "auth.start_login_passkey_setup",
-      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge"
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
     },
     "POST /api/auth/mfa/totp/setup/complete": {
       "handler": "auth.complete_login_totp_setup",
-      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge"
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
     },
     "POST /api/auth/mfa/totp/setup/start": {
       "handler": "auth.start_login_totp_setup",
-      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge"
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
     },
     "POST /api/auth/mfa/totp/verify": {
       "handler": "auth.verify_login_totp",
-      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge"
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
+    },
+    "GET /api/auth/password-reset/available": {
+      "handler": "auth.password_reset_available",
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
+    },
+    "POST /api/auth/password-reset/request": {
+      "handler": "auth.request_password_reset",
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
     },
     "GET /api/auth/session": {
       "handler": "auth.session",
-      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge"
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
     },
     "GET /api/auth/tenant-by-domain": {
       "handler": "auth.tenant_by_domain",
-      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge"
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
     },
     "GET /api/calendar-feeds": {
       "handler": "calendar_feeds.list_calendar_feeds",
@@ -1600,6 +1616,12 @@
         "participants.manage"
       ]
     },
+    "GET /api/participants/invites": {
+      "handler": "participants.list_participant_invites",
+      "requires": [
+        "access.manage"
+      ]
+    },
     "DELETE /api/participants/{participant_id}": {
       "handler": "participants.delete_participant",
       "requires": [
@@ -1609,6 +1631,20 @@
     },
     "PATCH /api/participants/{participant_id}": {
       "handler": "participants.patch_participant",
+      "requires": [
+        "access.manage",
+        "participants.manage"
+      ]
+    },
+    "DELETE /api/participants/{participant_id}/invite": {
+      "handler": "participants.revoke_participant_invite",
+      "requires": [
+        "access.manage",
+        "participants.manage"
+      ]
+    },
+    "POST /api/participants/{participant_id}/invite": {
+      "handler": "participants.invite_participant",
       "requires": [
         "access.manage",
         "participants.manage"

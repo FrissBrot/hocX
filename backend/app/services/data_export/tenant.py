@@ -27,6 +27,7 @@ from app.documents.strings import normalize_language, text
 from app.models import TenantDataExport
 from app.services.data_export import workbook
 from app.services.data_export.archive import EncryptedZip, safe_name, validate_password
+from app.notifications.exports import on_export_finished as notify_export_finished
 
 _logger = logging.getLogger(__name__)
 
@@ -109,6 +110,7 @@ def process_pending(db: Session) -> dict[str, int]:
         if job is not None:
             job.status, job.finished_at, job.password_encrypted = "failed", datetime.now(UTC), None
             job.error = type(exc).__name__
+            notify_export_finished(db, job)
             db.commit()
         result["failed"] += 1
     return result
@@ -132,6 +134,7 @@ def _fail_stale(db: Session) -> int:
     jobs = list(db.scalars(select(TenantDataExport).where(TenantDataExport.status == "running", TenantDataExport.started_at < cutoff)))
     for job in jobs:
         job.status, job.finished_at, job.password_encrypted, job.error = "failed", datetime.now(UTC), None, "timeout"
+        notify_export_finished(db, job)
     if jobs:
         db.commit()
     return len(jobs)
@@ -159,6 +162,7 @@ def _build(db: Session, job: TenantDataExport) -> None:
     job.object_key, job.size_bytes, job.password_encrypted = key, info.size, None
     job.filename = f"{_t(lang, 'tenant.prefix')}-{safe_name(tenant_name, 'Verein')}-{date.today():%Y%m%d}.zip"
     job.error = f"missing:{missing}" if missing else None
+    notify_export_finished(db, job)
     db.commit()
 
 

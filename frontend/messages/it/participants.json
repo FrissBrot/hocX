@@ -109,5 +109,20 @@
     "action": "Diritto d’accesso",
     "title": "Dati personali di {name}",
     "description": "Tutti i dati di questa persona salvati in hocX, come file ZIP protetto da password (Excel e JSON). Il download viene registrato nella cronologia."
+  },
+  "invite": {
+    "title": "Invito via e-mail",
+    "hint": "Invece di impostare una password: la persona riceve un link e imposta lei stessa la password. L’accesso si attiva quando accetta l’invito.",
+    "needsEmail": "Per un invito la persona deve avere un indirizzo e-mail salvato.",
+    "pendingQueued": "L’invito verrà inviato a breve.",
+    "pendingSent": "Invito inviato il {sent}, valido fino al {expires}.",
+    "send": "Invita via e-mail",
+    "resend": "Invia di nuovo",
+    "revoke": "Ritira invito",
+    "revokeConfirm": "Ritirare l’invito a {name}? Il link nell’e-mail non funzionerà più.",
+    "sentToast": "L’invito a {email} è in fase di invio.",
+    "revokedToast": "Invito ritirato.",
+    "failed": "Non è stato possibile elaborare l’invito.",
+    "badge": "Invitato"
   }
 }

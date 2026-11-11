@@ -109,5 +109,20 @@
     "action": "Data access request",
     "title": "Personal data of {name}",
     "description": "All data stored in hocX about this person as a password-protected ZIP file (Excel and JSON). The download is recorded in the activity log."
+  },
+  "invite": {
+    "title": "Invitation by email",
+    "hint": "Instead of setting a password: the person receives a link and sets their own password. Sign-in becomes active once they accept the invitation.",
+    "needsEmail": "An invitation needs a saved email address for this person.",
+    "pendingQueued": "The invitation will be sent shortly.",
+    "pendingSent": "Invitation sent on {sent}, valid until {expires}.",
+    "send": "Invite by email",
+    "resend": "Send again",
+    "revoke": "Withdraw invitation",
+    "revokeConfirm": "Withdraw the invitation to {name}? The link in the email will no longer work.",
+    "sentToast": "The invitation to {email} is being sent.",
+    "revokedToast": "Invitation withdrawn.",
+    "failed": "The invitation could not be processed.",
+    "badge": "Invited"
   }
 }

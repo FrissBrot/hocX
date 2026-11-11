@@ -109,5 +109,20 @@
     "action": "Droit d’accès",
     "title": "Données personnelles de {name}",
     "description": "Toutes les données de cette personne enregistrées dans hocX, sous forme de fichier ZIP protégé par mot de passe (Excel et JSON). Le téléchargement est consigné dans l’historique."
+  },
+  "invite": {
+    "title": "Invitation par e-mail",
+    "hint": "Au lieu de définir un mot de passe : la personne reçoit un lien et définit elle-même son mot de passe. La connexion devient active dès qu’elle accepte l’invitation.",
+    "needsEmail": "Pour une invitation, la personne doit avoir une adresse e-mail enregistrée.",
+    "pendingQueued": "L’invitation sera envoyée sous peu.",
+    "pendingSent": "Invitation envoyée le {sent}, valable jusqu’au {expires}.",
+    "send": "Inviter par e-mail",
+    "resend": "Renvoyer",
+    "revoke": "Retirer l’invitation",
+    "revokeConfirm": "Retirer l’invitation de {name} ? Le lien de l’e-mail ne fonctionnera plus.",
+    "sentToast": "L’invitation à {email} est en cours d’envoi.",
+    "revokedToast": "Invitation retirée.",
+    "failed": "L’invitation n’a pas pu être traitée.",
+    "badge": "Invité·e"
   }
 }

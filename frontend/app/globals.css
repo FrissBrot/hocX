@@ -5730,6 +5730,12 @@ input[type="color"]::-moz-color-swatch {
   text-decoration: underline;
 }
 
+/* «Passwort vergessen» und Einladung (app/auth/forgot-password, app/auth/set-password) */
+.account-link-form {
+  display: grid;
+  gap: var(--space-4);
+}
+
 .login-status {
   margin: 0;
   text-align: center;

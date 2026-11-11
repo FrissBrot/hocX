@@ -336,9 +336,39 @@
     "nextSession": "prochaine séance"
   },
   "email": {
+    "account": {
+      "inviteAction": "Configurer le compte",
+      "inviteIntro": "{tenant} t’invite à rejoindre hocX. Définis un mot de passe pour configurer ton compte.",
+      "inviteSubject": "{tenant} : invitation à hocX",
+      "inviteValidity": "Le lien est valable {days} jours et ne fonctionne qu’une seule fois.",
+      "linkFallback": "Si le bouton ne fonctionne pas, ouvre ce lien : {url}",
+      "resetAction": "Définir un nouveau mot de passe",
+      "resetIgnore": "Tu n’as rien demandé ? Ignore cet e-mail. Ton mot de passe reste inchangé.",
+      "resetIntro": "Un nouveau mot de passe a été demandé pour ton compte chez {tenant}.",
+      "resetSubject": "hocX : réinitialiser ton mot de passe",
+      "resetValidity": "Le lien est valable {minutes} minutes et ne fonctionne qu’une seule fois."
+    },
+    "export": {
+      "failed": "L’export de données n’a pas pu être créé. Merci de le redemander dans hocX sous Paramètres de l’association > Protection des données.",
+      "openButton": "Ouvrir l’export",
+      "ready": "L’export de données « {filename} » est prêt. Tu peux le télécharger dans hocX sous Paramètres de l’association > Protection des données.",
+      "subjectFailed": "{tenant} : échec de l’export de données",
+      "subjectReady": "{tenant} : export de données prêt"
+    },
     "footer": "Ce message vient de {tenant} via hocX.",
     "greeting": "Bonjour {name}",
     "noLoginHint": "Des questions sur ce message ? Adresse-toi à {tenant}.",
+    "security": {
+      "hint": "Ce n’était pas toi ? Contacte immédiatement {tenant}.",
+      "intro": "Les éléments suivants ont été modifiés sur ton compte chez {tenant} :",
+      "mandatory": "Les avis de sécurité sont toujours envoyés et ne peuvent pas être désactivés.",
+      "mfaAdded": "Deuxième facteur ajouté ({at})",
+      "mfaRemoved": "Deuxième facteur supprimé ({at})",
+      "mfaRemovedByAdmin": "Deuxième facteur supprimé par l’administration de l’association ({at})",
+      "passwordChanged": "Mot de passe modifié ({at})",
+      "passwordChangedByAdmin": "Mot de passe redéfini par l’administration de l’association ({at})",
+      "subject": "{tenant} : avis de sécurité concernant ton compte"
+    },
     "settingsHint": "Choisis les e-mails que tu reçois dans tes paramètres : {url}",
     "test": {
       "body": "Cet e-mail de test confirme que l'envoi d'e-mails de hocX fonctionne.",

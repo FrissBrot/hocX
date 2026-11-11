@@ -96,3 +96,12 @@ class ParticipantTemplateAssignmentUpdate(BaseModel):
 
 class ParticipantBulkDelete(BaseModel):
     participant_ids: list[uuid.UUID]
+
+
+class ParticipantInviteRead(BaseModel):
+    """Offene Einladung per E-Mail (notifications/account.py). sent_at/expires_at erst nach Versand."""
+
+    participant_id: uuid.UUID
+    created_at: datetime
+    sent_at: datetime | None = None
+    expires_at: datetime | None = None

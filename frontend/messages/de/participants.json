@@ -109,5 +109,20 @@
     "action": "Datenauskunft",
     "title": "Datenauskunft für {name}",
     "description": "Alle in hocX gespeicherten Daten dieser Person als passwortgeschützte ZIP-Datei (Excel und JSON). Der Abruf wird im Verlauf protokolliert."
+  },
+  "invite": {
+    "title": "Einladung per E-Mail",
+    "hint": "Statt ein Passwort zu setzen: Die Person bekommt einen Link und legt ihr Passwort selbst fest. Der Login wird aktiv, sobald sie die Einladung annimmt.",
+    "needsEmail": "Für eine Einladung braucht die Person eine gespeicherte E-Mail-Adresse.",
+    "pendingQueued": "Einladung wird in Kürze verschickt.",
+    "pendingSent": "Einladung verschickt am {sent}, gültig bis {expires}.",
+    "send": "Per E-Mail einladen",
+    "resend": "Erneut senden",
+    "revoke": "Einladung zurückziehen",
+    "revokeConfirm": "Einladung an {name} zurückziehen? Der Link in der E-Mail funktioniert danach nicht mehr.",
+    "sentToast": "Einladung an {email} wird verschickt.",
+    "revokedToast": "Einladung zurückgezogen.",
+    "failed": "Die Einladung konnte nicht verarbeitet werden.",
+    "badge": "Eingeladen"
   }
 }

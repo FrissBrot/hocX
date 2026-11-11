@@ -29,6 +29,7 @@ from app.core.config import settings
 from app.core.redis_client import get_redis_sync
 from app.models import AppUser, UserMfaFactor
 from app.services.role_service import ensure_can_manage_account
+from app.notifications import account as account_notifications
 from app.schemas.mfa import (
     MfaFactorRead,
     MfaPendingLoginMethodRead,
@@ -237,6 +238,7 @@ class MfaService:
                 detail="Tenant-Administratoren müssen mindestens einen MFA-Faktor behalten",
             )
         db.delete(factor)
+        account_notifications.notify_security(db, user, "security.mfa_removed")
         db.commit()
         self._sync_preferred_factor_type(db, user, self._list_factors(db, actor.user_id))
         return self.get_self_overview(db, actor, request_host=None)
@@ -251,6 +253,7 @@ class MfaService:
         # den zweiten Faktor zurücksetzt, soll keine bestehende Anmeldung weiterlaufen lassen.
         user.session_revoke_at = datetime.now(UTC)
         db.add(user)
+        account_notifications.notify_security(db, user, "security.mfa_removed", by_admin=True)
         db.commit()
         self._sync_preferred_factor_type(db, user, self._list_factors(db, user.id))
         return self.get_managed_user_overview(db, actor, user.id)
@@ -267,6 +270,7 @@ class MfaService:
         # den zweiten Faktor zurücksetzt, soll keine bestehende Anmeldung weiterlaufen lassen.
         user.session_revoke_at = datetime.now(UTC)
         db.add(user)
+        account_notifications.notify_security(db, user, "security.mfa_removed", by_admin=True)
         db.commit()
         self._sync_preferred_factor_type(db, user, self._list_factors(db, user.id))
         return self.get_platform_admin_user_overview(db, user.id)
@@ -394,6 +398,7 @@ class MfaService:
             last_used_at=datetime.now(UTC),
         )
         db.add(factor)
+        account_notifications.notify_security(db, user, "security.mfa_added")
         db.commit()
         db.refresh(factor)
         self._sync_preferred_factor_type(db, user, self._list_factors(db, user.id))
@@ -575,6 +580,7 @@ class MfaService:
             **passkey_factor_fields(registered, rp_id=rp_id),
         )
         db.add(factor)
+        account_notifications.notify_security(db, user, "security.mfa_added")
         db.commit()
         db.refresh(factor)
         self._sync_preferred_factor_type(db, user, self._list_factors(db, user.id))

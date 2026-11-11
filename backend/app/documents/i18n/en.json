@@ -336,9 +336,39 @@
     "nextSession": "next meeting"
   },
   "email": {
+    "account": {
+      "inviteAction": "Set up account",
+      "inviteIntro": "{tenant} invites you to hocX. Set a password to set up your account.",
+      "inviteSubject": "{tenant}: Invitation to hocX",
+      "inviteValidity": "The link is valid for {days} days and works only once.",
+      "linkFallback": "If the button doesn't work, open this link: {url}",
+      "resetAction": "Set a new password",
+      "resetIgnore": "Didn't request this? Then ignore this email. Your password stays unchanged.",
+      "resetIntro": "A new password was requested for your account at {tenant}.",
+      "resetSubject": "hocX: Reset your password",
+      "resetValidity": "The link is valid for {minutes} minutes and works only once."
+    },
+    "export": {
+      "failed": "The data export could not be created. Please request it again in hocX under Club settings > Privacy.",
+      "openButton": "Open export",
+      "ready": "The data export “{filename}” is ready. You can download it in hocX under Club settings > Privacy.",
+      "subjectFailed": "{tenant}: Data export failed",
+      "subjectReady": "{tenant}: Data export ready"
+    },
     "footer": "This message comes from {tenant} via hocX.",
     "greeting": "Hello {name}",
     "noLoginHint": "Questions about this message? Please contact {tenant}.",
+    "security": {
+      "hint": "Wasn't you? Contact {tenant} immediately.",
+      "intro": "The following was changed on your account at {tenant}:",
+      "mandatory": "Security notices are always sent and can't be turned off.",
+      "mfaAdded": "Second factor added ({at})",
+      "mfaRemoved": "Second factor removed ({at})",
+      "mfaRemovedByAdmin": "Second factor removed by the club administration ({at})",
+      "passwordChanged": "Password changed ({at})",
+      "passwordChangedByAdmin": "Password reset by the club administration ({at})",
+      "subject": "{tenant}: Security notice for your account"
+    },
     "settingsHint": "Choose which emails you receive in your settings: {url}",
     "test": {
       "body": "This test email confirms that email delivery from hocX works.",

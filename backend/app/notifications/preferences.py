@@ -23,6 +23,7 @@ def read(db: Session, user_id: int, tenant_id: int) -> NotificationPreferencesRe
         preferences=[
             NotificationPreferenceRead(category=key, enabled=bool(stored.get(key, category.default)))  # type: ignore[arg-type]
             for key, category in CATEGORIES.items()
+            if category.configurable
         ],
         has_email=bool(person and (person.email or "").strip()),
         email_enabled=bool(platform and platform.email_enabled),

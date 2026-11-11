@@ -1,7 +1,7 @@
 # Benachrichtigungen
 
 Zentraler, einheitlicher Weg, um Personen zu benachrichtigen. Heute nur per E-Mail (SMTP), später
-weitere Kanäle. Code: `backend/app/notifications/`, Migration `0170_notifications`.
+weitere Kanäle. Code: `backend/app/notifications/`, Migrationen `0170_notifications` und `0171_account_tokens`.
 
 ## Entscheidungen (2026-11-11)
 
@@ -42,8 +42,41 @@ weitere Kanäle. Code: `backend/app/notifications/`, Migration `0170_notificatio
 | `todo.assigned` | `todo_new` | `todo.new` | 10 Minuten |
 | `todo.due_soon` | `todo_reminders` | `todo.reminder` | – |
 | `todo.overdue` | `todo_reminders` | `todo.reminder` | – |
+| `account.password_reset` | `account` (Pflicht) | `account.password_reset` | – |
+| `account.invite` | `account` (Pflicht) | `account.invite` | – |
+| `security.password_changed`, `security.mfa_added`, `security.mfa_removed` | `account` (Pflicht) | `account.security` | – |
+| `export.ready`, `export.failed` | `exports` | `export` | – |
 
 Kategorien schalten Personen im Profil (Reiter «Benachrichtigungen») ein oder aus; Standard ist ein.
+Die Kategorie `account` ist Pflicht (`configurable=False`): sie erscheint nicht in den Einstellungen und
+erreicht die Person immer. Einladungen (`account.invite`) gehen auch an Konten ohne Login
+(`GROUPS_WITHOUT_LOGIN`), alles andere nur mit Login oder `notify_without_login`.
+
+## Einmal-Links: «Passwort vergessen» und Einladung (Phase 3)
+
+Code: `backend/app/notifications/account.py`, Tabelle `account_token` (Migration `0171_account_tokens`).
+
+1. **Anfrage:** `POST /api/auth/password-reset/request` (öffentlich, je IP 10 pro 15 Minuten, je
+   Adresse 3 pro Stunde) antwortet immer `202`, ob es das Konto gibt oder nicht. Der Link entsteht
+   erst nach der Antwort im Hintergrund (`BackgroundTasks`), damit auch die Antwortzeit nichts
+   verrät. Nur aktive Konten mit Login. Einladung: `POST /api/participants/{id}/invite`
+   (`participants.manage` + `access.manage`, keine Übernahme Höherberechtigter), nur für aktive
+   Personen ohne Login mit E-Mail; E-Mail-Eindeutigkeit und Benutzerlimit werden geprüft.
+2. **Zeile ohne Token:** `account_token` mit Zweck, offene ältere Links derselben Art werden widerrufen.
+3. **Versand:** Erst der Versand-Loop erzeugt das Token (`secrets.token_urlsafe(32)`), speichert nur
+   den SHA-256-Hash und setzt die Gültigkeit ab Versand (Passwort 60 Minuten, Einladung 7 Tage). Das
+   Token steht nur in der Mail, im URL-Fragment: `<Basis-URL>/auth/set-password#token=…`.
+4. **Einlösen:** Die Seite `/auth/set-password` liest das Fragment, entfernt es aus Adresszeile und
+   Verlauf und schickt es nur im Body (`/api/auth/account-link/preview` und `/complete`, je IP 30 pro
+   15 Minuten). Einmalig (Zeilensperre), setzt das Passwort und `session_revoke_at`; die Einladung
+   schaltet zusätzlich den Login frei. Ein zweiter Faktor bleibt bestehen und wird beim Login weiter
+   verlangt. Danach Sicherheitshinweis (nur beim Zurücksetzen) und Audit-Eintrag.
+5. **Aufräumen:** benutzte, widerrufene und abgelaufene Links nach 90 Tagen (Loop `notification_dispatch`).
+   Der Datenschutz-Export der Person zeigt Zweck und Zeitpunkte (Bereich «security»), nie den Hash.
+
+Sicherheitshinweise (Passwort geändert, auch durch die Verwaltung; zweiter Faktor hinzugefügt oder
+entfernt) entstehen in `user_service` und `mfa_service` in derselben Transaktion wie die Änderung.
+«Datenexport fertig» kommt aus `services/data_export/tenant.py` an die bestellende Person.
 
 ## Neue Benachrichtigung hinzufügen
 
@@ -71,10 +104,11 @@ Stand 2026-11-11. Prio P0 = vor der Vermarktung nötig, P3 = nice to have.
 
 | Bereich | Ereignis | Empfänger | Prio | Status |
 |---|---|---|---|---|
-| Konto/Sicherheit (Pflicht, nicht abbestellbar) | Passwort zurücksetzen (Einmal-Link) | Person | P0 | offen |
-| | Konto-Einladung statt vom Admin gesetztem Passwort | neue Person | P0 | offen |
-| | Passwort geändert, MFA geändert/zurückgesetzt, Sitzungen beendet | Person | P1 | offen |
-| | Vereins-Datenexport fertig | Besteller | P1 | offen |
+| Konto/Sicherheit (Pflicht, nicht abbestellbar) | Passwort zurücksetzen (Einmal-Link) | Person | P0 | **umgesetzt** |
+| | Konto-Einladung statt vom Admin gesetztem Passwort | neue Person | P0 | **umgesetzt** |
+| | Passwort geändert, MFA geändert/zurückgesetzt | Person | P1 | **umgesetzt** |
+| | Sitzungen beendet («überall abmelden» durch die Verwaltung) | Person | P2 | offen |
+| | Vereins-Datenexport fertig | Besteller | P1 | **umgesetzt** |
 | Aufgaben | neue Aufgabe (Sammelmail) | Verantwortliche | P1 | **umgesetzt** |
 | | fällig in 3 Tagen / seit gestern überfällig | Verantwortliche | P1 | **umgesetzt** |
 | Sitzungen | Einladung mit Traktandenliste (von Hand, Versandprotokoll) | Teilnehmende | P1 | offen |
@@ -97,7 +131,7 @@ Stand 2026-11-11. Prio P0 = vor der Vermarktung nötig, P3 = nice to have.
 1. **Fundament** – ✅ Katalog, Warteschlange, SMTP, Versand-Loop, Admin-Seite, Einstellungen im Profil.
    Offen: Mailpit im Dev-/E2E-Stack, Prüfung «E-Mail» in `/admin/system` mit ntfy-Alarm.
 2. **Aufgaben** – ✅ neue Aufgaben, Erinnerungen, Personen ohne Login per Admin.
-3. **Konto und Sicherheit** – Passwort zurücksetzen und Einladung (öffentliche Endpunkte mit
+3. **Konto und Sicherheit** – ✅ Passwort zurücksetzen und Einladung (öffentliche Endpunkte mit
    Rate-Limit, Einmal-Token gehasht, Link per URL-Fragment), Sicherheitshinweise, Export fertig.
 4. **Sitzungen** – Einladung/Protokoll versenden mit Versandprotokoll, Erinnerung vor Sitzungen,
    später An-/Abmeldung per Link.
@@ -107,8 +141,8 @@ Stand 2026-11-11. Prio P0 = vor der Vermarktung nötig, P3 = nice to have.
 
 ## Ausblick
 
-Weitere Benachrichtigungen aus dem Audit (Passwort zurücksetzen, Einladung, Sicherheitshinweise,
-Versand von Einladung/Protokoll, Bussen, Abgabebox, Aufbewahrung, Wartung) nutzen denselben Weg.
+Weitere Benachrichtigungen aus dem Audit (Versand von Einladung/Protokoll, Bussen, Abgabebox,
+Aufbewahrung, Wartung) nutzen denselben Weg.
 Weitere Kanäle (Web-Push für die PWA, Posteingang in der App) werden als zusätzlicher Versand je
-Zeile ergänzt, ohne den Fachcode zu ändern. Für Mails mit Einmal-Links (Passwort) und echtes
-Abmelden ohne Login braucht es noch öffentliche Endpunkte mit Rate-Limit.
+Zeile ergänzt, ohne den Fachcode zu ändern. Für echtes Abmelden ohne Login (`List-Unsubscribe`)
+braucht es noch einen öffentlichen Endpunkt mit Rate-Limit, nach dem Muster der Einmal-Links.

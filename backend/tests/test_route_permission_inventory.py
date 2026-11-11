@@ -29,7 +29,7 @@ ADMIN_DEPENDENCIES = ("get_current_admin", "require_admin_write", "require_admin
 # Bewusst ohne eigene Funktionsberechtigung - Kategorie: Begründung.
 ALLOWED = {
     # Öffentlich bzw. Anmeldung: eigenes Sicherheitsmodell (Token, Rate-Limit, Login-Ablauf).
-    "auth.*": "Anmeldung, MFA beim Login, Session, Domain-Bridge",
+    "auth.*": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung",
     "public_share.*": "öffentliche Freigabelinks: Token + Rate-Limit (share_link_service)",
     "public_catalog.*": "öffentlicher Preis-/Kundenkatalog der Website",
     "maintenance_public.*": "öffentlicher Wartungsstatus",

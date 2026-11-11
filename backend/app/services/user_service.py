@@ -12,6 +12,7 @@ from app.core.permissions import P
 from app.core.security import CurrentUser, hash_password, require_permission, verify_password
 from app.core.tenant_scope import tenant_scope_suspended
 from app.models import AppUser, Tenant
+from app.notifications import account as account_notifications
 from app.services import public_id_service, user_limit_service
 from app.services import role_service
 from app.services.access_service import AccessService
@@ -195,6 +196,7 @@ class UserService:
         return self._update_user_core(db, user, payload, actor=None)
 
     def _update_user_core(self, db: Session, user: AppUser, payload: UserUpdate, actor: CurrentUser | None):
+        was_login_enabled = bool(user.login_enabled)
         values = payload.model_dump(exclude_unset=True, exclude={"password", "role_ids", "system_role"})
         if "email" in values:
             values["email"] = values["email"].strip().lower() if values["email"] and values["email"].strip() else None
@@ -223,6 +225,11 @@ class UserService:
             values["password_hash"] = hash_password(payload.password)
             # Password change invalidates all existing sessions
             values["session_revoke_at"] = datetime.now(UTC)
+        if payload.password or payload.is_active is False or payload.login_enabled is False or (
+            "email" in values and (values["email"] or "") != (user.email or "").strip().lower()
+        ):
+            # Offene Einmal-Links («Passwort vergessen», Einladung) gelten nicht mehr
+            account_notifications.revoke_all_links(db, user.id)
         if payload.is_active is False:
             # Deactivation invalidates all existing sessions
             values["session_revoke_at"] = datetime.now(UTC)
@@ -239,6 +246,9 @@ class UserService:
 
         if payload.is_active is not None:
             self.access_service.sync_user_access_from_participants(db, user_id=user.id, tenant_id=user.tenant_id)
+        if payload.password and was_login_enabled:
+            # Neues Passwort durch die Verwaltung: Hinweis an die Person (nicht beim erstmaligen Login)
+            account_notifications.notify_security(db, user, "security.password_changed", by_admin=actor is None or actor.user_id != user.id)
         db.commit()
         return self._read_model(db, user)
 
@@ -310,5 +320,7 @@ class UserService:
                 "session_revoke_at": datetime.now(UTC),
             },
         )
+        account_notifications.revoke_all_links(db, user.id)
+        account_notifications.notify_security(db, user, "security.password_changed")
         db.commit()
         return self._read_model(db, user)

@@ -1,0 +1,124 @@
+"use client";
+
+import { FormEvent, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
+
+import { browserApiFetch } from "@/lib/api/client";
+import type { AccountLinkPreview } from "@/types/api";
+
+const MIN_PASSWORD_LENGTH = 12;
+
+/**
+ * Neues Passwort über einen Einmal-Link aus der E-Mail: «Passwort vergessen» oder Einladung
+ * (Benachrichtigungen Phase 3, backend/app/notifications/account.py).
+ *
+ * Das Token kommt im URL-Fragment (`#token=…`, SECURITY-RULES 3.2): Der Browser schickt es an
+ * keinen Server, die Seite entfernt es sofort aus Adresszeile und Verlauf und sendet es nur im
+ * Request-Body. Nach dem Setzen sind alle Sitzungen beendet; ein zweiter Faktor bleibt bestehen.
+ */
+function readTokenFromFragment(): string {
+  const token = new URLSearchParams(window.location.hash.slice(1)).get("token") ?? "";
+  if (window.location.hash) {
+    window.history.replaceState(null, "", window.location.pathname);
+  }
+  return token;
+}
+
+export default function SetPasswordPage() {
+  const t = useTranslations("auth.setPassword");
+  const [token, setToken] = useState("");
+  const [preview, setPreview] = useState<AccountLinkPreview | null>(null);
+  const [invalid, setInvalid] = useState(false);
+  const [password, setPassword] = useState("");
+  const [repeat, setRepeat] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fragmentToken = readTokenFromFragment();
+    if (!fragmentToken) {
+      setInvalid(true);
+      return;
+    }
+    setToken(fragmentToken);
+    browserApiFetch<AccountLinkPreview>("/api/auth/account-link/preview", { method: "POST", body: JSON.stringify({ token: fragmentToken }) })
+      .then((loaded) => { if (!cancelled) setPreview(loaded); })
+      .catch(() => { if (!cancelled) setInvalid(true); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const tooShort = Boolean(password) && password.length < MIN_PASSWORD_LENGTH;
+  const mismatch = repeat.length > 0 && password !== repeat;
+  const canSubmit = password.length >= MIN_PASSWORD_LENGTH && password === repeat && !busy;
+  const invite = preview?.purpose === "invite";
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!canSubmit) return;
+    setBusy(true);
+    setError("");
+    try {
+      await browserApiFetch("/api/auth/account-link/complete", { method: "POST", body: JSON.stringify({ token, password }) });
+      setDone(true);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t("failed"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <main className="login-frame">
+      <section className="login-panel">
+        <div className="login-heading">
+          <h1>{invite ? t("inviteTitle") : t("resetTitle")}</h1>
+          {preview && !done ? (
+            <p className="login-subtitle">
+              {invite
+                ? t("inviteIntro", { name: preview.display_name, tenant: preview.tenant_name, email: preview.email })
+                : t("resetIntro", { name: preview.display_name, email: preview.email })}
+            </p>
+          ) : null}
+        </div>
+        {invalid ? (
+          <>
+            <p className="login-status">{t("invalid")}</p>
+            <div className="table-actions table-actions-start">
+              <a className="button-ghost" href="/auth/forgot-password">{t("requestNew")}</a>
+              <a className="button-primary" href="/login">{t("toLogin")}</a>
+            </div>
+          </>
+        ) : done ? (
+          <>
+            <p className="login-status">{invite ? t("inviteDone") : t("resetDone")}</p>
+            <div className="table-actions table-actions-start">
+              <a className="button-primary" href="/login">{t("toLogin")}</a>
+            </div>
+          </>
+        ) : preview ? (
+          <form className="account-link-form" onSubmit={(event) => void submit(event)}>
+            <label className="field-stack">
+              <span className="field-label">{t("passwordLabel")}</span>
+              <input className="input" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" required />
+              <span className="field-help">{tooShort ? t("tooShort", { count: MIN_PASSWORD_LENGTH }) : t("passwordHelp", { count: MIN_PASSWORD_LENGTH })}</span>
+            </label>
+            <label className="field-stack">
+              <span className="field-label">{t("repeatLabel")}</span>
+              <input className="input" type="password" value={repeat} onChange={(event) => setRepeat(event.target.value)} autoComplete="new-password" required />
+              {mismatch ? <span className="field-help">{t("mismatch")}</span> : null}
+            </label>
+            <div className="table-actions table-actions-start">
+              <button type="submit" className="button-primary" disabled={!canSubmit}>{busy ? "…" : invite ? t("inviteSubmit") : t("resetSubmit")}</button>
+            </div>
+            {error ? <p className="login-status">{error}</p> : null}
+            {!invite ? <p className="muted">{t("mfaHint")}</p> : null}
+          </form>
+        ) : (
+          <p className="muted">{t("loading")}</p>
+        )}
+      </section>
+    </main>
+  );
+}

@@ -336,9 +336,39 @@
     "nextSession": "prossima seduta"
   },
   "email": {
+    "account": {
+      "inviteAction": "Configura account",
+      "inviteIntro": "{tenant} ti invita a hocX. Imposta una password per configurare il tuo account.",
+      "inviteSubject": "{tenant}: invito a hocX",
+      "inviteValidity": "Il link è valido per {days} giorni e funziona una sola volta.",
+      "linkFallback": "Se il pulsante non funziona, apri questo link: {url}",
+      "resetAction": "Imposta una nuova password",
+      "resetIgnore": "Non l’hai richiesta tu? Ignora questa e-mail. La tua password resta invariata.",
+      "resetIntro": "È stata richiesta una nuova password per il tuo account presso {tenant}.",
+      "resetSubject": "hocX: reimposta la password",
+      "resetValidity": "Il link è valido per {minutes} minuti e funziona una sola volta."
+    },
+    "export": {
+      "failed": "Non è stato possibile creare l’esportazione dati. Richiedila di nuovo in hocX in Impostazioni associazione > Protezione dei dati.",
+      "openButton": "Apri esportazione",
+      "ready": "L’esportazione dati «{filename}» è pronta. Puoi scaricarla in hocX in Impostazioni associazione > Protezione dei dati.",
+      "subjectFailed": "{tenant}: esportazione dati non riuscita",
+      "subjectReady": "{tenant}: esportazione dati pronta"
+    },
     "footer": "Questo messaggio proviene da {tenant} tramite hocX.",
     "greeting": "Ciao {name}",
     "noLoginHint": "Domande su questo messaggio? Rivolgiti a {tenant}.",
+    "security": {
+      "hint": "Non sei stato tu? Contatta subito {tenant}.",
+      "intro": "Sul tuo account presso {tenant} è stato modificato quanto segue:",
+      "mandatory": "Gli avvisi di sicurezza vengono sempre inviati e non si possono disattivare.",
+      "mfaAdded": "Secondo fattore aggiunto ({at})",
+      "mfaRemoved": "Secondo fattore rimosso ({at})",
+      "mfaRemovedByAdmin": "Secondo fattore rimosso dall’amministrazione dell’associazione ({at})",
+      "passwordChanged": "Password modificata ({at})",
+      "passwordChangedByAdmin": "Password reimpostata dall’amministrazione dell’associazione ({at})",
+      "subject": "{tenant}: avviso di sicurezza sul tuo account"
+    },
     "settingsHint": "Scegli quali e-mail ricevere nelle tue impostazioni: {url}",
     "test": {
       "body": "Questa e-mail di prova conferma che l'invio di e-mail da hocX funziona.",

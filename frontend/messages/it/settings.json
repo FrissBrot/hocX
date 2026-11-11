@@ -36,8 +36,13 @@
         "todo_reminders": {
           "label": "Promemoria compiti",
           "hint": "Una volta 3 giorni prima della scadenza e una volta il giorno dopo, se ancora aperti."
+        },
+        "exports": {
+          "label": "Esportazione dati pronta",
+          "hint": "Solo se richiedi un’esportazione dei dati dell’associazione: un’e-mail quando è pronta o non è riuscita."
         }
-      }
+      },
+      "securityNote": "Gli avvisi di sicurezza (password o secondo fattore modificati) e i link per reimpostare la password vengono sempre inviati."
     }
   },
   "logoutFailed": "Disconnessione non riuscita. Riprova.",

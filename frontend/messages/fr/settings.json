@@ -36,8 +36,13 @@
         "todo_reminders": {
           "label": "Rappels de tâches",
           "hint": "Une fois 3 jours avant l'échéance et une fois le lendemain, si elles sont encore ouvertes."
+        },
+        "exports": {
+          "label": "Export de données prêt",
+          "hint": "Uniquement si tu demandes un export des données de l’association : un e-mail dès qu’il est prêt ou en cas d’échec."
         }
-      }
+      },
+      "securityNote": "Les avis de sécurité (mot de passe ou deuxième facteur modifié) et les liens de réinitialisation du mot de passe sont toujours envoyés."
     }
   },
   "logoutFailed": "Échec de la déconnexion. Veuillez réessayer.",

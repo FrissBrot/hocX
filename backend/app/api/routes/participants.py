@@ -10,8 +10,12 @@ from app.core.db import get_db
 from app.core.rate_limit import enforce_rate_limit
 from app.core.permissions import P
 from app.core.security import CurrentUser, get_current_user, require_permission
-from app.models.entities import Participant, Template
+from sqlalchemy import func, or_, select
+
+from app.models.entities import AccountToken, Participant, PlatformNotificationSettings, Template
+from app.notifications import account as account_links
 from app.schemas.participant import (
+    ParticipantInviteRead,
     ParticipantBulkDelete,
     ParticipantCreate,
     ParticipantImportResult,
@@ -22,7 +26,7 @@ from app.schemas.participant import (
     ParticipantUpdate,
     TemplateParticipantAssignmentUpdate,
 )
-from app.services import public_id_service, role_service
+from app.services import public_id_service, role_service, user_limit_service
 from app.services.participant_service import ParticipantService
 from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
@@ -327,3 +331,65 @@ def replace_participant_templates(
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Participant templates could not be updated") from exc
+
+
+# ── Einladung per E-Mail (Benachrichtigungen Phase 3, notifications/account.py) ──
+# Statt ein Passwort zu setzen, bekommt die Person einen Einmal-Link und legt es selbst fest; der
+# Login wird erst beim Einlösen aktiv (Benutzerlimit und E-Mail werden dann erneut geprüft).
+
+
+def _invite_read(db: Session, token) -> ParticipantInviteRead:
+    participant = db.get(Participant, token.user_id)
+    return ParticipantInviteRead(participant_id=participant.public_id, created_at=token.created_at, sent_at=token.sent_at, expires_at=token.expires_at)
+
+
+@router.get("/participants/invites", response_model=list[ParticipantInviteRead])
+def list_participant_invites(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    require_permission(user, P.ACCESS_MANAGE)
+    rows = db.execute(
+        select(AccountToken, Participant.public_id)
+        .join(Participant, Participant.id == AccountToken.user_id)
+        .where(
+            AccountToken.tenant_id == user.current_tenant_id, AccountToken.purpose == "invite",
+            AccountToken.used_at.is_(None), AccountToken.revoked_at.is_(None),
+            or_(AccountToken.expires_at.is_(None), AccountToken.expires_at > func.now()),
+        )
+        .order_by(AccountToken.id)
+    ).all()
+    return [
+        ParticipantInviteRead(participant_id=public_id, created_at=token.created_at, sent_at=token.sent_at, expires_at=token.expires_at)
+        for token, public_id in rows
+    ]
+
+
+@router.post("/participants/{participant_id}/invite", response_model=ParticipantInviteRead, status_code=status.HTTP_201_CREATED)
+def invite_participant(participant_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    require_permission(user, P.PARTICIPANTS_MANAGE)
+    require_permission(user, P.ACCESS_MANAGE)
+    participant = _get_participant_or_404(db, participant_id, user)
+    _ensure_can_manage_login(db, user, participant)
+    enforce_rate_limit(f"participant-invite:{user.user_id}", limit=60, period_seconds=60 * 60)
+    if participant.login_enabled:
+        raise HTTPException(status_code=409, detail="Diese Person hat bereits einen Login.")
+    if not participant.is_active:
+        raise HTTPException(status_code=409, detail="Inaktive Personen können nicht eingeladen werden.")
+    if not (participant.email or "").strip():
+        raise HTTPException(status_code=400, detail="Für eine Einladung braucht die Person eine E-Mail-Adresse.")
+    settings_row = db.get(PlatformNotificationSettings, 1)
+    if not (settings_row and settings_row.email_enabled and settings_row.smtp_host and settings_row.email_from_address):
+        raise HTTPException(status_code=409, detail="Der E-Mail-Versand ist nicht eingerichtet.")
+    UserService().ensure_login_email_available(db, participant.email, excluding_user_id=participant.id)
+    user_limit_service.ensure_login_capacity(db, participant.tenant_id)
+    token = account_links.invite(db, participant, actor_user_id=user.user_id)
+    AuditService().log(db, action="user.invited", actor=user, entity_type="app_user", entity_id=participant.id)
+    return _invite_read(db, token)
+
+
+@router.delete("/participants/{participant_id}/invite", response_model=dict[str, str])
+def revoke_participant_invite(participant_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    require_permission(user, P.PARTICIPANTS_MANAGE)
+    require_permission(user, P.ACCESS_MANAGE)
+    participant = _get_participant_or_404(db, participant_id, user)
+    _ensure_can_manage_login(db, user, participant)
+    account_links.revoke_invite(db, participant.id)
+    return {"status": "revoked"}

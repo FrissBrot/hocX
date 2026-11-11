@@ -1,12 +1,13 @@
 from urllib.parse import urlencode, urlparse
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.client_ip import client_ip
-from app.core.db import get_db
+from app.core.db import SessionLocal, get_db
+from app.core.error_log import record_system_error
 from app.core.rate_limit import enforce_rate_limit
 from app.core.security import CurrentUser, get_optional_current_user
 from app.schemas.mfa import (
@@ -21,6 +22,16 @@ from app.schemas.mfa import (
     TotpLoginVerifyRequest,
 )
 from app.schemas.user import BridgePreviewRead, BridgeRedeemRequest, LoginRequest, SessionRead, TenantByDomainRead
+from app.models import PlatformNotificationSettings
+from app.notifications import account as account_links
+from app.schemas.notifications import (
+    AccountLinkComplete,
+    AccountLinkCompleteRead,
+    AccountLinkPreviewRead,
+    AccountLinkToken,
+    PasswordResetAvailableRead,
+    PasswordResetRequest,
+)
 from app.services import domain_bridge_service
 from app.services.auth_service import AuthService
 from app.services.tenant_service import build_tenant_profile_image_url
@@ -184,3 +195,57 @@ def redeem_bridge(payload: BridgeRedeemRequest, request: Request, response: Resp
     if not service.redeem_bridge_token(db, response, payload.token, request.url.hostname):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Anmeldelink ist ungültig oder abgelaufen")
     return {"status": "ok"}
+
+
+# ── Passwort vergessen und Einladung (Benachrichtigungen Phase 3, notifications/account.py) ──
+# Öffentlich, deshalb je Quell-IP begrenzt (SECURITY-RULES 3.4); Token nur im Body (3.2).
+
+
+def _email_sending_enabled(db: Session) -> bool:
+    row = db.get(PlatformNotificationSettings, 1)
+    return bool(row and row.email_enabled and row.smtp_host and row.email_from_address)
+
+
+@router.get("/password-reset/available", response_model=PasswordResetAvailableRead)
+def password_reset_available(request: Request, db: Session = Depends(get_db)):
+    enforce_rate_limit(f"password-reset-available:{client_ip(request)}", limit=60, period_seconds=60)
+    return PasswordResetAvailableRead(enabled=_email_sending_enabled(db))
+
+
+def _issue_password_reset(email: str) -> None:
+    """Läuft nach der Antwort (BackgroundTasks) mit eigener Session: so verrät auch die Antwortzeit
+    nicht, ob es das Konto gibt."""
+    with SessionLocal() as db:
+        try:
+            account_links.request_password_reset(db, email)
+        except Exception as exc:  # noqa: BLE001 - ausserhalb des Requests: selbst ins Fehlerprotokoll
+            db.rollback()
+            record_system_error(db, exc=exc)
+
+
+@router.post("/password-reset/request", status_code=status.HTTP_202_ACCEPTED, response_model=dict[str, str])
+def request_password_reset(payload: PasswordResetRequest, request: Request, background: BackgroundTasks, db: Session = Depends(get_db)):
+    """Antwortet immer gleich, ob es das Konto gibt oder nicht (kein Orakel). Je Adresse höchstens
+    drei Links pro Stunde, damit niemand ein Postfach mit Mails flutet."""
+    enforce_rate_limit(f"password-reset-ip:{client_ip(request)}", limit=10, period_seconds=15 * 60)
+    email_key = account_links.hash_token(payload.email.strip().lower())
+    enforce_rate_limit(f"password-reset-email:{email_key}", limit=3, period_seconds=60 * 60)
+    if _email_sending_enabled(db):
+        background.add_task(_issue_password_reset, payload.email)
+    return {"status": "accepted"}
+
+
+@router.post("/account-link/preview", response_model=AccountLinkPreviewRead)
+def account_link_preview(payload: AccountLinkToken, request: Request, db: Session = Depends(get_db)):
+    enforce_rate_limit(f"account-link-ip:{client_ip(request)}", limit=30, period_seconds=15 * 60)
+    preview = account_links.preview(db, payload.token)
+    if preview is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Der Link ist ungültig oder abgelaufen.")
+    return AccountLinkPreviewRead(**preview)
+
+
+@router.post("/account-link/complete", response_model=AccountLinkCompleteRead)
+def account_link_complete(payload: AccountLinkComplete, request: Request, db: Session = Depends(get_db)):
+    enforce_rate_limit(f"account-link-ip:{client_ip(request)}", limit=30, period_seconds=15 * 60)
+    purpose = account_links.complete(db, payload.token, payload.password)
+    return AccountLinkCompleteRead(purpose=purpose)

@@ -123,7 +123,7 @@ def scan_reminders(db: Session, *, now: datetime | None = None) -> dict[str, int
 # ── Beim Versand ─────────────────────────────────────────────────────
 
 
-def items_for(db: Session, notifications: list, recipient_id: int) -> dict[int, dict]:
+def items_for(db: Session, notifications: list, recipient_id: int, **_) -> dict[int, dict]:
     """Aktuelle Daten der Aufgaben je Benachrichtigung. Fehlt eine Benachrichtigung im Ergebnis,
     ist sie überholt (gelöscht, erledigt, nicht mehr verantwortlich, Fälligkeit geändert)."""
     from app.repositories.protocol_todo_repository import ProtocolTodoRepository

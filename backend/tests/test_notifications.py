@@ -222,7 +222,7 @@ def test_dispatch_retries_on_smtp_error(db, club):
 def test_preferences_default_on_and_scoped_to_own_account(db, club):
     other_tenant = make_tenant(db, "Anderer Verein")
     result = notification_preferences.read(db, club["anna"].id, club["tenant"].id)
-    assert {p.category: p.enabled for p in result.preferences} == {"todo_new": True, "todo_reminders": True}
+    assert {p.category: p.enabled for p in result.preferences} == {"todo_new": True, "todo_reminders": True, "exports": True}
     notification_preferences.write(
         db, club["anna"].id, club["tenant"].id,
         NotificationPreferencesWrite(preferences=[NotificationPreferenceRead(category="todo_reminders", enabled=False)]),

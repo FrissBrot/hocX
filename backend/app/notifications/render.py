@@ -7,10 +7,13 @@ nur auf feste Pfade der App unter der konfigurierten Basis-URL.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 from html import escape
 
 from app.documents.strings import text
+
+TZ = ZoneInfo("Europe/Zurich")
 
 SECTION_ORDER = {"todo.new": ("todo.assigned",), "todo.reminder": ("todo.due_soon", "todo.overdue")}
 SECTION_KEYS = {"todo.assigned": "email.todo.sectionNew", "todo.due_soon": "email.todo.sectionDueSoon", "todo.overdue": "email.todo.sectionOverdue"}
@@ -85,6 +88,93 @@ def render_group(
         f"{escape(footer)}<br>{escape(settings_hint)}</p></div></body></html>"
     )
     return Rendered(subject=subject, text="\n".join(plain), html=html)
+
+
+# ── Konto, Sicherheit, Export (Phase 3) ────────────────────────────────
+
+SECURITY_KEYS = {
+    ("security.password_changed", False): "email.security.passwordChanged",
+    ("security.password_changed", True): "email.security.passwordChangedByAdmin",
+    ("security.mfa_added", False): "email.security.mfaAdded",
+    ("security.mfa_added", True): "email.security.mfaAdded",
+    ("security.mfa_removed", False): "email.security.mfaRemoved",
+    ("security.mfa_removed", True): "email.security.mfaRemovedByAdmin",
+}
+
+
+def _local_time(value: datetime) -> str:
+    return value.astimezone(TZ).strftime("%d.%m.%Y %H:%M")
+
+
+def _compose(*, subject: str, paragraphs: list[str], lines: list[str], button: tuple[str, str] | None, fallback: str | None, footer: list[str]) -> Rendered:
+    plain: list[str] = []
+    for paragraph in paragraphs:
+        plain += [paragraph, ""]
+    if lines:
+        plain += [f"- {line}" for line in lines] + [""]
+    if button:
+        plain += [f"{button[0]}: {button[1]}", ""]
+    plain += ["--", *footer]
+    html_lines = f"<ul style=\"padding-left:20px;margin:0\">{''.join(f'<li style=\"margin:4px 0\">{escape(line)}</li>' for line in lines)}</ul>" if lines else ""
+    html_button = (
+        f"<p style=\"margin:24px 0\"><a href=\"{escape(button[1], quote=True)}\" style=\"background:#1f6feb;color:#ffffff;"
+        f"padding:10px 16px;border-radius:8px;text-decoration:none\">{escape(button[0])}</a></p>"
+        if button else ""
+    )
+    html_fallback = f"<p style=\"color:#656d76;font-size:12px;word-break:break-all\">{escape(fallback)}</p>" if fallback else ""
+    html = (
+        "<!doctype html><html><body style=\"font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;"
+        "font-size:14px;line-height:1.5;color:#1f2328;margin:0;padding:24px\">"
+        f"<div style=\"max-width:560px;margin:0 auto\">{''.join(f'<p>{escape(p)}</p>' for p in paragraphs)}{html_lines}{html_button}{html_fallback}"
+        f"<hr style=\"border:none;border-top:1px solid #d0d7de;margin:24px 0\"><p style=\"color:#656d76;font-size:12px\">"
+        f"{'<br>'.join(escape(line) for line in footer)}</p></div></body></html>"
+    )
+    return Rendered(subject=_one_line(subject), text="\n".join(plain), html=html)
+
+
+def render_account(*, lang: str, group: str, items: list[dict], recipient_name: str, tenant_name: str, base_url: str | None, can_login: bool) -> Rendered:
+    greeting = text(lang, "email.greeting", name=recipient_name)
+    footer = [text(lang, "email.footer", tenant=tenant_name)]
+    if group in ("account.password_reset", "account.invite"):
+        item = items[-1]
+        reset = group == "account.password_reset"
+        paragraphs = [
+            greeting,
+            text(lang, "email.account.resetIntro" if reset else "email.account.inviteIntro", tenant=tenant_name),
+            text(lang, "email.account.resetValidity", minutes=item["valid_minutes"]) if reset else text(lang, "email.account.inviteValidity", days=item["valid_hours"] // 24),
+        ]
+        if reset:
+            paragraphs.append(text(lang, "email.account.resetIgnore"))
+        return _compose(
+            subject=text(lang, "email.account.resetSubject" if reset else "email.account.inviteSubject", tenant=tenant_name),
+            paragraphs=paragraphs, lines=[],
+            button=(text(lang, "email.account.resetAction" if reset else "email.account.inviteAction"), item["link"]),
+            fallback=text(lang, "email.account.linkFallback", url=item["link"]), footer=footer,
+        )
+    if group == "account.security":
+        lines = [text(lang, SECURITY_KEYS[(item["kind"], item["by_admin"])], at=_local_time(item["at"])) for item in items]
+        return _compose(
+            subject=text(lang, "email.security.subject", tenant=tenant_name),
+            paragraphs=[greeting, text(lang, "email.security.intro", tenant=tenant_name)], lines=lines,
+            button=None, fallback=None,
+            footer=[text(lang, "email.security.hint", tenant=tenant_name), *footer, text(lang, "email.security.mandatory")],
+        )
+    # export
+    item = items[-1]
+    ready = item["kind"] == "export.ready"
+    link = f"{base_url}/tenant-settings/privacy" if base_url and can_login else None
+    return _compose(
+        subject=text(lang, "email.export.subjectReady" if ready else "email.export.subjectFailed", tenant=tenant_name),
+        paragraphs=[greeting, text(lang, "email.export.ready", filename=item["filename"]) if ready else text(lang, "email.export.failed")],
+        lines=[], button=(text(lang, "email.export.openButton"), link) if link else None, fallback=None,
+        footer=[*footer, text(lang, "email.settingsHint", url=f"{base_url}/settings") if base_url and can_login else text(lang, "email.noLoginHint", tenant=tenant_name)],
+    )
+
+
+def render(*, group: str, **kwargs) -> Rendered:
+    if group in SUBJECT_KEYS:
+        return render_group(group=group, **kwargs)
+    return render_account(group=group, **kwargs)
 
 
 def render_test(*, lang: str, base_url: str | None) -> Rendered:

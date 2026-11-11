@@ -11,6 +11,7 @@ from app.repositories.participant_repository import ParticipantRepository
 from app.schemas.participant import ParticipantCreate, ParticipantImportResult, ParticipantUpdate
 from app.services import role_service, user_limit_service
 from app.services.access_service import AccessService
+from app.notifications import account as account_notifications
 
 
 class ParticipantService:
@@ -80,6 +81,8 @@ class ParticipantService:
         if participant.login_enabled and not participant.is_active and values.get("is_active") is True:
             # Reaktivieren eines Kontos mit Login zählt zum Benutzerlimit des Abos
             user_limit_service.ensure_login_capacity(db, tenant_id)
+        if _account_relevant_change(participant, values):
+            account_notifications.revoke_all_links(db, participant.id)
         try:
             # Deaktivieren darf den letzten Administrator nicht treffen (role_service.admin_guard).
             with role_service.admin_guard(db, tenant_id, None):
@@ -236,3 +239,11 @@ class ParticipantService:
             )
         db.commit()
         return templates
+
+
+def _account_relevant_change(person, values: dict) -> bool:
+    """Ändert sich E-Mail oder Aktiv-Status, verlieren offene Einmal-Links ihre Gültigkeit."""
+    email = values.get("email", person.email)
+    if "email" in values and (email or "").strip().lower() != (person.email or "").strip().lower():
+        return True
+    return values.get("is_active", person.is_active) is False and person.is_active

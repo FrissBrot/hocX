@@ -78,6 +78,16 @@ export default function LoginPage() {
   const [totpSetup, setTotpSetup] = useState<TotpEnrollmentStart | null>(null);
   const [passkeyLabel, setPasskeyLabel] = useState("");
   const [showMethodChooser, setShowMethodChooser] = useState(false);
+  // «Passwort vergessen?» nur, wenn der Plattform-Admin den E-Mail-Versand eingerichtet hat.
+  const [passwordResetAvailable, setPasswordResetAvailable] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    browserApiFetch<{ enabled: boolean }>("/api/auth/password-reset/available")
+      .then((result) => { if (!cancelled) setPasswordResetAvailable(Boolean(result?.enabled)); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
   const autoStartedPasskeyTicketRef = useRef<string | null>(null);
   // Während voller Wartung ist die Anmeldung serverseitig gesperrt (503) - hier nur sichtbar machen.
   const { status: maintenance } = useMaintenanceStatus();
@@ -465,6 +475,9 @@ export default function LoginPage() {
         <button type="submit" className="button-secondary login-submit" disabled={loading}>
           {loading ? "…" : t("password.submit")}
         </button>
+        {passwordResetAvailable ? (
+          <a className="login-forgot-link" href="/auth/forgot-password">{t("password.forgot")}</a>
+        ) : null}
       </form>
     );
   }

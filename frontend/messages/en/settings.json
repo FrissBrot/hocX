@@ -36,8 +36,13 @@
         "todo_reminders": {
           "label": "Task reminders",
           "hint": "Once 3 days before the due date and once the day after, if still open."
+        },
+        "exports": {
+          "label": "Data export ready",
+          "hint": "Only if you request a club data export: an email once it is ready or has failed."
         }
-      }
+      },
+      "securityNote": "Security notices (password or second factor changed) and password reset links are always sent."
     }
   },
   "logoutFailed": "Logout failed. Please try again.",

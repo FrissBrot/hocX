@@ -173,6 +173,10 @@ def collect(db: Session, person: AppUser) -> dict[str, list[dict[str, Any]]]:
         SELECT 'mfa' AS kind, factor_type AS detail, label, created_at, last_used_at FROM user_mfa_factor WHERE user_id = :pid
         UNION ALL
         SELECT 'calendar_feed', kind, calendar_name, created_at, last_accessed_at FROM calendar_feed WHERE user_id = :pid
+        UNION ALL
+        -- Einmal-Links «Passwort vergessen»/Einladung (Migration 0171): Zweck und Zeitpunkte, nie der Hash
+        SELECT 'account_link', purpose, CASE WHEN used_at IS NOT NULL THEN 'used' WHEN revoked_at IS NOT NULL THEN 'revoked' ELSE 'open' END,
+               created_at, used_at FROM account_token WHERE tenant_id = :tenant_id AND user_id = :pid
         ORDER BY created_at
     """, params)]
 

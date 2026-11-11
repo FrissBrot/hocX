@@ -602,6 +602,36 @@
     "test": {
       "subject": "hocX: Test email",
       "body": "This test email confirms that email delivery from hocX works."
+    },
+    "account": {
+      "resetSubject": "hocX: Reset your password",
+      "resetIntro": "A new password was requested for your account at {tenant}.",
+      "resetValidity": "The link is valid for {minutes} minutes and works only once.",
+      "resetIgnore": "Didn't request this? Then ignore this email. Your password stays unchanged.",
+      "resetAction": "Set a new password",
+      "inviteSubject": "{tenant}: Invitation to hocX",
+      "inviteIntro": "{tenant} invites you to hocX. Set a password to set up your account.",
+      "inviteValidity": "The link is valid for {days} days and works only once.",
+      "inviteAction": "Set up account",
+      "linkFallback": "If the button doesn't work, open this link: {url}"
+    },
+    "security": {
+      "subject": "{tenant}: Security notice for your account",
+      "intro": "The following was changed on your account at {tenant}:",
+      "passwordChanged": "Password changed ({at})",
+      "passwordChangedByAdmin": "Password reset by the club administration ({at})",
+      "mfaAdded": "Second factor added ({at})",
+      "mfaRemoved": "Second factor removed ({at})",
+      "mfaRemovedByAdmin": "Second factor removed by the club administration ({at})",
+      "hint": "Wasn't you? Contact {tenant} immediately.",
+      "mandatory": "Security notices are always sent and can't be turned off."
+    },
+    "export": {
+      "subjectReady": "{tenant}: Data export ready",
+      "subjectFailed": "{tenant}: Data export failed",
+      "ready": "The data export “{filename}” is ready. You can download it in hocX under Club settings > Privacy.",
+      "failed": "The data export could not be created. Please request it again in hocX under Club settings > Privacy.",
+      "openButton": "Open export"
     }
   },
   "eventField": {

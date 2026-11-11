@@ -125,6 +125,8 @@ async function route(request: NextRequest, requestHeaders: Headers) {
   // Sitzungsprüfung ohnehin mit 503, die Seite selbst braucht keine Session.
   // /auth/bridge: Bestätigung des Domain-Wechsels, der Besucher ist hier per Definition noch
   // nicht angemeldet (MAIN-SEC-006).
+  // /auth/forgot-password und /auth/set-password: «Passwort vergessen» und Einladung, der Besucher
+  // hat noch keine Sitzung (Einmal-Link im URL-Fragment, notifications/account.py im Backend).
   // /overload ist die Überlast-Ansicht - die Sitzungsprüfung selbst wird dort abgewiesen.
   // /pdf-loading ist der Platzhalter im neuen Tab, bis ein PDF fertig ist (use-pdf-export.ts):
   // ohne Daten, deshalb ohne Sitzungsprüfung (erscheint sofort, keine Last während des Renderns).
@@ -133,6 +135,8 @@ async function route(request: NextRequest, requestHeaders: Headers) {
     rewrittenPathname === "/pdf-loading" ||
     rewrittenPathname === "/overload" ||
     rewrittenPathname === "/auth/bridge" ||
+    rewrittenPathname === "/auth/forgot-password" ||
+    rewrittenPathname === "/auth/set-password" ||
     rewrittenPathname === "/share" ||
     rewrittenPathname.startsWith("/share/") ||
     rewrittenPathname === WEBSITE_PATH ||

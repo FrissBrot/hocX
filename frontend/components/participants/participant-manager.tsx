@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { ActionIcon } from "@/components/ui/action-icons";
@@ -17,8 +17,8 @@ import { browserApiFetch, LONG_RUNNING_TIMEOUT_MS } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
-import { formatDate } from "@/lib/utils/format";
-import { ParticipantSummary, TemplateSummary } from "@/types/api";
+import { formatDate, formatDateTime } from "@/lib/utils/format";
+import { ParticipantInvite, ParticipantSummary, TemplateSummary } from "@/types/api";
 import { avatarTone, participantInitials } from "@/lib/utils/avatar";
 
 const PAGE_SIZE = 50;
@@ -133,6 +133,11 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
   const [search, setSearch] = useState("");
   const [loginTab, setLoginTab] = useState<"withoutLogin" | "withLogin">("withoutLogin");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("active");
+  // Einladung per E-Mail (Benachrichtigungen Phase 3): offene Einladungen je Person und ob der
+  // Versand eingerichtet ist. Nur für access.manage, wie die Login-Felder.
+  const [invites, setInvites] = useState<Record<string, ParticipantInvite>>({});
+  const [inviteAvailable, setInviteAvailable] = useState(false);
+  const [inviteBusy, setInviteBusy] = useState(false);
   const csvInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<ParticipantFormState>(emptyForm);
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
@@ -210,6 +215,50 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
     setForm(emptyForm);
     setAssignedTemplateIds([]);
     setShowModal(true);
+  }
+
+  useEffect(() => {
+    if (!canAdmin) return;
+    let cancelled = false;
+    browserApiFetch<{ enabled: boolean }>("/api/auth/password-reset/available")
+      .then((result) => { if (!cancelled) setInviteAvailable(Boolean(result?.enabled)); })
+      .catch(() => undefined);
+    browserApiFetch<ParticipantInvite[]>("/api/participants/invites")
+      .then((rows) => { if (!cancelled) setInvites(Object.fromEntries(rows.map((row) => [row.participant_id, row]))); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [canAdmin]);
+
+  async function sendInvite(participant: ParticipantSummary) {
+    setInviteBusy(true);
+    try {
+      const invite = await browserApiFetch<ParticipantInvite>(`/api/participants/${participant.id}/invite`, { method: "POST" });
+      setInvites((current) => ({ ...current, [participant.id]: invite }));
+      showToast(t("invite.sentToast", { email: participant.email ?? "" }), "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : t("invite.failed"), "error");
+    } finally {
+      setInviteBusy(false);
+    }
+  }
+
+  async function revokeInvite(participant: ParticipantSummary) {
+    const ok = await confirm({ message: t("invite.revokeConfirm", { name: participant.display_name }), tone: "danger", confirmLabel: t("invite.revoke") });
+    if (!ok) return;
+    setInviteBusy(true);
+    try {
+      await browserApiFetch(`/api/participants/${participant.id}/invite`, { method: "DELETE" });
+      setInvites((current) => {
+        const next = { ...current };
+        delete next[participant.id];
+        return next;
+      });
+      showToast(t("invite.revokedToast"), "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : t("invite.failed"), "error");
+    } finally {
+      setInviteBusy(false);
+    }
   }
 
   async function openEdit(participant: ParticipantSummary) {
@@ -523,6 +572,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
                 <Badge variant={participant.is_active ? "success" : "neutral"}>
                   {participant.is_active ? t("statusActive") : t("statusInactive")}
                 </Badge>
+                {invites[participant.id] && !participant.login_enabled ? <Badge variant="info">{t("invite.badge")}</Badge> : null}
               </td>
               <td>
                 <div className="table-actions table-actions-end">
@@ -671,6 +721,34 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
                 </label>
               ) : null}
             </>
+          ) : null}
+          {selectedParticipant && canAdmin && inviteAvailable && !selectedParticipant.login_enabled && !form.login_enabled ? (
+            <div className="field-stack">
+              <span className="field-label">{t("invite.title")}</span>
+              {invites[selectedParticipant.id] ? (
+                <span className="field-help">
+                  {invites[selectedParticipant.id].sent_at
+                    ? t("invite.pendingSent", {
+                      sent: formatDateTime(invites[selectedParticipant.id].sent_at ?? ""),
+                      expires: formatDateTime(invites[selectedParticipant.id].expires_at ?? ""),
+                    })
+                    : t("invite.pendingQueued")}
+                </span>
+              ) : (
+                <span className="field-help">{selectedParticipant.email ? t("invite.hint") : t("invite.needsEmail")}</span>
+              )}
+              <div className="table-actions table-actions-start">
+                <button type="button" className="button-secondary" disabled={inviteBusy || !selectedParticipant.email || form.email.trim() !== (selectedParticipant.email ?? "")}
+                  onClick={() => void sendInvite(selectedParticipant)}>
+                  {invites[selectedParticipant.id] ? t("invite.resend") : t("invite.send")}
+                </button>
+                {invites[selectedParticipant.id] ? (
+                  <button type="button" className="button-ghost" disabled={inviteBusy} onClick={() => void revokeInvite(selectedParticipant)}>
+                    {t("invite.revoke")}
+                  </button>
+                ) : null}
+              </div>
+            </div>
           ) : null}
           {selectedParticipant && !form.login_enabled ? (
             <label className="checkbox-line">

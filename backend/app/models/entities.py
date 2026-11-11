@@ -2426,6 +2426,31 @@ class Notification(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
 
 
+class AccountToken(Base):
+    """Einmal-Link für «Passwort vergessen» und Einladungen (Migration 0171). Nur der SHA-256-Hash
+    wird gespeichert; das Token entsteht erst beim Versand (notifications/account.py)."""
+
+    __tablename__ = "account_token"
+    __table_args__ = (
+        CheckConstraint("purpose IN ('password_reset', 'invite')", name="ck_account_token_purpose"),
+        UniqueConstraint("token_hash", name="uq_account_token_hash"),
+        Index("idx_account_token_tenant", "tenant_id"),
+        Index("idx_account_token_open", "user_id", "purpose", postgresql_where=text("used_at IS NULL AND revoked_at IS NULL")),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False)
+    purpose: Mapped[str] = mapped_column(Text, nullable=False)
+    token_hash: Mapped[str | None] = mapped_column(Text)
+    created_by_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class NotificationPreference(Base):
     """Kategorie je Person ein/aus (Migration 0170). Ohne Zeile gilt der Standard des Katalogs."""
 

@@ -61,6 +61,7 @@ export function NotificationPreferencesPanel({ open }: { open: boolean }) {
           <span className="album-picker-switch-track" aria-hidden="true" />
         </label>
       ))}
+      <p className="field-help">{t("securityNote")}</p>
     </div>
   );
 }

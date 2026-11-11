@@ -36,8 +36,13 @@
         "todo_reminders": {
           "label": "Erinnerungen an Aufgaben",
           "hint": "Einmal 3 Tage vor der Fälligkeit und einmal am Tag nach der Fälligkeit, falls noch offen."
+        },
+        "exports": {
+          "label": "Datenexport fertig",
+          "hint": "Nur wenn du einen Vereins-Datenexport bestellst: Mail, sobald er bereitliegt oder fehlgeschlagen ist."
         }
-      }
+      },
+      "securityNote": "Sicherheitshinweise (Passwort oder zweiter Faktor geändert) und Links zum Zurücksetzen des Passworts bekommst du immer."
     }
   },
   "logoutFailed": "Abmelden fehlgeschlagen. Bitte erneut versuchen.",

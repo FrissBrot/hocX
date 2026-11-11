@@ -2541,10 +2541,26 @@ export type EmailSettingsWrite = {
   email_link_base_url: string | null;
 };
 
-export type NotificationCategory = "todo_new" | "todo_reminders";
+export type NotificationCategory = "todo_new" | "todo_reminders" | "exports";
 
 export type NotificationPreferences = {
   preferences: { category: NotificationCategory; enabled: boolean }[];
   has_email: boolean;
   email_enabled: boolean;
+};
+
+// ── Konto: «Passwort vergessen» und Einladung (backend/app/notifications/account.py) ──
+
+export type AccountLinkPreview = {
+  purpose: "password_reset" | "invite";
+  display_name: string;
+  email: string;
+  tenant_name: string;
+};
+
+export type ParticipantInvite = {
+  participant_id: string;
+  created_at: string;
+  sent_at: string | null;
+  expires_at: string | null;
 };
