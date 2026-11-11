@@ -13625,3 +13625,47 @@ a.export-step-meta {
     flex: 1;
   }
 }
+
+/* Installationshinweis (InstallAppPrompt, PWA): Karte oben im Inhalt, auf iPhone/iPad und Android */
+.install-app-prompt {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  box-shadow: var(--shadow-soft);
+}
+
+.install-app-icon {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+}
+
+.install-app-text {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+  font-size: var(--text-sm);
+}
+
+.install-app-share {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin: 0 2px;
+  color: var(--accent);
+  vertical-align: -0.125em;
+}
+
+.install-app-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+}

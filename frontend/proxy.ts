@@ -162,5 +162,6 @@ async function route(request: NextRequest, requestHeaders: Headers) {
 }
 
 export const config = {
-  matcher: ["/((?!api/|api$|_next/static|_next/image|favicon\\.ico|robots\\.txt|sitemap\\.xml).*)"]
+  // manifest.webmanifest und icons/: die App-Installation lädt sie vor dem Login (app/manifest.ts)
+  matcher: ["/((?!api/|api$|_next/static|_next/image|favicon\\.ico|robots\\.txt|sitemap\\.xml|manifest\\.webmanifest|icons/).*)"]
 };

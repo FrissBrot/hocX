@@ -212,5 +212,13 @@
     "hue": "Hue",
     "hex": "Hex value",
     "swatches": "Colour suggestions"
+  },
+  "installApp": {
+    "title": "Install hocX as an app",
+    "ios": "In Safari, tap <share></share> “Share” and then “Add to Home Screen”.",
+    "android": "hocX then opens straight from your home screen, full screen and without an app store.",
+    "androidManual": "Open the browser menu ⋮ and choose “Install app” or “Add to Home screen”.",
+    "install": "Install",
+    "dismiss": "Dismiss"
   }
 }

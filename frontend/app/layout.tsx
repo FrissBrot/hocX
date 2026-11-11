@@ -24,12 +24,25 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase,
     title: "hocX",
     description: t("description"),
+    // Installierbar als App (app/manifest.ts); iOS liest Icon und Vollbild aus diesen Angaben
+    manifest: "/manifest.webmanifest",
+    icons: { apple: "/icons/apple-touch-icon.png" },
+    appleWebApp: { capable: true, title: "hocX", statusBarStyle: "default" },
   };
 }
 
 // viewport-fit=cover: die Mobile-Tableiste reserviert ueber env(safe-area-inset-bottom) selbst
 // Platz fuer den Home-Indikator, statt dass der Browser einen leeren Streifen darunter laesst.
-export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover" };
+// themeColor färbt die Statusleiste der installierten App passend zum Theme (= --bg in tokens.css).
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f6f7f9" }, // design-ok: Meta-Tag kennt keine CSS-Variablen (= --bg Light)
+    { media: "(prefers-color-scheme: dark)", color: "#0e1420" }, // design-ok: Meta-Tag kennt keine CSS-Variablen (= --bg Dark)
+  ],
+};
 
 // Ohne das wuerde Next.js Routen ohne eigene dynamische Datenabhaengigkeit (z.B. /login)
 // statisch zur Build-Zeit vorrendern - dann wuerde das untenstehende __HOCX_CONFIG__-Script

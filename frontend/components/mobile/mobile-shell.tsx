@@ -17,6 +17,7 @@ import { useVisibleInterval } from "@/lib/hooks/use-visible-interval";
 import { CONNECTIONS_HREF } from "@/lib/calendar-feeds";
 import type { SessionInfo, TodoListItem } from "@/types/api";
 import { can, featureAccess } from "@/lib/permissions";
+import { InstallAppPrompt } from "@/components/ui/install-app-prompt";
 
 type ThemePreference = "light" | "dark" | "auto";
 
@@ -156,6 +157,7 @@ export function MobileShell({
         <ConnectivityStatus userId={session?.user?.id ?? null} />
         {/* Inhalt bleibt beim Oeffnen von "Mehr" montiert, damit Filter/Scrollposition erhalten bleiben. */}
         <div className="mobile-shell-content" hidden={moreOpen}>
+          <InstallAppPrompt />
           {children}
         </div>
         {moreOpen ? (

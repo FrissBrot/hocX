@@ -24,6 +24,7 @@ import { ConnectivityStatus } from "@/components/ui/connectivity-status";
 import { CopyrightNotice } from "@/components/ui/copyright-notice";
 import { MobileShell } from "@/components/mobile/mobile-shell";
 import { useIsMobile } from "@/lib/hooks/use-is-mobile";
+import { InstallAppPrompt } from "@/components/ui/install-app-prompt";
 
 // Erst beim Oeffnen laden (MFA-Verwaltung, geschuetzter Export, Sprachwahl).
 const ProfileModal = dynamic(() => import("@/components/ui/profile-modal").then((m) => m.ProfileModal), {
@@ -488,7 +489,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
               </Menu>
             </Popover>
           </header>
-          <div className="shell-content">{children}</div>
+          <div className="shell-content"><InstallAppPrompt />{children}</div>
         </div>
       </div>
 

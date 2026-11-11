@@ -28,6 +28,13 @@ Bundle-Grössen und Abfragezahlen. Keine neuen Migrationen, keine Breaking Chang
 
 ### Hinzugefügt
 
+- **hocX als App installieren (PWA), ohne App Store.** iPhone/iPad: in Safari «Teilen» →
+  «Zum Home-Bildschirm»; Android und Desktop-Chrome/Edge: «App installieren». Auf iPhone, iPad
+  und Android schlägt hocX die Installation selbst vor (Android mit dem Installationsdialog des
+  Browsers, iOS mit kurzer Anleitung; nach «Schliessen» 30 Tage Ruhe, nie im Protokoll-Editor).
+  hocX startet dann mit eigenem Icon im Vollbild, Updates kommen mit jedem Deploy. Bewusst ohne Service Worker:
+  keine Protokolldaten im Gerätespeicher. In der installierten App muss man sich einmal neu
+  anmelden (iOS trennt die Anmeldung von Safari).
 - **Protokoll: «Nicht im PDF».** Hat ein Punkt oder Baustein Inhalt, der nicht im PDF erscheint,
   markiert der Editor das dezent; der Grund steht im Tooltip (in der Sitzungsvorlage vom Export
   ausgenommen, Sitzungsnotizen, von der PDF-Vorlage weggelassen, Bild noch im Virenscan).
