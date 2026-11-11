@@ -48,15 +48,42 @@ describe("wheelVars", () => {
   });
 });
 
+function scrollBox(scrollTop: number, scrollHeight = 2000, clientHeight = 800) {
+  const container = document.createElement("div");
+  Object.defineProperty(container, "scrollHeight", { value: scrollHeight });
+  Object.defineProperty(container, "clientHeight", { value: clientHeight });
+  container.scrollTop = scrollTop;
+  container.scrollTo = vi.fn() as unknown as HTMLElement["scrollTo"];
+  return container;
+}
+
 describe("nativeSmoothScroll", () => {
   it("meldet das Ende bei scrollend genau einmal", () => {
-    const container = document.createElement("div");
-    container.scrollTo = vi.fn() as unknown as HTMLElement["scrollTo"];
+    const container = scrollBox(300);
     const onDone = vi.fn();
     const stop = nativeSmoothScroll(container, 300, { onDone });
     expect(container.scrollTo).toHaveBeenCalledWith({ top: 300, behavior: "smooth" });
     container.dispatchEvent(new Event("scrollend"));
     stop();
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignoriert ein scrollend, das noch nicht am Ziel ist (verspätetes Ende eines Sprungs davor)", () => {
+    const container = scrollBox(126);
+    const onDone = vi.fn();
+    nativeSmoothScroll(container, 650, { onDone });
+    container.dispatchEvent(new Event("scrollend"));
+    expect(onDone).not.toHaveBeenCalled();
+    container.scrollTop = 650;
+    container.dispatchEvent(new Event("scrollend"));
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it("gilt am Rand des Scrollbereichs als am Ziel", () => {
+    const container = scrollBox(1200, 2000, 800);
+    const onDone = vi.fn();
+    nativeSmoothScroll(container, 5000, { onDone });
+    container.dispatchEvent(new Event("scrollend"));
     expect(onDone).toHaveBeenCalledTimes(1);
   });
 

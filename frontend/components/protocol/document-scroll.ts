@@ -11,6 +11,8 @@ export const SPY_HYSTERESIS = 32;
 export const WHEEL_HOLD_AFTER_SNAP_MS = 150;
 /** Obergrenze, falls das Ende des Wechsels nie gemeldet wird. */
 export const WHEEL_HOLD_MAX_MS = 900;
+// Abweichung in px, ab der ein scrollend als «am Ziel» gilt (Rundung, Zoom).
+export const SCROLL_END_TOLERANCE = 2;
 
 /** Oberkante eines Elements im Scrollinhalt des Containers. */
 export function offsetTopWithin(el: HTMLElement, container: HTMLElement): number {
@@ -126,19 +128,30 @@ export function supportsNativeSmoothScroll(): boolean {
   return typeof window !== "undefined" && "onscrollend" in window;
 }
 
-/** Sanft scrollen über den Browser (scrollTo smooth). onDone läuft genau einmal: bei scrollend,
- * nach dem Sicherheits-Timeout oder beim Abbruch (der Rückgabewert hält an der aktuellen Stelle an). */
+/** Sanft scrollen über den Browser (scrollTo smooth). onDone läuft genau einmal: bei scrollend am
+ * Ziel, nach dem Sicherheits-Timeout oder beim Abbruch (der Rückgabewert hält an der aktuellen
+ * Stelle an).
+ *
+ * Ein scrollend zählt nur, wenn das Ziel erreicht ist: Geht dem sanften Scrollen ein sofortiger
+ * Sprung voraus (Verankerung im Akkordeon), kommt dessen scrollend erst danach an. Es beendete
+ * sonst sofort die Pause des Scroll-Spys, bevor der neue Punkt in Position war; der Spy sah die
+ * Bildmitte noch über dem Punkt und wählte den vorherigen zurück (Rad-Effekt: man kam beim
+ * Mausrad nicht mehr zum nächsten Punkt, Bug 2026-11-11). */
 export function nativeSmoothScroll(container: HTMLElement, target: number, { onDone }: { onDone: () => void }): () => void {
   let finished = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  const reachable = () => Math.max(0, Math.min(target, container.scrollHeight - container.clientHeight));
   const finish = () => {
     if (finished) return;
     finished = true;
     clearTimeout(timer);
-    container.removeEventListener("scrollend", finish);
+    container.removeEventListener("scrollend", onScrollEnd);
     onDone();
   };
-  container.addEventListener("scrollend", finish);
+  const onScrollEnd = () => {
+    if (Math.abs(container.scrollTop - reachable()) <= SCROLL_END_TOLERANCE) finish();
+  };
+  container.addEventListener("scrollend", onScrollEnd);
   // Ohne Bewegung (schon am Ziel, Rand des Scrollbereichs) kommt kein scrollend
   timer = setTimeout(finish, 1200);
   container.scrollTo({ top: target, behavior: "smooth" });
