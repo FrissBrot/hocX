@@ -63,6 +63,9 @@ BACKGROUND_LOCK_IDS: dict[str, int] = {
     "thumbnail_backfill": 202600029,
     "photo_similarity_refresh": 202600030,
     "submission_todo_sync": 202600031,
+    # Benachrichtigungen (Migration 0170, app/notifications)
+    "notification_dispatch": 202600032,
+    "todo_reminders": 202600033,
 }
 
 # Lock-IDs anderer Dienste auf derselben Datenbank - Advisory Locks gelten datenbankweit, nicht

@@ -24,6 +24,7 @@ from app.schemas.submission import (
     SubmissionFileRead,
     SubmissionUploadLogEntry,
 )
+from app.notifications import todos as todo_notifications
 from app.services import public_id_service, submission_link_service, todo_fine_service
 from app.services.task_package_service import set_todo_assignees, todo_assignee_ids
 from app.core.storage import ABGABEBOX, ObjectNotFound, get_object_store, validate_key
@@ -682,8 +683,10 @@ class SubmissionService:
             todo.reference_link = url
             # Alle Verantwortlichen des Elements (mehrere = gemeinsam). Die Anzeige liest
             # protocol_todo_assignee vor assigned_participant_id, daher immer beide nachführen.
-            if todo_assignee_ids(db, todo.id) != participant_ids or todo.assigned_participant_id != participant_ids[0]:
+            if (previous := todo_assignee_ids(db, todo.id)) != participant_ids or todo.assigned_participant_id != participant_ids[0]:
                 set_todo_assignees(db, todo, participant_ids)
+                # Abgabe-Aufgaben haben kein Protokoll: neu Verantwortliche sofort (gebündelt) melden
+                todo_notifications.on_assignees_added(db, todo, [pid for pid in participant_ids if pid not in previous])
             if has_files and todo.todo_status_id not in closed_ids:
                 todo.todo_status_id = done_id
                 todo.completed_at = state.submitted_at or datetime.now(UTC)

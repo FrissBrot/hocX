@@ -542,6 +542,14 @@
       "submission_todo_sync": {
         "title": "Sincronizza le attività di consegna",
         "description": "Ogni 15 minuti allinea le attività delle consegne con eventi e liste: persona, scadenza, completata appena vengono consegnati file, elementi rimossi."
+      },
+      "notification_dispatch": {
+        "title": "Notifiche e-mail",
+        "description": "Invia per e-mail le notifiche in scadenza, raggruppate per persona (nuovi compiti, promemoria)."
+      },
+      "todo_reminders": {
+        "title": "Promemoria compiti",
+        "description": "Crea ogni giorno dalle 07:00 promemoria per i compiti in scadenza tra 3 giorni o scaduti da ieri."
       }
     }
   },
@@ -583,7 +591,41 @@
     "rotated": "Nuovo token creato.",
     "statusUrl": "URL per il monitor HTTP",
     "statusHelp": "Aggiungerlo in Uptime Kuma come monitor di tipo HTTP(s). Codici accettati: 200-299. La risposta contiene solo conteggi, nessun dettaglio.",
-    "noStatusToken": "Nessun token creato finora."
+    "noStatusToken": "Nessun token creato finora.",
+    "email": {
+      "title": "E-mail (SMTP)",
+      "description": "Invio delle notifiche ai membri (nuovi compiti, promemoria). Il mittente è un indirizzo hocX, il nome della società appare nell'oggetto.",
+      "enabledLabel": "Invio e-mail attivo",
+      "yes": "Sì",
+      "no": "No",
+      "host": "Server SMTP",
+      "port": "Porta",
+      "security": "Crittografia",
+      "securityStarttls": "STARTTLS (di solito porta 587)",
+      "securitySsl": "SSL/TLS (di solito porta 465)",
+      "securityNone": "Nessuna (solo interno)",
+      "username": "Nome utente",
+      "password": "Password",
+      "passwordKeep": "Salvata – lascia vuoto per mantenerla",
+      "removePassword": "Rimuovi password",
+      "removePasswordConfirm": "Rimuovere la password SMTP salvata?",
+      "fromAddress": "Indirizzo mittente",
+      "fromName": "Nome mittente",
+      "linkBase": "URL di base per i link",
+      "linkBaseHelp": "Se vuoto, viene usato il dominio della piattaforma.",
+      "save": "Salva",
+      "saved": "Impostazioni e-mail salvate.",
+      "saveFailed": "Salvataggio non riuscito.",
+      "testTo": "Invia e-mail di prova a",
+      "sendTest": "Invia e-mail di prova",
+      "saveBeforeTest": "Salva prima.",
+      "testSent": "E-mail di prova inviata.",
+      "testFailed": "E-mail di prova non riuscita: {error}",
+      "lastSent": "Ultimo invio: {date}",
+      "neverSent": "Ancora nulla inviato",
+      "lastError": "Ultimo errore ({date}): {error}",
+      "queue": "In attesa: {pending} · Non riusciti: {failed}"
+    }
   },
   "login": {
     "title": "Accesso amministratore",

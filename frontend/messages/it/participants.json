@@ -59,7 +59,9 @@
     "templates": "Modelli",
     "noDescription": "Nessun testo descrittivo",
     "save": "Salva partecipante",
-    "create": "Crea partecipante"
+    "create": "Crea partecipante",
+    "notifyWithoutLogin": "Inviare notifiche e-mail anche se la persona non ha un accesso",
+    "notifyWithoutLoginHint": "Nuovi compiti e promemoria vengono inviati all'indirizzo e-mail registrato."
   },
   "toasts": {
     "loadMoreFailed": "Impossibile caricare altri partecipanti",

@@ -62,6 +62,8 @@ class ParticipantService:
         if participant is None or participant.tenant_id != tenant_id:
             return None
         values = payload.model_dump(exclude_unset=True)
+        if "notify_without_login" in values and values["notify_without_login"] is None:
+            values.pop("notify_without_login")
         if not values:
             return participant
         from app.services.user_service import UserService

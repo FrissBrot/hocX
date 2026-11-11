@@ -198,6 +198,7 @@
       "protocol": "Protocol",
       "role": "Role",
       "rule": "Rule",
+      "sent_at": "Sent at",
       "size_bytes": "Size (bytes)",
       "status": "Status",
       "tag": "Tag",
@@ -225,6 +226,7 @@
       "lists": "Lists",
       "membership_changes": "Joins and leaves",
       "mentions": "Mentions",
+      "notifications": "Email notifications",
       "person": "Person",
       "responsibilities": "Responsibilities",
       "security": "Sign-in and feeds",
@@ -332,6 +334,28 @@
   "due": {
     "lastSession": "last meeting",
     "nextSession": "next meeting"
+  },
+  "email": {
+    "footer": "This message comes from {tenant} via hocX.",
+    "greeting": "Hello {name}",
+    "noLoginHint": "Questions about this message? Please contact {tenant}.",
+    "settingsHint": "Choose which emails you receive in your settings: {url}",
+    "test": {
+      "body": "This test email confirms that email delivery from hocX works.",
+      "subject": "hocX: Test email"
+    },
+    "todo": {
+      "due": "due {date}",
+      "introNew": "You have new tasks at {tenant}.",
+      "introReminder": "Here is a short overview of your tasks at {tenant}.",
+      "openButton": "View tasks",
+      "openLink": "View all tasks: {url}",
+      "sectionDueSoon": "Due in 3 days",
+      "sectionNew": "New tasks",
+      "sectionOverdue": "Overdue since yesterday",
+      "subjectNew": "{tenant}: New tasks for you",
+      "subjectReminder": "{tenant}: Reminder about your tasks"
+    }
   },
   "empty": {
     "attendance": "No attendance recorded.",

@@ -27,6 +27,9 @@ from app.services.audit_service import AuditService
 from app.services.mfa_service import MfaService
 from app.services.user_service import UserService
 
+from app.notifications import preferences as notification_preferences
+from app.schemas.notifications import NotificationPreferencesRead, NotificationPreferencesWrite
+
 router = APIRouter()
 service = UserService()
 mfa_service = MfaService()
@@ -239,6 +242,27 @@ def change_my_password(
         raise HTTPException(status_code=400, detail="Password could not be changed") from exc
     audit.log(db, action="user.password_changed", actor=user, entity_type="user", entity_id=user.user_id)
     return current
+
+
+@router.get("/me/notification-preferences", response_model=NotificationPreferencesRead)
+def get_my_notification_preferences(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Eigene E-Mail-Benachrichtigungen (eigene Daten, keine Permission nötig)."""
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    return notification_preferences.read(db, user.user_id, user.current_tenant_id)
+
+
+@router.put("/me/notification-preferences", response_model=NotificationPreferencesRead)
+def put_my_notification_preferences(
+    payload: NotificationPreferencesWrite, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user),
+):
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    try:
+        return notification_preferences.write(db, user.user_id, user.current_tenant_id, payload)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Preferences could not be saved") from exc
 
 
 def _resolve_user_id(db: Session, user_id: uuid.UUID) -> int:

@@ -198,6 +198,7 @@
       "protocol": "Verbale",
       "role": "Ruolo",
       "rule": "Regola",
+      "sent_at": "Inviato il",
       "size_bytes": "Dimensione (byte)",
       "status": "Stato",
       "tag": "Etichetta",
@@ -225,6 +226,7 @@
       "lists": "Liste",
       "membership_changes": "Entrate e uscite",
       "mentions": "Menzioni",
+      "notifications": "Notifiche e-mail",
       "person": "Persona",
       "responsibilities": "Responsabilità",
       "security": "Accesso e abbonamenti",
@@ -332,6 +334,28 @@
   "due": {
     "lastSession": "ultima seduta",
     "nextSession": "prossima seduta"
+  },
+  "email": {
+    "footer": "Questo messaggio proviene da {tenant} tramite hocX.",
+    "greeting": "Ciao {name}",
+    "noLoginHint": "Domande su questo messaggio? Rivolgiti a {tenant}.",
+    "settingsHint": "Scegli quali e-mail ricevere nelle tue impostazioni: {url}",
+    "test": {
+      "body": "Questa e-mail di prova conferma che l'invio di e-mail da hocX funziona.",
+      "subject": "hocX: e-mail di prova"
+    },
+    "todo": {
+      "due": "scadenza {date}",
+      "introNew": "Hai nuovi compiti presso {tenant}.",
+      "introReminder": "Ecco una breve panoramica dei tuoi compiti presso {tenant}.",
+      "openButton": "Vedi i compiti",
+      "openLink": "Vedi tutti i compiti: {url}",
+      "sectionDueSoon": "In scadenza tra 3 giorni",
+      "sectionNew": "Nuovi compiti",
+      "sectionOverdue": "Scaduti da ieri",
+      "subjectNew": "{tenant}: nuovi compiti per te",
+      "subjectReminder": "{tenant}: promemoria dei tuoi compiti"
+    }
   },
   "empty": {
     "attendance": "Nessuna presenza registrata.",

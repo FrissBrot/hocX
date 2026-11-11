@@ -1,8 +1,9 @@
+import { AdminEmailSettings } from "@/components/admin/admin-email-settings";
 import { AdminNotificationSettings } from "@/components/admin/admin-notification-settings";
 import { AdminShell } from "@/components/ui/admin-shell";
 import { requireAdminSession } from "@/lib/api/admin-server";
 import { backendFetchWithSession } from "@/lib/api/server";
-import { NotificationSettings } from "@/types/api";
+import { EmailSettings, NotificationSettings } from "@/types/api";
 
 const EMPTY_SETTINGS: NotificationSettings = {
   ntfy_enabled: false,
@@ -20,12 +21,18 @@ const EMPTY_SETTINGS: NotificationSettings = {
 
 export default async function AdminNotificationsPage() {
   const session = await requireAdminSession();
-  const settings = await backendFetchWithSession<NotificationSettings>("/api/admin/notifications");
+  const [settings, emailSettings] = await Promise.all([
+    backendFetchWithSession<NotificationSettings>("/api/admin/notifications"),
+    backendFetchWithSession<EmailSettings>("/api/admin/notifications/email"),
+  ]);
 
   return (
     <AdminShell session={session}>
       <section className="panel">
         <AdminNotificationSettings initialSettings={settings ?? EMPTY_SETTINGS} />
+      </section>
+      <section className="panel">
+        {emailSettings ? <AdminEmailSettings initialSettings={emailSettings} /> : null}
       </section>
     </AdminShell>
   );

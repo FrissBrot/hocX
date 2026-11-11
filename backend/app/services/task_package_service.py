@@ -234,6 +234,7 @@ def _sync_item(
             db.add(todo)
             db.flush()
             set_todo_assignees(db, todo, assignees)
+            _notify_assignees(db, todo, assignees)
             created += 1
             continue
         if todo.todo_status_id in closed_status_ids or todo.pending_delete:
@@ -247,13 +248,21 @@ def _sync_item(
             changed = True
         if _clear_foreign_due(todo, overridden):
             changed = True
-        if "assignees" not in overridden and todo_assignee_ids(db, todo.id) != assignees:
+        if "assignees" not in overridden and (previous := todo_assignee_ids(db, todo.id)) != assignees:
             set_todo_assignees(db, todo, assignees)
+            _notify_assignees(db, todo, [pid for pid in assignees if pid not in previous])
             changed = True
         if changed:
             db.add(todo)
             updated += 1
     return created, updated
+
+
+def _notify_assignees(db: Session, todo: ProtocolTodo, participant_ids: list[int]) -> None:
+    """Neue Paket-Aufgaben melden (gebündelt, app/notifications/todos.py)."""
+    from app.notifications import todos as todo_notifications
+
+    todo_notifications.on_assignees_added(db, todo, participant_ids)
 
 
 def _clear_foreign_due(todo: ProtocolTodo, overridden: set[str]) -> bool:

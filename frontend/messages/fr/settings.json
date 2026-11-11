@@ -5,7 +5,8 @@
     "tabs": {
       "profile": "Profil",
       "security": "Sécurité",
-      "data": "Mes données"
+      "data": "Mes données",
+      "notifications": "Notifications"
     },
     "languageLabel": "Langue",
     "wheelLabel": "Effet de roue au défilement",
@@ -19,6 +20,24 @@
     "personalData": {
       "description": "Téléchargez toutes les données que hocX a enregistrées à votre sujet – fichier ZIP protégé par mot de passe avec un classeur Excel et un fichier JSON lisible par machine.",
       "download": "Télécharger mes données"
+    },
+    "notifications": {
+      "description": "Les e-mails que tu reçois de ton club. Nous en envoyons volontairement peu : les nouvelles tâches regroupées et un rappel par tâche avant et après l'échéance.",
+      "loading": "Chargement …",
+      "loadFailed": "Impossible de charger les paramètres.",
+      "saveFailed": "Impossible d'enregistrer le paramètre.",
+      "platformOff": "L'envoi d'e-mails n'est pas encore configuré sur cette plateforme.",
+      "noEmail": "Aucune adresse e-mail n'est enregistrée pour ton compte.",
+      "category": {
+        "todo_new": {
+          "label": "Nouvelles tâches",
+          "hint": "E-mail groupé quand tu reçois de nouvelles tâches. Les tâches d'un procès-verbal arrivent dès qu'il est clôturé."
+        },
+        "todo_reminders": {
+          "label": "Rappels de tâches",
+          "hint": "Une fois 3 jours avant l'échéance et une fois le lendemain, si elles sont encore ouvertes."
+        }
+      }
     }
   },
   "logoutFailed": "Échec de la déconnexion. Veuillez réessayer.",

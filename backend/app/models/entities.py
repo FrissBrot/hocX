@@ -358,6 +358,8 @@ class Participant(Base, TimestampMixin, UpdatedAtMixin):
     external_identity_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
     # Bussentarif der Person für Pendenzen-Bussen (Migration 0169); NULL = Standardtarif.
     fine_tariff_group_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("fine_tariff_group.id", ondelete="SET NULL"))
+    # Personen ohne Login bekommen E-Mails nur, wenn ein Admin das einschaltet (Migration 0170).
+    notify_without_login: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
 
 
 # Authentifizierung und Teilnahme verwenden denselben Datensatz.
@@ -2361,6 +2363,8 @@ class PlatformNotificationSettings(Base):
     __table_args__ = (
         CheckConstraint("id = 1", name="ck_platform_notification_settings_singleton"),
         CheckConstraint("reminder_hours BETWEEN 0 AND 168", name="ck_platform_notification_settings_reminder_hours"),
+        CheckConstraint("smtp_security IN ('starttls', 'ssl', 'none')", name="ck_platform_notification_settings_smtp_security"),
+        CheckConstraint("smtp_port BETWEEN 1 AND 65535", name="ck_platform_notification_settings_smtp_port"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -2376,6 +2380,67 @@ class PlatformNotificationSettings(Base):
     last_send_error_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    # E-Mail-Versand (Migration 0170): SMTP, Passwort nur verschlüsselt (secret_crypto)
+    email_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    smtp_host: Mapped[str | None] = mapped_column(Text)
+    smtp_port: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("587"), default=587)
+    smtp_security: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'starttls'"), default="starttls")
+    smtp_username: Mapped[str | None] = mapped_column(Text)
+    smtp_password_encrypted: Mapped[str | None] = mapped_column(Text)
+    email_from_address: Mapped[str | None] = mapped_column(Text)
+    email_from_name: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'hocX'"), default="hocX")
+    email_link_base_url: Mapped[str | None] = mapped_column(Text)
+    email_last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    email_last_error: Mapped[str | None] = mapped_column(Text)
+    email_last_error_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Notification(Base):
+    """Benachrichtigung je Empfänger: Warteschlange und Versandprotokoll (Migration 0170).
+    Anlegen nur über app.notifications.publish; versenden nur der Loop notification_dispatch."""
+
+    __tablename__ = "notification"
+    __table_args__ = (
+        CheckConstraint("status IN ('pending', 'sent', 'skipped', 'failed')", name="ck_notification_status"),
+        UniqueConstraint("dedupe_key", name="uq_notification_dedupe_key"),
+        Index("idx_notification_tenant", "tenant_id"),
+        Index("idx_notification_recipient", "recipient_id", "created_at"),
+        Index("idx_notification_pending", "deliver_after", postgresql_where=text("status = 'pending'")),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()"))
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    recipient_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    group_key: Mapped[str] = mapped_column(Text, nullable=False)
+    subject_id: Mapped[int | None] = mapped_column(BigInteger)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
+    dedupe_key: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'pending'"), default="pending")
+    skip_reason: Mapped[str | None] = mapped_column(Text)
+    deliver_after: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    last_error: Mapped[str | None] = mapped_column(Text)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+
+
+class NotificationPreference(Base):
+    """Kategorie je Person ein/aus (Migration 0170). Ohne Zeile gilt der Standard des Katalogs."""
+
+    __tablename__ = "notification_preference"
+    __table_args__ = (
+        PrimaryKeyConstraint("user_id", "category", name="notification_preference_pkey"),
+        Index("idx_notification_preference_tenant", "tenant_id"),
+    )
+
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False)
+    category: Mapped[str] = mapped_column(Text, nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+
 
 class PhotoAlbum(Base, TimestampMixin):
     """`kind` distinguishes an admin-created album ("manual") from the three auto-generated

@@ -542,6 +542,14 @@
       "submission_todo_sync": {
         "title": "Sync submission tasks",
         "description": "Every 15 minutes, aligns submission tasks with events and lists: person, due date, done once files are submitted, removed elements."
+      },
+      "notification_dispatch": {
+        "title": "Email notifications",
+        "description": "Sends due notifications by email, bundled per person (new tasks, reminders)."
+      },
+      "todo_reminders": {
+        "title": "Task reminders",
+        "description": "Creates reminders daily from 07:00 for tasks due in 3 days or overdue since yesterday."
       }
     }
   },
@@ -583,7 +591,41 @@
     "rotated": "New token created.",
     "statusUrl": "URL for the HTTP monitor",
     "statusHelp": "Add it in Uptime Kuma as monitor type HTTP(s). Accepted status codes: 200-299. The response only contains counts, no details.",
-    "noStatusToken": "No token created yet."
+    "noStatusToken": "No token created yet.",
+    "email": {
+      "title": "Email (SMTP)",
+      "description": "Delivery of notifications to members (new tasks, reminders). The sender is a hocX address; the club name appears in the subject.",
+      "enabledLabel": "Email delivery active",
+      "yes": "Yes",
+      "no": "No",
+      "host": "SMTP server",
+      "port": "Port",
+      "security": "Encryption",
+      "securityStarttls": "STARTTLS (usually port 587)",
+      "securitySsl": "SSL/TLS (usually port 465)",
+      "securityNone": "None (internal only)",
+      "username": "Username",
+      "password": "Password",
+      "passwordKeep": "Saved – leave empty to keep it",
+      "removePassword": "Remove password",
+      "removePasswordConfirm": "Remove the stored SMTP password?",
+      "fromAddress": "Sender address",
+      "fromName": "Sender name",
+      "linkBase": "Base URL for links",
+      "linkBaseHelp": "If empty, the platform domain is used.",
+      "save": "Save",
+      "saved": "Email settings saved.",
+      "saveFailed": "Saving failed.",
+      "testTo": "Send test email to",
+      "sendTest": "Send test email",
+      "saveBeforeTest": "Save first.",
+      "testSent": "Test email sent.",
+      "testFailed": "Test email failed: {error}",
+      "lastSent": "Last sent: {date}",
+      "neverSent": "Nothing sent yet",
+      "lastError": "Last error ({date}): {error}",
+      "queue": "Waiting: {pending} · Failed: {failed}"
+    }
   },
   "login": {
     "title": "Admin sign-in",

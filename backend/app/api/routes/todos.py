@@ -296,7 +296,7 @@ def patch_todo(
     protocol = _get_protocol_or_404(db, protocol_id) if protocol_id else None
     track_changes_active = bool(protocol and protocol.status == "geplant" and protocol.track_changes_enabled)
     try:
-        todo = service.update_todo(db, existing.id, payload, track_changes_active=track_changes_active)
+        todo = service.update_todo(db, existing.id, payload, track_changes_active=track_changes_active, actor_user_id=user.user_id)
     except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Todo could not be updated") from exc

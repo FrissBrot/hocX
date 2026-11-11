@@ -59,7 +59,9 @@
     "templates": "Templates",
     "noDescription": "No description text",
     "save": "Save participant",
-    "create": "Create participant"
+    "create": "Create participant",
+    "notifyWithoutLogin": "Send email notifications even though this person has no login",
+    "notifyWithoutLoginHint": "New tasks and reminders go to the stored email address."
   },
   "toasts": {
     "loadMoreFailed": "Could not load more participants",

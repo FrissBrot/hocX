@@ -5,7 +5,8 @@
     "tabs": {
       "profile": "Profile",
       "security": "Security",
-      "data": "My data"
+      "data": "My data",
+      "notifications": "Notifications"
     },
     "languageLabel": "Language",
     "wheelLabel": "Wheel effect while scrolling",
@@ -19,6 +20,24 @@
     "personalData": {
       "description": "Download all data hocX has stored about you – as a password-protected ZIP file with an Excel workbook and a machine-readable JSON file.",
       "download": "Download my data"
+    },
+    "notifications": {
+      "description": "Which emails you receive from your club. We deliberately send few: new tasks bundled and one reminder per task before and after the due date.",
+      "loading": "Loading …",
+      "loadFailed": "Settings could not be loaded.",
+      "saveFailed": "Setting could not be saved.",
+      "platformOff": "Email delivery is not yet set up on this platform.",
+      "noEmail": "Your account has no email address.",
+      "category": {
+        "todo_new": {
+          "label": "New tasks",
+          "hint": "Bundled email when you get new tasks. Tasks from a protocol arrive once it is closed."
+        },
+        "todo_reminders": {
+          "label": "Task reminders",
+          "hint": "Once 3 days before the due date and once the day after, if still open."
+        }
+      }
     }
   },
   "logoutFailed": "Logout failed. Please try again.",

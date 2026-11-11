@@ -5,7 +5,8 @@
     "tabs": {
       "profile": "Profil",
       "security": "Sicherheit",
-      "data": "Meine Daten"
+      "data": "Meine Daten",
+      "notifications": "Benachrichtigungen"
     },
     "languageLabel": "Sprache",
     "wheelLabel": "Rad-Effekt beim Scrollen",
@@ -19,6 +20,24 @@
     "personalData": {
       "description": "Lade alle Daten herunter, die hocX über dich gespeichert hat – als passwortgeschützte ZIP-Datei mit einer Excel-Tabelle und einer maschinenlesbaren JSON-Datei.",
       "download": "Meine Daten herunterladen"
+    },
+    "notifications": {
+      "description": "Welche E-Mails du von deinem Verein bekommst. Wir schicken bewusst wenig: neue Aufgaben gesammelt und je Aufgabe eine Erinnerung vor und nach der Fälligkeit.",
+      "loading": "Wird geladen …",
+      "loadFailed": "Einstellungen konnten nicht geladen werden.",
+      "saveFailed": "Einstellung konnte nicht gespeichert werden.",
+      "platformOff": "Der E-Mail-Versand ist auf dieser Plattform noch nicht eingerichtet.",
+      "noEmail": "Für dein Konto ist keine E-Mail-Adresse hinterlegt.",
+      "category": {
+        "todo_new": {
+          "label": "Neue Aufgaben",
+          "hint": "Sammelmail, wenn du neue Aufgaben bekommst. Aufgaben aus einem Protokoll kommen, sobald es abgeschlossen ist."
+        },
+        "todo_reminders": {
+          "label": "Erinnerungen an Aufgaben",
+          "hint": "Einmal 3 Tage vor der Fälligkeit und einmal am Tag nach der Fälligkeit, falls noch offen."
+        }
+      }
     }
   },
   "logoutFailed": "Abmelden fehlgeschlagen. Bitte erneut versuchen.",

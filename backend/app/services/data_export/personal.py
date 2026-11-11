@@ -98,6 +98,12 @@ def collect(db: Session, person: AppUser) -> dict[str, list[dict[str, Any]]]:
         ORDER BY f.completed_on, f.id
     """, params)]
 
+    # Versandprotokoll der Benachrichtigungen (Migration 0170, 90 Tage aufbewahrt)
+    data["notifications"] = [dict(row) for row in _rows(db, """
+        SELECT n.kind, n.status, n.created_at, n.sent_at
+        FROM notification n WHERE n.tenant_id = :tenant_id AND n.recipient_id = :pid ORDER BY n.created_at, n.id
+    """, params)]
+
     data["todos"] = [dict(row) for row in _rows(db, """
         SELECT DISTINCT t.id AS ref, t.task, t.due_date, s.code AS status, t.completed_at, p.protocol_number AS protocol, t.notes
         FROM protocol_todo t
@@ -212,6 +218,7 @@ _SECTIONS: dict[str, list[str]] = {
     "fines": ["protocol", "date", "type", "amount", "currency", "status", "collected_at", "delete_comment"],
     "todo_fines": ["task", "due_date", "completed_on", "days_late", "rule", "tariff", "amount", "currency", "status", "collected_at", "delete_comment"],
     "todos": ["task", "due_date", "status", "completed_at", "protocol", "notes"],
+    "notifications": ["kind", "status", "created_at", "sent_at"],
     "responsibilities": ["protocol", "date", "element"],
     "agenda_items": ["title", "text", "template", "month", "protocol", "created_at"],
     "events": ["date", "title", "location", "role"],

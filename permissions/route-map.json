@@ -259,6 +259,18 @@
       "handler": "admin.update_notification_settings",
       "platform": true
     },
+    "GET /api/admin/notifications/email": {
+      "handler": "admin.get_email_settings",
+      "platform": true
+    },
+    "PUT /api/admin/notifications/email": {
+      "handler": "admin.update_email_settings",
+      "platform": true
+    },
+    "POST /api/admin/notifications/email/test": {
+      "handler": "admin.send_test_email",
+      "platform": true
+    },
     "POST /api/admin/notifications/status-token": {
       "handler": "admin.rotate_status_token",
       "platform": true
@@ -2964,6 +2976,14 @@
     "POST /api/users/me/mfa/totp/start": {
       "handler": "users.start_my_totp_enrollment",
       "note": "eigene MFA"
+    },
+    "GET /api/users/me/notification-preferences": {
+      "handler": "users.get_my_notification_preferences",
+      "note": "eigene E-Mail-Benachrichtigungen"
+    },
+    "PUT /api/users/me/notification-preferences": {
+      "handler": "users.put_my_notification_preferences",
+      "note": "eigene E-Mail-Benachrichtigungen"
     },
     "POST /api/users/me/password": {
       "handler": "users.change_my_password",

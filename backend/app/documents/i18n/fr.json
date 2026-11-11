@@ -198,6 +198,7 @@
       "protocol": "Procès-verbal",
       "role": "Rôle",
       "rule": "Règle",
+      "sent_at": "Envoyé le",
       "size_bytes": "Taille (octets)",
       "status": "Statut",
       "tag": "Étiquette",
@@ -225,6 +226,7 @@
       "lists": "Listes",
       "membership_changes": "Entrées et sorties",
       "mentions": "Mentions",
+      "notifications": "Notifications par e-mail",
       "person": "Personne",
       "responsibilities": "Responsabilités",
       "security": "Connexion et abonnements",
@@ -332,6 +334,28 @@
   "due": {
     "lastSession": "dernière séance",
     "nextSession": "prochaine séance"
+  },
+  "email": {
+    "footer": "Ce message vient de {tenant} via hocX.",
+    "greeting": "Bonjour {name}",
+    "noLoginHint": "Des questions sur ce message ? Adresse-toi à {tenant}.",
+    "settingsHint": "Choisis les e-mails que tu reçois dans tes paramètres : {url}",
+    "test": {
+      "body": "Cet e-mail de test confirme que l'envoi d'e-mails de hocX fonctionne.",
+      "subject": "hocX : e-mail de test"
+    },
+    "todo": {
+      "due": "échéance {date}",
+      "introNew": "Tu as de nouvelles tâches chez {tenant}.",
+      "introReminder": "Voici un bref aperçu de tes tâches chez {tenant}.",
+      "openButton": "Voir les tâches",
+      "openLink": "Voir toutes les tâches : {url}",
+      "sectionDueSoon": "Échéance dans 3 jours",
+      "sectionNew": "Nouvelles tâches",
+      "sectionOverdue": "En retard depuis hier",
+      "subjectNew": "{tenant} : nouvelles tâches pour toi",
+      "subjectReminder": "{tenant} : rappel de tes tâches"
+    }
   },
   "empty": {
     "attendance": "Aucune présence saisie.",

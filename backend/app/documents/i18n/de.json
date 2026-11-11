@@ -198,6 +198,7 @@
       "protocol": "Protokoll",
       "role": "Rolle",
       "rule": "Regel",
+      "sent_at": "Versendet am",
       "size_bytes": "Grösse (Bytes)",
       "status": "Status",
       "tag": "Tag",
@@ -225,6 +226,7 @@
       "lists": "Listen",
       "membership_changes": "Ein- und Austritte",
       "mentions": "Erwähnungen",
+      "notifications": "E-Mail-Benachrichtigungen",
       "person": "Person",
       "responsibilities": "Verantwortlichkeiten",
       "security": "Anmeldung und Abos",
@@ -332,6 +334,28 @@
   "due": {
     "lastSession": "letzte Sitzung",
     "nextSession": "nächste Sitzung"
+  },
+  "email": {
+    "footer": "Diese Nachricht kommt von {tenant} über hocX.",
+    "greeting": "Hallo {name}",
+    "noLoginHint": "Fragen zu dieser Nachricht? Wende dich an {tenant}.",
+    "settingsHint": "Welche E-Mails du bekommst, stellst du in deinen Einstellungen ein: {url}",
+    "test": {
+      "body": "Diese Test-E-Mail bestätigt, dass der E-Mail-Versand von hocX funktioniert.",
+      "subject": "hocX: Test-E-Mail"
+    },
+    "todo": {
+      "due": "fällig {date}",
+      "introNew": "Bei {tenant} hast du neue Aufgaben.",
+      "introReminder": "Hier ist eine kurze Übersicht deiner Aufgaben bei {tenant}.",
+      "openButton": "Aufgaben ansehen",
+      "openLink": "Alle Aufgaben ansehen: {url}",
+      "sectionDueSoon": "In 3 Tagen fällig",
+      "sectionNew": "Neue Aufgaben",
+      "sectionOverdue": "Seit gestern überfällig",
+      "subjectNew": "{tenant}: Neue Aufgaben für dich",
+      "subjectReminder": "{tenant}: Erinnerung an deine Aufgaben"
+    }
   },
   "empty": {
     "attendance": "Keine Anwesenheit erfasst.",

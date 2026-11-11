@@ -35,6 +35,22 @@ Installationen aktualisieren können.
   Mandanten ein eigenes Blatt.
 - Migration `0169_todo_fines`.
 
+### Neu: E-Mail-Benachrichtigungen
+
+- Zentraler Weg für Benachrichtigungen an Personen (`backend/app/notifications/`, Doku
+  `docs/NOTIFICATIONS.md`). Zuerst nur E-Mail über SMTP. Die Konfiguration liegt unter
+  `/admin/notifications` (Passwort verschlüsselt, Test-Mail, Anzeige von Warteschlange und Fehlern).
+- Neue Aufgaben als Sammelmail: Aufgaben aus einem Protokoll erst beim Abschluss des Protokolls,
+  Aufgaben ohne Protokoll (auch aus Aufgabenpaketen und der Abgabebox) beim Erstellen. Wer sich
+  selbst eine Aufgabe gibt, bekommt keine Mail.
+- Erinnerungen als tägliche Sammelmail ab 07:00: «fällig in 3 Tagen» und «seit gestern
+  überfällig», je Aufgabe nur einmal.
+- Im Profil (Reiter «Benachrichtigungen») schaltet jede Person beide Arten ein oder aus.
+  Personen ohne Login bekommen nur Mails, wenn ein Admin das im Personen-Dialog einschaltet.
+- Neue Hintergrundjobs `notification_dispatch` und `todo_reminders` (job-worker). Der
+  Datenschutz-Export enthält das Versandprotokoll (90 Tage aufbewahrt).
+- Migration `0170_notifications`.
+
 ## [1.2.4] - 2026-11-11
 
 Rückmeldungen aus dem Testbetrieb von 1.2.3: flüssigeres Scrollen im Protokoll mit einem neuen

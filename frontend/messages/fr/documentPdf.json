@@ -461,7 +461,8 @@
       "activity": "Activité",
       "mentions": "Mentions",
       "agenda_items": "Sujets",
-      "todo_fines": "Amendes pour tâches"
+      "todo_fines": "Amendes pour tâches",
+      "notifications": "Notifications par e-mail"
     },
     "col": {
       "first_name": "Prénom",
@@ -521,7 +522,8 @@
       "rule": "Règle",
       "tariff": "Tarif",
       "completed_on": "Terminée le",
-      "fine_tariff": "Tarif d'amendes"
+      "fine_tariff": "Tarif d'amendes",
+      "sent_at": "Envoyé le"
     },
     "file": {
       "workbook": "Rapport de données",
@@ -579,5 +581,27 @@
       "missingFiles": "Non inclus car introuvables dans le stockage : {count} fichier(s)."
     },
     "tenantReadme": "Export de l’association {tenant}, créé le {date}.\\n\\nTableaux (Excel) : membres, rendez-vous, présences (personne × séance), amendes, finances (une feuille par compte), tâches et, dans le dossier Listes, un fichier par liste. Noms au lieu de numéros internes, dates au format JJ.MM.AAAA, montants en nombres.\\nProcès-verbaux : le dernier PDF généré de chaque procès-verbal clôturé.\\n{files}\\n\\nLes identifiants (mots de passe, clés à deux facteurs, liens) ne sont pas inclus. À conserver en lieu sûr : le fichier contient des données personnelles."
+  },
+  "email": {
+    "greeting": "Bonjour {name}",
+    "footer": "Ce message vient de {tenant} via hocX.",
+    "settingsHint": "Choisis les e-mails que tu reçois dans tes paramètres : {url}",
+    "noLoginHint": "Des questions sur ce message ? Adresse-toi à {tenant}.",
+    "todo": {
+      "subjectNew": "{tenant} : nouvelles tâches pour toi",
+      "subjectReminder": "{tenant} : rappel de tes tâches",
+      "introNew": "Tu as de nouvelles tâches chez {tenant}.",
+      "introReminder": "Voici un bref aperçu de tes tâches chez {tenant}.",
+      "sectionNew": "Nouvelles tâches",
+      "sectionDueSoon": "Échéance dans 3 jours",
+      "sectionOverdue": "En retard depuis hier",
+      "due": "échéance {date}",
+      "openLink": "Voir toutes les tâches : {url}",
+      "openButton": "Voir les tâches"
+    },
+    "test": {
+      "subject": "hocX : e-mail de test",
+      "body": "Cet e-mail de test confirme que l'envoi d'e-mails de hocX fonctionne."
+    }
   }
 }

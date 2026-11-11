@@ -542,6 +542,14 @@
       "submission_todo_sync": {
         "title": "Abgabe-Pendenzen abgleichen",
         "description": "Gleicht alle 15 Minuten die Pendenzen der Abgaben mit Terminen und Listen ab: Person, Frist, erledigt bei eingereichten Dateien, weggefallene Elemente."
+      },
+      "notification_dispatch": {
+        "title": "E-Mail-Benachrichtigungen",
+        "description": "Versendet fällige Benachrichtigungen gebündelt per E-Mail (neue Aufgaben, Erinnerungen)."
+      },
+      "todo_reminders": {
+        "title": "Aufgaben-Erinnerungen",
+        "description": "Legt täglich ab 07:00 Erinnerungen für Aufgaben an, die in 3 Tagen fällig oder seit gestern überfällig sind."
       }
     }
   },
@@ -583,7 +591,41 @@
     "rotated": "Neues Token erzeugt.",
     "statusUrl": "URL für den HTTP-Monitor",
     "statusHelp": "In Uptime Kuma als Monitor-Typ HTTP(s) eintragen. Akzeptierte Statuscodes: 200-299. Die Antwort enthält nur Zähler, keine Details.",
-    "noStatusToken": "Noch kein Token erzeugt."
+    "noStatusToken": "Noch kein Token erzeugt.",
+    "email": {
+      "title": "E-Mail (SMTP)",
+      "description": "Versand der Benachrichtigungen an Mitglieder (neue Aufgaben, Erinnerungen). Absender ist eine hocX-Adresse, der Vereinsname steht im Betreff.",
+      "enabledLabel": "E-Mail-Versand aktiv",
+      "yes": "Ja",
+      "no": "Nein",
+      "host": "SMTP-Server",
+      "port": "Port",
+      "security": "Verschlüsselung",
+      "securityStarttls": "STARTTLS (meist Port 587)",
+      "securitySsl": "SSL/TLS (meist Port 465)",
+      "securityNone": "Keine (nur intern)",
+      "username": "Benutzername",
+      "password": "Passwort",
+      "passwordKeep": "Gespeichert – leer lassen, um es zu behalten",
+      "removePassword": "Passwort entfernen",
+      "removePasswordConfirm": "Das gespeicherte SMTP-Passwort entfernen?",
+      "fromAddress": "Absenderadresse",
+      "fromName": "Absendername",
+      "linkBase": "Basis-URL für Links",
+      "linkBaseHelp": "Ohne Angabe wird die Plattform-Domain verwendet.",
+      "save": "Speichern",
+      "saved": "E-Mail-Einstellungen gespeichert.",
+      "saveFailed": "Speichern fehlgeschlagen.",
+      "testTo": "Test-E-Mail an",
+      "sendTest": "Test-E-Mail senden",
+      "saveBeforeTest": "Zuerst speichern.",
+      "testSent": "Test-E-Mail versendet.",
+      "testFailed": "Test-E-Mail fehlgeschlagen: {error}",
+      "lastSent": "Zuletzt versendet: {date}",
+      "neverSent": "Noch nichts versendet",
+      "lastError": "Letzter Fehler ({date}): {error}",
+      "queue": "Wartend: {pending} · Fehlgeschlagen: {failed}"
+    }
   },
   "login": {
     "title": "Admin-Anmeldung",

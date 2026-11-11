@@ -45,6 +45,9 @@ from app.schemas.admin import (
     NotificationSettingsRead,
     NotificationSettingsWrite,
     NotificationTestResult,
+    EmailSettingsRead,
+    EmailSettingsWrite,
+    EmailTestRequest,
     PlatformAdminCreate,
     PlatformAdminRead,
     PlatformAdminUpdate,
@@ -378,6 +381,53 @@ def send_test_notification(
         # Erwarteter, kuratierter Fehler (falsche URL/Token) - gehört auf die Seite, nicht ins
         # Fehlerprotokoll.
         return NotificationTestResult(ok=False, error=str(exc))
+    return NotificationTestResult(ok=True)
+
+
+@router.get("/notifications/email", response_model=EmailSettingsRead)
+def get_email_settings(
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_owner),
+):
+    return notification_settings_service.read_email(db)
+
+
+@router.put("/notifications/email", response_model=EmailSettingsRead)
+def update_email_settings(
+    payload: EmailSettingsWrite,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
+    try:
+        result = notification_settings_service.update_email(db, payload)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    audit.log(
+        db, action="admin.email_settings_updated", actor_email=current_admin.email,
+        details={
+            "email_enabled": result.email_enabled, "smtp_host": result.smtp_host, "smtp_port": result.smtp_port,
+            "smtp_security": result.smtp_security, "from": result.email_from_address,
+            "smtp_password_changed": payload.smtp_password is not None,
+        },
+    )
+    return result
+
+
+@router.post("/notifications/email/test", response_model=NotificationTestResult)
+def send_test_email(
+    payload: EmailTestRequest,
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_write),
+):
+    from app.notifications.email_transport import EmailError
+
+    try:
+        notification_settings_service.send_test_email(db, payload.to)
+    except (ValueError, EmailError) as exc:
+        # Erwartet (Konfiguration/Server) - gehört auf die Seite, nicht ins Fehlerprotokoll.
+        return NotificationTestResult(ok=False, error=str(exc))
+    audit.log(db, action="admin.email_test_sent", actor_email=current_admin.email, details={})
     return NotificationTestResult(ok=True)
 
 

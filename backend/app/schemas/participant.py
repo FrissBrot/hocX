@@ -42,6 +42,8 @@ class ParticipantUpdate(BaseModel):
     is_active: bool | None = None
     joined_at: date | None = None
     left_at: date | None = None
+    # E-Mail-Benachrichtigungen für Personen ohne Login (Migration 0170) - nur der Admin schaltet sie ein.
+    notify_without_login: bool | None = None
 
     @model_validator(mode="after")
     def _check_date_order(self) -> "ParticipantUpdate":
@@ -54,6 +56,7 @@ class ParticipantRead(PublicIdModel, ParticipantBase):
     _fk_models: ClassVar[dict[str, type]] = {"tenant_id": Tenant}
 
     login_enabled: bool = False
+    notify_without_login: bool = False
     id: uuid.UUID
     tenant_id: uuid.UUID
     created_at: datetime

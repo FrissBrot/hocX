@@ -5,7 +5,8 @@
     "tabs": {
       "profile": "Profilo",
       "security": "Sicurezza",
-      "data": "I miei dati"
+      "data": "I miei dati",
+      "notifications": "Notifiche"
     },
     "languageLabel": "Lingua",
     "wheelLabel": "Effetto ruota durante lo scorrimento",
@@ -19,6 +20,24 @@
     "personalData": {
       "description": "Scarica tutti i dati che hocX ha salvato su di te – come file ZIP protetto da password con una cartella Excel e un file JSON leggibile da macchina.",
       "download": "Scarica i miei dati"
+    },
+    "notifications": {
+      "description": "Quali e-mail ricevi dalla tua società. Ne inviamo volutamente poche: i nuovi compiti raggruppati e un promemoria per compito prima e dopo la scadenza.",
+      "loading": "Caricamento …",
+      "loadFailed": "Impossibile caricare le impostazioni.",
+      "saveFailed": "Impossibile salvare l'impostazione.",
+      "platformOff": "L'invio di e-mail non è ancora configurato su questa piattaforma.",
+      "noEmail": "Per il tuo account non è registrato alcun indirizzo e-mail.",
+      "category": {
+        "todo_new": {
+          "label": "Nuovi compiti",
+          "hint": "E-mail raggruppata quando ricevi nuovi compiti. I compiti di un verbale arrivano quando viene chiuso."
+        },
+        "todo_reminders": {
+          "label": "Promemoria compiti",
+          "hint": "Una volta 3 giorni prima della scadenza e una volta il giorno dopo, se ancora aperti."
+        }
+      }
     }
   },
   "logoutFailed": "Disconnessione non riuscita. Riprova.",

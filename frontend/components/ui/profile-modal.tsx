@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { MfaProfilePanel } from "@/components/security/mfa-profile-panel";
+import { NotificationPreferencesPanel } from "@/components/notifications/notification-preferences-panel";
 import { Modal } from "@/components/ui/modal";
 import { ProtectedExportForm } from "@/components/ui/protected-export-modal";
 import { Tabs } from "@/components/ui/tabs";
@@ -112,6 +113,11 @@ export function ProfileModal({
                 </div>
               </div>
             ),
+          },
+          {
+            id: "benachrichtigungen",
+            label: t("tabs.notifications"),
+            content: <NotificationPreferencesPanel open={open && activeTab === "benachrichtigungen"} />,
           },
           {
             id: "sicherheit",

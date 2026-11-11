@@ -461,7 +461,8 @@
       "activity": "Attività recenti",
       "mentions": "Menzioni",
       "agenda_items": "Argomenti",
-      "todo_fines": "Multe per compiti"
+      "todo_fines": "Multe per compiti",
+      "notifications": "Notifiche e-mail"
     },
     "col": {
       "first_name": "Nome",
@@ -521,7 +522,8 @@
       "rule": "Regola",
       "tariff": "Tariffa",
       "completed_on": "Completato il",
-      "fine_tariff": "Tariffa multe"
+      "fine_tariff": "Tariffa multe",
+      "sent_at": "Inviato il"
     },
     "file": {
       "workbook": "Rapporto dati",
@@ -579,5 +581,27 @@
       "missingFiles": "Non inclusi perché non trovati nell’archivio: {count} file."
     },
     "tenantReadme": "Export dell’associazione {tenant}, creato il {date}.\\n\\nTabelle (Excel): membri, appuntamenti, presenze (persona × seduta), multe, finanze (un foglio per conto), compiti e nella cartella Liste un file per lista. Nomi invece di numeri interni, date nel formato GG.MM.AAAA, importi come numeri.\\nVerbali: l’ultimo PDF generato di ogni verbale chiuso.\\n{files}\\n\\nLe credenziali (password, chiavi a due fattori, link) non sono incluse. Conservare in modo sicuro: il file contiene dati personali."
+  },
+  "email": {
+    "greeting": "Ciao {name}",
+    "footer": "Questo messaggio proviene da {tenant} tramite hocX.",
+    "settingsHint": "Scegli quali e-mail ricevere nelle tue impostazioni: {url}",
+    "noLoginHint": "Domande su questo messaggio? Rivolgiti a {tenant}.",
+    "todo": {
+      "subjectNew": "{tenant}: nuovi compiti per te",
+      "subjectReminder": "{tenant}: promemoria dei tuoi compiti",
+      "introNew": "Hai nuovi compiti presso {tenant}.",
+      "introReminder": "Ecco una breve panoramica dei tuoi compiti presso {tenant}.",
+      "sectionNew": "Nuovi compiti",
+      "sectionDueSoon": "In scadenza tra 3 giorni",
+      "sectionOverdue": "Scaduti da ieri",
+      "due": "scadenza {date}",
+      "openLink": "Vedi tutti i compiti: {url}",
+      "openButton": "Vedi i compiti"
+    },
+    "test": {
+      "subject": "hocX: e-mail di prova",
+      "body": "Questa e-mail di prova conferma che l'invio di e-mail da hocX funziona."
+    }
   }
 }

@@ -59,7 +59,9 @@
     "templates": "Modèles",
     "noDescription": "Aucun texte de description",
     "save": "Enregistrer le participant",
-    "create": "Créer le participant"
+    "create": "Créer le participant",
+    "notifyWithoutLogin": "Envoyer des notifications par e-mail même sans connexion",
+    "notifyWithoutLoginHint": "Les nouvelles tâches et rappels sont envoyés à l'adresse e-mail enregistrée."
   },
   "toasts": {
     "loadMoreFailed": "Impossible de charger d'autres participants",

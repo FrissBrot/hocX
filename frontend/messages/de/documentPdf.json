@@ -461,7 +461,8 @@
       "activity": "Aktivität",
       "mentions": "Erwähnungen",
       "agenda_items": "Anliegen",
-      "todo_fines": "Pendenzen-Bussen"
+      "todo_fines": "Pendenzen-Bussen",
+      "notifications": "E-Mail-Benachrichtigungen"
     },
     "col": {
       "first_name": "Vorname",
@@ -521,7 +522,8 @@
       "rule": "Regel",
       "tariff": "Tarif",
       "completed_on": "Erledigt am",
-      "fine_tariff": "Bussentarif"
+      "fine_tariff": "Bussentarif",
+      "sent_at": "Versendet am"
     },
     "file": {
       "workbook": "Auskunft",
@@ -579,5 +581,27 @@
       "missingFiles": "Nicht enthalten, weil im Speicher nicht gefunden: {count} Datei(en)."
     },
     "tenantReadme": "Vereinsexport von {tenant}, erstellt am {date}.\\n\\nTabellen (Excel): Mitglieder, Termine, Anwesenheit (Person × Sitzung), Bussen, Finanzen (ein Blatt je Konto), Aufgaben und im Ordner Listen je Liste eine Datei. Namen statt interner Nummern, Datum im Format TT.MM.JJJJ, Beträge als Zahl.\\nProtokolle: das zuletzt erzeugte PDF jedes abgeschlossenen Protokolls.\\n{files}\\n\\nZugangsdaten (Passwörter, Zwei-Faktor-Schlüssel, Links) sind nicht enthalten. Bitte sicher aufbewahren: die Datei enthält Personendaten."
+  },
+  "email": {
+    "greeting": "Hallo {name}",
+    "footer": "Diese Nachricht kommt von {tenant} über hocX.",
+    "settingsHint": "Welche E-Mails du bekommst, stellst du in deinen Einstellungen ein: {url}",
+    "noLoginHint": "Fragen zu dieser Nachricht? Wende dich an {tenant}.",
+    "todo": {
+      "subjectNew": "{tenant}: Neue Aufgaben für dich",
+      "subjectReminder": "{tenant}: Erinnerung an deine Aufgaben",
+      "introNew": "Bei {tenant} hast du neue Aufgaben.",
+      "introReminder": "Hier ist eine kurze Übersicht deiner Aufgaben bei {tenant}.",
+      "sectionNew": "Neue Aufgaben",
+      "sectionDueSoon": "In 3 Tagen fällig",
+      "sectionOverdue": "Seit gestern überfällig",
+      "due": "fällig {date}",
+      "openLink": "Alle Aufgaben ansehen: {url}",
+      "openButton": "Aufgaben ansehen"
+    },
+    "test": {
+      "subject": "hocX: Test-E-Mail",
+      "body": "Diese Test-E-Mail bestätigt, dass der E-Mail-Versand von hocX funktioniert."
+    }
   }
 }

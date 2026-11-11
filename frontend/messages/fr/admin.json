@@ -542,6 +542,14 @@
       "submission_todo_sync": {
         "title": "Synchroniser les tâches de dépôt",
         "description": "Toutes les 15 minutes, aligne les tâches des dépôts sur les événements et les listes : personne, échéance, terminée dès que des fichiers sont déposés, éléments supprimés."
+      },
+      "notification_dispatch": {
+        "title": "Notifications par e-mail",
+        "description": "Envoie les notifications échues par e-mail, regroupées par personne (nouvelles tâches, rappels)."
+      },
+      "todo_reminders": {
+        "title": "Rappels de tâches",
+        "description": "Crée chaque jour dès 07:00 des rappels pour les tâches échues dans 3 jours ou en retard depuis hier."
       }
     }
   },
@@ -583,7 +591,41 @@
     "rotated": "Nouveau jeton créé.",
     "statusUrl": "URL pour la sonde HTTP",
     "statusHelp": "À ajouter dans Uptime Kuma comme sonde de type HTTP(s). Codes acceptés : 200-299. La réponse ne contient que des compteurs, aucun détail.",
-    "noStatusToken": "Aucun jeton créé pour l'instant."
+    "noStatusToken": "Aucun jeton créé pour l'instant.",
+    "email": {
+      "title": "E-mail (SMTP)",
+      "description": "Envoi des notifications aux membres (nouvelles tâches, rappels). L'expéditeur est une adresse hocX, le nom du club figure dans l'objet.",
+      "enabledLabel": "Envoi d'e-mails actif",
+      "yes": "Oui",
+      "no": "Non",
+      "host": "Serveur SMTP",
+      "port": "Port",
+      "security": "Chiffrement",
+      "securityStarttls": "STARTTLS (généralement port 587)",
+      "securitySsl": "SSL/TLS (généralement port 465)",
+      "securityNone": "Aucun (interne uniquement)",
+      "username": "Nom d'utilisateur",
+      "password": "Mot de passe",
+      "passwordKeep": "Enregistré – laisser vide pour le conserver",
+      "removePassword": "Supprimer le mot de passe",
+      "removePasswordConfirm": "Supprimer le mot de passe SMTP enregistré ?",
+      "fromAddress": "Adresse d'expéditeur",
+      "fromName": "Nom d'expéditeur",
+      "linkBase": "URL de base des liens",
+      "linkBaseHelp": "Sans indication, le domaine de la plateforme est utilisé.",
+      "save": "Enregistrer",
+      "saved": "Paramètres e-mail enregistrés.",
+      "saveFailed": "Échec de l'enregistrement.",
+      "testTo": "Envoyer l'e-mail de test à",
+      "sendTest": "Envoyer un e-mail de test",
+      "saveBeforeTest": "Enregistrer d'abord.",
+      "testSent": "E-mail de test envoyé.",
+      "testFailed": "Échec de l'e-mail de test : {error}",
+      "lastSent": "Dernier envoi : {date}",
+      "neverSent": "Rien envoyé pour l'instant",
+      "lastError": "Dernière erreur ({date}) : {error}",
+      "queue": "En attente : {pending} · Échecs : {failed}"
+    }
   },
   "login": {
     "title": "Connexion administrateur",

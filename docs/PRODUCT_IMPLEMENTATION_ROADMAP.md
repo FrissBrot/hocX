@@ -36,7 +36,7 @@ dem Marktstart folgen.
 
 | # | Feature | Aufwand | Abhängigkeit | Status |
 |---|---|---|---|---|
-| 3.1 | E-Mail-Versand (`platform.email`) | M | – | ⏳ |
+| 3.1 | E-Mail-Versand (`platform.email`), Plan und Phasen: `docs/NOTIFICATIONS.md` | M | – | ✅ Fundament (SMTP, Warteschlange, Versand-Loop) |
 | 3.2 | Passwort per E-Mail zurücksetzen (`people.password_reset`) | S–M | 3.1 | ⏳ |
 | 3.3 | Versand von Einladung und Protokoll (`meetings.distribution`) | M | 3.1 | ⏳ |
 | 3.4 | Pendenzenstatus «abgebrochen» in der Oberfläche | S | – | ⏳ |
@@ -47,7 +47,7 @@ dem Marktstart folgen.
 | # | Feature | Abo | Aufwand | Status |
 |---|---|---|---|---|
 | 4.1 | Mitgliederbeiträge mit QR-Rechnung (`finance.dues`) | Pro | M–L | ⏳ |
-| 4.2 | Erinnerungen (`meetings.reminders`) | Pro | M | ⏳ |
+| 4.2 | Erinnerungen (`meetings.reminders`) | Pro | M | ◐ Aufgaben erledigt (neu, fällig in 3 Tagen, überfällig), Sitzungen offen |
 | 4.3 | An-/Abmeldung per Link (`meetings.rsvp`) | Pro | M | ⏳ |
 | 4.4 | Login-Einladung (`people.invitations`) | Basic | S–M | ⏳ |
 | 4.5 | Anzeigenamen Basic/Pro/Business und `premium.load_priority = 2` im Adminportal | – | S | ⏳ (kommerzielle Entscheidung) |

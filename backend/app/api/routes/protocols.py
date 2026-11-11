@@ -340,7 +340,7 @@ def patch_protocol(
             detail="Die Sitzungsnotizen wurden zwischenzeitlich geändert. Der lokale Entwurf bleibt erhalten.",
         )
     try:
-        protocol = service.update_protocol(db, protocol_id, payload)
+        protocol = service.update_protocol(db, protocol_id, payload, actor_user_id=user.user_id, notify_todos=True)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except SQLAlchemyError as exc:

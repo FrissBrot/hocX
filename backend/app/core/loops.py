@@ -265,6 +265,20 @@ async def tenant_data_export_loop() -> None:
     )
 
 
+async def notification_dispatch_loop() -> None:
+    """Versendet fällige Benachrichtigungen gebündelt per E-Mail (app/notifications/dispatch.py)."""
+    from app.notifications import dispatch
+
+    await run_advisory_locked_loop(name="notification_dispatch", interval_seconds=60, task=dispatch.run)
+
+
+async def todo_reminders_loop() -> None:
+    """Legt einmal täglich ab 07:00 die Erinnerungen «fällig in 3 Tagen» und «überfällig» an."""
+    from app.notifications import todos as todo_notifications
+
+    await run_advisory_locked_loop(name="todo_reminders", interval_seconds=30 * 60, task=todo_notifications.scan_reminders)
+
+
 async def retention_proposals_loop() -> None:
     """Aufbewahrungsfristen der Vereine: Vorschläge anlegen, bei auto_apply umsetzen
     (services/tenant_retention_service.py)."""
@@ -357,4 +371,6 @@ JOB_WORKER_LOOPS: tuple[LoopFactory, ...] = (
     photo_similarity_refresh_loop,
     gallery_upload_ingest_loop,
     tenant_data_export_loop,
+    notification_dispatch_loop,
+    todo_reminders_loop,
 )

@@ -29,6 +29,7 @@ from app.schemas.protocol import (
     TodoDetailsUpdate,
     TodoListItem,
 )
+from app.notifications import todos as todo_notifications
 from app.services import public_id_service, task_package_service, todo_fine_service
 
 # Status codes that count as "closed"/completed for completed_at purposes - mirrors the
@@ -267,7 +268,16 @@ class ProtocolTodoService:
             tags=payload.tags,
             created_by=created_by,
         )
-        return self.repository.create(db, todo)
+        return self._notify_created(db, self.repository.create(db, todo), actor_user_id)
+
+    @staticmethod
+    def _notify_created(db: Session, todo: ProtocolTodo, actor_user_id: int | None) -> ProtocolTodo:
+        """Neue Aufgabe melden (app/notifications/todos.py) - aus einem offenen Protokoll erst beim
+        Abschluss, darum hier nur ohne Protokoll oder bei abgeschlossenem Protokoll."""
+        if todo.assigned_participant_id is not None:
+            todo_notifications.on_assignees_added(db, todo, [todo.assigned_participant_id], actor_user_id=actor_user_id)
+            db.commit()
+        return todo
 
     def create_todo(
         self,
@@ -312,12 +322,15 @@ class ProtocolTodoService:
             created_by=created_by,
             tracked_change="added" if track_changes_active else None,
         )
-        return self.repository.create(db, todo)
+        return self._notify_created(db, self.repository.create(db, todo), actor_user_id)
 
-    def update_todo(self, db: Session, todo_id: int, payload: ProtocolTodoUpdate, *, track_changes_active: bool = False):
+    def update_todo(
+        self, db: Session, todo_id: int, payload: ProtocolTodoUpdate, *, track_changes_active: bool = False, actor_user_id: int | None = None,
+    ):
         todo = self.repository.get(db, todo_id)
         if todo is None:
             return None
+        assignees_before = set(todo_notifications.assignee_ids(db, todo))
         values = payload.model_dump(exclude_unset=True)
         values = self._normalize_due_fields(values)
         # assigned_participant_id/due_event_id/assigned_user_id/closed_in_protocol_id arrive
@@ -427,6 +440,9 @@ class ProtocolTodoService:
             # Pendenzen-Bussen: beim Erledigen einfrieren, beim Wiedereröffnen offene entfernen,
             # bei Änderungen an Fälligkeit/Verantwortlichen/Tags eines erledigten Todos neu rechnen.
             todo_fine_service.sync_todo(db, todo)
+        # Neu Verantwortliche melden (nur freigegebene, offene Aufgaben, nicht sich selbst)
+        added = [pid for pid in todo_notifications.assignee_ids(db, todo) if pid not in assignees_before]
+        if added and todo_notifications.on_assignees_added(db, todo, added, actor_user_id=actor_user_id):
             db.commit()
         return todo
 

@@ -1250,6 +1250,8 @@ export type TableSnapshotRowsRead = {
 };
 
 export type ParticipantSummary = {
+  /** Personen ohne Login: E-Mail-Benachrichtigungen vom Admin eingeschaltet (Migration 0170) */
+  notify_without_login?: boolean;
   id: string;
   tenant_id: string;
   login_enabled?: boolean;
@@ -2502,4 +2504,47 @@ export type TodoFineEvaluation = {
   lines: { participant_id: string | null; participant_name: string; tariff_name: string | null; amount: number }[];
   total: number;
   can_manage: boolean;
+};
+
+// ── E-Mail-Benachrichtigungen (backend/app/notifications, Migration 0170) ──
+
+export type SmtpSecurity = "starttls" | "ssl" | "none";
+
+export type EmailSettings = {
+  email_enabled: boolean;
+  smtp_host: string | null;
+  smtp_port: number;
+  smtp_security: SmtpSecurity;
+  smtp_username: string | null;
+  smtp_password_set: boolean;
+  email_from_address: string | null;
+  email_from_name: string;
+  email_link_base_url: string | null;
+  effective_link_base_url: string | null;
+  email_last_sent_at: string | null;
+  email_last_error: string | null;
+  email_last_error_at: string | null;
+  pending_count: number;
+  failed_count: number;
+};
+
+export type EmailSettingsWrite = {
+  email_enabled: boolean;
+  smtp_host: string | null;
+  smtp_port: number;
+  smtp_security: SmtpSecurity;
+  smtp_username: string | null;
+  /** null = unverändert, "" = entfernen */
+  smtp_password: string | null;
+  email_from_address: string | null;
+  email_from_name: string;
+  email_link_base_url: string | null;
+};
+
+export type NotificationCategory = "todo_new" | "todo_reminders";
+
+export type NotificationPreferences = {
+  preferences: { category: NotificationCategory; enabled: boolean }[];
+  has_email: boolean;
+  email_enabled: boolean;
 };

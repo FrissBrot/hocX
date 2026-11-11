@@ -48,6 +48,8 @@ ALLOWED = {
     "users.complete_my_passkey_registration": "eigene MFA",
     "users.delete_my_mfa_factor": "eigene MFA",
     "users.change_my_password": "eigenes Passwort",
+    "users.get_my_notification_preferences": "eigene E-Mail-Benachrichtigungen",
+    "users.put_my_notification_preferences": "eigene E-Mail-Benachrichtigungen",
     "calendar_feeds.list_calendar_feeds": "eigene Kalender-Abos",
     "calendar_feeds.delete_calendar_feed": "eigene Kalender-Abos",
     "fines.list_fines": "eigene Bussen; alle nur mit reports.personal (im Rumpf)",

@@ -67,6 +67,7 @@ type ParticipantFormState = {
   left_at: string;
   login_enabled: boolean;
   password: string;
+  notify_without_login: boolean;
 };
 
 const emptyForm: ParticipantFormState = {
@@ -79,6 +80,7 @@ const emptyForm: ParticipantFormState = {
   left_at: "",
   login_enabled: false,
   password: "",
+  notify_without_login: false,
 };
 
 type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
@@ -222,6 +224,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
       left_at: participant.left_at ?? "",
       login_enabled: Boolean(participant.login_enabled),
       password: "",
+      notify_without_login: Boolean(participant.notify_without_login),
     });
     try {
       const assignedTemplates = await browserApiFetch<TemplateSummary[]>(`/api/participants/${participant.id}/templates`);
@@ -255,6 +258,8 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
         is_active: form.is_active,
         joined_at: form.joined_at || null,
         left_at: form.left_at || null,
+        // E-Mails ohne Login nur auf ausdrücklichen Wunsch des Admins (Benachrichtigungen)
+        ...(selectedParticipant ? { notify_without_login: !form.login_enabled && form.notify_without_login } : {}),
         ...(selectedParticipant && canAdmin ? {
           login_enabled: form.login_enabled,
           ...(form.password ? { password: form.password } : {}),
@@ -666,6 +671,16 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
                 </label>
               ) : null}
             </>
+          ) : null}
+          {selectedParticipant && !form.login_enabled ? (
+            <label className="checkbox-line">
+              <input type="checkbox" checked={form.notify_without_login} disabled={!form.email.trim()}
+                onChange={(event) => setForm((current) => ({ ...current, notify_without_login: event.target.checked }))} />
+              <span>
+                {t("editModal.notifyWithoutLogin")}
+                <span className="field-help"> {t("editModal.notifyWithoutLoginHint")}</span>
+              </span>
+            </label>
           ) : null}
           <div className="two-col">
             <label className="field-stack">

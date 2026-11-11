@@ -59,7 +59,9 @@
     "templates": "Templates",
     "noDescription": "Kein Beschreibungstext",
     "save": "Teilnehmer speichern",
-    "create": "Teilnehmer erstellen"
+    "create": "Teilnehmer erstellen",
+    "notifyWithoutLogin": "E-Mail-Benachrichtigungen senden, obwohl die Person kein Login hat",
+    "notifyWithoutLoginHint": "Neue Aufgaben und Erinnerungen gehen an die hinterlegte E-Mail-Adresse."
   },
   "toasts": {
     "loadMoreFailed": "Weitere Teilnehmende konnten nicht geladen werden",

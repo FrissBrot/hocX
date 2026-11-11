@@ -2621,7 +2621,9 @@ class ProtocolService:
                 detail=f"Cannot move protocol status from '{previous_status}' back to '{new_status}' in one step",
             )
 
-    def _run_status_transition_hooks(self, db: Session, protocol_id: int, previous_status: str, updated):
+    def _run_status_transition_hooks(
+        self, db: Session, protocol_id: int, previous_status: str, updated, *, notify_actor_id: int | None = None, notify_todos: bool = False,
+    ):
         """Replays every stage-change hook between previous_status and updated.status, in
         order - so a validated forward skip (e.g. geplant -> abgeschlossen for Word-Import)
         still fires every hook a step-by-step transition would have fired instead of silently
@@ -2661,6 +2663,14 @@ class ProtocolService:
                     updated.todos_snapshot_json = ProtocolTodoService().build_protocol_snapshot(db, updated)
                     db.add(updated)
                     crossed_into_abgeschlossen = True
+                    # Benachrichtigungen (app/notifications/todos.py): offene Aufgaben dieses
+                    # Protokolls gehen erst jetzt an die Verantwortlichen - in derselben
+                    # Transaktion. Nur beim Abschluss durch eine Person, nicht beim Word-Import
+                    # historischer Protokolle.
+                    if notify_todos:
+                        from app.notifications import todos as todo_notifications
+
+                        todo_notifications.on_protocol_closed(db, protocol_id, actor_user_id=notify_actor_id)
         elif new_idx < prev_idx and previous_status == "abgeschlossen":
             # Zurücksetzen verwirft die Momentaufnahme (das Frontend warnt davor): das
             # Protokoll zeigt wieder die Live-Todos, inkl. aller Änderungen seit Abschluss.
@@ -2675,7 +2685,7 @@ class ProtocolService:
             self._maybe_auto_create_next_protocol(db, updated)
         return self.repository.get(db, protocol_id) or updated
 
-    def update_protocol(self, db: Session, protocol_id: int, payload: ProtocolUpdate):
+    def update_protocol(self, db: Session, protocol_id: int, payload: ProtocolUpdate, *, actor_user_id: int | None = None, notify_todos: bool = False):
         protocol = self.repository.get(db, protocol_id)
         if protocol is None:
             return None
@@ -2705,7 +2715,9 @@ class ProtocolService:
             self.refresh_membership_blocks(db, protocol_id, commit=False)
         updated = self.repository.update(db, protocol, values, commit=not has_status_transition)
         if has_status_transition:
-            updated = self._run_status_transition_hooks(db, protocol_id, previous_status, updated)
+            updated = self._run_status_transition_hooks(
+                db, protocol_id, previous_status, updated, notify_actor_id=actor_user_id, notify_todos=notify_todos,
+            )
         # D4, 2026-08-16: protocol_date is freely editable via PATCH, but until this fix
         # nothing re-derived protocol_number/title or cascaded to siblings for the new date -
         # the "number follows date rank" invariant b432393 established for imports broke

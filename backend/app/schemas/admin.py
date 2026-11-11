@@ -530,6 +530,44 @@ class NotificationTestResult(BaseModel):
     ok: bool
     error: str | None = None
 
+
+class EmailSettingsRead(BaseModel):
+    """SMTP-Versand (Migration 0170). Das Passwort verlässt das Backend nie - nur ob eins gesetzt ist."""
+
+    email_enabled: bool
+    smtp_host: str | None = None
+    smtp_port: int
+    smtp_security: Literal["starttls", "ssl", "none"]
+    smtp_username: str | None = None
+    smtp_password_set: bool
+    email_from_address: str | None = None
+    email_from_name: str
+    email_link_base_url: str | None = None
+    # Basis-URL, die Mails tatsächlich verwenden (eigene Angabe oder Plattform-Domain)
+    effective_link_base_url: str | None = None
+    email_last_sent_at: datetime | None = None
+    email_last_error: str | None = None
+    email_last_error_at: datetime | None = None
+    pending_count: int = 0
+    failed_count: int = 0
+
+
+class EmailSettingsWrite(BaseModel):
+    email_enabled: bool
+    smtp_host: str | None = Field(default=None, max_length=255)
+    smtp_port: int = Field(default=587, ge=1, le=65535)
+    smtp_security: Literal["starttls", "ssl", "none"] = "starttls"
+    smtp_username: str | None = Field(default=None, max_length=255)
+    # None = unverändert lassen, "" = entfernen, sonst neues Passwort.
+    smtp_password: str | None = Field(default=None, max_length=500)
+    email_from_address: str | None = Field(default=None, max_length=255)
+    email_from_name: str = Field(default="hocX", min_length=1, max_length=100)
+    email_link_base_url: str | None = Field(default=None, max_length=500)
+
+
+class EmailTestRequest(BaseModel):
+    to: str = Field(min_length=3, max_length=255)
+
 TenantCleanupCategory = Literal[
     "protocols", "list_entries", "lists_full", "events", "todos", "participants", "documents"
 ]
