@@ -86,6 +86,7 @@ submission_assignment_table = Table(
     Column("is_active", Boolean),
     Column("sort_order", Text),
     Column("auto_close", Text),
+    Column("keep_open_after_end", Boolean),
 )
 
 # cycle_config/event_cycle: nur fuer den Zyklus-Filter der Termin-Abgaben. Spalten-SELECT

@@ -243,5 +243,8 @@
   "deleteFileConfirm": "Permanently delete “{name}”? It also disappears from photos and albums.",
   "deleteFileAction": "Delete file",
   "fileDeletedToast": "File deleted",
-  "fileDeleteFailed": "File could not be deleted"
+  "fileDeleteFailed": "File could not be deleted",
+  "keepOpenLabel": "Keep open after the end date",
+  "keepOpenHelp": "The submission field does not close on the end date but only by the rules above (automatically or manually). The task stays due on the end date and becomes overdue afterwards.",
+  "keepOpenSentence": "After the end date it stays open until it closes by these rules; the task then becomes overdue."
 }

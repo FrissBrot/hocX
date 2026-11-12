@@ -243,5 +243,8 @@
   "deleteFileConfirm": "Eliminare definitivamente «{name}»? Scompare anche da foto e album.",
   "deleteFileAction": "Elimina file",
   "fileDeletedToast": "File eliminato",
-  "fileDeleteFailed": "Impossibile eliminare il file"
+  "fileDeleteFailed": "Impossibile eliminare il file",
+  "keepOpenLabel": "Mantieni aperto dopo la data di fine",
+  "keepOpenHelp": "Il campo di consegna non si chiude alla data di fine, ma solo secondo le regole sopra (automaticamente o a mano). Il compito resta in scadenza alla data di fine e poi risulta in ritardo.",
+  "keepOpenSentence": "Dopo la data di fine resta aperto finché non si chiude secondo queste regole; il compito risulta allora in ritardo."
 }

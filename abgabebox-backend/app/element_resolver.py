@@ -116,6 +116,9 @@ def resolve_open_elements(db: Session, assignment: dict) -> list[dict]:
     manuell geschlossen wurden. Kumulatives Modell (seit 2026-08-17): ein Element mit Status
     'submitted' bleibt sichtbar/offen fuer weitere Uploads, nur 'closed' blendet es aus."""
     today = date.today()
+    # Option «nach dem Enddatum offen halten» (Migration 0173): das Ende des Fensters bzw. der
+    # Stichtag schliesst nichts mehr; es gelten nur auto_close und das Schliessen von Hand.
+    keep_open = bool(assignment.get("keep_open_after_end"))
     latest_status = repository.latest_status_by_element(db, assignment_id=assignment["id"])
     file_counts = repository.count_files_by_element(db, assignment_id=assignment["id"])
 
@@ -143,10 +146,12 @@ def resolve_open_elements(db: Session, assignment: dict) -> list[dict]:
             # None = kein Zeitfenster auf dieser Seite - die Abgabe bleibt offen, bis sie
             # manuell geschlossen wird, statt an ein festes Datum gebunden zu sein.
             window_start = event["event_date"] - timedelta(days=offset_before) if offset_before is not None else None
-            window_end = event["event_date"] + timedelta(days=offset_after) if offset_after is not None else None
+            # Wie SubmissionService (Fälligkeit der Pendenz): ab dem letzten Tag des Termins
+            event_end = event.get("event_end_date") or event["event_date"]
+            window_end = event_end + timedelta(days=offset_after) if offset_after is not None else None
             if window_start is not None and today < window_start:
                 continue
-            if window_end is not None and today > window_end:
+            if window_end is not None and today > window_end and not keep_open:
                 continue
             status = latest_status.get((event["id"], None))
             if status == "closed":
@@ -167,7 +172,7 @@ def resolve_open_elements(db: Session, assignment: dict) -> list[dict]:
         return _sort_elements(elements, assignment["sort_order"], sort_dates)
 
     deadline = assignment["deadline"]
-    if deadline is not None and today > deadline:
+    if deadline is not None and today > deadline and not keep_open:
         return []
     if assignment["source_type"] == "manual":
         # Genau ein Element: die Abgabe selbst (weder Termin noch Listen-Eintrag dahinter).

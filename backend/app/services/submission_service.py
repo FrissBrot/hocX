@@ -167,6 +167,8 @@ class SubmissionService:
         if assignment is None:
             return None
         values = payload.model_dump(exclude_unset=True)
+        if values.get("keep_open_after_end", False) is None:
+            values.pop("keep_open_after_end")  # null = unverändert (Spalte ist NOT NULL)
         link_ids = values.pop("link_ids", None)
         if link_ids is not None:
             assignment.links = submission_link_service.resolve_links(db, link_ids, tenant_id=assignment.tenant_id)

@@ -243,5 +243,8 @@
   "deleteFileConfirm": "Supprimer définitivement « {name} » ? Il disparaît aussi des photos et des albums.",
   "deleteFileAction": "Supprimer le fichier",
   "fileDeletedToast": "Fichier supprimé",
-  "fileDeleteFailed": "Le fichier n’a pas pu être supprimé"
+  "fileDeleteFailed": "Le fichier n’a pas pu être supprimé",
+  "keepOpenLabel": "Garder ouvert après la date de fin",
+  "keepOpenHelp": "Le champ de remise ne se ferme pas à la date de fin, mais seulement selon les règles ci-dessus (automatiquement ou à la main). La tâche reste due à la date de fin et passe ensuite en retard.",
+  "keepOpenSentence": "Après la date de fin, il reste ouvert jusqu’à sa fermeture selon ces règles ; la tâche est alors en retard."
 }

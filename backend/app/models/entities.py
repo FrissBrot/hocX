@@ -2082,6 +2082,9 @@ class SubmissionAssignment(Base, TimestampMixin, UpdatedAtMixin):
     # Element nach einer Abgabe ueber die Abgabebox automatisch schliessen: 'never',
     # 'first_upload' oder 'max_files' (Migration 0099_submission_auto_close).
     auto_close: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'never'"))
+    # Nach dem Ende des Fensters/Stichtag offen halten, bis auto_close oder Schliessen von Hand
+    # greift (Migration 0173); die Pendenz bleibt am Enddatum fällig.
+    keep_open_after_end: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     responsible_participant_source: Mapped[str | None] = mapped_column(Text)
     # Ueber welche Abgabe-Links (SubmissionLink) diese Abgabe oeffentlich erreichbar ist. Ohne
     # Link ist sie ueber die Abgabebox nicht erreichbar.

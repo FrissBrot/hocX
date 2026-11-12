@@ -39,6 +39,8 @@ class SubmissionAssignmentBase(BaseModel):
     max_file_size_mb: int = Field(default=20, ge=1, le=100)
     sort_order: SubmissionSortOrder = "date"
     auto_close: SubmissionAutoClose = "never"
+    # Nach dem Enddatum offen halten, bis auto_close oder Schliessen von Hand (Migration 0173)
+    keep_open_after_end: bool = False
     responsible_participant_source: str | None = None
 
 
@@ -66,6 +68,7 @@ class SubmissionAssignmentUpdate(BaseModel):
     max_file_size_mb: int | None = Field(default=None, ge=1, le=100)
     sort_order: SubmissionSortOrder | None = None
     auto_close: SubmissionAutoClose | None = None
+    keep_open_after_end: bool | None = None
     responsible_participant_source: str | None = None
     # None = Link-Zuordnung unveraendert lassen.
     link_ids: list[uuid.UUID] | None = None

@@ -37,6 +37,8 @@ export type FormState = {
   max_file_size_mb: number;
   sort_order: SubmissionSortOrder;
   auto_close: SubmissionAutoClose;
+  /** Nach dem Enddatum offen halten, bis auto_close oder Schliessen von Hand (Migration 0173). */
+  keep_open_after_end: boolean;
   responsible_participant_source: string;
   link_ids: string[];
 };
@@ -58,6 +60,7 @@ export const initialForm: FormState = {
   max_file_size_mb: 20,
   sort_order: "date",
   auto_close: "never",
+  keep_open_after_end: false,
   responsible_participant_source: "",
   link_ids: [],
 };
@@ -139,6 +142,7 @@ export function formFromAssignment(assignment: SubmissionAssignment): FormState 
     max_file_size_mb: assignment.max_file_size_mb,
     sort_order: assignment.sort_order,
     auto_close: assignment.auto_close ?? "never",
+    keep_open_after_end: assignment.keep_open_after_end ?? false,
     responsible_participant_source: assignment.responsible_participant_source ?? "",
     link_ids: assignment.link_ids,
   };
@@ -166,6 +170,7 @@ export function assignmentPayload(form: FormState) {
     max_file_size_mb: Number(form.max_file_size_mb),
     sort_order: form.sort_order,
     auto_close: form.auto_close,
+    keep_open_after_end: hasEnd(form) && form.keep_open_after_end,
     responsible_participant_source: form.source_type === "manual" ? null : form.responsible_participant_source || null,
     link_ids: form.link_ids,
   };
@@ -192,6 +197,11 @@ function windowSentence(before: number | "", after: number | "", t: TFunc): stri
   if (before !== "") return t("windowBeforeOnlySentence", { before });
   if (after !== "") return t("windowAfterOnlySentence", { after });
   return t("windowNoneSentence");
+}
+
+/** Hat die Abgabe ein Ende (Tage danach bzw. Stichtag)? Nur dann gibt es «offen halten». */
+export function hasEnd(form: FormState): boolean {
+  return form.source_type === "events" ? form.offset_days_after !== "" : Boolean(form.deadline);
 }
 
 function autoCloseSentence(form: FormState, t: TFunc): string | null {
@@ -221,8 +231,8 @@ function describeBase(form: FormState, listName: string | null, t: TFunc): strin
 /** Erklärt in einem Satz, wie sich die Abgabe mit den aktuellen Einstellungen verhält. */
 export function describeAssignment(form: FormState, listName: string | null, t: TFunc): string {
   const base = describeBase(form, listName, t);
-  const autoClose = autoCloseSentence(form, t);
-  return autoClose ? `${base} ${autoClose}` : base;
+  const parts = [base, autoCloseSentence(form, t), hasEnd(form) && form.keep_open_after_end ? t("keepOpenSentence") : null];
+  return parts.filter(Boolean).join(" ");
 }
 
 /** Öffentliche Adresse ohne Protokoll, aufgeteilt in feste Basis und den Slug der Abgabe. */
@@ -575,6 +585,16 @@ export function SubmissionAssignmentFormModal({
                 {form.max_files_per_element === "" ? t("autoCloseHelpUnlimited") : t("autoCloseHelp")}
               </span>
             </div>
+
+            {hasEnd(form) ? (
+              <label className="checkbox-row">
+                <input type="checkbox" checked={form.keep_open_after_end} onChange={(event) => setForm((c) => ({ ...c, keep_open_after_end: event.target.checked }))} />
+                <span>
+                  {t("keepOpenLabel")}
+                  <span className="field-help"> {t("keepOpenHelp")}</span>
+                </span>
+              </label>
+            ) : null}
 
             {responsibleOptions.length > 0 ? (
               <div className="field-stack">

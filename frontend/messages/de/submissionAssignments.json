@@ -243,5 +243,8 @@
   "deleteFileConfirm": "Datei «{name}» endgültig löschen? Sie verschwindet auch aus Fotos und Alben.",
   "deleteFileAction": "Datei löschen",
   "fileDeletedToast": "Datei gelöscht",
-  "fileDeleteFailed": "Datei konnte nicht gelöscht werden"
+  "fileDeleteFailed": "Datei konnte nicht gelöscht werden",
+  "keepOpenLabel": "Nach dem Enddatum offen halten",
+  "keepOpenHelp": "Das Abgabefeld schliesst nicht am Enddatum, sondern erst nach den Regeln oben (automatisch oder von Hand). Die Pendenz bleibt am Enddatum fällig und wird danach überfällig.",
+  "keepOpenSentence": "Nach dem Enddatum bleibt es offen, bis es nach diesen Regeln schliesst; die Pendenz wird dann überfällig."
 }

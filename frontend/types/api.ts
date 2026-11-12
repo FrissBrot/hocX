@@ -182,6 +182,8 @@ export type SubmissionAssignment = {
   max_file_size_mb: number;
   sort_order: SubmissionSortOrder;
   auto_close: SubmissionAutoClose;
+  /** Nach dem Enddatum offen halten (Migration 0173) */
+  keep_open_after_end?: boolean;
   responsible_participant_source: string | null;
   link_ids: string[];
   created_at: string;
