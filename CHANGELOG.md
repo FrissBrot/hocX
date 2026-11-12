@@ -8,6 +8,93 @@ Installationen aktualisieren können.
 
 ## [Unreleased]
 
+## [1.2.6] - 2026-11-12
+
+Konto und Sicherheit per E-Mail («Passwort vergessen», Einladung, Sicherheitshinweise,
+«Datenexport fertig»), eine gemeinsame Bussenliste, die Bussen-Konfiguration unter Konfiguration
+mit neuem Regel-Dialog und neuer Tarif-Ansicht, Tarife auch für Verspätung und Absenz, Abgaben,
+die nach dem Enddatum offen bleiben können, sowie ein Fix für das Mausrad im Protokoll und
+durchgehend Umlaute statt «ae/oe/ue». Vier neue Migrationen, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
+
+### Update
+
+- Von **1.2.5**: `./scripts/deploy.sh <test|prod>`. Migrationen `0171_account_tokens`,
+  `0172_fine_tariff_attendance` und `0173_submission_keep_open` legen nur eine neue Tabelle und
+  Spalten mit Standardwerten an und lassen sich zurückrollen. `0174_umlaut_session_label` ersetzt
+  den gespeicherten Titel «Naechste Sitzung» durch «Nächste Sitzung» (Vorlagen und nicht
+  abgeschlossene Protokolle; abgeschlossene bleiben unverändert).
+- «Passwort vergessen» und «Per E-Mail einladen» erscheinen erst, wenn der E-Mail-Versand unter
+  `/admin/notifications` eingerichtet ist. Für die Links in den Mails muss die Basis-URL stimmen
+  («Basis-URL für Links», sonst `https://<TRAEFIK_DOMAIN>`).
+
+### Neu: Konto und Sicherheit per E-Mail
+
+- **Passwort vergessen:** Auf der Anmeldeseite fordert man einen Link an (60 Minuten gültig,
+  einmal verwendbar). Die Antwort verrät nicht, ob es das Konto gibt. Das neue Passwort beendet
+  alle Sitzungen; ein eingerichteter zweiter Faktor bleibt und wird weiter verlangt.
+- **Einladung per E-Mail:** Im Personen-Dialog lädt die Verwaltung (`access.manage`) eine Person
+  ohne Login ein, statt ihr ein Passwort zu setzen. Die Person legt ihr Passwort selbst fest; der
+  Login wird erst dann aktiv (Benutzerlimit und E-Mail werden dabei erneut geprüft). Offene
+  Einladungen sind in der Liste markiert und lassen sich erneut senden oder zurückziehen. Der
+  Link ist 7 Tage gültig.
+- Links stehen nur im URL-Fragment der Mail; gespeichert wird nur ein Hash. Öffentliche Endpunkte
+  mit Rate-Limit, Einträge im Audit-Log, im Datenschutz-Export Zweck und Zeitpunkte der Links.
+- **Sicherheitshinweise** (immer, nicht abbestellbar): Passwort geändert, auch durch die
+  Verwaltung, sowie zweiter Faktor hinzugefügt oder entfernt.
+- **Datenexport fertig:** Mail an die Person, die den Vereins-Datenexport bestellt hat, sobald er
+  bereitliegt oder fehlgeschlagen ist (im Profil abschaltbar).
+- Migration `0171_account_tokens`.
+
+### Neu: Eine Bussenliste und Bussen-Konfiguration
+
+- **Alle Bussen in einer Liste** unter Finanzen > Bussen: Verspätung und Absenz aus den
+  Protokollen sowie Pendenzen-Bussen (laufend, strittig, fixiert) mit ihren Aktionen
+  (einkassieren, erlassen, wieder öffnen, Konflikt zuweisen), auch in der mobilen Ansicht. Der
+  eigene Reiter «Pendenzen-Bussen» entfällt, alte Links leiten auf die Liste um.
+- **Bussen-Konfiguration** als eigener Eintrag unter Konfiguration (mit `finances.read`, ändern
+  mit `finances.manage`): Vereinstarif für Verspätung und Absenz (Konto, Beträge; bisher in der
+  Bussenliste), Tarife mit Personenzuordnung und die Pendenzen-Regeln.
+- **Tarife auch für Anwesenheitsbussen:** Jeder Tarif kann eigene Beträge für Verspätung und
+  Absenz haben (leer = Vereinstarif). Die Busse im Protokoll richtet sich nach dem Tarif der
+  Person; den Betrag bestimmt der Server, die Tarife einzelner Personen gelangen nicht in den
+  Browser. Ergibt der Tarif 0, entsteht keine Busse. Eine Protokollvorlage mit eigenem Tarif gilt
+  weiterhin für alle gleich. Die Tarife
+  brauchen dafür nur noch das Feature `finance`, nicht mehr `todo_fines`.
+- **Neuer Regel-Dialog** (Design «Bussenregel Dialog»): Abschnitte «Für welche Pendenzen?» mit
+  Filter-Chips und Zusammenfassung und «Wie wird gebüsst?» mit Zuschlag-Stepper, Konto,
+  Umschalter für mehrere Verantwortliche und Beträgen je Tarif samt Vorschau nach 1, 3, 7 und 14
+  Tagen; «Regel aktiv» als Schalter unten.
+- **Neue Tarif-Ansicht** (Design «Pendenzen-Bussen Tarife»): Karten je Tarif mit Anzahl Personen
+  (Standardtarif inkl. Personen ohne eigenen Tarif), «Tarif je Person» mit Filter-Chips,
+  Umschalter je Person und Mehrfachauswahl («Tarif setzen» für alle ausgewählten).
+- Migration `0172_fine_tariff_attendance`.
+
+### Neu: Abgaben nach dem Enddatum offen halten
+
+- Neue Option in der Abgabe: **«Nach dem Enddatum offen halten»**. Das Abgabefeld schliesst dann
+  nicht mehr am Ende des Zeitfensters bzw. am Stichtag, sondern erst nach den normalen Regeln
+  (automatisch nach der ersten Abgabe bzw. bei maximaler Dateizahl, oder von Hand). Die Pendenz
+  bleibt am Enddatum fällig und wird danach überfällig (Pendenzen-Bussen laufen wie gewohnt).
+- Die Pendenz einer Abgabe war schon bisher am Enddatum der Abgabe fällig (Termin-Abgaben:
+  letzter Tag des Termins plus «Tage danach», Listen- und Einzelabgaben: Stichtag).
+- Migration `0173_submission_keep_open`.
+
+### Behoben
+
+- Protokoll, Rad-Effekt bzw. Akkordeon: Beim Scrollen mit dem Mausrad sprang der Editor zurück
+  und öffnete immer wieder denselben Punkt, statt zum nächsten zu wechseln (vor allem bei Punkten
+  mit Bildern). Ursache: das Ende des Verankerungssprungs beendete die Pause des Mitlesens zu früh,
+  bevor der neue Punkt in Position war. Jetzt zählt das Ende erst, wenn das Ziel erreicht ist.
+  Geprüft mit Mausrad (einzeln, schnell, mit Schwung) und Touchpad, mit und ohne Rad-Effekt, in
+  Protokollen mit 2, 6 und 22 Punkten.
+- **Umlaute überall:** Sichtbare Texte mit «ae/oe/ue» statt Umlaut korrigiert, u. a. «Nächste
+  Sitzung» (Editor und PDF), «nächste Sitzung» als Fälligkeit, «Verspätet», Meldungen beim
+  Löschen von Listen, Abgaben und Einträgen, Fehlermeldungen der Abgaben und der Abgabebox sowie
+  die Demodaten. Technisch bedingt bleibt nur der ASCII-Kommentar in exportierten Bildern (EXIF).
+- Abgabebox: Bei mehrtägigen Terminen schloss das Abgabefeld schon «Tage danach» nach dem
+  *ersten* Tag des Termins, die Pendenz war aber erst nach dem *letzten* Tag fällig. Beide rechnen
+  jetzt ab dem letzten Tag.
+
 ## [1.2.5] - 2026-11-11
 
 Zwei neue Bereiche: Pendenzen-Bussen als eigenes, buchbares Modul unter Finanzen und
