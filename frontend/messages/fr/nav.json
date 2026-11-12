@@ -64,5 +64,6 @@
   "retention": "Conservation",
   "roleManagement": "Rôles",
   "workflows": "Déroulements",
-  "design": "Mise en page"
+  "design": "Mise en page",
+  "fineSettings": "Réglages des amendes"
 }

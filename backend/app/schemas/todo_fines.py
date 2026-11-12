@@ -34,11 +34,16 @@ class FineTariffGroupRead(BaseModel):
     sort_index: int
     is_default: bool
     member_count: int = 0
+    # Anwesenheitsbussen je Tarif (Migration 0172); None = Vereinstarif
+    amount_late: FinanceDecimal | None = None
+    amount_absent: FinanceDecimal | None = None
 
 
 class FineTariffGroupWrite(BaseModel):
     name: Name
     is_default: bool = False
+    amount_late: NonNegativeAmount | None = None
+    amount_absent: NonNegativeAmount | None = None
 
     @field_validator("name")
     @classmethod

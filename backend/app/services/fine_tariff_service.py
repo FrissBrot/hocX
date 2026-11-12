@@ -11,9 +11,10 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import FinanceAccount, FineTariff, Template
+from app.models import FinanceAccount, FineTariff, FineTariffGroup, Participant, Template
 from app.schemas.fines import FineTariffRead, FineTariffUpdate, TemplateFineTariffRead, TemplateFineTariffUpdate
 from app.services import public_id_service
 
@@ -76,9 +77,35 @@ def update_template_tariff(db: Session, template: Template, payload: TemplateFin
     return read_template_tariff(db, template)
 
 
+def _groups(db: Session, tenant_id: int) -> list[FineTariffGroup]:
+    return list(db.scalars(select(FineTariffGroup).where(FineTariffGroup.tenant_id == tenant_id)))
+
+
+def has_attendance_tariffs(db: Session, tenant_id: int) -> bool:
+    """Ob ein Tarif eigene Beträge für Verspätung/Absenz hat (dann rechnet der Server je Person)."""
+    return any(group.amount_late is not None or group.amount_absent is not None for group in _groups(db, tenant_id))
+
+
+def amount_for_participant(db: Session, tenant_id: int, template_id: int | None, participant_id: int | None, fine_type: str) -> Decimal:
+    """Betrag einer Anwesenheitsbusse nach dem Tarif der Person (Migration 0172): eine Vorlage mit
+    eigenem Tarif gilt für alle gleich; sonst der Betrag des Tarifs der Person (ohne Tarif: der
+    Standardtarif), ohne eigenen Betrag der Vereinstarif."""
+    values = tariff_block_values(db, tenant_id, template_id)
+    base = Decimal(str(values["fine_amount_late" if fine_type == "late" else "fine_amount_absent"]))
+    if not values.get("fine_tariff_amounts"):
+        return base
+    groups = _groups(db, tenant_id)
+    person = db.get(Participant, participant_id) if participant_id is not None else None
+    group_id = person.fine_tariff_group_id if person is not None and person.tenant_id == tenant_id else None
+    group = next((g for g in groups if g.id == group_id), None) if group_id is not None else next((g for g in groups if g.is_default), None)
+    amount = (group.amount_late if fine_type == "late" else group.amount_absent) if group is not None else None
+    return Decimal(str(amount)) if amount is not None else base
+
+
 def tariff_block_values(db: Session, tenant_id: int, template_id: int | None = None) -> dict:
     """Konto (public id) und Beträge für die Block-Konfiguration eines Anwesenheitsblocks:
-    der Tarif der Vorlage, falls sie einen eigenen hat, sonst der des Mandanten."""
+    der Tarif der Vorlage, falls sie einen eigenen hat (gleich für alle Personen), sonst der des
+    Mandanten; fine_tariff_amounts sagt, ob Tarife eigene Beträge haben (amount_for_participant)."""
     template = db.get(Template, template_id) if template_id is not None else None
     if template is not None and template.tenant_id == tenant_id and template.fine_tariff_override:
         account_id = (
@@ -88,12 +115,17 @@ def tariff_block_values(db: Session, tenant_id: int, template_id: int | None = N
             "fine_account_id": str(account_id) if account_id else None,
             "fine_amount_late": float(template.fine_amount_late or 0),
             "fine_amount_absent": float(template.fine_amount_absent or 0),
+            "fine_tariff_amounts": False,
         }
     tariff = read_tariff(db, tenant_id)
+    late, absent = float(tariff.amount_late), float(tariff.amount_absent)
     return {
         "fine_account_id": str(tariff.account_id) if tariff.account_id else None,
-        "fine_amount_late": float(tariff.amount_late),
-        "fine_amount_absent": float(tariff.amount_absent),
+        "fine_amount_late": late,
+        "fine_amount_absent": absent,
+        # Nur ob es Tarif-Beträge gibt (kein Betrag je Person: der Tarif einer Person ist nur für
+        # finances.manage sichtbar). Den Betrag bestimmt der Server beim Anlegen (use_tariff).
+        "fine_tariff_amounts": has_attendance_tariffs(db, tenant_id),
     }
 
 
@@ -107,4 +139,4 @@ def attendance_fine_values(
     mehr (Bug 2026-11-08). ``tariff`` erspart beim Auflisten mehrerer Blöcke die Abfrage."""
     if config.get("fines_enabled") and tenant_id is not None:
         return tariff if tariff is not None else tariff_block_values(db, tenant_id, template_id)
-    return {"fine_account_id": None, "fine_amount_late": 0, "fine_amount_absent": 0}
+    return {"fine_account_id": None, "fine_amount_late": 0, "fine_amount_absent": 0, "fine_tariff_amounts": False}

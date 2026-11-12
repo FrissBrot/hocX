@@ -8,7 +8,7 @@ import { RouteTabs } from "@/components/ui/route-tabs";
 import { financeTabs } from "@/components/ui/section-tabs";
 import { FinesView } from "@/components/finances/fines-view";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
-import { AttendanceFineListItem, FinanceAccount } from "@/types/api";
+import { AttendanceFineListItem, FinanceAccount, TodoFineListItem } from "@/types/api";
 import { can, featureAccess } from "@/lib/permissions";
 
 export default async function FinesPage() {
@@ -23,16 +23,27 @@ export default async function FinesPage() {
   const fines = await backendFetchWithSession<AttendanceFineListItem[]>("/api/fines") ?? [];
   const accounts = hasFinance ? (await backendFetchWithSession<FinanceAccount[]>("/api/finance/accounts") ?? []) : [];
   const canWrite = can(session, "finances.manage");
+  // Pendenzen-Bussen (Feature todo_fines) stehen in derselben Liste; abgeschaltet nur lesbar.
+  const todoFinesAccess = featureAccess(session, "todo_fines");
+  const todoFines = todoFinesAccess !== "none" ? (await backendFetchWithSession<TodoFineListItem[]>("/api/todo-fines") ?? []) : null;
 
   return (
     <AppShell initialSession={session}>
       <ResponsiveView
-        mobile={<MobileFines initialFines={fines} accounts={accounts} canWrite={canWrite} ownOnly={!can(session, "reports.personal")} />}
+        mobile={<MobileFines initialFines={fines} initialTodoFines={todoFines} todoFinesWritable={todoFinesAccess === "full"} accounts={accounts} canWrite={canWrite} ownOnly={!can(session, "reports.personal")} />}
         desktop={
           <>
-          <RouteTabs tabs={financeTabs(t, { todoFines: featureAccess(session, "todo_fines") !== "none" })} activeHref="/fines" />
+          <RouteTabs tabs={financeTabs(t)} activeHref="/fines" />
           <section className="panel">
-            <FinesView initialFines={fines} accounts={accounts} canWrite={canWrite} ownOnly={!can(session, "reports.personal")} />
+            <FinesView
+              initialFines={fines}
+              initialTodoFines={todoFines}
+              todoFinesWritable={todoFinesAccess === "full"}
+              accounts={accounts}
+              canWrite={canWrite}
+              canConfigure={can(session, "finances.read")}
+              ownOnly={!can(session, "reports.personal")}
+            />
           </section>
           </>
         }

@@ -15,12 +15,12 @@ export function dashboardTabs(t: TFunc): RouteTab[] {
   ];
 }
 
-/** `todoFines`: Tab «Pendenzen-Bussen» nur, wenn das Feature todo_fines gebucht ist. */
-export function financeTabs(t: TFunc, options: { todoFines?: boolean } = {}): RouteTab[] {
+/** Bussen aller Arten (Anwesenheit, Pendenzen) stehen in einer Liste unter /fines; ihre
+ * Einstellungen unter Konfiguration > Bussen-Konfiguration (/fine-settings). */
+export function financeTabs(t: TFunc): RouteTab[] {
   return [
     { href: "/finances", label: t("financeAccounts") },
     { href: "/fines", label: t("fines") },
-    ...(options.todoFines ? [{ href: "/todo-fines", label: t("todoFines") }] : []),
   ];
 }
 

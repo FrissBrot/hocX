@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, PlainSerializer
+from pydantic import BaseModel, Field, PlainSerializer, model_validator
 
 _CENTS = Decimal("0.01")
 
@@ -31,8 +31,17 @@ class AttendanceFineCreate(BaseModel):
     participant_id: uuid.UUID | None = None
     participant_name_snapshot: str
     fine_type: Literal["late", "absent"]
-    amount: PositiveFineAmount
+    # Ohne use_tariff Pflicht. Mit use_tariff (Protokoll-Editor) bestimmt der Server den Betrag aus
+    # dem Tarif der Person (Migration 0172) - die Beträge je Person verlassen den Server nicht.
+    amount: PositiveFineAmount | None = None
+    use_tariff: bool = False
     account_id: uuid.UUID
+
+    @model_validator(mode="after")
+    def _amount_or_tariff(self) -> "AttendanceFineCreate":
+        if self.amount is None and not self.use_tariff:
+            raise ValueError("amount is required")
+        return self
 
 
 class AttendanceFineRead(BaseModel):

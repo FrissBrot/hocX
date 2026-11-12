@@ -66,14 +66,19 @@ describe("formatRoleLabel", () => {
 });
 
 describe("buildNav", () => {
-  it("teilt Konfiguration in Protokollvorlagen, Abläufe (nur mit templates.manage) und Gestaltung", () => {
+  it("teilt Konfiguration in Protokollvorlagen, Abläufe (nur mit templates.manage), Gestaltung und Bussen", () => {
     const hrefsOf = (groups: ReturnType<typeof buildNav>, titleKey: string) =>
       groups.find((group) => group.titleKey === titleKey)?.links.map((link) => link.href) ?? [];
     const admin = buildNav(adminSession());
-    expect(hrefsOf(admin, "groups.configuration")).toEqual(["/templates", "/cycles", "/documents"]);
+    expect(hrefsOf(admin, "groups.configuration")).toEqual(["/templates", "/cycles", "/documents", "/fine-settings"]);
     expect(hrefsOf(admin, "groups.work")).not.toContain("/documents");
     const writer = buildNav(sessionFor("writer"));
-    expect(hrefsOf(writer, "groups.configuration")).toEqual(["/templates", "/documents"]);
+    expect(hrefsOf(writer, "groups.configuration")).toEqual(["/templates", "/documents", "/fine-settings"]);
+    // Bussen-Konfiguration nur mit Feature finance; die Kasse sieht sie auch ohne Vorlagenrechte
+    const kassier = buildNav(sessionFor("kassier"));
+    expect(hrefsOf(kassier, "groups.configuration")).toContain("/fine-settings");
+    const noFinance = { ...sessionFor("writer"), current_tenant: { ...sessionFor("writer").current_tenant!, enabled_features: ["abgabebox"] } } as SessionInfo;
+    expect(hrefsOf(buildNav(noFinance), "groups.configuration")).not.toContain("/fine-settings");
     const links = admin.find((group) => group.titleKey === "groups.configuration")?.links ?? [];
     expect(links[0]?.match).toEqual(["/elements"]);
     expect(links[1]?.match).toEqual(["/task-packages"]);

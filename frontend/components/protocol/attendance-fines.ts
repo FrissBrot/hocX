@@ -10,6 +10,9 @@ export type AttendanceFineConfig = {
   accountId: string | null;
   amountLate: number;
   amountAbsent: number;
+  /** Tarife haben eigene Beträge (Backend: fine_tariff_amounts): dann bestimmt der Server den Betrag
+   * je Person (use_tariff). Die Beträge je Person kommen nie zum Client (Tarif = Personendaten). */
+  tariffAmounts: boolean;
   /** Nur mit Konto und mindestens einem Betrag > 0 werden ueberhaupt Bussen erzeugt. */
   enabled: boolean;
 };
@@ -18,7 +21,8 @@ export function attendanceFineConfig(blockConfig: Record<string, unknown>): Atte
   const accountId = blockConfig.fine_account_id ? String(blockConfig.fine_account_id) : null;
   const amountLate = Number(blockConfig.fine_amount_late ?? 0);
   const amountAbsent = Number(blockConfig.fine_amount_absent ?? 0);
-  return { accountId, amountLate, amountAbsent, enabled: accountId != null && (amountLate > 0 || amountAbsent > 0) };
+  const tariffAmounts = blockConfig.fine_tariff_amounts === true;
+  return { accountId, amountLate, amountAbsent, tariffAmounts, enabled: accountId != null && (amountLate > 0 || amountAbsent > 0 || tariffAmounts) };
 }
 
 /**
@@ -61,7 +65,10 @@ export async function syncAttendanceFine({
   const existingFine = currentFines.find(
     (fine) => fine.participant_id === participant.id && (fine.fine_type === "late" || fine.fine_type === "absent") && fine.status === "pending"
   );
-  const wanted = status === "late" && config.amountLate > 0 ? "late" : status === "absent" && config.amountAbsent > 0 ? "absent" : null;
+  // Mit Tarif-Beträgen entscheidet der Server (0 = keine Busse, Antwort ohne Inhalt)
+  const wanted = status === "late" && (config.tariffAmounts || config.amountLate > 0)
+    ? "late"
+    : status === "absent" && (config.tariffAmounts || config.amountAbsent > 0) ? "absent" : null;
 
   if (!wanted) {
     if (existingFine) {
@@ -82,7 +89,9 @@ export async function syncAttendanceFine({
       participant_id: participant.id,
       participant_name_snapshot: participant.display_name,
       fine_type: wanted,
-      amount: wanted === "late" ? config.amountLate : config.amountAbsent,
+      ...(config.tariffAmounts
+        ? { use_tariff: true }
+        : { amount: wanted === "late" ? config.amountLate : config.amountAbsent }),
       account_id: config.accountId,
     }),
   });

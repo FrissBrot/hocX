@@ -380,6 +380,11 @@
       "js_gzip_kb": 208,
       "css_gzip_kb": 43,
       "css_raw_kb": 277
+    },
+    "/fine-settings": {
+      "js_gzip_kb": 249,
+      "css_gzip_kb": 44,
+      "css_raw_kb": 287
     }
   }
 }

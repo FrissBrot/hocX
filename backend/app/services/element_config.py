@@ -314,6 +314,8 @@ def upgrade_block_config(element_type_id: int | str | None, config: dict | None,
         "fine_account_id",
         "fine_amount_late",
         "fine_amount_absent",
+        "fine_amounts_by_participant",
+        "fine_tariff_amounts",
     ):
         config.pop(key, None)
     if code == "chart":

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
-import { SearchableMultiSelect } from "@/components/ui/searchable-select";
+import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Select } from "@/components/ui/select";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
@@ -173,6 +173,34 @@ export function TodoFineRules({ rules, setRules, tariffs, accounts, canManage, o
   }
 
   const intervalDays = Math.max(1, Math.round(Number(draft.interval_days) || 1));
+  const currency = accounts.find((account) => account.id === draft.account_id)?.currency_label ?? accounts[0]?.currency_label ?? "CHF";
+
+  // Filter als Chip-Felder (Design «Bussenregel Dialog»): leer = alle, «+ Wählen» fügt hinzu.
+  type FilterKey = "tags" | "task_package_ids" | "participant_ids" | "role_ids";
+  const filterSource: Record<FilterKey, { id: string; label: string }[]> = {
+    tags: tagOptions.map((tag) => ({ id: tag, label: tag })),
+    task_package_ids: (options?.task_packages ?? []).map((item) => ({ id: item.id, label: item.name ?? "—" })),
+    participant_ids: (options?.participants ?? []).map((item) => ({ id: item.id, label: item.name ?? "—" })),
+    role_ids: (options?.roles ?? []).map((item) => ({ id: item.id, label: roleLabel(item) })),
+  };
+  const filterLabels: Record<FilterKey, string> = {
+    tags: t("todoFines.filterTags"),
+    task_package_ids: t("todoFines.filterPackages"),
+    participant_ids: t("todoFines.filterPeople"),
+    role_ids: t("todoFines.filterRoles"),
+  };
+  const filterFields = (Object.keys(filterLabels) as FilterKey[]).map((key) => {
+    const byId = new Map(filterSource[key].map((item) => [item.id, item]));
+    return {
+      key,
+      label: filterLabels[key],
+      selected: draft[key].map((id) => byId.get(id) ?? { id, label: key === "tags" ? id : "…" }),
+      available: filterSource[key].filter((item) => !draft[key].includes(item.id)),
+      add: (id: string) => setDraft((current) => ({ ...current, [key]: [...current[key], id] })),
+      remove: (id: string) => setDraft((current) => ({ ...current, [key]: current[key].filter((value) => value !== id) })),
+    };
+  });
+  const draftFilterSummary = filterSummary({ filter: { tags: draft.tags, task_package_ids: draft.task_package_ids, participant_ids: draft.participant_ids, role_ids: draft.role_ids } } as TodoFineRule);
 
   return (
     <div className="grid">
@@ -212,11 +240,11 @@ export function TodoFineRules({ rules, setRules, tariffs, accounts, canManage, o
       </DataTable>
 
       <Modal open={editing !== null} size="wide" onClose={() => setEditing(null)} title={editing === "new" ? t("todoFines.addRule") : t("todoFines.editRule")}>
-        <ModalSaveForm className="grid" onSubmit={submit}>
-          <div className="two-col">
+        <ModalSaveForm className="fine-rule-form" onSubmit={submit}>
+          <div className="fine-rule-grid">
             <label className="field-stack">
               <span className="field-label">{t("todoFines.ruleName")}</span>
-              <input value={draft.name} maxLength={120} autoFocus onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
+              <input value={draft.name} maxLength={120} autoFocus placeholder={t("todoFines.ruleNamePlaceholder")} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
             </label>
             <label className="field-stack">
               <span className="field-label">{t("todoFines.appliesFrom")}</span>
@@ -224,78 +252,121 @@ export function TodoFineRules({ rules, setRules, tariffs, accounts, canManage, o
               <span className="field-help">{t("todoFines.appliesFromHelp")}</span>
             </label>
           </div>
-          <label className="checkbox-row">
-            <input type="checkbox" checked={draft.is_active} onChange={(event) => setDraft({ ...draft, is_active: event.target.checked })} />
-            <span>{t("todoFines.activeLabel")}</span>
-          </label>
 
-          <h3 className="section-title">{t("todoFines.filterTitle")}</h3>
-          <p className="muted">{t("todoFines.filterHelp")}</p>
-          <div className="two-col">
-            <div className="field-stack">
-              <span className="field-label">{t("todoFines.filterTags")}</span>
-              <SearchableMultiSelect options={tagOptions} getId={(tag) => tag} getLabel={(tag) => tag} values={draft.tags}
-                emptySelectionLabel={t("todoFines.filterAny")} onChange={(tags) => setDraft({ ...draft, tags })} />
+          <section className="fine-rule-section">
+            <div className="fine-rule-section-head">
+              <h3>{t("todoFines.filterTitle")}</h3>
+              <span className="muted">{draftFilterSummary}</span>
             </div>
-            <div className="field-stack">
-              <span className="field-label">{t("todoFines.filterPackages")}</span>
-              <SearchableMultiSelect options={options?.task_packages ?? []} getId={(item) => item.id} getLabel={(item) => item.name ?? "—"}
-                values={draft.task_package_ids} emptySelectionLabel={t("todoFines.filterAny")} onChange={(ids) => setDraft({ ...draft, task_package_ids: ids })} />
+            <div className="fine-rule-box">
+              <div className="fine-rule-filters">
+                {filterFields.map((field) => (
+                  <div key={field.key} className="fine-rule-filter">
+                    <span className="field-label">{field.label}</span>
+                    <div className="fine-chip-field">
+                      {field.selected.length === 0 ? <span className="fine-chip-empty">{t("todoFines.filterAny")}</span> : null}
+                      {field.selected.map((item) => (
+                        <span key={item.id} className="fine-chip">
+                          {item.label}
+                          <button type="button" aria-label={t("todoFines.filterRemove", { name: item.label })} onClick={() => field.remove(item.id)}>×</button>
+                        </span>
+                      ))}
+                      {field.available.length > 0 ? (
+                        <Select className="fine-chip-add" value="" aria-label={t("todoFines.filterAdd", { name: field.label })} onChange={(event) => event.target.value && field.add(event.target.value)}>
+                          <option value="">{t("todoFines.filterChoose")}</option>
+                          {field.available.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+                        </Select>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="field-help fine-rule-hint">{t("todoFines.filterHelp")}</p>
             </div>
-            <div className="field-stack">
-              <span className="field-label">{t("todoFines.filterPeople")}</span>
-              <SearchableMultiSelect options={options?.participants ?? []} getId={(item) => item.id} getLabel={(item) => item.name ?? "—"}
-                values={draft.participant_ids} emptySelectionLabel={t("todoFines.filterAny")} onChange={(ids) => setDraft({ ...draft, participant_ids: ids })} />
-            </div>
-            <div className="field-stack">
-              <span className="field-label">{t("todoFines.filterRoles")}</span>
-              <SearchableMultiSelect options={options?.roles ?? []} getId={(item) => item.id} getLabel={roleLabel}
-                values={draft.role_ids} emptySelectionLabel={t("todoFines.filterAny")} onChange={(ids) => setDraft({ ...draft, role_ids: ids })} />
-            </div>
-          </div>
+          </section>
 
-          <h3 className="section-title">{t("todoFines.amountTitle")}</h3>
-          <div className="two-col">
-            <label className="field-stack">
-              <span className="field-label">{t("todoFines.intervalLabel")}</span>
-              <input type="number" min={1} max={365} step={1} value={draft.interval_days} onChange={(event) => setDraft({ ...draft, interval_days: event.target.value })} />
-              <span className="field-help">{t("todoFines.intervalHelp", { count: intervalDays })}</span>
-            </label>
-            <label className="field-stack">
+          <section className="fine-rule-section">
+            <h3>{t("todoFines.amountTitle")}</h3>
+            <div className="fine-rule-grid">
+              <div className="field-stack">
+                <span className="field-label">{t("todoFines.intervalLabel")}</span>
+                <div className="fine-stepper-row">
+                  <span>{t("todoFines.intervalEvery")}</span>
+                  <div className="fine-stepper">
+                    <button type="button" aria-label={t("todoFines.intervalLess")} disabled={intervalDays <= 1} onClick={() => setDraft({ ...draft, interval_days: String(Math.max(1, intervalDays - 1)) })}>−</button>
+                    <span>{intervalDays}</span>
+                    <button type="button" aria-label={t("todoFines.intervalMore")} disabled={intervalDays >= 365} onClick={() => setDraft({ ...draft, interval_days: String(Math.min(365, intervalDays + 1)) })}>+</button>
+                  </div>
+                  <span>{t("todoFines.intervalUnit", { count: intervalDays })}</span>
+                </div>
+              </div>
+              <label className="field-stack">
+                <span className="field-label">{t("todoFines.colAccount")}</span>
+                <Select value={draft.account_id} onChange={(event) => setDraft({ ...draft, account_id: event.target.value })}>
+                  <option value="">{t("todoFines.defaultAccount")}</option>
+                  {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+                </Select>
+              </label>
+            </div>
+            <div className="field-stack">
               <span className="field-label">{t("todoFines.splitLabel")}</span>
-              <Select value={draft.split_mode} onChange={(event) => setDraft({ ...draft, split_mode: event.target.value as FineSplitMode })}>
-                <option value="each">{t("todoFines.split.each")}</option>
-                <option value="split">{t("todoFines.split.split")}</option>
-              </Select>
-              <span className="field-help">{t("todoFines.splitHelp")}</span>
+              <FilterTabs<FineSplitMode>
+                options={[{ value: "each", label: t("todoFines.split.each") }, { value: "split", label: t("todoFines.split.split") }]}
+                value={draft.split_mode}
+                onChange={(value) => setDraft({ ...draft, split_mode: value })}
+              />
+              <span className="field-help">{t(`todoFines.splitHint.${draft.split_mode}`)}</span>
+            </div>
+            <div className="fine-rate-table" role="table" aria-label={t("todoFines.amountTitle")}>
+              <div className="fine-rate-row fine-rate-head" role="row">
+                <span role="columnheader">{t("todoFines.colTariff")}</span>
+                <span role="columnheader">{t("todoFines.baseAmount")}</span>
+                <span role="columnheader">{t("todoFines.intervalAmount", { count: intervalDays })}</span>
+                <span role="columnheader">{t("todoFines.preview")}</span>
+              </div>
+              {tariffs.map((tariff) => {
+                const rate = draft.rates[tariff.id] ?? { base: "", interval: "" };
+                const set = (patch: Partial<RateDraft>) => setDraft({ ...draft, rates: { ...draft.rates, [tariff.id]: { ...rate, ...patch } } });
+                const empty = !rate.base && !rate.interval;
+                return (
+                  <div key={tariff.id} className="fine-rate-row" role="row">
+                    <div role="cell">
+                      <div className="fine-rate-name">{tariff.name} {tariff.is_default ? <Badge variant="info">{t("todoFines.defaultTariff")}</Badge> : null}</div>
+                      <div className="muted fine-rate-count">{t("todoFines.tariffPeople", { count: tariff.member_count })}</div>
+                    </div>
+                    <label className="fine-money" role="cell">
+                      <span>{currency}</span>
+                      <input type="number" min={0} step="0.50" inputMode="decimal" placeholder="0.00" aria-label={t("todoFines.baseAmount")} value={rate.base} onChange={(event) => set({ base: event.target.value })} />
+                    </label>
+                    <label className="fine-money" role="cell">
+                      <span>+</span>
+                      <input type="number" min={0} step="0.50" inputMode="decimal" placeholder="0.00" aria-label={t("todoFines.intervalAmount", { count: intervalDays })} value={rate.interval} onChange={(event) => set({ interval: event.target.value })} />
+                    </label>
+                    <div className="fine-rate-preview" role="cell">
+                      {PREVIEW_DAYS.map((days) => (
+                        <div key={days}>
+                          <span>{t("todoFines.previewDays", { count: days })}</span>
+                          <strong>{empty ? "–" : ruleAmount(amountOf(rate.base), amountOf(rate.interval), intervalDays, days).toFixed(2)}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <div className="modal-actions fine-rule-footer">
+            <label className="fine-rule-active">
+              <input type="checkbox" role="switch" checked={draft.is_active} onChange={(event) => setDraft({ ...draft, is_active: event.target.checked })} />
+              <span className="album-picker-switch-track" aria-hidden="true" />
+              <span className="fine-rule-active-text">
+                <strong>{draft.is_active ? t("todoFines.activeOn") : t("todoFines.activeOff")}</strong>
+                <span className="field-help">{draft.is_active ? t("todoFines.activeOnHint") : t("todoFines.activeOffHint")}</span>
+              </span>
             </label>
-            <label className="field-stack">
-              <span className="field-label">{t("todoFines.colAccount")}</span>
-              <Select value={draft.account_id} onChange={(event) => setDraft({ ...draft, account_id: event.target.value })}>
-                <option value="">{t("todoFines.defaultAccount")}</option>
-                {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
-              </Select>
-            </label>
-          </div>
-          <DataTable columns={[t("todoFines.colTariff"), t("todoFines.baseAmount"), t("todoFines.intervalAmount", { count: intervalDays }), t("todoFines.preview")]}>
-            {tariffs.map((tariff) => {
-              const rate = draft.rates[tariff.id] ?? { base: "", interval: "" };
-              const set = (patch: Partial<RateDraft>) => setDraft({ ...draft, rates: { ...draft.rates, [tariff.id]: { ...rate, ...patch } } });
-              return (
-                <tr key={tariff.id}>
-                  <td><strong>{tariff.name}</strong></td>
-                  <td><input type="number" min={0} step="0.05" inputMode="decimal" aria-label={t("todoFines.baseAmount")} value={rate.base} onChange={(event) => set({ base: event.target.value })} /></td>
-                  <td><input type="number" min={0} step="0.05" inputMode="decimal" aria-label={t("todoFines.intervalAmount", { count: intervalDays })} value={rate.interval} onChange={(event) => set({ interval: event.target.value })} /></td>
-                  <td className="muted">
-                    {PREVIEW_DAYS.map((days) => t("todoFines.previewItem", { count: days, amount: ruleAmount(amountOf(rate.base), amountOf(rate.interval), intervalDays, days).toFixed(2) })).join(" · ")}
-                  </td>
-                </tr>
-              );
-            })}
-          </DataTable>
-          <div className="modal-actions">
             <button type="button" className="button-ghost" onClick={() => setEditing(null)}>{tCommon("cancel")}</button>
-            <button data-modal-save type="submit" className="button-primary" disabled={!draft.name.trim() || !draft.applies_from || saving}>{tCommon("save")}</button>
+            <button data-modal-save type="submit" className="button-primary" disabled={!draft.name.trim() || !draft.applies_from || saving}>{t("todoFines.saveRule")}</button>
           </div>
         </ModalSaveForm>
       </Modal>

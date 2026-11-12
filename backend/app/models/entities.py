@@ -1878,6 +1878,8 @@ class FineTariffGroup(Base, TimestampMixin, UpdatedAtMixin):
     __table_args__ = (
         UniqueConstraint("tenant_id", "name", name="uq_fine_tariff_group_tenant_name"),
         Index("uq_fine_tariff_group_default", "tenant_id", unique=True, postgresql_where=text("is_default")),
+        CheckConstraint("amount_late IS NULL OR amount_late >= 0", name="ck_fine_tariff_group_amount_late"),
+        CheckConstraint("amount_absent IS NULL OR amount_absent >= 0", name="ck_fine_tariff_group_amount_absent"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -1886,6 +1888,9 @@ class FineTariffGroup(Base, TimestampMixin, UpdatedAtMixin):
     name: Mapped[str] = mapped_column(Text, nullable=False)
     sort_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    # Anwesenheitsbussen je Tarif (Migration 0172); NULL = Vereinstarif (fine_tariff)
+    amount_late: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
+    amount_absent: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
 
 
 class TodoFineRule(Base, TimestampMixin, UpdatedAtMixin):

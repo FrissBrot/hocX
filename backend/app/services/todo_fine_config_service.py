@@ -60,7 +60,10 @@ def list_groups(db: Session, tenant_id: int) -> list[FineTariffGroupRead]:
         select(FineTariffGroup).where(FineTariffGroup.tenant_id == tenant_id).order_by(FineTariffGroup.sort_index, FineTariffGroup.id)
     ).all()
     return [
-        FineTariffGroupRead(id=g.public_id, name=g.name, sort_index=g.sort_index, is_default=g.is_default, member_count=counts.get(g.id, 0))
+        FineTariffGroupRead(
+            id=g.public_id, name=g.name, sort_index=g.sort_index, is_default=g.is_default, member_count=counts.get(g.id, 0),
+            amount_late=g.amount_late, amount_absent=g.amount_absent,
+        )
         for g in groups
     ]
 
@@ -88,7 +91,10 @@ def create_group(db: Session, tenant_id: int, payload: FineTariffGroupWrite) -> 
     if _name_taken(db, tenant_id, payload.name):
         raise ValueError("Tariff name already exists")
     count = db.scalar(select(func.count()).select_from(FineTariffGroup).where(FineTariffGroup.tenant_id == tenant_id)) or 0
-    group = FineTariffGroup(tenant_id=tenant_id, name=payload.name, sort_index=count, is_default=False)
+    group = FineTariffGroup(
+        tenant_id=tenant_id, name=payload.name, sort_index=count, is_default=False,
+        amount_late=payload.amount_late, amount_absent=payload.amount_absent,
+    )
     db.add(group)
     db.flush()
     # Der erste Tarif ist immer Standard, sonst hätten Personen ohne Tarif keinen Betrag.
@@ -102,6 +108,7 @@ def update_group(db: Session, tenant_id: int, group: FineTariffGroup, payload: F
     if _name_taken(db, tenant_id, payload.name, exclude_id=group.id):
         raise ValueError("Tariff name already exists")
     group.name = payload.name
+    group.amount_late, group.amount_absent = payload.amount_late, payload.amount_absent
     if payload.is_default and not group.is_default:
         _set_default(db, tenant_id, group)
     db.commit()

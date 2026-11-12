@@ -35,6 +35,24 @@ describe("attendance-fines", () => {
     expect(onCreated).toHaveBeenCalledWith(fine("absent"));
   });
 
+  it("laesst bei Tarif-Betraegen den Server den Betrag bestimmen", async () => {
+    api.mockResolvedValueOnce(fine("late"));
+    const tariffConfig = attendanceFineConfig({ fine_account_id: "acc", fine_amount_late: 5, fine_amount_absent: 20, fine_tariff_amounts: true });
+    await syncAttendanceFine({ protocolId: "pr", participant, status: "late", config: tariffConfig, fines: [], onRemoved: vi.fn(), onCreated: vi.fn() });
+    const body = JSON.parse(api.mock.calls[0][1].body);
+    expect(body).toMatchObject({ fine_type: "late", use_tariff: true });
+    expect(body.amount).toBeUndefined();
+  });
+
+  it("legt nichts an, wenn der Server fuer den Tarif keine Busse vorsieht (204)", async () => {
+    api.mockResolvedValueOnce(undefined);
+    const onCreated = vi.fn();
+    const tariffConfig = attendanceFineConfig({ fine_account_id: "acc", fine_amount_late: 0, fine_amount_absent: 0, fine_tariff_amounts: true });
+    expect(tariffConfig.enabled).toBe(true);
+    await syncAttendanceFine({ protocolId: "pr", participant, status: "absent", config: tariffConfig, fines: [], onRemoved: vi.fn(), onCreated });
+    expect(onCreated).not.toHaveBeenCalled();
+  });
+
   it("ersetzt eine andersartige offene Busse", async () => {
     api.mockResolvedValueOnce(undefined).mockResolvedValueOnce(fine("late"));
     const onRemoved = vi.fn();

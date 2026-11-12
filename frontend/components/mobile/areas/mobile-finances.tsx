@@ -27,7 +27,7 @@ import { restoreFine, useFineDelete } from "@/components/finances/fine-delete";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { fineTypeLabels } from "@/lib/constants/fine-types";
-import type { AttendanceFineListItem, FinanceAccount, FinanceTransaction } from "@/types/api";
+import type { AttendanceFineListItem, FinanceAccount, FinanceTransaction, TodoFineListItem } from "@/types/api";
 
 // Konflikte (409) aus dem Backend uebersetzt anzeigen: Konto mit Buchungen/Bussen loeschen bzw.
 // Buchung einer einkassierten Busse aendern (siehe backend finance_repository.FinanceConflictError).
@@ -422,11 +422,16 @@ type FineFilter = "pending" | "collected" | "deleted" | "all";
 
 export function MobileFines({
   initialFines,
+  initialTodoFines = null,
+  todoFinesWritable = true,
   accounts,
   canWrite,
   ownOnly,
 }: {
   initialFines: AttendanceFineListItem[];
+  /** Pendenzen-Bussen in derselben Liste (Feature todo_fines); null = nicht gebucht. */
+  initialTodoFines?: TodoFineListItem[] | null;
+  todoFinesWritable?: boolean;
   accounts: FinanceAccount[];
   canWrite: boolean;
   ownOnly: boolean;
@@ -443,7 +448,32 @@ export function MobileFines({
   const [search, setSearch] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [todoFines, setTodoFines] = useState<TodoFineListItem[]>(initialTodoFines ?? []);
+  const [openTodoKey, setOpenTodoKey] = useState<string | null>(null);
   const accountName = (id: string) => accounts.find((account) => account.id === id)?.name ?? t("unknownAccount");
+  // Laufende und strittige Pendenzen-Bussen zählen wie offene Bussen
+  const todoBucket = (fine: TodoFineListItem) => (fine.status === "collected" || fine.status === "deleted" ? fine.status : "pending");
+  const todoKey = (fine: TodoFineListItem, index: number) => fine.id ?? `${fine.todo_id}-${fine.participant_id}-${index}`;
+  const visibleTodo = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return todoFines
+      .map((fine, index) => ({ fine, key: todoKey(fine, index) }))
+      .filter(({ fine }) => filter === "all" || todoBucket(fine) === filter)
+      .filter(({ fine }) => !needle || `${fine.participant_name ?? ""} ${fine.task}`.toLowerCase().includes(needle));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todoFines, filter, search]);
+  const openTodo = visibleTodo.find((item) => item.key === openTodoKey)?.fine ?? null;
+
+  async function actTodo(fine: TodoFineListItem, action: "collect" | "reopen") {
+    if (!fine.id) return;
+    try {
+      const updated = await browserApiFetch<TodoFineListItem>(`/api/todo-fines/${fine.id}/${action}`, { method: "POST" });
+      setTodoFines((list) => list.map((item) => (item.id === updated.id ? updated : item)));
+      setOpenTodoKey(null);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : t("todoFines.actionFailed"), "error");
+    }
+  }
 
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -523,7 +553,7 @@ export function MobileFines({
         />
         <SearchInput value={search} onChange={setSearch} placeholder={t("finesSearchPlaceholder")} />
       </div>
-      {visible.length > 0 ? (
+      {visible.length > 0 || visibleTodo.length > 0 ? (
         <div className="mobile-section">
           <div className="mobile-card mobile-list-card">
             {visible.map((fine) => (
@@ -549,10 +579,29 @@ export function MobileFines({
                 trailing={<span className="mobile-amount">{money(fine.amount)}</span>}
               />
             ))}
+            {visibleTodo.map(({ fine, key }) => (
+              <MobileListRow
+                key={`pending-fine:${key}`}
+                onClick={() => setOpenTodoKey(key)}
+                leading={<MobileAvatar name={fine.participant_name ?? "?"} size="sm" />}
+                label={
+                  <span className="mobile-row-stack">
+                    <span className="mobile-row-title">{fine.participant_name ?? "—"}</span>
+                    <span className="mobile-row-meta">{[t("todoFineReason"), fine.task].join(" · ")}</span>
+                    {fine.status !== "pending" ? (
+                      <span className="mobile-row-pills">
+                        <span className={fine.status === "conflict" ? "mobile-overdue-pill" : "mobile-cycle-pill"}>{t(`todoFines.status.${fine.status}`)}</span>
+                      </span>
+                    ) : null}
+                  </span>
+                }
+                trailing={<span className="mobile-amount">{fine.status === "conflict" ? "—" : money(fine.amount)}</span>}
+              />
+            ))}
           </div>
         </div>
       ) : (
-        <MobileEmpty title={fines.length ? t("emptyFines") : t("noFinesTitle")} hint={fines.length ? undefined : t("noFinesHint")} />
+        <MobileEmpty title={fines.length || todoFines.length ? t("emptyFines") : t("noFinesTitle")} hint={fines.length ? undefined : t("noFinesHint")} />
       )}
 
       {canWrite ? <MobileFab label={tMobile("fines.fab")} onClick={() => setCreating(true)} /> : null}
@@ -609,6 +658,35 @@ export function MobileFines({
             {openFine.status === "deleted" && openFine.delete_comment ? (
               <MobileListRow label={t("deleteReasonLabel")} value={openFine.delete_comment} />
             ) : null}
+          </div>
+        </Modal>
+      ) : null}
+      {openTodo ? (
+        <Modal
+          open
+          size="sheet"
+          title={openTodo.participant_name ?? "—"}
+          description={openTodo.task}
+          onClose={() => setOpenTodoKey(null)}
+          className="mobile-sheet"
+          footer={
+            canWrite && todoFinesWritable && (openTodo.status === "pending" || (openTodo.status === "collected" && openTodo.can_reopen)) ? (
+              <div className="modal-actions mobile-sheet-footer">
+                {openTodo.status === "pending" ? (
+                  <button type="button" className="button-primary" onClick={() => void actTodo(openTodo, "collect")}>{t("markCollected")}</button>
+                ) : (
+                  <button type="button" className="button-secondary" onClick={() => void actTodo(openTodo, "reopen")}>{t("reopen")}</button>
+                )}
+              </div>
+            ) : undefined
+          }
+        >
+          <div className="mobile-card mobile-group-card">
+            <MobileListRow label={t("colReason")} value={`${t("todoFineReason")} · ${t("todoFines.daysLate", { count: openTodo.days_late })}`} />
+            <MobileListRow label={t("todoFines.colRule")} value={openTodo.rule_name ?? (openTodo.status === "conflict" ? openTodo.matching_rules.map((rule) => rule.name).join(", ") : t("todoFines.fixedAmount"))} />
+            <MobileListRow label={t("amountLabel")} value={<strong>{openTodo.status === "conflict" ? "—" : money(openTodo.amount, openTodo.currency_label ?? undefined)}</strong>} />
+            <MobileListRow label={t("colStatus")} value={t(`todoFines.status.${openTodo.status}`)} />
+            {openTodo.status === "deleted" && openTodo.delete_comment ? <MobileListRow label={t("deleteReasonLabel")} value={openTodo.delete_comment} /> : null}
           </div>
         </Modal>
       ) : null}

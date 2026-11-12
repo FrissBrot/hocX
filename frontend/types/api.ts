@@ -2421,6 +2421,9 @@ export type FineTariffGroup = {
   sort_index: number;
   is_default: boolean;
   member_count: number;
+  /** Anwesenheitsbussen je Tarif (Migration 0172); null = Vereinstarif */
+  amount_late: number | null;
+  amount_absent: number | null;
 };
 
 export type FineTariffMember = {

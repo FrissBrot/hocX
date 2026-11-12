@@ -1,5 +1,5 @@
 import { SessionInfo } from "@/types/api";
-import { can, rolesLabel } from "@/lib/permissions";
+import { can, featureAccess, rolesLabel } from "@/lib/permissions";
 import { NavIconKey } from "@/components/ui/nav-icons";
 
 // labelKey/titleKey sind next-intl-Schluessel im "nav"-Namespace (frontend/messages/<locale>/nav.json),
@@ -33,7 +33,7 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
         { href: "/todos", labelKey: "todos", icon: "todos" },
         { href: "/agenda", labelKey: "agenda", icon: "agenda" },
         ...(can(session, "submissions.manage") ? [{ href: "/submission-assignments", labelKey: "submissions", icon: "submissions" as const }] : []),
-        ...(can(session, "finances.read") ? [{ href: "/finances", labelKey: "finances", icon: "finances" as const, match: ["/fines", "/todo-fines"] }] : []),
+        ...(can(session, "finances.read") ? [{ href: "/finances", labelKey: "finances", icon: "finances" as const, match: ["/fines"] }] : []),
       ],
     },
   ];
@@ -56,17 +56,23 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
   // Konfiguration in drei Bereichen (Bereichs-Tabs siehe section-tabs.ts): Protokollvorlagen mit
   // Bausteinen, Abläufe (Zyklen, Aufgabenpakete) und Gestaltung der PDFs. templates.edit passt
   // Vorlagen und Gestaltung an; Abläufe brauchen templates.manage.
-  if (can(session, "templates.edit")) {
-    groups.push({
-      titleKey: "groups.configuration",
-      links: [
-        { href: "/templates", labelKey: "protocolTemplates", icon: "templates", match: ["/elements"] },
-        ...(can(session, "templates.manage")
-          ? [{ href: "/cycles", labelKey: "workflows", icon: "cycles" as const, match: ["/task-packages"] }]
-          : []),
-        { href: "/documents", labelKey: "design", icon: "documents", match: ["/documents"] },
-      ],
-    });
+  // Bussen-Konfiguration (Anwesenheit, Tarife, Pendenzen-Regeln): mit finances.read und Feature finance.
+  const configuration: NavLink[] = [
+    ...(can(session, "templates.edit")
+      ? [
+          { href: "/templates", labelKey: "protocolTemplates", icon: "templates" as const, match: ["/elements"] },
+          ...(can(session, "templates.manage")
+            ? [{ href: "/cycles", labelKey: "workflows", icon: "cycles" as const, match: ["/task-packages"] }]
+            : []),
+          { href: "/documents", labelKey: "design", icon: "documents" as const, match: ["/documents"] },
+        ]
+      : []),
+    ...(can(session, "finances.read") && featureAccess(session, "finance") !== "none"
+      ? [{ href: "/fine-settings", labelKey: "fineSettings", icon: "finances" as const }]
+      : []),
+  ];
+  if (configuration.length > 0) {
+    groups.push({ titleKey: "groups.configuration", links: configuration });
   }
 
   const administration: NavLink[] = [

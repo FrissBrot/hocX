@@ -64,5 +64,6 @@
   "retention": "Retention",
   "roleManagement": "Roles",
   "workflows": "Workflows",
-  "design": "Design"
+  "design": "Design",
+  "fineSettings": "Fine settings"
 }

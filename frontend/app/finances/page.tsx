@@ -26,7 +26,7 @@ export default async function FinancesPage() {
         mobile={<MobileFinances initialAccounts={accounts} canWrite={can(session, "finances.manage")} />}
         desktop={
           <>
-          <RouteTabs tabs={financeTabs(t, { todoFines: featureAccess(session, "todo_fines") !== "none" })} activeHref="/finances" />
+          <RouteTabs tabs={financeTabs(t)} activeHref="/finances" />
           <FinancesView
             initialAccounts={accounts}
             canWrite={can(session, "finances.manage")}

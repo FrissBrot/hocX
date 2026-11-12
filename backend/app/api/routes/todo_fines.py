@@ -69,6 +69,19 @@ def _manage(user: CurrentUser) -> int:
     return _tenant(user)
 
 
+def _read_tariffs(user: CurrentUser) -> int:
+    """Tarife gelten auch für Anwesenheitsbussen (0172): dafür reicht das Feature finance."""
+    require_permission(user, P.FINANCES_READ)
+    require_feature(user, F.FINANCE, write=False)
+    return _tenant(user)
+
+
+def _manage_tariffs(user: CurrentUser) -> int:
+    require_permission(user, P.FINANCES_MANAGE)
+    require_feature(user, F.FINANCE)
+    return _tenant(user)
+
+
 def _bad_request(db: Session, exc: Exception, detail: str) -> HTTPException:
     db.rollback()
     return HTTPException(status_code=400, detail=str(exc) if isinstance(exc, ValueError) else detail)
@@ -79,12 +92,12 @@ def _bad_request(db: Session, exc: Exception, detail: str) -> HTTPException:
 
 @router.get("/todo-fines/tariffs", response_model=list[FineTariffGroupRead])
 def list_tariffs(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    return config.list_groups(db, _read(user))
+    return config.list_groups(db, _read_tariffs(user))
 
 
 @router.post("/todo-fines/tariffs", response_model=FineTariffGroupRead, status_code=status.HTTP_201_CREATED)
 def create_tariff(payload: FineTariffGroupWrite, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    tenant_id = _manage(user)
+    tenant_id = _manage_tariffs(user)
     try:
         group = config.create_group(db, tenant_id, payload)
     except (SQLAlchemyError, ValueError) as exc:
@@ -95,7 +108,7 @@ def create_tariff(payload: FineTariffGroupWrite, db: Session = Depends(get_db), 
 
 @router.put("/todo-fines/tariffs/order", status_code=status.HTTP_204_NO_CONTENT)
 def order_tariffs(payload: FineTariffGroupOrder, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    tenant_id = _manage(user)
+    tenant_id = _manage_tariffs(user)
     try:
         config.reorder_groups(db, tenant_id, payload.ids)
     except (SQLAlchemyError, ValueError) as exc:
@@ -104,7 +117,7 @@ def order_tariffs(payload: FineTariffGroupOrder, db: Session = Depends(get_db), 
 
 @router.put("/todo-fines/tariffs/{tariff_id}", response_model=FineTariffGroupRead)
 def update_tariff(tariff_id: uuid.UUID, payload: FineTariffGroupWrite, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    tenant_id = _manage(user)
+    tenant_id = _manage_tariffs(user)
     group = config.get_group(db, tenant_id, tariff_id)
     if group is None:
         raise HTTPException(status_code=404, detail="Tariff not found")
@@ -118,7 +131,7 @@ def update_tariff(tariff_id: uuid.UUID, payload: FineTariffGroupWrite, db: Sessi
 
 @router.delete("/todo-fines/tariffs/{tariff_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_tariff(tariff_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    tenant_id = _manage(user)
+    tenant_id = _manage_tariffs(user)
     group = config.get_group(db, tenant_id, tariff_id)
     if group is None:
         raise HTTPException(status_code=404, detail="Tariff not found")
@@ -133,12 +146,12 @@ def delete_tariff(tariff_id: uuid.UUID, db: Session = Depends(get_db), user: Cur
 @router.get("/todo-fines/tariff-members", response_model=list[FineTariffMember])
 def list_tariff_members(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     # Der Tarif sagt etwas über die Person aus (Lernende, Verdienst) - nur für die Kasse.
-    return config.list_members(db, _manage(user))
+    return config.list_members(db, _manage_tariffs(user))
 
 
 @router.put("/todo-fines/tariff-members/{participant_id}", response_model=FineTariffMember)
 def assign_tariff(participant_id: uuid.UUID, payload: FineTariffAssignment, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    tenant_id = _manage(user)
+    tenant_id = _manage_tariffs(user)
     try:
         member = config.assign_member(db, tenant_id, participant_id, payload.tariff_group_id)
     except (SQLAlchemyError, ValueError) as exc:

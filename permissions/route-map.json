@@ -2785,7 +2785,7 @@
         "finances.manage"
       ],
       "features": [
-        "todo_fines"
+        "finance"
       ]
     },
     "PUT /api/todo-fines/tariff-members/{participant_id}": {
@@ -2794,7 +2794,7 @@
         "finances.manage"
       ],
       "features": [
-        "todo_fines"
+        "finance"
       ]
     },
     "GET /api/todo-fines/tariffs": {
@@ -2803,7 +2803,7 @@
         "finances.read"
       ],
       "features": [
-        "todo_fines (lesen)"
+        "finance (lesen)"
       ]
     },
     "POST /api/todo-fines/tariffs": {
@@ -2812,7 +2812,7 @@
         "finances.manage"
       ],
       "features": [
-        "todo_fines"
+        "finance"
       ]
     },
     "PUT /api/todo-fines/tariffs/order": {
@@ -2821,7 +2821,7 @@
         "finances.manage"
       ],
       "features": [
-        "todo_fines"
+        "finance"
       ]
     },
     "DELETE /api/todo-fines/tariffs/{tariff_id}": {
@@ -2830,7 +2830,7 @@
         "finances.manage"
       ],
       "features": [
-        "todo_fines"
+        "finance"
       ]
     },
     "PUT /api/todo-fines/tariffs/{tariff_id}": {
@@ -2839,7 +2839,7 @@
         "finances.manage"
       ],
       "features": [
-        "todo_fines"
+        "finance"
       ]
     },
     "POST /api/todo-fines/{fine_id}/collect": {

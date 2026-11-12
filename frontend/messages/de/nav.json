@@ -64,5 +64,6 @@
   "retention": "Aufbewahrung",
   "roleManagement": "Rollen",
   "workflows": "Abläufe",
-  "design": "Gestaltung"
+  "design": "Gestaltung",
+  "fineSettings": "Bussen-Konfiguration"
 }

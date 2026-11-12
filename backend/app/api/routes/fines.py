@@ -5,12 +5,12 @@ import uuid
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from app.core.db import get_db
 from app.core.permissions import P
 from app.core.security import CurrentUser, get_current_user, require_feature, require_permission
-from app.models.entities import AttendanceFine, Protocol
+from app.models.entities import AttendanceFine, Participant, Protocol
 from app.repositories.fines_repository import DuplicateFineError, FineDeleteError, FinesRepository
 from app.schemas.fines import (
     AttendanceFineCreate,
@@ -125,6 +125,19 @@ def create_fine(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.FINANCES_MANAGE)
+    if payload.use_tariff:
+        # Betrag nach Tarif der Person (0172); 0 = für diese Person keine Busse (204, nichts angelegt)
+        protocol = public_id_service.get_by_public_id(db, Protocol, payload.protocol_id, tenant_id=user.current_tenant_id)
+        if protocol is None:
+            raise HTTPException(status_code=404, detail="Protocol, account or participant not found")
+        participant_id = (
+            public_id_service.resolve_internal_id(db, Participant, payload.participant_id, tenant_id=user.current_tenant_id)
+            if payload.participant_id is not None else None
+        )
+        amount = fine_tariff_service.amount_for_participant(db, user.current_tenant_id, protocol.template_id, participant_id, payload.fine_type)
+        if amount <= 0:
+            return Response(status_code=status.HTTP_204_NO_CONTENT)
+        payload = payload.model_copy(update={"amount": amount})
     try:
         result = repo.create_fine(db, payload, user.current_tenant_id)
     except DuplicateFineError as exc:

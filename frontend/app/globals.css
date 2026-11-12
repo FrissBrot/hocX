@@ -13677,6 +13677,623 @@ a.export-step-meta {
 }
 
 /* Pendenzen-Bussen: Todo-Popup (todos, protocols) und Seite /todo-fines */
+/* Tarife (todo-fine-tariffs.tsx, Design «hocX Pendenzen-Bussen Tarife») */
+.fine-tariffs-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.fine-tariffs-section .section-title,
+.fine-tariffs-section p {
+  margin: 0;
+}
+
+.fine-tariffs-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.fine-tariff-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-3);
+}
+
+.fine-tariff-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+}
+
+.fine-tariff-card-default {
+  border-color: var(--accent);
+}
+
+.fine-tariff-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font-size: var(--text-md);
+}
+
+.fine-tariff-card-actions {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.fine-tariff-card-total {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.fine-tariff-card-total strong {
+  font-size: var(--text-2xl);
+  font-variant-numeric: tabular-nums;
+}
+
+.fine-tariff-card-detail {
+  font-size: var(--text-xs);
+}
+
+.fine-members-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.fine-members-search {
+  flex: 1;
+  min-width: 200px;
+  max-width: 320px;
+}
+
+.fine-members-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.fine-members-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 32px;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--panel-solid);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.fine-members-chip span {
+  font-weight: 500;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
+.fine-members-chip-active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-solid);
+}
+
+.fine-members {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.fine-members-bulk {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: var(--accent);
+  color: var(--on-solid);
+  font-size: var(--text-sm);
+}
+
+.fine-members-bulk-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.fine-members-bulk button {
+  min-height: 28px;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--on-solid) 35%, transparent 65%);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--on-solid) 10%, transparent 90%);
+  color: var(--on-solid);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.fine-members-bulk .fine-members-bulk-clear {
+  margin-left: auto;
+  border: none;
+  background: none;
+}
+
+.fine-members-row {
+  display: grid;
+  grid-template-columns: 28px minmax(160px, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.fine-members-row:last-child {
+  border-bottom: none;
+}
+
+.fine-members-head {
+  background: var(--bg);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.fine-members-row-selected {
+  background: var(--accent-soft);
+}
+
+.fine-members-row-inactive {
+  opacity: 0.6;
+}
+
+.fine-members-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.fine-members-person {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.fine-members-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--neutral-bg);
+  color: var(--neutral-fg);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.fine-members-name {
+  font-weight: 600;
+}
+
+.fine-members-inactive,
+.fine-members-empty {
+  margin: 0;
+  font-size: var(--text-xs);
+}
+
+.fine-members-empty {
+  padding: var(--space-5) var(--space-4);
+}
+
+.fine-members-segment {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 3px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  justify-self: end;
+}
+
+.fine-members-segment button {
+  min-height: 28px;
+  padding: var(--space-1) var(--space-3);
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.fine-members-segment .fine-members-segment-active {
+  background: var(--panel-solid);
+  color: var(--accent);
+  box-shadow: var(--shadow-soft);
+}
+
+.fine-tariff-default {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+
+.fine-tariff-default-locked {
+  cursor: default;
+}
+
+@media (max-width: 640px) {
+  .fine-members-row {
+    grid-template-columns: 28px 1fr;
+  }
+
+  .fine-members-segment {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
+/* Dialog «Bussenregel» (todo-fine-rules.tsx, Design «hocX Bussenregel Dialog») */
+.fine-rule-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.fine-rule-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.fine-rule-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.fine-rule-section h3 {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 700;
+}
+
+.fine-rule-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.fine-rule-section-head .muted {
+  font-size: var(--text-sm);
+}
+
+.fine-rule-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.fine-rule-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-3);
+}
+
+.fine-rule-filter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.fine-chip-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--panel-solid);
+}
+
+.fine-chip-empty {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.fine-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 3px 3px var(--space-2);
+  border-radius: var(--radius-xs);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.fine-chip button {
+  min-height: 0;
+  padding: 0 var(--space-1);
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: var(--text-base);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.fine-chip-field .fine-chip-add {
+  margin-left: auto;
+  width: auto;
+  min-height: 30px;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.fine-rule-hint {
+  margin: 0;
+}
+
+.fine-stepper-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-base);
+}
+
+.fine-stepper {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.fine-stepper button {
+  width: 34px;
+  min-height: 38px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-size: var(--text-lg);
+}
+
+.fine-stepper button:hover:not(:disabled) {
+  background: var(--border);
+}
+
+.fine-stepper span {
+  min-width: 34px;
+  text-align: center;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.fine-rate-table {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.fine-rate-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) 120px 120px minmax(200px, 1.6fr);
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.fine-rate-row:last-child {
+  border-bottom: none;
+}
+
+.fine-rate-head {
+  padding-block: var(--space-2);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.fine-rate-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font-weight: 600;
+}
+
+.fine-rate-count {
+  font-size: var(--text-xs);
+}
+
+.fine-money {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--panel-solid);
+}
+
+.fine-money:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.fine-money span {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.fine-money input {
+  width: 100%;
+  min-width: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  padding-inline: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.fine-money input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.fine-rate-preview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-1);
+}
+
+.fine-rate-preview div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-xs);
+  background: var(--bg);
+}
+
+.fine-rate-preview span {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.fine-rate-preview strong {
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.fine-rule-footer {
+  flex-wrap: wrap;
+  align-items: center;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.fine-rule-active {
+  position: relative;
+  flex: 1;
+  min-width: 200px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  cursor: pointer;
+}
+
+.fine-rule-active input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.fine-rule-active input:checked + .album-picker-switch-track {
+  background: var(--accent);
+}
+
+.fine-rule-active input:checked + .album-picker-switch-track::after {
+  transform: translateX(14px);
+}
+
+.fine-rule-active input:focus-visible + .album-picker-switch-track {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
+.fine-rule-active-text {
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 640px) {
+  .fine-rate-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .fine-rate-head {
+    display: none;
+  }
+
+  .fine-rate-row > :first-child,
+  .fine-rate-preview {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Bussen-Konfiguration (app/fine-settings): Vereinstarif der Anwesenheitsbussen */
+.fine-settings-summary {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+}
+
+.fine-settings-values {
+  display: flex;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+  margin: 0;
+}
+
+.fine-settings-values dt {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.fine-settings-values dd {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
 .todo-fine-toolbar {
   display: flex;
   align-items: flex-start;
