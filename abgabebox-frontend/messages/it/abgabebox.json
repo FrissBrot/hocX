@@ -64,9 +64,10 @@
     "dropLabelEmpty": "Seleziona un file o trascinalo qui",
     "dropLabelEmptyTouch": "Seleziona un file",
     "hintMaxFilesUnbounded": "max. 50 file per caricamento",
+    "hintMaxFiles": "{count, plural, one {max. # file} other {max. # file}}",
     "hintMaxFilesRemaining": "{count, plural, one {max. # file aggiuntivo} other {max. # file aggiuntivi}}",
-    "hintPerFile": "{size} MiB ciascuno",
-    "hintTotal": "massimo 150 MiB in totale",
+    "hintPerFile": "{size} MB ciascuno",
+    "hintTotal": "massimo 150 MB in totale",
     "removeFile": "Rimuovi",
     "offlineNotice": "Offline – i caricamenti sono possibili solo dopo il ripristino della connessione. La selezione rimane in questa scheda.",
     "alreadyUploaded": "{count, plural, one {Già # file caricato per questa consegna.} other {Già # file caricati per questa consegna.}}",
@@ -89,9 +90,9 @@
       "uploadFailedGeneric": "Caricamento non riuscito",
       "connectionLost": "Connessione interrotta durante il caricamento. Verifica se la consegna è già arrivata prima di inviare di nuovo.",
       "tooManyFiles": "È consentito un massimo di 50 file per caricamento.",
-      "selectionTooLarge": "La selezione supera 150 MiB. Suddividila in più caricamenti.",
+      "selectionTooLarge": "La selezione supera 150 MB. Suddividila in più caricamenti.",
       "maxFilesTotal": "È consentito un massimo di {maxFiles} file in totale ({remaining} ancora possibili)",
-      "unsupportedType": "\"{filename}\" non è supportato. Scegli un'immagine, un PDF o un documento Office.",
+      "unsupportedType": "\"{filename}\" non può essere accettato: {kind, select, missing {i file senza estensione non sono consentiti} other {l'estensione .{extension} non è consentita}}. Consentiti: {allowed}.",
       "disallowedType": "\"{filename}\" ha un formato file non consentito (consentiti: {allowed})",
       "fileTooLarge": "\"{filename}\" è troppo grande (max. {maxFileSizeMb} MB)"
     },
@@ -109,7 +110,12 @@
     "includeGps": "Invia i dati GPS dell’immagine",
     "privacyResponsible": "Il responsabile dei tuoi file è {tenant}.",
     "privacyLink": "Informativa sulla privacy",
-    "privacyCaptcha": "Per evitare lo spam, Friendly Captcha verifica il tuo browser senza cookie e senza tracciamento."
+    "privacyCaptcha": "Per evitare lo spam, Friendly Captcha verifica il tuo browser senza cookie e senza tracciamento.",
+    "progressLabel": "Avanzamento del caricamento",
+    "progressUploading": "Caricamento in corso …",
+    "progressPercent": "{percent} %",
+    "progressProcessing": "Verifica in corso …",
+    "progressProcessingHint": "I file sono stati trasferiti e ora vengono verificati (virus e formato). Lascia aperta questa pagina."
   },
   "language": {
     "label": "Lingua"

@@ -100,12 +100,6 @@ export function listElements(linkToken: string, assignmentSlug: string) {
   );
 }
 
-export function getElement(linkToken: string, assignmentSlug: string, elementRef: string) {
-  return listElements(linkToken, assignmentSlug).then(
-    (elements) => elements?.find((element) => element.element_ref === elementRef) ?? null
-  );
-}
-
 // Browser-seitig (Upload-Formular) wird immer same-origin (relativer Pfad) angesprochen, damit
 // das auf jeder Domain (Standard- oder Mandanten-Custom-Domain) automatisch korrekt aufgeloest wird.
 export function publicApiUrl(path: string): string {

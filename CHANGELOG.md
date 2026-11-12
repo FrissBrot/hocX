@@ -15,6 +15,52 @@ Installationen aktualisieren können.
   Mail). Abschaltbar im Profil unter «Benachrichtigungen» («Abgabe eingegangen», Standard ein). Von
   Hand erledigte Aufgaben lösen keine Mail aus. Beim ersten Lauf nach dem Update werden Abgaben der
   letzten 24 Stunden noch gemeldet.
+- **Abgaben einfacher einrichten.** Vorlagen zum Schnellstart («Berichte pro Termin», «Formular
+  bis Stichtag», «Fotos nach Anlass»), selten gebrauchte Einstellungen unter «Erweitert», ein
+  Beispiel mit echtem Datum zum Zeitfenster, ein Hinweis neben dem gesperrten «Speichern», was
+  noch fehlt, und nach dem Anlegen ein Fenster mit dem Link zum Kopieren. Der Link steht auch in
+  der Detailansicht. Auf dem Handy stehen Zusammenfassung und Link oben.
+- **Hilfe im Formular.** Kleine «?»-Knöpfe erklären Quelle, Zeitfenster, Stichtag, Zyklus,
+  Dateien, automatisches Schliessen, Verantwortliche und Links und führen zum passenden Abschnitt
+  der neu geschriebenen Anleitung «Abgabebox». Der Link braucht `TRAEFIK_DOCS_DOMAIN` (bereits
+  vorhanden, wird neu auch ans Frontend gegeben); ohne Wert erscheinen keine Doku-Links.
+- **Abgabebox:** Fortschrittsbalken beim Hochladen, die Beschreibung der Abgabe auch auf der
+  Upload-Seite, bei nur einem Dokument direkt das Upload-Formular und eine genauere Meldung bei
+  nicht erlaubten Dateitypen.
+
+### Behoben
+
+- **Verspätungsbussen bei Abgaben über die Abgabebox.** Eine Einreichung erledigte die Pendenz
+  in der Datenbank ohne die Pendenzen-Busse festzuschreiben. Der Abgleich-Job friert sie jetzt für
+  Abschlüsse der letzten zwei Tage nach (fehlende ältere werden bewusst nicht nachgerechnet).
+- **Dateien im Virenscan erledigten die Pendenz.** Erst eine sauber geprüfte Datei erledigt sie
+  (Migration `0175_submission_clean_files`); was der erneute Scan freigibt, erledigt der Scan bzw.
+  der Abgleich-Job, inklusive Busse und Mail. Erledigt-Zeitpunkt ist die Einreichung.
+- **«Alle Dateien (.zip)»** enthielt nur die Dateien der letzten Einreichung und nach dem
+  Schliessen gar nichts; jetzt alle geprüften Dateien aller Einreichungen und der in der App
+  verknüpften, ein Ordner je Abgabefeld.
+- **Schliessen/Wiederöffnen** mit einer fremden oder unbekannten Element-Referenz legte erst eine
+  Zeile an und endete dann mit Serverfehler; jetzt 400 ohne Änderung.
+- **Schliessen während eines Uploads**: Ein laufender Upload konnte ein eben geschlossenes
+  Abgabefeld wieder öffnen. Beide laufen jetzt unter einem gemeinsamen Lock je Abgabe; die
+  Abgabebox prüft das Schliessen von Hand nicht mehr nur bei automatischem Schliessen.
+- **Höchstzahl Dateien**: Die Abgabebox zählt in der App verknüpfte Dateien jetzt mit, wie die App.
+- **Fortschritt** zählt jedes Abgabefeld nur einmal und nur, wenn es noch zur Abgabe gehört
+  (nie mehr als 100 %). Die Abgaben-Liste lädt ihn in einer Anfrage
+  (`GET /api/submission-assignments/summaries`) statt einer je Abgabe.
+- Ein Fehler beim Nachtragen der Mails «Abgabe eingegangen» hielt den ganzen Mailversand an.
+- Datumsangaben im Abgabefeld-Fenster formatiert, uneinheitliche Begriffe (Abgabefeld, Stichtag,
+  Einzelabgabe) und fehlende Mehrzahlformen vereinheitlicht, Dauer-Animationen respektieren
+  «Bewegung reduzieren».
+
+### Geändert
+
+- **Von Hand geschlossene Abgabefelder zählen als erledigt.** Der Fortschrittsbalken zeigt sie
+  als eigenes Segment («4 von 5 erledigt · 1 geschlossen»). Die Aufgabe des Elements wird beim
+  Schliessen ohne geprüfte Datei «abgebrochen» (keine Verspätungsbusse), mit Datei bleibt sie
+  «erledigt»; eine von Hand erledigte oder abgebrochene Aufgabe bleibt unverändert. Wiederöffnen
+  öffnet eine abgebrochene Aufgabe wieder. Bereits geschlossene Elemente gleicht der Abgleich-Job nach dem
+  Update nach.
 
 ## [1.2.6] - 2026-11-12
 

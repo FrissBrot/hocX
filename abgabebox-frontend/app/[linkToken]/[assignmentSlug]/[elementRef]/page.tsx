@@ -3,7 +3,7 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
 import { UploadForm } from "@/components/upload-form";
-import { getAssignmentDetail, getElement } from "@/lib/api";
+import { getAssignmentDetail, listElements } from "@/lib/api";
 import { resolvePuzzleEndpoint } from "@/lib/friendly-captcha";
 import { formatDate } from "@/lib/format";
 
@@ -13,14 +13,18 @@ export default async function ElementUploadPage({
   params: Promise<{ linkToken: string; assignmentSlug: string; elementRef: string }>;
 }) {
   const { linkToken, assignmentSlug, elementRef } = await params;
-  const [assignment, element] = await Promise.all([
+  const [assignment, elements] = await Promise.all([
     getAssignmentDetail(linkToken, assignmentSlug),
-    getElement(linkToken, assignmentSlug, elementRef),
+    listElements(linkToken, assignmentSlug),
   ]);
+  const element = elements?.find((candidate) => candidate.element_ref === elementRef) ?? null;
 
-  if (assignment === null || element === null) {
+  if (assignment === null || elements === null || element === null) {
     notFound();
   }
+  // Einziges offenes Dokument: die Dokumentauswahl leitet direkt hierher weiter, der Zurück-Link
+  // führt deshalb zur Abgabenliste statt in die Weiterleitung zurück.
+  const singleElement = elements.length === 1;
 
   const sitekey = process.env.NEXT_PUBLIC_FRIENDLY_CAPTCHA_SITEKEY ?? "";
   const puzzleEndpoint = resolvePuzzleEndpoint(process.env.FRIENDLY_CAPTCHA_PUZZLE_URL);
@@ -36,12 +40,23 @@ export default async function ElementUploadPage({
   return (
     <div className="box-step">
       <div className="box-step-head">
-        <Link href={`/${linkToken}/${assignmentSlug}`} className="back-link">
-          {t("backTo", { title: assignment.title })}
-        </Link>
+        {singleElement ? (
+          <Link href={`/${linkToken}`} className="back-link">
+            {t("backToAssignments")}
+          </Link>
+        ) : (
+          <Link href={`/${linkToken}/${assignmentSlug}`} className="back-link">
+            {t("backTo", { title: assignment.title })}
+          </Link>
+        )}
         <h1>{element.label}</h1>
-        <p className="muted">{windowText ?? assignment.title}</p>
+        {/* Einzelabgabe: das Element heisst wie die Abgabe, Titel nicht doppelt zeigen */}
+        {(windowText ?? (assignment.title !== element.label ? assignment.title : null)) ? (
+          <p className="muted">{windowText ?? assignment.title}</p>
+        ) : null}
       </div>
+
+      {assignment.description ? <p className="box-step-desc">{assignment.description}</p> : null}
 
       <UploadForm
         linkToken={linkToken}
@@ -57,6 +72,7 @@ export default async function ElementUploadPage({
         puzzleEndpoint={puzzleEndpoint}
         tenantName={assignment.tenant_name}
         privacyNoticeUrl={assignment.privacy_notice_url}
+        singleElement={singleElement}
       />
     </div>
   );

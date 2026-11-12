@@ -334,9 +334,9 @@
 
 @media (max-width: 900px) {
   /* Untereinander im normalen Fluss: ein Grid mit definierter Höhe würde die Zeilen auf die Modal-Höhe kappen. */
-  .subm-edit-body { display: block; overflow-y: auto; }
-  .subm-edit-main, .subm-edit-sidebar { overflow: visible; }
-  .subm-edit-sidebar { border-left: 0; border-top: 1px solid var(--border); }
+  .subm-edit-body { display: flex; flex-direction: column; overflow-y: auto; }
+  .subm-edit-main, .subm-edit-sidebar { flex: none; overflow: visible; }
+  .subm-edit-sidebar { border-left: 0; border-bottom: 1px solid var(--border); }
 }
 
 @media (max-width: 640px) {

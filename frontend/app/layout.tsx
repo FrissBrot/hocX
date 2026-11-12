@@ -56,6 +56,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   // Werte zur Build-Zeit im Client-Bundle eingefroren werden.
   const runtimeConfig = {
     mainAppDomain: process.env.TRAEFIK_DOMAIN || null,
+    docsDomain: process.env.TRAEFIK_DOCS_DOMAIN || null,
     ...getServerVersion()
   };
 

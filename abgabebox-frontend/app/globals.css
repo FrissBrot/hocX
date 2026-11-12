@@ -471,6 +471,16 @@ p.muted-flush, .muted-flush {
   overflow-wrap: anywhere;
 }
 
+/* Beschreibung der Abgabe auf Dokumentauswahl und Upload-Seite (wie .choice-desc, etwas grösser) */
+.box-step-desc {
+  margin: 0;
+  font-size: var(--text-base);
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
 .choice-desc {
   font-size: var(--text-sm);
   line-height: 1.4;
@@ -912,7 +922,69 @@ input[type="file"] {
   color: var(--neutral-fg);
 }
 
+/* Upload-Fortschritt: Prozentbalken beim Senden, danach unbestimmt «wird geprüft» */
+.upload-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  animation: abgabebox-appear var(--dur-slow) var(--ease-out) both;
+}
+
+.upload-progress-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+  font-size: var(--text-base);
+}
+
+.upload-progress-label {
+  font-weight: 600;
+}
+
+.upload-progress-value {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.upload-progress-track {
+  position: relative;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--neutral-bg);
+  overflow: hidden;
+}
+
+.upload-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  transition: width var(--dur-base) var(--ease-out);
+}
+
+.upload-progress-processing .upload-progress-fill {
+  animation: abgabebox-pulse 1.4s ease-in-out infinite;
+}
+
+.upload-progress-hint {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+@keyframes abgabebox-appear {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes abgabebox-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
 .upload-success {
+  animation: abgabebox-appear var(--dur-slow) var(--ease-out) both;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1425,3 +1497,14 @@ input[type="file"] {
   cursor: not-allowed;
 }
 
+/* Weniger Bewegung gewünscht: alle Übergänge und Animationen der Abgabebox abschalten
+   (Fortschritt, Erfolg, Hover-Effekte, Spinner). Zustände bleiben sichtbar, nur ohne Bewegung. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

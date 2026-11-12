@@ -221,5 +221,10 @@
     "androidManual": "Öffne das Browsermenü ⋮ und wähle «App installieren» oder «Zum Startbildschirm hinzufügen».",
     "install": "Installieren",
     "dismiss": "Hinweis schliessen"
+  },
+  "help": {
+    "about": "Hilfe zu «{topic}»",
+    "moreInDocs": "Mehr in der Anleitung",
+    "guide": "Anleitung"
   }
 }

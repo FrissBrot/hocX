@@ -221,5 +221,10 @@
     "androidManual": "Open the browser menu ⋮ and choose “Install app” or “Add to Home screen”.",
     "install": "Install",
     "dismiss": "Dismiss"
+  },
+  "help": {
+    "about": "Help on “{topic}”",
+    "moreInDocs": "More in the guide",
+    "guide": "Guide"
   }
 }

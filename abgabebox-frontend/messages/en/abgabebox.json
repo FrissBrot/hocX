@@ -64,9 +64,10 @@
     "dropLabelEmpty": "Select a file or drag it here",
     "dropLabelEmptyTouch": "Select a file",
     "hintMaxFilesUnbounded": "max. 50 files per upload",
+    "hintMaxFiles": "{count, plural, one {max. # file} other {max. # files}}",
     "hintMaxFilesRemaining": "{count, plural, one {max. # more file} other {max. # more files}}",
-    "hintPerFile": "{size} MiB each",
-    "hintTotal": "150 MiB in total maximum",
+    "hintPerFile": "{size} MB each",
+    "hintTotal": "150 MB in total maximum",
     "removeFile": "Remove",
     "offlineNotice": "Offline – uploads are only possible once the connection is restored. Your selection stays in this tab.",
     "alreadyUploaded": "{count, plural, one {# file already uploaded for this submission.} other {# files already uploaded for this submission.}}",
@@ -89,9 +90,9 @@
       "uploadFailedGeneric": "Upload failed",
       "connectionLost": "Connection interrupted during upload. Check whether the submission already arrived before sending again.",
       "tooManyFiles": "A maximum of 50 files is allowed per upload.",
-      "selectionTooLarge": "The selection is larger than 150 MiB. Please split it across multiple uploads.",
+      "selectionTooLarge": "The selection is larger than 150 MB. Please split it across multiple uploads.",
       "maxFilesTotal": "A maximum of {maxFiles} file(s) is allowed in total ({remaining} still possible)",
-      "unsupportedType": "\"{filename}\" isn't supported. Please choose an image, PDF or Office document.",
+      "unsupportedType": "\"{filename}\" can't be accepted: {kind, select, missing {files without an extension aren't allowed} other {the extension .{extension} isn't allowed}}. Allowed: {allowed}.",
       "disallowedType": "\"{filename}\" has a disallowed file format (allowed: {allowed})",
       "fileTooLarge": "\"{filename}\" is too large (max. {maxFileSizeMb} MB)"
     },
@@ -109,7 +110,12 @@
     "includeGps": "Include the image’s GPS data",
     "privacyResponsible": "{tenant} is responsible for your files.",
     "privacyLink": "Privacy notice",
-    "privacyCaptcha": "To prevent spam, Friendly Captcha checks your browser without cookies or tracking."
+    "privacyCaptcha": "To prevent spam, Friendly Captcha checks your browser without cookies or tracking.",
+    "progressLabel": "Upload progress",
+    "progressUploading": "Uploading …",
+    "progressPercent": "{percent}%",
+    "progressProcessing": "Checking …",
+    "progressProcessingHint": "Your files have been transferred and are now being checked for viruses and format. Please keep this page open."
   },
   "language": {
     "label": "Language"

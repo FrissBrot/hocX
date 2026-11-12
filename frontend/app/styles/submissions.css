@@ -121,6 +121,8 @@
 
 .subm-summary-segment-clean { background: var(--success); }
 
+.subm-summary-segment-closed { background: var(--muted); }
+
 .subm-summary-segment-quarantine { background: var(--warning); }
 
 .subm-summary-segment-infected { background: var(--danger); }
@@ -464,3 +466,64 @@
 }
 
 .mobile-clamav-offline { background: var(--warning-bg); color: var(--warning-fg); }
+
+/* ── Erfolgs-Panel nach dem Anlegen (submission-share-link.tsx) ── */
+
+.subm-created {
+  gap: var(--space-4);
+  /* Kinder dürfen schmaler als ihr Inhalt werden: sonst schiebt der lange Link das Fenster
+     auf dem Handy über den Rand */
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.subm-created-check {
+  justify-self: start;
+}
+
+/* Langer Abgabe-Link bricht um statt das Fenster zu verbreitern */
+.subm-link-field {
+  min-width: 0;
+}
+
+.subm-link-field .wizard-dns-value {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: var(--text-sm);
+}
+
+.subm-created p {
+  margin: 0;
+}
+
+.subm-created-check {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--success-bg);
+  color: var(--success-fg);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  animation: subm-created-pop var(--dur-slow) var(--ease-out) both;
+}
+
+@keyframes subm-created-pop {
+  from { opacity: 0; transform: scale(0.6); }
+  to { opacity: 1; transform: none; }
+}
+
+/* «Bewegung reduzieren»: keine Dauer-Animationen (Puls, Shimmer) und keine Einblendungen */
+@media (prefers-reduced-motion: reduce) {
+  .subm-clamav-online .subm-clamav-dot,
+  .subm-pulse,
+  .subm-participant-row,
+  .subm-skeleton-row,
+  .subm-created-check {
+    animation: none;
+  }
+  .subm-summary-segment,
+  .subm-participant-row {
+    transition: none;
+  }
+}

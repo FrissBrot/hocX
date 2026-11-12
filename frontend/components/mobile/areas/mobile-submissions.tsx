@@ -26,6 +26,7 @@ import {
   SubmissionAssignmentFormModal,
 } from "@/components/submission-assignments/submission-assignment-form";
 import { SubmissionLinkManager } from "@/components/submission-assignments/submission-link-manager";
+import { SubmissionCreatedModal } from "@/components/submission-assignments/submission-share-link";
 import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -103,6 +104,7 @@ export function MobileSubmissions({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(initialForm);
   const [linksOpen, setLinksOpen] = useState(false);
+  const [createdAssignment, setCreatedAssignment] = useState<SubmissionAssignment | null>(null);
   const [actionsOpen, setActionsOpen] = useState(false);
   const availableTags = useMemo(() => [...new Set(availableEvents.map((event) => event.tag).filter((tag): tag is string => !!tag))].sort(), [availableEvents]);
   const participantName = (id: string | null) => (id ? availableParticipants.find((participant) => participant.id === id)?.display_name ?? null : null);
@@ -135,13 +137,10 @@ export function MobileSubmissions({
       (status) => setClamav(status.status === "online" ? "online" : "offline"),
       () => setClamav("offline")
     );
-    void Promise.all(
-      initialAssignments.map((assignment) =>
-        browserApiFetch<AssignmentSummary>(`/api/submission-assignments/${assignment.id}/summary`)
-          .then((summary) => [assignment.id, summary] as const)
-          .catch(() => null)
-      )
-    ).then((pairs) => setSummaries(Object.fromEntries(pairs.filter((pair): pair is readonly [string, AssignmentSummary] => !!pair))));
+    // Fortschritt aller Abgaben in einer Anfrage
+    browserApiFetch<Record<string, AssignmentSummary>>("/api/submission-assignments/summaries")
+      .then(setSummaries)
+      .catch(() => {});
   }, [initialAssignments]);
 
   function sourceMeta(assignment: SubmissionAssignment): string {
@@ -205,7 +204,14 @@ export function MobileSubmissions({
         : await browserApiFetch<SubmissionAssignment>("/api/submission-assignments", { method: "POST", body });
       setAssignments((list) => (editingId ? list.map((item) => (item.id === saved.id ? saved : item)) : [saved, ...list]));
       setFormOpen(false);
-      showToast(editingId ? t("assignmentSavedToast") : t("assignmentCreatedToast"), "success");
+      browserApiFetch<AssignmentSummary>(`/api/submission-assignments/${saved.id}/summary`)
+        .then((summary) => setSummaries((prev) => ({ ...prev, [saved.id]: summary })))
+        .catch(() => {});
+      if (editingId) {
+        showToast(t("assignmentSavedToast"), "success");
+      } else {
+        setCreatedAssignment(saved);
+      }
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("assignmentSaveFailed"), "error");
     }
@@ -225,6 +231,7 @@ export function MobileSubmissions({
 
   const shared = (
     <>
+      <SubmissionCreatedModal assignment={createdAssignment} links={links} onClose={() => setCreatedAssignment(null)} />
       <SubmissionAssignmentFormModal
         open={formOpen}
         editing={editingId !== null}
@@ -235,6 +242,7 @@ export function MobileSubmissions({
         availableLists={availableLists}
         availableTags={availableTags}
         availableCycleConfigs={availableCycleConfigs}
+        availableEvents={availableEvents}
         onSubmit={save}
         onClose={() => setFormOpen(false)}
         onManageLinks={() => {

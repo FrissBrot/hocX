@@ -200,11 +200,17 @@ export type SubmissionLink = {
   created_at: string;
 };
 
+/** Fortschritt einer Abgabe: jedes Element zählt höchstens einmal (Backend summarize_states). */
 export type AssignmentSummary = {
+  /** mit geprüfter Datei */
   submitted: number;
+  /** von Hand geschlossen ohne Datei, zählt als erledigt */
+  closed: number;
+  /** Datei im Virenscan oder Scanfehler */
   quarantine: number;
+  /** nur infizierte Dateien */
   infected: number;
-  total: number | null;
+  total: number;
 };
 
 export type SubmissionFile = {

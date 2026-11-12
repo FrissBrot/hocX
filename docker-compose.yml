@@ -490,6 +490,8 @@ services:
       TRAEFIK_ADMIN_DOMAIN: ${TRAEFIK_ADMIN_DOMAIN}
       TRAEFIK_WEBSITE_DOMAIN: ${TRAEFIK_WEBSITE_DOMAIN:-}
       WEBSITE_CONTACT_EMAIL: ${WEBSITE_CONTACT_EMAIL:-}
+      # Hilfe-Links in der App (lib/docs.ts); leer = keine Links
+      TRAEFIK_DOCS_DOMAIN: ${TRAEFIK_DOCS_DOMAIN:-}
       HOCX_APP_URL: ${HOCX_APP_URL:-}
     depends_on:
       - backend

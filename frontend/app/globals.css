@@ -1391,6 +1391,67 @@ a.button-secondary:hover { border-color: var(--border-strong); }
   box-shadow: var(--shadow);
 }
 
+/* Hilfe-Knopf «?» mit kurzer Erklärung und Link in die Anleitung (components/ui/help-popover.tsx) */
+.help-popover-trigger {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  padding: 0;
+  margin-left: var(--space-1);
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  /* über die Variablen des globalen button-Stils, sonst gewinnt button:hover (Primärfarbe) */
+  --button-bg: transparent;
+  --button-hover-bg: var(--accent-soft);
+  background: var(--button-bg);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  line-height: 1;
+  vertical-align: middle;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+.help-popover-trigger:hover,
+.help-popover-trigger[aria-expanded="true"] {
+  --button-bg: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.help-popover-panel {
+  display: grid;
+  gap: var(--space-2);
+  max-width: min(340px, calc(100vw - var(--space-4)));
+  padding: var(--space-3);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: normal;
+  animation: help-popover-in var(--dur-base) var(--ease-out);
+}
+.help-popover-text p { margin: 0; }
+.help-popover-text p + p { margin-top: var(--space-2); }
+.help-popover-link,
+.docs-link {
+  color: var(--accent);
+  font-weight: 500;
+  text-decoration: none;
+}
+.help-popover-link::after,
+.docs-link::after { content: " ↗"; }
+.help-popover-link:hover,
+.docs-link:hover { text-decoration: underline; }
+@keyframes help-popover-in {
+  from { opacity: 0; transform: translateY(-2px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .help-popover-panel { animation: none; }
+}
+
 /* Liste des Auswahlfelds (components/ui/select.tsx), ersetzt die Liste des Betriebssystems.
    Position, Höhe und Ebene setzt das Popover per Inline-Style. */
 .select-list {
@@ -8565,6 +8626,48 @@ input[type="color"]::-moz-color-swatch {
 .subm-edit-actions .button-secondary { --button-bg: var(--panel-solid); --button-hover-bg: var(--neutral-bg); background: var(--button-bg); color: var(--text); border-color: var(--border-strong); }
 @media (max-width: 640px) {
   .subm-edit-footer { flex-wrap: wrap; padding: var(--space-4); }
+}
+
+/* Schnellstart-Vorlagen, Bereich «Erweitert», Beispiel und Hinweise im Abgabe-Formular */
+.subm-edit-templates { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
+.subm-edit-modal .subm-edit-template { --button-bg: transparent; --button-hover-bg: var(--accent-soft); display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); width: auto; min-height: 0; padding: var(--space-3) var(--space-4); border: 1px dashed var(--border-strong); border-radius: var(--radius-md); color: var(--text); text-align: left; transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out); }
+.subm-edit-modal .subm-edit-template:hover { border-color: var(--accent); }
+.subm-edit-template strong { font-size: var(--text-base); font-weight: 600; }
+.subm-edit-template small { color: var(--muted); font-size: var(--text-sm); line-height: 1.4; }
+.subm-edit-example { margin: 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: var(--info-bg); color: var(--info-fg); font-size: var(--text-sm); line-height: 1.45; }
+.subm-edit-advanced { border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.subm-edit-modal .subm-edit-advanced-toggle { --button-bg: transparent; --button-hover-bg: var(--neutral-bg); display: flex; align-items: center; gap: var(--space-3); width: 100%; min-height: 48px; padding: var(--space-3) var(--space-4); border: 0; border-radius: var(--radius-lg); color: var(--text); text-align: left; }
+.subm-edit-advanced-chevron { display: inline-block; color: var(--muted); font-size: var(--text-xl); line-height: 1; transition: transform var(--dur-base) var(--ease-out); }
+.subm-edit-advanced-open .subm-edit-advanced-chevron { transform: rotate(90deg); }
+.subm-edit-advanced-title { font-weight: 600; }
+.subm-edit-advanced-summary { margin-left: auto; color: var(--muted); font-size: var(--text-sm); text-align: right; }
+.subm-edit-advanced-body { gap: var(--space-5); padding: var(--space-2) var(--space-4) var(--space-4); }
+.subm-edit-reveal { animation: subm-edit-reveal var(--dur-slow) var(--ease-out); }
+.subm-edit-summary-text { animation: subm-edit-flash var(--dur-slow) var(--ease-out); }
+.subm-edit-problem { align-self: center; color: var(--warning-fg); font-size: var(--text-sm); font-weight: 500; }
+.subm-edit-invalid .mini-menu-trigger { border-color: var(--warning); }
+.subm-edit-modal .subm-edit-title[aria-invalid="true"]::placeholder { color: var(--warning-fg); }
+@keyframes subm-edit-reveal {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes subm-edit-flash {
+  from { background: var(--accent-soft); }
+  to { background: transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .subm-edit-reveal, .subm-edit-summary-text { animation: none; }
+  .subm-edit-advanced-chevron, .subm-edit-modal .subm-edit-template { transition: none; }
+}
+@media (max-width: 900px) {
+  /* Zusammenfassung und Link oben: auf dem Handy sonst erst nach dem ganzen Formular sichtbar */
+  .subm-edit-sidebar { order: -1; }
+}
+@media (max-width: 640px) {
+  .subm-edit-templates { grid-template-columns: minmax(0, 1fr); }
+  .subm-edit-advanced-summary { display: none; }
+  .subm-edit-problem { flex-basis: 100%; }
+  .subm-edit-actions { flex-wrap: wrap; }
 }
 
 /* Leerer Zustand (EmptyState): Icon, Titel, Erklärung, Aktionen, Trenner, Hinweis */

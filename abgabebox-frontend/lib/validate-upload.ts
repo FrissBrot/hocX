@@ -15,7 +15,8 @@ export type UploadValidationError =
   | { code: "tooManyFiles" }
   | { code: "selectionTooLarge" }
   | { code: "maxFilesTotal"; params: { maxFiles: number; remaining: number } }
-  | { code: "unsupportedType"; params: { filename: string } }
+  // kind "missing": Datei ohne Endung (ICU-select in der Meldung), sonst "extension"
+  | { code: "unsupportedType"; params: { filename: string; extension: string; kind: "extension" | "missing"; allowed: string } }
   | { code: "disallowedType"; params: { filename: string; allowed: string } }
   | { code: "fileTooLarge"; params: { filename: string; maxFileSizeMb: number } };
 
@@ -58,7 +59,19 @@ export function validateUploadFiles(
   }
   const unsupported = selected.find((file) => !SUPPORTED_UPLOAD_EXTENSIONS.includes(getExtension(file.name)));
   if (unsupported) {
-    return { ok: false, code: "unsupportedType", params: { filename: unsupported.name } };
+    const extension = getExtension(unsupported.name);
+    // Erlaubt ist, was die Abgabe einschränkt - sonst alle grundsätzlich unterstützten Formate
+    const allowedList = allowedFileTypes.length > 0 ? allowedFileTypes : SUPPORTED_UPLOAD_EXTENSIONS;
+    return {
+      ok: false,
+      code: "unsupportedType",
+      params: {
+        filename: unsupported.name,
+        extension: extension.toUpperCase(),
+        kind: extension ? "extension" : "missing",
+        allowed: allowedList.map((t) => t.toUpperCase()).join(", "),
+      },
+    };
   }
   if (allowedFileTypes.length > 0) {
     const allowed = allowedFileTypes.map((t) => t.toLowerCase());

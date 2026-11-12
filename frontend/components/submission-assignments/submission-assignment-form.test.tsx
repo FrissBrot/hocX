@@ -9,9 +9,13 @@ import {
   describeAssignment,
   formProblem,
   initialForm,
+  assignmentTemplates,
+  pickExampleEvent,
   publicUrlParts,
   slugify,
+  windowExample,
 } from "./submission-assignment-form";
+import { assignmentPublicUrl } from "./submission-share-link";
 import { SubmissionLink } from "@/types/api";
 
 const t = useTranslations("submissionAssignments");
@@ -63,7 +67,8 @@ describe("describeAssignment – automatisch schliessen", () => {
 describe("Automatisch schliessen im Formular", () => {
   it("deaktiviert «Maximum» ohne Maximum und fällt beim Leeren auf «Nie» zurück", () => {
     render(<Harness start={{ ...initialForm, auto_close: "max_files", max_files_per_element: 3 }} />);
-    const maxOption = screen.getByRole("radio", { name: "Sobald Max. Dateien erreicht" });
+    fireEvent.click(screen.getByRole("button", { name: /Erweitert/ }));
+    const maxOption = screen.getByRole("radio", { name: "Sobald Höchstzahl erreicht" });
     expect(maxOption.getAttribute("aria-checked")).toBe("true");
 
     fireEvent.change(screen.getByPlaceholderText("unbegrenzt"), { target: { value: "" } });
@@ -100,7 +105,7 @@ describe("describeAssignment", () => {
   });
 
   it("beschreibt Termin-Abgaben ohne Zeitfenster als offen bis zum manuellen Schliessen", () => {
-    expect(describeAssignment({ ...initialForm, tag_filter: "x" }, null, t)).toContain("bleibt offen, bis es manuell geschlossen wird");
+    expect(describeAssignment({ ...initialForm, tag_filter: "x" }, null, t)).toContain("bleibt offen, bis es von Hand geschlossen wird");
   });
 
   it("beschreibt manuelle Abgaben mit einem einzigen Abgabefeld und optionalem Stichtag", () => {
@@ -126,31 +131,33 @@ describe("publicUrlParts / slugify", () => {
 });
 
 describe("SubmissionAssignmentFormModal", () => {
-  it("bietet Termine, Liste und Manuell als Verknüpfung an", () => {
+  it("bietet Termine, Liste und Einzelabgabe als Verknüpfung an", () => {
     render(<Harness />);
     const radios = within(screen.getByRole("radiogroup", { name: "Verknüpfung" })).getAllByRole("radio");
     expect(radios.map((r) => r.textContent)).toEqual([
       expect.stringContaining("Termine"),
       expect.stringContaining("Liste"),
-      expect.stringContaining("Manuell"),
+      expect.stringContaining("Einzelabgabe"),
     ]);
     expect(radios[0]).toHaveAttribute("aria-checked", "true");
   });
 
-  it("blendet bei «Manuell» Tag-Filter, Zeitfenster und Sortierung aus und erlaubt das Speichern ohne Tag", () => {
+  it("blendet bei «Einzelabgabe» Tag-Filter, Zeitfenster und Sortierung aus und erlaubt das Speichern ohne Tag", () => {
     const onSubmit = vi.fn();
     render(<Harness start={{ ...initialForm, title: "Vereinsfotos", public_slug: "vereinsfotos" }} onSubmit={onSubmit} />);
     const submit = screen.getByRole("button", { name: "Abgabe erstellen" });
     expect(submit).toBeDisabled();
     expect(screen.getByText("Tag-Filter")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Noch offen: Tag-Filter fehlt");
 
-    fireEvent.click(screen.getByRole("radio", { name: /Manuell/ }));
+    fireEvent.click(screen.getByRole("radio", { name: /Einzelabgabe/ }));
 
     expect(screen.queryByText("Tag-Filter")).not.toBeInTheDocument();
     expect(screen.queryByText("Zeitfenster")).not.toBeInTheDocument();
     expect(screen.queryByText("Sortierung")).not.toBeInTheDocument();
     expect(screen.getByText("Stichtag")).toBeInTheDocument();
     expect(submit).toBeEnabled();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
 
     fireEvent.click(submit);
     expect(onSubmit).toHaveBeenCalledTimes(1);
@@ -172,6 +179,8 @@ describe("SubmissionAssignmentFormModal", () => {
 
   it("zählt gewählte Dateitypen und wechselt zwischen «Alle» und «Keine»", () => {
     render(<Harness />);
+    expect(screen.queryByText("alle erlaubt")).not.toBeInTheDocument(); // in «Erweitert»
+    fireEvent.click(screen.getByRole("button", { name: /Erweitert/ }));
     expect(screen.getByText("alle erlaubt")).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole("button", { name: "Alle" })[0]);
@@ -180,5 +189,56 @@ describe("SubmissionAssignmentFormModal", () => {
 
     fireEvent.click(screen.getByRole("button", { name: ".png" }));
     expect(screen.getByText("2 ausgewählt")).toBeInTheDocument();
+  });
+});
+
+describe("Zeitfenster-Beispiel", () => {
+  const events = [
+    { title: "Alt", event_date: "2026-01-10", event_end_date: null, tag: "lager" },
+    { title: "Badetag", event_date: "2026-03-14", event_end_date: null, tag: "lager" },
+    { title: "Pfingstlager", event_date: "2026-05-23", event_end_date: "2026-05-25", tag: "lager" },
+    { title: "Fremd", event_date: "2026-03-01", event_end_date: null, tag: "andere" },
+  ];
+
+  it("nimmt den nächsten Termin mit dem Tag, sonst den letzten", () => {
+    expect(pickExampleEvent(events, "lager", "2026-03-01")?.title).toBe("Badetag");
+    expect(pickExampleEvent(events, "lager", "2026-12-01")?.title).toBe("Pfingstlager");
+    expect(pickExampleEvent(events, "keiner", "2026-03-01")).toBeNull();
+  });
+
+  it("rechnet wie das Backend, mehrtägige Termine ab dem letzten Tag", () => {
+    const form = { ...initialForm, offset_days_before: 3, offset_days_after: 7 };
+    expect(windowExample(form, events[1], t)).toBe("Beispiel: «Badetag» am 14.03.2026 → offen vom 11.03.2026 bis 21.03.2026.");
+    expect(windowExample(form, events[2], t)).toContain("bis 01.06.2026");
+    expect(windowExample({ ...initialForm, offset_days_after: 7 }, events[1], t)).toContain("sofort offen bis 21.03.2026");
+    expect(windowExample(initialForm, events[1], t)).toContain("sofort offen, ohne Ende");
+  });
+
+  it("zeigt das Beispiel im Formular", () => {
+    render(<Harness start={{ ...initialForm, tag_filter: "Scharanlass", offset_days_before: 0, offset_days_after: 2 }} />);
+    expect(screen.getByText(/^Beispiel: Termin am/)).toBeInTheDocument();
+  });
+});
+
+describe("Vorlagen und Link", () => {
+  it("füllt Quelle und Dateiregeln vor, Titel und Links bleiben", () => {
+    const start = { ...initialForm, title: "Mein Titel", link_ids: ["link-1"] };
+    const [reports, form, photos] = assignmentTemplates(t);
+    expect(reports.apply(start)).toMatchObject({ title: "Mein Titel", link_ids: ["link-1"], source_type: "events", offset_days_after: 7 });
+    expect(form.apply(start)).toMatchObject({ source_type: "manual", allowed_file_types: ["pdf"], max_files_per_element: 1, auto_close: "first_upload" });
+    expect(photos.apply(start)).toMatchObject({ max_files_per_element: "", offset_days_after: 14 });
+  });
+
+  it("bietet die Vorlagen nur beim Anlegen an und wendet sie an", () => {
+    render(<Harness start={{ ...initialForm, title: "Formular" }} />);
+    fireEvent.click(screen.getByRole("button", { name: /Formular bis Stichtag/ }));
+    expect(screen.getByRole("radio", { name: /Einzelabgabe/ })).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("baut die öffentliche Adresse über den Standard-Link der Abgabe", () => {
+    const links = [link({ id: "a", is_default: false, url: "https://box.example/a/" }), link({ id: "b", is_default: true, url: "https://box.example/b" })];
+    expect(assignmentPublicUrl({ link_ids: ["a", "b"], public_slug: "fotos" }, links)).toBe("https://box.example/b/fotos");
+    expect(assignmentPublicUrl({ link_ids: ["a"], public_slug: "fotos" }, links)).toBe("https://box.example/a/fotos");
+    expect(assignmentPublicUrl({ link_ids: [], public_slug: "fotos" }, links)).toBeNull();
   });
 });

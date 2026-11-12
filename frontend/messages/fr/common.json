@@ -221,5 +221,10 @@
     "androidManual": "Ouvrez le menu du navigateur ⋮ et choisissez « Installer l’application » ou « Ajouter à l’écran d’accueil ».",
     "install": "Installer",
     "dismiss": "Fermer l’indication"
+  },
+  "help": {
+    "about": "Aide sur « {topic} »",
+    "moreInDocs": "Plus dans le guide",
+    "guide": "Guide"
   }
 }

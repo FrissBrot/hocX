@@ -64,9 +64,10 @@
     "dropLabelEmpty": "Sélectionner un fichier ou le déposer ici",
     "dropLabelEmptyTouch": "Sélectionner un fichier",
     "hintMaxFilesUnbounded": "max. 50 fichiers par envoi",
+    "hintMaxFiles": "{count, plural, one {max. # fichier} other {max. # fichiers}}",
     "hintMaxFilesRemaining": "{count, plural, one {max. # fichier supplémentaire} other {max. # fichiers supplémentaires}}",
-    "hintPerFile": "{size} MiB chacun",
-    "hintTotal": "150 MiB au total maximum",
+    "hintPerFile": "{size} MB chacun",
+    "hintTotal": "150 MB au total maximum",
     "removeFile": "Retirer",
     "offlineNotice": "Hors ligne – les envois ne sont possibles qu'une fois la connexion rétablie. Votre sélection reste dans cet onglet.",
     "alreadyUploaded": "{count, plural, one {# fichier déjà téléversé pour ce dépôt.} other {# fichiers déjà téléversés pour ce dépôt.}}",
@@ -89,9 +90,9 @@
       "uploadFailedGeneric": "Échec de l'envoi",
       "connectionLost": "Connexion interrompue pendant l'envoi. Vérifiez si le dépôt est déjà arrivé avant de renvoyer.",
       "tooManyFiles": "Un maximum de 50 fichiers est autorisé par envoi.",
-      "selectionTooLarge": "La sélection dépasse 150 MiB. Veuillez la répartir sur plusieurs envois.",
+      "selectionTooLarge": "La sélection dépasse 150 MB. Veuillez la répartir sur plusieurs envois.",
       "maxFilesTotal": "Un maximum de {maxFiles} fichier(s) est autorisé au total ({remaining} encore possible(s))",
-      "unsupportedType": "« {filename} » n'est pas pris en charge. Veuillez choisir une image, un PDF ou un document Office.",
+      "unsupportedType": "« {filename} » ne peut pas être accepté : {kind, select, missing {les fichiers sans extension ne sont pas autorisés} other {l'extension .{extension} n'est pas autorisée}}. Autorisés : {allowed}.",
       "disallowedType": "« {filename} » a un format de fichier non autorisé (autorisés : {allowed})",
       "fileTooLarge": "« {filename} » est trop volumineux (max. {maxFileSizeMb} Mo)"
     },
@@ -109,7 +110,12 @@
     "includeGps": "Envoyer les données GPS de l’image",
     "privacyResponsible": "{tenant} est responsable de vos fichiers.",
     "privacyLink": "Protection des données",
-    "privacyCaptcha": "Pour éviter le spam, Friendly Captcha vérifie votre navigateur sans cookies ni suivi."
+    "privacyCaptcha": "Pour éviter le spam, Friendly Captcha vérifie votre navigateur sans cookies ni suivi.",
+    "progressLabel": "Progression de l'envoi",
+    "progressUploading": "Envoi en cours …",
+    "progressPercent": "{percent} %",
+    "progressProcessing": "Vérification en cours …",
+    "progressProcessingHint": "Les fichiers ont été transférés et sont maintenant vérifiés (virus et format). Veuillez laisser cette page ouverte."
   },
   "language": {
     "label": "Langue"

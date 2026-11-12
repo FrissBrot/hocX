@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect, RedirectType } from "next/navigation";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
@@ -20,6 +20,13 @@ export default async function AssignmentElementsPage({
   if (assignment === null || elements === null) {
     notFound();
   }
+  // Nur ein offenes Dokument (z. B. Einzelabgabe): keine Auswahl mit einem Eintrag zeigen, sondern
+  // direkt zum Upload. "replace" ersetzt diesen Verlaufseintrag, damit "Zurück" im Browser nicht
+  // wieder hier landet und erneut weiterleitet; der Zurück-Link der Upload-Seite zeigt in diesem
+  // Fall auf die Abgabenliste (siehe [elementRef]/page.tsx).
+  if (elements.length === 1) {
+    redirect(`/${linkToken}/${assignmentSlug}/${encodeURIComponent(elements[0].element_ref)}`, RedirectType.replace);
+  }
   const t = await getTranslations("abgabebox.elements");
 
   return (
@@ -29,6 +36,7 @@ export default async function AssignmentElementsPage({
           {t("backToAssignments")}
         </Link>
         <h1>{assignment.title}</h1>
+        {assignment.description ? <p className="box-step-desc">{assignment.description}</p> : null}
         <p className="muted">{t("hint")}</p>
       </div>
 

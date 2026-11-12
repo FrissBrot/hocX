@@ -221,5 +221,10 @@
     "androidManual": "Apri il menu del browser ⋮ e scegli «Installa app» o «Aggiungi a schermata Home».",
     "install": "Installa",
     "dismiss": "Chiudi suggerimento"
+  },
+  "help": {
+    "about": "Aiuto su «{topic}»",
+    "moreInDocs": "Altro nella guida",
+    "guide": "Guida"
   }
 }

@@ -10,6 +10,8 @@ import { useFlowDone } from "@/components/flow-steps";
 import { publicApiUrl } from "@/lib/api";
 import { isImageFile, validateUploadFiles, SUPPORTED_UPLOAD_EXTENSIONS } from "@/lib/validate-upload";
 import { MAX_BUSY_RETRIES, isRetryableBusy, retryDelaySeconds } from "@/lib/upload-retry";
+import { sendUpload, type UploadPhase } from "@/lib/upload-request";
+import { UploadProgress } from "@/components/upload-progress";
 
 type Props = {
   linkToken: string;
@@ -26,9 +28,16 @@ type Props = {
   // Datenschutzhinweis vor dem Upload (Datenschutz-Audit E2)
   tenantName?: string | null;
   privacyNoticeUrl?: string | null;
+  // Abgabe mit nur einem offenen Dokument: die Dokumentauswahl leitet direkt hierher weiter,
+  // ein Link «Anderes Dokument einreichen» würde nur wieder auf dieser Seite landen.
+  singleElement?: boolean;
 };
 
-export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTitle, elementLabel, allowedFileTypes, maxFiles, maxFileSizeMb, alreadyUploadedCount, sitekey, puzzleEndpoint, tenantName, privacyNoticeUrl }: Props) {
+// Bewusst erzeugte Fehler mit fertig übersetzter Meldung - alles andere (Netzwerkfehler,
+// Zeitüberschreitung) bekommt im catch-Block eine eigene, übersetzte Meldung.
+class UploadMessageError extends Error {}
+
+export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTitle, elementLabel, allowedFileTypes, maxFiles, maxFileSizeMb, alreadyUploadedCount, sitekey, puzzleEndpoint, tenantName, privacyNoticeUrl, singleElement = false }: Props) {
   const t = useTranslations("abgabebox.upload");
   const locale = useLocale();
   const setFlowDone = useFlowDone();
@@ -40,6 +49,8 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
   const [captchaKey, setCaptchaKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [retryNotice, setRetryNotice] = useState<string | null>(null);
+  // Sende-Fortschritt (Prozent) bzw. «wird geprüft», solange submitting
+  const [progress, setProgress] = useState<UploadPhase | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [done, setDone] = useState(false);
@@ -190,30 +201,31 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
         formData.append("captcha_session_token", captchaSessionToken);
         formData.append("include_gps", includeGps ? "true" : "false");
         files.forEach((file) => formData.append("files", file));
-        response = await fetch(uploadUrl, { method: "POST", body: formData, signal: AbortSignal.timeout(3 * 60 * 60 * 1000) });
+        response = await sendUpload(uploadUrl, formData, { timeoutMs: 3 * 60 * 60 * 1000, onPhase: setProgress });
         if (response.status !== 503 || attempt >= MAX_BUSY_RETRIES) break;
         const busyBody = await response.clone().json().catch(() => null);
         if (!isRetryableBusy(response.status, busyBody?.code)) break;
         const waitSeconds = retryDelaySeconds(response.headers.get("Retry-After"));
+        setProgress(null);
         setRetryNotice(t("busyRetry", { seconds: waitSeconds }));
         await new Promise((resolve) => setTimeout(resolve, waitSeconds * 1000));
         setRetryNotice(null);
       }
       if (!response.ok) {
         if (response.status === 429) {
-          throw new Error(t("errors.tooManyRequests"));
+          throw new UploadMessageError(t("errors.tooManyRequests"));
         }
         if (response.status === 401) {
           // Sitzungs-Token abgelaufen (siehe ABGABEBOX_CAPTCHA_SESSION_TTL_MINUTES) - Widget fuer
           // eine frische Loesung neu starten, ausgewaehlte Dateien bleiben erhalten.
           requestFreshCaptcha();
-          throw new Error(t("errors.captchaExpired"));
+          throw new UploadMessageError(t("errors.captchaExpired"));
         }
         const body = await response.json().catch(() => null);
         // body?.detail kommt direkt vom Backend (abgabebox-backend liefert aktuell kuratierten
         // Freitext, keine stabilen Fehlercodes) - kann hier noch nicht lokalisiert werden, siehe
         // CLAUDE.md Abschnitt i18n Punkt 10 (kein unnoetiger Umbau des Error-Handlings).
-        throw new Error(body?.detail ?? t("errors.uploadFailedGeneric"));
+        throw new UploadMessageError(typeof body?.detail === "string" ? body.detail : t("errors.uploadFailedGeneric"));
       }
       const result = await response.json().catch(() => null);
       setWarnings(result?.image_duplicate_warnings ?? []);
@@ -222,13 +234,19 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
       setFiles([]);
       setDone(true);
     } catch (err) {
-      setError(navigator.onLine
-        ? (err instanceof Error ? err.message : t("errors.uploadFailedGeneric"))
-        : t("errors.connectionLost"));
+      setError(!navigator.onLine
+        ? t("errors.connectionLost")
+        : err instanceof UploadMessageError
+          ? err.message
+          : err instanceof TypeError
+            // Verbindung beim Senden abgerissen (XHR onerror): Abgabe kann trotzdem angekommen sein
+            ? t("errors.connectionLost")
+            : t("errors.uploadFailedGeneric"));
     } finally {
       // Das Sitzungs-Token bleibt bewusst erhalten (ausser beim 401-Fall oben) - der
       // Sicherheitscheck soll nur einmal pro Seitenaufruf laufen, nicht vor jedem Upload.
       setSubmitting(false);
+      setProgress(null);
     }
   }
 
@@ -274,7 +292,7 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
             <button type="button" className="button" onClick={() => setDone(false)}>
               {t("uploadMore")}
             </button>
-          ) : (
+          ) : singleElement ? null : (
             <Link href={`/${linkToken}/${assignmentSlug}`} className="button">
               {t("otherElement")}
             </Link>
@@ -338,7 +356,7 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
           )}
         </div>
         <div className="drop-zone-hint">
-          {typeLabel} · {remaining === null ? t("hintMaxFilesUnbounded") : t("hintMaxFilesRemaining", { count: remaining })} · {t("hintPerFile", { size: maxFileSizeMb })} · {t("hintTotal")}
+          {typeLabel} · {remaining === null ? t("hintMaxFilesUnbounded") : uploadedSoFar === 0 ? t("hintMaxFiles", { count: remaining }) : t("hintMaxFilesRemaining", { count: remaining })} · {t("hintPerFile", { size: maxFileSizeMb })} · {t("hintTotal")}
         </div>
       </div>
 
@@ -359,6 +377,8 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
           })}
         </ul>
       )}
+
+      {submitting && progress ? <UploadProgress progress={progress} /> : null}
 
       {error && <p className="error">{error}</p>}
       {retryNotice && <p className="muted" role="status">{retryNotice}</p>}
@@ -416,7 +436,7 @@ export function UploadForm({ linkToken, assignmentSlug, elementRef, assignmentTi
         <div className="upload-submit-bar">
           <button type="submit" className="button upload-submit" disabled={submitDisabled}>
             {submitting
-              ? t("submitting")
+              ? (progress?.phase === "processing" ? t("progressProcessing") : t("submitting"))
               : files.length > 0
                 ? t("submitCount", { count: files.length })
                 : t("submit")}

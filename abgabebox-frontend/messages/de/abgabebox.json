@@ -64,9 +64,10 @@
     "dropLabelEmpty": "Datei auswählen oder hierher ziehen",
     "dropLabelEmptyTouch": "Datei auswählen",
     "hintMaxFilesUnbounded": "max. 50 Dateien pro Upload",
+    "hintMaxFiles": "{count, plural, one {max. # Datei} other {max. # Dateien}}",
     "hintMaxFilesRemaining": "{count, plural, one {max. # weitere Datei} other {max. # weitere Dateien}}",
-    "hintPerFile": "je {size} MiB",
-    "hintTotal": "insgesamt maximal 150 MiB",
+    "hintPerFile": "je {size} MB",
+    "hintTotal": "insgesamt maximal 150 MB",
     "removeFile": "Entfernen",
     "offlineNotice": "Offline – Uploads sind erst nach Wiederherstellung der Verbindung möglich. Die Auswahl bleibt in diesem Tab erhalten.",
     "alreadyUploaded": "{count, plural, one {Bereits # Datei für diese Abgabe hochgeladen.} other {Bereits # Dateien für diese Abgabe hochgeladen.}}",
@@ -89,9 +90,9 @@
       "uploadFailedGeneric": "Upload fehlgeschlagen",
       "connectionLost": "Verbindung während des Uploads unterbrochen. Prüfe vor dem erneuten Senden, ob die Abgabe bereits angekommen ist.",
       "tooManyFiles": "Maximal 50 Dateien pro Upload erlaubt.",
-      "selectionTooLarge": "Die Auswahl ist grösser als 150 MiB. Bitte auf mehrere Uploads aufteilen.",
+      "selectionTooLarge": "Die Auswahl ist grösser als 150 MB. Bitte auf mehrere Uploads aufteilen.",
       "maxFilesTotal": "Maximal {maxFiles} Datei(en) insgesamt erlaubt ({remaining} noch möglich)",
-      "unsupportedType": "„{filename}“ wird nicht unterstützt. Bitte ein Bild, PDF oder Office-Dokument wählen.",
+      "unsupportedType": "„{filename}“ wird nicht angenommen: {kind, select, missing {Dateien ohne Endung sind nicht erlaubt} other {die Endung .{extension} ist nicht erlaubt}}. Erlaubt: {allowed}.",
       "disallowedType": "„{filename}“ hat ein nicht erlaubtes Dateiformat (erlaubt: {allowed})",
       "fileTooLarge": "„{filename}“ ist zu gross (max. {maxFileSizeMb} MB)"
     },
@@ -109,7 +110,12 @@
     "includeGps": "GPS-Daten des Bildes mitsenden",
     "privacyResponsible": "Verantwortlich für deine Dateien ist {tenant}.",
     "privacyLink": "Datenschutzhinweise",
-    "privacyCaptcha": "Zum Schutz vor Spam prüft Friendly Captcha deinen Browser ohne Cookies und ohne Tracking."
+    "privacyCaptcha": "Zum Schutz vor Spam prüft Friendly Captcha deinen Browser ohne Cookies und ohne Tracking.",
+    "progressLabel": "Upload-Fortschritt",
+    "progressUploading": "Wird hochgeladen …",
+    "progressPercent": "{percent} %",
+    "progressProcessing": "Wird geprüft …",
+    "progressProcessingHint": "Die Dateien sind übertragen und werden jetzt auf Viren und Format geprüft. Bitte die Seite offen lassen."
   },
   "language": {
     "label": "Sprache"

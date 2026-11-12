@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { ActionIcon } from "@/components/ui/action-icons";
 import { DataTable } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
+import { DocsLink } from "@/components/ui/help-popover";
 import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
 import {
@@ -18,7 +19,9 @@ import {
   assignmentPayload,
 } from "@/components/submission-assignments/submission-assignment-form";
 import { SubmissionLinkManager } from "@/components/submission-assignments/submission-link-manager";
+import { AssignmentLinkField, SubmissionCreatedModal } from "@/components/submission-assignments/submission-share-link";
 import { browserApiFetch } from "@/lib/api/client";
+import { formatDate, formatDateTime } from "@/lib/utils/format";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useDeleteWithFiles } from "@/components/ui/delete-with-files-modal";
@@ -145,11 +148,11 @@ function SummaryBar({ summary, size = "row" }: { summary: AssignmentSummary | un
     );
   }
 
-  const { submitted, quarantine, infected, total } = summary;
-  const clean = Math.max(0, submitted);
-  const known = total !== null && total > 0;
-  const sum = clean + quarantine + infected;
-  const denom = known ? (total as number) : sum;
+  const { submitted: clean, closed, quarantine, infected, total } = summary;
+  const known = total > 0;
+  // Abgegeben = geprüft, im Scan oder von Hand geschlossen; infizierte zählen nicht
+  const sum = clean + closed + quarantine;
+  const denom = known ? total : sum + infected;
 
   if (denom === 0) {
     return (
@@ -161,12 +164,14 @@ function SummaryBar({ summary, size = "row" }: { summary: AssignmentSummary | un
   }
 
   const cleanPct = Math.min(100, (clean / denom) * 100);
-  const qPct = Math.min(100 - cleanPct, (quarantine / denom) * 100);
-  const infPct = Math.min(100 - cleanPct - qPct, (infected / denom) * 100);
-  const missingPct = Math.max(0, 100 - cleanPct - qPct - infPct);
+  const closedPct = Math.min(100 - cleanPct, (closed / denom) * 100);
+  const qPct = Math.min(100 - cleanPct - closedPct, (quarantine / denom) * 100);
+  const infPct = Math.min(100 - cleanPct - closedPct - qPct, (infected / denom) * 100);
+  const missingPct = Math.max(0, 100 - cleanPct - closedPct - qPct - infPct);
 
   const countLabel = known ? t("countOfTotal", { count: sum, total }) : `${sum}`;
   const extraParts = [
+    closed > 0 ? t("closedCount", { count: closed }) : null,
     quarantine > 0 ? t("quarantineCount", { count: quarantine }) : null,
     infected > 0 ? t("infectedCount", { count: infected }) : null,
   ].filter((v): v is string => Boolean(v));
@@ -174,6 +179,7 @@ function SummaryBar({ summary, size = "row" }: { summary: AssignmentSummary | un
   const track = (
     <div className="subm-summary-track">
       {cleanPct > 0 && <div className="subm-summary-segment subm-summary-segment-clean" style={{ width: `${cleanPct}%` }} />}
+      {closedPct > 0 && <div className="subm-summary-segment subm-summary-segment-closed" style={{ width: `${closedPct}%` }} />}
       {qPct > 0 && <div className="subm-summary-segment subm-summary-segment-quarantine" style={{ width: `${qPct}%` }} />}
       {infPct > 0 && <div className="subm-summary-segment subm-summary-segment-infected" style={{ width: `${infPct}%` }} />}
       {!isDetail && missingPct > 0 && <div className="subm-summary-segment" style={{ width: `${missingPct}%` }} />}
@@ -196,7 +202,7 @@ function SummaryBar({ summary, size = "row" }: { summary: AssignmentSummary | un
     <div className={wrapClass}>
       {track}
       <span className="subm-summary-caption">
-        {t("submittedCount", { label: countLabel })}{extraParts.length > 0 ? ` · ${extraParts.join(" · ")}` : ""}
+        {t(closed > 0 ? "doneCount" : "submittedCount", { label: countLabel })}{extraParts.length > 0 ? ` · ${extraParts.join(" · ")}` : ""}
       </span>
     </div>
   );
@@ -274,6 +280,8 @@ function VerifiedIcon() {
 
 export function SubmissionAssignmentManager({ initialAssignments, initialLinks, availableLists, availableEvents, availableParticipants, availableCycleConfigs, tenantName = null, initialSelectedId = null }: Props) {
   const t = useTranslations("submissionAssignments");
+  const locale = useLocale();
+  const tHelp = useTranslations("common.help");
   const showToast = useToast();
   const confirm = useConfirm();
   const { requestDelete, modal: deleteModal } = useDeleteWithFiles();
@@ -303,6 +311,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
   const [logEntries, setLogEntries] = useState<SubmissionUploadLogEntry[]>([]);
   const [logLoading, setLogLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const [createdAssignment, setCreatedAssignment] = useState<SubmissionAssignment | null>(null);
 
   const availableTags = Array.from(
     new Set(availableEvents.map((e) => e.tag).filter((t): t is string => Boolean(t)))
@@ -314,13 +323,10 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
       (d) => setClamavStatus(d.status === "online" ? "online" : "offline"),
       () => setClamavStatus("offline"),
     );
-    void Promise.all(
-      initialAssignments.map((a) =>
-        browserApiFetch<AssignmentSummary>(`/api/submission-assignments/${a.id}/summary`)
-          .then((s) => setSummaries((prev) => ({ ...prev, [a.id]: s })))
-          .catch(() => {})
-      )
-    );
+    // Fortschritt aller Abgaben in einer Anfrage (statt einer je Abgabe)
+    void browserApiFetch<Record<string, AssignmentSummary>>("/api/submission-assignments/summaries")
+      .then(setSummaries)
+      .catch(() => {});
   }, []);
 
   const filteredAssignments = search.trim()
@@ -455,12 +461,15 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
       setAssignments((current) =>
         editingId ? current.map((item) => (item.id === saved.id ? saved : item)) : [saved, ...current]
       );
-      // Initialise summary for new assignment
-      if (!editingId) {
-        setSummaries((prev) => ({ ...prev, [saved.id]: { submitted: 0, quarantine: 0, infected: 0, total: null } }));
-      }
+      void browserApiFetch<AssignmentSummary>(`/api/submission-assignments/${saved.id}/summary`)
+        .then((summary) => setSummaries((prev) => ({ ...prev, [saved.id]: summary })))
+        .catch(() => {});
       setModalOpen(false);
-      showToast(editingId ? t("assignmentSavedToast") : t("assignmentCreatedToast"), "success");
+      if (editingId) {
+        showToast(t("assignmentSavedToast"), "success");
+      } else {
+        setCreatedAssignment(saved);
+      }
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("assignmentSaveFailed"), "error");
     }
@@ -625,7 +634,10 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
       <div className="page-header">
         <div>
           <h1 className="page-title">{t("pageTitle")}</h1>
-          <p className="muted">{hasNoAssignments ? t("pageIntroEmpty") : t("pageIntro")}</p>
+          <p className="muted">
+            {hasNoAssignments ? t("pageIntroEmpty") : t("pageIntro")}{" "}
+            <DocsLink page="abgabebox" anchor="einrichten">{tHelp("guide")}</DocsLink>
+          </p>
         </div>
         <div className="table-toolbar-actions">
           <span
@@ -725,6 +737,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
         {selectedId !== null ? (
           <div className="grid subm-detail">
             <SummaryBar summary={summaries[selectedId]} size="detail" />
+            {selectedAssignment ? <AssignmentLinkField assignment={selectedAssignment} links={links} /> : null}
 
             {hasPendingFiles && (
               <Badge variant="warning" className="subm-pulse">
@@ -796,9 +809,6 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
               >
                 <DownloadIcon /> {zipLoading ? "…" : t("allFilesZip")}
               </button>
-              <button type="button" className="button-secondary" onClick={() => setSelectedId(null)}>
-                {t("close")}
-              </button>
             </div>
           </div>
         ) : null}
@@ -816,9 +826,9 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
             <div className="status-row">
               <Badge variant={statusVariant(elementModal)}>{statusLabel(elementModal, t)}</Badge>
               {elementModal.window_start && elementModal.window_end ? (
-                <span className="subm-modal-meta">{elementModal.window_start} – {elementModal.window_end}</span>
+                <span className="subm-modal-meta">{t("windowRange", { start: formatDate(elementModal.window_start), end: formatDate(elementModal.window_end) })}</span>
               ) : elementModal.window_end ? (
-                <span className="subm-modal-meta">{t("deadlineColon")} {elementModal.window_end}</span>
+                <span className="subm-modal-meta">{t("deadlineNamed", { date: formatDate(elementModal.window_end) })}</span>
               ) : null}
               {responsibleNames(elementModal) ? (() => {
                 const name = responsibleNames(elementModal);
@@ -918,7 +928,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
                         <div className="subm-log-body">
                           <div className="subm-log-header">
                             <Badge variant={variant}>{logStatusLabel(t)[entry.status] ?? entry.status}</Badge>
-                            <span className="subm-log-time">{new Date(entry.created_at).toLocaleString("de-CH")}</span>
+                            <span className="subm-log-time">{formatDateTime(entry.created_at, locale)}</span>
                           </div>
                           {entry.error_message ? <div className="subm-log-detail">{entry.error_message}</div> : null}
                         </div>
@@ -953,10 +963,13 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
         availableLists={availableLists}
         availableTags={availableTags}
         availableCycleConfigs={availableCycleConfigs}
+        availableEvents={availableEvents}
         onSubmit={submit}
         onClose={() => setModalOpen(false)}
         onManageLinks={openLinksFromForm}
       />
+
+      <SubmissionCreatedModal assignment={createdAssignment} links={links} onClose={() => setCreatedAssignment(null)} />
     </div>
   );
 }

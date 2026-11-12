@@ -43,7 +43,7 @@ describe("validateUploadFiles", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.code).toBe("unsupportedType");
-      expect(result.params).toEqual({ filename: "script.exe" });
+      expect(result.params).toEqual({ filename: "script.exe", extension: "EXE", kind: "extension", allowed: "PDF, JPG" });
     }
   });
 
@@ -64,6 +64,24 @@ describe("validateUploadFiles", () => {
   it("rejects unsupported formats even when allowedFileTypes is empty", () => {
     const result = validateUploadFiles([fakeFile("anything.xyz", 100)], { ...opts, allowedFileTypes: [] });
     expect(result.ok).toBe(false);
+  });
+
+  it("names the supported formats when the assignment has no restriction", () => {
+    const result = validateUploadFiles([fakeFile("anything.xyz", 100)], { ...opts, allowedFileTypes: [] });
+    expect(result.ok).toBe(false);
+    if (!result.ok && result.code === "unsupportedType") {
+      expect(result.params.extension).toBe("XYZ");
+      expect(result.params.allowed).toContain("PDF");
+      expect(result.params.allowed).toContain("DOCX");
+    }
+  });
+
+  it("marks files without extension as kind missing", () => {
+    const result = validateUploadFiles([fakeFile("README", 100)], opts);
+    expect(result.ok).toBe(false);
+    if (!result.ok && result.code === "unsupportedType") {
+      expect(result.params).toMatchObject({ extension: "", kind: "missing" });
+    }
   });
 
   it("checks extension case-insensitively", () => {
