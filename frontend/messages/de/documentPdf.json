@@ -597,7 +597,11 @@
       "sectionOverdue": "Seit gestern überfällig",
       "due": "fällig {date}",
       "openLink": "Alle Aufgaben ansehen: {url}",
-      "openButton": "Aufgaben ansehen"
+      "openButton": "Aufgaben ansehen",
+      "subjectSubmissionDone": "{tenant}: Abgabe eingegangen",
+      "introSubmissionDone": "Bei {tenant} ist eine Abgabe eingegangen. Die zugehörige Aufgabe ist damit erledigt.",
+      "sectionSubmissionDone": "Erledigte Abgaben",
+      "submitted": "abgegeben {at}"
     },
     "test": {
       "subject": "hocX: Test-E-Mail",

@@ -378,13 +378,17 @@
       "due": "due {date}",
       "introNew": "You have new tasks at {tenant}.",
       "introReminder": "Here is a short overview of your tasks at {tenant}.",
+      "introSubmissionDone": "A submission was received at {tenant}. The related task is now done.",
       "openButton": "View tasks",
       "openLink": "View all tasks: {url}",
       "sectionDueSoon": "Due in 3 days",
       "sectionNew": "New tasks",
       "sectionOverdue": "Overdue since yesterday",
+      "sectionSubmissionDone": "Completed submissions",
       "subjectNew": "{tenant}: New tasks for you",
-      "subjectReminder": "{tenant}: Reminder about your tasks"
+      "subjectReminder": "{tenant}: Reminder about your tasks",
+      "subjectSubmissionDone": "{tenant}: Submission received",
+      "submitted": "submitted {at}"
     }
   },
   "empty": {

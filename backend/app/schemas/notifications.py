@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-NotificationCategory = Literal["todo_new", "todo_reminders", "exports"]
+NotificationCategory = Literal["todo_new", "todo_reminders", "todo_submissions", "exports"]
 
 
 class NotificationPreferenceRead(BaseModel):

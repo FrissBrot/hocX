@@ -2546,7 +2546,7 @@ export type EmailSettingsWrite = {
   email_link_base_url: string | null;
 };
 
-export type NotificationCategory = "todo_new" | "todo_reminders" | "exports";
+export type NotificationCategory = "todo_new" | "todo_reminders" | "todo_submissions" | "exports";
 
 export type NotificationPreferences = {
   preferences: { category: NotificationCategory; enabled: boolean }[];

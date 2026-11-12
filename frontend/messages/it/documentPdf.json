@@ -597,7 +597,11 @@
       "sectionOverdue": "Scaduti da ieri",
       "due": "scadenza {date}",
       "openLink": "Vedi tutti i compiti: {url}",
-      "openButton": "Vedi i compiti"
+      "openButton": "Vedi i compiti",
+      "subjectSubmissionDone": "{tenant}: consegna ricevuta",
+      "introSubmissionDone": "Presso {tenant} è arrivata una consegna. Il compito corrispondente è quindi completato.",
+      "sectionSubmissionDone": "Consegne completate",
+      "submitted": "consegnato il {at}"
     },
     "test": {
       "subject": "hocX: e-mail di prova",

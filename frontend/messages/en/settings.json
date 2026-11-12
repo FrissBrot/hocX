@@ -37,6 +37,10 @@
           "label": "Task reminders",
           "hint": "Once 3 days before the due date and once the day after, if still open."
         },
+        "todo_submissions": {
+          "label": "Submission received",
+          "hint": "When a submission in the drop box completes your submission task."
+        },
         "exports": {
           "label": "Data export ready",
           "hint": "Only if you request a club data export: an email once it is ready or has failed."

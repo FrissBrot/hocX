@@ -9,17 +9,34 @@ Wann eine Aufgabe «freigegeben» ist und gemeldet wird (Vorgabe 2026-11-11):
 Erinnerungen (Loop todo_reminders, einmal täglich ab 07:00): «fällig in 3 Tagen» und «seit gestern
 überfällig», je Aufgabe, Person und Fälligkeit nur einmal (dedupe). Wer sich selbst eine Aufgabe
 gibt, bekommt dafür keine Mail.
+
+Abgabe eingegangen (todo.submission_done): schliesst eine Einreichung in der Abgabebox die
+Abgabe-Aufgabe, bekommen alle Verantwortlichen der Aufgabe eine Mail. Die Abgabebox schliesst über
+den Datenbank-Trigger ``trg_sync_todo_status`` (Migration 0164), ohne Python-Code im Backend; der
+Versand-Loop holt diese Fälle mit ``scan_submission_done`` nach. Von Hand erledigte Aufgaben lösen
+keine Mail aus (es braucht eine passende Einreichung).
 """
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Iterable
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import DateTime, Text, case, cast, exists, literal, select
 from sqlalchemy.orm import Session
 
-from app.models import Protocol, ProtocolElement, ProtocolElementBlock, ProtocolTodo, ProtocolTodoAssignee, TodoStatus
+from app.models import (
+    Event,
+    ListEntry,
+    Notification,
+    Protocol,
+    ProtocolElement,
+    ProtocolElementBlock,
+    ProtocolTodo,
+    ProtocolTodoAssignee,
+    SubmissionUpload,
+    TodoStatus,
+)
 from app.notifications import publish
 from app.notifications.catalog import DUE_SOON_DAYS
 
@@ -84,6 +101,74 @@ def on_protocol_closed(db: Session, protocol_id: int, *, actor_user_id: int | No
     return created
 
 
+# Einreichung und Abschluss liegen im selben Moment (Trigger) oder die Aufgabe übernimmt den
+# Zeitpunkt der Einreichung (submission_service); etwas Spielraum für langsame Transaktionen.
+SUBMISSION_MATCH_SLACK = timedelta(minutes=5)
+# So weit zurück holt der Versand-Loop verpasste Abschlüsse nach (Loop gestoppt, Versand aus).
+SUBMISSION_SCAN_WINDOW = timedelta(hours=24)
+
+
+def on_submission_done(db: Session, todo: ProtocolTodo) -> int:
+    """Abgabe eingegangen: alle Verantwortlichen der (jetzt erledigten) Abgabe-Aufgabe melden.
+    Einmal je Abschluss (dedupe über completed_at); erneut nach Wiedereröffnen und neuer Abgabe."""
+    if todo.submission_assignment_id is None or todo.completed_at is None or todo.pending_delete:
+        return 0
+    completed = todo.completed_at.astimezone(timezone.utc).isoformat()
+    return publish(
+        db, kind="todo.submission_done", tenant_id=todo.tenant_id, recipient_ids=assignee_ids(db, todo),
+        subject_id=todo.id, payload={"completed": completed}, dedupe=f"{todo.id}:{completed}",
+    )
+
+
+def _matching_submission():
+    """Gibt es eine Einreichung zum Element der Aufgabe, die zum Abschluss passt?"""
+    element_ref = case(
+        (SubmissionUpload.event_id.is_not(None), literal("event-") + cast(Event.public_id, Text)),
+        (SubmissionUpload.list_entry_id.is_not(None), literal("entry-") + cast(ListEntry.public_id, Text)),
+        else_=literal("manual"),
+    )
+    return exists(
+        select(SubmissionUpload.id)
+        .outerjoin(Event, Event.id == SubmissionUpload.event_id)
+        .outerjoin(ListEntry, ListEntry.id == SubmissionUpload.list_entry_id)
+        .where(
+            SubmissionUpload.assignment_id == ProtocolTodo.submission_assignment_id,
+            SubmissionUpload.status == "submitted",
+            SubmissionUpload.submitted_at.is_not(None),
+            SubmissionUpload.submitted_at <= ProtocolTodo.completed_at + SUBMISSION_MATCH_SLACK,
+            element_ref == ProtocolTodo.element_ref,
+        )
+    )
+
+
+def scan_submission_done(db: Session, *, now: datetime | None = None) -> int:
+    """Versand-Loop: von der Abgabebox (Trigger) erledigte Abgabe-Aufgaben melden, die noch keine
+    Mail haben. Ohne Commit (der Loop committet)."""
+    now = now or datetime.now(timezone.utc)
+    already = exists(
+        select(Notification.id).where(
+            Notification.kind == "todo.submission_done",
+            Notification.subject_id == ProtocolTodo.id,
+            Notification.tenant_id == ProtocolTodo.tenant_id,
+            # gleicher Abschluss (payload «completed», siehe on_submission_done)
+            cast(Notification.payload["completed"].astext, DateTime(timezone=True)) == ProtocolTodo.completed_at,
+        )
+    )
+    todos = db.scalars(
+        select(ProtocolTodo)
+        .join(TodoStatus, TodoStatus.id == ProtocolTodo.todo_status_id)
+        .where(
+            ProtocolTodo.submission_assignment_id.is_not(None),
+            ProtocolTodo.pending_delete.is_(False),
+            TodoStatus.code == "done",
+            ProtocolTodo.completed_at >= now - SUBMISSION_SCAN_WINDOW,
+            ~already,
+            _matching_submission(),
+        )
+    ).all()
+    return sum(on_submission_done(db, todo) for todo in todos)
+
+
 def now_local() -> datetime:
     return datetime.now(TZ)
 
@@ -140,6 +225,15 @@ def items_for(db: Session, notifications: list, recipient_id: int, **_) -> dict[
             continue
         todo: ProtocolTodo = row[0]
         assignees = list(row.assignee_ids or []) or ([todo.assigned_participant_id] if todo.assigned_participant_id else [])
+        if notification.kind == "todo.submission_done":
+            # Noch erledigt, Person noch verantwortlich, und derselbe Abschluss (nicht wieder geöffnet)
+            completed = todo.completed_at.astimezone(timezone.utc).isoformat() if todo.completed_at else None
+            if (
+                todo.tenant_id == notification.tenant_id and not todo.pending_delete and row.todo_status_code == "done"
+                and recipient_id in assignees and completed == notification.payload.get("completed")
+            ):
+                items[notification.id] = {"kind": notification.kind, "task": todo.task, "due": None, "submitted": todo.completed_at, "source": None}
+            continue
         if (
             todo.tenant_id != notification.tenant_id or todo.pending_delete or row.todo_status_code not in OPEN_STATUS_CODES
             or recipient_id not in assignees

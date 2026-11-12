@@ -37,6 +37,10 @@
           "label": "Promemoria compiti",
           "hint": "Una volta 3 giorni prima della scadenza e una volta il giorno dopo, se ancora aperti."
         },
+        "todo_submissions": {
+          "label": "Consegna ricevuta",
+          "hint": "Quando una consegna nella casella di consegna completa il tuo compito di consegna."
+        },
         "exports": {
           "label": "Esportazione dati pronta",
           "hint": "Solo se richiedi un’esportazione dei dati dell’associazione: un’e-mail quando è pronta o non è riuscita."

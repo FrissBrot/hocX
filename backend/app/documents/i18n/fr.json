@@ -378,13 +378,17 @@
       "due": "échéance {date}",
       "introNew": "Tu as de nouvelles tâches chez {tenant}.",
       "introReminder": "Voici un bref aperçu de tes tâches chez {tenant}.",
+      "introSubmissionDone": "Une remise a été reçue chez {tenant}. La tâche correspondante est donc terminée.",
       "openButton": "Voir les tâches",
       "openLink": "Voir toutes les tâches : {url}",
       "sectionDueSoon": "Échéance dans 3 jours",
       "sectionNew": "Nouvelles tâches",
       "sectionOverdue": "En retard depuis hier",
+      "sectionSubmissionDone": "Remises terminées",
       "subjectNew": "{tenant} : nouvelles tâches pour toi",
-      "subjectReminder": "{tenant} : rappel de tes tâches"
+      "subjectReminder": "{tenant} : rappel de tes tâches",
+      "subjectSubmissionDone": "{tenant} : remise reçue",
+      "submitted": "remis le {at}"
     }
   },
   "empty": {

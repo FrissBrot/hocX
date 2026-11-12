@@ -37,6 +37,10 @@
           "label": "Rappels de tâches",
           "hint": "Une fois 3 jours avant l'échéance et une fois le lendemain, si elles sont encore ouvertes."
         },
+        "todo_submissions": {
+          "label": "Remise reçue",
+          "hint": "Lorsqu’une remise dans la boîte de dépôt termine ta tâche de remise."
+        },
         "exports": {
           "label": "Export de données prêt",
           "hint": "Uniquement si tu demandes un export des données de l’association : un e-mail dès qu’il est prêt ou en cas d’échec."

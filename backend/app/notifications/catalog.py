@@ -34,6 +34,7 @@ class Kind:
 CATEGORIES: dict[str, Category] = {
     "todo_new": Category("todo_new"),
     "todo_reminders": Category("todo_reminders"),
+    "todo_submissions": Category("todo_submissions"),
     "exports": Category("exports"),
     "account": Category("account", configurable=False),
 }
@@ -43,6 +44,9 @@ KINDS: dict[str, Kind] = {
     "todo.assigned": Kind("todo.assigned", "todo_new", "todo.new", timedelta(minutes=10)),
     "todo.due_soon": Kind("todo.due_soon", "todo_reminders", "todo.reminder"),
     "todo.overdue": Kind("todo.overdue", "todo_reminders", "todo.reminder"),
+    # Abgabe eingegangen, die Abgabe-Aufgabe ist damit erledigt. Kurz warten: mehrere Dateien oder
+    # Elemente nacheinander landen in einer Mail.
+    "todo.submission_done": Kind("todo.submission_done", "todo_submissions", "todo.done", timedelta(minutes=2)),
     # Konto (Phase 3): Einmal-Links je Mail, immer nur der neueste (account.py)
     "account.password_reset": Kind("account.password_reset", "account", "account.password_reset"),
     "account.invite": Kind("account.invite", "account", "account.invite"),

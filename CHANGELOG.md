@@ -8,6 +8,14 @@ Installationen aktualisieren können.
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- **Mail «Abgabe eingegangen».** Erledigt eine Einreichung in der Abgabebox eine Abgabe-Aufgabe,
+  bekommen alle Verantwortlichen der Aufgabe eine Mail (mehrere Abgaben kurz nacheinander in einer
+  Mail). Abschaltbar im Profil unter «Benachrichtigungen» («Abgabe eingegangen», Standard ein). Von
+  Hand erledigte Aufgaben lösen keine Mail aus. Beim ersten Lauf nach dem Update werden Abgaben der
+  letzten 24 Stunden noch gemeldet.
+
 ## [1.2.6] - 2026-11-12
 
 Konto und Sicherheit per E-Mail («Passwort vergessen», Einladung, Sicherheitshinweise,

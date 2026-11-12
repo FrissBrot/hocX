@@ -37,6 +37,10 @@
           "label": "Erinnerungen an Aufgaben",
           "hint": "Einmal 3 Tage vor der Fälligkeit und einmal am Tag nach der Fälligkeit, falls noch offen."
         },
+        "todo_submissions": {
+          "label": "Abgabe eingegangen",
+          "hint": "Wenn eine Abgabe in der Abgabebox deine Abgabe-Aufgabe erledigt."
+        },
         "exports": {
           "label": "Datenexport fertig",
           "hint": "Nur wenn du einen Vereins-Datenexport bestellst: Mail, sobald er bereitliegt oder fehlgeschlagen ist."

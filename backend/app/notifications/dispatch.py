@@ -32,6 +32,7 @@ RETENTION = timedelta(days=90)
 ITEM_LOADERS = {
     "todo.new": todos.items_for,
     "todo.reminder": todos.items_for,
+    "todo.done": todos.items_for,
     "account.password_reset": account.link_items_for,
     "account.invite": account.link_items_for,
     "account.security": account.security_items_for,
@@ -148,6 +149,9 @@ def run(db: Session) -> dict[str, int]:
         counts["expired"] = len(expired)
         db.commit()
         return dict(counts)
+    # Von der Abgabebox erledigte Abgabe-Aufgaben (Datenbank-Trigger) nachtragen
+    counts["submission_done"] = todos.scan_submission_done(db, now=now)
+    db.commit()
     groups = db.execute(
         select(Notification.tenant_id, Notification.recipient_id, Notification.group_key)
         .where(Notification.status == "pending")

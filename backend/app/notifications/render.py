@@ -15,10 +15,19 @@ from app.documents.strings import text
 
 TZ = ZoneInfo("Europe/Zurich")
 
-SECTION_ORDER = {"todo.new": ("todo.assigned",), "todo.reminder": ("todo.due_soon", "todo.overdue")}
-SECTION_KEYS = {"todo.assigned": "email.todo.sectionNew", "todo.due_soon": "email.todo.sectionDueSoon", "todo.overdue": "email.todo.sectionOverdue"}
-SUBJECT_KEYS = {"todo.new": "email.todo.subjectNew", "todo.reminder": "email.todo.subjectReminder"}
-INTRO_KEYS = {"todo.new": "email.todo.introNew", "todo.reminder": "email.todo.introReminder"}
+SECTION_ORDER = {
+    "todo.new": ("todo.assigned",),
+    "todo.reminder": ("todo.due_soon", "todo.overdue"),
+    "todo.done": ("todo.submission_done",),
+}
+SECTION_KEYS = {
+    "todo.assigned": "email.todo.sectionNew",
+    "todo.due_soon": "email.todo.sectionDueSoon",
+    "todo.overdue": "email.todo.sectionOverdue",
+    "todo.submission_done": "email.todo.sectionSubmissionDone",
+}
+SUBJECT_KEYS = {"todo.new": "email.todo.subjectNew", "todo.reminder": "email.todo.subjectReminder", "todo.done": "email.todo.subjectSubmissionDone"}
+INTRO_KEYS = {"todo.new": "email.todo.introNew", "todo.reminder": "email.todo.introReminder", "todo.done": "email.todo.introSubmissionDone"}
 
 
 @dataclass(frozen=True)
@@ -41,6 +50,8 @@ def _line(lang: str, item: dict) -> str:
     parts = [item["task"]]
     if item.get("due"):
         parts.append(text(lang, "email.todo.due", date=_fmt(item["due"])))
+    if item.get("submitted"):
+        parts.append(text(lang, "email.todo.submitted", at=item["submitted"].astimezone(TZ).strftime("%d.%m.%Y %H:%M")))
     if item.get("source"):
         parts.append(str(item["source"]))
     return " · ".join(parts)

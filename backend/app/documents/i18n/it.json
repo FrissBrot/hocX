@@ -378,13 +378,17 @@
       "due": "scadenza {date}",
       "introNew": "Hai nuovi compiti presso {tenant}.",
       "introReminder": "Ecco una breve panoramica dei tuoi compiti presso {tenant}.",
+      "introSubmissionDone": "Presso {tenant} è arrivata una consegna. Il compito corrispondente è quindi completato.",
       "openButton": "Vedi i compiti",
       "openLink": "Vedi tutti i compiti: {url}",
       "sectionDueSoon": "In scadenza tra 3 giorni",
       "sectionNew": "Nuovi compiti",
       "sectionOverdue": "Scaduti da ieri",
+      "sectionSubmissionDone": "Consegne completate",
       "subjectNew": "{tenant}: nuovi compiti per te",
-      "subjectReminder": "{tenant}: promemoria dei tuoi compiti"
+      "subjectReminder": "{tenant}: promemoria dei tuoi compiti",
+      "subjectSubmissionDone": "{tenant}: consegna ricevuta",
+      "submitted": "consegnato il {at}"
     }
   },
   "empty": {

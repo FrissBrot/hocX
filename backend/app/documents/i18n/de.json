@@ -378,13 +378,17 @@
       "due": "fällig {date}",
       "introNew": "Bei {tenant} hast du neue Aufgaben.",
       "introReminder": "Hier ist eine kurze Übersicht deiner Aufgaben bei {tenant}.",
+      "introSubmissionDone": "Bei {tenant} ist eine Abgabe eingegangen. Die zugehörige Aufgabe ist damit erledigt.",
       "openButton": "Aufgaben ansehen",
       "openLink": "Alle Aufgaben ansehen: {url}",
       "sectionDueSoon": "In 3 Tagen fällig",
       "sectionNew": "Neue Aufgaben",
       "sectionOverdue": "Seit gestern überfällig",
+      "sectionSubmissionDone": "Erledigte Abgaben",
       "subjectNew": "{tenant}: Neue Aufgaben für dich",
-      "subjectReminder": "{tenant}: Erinnerung an deine Aufgaben"
+      "subjectReminder": "{tenant}: Erinnerung an deine Aufgaben",
+      "subjectSubmissionDone": "{tenant}: Abgabe eingegangen",
+      "submitted": "abgegeben {at}"
     }
   },
   "empty": {

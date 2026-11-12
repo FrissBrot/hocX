@@ -597,7 +597,11 @@
       "sectionOverdue": "Overdue since yesterday",
       "due": "due {date}",
       "openLink": "View all tasks: {url}",
-      "openButton": "View tasks"
+      "openButton": "View tasks",
+      "subjectSubmissionDone": "{tenant}: Submission received",
+      "introSubmissionDone": "A submission was received at {tenant}. The related task is now done.",
+      "sectionSubmissionDone": "Completed submissions",
+      "submitted": "submitted {at}"
     },
     "test": {
       "subject": "hocX: Test email",

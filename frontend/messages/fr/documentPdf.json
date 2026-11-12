@@ -597,7 +597,11 @@
       "sectionOverdue": "En retard depuis hier",
       "due": "échéance {date}",
       "openLink": "Voir toutes les tâches : {url}",
-      "openButton": "Voir les tâches"
+      "openButton": "Voir les tâches",
+      "subjectSubmissionDone": "{tenant} : remise reçue",
+      "introSubmissionDone": "Une remise a été reçue chez {tenant}. La tâche correspondante est donc terminée.",
+      "sectionSubmissionDone": "Remises terminées",
+      "submitted": "remis le {at}"
     },
     "test": {
       "subject": "hocX : e-mail de test",

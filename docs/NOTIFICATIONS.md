@@ -30,7 +30,13 @@ weitere Kanäle. Code: `backend/app/notifications/`, Migrationen `0170_notificat
    - Eintrag noch aktuell (Aufgabe offen, Person noch verantwortlich, Fälligkeit unverändert)
    Übersprungenes bekommt einen `skip_reason`. SMTP-Fehler: Wiederholung nach 5, 15, 60, 240 Minuten,
    danach `failed`. Ist der Versand aus, verfallen Einträge nach 7 Tagen (`email_disabled`).
-4. **Zeitgesteuert:** Loop `todo_reminders` (alle 30 Minuten, wirkt ab 07:00 Ortszeit) legt die
+4. **Abgabe eingegangen:** Die Abgabebox schliesst Abgabe-Aufgaben über den Datenbank-Trigger
+   `trg_sync_todo_status` (Migration 0164), ohne Code im Backend. Der Versand-Loop sucht deshalb vor
+   jedem Durchlauf erledigte Abgabe-Aufgaben der letzten 24 Stunden mit passender Einreichung und
+   ohne Benachrichtigung für diesen Abschluss (`todos.scan_submission_done`). Schliesst der
+   Abgleich im Backend (`submission_service.sync_submission_todos`), meldet er direkt. Von Hand
+   erledigte Aufgaben haben keine passende Einreichung und lösen nichts aus.
+5. **Zeitgesteuert:** Loop `todo_reminders` (alle 30 Minuten, wirkt ab 07:00 Ortszeit) legt die
    Erinnerungen idempotent an.
 
 ## Katalog
@@ -42,6 +48,7 @@ weitere Kanäle. Code: `backend/app/notifications/`, Migrationen `0170_notificat
 | `todo.assigned` | `todo_new` | `todo.new` | 10 Minuten |
 | `todo.due_soon` | `todo_reminders` | `todo.reminder` | – |
 | `todo.overdue` | `todo_reminders` | `todo.reminder` | – |
+| `todo.submission_done` | `todo_submissions` | `todo.done` | 2 Minuten |
 | `account.password_reset` | `account` (Pflicht) | `account.password_reset` | – |
 | `account.invite` | `account` (Pflicht) | `account.invite` | – |
 | `security.password_changed`, `security.mfa_added`, `security.mfa_removed` | `account` (Pflicht) | `account.security` | – |

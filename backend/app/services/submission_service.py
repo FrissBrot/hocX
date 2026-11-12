@@ -696,6 +696,8 @@ class SubmissionService:
                 db.flush()
                 # Zu spät abgegeben: Pendenzen-Busse einfrieren (todo_fine_service).
                 todo_fine_service.sync_todo(db, todo)
+                # Abgabe eingegangen: Verantwortliche per Mail informieren
+                todo_notifications.on_submission_done(db, todo)
             db.add(todo)
 
         for element_ref, todo in todos_by_ref.items():
