@@ -11,7 +11,8 @@ import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Select } from "@/components/ui/select";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
-import { browserApiFetch } from "@/lib/api/client";
+import { DocsLink, HelpPopover } from "@/components/ui/help-popover";
+import { ApiError, browserApiFetch } from "@/lib/api/client";
 import { localIsoDate } from "@/lib/documents/todo-export-filter";
 import { formatDate } from "@/lib/utils/format";
 import type { FinanceAccount, FineSplitMode, FineTariffGroup, TodoFineRule } from "@/types/api";
@@ -40,6 +41,30 @@ export function ruleAmount(base: number, perInterval: number, intervalDays: numb
 }
 
 const PREVIEW_DAYS = [1, 3, 7, 14];
+
+/** Vorlagen für neue Regeln (Audit Bereich 03): füllen Intervall und Beträge für alle Tarife vor.
+ *  "perDay": Fixbetrag pro Tag Verspätung; "basePlusWeek": Grundbetrag ab dem ersten Tag plus Betrag pro Woche. */
+export type RuleTemplate = "perDay" | "basePlusWeek";
+export const RULE_TEMPLATES: Record<RuleTemplate, { interval_days: number; base: string; interval: string }> = {
+  perDay: { interval_days: 1, base: "", interval: "1.00" },
+  basePlusWeek: { interval_days: 7, base: "5.00", interval: "5.00" },
+};
+
+export function applyRuleTemplate<D extends { interval_days: string; rates: Record<string, RateDraft> }>(
+  draft: D,
+  template: RuleTemplate,
+  tariffIds: string[],
+): D {
+  const preset = RULE_TEMPLATES[template];
+  const rates: Record<string, RateDraft> = { ...draft.rates };
+  for (const id of tariffIds) rates[id] = { base: preset.base, interval: preset.interval };
+  return { ...draft, interval_days: String(preset.interval_days), rates };
+}
+
+/** Filter oder abweichendes Konto gesetzt: dann ist «Erweitert» von Anfang an aufgeklappt. */
+export function hasAdvancedSettings(draft: { account_id: string; tags: string[]; task_package_ids: string[]; participant_ids: string[]; role_ids: string[] }): boolean {
+  return Boolean(draft.account_id) || draft.tags.length + draft.task_package_ids.length + draft.participant_ids.length + draft.role_ids.length > 0;
+}
 
 function toDraft(rule: TodoFineRule | null, tariffs: FineTariffGroup[]): Draft {
   const rates: Record<string, RateDraft> = {};
@@ -85,6 +110,7 @@ export function TodoFineRules({ rules, setRules, tariffs, accounts, canManage, o
   const [draft, setDraft] = useState<Draft>(() => toDraft(null, tariffs));
   const [options, setOptions] = useState<FilterOptions | null>(null);
   const [saving, setSaving] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const accountName = useMemo(() => new Map(accounts.map((account) => [account.id, account.name])), [accounts]);
 
   useEffect(() => {
@@ -99,8 +125,10 @@ export function TodoFineRules({ rules, setRules, tariffs, accounts, canManage, o
   const tagOptions = useMemo(() => Array.from(new Set([...(options?.tags ?? []), ...draft.tags])), [options, draft.tags]);
 
   function open(rule: TodoFineRule | "new") {
+    const next = toDraft(rule === "new" ? null : rule, tariffs);
     setEditing(rule);
-    setDraft(toDraft(rule === "new" ? null : rule, tariffs));
+    setDraft(next);
+    setAdvancedOpen(hasAdvancedSettings(next));
   }
 
   async function reloadRules() {
@@ -145,22 +173,21 @@ export function TodoFineRules({ rules, setRules, tariffs, accounts, canManage, o
       await browserApiFetch(`/api/todo-fines/rules/${rule.id}`, { method: "DELETE" });
       await reloadRules();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("todoFines.saveFailed"), "error");
+      // Von Hand an Pendenzen zugewiesene Regel: nicht löschen, sondern deaktivieren
+      const detail = error instanceof ApiError ? (error.detail as { code?: unknown; count?: unknown } | undefined) : undefined;
+      if (detail?.code === "rule_in_use") showToast(t("todoFines.ruleInUse", { count: Number(detail.count) || 0 }), "error");
+      else showToast(error instanceof Error ? error.message : t("todoFines.saveFailed"), "error");
     }
   }
 
-  async function move(rule: TodoFineRule, delta: number) {
-    const index = rules.findIndex((item) => item.id === rule.id);
-    const target = index + delta;
-    if (target < 0 || target >= rules.length) return;
-    const ordered = [...rules];
-    [ordered[index], ordered[target]] = [ordered[target], ordered[index]];
-    setRules(ordered);
-    try {
-      await browserApiFetch("/api/todo-fines/rules/order", { method: "PUT", body: JSON.stringify({ ids: ordered.map((item) => item.id) }) });
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : t("todoFines.saveFailed"), "error");
-    }
+  /** Tarife ohne Betrag in einer Regel: diese Personen zahlen nichts (Bereichs-Audit 2026-11). */
+  function tariffsWithoutAmount(rule: TodoFineRule): string[] {
+    return tariffs
+      .filter((tariff) => {
+        const rate = rule.rates.find((item) => item.tariff_group_id === tariff.id);
+        return !rate || (Number(rate.base_amount) <= 0 && Number(rate.interval_amount) <= 0);
+      })
+      .map((tariff) => tariff.name);
   }
 
   function filterSummary(rule: TodoFineRule): string {
@@ -205,7 +232,7 @@ export function TodoFineRules({ rules, setRules, tariffs, accounts, canManage, o
   return (
     <div className="grid">
       <div className="todo-fine-toolbar">
-        <p className="muted">{t("todoFines.rulesDescription")}</p>
+        <p className="muted">{t("todoFines.rulesDescription")} <DocsLink page="bussen" anchor="regeln">{t("todoFines.help.docsLink")}</DocsLink></p>
         {canManage ? <button type="button" className="button-primary" disabled={tariffs.length === 0} onClick={() => open("new")}>{t("todoFines.addRule")}</button> : null}
       </div>
       {canManage && tariffs.length === 0 ? <p className="muted">{t("todoFines.needTariffFirst")}</p> : null}
@@ -213,11 +240,14 @@ export function TodoFineRules({ rules, setRules, tariffs, accounts, canManage, o
         columns={[t("todoFines.colRule"), t("todoFines.colFilter"), t("todoFines.colInterval"), t("todoFines.colAccount"), ...(canManage ? [tCommon("actions")] : [])]}
         emptyMessage={t("todoFines.noRules")}
       >
-        {rules.map((rule, index) => (
+        {rules.map((rule) => (
           <tr key={rule.id} className={rule.is_active ? "" : "table-row-done"}>
             <td>
               <strong>{rule.name}</strong> {rule.is_active ? null : <Badge variant="neutral">{t("todoFines.inactive")}</Badge>}
               <div className="muted">{t("todoFines.appliesFromShort", { date: formatDate(rule.applies_from) })}</div>
+              {rule.is_active && tariffsWithoutAmount(rule).length > 0 ? (
+                <Badge variant="warning">{t("todoFines.ruleMissingRates", { tariffs: tariffsWithoutAmount(rule).join(", ") })}</Badge>
+              ) : null}
             </td>
             <td>{filterSummary(rule)}</td>
             <td>
@@ -228,8 +258,6 @@ export function TodoFineRules({ rules, setRules, tariffs, accounts, canManage, o
             {canManage ? (
               <td>
                 <div className="table-actions table-actions-start">
-                  <button type="button" className="row-text-action" disabled={index === 0} onClick={() => void move(rule, -1)} aria-label={t("todoFines.moveUp")}>↑</button>
-                  <button type="button" className="row-text-action" disabled={index === rules.length - 1} onClick={() => void move(rule, 1)} aria-label={t("todoFines.moveDown")}>↓</button>
                   <button type="button" className="row-text-action" onClick={() => open(rule)}>{tCommon("edit")}</button>
                   <button type="button" className="row-text-action row-text-action-danger" onClick={() => void remove(rule)}>{tCommon("delete")}</button>
                 </div>
@@ -246,50 +274,33 @@ export function TodoFineRules({ rules, setRules, tariffs, accounts, canManage, o
               <span className="field-label">{t("todoFines.ruleName")}</span>
               <input value={draft.name} maxLength={120} autoFocus placeholder={t("todoFines.ruleNamePlaceholder")} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
             </label>
-            <label className="field-stack">
-              <span className="field-label">{t("todoFines.appliesFrom")}</span>
-              <DateInput value={draft.applies_from} onChange={(value) => setDraft({ ...draft, applies_from: value })} />
+            <div className="field-stack">
+              <span className="field-label">{t("todoFines.appliesFrom")} <HelpPopover topic={t("todoFines.appliesFrom")} docs={{ page: "bussen", anchor: "regeln" }}>{t("todoFines.help.appliesFrom")}</HelpPopover></span>
+              <DateInput aria-label={t("todoFines.appliesFrom")} value={draft.applies_from} onChange={(value) => setDraft({ ...draft, applies_from: value })} />
               <span className="field-help">{t("todoFines.appliesFromHelp")}</span>
-            </label>
+            </div>
           </div>
 
-          <section className="fine-rule-section">
-            <div className="fine-rule-section-head">
-              <h3>{t("todoFines.filterTitle")}</h3>
-              <span className="muted">{draftFilterSummary}</span>
-            </div>
-            <div className="fine-rule-box">
-              <div className="fine-rule-filters">
-                {filterFields.map((field) => (
-                  <div key={field.key} className="fine-rule-filter">
-                    <span className="field-label">{field.label}</span>
-                    <div className="fine-chip-field">
-                      {field.selected.length === 0 ? <span className="fine-chip-empty">{t("todoFines.filterAny")}</span> : null}
-                      {field.selected.map((item) => (
-                        <span key={item.id} className="fine-chip">
-                          {item.label}
-                          <button type="button" aria-label={t("todoFines.filterRemove", { name: item.label })} onClick={() => field.remove(item.id)}>×</button>
-                        </span>
-                      ))}
-                      {field.available.length > 0 ? (
-                        <Select className="fine-chip-add" value="" aria-label={t("todoFines.filterAdd", { name: field.label })} onChange={(event) => event.target.value && field.add(event.target.value)}>
-                          <option value="">{t("todoFines.filterChoose")}</option>
-                          {field.available.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-                        </Select>
-                      ) : null}
-                    </div>
-                  </div>
+          {editing === "new" ? (
+            <div className="field-stack">
+              <span className="field-label">{t("todoFines.templateLabel")} <HelpPopover topic={t("todoFines.templateLabel")} docs={{ page: "bussen", anchor: "regeln" }}>{t("todoFines.help.template")}</HelpPopover></span>
+              <div className="fine-rule-templates">
+                {(Object.keys(RULE_TEMPLATES) as RuleTemplate[]).map((key) => (
+                  <button key={key} type="button" className="button-secondary" onClick={() => setDraft(applyRuleTemplate(draft, key, tariffs.map((tariff) => tariff.id)))}>
+                    {t(`todoFines.template.${key}`)}
+                  </button>
                 ))}
               </div>
-              <p className="field-help fine-rule-hint">{t("todoFines.filterHelp")}</p>
+              <span className="field-help">{t("todoFines.templateHint")}</span>
             </div>
-          </section>
+          ) : null}
+
 
           <section className="fine-rule-section">
             <h3>{t("todoFines.amountTitle")}</h3>
             <div className="fine-rule-grid">
               <div className="field-stack">
-                <span className="field-label">{t("todoFines.intervalLabel")}</span>
+                <span className="field-label">{t("todoFines.intervalLabel")} <HelpPopover topic={t("todoFines.intervalLabel")} docs={{ page: "bussen", anchor: "regeln" }}>{t("todoFines.help.interval")}</HelpPopover></span>
                 <div className="fine-stepper-row">
                   <span>{t("todoFines.intervalEvery")}</span>
                   <div className="fine-stepper">
@@ -300,16 +311,9 @@ export function TodoFineRules({ rules, setRules, tariffs, accounts, canManage, o
                   <span>{t("todoFines.intervalUnit", { count: intervalDays })}</span>
                 </div>
               </div>
-              <label className="field-stack">
-                <span className="field-label">{t("todoFines.colAccount")}</span>
-                <Select value={draft.account_id} onChange={(event) => setDraft({ ...draft, account_id: event.target.value })}>
-                  <option value="">{t("todoFines.defaultAccount")}</option>
-                  {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
-                </Select>
-              </label>
             </div>
             <div className="field-stack">
-              <span className="field-label">{t("todoFines.splitLabel")}</span>
+              <span className="field-label">{t("todoFines.splitLabel")} <HelpPopover topic={t("todoFines.splitLabel")} docs={{ page: "bussen", anchor: "aufteilen" }}>{t("todoFines.help.split")}</HelpPopover></span>
               <FilterTabs<FineSplitMode>
                 options={[{ value: "each", label: t("todoFines.split.each") }, { value: "split", label: t("todoFines.split.split") }]}
                 value={draft.split_mode}
@@ -355,6 +359,50 @@ export function TodoFineRules({ rules, setRules, tariffs, accounts, canManage, o
               })}
             </div>
           </section>
+
+          <details className="fine-rule-advanced" open={advancedOpen} onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}>
+            <summary>{t("todoFines.advancedTitle")} <span className="muted">{draftFilterSummary}</span></summary>
+            <div className="fine-rule-advanced-body">
+              <section className="fine-rule-section">
+                <div className="fine-rule-section-head">
+                  <h3>{t("todoFines.filterTitle")} <HelpPopover topic={t("todoFines.filterTitle")} docs={{ page: "bussen", anchor: "regeln" }}>{t("todoFines.help.filter")}</HelpPopover></h3>
+                  <span className="muted">{draftFilterSummary}</span>
+                </div>
+                <div className="fine-rule-box">
+                  <div className="fine-rule-filters">
+                    {filterFields.map((field) => (
+                      <div key={field.key} className="fine-rule-filter">
+                        <span className="field-label">{field.label}</span>
+                        <div className="fine-chip-field">
+                          {field.selected.length === 0 ? <span className="fine-chip-empty">{t("todoFines.filterAny")}</span> : null}
+                          {field.selected.map((item) => (
+                            <span key={item.id} className="fine-chip">
+                              {item.label}
+                              <button type="button" aria-label={t("todoFines.filterRemove", { name: item.label })} onClick={() => field.remove(item.id)}>×</button>
+                            </span>
+                          ))}
+                          {field.available.length > 0 ? (
+                            <Select className="fine-chip-add" value="" aria-label={t("todoFines.filterAdd", { name: field.label })} onChange={(event) => event.target.value && field.add(event.target.value)}>
+                              <option value="">{t("todoFines.filterChoose")}</option>
+                              {field.available.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+                            </Select>
+                          ) : null}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="field-help fine-rule-hint">{t("todoFines.filterHelp")}</p>
+                </div>
+              </section>
+              <label className="field-stack">
+                <span className="field-label">{t("todoFines.colAccount")}</span>
+                <Select value={draft.account_id} onChange={(event) => setDraft({ ...draft, account_id: event.target.value })}>
+                  <option value="">{t("todoFines.defaultAccount")}</option>
+                  {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+                </Select>
+              </label>
+            </div>
+          </details>
 
           <div className="modal-actions fine-rule-footer">
             <label className="fine-rule-active">

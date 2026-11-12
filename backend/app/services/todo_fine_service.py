@@ -6,8 +6,15 @@ Ablauf
   Abfrage neu gerechnet (nicht gespeichert) und wächst mit jedem vollen Intervall.
 - Wird das Todo erledigt ("done"), friert ``sync_todo`` den Betrag je verantwortliche Person als
   ``todo_fine`` (status pending) ein. Erst diese Zeilen können einkassiert oder erlassen werden.
-- Wird das Todo wieder geöffnet, verschwinden die noch offenen eingefrorenen Bussen; einkassierte
-  oder erlassene bleiben stehen. "Abgebrochen" (cancelled) ist keine Verspätung.
+- Eingefroren ist eingefroren (Bereichs-Audit 2026-11): Wiedereröffnen, eine andere Fälligkeit,
+  andere Verantwortliche oder Tags und das Löschen der Pendenz lassen eingefrorene Bussen stehen.
+  Entfernen kann sie nur, wer Finanzen verwaltet: erlassen (mit Begründung) oder über «Busse von
+  Hand festlegen» neu rechnen lassen - beides steht im Audit-Log. Wird die Pendenz erneut erledigt,
+  entsteht nur für Personen ohne bisherige Busse eine neue. ``fine_evaluated_at`` merkt sich, dass
+  der aktuelle Abschluss bewertet ist (Migration 0177).
+- Eine laufende Busse kann die gebüsste Person selbst nicht wegbekommen (Fälligkeit, Verantwortliche,
+  Tags, Abbrechen, Löschen): ``ensure_may_change`` verlangt dafür finances.manage.
+  "Abgebrochen" (cancelled) ist keine Verspätung.
 
 Welche Busse gilt
 -----------------
@@ -23,17 +30,17 @@ Betrag je Person (Tarif der Person, sonst Standardtarif):
     Grundbetrag + floor(Tage zu spät / Intervall) x Intervallbetrag
 Beispiel Intervall 2 Tage, 5.- Grundbetrag, 2.- pro Intervall: 1 Tag zu spät 5.-, 2 Tage 7.-,
 5 Tage 9.-. Bei Aufteilung ("split") zahlt jede Person ihren Betrag geteilt durch die Zahl der
-Verantwortlichen.
+Verantwortlichen; ein Rappenrest geht an die erste Person (10.- / 3 = 3.34 + 3.33 + 3.33).
 """
 from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -330,16 +337,21 @@ def evaluate(ctx: TenantFineContext, facts: TodoFacts, *, on: date | None = None
     split_mode = (facts.fine_split_mode or "each") if rule is None else rule.split_mode
     share = Decimal(len(people)) if split_mode == "split" and people else Decimal(1)
     lines: list[Line] = []
+    fixed_total = money(facts.fine_fixed_amount or 0)
     for person in (people[pid] for pid in facts.assignee_ids if pid in people):
         group_id = ctx.group_for(person)
         if rule is None:
-            full = money(facts.fine_fixed_amount or 0)
+            full = fixed_total
             tariff_name = None
         else:
             base, per_interval = rule.rates.get(group_id, (Decimal("0"), Decimal("0"))) if group_id is not None else (Decimal("0"), Decimal("0"))
             full = rule_amount(base, per_interval, rule.interval_days, days_late)
             tariff_name = ctx.group_name(group_id)
-        lines.append(Line(person.id, person.name, tariff_name, money(full / share)))
+        amount = (full / share).quantize(CENTS, rounding=ROUND_DOWN) if rule is None else money(full / share)
+        lines.append(Line(person.id, person.name, tariff_name, amount))
+    if rule is None and share > 1 and lines:
+        # Fixer Betrag geteilt: der Rappenrest geht an die erste Person, die Summe bleibt der Betrag
+        lines[0].amount = money(lines[0].amount + fixed_total - sum((line.amount for line in lines), Decimal("0")))
     return Evaluation(
         state="ok", due=facts.due, days_late=days_late, rule=rule, matching=matching, split_mode=split_mode,
         account_id=ctx.account_for(rule), lines=lines,
@@ -349,23 +361,46 @@ def evaluate(ctx: TenantFineContext, facts: TodoFacts, *, on: date | None = None
 # ── Einfrieren beim Erledigen ────────────────────────────────────────
 
 
-def sync_todo(db: Session, todo: ProtocolTodo, *, ctx: TenantFineContext | None = None) -> None:
-    """Hält die eingefrorenen Bussen eines Todos aktuell (ohne Commit).
+def sync_todo(db: Session, todo: ProtocolTodo, *, ctx: TenantFineContext | None = None, recalculate: bool = False) -> list[dict]:
+    """Friert die Bussen eines erledigten Todos ein (ohne Commit).
 
-    Nicht erledigt: offene eingefrorene Bussen löschen. Erledigt: offene eingefrorene Bussen neu
-    rechnen; einkassierte oder erlassene bleiben, und für ihre Person entsteht keine neue."""
+    Ein Abschluss wird genau einmal bewertet (``fine_evaluated_at``); spätere Änderungen an
+    Fälligkeit, Verantwortlichen oder Tags ändern eingefrorene Bussen nicht mehr. Nicht erledigt:
+    nur den Merker zurücksetzen - eingefrorene Bussen bleiben stehen. Einkassierte, erlassene und
+    offene eingefrorene Bussen verhindern eine zweite Busse derselben Person.
+
+    ``recalculate`` (nur «Busse von Hand festlegen», finances.manage): offene eingefrorene Bussen
+    verwerfen und neu rechnen. Liefert die verworfenen Bussen für das Audit-Log."""
+    # Gleichzeitiges Erledigen derselben Pendenz: Zeile sperren und den Merker frisch lesen,
+    # sonst trifft die zweite Anfrage auf uq_todo_fine_todo_participant.
+    db.flush()
+    db.refresh(todo, with_for_update=True)
+    removed: list[dict] = []
+    if todo_status_code(db, todo) != "done" or todo.completed_at is None:
+        if todo.fine_evaluated_at is not None:
+            todo.fine_evaluated_at = None
+            db.flush()
+        return removed
+    if todo.fine_evaluated_at is not None and not recalculate:
+        return removed
+    # Auch ohne gebuchtes Modul als bewertet merken: ein späteres Einschalten bewertet alte
+    # Abschlüsse nicht rückwirkend.
+    todo.fine_evaluated_at = datetime.now(timezone.utc)
+    db.flush()
     if not module_active(db, todo.tenant_id):
-        return
+        return removed
     facts = load_facts(db, todo)
     if facts is None:
-        return
-    db.execute(delete(TodoFine).where(TodoFine.protocol_todo_id == todo.id, TodoFine.status == "pending"))
-    if facts.status_code != "done" or facts.completed_on is None:
-        return
+        return removed
+    if recalculate:
+        for fine in db.scalars(select(TodoFine).where(TodoFine.protocol_todo_id == todo.id, TodoFine.status == "pending")):
+            removed.append({"participant": fine.participant_name_snapshot, "amount": str(fine.amount)})
+            db.delete(fine)
+        db.flush()
     ctx = ctx or TenantFineContext(db, facts.tenant_id)
     evaluation = evaluate(ctx, facts)
     if evaluation.state != "ok":
-        return
+        return removed
     settled = set(db.scalars(select(TodoFine.participant_id).where(TodoFine.protocol_todo_id == todo.id)))
     for line in evaluation.lines:
         if line.participant_id in settled or line.amount <= 0:
@@ -378,6 +413,49 @@ def sync_todo(db: Session, todo: ProtocolTodo, *, ctx: TenantFineContext | None 
             account_id=evaluation.account_id, status="pending",
         ))
     db.flush()
+    return removed
+
+
+def stored_participants(db: Session, todo_ids: list[int]) -> dict[int, set[int]]:
+    """Personen je Todo, die schon eine gespeicherte Busse haben (jeder Status)."""
+    result: dict[int, set[int]] = defaultdict(set)
+    if todo_ids:
+        for todo_id, participant_id in db.execute(
+            select(TodoFine.protocol_todo_id, TodoFine.participant_id).where(TodoFine.protocol_todo_id.in_(todo_ids))
+        ):
+            result[todo_id].add(participant_id)
+    return result
+
+
+def running_amount(db: Session, todo: ProtocolTodo, participant_id: int | None = None) -> Decimal:
+    """Laufende (noch nicht eingefrorene) Busse eines offenen Todos - gesamt oder einer Person."""
+    if not module_active(db, todo.tenant_id):
+        return Decimal("0")
+    facts = load_facts(db, todo)
+    if facts is None or facts.status_code not in OPEN_STATUS_CODES:
+        return Decimal("0")
+    if participant_id is not None and participant_id not in facts.assignee_ids:
+        return Decimal("0")
+    evaluation = evaluate(TenantFineContext(db, facts.tenant_id), facts)
+    if evaluation.state != "ok":
+        return Decimal("0")
+    stored = stored_participants(db, [todo.id]).get(todo.id, set())
+    return money(sum(
+        (line.amount for line in evaluation.lines
+         if line.participant_id not in stored and (participant_id is None or line.participant_id == participant_id)),
+        Decimal("0"),
+    ))
+
+
+def ensure_may_change(db: Session, todo: ProtocolTodo, *, actor_user_id: int | None, can_manage: bool) -> None:
+    """Die gebüsste Person selbst darf ihre laufende Busse nicht wegbekommen: Fälligkeit,
+    Verantwortliche oder Tags ändern, die Pendenz abbrechen oder löschen verlangt dann
+    finances.manage (TodoFineError "todo_fine_running", Route: 409). Andere mit meetings.edit
+    dürfen das, die Änderung steht im Audit-Log."""
+    if can_manage or actor_user_id is None:
+        return
+    if running_amount(db, todo, actor_user_id) > 0:
+        raise TodoFineError("todo_fine_running", "Deine laufende Busse kann nur ändern, wer Finanzen verwaltet")
 
 
 # ── Liste ────────────────────────────────────────────────────────────
@@ -392,7 +470,8 @@ class OpenItem:
 
 
 def open_items(db: Session, tenant_id: int, *, participant_id: int | None = None, on: date | None = None) -> list[OpenItem]:
-    """Laufende Bussen und Konflikte. Mit `participant_id` nur Todos dieser Person."""
+    """Laufende Bussen und Konflikte. Mit `participant_id` nur Todos dieser Person. Personen mit
+    gespeicherter Busse (z. B. nach dem Wiedereröffnen) haben keine laufende Busse mehr."""
     ctx = TenantFineContext(db, tenant_id)
     if not ctx.rules and not db.scalar(
         select(ProtocolTodo.id).where(ProtocolTodo.tenant_id == tenant_id, ProtocolTodo.fine_mode.in_(("fixed", "rule"))).limit(1)
@@ -416,14 +495,22 @@ def open_items(db: Session, tenant_id: int, *, participant_id: int | None = None
                 ProtocolTodoAssignee.protocol_todo_id == ProtocolTodo.id, ProtocolTodoAssignee.participant_id == participant_id
             ).exists()
         )
+    all_facts = [_facts_from_row(row) for row in db.execute(query)]
+    # Personen aller Zeilen in einer Abfrage statt je Todo (Rollenfilter und Beträge)
+    ctx.people([pid for facts in all_facts for pid in facts.assignee_ids])
+    stored = stored_participants(db, [facts.id for facts in all_facts if facts.status_code in OPEN_STATUS_CODES])
     items: list[OpenItem] = []
-    for row in db.execute(query):
-        facts = _facts_from_row(row)
+    for facts in all_facts:
         evaluation = evaluate(ctx, facts, on=on)
         if facts.status_code == "done":
             if evaluation.state == "conflict":
                 items.append(OpenItem(facts, evaluation))
-        elif evaluation.state in ("ok", "conflict"):
+            continue
+        if evaluation.state == "ok" and facts.id in stored:
+            evaluation.lines = [line for line in evaluation.lines if line.participant_id not in stored[facts.id]]
+            if not evaluation.lines:
+                continue
+        if evaluation.state in ("ok", "conflict"):
             items.append(OpenItem(facts, evaluation))
     return items
 

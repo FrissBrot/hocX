@@ -1,35 +1,35 @@
 {
-  "pageTitle": "Partecipanti",
-  "ownAccessOnlyHint": "Accessi e ruoli di questa organizzazione.",
-  "pageHint": "Gli account di questa organizzazione e i loro ruoli.",
-  "newUser": "Nuovo partecipante",
+  "pageTitle": "Accessi e ruoli",
+  "ownAccessOnlyHint": "Accessi e ruoli della tua associazione.",
+  "pageHint": "Chi può accedere e con quali ruoli. Le persone stesse si gestiscono in «Membri».",
+  "newUser": "Nuova persona",
   "emptyState": {
     "title": "Solo il tuo accesso",
     "description": "Invita altre persone e assegna loro un ruolo: Admin, Redattore, Cassiere o Lettore.",
-    "invite": "+ Invita partecipante"
+    "invite": "+ Invita persona"
   },
   "explainRoles": "Spiega i ruoli",
   "explainRolesDescription": "Ogni account può avere più ruoli e riceve tutte le loro autorizzazioni. I ruoli si gestiscono in «Ruoli».",
   "tabs": {
-    "active": "Partecipanti con accesso",
-    "participants": "Partecipanti"
+    "active": "Con accesso",
+    "participants": "Senza accesso"
   },
-  "searchUsers": "Cerca partecipanti",
-  "searchParticipants": "Cerca partecipanti",
+  "searchUsers": "Cerca accessi",
+  "searchParticipants": "Cerca membri senza accesso",
   "columns": {
     "displayName": "Nome visualizzato",
     "name": "Nome",
     "email": "E-mail",
     "role": "Ruolo",
     "actions": "Azioni",
-    "participantEmail": "E-mail (partecipante)"
+    "participantEmail": "E-mail"
   },
   "mfaButton": "MFA",
   "delete": "Elimina",
   "close": "Chiudi",
-  "editUserTitle": "Modifica partecipante",
-  "createUserTitle": "Crea partecipante",
-  "userModalDescription": "Gestisci i dati dell'account e il ruolo.",
+  "editUserTitle": "Modifica persona",
+  "createUserTitle": "Aggiungi persona",
+  "userModalDescription": "Nome, accesso e ruoli. Ingresso, uscita e modelli si gestiscono in «Membri».",
   "firstName": "Nome",
   "lastName": "Cognome",
   "displayName": "Nome visualizzato",
@@ -43,13 +43,13 @@
   "enableLogin": "Attiva accesso",
   "cancel": "Annulla",
   "save": "Salva",
-  "enableLoginForTitle": "Attiva accesso per {name}",
-  "enableLoginTitle": "Attiva accesso",
-  "enableLoginDescription": "Imposta un indirizzo e-mail e una password per l’accesso di questo partecipante.",
+  "enableLoginForTitle": "Accesso per {name}",
+  "enableLoginTitle": "Assegna accesso",
+  "enableLoginDescription": "Il modo più semplice è l'invito: la persona sceglie da sé la password.",
   "mfaTitle": "MFA di {name}",
   "mfaTitleFallback": "MFA",
   "roleDescriptions": {
-    "admin": "Accesso completo all'interno dell'organizzazione, inclusa la struttura (modelli, cicli, impostazioni) e la gestione partecipanti.",
+    "admin": "Accesso completo nell'associazione, inclusa la struttura (modelli, cicli, impostazioni), membri, accessi e ruoli.",
     "writer": "Lavora nell'area verbali e gestisce i dati operativi, senza modificare struttura o finanze.",
     "kassier": "Come lettore, con in più accesso completo in scrittura a finanze e multe.",
     "reader": "Accesso in sola lettura, può avviare esportazioni PDF e vede solo le proprie multe."
@@ -57,11 +57,46 @@
   "toasts": {
     "loginEnabled": "Accesso attivato",
     "loginEnableFailed": "Impossibile attivare l'accesso",
-    "userSaved": "Partecipante salvato",
-    "userCreated": "Partecipante creato",
-    "userSaveFailed": "Impossibile salvare l'partecipante",
-    "deleteConfirm": "Eliminare definitivamente l'partecipante \"{name}\"? L'account e l'accesso andranno persi immediatamente.",
-    "userDeleted": "Partecipante eliminato",
-    "userDeleteFailed": "Impossibile eliminare l'partecipante"
+    "userSaved": "Salvato",
+    "userCreated": "Persona aggiunta",
+    "userSaveFailed": "Impossibile salvare",
+    "deleteConfirm": "Eliminare definitivamente «{name}»? La persona scompare con presenze, multe e compiti.",
+    "userDeleted": "Persona eliminata",
+    "userDeleteFailed": "Impossibile eliminare la persona",
+    "inviteSent": "L'invito a {email} sta per essere inviato.",
+    "inviteFailed": "Impossibile inviare l'invito."
+  },
+  "inactiveBadge": "Inattivo",
+  "emptySearch": "Nessun risultato per questa ricerca.",
+  "emptyWithLogin": "Nessuno ha ancora un accesso.",
+  "emptyWithoutLogin": "Tutti i membri hanno già un accesso.",
+  "enableLoginInactive": "Le persone inattive non ricevono un accesso. Attivale prima in «Membri».",
+  "rolesDocs": "I ruoli nella guida",
+  "rolesLabel": "Ruoli",
+  "rolesHelp": "Un account può avere più ruoli e riceve tutte le loro autorizzazioni. Non puoi assegnare ruoli con autorizzazioni che non possiedi.",
+  "loginHelp": "Con un accesso la persona può accedere e vede ciò che i suoi ruoli consentono. Senza, resta membro (presenze, multe, compiti). Meglio invitare via e-mail che impostare una password.",
+  "loginActive": "Accesso attivo (deseleziona per revocare l'accesso)",
+  "loginSetPassword": "Attiva l'accesso con una password impostata da te",
+  "passwordHelpSet": "Almeno 12 caratteri. Comunicala alla persona in modo sicuro; potrà poi cambiarla nel profilo.",
+  "blockers": {
+    "displayName": "Salvataggio bloccato: manca il nome visualizzato.",
+    "email": "Salvataggio bloccato: un accesso richiede un indirizzo e-mail.",
+    "password": "Salvataggio bloccato: la password deve avere almeno 12 caratteri.",
+    "tenant": "Salvataggio bloccato: scegli un mandante."
+  },
+  "loginMode": {
+    "label": "Come riceve l'accesso la persona?",
+    "invite": "Invita via e-mail (consigliato)",
+    "inviteHelp": "La persona riceve un link (valido 7 giorni) e sceglie da sé la password. L'accesso diventa attivo quando accetta.",
+    "password": "Imposta tu la password",
+    "mailOff": "L'invio di e-mail non è configurato, quindi non è possibile invitare. Imposta una password e comunicala in modo sicuro.",
+    "inviteSubmit": "Invia invito"
+  },
+  "revokeLogin": {
+    "action": "Revoca accesso",
+    "confirmTitle": "Revocare l'accesso di {name}?",
+    "confirmMessage": "{name} non potrà più accedere; le sessioni in corso terminano subito. La persona resta membro con presenze, multe e compiti. Puoi eliminarla del tutto in «Membri».",
+    "done": "Accesso di {name} revocato",
+    "failed": "Impossibile revocare l'accesso"
   }
 }

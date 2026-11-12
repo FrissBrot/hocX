@@ -1,18 +1,18 @@
 {
-  "pageTitle": "Participants",
-  "pageDescriptionEmpty": "Members and guests of this organization.",
-  "pageDescription": "Organization-wide people who can later be assigned to templates and todos.",
+  "pageTitle": "Members",
+  "pageDescriptionEmpty": "Members and guests of your club.",
+  "pageDescription": "Everyone in your club – with or without a login. They appear in attendance, fines and tasks.",
   "csvImport": "CSV import",
-  "newParticipant": "New participant",
+  "newParticipant": "New member",
   "emptyState": {
-    "title": "No participants yet",
+    "title": "No members yet",
     "description": "Add members individually or import an existing list – they'll then be available for attendance, todos and fines.",
-    "addParticipant": "+ Participant",
+    "addParticipant": "+ Member",
     "importList": "Import list"
   },
   "searchPlaceholder": "Search name or email",
   "columns": {
-    "name": "Participant",
+    "name": "Member",
     "firstName": "First name",
     "lastName": "Last name",
     "email": "Email",
@@ -20,19 +20,25 @@
     "actions": "Actions",
     "membership": "Membership"
   },
-  "emptyFiltered": "No participants found for the current filter.",
+  "emptyFiltered": "No members found for the current filter.",
   "statusActive": "Active",
   "statusInactive": "Inactive",
   "delete": "Delete",
-  "loadingMore": "Loading more participants…",
+  "loadingMore": "Loading more members…",
   "loadMore": "Load more ({count} loaded)",
   "csvPreview": {
     "title": "CSV preview",
-    "description": "{count} entries recognized. Only first name, last name, nickname and email are imported.",
+    "description": "{count, plural, =0 {No entries recognized.} one {# entry recognized.} other {# entries recognized.}}",
     "displayName": "Display name",
     "cancel": "Cancel",
     "importing": "Importing…",
-    "importEntries": "Import {count} entries"
+    "importEntries": "{count, plural, one {Import # entry} other {Import # entries}}",
+    "columns": "Recognized columns: Vorname, Nachname, Übername (or Anzeigename), Firmenname, Haupt-E-Mail (or E-Mail) – English headers such as First name, Last name, Email also work. Separator semicolon or comma.",
+    "help": "People who already exist (same display name or same email) are skipped. New people get the «Reader» role and no login.",
+    "noRows": "No person was recognized in this file. Check the column names in the first row or use the template.",
+    "noEmailColumn": "No email column recognized: the people will be imported without an email address.",
+    "empty": "No entries",
+    "template": "Download template"
   },
   "importResult": {
     "title": "Import completed",
@@ -41,12 +47,13 @@
     "errorsCount": "{count} errors",
     "skippedExisting": "Skipped (already exists)",
     "errorsLabel": "Errors",
-    "close": "Close"
+    "close": "Close",
+    "errorRow": "Row {row} could not be imported."
   },
   "editModal": {
-    "createTitle": "Create participant",
-    "editTitle": "Edit participant",
-    "description": "Participants can be assigned templates directly and selected in todos later.",
+    "createTitle": "Add member",
+    "editTitle": "Edit member",
+    "description": "Master data, membership and templates. Roles are assigned under «Logins & roles».",
     "displayName": "Display name",
     "active": "Active",
     "firstName": "First name",
@@ -58,26 +65,29 @@
     "leftAtHint": "No longer appears in attendance lists from the next day on. Empty = no leave date set.",
     "templates": "Templates",
     "noDescription": "No description text",
-    "save": "Save participant",
-    "create": "Create participant",
+    "save": "Save",
+    "create": "Add member",
     "notifyWithoutLogin": "Send email notifications even though this person has no login",
-    "notifyWithoutLoginHint": "New tasks and reminders go to the stored email address."
+    "notifyWithoutLoginHint": "New tasks and reminders go to the stored email address.",
+    "notifyWithoutLoginHelp": "People without a login only receive emails if you switch this on: new tasks and reminders to the stored address. Without a login the person cannot unsubscribe themselves.",
+    "notifyWithoutLoginNeedsEmail": "This requires an email address for the person.",
+    "membershipHelp": "Joining and leaving dates control which attendance lists the person appears in. «Inactive» marks the person as no longer active and blocks a login without deleting data."
   },
   "toasts": {
-    "loadMoreFailed": "Could not load more participants",
+    "loadMoreFailed": "Could not load more members",
     "templatesLoadFailed": "Could not load assigned templates",
     "leftBeforeJoined": "Leave date cannot be before the join date",
     "updated": "{name} updated",
     "created": "{name} created",
-    "saveFailed": "Participant could not be saved",
-    "deleteConfirmMessage": "Permanently delete participant? This cannot be undone.",
+    "saveFailed": "Member could not be saved",
+    "deleteConfirmMessage": "Permanently delete member? This cannot be undone.",
     "deleteConfirmLabel": "Delete",
-    "deletedSingle": "Participant \"{name}\" deleted",
-    "deleteFailed": "Participant could not be deleted",
+    "deletedSingle": "«{name}» deleted",
+    "deleteFailed": "Member could not be deleted",
     "deleteUnnamed": "Unnamed",
-    "bulkDeleteConfirmMessage": "Permanently delete {count} participants? This cannot be undone.",
-    "bulkDeleted": "Participants deleted",
-    "bulkDeleteFailed": "Participants could not be deleted",
+    "bulkDeleteConfirmMessage": "Permanently delete {count} members? This cannot be undone.",
+    "bulkDeleted": "Members deleted",
+    "bulkDeleteFailed": "Members could not be deleted",
     "csvImportFailed": "CSV import failed"
   },
   "membership": {
@@ -99,11 +109,11 @@
     "inactive": "Inactive",
     "left": "Left"
   },
-  "footerCount": "{count, plural, one {# participant} other {# participants}}",
+  "footerCount": "{count, plural, one {# member} other {# members}}",
   "footerHint": "Click a row to edit",
   "loginTabs": {
-    "withoutLogin": "Participants",
-    "withLogin": "Participants with login"
+    "withoutLogin": "Without login",
+    "withLogin": "With login"
   },
   "personalData": {
     "action": "Data access request",
@@ -123,6 +133,17 @@
     "sentToast": "The invitation to {email} is being sent.",
     "revokedToast": "Invitation withdrawn.",
     "failed": "The invitation could not be processed.",
-    "badge": "Invited"
+    "badge": "Invited",
+    "mailOff": "Email invitations are not possible because email sending is not set up.",
+    "afterCreate": "Invite by email after adding",
+    "saveEmailFirst": "The email address was changed: save first, then invite."
+  },
+  "deleteDialog": {
+    "title": "Permanently delete «{name}»?",
+    "message": "The person disappears together with attendance, fines and task assignments; this cannot be undone. If they have only left, better set a leave date or «Inactive».",
+    "messageWithLogin": "The person disappears together with their login, attendance, fines and task assignments; this cannot be undone. If they should just no longer sign in, revoke the login instead (under «Logins & roles»).",
+    "confirm": "Delete permanently",
+    "bulkTitle": "{count, plural, one {Permanently delete # person?} other {Permanently delete # people?}}",
+    "bulkMessage": "The people disappear together with logins, attendance, fines and task assignments; this cannot be undone. For members who have left, better set a leave date."
   }
 }

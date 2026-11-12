@@ -85,17 +85,25 @@ nav:
       - Zyklen & Vorlagen: benutzer/vorlagen.md
       - Protokolle: benutzer/protokolle.md
       - Termine: benutzer/termine.md
-      - Mitglieder & Teilnehmer: benutzer/mitglieder.md
+      - Zyklen: benutzer/zyklen.md
+      - Mitglieder & Logins: benutzer/mitglieder.md
+      - Konto & Anmeldung: benutzer/konto.md
+      - Benachrichtigungen: benutzer/benachrichtigungen.md
       - Finanzen & Bussen: benutzer/finanzen.md
-      - Listen: benutzer/listen.md
+      - Pendenzen-Bussen: benutzer/bussen.md
+      - Stammlisten: benutzer/listen.md
       - Todos: benutzer/todos.md
+      - Aufgabenpakete: benutzer/aufgabenpakete.md
       - Anliegen: benutzer/anliegen.md
+      - Statistik und Dashboard: benutzer/statistik.md
       - Verknüpfungen (Kalender): benutzer/verknuepfungen.md
       - Abgabebox: benutzer/abgabebox.md
       - Dateien & Dokumente: benutzer/dateien.md
+      - Fotos & Alben: benutzer/fotos.md
       - Word-Import: benutzer/word-import.md
       - Dokumente & Document Studio: benutzer/dokumente.md
       - Echtheit prüfen: benutzer/echtheit.md
+      - Einstellungen & Domains: benutzer/einstellungen.md
   - Technik & Betrieb:
       - Übersicht: technik/index.md
       - Big Picture: technik/big-picture.md

@@ -1,18 +1,18 @@
 {
-  "pageTitle": "Partecipanti",
-  "pageDescriptionEmpty": "Membri e ospiti di questa organizzazione.",
-  "pageDescription": "Persone a livello di organizzazione che potranno poi essere assegnate a modelli e attività.",
+  "pageTitle": "Membri",
+  "pageDescriptionEmpty": "Membri e ospiti della tua associazione.",
+  "pageDescription": "Tutte le persone della tua associazione – con o senza accesso. Compaiono in presenze, multe e compiti.",
   "csvImport": "Importa CSV",
-  "newParticipant": "Nuovo partecipante",
+  "newParticipant": "Nuovo membro",
   "emptyState": {
-    "title": "Nessun partecipante registrato",
+    "title": "Nessun membro registrato",
     "description": "Registra i membri singolarmente o importa un elenco esistente – saranno quindi disponibili per presenze, attività e multe.",
-    "addParticipant": "+ Partecipante",
+    "addParticipant": "+ Membro",
     "importList": "Importa elenco"
   },
   "searchPlaceholder": "Cerca nome o e-mail",
   "columns": {
-    "name": "Partecipante",
+    "name": "Membro",
     "firstName": "Nome",
     "lastName": "Cognome",
     "email": "E-mail",
@@ -20,19 +20,25 @@
     "actions": "Azioni",
     "membership": "Adesione"
   },
-  "emptyFiltered": "Nessun partecipante trovato per il filtro attuale.",
+  "emptyFiltered": "Nessun membro trovato per il filtro attuale.",
   "statusActive": "Attivo",
   "statusInactive": "Inattivo",
   "delete": "Elimina",
-  "loadingMore": "Caricamento altri partecipanti…",
+  "loadingMore": "Caricamento altri membri…",
   "loadMore": "Carica altri ({count} caricati)",
   "csvPreview": {
     "title": "Anteprima CSV",
-    "description": "{count} voci riconosciute. Vengono importati solo nome, cognome, soprannome ed e-mail.",
+    "description": "{count, plural, =0 {Nessuna voce riconosciuta.} one {# voce riconosciuta.} other {# voci riconosciute.}}",
     "displayName": "Nome visualizzato",
     "cancel": "Annulla",
     "importing": "Importazione…",
-    "importEntries": "Importa {count} voci"
+    "importEntries": "{count, plural, one {Importa # voce} other {Importa # voci}}",
+    "columns": "Colonne riconosciute: Vorname, Nachname, Übername (o Anzeigename), Firmenname, Haupt-E-Mail (o E-Mail) – funzionano anche Nome, Cognome ed Email. Separatore punto e virgola o virgola.",
+    "help": "Le persone già presenti (stesso nome visualizzato o stessa e-mail) vengono saltate. Le nuove persone ricevono il ruolo «Lettore» e nessun accesso.",
+    "noRows": "In questo file non è stata riconosciuta nessuna persona. Controlla i nomi delle colonne nella prima riga o usa il modello.",
+    "noEmailColumn": "Nessuna colonna e-mail riconosciuta: le persone verranno importate senza indirizzo e-mail.",
+    "empty": "Nessuna voce",
+    "template": "Scarica modello"
   },
   "importResult": {
     "title": "Importazione completata",
@@ -41,12 +47,13 @@
     "errorsCount": "{count} errori",
     "skippedExisting": "Saltati (già esistenti)",
     "errorsLabel": "Errori",
-    "close": "Chiudi"
+    "close": "Chiudi",
+    "errorRow": "Impossibile importare la riga {row}."
   },
   "editModal": {
-    "createTitle": "Crea partecipante",
-    "editTitle": "Modifica partecipante",
-    "description": "Ai partecipanti è possibile assegnare direttamente dei modelli e selezionarli in seguito nelle attività.",
+    "createTitle": "Aggiungi membro",
+    "editTitle": "Modifica membro",
+    "description": "Dati anagrafici, adesione e modelli. I ruoli si assegnano in «Accessi e ruoli».",
     "displayName": "Nome visualizzato",
     "active": "Attivo",
     "firstName": "Nome",
@@ -58,26 +65,29 @@
     "leftAtHint": "Non appare più negli elenchi presenze dal giorno successivo. Vuoto = nessuna uscita impostata.",
     "templates": "Modelli",
     "noDescription": "Nessun testo descrittivo",
-    "save": "Salva partecipante",
-    "create": "Crea partecipante",
+    "save": "Salva",
+    "create": "Aggiungi membro",
     "notifyWithoutLogin": "Inviare notifiche e-mail anche se la persona non ha un accesso",
-    "notifyWithoutLoginHint": "Nuovi compiti e promemoria vengono inviati all'indirizzo e-mail registrato."
+    "notifyWithoutLoginHint": "Nuovi compiti e promemoria vengono inviati all'indirizzo e-mail registrato.",
+    "notifyWithoutLoginHelp": "Le persone senza accesso ricevono e-mail solo se lo attivi qui: nuovi compiti e promemoria all'indirizzo registrato. Senza accesso la persona non può disiscriversi da sola.",
+    "notifyWithoutLoginNeedsEmail": "Serve un indirizzo e-mail per la persona.",
+    "membershipHelp": "Le date di ingresso e uscita determinano in quali elenchi presenze compare la persona. «Inattivo» contrassegna la persona come non più attiva e blocca un accesso senza eliminare dati."
   },
   "toasts": {
-    "loadMoreFailed": "Impossibile caricare altri partecipanti",
+    "loadMoreFailed": "Impossibile caricare altri membri",
     "templatesLoadFailed": "Impossibile caricare i modelli assegnati",
     "leftBeforeJoined": "La data di uscita non può precedere la data di ingresso",
     "updated": "{name} aggiornato",
     "created": "{name} creato",
-    "saveFailed": "Impossibile salvare il partecipante",
-    "deleteConfirmMessage": "Eliminare definitivamente il partecipante? L'operazione non può essere annullata.",
+    "saveFailed": "Impossibile salvare il membro",
+    "deleteConfirmMessage": "Eliminare definitivamente il membro? L'operazione non può essere annullata.",
     "deleteConfirmLabel": "Elimina",
-    "deletedSingle": "Partecipante \"{name}\" eliminato",
-    "deleteFailed": "Impossibile eliminare il partecipante",
+    "deletedSingle": "«{name}» eliminato",
+    "deleteFailed": "Impossibile eliminare il membro",
     "deleteUnnamed": "Senza nome",
-    "bulkDeleteConfirmMessage": "Eliminare definitivamente {count} partecipanti? L'operazione non può essere annullata.",
-    "bulkDeleted": "Partecipanti eliminati",
-    "bulkDeleteFailed": "Impossibile eliminare i partecipanti",
+    "bulkDeleteConfirmMessage": "Eliminare definitivamente {count} membri? L'operazione non può essere annullata.",
+    "bulkDeleted": "Membri eliminati",
+    "bulkDeleteFailed": "Impossibile eliminare i membri",
     "csvImportFailed": "Importazione CSV non riuscita"
   },
   "membership": {
@@ -99,11 +109,11 @@
     "inactive": "Inattivi",
     "left": "Usciti"
   },
-  "footerCount": "{count, plural, one {# partecipante} other {# partecipanti}}",
+  "footerCount": "{count, plural, one {# membro} other {# membri}}",
   "footerHint": "Clicca su una riga per modificare",
   "loginTabs": {
-    "withoutLogin": "Partecipanti",
-    "withLogin": "Partecipanti con accesso"
+    "withoutLogin": "Senza accesso",
+    "withLogin": "Con accesso"
   },
   "personalData": {
     "action": "Diritto d’accesso",
@@ -123,6 +133,17 @@
     "sentToast": "L’invito a {email} è in fase di invio.",
     "revokedToast": "Invito ritirato.",
     "failed": "Non è stato possibile elaborare l’invito.",
-    "badge": "Invitato"
+    "badge": "Invitato",
+    "mailOff": "Gli inviti via e-mail non sono possibili perché l'invio di e-mail non è configurato.",
+    "afterCreate": "Invita via e-mail dopo l'aggiunta",
+    "saveEmailFirst": "L'indirizzo e-mail è stato modificato: salva prima, poi invita."
+  },
+  "deleteDialog": {
+    "title": "Eliminare definitivamente «{name}»?",
+    "message": "La persona scompare con presenze, multe e assegnazioni di compiti; non è reversibile. Se è solo uscita, imposta piuttosto una data di uscita o «Inattivo».",
+    "messageWithLogin": "La persona scompare con accesso, presenze, multe e assegnazioni di compiti; non è reversibile. Se non deve più accedere, revoca invece l'accesso (in «Accessi e ruoli»).",
+    "confirm": "Elimina definitivamente",
+    "bulkTitle": "{count, plural, one {Eliminare definitivamente # persona?} other {Eliminare definitivamente # persone?}}",
+    "bulkMessage": "Le persone scompaiono con accessi, presenze, multe e assegnazioni di compiti; non è reversibile. Per i membri usciti meglio impostare una data di uscita."
   }
 }

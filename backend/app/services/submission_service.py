@@ -14,7 +14,7 @@ from app.core.error_log import record_system_error
 from app.core.cycle_utils import cycle_years_for_offsets
 from app import scanner
 from app.core.features_generated import F
-from app.models import CycleConfig, GalleryImage, Event, ListDefinition, ListEntry, Participant, ProtocolTodo, StoredFile, SubmissionAssignment, SubmissionUpload, TenantFeature, TodoFine, TodoStatus, ProtocolTodoFile
+from app.models import CycleConfig, GalleryImage, Event, ListDefinition, ListEntry, Participant, ProtocolTodo, StoredFile, SubmissionAssignment, SubmissionUpload, TenantFeature, TodoStatus, ProtocolTodoFile
 from app.repositories.submission_repository import MANUAL_ELEMENT_REF, SubmissionRepository
 from app.schemas.submission import (
     SubmissionAssignmentCreate,
@@ -53,10 +53,6 @@ def _move_from_quarantine(db: Session, quarantine_rel_path: str) -> str:
     return new_rel
 
 
-# Busse für Aufgaben, die der Trigger erledigt hat, nur so lange nachfrieren (siehe
-# SubmissionService._freeze_fines_after_trigger). Der Job läuft alle 15 Minuten; zwei Tage decken
-# auch einen längeren Ausfall ab.
-TRIGGER_FINE_WINDOW = timedelta(days=2)
 
 # Gemeinsam mit abgabebox-backend/app/repository.py (SUBMISSION_ELEMENT_LOCK_NAMESPACE): Schliessen
 # von Hand und das Speichern einer Einreichung laufen je Abgabe nacheinander, damit ein Upload, der
@@ -836,12 +832,10 @@ class SubmissionService:
     @staticmethod
     def _freeze_fines_after_trigger(db: Session, todo: ProtocolTodo) -> None:
         """Der Datenbank-Trigger (Einreichung in der Abgabebox) erledigt die Aufgabe ohne Python,
-        also ohne Pendenzen-Busse. Der Abgleich friert sie nach: nur für frisch erledigte
-        Aufgaben (Fenster TRIGGER_FINE_WINDOW) ohne bisherige Busse, damit spätere Änderungen an
-        den Regeln alte Abschlüsse nicht neu bewerten."""
-        if datetime.now(UTC) - todo.completed_at > TRIGGER_FINE_WINDOW:
-            return
-        if db.scalar(select(TodoFine.id).where(TodoFine.protocol_todo_id == todo.id).limit(1)) is not None:
+        also ohne Pendenzen-Busse. Der Abgleich friert sie nach - genau einmal je Abschluss
+        (protocol_todo.fine_evaluated_at, Migration 0177), auch wenn der Job tagelang ausfiel.
+        Früher galt ein Fenster von zwei Tagen; danach ging die Busse still verloren."""
+        if todo.fine_evaluated_at is not None:
             return
         todo_fine_service.sync_todo(db, todo)
 

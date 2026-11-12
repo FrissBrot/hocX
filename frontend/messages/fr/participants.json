@@ -1,18 +1,18 @@
 {
-  "pageTitle": "Participants",
-  "pageDescriptionEmpty": "Membres et invités de cette organisation.",
-  "pageDescription": "Personnes de l'organisation pouvant ensuite être associées à des modèles et des tâches.",
+  "pageTitle": "Membres",
+  "pageDescriptionEmpty": "Membres et invités de votre association.",
+  "pageDescription": "Toutes les personnes de votre association – avec ou sans accès. Elles apparaissent dans les présences, amendes et tâches.",
   "csvImport": "Import CSV",
-  "newParticipant": "Nouveau participant",
+  "newParticipant": "Nouveau membre",
   "emptyState": {
-    "title": "Aucun participant pour l'instant",
+    "title": "Aucun membre pour l'instant",
     "description": "Ajoutez des membres individuellement ou importez une liste existante – ils seront alors disponibles pour les présences, tâches et amendes.",
-    "addParticipant": "+ Participant",
+    "addParticipant": "+ Membre",
     "importList": "Importer une liste"
   },
   "searchPlaceholder": "Rechercher un nom ou un e-mail",
   "columns": {
-    "name": "Participant",
+    "name": "Membre",
     "firstName": "Prénom",
     "lastName": "Nom",
     "email": "E-mail",
@@ -20,19 +20,25 @@
     "actions": "Actions",
     "membership": "Adhésion"
   },
-  "emptyFiltered": "Aucun participant trouvé pour le filtre actuel.",
+  "emptyFiltered": "Aucun membre trouvé pour le filtre actuel.",
   "statusActive": "Actif",
   "statusInactive": "Inactif",
   "delete": "Supprimer",
-  "loadingMore": "Chargement d'autres participants…",
+  "loadingMore": "Chargement d'autres membres…",
   "loadMore": "Charger plus ({count} chargés)",
   "csvPreview": {
     "title": "Aperçu CSV",
-    "description": "{count} entrées détectées. Seuls le prénom, le nom, le surnom et l'e-mail sont importés.",
+    "description": "{count, plural, =0 {Aucune entrée détectée.} one {# entrée détectée.} other {# entrées détectées.}}",
     "displayName": "Nom d'affichage",
     "cancel": "Annuler",
     "importing": "Import en cours…",
-    "importEntries": "Importer {count} entrées"
+    "importEntries": "{count, plural, one {Importer # entrée} other {Importer # entrées}}",
+    "columns": "Colonnes reconnues : Vorname, Nachname, Übername (ou Anzeigename), Firmenname, Haupt-E-Mail (ou E-Mail) – Prénom, Nom et Email fonctionnent aussi. Séparateur point-virgule ou virgule.",
+    "help": "Les personnes existantes (même nom affiché ou même e-mail) sont ignorées. Les nouvelles personnes reçoivent le rôle « Lecteur » et aucun accès.",
+    "noRows": "Aucune personne n'a été reconnue dans ce fichier. Vérifiez les noms de colonnes de la première ligne ou utilisez le modèle.",
+    "noEmailColumn": "Aucune colonne e-mail reconnue : les personnes seront importées sans adresse e-mail.",
+    "empty": "Aucune entrée",
+    "template": "Télécharger le modèle"
   },
   "importResult": {
     "title": "Import terminé",
@@ -41,12 +47,13 @@
     "errorsCount": "{count} erreurs",
     "skippedExisting": "Ignorés (déjà existants)",
     "errorsLabel": "Erreurs",
-    "close": "Fermer"
+    "close": "Fermer",
+    "errorRow": "La ligne {row} n'a pas pu être importée."
   },
   "editModal": {
-    "createTitle": "Créer un participant",
-    "editTitle": "Modifier le participant",
-    "description": "Des modèles peuvent être directement attribués aux participants et sélectionnés plus tard dans les tâches.",
+    "createTitle": "Ajouter un membre",
+    "editTitle": "Modifier le membre",
+    "description": "Données de base, adhésion et modèles. Les rôles s'attribuent sous « Accès et rôles ».",
     "displayName": "Nom d'affichage",
     "active": "Actif",
     "firstName": "Prénom",
@@ -58,26 +65,29 @@
     "leftAtHint": "N'apparaît plus dans les listes de présence à partir du lendemain. Vide = aucune sortie définie.",
     "templates": "Modèles",
     "noDescription": "Aucun texte de description",
-    "save": "Enregistrer le participant",
-    "create": "Créer le participant",
+    "save": "Enregistrer",
+    "create": "Ajouter le membre",
     "notifyWithoutLogin": "Envoyer des notifications par e-mail même sans connexion",
-    "notifyWithoutLoginHint": "Les nouvelles tâches et rappels sont envoyés à l'adresse e-mail enregistrée."
+    "notifyWithoutLoginHint": "Les nouvelles tâches et rappels sont envoyés à l'adresse e-mail enregistrée.",
+    "notifyWithoutLoginHelp": "Les personnes sans accès ne reçoivent des e-mails que si vous l'activez ici : nouvelles tâches et rappels à l'adresse enregistrée. Sans accès, la personne ne peut pas se désabonner elle-même.",
+    "notifyWithoutLoginNeedsEmail": "Cela nécessite une adresse e-mail pour la personne.",
+    "membershipHelp": "Les dates d'entrée et de sortie déterminent dans quelles listes de présence la personne apparaît. « Inactif » marque la personne comme n'étant plus active et bloque un accès sans supprimer de données."
   },
   "toasts": {
-    "loadMoreFailed": "Impossible de charger d'autres participants",
+    "loadMoreFailed": "Impossible de charger d'autres membres",
     "templatesLoadFailed": "Impossible de charger les modèles attribués",
     "leftBeforeJoined": "La date de sortie ne peut pas précéder la date d'entrée",
     "updated": "{name} mis à jour",
     "created": "{name} créé",
-    "saveFailed": "Le participant n'a pas pu être enregistré",
-    "deleteConfirmMessage": "Supprimer définitivement le participant ? Cette action est irréversible.",
+    "saveFailed": "Le membre n'a pas pu être enregistré",
+    "deleteConfirmMessage": "Supprimer définitivement le membre ? Cette action est irréversible.",
     "deleteConfirmLabel": "Supprimer",
-    "deletedSingle": "Participant « {name} » supprimé",
-    "deleteFailed": "Le participant n'a pas pu être supprimé",
+    "deletedSingle": "« {name} » supprimé",
+    "deleteFailed": "Le membre n'a pas pu être supprimé",
     "deleteUnnamed": "Sans nom",
-    "bulkDeleteConfirmMessage": "Supprimer définitivement {count} participants ? Cette action est irréversible.",
-    "bulkDeleted": "Participants supprimés",
-    "bulkDeleteFailed": "Les participants n'ont pas pu être supprimés",
+    "bulkDeleteConfirmMessage": "Supprimer définitivement {count} membres ? Cette action est irréversible.",
+    "bulkDeleted": "Membres supprimés",
+    "bulkDeleteFailed": "Les membres n'ont pas pu être supprimés",
     "csvImportFailed": "Échec de l'import CSV"
   },
   "membership": {
@@ -99,11 +109,11 @@
     "inactive": "Inactifs",
     "left": "Sortis"
   },
-  "footerCount": "{count, plural, one {# participant} other {# participants}}",
+  "footerCount": "{count, plural, one {# membre} other {# membres}}",
   "footerHint": "Cliquer sur une ligne pour modifier",
   "loginTabs": {
-    "withoutLogin": "Participants",
-    "withLogin": "Participants avec connexion"
+    "withoutLogin": "Sans accès",
+    "withLogin": "Avec accès"
   },
   "personalData": {
     "action": "Droit d’accès",
@@ -123,6 +133,17 @@
     "sentToast": "L’invitation à {email} est en cours d’envoi.",
     "revokedToast": "Invitation retirée.",
     "failed": "L’invitation n’a pas pu être traitée.",
-    "badge": "Invité·e"
+    "badge": "Invité·e",
+    "mailOff": "Les invitations par e-mail ne sont pas possibles car l'envoi d'e-mails n'est pas configuré.",
+    "afterCreate": "Inviter par e-mail après l'ajout",
+    "saveEmailFirst": "L'adresse e-mail a été modifiée : enregistrez d'abord, puis invitez."
+  },
+  "deleteDialog": {
+    "title": "Supprimer définitivement « {name} » ?",
+    "message": "La personne disparaît avec ses présences, amendes et attributions de tâches ; c'est irréversible. Si elle a seulement quitté l'association, indiquez plutôt une date de sortie ou « Inactif ».",
+    "messageWithLogin": "La personne disparaît avec son accès, ses présences, amendes et attributions de tâches ; c'est irréversible. Si elle ne doit simplement plus se connecter, retirez plutôt l'accès (sous « Accès et rôles »).",
+    "confirm": "Supprimer définitivement",
+    "bulkTitle": "{count, plural, one {Supprimer définitivement # personne ?} other {Supprimer définitivement # personnes ?}}",
+    "bulkMessage": "Les personnes disparaissent avec accès, présences, amendes et attributions de tâches ; c'est irréversible. Pour les membres sortis, indiquez plutôt une date de sortie."
   }
 }

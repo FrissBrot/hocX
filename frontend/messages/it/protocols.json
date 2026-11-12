@@ -69,7 +69,7 @@
     "protocolCount": "{count, plural, one {# verbale} other {# verbali}}",
     "protocolTitle": "Titolo",
     "revertClosedConfirmTitle": "Annullare la chiusura?",
-    "revertClosedConfirmMessage": "Alla chiusura è stato salvato lo stato di tutti i compiti di questo verbale. Annullando la chiusura questa istantanea viene scartata: il verbale mostrerà poi i compiti attuali, comprese tutte le modifiche dalla chiusura (compiti completati, modificati, eliminati e nuovi).",
+    "revertClosedConfirmMessage": "Alla chiusura è stato salvato lo stato di tutti i compiti di questo verbale. Annullando la chiusura questa istantanea viene scartata: il verbale mostrerà poi i compiti attuali, comprese tutte le modifiche dalla chiusura. Alla nuova chiusura i PDF precedenti e i segni di modifica vengono eliminati e viene creato un nuovo PDF firmato.",
     "revertClosedConfirmLabel": "Ripristina",
     "revertFailed": "Ripristino non riuscito",
     "revertTo": "Torna a \"{status}\"",
@@ -93,7 +93,15 @@
     "syncTemplateConfirmKept": "{count, plural, one {Non più nel modello ma contiene dati, quindi resta alla fine: {names}.} other {Non più nel modello ma contengono dati, quindi restano alla fine: {names}.}}",
     "syncTemplateConfirmLabel": "Ricarica",
     "syncTemplateDone": "Elementi ricaricati dal modello",
-    "syncTemplateFailed": "Impossibile ricaricare gli elementi"
+    "syncTemplateFailed": "Impossibile ricaricare gli elementi",
+    "alreadyFinalizedError": "Il verbale è già finalizzato e congelato. Riportalo prima indietro dal menu («Torna a …»).",
+    "deleteFinalizedHint": "I verbali finalizzati non possono essere eliminati. Riportali prima indietro con «Torna a …», poi eliminali.",
+    "searchFailed": "Ricerca non riuscita",
+    "searching": "Ricerca in corso …",
+    "loadMoreFailed": "Impossibile caricare altri verbali.",
+    "retry": "Riprova",
+    "templateHelp": "Il modello definisce i punti all’ordine del giorno, i blocchi e gli schemi per numero e titolo. Senza modello non si può creare un verbale. hocX ricorda l’ultimo scelto.",
+    "previewHelp": "hocX calcola numero e titolo dallo schema del modello: il numero progressivo segue la posizione della data nel ciclo. Con una data precedente, i verbali successivi ancora aperti vengono rinumerati."
   },
   "byName": "da {name}",
   "cancel": "Annulla",
@@ -159,7 +167,8 @@
       "shortcutSearch": "Cerca – nelle presenze prima la ricerca persona",
       "shortcutTodo": "Apri attività rapida",
       "shortcuts": "Scorciatoie da tastiera",
-      "title": "Stato e collaborazione"
+      "title": "Stato e collaborazione",
+      "docsLink": "Guida: collaborare a un verbale"
     }
   },
   "collectFine": "Riscuoti multa",
@@ -243,7 +252,20 @@
     "statusChangedByOtherToast": "{name} ha cambiato lo stato in «{status}».",
     "draftsRestoredToast": "{count, plural, one {# bozza locale è stata ripristinata} other {# bozze locali sono state ripristinate}}.",
     "conflictToast": "Conflitto: qualcun altro ha salvato questa sezione nel frattempo. È stata caricata la versione attuale – la tua ultima modifica non è stata applicata, ma è conservata come bozza locale.",
-    "eventHideFailed": "Non è stato possibile rimuovere l'evento"
+    "eventHideFailed": "Non è stato possibile rimuovere l'evento",
+    "finishProtocolConfirmTitle": "Finalizzare il verbale?",
+    "finishProtocolConfirmMessage": "Il verbale verrà congelato e non potrà più essere modificato. hocX genera il PDF firmato, registra lo stato dei compiti e invia le notifiche e-mail ai responsabili. Si può annullare solo dal menu nell’elenco dei verbali («Torna a …»).",
+    "finishSessionConfirmTitle": "Concludere la seduta?",
+    "finishSessionConfirmMessage": "La seduta termina e il verbale passa alla rielaborazione. Le richieste in attesa per questa riunione vengono riprese definitivamente. Tornare indietro è possibile solo dal menu nell’elenco dei verbali.",
+    "confirmWithOtherEditors": "{consequences} Attenzione: qualcun altro sta lavorando a questo verbale in questo momento.",
+    "statusChangeUnsavedChanges": "Stato non modificato: non tutte le modifiche sono state salvate. Controlla la connessione e riprova.",
+    "statusChangeFailed": "Impossibile modificare lo stato.",
+    "draftsConflictToast": "{count, plural, one {Una bozza locale non è stata applicata} other {# bozze locali non sono state applicate}} perché nel frattempo qualcun altro ha modificato questo punto. Viene mostrata la versione attuale.",
+    "draftsConflictApply": "Usa la mia bozza",
+    "workflowHelpTopic": "Stato e modalità di lavoro",
+    "workflowHelp": "Quattro passi: pianificato (preparazione), preparato (seduta), svolto (rielaborazione), concluso. La finalizzazione congela il verbale, genera il PDF firmato e avvisa i responsabili dei compiti aperti.",
+    "trackChangesHelpTopic": "Traccia modifiche",
+    "trackChangesHelp": "Durante la preparazione segna in rosso ciò che è cambiato rispetto all’ultimo verbale finalizzato di questo modello. Dalla seduta non si aggiungono nuovi segni; alla finalizzazione spariscono tutti."
   },
   "embeddedBlock": {
     "attendance": "Presenza",
@@ -293,7 +315,9 @@
     "sourceCycle": "il ciclo {year}",
     "sourceLive": "la lista attuale",
     "title": "Vista storica — {name} {year}",
-    "unlockEdit": "Sblocca modifica"
+    "unlockEdit": "Sblocca modifica",
+    "helpTopic": "Vista storica",
+    "help": "I verbali dei cicli passati mostrano lo stato di elenchi e dati finanziari congelato allora, non i dati attuali. «Sblocca modifica» consente correzioni allo stato storico; ogni modifica viene registrata."
   },
   "joinsLabel": "Entrate",
   "leavesLabel": "Uscite",
@@ -535,7 +559,9 @@
     "emptySearch": "Nessuna persona trovata per «{query}»",
     "emptyFilter": "Nessuno con questo stato",
     "fine": "CHF {amount, number}",
-    "fineTitle": "La multa viene creata automaticamente"
+    "fineTitle": "La multa viene creata automaticamente",
+    "helpTopic": "Registrare le presenze",
+    "help": "Un clic su una persona passa allo stato successivo, una pressione lunga apre la selezione. Con Tab raggiungi una persona e con 1–4 imposti lo stato. «Segna gli altri presenti» imposta tutte le persone ancora aperte. Se è prevista una multa per ritardo o assenza, viene creata automaticamente."
   },
   "matrixBoard": {
     "title": "Matrice",
@@ -578,6 +604,7 @@
       "block_not_exported": "Questo blocco è escluso dall’esportazione PDF nel modello di seduta.",
       "omitted_by_layout": "Il modello PDF (Documenti) non include questo blocco, ad es. a causa di un filtro dei contenuti.",
       "image_unavailable": "{count, plural, one {Un’immagine non è ancora stata verificata o non è disponibile e appare come segnaposto nel PDF.} other {# immagini non sono ancora state verificate o non sono disponibili e appaiono come segnaposto nel PDF.}}"
-    }
+    },
+    "help": "{reason} Il contenuto resta visibile e salvato nell’editor, ma non compare nel PDF."
   }
 }

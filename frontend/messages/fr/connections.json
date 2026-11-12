@@ -1,7 +1,8 @@
 {
   "page": {
     "title": "Connexions",
-    "description": "Affichez vos rendez-vous et vos tâches de hocX dans Apple Calendrier ou Google Agenda. Les calendriers se mettent à jour automatiquement – les modifications se font toujours dans hocX."
+    "description": "Affichez vos rendez-vous et vos tâches de hocX dans Apple Calendrier ou Google Agenda. Les calendriers se mettent à jour automatiquement – les modifications se font toujours dans hocX.",
+    "docsLink": "En savoir plus dans l'aide"
   },
   "status": {
     "active": "Connecté",

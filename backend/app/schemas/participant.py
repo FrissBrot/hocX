@@ -82,6 +82,7 @@ class ParticipantImportRow(BaseModel):
 class ParticipantImportResult(BaseModel):
     imported: list[ParticipantRead]
     duplicates: list[str]
+    # Zeilennummern (als Text) nicht importierbarer Zeilen; die Oberfläche übersetzt die Meldung.
     errors: list[str]
 
 

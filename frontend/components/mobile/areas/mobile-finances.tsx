@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
-import { useAllPages } from "@/components/mobile/mobile-data";
+import { fetchAllPages, useAllPages } from "@/components/mobile/mobile-data";
 import { MobileIcon } from "@/components/mobile/mobile-icons";
 import { useOpenMore } from "@/components/mobile/mobile-shell";
 import {
@@ -22,6 +22,10 @@ import { FineCreateModal } from "@/components/finances/fine-create-modal";
 import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
+import { StatusBanner } from "@/components/ui/status-banner";
+import { financeErrorMessage, lockedReasonText } from "@/components/finances/finance-errors";
+import { fineTotalsByCurrency, formatFineTotals } from "@/lib/utils/fine-stats";
+import { formatMoney } from "@/lib/utils/format";
 import { useConfirm } from "@/contexts/confirm-context";
 import { restoreFine, useFineDelete } from "@/components/finances/fine-delete";
 import { useToast } from "@/contexts/toast-context";
@@ -29,22 +33,15 @@ import { browserApiFetch } from "@/lib/api/client";
 import { fineTypeLabels } from "@/lib/constants/fine-types";
 import type { AttendanceFineListItem, FinanceAccount, FinanceTransaction, TodoFineListItem } from "@/types/api";
 
-// Konflikte (409) aus dem Backend uebersetzt anzeigen: Konto mit Buchungen/Bussen loeschen bzw.
-// Buchung einer einkassierten Busse aendern (siehe backend finance_repository.FinanceConflictError).
-function isConflict(error: unknown): boolean {
-  return error instanceof Error && (error as { status?: number }).status === 409;
-}
-
 function money(amount: number, currency?: string | null) {
-  const value = new Intl.NumberFormat("de-CH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
-  return currency ? `${currency} ${value}` : value;
+  return formatMoney(amount, currency ?? "", undefined, { currencyFirst: true });
 }
 
 // ── Finanzen ────────────────────────────────────────────────────────────
 
 type TxFilter = "all" | "income" | "expense" | "year";
 
-export function MobileFinances({ initialAccounts, canWrite }: { initialAccounts: FinanceAccount[]; canWrite: boolean }) {
+export function MobileFinances({ initialAccounts, canWrite, readOnly = false }: { initialAccounts: FinanceAccount[]; canWrite: boolean; readOnly?: boolean }) {
   const t = useTranslations("finances");
   const tMobile = useTranslations("mobile");
   const locale = useLocale();
@@ -63,6 +60,7 @@ export function MobileFinances({ initialAccounts, canWrite }: { initialAccounts:
   // (laengere, mehrseitige) Antwort des vorigen Kontos sonst nach der des neuen an und zeigte
   // dessen Buchungen unter dem gewaehlten Konto (Audit MAIN-FE-005).
   const loadRequestRef = useRef(0);
+  const [loadError, setLoadError] = useState<unknown>(null);
   const loadTransactions = useCallback(async (accountId: string) => {
     const requestId = ++loadRequestRef.current;
     const isCurrent = () => requestId === loadRequestRef.current;
@@ -75,10 +73,18 @@ export function MobileFinances({ initialAccounts, canWrite }: { initialAccounts:
         if (batch.length < 200) break;
       }
       setTransactions(list);
-    } catch {
-      if (isCurrent()) setTransactions([]);
+      setLoadError(null);
+    } catch (error) {
+      if (!isCurrent()) return;
+      setTransactions([]);
+      setLoadError(error);
     }
   }, []);
+
+  // Ladefehler als Toast (eigener Effekt, damit loadTransactions stabil bleibt)
+  useEffect(() => {
+    if (loadError) showToast(financeErrorMessage(loadError, t, "loadTxFailed"), "error");
+  }, [loadError, showToast, t]);
 
   const refreshAccounts = useCallback(async () => {
     const list = (await browserApiFetch<FinanceAccount[]>("/api/finance/accounts")) ?? [];
@@ -124,8 +130,9 @@ export function MobileFinances({ initialAccounts, canWrite }: { initialAccounts:
       const list = await refreshAccounts();
       setSelectedId(list[0]?.id ?? null);
       setAccountSheet(null);
+      showToast(t("accountDeleted"), "success");
     } catch (error) {
-      showToast(isConflict(error) ? t("accountDeleteConflict") : error instanceof Error ? error.message : t("deleteAccountFailed"), "error");
+      showToast(financeErrorMessage(error, t, "deleteAccountFailed"), "error");
     }
   }
 
@@ -144,6 +151,11 @@ export function MobileFinances({ initialAccounts, canWrite }: { initialAccounts:
           ) : undefined
         }
       />
+      {readOnly ? (
+        <div className="mobile-section">
+          <StatusBanner tone="neutral" message={t("readOnlyBanner")} />
+        </div>
+      ) : null}
       {accounts.length === 0 ? (
         <MobileEmpty title={t("emptyTitle")} hint={canWrite ? t("addTransactionFirstHint") : t("emptyDescription")} />
       ) : (
@@ -181,15 +193,20 @@ export function MobileFinances({ initialAccounts, canWrite }: { initialAccounts:
                 <span className="mobile-list-group-title">{group.label}</span>
               </div>
               <div className="mobile-card mobile-list-card">
-                {group.items.map((tx) => (
+                {group.items.map((tx) => {
+                  // Gesperrte Buchung (Busse/abgeschlossenes Protokoll): Grund anzeigen statt Bearbeiten anbieten
+                  const lockedText = lockedReasonText(tx, t);
+                  return (
                   <MobileListRow
                     key={tx.id}
-                    onClick={canWrite ? () => setTxSheet(tx) : undefined}
+                    onClick={lockedText ? () => showToast(lockedText, "info") : canWrite ? () => setTxSheet(tx) : undefined}
                     chevron={false}
                     label={
                       <span className="mobile-row-stack">
                         <span className="mobile-row-title">{tx.description}</span>
-                        <span className="mobile-row-meta">{dateParts.dayMonth(tx.transaction_date, locale)}</span>
+                        <span className="mobile-row-meta">
+                          {lockedText ? `${dateParts.dayMonth(tx.transaction_date, locale)} · ${t("locked.label")}` : dateParts.dayMonth(tx.transaction_date, locale)}
+                        </span>
                       </span>
                     }
                     trailing={
@@ -199,11 +216,12 @@ export function MobileFinances({ initialAccounts, canWrite }: { initialAccounts:
                       </span>
                     }
                   />
-                ))}
+                  );
+                })}
               </div>
             </section>
           ))}
-          {groups.length === 0 ? <MobileEmpty title={t("noTransactions")} /> : null}
+          {groups.length === 0 ? <MobileEmpty title={canWrite ? t("noTransactions") : t("noTransactionsReadOnly")} /> : null}
         </>
       )}
 
@@ -267,8 +285,9 @@ function TransactionSheet({
       if (transaction) await browserApiFetch(`/api/finance/transactions/${transaction.id}`, { method: "PATCH", body });
       else await browserApiFetch(`/api/finance/accounts/${account.id}/transactions`, { method: "POST", body });
       await onSaved();
+      showToast(t("txSaved"), "success");
     } catch (error) {
-      showToast(isConflict(error) ? t("txLockedByFineConflict") : error instanceof Error ? error.message : t("saveTxFailed"), "error");
+      showToast(financeErrorMessage(error, t, "saveTxFailed"), "error");
     } finally {
       setSaving(false);
     }
@@ -279,8 +298,9 @@ function TransactionSheet({
     try {
       await browserApiFetch(`/api/finance/transactions/${transaction.id}`, { method: "DELETE" });
       await onSaved();
+      showToast(t("txDeleted"), "success");
     } catch (error) {
-      showToast(isConflict(error) ? t("txLockedByFineConflict") : error instanceof Error ? error.message : t("deleteTxFailed"), "error");
+      showToast(financeErrorMessage(error, t, "deleteTxFailed"), "error");
     }
   }
 
@@ -365,8 +385,9 @@ function AccountSheet({
         ? await browserApiFetch<FinanceAccount>(`/api/finance/accounts/${account.id}`, { method: "PATCH", body })
         : await browserApiFetch<FinanceAccount>("/api/finance/accounts", { method: "POST", body });
       await onSaved(saved);
+      showToast(t("accountSaved"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("saveAccountFailed"), "error");
+      showToast(financeErrorMessage(error, t, "saveAccountFailed"), "error");
     } finally {
       setSaving(false);
     }
@@ -483,7 +504,8 @@ export function MobileFines({
       .sort((a, b) => (b.protocol_date ?? "").localeCompare(a.protocol_date ?? ""));
   }, [fines, filter, search]);
   const pending = fines.filter((fine) => fine.status === "pending");
-  const pendingTotal = pending.reduce((sum, fine) => sum + fine.amount, 0);
+  // Je Währung getrennt (Konten können verschiedene Währungsbezeichnungen haben)
+  const pendingTotals = fineTotalsByCurrency(pending.map((fine) => ({ count: 1, amount: fine.amount, currency: fine.currency_label ?? "CHF" })));
   const pendingPeople = new Set(pending.map((fine) => fine.participant_id ?? fine.participant_name_snapshot)).size;
   const openFine = fines.find((fine) => fine.id === openId) ?? null;
 
@@ -500,7 +522,7 @@ export function MobileFines({
         action: { label: t("reopen"), onClick: () => void reopen(fine) },
       });
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("collectFailed"), "error");
+      showToast(financeErrorMessage(error, t, "collectFailed"), "error");
     }
   }
 
@@ -508,7 +530,7 @@ export function MobileFines({
     try {
       replace(await browserApiFetch<AttendanceFineListItem>(`/api/fines/${fine.id}/reopen`, { method: "POST" }));
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("reopenFailed"), "error");
+      showToast(financeErrorMessage(error, t, "reopenFailed"), "error");
     }
   }
 
@@ -523,12 +545,17 @@ export function MobileFines({
     try {
       replace({ ...fine, ...(await restoreFine(fine.id)) });
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("restoreFineFailed"), "error");
+      showToast(financeErrorMessage(error, t, "restoreFineFailed"), "error");
     }
   }
 
+  // Alle Seiten neu laden (das Backend erlaubt höchstens limit=200 je Seite; limit=500 ergab 422)
   async function reload() {
-    setFines((await browserApiFetch<AttendanceFineListItem[]>("/api/fines?limit=500")) ?? []);
+    try {
+      setFines(await fetchAllPages<AttendanceFineListItem>("/api/fines"));
+    } catch (error) {
+      showToast(financeErrorMessage(error, t, "reloadFailed"), "error");
+    }
   }
 
   return (
@@ -548,7 +575,7 @@ export function MobileFines({
         />
         <MobileStat
           label={t("filterPending")}
-          value={money(pendingTotal, pending[0]?.currency_label ?? "CHF")}
+          value={formatFineTotals(pendingTotals, (amount) => formatMoney(amount, "", locale))}
           sub={tMobile("dashboard.finePeople", { count: pendingPeople })}
         />
         <SearchInput value={search} onChange={setSearch} placeholder={t("finesSearchPlaceholder")} />

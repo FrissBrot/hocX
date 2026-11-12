@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import type { EditorMode, PageSetup } from "@/components/documents/designer/toolbar-types";
 import { Select } from "@/components/ui/select";
+import { HelpPopover } from "@/components/ui/help-popover";
 
 export type SaveState = "saved" | "dirty" | "saving" | "conflict" | "error";
 export type ViewMode = "design" | "split" | "preview";
@@ -84,6 +85,9 @@ export function Toolbar(props: Props) {
             </option>
           ))}
         </Select>
+        <HelpPopover topic={t("toolbar.mode")} docs={{ page: "dokumente", anchor: "modi" }}>
+          {t("toolbar.modeHelp")}
+        </HelpPopover>
         <div className="studio-segmented" role="radiogroup" aria-label={t("toolbar.view")}>
           {(["design", "split", "preview"] as const).map((view) => (
             <button key={view} type="button" role="radio" aria-checked={props.view === view} className={props.view === view ? "button-toggle button-toggle-active" : "button-toggle"} onClick={() => props.onViewChange(view)}>

@@ -4,6 +4,7 @@ import { useParticipantSelectable } from "@/contexts/participant-date-context";
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
@@ -442,7 +443,10 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs, canMa
         {filteredTemplates.map((template) => (
           <tr key={template.id} className="table-row-clickable" onClick={() => router.push(`/templates/${template.id}`)}>
             <td>
-              <strong>{template.name}</strong>
+              {/* Echter Link: Zeile per Tastatur/Screenreader erreichbar (Audit 2026-11). */}
+              <Link href={`/templates/${template.id}`} className="table-row-link" onClick={(event) => event.stopPropagation()}>
+                {template.name}
+              </Link>
               <div className="muted">{template.status === "archived" ? t("archived") : t("active")}</div>
             </td>
             <td className="table-cell-wrap">{template.description ?? t("noDescription")}</td>

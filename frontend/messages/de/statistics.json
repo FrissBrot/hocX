@@ -10,9 +10,9 @@
   "chartFinesByType": "Bussen nach Typ",
   "chartFinesPerMemberTop10": "Bussen pro Mitglied (Top 10)",
   "chartSessionsPerGroup": "Termine pro Gruppe",
-  "chartTodosOverview": "Todos Übersicht",
+  "chartTodosOverview": "Pendenzen-Übersicht",
   "count": "Anzahl",
-  "emptyDescription": "Sobald Protokolle mit Anwesenheit, Todos oder Finanzdaten vorliegen, entstehen hier automatisch Diagramme.",
+  "emptyDescription": "Sobald Protokolle mit Anwesenheit, Pendenzen oder Finanzdaten vorliegen, entstehen hier automatisch Diagramme.",
   "emptyHint": "Ab dem zweiten Protokoll zeigt der Zeitverlauf Entwicklungen über mehrere Monate.",
   "emptyTitle": "Noch keine Auswertung möglich",
   "excused": "Entschuldigt",
@@ -24,7 +24,7 @@
   "kpiFinesTotal": "Bussen gesamt",
   "kpiMembers": "Mitglieder",
   "kpiProtocols": "Protokolle",
-  "kpiTodos": "Todos",
+  "kpiTodos": "Pendenzen",
   "noAttendanceData": "Keine Anwesenheitsdaten vorhanden.",
   "noAttendanceDataPeriod": "Keine Anwesenheitsdaten im gewählten Zeitraum.",
   "noDataAvailable": "Keine Statistikdaten verfügbar.",
@@ -32,7 +32,7 @@
   "noFinanceDataPeriod": "Keine Finanzdaten im gewählten Zeitraum.",
   "openCountSub": "{count} offen",
   "pageIntro": "Auswertungen und Kennzahlen für diesen Mandanten.",
-  "pageIntroEmpty": "Auswertungen zu Anwesenheit, Todos und Finanzen.",
+  "pageIntroEmpty": "Auswertungen zu Anwesenheit, Pendenzen und Finanzen.",
   "pageTitle": "Statistiken",
   "period12m": "12 Mo.",
   "period3m": "3 Mo.",
@@ -48,5 +48,14 @@
   "viewByMember": "Pro Mitglied",
   "viewByTime": "Über Zeit",
   "withParticipants": "Mit Teilnehmern",
-  "perPersonOwnHint": "Bei Bussen und Anwesenheit je Person siehst du nur deine eigenen Werte."
+  "perPersonOwnHint": "Bei Bussen und Anwesenheit je Person siehst du nur deine eigenen Werte.",
+  "fineType": {
+    "absent": "Unentschuldigt",
+    "late": "Verspätet"
+  },
+  "kpiProtocolsSub": "durchgeführt oder abgeschlossen",
+  "groupsHelp": "Gruppen sind die Einträge einer Stammliste, die als «Quelle der Gruppenstatistik» markiert ist. Gezählt werden Termine, deren Tag einem Eintrag entspricht, je Zyklus.",
+  "groupsEmptyNoSource": "Noch keine Gruppen: Markiere unter Stammdaten › Stammlisten eine Liste als «Quelle der Gruppenstatistik» und gib den Terminen das passende Tag.",
+  "groupsEmptyNoEvents": "Noch keine Termine mit einem Tag aus der Gruppenliste.",
+  "groupsDocsLink": "Mehr dazu in der Hilfe"
 }

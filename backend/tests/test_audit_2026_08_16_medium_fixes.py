@@ -92,12 +92,16 @@ def test_create_transaction_rejects_frozen_protocol(db):
     protocol = _frozen_protocol(db, tenant.id, template.id)
     account = make_finance_account(db, tenant.id)
 
+    from app.repositories.finance_repository import FinanceConflictError
+
     repo = FinanceRepository()
-    result = repo.create_transaction(
-        db, account.id, tenant.id,
-        FinanceTransactionCreate(amount=Decimal("10.00"), description="x", transaction_date=date(2026, 1, 1), protocol_id=protocol.public_id),
-    )
-    assert result is None
+    # Seit dem Finanz-Audit 2026-11: 409 mit Code statt «nicht gefunden»
+    with pytest.raises(FinanceConflictError) as exc:
+        repo.create_transaction(
+            db, account.id, tenant.id,
+            FinanceTransactionCreate(amount=Decimal("10.00"), description="x", transaction_date=date(2026, 1, 1), protocol_id=protocol.public_id),
+        )
+    assert exc.value.code == "protocol_finalized"
 
 
 # --- D3: title must not be re-rendered when the number update was blocked -----------------

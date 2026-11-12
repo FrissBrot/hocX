@@ -111,10 +111,11 @@ def test_delete_gallery_images_reports_unknown_or_cross_tenant_id_as_an_error(db
     assert service.stored_file_repository.get_by_public_id(db, item.id, tenant_id=tenant_b.id) is not None
 
 
-def test_delete_gallery_images_removes_album_membership_when_paired_with_drop_items_for_files(db):
-    """Mirrors the bulk-delete route's own sequencing: drop_items_for_files first (no FK
-    protects photo_album_item.file_id), then delete_gallery_images, then recompute_best_of
-    on whatever albums lost an item."""
+def test_delete_gallery_images_removes_album_membership_itself(db):
+    """FileEraser.erase entfernt die Album-Einträge der gelöschten Datei selbst; mit
+    übergebenem Eraser bestimmt after_commit die «besten Bilder» der Alben neu."""
+    from app.services.file_eraser import FileEraser
+
     tenant = make_tenant(db)
     item = _upload_gallery_image(db, tenant.id)
     album = PhotoAlbum(tenant_id=tenant.id, name="Album", kind="manual")
@@ -123,17 +124,35 @@ def test_delete_gallery_images_removes_album_membership_when_paired_with_drop_it
     photo_album_service.add_items(db, album, [item.id])
     db.commit()
 
-    touched = photo_album_service.drop_items_for_files(db, [item.id])
-    deleted, errors = service.delete_gallery_images(db, tenant.id, [item.id])
+    eraser = FileEraser(service)
+    deleted, errors = service.delete_gallery_images(db, tenant.id, [item.id], eraser=eraser)
     db.commit()
-    for album_id in touched:
-        recomputed_album = db.get(PhotoAlbum, album_id)
-        if recomputed_album is not None:
-            photo_album_service.recompute_best_of(db, service, recomputed_album)
+    eraser.after_commit(db)
 
     assert deleted == [item.id]
-    assert touched == {album.id}
+    assert errors == []
     assert db.query(PhotoAlbumItem).filter_by(album_id=album.id).count() == 0
+
+
+def test_bulk_delete_route_keeps_refused_photo_in_its_albums(db):
+    """Audit Dateien/Fotos: ein Protokollbild wird abgelehnt und darf deshalb auch nicht still
+    aus (ggf. geteilten) Alben verschwinden; das gleichzeitig gelöschte Galeriebild schon."""
+    tenant = make_tenant(db)
+    protocol_file = _make_protocol_image(db, tenant.id)
+    item = _upload_gallery_image(db, tenant.id)
+    album = PhotoAlbum(tenant_id=tenant.id, name="Album", kind="manual")
+    db.add(album)
+    db.flush()
+    photo_album_service.add_items(db, album, [protocol_file.public_id, item.id])
+    db.commit()
+    user = make_current_user(tenant.id, role="writer")
+
+    result = files_routes.bulk_delete_files(FileBulkDelete(file_ids=[protocol_file.public_id, item.id]), db=db, user=user)
+
+    assert result.deleted_ids == [item.id]
+    assert len(result.errors) == 1
+    remaining = {row.file_id for row in db.query(PhotoAlbumItem).filter_by(album_id=album.id)}
+    assert remaining == {protocol_file.public_id}
 
 
 def test_bulk_update_tags_adds_and_removes(db):

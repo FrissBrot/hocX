@@ -7,6 +7,27 @@ import { getRuntimeConfig } from "@/lib/runtime-config";
  */
 export const DOCS_PAGES = {
   abgabebox: "benutzer/abgabebox/",
+  bussen: "benutzer/bussen/",
+  todos: "benutzer/todos/",
+  aufgabenpakete: "benutzer/aufgabenpakete/",
+  listen: "benutzer/listen/",
+  anliegen: "benutzer/anliegen/",
+  vorlagen: "benutzer/vorlagen/",
+  statistik: "benutzer/statistik/",
+  dokumente: "benutzer/dokumente/",
+  fotos: "benutzer/fotos/",
+  dateien: "benutzer/dateien/",
+  protokolle: "benutzer/protokolle/",
+  termine: "benutzer/termine/",
+  zyklen: "benutzer/zyklen/",
+  verknuepfungen: "benutzer/verknuepfungen/",
+  mitglieder: "benutzer/mitglieder/",
+  rollen: "benutzer/rollen/",
+  konto: "benutzer/konto/",
+  benachrichtigungen: "benutzer/benachrichtigungen/",
+  finanzen: "benutzer/finanzen/",
+  einstellungen: "benutzer/einstellungen/",
+  echtheit: "benutzer/echtheit/",
 } as const;
 
 export type DocsPage = keyof typeof DOCS_PAGES;

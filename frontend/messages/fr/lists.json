@@ -7,7 +7,7 @@
   },
   "defaultColumnOne": "Colonne 1",
   "defaultColumnTwo": "Colonne 2",
-  "pageTitle": "Listes de référence",
+  "pageTitle": "Listes de base",
   "pageDescriptionEmpty": "Listes librement définissables pour le matériel, les fonctions ou les inscriptions.",
   "pageDescription": "Fonctions, groupes, sponsors – utilisables dans les procès-verbaux et les remises.",
   "newList": "+ Nouvelle liste",
@@ -17,7 +17,7 @@
     "hint": "Les listes peuvent servir de source pour les dépôts."
   },
   "sidebar": {
-    "title": "Listes",
+    "title": "Listes de base",
     "totalCount": "{count} au total",
     "search": "Rechercher",
     "searchPlaceholder": "Rechercher des listes…",
@@ -73,7 +73,8 @@
     "columns": "Colonnes",
     "columnsHint": "Toujours deux – titre et type de données au choix.",
     "preview": "Aperçu de la liste dans le bloc de tableau",
-    "cancel": "Annuler"
+    "cancel": "Annuler",
+    "groupSource": "Source des statistiques de groupes"
   },
   "toasts": {
     "pdfExportFailed": "Échec de l'export PDF",
@@ -99,7 +100,8 @@
     "entryRemoveFailed": "L'entrée n'a pas pu être retirée",
     "deleteDraftEntryConfirm": "Retirer cette entrée du brouillon ? Elle ne sera pas reprise lors de la confirmation.",
     "snapshotCreated": "Instantané créé pour cette période",
-    "snapshotCreateFailed": "L'instantané n'a pas pu être créé"
+    "snapshotCreateFailed": "L'instantané n'a pas pu être créé",
+    "listInUse": "La liste est encore liée et ne peut pas être supprimée: {places}. Supprimez le lien à cet endroit ou désactivez plutôt la liste."
   },
   "table": {
     "departedParticipant": "Départ le {date}",
@@ -168,5 +170,13 @@
       "0": "05.10. · Camp d’automne",
       "1": "19.12. · Noël en forêt"
     }
+  },
+  "help": {
+    "groupSource": "Les entrées de cette liste comptent comme groupes dans les statistiques: les événements dont l’étiquette correspond à une entrée sont comptés par groupe.",
+    "dataType": "Texte: valeur libre. Une personne / plusieurs personnes: choix parmi les membres. Événement: renvoi à un événement. Changer le type vide les valeurs existantes de cette colonne."
+  },
+  "usage": {
+    "element": "bloc «{name}»",
+    "protocol": "procès-verbal {number}"
   }
 }

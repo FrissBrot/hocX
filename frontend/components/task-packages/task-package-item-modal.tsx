@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { ActionIcon } from "@/components/ui/action-icons";
 import { Badge } from "@/components/ui/badge";
+import { HelpPopover } from "@/components/ui/help-popover";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { SearchableMultiSelect } from "@/components/ui/searchable-select";
 import { TagInput } from "@/components/ui/tag-input";
@@ -222,7 +223,7 @@ export function TaskPackageItemModal({
         </div>
 
         <div className="field-stack">
-          <span className="field-label">{t("responsibleTitle")}</span>
+          <span className="field-label">{t("responsibleTitle")} <HelpPopover topic={t("responsibleTitle")} docs={{ page: "aufgabenpakete", anchor: "verantwortliche-aus-listen" }}>{t("help.responsible")}</HelpPopover></span>
           <div className="task-package-responsible-box">
             {form.responsible.map((entry, index) => (
               <span key={`${entry.list_entry_id ?? entry.participant_id}-${index}`} className="task-package-chip">
@@ -265,7 +266,7 @@ export function TaskPackageItemModal({
         </div>
 
         <div className="field-stack" role="radiogroup" aria-label={t("recurrenceLabel")}>
-          <span className="field-label">{t("recurrenceLabel")}</span>
+          <span className="field-label">{t("recurrenceLabel")} <HelpPopover topic={t("recurrenceLabel")} docs={{ page: "aufgabenpakete", anchor: "wiederholung" }}>{t("help.recurrence")}</HelpPopover></span>
           <div className="role-picker">
             {RECURRENCE_TYPES.map((type) => (
               <label key={type} className="role-picker-option">
@@ -309,7 +310,7 @@ export function TaskPackageItemModal({
         </div>
 
         <div className="field-stack" role="radiogroup" aria-label={t("dueLabel")}>
-          <span className="field-label">{t("dueLabel")}</span>
+          <span className="field-label">{t("dueLabel")} <HelpPopover topic={t("dueLabel")} docs={{ page: "aufgabenpakete", anchor: "faelligkeit" }}>{t("help.due")}</HelpPopover></span>
           <div className="role-picker">
             {DUE_TYPES.map((type) => (
               <label key={type} className="role-picker-option">

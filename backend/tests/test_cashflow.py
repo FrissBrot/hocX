@@ -225,3 +225,35 @@ def test_tenant_charges_route_only_for_admin_of_own_tenant(db):
         with pytest.raises(HTTPException) as exc:
             get_tenant_charges(tenant.public_id, db=db, user=user)
         assert exc.value.status_code == 403
+
+
+def test_pricing_context_matches_single_tenant_charge(db):
+    """Audit 08 (2026-11): die Laufrate lädt Preise gesammelt statt fünf Abfragen je Mandant."""
+    tenant = _priced_tenant(db, cycle="yearly", discount=10)
+    db.add(Feature(code="cf_addon2", name="Zusatz 2", standalone_price_monthly_rp=700))
+    db.flush()
+    db.add(TenantFeature(tenant_id=tenant.id, feature_code="cf_addon2"))
+    db.flush()
+    single = cashflow_service.compute_tenant_charge(db, tenant)
+    shared = cashflow_service.compute_tenant_charge(db, tenant, cashflow_service.PricingContext.load(db))
+    assert single == shared
+    assert single[0] == round((20000 + 700 * 12) * 0.9)
+
+
+def test_reading_sync_does_not_wait_for_a_running_sync(db):
+    """Audit 08 (2026-11): lesende Aufrufe hingen am globalen, blockierenden Advisory-Lock."""
+    from sqlalchemy import text
+
+    from app.core.db import SessionLocal
+
+    tenant = _priced_tenant(db)
+    other = SessionLocal()
+    try:
+        other.execute(text("SELECT pg_advisory_xact_lock(:id)"), {"id": cashflow_service.SYNC_LOCK_ID})
+        assert cashflow_service.sync_charges(db, today=date(2026, 4, 10), wait=False) == 0
+        assert _charges(db, tenant) == []
+    finally:
+        other.rollback()
+        other.close()
+    cashflow_service.sync_charges(db, today=date(2026, 4, 10), wait=False)
+    assert len(_charges(db, tenant)) == 3

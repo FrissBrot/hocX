@@ -24,7 +24,7 @@ Das Document Studio hat fünf Bereiche:
 Das Document Studio ist für den Computer gedacht. Am Smartphone erscheint ein Hinweis mit einem
 Link, den du dir zuschicken kannst. Exportieren funktioniert auch am Smartphone.
 
-## Exportieren
+## Exportieren {#exportieren}
 
 Der Button **Export** bzw. **Exportieren** steht beim Protokoll, bei Todos, Terminen, Listen und
 in der Statistik. Er öffnet den Export-Dialog:
@@ -50,7 +50,7 @@ Welche Vorlage vorgewählt ist, entscheidet hocX in dieser Reihenfolge:
 Siehst du ein Datenfeld nicht (z. B. Finanzen), fehlt dir das Recht dazu. Der Export bricht dann
 mit einem Hinweis ab, statt still Daten wegzulassen.
 
-## Vorlagen
+## Vorlagen {#vorlagen}
 
 Unter **Dokumente → Vorlagen** stehen alle Vorlagen, gruppiert nach Dokumenttyp (Protokoll,
 Einladung, Traktandenliste, Anwesenheitsliste, Präsenzliste, Mitgliederliste, Pendenzenliste,
@@ -90,12 +90,12 @@ Dokumenttyp und jede Protokollvorlage fest, welche Vorlage und welches Corporate
 - **Archivierte** Vorlagen erscheinen nicht mehr im Export-Dialog, bleiben aber für bestehende
   Exporte erhalten.
 
-## Visual Designer
+## Visual Designer {#designer}
 
 Ein Klick auf **Bearbeiten** öffnet den Designer. Er startet im Modus **Einfach**; wer kein
 Corporate Design verwaltet, startet immer dort.
 
-### Modus «Einfach»
+### Modus «Einfach» {#modus-einfach}
 
 Links stehen drei Schritte, rechts die PDF-Vorschau. Die Vorschau ist hier die Arbeitsfläche:
 Ein Klick auf einen Bereich im PDF öffnet links den passenden Baustein, ein Klick auf einen
@@ -119,7 +119,7 @@ Darstellung.
 **Erweitert öffnen** wechselt zur freien Gestaltung unten; beide Modi bearbeiten dieselbe
 Vorlage, nichts geht verloren.
 
-### Modus «Erweitert» und «Experte»
+### Modus «Erweitert» und «Experte» {#modus-erweitert}
 
 | Bereich | Inhalt |
 |---|---|
@@ -150,7 +150,7 @@ Datum lang oder kurz) und einem Ersatztext, falls das Feld leer ist.
 Unterschriftsfelder haben eigene Einstellungen (Zeitraum, Spalten, Filter, Gruppierung) im
 Eigenschaftenbereich.
 
-### Modi
+### Modi {#modi}
 
 | Modus | Was du einstellen kannst |
 |---|---|

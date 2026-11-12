@@ -7,8 +7,8 @@ import { dateParts, daysBetween, isTodoOverdue, todayIso } from "@/components/mo
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { fineTypeLabels } from "@/lib/constants/fine-types";
-import { formatDate } from "@/lib/utils/format";
-import { AttendanceFineListItem, NextSessionInfo, TodoListItem } from "@/types/api";
+import { formatDate, formatMoney } from "@/lib/utils/format";
+import { AttendanceFineListItem, NextSessionInfo, OpenFinesSummary, TodoListItem } from "@/types/api";
 
 import { DashboardStatsTile } from "./dashboard-stats-tile";
 import { DashboardAccess, dashboardPermissions } from "./dashboard-permissions";
@@ -18,6 +18,8 @@ import { useSessionAttendance } from "./use-session-attendance";
 type Props = {
   todos: TodoListItem[];
   fines: AttendanceFineListItem[];
+  /** Offene Bussen je Währung (Server-Summe über alle, nicht nur die geladene Seite). */
+  fineSummary?: OpenFinesSummary | null;
   upcomingSessions: NextSessionInfo[];
   access: DashboardAccess;
   hasProtocols: boolean;
@@ -41,7 +43,7 @@ function sessionCountdownLabel(dateStr: string, t: TFunc): string {
   return "";
 }
 
-export function DashboardView({ todos, fines, upcomingSessions, access, hasProtocols, userName }: Props) {
+export function DashboardView({ todos, fines, fineSummary = null, upcomingSessions, access, hasProtocols, userName }: Props) {
   const t = useTranslations("dashboard");
   const locale = useLocale();
   const router = useRouter();
@@ -49,7 +51,7 @@ export function DashboardView({ todos, fines, upcomingSessions, access, hasProto
   const permissions = dashboardPermissions(access);
   const { canExcuse, canWrite, canConfigure } = permissions;
   const { sessions, busy, toggleExcused } = useSessionAttendance(upcomingSessions, canExcuse);
-  const data = useDashboardData({ todos, fines, permissions });
+  const data = useDashboardData({ todos, fines, fineSummary, permissions });
 
   const protocol = sessions[0]?.protocol;
   const countdown = protocol ? sessionCountdownLabel(protocol.protocol_date ?? "", t) : "";
@@ -138,7 +140,7 @@ export function DashboardView({ todos, fines, upcomingSessions, access, hasProto
                       className={`excuse-chip${excused ? " excuse-chip-excused" : ""}`}
                       aria-pressed={excused}
                       disabled={!canExcuse || busy[`${session.protocol!.id}:${entry.participant_id}`]}
-                      title={!canExcuse ? "" : excused ? t("unexcuseTitle") : t("excuseTitle")}
+                      title={!canExcuse ? t("excuseNoPermission") : excused ? t("unexcuseTitle") : t("excuseTitle")}
                       onClick={() => void toggleExcused(session, entry)}
                     >
                       <span className="excuse-chip-status-icon">{excused ? "✓" : "○"}</span>
@@ -148,6 +150,8 @@ export function DashboardView({ todos, fines, upcomingSessions, access, hasProto
                 })}
               </div>
             )}
+            {/* U7: gesperrte Chips ohne Recht sichtbar begründen statt still nichts zu tun. */}
+            {!canExcuse && session.entries.length > 0 ? <p className="field-help">{t("excuseNoPermission")}</p> : null}
           </div>
         </section>
       ) : null)}
@@ -235,25 +239,25 @@ export function DashboardView({ todos, fines, upcomingSessions, access, hasProto
               {t("allButton")}
             </button>
           </div>
-          {data.openFines.length === 0 ? (
+          {data.fineCount === 0 ? (
             <p className="muted">{permissions.ownFinesOnly ? t("noOwnOpenFines") : t("noOpenFines")}</p>
           ) : (
             <>
               <div className="dashboard-tile-summary">
                 <span className="dashboard-tile-total">
-                  {data.fineCurrency} {data.fineTotal.toFixed(2)}
+                  {data.fineTotalLabel}
                 </span>
                 {permissions.ownFinesOnly ? null : <span className="muted">{t("finePeople", { count: data.finePeople })}</span>}
               </div>
               <div className="dashboard-list">
                 {data.openFines.slice(0, FINE_LIMIT).map((fine) => (
                   <button key={fine.id} type="button" className="dashboard-list-row" onClick={() => router.push(`/protocols/${fine.protocol_id}`)}>
-                    <span className="dashboard-list-row-icon dashboard-list-row-icon-fine">CHF</span>
+                    <span className="dashboard-list-row-icon dashboard-list-row-icon-fine" aria-hidden="true">{fine.currency_label || "¤"}</span>
                     <span className="dashboard-list-row-text">
                       <span className="dashboard-list-row-title">{fine.participant_name_snapshot}</span>
                       <span className="dashboard-list-row-sub">{fineTypeLabel[fine.fine_type] ?? fine.fine_type}</span>
                     </span>
-                    <span className="dashboard-list-row-meta">{fine.amount.toFixed(2)} {fine.currency_label ?? ""}</span>
+                    <span className="dashboard-list-row-meta">{formatMoney(fine.amount, fine.currency_label ?? "", locale)}</span>
                   </button>
                 ))}
               </div>
@@ -281,7 +285,7 @@ export function DashboardView({ todos, fines, upcomingSessions, access, hasProto
                     {account.description ? <span className="dashboard-list-row-sub">{account.description}</span> : null}
                   </span>
                   <span className={`dashboard-list-row-meta${account.balance < 0 ? " dashboard-list-row-meta-overdue" : ""}`}>
-                    {account.balance.toFixed(2)} {account.currency_label}
+                    {formatMoney(account.balance, account.currency_label, locale)}
                   </span>
                 </button>
               ))}

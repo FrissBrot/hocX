@@ -4,6 +4,8 @@ import { ChangeEvent, ClipboardEvent, FormEvent, KeyboardEvent, SVGProps, useEff
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
+import { DocsLink } from "@/components/ui/help-popover";
+import { apiErrorMessage } from "@/lib/api/error-message";
 import { attemptBridgeRedirect } from "@/lib/bridge-redirect";
 import { browserApiFetch } from "@/lib/api/client";
 import { VersionNotice } from "@/components/ui/version-notice";
@@ -65,6 +67,7 @@ function sanitizeTotpCode(value: string) {
 
 export default function LoginPage() {
   const t = useTranslations("auth");
+  const tSecurity = useTranslations("security");
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -247,7 +250,7 @@ export default function LoginPage() {
       }
       setStatusMsg(t("status.loginIncomplete"));
     } catch (error) {
-      setStatusMsg(error instanceof Error ? error.message : t("status.loginFailed"));
+      setStatusMsg(apiErrorMessage(error, tSecurity, "apiErrors", t("status.loginFailed")));
     } finally {
       setLoading(false);
     }
@@ -466,7 +469,7 @@ export default function LoginPage() {
       <form className="login-form" onSubmit={submitLocal}>
         <label className="field-stack">
           <span className="field-label">{t("password.emailLabel")}</span>
-          <input className="input" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
+          <input className="input" type="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
         </label>
         <label className="field-stack">
           <span className="field-label">{t("password.passwordLabel")}</span>
@@ -478,6 +481,7 @@ export default function LoginPage() {
         {passwordResetAvailable ? (
           <a className="login-forgot-link" href="/auth/forgot-password">{t("password.forgot")}</a>
         ) : null}
+        <DocsLink page="konto" anchor="anmelden">{t("password.help")}</DocsLink>
       </form>
     );
   }
@@ -777,7 +781,8 @@ export default function LoginPage() {
           </div>
         ) : null}
 
-        {statusMsg && <p className={isVerifyScreen ? "login-status login-status-mfa" : "login-status"}>{statusMsg}</p>}
+        {statusMsg && <p className={isVerifyScreen ? "login-status login-status-mfa" : "login-status"} role="alert">{statusMsg}</p>}
+        {isVerifyScreen ? <p className="field-help">{t("mfa.lostFactorHint")}</p> : null}
         {isVerifyScreen ? <VersionNotice className="login-version login-version-in-panel" /> : null}
       </section>
       {!isVerifyScreen ? <CopyrightNotice className="login-copyright" /> : null}

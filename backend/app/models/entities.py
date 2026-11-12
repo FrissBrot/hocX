@@ -135,7 +135,10 @@ class PlatformOidcConfig(Base, TimestampMixin, UpdatedAtMixin):
 class TenantDomain(Base, TimestampMixin):
     __tablename__ = "tenant_domain"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "purpose", name="uq_tenant_domain_tenant_purpose"),
+        # Je Zweck höchstens eine aktive und eine ausstehende Domain (Migration 0179): eine neue
+        # Domain ersetzt die laufende erst, wenn sie verifiziert ist.
+        Index("uq_tenant_domain_purpose_active", "tenant_id", "purpose", unique=True, postgresql_where=text("status = 'active'")),
+        Index("uq_tenant_domain_purpose_pending", "tenant_id", "purpose", unique=True, postgresql_where=text("status = 'pending'")),
         # Eindeutig nur unter aktiven Domains (Migration 0129, Security-Audit SEC-004): eine
         # unbestätigte (pending) Domain darf die Domain für andere Mandanten nicht blockieren.
         Index("uq_tenant_domain_active_domain", "domain", unique=True, postgresql_where=text("status = 'active'")),
@@ -689,6 +692,8 @@ class ListDefinition(Base, TimestampMixin, UpdatedAtMixin):
     column_two_title: Mapped[str] = mapped_column(Text, nullable=False)
     column_two_value_type: Mapped[str] = mapped_column(Text, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
+    # Einträge dieser Liste gelten in der Statistik als Gruppen (Termin-Tags), Migration 0176.
+    is_group_source: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
     # Bumped on any entry create/update/delete, or a column title/type change - lets protocol
     # blocks that snapshot this list's data cheaply detect "has anything relevant changed"
     # without reconciling independent per-row updated_at timestamps (entries don't cascade
@@ -1542,6 +1547,10 @@ class ProtocolTodo(Base, TimestampMixin, UpdatedAtMixin):
     fine_rule_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("todo_fine_rule.id", ondelete="SET NULL"))
     fine_fixed_amount: Mapped[Decimal | None] = mapped_column(Numeric(15, 2))
     fine_split_mode: Mapped[str | None] = mapped_column(Text)
+    # Wann die Busse für den aktuellen Abschluss bewertet (eingefroren) wurde (Migration 0177).
+    # NULL = noch nicht bewertet; beim Wiedereröffnen wieder NULL. Ersetzt das Zeitfenster für
+    # Abschlüsse durch den Datenbank-Trigger (Abgabebox).
+    fine_evaluated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ProtocolTodoAssignee(Base):

@@ -74,9 +74,12 @@ export function MobileEventRow({
 export function MobileEvents({
   initialEvents,
   participants: initialParticipants,
+  canEdit = true,
 }: {
   initialEvents: EventSummary[];
   participants: ParticipantSummary[];
+  /** Ohne Schreibrecht (nur meetings.read): ansehen, nichts anlegen oder ändern. */
+  canEdit?: boolean;
 }) {
   const t = useTranslations("mobile");
   const locale = useLocale();
@@ -183,12 +186,12 @@ export function MobileEvents({
       ))}
       {groups.length === 0 ? <MobileEmpty title={t("events.emptyTitle")} hint={t("events.emptyHint")} /> : null}
 
-      <MobileFab label={t("events.fab")} onClick={() => setFormFor("new")} />
+      {canEdit ? <MobileFab label={t("events.fab")} onClick={() => setFormFor("new")} /> : null}
 
       {openEvent && !formFor ? (
         <EventDetailSheet
           event={openEvent}
-          canEdit
+          canEdit={canEdit}
           protocol={protocolsByEvent.get(openEvent.id) ?? null}
           participants={participants}
           cycleOptions={cycleOptions}
@@ -199,7 +202,7 @@ export function MobileEvents({
           onDeleted={(id) => setEvents((list) => list.filter((item) => item.id !== id))}
         />
       ) : null}
-      {formFor ? (
+      {formFor && canEdit ? (
         <EventFormSheet
           event={formEvent}
           tags={tags}

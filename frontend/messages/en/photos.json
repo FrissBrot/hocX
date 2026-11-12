@@ -67,7 +67,7 @@
     "releasedToast": "{count, plural, one {1 photo released.} other {# photos released.}}",
     "releasing": "Releasing…",
     "shareLink": "Share link",
-    "shareWithTenant": "Share with another tenant",
+    "shareWithTenant": "Share with another organization",
     "sharedBadge": "Shared",
     "sharedByBadge": "Shared by {name}",
     "sharedBySuffix": " · Shared by {name}",
@@ -77,10 +77,28 @@
     "statusActive": "active",
     "statusDeclined": "declined",
     "statusPending": "requested",
-    "unknownTenant": "Tenant {id}",
+    "unknownTenant": "Organization {id}",
     "myPhotosPublicLabel": "Show my photos in public links",
     "myShareError": "The setting could not be saved.",
-    "publicLinksNotAllowed": "The owner does not allow public links for this album."
+    "publicLinksNotAllowed": "The owner does not allow public links for this album.",
+    "renameAction": "Rename",
+    "deleteAction": "Delete album",
+    "manageAlbum": "Manage album",
+    "renameModalTitle": "Rename album",
+    "renameSubmit": "Save",
+    "renaming": "Saving…",
+    "renamedToast": "Album renamed.",
+    "renameError": "Album could not be renamed.",
+    "deleteConfirm": "Delete album «{name}»? The photos are kept, only the album disappears. Public links to this album will stop working.",
+    "deleteConfirmShared": "Delete album «{name}»? It is shared with other organizations – they lose access, and public links to this album will stop working. The photos themselves stay with their organizations.",
+    "deleteConfirmLabel": "Delete album",
+    "deletedToast": "Album deleted. The photos are still under «All photos».",
+    "deleteError": "Album could not be deleted.",
+    "helpTopic": "Album",
+    "helpOwner": "Add photos via «Add existing photos» or while uploading. To take photos out, select them and choose «Remove from album» – nothing is deleted. Use the ⋮ menu to rename or delete the album.",
+    "helpPartner": "This album belongs to another organization. You can add your own photos and remove them again; only the owning organization can rename or delete it.",
+    "pendingHelpTopic": "Held-back photos",
+    "pendingHelp": "Automatically sorted photos (e.g. from submissions) are at first only visible to your organization in a shared album. Partners and public album links only see them after «Release»."
   },
   "bulkBar": {
     "addTags": "Add tags",
@@ -112,7 +130,9 @@
     "download": "Download",
     "selectAll": "Select all",
     "selectionActions": "Selection actions",
-    "downloadError": "Photos could not be downloaded."
+    "downloadError": "Photos could not be downloaded.",
+    "removeFromAlbum": "Remove from album",
+    "bestHelp": "Every album has a selection of the best photos. hocX suggests them based on the photo analysis. With the star you permanently include a photo in the selection or exclude it; this stays even after later recalculations. In “All photos” the star applies to every album containing the photo."
   },
   "dateGroups": {
     "groupCount": "· {count, plural, one {# photo} other {# photos}}",
@@ -123,7 +143,7 @@
   "galleryUpload": {
     "browse": "Choose files",
     "cancel": "Cancel",
-    "description": "Images up to 100 MiB, ZIPs up to 10 GiB, whole folders too. Large selections are split into several jobs automatically; ZIPs up to 10,000 entries and 20 GiB unpacked. Images are checked in your browser first, existing ones are not transferred again, and everything is virus-scanned.",
+    "description": "Images up to 100 MB, ZIPs up to 10 GB, whole folders too. Large selections are split into several jobs automatically; ZIPs up to 10,000 entries and 20 GB unpacked. Images are checked in your browser first, existing ones are not transferred again, and everything is virus-scanned.",
     "dropActive": "Release to upload",
     "dropHint": "Drag images here",
     "formatsAriaLabel": "Supported formats",
@@ -133,7 +153,7 @@
     "queueHeading": "Queue",
     "releaseCheckboxLabel": "Release the images right away and share them with everyone who has access to the album",
     "removeAriaLabel": "Remove {name}",
-    "shareNotice": "The images will land in the shared album {albums}. Without release they're initially only visible to your own tenant there.",
+    "shareNotice": "The images will land in the shared album {albums}. Without release they're initially only visible to your own organization there.",
     "statusClip": "Live Photo video, belongs to the image of the same name",
     "statusReady": "Ready to upload",
     "statusUploaded": "Uploaded, now being processed…",
@@ -168,7 +188,10 @@
       "helpSet": "Only applies to images without a capture date ({date}). Real capture dates are never overwritten."
     },
     "largeZipHint": "Large ZIP file: on a slow connection the upload may stop after one hour. Better split the archive into several smaller ZIPs or upload the photos directly.",
-    "includeGps": "Include the image’s GPS data"
+    "includeGps": "Include the image’s GPS data",
+    "helpTopic": "Uploading photos",
+    "help": "Single images up to 100 MB, ZIP files up to 10 GB. Exactly identical images are not stored twice; new photos are visible everywhere only after the virus check.",
+    "helpLabel": "Limits, duplicates and virus check"
   },
   "shareModal": {
     "actionAriaLabelActive": "Remove access for {name}",
@@ -176,15 +199,15 @@
     "cancel": "Cancel",
     "clearAriaLabel": "Clear input",
     "declinedOn": "declined on {date}",
-    "description": "The tenant receives an invitation. Once accepted, «{albumName}» appears for them under Albums.",
+    "description": "The organization receives an invitation. Once accepted, «{albumName}» appears for them under Albums.",
     "endedToast": "Sharing ended.",
     "eyebrow": "Share album",
-    "fieldHint": "ID under tenant settings → General",
-    "fieldLabel": "Tenant ID or name",
-    "foundGeneric": "Tenant found",
+    "fieldHint": "The other organization finds its organization ID in its settings under «General» (with a copy button).",
+    "fieldLabel": "Organization ID or name",
+    "foundGeneric": "Organization found",
     "foundGenericHint": "Name and profile picture become visible once they accept an invitation.",
     "foundMark": "✓ Found",
-    "inputPlaceholder": "Paste tenant ID",
+    "inputPlaceholder": "Paste organization ID",
     "invite": "Invite",
     "inviteError": "Invitation could not be sent.",
     "inviteNamed": "Invite {name}",
@@ -192,12 +215,12 @@
     "invitedToast": "Invitation sent to {name}.",
     "invitedToastNoName": "Invitation sent.",
     "inviting": "Inviting…",
-    "lookupNotFound": "No tenant found with this ID.",
-    "noSuggestionsHint": "No known tenant with this name. New tenants can only be found by their tenant ID.",
+    "lookupNotFound": "No organization found with this ID.",
+    "noSuggestionsHint": "No known organization with this name. New organizations can only be found by their organization ID.",
     "participantsSuffix": "{count, plural, one {# participant} other {# participants}}",
     "removeLabel": "Remove",
-    "revokeConfirmGenericActive": "Remove this tenant’s access to this album?",
-    "revokeConfirmGenericPending": "Withdraw the invitation to this tenant?",
+    "revokeConfirmGenericActive": "Remove this organization’s access to this album?",
+    "revokeConfirmGenericPending": "Withdraw the invitation to this organization?",
     "revokeConfirmNamedActive": "Remove “{name}”’s access to this album?",
     "revokeConfirmNamedPending": "Withdraw the invitation to “{name}”?",
     "revokeError": "Sharing could not be ended.",
@@ -208,9 +231,9 @@
       "declined": "Declined",
       "pending": "Invitation pending"
     },
-    "suggestionsAriaLabel": "Known tenants",
-    "title": "Share with another tenant",
-    "unknownTenant": "Unknown tenant",
+    "suggestionsAriaLabel": "Known organizations",
+    "title": "Share with another organization",
+    "unknownTenant": "Unknown organization",
     "withdrawLabel": "Withdraw",
     "withdrawnToast": "Invitation withdrawn.",
     "shareLocationLabel": "Share location",
@@ -221,18 +244,22 @@
     "publicLinksShort": "Public links",
     "publicLinksAriaLabel": "{name} may share this album via public links",
     "publicLinksError": "The public link setting could not be saved.",
-    "partnerPhotosHidden": "This partner’s photos are not shown in public links."
+    "partnerPhotosHidden": "This partner’s photos are not shown in public links.",
+    "helpTopic": "Share album",
+    "help": "1. The other organization copies its organization ID (settings → General) and sends it to you. 2. You paste it here and invite. 3. Once accepted, both organizations see the album and can contribute their own photos. You control location and public links per partner."
   },
   "shareRelease": {
     "confirmLabel": "Add and share",
-    "noOwnerMessage": "{count, plural, one {“{albumName}” is shared. 1 photo will immediately become visible to every tenant and link with access to the album.} other {“{albumName}” is shared. # photos will immediately become visible to every tenant and link with access to the album.}}",
+    "noOwnerMessage": "{count, plural, one {“{albumName}” is shared. 1 photo will immediately become visible to every organization and link with access to the album.} other {“{albumName}” is shared. # photos will immediately become visible to every organization and link with access to the album.}}",
     "ownerMessage": "{count, plural, one {“{albumName}” is shared by {owner}. 1 photo will then be visible to everyone involved.} other {“{albumName}” is shared by {owner}. # photos will then be visible to everyone involved.}}",
     "title": "Photos will be shared"
   },
   "similarity": {
     "pending": "Photos are being grouped in the background. The result will appear here in a few minutes.",
     "tooMany": "Too many photos for automatic grouping (at most {max, number}).",
-    "computedAt": "As of {time} · new photos appear after a few minutes."
+    "computedAt": "As of {time} · new photos appear after a few minutes.",
+    "helpTopic": "Similar photos",
+    "help": "Duplicates are practically identical images, series are photos taken in quick succession. «Keep only the best» permanently deletes the other directly uploaded photos."
   },
   "similarGroups": {
     "bestChoice": "Best pick",
@@ -278,11 +305,16 @@
   },
   "tile": {
     "bestBadge": "★ Best-of",
-    "deselectAriaLabel": "Deselect",
+    "deselectAriaLabel": "Deselect {name}",
     "liveBadge": "LIVE",
     "pendingBadge": "Not released",
-    "selectAriaLabel": "Select",
-    "openAriaLabel": "Open {name}"
+    "selectAriaLabel": "Select {name}",
+    "openAriaLabel": "Open {name}",
+    "scanningBadge": "Being checked",
+    "blockedBadge": "Blocked",
+    "scanningHint": "Virus check in progress – the preview will appear shortly.",
+    "blockedHint": "Blocked: the file could not be checked for viruses.",
+    "previewUnavailable": "Preview not available"
   },
   "view": {
     "albumLinkWithCount": "{name} ({count})",
@@ -292,7 +324,7 @@
     "bestError": "The best-of status could not be changed.",
     "bestUnscopedError": "This photo doesn't belong to an album - best-of is only possible within an album.",
     "createAssignmentButton": "Create submission box",
-    "description": "All photos of this tenant - from protocols, submissions and directly uploaded gallery images.",
+    "description": "All photos of your organization – from protocols, submissions and directly uploaded gallery images.",
     "dropOverlayHint": "Images or ZIP files - you'll set up the upload afterwards.",
     "dropOverlayTitle": "Release to upload",
     "emptyDescription": "As soon as images are inserted into protocols, submitted via a submission box, or uploaded here, they appear in this gallery.",
@@ -341,7 +373,14 @@
     "uploadPillTotal": "Gallery upload running · {processed} of {total} images",
     "uploadQueuedToast": "Uploading and processing in the background…",
     "uploadedToast": "{count, plural, one {1 image uploaded.} other {# images uploaded.}}",
-    "loadedOfTotal": "{count} of {total} photos loaded."
+    "loadedOfTotal": "{count} of {total} photos loaded.",
+    "removeFromAlbumConfirm": "{count, plural, one {Remove 1 photo from this album? The photo stays in «All photos».} other {Remove # photos from this album? The photos stay in «All photos».}}",
+    "removeFromAlbumConfirmLabel": "Remove from album",
+    "removedFromAlbumToast": "{count, plural, one {1 photo removed from the album.} other {# photos removed from the album.}}",
+    "removeFromAlbumError": "The photos could not be removed from the album. In a shared album you can only remove photos of your own organization.",
+    "galleryJobFailed": "The upload could not be completed due to a technical error. Photos already saved are kept – please upload the remaining ones again.",
+    "analysisHelpTopic": "Photo analysis",
+    "analysisHelp": "Sharpness, exposure and faces are rated in the background. This drives sorting by quality and the «Best-of» suggestions. The analysis does not change any photos."
   },
   "viewer": {
     "analysisPending": "Analysis pending",
@@ -407,7 +446,9 @@
       "unknownNote": "The file has no capture date – sorted by upload date",
       "change": "Change",
       "done": "Done"
-    }
+    },
+    "bestHelpTopic": "Best-of",
+    "bestHelp": "Every album has a selection of the best photos. hocX suggests them based on the photo analysis. With the star you permanently include a photo in the selection or exclude it; this stays even after later recalculations. In “All photos” the star applies to every album containing the photo."
   },
   "dateMarker": {
     "estimated": "Estimated capture date",

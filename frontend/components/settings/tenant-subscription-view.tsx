@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from "next-intl";
 
 import { ChargeFilter, TenantBillingCard, TenantOverdueBanner, useTenantCharges } from "@/components/settings/tenant-charges";
 import { Badge } from "@/components/ui/badge";
+import { DocsLink, HelpPopover } from "@/components/ui/help-popover";
 import { NavIcon, NavIconKey } from "@/components/ui/nav-icons";
 import { colorForUser, initials } from "@/components/protocol/collaboration-presence";
 import { CATEGORY_COLORS, categoryHints, StorageQuotaComposition } from "@/components/storage/storage-usage-view";
@@ -269,7 +270,12 @@ export function TenantSubscriptionView({ initialTenant }: Props) {
           </div>
 
           <section className="card">
-            <div className="eyebrow">{t("includedModulesEyebrow")}</div>
+            <div className="eyebrow">
+              {t("includedModulesEyebrow")}{" "}
+              <HelpPopover topic={t("includedModulesEyebrow")} docs={{ page: "einstellungen", anchor: "abo" }}>
+                {t("help.modules")}
+              </HelpPopover>
+            </div>
             {subscription.features.length === 0 ? (
               <div className="muted">{t("noModulesBooked")}</div>
             ) : (
@@ -282,17 +288,27 @@ export function TenantSubscriptionView({ initialTenant }: Props) {
                     <div className="tenant-module-copy">
                       <strong>{feature.name}</strong>
                       {feature.description ? <div className="muted">{feature.description}</div> : null}
-                      {!feature.included_in_plan && feature.standalone_price_monthly_rp !== null ? (
+                      {feature.read_only ? <div className="muted">{t("moduleReadOnlyHint")}</div> : null}
+                      {!feature.included_in_plan && !feature.read_only && feature.standalone_price_monthly_rp !== null ? (
                         <div className="muted">{t("pricePerMonth", { price: formatRappen(feature.standalone_price_monthly_rp, locale as Locale) })}</div>
                       ) : null}
                     </div>
-                    <Badge variant="success" dot className="tenant-module-status">
-                      {t("moduleActive")}
-                    </Badge>
+                    {feature.read_only ? (
+                      <Badge variant="warning" dot className="tenant-module-status">
+                        {t("moduleReadOnly")}
+                      </Badge>
+                    ) : (
+                      <Badge variant="success" dot className="tenant-module-status">
+                        {t("moduleActive")}
+                      </Badge>
+                    )}
                   </div>
                 ))}
               </div>
             )}
+            <p className="field-help">
+              {t("changePlanHint")} <DocsLink page="einstellungen" anchor="abo">{t("docsLink")}</DocsLink>
+            </p>
           </section>
         </>
       )}

@@ -23,13 +23,16 @@ export default async function FinancesPage() {
   return (
     <AppShell initialSession={session}>
       <ResponsiveView
-        mobile={<MobileFinances initialAccounts={accounts} canWrite={can(session, "finances.manage")} />}
+        // can() berücksichtigt den Nur-Lesen-Zustand nach einem Downgrade schon (finances.manage ist
+        // keine Lese-Berechtigung des Features «finance»): canWrite ist dann false.
+        mobile={<MobileFinances initialAccounts={accounts} canWrite={can(session, "finances.manage")} readOnly={featureAccess(session, "finance") === "read_only"} />}
         desktop={
           <>
           <RouteTabs tabs={financeTabs(t)} activeHref="/finances" />
           <FinancesView
             initialAccounts={accounts}
             canWrite={can(session, "finances.manage")}
+            readOnly={featureAccess(session, "finance") === "read_only"}
           />
           </>
         }

@@ -46,6 +46,15 @@ def _get_template_or_404(db: Session, template_id: uuid.UUID, user: CurrentUser)
     return template
 
 
+def _get_readable_template_or_404(db: Session, template_id: uuid.UUID, user: CurrentUser) -> Template:
+    """Lesen: nicht zugewiesene Vorlagen antworten wie nicht vorhandene mit 404 (kein
+    Existenz-Orakel für eingeschränkte Leser, Audit 07 C14 - vorher 403)."""
+    template = _get_template_or_404(db, template_id, user)
+    if not access_service.can_read_template(db, user, template.id):
+        raise HTTPException(status_code=404, detail="Template not found")
+    return template
+
+
 def _get_element_definition_or_404(db: Session, element_definition_id: uuid.UUID, user: CurrentUser) -> ElementDefinition:
     definition = public_id_service.get_by_public_id(db, ElementDefinition, element_definition_id, tenant_id=user.current_tenant_id)
     if definition is None:
@@ -90,8 +99,7 @@ def create_template(
 @router.get("/templates/{template_id}", response_model=TemplateRead)
 def get_template(template_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     require_permission(user, P.MEETINGS_READ)
-    template = _get_template_or_404(db, template_id, user)
-    access_service.ensure_can_read_template(db, user, template.id)
+    template = _get_readable_template_or_404(db, template_id, user)
     return template
 
 
@@ -191,8 +199,7 @@ def list_template_elements(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.MEETINGS_READ)
-    template = _get_template_or_404(db, template_id, user)
-    access_service.ensure_can_read_template(db, user, template.id)
+    template = _get_readable_template_or_404(db, template_id, user)
     return template_element_service.list_template_elements(db, template.id)
 
 

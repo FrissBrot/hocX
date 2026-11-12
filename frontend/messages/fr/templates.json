@@ -373,7 +373,8 @@
       "liveHint": "Les modifications s'appliquent immédiatement à tous les procès-verbaux ouverts de ce modèle. Les amendes déjà saisies conservent leur montant.",
       "saved": "Tarif des amendes du modèle enregistré",
       "saveFailed": "Le tarif des amendes n'a pas pu être enregistré",
-      "loadFailed": "Le tarif des amendes n'a pas pu être chargé"
+      "loadFailed": "Le tarif des amendes n'a pas pu être chargé",
+      "docsLink": "En savoir plus sur le tarif des amendes dans l’aide"
     },
     "invitationVisible": "Dans l’invitation et l’ordre du jour",
     "invitationToggleFailed": "Le réglage n’a pas pu être enregistré."

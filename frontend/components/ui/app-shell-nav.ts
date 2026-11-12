@@ -29,7 +29,8 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
       titleKey: "groups.work",
       links: [
         { href: "/protocols", labelKey: "protocols", icon: "protocols" },
-        ...(editsMeetings ? [{ href: "/events", labelKey: "events", icon: "events" as const }] : []),
+        // Leseansicht für meetings.read, Bearbeiten nur mit meetings.edit (Seite selbst prüft).
+        ...(can(session, "meetings.read") ? [{ href: "/events", labelKey: "events", icon: "events" as const }] : []),
         { href: "/todos", labelKey: "todos", icon: "todos" },
         { href: "/agenda", labelKey: "agenda", icon: "agenda" },
         ...(can(session, "submissions.manage") ? [{ href: "/submission-assignments", labelKey: "submissions", icon: "submissions" as const }] : []),

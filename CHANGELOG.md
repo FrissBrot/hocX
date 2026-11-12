@@ -10,6 +10,21 @@ Installationen aktualisieren können.
 
 ### Hinzugefügt
 
+- **Alben verwalten.** Alben lassen sich umbenennen und löschen (die Fotos bleiben erhalten),
+  Fotos lassen sich aus einem Album nehmen, ohne sie zu löschen.
+- **Pendenzen** zeigen in der Liste (auch mobil) den Hinweis «Busse läuft»; neue Bussenregeln
+  lassen sich aus Vorlagen anlegen, Filter und Konto stehen unter «Erweitert». In der Oberfläche
+  heisst es einheitlich «Pendenz».
+- **Sicherheitshinweis** an die bisherige Adresse, wenn die Login-E-Mail geändert wird.
+- **Passwort ändern** im Profil unter «Sicherheit»; andere Sitzungen enden, die aktuelle bleibt.
+- **Finanzen:** Jahressicht mit Einnahmen, Ausgaben, Anfangs- und Endsaldo und «Exportieren».
+- **Stammlisten:** Eine Liste lässt sich als Quelle der Gruppenstatistik markieren; die Statistik
+  hängt nicht mehr am Listennamen «Gruppen».
+- **Hilfe und Doku in allen Bereichen.** Neue Anleitungen zu Bussen, Aufgabenpaketen,
+  Benachrichtigungen, Konto, Fotos und Alben, Statistik und Dashboard, Zyklen sowie Einstellungen
+  und Domains; Protokolle, Termine, Mitglieder, Finanzen und Stammlisten neu geschrieben. «?»-Hilfen
+  und Doku-Links in Protokollen, Terminen, Bussen, Finanzen, Mitgliedern, Fotos, Listen, Anliegen,
+  Statistik, Document Studio und Einstellungen.
 - **Mail «Abgabe eingegangen».** Erledigt eine Einreichung in der Abgabebox eine Abgabe-Aufgabe,
   bekommen alle Verantwortlichen der Aufgabe eine Mail (mehrere Abgaben kurz nacheinander in einer
   Mail). Abschaltbar im Profil unter «Benachrichtigungen» («Abgabe eingegangen», Standard ein). Von
@@ -30,6 +45,36 @@ Installationen aktualisieren können.
 
 ### Behoben
 
+- **Pendenzen-Bussen.** Nachträgliches Bearbeiten einer erledigten Pendenz verschiebt das
+  Erledigungsdatum nicht mehr und löst keine falsche Busse mehr aus. Eingefrorene Bussen bleiben
+  bestehen, auch beim Wiedereröffnen, Verschieben oder Löschen der Pendenz; ändern oder erlassen
+  kann sie nur, wer Finanzen verwaltet (mit Audit-Eintrag). Die gebüsste Person kann ihre laufende
+  Busse nicht mehr durch Verschieben, Umverteilen, Abbrechen oder Löschen loswerden. Abgabe-
+  Pendenzen werden auch nach längerem Ausfall des Abgleichs korrekt bewertet.
+- **Protokoll abschliessen** fragt nach und erklärt die Folgen; vorher wird alles noch Getippte
+  gespeichert, der letzte Satz fehlt nicht mehr im PDF. Abgeschlossene Protokolle lassen sich nicht
+  mehr umbenennen oder umdatieren, lokale Entwürfe überschreiben keine neuere fremde Fassung.
+- **Termin-Formular** speichert nicht mehr bei jedem Tastendruck, sondern nach einer kurzen Pause,
+  der Reihe nach und mit Statusanzeige; beim Schliessen geht nichts verloren. Per CSV importierte
+  Termine und neue Zyklen ordnen Termine dem Zyklus zu, fehlende Zuordnungen werden nachgetragen.
+  Der Löschdialog nennt die mitgelöschten Abgabe-Einreichungen und Dateien.
+- **Datenschutz:** Bussen-Exporte im Document Studio enthalten ohne «Personenbezogene Daten aller»
+  nur noch die eigenen Bussen. Pendenzen-Routen antworten bei fremden Pendenzen mit 404.
+- **Finanzen:** Buchungen aus Pendenzen-Bussen sind gesperrt (Schloss mit Erklärung). Nach einem
+  Abo-Downgrade bleiben die Bussen lesbar. Das Dashboard summiert offene Bussen korrekt je Währung.
+- **Domains:** Eine neue eigene Domain ersetzt die laufende erst nach erfolgreicher DNS-Prüfung; ein
+  Tippfehler legt die Vereinsadresse nicht mehr lahm. Prüfen und Löschen haben eigene Kontingente.
+- **Mitglieder:** «E-Mail-Benachrichtigungen ohne Login» bleibt beim Speichern durch Admins
+  erhalten. Der CSV-Import erkennt Duplikate über alle Mitglieder (auch per E-Mail).
+- **Fotos:** «Löschen» nimmt Fotos, die nicht gelöscht werden dürfen, nicht mehr still aus Alben.
+  Fehler beim Galerie-Upload landen im Fehlerprotokoll statt als Rohtext beim Benutzer.
+- «Rückgängig» bei einer einkassierten Busse fragt nach, weil die Buchung gelöscht wird.
+- **Systemalarme** gehen bei einem ntfy-Ausfall nicht mehr verloren und werden nachgesendet;
+  fehlschlagende Systemprüfungen und Fehler der PDF-Aufträge werden gemeldet.
+- **Schweizer Zeit:** «Heute» gilt in Terminen, Anliegen, Statistik, Protokollen, Finanzen und
+  Document Studio nach Schweizer Datum statt UTC.
+- **Statistik:** Bussenarten in der gewählten Sprache, Diagramme in der Kontowährung, «Protokolle»
+  zählt nur durchgeführte und abgeschlossene; Leser mit zugewiesenen Vorlagen sehen nur deren Zahlen.
 - **Verspätungsbussen bei Abgaben über die Abgabebox.** Eine Einreichung erledigte die Pendenz
   in der Datenbank ohne die Pendenzen-Busse festzuschreiben. Der Abgleich-Job friert sie jetzt für
   Abschlüsse der letzten zwei Tage nach (fehlende ältere werden bewusst nicht nachgerechnet).
@@ -55,6 +100,15 @@ Installationen aktualisieren können.
 
 ### Geändert
 
+- **Begriffe:** «Mitglieder» und «Logins & Rollen» sind klar getrennt; in der Login-Liste wird nur
+  noch der Login entzogen. Logins werden standardmässig per E-Mail-Einladung vergeben.
+- Termine sind mit reinem Leserecht als Leseansicht sichtbar; Sitzungen mit Uhrzeit erscheinen im
+  Kalender-Abo mit Uhrzeit.
+- Plan-Änderungen gelten sofort für alle Organisationen auf dem Plan; «Abo & Nutzung» zeigt Module
+  im Zustand «Nur lesen».
+- Migrationen 0176–0179 (Gruppenquelle für Listen, Bewertungsmerker für Pendenzen-Bussen,
+  Nachtrag der Zyklus-Zuordnung, ausstehende Domain-Ersetzung). Die Wanderplaner-Migration muss
+  damit ab 0180 nummeriert werden.
 - **Von Hand geschlossene Abgabefelder zählen als erledigt.** Der Fortschrittsbalken zeigt sie
   als eigenes Segment («4 von 5 erledigt · 1 geschlossen»). Die Aufgabe des Elements wird beim
   Schliessen ohne geprüfte Datei «abgebrochen» (keine Verspätungsbusse), mit Datei bleibt sie

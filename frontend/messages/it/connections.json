@@ -1,7 +1,8 @@
 {
   "page": {
     "title": "Collegamenti",
-    "description": "Mostra i tuoi appuntamenti e le tue attività di hocX in Calendario Apple o Google Calendar. I calendari si aggiornano automaticamente – le modifiche si fanno sempre in hocX."
+    "description": "Mostra i tuoi appuntamenti e le tue attività di hocX in Calendario Apple o Google Calendar. I calendari si aggiornano automaticamente – le modifiche si fanno sempre in hocX.",
+    "docsLink": "Maggiori informazioni nella guida"
   },
   "status": {
     "active": "Collegato",

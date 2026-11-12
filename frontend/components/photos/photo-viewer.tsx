@@ -11,6 +11,7 @@ import { todayIso } from "@/components/mobile/mobile-utils";
 import { TagInput } from "@/components/ui/tag-input";
 import { PhotoDateMarker } from "@/components/photos/photo-date-marker";
 import { ActionIcon } from "@/components/ui/action-icons";
+import { HelpPopover } from "@/components/ui/help-popover";
 import { useDeferredPopupSave } from "@/lib/hooks/use-deferred-popup-save";
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { formatCaptureDateTime, formatDate, formatDateTime, formatFileSize, formatWeekdayDate } from "@/lib/utils/format";
@@ -25,6 +26,17 @@ function liveDownloadOptions(t: TFunc) {
     { part: "video", label: t("downloadOptions.video") },
     { part: "both", label: t("downloadOptions.both") },
   ];
+}
+
+const SWIPE_MIN_PX = 50;
+
+/** Waagrechte Wischgeste: nach links = nächstes Foto, nach rechts = vorheriges. Senkrechte
+ * Bewegungen (Scrollen) und kurze Tipps lösen nichts aus. */
+export function swipeDirection(startX: number, startY: number, endX: number, endY: number): "prev" | "next" | null {
+  const dx = endX - startX;
+  const dy = endY - startY;
+  if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dx) < Math.abs(dy) * 1.5) return null;
+  return dx < 0 ? "next" : "prev";
 }
 
 export function PhotoViewer({
@@ -137,6 +149,21 @@ export function PhotoViewer({
     };
   }, [hasPrev, hasNext, index, onClose, onIndexChange]);
 
+  // Wischgeste (Touch/Stift) zum Blättern - mobil sind die Pfeil-Buttons klein (Audit Dateien/Fotos).
+  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  function handlePointerDown(event: React.PointerEvent) {
+    if (event.pointerType === "mouse") return;
+    swipeStartRef.current = { x: event.clientX, y: event.clientY };
+  }
+  function handlePointerUp(event: React.PointerEvent) {
+    const start = swipeStartRef.current;
+    swipeStartRef.current = null;
+    if (!start) return;
+    const direction = swipeDirection(start.x, start.y, event.clientX, event.clientY);
+    if (direction === "prev" && hasPrev) onIndexChange(index - 1);
+    if (direction === "next" && hasNext) onIndexChange(index + 1);
+  }
+
   useEffect(() => {
     setLiveHover(false);
     setLivePinned(false);
@@ -222,6 +249,7 @@ export function PhotoViewer({
           <button type="button" className="pill photo-viewer-pill-accent" onClick={() => onToggleBest(item)}>
             {item.is_best ? t("bestOn") : t("bestOff")}
           </button>
+          <HelpPopover topic={t("bestHelpTopic")} docs={{ page: "fotos", anchor: "best-of" }}>{t("bestHelp")}</HelpPopover>
           {item.live_video_url && (
             <div ref={downloadRef} className="photo-viewer-download">
               <button
@@ -261,6 +289,9 @@ export function PhotoViewer({
       <div className="photo-viewer-body">
         <div
           className="photo-viewer-stage"
+          onPointerDown={handlePointerDown}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={() => { swipeStartRef.current = null; }}
           onMouseEnter={item.live_video_url ? () => setLiveHover(true) : undefined}
           onMouseLeave={item.live_video_url ? () => setLiveHover(false) : undefined}
         >

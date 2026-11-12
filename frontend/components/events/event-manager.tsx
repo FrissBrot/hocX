@@ -8,6 +8,9 @@ import { useLocale, useTranslations } from "next-intl";
 
 import { CalendarLinkHint } from "@/components/connections/calendar-link-hint";
 import { EventIcon } from "@/components/events/event-icons";
+import { useConfirmEventDelete } from "@/components/events/use-confirm-event-delete";
+import { todayIso as localTodayIso } from "@/components/mobile/mobile-utils";
+import { DocsLink, HelpPopover } from "@/components/ui/help-popover";
 import { effectiveEndDate, fallbackTagColor, isoToUtcDate } from "@/components/events/event-utils";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +23,6 @@ import { SearchInput } from "@/components/ui/search-input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { EventDetailForm } from "@/components/protocol/planning/event-detail-form";
 import { browserApiFetch, LONG_RUNNING_TIMEOUT_MS } from "@/lib/api/client";
-import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { sortTagsByImportance, useTagConfig } from "@/lib/hooks/use-tag-config";
@@ -85,15 +87,26 @@ type Props = {
   initialEvents: EventSummary[];
   availableParticipants?: ParticipantSummary[];
   tenantName?: string | null;
+  /** Ohne meetings.edit: reine Leseansicht (keine Anlage-, Lösch-, Import- oder Bearbeiten-Aktionen). */
+  canEdit?: boolean;
+  canManageCycles?: boolean;
+  canManageSettings?: boolean;
 };
 
-export function EventManager({ initialEvents, availableParticipants = [], tenantName }: Props) {
+export function EventManager({
+  initialEvents,
+  availableParticipants = [],
+  tenantName,
+  canEdit = true,
+  canManageCycles = false,
+  canManageSettings = false,
+}: Props) {
   const t = useTranslations("events");
   const locale = useLocale();
   const CSV_TARGET_FIELDS = useMemo(() => csvTargetFields(t), [t]);
   const ROW_FIELD_OPTIONS = useMemo(() => rowFieldOptions(t), [t]);
   const showToast = useToast();
-  const confirm = useConfirm();
+  const confirmEventDelete = useConfirmEventDelete();
   const [events, setEvents] = useState(initialEvents);
   const [hasMore, setHasMore] = useState(initialEvents.length === PAGE_SIZE);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -125,7 +138,9 @@ export function EventManager({ initialEvents, availableParticipants = [], tenant
   const [importError, setImportError] = useState<string | null>(null);
 
   useEffect(() => {
-    setTodayIso(new Date().toISOString().slice(0, 10));
+    // Lokales Datum (wie die mobile Ansicht), nicht UTC: sonst gilt zwischen 00:00 und 02:00
+    // Schweizer Zeit noch der Vortag als «heute».
+    setTodayIso(localTodayIso());
   }, []);
 
   // Zeilen-Ansicht ist eine reine Komfort-Einstellung pro Browser.
@@ -366,25 +381,33 @@ export function EventManager({ initialEvents, availableParticipants = [], tenant
     setCreateDate(date ?? todayIso);
   }
 
-  async function updateEventDetail(eventId: string, patch: Partial<EventSummary>) {
+  // Je Termin die Nummer der letzten Anfrage: eine ältere Antwort überschreibt nie einen neueren Stand.
+  const updateSeqRef = useRef<Map<string, number>>(new Map());
+
+  async function updateEventDetail(eventId: string, patch: Partial<EventSummary>): Promise<boolean> { // i18n-ok: TS-Generic-Signatur, kein UI-Text
     const previous = events.find((event) => event.id === eventId) ?? null;
+    const seq = (updateSeqRef.current.get(eventId) ?? 0) + 1;
+    updateSeqRef.current.set(eventId, seq);
     setEvents((current) => current.map((event) => (event.id === eventId ? { ...event, ...patch } : event)));
     try {
       const updated = await browserApiFetch<EventSummary>(`/api/events/${eventId}`, {
         method: "PATCH",
         body: JSON.stringify(patch),
       });
+      if (updateSeqRef.current.get(eventId) !== seq) return true;
       setEvents((current) => current.map((event) => (event.id === eventId ? updated : event)));
       // Nur die Zyklen aus dem Server-Stand übernehmen (wandern beim Datumswechsel mit); übrige
       // Felder bleiben lokal, damit langsame Antworten keine laufende Eingabe überschreiben.
       setDetailEvent((current) =>
         current && current.id === eventId ? { ...current, cycle_assignments: updated.cycle_assignments } : current
       );
+      return true;
     } catch (error) {
-      if (previous) {
+      if (previous && updateSeqRef.current.get(eventId) === seq) {
         setEvents((current) => current.map((event) => (event.id === eventId ? previous : event)));
       }
       showToast(error instanceof Error ? error.message : t("toasts.eventUpdateFailed"), "error");
+      return false;
     }
   }
 
@@ -397,11 +420,8 @@ export function EventManager({ initialEvents, availableParticipants = [], tenant
   }
 
   async function deleteEvent(eventId: string) {
-    const ok = await confirm({
-      message: t("toasts.deleteConfirmMessage"),
-      tone: "danger",
-      confirmLabel: t("toasts.deleteConfirmLabel")
-    });
+    const title = events.find((event) => event.id === eventId)?.title ?? null;
+    const ok = await confirmEventDelete(eventId, title);
     if (!ok) return;
     try {
       await browserApiFetch(`/api/events/${eventId}`, { method: "DELETE" });
@@ -445,6 +465,25 @@ export function EventManager({ initialEvents, availableParticipants = [], tenant
     }
   }
 
+  // Suche und Filter wirken nur auf geladene Termine - auf Wunsch alle nachladen.
+  async function loadAll() {
+    setIsLoadingMore(true);
+    try {
+      const all: EventSummary[] = [];
+      for (let skip = 0; ; skip += 500) {
+        const page = await browserApiFetch<EventSummary[]>(`/api/events?skip=${skip}&limit=500`);
+        all.push(...page);
+        if (page.length < 500) break;
+      }
+      setEvents(all);
+      setHasMore(false);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : t("toasts.loadMoreFailed"), "error");
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }
+
   const loadMoreSentinelRef = useInfiniteScroll({
     hasMore,
     isLoading: isLoadingMore,
@@ -479,7 +518,7 @@ export function EventManager({ initialEvents, availableParticipants = [], tenant
     return (
       <Fragment key={item.id}>
         {item.id === todayMarkerEventId && !isFirstInMonth ? renderTodayMarker() : null}
-        <div className={rowClass} onClick={() => setDetailEvent(item)} onContextMenu={(event) => openEventContextMenu(event, item)}>
+        <div className={rowClass} onClick={() => setDetailEvent(item)} onContextMenu={canEdit ? (event) => openEventContextMenu(event, item) : undefined}>
           <div className="event-date-tile" aria-hidden="true">
             <span className="event-date-tile-weekday">{weekdayFormatter.format(startDate).replace(/\.$/, "")}</span>
             <span className="event-date-tile-day">{startDate.getUTCDate()}</span>
@@ -531,19 +570,31 @@ export function EventManager({ initialEvents, availableParticipants = [], tenant
               </span>
             ) : null}
             <ActionMenu
-              items={[
-                { label: t("list.open"), onClick: () => setDetailEvent(item) },
-                {
-                  label: item.is_cancelled ? t("contextMenu.uncancel") : t("contextMenu.markCancelled"),
-                  onClick: () => void toggleCancelled(item),
-                },
-                { label: t("delete"), onClick: () => void deleteEvent(item.id), danger: true },
-              ]}
+              items={
+                canEdit
+                  ? [
+                      { label: t("list.open"), onClick: () => setDetailEvent(item) },
+                      {
+                        label: item.is_cancelled ? t("contextMenu.uncancel") : t("contextMenu.markCancelled"),
+                        onClick: () => void toggleCancelled(item),
+                      },
+                      { label: t("delete"), onClick: () => void deleteEvent(item.id), danger: true },
+                    ]
+                  : [{ label: t("list.open"), onClick: () => setDetailEvent(item) }]
+              }
             />
           </div>
         </div>
       </Fragment>
     );
+  }
+
+  // Übersetzbarer Zeilenfehler aus der Vorschau (error_code + Parameter), sonst Backend-Text.
+  function csvRowError(row: EventImportPreview["rows"][number]): string {
+    if (row.error_code && t.has(`csvErrors.${row.error_code}`)) {
+      return t(`csvErrors.${row.error_code}`, (row.error_params ?? {}) as Record<string, string | number>);
+    }
+    return row.error ?? "";
   }
 
   function openImportModal() {
@@ -637,16 +688,20 @@ export function EventManager({ initialEvents, availableParticipants = [], tenant
               {t("calendar.open")}
             </button>
             <div className="event-button-group">
-              <button type="button" className="button-secondary button-ghost" onClick={openImportModal}>
-                <EventIcon name="upload" />
-                {t("csvImport")}
-              </button>
+              {canEdit ? (
+                <button type="button" className="button-secondary button-ghost" onClick={openImportModal}>
+                  <EventIcon name="upload" />
+                  {t("csvImport")}
+                </button>
+              ) : null}
               <DocumentExportButton className="button-secondary button-ghost" label={t("export")} context={{ documentType: "events" }} />
             </div>
-            <button type="button" className="button-primary event-new-button" onClick={() => openCreate()}>
-              <EventIcon name="plus" />
-              {t("newEvent")}
-            </button>
+            {canEdit ? (
+              <button type="button" className="button-primary event-new-button" onClick={() => openCreate()}>
+                <EventIcon name="plus" />
+                {t("newEvent")}
+              </button>
+            ) : null}
           </div>
         )}
       </div>
@@ -656,9 +711,15 @@ export function EventManager({ initialEvents, availableParticipants = [], tenant
           title={t("emptyState.title")}
           description={t("emptyState.description")}
           actions={
-            <button type="button" className="button-primary" onClick={() => openCreate()}>
-              {t("emptyState.add")}
-            </button>
+            <>
+              {canEdit ? (
+                <button type="button" className="button-primary" onClick={() => openCreate()}>
+                  {t("emptyState.add")}
+                </button>
+              ) : null}
+              <DocsLink page="termine">{t("help.docsLink")}</DocsLink>
+              <DocsLink page="verknuepfungen">{t("help.calendarDocsLink")}</DocsLink>
+            </>
           }
           hint={t("emptyState.hint")}
         />
@@ -694,6 +755,7 @@ export function EventManager({ initialEvents, availableParticipants = [], tenant
                       <span className="event-tag-sidebar-label">{tag}</span>
                       <span className="event-tag-sidebar-count">{count}</span>
                     </button>
+                    {canEdit ? (
                     <button
                       type="button"
                       className="event-tag-star"
@@ -706,6 +768,7 @@ export function EventManager({ initialEvents, availableParticipants = [], tenant
                         <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />
                       </svg>
                     </button>
+                    ) : null}
                   </div>
                 );
               })}
@@ -758,7 +821,12 @@ export function EventManager({ initialEvents, availableParticipants = [], tenant
               >
                 {cycleConfigs.length > 0 && (
                   <div className="mini-menu-section">
-                    <div className="mini-menu-section-title">{t("filterSection")}</div>
+                    <div className="mini-menu-section-title">
+                      {t("filterSection")}
+                      <HelpPopover topic={t("showAllPeriods")} docs={{ page: "zyklen", anchor: "aktueller-zyklus" }}>
+                        {t("help.currentCycle")}
+                      </HelpPopover>
+                    </div>
                     <label className="mini-menu-option mini-menu-switch-option">
                       <span>{t("showAllPeriods")}</span>
                       <input
@@ -817,6 +885,15 @@ export function EventManager({ initialEvents, availableParticipants = [], tenant
                 </div>
               </Popover>
             </div>
+
+            {hasMore && (hasActiveFilter || timeFilter !== "all") ? (
+              <div className="event-filter-summary" role="status">
+                <span>{t("list.partialLoaded", { count: events.length })}</span>
+                <button type="button" className="event-link-button" onClick={() => void loadAll()} disabled={isLoadingMore}>
+                  {isLoadingMore ? t("loadingMore") : t("list.loadAll")}
+                </button>
+              </div>
+            ) : null}
 
             {hasActiveFilter && filteredEvents.length > 0 && (
               <div className="event-filter-summary">
@@ -906,7 +983,12 @@ export function EventManager({ initialEvents, availableParticipants = [], tenant
 
           <details className="card import-help-card">
             <summary className="import-help-summary">
-              <span>{t("importModal.showFormat")}</span>
+              <span>
+                {t("importModal.showFormat")}
+                <HelpPopover topic={t("importModal.title")} docs={{ page: "termine", anchor: "csv-import" }}>
+                  {t("help.csvImport")}
+                </HelpPopover>
+              </span>
               <span className="muted">{t("importModal.requiredFields")}</span>
             </summary>
             <div className="import-help-body">
@@ -971,7 +1053,7 @@ export function EventManager({ initialEvents, availableParticipants = [], tenant
                     <td>{row.participant_count ?? <span className="muted">–</span>}</td>
                     <td>
                       {row.error ? (
-                        <Badge variant="danger">{row.error}</Badge>
+                        <Badge variant="danger">{csvRowError(row)}</Badge>
                       ) : (
                         <Badge variant="success">{t("importModal.rowValid")}</Badge>
                       )}
@@ -1044,9 +1126,14 @@ export function EventManager({ initialEvents, availableParticipants = [], tenant
             tagConfig={tagConfig}
             onTagColorChange={updateTagColor}
             onTagRename={renameTag}
+            readOnly={!canEdit}
+            canManageCycles={canManageCycles}
+            fieldSettingsHref={canManageSettings ? "/tenant-settings" : null}
             onUpdate={(patch) => {
-              setDetailEvent((current) => (current ? { ...current, ...patch } : current));
-              return updateEventDetail(detailEvent.id, patch);
+              const eventId = detailEvent.id;
+              // Nur in den noch offenen Termin übernehmen (verspätetes Speichern nach einem Wechsel).
+              setDetailEvent((current) => (current && current.id === eventId ? { ...current, ...patch } : current));
+              return updateEventDetail(eventId, patch);
             }}
           />
         ) : null}

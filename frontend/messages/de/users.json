@@ -1,35 +1,35 @@
 {
-  "pageTitle": "Teilnehmer",
-  "ownAccessOnlyHint": "Zugänge und Rollen dieses Mandanten.",
-  "pageHint": "Die Konten dieses Mandanten und ihre Rollen.",
-  "newUser": "Neuer Teilnehmer",
+  "pageTitle": "Logins & Rollen",
+  "ownAccessOnlyHint": "Logins und Rollen deines Vereins.",
+  "pageHint": "Wer sich anmelden darf und mit welchen Rollen. Die Personen selbst pflegst du unter «Mitglieder».",
+  "newUser": "Neue Person",
   "emptyState": {
     "title": "Nur dein eigener Zugang",
     "description": "Lade weitere Personen ein und weise ihnen eine Rolle zu: Admin, Schreiber, Kassier oder Leser.",
-    "invite": "+ Teilnehmer einladen"
+    "invite": "+ Person einladen"
   },
   "explainRoles": "Rollen erklären",
   "explainRolesDescription": "Jedes Konto kann mehrere Rollen haben und erhält alle ihre Berechtigungen. Die Rollen verwaltest du unter «Rollen».",
   "tabs": {
-    "active": "Teilnehmer mit Login",
-    "participants": "Teilnehmer"
+    "active": "Mit Login",
+    "participants": "Ohne Login"
   },
-  "searchUsers": "Teilnehmer durchsuchen",
-  "searchParticipants": "Teilnehmer durchsuchen",
+  "searchUsers": "Logins durchsuchen",
+  "searchParticipants": "Mitglieder ohne Login durchsuchen",
   "columns": {
     "displayName": "Anzeigename",
     "name": "Name",
     "email": "E-Mail",
     "role": "Rolle",
     "actions": "Aktionen",
-    "participantEmail": "E-Mail (Teilnehmer)"
+    "participantEmail": "E-Mail"
   },
   "mfaButton": "MFA",
   "delete": "Löschen",
   "close": "Schliessen",
-  "editUserTitle": "Teilnehmer bearbeiten",
-  "createUserTitle": "Teilnehmer erstellen",
-  "userModalDescription": "Kontodaten und Rolle pflegen.",
+  "editUserTitle": "Person bearbeiten",
+  "createUserTitle": "Person erfassen",
+  "userModalDescription": "Name, Login und Rollen. Eintritt, Austritt und Vorlagen pflegst du unter «Mitglieder».",
   "firstName": "Vorname",
   "lastName": "Nachname",
   "displayName": "Anzeigename",
@@ -43,13 +43,13 @@
   "enableLogin": "Login aktivieren",
   "cancel": "Abbrechen",
   "save": "Speichern",
-  "enableLoginForTitle": "Login aktivieren für {name}",
-  "enableLoginTitle": "Login aktivieren",
-  "enableLoginDescription": "Vergib E-Mail-Adresse und Passwort für den Login dieses Teilnehmers.",
+  "enableLoginForTitle": "Login für {name}",
+  "enableLoginTitle": "Login vergeben",
+  "enableLoginDescription": "Am einfachsten per Einladung: die Person legt ihr Passwort selbst fest.",
   "mfaTitle": "MFA von {name}",
   "mfaTitleFallback": "MFA",
   "roleDescriptions": {
-    "admin": "Voller Zugriff innerhalb des Mandanten, inklusive Struktur (Vorlagen, Zyklen, Einstellungen) und Teilnehmerverwaltung.",
+    "admin": "Voller Zugriff im Verein, inklusive Struktur (Vorlagen, Zyklen, Einstellungen), Mitglieder, Logins und Rollen.",
     "writer": "Arbeitet im Protokoll-Bereich mit und pflegt operative Daten, ändert aber weder Struktur noch Finanzen.",
     "kassier": "Wie Leser, zusätzlich voller Schreibzugriff auf Finanzen und Bussen.",
     "reader": "Nur Lesezugriff, kann PDF-Exporte auslösen und sieht nur die eigenen Bussen."
@@ -57,11 +57,46 @@
   "toasts": {
     "loginEnabled": "Login aktiviert",
     "loginEnableFailed": "Login konnte nicht aktiviert werden",
-    "userSaved": "Teilnehmer gespeichert",
-    "userCreated": "Teilnehmer erstellt",
-    "userSaveFailed": "Teilnehmer konnte nicht gespeichert werden",
-    "deleteConfirm": "Teilnehmer \"{name}\" endgültig löschen? Das Konto und der Zugriff gehen sofort verloren.",
-    "userDeleted": "Teilnehmer gelöscht",
-    "userDeleteFailed": "Teilnehmer konnte nicht gelöscht werden"
+    "userSaved": "Gespeichert",
+    "userCreated": "Person erfasst",
+    "userSaveFailed": "Konnte nicht gespeichert werden",
+    "deleteConfirm": "«{name}» endgültig löschen? Die Person verschwindet mit Anwesenheit, Bussen und Aufgaben.",
+    "userDeleted": "Person gelöscht",
+    "userDeleteFailed": "Person konnte nicht gelöscht werden",
+    "inviteSent": "Einladung an {email} wird verschickt.",
+    "inviteFailed": "Die Einladung konnte nicht verschickt werden."
+  },
+  "inactiveBadge": "Inaktiv",
+  "emptySearch": "Keine Treffer für diese Suche.",
+  "emptyWithLogin": "Noch niemand hat einen Login.",
+  "emptyWithoutLogin": "Alle Mitglieder haben bereits einen Login.",
+  "enableLoginInactive": "Inaktive Personen bekommen keinen Login. Zuerst unter «Mitglieder» aktivieren.",
+  "rolesDocs": "Rollen in der Anleitung",
+  "rolesLabel": "Rollen",
+  "rolesHelp": "Ein Konto kann mehrere Rollen haben und bekommt alle ihre Berechtigungen. Rollen mit Rechten, die du selbst nicht hast, kannst du nicht vergeben.",
+  "loginHelp": "Mit Login kann sich die Person anmelden und sieht, was ihre Rollen erlauben. Ohne Login bleibt sie Mitglied (Anwesenheit, Bussen, Aufgaben). Am besten per E-Mail einladen statt ein Passwort zu vergeben.",
+  "loginActive": "Login aktiv (abwählen entzieht den Login)",
+  "loginSetPassword": "Login mit selbst gesetztem Passwort aktivieren",
+  "passwordHelpSet": "Mindestens 12 Zeichen. Teile es der Person sicher mit; sie kann es danach im Profil ändern.",
+  "blockers": {
+    "displayName": "Speichern ist gesperrt: der Anzeigename fehlt.",
+    "email": "Speichern ist gesperrt: für einen Login braucht es eine E-Mail-Adresse.",
+    "password": "Speichern ist gesperrt: das Passwort braucht mindestens 12 Zeichen.",
+    "tenant": "Speichern ist gesperrt: wähle einen Mandanten."
+  },
+  "loginMode": {
+    "label": "Wie bekommt die Person den Login?",
+    "invite": "Per E-Mail einladen (empfohlen)",
+    "inviteHelp": "Die Person bekommt einen Link (7 Tage gültig) und legt ihr Passwort selbst fest. Der Login wird aktiv, sobald sie annimmt.",
+    "password": "Passwort selbst setzen",
+    "mailOff": "Der E-Mail-Versand ist nicht eingerichtet, deshalb ist keine Einladung möglich. Setze ein Passwort und teile es der Person sicher mit.",
+    "inviteSubmit": "Einladung senden"
+  },
+  "revokeLogin": {
+    "action": "Login entziehen",
+    "confirmTitle": "Login von {name} entziehen?",
+    "confirmMessage": "{name} kann sich danach nicht mehr anmelden; laufende Sitzungen enden sofort. Die Person bleibt als Mitglied mit Anwesenheit, Bussen und Aufgaben erhalten. Ganz löschen kannst du sie unter «Mitglieder».",
+    "done": "Login von {name} entzogen",
+    "failed": "Der Login konnte nicht entzogen werden"
   }
 }

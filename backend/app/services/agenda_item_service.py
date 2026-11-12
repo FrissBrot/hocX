@@ -27,6 +27,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from app.models.entities import AgendaItem, Participant, Protocol, ProtocolElement, Template, TemplateElement
+from app.services.todo_fine_service import today as today_local
 
 # Status, in denen ein Protokoll wartende Anliegen anzieht.
 OPEN_PROTOCOL_STATUSES = ("geplant", "vorbereitet")
@@ -148,6 +149,17 @@ class AgendaItemService:
             return {}
         return dict(db.execute(select(Participant.id, Participant.display_name).where(Participant.id.in_(ids))).all())
 
+    def lock(self, db: Session, item: AgendaItem) -> AgendaItem:
+        """Sperrt die Zeile des Anliegens bis zum Commit und lädt sie neu (Audit 07, C13): so
+        laufen Vertagen/Ändern/Löschen und das Binden beim Durchführen (bind_to_protocol sperrt
+        dieselben Zeilen) nacheinander statt gleichzeitig. Nur die Anliegen-Zeile wird gesperrt,
+        der Protokollstatus nur gelesen - bind_to_protocol sperrt umgekehrt nie das Anliegen vor
+        dem Protokoll, ein Deadlock ist so ausgeschlossen."""
+        db.execute(
+            select(AgendaItem).where(AgendaItem.id == item.id).with_for_update().execution_options(populate_existing=True)
+        )
+        return item
+
     def is_frozen(self, db: Session, item: AgendaItem) -> bool:
         if item.protocol_id is None:
             return False
@@ -199,7 +211,7 @@ class AgendaItemService:
         if template.tenant_id != tenant_id:
             raise ValueError("Template does not belong to the tenant")
         self._validate_point(db, template, template_element_id)
-        today = today or date.today()
+        today = today or today_local()
         item = AgendaItem(
             tenant_id=tenant_id,
             template_id=template.id,
@@ -263,6 +275,7 @@ class AgendaItemService:
     ) -> AgendaItem:
         """`fields` nennt die gesetzten Felder. Vorlage, Punkt und Termin lassen sich nur bei
         wartenden Anliegen ändern (gebundene: vertagen)."""
+        self.lock(db, item)
         if self.is_frozen(db, item):
             raise AgendaItemFrozenError("Agenda item belongs to an abgeschlossen protocol")
         if "title" in fields:
@@ -282,7 +295,7 @@ class AgendaItemService:
             self._validate_point(db, target_template, template_element_id)
             item.template_element_id = template_element_id
         if "schedule" in fields and schedule is not None:
-            self._apply_schedule(item, schedule, after=None, today=today or date.today())
+            self._apply_schedule(item, schedule, after=None, today=today or today_local())
         db.add(item)
         db.commit()
         db.refresh(item)
@@ -294,11 +307,12 @@ class AgendaItemService:
         item.earliest_date = self._earliest_for(schedule, after=after, today=today)
 
     def postpone(self, db: Session, item: AgendaItem, schedule: Schedule, *, today: date | None = None) -> AgendaItem:
+        self.lock(db, item)
         if self.is_frozen(db, item):
             raise AgendaItemFrozenError("Agenda item belongs to an abgeschlossen protocol")
         reference_id = item.protocol_id or self.target_protocol_ids(db, [item.id]).get(item.id)
         reference_date = db.scalar(select(Protocol.protocol_date).where(Protocol.id == reference_id)) if reference_id else None
-        self._apply_schedule(item, schedule, after=reference_date, today=today or date.today())
+        self._apply_schedule(item, schedule, after=reference_date, today=today or today_local())
         item.protocol_id = None
         item.protocol_element_id = None
         item.postponed_count = (item.postponed_count or 0) + 1
@@ -308,6 +322,7 @@ class AgendaItemService:
         return item
 
     def delete(self, db: Session, item: AgendaItem) -> None:
+        self.lock(db, item)
         if self.is_frozen(db, item):
             raise AgendaItemFrozenError("Agenda item belongs to an abgeschlossen protocol")
         db.delete(item)
@@ -316,7 +331,8 @@ class AgendaItemService:
     def bind_to_protocol(self, db: Session, protocol: Protocol) -> int:
         """Beim Durchführen: wartende Anliegen mit diesem Zielprotokoll fest binden. Ohne
         Commit - Teil des Statusübergangs."""
-        pending = list(db.scalars(self._pending_for_protocol_query(protocol)).all())
+        # FOR UPDATE: ein gleichzeitiges Vertagen wartet bzw. wird hier neu ausgewertet (C13).
+        pending = list(db.scalars(self._pending_for_protocol_query(protocol).with_for_update(of=AgendaItem)).all())
         if not pending:
             return 0
         placement = self.placements(db, protocol, pending)

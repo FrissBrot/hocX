@@ -51,6 +51,7 @@
     "late": "En retard",
     "absent": "Absence non excusée"
   },
+  "fineTransaction": "Amende {type} : {name}",
   "col": {
     "status": "Statut",
     "task": "Tâche",
@@ -323,7 +324,15 @@
     "brandArchived": "Un profil de marque archivé ne peut pas être le profil par défaut.",
     "defaultBrand": "Le profil de marque par défaut ne peut pas être archivé ou supprimé.",
     "brandInUse": "Le profil de marque est utilisé. Veuillez l’archiver au lieu de le supprimer.",
-    "noColumns": "Sélectionnez au moins une colonne."
+    "noColumns": "Sélectionnez au moins une colonne.",
+    "agendaItemNotFound": "Le sujet est introuvable.",
+    "agendaItemFrozen": "Le sujet appartient à un procès-verbal clôturé et ne peut plus être modifié.",
+    "agendaProtocolClosed": "Le procès-verbal est déjà clôturé.",
+    "agendaTitleRequired": "Veuillez saisir un titre.",
+    "agendaMonthRequired": "Veuillez choisir un mois.",
+    "agendaBoundOnlyPostpone": "Le sujet figure déjà dans un procès-verbal. Utilisez «Reporter» pour le déplacer.",
+    "agendaPointMismatch": "Le point choisi n’appartient pas à ce modèle.",
+    "agendaSaveFailed": "Le sujet n’a pas pu être enregistré."
   },
   "metadata": {
     "title": "Informations sur le document",
@@ -628,7 +637,11 @@
       "mfaRemoved": "Deuxième facteur supprimé ({at})",
       "mfaRemovedByAdmin": "Deuxième facteur supprimé par l’administration de l’association ({at})",
       "hint": "Ce n’était pas toi ? Contacte immédiatement {tenant}.",
-      "mandatory": "Les avis de sécurité sont toujours envoyés et ne peuvent pas être désactivés."
+      "mandatory": "Les avis de sécurité sont toujours envoyés et ne peuvent pas être désactivés.",
+      "emailChanged": "E-mail de connexion modifié ({at})",
+      "emailChangedByAdmin": "E-mail de connexion modifié par l’administration de l’association ({at})",
+      "emailChangedSubject": "{tenant} : ton e-mail de connexion a été modifié",
+      "emailChangedIntro": "L’e-mail de connexion de ton compte chez {tenant} a été modifié. Cette adresse n’est plus utilisée pour la connexion, ce message est donc le dernier envoyé ici :"
     },
     "export": {
       "subjectReady": "{tenant} : export de données prêt",

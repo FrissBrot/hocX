@@ -72,17 +72,27 @@ def _broadcast_block_update(protocol_id: int, read: ProtocolElementBlockRead, us
     )
 
 
+def _ensure_readable_protocol_or_404(db: Session, user: CurrentUser, protocol_id: int | None, detail: str) -> None:
+    """Wie access_service.ensure_can_read_protocol, aber mit 404 statt 403: Wer ein Protokoll
+    (z. B. einen Entwurf) nicht lesen darf, erfährt auch nicht, dass es existiert
+    (SECURITY-RULES 1.6). Mandant, Entwurfsrecht und Teilnehmer-Zuordnung prüft can_read_protocol."""
+    if protocol_id is None or not access_service.can_read_protocol(db, user, protocol_id):
+        raise HTTPException(status_code=404, detail=detail)
+
+
 def _block_and_protocol_or_404(db: Session, user: CurrentUser, protocol_element_block_id: uuid.UUID):
     """Shared guard for the list-snapshot/text/config routes below: resolves the block + its
     protocol, 404s if either is missing/inaccessible, 409s if the protocol is already
     abgeschlossen (permanently frozen, edits/refresh/undo no longer apply). The 404/409
     protocol check itself lives on ProtocolService so app/api/routes/todos.py can share the
     exact same logic for todos, which hang off a protocol_id rather than a block."""
-    block = public_id_service.get_by_public_id(db, ProtocolElementBlock, protocol_element_block_id)
+    block = public_id_service.get_by_public_id(
+        db, ProtocolElementBlock, protocol_element_block_id, tenant_id=user.current_tenant_id
+    )
     if block is None:
         raise HTTPException(status_code=404, detail="Protocol element block not found")
-    access_service.ensure_can_read_protocol_block(db, user, block.id)
     protocol_id = access_service.repository.protocol_id_for_block(db, protocol_element_block_id=block.id)
+    _ensure_readable_protocol_or_404(db, user, protocol_id, "Protocol element block not found")
     protocol = protocol_service.get_protocol_or_404_not_frozen(db, protocol_id)
     return block, protocol
 
@@ -181,11 +191,11 @@ def patch_protocol_element(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.MEETINGS_EDIT)
-    element = public_id_service.get_by_public_id(db, ProtocolElement, protocol_element_id)
+    element = public_id_service.get_by_public_id(db, ProtocolElement, protocol_element_id, tenant_id=user.current_tenant_id)
     if element is None:
         raise HTTPException(status_code=404, detail="Protocol element not found")
-    access_service.ensure_can_read_protocol_element(db, user, element.id)
     protocol_id = access_service.repository.protocol_id_for_element(db, protocol_element_id=element.id)
+    _ensure_readable_protocol_or_404(db, user, protocol_id, "Protocol element not found")
     protocol_service.get_protocol_or_404_not_frozen(db, protocol_id)
     try:
         protocol_element = service.update_protocol_element(db, element.id, payload)
@@ -360,11 +370,11 @@ def create_protocol_element_block_from_event(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.MEETINGS_EDIT)
-    element = public_id_service.get_by_public_id(db, ProtocolElement, protocol_element_id)
+    element = public_id_service.get_by_public_id(db, ProtocolElement, protocol_element_id, tenant_id=user.current_tenant_id)
     if element is None:
         raise HTTPException(status_code=404, detail="Protocol element not found")
-    access_service.ensure_can_read_protocol_element(db, user, element.id)
     protocol_id = access_service.repository.protocol_id_for_element(db, protocol_element_id=element.id)
+    _ensure_readable_protocol_or_404(db, user, protocol_id, "Protocol element not found")
     protocol = protocol_service.get_protocol_or_404_not_frozen(db, protocol_id)
     # Schreibroute: nur Protokolle des eigenen Mandanten, auch wenn Leserechte einmal weiter
     # reichen (z. B. geteilte Inhalte) - Sicherheitsregel 1.2, ProtocolElement hat kein tenant_id

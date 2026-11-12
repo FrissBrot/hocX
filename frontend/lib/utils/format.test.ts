@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatDate,
+  formatFileSize,
   formatDateInputValue,
   formatDateRange,
   formatDateTime,
@@ -95,5 +96,15 @@ describe("formatDateTime", () => {
 
   it("falls back to formatDate for an unparseable datetime", () => {
     expect(formatDateTime("not a date")).toBe(formatDate("not a date"));
+  });
+});
+
+describe("formatFileSize mit UI-Sprache", () => {
+  it("bleibt ohne Locale beim Punkt und nutzt mit Locale das Dezimalzeichen der Sprache", () => {
+    expect(formatFileSize(1.5 * 1024 * 1024)).toBe("1.5 MB");
+    expect(formatFileSize(1.5 * 1024 * 1024, "de")).toBe("1.5 MB"); // de-CH: Punkt
+    expect(formatFileSize(1.5 * 1024 * 1024, "fr")).toBe("1,5 MB");
+    expect(formatFileSize(1.5 * 1024 * 1024, "en")).toBe("1.5 MB");
+    expect(formatFileSize(512)).toBe("512 B");
   });
 });

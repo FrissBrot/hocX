@@ -144,7 +144,8 @@
       "source_consistent": "Storage precedente ancora attivo e invariato",
       "inconsistent": "Stato dello storage incoerente – verificare",
       "migration_running": "Migrazione dei dati ancora in corso"
-    }
+    },
+    "help": "Una manutenzione non termina mai per un timer. Può essere sbloccata solo quando tutte le condizioni sono soddisfatte (ad es. job concluso, controlli verdi). Le condizioni aperte mostrano cosa si sta ancora aspettando."
   },
   "form": {
     "message": "Messaggio pubblico ({locale})",

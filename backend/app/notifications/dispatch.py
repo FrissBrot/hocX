@@ -36,6 +36,7 @@ ITEM_LOADERS = {
     "account.password_reset": account.link_items_for,
     "account.invite": account.link_items_for,
     "account.security": account.security_items_for,
+    "account.email_changed": account.email_changed_items_for,
     "export": exports.items_for,
 }
 
@@ -106,13 +107,18 @@ def _deliver_group(db: Session, config: email_transport.EmailConfig, tenant_id: 
     rows = [row for row in rows if row.id in items]
     if not rows:
         return "skipped"
+    # Einträge mit eigener Zieladresse (Login-E-Mail geändert -> alte Adresse): je Adresse eine Mail,
+    # hier nur die neueste; ältere gleicher Adresse gelten mit als versendet.
+    target = items[rows[-1].id].get("to")
+    if target:
+        rows = [row for row in rows if items[row.id].get("to") == target]
     tenant_name = db.scalar(select(Tenant.name).where(Tenant.id == tenant_id)) or "hocX"
     rendered = render(
         lang=person.preferred_language, group=group, items=[items[row.id] for row in rows], recipient_name=person.first_name or person.display_name,
         tenant_name=tenant_name, base_url=config.link_base_url, can_login=person.login_enabled,
     )
     try:
-        email_transport.send(config, email_transport.OutgoingEmail(to=person.email.strip(), subject=rendered.subject, text=rendered.text, html=rendered.html))
+        email_transport.send(config, email_transport.OutgoingEmail(to=target or person.email.strip(), subject=rendered.subject, text=rendered.text, html=rendered.html))
     except email_transport.EmailError as exc:
         _fail(db, rows, str(exc))
         return "failed"

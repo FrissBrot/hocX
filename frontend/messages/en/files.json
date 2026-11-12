@@ -32,7 +32,8 @@
     "cancel": "Cancel",
     "uploading": "Uploading…",
     "uploadCount": "{count, plural, one {Upload # file} other {Upload # files}}",
-    "upload": "Upload"
+    "upload": "Upload",
+    "progress": "{sent} of {total} transferred"
   },
   "errors": {
     "uploadFailed": "Upload failed"

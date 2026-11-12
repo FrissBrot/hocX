@@ -47,6 +47,10 @@
         }
       },
       "securityNote": "Les avis de sécurité (mot de passe ou deuxième facteur modifié) et les liens de réinitialisation du mot de passe sont toujours envoyés."
+    },
+    "docs": {
+      "notifications": "En savoir plus sur les notifications par e-mail",
+      "security": "En savoir plus sur le mot de passe et le second facteur"
     }
   },
   "logoutFailed": "Échec de la déconnexion. Veuillez réessayer.",

@@ -88,7 +88,7 @@ export function AttendanceParticipantChart({ data }: { data: ParticipantAttEntry
 }
 
 export type FinanceEntry = { month: string; income: number; expenses: number; net: number };
-export function FinanceChart({ data }: { data: FinanceEntry[] }) {
+export function FinanceChart({ data, currency }: { data: FinanceEntry[]; currency?: string | null }) {
   const t = useTranslations("statistics");
   const locale = useLocale();
   const h = useChartHeight(240);
@@ -98,7 +98,7 @@ export function FinanceChart({ data }: { data: FinanceEntry[] }) {
         <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
         <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="var(--muted)" />
         <YAxis tick={{ fontSize: 11 }} stroke="var(--muted)" width={50} />
-        <Tooltip content={<ChartTooltip formatter={(v) => `${fmtAmount(v, locale)} CHF`} />} />
+        <Tooltip content={<ChartTooltip formatter={(v) => [fmtAmount(v, locale), currency].filter(Boolean).join(" ")} />} />
         <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: "var(--text-xs)" }} />
         <Bar dataKey="income" name={t("income")} fill={COLORS.income} radius={[4, 4, 0, 0]} />
         <Bar dataKey="expenses" name={t("expenses")} fill={COLORS.expenses} radius={[4, 4, 0, 0]} />

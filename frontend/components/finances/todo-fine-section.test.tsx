@@ -53,3 +53,19 @@ it("computes amounts like the backend (base + full intervals)", () => {
   expect(ruleAmount(5, 2, 2, 5)).toBe(9);
   expect(ruleAmount(5, 2, 1, 0)).toBe(0);
 });
+
+it("shows a frozen fine read-only with currency and explains it", async () => {
+  api.mockResolvedValue({ ...conflict, state: "ok", running: false, frozen: true, matching_rules: [], rule_name: "Alle",
+    lines: [{ participant_id: "p1", participant_name: "Anna", tariff_name: null, amount: 7.5 }] });
+  render(<TodoFineSection todoId="todo-1" readOnly />);
+  expect(await screen.findByText("Eingefroren")).toBeInTheDocument();
+  expect(screen.getByText(/7\.50/)).toBeInTheDocument();
+  expect(screen.getByText(/bleibt beim Wiedereröffnen/)).toBeInTheDocument();
+  expect(screen.queryByLabelText("Busse festlegen")).not.toBeInTheDocument();
+});
+
+it("reports a failed load instead of silently hiding the section", async () => {
+  api.mockRejectedValue(new Error("down"));
+  render(<TodoFineSection todoId="todo-1" />);
+  expect(await screen.findByText("Die Busse konnte nicht geladen werden.")).toBeInTheDocument();
+});

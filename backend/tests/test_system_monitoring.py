@@ -434,3 +434,72 @@ def test_never_run_is_announced_only_after_startup_grace_and_survives_restarts(c
     later = when + timedelta(minutes=1)
     system_alert_service.evaluate_and_notify(db, snapshot.model_copy(update={"collected_at": later}), now=later)
     assert len(sent) == 1
+
+
+# ── Audit 08 (2026-11): Zustellung erst nach Versand, Fehler in DB-Prüfungen ───────────
+
+
+def test_alert_that_could_not_be_delivered_is_resent_after_ntfy_recovers(clean_state, sent, monkeypatch):
+    db = clean_state
+    _enable_ntfy(db)
+    working_send = ntfy_client.send
+
+    def _down(**_kwargs):
+        raise ntfy_client.NtfyError("ntfy nicht erreichbar")
+
+    monkeypatch.setattr(system_alert_service, "record_system_error", lambda db, *, exc: None)
+    unhealthy = _snapshot(containers=[_container(health="unhealthy")])
+    system_alert_service.evaluate_and_notify(db, unhealthy, now=NOW)
+    monkeypatch.setattr(ntfy_client, "send", _down)
+    system_alert_service.evaluate_and_notify(db, unhealthy, now=NOW + timedelta(seconds=120))
+    event = db.scalars(select(SystemHealthEvent)).one()
+    assert event.notified_at is None  # nicht zugestellt = nicht gemeldet
+
+    monkeypatch.setattr(ntfy_client, "send", working_send)
+    system_alert_service.evaluate_and_notify(db, unhealthy, now=NOW + timedelta(seconds=150))
+    assert [message.title for message in sent] == ["[hocX] Container backend ist unhealthy"]
+    db.refresh(event)
+    assert event.notified_at is not None
+    # Kein zweites Ereignis, kein zweiter Versand
+    system_alert_service.evaluate_and_notify(db, unhealthy, now=NOW + timedelta(seconds=180))
+    assert len(sent) == 1
+    assert len(db.scalars(select(SystemHealthEvent)).all()) == 1
+
+
+def test_alerts_raised_while_ntfy_was_off_are_sent_once_it_is_enabled(clean_state, sent):
+    db = clean_state
+    unhealthy = _snapshot(containers=[_container(health="unhealthy")])
+    system_alert_service.evaluate_and_notify(db, unhealthy, now=NOW)
+    system_alert_service.evaluate_and_notify(db, unhealthy, now=NOW + timedelta(seconds=120))
+    assert sent == []
+    _enable_ntfy(db)
+    system_alert_service.evaluate_and_notify(db, unhealthy, now=NOW + timedelta(seconds=150))
+    assert [message.title for message in sent] == ["[hocX] Container backend ist unhealthy"]
+
+
+def test_failing_db_check_is_logged_once_and_reported_after_it_persists(clean_state, sent, monkeypatch):
+    db = clean_state
+    logged = []
+    monkeypatch.setattr(system_health_service, "record_system_error", lambda db, *, exc: logged.append(exc))
+    monkeypatch.setattr(system_health_service, "_reported_check_errors", {})
+
+    def _broken():
+        raise RuntimeError("column does not exist")
+
+    class _FakeSession:  # _run_check rollt zurück - nicht die Test-Transaktion
+        def rollback(self):
+            pass
+
+    for _ in range(3):
+        result = system_health_service._run_check("backup", _broken, failure_status="unknown", db=_FakeSession())
+    assert result[0].status == "unknown" and result[0].error
+    assert len(logged) == 1  # gedrosselt
+
+    _enable_ntfy(db)
+    for minutes in (0, 5):
+        when = NOW + timedelta(minutes=minutes)
+        system_alert_service.evaluate_and_notify(db, _snapshot(checks=result, collected_at=when), now=when)
+    assert sent == []  # längere Schonfrist für check_failed
+    when = NOW + timedelta(minutes=20)
+    system_alert_service.evaluate_and_notify(db, _snapshot(checks=result, collected_at=when), now=when)
+    assert [message.title for message in sent] == ["[hocX] Prüfung Backup schlägt fehl"]

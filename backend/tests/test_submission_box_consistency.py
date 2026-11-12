@@ -171,9 +171,24 @@ def test_late_submission_through_the_box_gets_its_fine_from_the_sync(db, box):
     assert db.scalar(select(func.count(TodoFine.id)).where(TodoFine.protocol_todo_id == todo.id)) == 1
 
 
-def test_old_completions_are_not_fined_afterwards(db, box):
+def test_trigger_completion_is_fined_once_even_after_a_long_sync_outage(db, box):
+    """Bereichs-Audit 2026-11: früher fror der Abgleich nur innerhalb von zwei Tagen nach - fiel
+    der Job länger aus, ging die Busse still verloren. Jetzt zählt fine_evaluated_at (0177)."""
     _fine_rule(db, box)
     _submit(db, box, submitted_at=datetime.now(UTC) - timedelta(days=5))
+    service.sync_submission_todos(db, box["assignment"])
+    service.sync_submission_todos(db, box["assignment"])
+    assert db.scalar(select(func.count(TodoFine.id)).where(TodoFine.protocol_todo_id == box["todo"].id)) <= 1
+    assert box["todo"].fine_evaluated_at is not None
+
+
+def test_already_evaluated_completions_are_not_fined_afterwards(db, box):
+    """Abschlüsse vor Migration 0177 gelten als bewertet: neue Regeln bewerten sie nicht rückwirkend."""
+    _submit(db, box, submitted_at=datetime.now(UTC) - timedelta(days=5))
+    service.sync_submission_todos(db, box["assignment"])
+    db.refresh(box["todo"])
+    assert box["todo"].fine_evaluated_at is not None
+    _fine_rule(db, box)
     service.sync_submission_todos(db, box["assignment"])
     assert db.scalar(select(func.count(TodoFine.id)).where(TodoFine.protocol_todo_id == box["todo"].id)) == 0
 

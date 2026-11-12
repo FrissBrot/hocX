@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TaskPackage } from "@/types/api";
 const api = vi.hoisted(() => vi.fn());
 const toast = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/api/client", () => ({ browserApiFetch: api }));
+vi.mock("@/lib/api/client", () => ({
+  browserApiFetch: api,
+  ApiError: class ApiError extends Error { constructor(message: string, public kind?: string, public status?: number, public detail?: unknown) { super(message); } },
+}));
 vi.mock("@/contexts/toast-context", () => ({ useToast: () => toast }));
 vi.mock("@/contexts/confirm-context", () => ({ useConfirm: () => vi.fn().mockResolvedValue(true) }));
 import { TaskPackageManager } from "./task-package-manager";
@@ -73,6 +76,17 @@ describe("TaskPackageManager", () => {
     fireEvent.click(screen.getByRole("button", { name: "Paket löschen" }));
     await waitFor(() => expect(api).toHaveBeenCalledWith("/api/task-packages/pkg-1?todos=none", { method: "DELETE" }));
     await waitFor(() => expect(screen.queryByText("Lagerplatz reservieren")).not.toBeInTheDocument());
+  });
+
+  it("translates backend error codes instead of showing the German detail", async () => {
+    const { ApiError } = await import("@/lib/api/client");
+    api.mockRejectedValue(new ApiError("Aufgabenpaket konnte nicht gelöscht werden", "validation", 400, { code: "delete_failed", message: "x" }));
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: /Aktionen für Sommerlager/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Löschen" }));
+    fireEvent.click(await screen.findByLabelText(/Keine Aufgaben löschen/));
+    fireEvent.click(screen.getByRole("button", { name: "Paket löschen" }));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith("Das Aufgabenpaket konnte nicht gelöscht werden.", "error"));
   });
 });
 

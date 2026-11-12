@@ -73,5 +73,7 @@
     "sectionLabel": "Punto all’ordine del giorno",
     "sectionNone": "Altri argomenti (senza punto)"
   },
-  "cancel": "Annulla"
+  "cancel": "Annulla",
+  "boundHintNoProtocol": "È già in un verbale. Per cambiare modello, punto o scadenza, rinvia l’argomento.",
+  "scheduleHelp": "«Prossima seduta»: compare nel prossimo verbale pianificato o preparato di questo modello. «Mese»: compare al più presto dal primo del mese nel prossimo verbale."
 }

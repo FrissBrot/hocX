@@ -144,7 +144,8 @@
       "source_consistent": "Bisheriger Speicher unverändert aktiv",
       "inconsistent": "Speicherzustand widersprüchlich – bitte prüfen",
       "migration_running": "Datenmigration läuft noch"
-    }
+    },
+    "help": "Eine Wartung endet nie durch einen Timer. Freigeben lässt sie sich erst, wenn alle Bedingungen erfüllt sind (z. B. Job abgeschlossen, Prüfungen grün). Offene Bedingungen zeigen, worauf noch gewartet wird."
   },
   "form": {
     "message": "Öffentliche Meldung ({locale})",

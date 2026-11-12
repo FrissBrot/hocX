@@ -73,5 +73,7 @@
     "sectionLabel": "Agenda item",
     "sectionNone": "Further topics (no agenda item)"
   },
-  "cancel": "Cancel"
+  "cancel": "Cancel",
+  "boundHintNoProtocol": "Already part of a protocol. To change the template, agenda item or date, postpone the topic.",
+  "scheduleHelp": "«Next meeting»: appears in the next planned or prepared protocol of this template. «Month»: appears in the next protocol from the first of that month at the earliest."
 }

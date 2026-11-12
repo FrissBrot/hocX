@@ -1,7 +1,8 @@
 {
   "page": {
     "title": "Connections",
-    "description": "Show your events and todos from hocX in Apple Calendar or Google Calendar. The calendars update automatically – you keep editing in hocX."
+    "description": "Show your events and todos from hocX in Apple Calendar or Google Calendar. The calendars update automatically – you keep editing in hocX.",
+    "docsLink": "Learn more in the help"
   },
   "status": {
     "active": "Connected",

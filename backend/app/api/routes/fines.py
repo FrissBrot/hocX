@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Annotated, Literal
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -20,6 +21,7 @@ from app.schemas.fines import (
     DeleteFinePayload,
     FineTariffRead,
     FineTariffUpdate,
+    OpenFinesSummary,
 )
 from app.services import fine_tariff_service, public_id_service
 from app.services.audit_service import AuditService
@@ -32,18 +34,35 @@ audit = AuditService()
 @router.get("/fines", response_model=list[AttendanceFineListItem])
 def list_fines(
     skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=50, ge=1, le=200),
+    # 500 wie fetchAllPages im Frontend (Mobile lädt alle Seiten; mit le=200 kam 422)
+    limit: int = Query(default=50, ge=1, le=500),
+    # Annotated statt Query-Default: direkte Aufrufe (Tests) bekommen None statt eines Query-Objekts
+    fine_status: Annotated[Literal["pending", "collected", "deleted"] | None, Query(alias="status")] = None,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     """Ohne reports.personal nur die eigenen Bussen (eigene Daten, keine Permission nötig).
+    Reine Leseroute: bleibt nach einem Downgrade («nur lesen») erreichbar (write=False).
 
     Mit reports.personal alle Bussen des Mandanten; ändern nur mit finances.manage (unten).
     """
-    require_feature(user, "finance")
+    require_feature(user, "finance", write=False)
     if not user.can(P.REPORTS_PERSONAL):
-        return repo.list_fines_for_user(db, user.current_tenant_id, user.user_id, skip=skip, limit=limit)
-    return repo.list_fines_for_tenant(db, user.current_tenant_id, skip=skip, limit=limit)
+        return repo.list_fines_for_user(db, user.current_tenant_id, user.user_id, skip=skip, limit=limit, status=fine_status)
+    return repo.list_fines_for_tenant(db, user.current_tenant_id, skip=skip, limit=limit, status=fine_status)
+
+
+@router.get("/fines/open-summary", response_model=OpenFinesSummary)
+def open_fines_summary(
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Summe der offenen Bussen je Währung (Dashboard). Gleiche Sichtbarkeit wie GET /fines:
+    ohne reports.personal nur die eigenen. Reine Leseroute (auch im Nur-Lesen-Zustand)."""
+    require_feature(user, "finance", write=False)
+    own_only = not user.can(P.REPORTS_PERSONAL)
+    summary = repo.open_fines_summary(db, user.current_tenant_id, user_id=user.user_id if own_only else None)
+    return OpenFinesSummary(**summary, own_only=own_only)
 
 
 def _resolve_protocol_id(db: Session, protocol_id: uuid.UUID, user: CurrentUser) -> int:
@@ -70,7 +89,7 @@ def get_fine_tariff(
 ):
     """Zentraler Bussentarif des Mandanten (Konto + Beträge für «zu spät»/«abwesend»)."""
     require_permission(user, P.MEETINGS_READ)
-    require_feature(user, "finance")
+    require_feature(user, "finance", write=False)
     return fine_tariff_service.read_tariff(db, user.current_tenant_id)
 
 
@@ -101,7 +120,7 @@ def list_pending_fines(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.REPORTS_PERSONAL)
-    require_feature(user, "finance")
+    require_feature(user, "finance", write=False)
     internal_id = _resolve_protocol_id(db, protocol_id, user)
     return repo.list_pending_fines_for_protocol(db, internal_id, user.current_tenant_id)
 
@@ -113,7 +132,7 @@ def list_protocol_fines(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.REPORTS_PERSONAL)
-    require_feature(user, "finance")
+    require_feature(user, "finance", write=False)
     internal_id = _resolve_protocol_id(db, protocol_id, user)
     return repo.list_fines_for_protocol(db, internal_id, user.current_tenant_id)
 

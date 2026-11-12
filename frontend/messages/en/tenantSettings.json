@@ -4,7 +4,7 @@
   "masterDataEyebrow": "Master data",
   "changeProfileImage": "Change profile picture",
   "tenantNameLabel": "Organization name",
-  "publicSlugLabel": "Public slug (submission box URL)",
+  "publicSlugLabel": "Short name",
   "publicSlugPlaceholder": "e.g. sample-club",
   "tenantIdLabel": "Organization ID",
   "tenantIdHelp": "Needed, for example, to share a photo album with this organization.",
@@ -26,7 +26,7 @@
   "emptyDomainHintWithFeature": "Until then, the organization stays reachable at the default address.",
   "emptyDomainHintWithoutFeature": "Custom domains must be added to your plan (tab \"Plan & usage\"). Until then, the organization stays reachable at the default address.",
   "domainsEyebrow": "Domains",
-  "domainsDescription": "Custom domains for the hocX app, the submission box and the verification page. hocx.example.com and the default submission box domain always stay reachable too.",
+  "domainsDescription": "Custom domains for the hocX app, the submission box and the verification page. The standard hocX addresses always remain reachable as well.",
   "wizardTitle": "Set up custom domain",
   "wizardDescription": "Connect a custom domain for this organization in three steps.",
   "stepDomain": "Domain",
@@ -40,7 +40,7 @@
   "verifyFailed": "Verification failed",
   "removeDomainConfirm": "Permanently delete domain \"{domain}\"? DNS setup will need to be restarted afterwards.",
   "continueLabel": "Continue",
-  "dnsIntro": "Set two records for {domain} with your domain provider, then verify. hocx.example.com and the default submission box domain always stay reachable too.",
+  "dnsIntro": "Add two records for {domain} at your domain provider, then verify. The standard hocX addresses always remain reachable as well.",
   "dnsStep1": "1. Proof of ownership · TXT record",
   "dnsStep2": "2. Routing · CNAME/A record",
   "nameLabel": "Name",
@@ -82,7 +82,7 @@
   "noModulesBooked": "No modules booked.",
   "pricePerMonth": "+{price}/month",
   "moduleActive": "Active",
-  "saveSuccessVerificationRevoked": "Saved. Because the name changed, the verification by hocX was revoked (Templates → Authenticity check).",
+  "saveSuccessVerificationRevoked": "Saved. Because the name changed, the verification by hocX was revoked (Organization settings → Authenticity check).",
   "purposeVerify": "Verification page",
   "wizardPurposeVerifyDescription": "Let people verify your documents under your own address, e.g. verify.club.com.",
   "domainPlaceholderVerify": "e.g. verify.club.com",
@@ -255,5 +255,34 @@
       "spezial_text2": "Special text 2",
       "spezial_text3": "Special text 3"
     }
-  }
+  },
+  "replacesDomainHint": "Replaces {domain} once verification succeeds. Until then, {domain} stays active unchanged.",
+  "recheckDomain": "Check again",
+  "domainsLoadFailed": "The domains could not be loaded. Domains that are already set up are not affected.",
+  "retryLoad": "Reload",
+  "domainsDescriptionWithDomain": "Custom domains for the hocX app, the submission box and the verification page. {appDomain} and the standard submission box address always remain reachable as well.",
+  "dnsIntroShort": "Add these two records for {domain} at your domain provider (where the domain is registered), then click «Verify now».",
+  "replaceNotice": "{domain} is active for this purpose. The new domain only replaces it once its verification succeeds – until then {domain} keeps working unchanged.",
+  "dnsWaitHint": "New DNS records often take a few minutes, sometimes up to a few hours. Only check once both records are set: 20 checks per hour are possible. Use «Finish later» to come back at any time.",
+  "docsLink": "Learn more in the help",
+  "help": {
+    "domains": "A custom domain (e.g. app.club.ch) makes hocX, the submission box or the verification page available under your own address. There is one active domain per purpose; a new one only replaces it after successful verification.",
+    "dns": "The TXT record proves that you own the domain. The CNAME record points the address to hocX. A root domain without a prefix (club.ch) cannot have a CNAME with many providers – use a subdomain such as app.club.ch or an A record pointing to the same IP address as the target.",
+    "publicSlug": "Short, unique name of your club made of lowercase letters, digits and hyphens. Other organizations find you by it, e.g. when sharing a photo album. Submission box links do not depend on it and remain valid if you change it.",
+    "modules": "«Active» means fully usable. «Read only» means the module is no longer part of your subscription, but your data is kept and readable; changes are blocked until the module is booked again."
+  },
+  "errors": {
+    "rateLimited": "Too many attempts in a short time. Please wait about an hour and try again.",
+    "domain_invalid_format": "This is not a valid domain. Example: app.club.ch (without https:// and without a path).",
+    "domain_reserved": "This domain belongs to hocX itself and cannot be added.",
+    "domain_domain_taken": "This domain is already active for another organization.",
+    "domain_already_active": "This domain is already active for this purpose.",
+    "domain_txt_missing": "The TXT record {record} with the verification value was not found yet. Check name and value at your domain provider or wait until the change has propagated.",
+    "domain_not_routed": "{domain} does not point to {target} yet. Check the CNAME or A record or wait until the change has propagated."
+  },
+  "renameRevokesVerificationConfirm": "Your club is verified by hocX. Changing the name revokes this verification, and new PDFs will no longer be shown as verified. You can request it again under Organization settings → Authenticity check. Save anyway?",
+  "renameConfirmLabel": "Change name",
+  "moduleReadOnly": "Read only",
+  "moduleReadOnlyHint": "No longer in your subscription: data stays readable, changes are blocked.",
+  "changePlanHint": "To change your plan or book modules, contact the operator of your hocX instance."
 }

@@ -6,6 +6,13 @@ Jeder Verein (Mandant) hat einen eigenen Zugang. Die Anmeldung erfolgt unter `/l
 mit E-Mail-Adresse und Passwort. Jedes Konto gehört genau einem Verein, einen
 Mandantenwechsel gibt es nicht.
 
+Meist bekommst du deinen Login per **Einladung**: ein Link in einer E-Mail, über den du dein
+Passwort selbst festlegst. Wer eine Administrationsberechtigung hat, richtet beim ersten Anmelden
+einen **zweiten Faktor** (Authenticator-App oder Passkey) ein. Details: [Konto & Anmeldung](konto.md).
+
+Personen ohne Login (zum Beispiel Mitglieder, die nur in Anwesenheitslisten erscheinen) pflegst
+du unter **Mitglieder**, siehe [Mitglieder & Logins](mitglieder.md).
+
 ## Typischer Ablauf
 
 1. **Vorlage prüfen/anlegen** – unter *Vorlagen* wird der Aufbau einer wiederkehrenden

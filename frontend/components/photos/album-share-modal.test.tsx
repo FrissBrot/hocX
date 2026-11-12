@@ -71,7 +71,7 @@ function share(overrides: Partial<AlbumTenantShareStatus> = {}): AlbumTenantShar
 }
 
 function typeInto(value: string) {
-  fireEvent.change(screen.getByPlaceholderText("Mandanten-ID einfügen"), { target: { value } });
+  fireEvent.change(screen.getByPlaceholderText("Vereins-ID einfügen"), { target: { value } });
 }
 
 describe("AlbumShareModal", () => {
@@ -87,7 +87,7 @@ describe("AlbumShareModal", () => {
     render(<AlbumShareModal open album={makeAlbum()} onClose={() => {}} onChanged={() => {}} />);
     typeInto(TENANT_ID);
 
-    expect(await screen.findByText("Mandant gefunden")).toBeTruthy();
+    expect(await screen.findByText("Verein gefunden")).toBeTruthy();
     expect(browserApiFetchMock).toHaveBeenCalledWith(`/api/tenants/lookup?public_id=${TENANT_ID}`);
     expect(screen.getByTestId("tenant-avatar-generic")).toBeTruthy();
     expect(screen.queryByRole("img")).toBeNull();
@@ -126,7 +126,7 @@ describe("AlbumShareModal", () => {
     render(<AlbumShareModal open album={makeAlbum()} onClose={() => {}} onChanged={() => {}} />);
     typeInto("Geheimer Verein");
 
-    expect(await screen.findByText(/Neue Mandanten findest du nur über ihre Mandanten-ID/)).toBeTruthy();
+    expect(await screen.findByText(/Neue Vereine findest du nur über ihre Vereins-ID/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Einladen" })).toBeDisabled();
   });
 
@@ -136,7 +136,7 @@ describe("AlbumShareModal", () => {
     render(<AlbumShareModal open album={makeAlbum()} onClose={() => {}} onChanged={() => {}} />);
     typeInto(TENANT_ID);
 
-    expect(await screen.findByText("Kein Mandant mit dieser ID gefunden.")).toBeTruthy();
+    expect(await screen.findByText("Kein Verein mit dieser ID gefunden.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Einladen" })).toBeDisabled();
   });
 
@@ -147,7 +147,7 @@ describe("AlbumShareModal", () => {
 
     render(<AlbumShareModal open album={makeAlbum()} onClose={() => {}} onChanged={onChanged} />);
     typeInto(TENANT_ID);
-    await screen.findByText("Mandant gefunden");
+    await screen.findByText("Verein gefunden");
 
     fireEvent.click(screen.getByRole("button", { name: "Einladen" }));
 
@@ -166,7 +166,7 @@ describe("AlbumShareModal", () => {
 
     render(<AlbumShareModal open album={makeAlbum()} onClose={() => {}} onChanged={onChanged} />);
     typeInto(TENANT_ID);
-    await screen.findByText("Mandant gefunden");
+    await screen.findByText("Verein gefunden");
     const locationSwitch = screen.getByRole("switch", { name: /Standort teilen/ });
     expect((locationSwitch as HTMLInputElement).checked).toBe(true);
     fireEvent.click(locationSwitch);
@@ -216,7 +216,7 @@ describe("AlbumShareModal", () => {
 
     render(<AlbumShareModal open album={album} onClose={() => {}} onChanged={() => {}} />);
 
-    expect(screen.getByText("Unbekannter Mandant")).toBeTruthy();
+    expect(screen.getByText("Unbekannter Verein")).toBeTruthy();
     expect(screen.getByText("01a0b7e9…")).toBeTruthy();
     expect(screen.getByText("Einladung offen")).toBeTruthy();
     expect(screen.getByTestId("tenant-avatar-generic")).toBeTruthy();

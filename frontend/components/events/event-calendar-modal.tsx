@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { EventIcon } from "@/components/events/event-icons";
@@ -140,6 +140,30 @@ export function EventCalendarModal({ open, onClose, events, todayIso, tagColor, 
 
   const dayMap = useMemo(() => eventsByDay(events), [events]);
 
+  // Tastatur im Monatsraster (roving tabindex): nur der gewählte Tag ist per Tab erreichbar,
+  // Pfeiltasten wandern tageweise bzw. wochenweise, auch über den Monatsrand.
+  const monthGridRef = useRef<HTMLDivElement | null>(null);
+  const focusDayRef = useRef<string | null>(null);
+  const DAY_KEY_DELTAS: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
+
+  function onDayKeyDown(event: KeyboardEvent<HTMLButtonElement>, day: string) {
+    const delta = DAY_KEY_DELTAS[event.key];
+    if (delta === undefined) return;
+    event.preventDefault();
+    const next = addUtcDays(day, delta);
+    const nextDate = isoToUtcDate(next);
+    setSelectedIso(next);
+    setCursor({ year: nextDate.getUTCFullYear(), month: nextDate.getUTCMonth() });
+    focusDayRef.current = next;
+  }
+
+  useEffect(() => {
+    const day = focusDayRef.current;
+    if (!day) return;
+    focusDayRef.current = null;
+    monthGridRef.current?.querySelector<HTMLButtonElement>(`[data-day="${day}"]`)?.focus();
+  });
+
   const formatters = useMemo(
     () => ({
       monthYear: new Intl.DateTimeFormat(intlLocale, { month: "long", year: "numeric", timeZone: "UTC" }),
@@ -211,8 +235,11 @@ export function EventCalendarModal({ open, onClose, events, todayIso, tagColor, 
       : t("calendar.yearSummary", { count: yearStats.count, busy: yearStats.busy });
 
   function renderMonth() {
+    const gridDays = monthGridDays(cursor.year, cursor.month);
+    // Ist der gewählte Tag nicht im angezeigten Monat, bleibt der Monatserste per Tab erreichbar.
+    const tabDay = gridDays.includes(selectedIso) ? selectedIso : utcDateToIso(new Date(Date.UTC(cursor.year, cursor.month, 1)));
     return (
-      <div className="event-cal-month" role="grid" aria-label={title}>
+      <div ref={monthGridRef} className="event-cal-month" role="grid" aria-label={title}>
         <div className="event-cal-weekdays" role="row">
           {weekdayLabels.map((label) => (
             <div key={label.short} className="event-cal-weekday" role="columnheader">
@@ -221,7 +248,7 @@ export function EventCalendarModal({ open, onClose, events, todayIso, tagColor, 
           ))}
         </div>
         <div className="event-cal-days">
-          {chunkWeeks(monthGridDays(cursor.year, cursor.month)).map((week) => {
+          {chunkWeeks(gridDays).map((week) => {
             const segments = weekSegments(week, dayMap);
             const hiddenPerDay = week.map((_, column) => hiddenSegmentCount(segments, column));
             const isOutside = (day: string) => isoToUtcDate(day).getUTCMonth() !== cursor.month;
@@ -247,6 +274,9 @@ export function EventCalendarModal({ open, onClose, events, todayIso, tagColor, 
                       key={day}
                       type="button"
                       role="gridcell"
+                      data-day={day}
+                      tabIndex={day === tabDay ? 0 : -1}
+                      onKeyDown={(keyEvent) => onDayKeyDown(keyEvent, day)}
                       aria-selected={day === selectedIso}
                       aria-label={formatters.dayLong.format(date)}
                       className={className}

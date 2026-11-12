@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Event, ListDefinition, ListEntry, Participant
@@ -16,6 +17,28 @@ from app.schemas.list_definition import (
     ListEntryUpdate,
 )
 from app.services import public_id_service
+
+
+def lock_linked_list_definitions(db: Session, list_ids, *, tenant_id: int | None) -> set[int]:
+    """Sperrt die Listen, die ein Baustein gerade verknüpft, bis zum Commit (Audit 07, C10).
+
+    Gegenstück zur Zeilensperre in DELETE /lists/{id}: läuft das Löschen zuerst, wartet das
+    Verknüpfen und findet die Liste danach nicht mehr (-> «Linked list not found»); verknüpft
+    der Baustein zuerst, sieht das Löschen nach dem Warten die Verknüpfung und antwortet 409.
+    FOR SHARE statt FOR UPDATE: blockiert nur das Löschen/Ändern der Liste, nicht gleichzeitige
+    Verknüpfungen oder neue Einträge. Feste Reihenfolge gegen Deadlocks.
+    Liefert die gefundenen IDs (nur Listen des Mandanten)."""
+    ids = sorted({int(list_id) for list_id in list_ids if list_id})
+    if not ids or tenant_id is None:
+        return set()
+    return set(
+        db.scalars(
+            select(ListDefinition.id)
+            .where(ListDefinition.id.in_(ids), ListDefinition.tenant_id == tenant_id)
+            .order_by(ListDefinition.id)
+            .with_for_update(read=True)
+        )
+    )
 
 
 class ListService:
@@ -107,6 +130,7 @@ class ListService:
             column_two_title=payload.column_two_title,
             column_two_value_type=payload.column_two_value_type,
             is_active=payload.is_active,
+            is_group_source=payload.is_group_source,
         )
         created = self.repository.create_definition(db, entity)
         return self._definition_read(created)
@@ -135,6 +159,30 @@ class ListService:
         entries = self.repository.list_entries(db, list_definition_id=list_definition_id)
         self._prime_entry_references(db, definition, entries)
         return [self._entry_read(db, item, definition=definition) for item in entries]
+
+    def entries_by_list(self, db: Session, *, tenant_id: int) -> dict[str, list[ListEntryRead]]:
+        """Einträge aller Listen des Mandanten, nach öffentlicher Listen-ID: zwei Abfragen plus
+        eine Sammelauflösung je Personen-/Termin-Typ und Liste (statt eines HTTP-Aufrufs je Liste)."""
+        definitions = self.repository.list_definitions(db, tenant_id=tenant_id)
+        if not definitions:
+            return {}
+        by_id = {definition.id: definition for definition in definitions}
+        entries = list(
+            db.scalars(
+                select(ListEntry)
+                .where(ListEntry.list_definition_id.in_(by_id))
+                .order_by(ListEntry.list_definition_id, ListEntry.sort_index.asc(), ListEntry.id.asc())
+            )
+        )
+        grouped: dict[int, list[ListEntry]] = {definition_id: [] for definition_id in by_id}
+        for entry in entries:
+            grouped[entry.list_definition_id].append(entry)
+        result: dict[str, list[ListEntryRead]] = {}
+        for definition_id, items in grouped.items():
+            definition = by_id[definition_id]
+            self._prime_entry_references(db, definition, items)
+            result[str(definition.public_id)] = [self._entry_read(db, item, definition=definition) for item in items]
+        return result
 
     @staticmethod
     def _prime_entry_references(db: Session, definition: ListDefinition | None, entries: list[ListEntry]) -> None:

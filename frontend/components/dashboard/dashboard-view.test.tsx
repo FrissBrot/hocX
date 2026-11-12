@@ -51,6 +51,7 @@ it("reverts only the affected protocol and reports failed updates", async () => 
 it("prevents readers from changing attendance", () => {
   mount(sessions, false);
   screen.getAllByRole("button", { name: /Alex/ }).forEach((chip) => expect(chip).toBeDisabled());
+  expect(screen.getAllByText("Nur wer Protokolle bearbeiten darf, kann hier entschuldigen.").length).toBeGreaterThan(0);
 });
 it("removes attendance widgets when refreshed session data becomes empty", async () => {
   const props = { todos: [], fines: [], access: access("writer"), hasProtocols: true };
@@ -79,6 +80,6 @@ it("hides finance and submission tiles when the features are not booked", () => 
   expect(screen.queryByText("Offene Bussen")).not.toBeInTheDocument();
   expect(screen.queryByText("Kontostände")).not.toBeInTheDocument();
   expect(screen.queryByText("Abgaben mit Frist")).not.toBeInTheDocument();
-  expect(screen.getByText("Meine Todos")).toBeInTheDocument();
+  expect(screen.getByText("Meine Pendenzen")).toBeInTheDocument();
   expect(screen.getByText("Kommende Termine")).toBeInTheDocument();
 });

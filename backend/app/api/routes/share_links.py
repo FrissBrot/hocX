@@ -15,7 +15,7 @@ from app.core.security import CurrentUser, get_current_user, require_feature, re
 from app.models.entities import ShareLink
 from app.schemas.files import ShareLinkCreate, ShareLinkRead
 from app.services import photo_album_share_service, share_link_service
-from app.services.file_service import FileService
+from app.services.file_service import BLOCKED_SCAN_STATUSES, FileService
 from app.services.photo_metadata_privacy import MetadataPolicy
 
 router = APIRouter()
@@ -38,6 +38,9 @@ def _read(link: ShareLink, *, album_name: str | None, file_count: int, created_b
         share_capture_date=link.share_capture_date,
         share_camera=link.share_camera,
     )
+
+
+MAX_LINK_FILES = 200
 
 
 @router.post("/share-links", response_model=ShareLinkRead, status_code=201)
@@ -68,9 +71,16 @@ def create_share_link(payload: ShareLinkCreate, db: Session = Depends(get_db), u
         return _read(link, album_name=album.name, file_count=len(share_link_service.file_ids_for_link(db, link)), created_by_name=user.display_name)
 
     ids = list(dict.fromkeys(payload.file_ids or []))
-    found = service.list_tenant_files(db, user.current_tenant_id, file_ids=ids, limit=200)
+    # Obergrenze vor der Suche prüfen: sonst schnitt limit=200 ab und die Meldung lautete
+    # fälschlich «nicht gefunden» (Audit Dateien/Fotos).
+    if len(ids) > MAX_LINK_FILES:
+        raise HTTPException(status_code=422, detail=f"Ein Link kann höchstens {MAX_LINK_FILES} Dateien enthalten.")
+    found = service.list_tenant_files(db, user.current_tenant_id, file_ids=ids, limit=MAX_LINK_FILES)
     if {item.id for item in found} != set(ids):
         raise HTTPException(status_code=404, detail="Mindestens eine Datei wurde nicht gefunden")
+    if any(item.scan_status in BLOCKED_SCAN_STATUSES for item in found):
+        # Gesperrte Dateien zeigt die öffentliche Seite nie - nicht erst aufnehmen und mitzählen.
+        raise HTTPException(status_code=422, detail="Gesperrte Dateien (Virenprüfung) können nicht geteilt werden.")
     try:
         link = share_link_service.create_for_files(
             db, tenant_id=user.current_tenant_id, name=name, file_ids=ids, expires_at=payload.expires_at, created_by=user.user_id, metadata=metadata

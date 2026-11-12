@@ -73,7 +73,7 @@ export function MatrixEmbeddedBlockEditor({
   knownEventTags: string[];
   tagConfig: TagConfig;
   onTagColorChange: (tag: string, color: string) => Promise<void>;
-  onTagRename: (oldTag: string, newTag: string) => Promise<void>;
+  onTagRename: (oldTag: string, newTag: string) => Promise<void | boolean>;
 }) {
   const isParticipantSelectable = useParticipantSelectable();
   const participantNames = useParticipantNameSource(availableParticipants);
@@ -377,7 +377,7 @@ export function MatrixEmbeddedBlockEditor({
               }), true)
             }
           >
-            + Todo
+            {tRoot("newTodoPlus")}
           </button>
         </div>
       </div>

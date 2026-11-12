@@ -159,7 +159,7 @@ export function MobileStatistics({ data }: { data: StatisticsOverview | null }) 
                   </div>
                 ))
               : null}
-            {detail === "fines" ? data.fines_by_type.map((row) => <HBar key={`${row.fine_type}-${row.currency ?? ""}`} label={`${row.label} (${row.count})`} value={row.amount} max={finesMax} display={[money(row.amount, locale), row.currency].filter(Boolean).join(" ")} tone="danger" />) : null}
+            {detail === "fines" ? data.fines_by_type.map((row) => <HBar key={`${row.fine_type}-${row.currency ?? ""}`} label={`${row.fine_type === "absent" || row.fine_type === "late" ? t(`fineType.${row.fine_type}`) : row.label} (${row.count})`} value={row.amount} max={finesMax} display={[money(row.amount, locale), row.currency].filter(Boolean).join(" ")} tone="danger" />) : null}
             {detail === "groups" ? data.groups_stats.map((row, index) => <HBar key={`${row.group_name}-${index}`} label={row.group_name} value={row.session_count} max={groupsMax} display={String(row.session_count)} />) : null}
             {(detail === "finance" && finance.length === 0) || (detail === "members" && members.length === 0) ? <p className="mobile-card-empty">{t("noDataAvailable")}</p> : null}
           </div>

@@ -421,7 +421,8 @@ def test_k9_csv_import_continues_after_row_failure(db, monkeypatch):
 
     assert [p.display_name for p in result.imported] == ["Anna Muster", "Beat Muster"]
     assert len(result.errors) == 1
-    assert "Zeile 3" in result.errors[0]
+    # Nur die Zeilennummer, keine rohe Exception (Bereichs-Audit 05); die UI übersetzt «Zeile N».
+    assert result.errors[0] == "3"
 
     remaining_names = {
         p.display_name for p in db.scalars(select(Participant).where(Participant.tenant_id == tenant.id)).all()

@@ -8,6 +8,11 @@ const refreshMock = vi.fn();
 
 vi.mock("@/lib/api/client", () => ({
   browserApiFetch: (...args: unknown[]) => browserApiFetchMock(...args),
+  ApiError: class ApiError extends Error {
+    constructor(message: string, public readonly kind: string, public readonly status?: number) {
+      super(message);
+    }
+  },
 }));
 vi.mock("@/contexts/toast-context", () => ({ useToast: () => showToastMock }));
 vi.mock("@/contexts/confirm-context", () => ({ useConfirm: () => confirmMock }));
@@ -94,5 +99,48 @@ describe("ProtocolBuilder: Elemente aus Vorlage neu laden", () => {
     fireEvent.click(screen.getByRole("button", { name: "Aktionen für P-7" }));
 
     expect(screen.queryByRole("menuitem", { name: "Elemente aus Vorlage neu laden" })).toBeNull();
+  });
+});
+
+describe("ProtocolBuilder: Liste (Audit 2026-11)", () => {
+  beforeEach(() => {
+    browserApiFetchMock.mockReset();
+    showToastMock.mockReset();
+    confirmMock.mockReset();
+  });
+
+  it("macht den Titel zum Link, damit die Zeile per Tastatur erreichbar ist", () => {
+    render(<ProtocolBuilder initialProtocols={[makeProtocol()]} templates={[]} />);
+    const link = screen.getByRole("link", { name: "7. Hock" });
+    expect(link.getAttribute("href")).toBe("/protocols/protocol-1");
+  });
+
+  it("löscht abgeschlossene Protokolle nicht, sondern erklärt warum", () => {
+    render(<ProtocolBuilder initialProtocols={[makeProtocol({ status: "abgeschlossen" })]} templates={[]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Aktionen für P-7" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Protokoll löschen" }));
+    expect(browserApiFetchMock).not.toHaveBeenCalled();
+    expect(showToastMock).toHaveBeenCalledWith(expect.stringContaining("zurück"), "info");
+  });
+
+  it("sucht serverseitig, wenn noch nicht alle Protokolle geladen sind", async () => {
+    const page = Array.from({ length: 100 }, (_, index) =>
+      makeProtocol({ id: `p-${index}`, protocol_number: `P-${index}`, title: `Hock ${index}` })
+    );
+    const old = makeProtocol({ id: "old", protocol_number: "P-1999", title: "Gründungshock" });
+    browserApiFetchMock.mockResolvedValue([old]);
+    render(<ProtocolBuilder initialProtocols={page} templates={[]} />);
+
+    fireEvent.change(screen.getByPlaceholderText("Protokolle durchsuchen"), { target: { value: "Gründung" } });
+
+    await waitFor(() => expect(screen.getByRole("link", { name: "Gründungshock" })).toBeTruthy());
+    expect(browserApiFetchMock).toHaveBeenCalledWith("/api/protocols?limit=100&q=Gr%C3%BCndung");
+  });
+
+  it("fragt den Server nicht, wenn alles geladen ist", async () => {
+    render(<ProtocolBuilder initialProtocols={[makeProtocol()]} templates={[]} />);
+    fireEvent.change(screen.getByPlaceholderText("Protokolle durchsuchen"), { target: { value: "xyz" } });
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(browserApiFetchMock).not.toHaveBeenCalled();
   });
 });

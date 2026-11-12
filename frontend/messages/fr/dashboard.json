@@ -40,5 +40,6 @@
   "today": "Aujourd'hui",
   "tomorrow": "Demain",
   "unexcuseTitle": "Remettre en non excusé",
-  "upcomingEventsEyebrow": "Rendez-vous à venir"
+  "upcomingEventsEyebrow": "Rendez-vous à venir",
+  "excuseNoPermission": "Seules les personnes autorisées à modifier les procès-verbaux peuvent excuser ici."
 }

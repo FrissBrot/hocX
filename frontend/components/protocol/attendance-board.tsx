@@ -11,6 +11,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
+import { HelpPopover } from "@/components/ui/help-popover";
 import { Menu, MenuItem, Popover } from "@/components/ui/popover";
 import { SearchInput } from "@/components/ui/search-input";
 import { ParticipantSummary } from "@/types/api";
@@ -125,6 +126,8 @@ export function AttendanceBoard({ participants, statusById, editable, fineAmount
         <span className="attendance-board-meta">
           {t("summary", { total, deviations })}
           {counts.open > 0 ? ` · ${t("openCount", { count: counts.open })}` : ""}
+          {" "}
+          <HelpPopover topic={t("helpTopic")} docs={{ page: "protokolle", anchor: "sitzung" }}>{t("help")}</HelpPopover>
         </span>
         {editable && counts.open > 0 ? (
           <button type="button" className="button-secondary" onClick={() => void onMarkOpenPresent(participants.filter((p) => statusOf(p.id) === "open"))}>

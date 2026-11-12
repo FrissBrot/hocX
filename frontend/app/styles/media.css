@@ -209,6 +209,34 @@
   font-weight: 600;
 }
 
+/* Virenprüfung (Audit Dateien/Fotos): «Wird geprüft» bzw. «Gesperrt» statt kaputtem Vorschaubild. */
+.photo-tile-badge-scan {
+  top: var(--space-2);
+  bottom: auto;
+  left: 40px;
+  background: var(--info-bg);
+  color: var(--info-fg);
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.photo-tile-badge-blocked {
+  background: var(--danger-bg);
+  color: var(--danger-fg);
+}
+
+.photo-tile-fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-3);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  text-align: center;
+}
+
 /* Live Photo: LIVE-Marke oben rechts (unten links sitzt "Best-of", oben links die Auswahl) und der
    Clip als Deckschicht über dem Standbild - erst sichtbar, wenn sein erstes Bild da ist. */
 .photo-tile-badge-live {
@@ -284,6 +312,8 @@
   padding: var(--space-3);
   overflow: hidden;
   background: var(--pv-bg);
+  /* Waagrechtes Wischen blättert (photo-viewer.tsx), senkrecht scrollt die Seite weiter. */
+  touch-action: pan-y pinch-zoom;
 }
 
 .photo-viewer-img {
@@ -384,6 +414,15 @@
 .photo-viewer-nav-prev { left: 8px; }
 
 .photo-viewer-nav-next { right: 8px; }
+
+/* Smartphone: grössere Blätter-Knöpfe (mindestens 44 px Tippfläche), immer gut sichtbar. */
+@media (max-width: 640px) {
+  .photo-viewer-nav {
+    width: 44px;
+    height: 44px;
+    opacity: 0.85;
+  }
+}
 
 .photo-viewer-section-title {
   font-size: var(--text-xs);

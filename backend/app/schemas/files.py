@@ -73,6 +73,9 @@ class FileOverviewItem(BaseModel):
     # thumbnail hasn't been regenerated since.
     width: int | None = None
     height: int | None = None
+    # Virenprüfung: "pending" (wird geprüft), "clean", "error" (gesperrt) - die Fotos-Kacheln
+    # zeigen damit ein Badge statt eines kaputten Vorschaubilds (Audit Dateien/Fotos).
+    scan_status: str = "clean"
     # The photo's logical date for the Fotos page's date-group headers - protocol/word-
     # import date, else the central capture-date priority (capture_date.py): real EXIF date,
     # estimated date, upload date.
@@ -301,6 +304,12 @@ class PhotoAlbumCreate(BaseModel):
     name: str
 
 
+class PhotoAlbumUpdate(BaseModel):
+    """Album umbenennen (nur der Besitzer-Mandant)."""
+
+    name: str
+
+
 class AlbumTenantShareStatus(BaseModel):
     tenant_public_id: uuid.UUID
     # None ohne Trust zwischen Besitzer und Partner (siehe tenant_trust_service).
@@ -416,6 +425,10 @@ class AlbumShareRequestRead(BaseModel):
 
 class PhotoAlbumItemsUpdate(BaseModel):
     file_ids: list[uuid.UUID]
+
+
+class PhotoAlbumItemsRemoveResult(BaseModel):
+    removed: int
 
 
 class PhotoAlbumItemBestUpdate(BaseModel):

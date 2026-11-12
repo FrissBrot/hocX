@@ -24,5 +24,8 @@
   "editCycleEyebrow": "Modifier le cycle",
   "resetLabel": "Réinitialisation {date}",
   "currentLabel": "Actuel :",
-  "editButton": "Modifier"
+  "editButton": "Modifier",
+  "resetLabelHelpTopic": "Date de réinitialisation",
+  "resetReassignHelp": "Par défaut, chaque rendez-vous appartient au cycle dans lequel tombe sa date. Un nouveau cycle reprend ainsi tous les rendez-vous existants ; si la date de réinitialisation change, ces attributions par défaut suivent. Les attributions définies manuellement restent inchangées.",
+  "deleteInUse": "Ce cycle est encore utilisé par un modèle ou un dépôt et ne peut pas être supprimé."
 }

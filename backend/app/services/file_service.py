@@ -366,6 +366,14 @@ class _SignatureUnavailable(Exception):
     pass
 
 
+# Kuratierter Fehlercode für GalleryUploadJob.error bei unerwarteten Fehlern - das Frontend
+# übersetzt ihn (photos.galleryJobFailed); Details stehen nur in system_error_log.
+GALLERY_JOB_FAILED_CODE = "ingest_failed"
+
+# Scan-Status, unter denen eine Datei gesperrt ist und nicht als exaktes Duplikat zählt.
+BLOCKED_SCAN_STATUSES = ("infected", "error")
+
+
 class _IngestYield(Exception):
     """Galerie-Ingest gibt seine Zeitscheibe ab (andere Mandanten warten)."""
 
@@ -650,6 +658,7 @@ class FileService:
             estimated_taken_on=row.estimated_taken_on,
             context_label=row.context_label,
             live_video_url=self.build_content_url(row.live_video_public_id) if row.live_video_public_id else None,
+            scan_status=getattr(row, "scan_status", None) or "clean",
         )
 
     def list_similarity_groups(
@@ -1123,7 +1132,9 @@ class FileService:
         rows = db.execute(
             select(StoredFile.checksum_sha256, StoredFile.source_checksum_sha256).where(
                 StoredFile.tenant_id == tenant_id,
-                StoredFile.scan_status != "infected",
+                # Gesperrte Dateien (Scan-Fehler) zählen nicht als vorhanden, sonst liesse sich nie
+                # eine nutzbare Kopie hochladen (Audit Dateien/Fotos); "pending" wird noch geprüft.
+                StoredFile.scan_status.notin_(BLOCKED_SCAN_STATUSES),
                 or_(StoredFile.checksum_sha256.in_(checksums),
                     StoredFile.source_checksum_sha256.in_(checksums)),
             )
@@ -1505,6 +1516,7 @@ class FileService:
                     face_analyzed_at=stored_file.face_analyzed_at,
                     width=stored_file.width,
                     height=stored_file.height,
+                    scan_status=stored_file.scan_status or "clean",
                     group_date=effective_day,
                     date_source=date_source,
                     exif_taken_at=stored_file.exif_taken_at,
@@ -1877,7 +1889,12 @@ class FileService:
                 db.commit()
                 return
             except Exception as exc:
+                from app.core.error_log import record_system_error
+
                 db.rollback()
+                # Hintergrundjob ausserhalb eines Requests: selbst ins Fehlerprotokoll (Audit Dateien/Fotos);
+                # der Benutzer sieht nur den kuratierten Code, nie str(exc) mit Pfaden/Bucket-Namen.
+                record_system_error(db, exc=exc, tenant_id=job.tenant_id)
                 db.refresh(job)
                 # _run_gallery_upload_job already cleans up each staged file as it finishes
                 # with it, but an unexpected failure can abort partway through job.staged_paths
@@ -1888,7 +1905,7 @@ class FileService:
                 job.status = "failed"
                 job.reserved_bytes = 0
                 job.file_hints = {}  # Browser-Hinweise (u. a. GPS) nicht über das Jobende hinaus aufbewahren
-                job.error = str(exc)
+                job.error = GALLERY_JOB_FAILED_CODE
                 job.finished_at = datetime.now(UTC)
                 db.commit()
             else:
@@ -2220,7 +2237,7 @@ class FileService:
         eraser.after_commit(db)
 
     def delete_gallery_images(
-        self, db: Session, tenant_id: int, file_ids: list[uuid.UUID]
+        self, db: Session, tenant_id: int, file_ids: list[uuid.UUID], *, eraser=None
     ) -> tuple[list[uuid.UUID], list[str]]:
         """Bulk hard-delete for the Fotos page's multi-select "Löschen" action and the
         "Ähnliche" tab's "Nur beste behalten" - gallery uploads only. Protocol images,
@@ -2228,10 +2245,18 @@ class FileService:
         semantics this must not bypass (a dedicated permission-checked route, or a soft-
         delete owned by the abgabebox sync), so any id resolving to one of those sources is
         reported back as an error instead of deleted - same partial-success shape as
-        save_gallery_uploads' (items, errors) return. Caller commits; PhotoAlbumItem rows
-        for the deleted files must already be gone (see photo_album_service.
-        drop_items_for_files) before this runs, since GalleryImage.stored_file_id is
-        ON DELETE RESTRICT and photo_album_item.file_id has no FK at all to catch it."""
+        save_gallery_uploads' (items, errors) return. Caller commits.
+
+        Album- und Linkeinträge entfernt erst FileEraser.erase, und zwar nur für Dateien, die
+        hier tatsächlich gelöscht werden (Audit Dateien/Fotos: der frühere Vorab-Drop durch den
+        Aufrufer nahm abgelehnte Fotos still aus allen Alben). Mit ``eraser`` (FileEraser) sammelt
+        der Aufrufer Vorschaubilder und betroffene Alben und ruft nach dem Commit
+        ``eraser.after_commit(db)`` auf."""
+        from app.services.file_eraser import FileEraser
+
+        own_eraser = eraser is None
+        if eraser is None:
+            eraser = FileEraser()
         rows = self.stored_file_repository.list_tenant_files(db, tenant_id, file_ids=file_ids, limit=max(len(file_ids), 1))
         rows_by_public_id = {row.public_id: row for row in rows}
         deleted: list[uuid.UUID] = []
@@ -2250,11 +2275,13 @@ class FileService:
                 continue
             live_video_id = db.scalar(select(GalleryImage.live_video_stored_file_id).where(GalleryImage.stored_file_id == stored_file.id))
             db.execute(delete(GalleryImage).where(GalleryImage.stored_file_id == stored_file.id))
-            self.delete_stored_file(db, stored_file)
+            eraser.erase(db, stored_file, namespace=MAIN)
             live_video = self.stored_file_repository.get(db, live_video_id) if live_video_id is not None else None
             if live_video is not None:
-                self.delete_stored_file(db, live_video)
+                eraser.erase(db, live_video, namespace=MAIN)
             deleted.append(file_id)
+        if own_eraser:
+            eraser.after_commit(db)
         return deleted, errors
 
     def bulk_update_tags(

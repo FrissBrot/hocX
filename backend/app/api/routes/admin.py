@@ -651,7 +651,7 @@ def create_plan(
 ):
     # Code optional aus dem Formular, sonst aus dem Namen abgeleitet.
     try:
-        result = tenant_service.create_plan(db, payload)
+        result = tenant_service.create_plan(db, payload, admin_id=current_admin.admin_id)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     audit.log(
@@ -668,7 +668,7 @@ def upsert_plan(
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
-    result = tenant_service.upsert_plan(db, code, payload)
+    result = tenant_service.upsert_plan(db, code, payload, admin_id=current_admin.admin_id)
     audit.log(
         db, action="admin.plan_upserted", actor_email=current_admin.email,
         entity_type="plan", entity_id=None, details={"code": code},

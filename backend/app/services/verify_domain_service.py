@@ -16,11 +16,14 @@ from app.services import traefik_config_service
 
 
 def verify_domain_row(db: Session, tenant_id: int) -> TenantDomain | None:
-    """Die Prüf-Domain des Mandanten, unabhängig von Status und Buchung (Einstellungsseite)."""
+    """Die Prüf-Domain des Mandanten, unabhängig von Status und Buchung (Einstellungsseite).
+    Seit Migration 0179 kann neben der aktiven eine ausstehende Ersatz-Domain bestehen - dann
+    zählt die aktive, denn sie ist die, die gerade wirkt."""
     return (
         db.query(TenantDomain)
         .filter(TenantDomain.tenant_id == tenant_id, TenantDomain.purpose == "verify")
-        .one_or_none()
+        .order_by((TenantDomain.status == "active").desc(), TenantDomain.id.desc())
+        .first()
     )
 
 

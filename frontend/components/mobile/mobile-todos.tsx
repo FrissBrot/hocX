@@ -24,6 +24,8 @@ import { daysBetween, isTodoDone, isTodoOverdue, tagColor, todayIso } from "@/co
 import { TODO_STATUS } from "@/components/protocol/protocol-editor-shared";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
+import { featureAccess } from "@/lib/permissions";
+import { useRunningTodoFines } from "@/components/todos/use-running-todo-fines";
 import { TagConfig, useTagConfig } from "@/lib/hooks/use-tag-config";
 import type { ParticipantSummary, TodoListItem } from "@/types/api";
 
@@ -69,6 +71,7 @@ export function MobileTodoRow({
   canEdit,
   tagConfig,
   showMeta = "full",
+  fineRunning = false,
   onToggle,
   onOpen,
 }: {
@@ -76,6 +79,8 @@ export function MobileTodoRow({
   canEdit: boolean;
   tagConfig: TagConfig;
   showMeta?: "full" | "compact";
+  /** Für diese Pendenz läuft eine Busse (Badge «Busse läuft») */
+  fineRunning?: boolean;
   onToggle: () => void;
   onOpen: () => void;
 }) {
@@ -106,6 +111,7 @@ export function MobileTodoRow({
             </span>
           ) : null}
           {todo.protocol_number ? <span>{todo.protocol_number}</span> : null}
+          {fineRunning && !done ? <span className="mobile-overdue-pill">{tTodos("fineRunningBadge")}</span> : null}
         </span>
       </button>
       {showMeta === "full" && todo.assigned_participant_name ? (
@@ -143,6 +149,7 @@ export function MobileTodos({
   const [mine] = useAllPages<TodoListItem>("/api/todos/my", myTodos);
   const participants = useParticipants(canEdit, initialParticipants);
   const toggle = useTodoToggle(setTodos);
+  const runningFines = useRunningTodoFines(featureAccess(session, "todo_fines") !== "none");
   const [status, setStatus] = useState<StatusFilter>("open");
   const [onlyMine, setOnlyMine] = useState(false);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
@@ -245,6 +252,7 @@ export function MobileTodos({
                 todo={todo}
                 canEdit={canEdit}
                 tagConfig={tagConfig}
+                fineRunning={runningFines.has(todo.id)}
                 onToggle={() => void toggle(todo)}
                 onOpen={() => setOpenId(todo.id)}
               />

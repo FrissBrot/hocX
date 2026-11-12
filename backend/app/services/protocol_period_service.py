@@ -68,7 +68,12 @@ def transaction_matches(tx_date: date, config: dict, *, protocol_date: date | No
         since = str(config.get("finance_since_date") or (protocol_date.isoformat() if protocol_date else ""))
         return not since or tx_date.isoformat() >= since
     if filter_type == "this_year":
-        return tx_date.year == (protocol_date or date.today()).year
+        if protocol_date is None:
+            # Fachliches «heute» in Schweizer Zeit (nicht UTC), zentral wie bei den Bussen.
+            from app.services.todo_fine_service import today as swiss_today
+
+            protocol_date = swiss_today()
+        return tx_date.year == protocol_date.year
     if filter_type == "this_cycle":
         start, end = period.get("cycle_start"), period.get("cycle_end")
         return not start or start <= tx_date.isoformat() <= end

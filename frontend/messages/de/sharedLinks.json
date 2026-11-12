@@ -17,14 +17,16 @@
     "metadataCaptureDateHelp": "Datum und Uhrzeit der Aufnahme.",
     "metadataCamera": "Kamera & Gerät",
     "metadataCameraHelp": "Modell, Seriennummer, Objektiv und Belichtungswerte.",
-    "metadataHelp": "Ausgeschaltete Angaben werden beim Herunterladen aus den Fotos entfernt."
+    "metadataHelp": "Ausgeschaltete Angaben werden beim Herunterladen aus den Fotos entfernt.",
+    "albumLiveNotice": "Album-Links sind «live»: Fotos, die später ins Album kommen, erscheinen automatisch im Link – auch automatisch einsortierte, sobald sie freigegeben sind.",
+    "linkHelp": "Wer den Link hat, kann die Fotos ohne Anmeldung ansehen und herunterladen. Ausgeschaltete Angaben (Standort, Datum, Kamera) werden aus den Dateien entfernt. Du kannst den Link jederzeit unter «Geteilte Links» widerrufen."
   },
   "emptyDescription": "Über „Teilen“ bei Dateien, Fotos oder einem Fotoalbum lässt sich ein Download-Link ohne Anmeldung erzeugen.",
   "emptyTitle": "Noch keine Links vorhanden",
   "filterActive": "Aktiv",
   "filterAll": "Alle",
   "page": {
-    "description": "Öffentliche Download-Links für Dateien und Fotos dieses Mandanten.",
+    "description": "Öffentliche Download-Links für Dateien und Fotos deines Vereins.",
     "title": "Geteilte Links"
   },
   "revokeConfirm": "Link „{name}“ widerrufen? Er funktioniert danach nicht mehr.",

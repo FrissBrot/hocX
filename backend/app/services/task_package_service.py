@@ -68,7 +68,10 @@ class Occurrence:
 
 
 def current_cycle_year(cycle_config: CycleConfig, today: date | None = None) -> int:
-    return get_cycle_year(today or date.today(), cycle_config.reset_month, cycle_config.reset_day)
+    # Schweizer Datum: der Zykluswechsel um 00:30 Ortszeit gehört schon zum neuen Jahr
+    from app.services.todo_fine_service import today as swiss_today
+
+    return get_cycle_year(today or swiss_today(), cycle_config.reset_month, cycle_config.reset_day)
 
 
 def cycle_label(cycle_config: CycleConfig, cycle_year: int) -> str:

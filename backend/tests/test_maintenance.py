@@ -196,6 +196,28 @@ def test_supervisor_starts_scheduled_maintenance_marks_overdue_and_never_release
     assert scheduled.state == "overdue", "ein Timer darf die Wartung nie beenden"
 
 
+def test_supervisor_skips_a_window_held_by_an_admin_and_never_revives_a_cancelled_one(committed_storage):
+    """Audit 08 (2026-11): supervise() lud Fenster ohne Sperre und schrieb 'preparing' über ein
+    gleichzeitig abgesagtes Fenster."""
+    from app.core.db import SessionLocal
+
+    db = committed_storage
+    window = maintenance_service.create_window(db, kind="full", reason_code="manual", state="scheduled",
+                                               scheduled_start_at=datetime.now(UTC) - timedelta(seconds=1))
+    db.commit()
+    admin = SessionLocal()
+    try:
+        held = maintenance_service.lock_window(admin, window.id)  # Admin sagt gerade ab
+        maintenance_service.supervise(db)  # darf nicht warten und nichts überschreiben
+        maintenance_service.transition(admin, held, "cancelled", actor_email="owner@example.com")
+        admin.commit()
+    finally:
+        admin.close()
+    maintenance_service.supervise(db)
+    db.refresh(window)
+    assert window.state == "cancelled"
+
+
 # --- Öffentlicher Status ----------------------------------------------------------------------
 
 

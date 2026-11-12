@@ -4,7 +4,7 @@ import uuid
 from datetime import date, datetime
 from typing import Any, ClassVar
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from sqlalchemy.orm import object_session
 
 from app.models.entities import CycleConfig, Participant, Tenant
@@ -86,6 +86,15 @@ class EventUpdate(BaseModel):
     spezial_text3: str | None = None
     cycle_assignments: list[CycleAssignment] | None = None
 
+    @field_validator("event_date", "title", "is_cancelled")
+    @classmethod
+    def _reject_explicit_null(cls, value: Any) -> Any:
+        # Weglassen ist erlaubt (Teil-Update), ausdrückliches null nicht: sonst fiele z. B. der
+        # Vergleich mit dem Enddatum mit TypeError (500) um oder die NOT-NULL-Spalte würde verletzt.
+        if value is None:
+            raise ValueError("must not be null")
+        return value
+
 
 class EventRead(PublicIdModel, EventBase):
     _fk_models: ClassVar[dict[str, type]] = {"tenant_id": Tenant}
@@ -114,6 +123,9 @@ class EventImportPreviewRow(BaseModel):
     description: str | None = None
     participant_count: int | None = None
     error: str | None = None
+    # Übersetzbarer Fehler-Code (Frontend events.csvErrors.<code>) mit Parametern, z. B. {"row": 3}.
+    error_code: str | None = None
+    error_params: dict[str, str | int] | None = None
 
 
 class EventImportPreview(BaseModel):

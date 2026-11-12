@@ -33,7 +33,8 @@ export function TagInput({
   alwaysShowPlaceholder?: boolean;
   tagConfig?: TagConfig;
   onTagColorChange?: (tag: string, color: string) => Promise<void>;
-  onTagRename?: (oldTag: string, newTag: string) => Promise<void>;
+  /** `false` = abgebrochen (z. B. Rückfrage verneint): nichts übernehmen, Eingabe bleibt offen. */
+  onTagRename?: (oldTag: string, newTag: string) => Promise<void | boolean>;
 }) {
   const t = useTranslations("common.tagInput");
   const tCommonClose = useTranslations("common")("close");
@@ -86,7 +87,7 @@ export function TagInput({
     const oldTag = editingTag;
     const newTag = renameVal.trim();
     try {
-      await onTagRename(oldTag, newTag);
+      if ((await onTagRename(oldTag, newTag)) === false) return;
       // Update current value if it contained the renamed tag
       if (tags.includes(oldTag)) {
         onChange(tags.map((t) => (t === oldTag ? newTag : t)).join(","));

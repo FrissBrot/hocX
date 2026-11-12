@@ -35,7 +35,7 @@ Filter **Protokollexporte** siehst du nur diese Dokumente.
 
 ## Gut zu wissen
 
-- Bilder gehören in den Bereich **Fotos**; ZIP-Archive bleiben normale Dateien ohne
+- Bilder gehören in den Bereich **Fotos** (siehe [Fotos und Alben](fotos.md)); ZIP-Archive bleiben normale Dateien ohne
   PDF-Ansicht.
 - Bei Tabellen und Präsentationen gibt es eine PDF-Ansicht, aber keinen extrahierten Text.
 - Bei eingescannten PDFs versucht hocX, den Text automatisch zu erkennen. Das Ergebnis kann

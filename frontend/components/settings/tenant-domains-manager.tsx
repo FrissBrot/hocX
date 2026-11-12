@@ -6,7 +6,16 @@ import { useTranslations } from "next-intl";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { DomainWizardModal } from "@/components/ui/domain-wizard-modal";
 import { EmptyState } from "@/components/ui/empty-state";
-import { bookablePurposes, domainStatus, TenantDomainRowContent } from "@/components/settings/tenant-domain-row";
+import {
+  bookablePurposes,
+  domainErrorMessage,
+  domainsDescriptionText,
+  domainStatus,
+  TenantDomainRowContent,
+  useMainAppDomain,
+} from "@/components/settings/tenant-domain-row";
+import { HelpPopover } from "@/components/ui/help-popover";
+import { StatusBanner } from "@/components/ui/status-banner";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -23,6 +32,9 @@ export function useTenantDomains(tenantId: string) {
   const showToast = useToast();
   const confirm = useConfirm();
   const [domains, setDomains] = useState<TenantDomain[]>([]);
+  // Ladefehler nicht als «noch keine Domain» zeigen (Audit 08): sonst legt jemand die
+  // vermeintlich verschwundene Domain neu an.
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     void loadDomains();
@@ -33,8 +45,9 @@ export function useTenantDomains(tenantId: string) {
     try {
       const rows = await browserApiFetch<TenantDomain[]>(`/api/tenants/${tenantId}/domains`);
       setDomains(rows);
+      setLoadError(false);
     } catch {
-      // keine Domains bzw. Fehler beim Laden — leere Liste anzeigen
+      setLoadError(true);
     }
   }
 
@@ -49,11 +62,11 @@ export function useTenantDomains(tenantId: string) {
       await browserApiFetch<{ message: string }>(`/api/tenants/${tenantId}/domains/${domainId}`, { method: "DELETE" });
       await loadDomains();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("deleteDomainFailed"), "error");
+      showToast(domainErrorMessage(error, t, "deleteDomainFailed"), "error");
     }
   }
 
-  return { domains, loadDomains, deleteDomain };
+  return { domains, loadDomains, deleteDomain, loadError };
 }
 
 export function TenantDomainsManager({ initialTenant }: Props) {
@@ -63,7 +76,8 @@ export function TenantDomainsManager({ initialTenant }: Props) {
   // Eigene App-/Abgabebox-Domain (custom_domain) und Prüf-Domain (verify_domain) sind getrennt buchbar
   const purposes = bookablePurposes(initialTenant.enabled_features);
   const hasCustomDomainFeature = purposes.length > 0;
-  const { domains, loadDomains, deleteDomain } = useTenantDomains(tenantId);
+  const { domains, loadDomains, deleteDomain, loadError } = useTenantDomains(tenantId);
+  const mainDomain = useMainAppDomain();
 
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardDomain, setWizardDomain] = useState<TenantDomain | null>(null);
@@ -88,6 +102,11 @@ export function TenantDomainsManager({ initialTenant }: Props) {
             <button type="button" className="button-secondary" onClick={() => openWizardToResume(d)}>
               {t("setup")}
             </button>
+          ) : !d.is_healthy ? (
+            // Aktive, aber unerreichbare Domain: DNS-Ansicht und erneute Prüfung (Audit 08)
+            <button type="button" className="button-secondary" onClick={() => openWizardToResume(d)}>
+              {t("recheckDomain")}
+            </button>
           ) : null}
           <span className={`record-list-row-dot record-list-row-dot-${status.variant}`} />
           <ActionMenu
@@ -101,7 +120,16 @@ export function TenantDomainsManager({ initialTenant }: Props) {
 
   return (
     <>
-      {domains.length === 0 ? (
+      {loadError ? (
+        <section className="card">
+          <StatusBanner tone="error" message={t("domainsLoadFailed")} />
+          <div className="table-actions table-actions-start">
+            <button type="button" className="button-secondary" onClick={() => void loadDomains()}>
+              {t("retryLoad")}
+            </button>
+          </div>
+        </section>
+      ) : domains.length === 0 ? (
         <EmptyState
           icon="document"
           title={t("emptyDomainTitle")}
@@ -121,9 +149,14 @@ export function TenantDomainsManager({ initialTenant }: Props) {
         />
       ) : (
         <section className="card">
-          <div className="eyebrow">{t("domainsEyebrow")}</div>
+          <div className="eyebrow">
+            {t("domainsEyebrow")}{" "}
+            <HelpPopover topic={t("domainsEyebrow")} docs={{ page: "einstellungen", anchor: "domains" }}>
+              {t("help.domains")}
+            </HelpPopover>
+          </div>
           <p className="muted">
-            {t("domainsDescription")}
+            {domainsDescriptionText(t, mainDomain)}
           </p>
 
           <div className="grid tenant-domain-list">{domains.map((d) => renderRow(d))}</div>
@@ -142,7 +175,7 @@ export function TenantDomainsManager({ initialTenant }: Props) {
         tenantId={tenantId}
         domain={wizardDomain}
         purposes={purposes}
-        onChanged={loadDomains}
+        onChanged={loadDomains} domains={domains}
       />
     </>
   );

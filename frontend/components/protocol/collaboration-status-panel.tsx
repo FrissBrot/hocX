@@ -2,6 +2,8 @@
 
 import { useRef } from "react";
 import { useTranslations } from "next-intl";
+
+import { DocsLink } from "@/components/ui/help-popover";
 import { NavIcon } from "@/components/ui/nav-icons";
 import { ActionIcon } from "@/components/ui/action-icons";
 import { CollaboratorAvatar } from "@/components/protocol/collaboration-presence";
@@ -122,6 +124,7 @@ export function CollaborationStatusPanel({
           <div className="collab-status-shortcut-row"><kbd>⌃⏎</kbd><span>{t("shortcutNextSection")}</span></div>
           <div className="collab-status-shortcut-row"><kbd>⌃⇧⏎</kbd><span>{t("shortcutPrevSection")}</span></div>
         </div>
+        <DocsLink page="protokolle" anchor="mehrbenutzer">{t("docsLink")}</DocsLink>
       </div>
   );
 }

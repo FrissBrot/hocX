@@ -73,5 +73,7 @@
     "sectionLabel": "Point de l’ordre du jour",
     "sectionNone": "Autres sujets (sans point)"
   },
-  "cancel": "Annuler"
+  "cancel": "Annuler",
+  "boundHintNoProtocol": "Figure déjà dans un procès-verbal. Pour changer le modèle, le point ou l’échéance, reportez le sujet.",
+  "scheduleHelp": "«Prochaine séance»: apparaît dans le prochain procès-verbal planifié ou préparé de ce modèle. «Mois»: apparaît au plus tôt dès le premier du mois dans le prochain procès-verbal."
 }

@@ -31,8 +31,17 @@ def _month_label(value: str) -> str:
         return value
 
 
+def _template_ids(ctx: BuildContext) -> set[int] | None:
+    """Eingeschränkte Leser: nur Zahlen ihrer Vorlagen, wie /statistics/overview (Audit 07, C9)."""
+    if ctx.user is None:
+        return None
+    from app.services.access_service import AccessService
+
+    return AccessService().readable_template_ids(ctx.db, ctx.user)
+
+
 def _attendance(ctx: BuildContext, bounds):
-    return stats.aggregate_attendance(stats.fetch_attendance_blocks(ctx.db, ctx.tenant_id, bounds))
+    return stats.aggregate_attendance(stats.fetch_attendance_blocks(ctx.db, ctx.tenant_id, bounds, _template_ids(ctx)))
 
 
 def _visible_people(ctx: BuildContext, people):
@@ -88,7 +97,7 @@ def provide_chart(ctx: BuildContext, spec: BlockSpec, params: ChartParams):
         ]
     elif chart == "fines_by_participant":
         # Beträge verschiedener Währungen nicht addieren (MAIN-BE-019 aus main): Hauptwährung.
-        rows = _main_currency_rows(_visible_fine_rows(ctx, stats.fetch_fines_by_participant(ctx.db, ctx.tenant_id, bounds)))
+        rows = _main_currency_rows(_visible_fine_rows(ctx, stats.fetch_fines_by_participant(ctx.db, ctx.tenant_id, bounds, _template_ids(ctx))))
         rows = sorted(rows, key=lambda row: float(row.amount or 0), reverse=True)[:10]
         categories = [row.name for row in rows]
         horizontal = True
@@ -97,7 +106,7 @@ def provide_chart(ctx: BuildContext, spec: BlockSpec, params: ChartParams):
     elif chart == "fines_by_type":
         # Anzahl je Typ über alle Währungen (die Abfrage liefert je Typ und Währung eine Zeile).
         counts: dict[str, int] = {}
-        for row in stats.fetch_fines_by_type(ctx.db, ctx.tenant_id, bounds):
+        for row in stats.fetch_fines_by_type(ctx.db, ctx.tenant_id, bounds, _template_ids(ctx)):
             counts[row.fine_type] = counts.get(row.fine_type, 0) + int(row.count)
         kind = "donut"
         categories = list(counts)
@@ -105,7 +114,7 @@ def provide_chart(ctx: BuildContext, spec: BlockSpec, params: ChartParams):
         category_tones = ["warning" if fine_type == "late" else "danger" for fine_type in counts]
         series = [ChartSeries(label_key="chart.count", values=list(counts.values()))]
     elif chart == "todos":
-        open_count, done_count = stats.aggregate_todo_counts(stats.fetch_todo_rows(ctx.db, ctx.tenant_id, bounds))
+        open_count, done_count = stats.aggregate_todo_counts(stats.fetch_todo_rows(ctx.db, ctx.tenant_id, bounds, _template_ids(ctx)))
         kind = "donut"
         categories = ["done", "open"]
         category_keys = ["chart.done", "chart.open"]
@@ -168,7 +177,7 @@ def provide_kpis(ctx: BuildContext, spec: BlockSpec, params: KpiTilesParams):
             tiles.append(KpiTile(label_key="kpi.attendanceRate", value=format_percent(attended, total), tone="success"))
         elif key in ("openTodos", "doneTodos"):
             if todo_counts is None:
-                todo_counts = stats.aggregate_todo_counts(stats.fetch_todo_rows(ctx.db, ctx.tenant_id, bounds))
+                todo_counts = stats.aggregate_todo_counts(stats.fetch_todo_rows(ctx.db, ctx.tenant_id, bounds, _template_ids(ctx)))
             value = todo_counts[0] if key == "openTodos" else todo_counts[1]
             tiles.append(KpiTile(label_key=f"kpi.{key}", value=format_number(value), tone="warning" if key == "openTodos" else "success"))
         elif key == "events":
@@ -178,7 +187,7 @@ def provide_kpis(ctx: BuildContext, spec: BlockSpec, params: KpiTilesParams):
             tiles.append(KpiTile(label_key="kpi.members", value=format_number(count)))
         elif key == "finesTotal":
             totals: dict[str, float] = {}
-            for row in stats.fetch_fines_by_participant(ctx.db, ctx.tenant_id, bounds):
+            for row in stats.fetch_fines_by_participant(ctx.db, ctx.tenant_id, bounds, _template_ids(ctx)):
                 totals[row.currency or ""] = totals.get(row.currency or "", 0.0) + float(row.amount or 0)
             value = " · ".join(f"{format_amount(total)} {code}".strip() for code, total in totals.items()) or format_amount(0)
             tiles.append(KpiTile(label_key="kpi.finesTotal", value=value))
@@ -199,7 +208,7 @@ def provide_table(ctx: BuildContext, spec: BlockSpec, params: StatTableParams):
             rows.append(TableRow(cells=[text_cell(person.name), *(amount_cell(str(getattr(counts, status))) for status in ("present", "late", "excused", "absent")), amount_cell(format_percent(counts.present + counts.late, counts.total))]))
     elif params.table == "fines_by_participant":
         columns = [col("name", "col.person", width="fill"), col("count", "col.count", align="right"), col("amount", "col.amount", align="right")]
-        for row in sorted(_visible_fine_rows(ctx, stats.fetch_fines_by_participant(ctx.db, ctx.tenant_id, bounds)), key=lambda item: float(item.amount or 0), reverse=True):
+        for row in sorted(_visible_fine_rows(ctx, stats.fetch_fines_by_participant(ctx.db, ctx.tenant_id, bounds, _template_ids(ctx))), key=lambda item: float(item.amount or 0), reverse=True):
             rows.append(TableRow(cells=[text_cell(row.name), amount_cell(str(int(row.count))), amount_cell(f"{format_amount(row.amount)} {row.currency or ''}".strip())]))
     elif params.table == "groups":
         columns = [col("group", "col.group", width="fill"), col("sessions", "col.sessions", align="right"), col("with", "col.sessionsWithParticipants", align="right"), col("avg", "col.avgParticipants", align="right")]

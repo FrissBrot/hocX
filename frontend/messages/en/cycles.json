@@ -24,5 +24,8 @@
   "editCycleEyebrow": "Edit cycle",
   "resetLabel": "Reset {date}",
   "currentLabel": "Current:",
-  "editButton": "Edit"
+  "editButton": "Edit",
+  "resetLabelHelpTopic": "Reset date",
+  "resetReassignHelp": "By default every event belongs to the cycle its date falls into. A new cycle picks up all existing events this way; if the reset date changes, these default assignments move along. Manually set assignments stay unchanged.",
+  "deleteInUse": "This cycle is still used by a template or a submission and cannot be deleted."
 }

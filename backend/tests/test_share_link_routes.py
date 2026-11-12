@@ -485,3 +485,75 @@ def test_public_share_hides_capture_dates_when_the_link_does_not_share_them(db):
 
     assert result.date_from is None and result.date_to is None
     assert result.files[0].taken_at is None
+
+
+# --- Audit Dateien/Fotos ------------------------------------------------------------------
+
+
+def test_create_share_link_rejects_more_than_200_files_with_422_not_404(db):
+    tenant = make_tenant(db)
+    user = make_current_user(tenant.id, role="writer")
+    ids = [uuid.uuid4() for _ in range(201)]
+
+    with pytest.raises(HTTPException) as exc_info:
+        share_links_routes.create_share_link(ShareLinkCreate(name="Zu viele", file_ids=ids), db, user)
+    assert exc_info.value.status_code == 422
+
+
+def test_create_share_link_rejects_blocked_file(db):
+    tenant = make_tenant(db)
+    user = make_current_user(tenant.id, role="writer")
+    blocked = _make_file(db, tenant.id, "gesperrt.png")
+    blocked.scan_status = "error"
+    db.commit()
+
+    with pytest.raises(HTTPException) as exc_info:
+        share_links_routes.create_share_link(ShareLinkCreate(name="Gesperrt", file_ids=[blocked.public_id]), db, user)
+    assert exc_info.value.status_code == 422
+
+
+def test_share_link_overview_counts_only_clean_files(db):
+    tenant = make_tenant(db)
+    user = make_current_user(tenant.id, role="writer")
+    clean = _make_file(db, tenant.id, "a.png")
+    pending = _make_file(db, tenant.id, "b.png")
+    pending.scan_status = "pending"
+    album = PhotoAlbum(tenant_id=tenant.id, name="Album", kind="manual")
+    db.add(album)
+    db.flush()
+    db.add_all([PhotoAlbumItem(album_id=album.id, file_id=clean.public_id), PhotoAlbumItem(album_id=album.id, file_id=pending.public_id)])
+    db.commit()
+    share_links_routes.create_share_link(ShareLinkCreate(name="Dateien", file_ids=[clean.public_id, pending.public_id]), db, user)
+    share_links_routes.create_share_link(ShareLinkCreate(name="Album", album_id=album.id), db, user)
+
+    counts = {row.name: row.file_count for row in share_links_routes.list_share_links(db, user)}
+
+    assert counts == {"Dateien": 1, "Album": 1}
+
+
+def test_public_album_thumbnail_resolves_single_file_and_respects_pending_release(db):
+    """Gezielte Einzelauflösung (statt ganzes Album je Thumbnail): ein Foto im Album wird
+    gefunden, ein vorgemerktes (share_pending) nicht."""
+    tenant = make_tenant(db)
+    user = make_current_user(tenant.id, role="writer")
+    released = _make_file(db, tenant.id, "frei.png")
+    held_back = _make_file(db, tenant.id, "vorgemerkt.png")
+    album = PhotoAlbum(tenant_id=tenant.id, name="Album", kind="manual")
+    db.add(album)
+    db.flush()
+    db.add_all([
+        PhotoAlbumItem(album_id=album.id, file_id=released.public_id),
+        PhotoAlbumItem(album_id=album.id, file_id=held_back.public_id),
+    ])
+    db.commit()
+    created = share_links_routes.create_share_link(ShareLinkCreate(name="Album", album_id=album.id), db, user)
+    token = created.url.removeprefix("/share/")
+    # Erst nach dem Anlegen vormerken (das Anlegen gibt alte Vormerkungen frei).
+    db.get(PhotoAlbumItem, {"album_id": album.id, "file_id": held_back.public_id}).share_pending = True
+    db.commit()
+    link = public_share_routes._resolve_link_or_404(db, token)
+
+    assert public_share_routes._resolve_file_or_404(db, link, released.public_id).id == released.id
+    with pytest.raises(HTTPException) as exc_info:
+        public_share_routes._resolve_file_or_404(db, link, held_back.public_id)
+    assert exc_info.value.status_code == 404

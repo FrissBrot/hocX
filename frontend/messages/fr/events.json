@@ -75,7 +75,16 @@
     "special3Label": "Spécial 3",
     "specialText1Label": "Texte spécial 1",
     "specialText2Label": "Texte spécial 2",
-    "specialText3Label": "Texte spécial 3"
+    "specialText3Label": "Texte spécial 3",
+    "readOnlyHint": "Lecture seule : il te faut l'autorisation «Modifier les séances» pour faire des changements.",
+    "saveStatus": {
+      "idle": "Les modifications sont enregistrées automatiquement.",
+      "saving": "Enregistrement…",
+      "saved": "Toutes les modifications sont enregistrées",
+      "error": "Non enregistré – réessaie, s'il te plaît."
+    },
+    "fieldSettingsHint": "Les champs «Spécial» peuvent être renommés ou masqués.",
+    "fieldSettingsLink": "Vers les paramètres"
   },
   "detailModal": {
     "fallbackTitle": "Événement"
@@ -115,13 +124,14 @@
     "endDate": "Date de fin",
     "location": "Lieu",
     "locationPlaceholder": "p. ex. maison communale, terrain de sport",
-    "noCycles": "Aucun cycle disponible (créez des cycles sous Structure → Cycles)",
+    "noCycles": "Aucun cycle disponible (créez des cycles sous Configuration → Déroulements → Cycles)",
     "participantCount": "Nombre de participants",
     "people": "Personnes",
     "startDate": "Date de début",
     "tag": "Étiquette",
     "tagPlaceholder": "p. ex. réunion, camp, soirée parents",
-    "title": "Titre"
+    "title": "Titre",
+    "noCyclesAskAdmin": "Aucun cycle pour l'instant. Les cycles sont créés par une personne ayant l'autorisation «Gérer les modèles»."
   },
   "importModal": {
     "cancel": "Annuler",
@@ -162,7 +172,9 @@
     "summaryQuery": "{count, plural, one {# événement} other {# événements}} pour « {query} »",
     "summaryTag": "{count, plural, one {# événement} other {# événements}} avec le tag « {tag} »",
     "summaryTagQuery": "{count, plural, one {# événement} other {# événements}} avec le tag « {tag} » pour « {query} »",
-    "today": "Aujourd’hui · {date}"
+    "today": "Aujourd’hui · {date}",
+    "partialLoaded": "La recherche et les filtres ne portent que sur les {count} rendez-vous chargés.",
+    "loadAll": "Charger tous les rendez-vous"
   },
   "loadMore": "Charger plus ({count} chargés)",
   "loadingMore": "Chargement d'autres événements…",
@@ -174,7 +186,6 @@
     "createEventButton": "Créer l'événement",
     "currentCycleScope": "Cycle actuel",
     "deleteButtonTitle": "Supprimer définitivement l'événement",
-    "deleteConfirm": "Supprimer définitivement l'événement « {title} » ? Cela le retire de tous les procès-verbaux.",
     "newEventButton": "+ Nouvel événement",
     "noEventsShown": "Aucun événement affiché.",
     "noMatchingEvents": "Aucun événement correspondant trouvé.",
@@ -194,7 +205,7 @@
   "rowFieldsSection": "Afficher dans la ligne",
   "searchPlaceholder": "Rechercher des événements",
   "selectedCount": "{count} sélectionné(s)",
-  "showAllPeriods": "Afficher toutes les périodes de cycle",
+  "showAllPeriods": "Afficher aussi les cycles précédents et suivants",
   "cycleFilter": {
     "title": "Cycle",
     "all": "Tous les cycles"
@@ -225,5 +236,30 @@
     "previewFailed": "Échec de l'aperçu",
     "saveFailed": "L'événement n'a pas pu être enregistré"
   },
-  "view": "Affichage"
+  "view": "Affichage",
+  "help": {
+    "tag": "Un tag classe le rendez-vous (p. ex. «Séance», «Camp»). Les blocs de procès-verbal et les dépôts filtrent selon lui ; un filtre trouve chaque tag qui contient le texte recherché. Renommer modifie le tag sur tous les rendez-vous et dans les dépôts.",
+    "cycles": "Par défaut, un rendez-vous appartient au cycle dans lequel tombe sa date. Une attribution manuelle est conservée même si la date change et détermine dans quels filtres de cycle (procès-verbaux, dépôts, albums photo) le rendez-vous apparaît.",
+    "currentCycle": "Par défaut, la liste n'affiche que les rendez-vous du cycle en cours (p. ex. l'année associative). Avec cet interrupteur, les rendez-vous des cycles précédents et suivants apparaissent aussi.",
+    "csvImport": "La date de début et le titre sont obligatoires. hocX ne vérifie pas les doublons : importer un fichier deux fois crée les rendez-vous en double. Les rendez-vous importés sont attribués à leur cycle selon la date.",
+    "docsLink": "Guide des rendez-vous",
+    "calendarDocsLink": "S'abonner aux rendez-vous dans son propre calendrier",
+    "roles": "Attribue des personnes aux rôles du rendez-vous. Les champs «Spécial» sont libres ; ils peuvent être renommés ou masqués dans les paramètres du mandant."
+  },
+  "deleteDialog": {
+    "title": "Supprimer le rendez-vous ?",
+    "message": "Le rendez-vous sera supprimé définitivement et retiré de tous les procès-verbaux.",
+    "messageWithTitle": "«{title}» sera supprimé définitivement et retiré de tous les procès-verbaux.",
+    "submissions": "Attention : {count, plural, one {# dépôt} other {# dépôts}} avec {files, plural, one {# fichier} other {# fichiers}} pour ce rendez-vous seront également supprimés de manière irréversible.",
+    "submissionsUnknown": "Les éventuels dépôts pour ce rendez-vous seront supprimés de manière irréversible avec leurs fichiers.",
+    "cancelInstead": "Si le rendez-vous n'a simplement pas lieu, marque-le plutôt comme annulé."
+  },
+  "csvErrors": {
+    "startDateMissing": "Ligne {row} : date de début manquante",
+    "titleMissing": "Ligne {row} : titre manquant",
+    "startDateFormat": "Ligne {row} : la date de début «{value}» a un format inconnu",
+    "endDateFormat": "Ligne {row} : la date de fin «{value}» a un format inconnu",
+    "endBeforeStart": "Ligne {row} : la date de fin est antérieure à la date de début",
+    "participantCountInvalid": "Ligne {row} : le nombre de participants n'est pas un nombre entier"
+  }
 }

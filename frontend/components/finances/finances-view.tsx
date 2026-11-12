@@ -1,30 +1,35 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { DateInput } from "@/components/ui/date-input";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ActionIcon } from "@/components/ui/action-icons";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
-import { FinanceAccount, FinanceTransaction } from "@/types/api";
+import { Select } from "@/components/ui/select";
+import { StatusBanner } from "@/components/ui/status-banner";
+import { DocsLink, HelpPopover } from "@/components/ui/help-popover";
+import { DocumentExportButton } from "@/components/documents/export-dialog";
+import { FinanceAccount, FinancePeriodSummary, FinanceTransaction } from "@/types/api";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
-import { formatDate } from "@/lib/utils/format";
-
-// Konflikte (409) aus dem Backend uebersetzt anzeigen: Konto mit Buchungen/Bussen loeschen bzw.
-// Buchung einer einkassierten Busse aendern (siehe backend finance_repository.FinanceConflictError).
-function isConflict(error: unknown): boolean {
-  return error instanceof Error && (error as { status?: number }).status === 409;
-}
+import { formatDate, formatMoney } from "@/lib/utils/format";
+import { financeErrorMessage, lockedReasonText } from "./finance-errors";
 
 const PAGE_SIZE = 50;
 
-type Props = { initialAccounts: FinanceAccount[]; canWrite: boolean };
+type Props = {
+  initialAccounts: FinanceAccount[];
+  /** finances.manage und Feature «finance» mit Vollzugriff (nicht nur lesend nach Downgrade). */
+  canWrite: boolean;
+  /** Feature «finance» nur noch lesend (Downgrade): Hinweisbanner statt Schreibaktionen. */
+  readOnly?: boolean;
+};
 
-export function FinancesView({ initialAccounts, canWrite }: Props) {
+export function FinancesView({ initialAccounts, canWrite, readOnly = false }: Props) {
   const t = useTranslations("finances");
   const tCommon = useTranslations("common");
   const locale = useLocale();
@@ -36,6 +41,11 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
   const [loadingTx, setLoadingTx] = useState(false);
   const [hasMoreTx, setHasMoreTx] = useState(false);
   const [isLoadingMoreTx, setIsLoadingMoreTx] = useState(false);
+  // Jahressicht: "" = alle Jahre. Summe/Anfangs-/Endsaldo kommen vom Backend (ganze Historie).
+  const [year, setYear] = useState("");
+  const [summary, setSummary] = useState<FinancePeriodSummary | null>(null);
+  // Schneller Kontowechsel A→B: nur die Antwort der letzten Anfrage zählt (wie mobile-finances).
+  const requestRef = useRef(0);
 
   // Account form
   const [showAccountForm, setShowAccountForm] = useState(false);
@@ -56,31 +66,56 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
     setSelected(account);
     setShowTxForm(false);
     setEditingTx(null);
-    await reloadFirstPage(account.id);
+    setYear("");
+    await reloadFirstPage(account.id, "");
   }
 
-  async function reloadFirstPage(accountId: string) {
+  function yearQuery(value: string): string {
+    return value ? `&year=${encodeURIComponent(value)}` : "";
+  }
+
+  async function reloadFirstPage(accountId: string, forYear: string = year) {
+    const requestId = ++requestRef.current;
     setLoadingTx(true);
     try {
-      const data = await browserApiFetch<FinanceTransaction[]>(
-        `/api/finance/accounts/${accountId}/transactions?limit=${PAGE_SIZE}`
-      );
+      const [data, period] = await Promise.all([
+        browserApiFetch<FinanceTransaction[]>(`/api/finance/accounts/${accountId}/transactions?limit=${PAGE_SIZE}${yearQuery(forYear)}`),
+        browserApiFetch<FinancePeriodSummary>(`/api/finance/accounts/${accountId}/summary${forYear ? `?year=${encodeURIComponent(forYear)}` : ""}`),
+      ]);
+      if (requestId !== requestRef.current) return;
       setTransactions(data ?? []);
       setHasMoreTx((data ?? []).length === PAGE_SIZE);
+      setSummary(period ?? null);
+    } catch (error) {
+      if (requestId !== requestRef.current) return;
+      setTransactions([]);
+      setHasMoreTx(false);
+      setSummary(null);
+      showToast(financeErrorMessage(error, t, "loadTxFailed"), "error");
     } finally {
-      setLoadingTx(false);
+      if (requestId === requestRef.current) setLoadingTx(false);
     }
+  }
+
+  async function changeYear(value: string) {
+    if (!selected) return;
+    setYear(value);
+    await reloadFirstPage(selected.id, value);
   }
 
   async function loadMoreTx() {
     if (!selected) return;
+    const requestId = requestRef.current;
     setIsLoadingMoreTx(true);
     try {
       const next = await browserApiFetch<FinanceTransaction[]>(
-        `/api/finance/accounts/${selected.id}/transactions?skip=${transactions.length}&limit=${PAGE_SIZE}`
+        `/api/finance/accounts/${selected.id}/transactions?skip=${transactions.length}&limit=${PAGE_SIZE}${yearQuery(year)}`
       );
+      if (requestId !== requestRef.current) return;
       setTransactions((current) => [...current, ...next]);
       setHasMoreTx(next.length === PAGE_SIZE);
+    } catch (error) {
+      showToast(financeErrorMessage(error, t, "loadTxFailed"), "error");
     } finally {
       setIsLoadingMoreTx(false);
     }
@@ -96,7 +131,7 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
   // aggregate query (list_accounts) — refetch it instead of resumming the currently
   // loaded transaction page, which since pagination only ever holds a partial view.
   async function refreshAccounts(accountId: string) {
-    const data = await browserApiFetch<FinanceAccount[]>("/api/finance/accounts");
+    const data = await browserApiFetch<FinanceAccount[]>("/api/finance/accounts").catch(() => null);
     if (!data) return;
     setAccounts(data);
     const updated = data.find((a) => a.id === accountId);
@@ -111,8 +146,7 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
     setShowAccountForm(true);
   }
 
-  function startEditAccount(account: FinanceAccount, e: React.MouseEvent) {
-    e.stopPropagation();
+  function startEditAccount(account: FinanceAccount) {
     setEditingAccount(account);
     setAccountDraft({ name: account.name, currency_label: account.currency_label, description: account.description ?? "" });
     setShowAccountForm(true);
@@ -139,22 +173,23 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
         if (created) setAccounts((prev) => [...prev, created]);
       }
       setShowAccountForm(false);
+      showToast(t("accountSaved"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("saveAccountFailed"), "error");
+      showToast(financeErrorMessage(error, t, "saveAccountFailed"), "error");
     } finally {
       setSavingAccount(false);
     }
   }
 
-  async function deleteAccount(account: FinanceAccount, e: React.MouseEvent) {
-    e.stopPropagation();
+  async function deleteAccount(account: FinanceAccount) {
     if (!(await confirm({ message: t("deleteAccountConfirm", { name: account.name }), tone: "danger", confirmLabel: tCommon("delete") }))) return;
     try {
       await browserApiFetch(`/api/finance/accounts/${account.id}`, { method: "DELETE" });
       setAccounts((prev) => prev.filter((a) => a.id !== account.id));
-      if (selected?.id === account.id) { setSelected(null); setTransactions([]); }
+      if (selected?.id === account.id) { setSelected(null); setTransactions([]); setSummary(null); }
+      showToast(t("accountDeleted"), "success");
     } catch (error) {
-      showToast(isConflict(error) ? t("accountDeleteConflict") : error instanceof Error ? error.message : t("deleteAccountFailed"), "error");
+      showToast(financeErrorMessage(error, t, "deleteAccountFailed"), "error");
     }
   }
 
@@ -195,8 +230,9 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
       await Promise.all([reloadFirstPage(selected.id), refreshAccounts(selected.id)]);
       setShowTxForm(false);
       setEditingTx(null);
+      showToast(t("txSaved"), "success");
     } catch (error) {
-      showToast(isConflict(error) ? t("txLockedByFineConflict") : error instanceof Error ? error.message : t("saveTxFailed"), "error");
+      showToast(financeErrorMessage(error, t, "saveTxFailed"), "error");
     } finally {
       setSavingTx(false);
     }
@@ -208,8 +244,9 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
     try {
       await browserApiFetch(`/api/finance/transactions/${tx.id}`, { method: "DELETE" });
       await Promise.all([reloadFirstPage(selected.id), refreshAccounts(selected.id)]);
+      showToast(t("txDeleted"), "success");
     } catch (error) {
-      showToast(isConflict(error) ? t("txLockedByFineConflict") : error instanceof Error ? error.message : t("deleteTxFailed"), "error");
+      showToast(financeErrorMessage(error, t, "deleteTxFailed"), "error");
     }
   }
 
@@ -231,7 +268,10 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
             <input value={accountDraft.name} onChange={(e) => setAccountDraft((d) => ({ ...d, name: e.target.value }))} placeholder={t("namePlaceholder")} required autoFocus />
           </label>
           <label className="field-stack">
-            <span className="field-label">{t("currencyLabel")}</span>
+            <span className="field-label">
+              {t("currencyLabel")}{" "}
+              <HelpPopover topic={t("currencyHelpTopic")} docs={{ page: "finanzen", anchor: "konten" }}>{t("currencyHelp")}</HelpPopover>
+            </span>
             <input value={accountDraft.currency_label} onChange={(e) => setAccountDraft((d) => ({ ...d, currency_label: e.target.value }))} placeholder="CHF" />
           </label>
           <label className="field-stack">
@@ -257,29 +297,18 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
         <div className="page-header">
           <div>
             <h1 className="page-title">{t("pageTitle")}</h1>
-            <p className="muted">{t("pageDescription")}</p>
+            <p className="muted">{t("pageDescription")} <DocsLink page="finanzen">{t("docsLink")}</DocsLink></p>
           </div>
         </div>
+        {readOnly ? <StatusBanner tone="neutral" message={t("readOnlyBanner")} /> : null}
         <EmptyState
           title={t("emptyTitle")}
           description={t("emptyDescription")}
           actions={
             canWrite ? (
-              <>
-                <button
-                  type="button"
-                  className="button-primary"
-                  onClick={() => {
-                    showToast(t("addTransactionFirstHint"), "info");
-                    startCreateAccount();
-                  }}
-                >
-                  {t("addTransaction")}
-                </button>
-                <button type="button" className="button-secondary" onClick={startCreateAccount}>
-                  {t("createAccount")}
-                </button>
-              </>
+              <button type="button" className="button-primary" onClick={startCreateAccount}>
+                {t("createAccount")}
+              </button>
             ) : null
           }
           hint={t("emptyHint")}
@@ -290,6 +319,8 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
   }
 
   return (
+    <div className="grid">
+    {readOnly ? <StatusBanner tone="neutral" message={t("readOnlyBanner")} /> : null}
     <div className="finance-layout">
       {/* ── Account sidebar ── */}
       <aside className="finance-sidebar">
@@ -300,28 +331,30 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
 
         <div className="finance-account-list">
           {accounts.map((account) => (
-            <div
-              key={account.id}
-              role="button"
-              tabIndex={0}
-              className={`finance-account-card${selected?.id === account.id ? " finance-account-card-active" : ""}`}
-              onClick={() => void openAccount(account)}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") void openAccount(account); }}
-            >
-              <div className="finance-account-name">{account.name}</div>
-              <div className={`finance-account-balance${account.balance < 0 ? " finance-balance-negative" : ""}`}>
-                {formatAmount(account.balance, account.currency_label, locale)}
-              </div>
-              {account.provisional_balance > 0 ? (
-                <div className="finance-account-provisional">
-                  + {formatAmount(account.provisional_balance, account.currency_label, locale)} {t("provisional")}
-                </div>
-              ) : null}
-              {account.description ? <div className="finance-account-desc">{account.description}</div> : null}
+            // Barrierefrei: die Karte selbst ist ein echter Button (Enter/Leertaste ohne
+            // Seiten-Scroll), Bearbeiten/Löschen stehen daneben statt verschachtelt darin.
+            <div key={account.id} className={`finance-account-card${selected?.id === account.id ? " finance-account-card-active" : ""}`}>
+              <button
+                type="button"
+                className="finance-account-open"
+                aria-pressed={selected?.id === account.id}
+                onClick={() => void openAccount(account)}
+              >
+                <span className="finance-account-name">{account.name}</span>
+                <span className={`finance-account-balance${account.balance < 0 ? " finance-balance-negative" : ""}`}>
+                  {formatAmount(account.balance, account.currency_label, locale)}
+                </span>
+                {account.provisional_balance > 0 ? (
+                  <span className="finance-account-provisional">
+                    + {formatAmount(account.provisional_balance, account.currency_label, locale)} {t("provisional")}
+                  </span>
+                ) : null}
+                {account.description ? <span className="finance-account-desc">{account.description}</span> : null}
+              </button>
               <div className="finance-account-actions">
                 <span className="finance-account-count">{t("transactionCount", { count: account.transaction_count })}</span>
-                {canWrite && <button type="button" className="button-icon-soft-sm" onClick={(e) => startEditAccount(account, e)} title={tCommon("edit")} aria-label={tCommon("edit")}><ActionIcon name="edit" /></button>}
-                {canWrite && <button type="button" className="button-icon-soft-sm button-icon-soft-danger" onClick={(e) => void deleteAccount(account, e)} title={tCommon("delete")} aria-label={tCommon("delete")}><ActionIcon name="delete" /></button>}
+                {canWrite && <button type="button" className="button-icon-soft-sm" onClick={() => startEditAccount(account)} title={tCommon("edit")} aria-label={tCommon("edit")}><ActionIcon name="edit" /></button>}
+                {canWrite && <button type="button" className="button-icon-soft-sm button-icon-soft-danger" onClick={() => void deleteAccount(account)} title={tCommon("delete")} aria-label={tCommon("delete")}><ActionIcon name="delete" /></button>}
               </div>
             </div>
           ))}
@@ -346,11 +379,43 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
                 </div>
                 {selected.provisional_balance > 0 ? (
                   <div className="finance-account-provisional">
-                    + {formatAmount(selected.provisional_balance, selected.currency_label, locale, true)} {t("provisionalPending")}
+                    + {formatAmount(selected.provisional_balance, selected.currency_label, locale, true)} {t("provisionalPending")}{" "}
+                    <HelpPopover topic={t("provisionalHelpTopic")} docs={{ page: "finanzen", anchor: "provisorischer-saldo" }}>{t("provisionalHelp")}</HelpPopover>
                   </div>
                 ) : null}
               </div>
-              {canWrite && !showTxForm && <button type="button" className="button-secondary" onClick={startCreateTx}>{t("addTransaction")}</button>}
+              <div className="finance-main-actions">
+                <DocumentExportButton
+                  label={t("exportButton")}
+                  context={{
+                    documentType: "finance",
+                    params: { account_id: selected.id, ...(year ? { date_from: `${year}-01-01`, date_to: `${year}-12-31` } : {}) },
+                  }}
+                />
+                {canWrite && !showTxForm && <button type="button" className="button-secondary" onClick={startCreateTx}>{t("addTransaction")}</button>}
+              </div>
+            </div>
+
+            <div className="finance-period">
+              <label className="field-stack finance-period-year">
+                <span className="field-label">{t("yearLabel")}</span>
+                <Select value={year} onChange={(event) => void changeYear(event.target.value)}>
+                  <option value="">{t("yearAll")}</option>
+                  {(summary?.years ?? []).map((value) => (
+                    <option key={value} value={String(value)}>{value}</option>
+                  ))}
+                </Select>
+              </label>
+              {summary ? (
+                <dl className="finance-period-totals">
+                  {year ? (
+                    <div><dt>{t("periodOpening")}</dt><dd>{formatAmount(summary.opening_balance, currency, locale)}</dd></div>
+                  ) : null}
+                  <div><dt>{t("periodIncome")}</dt><dd className="finance-amount-pos">{formatAmount(summary.income, currency, locale)}</dd></div>
+                  <div><dt>{t("periodExpenses")}</dt><dd className="finance-amount-neg">{formatAmount(summary.expenses, currency, locale)}</dd></div>
+                  <div><dt>{t("periodClosing")}</dt><dd className={summary.closing_balance < 0 ? "finance-balance-negative" : undefined}>{formatAmount(summary.closing_balance, currency, locale)}</dd></div>
+                </dl>
+              ) : null}
             </div>
 
             {canWrite && showTxForm && (
@@ -410,7 +475,7 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
             {loadingTx ? (
               <p className="muted">{tCommon("loading")}</p>
             ) : transactions.length === 0 ? (
-              <p className="muted finance-empty">{t("noTransactions")}</p>
+              <p className="muted finance-empty">{year ? t("noTransactionsYear", { year }) : canWrite ? t("noTransactions") : t("noTransactionsReadOnly")}</p>
             ) : (
               <div className="finance-tx-table">
                 <div className="finance-tx-header">
@@ -418,10 +483,15 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
                   <span>{t("colDescription")}</span>
                   <span className="finance-tx-cell-right">{t("colAmount")}</span>
                   <span className="finance-tx-cell-right">{t("colBalance")}</span>
-                  <span></span>
+                  <span className="finance-tx-actions">
+                    {transactions.some((tx) => tx.locked_reason) ? (
+                      <HelpPopover topic={t("lockedHelpTopic")} docs={{ page: "finanzen", anchor: "buchungen-korrigieren" }}>{t("lockedHelp")}</HelpPopover>
+                    ) : null}
+                  </span>
                 </div>
                 {transactions.map((tx) => {
                   const running = tx.running_balance ?? tx.amount;
+                  const lockedText = lockedReasonText(tx, t);
                   return (
                     <div key={tx.id} className={`finance-tx-row${tx.amount < 0 ? " finance-tx-expense" : " finance-tx-income"}`}>
                       <span className="finance-tx-date">{formatDate(tx.transaction_date)}</span>
@@ -435,8 +505,23 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
                         {formatAmount(running, currency, locale)}
                       </span>
                       <span className="finance-tx-actions">
-                        {canWrite && <button type="button" className="button-icon-soft-sm" onClick={() => startEditTx(tx)} title={tCommon("edit")} aria-label={tCommon("edit")}><ActionIcon name="edit" /></button>}
-                        {canWrite && <button type="button" className="button-icon-soft-sm button-icon-soft-danger" onClick={() => void deleteTx(tx)} title={tCommon("delete")} aria-label={tCommon("delete")}><ActionIcon name="delete" /></button>}
+                        {lockedText ? (
+                          // Gesperrt (Busse/abgeschlossenes Protokoll): Grund als Tooltip, per Klick/Tippen als Hinweis
+                          <button
+                            type="button"
+                            className="button-icon-soft-sm finance-tx-lock"
+                            title={lockedText}
+                            aria-label={`${t("locked.label")}: ${lockedText}`}
+                            onClick={() => showToast(lockedText, "info")}
+                          >
+                            <ActionIcon name="lock" />
+                          </button>
+                        ) : (
+                          <>
+                            {canWrite && <button type="button" className="button-icon-soft-sm" onClick={() => startEditTx(tx)} title={tCommon("edit")} aria-label={tCommon("edit")}><ActionIcon name="edit" /></button>}
+                            {canWrite && <button type="button" className="button-icon-soft-sm button-icon-soft-danger" onClick={() => void deleteTx(tx)} title={tCommon("delete")} aria-label={tCommon("delete")}><ActionIcon name="delete" /></button>}
+                          </>
+                        )}
                       </span>
                     </div>
                   );
@@ -459,6 +544,7 @@ export function FinancesView({ initialAccounts, canWrite }: Props) {
         )}
       </main>
     </div>
+    </div>
   );
 }
 
@@ -468,8 +554,5 @@ function today(): string {
 }
 
 function formatAmount(amount: number, currency: string, locale: string, currencyFirst = false): string {
-  const abs = Math.abs(amount).toFixed(2);
-  const formatted = Number(abs).toLocaleString(`${locale}-CH`, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const value = `${amount < 0 ? "−" : ""}${formatted}`;
-  return currencyFirst ? `${currency} ${value}` : `${value} ${currency}`;
+  return formatMoney(amount, currency, locale, { currencyFirst });
 }

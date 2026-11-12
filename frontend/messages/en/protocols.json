@@ -69,7 +69,7 @@
     "protocolCount": "{count, plural, one {# protocol} other {# protocols}}",
     "protocolTitle": "Title",
     "revertClosedConfirmTitle": "Revert completion?",
-    "revertClosedConfirmMessage": "When this protocol was completed, the state of all its to-dos was saved. Reverting discards this snapshot: the protocol will then show the current to-dos, including every change since completion (completed, edited, deleted and new tasks).",
+    "revertClosedConfirmMessage": "When these minutes were finished, the state of all their to-dos was saved. Reverting discards this snapshot: the minutes will then show the current to-dos, including every change since completion. When you finish them again, the previous PDFs and change markings are deleted and a new signed PDF is created.",
     "revertClosedConfirmLabel": "Revert",
     "revertFailed": "Revert failed",
     "revertTo": "Revert to \"{status}\"",
@@ -93,7 +93,15 @@
     "syncTemplateConfirmKept": "{count, plural, one {No longer in the template but contains data, so it stays at the end: {names}.} other {No longer in the template but contain data, so they stay at the end: {names}.}}",
     "syncTemplateConfirmLabel": "Reload",
     "syncTemplateDone": "Elements reloaded from the template",
-    "syncTemplateFailed": "Elements could not be reloaded"
+    "syncTemplateFailed": "Elements could not be reloaded",
+    "alreadyFinalizedError": "These minutes are already finished and frozen. Revert them first via the menu (“Revert to …”).",
+    "deleteFinalizedHint": "Finished minutes cannot be deleted. Revert them first via “Revert to …”, then delete.",
+    "searchFailed": "Search failed",
+    "searching": "Searching …",
+    "loadMoreFailed": "More minutes could not be loaded.",
+    "retry": "Try again",
+    "templateHelp": "The template defines the agenda items, building blocks and the patterns for number and title. Minutes cannot be created without a template. hocX remembers the last one you chose.",
+    "previewHelp": "hocX derives number and title from the template’s pattern: the running number follows the rank of the date within the cycle. With an earlier date, later minutes that are still open move up."
   },
   "byName": "by {name}",
   "cancel": "Cancel",
@@ -159,7 +167,8 @@
       "shortcutSearch": "Search – in attendance, person search first",
       "shortcutTodo": "Open quick todo",
       "shortcuts": "Keyboard shortcuts",
-      "title": "Status & collaboration"
+      "title": "Status & collaboration",
+      "docsLink": "Guide: working together on minutes"
     }
   },
   "collectFine": "Collect fine",
@@ -243,7 +252,20 @@
     "statusChangedByOtherToast": "{name} changed the status to “{status}”.",
     "draftsRestoredToast": "{count, plural, one {# local text draft was} other {# local text drafts were}} restored.",
     "conflictToast": "Conflict: someone else saved this section in the meantime. The current version has been loaded – your last change was not applied, but it is kept as a local draft.",
-    "eventHideFailed": "Event could not be removed"
+    "eventHideFailed": "Event could not be removed",
+    "finishProtocolConfirmTitle": "Finish minutes?",
+    "finishProtocolConfirmMessage": "The minutes will be frozen and can no longer be edited. hocX creates the signed PDF, records the current state of the to-dos and sends the email notifications to the people responsible. This can only be undone via the menu in the minutes list (“Revert to …”).",
+    "finishSessionConfirmTitle": "End session?",
+    "finishSessionConfirmMessage": "The session ends and the minutes move to post-processing. Pending agenda requests for this meeting are taken over permanently. You can only go back via the menu in the minutes list.",
+    "confirmWithOtherEditors": "{consequences} Note: someone else is currently working on these minutes.",
+    "statusChangeUnsavedChanges": "Status not changed: not all changes could be saved. Please check your connection and try again.",
+    "statusChangeFailed": "Status could not be changed.",
+    "draftsConflictToast": "{count, plural, one {A local text draft was} other {# local text drafts were}} not applied because someone else has changed this passage in the meantime. The current version is shown.",
+    "draftsConflictApply": "Use my draft",
+    "workflowHelpTopic": "Status and working mode",
+    "workflowHelp": "Four steps: planned (preparation), prepared (session), held (post-processing), completed. Finishing freezes the minutes, creates the signed PDF and notifies the people responsible for open to-dos.",
+    "trackChangesHelpTopic": "Track changes",
+    "trackChangesHelp": "During preparation, marks in red what has changed compared to the last finished minutes of this template. From the session on no new marks are added; all of them disappear when the minutes are finished."
   },
   "embeddedBlock": {
     "attendance": "Attendance",
@@ -293,7 +315,9 @@
     "sourceCycle": "cycle {year}",
     "sourceLive": "the current list",
     "title": "Historical view — {name} {year}",
-    "unlockEdit": "Unlock editing"
+    "unlockEdit": "Unlock editing",
+    "helpTopic": "Historical view",
+    "help": "Minutes of past cycles show the state of lists and financial data frozen at that time, not the current data. “Unlock editing” allows corrections to the historical state; every change is logged."
   },
   "joinsLabel": "Entries",
   "leavesLabel": "Exits",
@@ -535,7 +559,9 @@
     "emptySearch": "No person found for “{query}”",
     "emptyFilter": "Nobody with this status",
     "fine": "CHF {amount, number}",
-    "fineTitle": "Fine is created automatically"
+    "fineTitle": "Fine is created automatically",
+    "helpTopic": "Recording attendance",
+    "help": "Clicking a person switches to the next status, a long press opens the selection. Use Tab to reach a person and 1–4 to set the status. “Mark remaining present” sets everyone still open. If a fine for lateness or absence is configured, it is created automatically."
   },
   "matrixBoard": {
     "title": "Matrix",
@@ -578,6 +604,7 @@
       "block_not_exported": "This block is excluded from the PDF export in the meeting template.",
       "omitted_by_layout": "The PDF template (Documents) does not include this block, e.g. because of a content filter.",
       "image_unavailable": "{count, plural, one {One image has not been checked yet or is unavailable and appears as a placeholder in the PDF.} other {# images have not been checked yet or are unavailable and appear as placeholders in the PDF.}}"
-    }
+    },
+    "help": "{reason} The content stays visible and saved in the editor but does not appear in the PDF."
   }
 }

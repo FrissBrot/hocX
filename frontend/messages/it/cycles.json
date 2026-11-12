@@ -24,5 +24,8 @@
   "editCycleEyebrow": "Modifica ciclo",
   "resetLabel": "Reset {date}",
   "currentLabel": "Attuale:",
-  "editButton": "Modifica"
+  "editButton": "Modifica",
+  "resetLabelHelpTopic": "Data di reset",
+  "resetReassignHelp": "Di norma ogni appuntamento appartiene al ciclo in cui cade la sua data. Un nuovo ciclo riprende così tutti gli appuntamenti esistenti; se la data di reset cambia, queste assegnazioni predefinite si spostano di conseguenza. Le assegnazioni impostate manualmente restano invariate.",
+  "deleteInUse": "Questo ciclo è ancora usato da un modello o da una consegna e non può essere eliminato."
 }

@@ -48,13 +48,21 @@ const MIN_PASSWORD_LENGTH = 12;
 // Abschnitt 8) - natives `required` liess den Browser bei leerem Absenden eine englische
 // Meldung ("Please fill out this field.") zeigen, UX-Audit-Befund F5.
 export function isUserFormValid(form: UserFormState, { requireTenant = false }: { requireTenant?: boolean } = {}): boolean {
+  return userFormBlocker(form, { requireTenant }) === null;
+}
+
+export type UserFormBlocker = "displayName" | "email" | "password" | "tenant";
+
+/** Warum «Speichern» gesperrt ist (für einen Hinweis neben dem Button), oder null. */
+export function userFormBlocker(form: UserFormState, { requireTenant = false }: { requireTenant?: boolean } = {}): UserFormBlocker | null {
   const isEdit = Boolean(form.id);
-  return (
-    form.display_name.trim() !== "" &&
-    (!form.login_enabled || form.email.trim() !== "") &&
-    (!form.login_enabled || (isEdit && form.password === "") || form.password.length >= MIN_PASSWORD_LENGTH) &&
-    (!requireTenant || isEdit || form.tenant_id !== "")
-  );
+  if (form.display_name.trim() === "") return "displayName";
+  if (form.login_enabled && form.email.trim() === "") return "email";
+  // Ein neu gesetztes Passwort braucht immer die Mindestlänge, auch beim Bearbeiten.
+  if (form.password !== "" && form.password.length < MIN_PASSWORD_LENGTH) return "password";
+  if (form.login_enabled && !isEdit && form.password.length < MIN_PASSWORD_LENGTH) return "password";
+  if (requireTenant && !isEdit && form.tenant_id === "") return "tenant";
+  return null;
 }
 
 /** Baut ein leeres Formular auf. `tenantId` nur im globalen Admin-Formular vorbelegen. */

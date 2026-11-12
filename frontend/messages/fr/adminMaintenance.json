@@ -144,7 +144,8 @@
       "source_consistent": "Ancien stockage toujours actif et inchangé",
       "inconsistent": "État du stockage incohérent – veuillez vérifier",
       "migration_running": "Migration des données encore en cours"
-    }
+    },
+    "help": "Une maintenance ne se termine jamais par minuterie. Elle ne peut être libérée que lorsque toutes les conditions sont remplies (p. ex. tâche terminée, contrôles au vert). Les conditions ouvertes indiquent ce qui est encore attendu."
   },
   "form": {
     "message": "Message public ({locale})",

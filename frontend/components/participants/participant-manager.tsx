@@ -20,34 +20,25 @@ import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { formatDate, formatDateTime } from "@/lib/utils/format";
 import { ParticipantInvite, ParticipantSummary, TemplateSummary } from "@/types/api";
 import { avatarTone, participantInitials } from "@/lib/utils/avatar";
+import { CSV_TEMPLATE, CsvPreview, parseParticipantCsv } from "@/lib/utils/participant-csv";
+import { apiErrorMessage } from "@/lib/api/error-message";
+import { HelpPopover } from "@/components/ui/help-popover";
+import { StatusBanner } from "@/components/ui/status-banner";
 
-const PAGE_SIZE = 50;
+// Alle Personen auf einmal laden (wie die Auswahllisten, Obergrenze der Route 2000): Suche, Tabs
+// und Zähler arbeiten sonst nur über die ersten Seiten (Bereichs-Audit 05). Darüber lädt
+// «Mehr laden» weiter.
+const PAGE_SIZE = 2000;
 
-type CsvPreviewRow = { display_name: string; first_name: string | null; last_name: string | null; email: string | null };
 type ImportResult = { imported: ParticipantSummary[]; duplicates: string[]; errors: string[] };
 
-function parseCsvForPreview(text: string): CsvPreviewRow[] {
-  const normalized = text.replace(/^﻿/, "");
-  const lines = normalized.split(/\r?\n/);
-  const firstLine = lines[0] ?? "";
-  const delimiter = firstLine.split(";").length > firstLine.split(",").length ? ";" : ",";
-  const headers = firstLine.split(delimiter).map((h) => h.trim());
-  const rows: CsvPreviewRow[] = [];
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    const cells = line.split(delimiter);
-    const get = (name: string) => (cells[headers.indexOf(name)] ?? "").trim() || null;
-    const first_name = get("Vorname");
-    const last_name = get("Nachname");
-    const nickname = get("Übername");
-    const company_name = get("Firmenname");
-    const email = get("Haupt-E-Mail");
-    const display_name = nickname ?? ([first_name, last_name].filter(Boolean).join(" ") || null) ?? company_name;
-    if (!display_name) continue;
-    rows.push({ display_name, first_name, last_name, email });
-  }
-  return rows;
+function downloadCsvTemplate() {
+  const url = URL.createObjectURL(new Blob([CSV_TEMPLATE], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "hocx-mitglieder-vorlage.csv"; // i18n-ok: Dateiname
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 type ParticipantManagerProps = {
@@ -124,6 +115,7 @@ function membershipInfo(participant: ParticipantSummary, today: string, t: TFunc
 export function ParticipantManager({ initialParticipants, templates, tenantId, canAdmin = false }: ParticipantManagerProps) {
   const t = useTranslations("participants");
   const tUsers = useTranslations("users");
+  const tSecurity = useTranslations("security");
   const showToast = useToast();
   const confirm = useConfirm();
   const [participants, setParticipants] = useState(initialParticipants);
@@ -142,7 +134,9 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
   const [form, setForm] = useState<ParticipantFormState>(emptyForm);
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
   const [assignedTemplateIds, setAssignedTemplateIds] = useState<string[]>([]);
-  const [csvPreview, setCsvPreview] = useState<{ rows: CsvPreviewRow[]; file: File } | null>(null);
+  const [csvPreview, setCsvPreview] = useState<(CsvPreview & { file: File }) | null>(null);
+  // Neue Person: nach dem Anlegen gleich per E-Mail einladen (Standardweg statt Passwort).
+  const [inviteAfterCreate, setInviteAfterCreate] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importing, setImporting] = useState(false);
 
@@ -214,6 +208,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
     setSelectedParticipant(null);
     setForm(emptyForm);
     setAssignedTemplateIds([]);
+    setInviteAfterCreate(false);
     setShowModal(true);
   }
 
@@ -236,7 +231,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
       setInvites((current) => ({ ...current, [participant.id]: invite }));
       showToast(t("invite.sentToast", { email: participant.email ?? "" }), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("invite.failed"), "error");
+      showToast(apiErrorMessage(error, tSecurity, "apiErrors", t("invite.failed")), "error");
     } finally {
       setInviteBusy(false);
     }
@@ -255,7 +250,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
       });
       showToast(t("invite.revokedToast"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("invite.failed"), "error");
+      showToast(apiErrorMessage(error, tSecurity, "apiErrors", t("invite.failed")), "error");
     } finally {
       setInviteBusy(false);
     }
@@ -288,7 +283,15 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
     setShowModal(true);
   }
 
-  const canSave = Boolean(form.display_name.trim()) && (!form.login_enabled || (Boolean(form.email.trim()) && (Boolean(selectedParticipant?.login_enabled) || form.password.length >= 12))) && (form.password.length === 0 || form.password.length >= 12);
+  // Grund, warum «Speichern» gesperrt ist (wird neben dem Button angezeigt), oder null.
+  const saveBlocker: "displayName" | "email" | "password" | null = !form.display_name.trim()
+    ? "displayName"
+    : form.login_enabled && !form.email.trim()
+      ? "email"
+      : (form.password !== "" || (form.login_enabled && !selectedParticipant?.login_enabled)) && form.password.length < 12
+        ? "password"
+        : null;
+  const canSave = saveBlocker === null;
 
   async function saveParticipant(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -335,6 +338,9 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
         participantId = updatedParticipant.id;
         setParticipants((current) => [updatedParticipant, ...current]);
         successMessage = t("toasts.created", { name: updatedParticipant.display_name });
+        if (inviteAfterCreate && canAdmin && inviteAvailable && updatedParticipant.email) {
+          await sendInvite(updatedParticipant);
+        }
       }
 
       await browserApiFetch(`/api/participants/${participantId}/templates`, {
@@ -348,15 +354,19 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
       setForm(emptyForm);
       setAssignedTemplateIds([]);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("toasts.saveFailed"), "error");
+      showToast(apiErrorMessage(error, tSecurity, "apiErrors", t("toasts.saveFailed")), "error");
     }
   }
 
   async function deleteParticipant(participantId: string) {
+    const target = participants.find((participant) => participant.id === participantId);
+    // Löschen entfernt die ganze Person mit Anwesenheit, Bussen und Aufgaben - deutlich sagen und
+    // auf die schonenden Wege (Inaktiv, Austritt, nur Login entziehen) hinweisen (Bereichs-Audit 05).
     const ok = await confirm({
-      message: t("toasts.deleteConfirmMessage"),
+      title: t("deleteDialog.title", { name: target?.display_name ?? t("toasts.deleteUnnamed") }),
+      message: target?.login_enabled ? t("deleteDialog.messageWithLogin") : t("deleteDialog.message"),
       tone: "danger",
-      confirmLabel: t("toasts.deleteConfirmLabel")
+      confirmLabel: t("deleteDialog.confirm")
     });
     if (!ok) return;
     try {
@@ -375,9 +385,10 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
       return;
     }
     const ok = await confirm({
-      message: t("toasts.bulkDeleteConfirmMessage", { count: selectedParticipantIds.length }),
+      title: t("deleteDialog.bulkTitle", { count: selectedParticipantIds.length }),
+      message: t("deleteDialog.bulkMessage"),
       tone: "danger",
-      confirmLabel: t("toasts.deleteConfirmLabel")
+      confirmLabel: t("deleteDialog.confirm")
     });
     if (!ok) return;
     try {
@@ -399,8 +410,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
     event.target.value = "";
     if (!file) return;
     const text = await file.text();
-    const rows = parseCsvForPreview(text);
-    setCsvPreview({ rows, file });
+    setCsvPreview({ ...parseParticipantCsv(text), file });
   }
 
   async function confirmCsvImport() {
@@ -613,7 +623,13 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
         description={t("csvPreview.description", { count: csvPreview?.rows.length ?? 0 })}
       >
         <div className="grid">
-          <DataTable columns={[t("csvPreview.displayName"), t("columns.firstName"), t("columns.lastName"), t("columns.email")]}>
+          <p className="field-help">
+            {t("csvPreview.columns")}{" "}
+            <HelpPopover topic={t("csvImport")} docs={{ page: "mitglieder", anchor: "import" }}>{t("csvPreview.help")}</HelpPopover>
+          </p>
+          {csvPreview && csvPreview.rows.length === 0 ? <StatusBanner tone="error" message={t("csvPreview.noRows")} /> : null}
+          {csvPreview?.rows.length && csvPreview.missingEmailColumn ? <StatusBanner tone="neutral" message={t("csvPreview.noEmailColumn")} /> : null}
+          <DataTable emptyMessage={t("csvPreview.empty")} columns={[t("csvPreview.displayName"), t("columns.firstName"), t("columns.lastName"), t("columns.email")]}>
             {(csvPreview?.rows ?? []).map((row, i) => (
               <tr key={i}>
                 <td><strong>{row.display_name}</strong></td>
@@ -623,9 +639,10 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
               </tr>
             ))}
           </DataTable>
-          <div className="table-toolbar-actions">
-            <button type="button" className="button-secondary button-ghost" onClick={() => setCsvPreview(null)}>{t("csvPreview.cancel")}</button>
-            <button type="button" className="button-secondary" onClick={() => void confirmCsvImport()} disabled={importing}>
+          <div className="modal-actions">
+            <button type="button" className="button-ghost" onClick={() => setCsvPreview(null)}>{t("csvPreview.cancel")}</button>
+            <button type="button" className="button-secondary" onClick={downloadCsvTemplate}>{t("csvPreview.template")}</button>
+            <button type="button" className="button-primary" onClick={() => void confirmCsvImport()} disabled={importing || !csvPreview?.rows.length}>
               {importing ? t("csvPreview.importing") : t("csvPreview.importEntries", { count: csvPreview?.rows.length ?? 0 })}
             </button>
           </div>
@@ -660,7 +677,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
               <div>
                 <div className="field-label">{t("importResult.errorsLabel")}</div>
                 <div className="muted" style={{ fontSize: "var(--text-base)", lineHeight: 1.7 }}>
-                  {importResult.errors.map((e, i) => <div key={i}>{e}</div>)}
+                  {importResult.errors.map((row, i) => <div key={i}>{/^\d+$/.test(row) ? t("importResult.errorRow", { row }) : row}</div>)}
                 </div>
               </div>
             )}
@@ -711,7 +728,8 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
             <>
               <label className="checkbox-line">
                 <input type="checkbox" checked={form.login_enabled} onChange={(event) => setForm((current) => ({ ...current, login_enabled: event.target.checked }))} />
-                {tUsers("enableLogin")}
+                {selectedParticipant.login_enabled ? tUsers("loginActive") : tUsers("loginSetPassword")}
+                <HelpPopover topic={tUsers("enableLogin")} docs={{ page: "mitglieder", anchor: "login" }}>{tUsers("loginHelp")}</HelpPopover>
               </label>
               {form.login_enabled ? (
                 <label className="field-stack">
@@ -722,9 +740,24 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
               ) : null}
             </>
           ) : null}
+          {canAdmin && !inviteAvailable && !selectedParticipant?.login_enabled && !form.login_enabled ? (
+            <span className="field-help">{t("invite.mailOff")}</span>
+          ) : null}
+          {!selectedParticipant && canAdmin && inviteAvailable ? (
+            <label className="checkbox-line">
+              <input type="checkbox" checked={inviteAfterCreate} disabled={!form.email.trim()} onChange={(event) => setInviteAfterCreate(event.target.checked)} />
+              <span>
+                {t("invite.afterCreate")}
+                <span className="field-help"> {form.email.trim() ? t("invite.hint") : t("invite.needsEmail")}</span>
+              </span>
+            </label>
+          ) : null}
           {selectedParticipant && canAdmin && inviteAvailable && !selectedParticipant.login_enabled && !form.login_enabled ? (
             <div className="field-stack">
-              <span className="field-label">{t("invite.title")}</span>
+              <span className="field-label">
+                {t("invite.title")}{" "}
+                <HelpPopover topic={t("invite.title")} docs={{ page: "mitglieder", anchor: "einladung" }}>{t("invite.hint")}</HelpPopover>
+              </span>
               {invites[selectedParticipant.id] ? (
                 <span className="field-help">
                   {invites[selectedParticipant.id].sent_at
@@ -748,6 +781,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
                   </button>
                 ) : null}
               </div>
+              {form.email.trim() !== (selectedParticipant.email ?? "") ? <span className="field-help">{t("invite.saveEmailFirst")}</span> : null}
             </div>
           ) : null}
           {selectedParticipant && !form.login_enabled ? (
@@ -755,25 +789,25 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
               <input type="checkbox" checked={form.notify_without_login} disabled={!form.email.trim()}
                 onChange={(event) => setForm((current) => ({ ...current, notify_without_login: event.target.checked }))} />
               <span>
-                {t("editModal.notifyWithoutLogin")}
-                <span className="field-help"> {t("editModal.notifyWithoutLoginHint")}</span>
+                {t("editModal.notifyWithoutLogin")}{" "}
+                <HelpPopover topic={t("editModal.notifyWithoutLogin")} docs={{ page: "benachrichtigungen", anchor: "ohne-login" }}>{t("editModal.notifyWithoutLoginHelp")}</HelpPopover>
+                <span className="field-help"> {form.email.trim() ? t("editModal.notifyWithoutLoginHint") : t("editModal.notifyWithoutLoginNeedsEmail")}</span>
               </span>
             </label>
           ) : null}
           <div className="two-col">
             <label className="field-stack">
-              <span className="field-label">{t("editModal.joinedAt")}</span>
-              <DateInput value={form.joined_at} onChange={(value) => setForm((current) => ({ ...current, joined_at: value }))} />
-              <span className="muted" style={{ fontSize: "var(--text-sm)" }}>
-                {t("editModal.joinedAtHint")}
+              <span className="field-label">
+                {t("editModal.joinedAt")}{" "}
+                <HelpPopover topic={t("editModal.joinedAt")} docs={{ page: "mitglieder", anchor: "mitgliedschaft" }}>{t("editModal.membershipHelp")}</HelpPopover>
               </span>
+              <DateInput value={form.joined_at} onChange={(value) => setForm((current) => ({ ...current, joined_at: value }))} />
+              <span className="field-help">{t("editModal.joinedAtHint")}</span>
             </label>
             <label className="field-stack">
               <span className="field-label">{t("editModal.leftAt")}</span>
               <DateInput value={form.left_at} onChange={(value) => setForm((current) => ({ ...current, left_at: value }))} />
-              <span className="muted" style={{ fontSize: "var(--text-sm)" }}>
-                {t("editModal.leftAtHint")}
-              </span>
+              <span className="field-help">{t("editModal.leftAtHint")}</span>
             </label>
           </div>
           <div className="field-stack">
@@ -801,8 +835,10 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
               })}
             </div>
           </div>
-          <div className="table-toolbar-actions">
-            <button data-modal-save type="submit" className="button-secondary" disabled={!canSave}>
+          <div className="modal-actions">
+            {saveBlocker ? <span className="field-help">{tUsers(`blockers.${saveBlocker}`)}</span> : null}
+            <button type="button" className="button-ghost" onClick={() => setShowModal(false)}>{t("csvPreview.cancel")}</button>
+            <button data-modal-save type="submit" className="button-primary" disabled={!canSave}>
               {selectedParticipant ? t("editModal.save") : t("editModal.create")}
             </button>
           </div>

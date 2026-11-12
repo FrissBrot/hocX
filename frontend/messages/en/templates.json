@@ -373,7 +373,8 @@
       "liveHint": "Changes apply immediately to all open protocols of this template. Fines already recorded keep their amount.",
       "saved": "Template fine rates saved",
       "saveFailed": "Fine rates could not be saved",
-      "loadFailed": "Fine rates could not be loaded"
+      "loadFailed": "Fine rates could not be loaded",
+      "docsLink": "More about the fine tariff in the help"
     },
     "invitationVisible": "In invitation and agenda",
     "invitationToggleFailed": "Setting could not be saved."

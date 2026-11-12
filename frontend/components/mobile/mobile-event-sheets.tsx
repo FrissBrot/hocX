@@ -12,7 +12,7 @@ import { ActionMenu } from "@/components/ui/action-menu";
 import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
 import { StatusBanner } from "@/components/ui/status-banner";
-import { useConfirm } from "@/contexts/confirm-context";
+import { useConfirmEventDelete } from "@/components/events/use-confirm-event-delete";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import type { CycleOption } from "@/lib/hooks/use-cycle-options";
@@ -53,7 +53,7 @@ export function EventDetailSheet({
   const tEvents = useTranslations("events");
   const locale = useLocale();
   const router = useRouter();
-  const confirm = useConfirm();
+  const confirmEventDelete = useConfirmEventDelete();
   const showToast = useToast();
 
   const nameById = useMemo(() => new Map(participants.map((participant) => [participant.id, participant.display_name])), [participants]);
@@ -80,7 +80,7 @@ export function EventDetailSheet({
   }
 
   async function remove() {
-    const ok = await confirm({ message: tEvents("toasts.deleteConfirmMessage"), tone: "danger", confirmLabel: tEvents("toasts.deleteConfirmLabel") });
+    const ok = await confirmEventDelete(event.id, event.title);
     if (!ok) return;
     try {
       await browserApiFetch(`/api/events/${event.id}`, { method: "DELETE" });

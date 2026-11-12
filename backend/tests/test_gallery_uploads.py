@@ -96,7 +96,23 @@ def test_iter_gallery_zip_entries_keeps_only_images_and_skips_junk(tmp_path):
 
     matched_names = {name for name, _content in matched}
     assert matched_names == {"strand.png"}
-    assert notes == []
+    # Nicht-Bilder werden zusammengefasst gemeldet statt still übersprungen (Audit Dateien/Fotos).
+    assert notes == ["1 Datei ohne Bildinhalt übersprungen (kein Bild)"]
+
+
+def test_iter_gallery_zip_entries_normalizes_windows_paths(tmp_path):
+    zip_bytes = _zip_of({"Ordner\\Unterordner\\IMG.png": _png_bytes((7, 7, 7))})
+
+    matched, _notes = _drain_zip_entries(zip_bytes, tmp_path)
+
+    assert [name for name, _content in matched] == ["IMG.png"]
+
+
+def test_safe_entry_name_strips_paths_and_control_chars():
+    from app.services.upload_pipeline import safe_entry_name
+
+    assert safe_entry_name("a\\b\\c.jpg") == "c.jpg"
+    assert safe_entry_name("ordner/bild\x07.jpg") == "bild.jpg"
 
 
 def test_iter_gallery_zip_entries_sniffs_content_not_filename(tmp_path):
@@ -393,7 +409,9 @@ def test_upload_gallery_images_route_accepts_mixed_batch_of_image_and_zip(db):
     # trip the perceptual-duplicate hint against each other for that reason. That's an
     # informational note, not a failure (all 3 still imported, asserted above) - only
     # assert there's no real failure (too-large/unsupported-format/infected) message.
-    assert all("ähnelt" in error for error in job.errors)
+    # notizen.txt erscheint als zusammengefasster Hinweis «… übersprungen (kein Bild)».
+    assert all("ähnelt" in error or "kein Bild" in error for error in job.errors)
+    assert any("kein Bild" in error for error in job.errors)
 
     detail = files_routes.get_gallery_upload_job(queued.id, db=db, user=writer)
     assert all(item.source == "gallery_upload" for item in detail.imported_items)
@@ -425,3 +443,40 @@ def test_gallery_upload_job_reports_a_zip_with_no_images(db):
     assert job.status == "done"
     assert job.imported_file_ids == []
     assert job.errors == ["ZIP enthält keine Bilddateien"]
+
+
+def test_gallery_upload_job_failure_is_logged_and_shows_only_a_curated_code(db, monkeypatch):
+    """Audit Dateien/Fotos: ein unerwarteter Fehler im Galerie-Ingest landet in system_error_log,
+    der Benutzer sieht nur den kuratierten Code statt str(exc) mit internen Details."""
+    from sqlalchemy import select
+
+    from app.models.entities import SystemErrorLog
+
+    tenant = make_tenant(db)
+    writer = make_current_user(tenant.id, role="writer")
+    queued = asyncio.run(
+        files_routes.upload_gallery_images(
+            files=[_upload_file(_png_bytes((3, 3, 3)), "einzelbild.png", "image/png")],
+            tags=None,
+            event_id=None,
+            submission_assignment_id=None,
+            submission_element_ref=None,
+            cycle_config_id=None,
+            db=db,
+            user=writer,
+        )
+    )
+
+    async def _boom(self, db_, job):  # noqa: ARG001
+        raise RuntimeError("s3://geheimer-bucket/pfad/zu/objekt timeout")
+
+    monkeypatch.setattr(FileService, "_run_gallery_upload_job", _boom)
+    service.process_pending_gallery_upload_jobs(db)
+
+    job = db.get(GalleryUploadJob, queued.id)
+    db.refresh(job)
+    assert job.status == "failed"
+    assert job.error == file_service_module.GALLERY_JOB_FAILED_CODE
+    assert "geheimer-bucket" not in (job.error or "")
+    logged = db.scalars(select(SystemErrorLog).where(SystemErrorLog.tenant_id == tenant.id)).all()
+    assert any(entry.error_type == "RuntimeError" for entry in logged)

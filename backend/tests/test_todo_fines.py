@@ -85,7 +85,7 @@ def _complete(db, todo, on: date | None = None):
     ProtocolTodoService().update_todo(db, todo.id, ProtocolTodoUpdate(todo_status_id=_status(db, "done")))
     if on is not None:
         todo.completed_at = datetime(on.year, on.month, on.day, 12, tzinfo=timezone.utc)
-        fines.sync_todo(db, todo)
+        fines.sync_todo(db, todo, recalculate=True)
         db.commit()
 
 
@@ -151,7 +151,7 @@ def test_fixed_fine_and_no_fine_override_rules(db, setup):
     assert none.state == "none" and none.lines == []
 
 
-def test_completing_late_freezes_and_reopening_removes_pending(db, setup):
+def test_completing_late_freezes_and_reopening_keeps_frozen_fines(db, setup):
     s = setup
     _rule(db, s)
     todo = _todo(db, s, days_late=5, people=("anna", "ben"))
@@ -166,10 +166,21 @@ def test_completing_late_freezes_and_reopening_removes_pending(db, setup):
     tx = db.scalar(select(FinanceTransaction).where(FinanceTransaction.account_id == s["account"].id))
     assert tx is not None and tx.amount == Decimal("20.00")
 
-    # Wieder geöffnet: Annas offene Busse verschwindet, Bens einkassierte bleibt
+    # Wieder geöffnet: eingefroren bleibt eingefroren (Bereichs-Audit 2026-11) - Annas offene und
+    # Bens einkassierte Busse bleiben, und es läuft keine zweite Busse für dieselben Personen.
     ProtocolTodoService().update_todo(db, todo.id, ProtocolTodoUpdate(todo_status_id=_status(db, "open")))
-    remaining = db.scalars(select(TodoFine).where(TodoFine.protocol_todo_id == todo.id)).all()
-    assert [(f.participant_name_snapshot, f.status) for f in remaining] == [("Ben", "collected")]
+    remaining = db.scalars(select(TodoFine).where(TodoFine.protocol_todo_id == todo.id).order_by(TodoFine.participant_name_snapshot)).all()
+    assert [(f.participant_name_snapshot, f.status, f.amount) for f in remaining] == [
+        ("Anna", "pending", Decimal("4.00")), ("Ben", "collected", Decimal("20.00")),
+    ]
+    assert [item for item in fines.open_items(db, s["tenant"].id) if item.facts.id == todo.id] == []
+    reopened = route.get_todo_fine(todo.public_id, db=db, user=s["manager"])
+    assert reopened.frozen and not reopened.running and len(reopened.lines) == 2
+
+    # Erneut erledigt: keine zweite Busse, Betrag unverändert
+    _complete(db, todo)
+    again = db.scalars(select(TodoFine).where(TodoFine.protocol_todo_id == todo.id)).all()
+    assert sorted((f.participant_name_snapshot, f.amount) for f in again) == [("Anna", Decimal("4.00")), ("Ben", Decimal("20.00"))]
 
 
 def test_on_time_or_cancelled_todos_have_no_fine(db, setup):
@@ -362,3 +373,210 @@ def test_member_sees_only_own_line_and_no_manual_settings(db, setup):
     result = route.get_todo_fine(todo.public_id, db=db, user=member)
     assert [line.participant_name for line in result.lines] == ["Ben"]
     assert result.fine_fixed_amount is None and result.fine_mode == "auto" and not result.can_manage
+
+
+# ── Bereichs-Audit 2026-11 ───────────────────────────────────────────
+
+
+def _patch(db, todo, user, **values):
+    from app.api.routes import todos as todos_route
+
+    return todos_route.patch_todo(todo.public_id, ProtocolTodoUpdate(**values), db=db, user=user)
+
+
+def _writer(s, person: str):
+    return make_current_user(s["tenant"].id, role="writer", user_id=s[person].id, features=FEATURES)
+
+
+def _audit_actions(db, todo) -> list[str]:
+    from sqlalchemy import text
+
+    return list(db.scalars(
+        text("SELECT action FROM audit_log WHERE entity_type = 'protocol_todo' AND entity_id = :id"), {"id": todo.id}
+    ))
+
+
+def test_saving_done_todo_again_keeps_completed_at_and_creates_no_fine(db, setup):
+    """Hoch 1: das Popup schickt den Status immer mit - Speichern einer pünktlich erledigten
+    Pendenz darf completed_at nicht neu setzen (und damit keine Busse auslösen)."""
+    s = setup
+    _rule(db, s)
+    todo = _todo(db, s, days_late=11)
+    punctual = TODAY - timedelta(days=12)
+    _complete(db, todo, on=punctual)
+    assert db.scalar(select(TodoFine.id).where(TodoFine.protocol_todo_id == todo.id)) is None
+    before = db.get(ProtocolTodo, todo.id).completed_at
+
+    _patch(db, todo, s["manager"], task="Material bringen (mit Notiz)", todo_status_id=_status(db, "done"))
+
+    db.refresh(todo)
+    assert todo.completed_at == before
+    assert db.scalar(select(TodoFine.id).where(TodoFine.protocol_todo_id == todo.id)) is None
+
+
+def test_status_change_between_done_and_open_sets_and_clears_completed_at(db, setup):
+    s = setup
+    todo = _todo(db, s, days_late=0)
+    service = ProtocolTodoService()
+    service.update_todo(db, todo.id, ProtocolTodoUpdate(todo_status_id=_status(db, "done")))
+    assert db.get(ProtocolTodo, todo.id).completed_at is not None
+    service.update_todo(db, todo.id, ProtocolTodoUpdate(todo_status_id=_status(db, "open")))
+    assert db.get(ProtocolTodo, todo.id).completed_at is None
+
+
+def test_todo_created_as_done_gets_completed_at(db, setup):
+    from app.schemas.protocol import ProtocolTodoCreate
+
+    s = setup
+    todo = ProtocolTodoService().create_standalone_todo(
+        db, s["tenant"].id, ProtocolTodoCreate(task="Schon erledigt", todo_status_id=_status(db, "done")), actor_user_id=s["anna"].id,
+    )
+    assert todo.completed_at is not None and todo.fine_evaluated_at is not None
+
+
+def test_frozen_fine_survives_due_and_assignee_changes_and_delete(db, setup):
+    """Hoch 2: Fälligkeit, Verantwortliche und Löschen lassen eingefrorene Bussen stehen."""
+    from app.api.routes import todos as todos_route
+
+    s = setup
+    _rule(db, s)
+    todo = _todo(db, s, days_late=5, people=("ben",))
+    _complete(db, todo, on=TODAY - timedelta(days=3))
+    fine = db.scalar(select(TodoFine).where(TodoFine.protocol_todo_id == todo.id))
+    assert fine.status == "pending" and fine.amount == Decimal("20.00")
+
+    ben = _writer(s, "ben")
+    _patch(db, todo, ben, due_date=TODAY, assigned_participant_ids=[s["anna"].public_id])
+    db.refresh(fine)
+    assert fine.status == "pending" and fine.amount == Decimal("20.00")
+    assert "todo.fine_relevant_changed" in _audit_actions(db, todo)
+
+    todos_route.delete_todo(todo.public_id, db=db, user=ben)
+    db.refresh(fine)
+    assert fine.status == "pending" and fine.protocol_todo_id is None and fine.task_snapshot == "Material bringen"
+
+
+def test_fined_person_cannot_remove_own_running_fine(db, setup):
+    from app.api.routes import todos as todos_route
+
+    s = setup
+    _rule(db, s)
+    todo = _todo(db, s, days_late=4, people=("ben",))
+    ben = _writer(s, "ben")
+    for values in ({"due_date": TODAY}, {"assigned_participant_ids": [s["anna"].public_id]}, {"tags": ["anders"]},
+                   {"todo_status_id": _status(db, "cancelled")}):
+        with pytest.raises(HTTPException) as exc:
+            _patch(db, todo, ben, **values)
+        assert exc.value.status_code == 409 and exc.value.detail["code"] == "todo_fine_running"
+    with pytest.raises(HTTPException) as exc:
+        todos_route.delete_todo(todo.public_id, db=db, user=ben)
+    assert exc.value.status_code == 409
+
+    # Unveränderte Werte (das Popup schickt alles mit) und Erledigen sind erlaubt
+    _patch(db, todo, ben, task="Material bringen", due_date=todo.due_date, assigned_participant_ids=[s["ben"].public_id])
+    # Jemand anderes darf verschieben - nachvollziehbar im Audit-Log
+    _patch(db, todo, _writer(s, "anna"), due_date=TODAY)
+    assert "todo.fine_relevant_changed" in _audit_actions(db, todo)
+
+
+def test_cashier_recalculation_replaces_pending_fine_with_audit(db, setup):
+    s = setup
+    _rule(db, s)
+    todo = _todo(db, s, days_late=3)
+    _complete(db, todo)
+    route.put_todo_fine(todo.public_id, TodoFineSettings(fine_mode="fixed", fine_fixed_amount=Decimal("7")), db=db, user=s["manager"])
+    stored = db.scalars(select(TodoFine).where(TodoFine.protocol_todo_id == todo.id)).all()
+    assert [(f.amount, f.status) for f in stored] == [(Decimal("7.00"), "pending")]
+    assert "todo_fine.todo_settings_changed" in _audit_actions(db, todo)
+
+
+def test_split_fixed_amount_keeps_every_cent(db, setup):
+    s = setup
+    carl = make_participant(db, s["tenant"].id, "Carl")
+    s["carl"] = carl
+    todo = _todo(db, s, days_late=2, people=("anna", "ben", "carl"))
+    result = route.put_todo_fine(
+        todo.public_id, TodoFineSettings(fine_mode="fixed", fine_fixed_amount=Decimal("10"), fine_split_mode="split"), db=db, user=s["manager"]
+    )
+    assert [line.amount for line in result.lines] == [Decimal("3.34"), Decimal("3.33"), Decimal("3.33")]
+
+
+def test_rule_assigned_by_hand_cannot_be_deleted(db, setup):
+    s = setup
+    rule = _rule(db, s)
+    todo = _todo(db, s, days_late=1)
+    route.put_todo_fine(todo.public_id, TodoFineSettings(fine_mode="rule", fine_rule_id=rule.id), db=db, user=s["manager"])
+    with pytest.raises(HTTPException) as exc:
+        route.delete_rule(rule.id, db=db, user=s["manager"])
+    assert exc.value.status_code == 409 and exc.value.detail["code"] == "rule_in_use" and exc.value.detail["count"] == 1
+
+
+def test_restored_fine_on_reopened_todo_is_not_doubled(db, setup):
+    s = setup
+    _rule(db, s)
+    todo = _todo(db, s, days_late=3)
+    _complete(db, todo)
+    fine = db.scalar(select(TodoFine).where(TodoFine.protocol_todo_id == todo.id))
+    route.waive_todo_fine(fine.public_id, TodoFineDelete(reason="Versehen"), db=db, user=s["manager"])
+    ProtocolTodoService().update_todo(db, todo.id, ProtocolTodoUpdate(todo_status_id=_status(db, "open")))
+    route.restore_todo_fine(fine.public_id, db=db, user=s["manager"])
+    listed = [item for item in route.list_todo_fines(db=db, user=s["manager"]) if item.todo_id == todo.public_id]
+    assert [item.status for item in listed] == ["pending"]
+    _complete(db, todo)
+    assert len(db.scalars(select(TodoFine).where(TodoFine.protocol_todo_id == todo.id)).all()) == 1
+
+
+def test_trigger_completion_is_frozen_even_after_days(db, setup):
+    from app.services.submission_service import SubmissionService
+
+    s = setup
+    _rule(db, s)
+    todo = _todo(db, s, days_late=10)
+    todo.todo_status_id = _status(db, "done")
+    todo.completed_at = datetime.now(timezone.utc) - timedelta(days=5)  # Abgleich lange ausgefallen
+    db.flush()
+    SubmissionService._freeze_fines_after_trigger(db, todo)
+    SubmissionService._freeze_fines_after_trigger(db, todo)
+    stored = db.scalars(select(TodoFine).where(TodoFine.protocol_todo_id == todo.id)).all()
+    assert len(stored) == 1 and stored[0].days_late == 5
+
+
+def test_running_fines_list_has_account_and_constant_query_count(db, setup):
+    from tests.test_fines_query_count import _SelectCounter
+
+    s = setup
+    _rule(db, s)
+    _todo(db, s, days_late=2, people=("anna",))
+    db.expire_all()
+    with _SelectCounter(db) as small:
+        first = route.list_todo_fines(db=db, user=s["manager"])
+    for index in range(6):
+        extra = make_participant(db, s["tenant"].id, f"Person {index}")
+        s[f"p{index}"] = extra
+        _todo(db, s, days_late=2, people=(f"p{index}",))
+    db.expire_all()
+    with _SelectCounter(db) as large:
+        many = route.list_todo_fines(db=db, user=s["manager"])
+    assert len(first) == 1 and len(many) == 7
+    assert all(item.account_id == s["account"].public_id for item in many)
+    assert large.count == small.count
+
+
+def test_todo_routes_answer_404_for_foreign_tenant(db, setup):
+    from app.api.routes import todos as todos_route
+
+    s = setup
+    todo = _todo(db, s, days_late=0)
+    other = make_tenant(db, "Fremd", features=GRANDFATHERED_FEATURES + ("finance", "todo_fines"))
+    foreign = make_current_user(other.id, role="admin", features=FEATURES)
+    calls = (
+        lambda: todos_route.patch_todo(todo.public_id, ProtocolTodoUpdate(task="x"), db=db, user=foreign),
+        lambda: todos_route.delete_todo(todo.public_id, db=db, user=foreign),
+        lambda: todos_route.get_todo_due_events(todo.public_id, db=db, user=foreign),
+        lambda: todos_route.get_todo_details(todo.public_id, db=db, user=foreign),
+        lambda: todos_route.accept_todo_tracked_change(todo.public_id, db=db, user=foreign),
+    )
+    for call in calls:
+        with pytest.raises(HTTPException) as exc:
+            call()
+        assert exc.value.status_code == 404

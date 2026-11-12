@@ -51,6 +51,7 @@
     "late": "Verspätet",
     "absent": "Unentschuldigt"
   },
+  "fineTransaction": "Busse {type}: {name}",
   "col": {
     "status": "Status",
     "task": "Aufgabe",
@@ -109,7 +110,7 @@
     "asOf": "Stand {date}",
     "responsible": "Verantwortlich",
     "agendaOther": "Weitere Anliegen",
-    "sessionTodos": "Todos",
+    "sessionTodos": "Pendenzen",
     "yes": "Ja",
     "scanToOpen": "Zum Öffnen scannen",
     "attendanceCounts": "{present} anwesend · {late} verspätet · {excused} entschuldigt · {absent} unentschuldigt",
@@ -162,8 +163,8 @@
   "kpi": {
     "sessions": "Sitzungen",
     "attendanceRate": "Anwesenheitsquote",
-    "openTodos": "Offene Todos",
-    "doneTodos": "Erledigte Todos",
+    "openTodos": "Offene Pendenzen",
+    "doneTodos": "Erledigte Pendenzen",
     "events": "Termine",
     "members": "Mitglieder",
     "finesTotal": "Bussen total",
@@ -223,7 +224,7 @@
     "member_list": "Mitgliederliste",
     "signature_fields": "Unterschriften",
     "attendance_sheet": "Präsenzliste",
-    "todo_table": "Todos",
+    "todo_table": "Pendenzen",
     "event_table": "Termine",
     "event_calendar_month": "Monatskalender",
     "event_agenda": "Jahresprogramm",
@@ -259,7 +260,7 @@
     "member_list": "Keine Mitglieder.",
     "signature_fields": "Keine Unterschriftsfelder.",
     "attendance_sheet": "Keine Personen.",
-    "todo_table": "Keine Todos vorhanden.",
+    "todo_table": "Keine Pendenzen vorhanden.",
     "event_table": "Keine passenden Termine.",
     "event_calendar_month": "Keine Termine.",
     "event_agenda": "Keine Termine.",
@@ -323,7 +324,15 @@
     "brandArchived": "Ein archiviertes Brand-Profil kann nicht Standard sein.",
     "defaultBrand": "Das Standard-Brand-Profil kann nicht archiviert oder gelöscht werden.",
     "brandInUse": "Das Brand-Profil wird verwendet. Bitte archivieren statt löschen.",
-    "noColumns": "Mindestens eine Spalte muss ausgewählt sein."
+    "noColumns": "Mindestens eine Spalte muss ausgewählt sein.",
+    "agendaItemNotFound": "Das Anliegen wurde nicht gefunden.",
+    "agendaItemFrozen": "Das Anliegen gehört zu einem abgeschlossenen Protokoll und kann nicht mehr geändert werden.",
+    "agendaProtocolClosed": "Das Protokoll ist bereits abgeschlossen.",
+    "agendaTitleRequired": "Bitte einen Titel eingeben.",
+    "agendaMonthRequired": "Bitte einen Monat wählen.",
+    "agendaBoundOnlyPostpone": "Das Anliegen steht schon in einem Protokoll. Zum Verschieben «Vertagen» verwenden.",
+    "agendaPointMismatch": "Der gewählte Punkt gehört nicht zu dieser Vorlage.",
+    "agendaSaveFailed": "Das Anliegen konnte nicht gespeichert werden."
   },
   "metadata": {
     "title": "Angaben zum Dokument",
@@ -628,7 +637,11 @@
       "mfaRemoved": "Zweiter Faktor entfernt ({at})",
       "mfaRemovedByAdmin": "Zweiter Faktor durch die Vereinsverwaltung entfernt ({at})",
       "hint": "Warst du das nicht? Melde dich sofort bei {tenant}.",
-      "mandatory": "Sicherheitshinweise bekommst du immer, sie lassen sich nicht abbestellen."
+      "mandatory": "Sicherheitshinweise bekommst du immer, sie lassen sich nicht abbestellen.",
+      "emailChanged": "Login-E-Mail geändert ({at})",
+      "emailChangedByAdmin": "Login-E-Mail durch die Vereinsverwaltung geändert ({at})",
+      "emailChangedSubject": "{tenant}: Deine Login-E-Mail wurde geändert",
+      "emailChangedIntro": "Die Login-E-Mail deines Kontos bei {tenant} wurde geändert. Diese Adresse gilt ab jetzt nicht mehr für die Anmeldung, du bekommst diese Nachricht deshalb ein letztes Mal hierhin:"
     },
     "export": {
       "subjectReady": "{tenant}: Datenexport bereit",

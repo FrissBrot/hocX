@@ -162,6 +162,15 @@ def render_account(*, lang: str, group: str, items: list[dict], recipient_name: 
             button=(text(lang, "email.account.resetAction" if reset else "email.account.inviteAction"), item["link"]),
             fallback=text(lang, "email.account.linkFallback", url=item["link"]), footer=footer,
         )
+    if group == "account.email_changed":
+        # Nur Hinweis, keine Links: die alte Adresse gehört evtl. nicht mehr zum Konto.
+        lines = [text(lang, "email.security.emailChangedByAdmin" if item["by_admin"] else "email.security.emailChanged", at=_local_time(item["at"])) for item in items]
+        return _compose(
+            subject=text(lang, "email.security.emailChangedSubject", tenant=tenant_name),
+            paragraphs=[greeting, text(lang, "email.security.emailChangedIntro", tenant=tenant_name)], lines=lines,
+            button=None, fallback=None,
+            footer=[text(lang, "email.security.hint", tenant=tenant_name), *footer, text(lang, "email.security.mandatory")],
+        )
     if group == "account.security":
         lines = [text(lang, SECURITY_KEYS[(item["kind"], item["by_admin"])], at=_local_time(item["at"])) for item in items]
         return _compose(

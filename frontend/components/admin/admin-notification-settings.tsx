@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 
 import { DataToolbar } from "@/components/ui/data-table";
 import { CopyField } from "@/components/ui/copy-field";
+import { HelpPopover } from "@/components/ui/help-popover";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
@@ -177,7 +178,10 @@ export function AdminNotificationSettings({ initialSettings }: Props) {
               <span className="field-help">{t("adminUrlHelp")}</span>
             </label>
             <label className="field-stack">
-              <span className="field-label">{t("reminderHours")}</span>
+              <span className="field-label">
+                {t("reminderHours")}{" "}
+                <HelpPopover topic={t("reminderHours")}>{t("reminderPopover")}</HelpPopover>
+              </span>
               <input
                 type="number"
                 min={0}

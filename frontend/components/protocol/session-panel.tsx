@@ -34,6 +34,8 @@ export type SessionPanelHandle = {
   openNotes: (focus?: boolean) => void;
   scheduleClose: () => void;
   close: () => void;
+  /** Speichert wartende Sitzungsnotizen sofort und meldet, ob alles auf dem Server ist. */
+  flushPendingSaves: () => Promise<boolean>;
 };
 
 type ActivePanel = "notes" | "todo" | null;
@@ -110,6 +112,9 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
     }, []);
 
     useImperativeHandle(ref, () => ({
+      flushPendingSaves() {
+        return flushNotes();
+      },
       openTodo(focus = true) {
         if (leaveTimerRef.current) window.clearTimeout(leaveTimerRef.current);
         setHoverMode(!focus);
@@ -130,7 +135,7 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
         setHoverMode(false);
         setActive(null);
       },
-    }), [scheduleClose, setHoverMode]);
+    }), [scheduleClose, setHoverMode, flushNotes]);
 
     // A flyout can appear between two pointer events, which means browsers do not always
     // emit the mouse-leave sequence we would expect. While it was opened by hovering,

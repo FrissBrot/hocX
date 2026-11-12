@@ -146,8 +146,13 @@ def complete(db: Session, token: str, password: str) -> str:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Der Link ist ungültig oder abgelaufen.")
     row, user = found
     # Gegen gleichzeitiges zweites Einlösen: Zeile sperren und erneut prüfen
-    locked = db.scalar(select(AccountToken).where(AccountToken.id == row.id).with_for_update())
-    if locked is None or locked.used_at is not None or locked.revoked_at is not None:
+    # populate_existing: row liegt schon in der Identity-Map; ohne die Option lieferte die Sperrabfrage
+    # das veraltete Objekt (used_at=None) und zwei gleichzeitige Requests lösten denselben Link ein.
+    locked = db.scalar(select(AccountToken).where(AccountToken.id == row.id).with_for_update().execution_options(populate_existing=True))
+    if (
+        locked is None or locked.used_at is not None or locked.revoked_at is not None
+        or locked.expires_at is None or locked.expires_at <= _now()
+    ):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Der Link ist ungültig oder abgelaufen.")
     now = _now()
     if row.purpose == "invite":
@@ -180,6 +185,20 @@ def notify_security(db: Session, user: AppUser | None, kind: str, *, by_admin: b
     publish(db, kind=kind, tenant_id=user.tenant_id, recipient_ids=[user.id], payload={"at": _now().isoformat(), "by_admin": by_admin})
 
 
+def notify_email_changed(db: Session, user: AppUser | None, old_email: str | None, *, by_admin: bool) -> None:
+    """Hinweis «Deine Login-E-Mail wurde geändert» an die bisherige Adresse (ohne Links/Token).
+
+    Wer eine fremde Adresse einträgt, übernimmt sonst still das Konto: die alte Adresse ist die
+    einzige, die davon erfährt. Ohne Commit, in der Transaktion des Aufrufers."""
+    old = (old_email or "").strip().lower()
+    if user is None or not user.login_enabled or not old or old == (user.email or "").strip().lower():
+        return
+    publish(
+        db, kind="security.email_changed", tenant_id=user.tenant_id, recipient_ids=[user.id],
+        payload={"at": _now().isoformat(), "by_admin": by_admin, "old_email": old},
+    )
+
+
 # ── Versand (dispatch.ITEM_LOADERS) ─────────────────────────────────────
 
 
@@ -200,7 +219,9 @@ def link_items_for(db: Session, notifications: list, recipient_id: int, *, base_
         row.token_hash, row.sent_at, row.expires_at = hash_token(token), now, now + TOKEN_TTL[row.purpose]
         items[notification.id] = {
             "kind": notification.kind,
-            "link": f"{base_url}{SET_PASSWORD_PATH}#token={token}",
+            # kind=invite (nicht geheim) lässt die Seite bei einem abgelaufenen Link den richtigen
+            # Ausweg zeigen: eine neue Einladung beim Verein statt «Passwort vergessen».
+            "link": f"{base_url}{SET_PASSWORD_PATH}#token={token}" + ("&kind=invite" if row.purpose == "invite" else ""),
             "valid_hours": int(TOKEN_TTL[row.purpose].total_seconds() // 3600),
             "valid_minutes": int(TOKEN_TTL[row.purpose].total_seconds() // 60),
         }
@@ -216,4 +237,17 @@ def security_items_for(db: Session, notifications: list, recipient_id: int, **_)
             "at": datetime.fromisoformat(at) if at else notification.created_at,
             "by_admin": bool(notification.payload.get("by_admin")),
         }
+    return items
+
+
+def email_changed_items_for(db: Session, notifications: list, recipient_id: int, **_) -> dict[int, dict]:
+    """Je Änderung eine Mail an die damals alte Adresse (``to`` überschreibt im Versand die
+    aktuelle Adresse der Person)."""
+    items = security_items_for(db, notifications, recipient_id)
+    for notification in notifications:
+        old_email = (notification.payload.get("old_email") or "").strip()
+        if not old_email:
+            items.pop(notification.id, None)
+            continue
+        items[notification.id]["to"] = old_email
     return items

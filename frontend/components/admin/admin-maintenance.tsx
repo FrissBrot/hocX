@@ -7,6 +7,7 @@ import { ActionMenu } from "@/components/ui/action-menu";
 import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
+import { HelpPopover } from "@/components/ui/help-popover";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -315,7 +316,10 @@ function RunningCard({ window, t, locale, now, busy, onRelease, onStart, onEdit 
         </div>
       </div>
       <div className="maintenance-checks">
-        <h3 className="maintenance-checks-title">{t("conditions.title")}</h3>
+        <h3 className="maintenance-checks-title">
+          {t("conditions.title")}{" "}
+          <HelpPopover topic={t("conditions.title")}>{t("conditions.help")}</HelpPopover>
+        </h3>
         <ul>
           {window.conditions.map((condition) => {
             const detail = conditionDetail(condition, t);

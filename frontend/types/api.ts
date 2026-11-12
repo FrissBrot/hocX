@@ -108,6 +108,8 @@ export type TenantSummary = {
   read_only_features?: string[];
   // Nur in der Antwort auf eine Änderung: die Namensänderung hat die Verifizierung durch hocX aufgehoben
   identity_verification_revoked?: boolean;
+  /** Organisation durch hocX bestätigt - eine Namensänderung hebt das auf. */
+  identity_verified?: boolean;
 };
 
 export type TenantSubscriptionFeature = {
@@ -116,6 +118,8 @@ export type TenantSubscriptionFeature = {
   description: string | null;
   standalone_price_monthly_rp: number | null;
   included_in_plan: boolean;
+  /** Nach einem Downgrade nur noch lesbar. */
+  read_only?: boolean;
 };
 
 export type TenantSubscription = {
@@ -154,6 +158,8 @@ export type TenantDomain = {
   verified_at: string | null;
   is_healthy: boolean;
   last_checked_at: string | null;
+  /** Ausstehende Domain, die nach erfolgreicher Prüfung diese aktive Domain ersetzt (Migration 0179). */
+  replaces_domain?: string | null;
 };
 
 export type SubmissionSourceType = "events" | "list" | "manual";
@@ -356,6 +362,8 @@ export type FileOverviewItem = {
   context_label: string | null;
   // Live Photo: content URL of the short MP4 played on hover (null for ordinary photos).
   live_video_url: string | null;
+  // Virenprüfung: "pending" (wird geprüft), "clean", "error" (gesperrt). Fehlt bei älteren Antworten.
+  scan_status?: string;
   // Logisches Dokument (PDF-Ansicht, Status, Versionen) - fehlt/null bei Bildern, ZIPs usw.
   document?: DocumentSummary | null;
   // Every album this file belongs to (only populated on the unscoped GET /files listing).
@@ -1311,6 +1319,9 @@ export type EventImportPreviewRow = {
   description: string | null;
   participant_count: number | null;
   error: string | null;
+  /** Übersetzbarer Fehler-Code (events.csvErrors.<code>) mit Parametern. */
+  error_code?: string | null;
+  error_params?: Record<string, string | number> | null;
 };
 
 export type EventImportPreview = {
@@ -1333,6 +1344,8 @@ export type StructuredListDefinition = {
   column_two_title: string;
   column_two_value_type: StructuredListValueType;
   is_active: boolean;
+  /** Einträge zählen in der Statistik als Gruppen (Termin-Tags), Migration 0176. */
+  is_group_source?: boolean;
   content_version: number;
   created_at: string;
   updated_at: string;
@@ -1718,6 +1731,30 @@ export type FinanceTransaction = {
   protocol_id: string | null;
   created_at: string;
   running_balance: number | null;
+  /** Gesperrt (nicht direkt änderbar): Busse, Pendenzen-Busse oder abgeschlossenes Protokoll. */
+  locked_reason?: "fine_transaction" | "todo_fine_transaction" | "protocol_finalized" | null;
+  /** Person der Busse bzw. Protokollnummer. */
+  locked_detail?: string | null;
+};
+
+/** Jahressicht eines Kontos (GET /api/finance/accounts/{id}/summary). */
+export type FinancePeriodSummary = {
+  year: number | null;
+  income: number;
+  expenses: number;
+  net: number;
+  opening_balance: number;
+  closing_balance: number;
+  transaction_count: number;
+  years: number[];
+};
+
+/** Offene Bussen je Währung über alle Bussen (GET /api/fines/open-summary). */
+export type OpenFinesSummary = {
+  totals: { currency_label: string; amount: number; count: number }[];
+  count: number;
+  people: number;
+  own_only: boolean;
 };
 
 export type StatisticsOverview = {
@@ -1727,12 +1764,14 @@ export type StatisticsOverview = {
   /** Pro Person und Währung eine Zeile (MAIN-BE-019); participant_key fasst eine Person zusammen. */
   fines_by_participant: { name: string; count: number; amount: number; currency?: string; participant_key?: string }[];
   fines_by_type: { fine_type: string; label: string; count: number; amount: number; currency?: string }[];
-  finance_by_month: { month: string; account_id: string; account_name: string; income: number; expenses: number; net: number }[];
+  finance_by_month: { month: string; account_id: string; account_name: string; currency?: string; income: number; expenses: number; net: number }[];
   participants_total: number;
   participants_active: number;
   protocols_total: number;
   cycles: { cycle_config_id: string; cycle_config_name: string; cycle_year: number; label: string }[];
   groups_stats: { group_name: string; cycle_config_id: string | null; cycle_year: number | null; session_count: number; session_count_with_participants: number; avg_participants: number }[];
+  /** Ob eine Stammliste als Quelle der Gruppenstatistik markiert ist (Audit 07, U5). */
+  groups_source_configured?: boolean;
   /** "own": Bussen/Anwesenheit je Person enthalten nur die eigene Zeile (Leser, PRIV-001). */
   per_person_scope?: "all" | "own";
 };

@@ -12,6 +12,7 @@ import { ActionMenu } from "@/components/ui/action-menu";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { FilterTabs } from "@/components/ui/filter-tabs";
+import { HelpPopover } from "@/components/ui/help-popover";
 import { Modal } from "@/components/ui/modal";
 import { NavIcon } from "@/components/ui/nav-icons";
 import { browserApiFetch } from "@/lib/api/client";
@@ -786,7 +787,11 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
               </section>
 
               <section className="admin-form-section">
-                <div className="admin-section-title">{t("includedModules")}</div>
+                <div className="admin-section-title">
+                  {t("includedModules")}{" "}
+                  <HelpPopover topic={t("includedModules")}>{t("planChangeAffectsTenantsHelp")}</HelpPopover>
+                </div>
+                {!planForm.isNew ? <span className="field-help">{t("planChangeAffectsTenants")}</span> : null}
                 {features.length === 0 ? (
                   <div className="muted">{t("noModulesInCatalog")}</div>
                 ) : (

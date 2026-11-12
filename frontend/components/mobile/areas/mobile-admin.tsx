@@ -26,6 +26,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
+import { apiErrorMessage } from "@/lib/api/error-message";
 import { formatCycleName, getCycleYear } from "@/lib/utils/cycle";
 import { rolesLabel } from "@/lib/permissions";
 import type { CycleConfigSummary, RoleRead, ShareLink, UserSummary } from "@/types/api";
@@ -215,7 +216,7 @@ export function MobileUsers({ initialUsers, roles, actorPermissions, enabledFeat
   const tMobile = useTranslations("mobile");
   const openMore = useOpenMore();
   const [users, setUsers] = useState(initialUsers);
-  const [tab, setTab] = useState<"active" | "nologin">("nologin");
+  const [tab, setTab] = useState<"active" | "nologin">("active");
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<UserSummary | "new" | null>(null);
   const [mfaFor, setMfaFor] = useState<UserSummary | null>(null);
@@ -286,10 +287,6 @@ export function MobileUsers({ initialUsers, roles, actorPermissions, enabledFeat
             setUsers((list) => (created ? [saved, ...list] : list.map((item) => (item.id === saved.id ? saved : item))));
             setEditing(null);
           }}
-          onDeleted={(id) => {
-            setUsers((list) => list.filter((item) => item.id !== id));
-            setEditing(null);
-          }}
         />
       ) : null}
       <MfaAdminModal
@@ -310,13 +307,11 @@ function UserSheet({
   enabledFeatures,
   onClose,
   onSaved,
-  onDeleted,
   onMfa,
 }: RoleAccess & {
   user: UserSummary | null;
   onClose: () => void;
   onSaved: (user: UserSummary, created: boolean) => void;
-  onDeleted: (id: string) => void;
   onMfa: (user: UserSummary) => void;
 }) {
   const t = useTranslations("users");
@@ -346,6 +341,22 @@ function UserSheet({
   const [saving, setSaving] = useState(false);
   const update = (patch: Partial<UserFormState>) => setForm((current) => ({ ...current, ...patch }));
   const isSelf = !!user && user.id === session?.user?.id;
+  const tSecurity = useTranslations("security");
+  const [inviting, setInviting] = useState(false);
+
+  // Einladung per E-Mail auch auf dem Handy (Standardweg statt Passwort, Bereichs-Audit 05).
+  async function invite() {
+    if (!user || inviting) return;
+    setInviting(true);
+    try {
+      await browserApiFetch(`/api/participants/${user.id}/invite`, { method: "POST" });
+      showToast(t("toasts.inviteSent", { email: user.email ?? "" }), "success");
+    } catch (error) {
+      showToast(apiErrorMessage(error, tSecurity, "apiErrors", t("toasts.inviteFailed")), "error");
+    } finally {
+      setInviting(false);
+    }
+  }
 
   async function save() {
     if (!isUserFormValid(form) || saving) return;
@@ -364,14 +375,20 @@ function UserSheet({
     }
   }
 
-  async function remove() {
-    if (!user || !(await confirm({ message: t("toasts.deleteConfirm", { name: user.display_name }), tone: "danger", confirmLabel: t("delete") }))) return;
+  // Nur den Login entziehen, nicht die Person löschen (wie user-management.tsx, Bereichs-Audit 05).
+  async function revokeLogin() {
+    if (!user || !(await confirm({
+      title: t("revokeLogin.confirmTitle", { name: user.display_name }),
+      message: t("revokeLogin.confirmMessage", { name: user.display_name }),
+      tone: "danger",
+      confirmLabel: t("revokeLogin.action"),
+    }))) return;
     try {
-      await browserApiFetch(`/api/users/${user.id}`, { method: "DELETE" });
-      showToast(t("toasts.userDeleted"), "success");
-      onDeleted(user.id);
+      const saved = await browserApiFetch<UserSummary>(`/api/users/${user.id}`, { method: "PATCH", body: JSON.stringify({ login_enabled: false }) });
+      showToast(t("revokeLogin.done", { name: user.display_name }), "success");
+      onSaved(saved, false);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("toasts.userDeleteFailed"), "error");
+      showToast(error instanceof Error ? error.message : t("revokeLogin.failed"), "error");
     }
   }
 
@@ -392,9 +409,9 @@ function UserSheet({
       }
       footer={
         <div className="modal-actions mobile-sheet-footer">
-          {user && !isSelf ? (
-            <button type="button" className="button-danger" onClick={() => void remove()}>
-              {t("delete")}
+          {user && !isSelf && user.login_enabled ? (
+            <button type="button" className="button-danger" onClick={() => void revokeLogin()}>
+              {t("revokeLogin.action")}
             </button>
           ) : (
             <button type="button" className="button-ghost" onClick={onClose}>
@@ -443,6 +460,14 @@ function UserSheet({
             <MobileSwitch checked={form.login_enabled} />
           </button>
         </div>
+        {user && !user.login_enabled && user.is_active && user.email ? (
+          <div className="field-stack">
+            <button type="button" className="button-secondary mobile-button-block" disabled={inviting} onClick={() => void invite()}>
+              {t("loginMode.invite")}
+            </button>
+            <span className="field-help">{t("loginMode.inviteHelp")}</span>
+          </div>
+        ) : null}
       </div>
     </Modal>
   );

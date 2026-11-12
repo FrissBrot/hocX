@@ -57,14 +57,15 @@ it("preselects the remembered template and stores the choice after creating", as
   render(<AgendaItemModal templates={templates} preferredTemplateId="tpl-2" canEdit onClose={vi.fn()} onSaved={saved} onTemplateRemembered={remembered} />);
 
   expect(screen.getByText("GV")).toBeTruthy();
-  expect(screen.getByText("Wahlen")).toBeTruthy();
+  // U8 (Audit 07): ohne Wahl kein stiller erster Punkt, sondern «Ohne Traktandum».
+  expect(screen.getByText("Ohne Traktandum (unter «Weitere Anliegen»)")).toBeTruthy();
   fireEvent.change(screen.getByLabelText("Titel"), { target: { value: "Neuwahl Kassier" } });
   fireEvent.click(screen.getByRole("button", { name: "Erfassen" }));
 
   await waitFor(() => expect(saved).toHaveBeenCalledOnce());
   const [, init] = api.mock.calls.find(([url]) => url === "/api/agenda-items")!;
   expect(JSON.parse((init as { body: string }).body)).toMatchObject({
-    template_id: "tpl-2", template_element_id: "pt-3", title: "Neuwahl Kassier", schedule: { kind: "next_meeting" },
+    template_id: "tpl-2", template_element_id: null, title: "Neuwahl Kassier", schedule: { kind: "next_meeting" },
   });
   await waitFor(() => expect(remembered).toHaveBeenCalledWith("tpl-2"));
   expect(api).toHaveBeenCalledWith("/api/agenda-items/template-preference", expect.objectContaining({ method: "PUT" }));
@@ -91,6 +92,15 @@ it("bound items only allow title and text; frozen items are read-only", () => {
   expect(screen.queryByRole("tab", { name: "Monat" })).toBeNull();
   expect(screen.getByText("Erstellt von Anna Muster am 24.10.2026")).toBeTruthy();
   unmount();
+
+  // U1: «Vertagen» direkt im Dialog.
+  const postpone = vi.fn();
+  const second = render(
+    <AgendaItemModal item={item({ is_bound: true })} templates={templates} canEdit onClose={vi.fn()} onSaved={vi.fn()} onPostpone={postpone} />
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Vertagen" }));
+  expect(postpone).toHaveBeenCalledOnce();
+  second.unmount();
 
   render(<AgendaItemModal item={item({ is_bound: true, can_edit: false })} templates={templates} canEdit onClose={vi.fn()} onSaved={vi.fn()} />);
   expect(screen.getByText(/abgeschlossenen Protokoll/)).toBeTruthy();

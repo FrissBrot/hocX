@@ -5,17 +5,35 @@ import uuid
 from datetime import date, datetime
 from io import StringIO
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.cycle_utils import format_cycle_name, get_cycle_year
 from app.models import Event, Participant, Protocol
-from app.models.entities import CycleConfig, EventCycle
+from app.models.entities import CycleConfig, EventCycle, SubmissionUpload, SubmissionUploadFile
 from app.repositories.event_repository import EventRepository
 from app.schemas.event import CycleAssignment, EventCreate, EventUpdate
 from app.schemas.protocol import ProtocolCycleInfo
 from app.services import public_id_service
 from app.services.event_cycle_service import list_cycle_event_ids, resolve_protocol_cycle
+
+
+def swiss_today() -> date:
+    """Fachliches «heute» in Schweizer Zeit (nie date.today() in UTC: zwischen 00:00 und
+    02:00 wäre das noch der Vortag). Zentral über todo_fine_service.today()."""
+    from app.services.todo_fine_service import today
+
+    return today()
+
+
+class CsvRowError(ValueError):
+    """Fehler einer CSV-Zeile mit übersetzbarem Code und Parametern (Frontend: events.csvErrors.*).
+    Der Text (str) bleibt als Rückfall für ältere Clients erhalten."""
+
+    def __init__(self, code: str, message: str, **params: str | int) -> None:
+        super().__init__(message)
+        self.code = code
+        self.params = params
 
 
 class EventService:
@@ -60,7 +78,7 @@ class EventService:
             )
             if cycle_cfg is None:
                 raise ValueError("Zyklus nicht gefunden")
-            reference_date = protocol.protocol_date or date.today()
+            reference_date = protocol.protocol_date or swiss_today()
             cycle_year = get_cycle_year(reference_date, cycle_cfg.reset_month, cycle_cfg.reset_day) + cycle_offset
             event_ids = list_cycle_event_ids(db, cycle_cfg.id, cycle_year)
             cycle_info = ProtocolCycleInfo(
@@ -224,6 +242,63 @@ class EventService:
         self.repository.delete(db, event)
         return True
 
+    def delete_impact(self, db: Session, event_id: int) -> dict[str, int]:
+        """Was beim Löschen mitverschwindet: Abgabe-Einreichungen (per Kaskade) und deren Dateien.
+        Für die Rückfrage im Löschdialog."""
+        upload_count = db.scalar(select(func.count()).select_from(SubmissionUpload).where(SubmissionUpload.event_id == event_id)) or 0
+        file_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(SubmissionUploadFile)
+                .join(SubmissionUpload, SubmissionUpload.id == SubmissionUploadFile.upload_id)
+                .where(SubmissionUpload.event_id == event_id)
+            )
+            or 0
+        )
+        return {"submission_count": int(upload_count), "file_count": int(file_count)}
+
+    def apply_cycle_config_to_events(
+        self, db: Session, config: CycleConfig, *, previous_reset: tuple[int, int] | None = None
+    ) -> int:
+        """Wendet eine neue bzw. geänderte Zyklus-Definition auf die bestehenden Termine an.
+
+        - Neu (previous_reset None): jeder Termin ohne Zuordnung zu diesem Zyklus erhält die
+          Standard-Zuordnung nach seinem Datum (wie beim Anlegen eines Termins).
+        - Stichtag geändert: Termine, deren Zuordnung zu diesem Zyklus noch genau dem Standard
+          des alten Stichtags entspricht, wandern auf den Standard des neuen Stichtags. Manuell
+          abweichende Zuordnungen bleiben unverändert.
+        Automatisch erzeugte Sitzungs-Platzhalter bleiben aussen vor (sie haben nie Zuordnungen).
+        Committet nicht. Gibt die Zahl geänderter Termine zurück."""
+        events = db.execute(
+            select(Event.id, Event.event_date).where(Event.tenant_id == config.tenant_id, Event.is_session_marker.is_(False))
+        ).all()
+        if not events:
+            return 0
+        existing: dict[int, set[int]] = {}
+        for event_id, cycle_year in db.execute(
+            select(EventCycle.event_id, EventCycle.cycle_year).where(EventCycle.cycle_config_id == config.id)
+        ).all():
+            existing.setdefault(event_id, set()).add(cycle_year)
+        changed = 0
+        for event_id, event_date in events:
+            new_year = get_cycle_year(event_date, config.reset_month, config.reset_day)
+            current = existing.get(event_id)
+            if previous_reset is None:
+                if current:
+                    continue
+                db.add(EventCycle(event_id=event_id, cycle_config_id=config.id, cycle_year=new_year))
+                changed += 1
+                continue
+            old_year = get_cycle_year(event_date, previous_reset[0], previous_reset[1])
+            if current != {old_year} or old_year == new_year:
+                continue
+            db.query(EventCycle).filter(
+                EventCycle.event_id == event_id, EventCycle.cycle_config_id == config.id
+            ).delete(synchronize_session=False)
+            db.add(EventCycle(event_id=event_id, cycle_config_id=config.id, cycle_year=new_year))
+            changed += 1
+        return changed
+
     def _default_cycle_keys(self, db: Session, event_date: date, *, tenant_id: int) -> set[tuple[int, int]]:
         configs = db.query(CycleConfig).filter(CycleConfig.tenant_id == tenant_id).all()
         return {(config.id, get_cycle_year(event_date, config.reset_month, config.reset_day)) for config in configs}
@@ -311,6 +386,15 @@ class EventService:
         if not created:
             return []
 
+        try:
+            db.flush()
+            # Wie beim einzelnen Anlegen: Standard-Zuordnung zum Zyklus nach Datum, sonst fehlen
+            # importierte Termine in Zyklusfiltern von Protokollen, Abgaben und Fotoalben.
+            for event in created:
+                self._apply_default_cycle_assignments(db, event.id, event.event_date, tenant_id=tenant_id)
+        except Exception:
+            db.rollback()
+            raise
         db.commit()
         for event in created:
             db.refresh(event)
@@ -380,12 +464,14 @@ class EventService:
                 "description": None,
                 "participant_count": None,
                 "error": None,
+                "error_code": None,
+                "error_params": None,
             }
             try:
                 if not start_date_raw:
-                    raise ValueError(f"CSV row {row_number}: Startdatum fehlt")
+                    raise CsvRowError("startDateMissing", f"CSV row {row_number}: Startdatum fehlt", row=row_number)
                 if not title:
-                    raise ValueError(f"CSV row {row_number}: Titel fehlt")
+                    raise CsvRowError("titleMissing", f"CSV row {row_number}: Titel fehlt", row=row_number)
                 event_date = self._parse_csv_date(start_date_raw, row_number=row_number, field_label="Startdatum")
                 end_date_raw = value_for("event_end_date")
                 event_end_date = (
@@ -393,9 +479,10 @@ class EventService:
                     if end_date_raw
                     else None
                 )
-                self._validate_end_after_start(
-                    event_date, event_end_date, error_message=f"CSV row {row_number}: Enddatum liegt vor dem Startdatum"
-                )
+                if event_end_date and event_end_date < event_date:
+                    raise CsvRowError(
+                        "endBeforeStart", f"CSV row {row_number}: Enddatum liegt vor dem Startdatum", row=row_number
+                    )
                 participant_count = self._parse_participant_count(value_for("participant_count"), row_number=row_number)
                 entry.update(
                     {
@@ -407,6 +494,10 @@ class EventService:
                         "participant_count": participant_count,
                     }
                 )
+            except CsvRowError as exc:
+                entry["error"] = str(exc)
+                entry["error_code"] = exc.code
+                entry["error_params"] = dict(exc.params)
             except ValueError as exc:
                 entry["error"] = str(exc)
             results.append(entry)
@@ -485,7 +576,8 @@ class EventService:
                 return parser(normalized)
             except ValueError:
                 continue
-        raise ValueError(f"CSV row {row_number}: {field_label} hat ein unbekanntes Format")
+        code = "startDateFormat" if field_label == "Startdatum" else "endDateFormat"
+        raise CsvRowError(code, f"CSV row {row_number}: {field_label} hat ein unbekanntes Format", row=row_number, value=normalized[:40])
 
     def _parse_participant_count(self, value: str, *, row_number: int) -> int:
         normalized = value.strip()
@@ -494,4 +586,6 @@ class EventService:
         try:
             return max(0, int(normalized))
         except ValueError as exc:
-            raise ValueError(f"CSV row {row_number}: Teilnehmerzahl ist keine ganze Zahl") from exc
+            raise CsvRowError(
+                "participantCountInvalid", f"CSV row {row_number}: Teilnehmerzahl ist keine ganze Zahl", row=row_number
+            ) from exc

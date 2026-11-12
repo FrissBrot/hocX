@@ -255,7 +255,8 @@
         "restart_loop": "Container {subject} keeps restarting"
       },
       "check": {
-        "unreachable": "{subject} unreachable"
+        "unreachable": "{subject} unreachable",
+        "checkFailed": "Check «{subject}» keeps failing (see error log)"
       },
       "job": {
         "failing": "Job {subject} failed",
@@ -625,7 +626,8 @@
       "neverSent": "Nothing sent yet",
       "lastError": "Last error ({date}): {error}",
       "queue": "Waiting: {pending} · Failed: {failed}"
-    }
+    },
+    "reminderPopover": "If a problem stays open, the reminder «Still: …» is sent after this many hours. 0 turns reminders off. If ntfy could not deliver a message, hocX resends it for up to 24 hours."
   },
   "login": {
     "title": "Admin sign-in",
@@ -1196,7 +1198,9 @@
         "0": "Low priority",
         "2": "High priority"
       }
-    }
+    },
+    "planChangeAffectsTenants": "Changes to the modules apply immediately to all organizations already on this plan.",
+    "planChangeAffectsTenantsHelp": "A newly added module is fully booked for all organizations on this plan. A removed module switches to «read only» there (data is kept) or is dropped (domains). Individually booked modules stay unchanged."
   },
   "catalogImport": {
     "title": "Import configuration",

@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useProtocolCreation } from "@/lib/hooks/use-protocol-creation";
@@ -13,8 +14,9 @@ import { ActionMenu, ActionMenuItem } from "@/components/ui/action-menu";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
+import { HelpPopover } from "@/components/ui/help-popover";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { browserApiFetch } from "@/lib/api/client";
+import { ApiError, browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useDeleteWithFiles } from "@/components/ui/delete-with-files-modal";
 import { useToast } from "@/contexts/toast-context";
@@ -26,6 +28,22 @@ import { protocolStatusLabel, protocolStatusVariant } from "@/components/protoco
 import { ProtocolCycleGroup, groupProtocolsByCycle, visibleCycleGroupCount } from "@/components/protocol/protocol-cycle-groups";
 
 const PAGE_SIZE = 100;
+const SERVER_SEARCH_DEBOUNCE_MS = 300;
+
+/** Bekannte englische Backend-Meldungen in Benutzersprache, sonst die Meldung selbst. */
+export function protocolActionError(error: unknown, t: (key: string) => string, fallback: string): string {
+  if (error instanceof ApiError && error.status === 409 && /already abgeschlossen/i.test(error.message)) {
+    return t("alreadyFinalizedError");
+  }
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+/** Fügt nachgeladene Protokolle an, ohne bereits vorhandene doppelt aufzunehmen. */
+export function mergeProtocols(current: ProtocolSummary[], incoming: ProtocolSummary[]): ProtocolSummary[] {
+  const known = new Set(current.map((protocol) => protocol.id));
+  const added = incoming.filter((protocol) => !known.has(protocol.id));
+  return added.length ? [...current, ...added] : current;
+}
 
 type TFunc = (key: string, values?: Record<string, string | number>) => string;
 
@@ -78,12 +96,16 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false,
   useRefreshOnRestore();
   const [protocols, setProtocols] = useState(initialProtocols);
   const [hasMore, setHasMore] = useState(initialProtocols.length === PAGE_SIZE);
+  // Offset der seitenweisen Liste - getrennt von protocols.length, weil Treffer der
+  // Server-Suche zusätzlich in die Liste gemischt werden.
+  const pagedCountRef = useRef(initialProtocols.length);
 
   // When router.refresh() re-renders the server component while already on this page,
   // sync the updated initialProtocols into local state.
   useEffect(() => {
     setProtocols(initialProtocols);
     setHasMore(initialProtocols.length === PAGE_SIZE);
+    pagedCountRef.current = initialProtocols.length;
   }, [initialProtocols]);
   const showToast = useToast();
   const confirm = useConfirm();
@@ -93,6 +115,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false,
   const { busyByProtocol: pdfBusyByProtocol, openOrGeneratePdf } = usePdfExport();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [serverSearching, setServerSearching] = useState(false);
   const [showOlderCycles, setShowOlderCycles] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [form, setForm] = useState<ProtocolFormState>({
@@ -130,6 +153,38 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false,
       })
       .sort((a, b) => (b.protocol_date ?? "").localeCompare(a.protocol_date ?? ""));
   }, [protocols, search, statusFilter]);
+
+  // Suche und Statusfilter wirken sofort auf die geladenen Einträge. Sind noch nicht alle
+  // geladen (über 100 Protokolle), fragt die Liste zusätzlich den Server (?q=&status=) und
+  // mischt die Treffer ein - sonst hiess es «Keine Protokolle gefunden», obwohl es sie gab.
+  const trimmedSearch = search.trim();
+  useEffect(() => {
+    if (!hasMore || (!trimmedSearch && statusFilter === "all")) {
+      setServerSearching(false);
+      return;
+    }
+    let cancelled = false;
+    setServerSearching(true);
+    const timer = window.setTimeout(async () => {
+      const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
+      if (trimmedSearch) params.set("q", trimmedSearch);
+      if (statusFilter !== "all") params.set("status", statusFilter);
+      try {
+        const found = await browserApiFetch<ProtocolSummary[]>(`/api/protocols?${params.toString()}`);
+        if (!cancelled) setProtocols((current) => mergeProtocols(current, found));
+      } catch (error) {
+        if (!cancelled) showToast(error instanceof Error && error.message ? error.message : t("searchFailed"), "error");
+      } finally {
+        if (!cancelled) setServerSearching(false);
+      }
+    }, SERVER_SEARCH_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  // showToast/t sind stabil; bewusst nicht als Auslöser, damit keine Doppelabfrage entsteht.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trimmedSearch, statusFilter, hasMore]);
 
   const cycleGroups = useMemo(() => groupProtocolsByCycle(sortedProtocols), [sortedProtocols]);
   // Beim Suchen/Filtern alles zeigen - sonst verstecken sich Treffer in eingeklappten Zyklen.
@@ -215,7 +270,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false,
       showToast(t("deleted", { name: deletedLabel }), "success");
       router.refresh();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("deleteFailed"), "error");
+      showToast(protocolActionError(error, t, t("deleteFailed")), "error");
     }
   }
 
@@ -235,11 +290,15 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false,
   async function loadMore() {
     setIsLoadingMore(true);
     try {
-      const next = await browserApiFetch<ProtocolSummary[]>(`/api/protocols?skip=${protocols.length}&limit=${PAGE_SIZE}`);
-      setProtocols((current) => [...current, ...next]);
+      const next = await browserApiFetch<ProtocolSummary[]>(`/api/protocols?skip=${pagedCountRef.current}&limit=${PAGE_SIZE}`);
+      pagedCountRef.current += next.length;
+      setProtocols((current) => mergeProtocols(current, next));
       setHasMore(next.length === PAGE_SIZE);
-    } catch {
-      // keep current list on error
+    } catch (error) {
+      // Liste bleibt stehen; ohne Hinweis sah es aus, als gäbe es nichts mehr.
+      showToast(error instanceof Error && error.message ? error.message : t("loadMoreFailed"), "error", {
+        action: { label: t("retry"), onClick: () => void loadMore() },
+      });
     } finally {
       setIsLoadingMore(false);
     }
@@ -269,7 +328,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false,
       showToast(t("statusChanged", { status: protocolStatusLabel(updated.status, tRoot) }), "success");
       router.refresh();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("revertFailed"), "error");
+      showToast(protocolActionError(error, t, t("revertFailed")), "error");
     }
   }
 
@@ -305,7 +364,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false,
       showToast(t("syncTemplateDone"), "success");
       router.refresh();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("syncTemplateFailed"), "error");
+      showToast(protocolActionError(error, t, t("syncTemplateFailed")), "error");
     }
   }
 
@@ -336,10 +395,14 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false,
         onClick: () => void revertStatus(protocol.id),
       });
     }
+    // Abgeschlossene Protokolle sind eingefroren und lassen sich erst nach dem Zurückstufen
+    // löschen. Vorher scheiterte der Versuch erst nach der Bildauswahl mit einer englischen Meldung.
     actions.push({
       label: t("deleteProtocol"),
       danger: true,
-      onClick: () => void deleteProtocol(protocol.id),
+      onClick: isFinal
+        ? () => showToast(t("deleteFinalizedHint"), "info")
+        : () => void deleteProtocol(protocol.id),
     });
     const statusVariant = protocolStatusVariant(protocol.status);
     const subtitle = [
@@ -353,7 +416,15 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false,
       <div key={protocol.id} className="record-list-row" onClick={() => router.push(`/protocols/${protocol.id}`)}>
         <span className={`record-list-row-dot record-list-row-dot-${statusVariant}`} aria-hidden="true" />
         <span className="record-list-row-text">
-          <span className="record-list-row-title">{protocol.title ?? protocol.protocol_number}</span>
+          {/* Echter Link: per Tastatur und Screenreader erreichbar; die ganze Zeile bleibt
+              für die Maus klickbar. */}
+          <Link
+            href={`/protocols/${protocol.id}`}
+            className="record-list-row-title record-list-row-link"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {protocol.title ?? protocol.protocol_number}
+          </Link>
           <span className="record-list-row-sub">{subtitle}</span>
         </span>
         <div className="record-list-row-trailing" onClick={(e) => e.stopPropagation()}>
@@ -417,7 +488,12 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false,
       >
         <ModalSaveForm className="grid" onSubmit={createProtocol}>
           <label className="field-stack">
-            <span className="field-label">{t("template")}</span>
+            <span className="field-label">
+              {t("template")}{" "}
+              <HelpPopover topic={t("template")} docs={{ page: "protokolle", anchor: "erstellen" }}>
+                {t("templateHelp")}
+              </HelpPopover>
+            </span>
             <SearchableSelect
               options={availableTemplates}
               getId={(template) => String(template.id)}
@@ -432,7 +508,12 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false,
           </label>
           {selectedTemplate?.protocol_number_pattern || selectedTemplate?.title_pattern ? (
             <div className="field-stack">
-              <span className="field-label">{t("preview")}</span>
+              <span className="field-label">
+                {t("preview")}{" "}
+                <HelpPopover topic={t("preview")} docs={{ page: "protokolle", anchor: "erstellen" }}>
+                  {t("previewHelp")}
+                </HelpPopover>
+              </span>
               <div className="info-note" aria-live="polite">
                 {preview ? (
                   <>
@@ -500,7 +581,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false,
       <div className="protocol-cycle-groups">
         {sortedProtocols.length === 0 ? (
           <article className="card">
-            <p className="muted record-list-empty">{t("noProtocolsFound")}</p>
+            <p className="muted record-list-empty">{serverSearching ? t("searching") : t("noProtocolsFound")}</p>
           </article>
         ) : null}
         {visibleGroups.map((group) => {

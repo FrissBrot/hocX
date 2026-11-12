@@ -17,7 +17,7 @@
     "hint": "Lists can be used as a source for submissions."
   },
   "sidebar": {
-    "title": "Lists",
+    "title": "Master lists",
     "totalCount": "{count} total",
     "search": "Search",
     "searchPlaceholder": "Search lists…",
@@ -73,7 +73,8 @@
     "columns": "Columns",
     "columnsHint": "Always two – choose any title and data type.",
     "preview": "How the list appears in the table block",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "groupSource": "Source for group statistics"
   },
   "toasts": {
     "pdfExportFailed": "PDF export failed",
@@ -99,7 +100,8 @@
     "entryRemoveFailed": "Entry could not be removed",
     "deleteDraftEntryConfirm": "Remove this entry from the draft? It won't be included when confirming.",
     "snapshotCreated": "Snapshot created for this period",
-    "snapshotCreateFailed": "Snapshot could not be created"
+    "snapshotCreateFailed": "Snapshot could not be created",
+    "listInUse": "The list is still linked and cannot be deleted: {places}. Remove the link there or set the list to inactive instead."
   },
   "table": {
     "departedParticipant": "Left on {date}",
@@ -168,5 +170,13 @@
       "0": "05.10. · Autumn camp",
       "1": "19.12. · Forest Christmas"
     }
+  },
+  "help": {
+    "groupSource": "The entries of this list count as groups in the statistics: events whose tag matches an entry are counted per group.",
+    "dataType": "Text: free value. One person / several people: chosen from the members. Event: reference to an event. Changing the type clears the existing values of this column."
+  },
+  "usage": {
+    "element": "building block «{name}»",
+    "protocol": "protocol {number}"
   }
 }

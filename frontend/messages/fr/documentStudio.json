@@ -1830,7 +1830,8 @@
       "split": "Partagé"
     },
     "zoomIn": "Agrandir",
-    "zoomOut": "Réduire"
+    "zoomOut": "Réduire",
+    "modeHelp": "«Simple»: apparence, contenu et page en quelques étapes. «Avancé»: mise en page libre avec espacements, colonnes, conditions et composants propres. Les deux modes modifient le même modèle, rien ne se perd en changeant."
   },
   "appearance": {
     "baseTitle": "Style de base",

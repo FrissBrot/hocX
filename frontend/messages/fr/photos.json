@@ -67,7 +67,7 @@
     "releasedToast": "{count, plural, one {1 photo validée.} other {# photos validées.}}",
     "releasing": "Validation en cours…",
     "shareLink": "Partager le lien",
-    "shareWithTenant": "Partager avec un autre tenant",
+    "shareWithTenant": "Partager avec une autre organisation",
     "sharedBadge": "Partagé",
     "sharedByBadge": "Partagé par {name}",
     "sharedBySuffix": " · Partagé par {name}",
@@ -77,10 +77,28 @@
     "statusActive": "actif",
     "statusDeclined": "refusé",
     "statusPending": "demandé",
-    "unknownTenant": "Tenant {id}",
+    "unknownTenant": "Organisation {id}",
     "myPhotosPublicLabel": "Afficher mes photos dans les liens publics",
     "myShareError": "Le réglage n’a pas pu être enregistré.",
-    "publicLinksNotAllowed": "Le propriétaire n’autorise pas de liens publics pour cet album."
+    "publicLinksNotAllowed": "Le propriétaire n’autorise pas de liens publics pour cet album.",
+    "renameAction": "Renommer",
+    "deleteAction": "Supprimer l’album",
+    "manageAlbum": "Gérer l’album",
+    "renameModalTitle": "Renommer l’album",
+    "renameSubmit": "Enregistrer",
+    "renaming": "Enregistrement…",
+    "renamedToast": "Album renommé.",
+    "renameError": "L’album n’a pas pu être renommé.",
+    "deleteConfirm": "Supprimer l’album « {name} » ? Les photos sont conservées, seul l’album disparaît. Les liens publics vers cet album ne fonctionneront plus.",
+    "deleteConfirmShared": "Supprimer l’album « {name} » ? Il est partagé avec d’autres organisations – elles perdent l’accès, et les liens publics vers cet album ne fonctionneront plus. Les photos restent chez leurs organisations.",
+    "deleteConfirmLabel": "Supprimer l’album",
+    "deletedToast": "Album supprimé. Les photos restent dans « Toutes les photos ».",
+    "deleteError": "L’album n’a pas pu être supprimé.",
+    "helpTopic": "Album",
+    "helpOwner": "Ajoutez des photos via « Ajouter des photos existantes » ou lors du téléversement. Pour en retirer, sélectionnez-les et choisissez « Retirer de l’album » – rien n’est supprimé. Le menu ⋮ permet de renommer ou de supprimer l’album.",
+    "helpPartner": "Cet album appartient à une autre organisation. Vous pouvez ajouter vos propres photos et les retirer ; seule l’organisation propriétaire peut le renommer ou le supprimer.",
+    "pendingHelpTopic": "Photos en attente",
+    "pendingHelp": "Les photos classées automatiquement (p. ex. issues de dépôts) ne sont d’abord visibles que pour votre organisation dans un album partagé. Les partenaires et les liens publics ne les voient qu’après « Valider »."
   },
   "bulkBar": {
     "addTags": "Ajouter des tags",
@@ -112,7 +130,9 @@
     "download": "Télécharger",
     "selectAll": "Tout sélectionner",
     "selectionActions": "Actions de sélection",
-    "downloadError": "Impossible de télécharger les photos."
+    "downloadError": "Impossible de télécharger les photos.",
+    "removeFromAlbum": "Retirer de l’album",
+    "bestHelp": "Chaque album a une sélection des meilleures photos. hocX la propose à partir de l’analyse des photos. Avec l’étoile, tu inclus une photo de façon fixe dans la sélection ou tu l’exclus ; cela reste ainsi même après de nouveaux calculs. Dans « Toutes les photos », l’étoile s’applique à tous les albums qui contiennent la photo."
   },
   "dateGroups": {
     "groupCount": "· {count, plural, one {# photo} other {# photos}}",
@@ -123,7 +143,7 @@
   "galleryUpload": {
     "browse": "Choisir des fichiers",
     "cancel": "Annuler",
-    "description": "Images jusqu'à 100 Mio, ZIP jusqu'à 10 Gio, aussi des dossiers entiers. Les grandes sélections sont réparties automatiquement en plusieurs envois ; ZIP jusqu'à 10 000 entrées et 20 Gio décompressés. Les images sont d'abord vérifiées dans le navigateur, celles déjà présentes ne sont pas retransférées, et tout est analysé contre les virus.",
+    "description": "Images jusqu'à 100 Mo, ZIP jusqu'à 10 Go, aussi des dossiers entiers. Les grandes sélections sont réparties automatiquement en plusieurs envois ; ZIP jusqu'à 10 000 entrées et 20 Go décompressés. Les images sont d'abord vérifiées dans le navigateur, celles déjà présentes ne sont pas retransférées, et tout est analysé contre les virus.",
     "dropActive": "Relâchez pour importer",
     "dropHint": "Glissez des images ici",
     "formatsAriaLabel": "Formats pris en charge",
@@ -133,7 +153,7 @@
     "queueHeading": "File d’attente",
     "releaseCheckboxLabel": "Valider les images immédiatement et les partager avec tous ceux qui ont accès à l’album",
     "removeAriaLabel": "Supprimer {name}",
-    "shareNotice": "Les images arriveront dans l’album partagé {albums}. Sans validation, elles n’y sont d’abord visibles que pour votre propre tenant.",
+    "shareNotice": "Les images arriveront dans l’album partagé {albums}. Sans validation, elles n’y sont d’abord visibles que pour votre propre organisation.",
     "statusClip": "Vidéo Live Photo, appartient à l’image du même nom",
     "statusReady": "Prêt à importer",
     "statusUploaded": "Importé, traitement en cours…",
@@ -168,7 +188,10 @@
       "helpSet": "S'applique uniquement aux images sans date de prise de vue ({date}). Les vraies dates ne sont jamais écrasées."
     },
     "largeZipHint": "Fichier ZIP volumineux : avec une connexion lente, le téléversement peut s'interrompre après une heure. Divisez plutôt l'archive en plusieurs ZIP plus petits ou téléversez directement les photos.",
-    "includeGps": "Envoyer les données GPS de l’image"
+    "includeGps": "Envoyer les données GPS de l’image",
+    "helpTopic": "Téléverser des photos",
+    "help": "Images jusqu’à 100 Mo, fichiers ZIP jusqu’à 10 Go. Les images strictement identiques ne sont pas enregistrées deux fois ; les nouvelles photos ne sont visibles partout qu’après le contrôle antivirus.",
+    "helpLabel": "Limites, doublons et contrôle antivirus"
   },
   "shareModal": {
     "actionAriaLabelActive": "Retirer l’accès de {name}",
@@ -176,15 +199,15 @@
     "cancel": "Annuler",
     "clearAriaLabel": "Effacer la saisie",
     "declinedOn": "refusé le {date}",
-    "description": "Le tenant reçoit une invitation. Une fois acceptée, «{albumName}» apparaît chez lui sous Albums.",
+    "description": "L’organisation reçoit une invitation. Une fois acceptée, « {albumName} » apparaît chez elle sous Albums.",
     "endedToast": "Partage terminé.",
     "eyebrow": "Partager l’album",
-    "fieldHint": "ID sous Paramètres du tenant → Général",
-    "fieldLabel": "ID du tenant ou nom",
-    "foundGeneric": "Tenant trouvé",
+    "fieldHint": "L’autre organisation trouve son ID dans ses paramètres sous « Général » (avec un bouton Copier).",
+    "fieldLabel": "ID de l’organisation ou nom",
+    "foundGeneric": "Organisation trouvée",
     "foundGenericHint": "Le nom et la photo de profil deviennent visibles dès qu’il accepte une invitation.",
     "foundMark": "✓ Trouvé",
-    "inputPlaceholder": "Coller l’ID du tenant",
+    "inputPlaceholder": "Coller l’ID de l’organisation",
     "invite": "Inviter",
     "inviteError": "Impossible d’envoyer l’invitation.",
     "inviteNamed": "Inviter {name}",
@@ -192,12 +215,12 @@
     "invitedToast": "Invitation envoyée à {name}.",
     "invitedToastNoName": "Invitation envoyée.",
     "inviting": "Invitation en cours…",
-    "lookupNotFound": "Aucun tenant trouvé avec cet ID.",
-    "noSuggestionsHint": "Aucun tenant connu sous ce nom. Les nouveaux tenants ne se trouvent que par leur ID.",
+    "lookupNotFound": "Aucune organisation trouvée avec cet ID.",
+    "noSuggestionsHint": "Aucune organisation connue sous ce nom. Les nouvelles organisations ne se trouvent que par leur ID.",
     "participantsSuffix": "{count, plural, one {# participant} other {# participants}}",
     "removeLabel": "Supprimer",
-    "revokeConfirmGenericActive": "Retirer l’accès de ce tenant à cet album ?",
-    "revokeConfirmGenericPending": "Retirer l’invitation à ce tenant ?",
+    "revokeConfirmGenericActive": "Retirer l’accès de cette organisation à cet album ?",
+    "revokeConfirmGenericPending": "Retirer l’invitation à cette organisation ?",
     "revokeConfirmNamedActive": "Retirer l’accès de « {name} » à cet album ?",
     "revokeConfirmNamedPending": "Retirer l’invitation à « {name} » ?",
     "revokeError": "Impossible de mettre fin au partage.",
@@ -208,9 +231,9 @@
       "declined": "Refusée",
       "pending": "Invitation en attente"
     },
-    "suggestionsAriaLabel": "Tenants connus",
-    "title": "Partager avec un autre tenant",
-    "unknownTenant": "Tenant inconnu",
+    "suggestionsAriaLabel": "Organisations connues",
+    "title": "Partager avec une autre organisation",
+    "unknownTenant": "Organisation inconnue",
     "withdrawLabel": "Retirer",
     "withdrawnToast": "Invitation retirée.",
     "shareLocationLabel": "Partager la position",
@@ -221,18 +244,22 @@
     "publicLinksShort": "Liens publics",
     "publicLinksAriaLabel": "{name} peut partager cet album via des liens publics",
     "publicLinksError": "Le réglage des liens publics n’a pas pu être enregistré.",
-    "partnerPhotosHidden": "Les photos de ce partenaire n’apparaissent pas dans les liens publics."
+    "partnerPhotosHidden": "Les photos de ce partenaire n’apparaissent pas dans les liens publics.",
+    "helpTopic": "Partager l’album",
+    "help": "1. L’autre organisation copie son ID (paramètres → Général) et vous l’envoie. 2. Vous le collez ici et invitez. 3. Après acceptation, les deux organisations voient l’album et peuvent y ajouter leurs photos. Vous gérez la localisation et les liens publics par partenaire."
   },
   "shareRelease": {
     "confirmLabel": "Ajouter et partager",
-    "noOwnerMessage": "{count, plural, one {« {albumName} » est partagé. 1 photo sera immédiatement visible pour tous les tenants et liens ayant accès à l’album.} other {« {albumName} » est partagé. # photos seront immédiatement visibles pour tous les tenants et liens ayant accès à l’album.}}",
+    "noOwnerMessage": "{count, plural, one {« {albumName} » est partagé. 1 photo sera immédiatement visible pour toutes les organisations et liens ayant accès à l’album.} other {« {albumName} » est partagé. # photos seront immédiatement visibles pour toutes les organisations et liens ayant accès à l’album.}}",
     "ownerMessage": "{count, plural, one {« {albumName} » est partagé par {owner}. 1 photo sera alors visible pour toutes les personnes concernées.} other {« {albumName} » est partagé par {owner}. # photos seront alors visibles pour toutes les personnes concernées.}}",
     "title": "Les photos vont être partagées"
   },
   "similarity": {
     "pending": "Les photos sont regroupées en arrière-plan. Le résultat apparaîtra ici dans quelques minutes.",
     "tooMany": "Trop de photos pour le regroupement automatique (au maximum {max, number}).",
-    "computedAt": "État au {time} · les nouvelles photos apparaissent après quelques minutes."
+    "computedAt": "État au {time} · les nouvelles photos apparaissent après quelques minutes.",
+    "helpTopic": "Photos similaires",
+    "help": "Les doublons sont des images pratiquement identiques, les séries des photos prises coup sur coup. « Ne garder que les meilleures » supprime définitivement les autres photos téléversées directement."
   },
   "similarGroups": {
     "bestChoice": "Meilleur choix",
@@ -278,11 +305,16 @@
   },
   "tile": {
     "bestBadge": "★ Best-of",
-    "deselectAriaLabel": "Désélectionner",
+    "deselectAriaLabel": "Désélectionner {name}",
     "liveBadge": "LIVE",
     "pendingBadge": "Non validée",
-    "selectAriaLabel": "Sélectionner",
-    "openAriaLabel": "Ouvrir {name}"
+    "selectAriaLabel": "Sélectionner {name}",
+    "openAriaLabel": "Ouvrir {name}",
+    "scanningBadge": "En vérification",
+    "blockedBadge": "Bloquée",
+    "scanningHint": "Contrôle antivirus en cours – l’aperçu apparaîtra sous peu.",
+    "blockedHint": "Bloquée : le fichier n’a pas pu être contrôlé contre les virus.",
+    "previewUnavailable": "Aperçu indisponible"
   },
   "view": {
     "albumLinkWithCount": "{name} ({count})",
@@ -292,7 +324,7 @@
     "bestError": "Impossible de modifier le statut best-of.",
     "bestUnscopedError": "Cette photo n’appartient à aucun album - le best-of n’est possible qu’au sein d’un album.",
     "createAssignmentButton": "Créer une boîte de dépôt",
-    "description": "Toutes les photos de ce tenant - issues de procès-verbaux, de dépôts et d’images importées directement dans la galerie.",
+    "description": "Toutes les photos de votre organisation – issues de procès-verbaux, de dépôts et d’images importées directement dans la galerie.",
     "dropOverlayHint": "Images ou fichiers ZIP - vous configurerez l’import ensuite.",
     "dropOverlayTitle": "Relâchez pour importer",
     "emptyDescription": "Dès que des images sont insérées dans des procès-verbaux, soumises via une boîte de dépôt ou importées ici, elles apparaissent dans cette galerie.",
@@ -341,7 +373,14 @@
     "uploadPillTotal": "Import de galerie en cours · {processed} sur {total} images",
     "uploadQueuedToast": "Importation en cours, traitement en arrière-plan…",
     "uploadedToast": "{count, plural, one {1 image importée.} other {# images importées.}}",
-    "loadedOfTotal": "{count} photos chargées sur {total}."
+    "loadedOfTotal": "{count} photos chargées sur {total}.",
+    "removeFromAlbumConfirm": "{count, plural, one {Retirer 1 photo de cet album ? La photo reste dans « Toutes les photos ».} other {Retirer # photos de cet album ? Les photos restent dans « Toutes les photos ».}}",
+    "removeFromAlbumConfirmLabel": "Retirer de l’album",
+    "removedFromAlbumToast": "{count, plural, one {1 photo retirée de l’album.} other {# photos retirées de l’album.}}",
+    "removeFromAlbumError": "Les photos n’ont pas pu être retirées de l’album. Dans un album partagé, vous ne pouvez retirer que les photos de votre propre organisation.",
+    "galleryJobFailed": "Le téléversement n’a pas pu être terminé en raison d’une erreur technique. Les photos déjà enregistrées sont conservées – veuillez téléverser à nouveau les autres.",
+    "analysisHelpTopic": "Analyse des photos",
+    "analysisHelp": "La netteté, l’exposition et les visages sont évalués en arrière-plan. Cela sert au tri par qualité et aux suggestions « Best-of ». L’analyse ne modifie aucune photo."
   },
   "viewer": {
     "analysisPending": "Analyse en attente",
@@ -407,7 +446,9 @@
       "unknownNote": "Le fichier ne contient pas de date de prise de vue – classé à la date d’envoi",
       "change": "Modifier",
       "done": "Terminé"
-    }
+    },
+    "bestHelpTopic": "Best-of",
+    "bestHelp": "Chaque album a une sélection des meilleures photos. hocX la propose à partir de l’analyse des photos. Avec l’étoile, tu inclus une photo de façon fixe dans la sélection ou tu l’exclus ; cela reste ainsi même après de nouveaux calculs. Dans « Toutes les photos », l’étoile s’applique à tous les albums qui contiennent la photo."
   },
   "dateMarker": {
     "estimated": "Date de prise de vue estimée",

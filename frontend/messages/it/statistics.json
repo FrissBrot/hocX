@@ -48,5 +48,14 @@
   "viewByMember": "Per membro",
   "viewByTime": "Nel tempo",
   "withParticipants": "Con partecipanti",
-  "perPersonOwnHint": "Per multe e presenze per persona vedi solo i tuoi valori."
+  "perPersonOwnHint": "Per multe e presenze per persona vedi solo i tuoi valori.",
+  "fineType": {
+    "absent": "Non giustificato",
+    "late": "In ritardo"
+  },
+  "kpiProtocolsSub": "svolti o chiusi",
+  "groupsHelp": "I gruppi sono le voci di una lista anagrafica contrassegnata come «Fonte delle statistiche dei gruppi». Gli eventi il cui tag corrisponde a una voce vengono contati per ciclo.",
+  "groupsEmptyNoSource": "Ancora nessun gruppo: in Anagrafiche › Liste anagrafiche contrassegna una lista come «Fonte delle statistiche dei gruppi» e assegna agli eventi il tag corrispondente.",
+  "groupsEmptyNoEvents": "Ancora nessun evento con un tag della lista dei gruppi.",
+  "groupsDocsLink": "Maggiori informazioni nella guida"
 }

@@ -17,7 +17,7 @@
     "hint": "Listen können als Quelle für Abgaben verwendet werden."
   },
   "sidebar": {
-    "title": "Listen",
+    "title": "Stammlisten",
     "totalCount": "{count} gesamt",
     "search": "Suche",
     "searchPlaceholder": "Listen suchen…",
@@ -73,7 +73,8 @@
     "columns": "Spalten",
     "columnsHint": "Immer zwei – Titel und Datentyp sind frei wählbar.",
     "preview": "So erscheint die Liste im Tabellenblock",
-    "cancel": "Abbrechen"
+    "cancel": "Abbrechen",
+    "groupSource": "Quelle der Gruppenstatistik"
   },
   "toasts": {
     "pdfExportFailed": "PDF-Export fehlgeschlagen",
@@ -99,7 +100,8 @@
     "entryRemoveFailed": "Eintrag konnte nicht entfernt werden",
     "deleteDraftEntryConfirm": "Diesen Eintrag aus dem Entwurf entfernen? Er wird beim Bestätigen nicht mit übernommen.",
     "snapshotCreated": "Snapshot für diese Periode erstellt",
-    "snapshotCreateFailed": "Snapshot konnte nicht erstellt werden"
+    "snapshotCreateFailed": "Snapshot konnte nicht erstellt werden",
+    "listInUse": "Die Liste ist noch verknüpft und kann nicht gelöscht werden: {places}. Verknüpfung dort entfernen oder die Liste stattdessen auf inaktiv stellen."
   },
   "table": {
     "departedParticipant": "Ausgetreten am {date}",
@@ -168,5 +170,13 @@
       "0": "05.10. · Herbstlager",
       "1": "19.12. · Waldweihnacht"
     }
+  },
+  "help": {
+    "groupSource": "Die Einträge dieser Liste gelten in der Statistik als Gruppen: Termine, deren Tag einem Eintrag entspricht, werden je Gruppe gezählt.",
+    "dataType": "Text: freier Wert. Eine Person / mehrere Personen: Auswahl aus den Mitgliedern. Termin: Verweis auf einen Termin. Ein Wechsel des Typs leert die bestehenden Werte dieser Spalte."
+  },
+  "usage": {
+    "element": "Baustein «{name}»",
+    "protocol": "Protokoll {number}"
   }
 }

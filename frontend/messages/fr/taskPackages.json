@@ -1,6 +1,6 @@
 {
   "pageTitle": "Paquets de tâches",
-  "pageDescription": "Tâches récurrentes créées automatiquement comme todos à chaque cycle. Les responsables proviennent de listes comme la liste des charges.",
+  "pageDescription": "Tâches récurrentes ajoutées automatiquement à la liste des tâches à chaque cycle. Les responsables proviennent de listes comme la liste des charges.",
   "newPackage": "Nouveau paquet",
   "emptyTitle": "Aucun paquet de tâches",
   "emptyDescription": "Crée un paquet comme « Camp d’été » ou « Direction » et attribue-le à un cycle.",
@@ -32,7 +32,7 @@
   "moveUp": "Monter",
   "moveDown": "Descendre",
   "remove": "Retirer",
-  "deleteItemConfirm": "Retirer « {task} » du paquet ? Les todos déjà créés restent des todos normaux.",
+  "deleteItemConfirm": "Retirer « {task} » du paquet ? Les tâches déjà créées restent des tâches normales.",
   "createTitle": "Nouveau paquet de tâches",
   "editTitle": "Modifier le paquet",
   "nameLabel": "Nom",
@@ -59,9 +59,9 @@
     "none": "Ne supprimer aucune tâche"
   },
   "removalModeHelp": {
-    "all": "Les tâches terminées et celles des cycles passés sont aussi supprimées.",
-    "future": "Les tâches du cycle en cours et des cycles passés restent des todos normaux.",
-    "none": "Toutes les tâches restent des todos normaux."
+    "all": "Les tâches terminées et celles des cycles passés sont aussi supprimées. Les notes et fichiers liés sont aussi supprimés ; les amendes déjà gelées sont conservées.",
+    "future": "Les tâches du cycle en cours et des cycles passés restent des tâches normales.",
+    "none": "Toutes les tâches restent des tâches normales."
   },
   "deleteConfirm": "Supprimer le paquet",
   "unassignConfirm": "Retirer l’attribution",
@@ -73,6 +73,30 @@
   "statusExists": "Existe",
   "statusNew": "Nouveau",
   "errorGeneric": "L’action a échoué",
+  "errors": {
+    "package_not_found": "Paquet de tâches introuvable.",
+    "item_not_found": "Tâche introuvable.",
+    "name_taken": "Un paquet de tâches portant ce nom existe déjà.",
+    "create_failed": "Le paquet de tâches n'a pas pu être créé.",
+    "save_failed": "Le paquet de tâches n'a pas pu être enregistré.",
+    "delete_failed": "Le paquet de tâches n'a pas pu être supprimé.",
+    "generate_failed": "Les tâches n'ont pas pu être générées.",
+    "item_create_failed": "La tâche n'a pas pu être créée.",
+    "item_save_failed": "La tâche n'a pas pu être enregistrée.",
+    "item_delete_failed": "La tâche n'a pas pu être retirée.",
+    "order_incomplete": "L'ordre doit contenir toutes les tâches du paquet.",
+    "order_failed": "L'ordre n'a pas pu être enregistré.",
+    "cycle_not_found": "Cycle introuvable.",
+    "cycle_already_assigned": "Le paquet est déjà attribué à ce cycle.",
+    "cycle_assign_failed": "Le cycle n'a pas pu être attribué.",
+    "assignment_not_found": "Attribution introuvable.",
+    "assignment_save_failed": "L'attribution n'a pas pu être enregistrée.",
+    "assignment_delete_failed": "L'attribution n'a pas pu être retirée.",
+    "person_not_found": "Personne introuvable.",
+    "list_row_not_found": "Ligne de liste introuvable.",
+    "invalid_delete_mode": "Mode de suppression inconnu.",
+    "invalid": "La saisie n'est pas valable."
+  },
   "savedToast": "Enregistré",
   "createdToast": "Paquet créé",
   "pausedToast": "Paquet mis en pause",
@@ -168,5 +192,10 @@
     "10": "octobre",
     "11": "novembre",
     "12": "décembre"
+  },
+  "help": {
+    "responsible": "Tu peux choisir directement les responsables ou les reprendre d’une liste. Une entrée de liste détermine, pour chaque nouvelle tâche, qui est de tour.",
+    "recurrence": "Définit à quelle fréquence cet élément crée une nouvelle tâche : une fois par cycle, chaque mois, chaque semaine ou pour les événements avec une étiquette précise.",
+    "due": "Détermine l’échéance de chaque tâche créée, p. ex. une date fixe dans le cycle ou quelques jours avant ou après une date de référence comme l’événement."
   }
 }

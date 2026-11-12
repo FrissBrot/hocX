@@ -69,7 +69,7 @@
     "protocolCount": "{count, plural, one {# procès-verbal} other {# procès-verbaux}}",
     "protocolTitle": "Titre",
     "revertClosedConfirmTitle": "Annuler la clôture ?",
-    "revertClosedConfirmMessage": "Lors de la clôture, l'état de toutes les tâches de ce procès-verbal a été sauvegardé. Annuler la clôture supprime cet instantané : le procès-verbal affichera ensuite les tâches actuelles, y compris toutes les modifications depuis la clôture (tâches terminées, modifiées, supprimées et nouvelles).",
+    "revertClosedConfirmMessage": "Lors de la clôture, l'état de toutes les tâches de ce procès-verbal a été sauvegardé. Annuler la clôture supprime cet instantané : le procès-verbal affichera ensuite les tâches actuelles, y compris toutes les modifications depuis la clôture. Lors de la prochaine clôture, les anciens PDF et les marques de modification sont supprimés et un nouveau PDF signé est créé.",
     "revertClosedConfirmLabel": "Rétablir",
     "revertFailed": "Échec de la restauration",
     "revertTo": "Revenir à « {status} »",
@@ -93,7 +93,15 @@
     "syncTemplateConfirmKept": "{count, plural, one {Plus dans le modèle mais contient des données, reste donc à la fin : {names}.} other {Plus dans le modèle mais contiennent des données, restent donc à la fin : {names}.}}",
     "syncTemplateConfirmLabel": "Recharger",
     "syncTemplateDone": "Éléments rechargés depuis le modèle",
-    "syncTemplateFailed": "Impossible de recharger les éléments"
+    "syncTemplateFailed": "Impossible de recharger les éléments",
+    "alreadyFinalizedError": "Ce procès-verbal est déjà finalisé et figé. Rétrograde-le d’abord via le menu (« Revenir à … »).",
+    "deleteFinalizedHint": "Un procès-verbal finalisé ne peut pas être supprimé. Rétrograde-le d’abord via « Revenir à … », puis supprime-le.",
+    "searchFailed": "La recherche a échoué",
+    "searching": "Recherche en cours …",
+    "loadMoreFailed": "Impossible de charger d’autres procès-verbaux.",
+    "retry": "Réessayer",
+    "templateHelp": "Le modèle définit les points de l’ordre du jour, les blocs et les schémas du numéro et du titre. Sans modèle, impossible de créer un procès-verbal. hocX retient le dernier choisi.",
+    "previewHelp": "hocX calcule le numéro et le titre à partir du schéma du modèle : le numéro courant suit le rang de la date dans le cycle. Avec une date antérieure, les procès-verbaux ultérieurs encore ouverts sont renumérotés."
   },
   "byName": "par {name}",
   "cancel": "Annuler",
@@ -159,7 +167,8 @@
       "shortcutSearch": "Rechercher – dans les présences, d'abord la recherche de personne",
       "shortcutTodo": "Ouvrir une tâche rapide",
       "shortcuts": "Raccourcis clavier",
-      "title": "Statut et collaboration"
+      "title": "Statut et collaboration",
+      "docsLink": "Guide : collaborer sur un procès-verbal"
     }
   },
   "collectFine": "Encaisser l'amende",
@@ -243,7 +252,20 @@
     "statusChangedByOtherToast": "{name} a changé le statut en « {status} ».",
     "draftsRestoredToast": "{count, plural, one {# brouillon local a été restauré} other {# brouillons locaux ont été restaurés}}.",
     "conflictToast": "Conflit : quelqu'un d'autre a enregistré cette section entre-temps. La version actuelle a été chargée – votre dernière modification n'a pas été appliquée, mais elle est conservée comme brouillon local.",
-    "eventHideFailed": "L'événement n'a pas pu être retiré"
+    "eventHideFailed": "L'événement n'a pas pu être retiré",
+    "finishProtocolConfirmTitle": "Finaliser le procès-verbal ?",
+    "finishProtocolConfirmMessage": "Le procès-verbal sera figé et ne pourra plus être modifié. hocX génère le PDF signé, enregistre l’état des tâches et envoie les notifications par e-mail aux responsables. Pour annuler, passe par le menu de la liste des procès-verbaux (« Revenir à … »).",
+    "finishSessionConfirmTitle": "Terminer la séance ?",
+    "finishSessionConfirmMessage": "La séance se termine et le procès-verbal passe en post-traitement. Les demandes en attente pour cette réunion sont reprises définitivement. Le retour en arrière n’est possible que via le menu de la liste des procès-verbaux.",
+    "confirmWithOtherEditors": "{consequences} Attention : quelqu’un d’autre travaille actuellement sur ce procès-verbal.",
+    "statusChangeUnsavedChanges": "Statut inchangé : toutes les modifications n’ont pas pu être enregistrées. Vérifie la connexion et réessaie.",
+    "statusChangeFailed": "Le statut n’a pas pu être modifié.",
+    "draftsConflictToast": "{count, plural, one {Un brouillon local n’a pas été repris} other {# brouillons locaux n’ont pas été repris}} car quelqu’un d’autre a modifié ce passage entre-temps. La version actuelle est affichée.",
+    "draftsConflictApply": "Reprendre mon brouillon",
+    "workflowHelpTopic": "Statut et mode de travail",
+    "workflowHelp": "Quatre étapes : planifié (préparation), préparé (séance), tenu (post-traitement), terminé. La finalisation fige le procès-verbal, génère le PDF signé et avertit les responsables des tâches ouvertes.",
+    "trackChangesHelpTopic": "Suivi des modifications",
+    "trackChangesHelp": "Pendant la préparation, marque en rouge ce qui a changé par rapport au dernier procès-verbal finalisé de ce modèle. Dès la séance, aucune nouvelle marque n’est ajoutée ; toutes disparaissent à la finalisation."
   },
   "embeddedBlock": {
     "attendance": "Présence",
@@ -293,7 +315,9 @@
     "sourceCycle": "le cycle {year}",
     "sourceLive": "la liste actuelle",
     "title": "Vue historique — {name} {year}",
-    "unlockEdit": "Débloquer la modification"
+    "unlockEdit": "Débloquer la modification",
+    "helpTopic": "Vue historique",
+    "help": "Les procès-verbaux des cycles passés montrent l’état des listes et des données financières figé à l’époque, pas les données actuelles. « Débloquer la modification » permet de corriger l’état historique ; chaque modification est consignée."
   },
   "joinsLabel": "Entrées",
   "leavesLabel": "Sorties",
@@ -535,7 +559,9 @@
     "emptySearch": "Aucune personne trouvée pour « {query} »",
     "emptyFilter": "Personne avec ce statut",
     "fine": "CHF {amount, number}",
-    "fineTitle": "L'amende est créée automatiquement"
+    "fineTitle": "L'amende est créée automatiquement",
+    "helpTopic": "Saisir les présences",
+    "help": "Un clic sur une personne passe au statut suivant, un appui long ouvre la sélection. Avec Tab, atteins une personne et règle le statut avec 1–4. « Marquer les autres présents » règle toutes les personnes encore ouvertes. Si une amende pour retard ou absence est définie, elle est créée automatiquement."
   },
   "matrixBoard": {
     "title": "Matrice",
@@ -578,6 +604,7 @@
       "block_not_exported": "Ce bloc est exclu de l’export PDF dans le modèle de séance.",
       "omitted_by_layout": "Le modèle PDF (Documents) n’inclut pas ce bloc, p. ex. à cause d’un filtre de contenu.",
       "image_unavailable": "{count, plural, one {Une image n’a pas encore été vérifiée ou n’est pas disponible et apparaît comme espace réservé dans le PDF.} other {# images n’ont pas encore été vérifiées ou ne sont pas disponibles et apparaissent comme espaces réservés dans le PDF.}}"
-    }
+    },
+    "help": "{reason} Le contenu reste visible et enregistré dans l’éditeur, mais n’apparaît pas dans le PDF."
   }
 }

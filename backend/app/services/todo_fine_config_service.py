@@ -275,6 +275,15 @@ def update_rule(db: Session, tenant_id: int, rule: TodoFineRule, payload: TodoFi
     return _rule_read(db, rule)
 
 
+def rule_usage(db: Session, tenant_id: int, rule_id: int) -> int:
+    """Pendenzen, denen die Regel von Hand zugewiesen ist (fine_mode "rule")."""
+    return db.scalar(
+        select(func.count()).select_from(ProtocolTodo).where(
+            ProtocolTodo.tenant_id == tenant_id, ProtocolTodo.fine_rule_id == rule_id, ProtocolTodo.fine_mode == "rule",
+        )
+    ) or 0
+
+
 def delete_rule(db: Session, rule: TodoFineRule) -> None:
     db.delete(rule)
     db.commit()

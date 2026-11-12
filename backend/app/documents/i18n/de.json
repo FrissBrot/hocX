@@ -1,5 +1,13 @@
 {
   "apiError": {
+    "agendaBoundOnlyPostpone": "Das Anliegen steht schon in einem Protokoll. Zum Verschieben «Vertagen» verwenden.",
+    "agendaItemFrozen": "Das Anliegen gehört zu einem abgeschlossenen Protokoll und kann nicht mehr geändert werden.",
+    "agendaItemNotFound": "Das Anliegen wurde nicht gefunden.",
+    "agendaMonthRequired": "Bitte einen Monat wählen.",
+    "agendaPointMismatch": "Der gewählte Punkt gehört nicht zu dieser Vorlage.",
+    "agendaProtocolClosed": "Das Protokoll ist bereits abgeschlossen.",
+    "agendaSaveFailed": "Das Anliegen konnte nicht gespeichert werden.",
+    "agendaTitleRequired": "Bitte einen Titel eingeben.",
     "assetInUse": "Die Datei wird noch von einem Brand-Profil, einer Vorlage oder einer Komponente verwendet.",
     "assetNotFound": "Die gewählte Datei gehört nicht zu diesem Mandanten oder hat die falsche Art.",
     "assignmentScope": "Dieser Dokumenttyp kann keiner Protokollvorlage zugewiesen werden.",
@@ -83,7 +91,7 @@
     "stat_table": "Statistiktabelle",
     "static_text": "Fester Text",
     "toc": "Inhaltsverzeichnis",
-    "todo_table": "Todos"
+    "todo_table": "Pendenzen"
   },
   "chart": {
     "absent": "Unentschuldigt",
@@ -359,6 +367,10 @@
     "greeting": "Hallo {name}",
     "noLoginHint": "Fragen zu dieser Nachricht? Wende dich an {tenant}.",
     "security": {
+      "emailChanged": "Login-E-Mail geändert ({at})",
+      "emailChangedByAdmin": "Login-E-Mail durch die Vereinsverwaltung geändert ({at})",
+      "emailChangedIntro": "Die Login-E-Mail deines Kontos bei {tenant} wurde geändert. Diese Adresse gilt ab jetzt nicht mehr für die Anmeldung, du bekommst diese Nachricht deshalb ein letztes Mal hierhin:",
+      "emailChangedSubject": "{tenant}: Deine Login-E-Mail wurde geändert",
       "hint": "Warst du das nicht? Melde dich sofort bei {tenant}.",
       "intro": "An deinem Konto bei {tenant} wurde Folgendes geändert:",
       "mandatory": "Sicherheitshinweise bekommst du immer, sie lassen sich nicht abbestellen.",
@@ -425,7 +437,7 @@
     "stat_table": "Keine Daten.",
     "static_text": "Kein Text vorhanden.",
     "toc": "–",
-    "todo_table": "Keine Todos vorhanden."
+    "todo_table": "Keine Pendenzen vorhanden."
   },
   "error": {
     "block": "Der Block «{block}» konnte nicht dargestellt werden. Bitte Inhalt oder Einstellungen prüfen.",
@@ -459,6 +471,7 @@
     "earlierProtocol": "früherem Protokoll",
     "open": "Offen"
   },
+  "fineTransaction": "Busse {type}: {name}",
   "fineType": {
     "absent": "Unentschuldigt",
     "late": "Verspätet"
@@ -473,12 +486,12 @@
     "attendanceRate": "Anwesenheitsquote",
     "balance": "Kontostand",
     "done": "Erledigt",
-    "doneTodos": "Erledigte Todos",
+    "doneTodos": "Erledigte Pendenzen",
     "events": "Termine",
     "finesTotal": "Bussen total",
     "members": "Mitglieder",
     "open": "Offen",
-    "openTodos": "Offene Todos",
+    "openTodos": "Offene Pendenzen",
     "overdue": "Überfällig",
     "sessions": "Sitzungen"
   },
@@ -501,7 +514,7 @@
     "placeDate": "Ort, Datum",
     "responsible": "Verantwortlich",
     "scanToOpen": "Zum Öffnen scannen",
-    "sessionTodos": "Todos",
+    "sessionTodos": "Pendenzen",
     "signature": "Unterschrift",
     "subtotal": "Zwischensumme",
     "total": "Total",

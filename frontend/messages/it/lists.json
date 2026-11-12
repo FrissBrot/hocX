@@ -7,7 +7,7 @@
   },
   "defaultColumnOne": "Colonna 1",
   "defaultColumnTwo": "Colonna 2",
-  "pageTitle": "Liste principali",
+  "pageTitle": "Liste anagrafiche",
   "pageDescriptionEmpty": "Liste liberamente definibili per materiale, incarichi o iscrizioni.",
   "pageDescription": "Incarichi, gruppi, sponsor – utilizzabili nei verbali e nelle consegne.",
   "newList": "+ Nuova lista",
@@ -17,7 +17,7 @@
     "hint": "Le liste possono essere usate come fonte per le consegne."
   },
   "sidebar": {
-    "title": "Liste",
+    "title": "Liste anagrafiche",
     "totalCount": "{count} totali",
     "search": "Cerca",
     "searchPlaceholder": "Cerca liste…",
@@ -73,7 +73,8 @@
     "columns": "Colonne",
     "columnsHint": "Sempre due – titolo e tipo di dati a scelta.",
     "preview": "Anteprima della lista nel blocco tabella",
-    "cancel": "Annulla"
+    "cancel": "Annulla",
+    "groupSource": "Fonte delle statistiche dei gruppi"
   },
   "toasts": {
     "pdfExportFailed": "Esportazione PDF non riuscita",
@@ -99,7 +100,8 @@
     "entryRemoveFailed": "Impossibile rimuovere la voce",
     "deleteDraftEntryConfirm": "Rimuovere questa voce dalla bozza? Non verrà ripresa alla conferma.",
     "snapshotCreated": "Snapshot creato per questo periodo",
-    "snapshotCreateFailed": "Impossibile creare lo snapshot"
+    "snapshotCreateFailed": "Impossibile creare lo snapshot",
+    "listInUse": "La lista è ancora collegata e non può essere eliminata: {places}. Rimuovi il collegamento lì oppure imposta la lista come inattiva."
   },
   "table": {
     "departedParticipant": "Uscita il {date}",
@@ -168,5 +170,13 @@
       "0": "05.10. · Campo autunnale",
       "1": "19.12. · Natale nel bosco"
     }
+  },
+  "help": {
+    "groupSource": "Le voci di questa lista valgono come gruppi nelle statistiche: gli eventi il cui tag corrisponde a una voce vengono contati per gruppo.",
+    "dataType": "Testo: valore libero. Una persona / più persone: scelta tra i membri. Evento: riferimento a un evento. Cambiare il tipo svuota i valori esistenti di questa colonna."
+  },
+  "usage": {
+    "element": "blocco «{name}»",
+    "protocol": "verbale {number}"
   }
 }

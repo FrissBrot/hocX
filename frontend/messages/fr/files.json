@@ -32,7 +32,8 @@
     "cancel": "Annuler",
     "uploading": "Téléversement…",
     "uploadCount": "{count, plural, one {Téléverser # fichier} other {Téléverser # fichiers}}",
-    "upload": "Téléverser"
+    "upload": "Téléverser",
+    "progress": "{sent} sur {total} transférés"
   },
   "errors": {
     "uploadFailed": "Échec du téléversement"

@@ -1,5 +1,13 @@
 {
   "apiError": {
+    "agendaBoundOnlyPostpone": "Le sujet figure déjà dans un procès-verbal. Utilisez «Reporter» pour le déplacer.",
+    "agendaItemFrozen": "Le sujet appartient à un procès-verbal clôturé et ne peut plus être modifié.",
+    "agendaItemNotFound": "Le sujet est introuvable.",
+    "agendaMonthRequired": "Veuillez choisir un mois.",
+    "agendaPointMismatch": "Le point choisi n’appartient pas à ce modèle.",
+    "agendaProtocolClosed": "Le procès-verbal est déjà clôturé.",
+    "agendaSaveFailed": "Le sujet n’a pas pu être enregistré.",
+    "agendaTitleRequired": "Veuillez saisir un titre.",
     "assetInUse": "Le fichier est encore utilisé par un profil de marque, un modèle ou un composant.",
     "assetNotFound": "Le fichier choisi n’appartient pas à ce mandant ou n’est pas du bon type.",
     "assignmentScope": "Ce type de document ne peut pas être attribué à un modèle de procès-verbal.",
@@ -359,6 +367,10 @@
     "greeting": "Bonjour {name}",
     "noLoginHint": "Des questions sur ce message ? Adresse-toi à {tenant}.",
     "security": {
+      "emailChanged": "E-mail de connexion modifié ({at})",
+      "emailChangedByAdmin": "E-mail de connexion modifié par l’administration de l’association ({at})",
+      "emailChangedIntro": "L’e-mail de connexion de ton compte chez {tenant} a été modifié. Cette adresse n’est plus utilisée pour la connexion, ce message est donc le dernier envoyé ici :",
+      "emailChangedSubject": "{tenant} : ton e-mail de connexion a été modifié",
       "hint": "Ce n’était pas toi ? Contacte immédiatement {tenant}.",
       "intro": "Les éléments suivants ont été modifiés sur ton compte chez {tenant} :",
       "mandatory": "Les avis de sécurité sont toujours envoyés et ne peuvent pas être désactivés.",
@@ -459,6 +471,7 @@
     "earlierProtocol": "un procès-verbal précédent",
     "open": "Ouvert"
   },
+  "fineTransaction": "Amende {type} : {name}",
   "fineType": {
     "absent": "Absence non excusée",
     "late": "En retard"

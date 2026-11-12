@@ -60,6 +60,7 @@
   "protocolLabel": "Minutes",
   "saveButton": "Save",
   "saveFailed": "Todo could not be saved",
+  "fineRunningLocked": "You cannot remove your own running fine by changing the due date, assignees or tags, cancelling or deleting the task. Only someone who manages finances can.",
   "savingEllipsis": "Saving…",
   "scopeAll": "All",
   "scopeMine": "Mine",
@@ -127,5 +128,6 @@
     "endOfNextMonth": "month end",
     "endOfYear": "year end New Year's Eve"
   },
-  "dueSearchPlaceholder": "Search date or event …"
+  "dueSearchPlaceholder": "Search date or event …",
+  "fineRunningBadge": "Fine running"
 }

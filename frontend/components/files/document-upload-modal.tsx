@@ -1,12 +1,12 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import { findUploadRuleProblems, UploadTargetFields, useUploadTarget } from "./upload-target-fields";
 import { Modal } from "@/components/ui/modal";
 import { TagInput } from "@/components/ui/tag-input";
-import { browserApiFetch } from "@/lib/api/client";
+import { browserApiFetch, browserApiUpload } from "@/lib/api/client";
 import { hashForPrecheck, needsUpload, precheckToFileResult, precheckUploads } from "@/lib/image-analysis/precheck";
 import { formatFileSize } from "@/lib/utils/format";
 import { DocumentUploadResult, UploadFileResult } from "@/types/api";
@@ -79,11 +79,14 @@ export function DocumentUploadModal({
   onUploaded: (result: DocumentUploadResult) => void;
 }) {
   const t = useTranslations("files");
+  const locale = useLocale();
   const [initial] = useState(() => partitionDocuments(initialFiles ?? [], t));
   const [selectedFiles, setSelectedFiles] = useState<File[]>(initial.accepted);
   const [tagsValue, setTagsValue] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
+  // Byte-Fortschritt der Übertragung (wie im Foto-Upload) - danach folgt die Prüfung auf dem Server.
+  const [progress, setProgress] = useState<{ loaded: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(initial.error);
   const inputRef = useRef<HTMLInputElement>(null);
   const target = useUploadTarget();
@@ -138,12 +141,12 @@ export function DocumentUploadModal({
       toUpload.forEach((file) => body.append("files", file));
       body.append("tags", tagsValue);
       target.appendTo(body);
-      const response = await browserApiFetch<DocumentUploadResult>("/api/files/document-uploads", {
-        method: "POST",
-        body,
-        // browserApiFetch's default 15s timeout is too short for a batch of large documents
-        // plus the virus scan - same fix as the photo upload's own request.
-        signal: AbortSignal.timeout(300_000),
+      // XHR statt fetch, damit grosse PDFs einen Byte-Fortschritt zeigen (Audit Dateien/Fotos).
+      // 5 Minuten wie bisher: ein Stapel grosser Dokumente plus Virenprüfung.
+      setProgress(null);
+      const response = await browserApiUpload<DocumentUploadResult>("/api/files/document-uploads", body, {
+        timeoutMs: 300_000,
+        onProgress: (loaded, total) => setProgress({ loaded, total }),
       });
       const result = response && skipped.length ? { ...response, file_results: [...skipped, ...(response.file_results ?? [])] } : response;
       if (!result || (result.items.length === 0 && skipped.length === 0 && !(result.file_results ?? []).some((entry) => entry.status === "skipped"))) {
@@ -157,6 +160,7 @@ export function DocumentUploadModal({
       setError(err instanceof Error ? err.message : t("errors.uploadFailed"));
     } finally {
       setUploading(false);
+      setProgress(null);
     }
   }
 
@@ -239,12 +243,14 @@ export function DocumentUploadModal({
                     <div className="gallery-upload-file-details">
                       <div className="gallery-upload-file-heading">
                         <span className="gallery-upload-file-name" title={file.name}>{file.name}</span>
-                        <span className="muted">{formatFileSize(file.size)}</span>
+                        <span className="muted">{formatFileSize(file.size, locale)}</span>
                       </div>
                       <span className="gallery-upload-file-status">
                         {uploading ? t("queue.uploading") : t("queue.ready")}
                       </span>
-                      {uploading && <progress className="gallery-upload-progress" />}
+                      {uploading && (progress && progress.loaded < progress.total
+                        ? <progress className="gallery-upload-progress" value={progress.loaded} max={progress.total || 1} />
+                        : <progress className="gallery-upload-progress" />)}
                     </div>
                     <button
                       type="button"
@@ -271,9 +277,13 @@ export function DocumentUploadModal({
         </div>
 
         <div className="gallery-upload-footer">
-          <span className="gallery-upload-summary">
+          <span className="gallery-upload-summary" role="status" aria-live="polite">
             {t("footer.summary", { count: selectedFiles.length })}
-            {selectedFiles.length > 0 ? ` · ${formatFileSize(totalBytes)}` : ""}
+            {selectedFiles.length > 0
+              ? progress && progress.loaded < progress.total
+                ? ` · ${t("footer.progress", { sent: formatFileSize(progress.loaded, locale), total: formatFileSize(progress.total, locale) })}`
+                : ` · ${formatFileSize(totalBytes, locale)}`
+              : ""}
           </span>
           <div className="gallery-upload-actions">
             <button type="button" className="button-ghost" onClick={onClose} disabled={uploading}>

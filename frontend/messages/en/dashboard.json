@@ -40,5 +40,6 @@
   "today": "Today",
   "tomorrow": "Tomorrow",
   "unexcuseTitle": "Mark as unexcused again",
-  "upcomingEventsEyebrow": "Upcoming events"
+  "upcomingEventsEyebrow": "Upcoming events",
+  "excuseNoPermission": "Only people who may edit protocols can excuse here."
 }

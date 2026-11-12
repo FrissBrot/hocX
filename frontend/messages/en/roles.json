@@ -145,5 +145,8 @@
         "description": "Full export of the organization and data access requests for other persons."
       }
     }
-  }
+  },
+  "permissionsHelp": "A role bundles permissions; an account gets all permissions of its roles. «MFA» means: whoever has it signs in with a second factor. «Module not booked»: only takes effect with that subscription module. Greyed out: you do not have it yourself, or it follows from another permission.",
+  "notOwnPermission": "Locked: you do not have this permission yourself.",
+  "nameMissing": "Give the role a name."
 }

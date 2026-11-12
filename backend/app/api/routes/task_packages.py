@@ -2,7 +2,6 @@
 übrige Vorlagen-Konfiguration. Fachlogik in app/services/task_package_service.py."""
 
 import uuid
-from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -39,6 +38,15 @@ router = APIRouter()
 audit = AuditService()
 
 
+# Fehler als {"code", "message"}: das Frontend übersetzt den Code (messages taskPackages.errors.*),
+# "message" bleibt für ältere Clients und Logs (Bereichs-Audit 2026-11: deutsche Texte als Toast).
+_VALUE_ERROR_CODES = {"Person nicht gefunden": "person_not_found", "Listenzeile nicht gefunden": "list_row_not_found", "Unbekannter Löschmodus": "invalid_delete_mode"}
+
+
+def _error(code: str, message: str) -> dict:
+    return {"code": code, "message": message}
+
+
 class TaskPackageItemOrder(BaseModel):
     item_ids: list[uuid.UUID]
 
@@ -51,14 +59,14 @@ class TaskPackageItemOrder(BaseModel):
 def _get_package(db: Session, package_id: uuid.UUID, tenant_id: int) -> TaskPackage:
     package = public_id_service.get_by_public_id(db, TaskPackage, package_id, tenant_id=tenant_id)
     if package is None:
-        raise HTTPException(status_code=404, detail="Aufgabenpaket nicht gefunden")
+        raise HTTPException(status_code=404, detail=_error("package_not_found", "Aufgabenpaket nicht gefunden"))
     return package
 
 
 def _get_item(db: Session, package: TaskPackage, item_id: uuid.UUID) -> TaskPackageItem:
     item = public_id_service.get_by_public_id(db, TaskPackageItem, item_id)
     if item is None or item.task_package_id != package.id:
-        raise HTTPException(status_code=404, detail="Aufgabe nicht gefunden")
+        raise HTTPException(status_code=404, detail=_error("item_not_found", "Aufgabe nicht gefunden"))
     return item
 
 
@@ -205,10 +213,10 @@ def create_task_package(
         db.refresh(package)
     except IntegrityError as exc:
         db.rollback()
-        raise HTTPException(status_code=409, detail="Ein Aufgabenpaket mit diesem Namen existiert bereits") from exc
+        raise HTTPException(status_code=409, detail=_error("name_taken", "Ein Aufgabenpaket mit diesem Namen existiert bereits")) from exc
     except SQLAlchemyError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Aufgabenpaket konnte nicht erstellt werden") from exc
+        raise HTTPException(status_code=400, detail=_error("create_failed", "Aufgabenpaket konnte nicht erstellt werden")) from exc
     audit.log(db, action="task_package.created", actor=user, entity_type="task_package", entity_id=package.id)
     return _package_read(db, package)
 
@@ -246,10 +254,10 @@ def update_task_package(
         packages.sync_package(db, package)
     except IntegrityError as exc:
         db.rollback()
-        raise HTTPException(status_code=409, detail="Ein Aufgabenpaket mit diesem Namen existiert bereits") from exc
+        raise HTTPException(status_code=409, detail=_error("name_taken", "Ein Aufgabenpaket mit diesem Namen existiert bereits")) from exc
     except SQLAlchemyError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Aufgabenpaket konnte nicht gespeichert werden") from exc
+        raise HTTPException(status_code=400, detail=_error("save_failed", "Aufgabenpaket konnte nicht gespeichert werden")) from exc
     audit.log(db, action="task_package.updated", actor=user, entity_type="task_package", entity_id=package.id, details={"fields": sorted(values)})
     return _package_read(db, package)
 
@@ -271,7 +279,7 @@ def delete_task_package(
         deleted, kept = packages.delete_package(db, package, mode=todos)
     except SQLAlchemyError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Aufgabenpaket konnte nicht gelöscht werden") from exc
+        raise HTTPException(status_code=400, detail=_error("delete_failed", "Aufgabenpaket konnte nicht gelöscht werden")) from exc
     audit.log(
         db, action="task_package.deleted", actor=user, entity_type="task_package", entity_id=internal_id,
         details={"todos": todos, "deleted_todos": deleted, "kept_todos": kept},
@@ -294,7 +302,7 @@ def sync_task_package(
         created, updated = packages.sync_package(db, package)
     except SQLAlchemyError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Aufgaben konnten nicht erzeugt werden") from exc
+        raise HTTPException(status_code=400, detail=_error("generate_failed", "Aufgaben konnten nicht erzeugt werden")) from exc
     audit.log(
         db, action="task_package.synced", actor=user, entity_type="task_package", entity_id=package.id,
         details={"created": created, "updated": updated},
@@ -330,10 +338,10 @@ def create_task_package_item(
         packages.sync_package(db, package)
     except ValueError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=_error(_VALUE_ERROR_CODES.get(str(exc), "invalid"), str(exc))) from exc
     except SQLAlchemyError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Aufgabe konnte nicht erstellt werden") from exc
+        raise HTTPException(status_code=400, detail=_error("item_create_failed", "Aufgabe konnte nicht erstellt werden")) from exc
     audit.log(db, action="task_package.item_created", actor=user, entity_type="task_package_item", entity_id=item.id)
     return _package_read(db, package)
 
@@ -361,10 +369,10 @@ def update_task_package_item(
         packages.sync_package(db, package)
     except ValueError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=_error(_VALUE_ERROR_CODES.get(str(exc), "invalid"), str(exc))) from exc
     except SQLAlchemyError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Aufgabe konnte nicht gespeichert werden") from exc
+        raise HTTPException(status_code=400, detail=_error("item_save_failed", "Aufgabe konnte nicht gespeichert werden")) from exc
     audit.log(db, action="task_package.item_updated", actor=user, entity_type="task_package_item", entity_id=item.id)
     return _package_read(db, package)
 
@@ -388,7 +396,7 @@ def delete_task_package_item(
         db.commit()
     except SQLAlchemyError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Aufgabe konnte nicht entfernt werden") from exc
+        raise HTTPException(status_code=400, detail=_error("item_delete_failed", "Aufgabe konnte nicht entfernt werden")) from exc
     audit.log(db, action="task_package.item_deleted", actor=user, entity_type="task_package_item", entity_id=internal_id)
     return _package_read(db, package)
 
@@ -405,14 +413,14 @@ def reorder_task_package_items(
     package = _get_package(db, package_id, user.current_tenant_id)
     items = {item.public_id: item for item in packages.list_items(db, package.id)}
     if set(payload.item_ids) != set(items):
-        raise HTTPException(status_code=400, detail="Die Reihenfolge muss alle Aufgaben des Pakets enthalten")
+        raise HTTPException(status_code=400, detail=_error("order_incomplete", "Die Reihenfolge muss alle Aufgaben des Pakets enthalten"))
     try:
         for index, public_id in enumerate(payload.item_ids):
             items[public_id].sort_index = index
         db.commit()
     except SQLAlchemyError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Reihenfolge konnte nicht gespeichert werden") from exc
+        raise HTTPException(status_code=400, detail=_error("order_failed", "Reihenfolge konnte nicht gespeichert werden")) from exc
     audit.log(db, action="task_package.items_reordered", actor=user, entity_type="task_package", entity_id=package.id)
     return _package_read(db, package)
 
@@ -436,7 +444,7 @@ def assign_task_package_cycle(
     package = _get_package(db, package_id, user.current_tenant_id)
     cycle_config = public_id_service.get_by_public_id(db, CycleConfig, payload.cycle_config_id, tenant_id=user.current_tenant_id)
     if cycle_config is None:
-        raise HTTPException(status_code=404, detail="Zyklus nicht gefunden")
+        raise HTTPException(status_code=404, detail=_error("cycle_not_found", "Zyklus nicht gefunden"))
     start_cycle_year = payload.start_cycle_year or packages.current_cycle_year(cycle_config)
     try:
         package_cycle = TaskPackageCycle(task_package_id=package.id, cycle_config_id=cycle_config.id, start_cycle_year=start_cycle_year)
@@ -445,10 +453,10 @@ def assign_task_package_cycle(
         packages.sync_package(db, package)
     except IntegrityError as exc:
         db.rollback()
-        raise HTTPException(status_code=409, detail="Das Paket ist diesem Zyklus bereits zugewiesen") from exc
+        raise HTTPException(status_code=409, detail=_error("cycle_already_assigned", "Das Paket ist diesem Zyklus bereits zugewiesen")) from exc
     except SQLAlchemyError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Zyklus konnte nicht zugewiesen werden") from exc
+        raise HTTPException(status_code=400, detail=_error("cycle_assign_failed", "Zyklus konnte nicht zugewiesen werden")) from exc
     audit.log(
         db, action="task_package.cycle_assigned", actor=user, entity_type="task_package", entity_id=package.id,
         details={"cycle_config_id": cycle_config.id, "start_cycle_year": start_cycle_year},
@@ -470,7 +478,7 @@ def update_task_package_cycle(
     package = _get_package(db, package_id, user.current_tenant_id)
     package_cycle = public_id_service.get_by_public_id(db, TaskPackageCycle, package_cycle_id)
     if package_cycle is None or package_cycle.task_package_id != package.id:
-        raise HTTPException(status_code=404, detail="Zuweisung nicht gefunden")
+        raise HTTPException(status_code=404, detail=_error("assignment_not_found", "Zuweisung nicht gefunden"))
     cycle_config = db.get(CycleConfig, package_cycle.cycle_config_id)
     try:
         package_cycle.start_cycle_year = payload.start_cycle_year or packages.current_cycle_year(cycle_config)
@@ -478,7 +486,7 @@ def update_task_package_cycle(
         packages.sync_package(db, package)
     except SQLAlchemyError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Zuweisung konnte nicht gespeichert werden") from exc
+        raise HTTPException(status_code=400, detail=_error("assignment_save_failed", "Zuweisung konnte nicht gespeichert werden")) from exc
     audit.log(
         db, action="task_package.cycle_updated", actor=user, entity_type="task_package", entity_id=package.id,
         details={"cycle_config_id": package_cycle.cycle_config_id, "start_cycle_year": package_cycle.start_cycle_year},
@@ -499,13 +507,13 @@ def unassign_task_package_cycle(
     package = _get_package(db, package_id, user.current_tenant_id)
     package_cycle = public_id_service.get_by_public_id(db, TaskPackageCycle, package_cycle_id)
     if package_cycle is None or package_cycle.task_package_id != package.id:
-        raise HTTPException(status_code=404, detail="Zuweisung nicht gefunden")
+        raise HTTPException(status_code=404, detail=_error("assignment_not_found", "Zuweisung nicht gefunden"))
     cycle_config_id = package_cycle.cycle_config_id
     try:
         deleted, kept = packages.unassign_cycle(db, package, package_cycle, mode=todos)
     except SQLAlchemyError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Zuweisung konnte nicht entfernt werden") from exc
+        raise HTTPException(status_code=400, detail=_error("assignment_delete_failed", "Zuweisung konnte nicht entfernt werden")) from exc
     audit.log(
         db, action="task_package.cycle_unassigned", actor=user, entity_type="task_package", entity_id=package.id,
         details={"cycle_config_id": cycle_config_id, "todos": todos, "deleted_todos": deleted, "kept_todos": kept},
@@ -526,8 +534,8 @@ def preview_task_package(
     package = _get_package(db, package_id, user.current_tenant_id)
     cycle_config = public_id_service.get_by_public_id(db, CycleConfig, cycle_config_id, tenant_id=user.current_tenant_id)
     if cycle_config is None:
-        raise HTTPException(status_code=404, detail="Zyklus nicht gefunden")
-    year = cycle_year or packages.current_cycle_year(cycle_config, date.today())
+        raise HTTPException(status_code=404, detail=_error("cycle_not_found", "Zyklus nicht gefunden"))
+    year = cycle_year or packages.current_cycle_year(cycle_config)
     entries = packages.preview(db, package, cycle_config=cycle_config, cycle_year=year)
     return TaskPackagePreview(
         cycle_config_id=cycle_config.public_id,

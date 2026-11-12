@@ -1,6 +1,6 @@
 {
   "pageTitle": "Pacchetti di attività",
-  "pageDescription": "Attività ricorrenti create automaticamente come todo in ogni ciclo. I responsabili provengono da liste come l'elenco degli incarichi.",
+  "pageDescription": "Attività ricorrenti aggiunte automaticamente alle attività da fare in ogni ciclo. I responsabili provengono da liste come l'elenco degli incarichi.",
   "newPackage": "Nuovo pacchetto",
   "emptyTitle": "Nessun pacchetto di attività",
   "emptyDescription": "Crea un pacchetto come «Campo estivo» o «Direzione» e assegnalo a un ciclo.",
@@ -32,7 +32,7 @@
   "moveUp": "Sposta su",
   "moveDown": "Sposta giù",
   "remove": "Rimuovi",
-  "deleteItemConfirm": "Rimuovere «{task}» dal pacchetto? I todo già creati restano come todo normali.",
+  "deleteItemConfirm": "Rimuovere «{task}» dal pacchetto? Le attività già create restano come attività normali.",
   "createTitle": "Nuovo pacchetto di attività",
   "editTitle": "Modifica pacchetto",
   "nameLabel": "Nome",
@@ -59,9 +59,9 @@
     "none": "Non eliminare alcuna attività"
   },
   "removalModeHelp": {
-    "all": "Vengono eliminate anche le attività completate e quelle dei cicli passati.",
-    "future": "Le attività del ciclo in corso e dei cicli passati restano come todo normali.",
-    "none": "Tutte le attività restano come todo normali."
+    "all": "Vengono eliminate anche le attività completate e quelle dei cicli passati. Vengono eliminati anche note e file collegati; le multe già congelate restano.",
+    "future": "Le attività del ciclo in corso e dei cicli passati restano come attività normali.",
+    "none": "Tutte le attività restano come attività normali."
   },
   "deleteConfirm": "Elimina pacchetto",
   "unassignConfirm": "Rimuovi assegnazione",
@@ -73,6 +73,30 @@
   "statusExists": "Esiste",
   "statusNew": "Nuovo",
   "errorGeneric": "Azione non riuscita",
+  "errors": {
+    "package_not_found": "Pacchetto di compiti non trovato.",
+    "item_not_found": "Compito non trovato.",
+    "name_taken": "Esiste già un pacchetto di compiti con questo nome.",
+    "create_failed": "Non è stato possibile creare il pacchetto di compiti.",
+    "save_failed": "Non è stato possibile salvare il pacchetto di compiti.",
+    "delete_failed": "Non è stato possibile eliminare il pacchetto di compiti.",
+    "generate_failed": "Non è stato possibile generare i compiti.",
+    "item_create_failed": "Non è stato possibile creare il compito.",
+    "item_save_failed": "Non è stato possibile salvare il compito.",
+    "item_delete_failed": "Non è stato possibile rimuovere il compito.",
+    "order_incomplete": "L'ordine deve contenere tutti i compiti del pacchetto.",
+    "order_failed": "Non è stato possibile salvare l'ordine.",
+    "cycle_not_found": "Ciclo non trovato.",
+    "cycle_already_assigned": "Il pacchetto è già assegnato a questo ciclo.",
+    "cycle_assign_failed": "Non è stato possibile assegnare il ciclo.",
+    "assignment_not_found": "Assegnazione non trovata.",
+    "assignment_save_failed": "Non è stato possibile salvare l'assegnazione.",
+    "assignment_delete_failed": "Non è stato possibile rimuovere l'assegnazione.",
+    "person_not_found": "Persona non trovata.",
+    "list_row_not_found": "Riga della lista non trovata.",
+    "invalid_delete_mode": "Modalità di eliminazione sconosciuta.",
+    "invalid": "L'inserimento non è valido."
+  },
   "savedToast": "Salvato",
   "createdToast": "Pacchetto creato",
   "pausedToast": "Pacchetto messo in pausa",
@@ -168,5 +192,10 @@
     "10": "ottobre",
     "11": "novembre",
     "12": "dicembre"
+  },
+  "help": {
+    "responsible": "Puoi scegliere direttamente i responsabili o riprenderli da un elenco. Una voce dell’elenco stabilisce, per ogni nuovo compito, a chi tocca.",
+    "recurrence": "Stabilisce quanto spesso questo elemento crea un nuovo compito: una volta per ciclo, ogni mese, ogni settimana o per gli eventi con un tag preciso.",
+    "due": "Determina la scadenza di ogni compito creato, p. es. una data fissa nel ciclo o alcuni giorni prima o dopo una data di riferimento come l’evento."
   }
 }

@@ -144,7 +144,8 @@
       "source_consistent": "Previous storage still active and unchanged",
       "inconsistent": "Storage state is inconsistent – please check",
       "migration_running": "Data migration still running"
-    }
+    },
+    "help": "Maintenance never ends on a timer. It can only be released once all conditions are met (e.g. job finished, checks green). Open conditions show what is still pending."
   },
   "form": {
     "message": "Public message ({locale})",

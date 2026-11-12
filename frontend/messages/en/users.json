@@ -1,35 +1,35 @@
 {
-  "pageTitle": "Participants",
-  "ownAccessOnlyHint": "Access and roles for this organization.",
-  "pageHint": "This organization's accounts and their roles.",
-  "newUser": "New participant",
+  "pageTitle": "Logins & roles",
+  "ownAccessOnlyHint": "Logins and roles of your club.",
+  "pageHint": "Who may sign in and with which roles. You maintain the people themselves under «Members».",
+  "newUser": "New person",
   "emptyState": {
     "title": "Only your own access",
     "description": "Invite more people and assign them a role: Admin, Writer, Treasurer or Reader.",
-    "invite": "+ Invite participant"
+    "invite": "+ Invite person"
   },
   "explainRoles": "Explain roles",
   "explainRolesDescription": "Each account can have several roles and receives all of their permissions. Roles are managed under “Roles”.",
   "tabs": {
-    "active": "Participants with login",
-    "participants": "Participants"
+    "active": "With login",
+    "participants": "Without login"
   },
-  "searchUsers": "Search participants",
-  "searchParticipants": "Search participants",
+  "searchUsers": "Search logins",
+  "searchParticipants": "Search members without login",
   "columns": {
     "displayName": "Display name",
     "name": "Name",
     "email": "Email",
     "role": "Role",
     "actions": "Actions",
-    "participantEmail": "Email (participant)"
+    "participantEmail": "Email"
   },
   "mfaButton": "MFA",
   "delete": "Delete",
   "close": "Close",
-  "editUserTitle": "Edit participant",
-  "createUserTitle": "Create participant",
-  "userModalDescription": "Maintain account data and role.",
+  "editUserTitle": "Edit person",
+  "createUserTitle": "Add person",
+  "userModalDescription": "Name, login and roles. Joining, leaving and templates are maintained under «Members».",
   "firstName": "First name",
   "lastName": "Last name",
   "displayName": "Display name",
@@ -43,13 +43,13 @@
   "enableLogin": "Enable login",
   "cancel": "Cancel",
   "save": "Save",
-  "enableLoginForTitle": "Enable login for {name}",
-  "enableLoginTitle": "Enable login",
-  "enableLoginDescription": "Set an email address and password for this participant’s login.",
+  "enableLoginForTitle": "Login for {name}",
+  "enableLoginTitle": "Grant login",
+  "enableLoginDescription": "Easiest by invitation: the person sets their own password.",
   "mfaTitle": "MFA for {name}",
   "mfaTitleFallback": "MFA",
   "roleDescriptions": {
-    "admin": "Full access within the organization, including structure (templates, cycles, settings) and participant management.",
+    "admin": "Full access within the club, including structure (templates, cycles, settings), members, logins and roles.",
     "writer": "Works in the protocol area and maintains operational data, but changes neither structure nor finances.",
     "kassier": "Like reader, plus full write access to finances and fines.",
     "reader": "Read-only access, can trigger PDF exports and only sees their own fines."
@@ -57,11 +57,46 @@
   "toasts": {
     "loginEnabled": "Login enabled",
     "loginEnableFailed": "Login could not be enabled",
-    "userSaved": "Participant saved",
-    "userCreated": "Participant created",
-    "userSaveFailed": "Participant could not be saved",
-    "deleteConfirm": "Permanently delete participant \"{name}\"? The account and access are lost immediately.",
-    "userDeleted": "Participant deleted",
-    "userDeleteFailed": "Participant could not be deleted"
+    "userSaved": "Saved",
+    "userCreated": "Person added",
+    "userSaveFailed": "Could not be saved",
+    "deleteConfirm": "Permanently delete «{name}»? The person disappears together with attendance, fines and tasks.",
+    "userDeleted": "Person deleted",
+    "userDeleteFailed": "Person could not be deleted",
+    "inviteSent": "Invitation to {email} is being sent.",
+    "inviteFailed": "The invitation could not be sent."
+  },
+  "inactiveBadge": "Inactive",
+  "emptySearch": "No results for this search.",
+  "emptyWithLogin": "Nobody has a login yet.",
+  "emptyWithoutLogin": "All members already have a login.",
+  "enableLoginInactive": "Inactive people cannot get a login. Activate them under «Members» first.",
+  "rolesDocs": "Roles in the guide",
+  "rolesLabel": "Roles",
+  "rolesHelp": "An account can have several roles and gets all their permissions. You cannot assign roles with permissions you do not have yourself.",
+  "loginHelp": "With a login the person can sign in and sees what their roles allow. Without one they remain a member (attendance, fines, tasks). Best invite by email instead of setting a password.",
+  "loginActive": "Login active (untick to revoke the login)",
+  "loginSetPassword": "Enable login with a password you set",
+  "passwordHelpSet": "At least 12 characters. Share it with the person securely; they can change it in their profile afterwards.",
+  "blockers": {
+    "displayName": "Saving is disabled: the display name is missing.",
+    "email": "Saving is disabled: a login needs an email address.",
+    "password": "Saving is disabled: the password needs at least 12 characters.",
+    "tenant": "Saving is disabled: choose a tenant."
+  },
+  "loginMode": {
+    "label": "How does the person get the login?",
+    "invite": "Invite by email (recommended)",
+    "inviteHelp": "The person receives a link (valid for 7 days) and sets their own password. The login becomes active once they accept.",
+    "password": "Set a password yourself",
+    "mailOff": "Email sending is not set up, so no invitation is possible. Set a password and share it with the person securely.",
+    "inviteSubmit": "Send invitation"
+  },
+  "revokeLogin": {
+    "action": "Revoke login",
+    "confirmTitle": "Revoke the login of {name}?",
+    "confirmMessage": "{name} can no longer sign in afterwards; running sessions end immediately. The person remains a member with attendance, fines and tasks. You can delete them completely under «Members».",
+    "done": "Login of {name} revoked",
+    "failed": "The login could not be revoked"
   }
 }

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { HelpPopover } from "@/components/ui/help-popover";
 
 import { AlbumReleaseNotice } from "./album-share-release";
 import { findUploadRuleProblems, UploadTargetFields, useUploadTarget } from "@/components/files/upload-target-fields";
@@ -117,6 +118,7 @@ export function GalleryUploadModal({
   // (siehe components/files/upload-target-fields.tsx), unabhängig vom restlichen "photos"-
   // Namespace dieser Datei.
   const t = useTranslations("photos.galleryUpload");
+  const locale = useLocale();
   const tFiles = useTranslations("files");
   const [selectedFiles, setSelectedFiles] = useState<File[]>(initialFiles ?? []);
   const previews = useFilePreviews(selectedFiles);
@@ -384,7 +386,7 @@ export function GalleryUploadModal({
     if (state === "uploaded") return t("statusUploaded");
     if (state === "uploading") {
       if (transferDone) return t("statusUploaded");
-      return progress ? t("statusUploadingProgress", { sent: formatFileSize(fileSentBytes(index)), total: formatFileSize(file.size) }) : t("statusUploading");
+      return progress ? t("statusUploadingProgress", { sent: formatFileSize(fileSentBytes(index), locale), total: formatFileSize(file.size, locale) }) : t("statusUploading");
     }
     if (clipIndexes.has(index)) return t("statusClip");
     const analysis = analyses[index];
@@ -406,6 +408,10 @@ export function GalleryUploadModal({
     >
       <div className="gallery-upload">
         <div className="gallery-upload-scroll">
+          <p className="muted gallery-upload-help">
+            {t("helpLabel")}{" "}
+            <HelpPopover topic={t("helpTopic")} docs={{ page: "fotos", anchor: "hochladen" }}>{t("help")}</HelpPopover>
+          </p>
           <UploadTargetFields target={target} />
 
           {sharedTargets.length > 0 && (
@@ -517,7 +523,7 @@ export function GalleryUploadModal({
                     <div className="gallery-upload-file-details">
                       <div className="gallery-upload-file-heading">
                         <span className="gallery-upload-file-name" title={file.name}>{file.name}</span>
-                        <span className="muted">{formatFileSize(file.size)}</span>
+                        <span className="muted">{formatFileSize(file.size, locale)}</span>
                       </div>
                       <span className="gallery-upload-file-status">{fileStatusLabel(index, file)}</span>
                       {fileStates[index] === "uploading" && (progress && !transferDone
@@ -572,12 +578,12 @@ export function GalleryUploadModal({
         </div>
 
         <div className="gallery-upload-footer">
-          <span className="gallery-upload-summary">
+          <span className="gallery-upload-summary" role="status" aria-live="polite">
             {t("summaryCount", { count: selectedFiles.length })}
             {selectedFiles.length > 0
               ? progress && !transferDone
-                ? ` · ${t("summaryProgress", { sent: formatFileSize(progress.loaded), total: formatFileSize(progress.total) })}`
-                : ` · ${formatFileSize(totalBytes)}`
+                ? ` · ${t("summaryProgress", { sent: formatFileSize(progress.loaded, locale), total: formatFileSize(progress.total, locale) })}`
+                : ` · ${formatFileSize(totalBytes, locale)}`
               : ""}
             {batchInfo && batchInfo.total > 1 ? ` · ${t("batchProgress", { current: batchInfo.current, total: batchInfo.total })}` : ""}
           </span>

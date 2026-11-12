@@ -4,14 +4,13 @@ from collections.abc import Callable
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core.permissions import P
 from app.core.security import CurrentUser
-from app.models.entities import PhotoAlbumItem, ProtocolTodo, ProtocolTodoAssignee, StoredFile
+from app.models.entities import PhotoAlbum, PhotoAlbumItem, PhotoAlbumTenantShare, ProtocolTodo, ProtocolTodoAssignee, StoredFile
 from app.repositories.access_repository import AccessRepository
-from app.services import photo_album_share_service
 
 
 # Status eines abgeschlossenen (eingefrorenen) Protokolls (ck_protocol_status).
@@ -148,6 +147,18 @@ class AccessService:
     def ensure_can_read_stored_file(self, db: Session, user: CurrentUser, stored_file_id: int) -> None:
         protocol_id = self.repository.protocol_id_for_stored_file(db, stored_file_id=stored_file_id)
         if protocol_id is not None:
+            # Protokollbild, das der Besitzer bewusst in ein geteiltes Album gelegt hat: der Partner
+            # sieht es dort wie im öffentlichen Album-Link (Audit Dateien/Fotos) - die Protokoll-
+            # prüfung schlug für den fremden Mandanten sonst immer fehl (leere Kacheln).
+            file_tenant_id = self.repository.tenant_id_for_stored_file(db, stored_file_id=stored_file_id)
+            if (
+                file_tenant_id is not None
+                and user.current_tenant_id is not None
+                and file_tenant_id != user.current_tenant_id
+                and user.can(P.FILES_MANAGE)
+                and self._can_read_via_shared_album(db, user.current_tenant_id, stored_file_id)
+            ):
+                return
             self.ensure_can_read_protocol(db, user, protocol_id)
             return
         # Not linked to a protocol (export/image) or an imported Word-Import document (e.g. a
@@ -178,13 +189,25 @@ class AccessService:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Stored file not accessible")
 
     def _can_read_via_shared_album(self, db: Session, tenant_id: int, stored_file_id: int) -> bool:
-        album_ids = db.scalars(
+        """Eine Abfrage statt einer pro Album (Audit Dateien/Fotos, N+1 bei jedem Partner-Thumbnail):
+        liegt die Datei freigegeben in einem Album, das ``tenant_id`` besitzt oder angenommen hat?"""
+        accepted = (
+            select(PhotoAlbumTenantShare.album_id)
+            .where(PhotoAlbumTenantShare.tenant_id == tenant_id, PhotoAlbumTenantShare.status == "accepted")
+        )
+        match = db.scalar(
             select(PhotoAlbumItem.album_id)
             .join(StoredFile, StoredFile.public_id == PhotoAlbumItem.file_id)
+            .join(PhotoAlbum, PhotoAlbum.id == PhotoAlbumItem.album_id)
             # Noch nicht freigegebene Fotos (share_pending) sind fuer Partner nicht lesbar.
-            .where(StoredFile.id == stored_file_id, PhotoAlbumItem.share_pending.is_(False))
+            .where(
+                StoredFile.id == stored_file_id,
+                PhotoAlbumItem.share_pending.is_(False),
+                or_(PhotoAlbum.tenant_id == tenant_id, PhotoAlbumItem.album_id.in_(accepted)),
+            )
+            .limit(1)
         )
-        return any(tenant_id in photo_album_share_service.accessible_tenant_ids_for_album(db, album_id) for album_id in album_ids)
+        return match is not None
 
     def sync_user_access_from_participants(self, db: Session, *, user_id: int, tenant_id: int) -> None:
         template_ids = self.repository.linked_template_ids_for_user(db, user_id=user_id, tenant_id=tenant_id)

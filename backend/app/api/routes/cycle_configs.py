@@ -1,5 +1,4 @@
 import uuid
-from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -13,8 +12,10 @@ from app.core.security import CurrentUser, get_current_user, require_permission
 from app.models.entities import CycleConfig, Protocol, SubmissionAssignment, Template
 from app.schemas.cycle_config import CycleConfigCreate, CycleConfigRead, CycleConfigUpdate, CycleInfo
 from app.services import public_id_service
+from app.services.event_service import EventService, swiss_today
 
 router = APIRouter()
+event_service = EventService()
 
 
 def _get_owned(db: Session, cycle_config_id: uuid.UUID, tenant_id: int) -> CycleConfig:
@@ -53,6 +54,9 @@ def create_cycle_config(
     )
     try:
         db.add(obj)
+        db.flush()
+        # Bestehende Termine gehören ab sofort zum Zyklus, in den ihr Datum fällt (wie neu angelegte).
+        event_service.apply_cycle_config_to_events(db, obj)
         db.commit()
         db.refresh(obj)
     except SQLAlchemyError as exc:
@@ -81,9 +85,13 @@ def update_cycle_config(
     require_permission(user, P.TEMPLATES_MANAGE)
     obj = _get_owned(db, cycle_config_id, user.current_tenant_id)
     values = payload.model_dump(exclude_unset=True)
+    previous_reset = (obj.reset_month, obj.reset_day)
     for k, v in values.items():
         setattr(obj, k, v)
     try:
+        if obj.reset_month is not None and obj.reset_day is not None and (obj.reset_month, obj.reset_day) != previous_reset:
+            # Stichtag verschoben: Standard-Zuordnungen der Termine neu berechnen, manuelle bleiben.
+            event_service.apply_cycle_config_to_events(db, obj, previous_reset=previous_reset)
         db.commit()
         db.refresh(obj)
     except SQLAlchemyError as exc:
@@ -136,7 +144,7 @@ def list_cycles(
 
     cycle_years: set[int] = {get_cycle_year(d, cfg.reset_month, cfg.reset_day) for d in protocol_dates}
 
-    today = date.today()
+    today = swiss_today()
     current_cycle_year = get_cycle_year(today, cfg.reset_month, cfg.reset_day)
     cycle_years.add(current_cycle_year)
     cycle_years.add(current_cycle_year + 1)

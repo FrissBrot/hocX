@@ -37,7 +37,7 @@ from app.documents.strings import normalize_language, text
 from app.documents.template_service import TemplateStateError
 from app.models import DocumentExport, DocumentTemplate, DocumentTemplateRevision, Protocol, StoredFile, Tenant
 from app.services import document_render_jobs, public_id_service
-from app.services.access_service import AccessService
+from app.services.access_service import FINAL_PROTOCOL_STATUS, AccessService
 from app.services.audit_service import AuditService
 
 router = APIRouter()
@@ -527,11 +527,20 @@ def list_source_options(
         rows = db.scalars(select(Participant).where(Participant.tenant_id == tenant_id, Participant.is_active.is_(True)).order_by(Participant.display_name))
         return [SourceOption(id=row.public_id, label=row.display_name) for row in rows]
     if source == "protocols":
-        rows = db.scalars(select(Protocol).where(Protocol.tenant_id == tenant_id).order_by(Protocol.protocol_date.desc()).limit(300))
+        # Sichtbarkeit in der Abfrage (Audit 07, C7): vorher die 300 neuesten des Mandanten und
+        # danach je Zeile can_read_protocol - ein eingeschränkter Leser mit nur älteren
+        # Protokollen bekam eine leere Auswahl. Regel wie AccessService.protocol_visibility.
+        conditions = [Protocol.tenant_id == tenant_id]
+        if not access_service.sees_all_protocols(user):
+            if access_service.is_restricted_reader(db, user):
+                allowed = access_service.repository.list_protocol_ids(db, user_id=user.user_id, tenant_id=tenant_id)
+                conditions.append(Protocol.id.in_(list(allowed)))
+            else:
+                conditions.append(Protocol.status == FINAL_PROTOCOL_STATUS)
+        rows = db.scalars(select(Protocol).where(*conditions).order_by(Protocol.protocol_date.desc()).limit(300))
         return [
             SourceOption(id=row.public_id, label=row.title or row.protocol_number, detail=f"{row.protocol_number} · {format_date(row.protocol_date)}")
             for row in rows
-            if access_service.can_read_protocol(db, user, row.id)
         ]
     if source in ("protocol_elements", "protocol_blocks"):
         internal = public_id_service.resolve_internal_id(db, Protocol, protocol_id, tenant_id=tenant_id) if protocol_id else None
@@ -541,11 +550,23 @@ def list_source_options(
         elements = list(db.scalars(select(ProtocolElement).where(ProtocolElement.protocol_id == internal).order_by(ProtocolElement.sort_index)))
         if source == "protocol_elements":
             return [SourceOption(id=element.public_id, label=element.section_name_snapshot) for element in elements]
-        options: list[SourceOption] = []
-        for element in elements:
-            for block in db.scalars(select(ProtocolElementBlock).where(ProtocolElementBlock.protocol_element_id == element.id).order_by(ProtocolElementBlock.sort_index)):
-                options.append(SourceOption(id=block.public_id, label=block.block_title_snapshot or block.title_snapshot, detail=element.section_name_snapshot))
-        return options
+        # Alle Blöcke des Protokolls in einer Abfrage statt einer je Element (C7).
+        element_by_id = {element.id: element for element in elements}
+        blocks = db.scalars(
+            select(ProtocolElementBlock)
+            .where(ProtocolElementBlock.protocol_element_id.in_(list(element_by_id)))
+            .order_by(ProtocolElementBlock.sort_index)
+        ) if element_by_id else []
+        order = {element.id: index for index, element in enumerate(elements)}
+        ordered = sorted(blocks, key=lambda block: (order[block.protocol_element_id], block.sort_index))
+        return [
+            SourceOption(
+                id=block.public_id,
+                label=block.block_title_snapshot or block.title_snapshot,
+                detail=element_by_id[block.protocol_element_id].section_name_snapshot,
+            )
+            for block in ordered
+        ]
     if source == "images":
         if access_service.is_restricted_reader(db, user):
             return []
@@ -560,8 +581,12 @@ def list_source_options(
         rows = db.scalars(select(CycleConfig).where(CycleConfig.tenant_id == tenant_id).order_by(CycleConfig.name))
         return [SourceOption(id=row.public_id, label=row.name) for row in rows]
     if source == "templates":
-        rows = db.scalars(select(Template).where(Template.tenant_id == tenant_id, Template.status == "active").order_by(Template.name))
-        return [SourceOption(id=row.public_id, label=row.name) for row in rows if access_service.can_read_template(db, user, row.id)]
+        readable = access_service.readable_template_ids(db, user)
+        conditions = [Template.tenant_id == tenant_id, Template.status == "active"]
+        if readable is not None:
+            conditions.append(Template.id.in_(list(readable)))
+        rows = db.scalars(select(Template).where(*conditions).order_by(Template.name))
+        return [SourceOption(id=row.public_id, label=row.name) for row in rows]
     if source == "lists":
         # Wie die Listen-API und der Block list_table: nur Schreibende.
         require_permission(user, P.MEETINGS_EDIT)

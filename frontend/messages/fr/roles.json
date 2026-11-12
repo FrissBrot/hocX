@@ -145,5 +145,8 @@
         "description": "Export complet de l’organisation et droit d’accès pour d’autres personnes."
       }
     }
-  }
+  },
+  "permissionsHelp": "Un rôle regroupe des autorisations ; un compte reçoit toutes les autorisations de ses rôles. « MFA » : qui l'a se connecte avec un second facteur. « Module non réservé » : n'agit qu'avec ce module d'abonnement. Grisé : vous ne l'avez pas vous-même ou elle découle d'une autre autorisation.",
+  "notOwnPermission": "Verrouillé : vous n'avez pas vous-même cette autorisation.",
+  "nameMissing": "Donnez un nom au rôle."
 }

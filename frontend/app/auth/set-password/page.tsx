@@ -16,12 +16,15 @@ const MIN_PASSWORD_LENGTH = 12;
  * keinen Server, die Seite entfernt es sofort aus Adresszeile und Verlauf und sendet es nur im
  * Request-Body. Nach dem Setzen sind alle Sitzungen beendet; ein zweiter Faktor bleibt bestehen.
  */
-function readTokenFromFragment(): string {
-  const token = new URLSearchParams(window.location.hash.slice(1)).get("token") ?? "";
+function readTokenFromFragment(): { token: string; invite: boolean } {
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  const token = params.get("token") ?? "";
   if (window.location.hash) {
     window.history.replaceState(null, "", window.location.pathname);
   }
-  return token;
+  // kind=invite steht seit dem Bereichs-Audit 05 im Link: bei abgelaufener Einladung hilft
+  // «Passwort vergessen» nicht (das Konto hat noch keinen Login), nur eine neue Einladung.
+  return { token, invite: params.get("kind") === "invite" };
 }
 
 export default function SetPasswordPage() {
@@ -34,10 +37,12 @@ export default function SetPasswordPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
+  const [inviteLink, setInviteLink] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    const fragmentToken = readTokenFromFragment();
+    const { token: fragmentToken, invite: fragmentInvite } = readTokenFromFragment();
+    setInviteLink(fragmentInvite);
     if (!fragmentToken) {
       setInvalid(true);
       return;
@@ -52,7 +57,7 @@ export default function SetPasswordPage() {
   const tooShort = Boolean(password) && password.length < MIN_PASSWORD_LENGTH;
   const mismatch = repeat.length > 0 && password !== repeat;
   const canSubmit = password.length >= MIN_PASSWORD_LENGTH && password === repeat && !busy;
-  const invite = preview?.purpose === "invite";
+  const invite = preview ? preview.purpose === "invite" : inviteLink;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -84,9 +89,9 @@ export default function SetPasswordPage() {
         </div>
         {invalid ? (
           <>
-            <p className="login-status">{t("invalid")}</p>
+            <p className="login-status" role="alert">{invite ? t("inviteInvalid") : t("invalid")}</p>
             <div className="table-actions table-actions-start">
-              <a className="button-ghost" href="/auth/forgot-password">{t("requestNew")}</a>
+              {invite ? null : <a className="button-ghost" href="/auth/forgot-password">{t("requestNew")}</a>}
               <a className="button-primary" href="/login">{t("toLogin")}</a>
             </div>
           </>

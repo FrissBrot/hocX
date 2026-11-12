@@ -37,8 +37,11 @@ MAX_ROLES_PER_TENANT = 50
 
 
 class RoleConflict(HTTPException):
-    def __init__(self, detail: str) -> None:
-        super().__init__(status_code=status.HTTP_409_CONFLICT, detail=detail)
+    """409 mit stabilem Code; die Oberfläche übersetzt `code`, `message` bleibt der deutsche
+    Fallback (lib/api/client.ts liest detail.message)."""
+
+    def __init__(self, detail: str, code: str) -> None:
+        super().__init__(status_code=status.HTTP_409_CONFLICT, detail={"code": code, "message": detail})
 
 
 # ── Laden ────────────────────────────────────────────────────────────────────────────────────
@@ -168,7 +171,7 @@ def _ensure_subset(actor: CurrentUser | None, permissions: Iterable[str]) -> Non
     if missing:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Nur Berechtigungen, die man selbst hat, können vergeben oder verwaltet werden",
+            detail={"code": "permission_not_held", "message": "Nur Berechtigungen, die man selbst hat, können vergeben oder verwaltet werden"},
         )
 
 
@@ -212,12 +215,12 @@ def ensure_admin_remains(db: Session, tenant_id: int, actor: CurrentUser | None,
     Bei Verstoss 409; der Aufrufer committet dann nicht (die Request-Session verwirft alles)."""
     db.flush()
     if before > 0 and count_capable_admins(db, tenant_id) == 0:
-        raise RoleConflict("Der letzte Administrator eines Mandanten kann nicht entfernt oder herabgestuft werden")
+        raise RoleConflict("Der letzte Administrator eines Mandanten kann nicht entfernt oder herabgestuft werden", "last_admin")
     if affects_actor and actor is not None and P.ACCESS_MANAGE.value in actor.permissions:
         own, _ = load_role_permissions(db, actor.user_id)
         still_active = db.scalar(select(AppUser.is_active).where(AppUser.id == actor.user_id))
         if P.ACCESS_MANAGE.value not in own or not still_active:
-            raise RoleConflict("Die eigene Benutzerverwaltung kann man sich nicht selbst entziehen")
+            raise RoleConflict("Die eigene Benutzerverwaltung kann man sich nicht selbst entziehen", "own_access_management")
 
 
 @contextmanager
@@ -245,7 +248,7 @@ def ensure_not_last_admin_removed(db: Session, tenant_id: int, user_ids: Iterabl
     if lock_tenant(db, tenant_id) == 0 or not removed:
         return
     if count_capable_admins(db, tenant_id, excluding=removed) == 0:
-        raise RoleConflict("Der letzte Administrator eines Mandanten kann nicht entfernt oder herabgestuft werden")
+        raise RoleConflict("Der letzte Administrator eines Mandanten kann nicht entfernt oder herabgestuft werden", "last_admin")
 
 
 # ── Zuweisung ────────────────────────────────────────────────────────────────────────────────
@@ -314,7 +317,7 @@ def _ensure_unique_name(db: Session, tenant_id: int, name: str | None, *, exclud
     if excluding_id is not None:
         statement = statement.where(TenantRole.id != excluding_id)
     if db.scalar(statement) is not None:
-        raise RoleConflict("Eine Rolle mit diesem Namen gibt es bereits")
+        raise RoleConflict("Eine Rolle mit diesem Namen gibt es bereits", "role_name_taken")
 
 
 def _replace_permissions(db: Session, role: TenantRole, keys: frozenset[str]) -> None:
@@ -341,7 +344,7 @@ def create_role(db: Session, actor: CurrentUser, payload: RoleCreate) -> TenantR
     tenant_id = actor.current_tenant_id
     lock_tenant(db, tenant_id)
     if (db.scalar(select(func.count()).select_from(TenantRole).where(TenantRole.tenant_id == tenant_id)) or 0) >= MAX_ROLES_PER_TENANT:
-        raise RoleConflict("Zu viele Rollen")
+        raise RoleConflict("Zu viele Rollen", "too_many_roles")
     name = _clean_name(payload.name)
     if name is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Name fehlt")
@@ -367,7 +370,7 @@ def update_role(db: Session, actor: CurrentUser, role: TenantRole, payload: Role
     """Gibt (alte, neue) Berechtigungen zurück (für das Audit-Log)."""
     require_permission(actor, P.ACCESS_MANAGE)
     if role.system_key == ADMIN_ROLE_KEY:
-        raise RoleConflict("Die Rolle Administrator ist fest und kann nicht geändert werden")
+        raise RoleConflict("Die Rolle Administrator ist fest und kann nicht geändert werden", "admin_role_fixed")
     before = _role_permissions(db, [role.id]).get(role.id, frozenset())
     _ensure_subset(actor, before)
     fields = payload.model_fields_set
@@ -395,10 +398,10 @@ def delete_role(db: Session, actor: CurrentUser, role: TenantRole) -> None:
     require_permission(actor, P.ACCESS_MANAGE)
     lock_tenant(db, role.tenant_id)
     if role.system_key is not None:
-        raise RoleConflict("Standardrollen können nicht gelöscht werden")
+        raise RoleConflict("Standardrollen können nicht gelöscht werden", "system_role_not_deletable")
     _ensure_subset(actor, _role_permissions(db, [role.id]).get(role.id, frozenset()))
     if db.scalar(select(func.count()).select_from(UserRole).where(UserRole.role_id == role.id)):
-        raise RoleConflict("Die Rolle ist noch Benutzern zugewiesen")
+        raise RoleConflict("Die Rolle ist noch Benutzern zugewiesen", "role_in_use")
     # Eine Rolle ohne Zuweisungen kann niemandem Rechte nehmen - Schutzregeln 2/3 greifen hier nicht.
     db.delete(role)
     db.flush()

@@ -19,7 +19,8 @@ import { Modal } from "@/components/ui/modal";
 import { fineTypeLabels } from "@/lib/constants/fine-types";
 import { useCycleOptions } from "@/lib/hooks/use-cycle-options";
 import { useTagConfig } from "@/lib/hooks/use-tag-config";
-import type { AttendanceFineListItem, NextSessionInfo, TodoListItem } from "@/types/api";
+import type { AttendanceFineListItem, NextSessionInfo, OpenFinesSummary, TodoListItem } from "@/types/api";
+import { formatMoney } from "@/lib/utils/format";
 
 import { DashboardAccess, dashboardPermissions } from "@/components/dashboard/dashboard-permissions";
 import { useDashboardData } from "@/components/dashboard/use-dashboard-data";
@@ -33,12 +34,14 @@ const DASHBOARD_DEADLINE_LIMIT = 3;
 export function MobileDashboard({
   todos: initialTodos,
   fines,
+  fineSummary = null,
   upcomingSessions,
   access,
   hasProtocols,
 }: {
   todos: TodoListItem[];
   fines: AttendanceFineListItem[];
+  fineSummary?: OpenFinesSummary | null;
   upcomingSessions: NextSessionInfo[];
   access: DashboardAccess;
   hasProtocols: boolean;
@@ -53,8 +56,8 @@ export function MobileDashboard({
   const { options: cycleOptions } = useCycleOptions();
   const permissions = dashboardPermissions(access);
   const { canExcuse, canWrite } = permissions;
-  const data = useDashboardData({ todos: initialTodos, fines, permissions });
-  const { todos, setTodos, events, setEvents, today, fineTotal, finePeople } = data;
+  const data = useDashboardData({ todos: initialTodos, fines, fineSummary, permissions });
+  const { todos, setTodos, events, setEvents, today, fineTotalLabel, finePeople } = data;
   const participants = useParticipants(canWrite);
   const protocolsByEvent = useProtocolsByEvent(true);
   const toggleTodo = useTodoToggle(setTodos);
@@ -209,7 +212,7 @@ export function MobileDashboard({
 
       {permissions.hasFinance ? (
         <MobileCard className="mobile-list-card">
-          {openFines.length === 0 ? (
+          {data.fineCount === 0 ? (
             <>
               <MobileCardHeader label={permissions.ownFinesOnly ? tDashboard("myOpenFinesEyebrow") : tDashboard("openFinesEyebrow")} />
               <p className="mobile-card-empty">{permissions.ownFinesOnly ? tDashboard("noOwnOpenFines") : tDashboard("noOpenFines")}</p>
@@ -219,7 +222,7 @@ export function MobileDashboard({
               <div>
                 <div className="mobile-eyebrow">{permissions.ownFinesOnly ? tDashboard("myOpenFinesEyebrow") : tDashboard("openFinesEyebrow")}</div>
                 <div className="mobile-fines-total">
-                  {data.fineCurrency} {fineTotal.toFixed(2)}
+                  {fineTotalLabel}
                 </div>
               </div>
               {permissions.ownFinesOnly ? null : <span className="mobile-muted-sm">{tDashboard("finePeople", { count: finePeople })}</span>}
@@ -229,7 +232,7 @@ export function MobileDashboard({
             <div key={fine.id} className="mobile-fine-row">
               <span className="mobile-fine-row-name">{fine.participant_name_snapshot}</span>
               <span className="mobile-muted-sm">{fineTypeLabel[fine.fine_type] ?? fine.fine_type}</span>
-              <span className="mobile-fine-row-amount">{fine.amount.toFixed(2)}</span>
+              <span className="mobile-fine-row-amount">{formatMoney(fine.amount, "", locale)}</span>
             </div>
           ))}
         </MobileCard>

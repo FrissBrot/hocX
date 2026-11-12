@@ -271,9 +271,35 @@ async def document_render_loop() -> None:
                 task.add_done_callback(running.discard)
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as exc:
             _logger.exception("PDF-Auftragsschleife: Durchlauf fehlgeschlagen")
+            await run_in_threadpool(_report_loop_error, exc, loop.time())
         await asyncio.sleep(POLL_SECONDS)
+
+
+# Ein dauerhaft scheiternder Durchlauf (z. B. Schemaabweichung bei claim_next) würde alle
+# POLL_SECONDS einen Eintrag schreiben: gleiche Fehler höchstens alle 10 Minuten melden.
+_LOOP_ERROR_REPEAT_SECONDS = 600
+_last_loop_error: dict[str, float] = {}
+
+
+def _report_loop_error(exc: Exception, now: float) -> None:
+    """Fehler der Auftragsschleife in system_error_log (CLAUDE.md, Zentrale Fehlererfassung;
+    Audit 07, C5). Die Schleife selbst erscheint nicht unter /admin/jobs - sie gehört zum
+    job-worker (Heartbeat dort), die Warteschlange prüft /admin/system (render_queue)."""
+    from app.core.error_log import record_system_error
+
+    signature = f"{type(exc).__name__}:{exc}"
+    last = _last_loop_error.get(signature)
+    if last is not None and now - last < _LOOP_ERROR_REPEAT_SECONDS:
+        return
+    _last_loop_error.clear()
+    _last_loop_error[signature] = now
+    try:
+        with SessionLocal() as db:
+            record_system_error(db, exc=exc)
+    except Exception:
+        _logger.exception("PDF-Auftragsschleife: Fehler konnte nicht gemeldet werden")
 
 
 def _with_session(fn):

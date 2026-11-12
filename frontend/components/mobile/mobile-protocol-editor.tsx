@@ -25,6 +25,7 @@ import { ActionMenu } from "@/components/ui/action-menu";
 import { Modal } from "@/components/ui/modal";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { useConfirm } from "@/contexts/confirm-context";
+import { prefersReducedMotion } from "@/components/protocol/document-scroll";
 import { useToast } from "@/contexts/toast-context";
 import { ApiError, browserApiFetch } from "@/lib/api/client";
 import { isAlreadyUploaded } from "@/lib/image-analysis/precheck";
@@ -102,6 +103,7 @@ export function MobileProtocolEditor({
   const router = useRouter();
   const showToast = useToast();
   const confirm = useConfirm();
+  const pendingNotesSaveRef = useRef<Promise<boolean> | null>(null);
   const session = useMobileSession();
   const collab = useProtocolCollaboration(protocol.id);
   const { busyByProtocol, openOrGeneratePdf } = usePdfExport();
@@ -203,7 +205,7 @@ export function MobileProtocolEditor({
   }, [sections.length]);
 
   useEffect(() => {
-    chipRefs.current[activeSection]?.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
+    chipRefs.current[activeSection]?.scrollIntoView({ block: "nearest", inline: "center", behavior: prefersReducedMotion() ? "auto" : "smooth" });
   }, [activeSection]);
 
   async function setTodoDone(blockId: string | null, todo: ProtocolTodo | TodoListItem, done: boolean) {
@@ -264,7 +266,30 @@ export function MobileProtocolEditor({
 
   async function advanceStatus() {
     if (!nextStatus) return;
-    if (collab.hasOtherActiveEditors && !(await confirm({ message: t("editor.othersEditingConfirm"), confirmLabel: ctaLabel ?? "" }))) return;
+    // Wie am Desktop: Sitzung/Protokoll abschliessen immer mit Rückfrage und den Folgen.
+    if (nextStatus === "abgeschlossen" || nextStatus === "durchgeführt") {
+      const consequences =
+        nextStatus === "abgeschlossen"
+          ? tProtocols("editor.finishProtocolConfirmMessage")
+          : tProtocols("editor.finishSessionConfirmMessage");
+      const ok = await confirm({
+        title:
+          nextStatus === "abgeschlossen"
+            ? tProtocols("editor.finishProtocolConfirmTitle")
+            : tProtocols("editor.finishSessionConfirmTitle"),
+        message: collab.hasOtherActiveEditors ? tProtocols("editor.confirmWithOtherEditors", { consequences }) : consequences,
+        confirmLabel: ctaLabel ?? "",
+      });
+      if (!ok) return;
+    } else if (collab.hasOtherActiveEditors && !(await confirm({ message: t("editor.othersEditingConfirm"), confirmLabel: ctaLabel ?? "" }))) {
+      return;
+    }
+    // Eine beim Schliessen des Notiz-Blatts ausgelöste Speicherung muss vor dem
+    // Statuswechsel angekommen sein, sonst scheitert sie am eingefrorenen Protokoll.
+    if (pendingNotesSaveRef.current && !(await pendingNotesSaveRef.current)) {
+      showToast(tProtocols("editor.statusChangeUnsavedChanges"), "error");
+      return;
+    }
     try {
       await browserApiFetch(`/api/protocols/${protocol.id}`, { method: "PATCH", body: JSON.stringify({ status: nextStatus }) });
       setStatus(nextStatus);
@@ -345,7 +370,7 @@ export function MobileProtocolEditor({
               type="button"
               className={`mobile-editor-chip${activeSection === index ? " mobile-editor-chip-active" : ""}`}
               aria-current={activeSection === index ? "true" : undefined}
-              onClick={() => sectionRefs.current[index]?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              onClick={() => sectionRefs.current[index]?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" })}
             >
               <span className="mobile-editor-chip-num">{index + 1}</span>
               {trimSectionName(section.element.section_name_snapshot)}
@@ -468,6 +493,9 @@ export function MobileProtocolEditor({
           value={sessionNotes}
           editable={!forceReadOnly}
           onSaved={setSessionNotes}
+          onPendingSave={(save) => {
+            pendingNotesSaveRef.current = save;
+          }}
           onClose={() => setSheet(null)}
         />
       ) : null}
@@ -1031,12 +1059,14 @@ function NotesSheet({
   value,
   editable,
   onSaved,
+  onPendingSave,
   onClose,
 }: {
   protocolId: string;
   value: string;
   editable: boolean;
   onSaved: (value: string) => void;
+  onPendingSave?: (save: Promise<boolean>) => void;
   onClose: () => void;
 }) {
   const t = useTranslations("mobile");
@@ -1047,7 +1077,7 @@ function NotesSheet({
   const timer = useRef<number | null>(null);
 
   const flush = useCallback(
-    async (next: string) => {
+    async (next: string): Promise<boolean> => {
       try {
         const updated = await browserApiFetch<ProtocolSummary>(`/api/protocols/${protocolId}`, {
           method: "PATCH",
@@ -1056,9 +1086,11 @@ function NotesSheet({
         serverValue.current = updated?.session_notes ?? next;
         onSaved(serverValue.current);
         setState("saved");
+        return true;
       } catch (error) {
         setState("error");
         showToast(error instanceof ApiError && error.kind === "conflict" ? t("editor.notesConflict") : error instanceof Error ? error.message : t("editor.saveError"), "error");
+        return false;
       }
     },
     [protocolId, onSaved, showToast, t]
@@ -1075,13 +1107,13 @@ function NotesSheet({
     setDraft(next);
     setState("saving");
     if (timer.current) window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => void flush(next), 800);
+    timer.current = window.setTimeout(() => onPendingSave?.(flush(next)), 800);
   }
 
   function close() {
     if (timer.current && state === "saving") {
       window.clearTimeout(timer.current);
-      void flush(draft);
+      onPendingSave?.(flush(draft));
     }
     onClose();
   }

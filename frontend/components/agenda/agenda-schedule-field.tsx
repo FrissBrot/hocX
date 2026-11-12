@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { FilterTabs } from "@/components/ui/filter-tabs";
+import { HelpPopover } from "@/components/ui/help-popover";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { formatMonthYear } from "@/lib/utils/format";
 import { AgendaSchedule } from "@/types/api";
@@ -38,7 +39,12 @@ export function AgendaScheduleField({
 
   return (
     <div className="field-stack">
-      <span className="field-label">{t("fieldSchedule")}</span>
+      <span className="field-label">
+        {t("fieldSchedule")}{" "}
+        <HelpPopover topic={t("fieldSchedule")} docs={{ page: "anliegen", anchor: "termin" }}>
+          {t("scheduleHelp")}
+        </HelpPopover>
+      </span>
       <FilterTabs
         options={[
           { value: "next_meeting", label: t("scheduleNextMeeting") },

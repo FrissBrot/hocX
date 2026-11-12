@@ -6,6 +6,7 @@ mandantengebunden aufgelöst (Audit 2026-08-25)."""
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 
 from sqlalchemy import func, select
 
@@ -29,7 +30,8 @@ def balance_line(ctx: BuildContext, account: FinanceAccount, as_of: date | None)
     statement = select(func.coalesce(func.sum(FinanceTransaction.amount), 0)).where(FinanceTransaction.account_id == account.id)
     if as_of is not None:
         statement = statement.where(FinanceTransaction.transaction_date <= as_of)
-    balance = float(ctx.db.scalar(statement) or 0)
+    # Decimal statt float: keine Rundungsabweichung bei vielen Buchungen
+    balance = Decimal(ctx.db.scalar(statement) or 0)
     return BalanceLine(name=account.name, amount=format_amount(balance), currency=account.currency_label or "", negative=balance < 0, as_of=format_date(as_of) if as_of else None)
 
 
@@ -41,7 +43,7 @@ def provide_balance(ctx: BuildContext, spec: BlockSpec, params: FinanceBalancePa
     return [FinanceBalanceBlock(**spec_fields(spec), balances=[balance_line(ctx, account, params.as_of) for account in accounts])]
 
 
-def transactions_table(account: FinanceAccount, transactions: list[FinanceTransaction], *, subtotals: str = "none", strings: dict[str, str] | None = None, opening_balance: float = 0.0) -> TableData:
+def transactions_table(account: FinanceAccount, transactions: list[FinanceTransaction], *, subtotals: str = "none", strings: dict[str, str] | None = None, opening_balance: Decimal | float = Decimal(0)) -> TableData:
     currency = account.currency_label or ""
     columns = [
         col("date", "col.date"),
@@ -49,17 +51,17 @@ def transactions_table(account: FinanceAccount, transactions: list[FinanceTransa
         col("amount", "col.amount", align="right"),
         col("balance", "col.balance", align="right"),
     ]
-    running = opening_balance
+    running = Decimal(str(opening_balance))
     groups: list[TableGroup] = []
     current_key: str | None = None
-    group_sum = 0.0
+    group_sum = Decimal(0)
 
     def close_group() -> None:
         if groups and subtotals != "none":
             groups[-1].subtotal = [Cell(k="text", v="", note_key="label.subtotal"), text_cell(""), amount_cell(f"{format_amount(group_sum, sign=True)} {currency}"), amount_cell("")]
 
     for tx in transactions:
-        amount = float(tx.amount)
+        amount = Decimal(tx.amount)
         running += amount
         if subtotals == "month":
             key = tx.transaction_date.strftime("%Y-%m")
@@ -70,7 +72,7 @@ def transactions_table(account: FinanceAccount, transactions: list[FinanceTransa
         if key != current_key:
             close_group()
             current_key = key
-            group_sum = 0.0
+            group_sum = Decimal(0)
             label = None
             if subtotals == "month":
                 label = f"{(strings or {}).get(f'month.{tx.transaction_date.month}', str(tx.transaction_date.month))} {tx.transaction_date.year}"
@@ -87,7 +89,7 @@ def transactions_table(account: FinanceAccount, transactions: list[FinanceTransa
             ])
         )
     close_group()
-    total = sum(float(tx.amount) for tx in transactions)
+    total = sum((Decimal(tx.amount) for tx in transactions), Decimal(0))
     totals = [Cell(k="text", v="", note_key="label.total"), text_cell(""), amount_cell(f"{format_amount(total, sign=True)} {currency}"), amount_cell(f"{format_amount(running)} {currency}")] if transactions else None
     return TableData(columns=columns, groups=groups, totals=totals)
 
@@ -117,10 +119,10 @@ def _transactions_block(ctx: BuildContext, spec: BlockSpec, params: FinanceTrans
     transactions = list(ctx.db.scalars(statement.order_by(FinanceTransaction.transaction_date.asc(), FinanceTransaction.id.asc())))
     if params.last_n:
         transactions = transactions[-params.last_n:]
-    opening = 0.0
+    opening = Decimal(0)
     if transactions:
         first = transactions[0]
-        opening = float(ctx.db.scalar(
+        opening = Decimal(ctx.db.scalar(
             select(func.coalesce(func.sum(FinanceTransaction.amount), 0)).where(
                 FinanceTransaction.account_id == account.id,
                 (FinanceTransaction.transaction_date < first.transaction_date)
@@ -189,21 +191,22 @@ def fines_table(ctx: BuildContext, own: list[AttendanceFine], collected_here: li
     if group_by_person:
         items.sort(key=lambda item: sort_key(item[0]))
     rows = [item[1] for item in items]
-    totals_by_currency: dict[str, float] = {}
+    totals_by_currency: dict[str, Decimal] = {}
     for _, table_row, fine in items:
         if fine.status == "deleted":
             # Gelöschte Bussen zählen nicht zur Summe, der Betrag wird durchgestrichen.
             table_row.cells[3].strike = True
             continue
-        totals_by_currency[currency(fine)] = totals_by_currency.get(currency(fine), 0.0) + float(fine.amount)
+        totals_by_currency[currency(fine)] = totals_by_currency.get(currency(fine), Decimal(0)) + Decimal(fine.amount)
     totals = None
     if items:
         totals = [Cell(k="text", v="", note_key="label.total"), text_cell(""), text_cell(""), amount_cell(" · ".join(f"{format_amount(value)} {code}" for code, value in totals_by_currency.items())), text_cell("")]
     return TableData(columns=columns, groups=[TableGroup(rows=rows)] if rows else [], totals=totals)
 
 
-def protocol_fines(ctx: BuildContext, protocol: Protocol, config: dict | None = None) -> TableData:
-    """Bussen eines Protokolls mit den Optionen der Bussenliste (period.ts::filterFines)."""
+def protocol_fines(ctx: BuildContext, protocol: Protocol, config: dict | None = None, *, only_participant_id: int | None = None) -> TableData:
+    """Bussen eines Protokolls mit den Optionen der Bussenliste (period.ts::filterFines).
+    ``only_participant_id``: nur die Bussen dieser Person (Komponente «Bussen» ohne reports.personal)."""
     from app.services.protocol_period_service import protocol_period
 
     config = config or {}
@@ -215,6 +218,9 @@ def protocol_fines(ctx: BuildContext, protocol: Protocol, config: dict | None = 
         .where(AttendanceFine.closed_in_protocol_id == protocol.id)
         .order_by(func.coalesce(AttendanceFine.collected_at, AttendanceFine.deleted_at).asc())
     ))
+    if only_participant_id is not None:
+        own = [fine for fine in own if fine.participant_id == only_participant_id]
+        collected_here = [fine for fine in collected_here if fine.participant_id == only_participant_id]
     account_filter = ctx.ref_to_internal_id(FinanceAccount, config.get("fine_list_account_id"))
     if account_filter:
         own = [fine for fine in own if fine.account_id == account_filter]
@@ -246,7 +252,10 @@ def provide_fines(ctx: BuildContext, spec: BlockSpec, params: FinesParams):
         protocol = ctx.protocol
     if protocol is not None:
         ctx.ensure_can_read_protocol(protocol.id)
-        table = protocol_fines(ctx, protocol, {"fine_list_status": params.status, "fine_list_group_by": "participant" if params.group_by_person else ""})
+        table = protocol_fines(
+            ctx, protocol, {"fine_list_status": params.status, "fine_list_group_by": "participant" if params.group_by_person else ""},
+            only_participant_id=ctx.own_fines_participant_id(),
+        )
         return [FinesBlock(**spec_fields(spec), table=table)]
     statement = (
         select(AttendanceFine)
@@ -255,6 +264,10 @@ def provide_fines(ctx: BuildContext, spec: BlockSpec, params: FinesParams):
     )
     if params.status == "open":
         statement = statement.where(AttendanceFine.status == "pending")
+    own_participant_id = ctx.own_fines_participant_id()
+    if own_participant_id is not None:
+        # Ohne reports.personal nur die eigenen Bussen (wie GET /api/fines)
+        statement = statement.where(AttendanceFine.participant_id == own_participant_id)
     from app.documents.context import relative_range
 
     date_from, date_to = relative_range(ctx.today, params.relative) or (params.date_from, params.date_to)

@@ -36,8 +36,6 @@ from app.services import public_id_service, task_package_service, todo_fine_serv
 # closed_status_ids grouping used elsewhere (e.g. ProtocolService._open_todos_for_template_block)
 # and the "done" bucket the statistics/chart services derive from completed_at.
 _COMPLETED_STATUS_CODES = ("done", "cancelled")
-# Felder, die die Busse eines verspäteten Todos ändern (app/services/todo_fine_service.py).
-_FINE_RELEVANT_FIELDS = ("todo_status_id", "due_date", "due_event_id", "due_marker", "tags", "assigned_participant_id")
 
 
 class ProtocolTodoService:
@@ -267,8 +265,24 @@ class ProtocolTodoService:
             reference_link=payload.reference_link,
             tags=payload.tags,
             created_by=created_by,
+            completed_at=self._completed_at_for_new(db, payload.todo_status_id),
         )
-        return self._notify_created(db, self.repository.create(db, todo), actor_user_id)
+        return self._notify_created(db, self._freeze_if_done(db, self.repository.create(db, todo)), actor_user_id)
+
+    @staticmethod
+    def _completed_at_for_new(db: Session, status_id: int | None) -> datetime | None:
+        """Gleiche Ableitung wie update_todo: direkt erledigt/abgebrochen angelegt -> jetzt."""
+        if status_id is None:
+            return None
+        code = db.scalar(select(TodoStatus.code).where(TodoStatus.id == status_id))
+        return datetime.now(timezone.utc) if code in _COMPLETED_STATUS_CODES else None
+
+    @staticmethod
+    def _freeze_if_done(db: Session, todo: ProtocolTodo) -> ProtocolTodo:
+        if todo.completed_at is not None:
+            todo_fine_service.sync_todo(db, todo)
+            db.commit()
+        return todo
 
     @staticmethod
     def _notify_created(db: Session, todo: ProtocolTodo, actor_user_id: int | None) -> ProtocolTodo:
@@ -321,12 +335,18 @@ class ProtocolTodoService:
             tags=payload.tags,
             created_by=created_by,
             tracked_change="added" if track_changes_active else None,
+            completed_at=self._completed_at_for_new(db, payload.todo_status_id),
         )
-        return self._notify_created(db, self.repository.create(db, todo), actor_user_id)
+        return self._notify_created(db, self._freeze_if_done(db, self.repository.create(db, todo)), actor_user_id)
 
     def update_todo(
         self, db: Session, todo_id: int, payload: ProtocolTodoUpdate, *, track_changes_active: bool = False, actor_user_id: int | None = None,
+        can_manage_fines: bool = True, fine_changes: dict | None = None,
     ):
+        """``can_manage_fines`` False: die gebüsste Person darf ihre laufende Busse nicht über
+        Fälligkeit, Verantwortliche, Tags oder Abbrechen loswerden (TodoFineError). In
+        ``fine_changes`` (falls übergeben) stehen danach die tatsächlich geänderten,
+        bussenrelevanten Felder und die laufende Busse davor - für das Audit-Log der Route."""
         todo = self.repository.get(db, todo_id)
         if todo is None:
             return None
@@ -406,13 +426,30 @@ class ProtocolTodoService:
         # statistics/charts (which key off completed_at) can't drift from the actual
         # todo_status_id - e.g. reopening a "done" todo without the client explicitly
         # clearing completed_at must not leave it counted as done.
+        # Only a real transition touches it (Bereichs-Audit 2026-11): the todo popup always sends
+        # the current status, and re-stamping completed_at on every save turned a punctual todo
+        # into a late one (and froze a fine) as soon as someone edited its notes afterwards.
+        values.pop("completed_at", None)
+        new_status_code = None
         if "todo_status_id" in values:
             new_status_code = db.scalar(select(TodoStatus.code).where(TodoStatus.id == values["todo_status_id"]))
             if new_status_code is None:
                 raise ValueError("Unknown todo status")
-            values["completed_at"] = datetime.now(timezone.utc) if new_status_code in _COMPLETED_STATUS_CODES else None
-        else:
-            values.pop("completed_at", None)
+            if values["todo_status_id"] == todo.todo_status_id:
+                values.pop("todo_status_id")
+            else:
+                old_status_code = db.scalar(select(TodoStatus.code).where(TodoStatus.id == todo.todo_status_id)) if todo.todo_status_id else None
+                if new_status_code not in _COMPLETED_STATUS_CODES:
+                    values["completed_at"] = None
+                elif old_status_code not in _COMPLETED_STATUS_CODES or todo.completed_at is None:
+                    values["completed_at"] = datetime.now(timezone.utc)
+        changed_fine_fields = self._changed_fine_fields(db, todo, values, assignee_ids, new_status_code)
+        if changed_fine_fields:
+            running_before = todo_fine_service.running_amount(db, todo)
+            if not can_manage_fines:
+                todo_fine_service.ensure_may_change(db, todo, actor_user_id=actor_user_id, can_manage=False)
+            if fine_changes is not None:
+                fine_changes.update({"fields": changed_fine_fields, "running_fine_before": str(running_before)})
         if not values:
             return todo
         # Only task/tags count as "content" for marking purposes (assignee/due-date/status
@@ -434,17 +471,37 @@ class ProtocolTodoService:
         elif "assigned_participant_id" in values and (todo.task_package_item_id is not None or task_package_service.todo_assignee_ids(db, todo.id)):
             participant_id = values["assigned_participant_id"]
             task_package_service.set_todo_assignees(db, todo, [participant_id] if participant_id else [])
-        fine_relevant = assignee_ids is not None or any(key in values for key in _FINE_RELEVANT_FIELDS)
+        status_changed = "todo_status_id" in values
         todo = self.repository.update(db, todo, values)
-        if fine_relevant:
-            # Pendenzen-Bussen: beim Erledigen einfrieren, beim Wiedereröffnen offene entfernen,
-            # bei Änderungen an Fälligkeit/Verantwortlichen/Tags eines erledigten Todos neu rechnen.
+        if status_changed:
+            # Pendenzen-Bussen: beim Erledigen einfrieren. Wiedereröffnen und spätere Änderungen an
+            # Fälligkeit/Verantwortlichen/Tags lassen eingefrorene Bussen stehen.
             todo_fine_service.sync_todo(db, todo)
+            db.commit()
         # Neu Verantwortliche melden (nur freigegebene, offene Aufgaben, nicht sich selbst)
         added = [pid for pid in todo_notifications.assignee_ids(db, todo) if pid not in assignees_before]
         if added and todo_notifications.on_assignees_added(db, todo, added, actor_user_id=actor_user_id):
             db.commit()
         return todo
+
+    @staticmethod
+    def _changed_fine_fields(db: Session, todo: ProtocolTodo, values: dict, assignee_ids: list[int] | None, new_status_code: str | None) -> list[str]:
+        """Bussenrelevante Felder, die sich wirklich ändern (das Popup schickt alles mit)."""
+        changed = [
+            key for key in ("due_date", "due_event_id", "due_marker")
+            if key in values and values[key] != getattr(todo, key)
+        ]
+        if "tags" in values and list(values["tags"] or []) != list(todo.tags or []):
+            changed.append("tags")
+        current = task_package_service.todo_assignee_ids(db, todo.id) or ([todo.assigned_participant_id] if todo.assigned_participant_id else [])
+        if assignee_ids is not None:
+            if set(assignee_ids) != set(current):
+                changed.append("assignees")
+        elif "assigned_participant_id" in values and values["assigned_participant_id"] != todo.assigned_participant_id:
+            changed.append("assignees")
+        if "todo_status_id" in values and new_status_code == "cancelled":
+            changed.append("status_cancelled")
+        return changed
 
     def accept_tracked_change(self, db: Session, todo_id: int) -> tuple[bool, int | None] | None:
         """'Ausblenden' for one todo's tracked-change highlight: permanently accepts its

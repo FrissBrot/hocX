@@ -40,5 +40,6 @@
   "today": "Oggi",
   "tomorrow": "Domani",
   "unexcuseTitle": "Segna di nuovo come non giustificato",
-  "upcomingEventsEyebrow": "Prossimi appuntamenti"
+  "upcomingEventsEyebrow": "Prossimi appuntamenti",
+  "excuseNoPermission": "Solo chi può modificare i verbali può giustificare qui."
 }

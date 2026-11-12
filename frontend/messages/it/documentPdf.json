@@ -51,6 +51,7 @@
     "late": "In ritardo",
     "absent": "Assenza ingiustificata"
   },
+  "fineTransaction": "Multa {type}: {name}",
   "col": {
     "status": "Stato",
     "task": "Compito",
@@ -323,7 +324,15 @@
     "brandArchived": "Un profilo brand archiviato non può essere predefinito.",
     "defaultBrand": "Il profilo brand predefinito non può essere archiviato o eliminato.",
     "brandInUse": "Il profilo brand è in uso. Archivialo invece di eliminarlo.",
-    "noColumns": "Seleziona almeno una colonna."
+    "noColumns": "Seleziona almeno una colonna.",
+    "agendaItemNotFound": "L’argomento non è stato trovato.",
+    "agendaItemFrozen": "L’argomento appartiene a un verbale chiuso e non può più essere modificato.",
+    "agendaProtocolClosed": "Il verbale è già chiuso.",
+    "agendaTitleRequired": "Inserisci un titolo.",
+    "agendaMonthRequired": "Scegli un mese.",
+    "agendaBoundOnlyPostpone": "L’argomento è già in un verbale. Usa «Rinvia» per spostarlo.",
+    "agendaPointMismatch": "Il punto scelto non appartiene a questo modello.",
+    "agendaSaveFailed": "Non è stato possibile salvare l’argomento."
   },
   "metadata": {
     "title": "Dati del documento",
@@ -628,7 +637,11 @@
       "mfaRemoved": "Secondo fattore rimosso ({at})",
       "mfaRemovedByAdmin": "Secondo fattore rimosso dall’amministrazione dell’associazione ({at})",
       "hint": "Non sei stato tu? Contatta subito {tenant}.",
-      "mandatory": "Gli avvisi di sicurezza vengono sempre inviati e non si possono disattivare."
+      "mandatory": "Gli avvisi di sicurezza vengono sempre inviati e non si possono disattivare.",
+      "emailChanged": "E-mail di accesso modificata ({at})",
+      "emailChangedByAdmin": "E-mail di accesso modificata dall’amministrazione dell’associazione ({at})",
+      "emailChangedSubject": "{tenant}: la tua e-mail di accesso è stata modificata",
+      "emailChangedIntro": "L’e-mail di accesso del tuo account presso {tenant} è stata modificata. Questo indirizzo non viene più usato per l’accesso, perciò questo è l’ultimo messaggio inviato qui:"
     },
     "export": {
       "subjectReady": "{tenant}: esportazione dati pronta",

@@ -12,25 +12,31 @@ export default async function EventsPage() {
   const session = await requireSession();
   const canWrite = can(session, "meetings.edit");
 
-  if (!canWrite) {
+  // Lesen reicht für die Ansicht (wie API und Kalender-Abo); Bearbeiten nur mit meetings.edit.
+  if (!can(session, "meetings.read")) {
     redirect("/");
   }
 
   const [events, participants] = await Promise.all([
     backendFetchWithSession<EventSummary[]>("/api/events"),
-    backendFetchWithSession<ParticipantSummary[]>("/api/participants?limit=500"),
+    can(session, "participants.manage")
+      ? backendFetchWithSession<ParticipantSummary[]>("/api/participants?limit=500")
+      : Promise.resolve<ParticipantSummary[] | null>(null),
   ]);
 
   return (
     <AppShell initialSession={session}>
       <ResponsiveView
-        mobile={<MobileEvents initialEvents={events ?? []} participants={participants ?? []} />}
+        mobile={<MobileEvents initialEvents={events ?? []} participants={participants ?? []} canEdit={canWrite} />}
         desktop={
           <section className="panel">
             <EventManager
               initialEvents={events ?? []}
               availableParticipants={participants ?? []}
               tenantName={session.current_tenant?.name ?? null}
+              canEdit={canWrite}
+              canManageCycles={can(session, "templates.manage")}
+              canManageSettings={can(session, "settings.manage")}
             />
           </section>
         }

@@ -20,6 +20,8 @@ class ListDefinitionBase(BaseModel):
     column_two_title: str
     column_two_value_type: ListValueType
     is_active: bool = True
+    # Quelle der Gruppenstatistik (Einträge = Termin-Tags, die als Gruppe zählen).
+    is_group_source: bool = False
 
 
 class ListDefinitionCreate(ListDefinitionBase):
@@ -34,6 +36,7 @@ class ListDefinitionUpdate(BaseModel):
     column_two_title: str | None = None
     column_two_value_type: ListValueType | None = None
     is_active: bool | None = None
+    is_group_source: bool | None = None
 
 
 class ListDefinitionRead(PublicIdModel, ListDefinitionBase):

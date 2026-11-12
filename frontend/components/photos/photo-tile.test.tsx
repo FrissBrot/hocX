@@ -205,3 +205,23 @@ it("falls back to the still photo when the clip cannot be loaded", () => {
   vi.useRealTimers();
 });
 
+
+it("shows a scanning badge for a pending photo and a hint instead of a broken image when the preview fails", () => {
+  render(<PhotoTile item={{ ...item, scan_status: "pending" } as FileOverviewItem} selected={false} selectionMode={false} onOpen={vi.fn()} onToggleSelect={vi.fn()} />);
+  intersect(0, true);
+  expect(screen.getByText("Wird geprüft")).toBeTruthy();
+  fireEvent.error(screen.getByRole("img"));
+  expect(screen.queryByRole("img")).toBeNull();
+  expect(screen.getByText(/Virenprüfung läuft/)).toBeTruthy();
+});
+
+it("never requests the preview of a blocked photo and labels it", () => {
+  render(<PhotoTile item={{ ...item, scan_status: "error" } as FileOverviewItem} selected={false} selectionMode={false} onOpen={vi.fn()} onToggleSelect={vi.fn()} />);
+  expect(screen.queryByRole("img")).toBeNull();
+  expect(screen.getByText("Gesperrt")).toBeTruthy();
+});
+
+it("names the photo in the selection checkbox label", () => {
+  render(<PhotoTile item={item} selected={false} selectionMode={false} onOpen={vi.fn()} onToggleSelect={vi.fn()} />);
+  expect(screen.getByRole("checkbox", { name: "photo.jpg auswählen" })).toBeTruthy();
+});

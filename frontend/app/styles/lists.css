@@ -145,6 +145,11 @@
 
 .list-definition-active { display: flex; align-items: center; gap: var(--space-2); }
 
+/* Markierung «Quelle der Gruppenstatistik» mit Hilfe daneben (Audit 07, C3). */
+.list-definition-group-source { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+
+.list-definition-type-label { display: flex; align-items: center; gap: var(--space-1); }
+
 .list-definition-active input { appearance: none; width: 36px; height: 22px; border-radius: var(--radius-pill); background: var(--border-strong); padding: 2px; cursor: pointer; }
 
 .list-definition-active input::before { content: ""; display: block; width: 18px; height: 18px; border-radius: 50%; background: var(--panel-solid); }

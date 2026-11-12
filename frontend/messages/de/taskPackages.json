@@ -1,6 +1,6 @@
 {
   "pageTitle": "Aufgabenpakete",
-  "pageDescription": "Wiederkehrende Aufgaben, die pro Zyklus automatisch als Todos entstehen. Verantwortliche kommen aus Listen wie der Ämtliliste.",
+  "pageDescription": "Wiederkehrende Aufgaben, die pro Zyklus automatisch als Pendenzen entstehen. Verantwortliche kommen aus Listen wie der Ämtliliste.",
   "newPackage": "Neues Paket",
   "emptyTitle": "Noch keine Aufgabenpakete",
   "emptyDescription": "Lege ein Paket wie „Sommerlager“ oder „Scharleitung“ an und weise es einem Zyklus zu.",
@@ -32,7 +32,7 @@
   "moveUp": "Nach oben",
   "moveDown": "Nach unten",
   "remove": "Entfernen",
-  "deleteItemConfirm": "„{task}“ aus dem Paket entfernen? Bereits erzeugte Todos bleiben als normale Todos bestehen.",
+  "deleteItemConfirm": "„{task}“ aus dem Paket entfernen? Bereits erzeugte Pendenzen bleiben als normale Pendenzen bestehen.",
   "createTitle": "Neues Aufgabenpaket",
   "editTitle": "Paket bearbeiten",
   "nameLabel": "Name",
@@ -59,9 +59,9 @@
     "none": "Keine Aufgaben löschen"
   },
   "removalModeHelp": {
-    "all": "Auch erledigte Aufgaben und Aufgaben vergangener Zyklen werden gelöscht.",
-    "future": "Aufgaben des laufenden und vergangener Zyklen bleiben als normale Todos bestehen.",
-    "none": "Alle Aufgaben bleiben als normale Todos bestehen."
+    "all": "Auch erledigte Aufgaben und Aufgaben vergangener Zyklen werden gelöscht, samt Notizen und verknüpften Dateien. Bereits eingefrorene Bussen bleiben erhalten.",
+    "future": "Aufgaben des laufenden und vergangener Zyklen bleiben als normale Pendenzen bestehen.",
+    "none": "Alle Aufgaben bleiben als normale Pendenzen bestehen."
   },
   "deleteConfirm": "Paket löschen",
   "unassignConfirm": "Zuweisung entfernen",
@@ -73,6 +73,30 @@
   "statusExists": "Vorhanden",
   "statusNew": "Neu",
   "errorGeneric": "Aktion fehlgeschlagen",
+  "errors": {
+    "package_not_found": "Aufgabenpaket nicht gefunden.",
+    "item_not_found": "Aufgabe nicht gefunden.",
+    "name_taken": "Ein Aufgabenpaket mit diesem Namen existiert bereits.",
+    "create_failed": "Das Aufgabenpaket konnte nicht erstellt werden.",
+    "save_failed": "Das Aufgabenpaket konnte nicht gespeichert werden.",
+    "delete_failed": "Das Aufgabenpaket konnte nicht gelöscht werden.",
+    "generate_failed": "Die Aufgaben konnten nicht erzeugt werden.",
+    "item_create_failed": "Die Aufgabe konnte nicht erstellt werden.",
+    "item_save_failed": "Die Aufgabe konnte nicht gespeichert werden.",
+    "item_delete_failed": "Die Aufgabe konnte nicht entfernt werden.",
+    "order_incomplete": "Die Reihenfolge muss alle Aufgaben des Pakets enthalten.",
+    "order_failed": "Die Reihenfolge konnte nicht gespeichert werden.",
+    "cycle_not_found": "Zyklus nicht gefunden.",
+    "cycle_already_assigned": "Das Paket ist diesem Zyklus bereits zugewiesen.",
+    "cycle_assign_failed": "Der Zyklus konnte nicht zugewiesen werden.",
+    "assignment_not_found": "Zuweisung nicht gefunden.",
+    "assignment_save_failed": "Die Zuweisung konnte nicht gespeichert werden.",
+    "assignment_delete_failed": "Die Zuweisung konnte nicht entfernt werden.",
+    "person_not_found": "Person nicht gefunden.",
+    "list_row_not_found": "Listenzeile nicht gefunden.",
+    "invalid_delete_mode": "Unbekannter Löschmodus.",
+    "invalid": "Die Eingabe ist ungültig."
+  },
   "savedToast": "Gespeichert",
   "createdToast": "Paket erstellt",
   "pausedToast": "Paket pausiert",
@@ -168,5 +192,10 @@
     "10": "Oktober",
     "11": "November",
     "12": "Dezember"
+  },
+  "help": {
+    "responsible": "Verantwortliche kannst du fest wählen oder aus einer Liste übernehmen. Ein Listeneintrag bestimmt bei jeder neuen Pendenz, wer gerade an der Reihe ist.",
+    "recurrence": "Legt fest, wie oft aus dieser Aufgabe eine neue Pendenz entsteht: einmal pro Zyklus, monatlich, wöchentlich oder zu Terminen mit einem bestimmten Tag.",
+    "due": "Bestimmt das Fälligkeitsdatum jeder erzeugten Pendenz, z. B. ein festes Datum im Zyklus oder einige Tage vor bzw. nach einem Bezugsdatum wie dem Termin."
   }
 }

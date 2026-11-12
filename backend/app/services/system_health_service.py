@@ -14,6 +14,7 @@ import shutil
 import time
 import urllib.request
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import pyclamd
 from sqlalchemy import func, select, text
@@ -29,6 +30,7 @@ from app.models.entities import PhotoAnalysisJob
 from app.schemas.admin import ContainerStatusRead, HealthCheckRead, HealthStatus, OverloadTenantRead, SystemHealthSnapshot
 
 _logger = logging.getLogger(__name__)
+_TZ = ZoneInfo("Europe/Zurich")
 
 SNAPSHOT_REDIS_KEY = "hocx:system_monitor:snapshot"
 # Ab hier gilt der Snapshot als veraltet (Loop hängt oder läuft nicht) - 6 verpasste Durchläufe.
@@ -734,15 +736,33 @@ def _cached_slow_check(key: str, fn):
     return result
 
 
-def _run_check(key: str, fn, *, failure_status: HealthStatus = "critical", db: Session | None = None) -> list[HealthCheckRead]:
+# Zuletzt protokollierter Fehler je Prüfung - ein dauerhaft kaputter Check soll nicht alle 30 s
+# einen Eintrag ins Fehlerprotokoll schreiben, sondern nur beim ersten Auftreten bzw. neuer Ursache.
+_reported_check_errors: dict[str, str] = {}
+
+
+def _run_check(
+    key: str, fn, *, failure_status: HealthStatus = "critical", db: Session | None = None, report_errors: bool | None = None
+) -> list[HealthCheckRead]:
     """Ein Ausfall einer Prüfung ist selbst ein Befund (Dienst nicht erreichbar) - er darf aber
-    die übrigen Prüfungen nicht verhindern."""
+    die übrigen Prüfungen nicht verhindern.
+
+    Reine DB-Auswertungen (failure_status="unknown") scheitern nur durch einen Bug (z. B. nach
+    einer Migration). Das landet seit Audit 08 (2026-11) gedrosselt im Fehlerprotokoll, und der
+    Alarmdienst meldet eine dauerhaft fehlschlagende Prüfung als Warnung (check_failed)."""
+    if report_errors is None:
+        report_errors = failure_status == "unknown" and db is not None
     try:
         result = fn()
     except Exception as exc:
+        error = f"{type(exc).__name__}: {exc}"[:500]
         if db is not None:
             db.rollback()
-        return [HealthCheckRead(key=key, status=failure_status, error=f"{type(exc).__name__}: {exc}"[:500])]
+        if report_errors and db is not None and _reported_check_errors.get(key) != error:
+            _reported_check_errors[key] = error
+            record_system_error(db, exc=exc)  # wirft nie, rollt selbst zurück
+        return [HealthCheckRead(key=key, status=failure_status, error=error)]
+    _reported_check_errors.pop(key, None)
     return result if isinstance(result, list) else [result]
 
 
@@ -762,7 +782,8 @@ def collect_checks(db: Session, now: datetime) -> list[HealthCheckRead]:
     checks += _run_check("scan_backlog", lambda: _check_scan_backlog(db), failure_status="unknown", db=db)
     checks += _run_check("orphaned_files", lambda: _cached_slow_check("orphaned_files", lambda: _check_orphaned_files(db)), failure_status="unknown", db=db)
     checks += _run_check("tenant_offboarding", lambda: _check_tenant_offboarding(db), failure_status="unknown", db=db)
-    checks += _run_check("captcha_endpoint", _check_captcha_endpoint, failure_status="unknown", db=db)
+    # Netzwerkprüfung: ein Ausfall des Captcha-Dienstes ist kein Bug, nicht ins Fehlerprotokoll.
+    checks += _run_check("captcha_endpoint", _check_captcha_endpoint, failure_status="unknown", db=db, report_errors=False)
     checks += _run_check("security", lambda: _check_security(db), failure_status="unknown", db=db)
     checks += _run_check("photo_queue", lambda: _check_photo_queue(db, now), failure_status="unknown", db=db)
     checks += _run_check("document_queue", lambda: _check_document_queue(db, now), failure_status="unknown", db=db)
@@ -834,7 +855,7 @@ def detect_container_restarts(db: Session, previous: SystemHealthSnapshot | None
                 reason="restarted",
                 severity="warning",
                 title=f"Container {container.service} wurde neu gestartet",
-                message=f"{container.name} läuft seit {container.started_at:%d.%m.%Y %H:%M:%S} UTC wieder (Neustarts insgesamt: {container.restart_count}).",
+                message=f"{container.name} läuft seit {container.started_at.astimezone(_TZ):%d.%m.%Y %H:%M:%S} wieder (Neustarts insgesamt: {container.restart_count}).",
             )
         )
     db.commit()

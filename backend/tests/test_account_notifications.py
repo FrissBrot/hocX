@@ -15,7 +15,9 @@ from app.core.security import get_current_user, verify_password
 from app.models import AccountToken, Notification, TenantDataExport
 from app.notifications import account, dispatch, email_transport, exports
 from app.notifications import preferences as notification_preferences
-from app.schemas.user import UserPasswordChange
+from app.schemas.participant import ParticipantUpdate
+from app.schemas.user import UserPasswordChange, UserUpdate
+from app.services.participant_service import ParticipantService
 from app.services.notification_settings_service import NotificationSettingsService
 from app.services.user_service import UserService
 from tests.factories import make_app_user, make_current_user, make_participant, make_tenant
@@ -165,6 +167,38 @@ def test_security_notices_are_mandatory_and_sent(db, club, sent):
     assert dispatch.preference_enabled(db, anna.id, "account")
     _deliver(db)
     assert len(sent) == 1 and "Sicherheitshinweis" in sent[0].subject
+
+
+def _berta(db, club):
+    return make_app_user(db, "berta@example.com", tenant_id=club["tenant"].id, first_name="Berta", last_name="B", role_code="reader")
+
+
+def test_login_email_change_notifies_the_old_address_without_links(db, club, sent):
+    berta = _berta(db, club)
+    actor = make_current_user(club["tenant"].id, role="admin", user_id=club["anna"].id)
+    UserService().update_user(db, berta.id, UserUpdate(email=" Berta.Neu@example.com "), actor)
+    _deliver(db)
+    assert [mail.to for mail in sent] == ["berta@example.com"]
+    mail = sent[0]
+    assert "Login-E-Mail" in mail.subject and "Vereinsverwaltung" in mail.text
+    # Reiner Hinweis: weder die neue Adresse noch ein Link oder Token
+    assert "berta.neu@example.com" not in mail.text and "http" not in mail.text and "token" not in mail.text.lower()
+    assert "http" not in mail.html.replace("<!doctype html>", "")
+
+
+def test_login_email_change_via_participant_edit_notifies_the_old_address(db, club, sent):
+    berta = _berta(db, club)
+    ParticipantService().update_participant(db, berta.id, ParticipantUpdate(email="berta2@example.com"), tenant_id=club["tenant"].id)
+    _deliver(db)
+    assert [mail.to for mail in sent] == ["berta@example.com"]
+
+
+def test_unchanged_login_email_sends_nothing(db, club, sent):
+    berta = _berta(db, club)
+    actor = make_current_user(club["tenant"].id, role="admin", user_id=club["anna"].id)
+    UserService().update_user(db, berta.id, UserUpdate(email="BERTA@example.com", first_name="Berta"), actor)
+    ParticipantService().update_participant(db, berta.id, ParticipantUpdate(email="berta@example.com"), tenant_id=club["tenant"].id)
+    assert db.scalar(select(Notification).where(Notification.kind == "security.email_changed")) is None
 
 
 def test_export_ready_notifies_the_requester(db, club, sent):

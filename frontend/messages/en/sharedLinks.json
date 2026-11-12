@@ -17,14 +17,16 @@
     "metadataCaptureDateHelp": "Date and time the photo was taken.",
     "metadataCamera": "Camera & device",
     "metadataCameraHelp": "Model, serial number, lens and exposure settings.",
-    "metadataHelp": "Details that are switched off are removed from the photos when they are downloaded."
+    "metadataHelp": "Details that are switched off are removed from the photos when they are downloaded.",
+    "albumLiveNotice": "Album links are “live”: photos added to the album later appear in the link automatically – including automatically sorted ones once they are released.",
+    "linkHelp": "Anyone with the link can view and download the photos without signing in. Switched-off details (location, date, camera) are removed from the files. You can revoke the link at any time under «Shared links»."
   },
   "emptyDescription": "Use \"Share\" on files, photos or a photo album to create a download link without logging in.",
   "emptyTitle": "No links yet",
   "filterActive": "Active",
   "filterAll": "All",
   "page": {
-    "description": "Public download links for files and photos of this organization.",
+    "description": "Public download links for files and photos of your organization.",
     "title": "Shared links"
   },
   "revokeConfirm": "Revoke link \"{name}\"? It will stop working afterwards.",

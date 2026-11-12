@@ -47,7 +47,7 @@ class EnrichResult:
 
 
 def find_existing(db: Session, tenant_id: int, checksums: list[str], *, lock: bool = False) -> dict[str, list[StoredFile]]:
-    """Vorhandene, nicht infizierte Dateien des Mandanten je Hash (Original- oder Quell-Hash).
+    """Vorhandene, nicht gesperrte Dateien des Mandanten je Hash (Original- oder Quell-Hash).
     lock=True sperrt die Zeilen bis zum Ende der Transaktion (SELECT ... FOR UPDATE), damit
     zwei gleichzeitige Abgleiche dieselben fehlenden Felder nicht doppelt bzw. widersprüchlich
     befüllen - der zweite sieht danach den bereits ergänzten Wert."""
@@ -58,7 +58,8 @@ def find_existing(db: Session, tenant_id: int, checksums: list[str], *, lock: bo
         select(StoredFile)
         .where(
             StoredFile.tenant_id == tenant_id,
-            StoredFile.scan_status != "infected",
+            # Gesperrte Dateien (infiziert, Scan-Fehler) zählen nicht als Duplikat (Audit Dateien/Fotos).
+            StoredFile.scan_status.notin_(("infected", "error")),
             or_(StoredFile.checksum_sha256.in_(wanted), StoredFile.source_checksum_sha256.in_(wanted)),
         )
         .order_by(StoredFile.id)

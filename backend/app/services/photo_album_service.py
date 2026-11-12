@@ -268,6 +268,50 @@ def set_best_override_everywhere(db: Session, file_service, tenant_id: int, file
     return len(albums)
 
 
+ALBUM_NAME_MAX_LENGTH = 120
+
+
+def normalize_album_name(name: str) -> str:
+    """Gemeinsame Regel für Anlegen und Umbenennen: 1-120 Zeichen nach dem Trimmen."""
+    cleaned = name.strip()
+    if not cleaned or len(cleaned) > ALBUM_NAME_MAX_LENGTH:
+        raise ValueError("Albumname muss zwischen 1 und 120 Zeichen lang sein")
+    return cleaned
+
+
+def rename_album(db: Session, album: PhotoAlbum, name: str) -> PhotoAlbum:
+    """Umbenennen ist für alle Albumarten erlaubt: automatische Alben bekommen ihren Namen nur
+    beim Anlegen (get_or_create_*), ein neuer Name bleibt also erhalten. Der Aufrufer committet."""
+    album.name = normalize_album_name(name)
+    db.flush()
+    return album
+
+
+def delete_album(db: Session, album: PhotoAlbum) -> None:
+    """Löscht nur das Album: Album-Einträge, Freigaben an Partner und Album-Links hängen per
+    ON DELETE CASCADE daran, die Fotos selbst bleiben unverändert erhalten. Nur manuelle Alben -
+    automatische (Zyklus/Abgabe) würden beim nächsten Upload ohnehin neu entstehen."""
+    if album.kind != "manual":
+        raise ValueError("Automatisch erstellte Alben können nicht gelöscht werden")
+    db.delete(album)
+    db.flush()
+
+
+def remove_items(db: Session, album: PhotoAlbum, file_ids: list[uuid.UUID]) -> int:
+    """Nimmt Fotos aus einem Album heraus, ohne sie zu löschen. Rückgabe: Anzahl entfernter Einträge."""
+    if not file_ids:
+        return 0
+    result = db.execute(delete(PhotoAlbumItem).where(PhotoAlbumItem.album_id == album.id, PhotoAlbumItem.file_id.in_(file_ids)))
+    db.flush()
+    return result.rowcount or 0
+
+
+def album_item_ids(db: Session, album: PhotoAlbum, file_ids: list[uuid.UUID]) -> set[uuid.UUID]:
+    if not file_ids:
+        return set()
+    return set(db.scalars(select(PhotoAlbumItem.file_id).where(PhotoAlbumItem.album_id == album.id, PhotoAlbumItem.file_id.in_(file_ids))))
+
+
 def drop_items_for_files(db: Session, file_ids: list[uuid.UUID]) -> set[uuid.UUID]:
     """Removes every PhotoAlbumItem row for the given files - photo_album_item.file_id has
     no FK constraint, so deleting a StoredFile leaves these orphaned unless a caller cleans

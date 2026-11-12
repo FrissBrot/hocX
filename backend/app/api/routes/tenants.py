@@ -159,6 +159,12 @@ def tenant_profile_image(tenant_id: uuid.UUID, request: Request, db: Session = D
     return tenant_profile_image_response(request, tenant.profile_image_path)
 
 
+# Getrennte Stundenkontingente je Mandant für die Domain-Routen (Audit 08, 2026-11).
+DOMAIN_CREATE_LIMIT_PER_HOUR = 5
+DOMAIN_VERIFY_LIMIT_PER_HOUR = 20
+DOMAIN_DELETE_LIMIT_PER_HOUR = 10
+
+
 @router.get("/tenants/{tenant_id}/domains", response_model=list[TenantDomainRead])
 def list_tenant_domains(
     tenant_id: uuid.UUID,
@@ -187,7 +193,7 @@ def create_tenant_domain(
     # Erst Rechte, dann Kontingent (Audit MAIN-SEC-008): sonst verbrauchen Fremde mit
     # 403-Requests das Stundenkontingent des Mandanten.
     service.require_manageable(internal_id, user)
-    enforce_rate_limit(f"tenant-domain-mutation:{internal_id}", limit=5, period_seconds=3600)
+    enforce_rate_limit(f"tenant-domain-create:{internal_id}", limit=DOMAIN_CREATE_LIMIT_PER_HOUR, period_seconds=3600)
     return service.create_domain(db, internal_id, user, payload)
 
 
@@ -205,7 +211,10 @@ def verify_tenant_domain(
     # Erst Rechte, dann Kontingent (Audit MAIN-SEC-008): sonst verbrauchen Fremde mit
     # 403-Requests das Stundenkontingent des Mandanten.
     service.require_manageable(tenant_internal_id, user)
-    enforce_rate_limit(f"tenant-domain-mutation:{tenant_internal_id}", limit=5, period_seconds=3600)
+    # Eigenes, grosszügigeres Kontingent (Audit 08, 2026-11): wer wiederholt «Jetzt prüfen»
+    # klickt, solange das DNS noch nicht durch ist, darf sich nicht das Löschen sperren. Eine
+    # erfolglose Prüfung schreibt Traefik nicht neu, kostet nur DNS-Abfragen.
+    enforce_rate_limit(f"tenant-domain-verify:{tenant_internal_id}", limit=DOMAIN_VERIFY_LIMIT_PER_HOUR, period_seconds=3600)
     return service.verify_domain(db, tenant_internal_id, user, domain_internal_id)
 
 
@@ -223,6 +232,6 @@ def delete_tenant_domain(
     # Erst Rechte, dann Kontingent (Audit MAIN-SEC-008): sonst verbrauchen Fremde mit
     # 403-Requests das Stundenkontingent des Mandanten.
     service.require_manageable(tenant_internal_id, user)
-    enforce_rate_limit(f"tenant-domain-mutation:{tenant_internal_id}", limit=5, period_seconds=3600)
+    enforce_rate_limit(f"tenant-domain-delete:{tenant_internal_id}", limit=DOMAIN_DELETE_LIMIT_PER_HOUR, period_seconds=3600)
     service.delete_domain(db, tenant_internal_id, user, domain_internal_id)
     return {"message": "Domain removed"}

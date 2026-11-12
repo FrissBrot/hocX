@@ -51,6 +51,7 @@
     "late": "Late",
     "absent": "Unexcused absence"
   },
+  "fineTransaction": "Fine {type}: {name}",
   "col": {
     "status": "Status",
     "task": "Task",
@@ -323,7 +324,15 @@
     "brandArchived": "An archived brand profile cannot be the default.",
     "defaultBrand": "The default brand profile cannot be archived or deleted.",
     "brandInUse": "The brand profile is in use. Please archive it instead of deleting it.",
-    "noColumns": "Select at least one column."
+    "noColumns": "Select at least one column.",
+    "agendaItemNotFound": "The topic was not found.",
+    "agendaItemFrozen": "The topic belongs to a closed protocol and can no longer be changed.",
+    "agendaProtocolClosed": "The protocol is already closed.",
+    "agendaTitleRequired": "Please enter a title.",
+    "agendaMonthRequired": "Please choose a month.",
+    "agendaBoundOnlyPostpone": "The topic is already part of a protocol. Use «Postpone» to move it.",
+    "agendaPointMismatch": "The selected item does not belong to this template.",
+    "agendaSaveFailed": "The topic could not be saved."
   },
   "metadata": {
     "title": "Document details",
@@ -628,7 +637,11 @@
       "mfaRemoved": "Second factor removed ({at})",
       "mfaRemovedByAdmin": "Second factor removed by the club administration ({at})",
       "hint": "Wasn't you? Contact {tenant} immediately.",
-      "mandatory": "Security notices are always sent and can't be turned off."
+      "mandatory": "Security notices are always sent and can't be turned off.",
+      "emailChanged": "Login email changed ({at})",
+      "emailChangedByAdmin": "Login email changed by the club administration ({at})",
+      "emailChangedSubject": "{tenant}: Your login email was changed",
+      "emailChangedIntro": "The login email of your account at {tenant} was changed. This address is no longer used for signing in, so this is the last message sent here:"
     },
     "export": {
       "subjectReady": "{tenant}: Data export ready",

@@ -38,6 +38,9 @@ class TenantRead(BaseModel):
     # Nur in der Antwort auf eine Änderung: die Namensänderung hat die Bestätigung der
     # Organisation durch hocX aufgehoben (Hinweis im UI).
     identity_verification_revoked: bool = False
+    # Organisation ist durch hocX bestätigt - die Stammdaten fragen vor einer Namensänderung
+    # nach, weil sie die Bestätigung aufhebt (Audit 08, 2026-11).
+    identity_verified: bool = False
 
 
 class TenantLookupRead(BaseModel):
@@ -61,6 +64,8 @@ class TenantSubscriptionFeatureRead(BaseModel):
     standalone_price_monthly_rp: int | None = None
     # Teil des aktuellen Plans (kostet nicht zusaetzlich) vs. einzeln zugebucht.
     included_in_plan: bool = False
+    # Nach einem Downgrade nur noch lesbar (Daten bleiben, Ändern gesperrt; Audit 08).
+    read_only: bool = False
 
 
 class TenantSubscriptionRead(BaseModel):
@@ -144,6 +149,10 @@ class UserUpdate(BaseModel):
     role_ids: list[uuid.UUID] | None = Field(default=None, max_length=50)
     system_role: SystemRoleKey | None = None
     login_enabled: bool | None = None
+    # E-Mail-Benachrichtigungen für Personen ohne Login (Migration 0170). Muss hier stehen, weil
+    # PATCH /participants Admin-Speicherungen (mit login_enabled) über UserUpdate leitet - fehlte
+    # das Feld, verwarf Pydantic den Schalter stillschweigend (Bereichs-Audit 05, 2026-11).
+    notify_without_login: bool | None = None
 
     _validate_preferred_language = field_validator("preferred_language")(_validate_preferred_language)
 
@@ -244,5 +253,8 @@ class TenantDomainRead(BaseModel):
     verified_at: datetime | None = None
     is_healthy: bool = True
     last_checked_at: datetime | None = None
+    # Ausstehende Domain, die nach erfolgreicher Prüfung die aktive Domain desselben Zwecks
+    # ersetzt (Migration 0179) - bis dahin läuft die bisherige Domain unverändert weiter.
+    replaces_domain: str | None = None
 
     model_config = {"from_attributes": True}

@@ -12,7 +12,15 @@ import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
-import { browserApiFetch } from "@/lib/api/client";
+import { ApiError, browserApiFetch } from "@/lib/api/client";
+
+const TASK_PACKAGE_ERROR_CODES = [
+  "package_not_found", "item_not_found", "name_taken", "create_failed", "save_failed", "delete_failed", "generate_failed",
+  "item_create_failed", "item_save_failed", "item_delete_failed", "order_incomplete", "order_failed", "cycle_not_found",
+  "cycle_already_assigned", "cycle_assign_failed", "assignment_not_found", "assignment_save_failed", "assignment_delete_failed",
+  "person_not_found", "list_row_not_found", "invalid_delete_mode", "invalid",
+] as const;
+type TaskPackageErrorCode = (typeof TASK_PACKAGE_ERROR_CODES)[number];
 import { formatCycleName } from "@/lib/utils/cycle";
 import {
   CycleConfigSummary,
@@ -91,6 +99,13 @@ export function TaskPackageManager({ initialPackages, cycleConfigs, responsibleL
     setPackages((current) => sortPackages(current.some((pkg) => pkg.id === updated.id) ? current.map((pkg) => (pkg.id === updated.id ? updated : pkg)) : [...current, updated]));
   }
 
+  /** Fehlercodes des Backends ({code, message}) übersetzen statt deutscher Texte anzuzeigen. */
+  function errorText(error: unknown): string {
+    const code = error instanceof ApiError ? (error.detail as { code?: unknown } | undefined)?.code : undefined;
+    if (typeof code === "string" && (TASK_PACKAGE_ERROR_CODES as readonly string[]).includes(code)) return t(`errors.${code as TaskPackageErrorCode}`);
+    return error instanceof Error ? error.message : t("errorGeneric");
+  }
+
   async function run<T>(action: () => Promise<T>, successMessage?: string | ((result: T) => string)): Promise<T | null> {
     setBusy(true);
     try {
@@ -98,7 +113,7 @@ export function TaskPackageManager({ initialPackages, cycleConfigs, responsibleL
       if (successMessage) showToast(typeof successMessage === "function" ? successMessage(result) : successMessage, "success");
       return result;
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("errorGeneric"), "error");
+      showToast(errorText(error), "error");
       return null;
     } finally {
       setBusy(false);

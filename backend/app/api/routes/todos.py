@@ -1,5 +1,4 @@
 import uuid
-from datetime import date
 from types import SimpleNamespace
 
 from sqlalchemy import case, select
@@ -25,12 +24,25 @@ from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
 from app.services.protocol_service import ProtocolService
 from app.services.protocol_todo_service import ProtocolTodoService
+from app.services import todo_fine_service
 
 router = APIRouter()
 service = ProtocolTodoService()
 access_service = AccessService()
 audit = AuditService()
 protocol_service = ProtocolService()
+
+
+def _todo_or_404(db: Session, user: CurrentUser, todo_id: uuid.UUID) -> ProtocolTodo:
+    """Todo des eigenen Mandanten mit Leserecht. Fremde und unbekannte IDs ergeben 404 (kein
+    Existenz-Orakel über Mandanten hinweg, SECURITY-RULES 1.1/1.6)."""
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=404, detail="Todo not found")
+    todo = public_id_service.get_by_public_id(db, ProtocolTodo, todo_id, tenant_id=user.current_tenant_id)
+    if todo is None:
+        raise HTTPException(status_code=404, detail="Todo not found")
+    access_service.ensure_can_read_todo(db, user, todo.id)
+    return todo
 
 
 def _get_protocol_or_404(db: Session, protocol_id: int):
@@ -110,7 +122,7 @@ def list_todos(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.MEETINGS_READ)
-    block = public_id_service.get_by_public_id(db, ProtocolElementBlock, protocol_element_block_id)
+    block = public_id_service.get_by_public_id(db, ProtocolElementBlock, protocol_element_block_id, tenant_id=user.current_tenant_id)
     if block is None:
         raise HTTPException(status_code=404, detail="Protocol element block not found")
     # Gleiche Prüfung wie ensure_can_read_protocol_block, aber das Protokoll nur einmal ermitteln
@@ -194,7 +206,7 @@ def create_todo(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.MEETINGS_EDIT)
-    block = public_id_service.get_by_public_id(db, ProtocolElementBlock, protocol_element_block_id)
+    block = public_id_service.get_by_public_id(db, ProtocolElementBlock, protocol_element_block_id, tenant_id=user.current_tenant_id)
     if block is None:
         raise HTTPException(status_code=404, detail="Protocol element block not found")
     access_service.ensure_can_read_protocol_block(db, user, block.id)
@@ -218,11 +230,8 @@ def get_todo_due_events(
 ):
     """Return upcoming events for due-date selection, filtered by the template's todo_due_event_tag."""
     require_permission(user, P.MEETINGS_READ)
-    todo = public_id_service.get_by_public_id(db, ProtocolTodo, todo_id)
-    if todo is None:
-        raise HTTPException(status_code=404, detail="Todo not found")
-    access_service.ensure_can_read_todo(db, user, todo.id)
-    today = date.today()
+    todo = _todo_or_404(db, user, todo_id)
+    today = todo_fine_service.today()
 
     tag_filter: str | None = None
     next_event_public_id: uuid.UUID | None = None
@@ -286,17 +295,21 @@ def patch_todo(
     # this pass; a real fix would need the frontend to start locking todos as its own
     # field_key first.
     require_permission(user, P.MEETINGS_EDIT)
-    existing = public_id_service.get_by_public_id(db, ProtocolTodo, todo_id)
-    if existing is None:
-        raise HTTPException(status_code=404, detail="Todo not found")
-    access_service.ensure_can_read_todo(db, user, existing.id)
+    existing = _todo_or_404(db, user, todo_id)
     previous_status_id = existing.todo_status_id
     protocol_id = access_service.repository.protocol_id_for_todo(db, todo_id=existing.id)
     # Standalone todos (protocol_id None) have no protocol at all.
     protocol = _get_protocol_or_404(db, protocol_id) if protocol_id else None
     track_changes_active = bool(protocol and protocol.status == "geplant" and protocol.track_changes_enabled)
+    fine_changes: dict = {}
     try:
-        todo = service.update_todo(db, existing.id, payload, track_changes_active=track_changes_active, actor_user_id=user.user_id)
+        todo = service.update_todo(
+            db, existing.id, payload, track_changes_active=track_changes_active, actor_user_id=user.user_id,
+            can_manage_fines=user.can(P.FINANCES_MANAGE), fine_changes=fine_changes,
+        )
+    except todo_fine_service.TodoFineError as exc:
+        # Die Prüfung läuft vor jedem Schreiben - nichts zurückzurollen
+        raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)}) from exc
     except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Todo could not be updated") from exc
@@ -307,6 +320,9 @@ def patch_todo(
             db, action="todo.status_changed", actor=user, entity_type="protocol_todo", entity_id=existing.id,
             details={"from_status_id": previous_status_id, "to_status_id": payload.todo_status_id},
         )
+    if fine_changes:
+        # Fälligkeit, Verantwortliche, Tags oder Abbrechen: kann eine laufende Busse ändern
+        audit.log(db, action="todo.fine_relevant_changed", actor=user, entity_type="protocol_todo", entity_id=existing.id, details=fine_changes)
     if todo.protocol_element_block_id is None:
         # Standalone (z. B. aus einem Aufgabenpaket): nur diese eine Zeile laden statt aller
         # protokollfreien Todos.
@@ -326,11 +342,7 @@ def get_todo_details(
 ):
     """Notizen und verknüpfte Dateien für das Todo-Popup (nicht in Liste/Übersicht/Export)."""
     require_permission(user, P.MEETINGS_READ)
-    todo = public_id_service.get_by_public_id(db, ProtocolTodo, todo_id, tenant_id=user.current_tenant_id)
-    if todo is None:
-        raise HTTPException(status_code=404, detail="Todo not found")
-    access_service.ensure_can_read_todo(db, user, todo.id)
-    return service.get_details(db, todo)
+    return service.get_details(db, _todo_or_404(db, user, todo_id))
 
 
 @router.put("/protocol-todos/{todo_id}/details", response_model=TodoDetails)
@@ -343,10 +355,7 @@ def put_todo_details(
     require_permission(user, P.MEETINGS_EDIT)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
-    todo = public_id_service.get_by_public_id(db, ProtocolTodo, todo_id, tenant_id=user.current_tenant_id)
-    if todo is None:
-        raise HTTPException(status_code=404, detail="Todo not found")
-    access_service.ensure_can_read_todo(db, user, todo.id)
+    todo = _todo_or_404(db, user, todo_id)
     try:
         return service.update_details(db, todo, payload, tenant_id=user.current_tenant_id)
     except (SQLAlchemyError, ValueError) as exc:
@@ -363,10 +372,7 @@ def accept_todo_tracked_change(
     """'Ausblenden' for one todo's red tracked-change highlight - keeps the todo, just
     stops marking it as changed/added/pending-delete."""
     require_permission(user, P.MEETINGS_EDIT)
-    existing = public_id_service.get_by_public_id(db, ProtocolTodo, todo_id)
-    if existing is None:
-        raise HTTPException(status_code=404, detail="Todo not found")
-    access_service.ensure_can_read_todo(db, user, existing.id)
+    existing = _todo_or_404(db, user, todo_id)
     protocol_id = access_service.repository.protocol_id_for_todo(db, todo_id=existing.id)
     # Standalone todos (protocol_id None) have no tracked-change concept in practice, but
     # guard consistently with patch/delete above rather than special-casing this endpoint.
@@ -394,14 +400,18 @@ def delete_todo(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.MEETINGS_EDIT)
-    existing = public_id_service.get_by_public_id(db, ProtocolTodo, todo_id)
-    if existing is None:
-        raise HTTPException(status_code=404, detail="Todo not found")
-    access_service.ensure_can_read_todo(db, user, existing.id)
+    existing = _todo_or_404(db, user, todo_id)
     protocol_id = access_service.repository.protocol_id_for_todo(db, todo_id=existing.id)
     # Standalone todos (protocol_id None) have no protocol at all.
     protocol = _get_protocol_or_404(db, protocol_id) if protocol_id else None
     track_changes_active = bool(protocol and protocol.status == "geplant" and protocol.track_changes_enabled)
+    # Löschen beendet eine laufende Busse: nicht durch die gebüsste Person selbst. Eingefrorene
+    # Bussen bleiben stehen (todo_fine.protocol_todo_id ON DELETE SET NULL, Snapshots).
+    try:
+        todo_fine_service.ensure_may_change(db, existing, actor_user_id=user.user_id, can_manage=user.can(P.FINANCES_MANAGE))
+    except todo_fine_service.TodoFineError as exc:
+        raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)}) from exc
+    running_before = todo_fine_service.running_amount(db, existing)
     try:
         result = service.delete_todo(db, existing.id, track_changes_active=track_changes_active)
     except SQLAlchemyError as exc:
@@ -410,7 +420,10 @@ def delete_todo(
     if result is None:
         raise HTTPException(status_code=404, detail="Todo not found")
     hard_deleted, block_id = result
-    audit.log(db, action="todo.deleted", actor=user, entity_type="protocol_todo", entity_id=existing.id)
+    audit.log(
+        db, action="todo.deleted", actor=user, entity_type="protocol_todo", entity_id=existing.id,
+        details={"running_fine_before": str(running_before)} if running_before else None,
+    )
     if hard_deleted or block_id is None:
         return {"pending_delete": False, "message": "Todo deleted", "todo": None}
     todos = service.list_todos(db, block_id)

@@ -3997,3 +3997,13 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* Titel der Listenzeile als echter Link (Tastatur/Screenreader), Optik wie bisher. */
+.record-list-row-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.record-list-row-link:hover {
+  text-decoration: underline;
+}

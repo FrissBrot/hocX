@@ -75,7 +75,16 @@
     "special3Label": "Speciale 3",
     "specialText1Label": "Testo speciale 1",
     "specialText2Label": "Testo speciale 2",
-    "specialText3Label": "Testo speciale 3"
+    "specialText3Label": "Testo speciale 3",
+    "readOnlyHint": "Solo visualizzazione: per modificare ti serve l'autorizzazione «Modificare le sedute».",
+    "saveStatus": {
+      "idle": "Le modifiche vengono salvate automaticamente.",
+      "saving": "Salvataggio…",
+      "saved": "Tutte le modifiche salvate",
+      "error": "Non salvato – riprova, per favore."
+    },
+    "fieldSettingsHint": "I campi «Speciale» si possono rinominare o nascondere.",
+    "fieldSettingsLink": "Alle impostazioni"
   },
   "detailModal": {
     "fallbackTitle": "Evento"
@@ -115,13 +124,14 @@
     "endDate": "Data di fine",
     "location": "Luogo",
     "locationPlaceholder": "ad es. casa comunale, campo sportivo",
-    "noCycles": "Nessun ciclo disponibile (crea cicli in Struttura → Cicli)",
+    "noCycles": "Nessun ciclo disponibile (crea cicli in Configurazione → Flussi di lavoro → Cicli)",
     "participantCount": "Numero di partecipanti",
     "people": "Persone",
     "startDate": "Data di inizio",
     "tag": "Tag",
     "tagPlaceholder": "ad es. riunione, campo, serata genitori",
-    "title": "Titolo"
+    "title": "Titolo",
+    "noCyclesAskAdmin": "Ancora nessun ciclo. I cicli vengono creati da una persona con l'autorizzazione «Gestire i modelli»."
   },
   "importModal": {
     "cancel": "Annulla",
@@ -162,7 +172,9 @@
     "summaryQuery": "{count, plural, one {# evento} other {# eventi}} per «{query}»",
     "summaryTag": "{count, plural, one {# evento} other {# eventi}} con tag «{tag}»",
     "summaryTagQuery": "{count, plural, one {# evento} other {# eventi}} con tag «{tag}» per «{query}»",
-    "today": "Oggi · {date}"
+    "today": "Oggi · {date}",
+    "partialLoaded": "Ricerca e filtri considerano solo i {count} appuntamenti caricati.",
+    "loadAll": "Carica tutti gli appuntamenti"
   },
   "loadMore": "Carica altri ({count} caricati)",
   "loadingMore": "Caricamento altri eventi…",
@@ -174,7 +186,6 @@
     "createEventButton": "Crea evento",
     "currentCycleScope": "Ciclo attuale",
     "deleteButtonTitle": "Elimina definitivamente l'evento",
-    "deleteConfirm": "Eliminare definitivamente l'evento \"{title}\"? Verrà rimosso da tutti i verbali.",
     "newEventButton": "+ Nuovo evento",
     "noEventsShown": "Nessun evento mostrato.",
     "noMatchingEvents": "Nessun evento corrispondente trovato.",
@@ -194,7 +205,7 @@
   "rowFieldsSection": "Mostra nella riga",
   "searchPlaceholder": "Cerca eventi",
   "selectedCount": "{count} selezionati",
-  "showAllPeriods": "Mostra tutti i periodi di ciclo",
+  "showAllPeriods": "Mostra anche i cicli precedenti e successivi",
   "cycleFilter": {
     "title": "Ciclo",
     "all": "Tutti i cicli"
@@ -225,5 +236,30 @@
     "previewFailed": "Anteprima non riuscita",
     "saveFailed": "Impossibile salvare l'evento"
   },
-  "view": "Vista"
+  "view": "Vista",
+  "help": {
+    "tag": "Un tag classifica l'appuntamento (p. es. «Seduta», «Campo»). I blocchi del verbale e le consegne filtrano in base ad esso; un filtro trova ogni tag che contiene il testo cercato. Rinominare cambia il tag in tutti gli appuntamenti e nelle consegne.",
+    "cycles": "Di norma un appuntamento appartiene al ciclo in cui cade la sua data. Un'assegnazione manuale resta anche se la data cambia e determina in quali filtri di ciclo (verbali, consegne, album fotografici) compare l'appuntamento.",
+    "currentCycle": "Di norma l'elenco mostra solo gli appuntamenti del ciclo attuale (p. es. l'anno sociale in corso). Con questo interruttore compaiono anche gli appuntamenti dei cicli precedenti e successivi.",
+    "csvImport": "Data d'inizio e titolo sono obbligatori. hocX non controlla i doppioni: importare due volte un file crea gli appuntamenti due volte. Gli appuntamenti importati vengono assegnati al loro ciclo in base alla data.",
+    "docsLink": "Guida agli appuntamenti",
+    "calendarDocsLink": "Abbonarsi agli appuntamenti nel proprio calendario",
+    "roles": "Assegna le persone ai ruoli dell'appuntamento. I campi «Speciale» sono liberi; si possono rinominare o nascondere nelle impostazioni del mandante."
+  },
+  "deleteDialog": {
+    "title": "Eliminare l'appuntamento?",
+    "message": "L'appuntamento verrà eliminato definitivamente e rimosso da tutti i verbali.",
+    "messageWithTitle": "«{title}» verrà eliminato definitivamente e rimosso da tutti i verbali.",
+    "submissions": "Attenzione: {count, plural, one {# consegna} other {# consegne}} con {files, plural, one {# file} other {# file}} per questo appuntamento verranno eliminate anch'esse in modo irreversibile.",
+    "submissionsUnknown": "Eventuali consegne per questo appuntamento verranno eliminate in modo irreversibile insieme ai loro file.",
+    "cancelInstead": "Se l'appuntamento semplicemente non ha luogo, segnalo piuttosto come annullato."
+  },
+  "csvErrors": {
+    "startDateMissing": "Riga {row}: manca la data d'inizio",
+    "titleMissing": "Riga {row}: manca il titolo",
+    "startDateFormat": "Riga {row}: la data d'inizio «{value}» ha un formato sconosciuto",
+    "endDateFormat": "Riga {row}: la data di fine «{value}» ha un formato sconosciuto",
+    "endBeforeStart": "Riga {row}: la data di fine precede la data d'inizio",
+    "participantCountInvalid": "Riga {row}: il numero di partecipanti non è un numero intero"
+  }
 }

@@ -1,7 +1,8 @@
 {
   "page": {
     "title": "Verknüpfungen",
-    "description": "Zeige deine Termine und Todos aus hocX in Apple Kalender oder Google Kalender an. Die Kalender aktualisieren sich automatisch – bearbeitet wird weiterhin in hocX."
+    "description": "Zeige deine Termine und Pendenzen aus hocX in Apple Kalender oder Google Kalender an. Die Kalender aktualisieren sich automatisch – bearbeitet wird weiterhin in hocX.",
+    "docsLink": "Mehr dazu in der Hilfe"
   },
   "status": {
     "active": "Verknüpft",
@@ -14,15 +15,15 @@
     "calendarName": "hocX – Termine ({tenant})"
   },
   "todos": {
-    "title": "Todos",
-    "description": "Todos mit Fälligkeitsdatum als ganztägige Einträge – offene mit ☐, erledigte mit ✓.",
-    "calendarName": "hocX – Todos ({tenant})"
+    "title": "Pendenzen",
+    "description": "Pendenzen mit Fälligkeitsdatum als ganztägige Einträge – offene mit ☐, erledigte mit ✓.",
+    "calendarName": "hocX – Pendenzen ({tenant})"
   },
   "options": {
-    "scope": "Welche Todos",
-    "scopeMine": "Nur meine Todos",
-    "scopeAll": "Alle Todos, die ich sehe",
-    "includeCompleted": "Erledigte Todos anzeigen",
+    "scope": "Welche Pendenzen",
+    "scopeMine": "Nur meine Pendenzen",
+    "scopeAll": "Alle Pendenzen, die ich sehe",
+    "includeCompleted": "Erledigte Pendenzen anzeigen",
     "hideDetails": "Nur Titel und Datum übertragen",
     "hideDetailsHelp": "Ohne Beschreibung, Ort und Namen. Google speichert abonnierte Kalender auf eigenen Servern."
   },
@@ -65,7 +66,7 @@
   },
   "hint": {
     "events": "Termine in Apple oder Google Kalender anzeigen",
-    "todos": "Todos in Apple oder Google Kalender anzeigen",
+    "todos": "Pendenzen in Apple oder Google Kalender anzeigen",
     "action": "Verknüpfen",
     "linked": "Mit deinem Kalender verknüpft",
     "manage": "Verwalten"

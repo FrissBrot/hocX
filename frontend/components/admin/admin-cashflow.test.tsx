@@ -17,7 +17,7 @@ vi.mock("@/lib/api/client", () => ({
 vi.mock("@/contexts/toast-context", () => ({ useToast: () => showToast }));
 vi.mock("@/contexts/confirm-context", () => ({ useConfirm: () => vi.fn(async () => true) }));
 
-import { AdminCashflow } from "./admin-cashflow";
+import { AdminCashflow, todayLocalIso } from "./admin-cashflow";
 import { CashflowCost, CashflowOverview, TenantChargePage } from "@/types/api";
 
 function overview(): CashflowOverview {
@@ -125,5 +125,12 @@ describe("AdminCashflow", () => {
     const call = browserApiFetchMock.mock.calls.find(([path, init]) => path === "/api/admin/cashflow/costs" && init?.method === "POST");
     expect(JSON.parse(call![1].body)).toMatchObject({ name: "TWINT", kind: "percent", percent_bp: 130, amount_rp: null, interval: null });
     expect(dialog).toBeTruthy();
+  });
+});
+
+describe("todayLocalIso", () => {
+  it("nimmt das lokale Datum statt des UTC-Datums (kurz nach Mitternacht)", () => {
+    const justAfterMidnight = new Date(2026, 10, 12, 0, 30);
+    expect(todayLocalIso(justAfterMidnight)).toBe("2026-11-12");
   });
 });

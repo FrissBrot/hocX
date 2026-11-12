@@ -453,7 +453,21 @@ def supervise(db: Session) -> dict[str, int]:
 
     now = _now()
     counts = {"started": 0, "activated": 0, "overdue": 0, "estimated": 0}
-    for window in db.scalars(select(MaintenanceWindow).where(MaintenanceWindow.state.in_(("scheduled", "preparing", "active", "verifying", "overdue")))).all():
+    supervised = ("scheduled", "preparing", "active", "verifying", "overdue")
+    # Erst nur IDs, dann je Fenster sperren und den Zustand frisch lesen (Audit 08, 2026-11):
+    # transition() verlangt die Zeilensperre. Ohne sie konnte der Supervisor ein gerade
+    # abgesagtes Fenster mit veraltetem 'scheduled'-Stand doch noch starten. Ein Fenster, das
+    # gerade ein Admin oder Job hält, wird übersprungen und im nächsten Tick behandelt.
+    window_ids = db.scalars(select(MaintenanceWindow.id).where(MaintenanceWindow.state.in_(supervised))).all()
+    for window_id in window_ids:
+        window = db.scalars(
+            select(MaintenanceWindow)
+            .where(MaintenanceWindow.id == window_id)
+            .with_for_update(skip_locked=True)
+            .execution_options(populate_existing=True)
+        ).first()
+        if window is None or window.state not in supervised:
+            continue
         if window.source_job_type is None and window.state == "scheduled" and window.scheduled_start_at and window.scheduled_start_at <= now:
             transition(db, window, "preparing", details={"source": "schedule"})
             counts["started"] += 1

@@ -47,6 +47,10 @@
         }
       },
       "securityNote": "Sicherheitshinweise (Passwort oder zweiter Faktor geändert) und Links zum Zurücksetzen des Passworts bekommst du immer."
+    },
+    "docs": {
+      "notifications": "Mehr zu E-Mail-Benachrichtigungen",
+      "security": "Mehr zu Passwort und zweitem Faktor"
     }
   },
   "logoutFailed": "Abmelden fehlgeschlagen. Bitte erneut versuchen.",

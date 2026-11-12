@@ -17,14 +17,16 @@
     "metadataCaptureDateHelp": "Data e ora dello scatto.",
     "metadataCamera": "Fotocamera e dispositivo",
     "metadataCameraHelp": "Modello, numero di serie, obiettivo e impostazioni di esposizione.",
-    "metadataHelp": "Le informazioni disattivate vengono rimosse dalle foto al momento del download."
+    "metadataHelp": "Le informazioni disattivate vengono rimosse dalle foto al momento del download.",
+    "albumLiveNotice": "I link agli album sono «in tempo reale»: le foto aggiunte in seguito all’album compaiono automaticamente nel link – anche quelle inserite automaticamente, una volta approvate.",
+    "linkHelp": "Chiunque abbia il link può vedere e scaricare le foto senza accedere. Le informazioni disattivate (posizione, data, fotocamera) vengono rimosse dai file. Puoi revocare il link in qualsiasi momento in «Link condivisi»."
   },
   "emptyDescription": "Usa \"Condividi\" su file, foto o un album fotografico per creare un link di download senza accesso.",
   "emptyTitle": "Ancora nessun link",
   "filterActive": "Attivo",
   "filterAll": "Tutti",
   "page": {
-    "description": "Link di download pubblici per file e foto di questa organizzazione.",
+    "description": "Link di download pubblici per file e foto della tua organizzazione.",
     "title": "Link condivisi"
   },
   "revokeConfirm": "Revocare il link \"{name}\"? Dopo non funzionerà più.",

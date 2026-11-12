@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import Text, and_, cast, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from app.models.entities import AppUser, AttendanceFine, FinanceAccount, FinanceTransaction, Participant, Protocol
@@ -29,6 +29,23 @@ class FineDeleteError(ValueError):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
         self.code = code
+
+
+def _swiss_date(value: datetime):
+    from app.services.todo_fine_service import local_date
+
+    return local_date(value)
+
+
+def _fine_transaction_text(db: Session, tenant_id: int, fine: AttendanceFine) -> str:
+    """Buchungstext in der Dokumentsprache des Vereins («Busse Verspätet: Max Muster») statt
+    des technischen Typcodes."""
+    from app.documents.strings import strings_for, text
+    from app.models.entities import Tenant
+
+    language = db.scalar(select(Tenant.document_language).where(Tenant.id == tenant_id))
+    type_label = strings_for(language).get(f"fineType.{fine.fine_type}", fine.fine_type)
+    return text(language, "fineTransaction", type=type_label, name=fine.participant_name_snapshot)
 
 
 class FinesRepository:
@@ -68,11 +85,13 @@ class FinesRepository:
         )
 
     def list_fines_for_tenant(
-        self, db: Session, tenant_id: int, skip: int = 0, limit: int = 50
+        self, db: Session, tenant_id: int, skip: int = 0, limit: int = 50, *, status: str | None = None
     ) -> list[AttendanceFineListItem]:
+        statement = self._base_query().where(Protocol.tenant_id == tenant_id)
+        if status is not None:
+            statement = statement.where(AttendanceFine.status == status)
         rows = db.execute(
-            self._base_query()
-            .where(Protocol.tenant_id == tenant_id)
+            statement
             .order_by(AttendanceFine.created_at.desc())
             .offset(skip)
             .limit(limit)
@@ -94,10 +113,10 @@ class FinesRepository:
         return [self._to_list_item(db, row) for row in rows]
 
     def list_fines_for_user(
-        self, db: Session, tenant_id: int, user_id: int, skip: int = 0, limit: int = 50
+        self, db: Session, tenant_id: int, user_id: int, skip: int = 0, limit: int = 50, *, status: str | None = None
     ) -> list[AttendanceFineListItem]:
         """Return only fines belonging to participant records linked to this account."""
-        rows = db.execute(
+        statement = (
             self._base_query()
             .join(Participant, Participant.id == AttendanceFine.participant_id)
             .where(
@@ -105,11 +124,47 @@ class FinesRepository:
                 Participant.tenant_id == tenant_id,
                 Participant.id == user_id,
             )
+        )
+        if status is not None:
+            statement = statement.where(AttendanceFine.status == status)
+        rows = db.execute(
+            statement
             .order_by(AttendanceFine.created_at.desc())
             .offset(skip)
             .limit(limit)
         ).all()
         return [self._to_list_item(db, row) for row in rows]
+
+    def open_fines_summary(self, db: Session, tenant_id: int, *, user_id: int | None = None) -> dict:
+        """Summe der offenen Präsenz-Bussen je Währung über alle Bussen (nicht nur eine Seite)
+        plus Anzahl betroffener Personen. ``user_id``: nur die eigenen Bussen (ohne reports.personal)."""
+        conditions = [Protocol.tenant_id == tenant_id, AttendanceFine.status == "pending"]
+        if user_id is not None:
+            conditions.append(AttendanceFine.participant_id == user_id)
+        rows = db.execute(
+            select(
+                FinanceAccount.currency_label,
+                func.coalesce(func.sum(AttendanceFine.amount), 0).label("amount"),
+                func.count(AttendanceFine.id).label("count"),
+            )
+            .select_from(AttendanceFine)
+            .join(Protocol, Protocol.id == AttendanceFine.protocol_id)
+            .join(FinanceAccount, FinanceAccount.id == AttendanceFine.account_id)
+            .where(*conditions)
+            .group_by(FinanceAccount.currency_label)
+            .order_by(func.sum(AttendanceFine.amount).desc(), FinanceAccount.currency_label.asc())
+        ).all()
+        people = db.scalar(
+            select(func.count(func.distinct(func.coalesce(cast(AttendanceFine.participant_id, Text), AttendanceFine.participant_name_snapshot))))
+            .select_from(AttendanceFine)
+            .join(Protocol, Protocol.id == AttendanceFine.protocol_id)
+            .where(*conditions)
+        ) or 0
+        return {
+            "totals": [{"currency_label": row.currency_label or "", "amount": row.amount, "count": int(row.count)} for row in rows],
+            "count": sum(int(row.count) for row in rows),
+            "people": int(people),
+        }
 
     def list_pending_fines_for_protocol(self, db: Session, protocol_id: int, tenant_id: int) -> list[AttendanceFineListItem]:
         """Fines from other protocols relevant to this protocol:
@@ -369,8 +424,9 @@ class FinesRepository:
         tx = FinanceTransaction(
             account_id=fine.account_id,
             amount=fine.amount,
-            description=f"Busse {fine.fine_type}: {fine.participant_name_snapshot}",
-            transaction_date=now.date(),
+            description=_fine_transaction_text(db, tenant_id, fine),
+            # Buchungsdatum nach Schweizer Zeit: am 1.1. um 00:30 gehört die Buchung ins neue Jahr
+            transaction_date=_swiss_date(now),
             # Buchung im Protokoll, in dem kassiert wurde (MAIN-BE-002) - sonst hinge sie an
             # einem womöglich schon eingefrorenen Ursprungsprotokoll.
             protocol_id=effective_protocol_id or fine.protocol_id,

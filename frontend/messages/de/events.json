@@ -75,7 +75,16 @@
     "special3Label": "Spezial 3",
     "specialText1Label": "Spezial Text 1",
     "specialText2Label": "Spezial Text 2",
-    "specialText3Label": "Spezial Text 3"
+    "specialText3Label": "Spezial Text 3",
+    "readOnlyHint": "Nur Ansicht: Für Änderungen fehlt dir das Recht «Sitzungen bearbeiten».",
+    "saveStatus": {
+      "idle": "Änderungen werden automatisch gespeichert.",
+      "saving": "Speichert…",
+      "saved": "Alle Änderungen gespeichert",
+      "error": "Nicht gespeichert – bitte erneut versuchen."
+    },
+    "fieldSettingsHint": "Die Felder «Spezial» lassen sich umbenennen oder ausblenden.",
+    "fieldSettingsLink": "Zu den Einstellungen"
   },
   "detailModal": {
     "fallbackTitle": "Termin"
@@ -115,13 +124,14 @@
     "endDate": "Enddatum",
     "location": "Standort",
     "locationPlaceholder": "z. B. Gemeinschaftshaus, Sportplatz",
-    "noCycles": "Keine Zyklen verfügbar (Zyklen unter Struktur → Zyklen anlegen)",
+    "noCycles": "Keine Zyklen verfügbar (Zyklen unter Konfiguration → Abläufe → Zyklen anlegen)",
     "participantCount": "Anzahl Teilnehmer",
     "people": "Personen",
     "startDate": "Startdatum",
     "tag": "Tag",
     "tagPlaceholder": "z. B. Sitzung, Lager, Elternabend",
-    "title": "Titel"
+    "title": "Titel",
+    "noCyclesAskAdmin": "Keine Zyklen vorhanden. Zyklen legt eine Person mit dem Recht «Vorlagen verwalten» an."
   },
   "importModal": {
     "cancel": "Abbrechen",
@@ -162,7 +172,9 @@
     "summaryQuery": "{count, plural, one {# Termin} other {# Termine}} für «{query}»",
     "summaryTag": "{count, plural, one {# Termin} other {# Termine}} mit Tag «{tag}»",
     "summaryTagQuery": "{count, plural, one {# Termin} other {# Termine}} mit Tag «{tag}» für «{query}»",
-    "today": "Heute · {date}"
+    "today": "Heute · {date}",
+    "partialLoaded": "Suche und Filter berücksichtigen nur die {count} geladenen Termine.",
+    "loadAll": "Alle Termine laden"
   },
   "loadMore": "Mehr laden ({count} geladen)",
   "loadingMore": "Lädt weitere Termine…",
@@ -174,7 +186,6 @@
     "createEventButton": "Termin anlegen",
     "currentCycleScope": "Aktueller Zyklus",
     "deleteButtonTitle": "Termin endgültig löschen",
-    "deleteConfirm": "Termin \"{title}\" endgültig löschen? Das entfernt ihn aus allen Protokollen.",
     "newEventButton": "+ Neuer Termin",
     "noEventsShown": "Keine Termine angezeigt.",
     "noMatchingEvents": "Keine passenden Termine gefunden.",
@@ -194,7 +205,7 @@
   "rowFieldsSection": "In der Zeile anzeigen",
   "searchPlaceholder": "Termine durchsuchen",
   "selectedCount": "{count} ausgewählt",
-  "showAllPeriods": "Alle Zyklus-Perioden anzeigen",
+  "showAllPeriods": "Auch frühere und spätere Zyklen anzeigen",
   "cycleFilter": {
     "title": "Zyklus",
     "all": "Alle Zyklen"
@@ -225,5 +236,30 @@
     "previewFailed": "Vorschau fehlgeschlagen",
     "saveFailed": "Termin konnte nicht gespeichert werden"
   },
-  "view": "Ansicht"
+  "view": "Ansicht",
+  "help": {
+    "tag": "Ein Tag ordnet den Termin einer Art zu (z. B. «Sitzung», «Lager»). Protokoll-Blöcke und Abgaben filtern danach; ein Filter trifft jeden Tag, der den Suchtext enthält. Umbenennen ändert den Tag bei allen Terminen und in den Abgaben.",
+    "cycles": "Standardmässig gehört ein Termin zum Zyklus, in den sein Datum fällt. Eine manuelle Zuordnung bleibt auch bei Datumsänderungen bestehen und steuert, in welchen Zyklusfiltern (Protokolle, Abgaben, Fotoalben) der Termin erscheint.",
+    "currentCycle": "Standardmässig zeigt die Liste nur Termine des aktuellen Zyklus (z. B. des laufenden Vereinsjahres). Mit dem Schalter erscheinen auch Termine früherer und späterer Zyklen.",
+    "csvImport": "Pflichtspalten sind Startdatum und Titel. hocX prüft keine Duplikate: eine Datei zweimal importieren legt die Termine doppelt an. Importierte Termine werden ihrem Zyklus nach Datum zugeordnet.",
+    "docsLink": "Anleitung zu Terminen",
+    "calendarDocsLink": "Termine im eigenen Kalender abonnieren",
+    "roles": "Ordne Personen den Rollen des Termins zu. Die Felder «Spezial» sind frei verwendbar; in den Mandant-Einstellungen lassen sie sich umbenennen oder ausblenden."
+  },
+  "deleteDialog": {
+    "title": "Termin löschen?",
+    "message": "Der Termin wird endgültig gelöscht und aus allen Protokollen entfernt.",
+    "messageWithTitle": "«{title}» wird endgültig gelöscht und aus allen Protokollen entfernt.",
+    "submissions": "Achtung: {count, plural, one {# Abgabe-Einreichung} other {# Abgabe-Einreichungen}} mit {files, plural, one {# Datei} other {# Dateien}} zu diesem Termin werden unwiderruflich mitgelöscht.",
+    "submissionsUnknown": "Allfällige Abgabe-Einreichungen zu diesem Termin werden samt Dateien unwiderruflich mitgelöscht.",
+    "cancelInstead": "Findet der Termin nur nicht statt, markiere ihn besser als abgesagt."
+  },
+  "csvErrors": {
+    "startDateMissing": "Zeile {row}: Startdatum fehlt",
+    "titleMissing": "Zeile {row}: Titel fehlt",
+    "startDateFormat": "Zeile {row}: Startdatum «{value}» hat ein unbekanntes Format",
+    "endDateFormat": "Zeile {row}: Enddatum «{value}» hat ein unbekanntes Format",
+    "endBeforeStart": "Zeile {row}: Enddatum liegt vor dem Startdatum",
+    "participantCountInvalid": "Zeile {row}: Teilnehmerzahl ist keine ganze Zahl"
+  }
 }

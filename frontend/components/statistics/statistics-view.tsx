@@ -9,6 +9,7 @@ import { useLocale, useTranslations } from "next-intl";
 
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatusBanner } from "@/components/ui/status-banner";
+import { DocsLink, HelpPopover } from "@/components/ui/help-popover";
 import { ActionIcon } from "@/components/ui/action-icons";
 import { StatisticsOverview } from "@/types/api";
 import { CHART_COLORS, CHART_PIE_PALETTE } from "@/lib/constants/chart-colors";
@@ -229,6 +230,13 @@ export function StatisticsView({ data }: Props) {
   }, [data, period, financeAccount]);
 
   const accounts = useMemo(() => [...new Set((data?.finance_by_month ?? []).map((r) => r.account_name))], [data]);
+  // Währung fürs Diagramm (C8): die des gewählten Kontos; bei «alle» nur, wenn alle Konten
+  // dieselbe haben - sonst ohne Währungsangabe statt falsch «CHF».
+  const financeCurrency = useMemo(() => {
+    const rows = (data?.finance_by_month ?? []).filter((r) => financeAccount === "all" || r.account_name === financeAccount);
+    const currencies = [...new Set(rows.map((r) => r.currency ?? ""))];
+    return currencies.length === 1 ? currencies[0] || null : null;
+  }, [data, financeAccount]);
 
   const groupsFiltered = useMemo(() => {
     const stats = data?.groups_stats ?? [];
@@ -308,8 +316,11 @@ export function StatisticsView({ data }: Props) {
     { name: t("todoOpen"), value: data.todos.open, color: COLORS.open },
   ];
 
+  // Bussenart in der UI-Sprache (C8): das Backend liefert nur ein deutsches label.
+  const fineTypeLabel = (fineType: string, fallback: string) =>
+    fineType === "absent" || fineType === "late" ? t(`fineType.${fineType}`) : fallback;
   const fineTypeData: PieEntry[] = fineCountsByType(data.fines_by_type).map((f, i) => ({
-    name: f.label,
+    name: fineTypeLabel(f.fine_type, f.label),
     value: f.count,
     color: PIE_PALETTE[i % PIE_PALETTE.length],
   }));
@@ -321,6 +332,11 @@ export function StatisticsView({ data }: Props) {
 
   const hasCycles = data.cycles.length > 0;
   const hasGroups = data.groups_stats.length > 0;
+  const groupsHelp = (
+    <HelpPopover topic={t("sectionGroups")} docs={{ page: "statistik", anchor: "gruppen" }}>
+      {t("groupsHelp")}
+    </HelpPopover>
+  );
 
   return (
     <div className="stats-page">
@@ -336,7 +352,7 @@ export function StatisticsView({ data }: Props) {
 
       {/* ── KPI row ── */}
       <div className="stats-kpi-row">
-        <StatCard label={t("kpiProtocols")} value={data.protocols_total} />
+        <StatCard label={t("kpiProtocols")} value={data.protocols_total} sub={t("kpiProtocolsSub")} />
         <StatCard label={t("kpiMembers")} value={data.participants_active} sub={t("totalCountSub", { count: data.participants_total })} />
         <StatCard label={t("kpiTodos")} value={data.todos.total} sub={t("openCountSub", { count: data.todos.open })} />
         <StatCard label={t("kpiFinesTotal")} value={fineTotals.reduce((s, f) => s + f.count, 0)} />
@@ -344,10 +360,22 @@ export function StatisticsView({ data }: Props) {
       </div>
 
       {/* ── Section: Gruppen ── */}
+      {!hasGroups && (
+        // Leerzustand mit Erklärung (U5): vorher fehlte der Abschnitt ohne Hinweis, warum.
+        <div className="stats-section">
+          <div className="stats-section-header">
+            <h2 className="stats-section-title">{t("sectionGroups")} {groupsHelp}</h2>
+          </div>
+          <p className="muted">
+            {data.groups_source_configured ? t("groupsEmptyNoEvents") : t("groupsEmptyNoSource")}{" "}
+            <DocsLink page="statistik" anchor="gruppen">{t("groupsDocsLink")}</DocsLink>
+          </p>
+        </div>
+      )}
       {hasGroups && (
         <div className="stats-section">
           <div className="stats-section-header">
-            <h2 className="stats-section-title">{t("sectionGroups")}</h2>
+            <h2 className="stats-section-title">{t("sectionGroups")} {groupsHelp}</h2>
             {hasCycles && (
               <CycleDropdown
                 value={selectedCycle}
@@ -418,7 +446,7 @@ export function StatisticsView({ data }: Props) {
               </div>
               {financeMonths.length === 0
                 ? <p className="stats-no-data">{t("noFinanceDataPeriod")}</p>
-                : <FinanceChart data={financeMonths} />}
+                : <FinanceChart data={financeMonths} currency={financeCurrency} />}
             </ChartCard>
           )}
         </div>

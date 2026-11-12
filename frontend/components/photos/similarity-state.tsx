@@ -1,6 +1,7 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
+import { HelpPopover } from "@/components/ui/help-popover";
 
 import { StatusBanner } from "@/components/ui/status-banner";
 import { formatDateTime } from "@/lib/utils/format";
@@ -33,5 +34,10 @@ export function SimilarityComputedAt({ computedAt }: { computedAt: string | null
   const t = useTranslations("photos.similarity");
   const locale = useLocale();
   if (!computedAt) return null;
-  return <p className="muted photo-series-hint">{t("computedAt", { time: formatDateTime(computedAt, locale) })}</p>;
+  return (
+    <p className="muted photo-series-hint">
+      {t("computedAt", { time: formatDateTime(computedAt, locale) })}{" "}
+      <HelpPopover topic={t("helpTopic")} docs={{ page: "fotos", anchor: "aehnliche" }}>{t("help")}</HelpPopover>
+    </p>
+  );
 }

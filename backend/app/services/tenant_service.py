@@ -122,6 +122,12 @@ async def apply_tenant_profile_image(db: Session, tenant: Tenant, profile_image:
     tenant.profile_image_path = key
 
 
+
+def _domain_error(code: str, message: str, **params: str) -> dict:
+    """Fehler der Domain-Routen als Code + deutscher Rückfalltext; die Oberfläche übersetzt den
+    Code (Audit 08, 2026-11)."""
+    return {"code": f"domain_{code}", "message": message, **params}
+
 class TenantService:
     def __init__(self) -> None:
         self.storage_service = StorageService()
@@ -143,6 +149,7 @@ class TenantService:
             created_at=tenant.created_at,
             updated_at=tenant.updated_at,
             enabled_features=sorted(actor.current_tenant_features),
+            identity_verified=tenant.identity_verified_at is not None,
         )
 
     def list_tenants(self, db: Session, actor: CurrentUser) -> list[TenantRead]:
@@ -181,7 +188,10 @@ class TenantService:
             if plan is not None
             else set()
         )
-        booked_codes = sorted(actor.current_tenant_features)
+        # Nur-Lesen-Module nach einem Downgrade gehören dazu - sonst fehlen sie auf der Abo-Seite
+        # und niemand erfährt, warum ein Modul plötzlich gesperrt ist (Audit 08, 2026-11).
+        read_only_codes = set(actor.current_tenant_read_only_features) - set(actor.current_tenant_features)
+        booked_codes = sorted(set(actor.current_tenant_features) | read_only_codes)
         catalog = {f.code: f for f in db.query(Feature).filter(Feature.code.in_(booked_codes)).all()} if booked_codes else {}
         features = [
             TenantSubscriptionFeatureRead(
@@ -190,11 +200,14 @@ class TenantService:
                 description=catalog[code].description if code in catalog else None,
                 standalone_price_monthly_rp=catalog[code].standalone_price_monthly_rp if code in catalog else None,
                 included_in_plan=code in plan_feature_codes,
+                read_only=code in read_only_codes,
             )
             for code in booked_codes
         ]
         extra_monthly_rp = sum(
-            f.standalone_price_monthly_rp for f in features if not f.included_in_plan and f.standalone_price_monthly_rp is not None
+            f.standalone_price_monthly_rp
+            for f in features
+            if not f.included_in_plan and not f.read_only and f.standalone_price_monthly_rp is not None
         )
         estimated_monthly_cost_rp = None
         estimated_yearly_cost_rp = None
@@ -291,7 +304,7 @@ class TenantService:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant not accessible")
         require_permission(actor, P.SETTINGS_MANAGE)
 
-    def _domain_read_model(self, row: TenantDomain) -> TenantDomainRead:
+    def _domain_read_model(self, row: TenantDomain, *, replaces_domain: str | None = None) -> TenantDomainRead:
         return TenantDomainRead(
             id=row.public_id,
             purpose=row.purpose,
@@ -303,19 +316,37 @@ class TenantService:
             verified_at=row.verified_at,
             is_healthy=row.is_healthy,
             last_checked_at=row.last_checked_at,
+            replaces_domain=replaces_domain,
         )
 
     def list_domains(self, db: Session, tenant_id: int, actor: CurrentUser) -> list[TenantDomainRead]:
         self._require_manageable(tenant_id, actor)
-        rows = db.query(TenantDomain).filter(TenantDomain.tenant_id == tenant_id).order_by(TenantDomain.purpose.asc()).all()
-        return [self._domain_read_model(row) for row in rows]
+        rows = (
+            db.query(TenantDomain)
+            .filter(TenantDomain.tenant_id == tenant_id)
+            .order_by(TenantDomain.purpose.asc(), (TenantDomain.status == "active").desc())
+            .all()
+        )
+        active_by_purpose = {row.purpose: row.domain for row in rows if row.status == "active"}
+        return [
+            self._domain_read_model(row, replaces_domain=active_by_purpose.get(row.purpose) if row.status == "pending" else None)
+            for row in rows
+        ]
 
     def _ensure_domain_not_active_elsewhere(self, db: Session, domain: str, *, excluding_domain_id: int | None = None) -> None:
         query = db.query(TenantDomain.id).filter(TenantDomain.domain == domain, TenantDomain.status == "active")
         if excluding_domain_id is not None:
             query = query.filter(TenantDomain.id != excluding_domain_id)
         if query.first() is not None:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Domain ist bereits vergeben")
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_domain_error("domain_taken", "Domain ist bereits vergeben"))
+
+    def _active_domain_for_purpose(self, db: Session, tenant_id: int, purpose: str, *, lock: bool = False) -> TenantDomain | None:
+        query = db.query(TenantDomain).filter(
+            TenantDomain.tenant_id == tenant_id, TenantDomain.purpose == purpose, TenantDomain.status == "active"
+        )
+        if lock:
+            query = query.with_for_update()
+        return query.one_or_none()
 
     def create_domain(
         self, db: Session, tenant_id: int, actor: CurrentUser, payload: TenantDomainCreate
@@ -326,24 +357,28 @@ class TenantService:
 
         domain = domain_verification_service.normalize_domain(payload.domain)
         if not domain_verification_service.is_valid_domain_format(domain):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ungültiges Domain-Format")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=_domain_error("invalid_format", "Ungültiges Domain-Format"))
         reserved = {d for d in (settings.traefik_domain, settings.traefik_abgabebox_domain) if d}
         if domain in reserved:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Diese Domain ist bereits durch hocX belegt")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=_domain_error("reserved", "Diese Domain ist bereits durch hocX belegt")
+            )
+        # Audit 08 (2026-11, Migration 0179): eine aktive Domain desselben Zwecks bleibt bestehen,
+        # bis die neue verifiziert ist (verify_domain tauscht dann). Früher wurde sie hier sofort
+        # gelöscht - ein Tippfehler nahm die laufende Vereins-Domain aus dem Routing. Nur eine
+        # ältere, ebenfalls noch ausstehende Domain desselben Zwecks wird ersetzt.
+        active = self._active_domain_for_purpose(db, tenant_id, payload.purpose)
+        if active is not None and active.domain == domain:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail=_domain_error("already_active", "Diese Domain ist bereits aktiv")
+            )
         # Nur eine aktive (verifizierte) Domain belegt den Namen (Migration 0129, SEC-004); eine
         # unbestätigte Domain eines anderen Mandanten blockiert nicht mehr.
         self._ensure_domain_not_active_elsewhere(db, domain)
-
-        # Ersetzt einen ggf. vorhandenen (pending oder active) Eintrag fuer denselben Zweck -
-        # ein Mandant hat gemaess Vorgabe genau eine Domain pro Zweck.
-        existing = (
-            db.query(TenantDomain)
-            .filter(TenantDomain.tenant_id == tenant_id, TenantDomain.purpose == payload.purpose)
-            .one_or_none()
-        )
-        if existing is not None:
-            db.delete(existing)
-            db.flush()
+        db.query(TenantDomain).filter(
+            TenantDomain.tenant_id == tenant_id, TenantDomain.purpose == payload.purpose, TenantDomain.status == "pending"
+        ).delete(synchronize_session=False)
+        db.flush()
 
         row = TenantDomain(
             tenant_id=tenant_id,
@@ -357,13 +392,9 @@ class TenantService:
             db.commit()
         except IntegrityError as exc:
             db.rollback()
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Domain ist bereits vergeben") from exc
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_domain_error("domain_taken", "Domain ist bereits vergeben")) from exc
         db.refresh(row)
-
-        if existing is not None and existing.status == "active":
-            traefik_config_service.regenerate(db)
-
-        return self._domain_read_model(row)
+        return self._domain_read_model(row, replaces_domain=active.domain if active is not None else None)
 
     def verify_domain(self, db: Session, tenant_id: int, actor: CurrentUser, domain_id: int) -> TenantDomainRead:
         self._require_manageable(tenant_id, actor)
@@ -382,10 +413,22 @@ class TenantService:
         if not target_host:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Server-Domain nicht konfiguriert")
 
-        ok, message = domain_verification_service.verify_domain(row.domain, row.verification_token, target_host)
+        ok, code = domain_verification_service.verify_domain(row.domain, row.verification_token, target_host)
         if not ok:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=_domain_error(
+                    code, domain_verification_service.failure_message(code, row.domain, target_host),
+                    record=domain_verification_service.challenge_record_name(row.domain), target=target_host, domain=row.domain,
+                ),
+            )
         self._ensure_domain_not_active_elsewhere(db, row.domain, excluding_domain_id=row.id)
+
+        # Erst jetzt ersetzt die neue Domain die bisher aktive desselben Zwecks (Migration 0179).
+        previous = self._active_domain_for_purpose(db, tenant_id, row.purpose, lock=True)
+        if previous is not None and previous.id != row.id:
+            db.delete(previous)
+            db.flush()
 
         row.status = "active"
         row.verified_at = datetime.now(timezone.utc)
@@ -397,7 +440,7 @@ class TenantService:
         except IntegrityError as exc:
             # Gleichzeitige Verifizierung derselben Domain: der partielle Unique-Index entscheidet.
             db.rollback()
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Domain ist bereits vergeben") from exc
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_domain_error("domain_taken", "Domain ist bereits vergeben")) from exc
         db.refresh(row)
 
         traefik_config_service.regenerate(db)

@@ -59,7 +59,7 @@
     "none": "Do not delete any tasks"
   },
   "removalModeHelp": {
-    "all": "Completed tasks and tasks from past cycles are deleted as well.",
+    "all": "Completed tasks and tasks from past cycles are deleted as well. Notes and linked files are deleted too; fines that are already frozen are kept.",
     "future": "Tasks of the current and past cycles remain as regular todos.",
     "none": "All tasks remain as regular todos."
   },
@@ -73,6 +73,30 @@
   "statusExists": "Exists",
   "statusNew": "New",
   "errorGeneric": "Action failed",
+  "errors": {
+    "package_not_found": "Task package not found.",
+    "item_not_found": "Task not found.",
+    "name_taken": "A task package with this name already exists.",
+    "create_failed": "The task package could not be created.",
+    "save_failed": "The task package could not be saved.",
+    "delete_failed": "The task package could not be deleted.",
+    "generate_failed": "The tasks could not be generated.",
+    "item_create_failed": "The task could not be created.",
+    "item_save_failed": "The task could not be saved.",
+    "item_delete_failed": "The task could not be removed.",
+    "order_incomplete": "The order must contain all tasks of the package.",
+    "order_failed": "The order could not be saved.",
+    "cycle_not_found": "Cycle not found.",
+    "cycle_already_assigned": "The package is already assigned to this cycle.",
+    "cycle_assign_failed": "The cycle could not be assigned.",
+    "assignment_not_found": "Assignment not found.",
+    "assignment_save_failed": "The assignment could not be saved.",
+    "assignment_delete_failed": "The assignment could not be removed.",
+    "person_not_found": "Person not found.",
+    "list_row_not_found": "List row not found.",
+    "invalid_delete_mode": "Unknown deletion mode.",
+    "invalid": "The input is invalid."
+  },
   "savedToast": "Saved",
   "createdToast": "Package created",
   "pausedToast": "Package paused",
@@ -168,5 +192,10 @@
     "10": "October",
     "11": "November",
     "12": "December"
+  },
+  "help": {
+    "responsible": "You can pick responsible people directly or take them from a list. A list entry decides, for each new task, whose turn it is.",
+    "recurrence": "Sets how often this item creates a new task: once per cycle, monthly, weekly or for events with a specific tag.",
+    "due": "Sets the due date of each generated task, e.g. a fixed date in the cycle or a few days before or after a reference date such as the event."
   }
 }

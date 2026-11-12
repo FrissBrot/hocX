@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 
+import { HelpPopover } from "@/components/ui/help-popover";
 import { Modal } from "@/components/ui/modal";
 
 type HistoricalViewBannerProps = {
@@ -21,7 +22,8 @@ export function HistoricalViewBanner({ cycleConfigName, cycleYear, isEdited, edi
   return (
     <div className="historical-view-banner">
       <div>
-        <strong>{t("title", { name: cycleConfigName, year: cycleYear })}</strong>
+        <strong>{t("title", { name: cycleConfigName, year: cycleYear })}</strong>{" "}
+        <HelpPopover topic={t("helpTopic")} docs={{ page: "protokolle", anchor: "historisch" }}>{t("help")}</HelpPopover>
         <p className="muted">
           {t("frozenNotice")}
           {isEdited ? t("editedNotice") : ""}

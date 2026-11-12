@@ -17,9 +17,12 @@ import { FilterTabs } from "@/components/ui/filter-tabs";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
+import { useConfirm } from "@/contexts/confirm-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { fineTypeLabels } from "@/lib/constants/fine-types";
-import { formatDate, formatDateTime } from "@/lib/utils/format";
+import { formatDate, formatDateTime, formatMoney } from "@/lib/utils/format";
+import { HelpPopover } from "@/components/ui/help-popover";
+import { financeErrorMessage } from "@/components/finances/finance-errors";
 import type { Locale } from "@/i18n/locale-config.generated";
 import { AttendanceFineListItem, FinanceAccount, TodoFineListItem, TodoFineStatus } from "@/types/api";
 
@@ -38,6 +41,8 @@ type Props = {
   /** Link auf die Bussen-Konfiguration (finances.read). */
   canConfigure?: boolean;
   ownOnly: boolean;
+  /** Feature «finance» nach Downgrade nur noch lesend: Hinweisbanner. */
+  readOnly?: boolean;
 };
 
 // Eine Zeile der gemeinsamen Liste: Anwesenheitsbusse (Protokoll) oder Pendenzen-Busse.
@@ -59,13 +64,14 @@ function bucket(row: Row): "pending" | "collected" | "deleted" {
   return row.fine.status === "collected" ? "collected" : row.fine.status === "deleted" ? "deleted" : "pending";
 }
 
-export function FinesView({ initialFines, initialTodoFines = null, todoFinesWritable = true, accounts, canWrite, canConfigure = false, ownOnly }: Props) {
+export function FinesView({ initialFines, initialTodoFines = null, todoFinesWritable = true, accounts, canWrite, canConfigure = false, ownOnly, readOnly = false }: Props) {
   const t = useTranslations("finances");
   const tCommon = useTranslations("common");
   const fineTypeLabel = useMemo(() => fineTypeLabels(t), [t]);
   const locale = useLocale();
   const router = useRouter();
   const showToast = useToast();
+  const confirm = useConfirm();
   const [fines, setFines] = useState<AttendanceFineListItem[]>(initialFines);
   const [statusFilter, setStatusFilter] = useState<"pending" | "collected" | "deleted" | "all">("pending");
   const [search, setSearch] = useState("");
@@ -157,17 +163,28 @@ export function FinesView({ initialFines, initialTodoFines = null, todoFinesWrit
     try {
       setTodoFines(await browserApiFetch<TodoFineListItem[]>("/api/todo-fines"));
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("reloadFailed"), "error");
+      showToast(financeErrorMessage(error, t, "reloadFailed"), "error");
     }
+  }
+
+  /** Wieder öffnen löscht die Finanzbuchung der Einkassierung: immer nachfragen (Audit Bereich 03). */
+  function confirmReopen(name: string | null, amount: number, currency: string | null | undefined, confirmLabel: string) {
+    return confirm({
+      message: t("reopenConfirm", { name: name ?? "—", amount: formatMoney(amount, currency ?? "", locale) }),
+      tone: "danger",
+      confirmLabel,
+    });
   }
 
   async function actTodo(fine: TodoFineListItem, action: "collect" | "reopen" | "restore") {
     if (!fine.id) return;
     const id = fine.id;
+    if (action === "reopen" && !(await confirmReopen(fine.participant_name, fine.amount, fine.currency_label, t("reopen")))) return;
     setBusy((b) => ({ ...b, [id]: true }));
     try {
       const updated = await browserApiFetch<TodoFineListItem>(`/api/todo-fines/${id}/${action}`, { method: "POST" });
       setTodoFines((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      showToast(t(`todoFines.toast.${action}`), "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("todoFines.actionFailed"), "error");
     } finally {
@@ -188,6 +205,7 @@ export function FinesView({ initialFines, initialTodoFines = null, todoFinesWrit
       setTodoFines((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       setWaiveTarget(null);
       setWaiveReason("");
+      showToast(t("todoFines.toast.waive"), "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("todoFines.actionFailed"), "error");
     } finally {
@@ -201,7 +219,7 @@ export function FinesView({ initialFines, initialTodoFines = null, todoFinesWrit
       const updated = await browserApiFetch<AttendanceFineListItem>(`/api/fines/${fine.id}/collect`, { method: "POST" });
       if (updated) setFines((prev) => prev.map((f) => f.id === updated.id ? { ...f, ...updated } : f));
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("collectFailed"), "error");
+      showToast(financeErrorMessage(error, t, "collectFailed"), "error");
     } finally {
       setBusy((b) => ({ ...b, [fine.id]: false }));
     }
@@ -220,19 +238,20 @@ export function FinesView({ initialFines, initialTodoFines = null, todoFinesWrit
       const updated = await restoreFineRequest(fine.id);
       setFines((prev) => prev.map((f) => f.id === updated.id ? { ...f, ...updated } : f));
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("restoreFineFailed"), "error");
+      showToast(financeErrorMessage(error, t, "restoreFineFailed"), "error");
     } finally {
       setBusy((b) => ({ ...b, [fine.id]: false }));
     }
   }
 
   async function reopenFine(fine: AttendanceFineListItem) {
+    if (!(await confirmReopen(fine.participant_name_snapshot, fine.amount, accountMap.get(fine.account_id)?.currency_label, t("reopen")))) return;
     setBusy((b) => ({ ...b, [fine.id]: true }));
     try {
       const updated = await browserApiFetch<AttendanceFineListItem>(`/api/fines/${fine.id}/reopen`, { method: "POST" });
       if (updated) setFines((prev) => prev.map((f) => f.id === updated.id ? { ...f, ...updated } : f));
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("reopenFailed"), "error");
+      showToast(financeErrorMessage(error, t, "reopenFailed"), "error");
     } finally {
       setBusy((b) => ({ ...b, [fine.id]: false }));
     }
@@ -245,7 +264,7 @@ export function FinesView({ initialFines, initialTodoFines = null, todoFinesWrit
       setHasMore((latest ?? []).length === PAGE_SIZE);
       setCreateOpen(false);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("reloadFailed"), "error");
+      showToast(financeErrorMessage(error, t, "reloadFailed"), "error");
     }
   }
 
@@ -298,7 +317,7 @@ export function FinesView({ initialFines, initialTodoFines = null, todoFinesWrit
           </div>
         </td>
         <td>{account?.name ?? "—"}</td>
-        <td>{fine.status === "conflict" ? "—" : `${fine.amount.toFixed(2)} ${cur}`.trim()}</td>
+        <td>{fine.status === "conflict" ? "—" : formatMoney(fine.amount, cur, locale)}</td>
         <td>
           <Badge variant={TODO_STATUS_VARIANT[fine.status]}>{t(`todoFines.status.${fine.status}`)}</Badge>
           {fine.status === "deleted" && fine.delete_comment ? <div className="muted fines-collected-note">{fine.delete_comment}</div> : null}
@@ -336,13 +355,17 @@ export function FinesView({ initialFines, initialTodoFines = null, todoFinesWrit
     <div className="grid">
       <div className="page-header">
         <div>
-          <h1 className="page-title">{t("finesPageTitle")}</h1>
+          <h1 className="page-title">
+            {t("finesPageTitle")}{" "}
+            <HelpPopover topic={t("finesHelpTopic")} docs={{ page: "finanzen", anchor: "bussen-einkassieren" }}>{t("finesHelp")}</HelpPopover>
+          </h1>
           <p className="muted">{ownOnly ? t("ownOnlyDescription") : t("allDescription")}</p>
         </div>
         {canConfigure && !ownOnly ? (
           <Link className="button-secondary" href="/fine-settings">{t("fineSettings.openSettings")}</Link>
         ) : null}
       </div>
+      {readOnly ? <StatusBanner tone="neutral" message={t("readOnlyBanner")} /> : null}
       {initialTodoFines !== null && !todoFinesWritable ? <StatusBanner tone="neutral" message={t("todoFines.readOnlyNotice")} /> : null}
       {conflicts !== 0 && !ownOnly ? <StatusBanner tone="error" message={t("todoFines.conflictBanner", { count: conflicts })} /> : null}
 
@@ -427,7 +450,7 @@ export function FinesView({ initialFines, initialTodoFines = null, todoFinesWrit
               </td>
               <td>{fineTypeLabel[fine.fine_type] ?? fine.fine_type}</td>
               <td>{account?.name ?? t("unknownAccount")}</td>
-              <td>{fine.amount.toFixed(2)} {cur}</td>
+              <td>{formatMoney(fine.amount, cur, locale)}</td>
               <td>
                 {isDeleted ? (
                   <Badge variant="danger">{t("statusDeleted")}</Badge>

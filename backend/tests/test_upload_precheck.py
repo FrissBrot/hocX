@@ -205,6 +205,26 @@ def test_infected_matches_do_not_count(db):
     assert _precheck(db, user, [_entry(content)])[0].status == "upload_required"
 
 
+def test_blocked_scan_error_matches_do_not_count(db):
+    """Audit Dateien/Fotos: eine wegen Scan-Fehler gesperrte Datei darf den Neu-Upload derselben
+    Datei nicht als «exaktes Duplikat» blockieren - weder im Vorab-Abgleich noch beim Speichern."""
+    tenant = make_tenant(db)
+    user = _writer(db, tenant.id)
+    content = jpeg(color=(9, 99, 199))
+    row = _gallery_file(db, tenant.id, content)
+    row.scan_status = "error"
+    db.flush()
+    assert _precheck(db, user, [_entry(content)])[0].status == "upload_required"
+
+    accepted, warnings = files_routes.service._filter_exact_duplicates(db, tenant.id, [("x.jpg", content)])
+    assert len(accepted) == 1 and warnings == []
+
+    row.scan_status = "pending"
+    db.flush()
+    accepted, warnings = files_routes.service._filter_exact_duplicates(db, tenant.id, [("x.jpg", content)])
+    assert accepted == [] and len(warnings) == 1
+
+
 def test_invalid_hash_is_rejected_by_the_schema():
     with pytest.raises(ValueError):
         UploadPrecheckRequest(files=[{"client_id": "a", "sha256": "xyz", "size": 1}])

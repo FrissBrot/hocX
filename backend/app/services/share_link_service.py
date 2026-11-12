@@ -11,7 +11,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.entities import AppUser, PhotoAlbum, PhotoAlbumItem, ShareLink, ShareLinkFile, StoredFile
@@ -143,6 +143,32 @@ def file_ids_for_link(db: Session, link: ShareLink) -> list[uuid.UUID]:
     return list(db.scalars(select(ShareLinkFile.file_id).where(ShareLinkFile.share_link_id == link.id)))
 
 
+def link_contains_file(db: Session, link: ShareLink, file_id: uuid.UUID) -> bool:
+    """Gezielte Einzelprüfung zu file_ids_for_link (Audit Dateien/Fotos): jede Vorschau- und
+    Ansichtsanfrage eines öffentlichen Album-Links lud vorher das ganze Album (O(n²) bei n
+    Thumbnails). Gleiche Regeln: nur freigegebene Album-Einträge, ohne Partner, die ihre Fotos
+    aus öffentlichen Links ausgeblendet haben."""
+    if link.album_id is not None:
+        in_album = db.scalar(
+            select(PhotoAlbumItem.file_id).where(
+                PhotoAlbumItem.album_id == link.album_id,
+                PhotoAlbumItem.file_id == file_id,
+                PhotoAlbumItem.share_pending.is_(False),
+            )
+        )
+        if in_album is None:
+            return False
+        hidden_tenant_ids = photo_album_share_service.tenants_hidden_from_public_links(db, link.album_id, link.tenant_id)
+        if hidden_tenant_ids:
+            hidden = db.scalar(
+                select(StoredFile.id).where(StoredFile.public_id == file_id, StoredFile.tenant_id.in_(hidden_tenant_ids))
+            )
+            if hidden is not None:
+                return False
+        return True
+    return db.scalar(select(ShareLinkFile.file_id).where(ShareLinkFile.share_link_id == link.id, ShareLinkFile.file_id == file_id)) is not None
+
+
 @dataclass
 class ShareLinkOverviewRow:
     link: ShareLink
@@ -177,9 +203,12 @@ def list_for_tenant(db: Session, tenant_id: int) -> list[ShareLinkOverviewRow]:
     file_link_ids = [link.id for link in links if link.album_id is None]
     file_counts_by_link: dict[uuid.UUID, int] = {}
     if file_link_ids:
+        # Nur geprüfte Dateien zählen - die öffentliche Seite zeigt nur diese (Audit Dateien/Fotos).
         rows = db.execute(
             select(ShareLinkFile.share_link_id, func.count())
-            .where(ShareLinkFile.share_link_id.in_(file_link_ids))
+            .join(ShareLink, ShareLink.id == ShareLinkFile.share_link_id)
+            .join(StoredFile, and_(StoredFile.public_id == ShareLinkFile.file_id, StoredFile.tenant_id == ShareLink.tenant_id))
+            .where(ShareLinkFile.share_link_id.in_(file_link_ids), StoredFile.scan_status == "clean")
             .group_by(ShareLinkFile.share_link_id)
         ).all()
         file_counts_by_link = dict(rows)
@@ -188,7 +217,8 @@ def list_for_tenant(db: Session, tenant_id: int) -> list[ShareLinkOverviewRow]:
     if album_ids:
         rows = db.execute(
             select(PhotoAlbumItem.album_id, func.count())
-            .where(PhotoAlbumItem.album_id.in_(album_ids), PhotoAlbumItem.share_pending.is_(False))
+            .join(StoredFile, StoredFile.public_id == PhotoAlbumItem.file_id)
+            .where(PhotoAlbumItem.album_id.in_(album_ids), PhotoAlbumItem.share_pending.is_(False), StoredFile.scan_status == "clean")
             .group_by(PhotoAlbumItem.album_id)
         ).all()
         album_item_counts = dict(rows)

@@ -53,6 +53,7 @@ function checkTitle(key: string, t: TFunc): string {
 function problemText(source: string, subject: string, reason: string, t: TFunc): string {
   if (source === "check") {
     if (reason === "unreachable") return t("problems.check.unreachable", { subject: checkTitle(subject, t) });
+    if (reason === "check_failed") return t("problems.check.checkFailed", { subject: checkTitle(subject, t) });
     return t.has(`checks.${subject}.problem`) ? t(`checks.${subject}.problem`) : checkTitle(subject, t);
   }
   const key = `problems.${source}.${reason}`;

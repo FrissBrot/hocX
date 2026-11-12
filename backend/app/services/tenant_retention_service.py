@@ -233,11 +233,18 @@ def _apply(db: Session, tenant_id: int, kind: str, subject_id: int) -> None:
 # ── Plattform: Offboarding ───────────────────────────────────────────────
 
 
+def _swiss_today() -> date:
+    """Heute in Schweizer Zeit (Container laufen in UTC; zwischen 00 und 02 Uhr lag die Frist sonst daneben)."""
+    from app.services.todo_fine_service import today
+
+    return today()
+
+
 def offboarding_due(db: Session, *, grace_days: int, today: date | None = None) -> list[dict[str, Any]]:
     """Mandanten, deren Vertragsende plus Exportfenster vorbei ist (Plattform-Admin löscht von Hand)."""
     rows = db.execute(sql("""
         SELECT public_id, name, contract_ends_on FROM tenant
         WHERE contract_ends_on IS NOT NULL AND contract_ends_on + make_interval(days => :days) < CAST(:today AS date)
         ORDER BY contract_ends_on
-    """), {"days": grace_days, "today": today or date.today()}).mappings().all()
+    """), {"days": grace_days, "today": today or _swiss_today()}).mappings().all()
     return [dict(row) for row in rows]

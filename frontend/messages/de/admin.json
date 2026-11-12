@@ -255,7 +255,8 @@
         "restart_loop": "Container {subject} startet ständig neu"
       },
       "check": {
-        "unreachable": "{subject} nicht erreichbar"
+        "unreachable": "{subject} nicht erreichbar",
+        "checkFailed": "Prüfung «{subject}» schlägt fehl (siehe Fehlerprotokoll)"
       },
       "job": {
         "failing": "Job {subject} ist fehlgeschlagen",
@@ -625,7 +626,8 @@
       "neverSent": "Noch nichts versendet",
       "lastError": "Letzter Fehler ({date}): {error}",
       "queue": "Wartend: {pending} · Fehlgeschlagen: {failed}"
-    }
+    },
+    "reminderPopover": "Bleibt ein Problem offen, kommt nach dieser Anzahl Stunden die Erinnerung «Weiterhin: …». 0 schaltet Erinnerungen aus. Konnte ntfy eine Nachricht nicht zustellen, sendet hocX sie bis zu 24 Stunden lang erneut."
   },
   "login": {
     "title": "Admin-Anmeldung",
@@ -844,8 +846,8 @@
           "description": "Alle Termine/Anlässe."
         },
         "todos": {
-          "title": "Todos",
-          "description": "Eigenständige Todos. Todos, die an ein Protokoll gebunden sind, verschwinden bereits mit „Protokolle\"."
+          "title": "Pendenzen",
+          "description": "Eigenständige Pendenzen. Pendenzen, die an ein Protokoll gebunden sind, verschwinden bereits mit „Protokolle\"."
         },
         "participants": {
           "title": "Teilnehmer ohne Login",
@@ -1034,7 +1036,7 @@
     "cloneStructureOnlyTitle": "Nur Struktur & Konfiguration",
     "cloneStructureOnlyDescription": "Vorlagen, Formularfelder, Dokumentvorlagen, Zyklen, Konten. Keine Teilnehmer, Termine, Protokolle oder Benutzer.",
     "cloneFullTitle": "Alles (vollständige Kopie)",
-    "cloneFullDescription": "Zusätzlich Teilnehmer, Termine, Protokolle, Bussen, Todos, Abgaben und Benutzerzugriffe — z.B. für Tests.",
+    "cloneFullDescription": "Zusätzlich Teilnehmer, Termine, Protokolle, Bussen, Pendenzen, Abgaben und Benutzerzugriffe — z.B. für Tests.",
     "cloning": "Wird geklont…",
     "exportTitleNamed": "\"{name}\" exportieren",
     "exportTitle": "Mandant exportieren",
@@ -1044,7 +1046,7 @@
     "exportStructureListsTitle": "Struktur + Listeninhalt",
     "exportStructureListsDescription": "Wie oben, zusätzlich die Einträge in den Listen. Ohne Teilnehmer/Termine - Listeneinträge, die auf einen Teilnehmer oder Termin verweisen, werden dabei ohne diesen Verweis übernommen.",
     "exportFullTitle": "Struktur + alle Protokolle",
-    "exportFullDescription": "Zusätzlich Teilnehmer, Termine, Protokolle, Bussen, Todos, Dateien (inkl. Fotos-Galerie und Alben), Freigabe-Links, Kalender-Abos und Album-Freigaben. Ohne Abgabebox.",
+    "exportFullDescription": "Zusätzlich Teilnehmer, Termine, Protokolle, Bussen, Pendenzen, Dateien (inkl. Fotos-Galerie und Alben), Freigabe-Links, Kalender-Abos und Album-Freigaben. Ohne Abgabebox.",
     "exportFullAbgabeboxTitle": "Alles inklusive Abgabebox",
     "exportFullAbgabeboxDescription": "Wie oben, zusätzlich Abgabebox-Konfiguration, Abgabebox-Links und hochgeladene Dateien. Vollständiges Backup des Mandanten.",
     "importDescription": "Legt anhand einer zuvor exportierten Datei einen neuen Mandanten an.",
@@ -1110,7 +1112,7 @@
     "noModulesInCatalog": "Kein Modul im Katalog.",
     "perMonth": "{price} / Monat",
     "no": "Nein",
-    "coreFeatureFootnote": "Protokolle, Termine, Todos, Teilnehmer und Listen sind Kernfunktionen und in jedem Plan enthalten. Add-ons werden pro Mandant im Tab «Plan & Abo» der Mandant-Einstellungen zugebucht.",
+    "coreFeatureFootnote": "Protokolle, Termine, Pendenzen, Teilnehmer und Listen sind Kernfunktionen und in jedem Plan enthalten. Add-ons werden pro Mandant im Tab «Plan & Abo» der Mandant-Einstellungen zugebucht.",
     "colPackage": "Paket",
     "colSize": "Grösse",
     "colPricePerYear": "Preis/Jahr",
@@ -1196,7 +1198,9 @@
         "0": "Niedrige Priorität",
         "2": "Hohe Priorität"
       }
-    }
+    },
+    "planChangeAffectsTenants": "Änderungen an den Modulen gelten sofort auch für alle Organisationen, die diesen Plan schon haben.",
+    "planChangeAffectsTenantsHelp": "Ein neu aufgenommenes Modul wird bei allen Organisationen auf diesem Plan voll gebucht. Ein entferntes Modul wechselt dort in «nur lesen» (Daten bleiben) oder fällt weg (Domains). Einzeln dazugebuchte Module bleiben unverändert."
   },
   "catalogImport": {
     "title": "Konfiguration importieren",

@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
+import { HelpPopover } from "@/components/ui/help-popover";
+
 import { PhotoActionIcon } from "./photo-action-icon";
 import { Popover } from "@/components/ui/popover";
 import { confirmAddToSharedAlbum } from "./album-share-release";
@@ -20,6 +22,7 @@ export function PhotoBulkBar({
   onClearSelection,
   onDone,
   onReleaseSelected,
+  onRemoveFromAlbum,
   onSelectAll,
   selectedItems = [],
 }: {
@@ -29,6 +32,8 @@ export function PhotoBulkBar({
   onDone: () => void;
   // Albumansicht des Besitzers mit noch nicht freigegebenen Fotos in der Auswahl.
   onReleaseSelected?: () => void;
+  // Albumansicht: Auswahl aus dem Album nehmen (die Fotos bleiben erhalten).
+  onRemoveFromAlbum?: () => void;
   onSelectAll?: () => void;
   selectedItems?: { id: string; original_name: string; content_url: string }[];
 }) {
@@ -181,6 +186,7 @@ export function PhotoBulkBar({
         <button type="button" className="button-secondary button-ghost" onClick={() => setTaggingOpen((open) => !open)} disabled={busy} aria-expanded={taggingOpen}><PhotoActionIcon name="tag" />{t("tagsAction")}</button>
         <div ref={bestAnchorRef}>
           <button type="button" className="button-secondary button-ghost photo-bulk-best" onClick={() => setBestOpen((open) => !open)} disabled={busy} aria-expanded={bestOpen}><PhotoActionIcon name="star" />{t("bestAction")}</button>
+          <HelpPopover topic={t("bestAction")} docs={{ page: "fotos", anchor: "best-of" }}>{t("bestHelp")}</HelpPopover>
           <Popover open={bestOpen} onOpenChange={setBestOpen} anchorRef={bestAnchorRef} className="action-menu">
             <button type="button" className="action-menu-item" disabled={busy} onClick={() => { setBestOpen(false); void toggleBest("include"); }}>{t("markBest")}</button>
             <button type="button" className="action-menu-item" disabled={busy} onClick={() => { setBestOpen(false); void toggleBest("exclude"); }}>{t("unmarkBest")}</button>
@@ -188,6 +194,7 @@ export function PhotoBulkBar({
         </div>
         {selectedItems.length > 0 && <button type="button" className="button-secondary button-ghost" onClick={() => void downloadSelected()} disabled={busy}><PhotoActionIcon name="download" />{t("download")}</button>}
         <button type="button" className="button-secondary button-ghost" onClick={() => setShareOpen(true)} disabled={busy}><PhotoActionIcon name="share" />{t("share")}</button>
+        {onRemoveFromAlbum && <button type="button" className="button-secondary button-ghost photo-bulk-remove-from-album" onClick={onRemoveFromAlbum} disabled={busy}><PhotoActionIcon name="album" />{t("removeFromAlbum")}</button>}
         <button type="button" className="button-secondary button-ghost photo-bulk-delete" onClick={() => void deleteSelected()} disabled={busy}><PhotoActionIcon name="delete" />{t("delete")}</button>
       </div>
       <ShareLinkModal

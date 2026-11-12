@@ -8,6 +8,7 @@ import { useOpenMore } from "@/components/mobile/mobile-shell";
 import { MobileSubHeader } from "@/components/mobile/mobile-ui";
 import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { CopyField } from "@/components/ui/copy-field";
+import { DocsLink } from "@/components/ui/help-popover";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
@@ -78,7 +79,9 @@ export function ConnectionsView({
       <div className="page-header">
         <div>
           <h1 className="page-title">{t("page.title")}</h1>
-          <p className="muted">{t("page.description")}</p>
+          <p className="muted">
+            {t("page.description")} <DocsLink page="verknuepfungen">{t("page.docsLink")}</DocsLink>
+          </p>
         </div>
       </div>
       <div className="connections-cards">{cards}</div>

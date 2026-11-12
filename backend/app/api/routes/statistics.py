@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from redis.exceptions import RedisError
-from sqlalchemy import select, text
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.cycle_utils import format_cycle_name
@@ -12,8 +12,9 @@ from app.core.db import get_db
 from app.core.redis_client import get_redis_sync
 from app.core.permissions import P
 from app.core.security import CurrentUser, get_current_user, require_permission
-from app.models.entities import CycleConfig, FinanceAccount, Participant, Protocol
+from app.models.entities import CycleConfig, FinanceAccount, ListDefinition, Participant, Protocol
 from app.services import public_id_service
+from app.services.access_service import AccessService
 from app.services.statistics_common import (
     chart_cycle_bounds,
     aggregate_attendance,
@@ -29,6 +30,7 @@ from app.services.statistics_common import (
 )
 
 router = APIRouter()
+access_service = AccessService()
 
 
 # ── Response models ──────────────────────────────────────────────────────────
@@ -85,6 +87,8 @@ class FinanceMonthStat(BaseModel):
     month: str
     account_id: uuid.UUID
     account_name: str
+    # Währung des Kontos (Audit 07, C8: das Diagramm zeigte fest «CHF»).
+    currency: str = ""
     income: float
     expenses: float
     net: float
@@ -120,6 +124,8 @@ class StatisticsOverview(BaseModel):
     protocols_total: int
     cycles: list[CycleInfo]
     groups_stats: list[GroupStat]
+    # Ob eine Liste als Gruppenquelle markiert ist - für den erklärenden Leerzustand (U5).
+    groups_source_configured: bool = False
 
 
 # ── Endpoint ─────────────────────────────────────────────────────────────────
@@ -131,12 +137,17 @@ class StatisticsOverview(BaseModel):
 STATS_CACHE_SECONDS = 30
 
 
-def _stats_cache_key(user: CurrentUser, cycle_config_id: uuid.UUID | None, cycle_offset: int, own_key: str | None) -> str:
+def _stats_cache_key(
+    user: CurrentUser, cycle_config_id: uuid.UUID | None, cycle_offset: int, own_key: str | None, restricted: bool = False,
+) -> str:
     # Der Schlüssel enthält die Sicht des Aufrufers (alle Personen oder nur die eigene, PRIV-001):
     # sonst bekäme ein Leser das von einem Admin berechnete Ergebnis mit allen Personen aus dem
     # Cache (und umgekehrt ein Admin das gefilterte eines Lesers).
     finance = user.can(P.FINANCES_READ)
     scope = own_key or "all"
+    if restricted:
+        # Eingeschränkte Leser sehen nur Zahlen ihrer Vorlagen - eigener Eintrag je Konto.
+        scope = f"{scope}:tpl{user.user_id}"
     return f"hocx:stats:{user.current_tenant_id}:{cycle_config_id or '-'}:{cycle_offset}:{int(finance)}:{scope}"
 
 
@@ -149,7 +160,9 @@ def get_statistics_overview(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.MEETINGS_READ)
-    key = _stats_cache_key(user, cycle_config_id, cycle_offset, own_person_key(db, user))
+    key = _stats_cache_key(
+        user, cycle_config_id, cycle_offset, own_person_key(db, user), access_service.is_restricted_reader(db, user)
+    )
     if cached:
         try:
             raw = get_redis_sync().get(key)
@@ -172,12 +185,19 @@ def _compute_statistics_overview(db: Session, user: CurrentUser, cycle_config_id
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    # Eingeschränkte Leser (nur bestimmten Vorlagen zugeordnet) sehen nur Zahlen aus diesen
+    # Vorlagen (Audit 07, C9); None = alle Vorlagen des Mandanten.
+    template_ids = access_service.readable_template_ids(db, user)
+
     # ── Protocols total ──────────────────────────────────────────────────────
-    protocols_total = db.scalar(
-        select(Protocol.id).where(Protocol.tenant_id == tenant_id).with_only_columns(
-            text("COUNT(*)")
-        )
-    ) or 0
+    # Durchgeführte/abgeschlossene Protokolle im gewählten Zyklus, wie die Anwesenheit (U6:
+    # vorher alle Protokolle inkl. vorbereiteter, unabhängig vom Zyklus).
+    protocol_conditions = [Protocol.tenant_id == tenant_id, Protocol.status.in_(["durchgeführt", "abgeschlossen"])]
+    if bounds is not None:
+        protocol_conditions += [Protocol.protocol_date >= bounds[0], Protocol.protocol_date <= bounds[1]]
+    if template_ids is not None:
+        protocol_conditions.append(Protocol.template_id.in_(template_ids))
+    protocols_total = db.scalar(select(func.count()).select_from(Protocol).where(*protocol_conditions)) or 0
 
     # ── Cycles ───────────────────────────────────────────────────────────────
     cycle_configs = {
@@ -202,8 +222,11 @@ def _compute_statistics_overview(db: Session, user: CurrentUser, cycle_config_id
                     label=format_cycle_name(cc.name_pattern or cc.name, ec.cycle_year),
                 ))
 
-    # ── Groups stats (groups identified by event.tag matching Gruppen list) ──
+    # ── Groups stats (event.tag matching an entry of a group-source list) ──
     group_rows = fetch_group_session_rows(db, tenant_id, bounds)
+    groups_source_configured = db.scalar(
+        select(ListDefinition.id).where(ListDefinition.tenant_id == tenant_id, ListDefinition.is_group_source.is_(True)).limit(1)
+    ) is not None
 
     groups_stats = [
         GroupStat(
@@ -218,7 +241,7 @@ def _compute_statistics_overview(db: Session, user: CurrentUser, cycle_config_id
     ]
 
     # ── Attendance ───────────────────────────────────────────────────────────
-    attendance_blocks = fetch_attendance_blocks(db, tenant_id, bounds)
+    attendance_blocks = fetch_attendance_blocks(db, tenant_id, bounds, template_ids)
     monthly_att, per_participant_att = aggregate_attendance(attendance_blocks)
     # Leser sehen je Person nur sich selbst (PRIV-001), siehe statistics_common.own_person_key.
     own_key = own_person_key(db, user)
@@ -253,11 +276,12 @@ def _compute_statistics_overview(db: Session, user: CurrentUser, cycle_config_id
     ]
 
     # ── Todos ────────────────────────────────────────────────────────────────
-    todos = fetch_todo_rows(db, tenant_id, bounds)
+    todos = fetch_todo_rows(db, tenant_id, bounds, template_ids)
     todo_open, todo_done = aggregate_todo_counts(todos)
     todos_summary = TodoSummary(open=todo_open, done=todo_done, total=len(todos))
 
     # ── Fines ────────────────────────────────────────────────────────────────
+    # label bleibt für ältere Clients; die Oberfläche übersetzt fine_type selbst (Audit 07, C8).
     fine_type_labels = {"absent": "Unentschuldigt", "late": "Verspätet"}
     fines_by_participant = sorted(
         [
@@ -265,7 +289,7 @@ def _compute_statistics_overview(db: Session, user: CurrentUser, cycle_config_id
                 name=r.name, count=int(r.count), amount=float(r.amount or 0),
                 currency=r.currency or "", participant_key=r.participant_key,
             )
-            for r in fetch_fines_by_participant(db, tenant_id, bounds)
+            for r in fetch_fines_by_participant(db, tenant_id, bounds, template_ids)
             if sees_everyone or r.participant_key == own_key
         ],
         key=lambda x: x.count,
@@ -279,7 +303,7 @@ def _compute_statistics_overview(db: Session, user: CurrentUser, cycle_config_id
             amount=float(r.amount or 0),
             currency=r.currency or "",
         )
-        for r in fetch_fines_by_type(db, tenant_id, bounds)
+        for r in fetch_fines_by_type(db, tenant_id, bounds, template_ids)
     ]
 
     # ── Finance by month ─────────────────────────────────────────────────────
@@ -292,6 +316,7 @@ def _compute_statistics_overview(db: Session, user: CurrentUser, cycle_config_id
             month=r.month,
             account_id=account_public_ids[r.account_id],
             account_name=r.account_name,
+            currency=r.currency or "",
             income=float(r.income or 0),
             expenses=float(r.expenses or 0),
             net=float(r.income or 0) - float(r.expenses or 0),
@@ -318,5 +343,6 @@ def _compute_statistics_overview(db: Session, user: CurrentUser, cycle_config_id
         protocols_total=protocols_total,
         cycles=cycles,
         groups_stats=groups_stats,
+        groups_source_configured=groups_source_configured,
         per_person_scope="all" if sees_everyone else "own",
     )

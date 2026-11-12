@@ -14,7 +14,7 @@ import { TodoFilePicker } from "./todo-file-picker";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { FileTypeIcon } from "@/components/files/file-type-icon";
 import { TODO_STATUS } from "@/components/protocol/protocol-editor-shared";
-import { browserApiFetch } from "@/lib/api/client";
+import { ApiError, browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { formatDate, formatFileSize } from "@/lib/utils/format";
 import type { ParticipantSummary, TodoDetails, TodoListItem } from "@/types/api";
@@ -62,14 +62,28 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
   const notesChanged = !!details && !!detailsDraft && detailsDraft.notes.trim() !== details.notes.trim();
   const filesChanged = !!details && !!detailsDraft && detailsDraft.files.map((file) => file.id).join() !== details.files.map((file) => file.id).join();
 
+  /** Laufende Busse der eigenen Person (409 todo_fine_running) verständlich melden. */
+  function todoErrorMessage(error: unknown, fallback: string): string {
+    if (error instanceof ApiError && (error.detail as { code?: unknown } | undefined)?.code === "todo_fine_running") return t("fineRunningLocked");
+    return error instanceof Error ? error.message : fallback;
+  }
+
   async function save() {
     if (!editable || !draft.task.trim()) return;
     setBusy(true);
     try {
+      // Nur Geändertes senden: ein mitgeschickter, unveränderter Status setzte früher das
+      // Erledigungsdatum neu (und konnte eine Busse auslösen).
+      const originalIds = todo.assigned_participant_ids?.length ? todo.assigned_participant_ids : todo.assigned_participant_id ? [todo.assigned_participant_id] : [];
       const updated = await browserApiFetch<TodoListItem>(`/api/protocol-todos/${todo.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ task: draft.task.trim(), tags: draft.tags, assigned_participant_ids: assignedIds,
-          ...(!todo.submission_assignment_id ? { todo_status_id: draft.todo_status_id } : {}), ...duePatch }),
+        body: JSON.stringify({
+          task: draft.task.trim(),
+          ...(draft.tags.join("\u0000") !== todo.tags.join("\u0000") ? { tags: draft.tags } : {}),
+          ...([...assignedIds].sort().join() !== [...originalIds].sort().join() ? { assigned_participant_ids: assignedIds } : {}),
+          ...(!todo.submission_assignment_id && draft.todo_status_id !== todo.todo_status_id ? { todo_status_id: draft.todo_status_id } : {}),
+          ...duePatch,
+        }),
       });
       if (detailsDraft && (notesChanged || filesChanged)) {
         await browserApiFetch<TodoDetails>(`/api/protocol-todos/${todo.id}/details`, {
@@ -82,7 +96,7 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
       }
       onSaved({ ...draft, ...updated });
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("saveFailed"), "error");
+      showToast(todoErrorMessage(error, t("saveFailed")), "error");
     } finally { setBusy(false); }
   }
 
@@ -94,11 +108,11 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
       if (result.pending_delete && result.todo) onSaved({ ...todo, ...result.todo });
       else onDeleted();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("deleteFailed"), "error");
+      showToast(todoErrorMessage(error, t("deleteFailed")), "error");
     } finally { setBusy(false); }
   }
 
-  return <Modal open title={todo.task} className="todo-edit-modal" hideCloseButton onEscape={canEdit ? save : onClose} onClose={() => { if (!busy) onClose(); }}>
+  return <Modal open title={todo.task} className="todo-edit-modal" hideCloseButton onEscape={() => { if (!busy) onClose(); }} onClose={() => { if (!busy) onClose(); }}>
     <header className="todo-edit-heading">
       <div className="todo-edit-eyebrow">{t("editEyebrow")} {todo.protocol_number && <><span>·</span><span className="todo-edit-number">{todo.protocol_number}</span></>}</div>
       <input aria-label={t("colTask")} className="todo-edit-title" value={draft.task} disabled={!editable} onChange={(e) => setDraft({ ...draft, task: e.target.value })} />

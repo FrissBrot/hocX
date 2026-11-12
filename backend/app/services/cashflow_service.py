@@ -13,7 +13,9 @@ Zwei Datenquellen:
 
 Die Erzeugung läuft beim Öffnen der Übersicht bzw. Forderungsliste (sync_charges), nicht als
 Hintergrundjob: idempotent über den Cursor tenant.billing_charged_until und die Eindeutigkeit
-(tenant_id, period_start), serialisiert über ein Advisory-Lock.
+(tenant_id, period_start), serialisiert über ein Advisory-Lock. Lesende Aufrufe warten nicht auf
+das Lock (pg_try_advisory_xact_lock) und laden nur fällige Mandanten samt gesammelter
+Preisgrundlage (PricingContext) - im Normalfall kostet der Abgleich so eine Abfrage.
 """
 
 from __future__ import annotations
@@ -27,7 +29,10 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, delete, func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
+
+from app.core.error_log import record_system_error
 
 from app.models import CashflowCost, Feature, Plan, PlanFeature, StoragePackage, Tenant, TenantCharge, TenantFeature, TenantStoragePackage
 from app.schemas.cashflow import (
@@ -93,14 +98,60 @@ def discounted_rp(subtotal_rp: int, discount_percent: Decimal | float | int) -> 
     return int((Decimal(subtotal_rp) * factor).quantize(Decimal(1), rounding=ROUND_HALF_UP))
 
 
-def compute_tenant_charge(db: Session, tenant: Tenant) -> tuple[int | None, list[dict]]:
+@dataclass
+class PricingContext:
+    """Preisgrundlagen gesammelt geladen (Audit 08, 2026-11): früher machte compute_tenant_charge
+    rund fünf Abfragen je Mandant, die Laufrate der Übersicht also über 1000 bei 300 Mandanten."""
+
+    plans: dict[str, Plan]
+    plan_features: dict[str, set[str]]
+    feature_prices: dict[str, tuple[str, int]]
+    booked: dict[int, set[str]]
+    packages: dict[int, list[tuple[StoragePackage, int]]]
+
+    @classmethod
+    def load(cls, db: Session, tenant_ids: list[int] | None = None) -> "PricingContext":
+        plan_features: dict[str, set[str]] = {}
+        for plan_code, feature_code in db.execute(select(PlanFeature.plan_code, PlanFeature.feature_code)):
+            plan_features.setdefault(plan_code, set()).add(feature_code)
+        booked_query = select(TenantFeature.tenant_id, TenantFeature.feature_code).where(TenantFeature.access == "full")
+        package_query = (
+            select(TenantStoragePackage.tenant_id, StoragePackage, TenantStoragePackage.quantity)
+            .join(StoragePackage, TenantStoragePackage.package_code == StoragePackage.code)
+            .order_by(StoragePackage.sort_order, StoragePackage.name)
+        )
+        if tenant_ids is not None:
+            booked_query = booked_query.where(TenantFeature.tenant_id.in_(tenant_ids))
+            package_query = package_query.where(TenantStoragePackage.tenant_id.in_(tenant_ids))
+        booked: dict[int, set[str]] = {}
+        for tenant_id, feature_code in db.execute(booked_query):
+            booked.setdefault(tenant_id, set()).add(feature_code)
+        packages: dict[int, list[tuple[StoragePackage, int]]] = {}
+        for tenant_id, package, quantity in db.execute(package_query):
+            packages.setdefault(tenant_id, []).append((package, quantity))
+        return cls(
+            plans={plan.code: plan for plan in db.scalars(select(Plan))},
+            plan_features=plan_features,
+            feature_prices={
+                feature.code: (feature.name, feature.standalone_price_monthly_rp)
+                for feature in db.scalars(select(Feature).where(Feature.standalone_price_monthly_rp.is_not(None)))
+            },
+            booked=booked,
+            packages=packages,
+        )
+
+
+def compute_tenant_charge(db: Session, tenant: Tenant, context: PricingContext | None = None) -> tuple[int | None, list[dict]]:
     """Betrag einer Periode nach dem aktuellen Abo. Gleiche Regel wie die Kostenvorschau im
     Admin-Tab «Plan & Abo» (Plan + Zusatzmodule, bei jährlicher Abrechnung Monatspreis x 12,
     abzüglich Rabatt), zusätzlich die zugebuchten Speicherpakete (ohne Rabatt).
-    None = kein bestimmbarer Preis (kein Plan bzw. Plan ohne Preis und ohne Zusatzmodule)."""
+    None = kein bestimmbarer Preis (kein Plan bzw. Plan ohne Preis und ohne Zusatzmodule).
+    Für viele Mandanten einen gemeinsamen PricingContext übergeben."""
     if tenant.plan_code is None:
         return None, []
-    plan = db.get(Plan, tenant.plan_code)
+    if context is None:
+        context = PricingContext.load(db, tenant_ids=[tenant.id])
+    plan = context.plans.get(tenant.plan_code)
     if plan is None:
         return None, []
     yearly = tenant.billing_cycle == "yearly"
@@ -111,16 +162,14 @@ def compute_tenant_charge(db: Session, tenant: Tenant) -> tuple[int | None, list
     if plan_rp is not None:
         lines.append({"kind": "plan", "label": plan.name, "amount_rp": plan_rp})
 
-    plan_codes = set(db.scalars(select(PlanFeature.feature_code).where(PlanFeature.plan_code == plan.code)))
+    plan_codes = context.plan_features.get(plan.code, set())
     # Nur voll gebuchte Features kosten; nach einem Downgrade (nur lesen) nicht mehr
-    booked = set(db.scalars(select(TenantFeature.feature_code).where(TenantFeature.tenant_id == tenant.id, TenantFeature.access == "full")))
-    add_on_codes = booked - plan_codes
-    if add_on_codes:
-        features = db.scalars(
-            select(Feature).where(Feature.code.in_(add_on_codes), Feature.standalone_price_monthly_rp.is_not(None)).order_by(Feature.name)
-        ).all()
-        for feature in features:
-            lines.append({"kind": "feature", "label": feature.name, "amount_rp": feature.standalone_price_monthly_rp * factor})
+    add_on_codes = context.booked.get(tenant.id, set()) - plan_codes
+    add_ons = sorted(
+        (context.feature_prices[code] for code in add_on_codes if code in context.feature_prices), key=lambda item: item[0]
+    )
+    for name, price in add_ons:
+        lines.append({"kind": "feature", "label": name, "amount_rp": price * factor})
 
     if not lines:
         return None, []
@@ -129,13 +178,7 @@ def compute_tenant_charge(db: Session, tenant: Tenant) -> tuple[int | None, list
         discounted = discounted_rp(subtotal, tenant.discount_percent)
         lines.append({"kind": "discount", "label": "discount", "percent": float(tenant.discount_percent), "amount_rp": discounted - subtotal})
 
-    packages = db.execute(
-        select(StoragePackage, TenantStoragePackage.quantity)
-        .join(TenantStoragePackage, TenantStoragePackage.package_code == StoragePackage.code)
-        .where(TenantStoragePackage.tenant_id == tenant.id)
-        .order_by(StoragePackage.sort_order, StoragePackage.name)
-    ).all()
-    for package, quantity in packages:
+    for package, quantity in context.packages.get(tenant.id, []):
         if yearly:
             price = package.price_yearly_rp if package.price_yearly_rp is not None else (
                 package.price_monthly_rp * 12 if package.price_monthly_rp is not None else None
@@ -149,23 +192,36 @@ def compute_tenant_charge(db: Session, tenant: Tenant) -> tuple[int | None, list
     return sum(line["amount_rp"] for line in lines), lines
 
 
-def sync_charges(db: Session, *, today: date | None = None, tenant_ids: list[int] | None = None) -> int:
+def sync_charges(db: Session, *, today: date | None = None, tenant_ids: list[int] | None = None, wait: bool = True) -> int:
     """Legt für jeden Mandanten die fehlenden Forderungen bis zur laufenden Periode an und
     committet. Gibt die Anzahl neuer Forderungen zurück. Perioden ohne bestimmbaren Preis
     (oder mit 0) werden übersprungen, der Cursor rückt trotzdem vor - eine spätere
     Preisänderung erzeugt so nie rückwirkend Forderungen."""
     today = today or today_local()
-    db.execute(text("SELECT pg_advisory_xact_lock(:id)"), {"id": SYNC_LOCK_ID})
+    if not wait:
+        # Lesende Aufrufe warten nicht auf einen laufenden Abgleich (Audit 08, 2026-11): der
+        # Lock war global und blockierend, Mandanten-Admins hingen sonst an der Admin-Übersicht.
+        if not db.scalar(text("SELECT pg_try_advisory_xact_lock(:id)"), {"id": SYNC_LOCK_ID}):
+            return 0
+    else:
+        db.execute(text("SELECT pg_advisory_xact_lock(:id)"), {"id": SYNC_LOCK_ID})
     created = 0
-    query = select(Tenant).order_by(Tenant.id)
+    # Nur Mandanten mit fälliger Periode laden - im Normalfall keiner, dann bleibt es bei einer Abfrage.
+    query = (
+        select(Tenant)
+        .where((Tenant.billing_charged_until.is_(None)) | (Tenant.billing_charged_until <= today))
+        .order_by(Tenant.id)
+    )
     if tenant_ids is not None:
         query = query.where(Tenant.id.in_(tenant_ids))
-    for tenant in db.scalars(query).all():
+    due = db.scalars(query).all()
+    context = PricingContext.load(db, tenant_ids=[tenant.id for tenant in due]) if due else None
+    for tenant in due:
         start = billing_start(tenant)
         cursor = tenant.billing_charged_until or start
         if cursor > today:
             continue
-        amount, lines = compute_tenant_charge(db, tenant)
+        amount, lines = compute_tenant_charge(db, tenant, context)
         months = _cycle_months(tenant.billing_cycle)
         periods = 0
         while cursor <= today and periods < _MAX_PERIODS_PER_SYNC:
@@ -264,7 +320,13 @@ def list_charges(
 def tenant_charges(db: Session, tenant: Tenant, *, today: date | None = None) -> TenantPortalCharges:
     """Forderungen aus Sicht des Mandanten (Abo & Nutzung): ohne interne Notiz."""
     today = today or today_local()
-    sync_charges(db, today=today, tenant_ids=[tenant.id])
+    try:
+        sync_charges(db, today=today, tenant_ids=[tenant.id], wait=False)
+    except SQLAlchemyError as exc:
+        # Ein lesender Aufruf darf am Abgleich nicht scheitern (z. B. Schreibsperre während einer
+        # Wartung) - dann eben die bisherigen Forderungen zeigen und den Fehler protokollieren.
+        db.rollback()
+        record_system_error(db, exc=exc, tenant_id=tenant.id)
     charges = db.scalars(
         select(TenantCharge).where(TenantCharge.tenant_id == tenant.id).order_by(TenantCharge.period_start.desc())
     ).all()
@@ -524,8 +586,9 @@ def overview(db: Session, year: int | None = None, *, today: date | None = None)
     # Laufrate: aktuelle Abos aller Mandanten auf einen Monat umgerechnet, laufende Kosten
     # (Prozentanteile auf diese Monatseinnahmen, daher erst nach der Mandantenschleife).
     run_rate = CashflowRunRate()
+    pricing = PricingContext.load(db)
     for tenant in db.scalars(select(Tenant)).all():
-        amount, _ = compute_tenant_charge(db, tenant)
+        amount, _ = compute_tenant_charge(db, tenant, pricing)
         if amount:
             run_rate.income_rp += round(amount / _cycle_months(tenant.billing_cycle))
             run_rate.paying_tenants += 1

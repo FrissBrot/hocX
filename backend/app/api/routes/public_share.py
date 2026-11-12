@@ -29,6 +29,7 @@ from app.core.rate_limit import enforce_rate_limit
 from app.models.entities import PhotoAlbum, ShareLink, StoredFile, Tenant
 from app.schemas.files import PublicShareFile, PublicShareRead
 from app.services import photo_album_share_service, share_link_service
+from app.services.upload_pipeline import safe_entry_name
 from app.core.storage import MAIN, get_object_store, object_response, read_bytes_or_404, safe_suffix, write_object_to_zip
 from app.services.file_service import FileService
 from app.services import image_export_service
@@ -76,10 +77,18 @@ _INLINE_IMAGE_TYPES = frozenset({"image/jpeg", "image/png", "image/webp", "image
 
 
 def _resolve_file_or_404(db: Session, link: ShareLink, file_id: uuid.UUID) -> StoredFile:
-    for stored_file in _clean_stored_files_for_link(db, link):
-        if stored_file.public_id == file_id:
-            return stored_file
-    raise HTTPException(status_code=404, detail="Datei nicht gefunden")
+    """Eine Datei des Links - gezielte Abfrage statt der ganzen Liste (Audit Dateien/Fotos: jede
+    Vorschau eines grossen Albums lud vorher alle Einträge, O(n²) aus einem anonymen Endpunkt).
+    Gleiche Regeln wie _clean_stored_files_for_link."""
+    if not share_link_service.link_contains_file(db, link, file_id):
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden")
+    statement = select(StoredFile).where(StoredFile.public_id == file_id, StoredFile.scan_status == "clean")
+    if link.album_id is None:
+        statement = statement.where(StoredFile.tenant_id == link.tenant_id)  # PRIV-016, siehe oben
+    stored_file = db.scalar(statement)
+    if stored_file is None:
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden")
+    return stored_file
 
 
 def _policy_for(db: Session, link: ShareLink, stored_file: StoredFile) -> MetadataPolicy:
@@ -334,7 +343,7 @@ def _cached_share_zip(link: ShareLink, stored_files: list[StoredFile], policies:
                 for stored_file in stored_files:
                     if not store.exists(MAIN, stored_file.storage_path):
                         continue
-                    name = Path(stored_file.original_name).name
+                    name = safe_entry_name(stored_file.original_name) or "datei"
                     if name in used_names:
                         name = f"{stored_file.public_id.hex[:8]}_{name}"
                     used_names.add(name)

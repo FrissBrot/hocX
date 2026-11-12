@@ -235,8 +235,7 @@ def bulk_delete_participants(
 ):
     require_permission(user, P.PARTICIPANTS_MANAGE)
     id_map = public_id_service.resolve_internal_ids(db, Participant, payload.participant_ids, tenant_id=user.current_tenant_id)
-    for participant_id in id_map.values():
-        participant = db.get(Participant, participant_id)
+    for participant in participant_service.load_many(db, list(id_map.values()), tenant_id=user.current_tenant_id):
         if participant.login_enabled:
             require_permission(user, P.ACCESS_MANAGE)
             _ensure_can_manage_login(db, user, participant)
@@ -370,14 +369,14 @@ def invite_participant(participant_id: uuid.UUID, db: Session = Depends(get_db),
     _ensure_can_manage_login(db, user, participant)
     enforce_rate_limit(f"participant-invite:{user.user_id}", limit=60, period_seconds=60 * 60)
     if participant.login_enabled:
-        raise HTTPException(status_code=409, detail="Diese Person hat bereits einen Login.")
+        raise HTTPException(status_code=409, detail={"code": "already_has_login", "message": "Diese Person hat bereits einen Login."})
     if not participant.is_active:
-        raise HTTPException(status_code=409, detail="Inaktive Personen können nicht eingeladen werden.")
+        raise HTTPException(status_code=409, detail={"code": "inactive_person", "message": "Inaktive Personen können nicht eingeladen werden."})
     if not (participant.email or "").strip():
-        raise HTTPException(status_code=400, detail="Für eine Einladung braucht die Person eine E-Mail-Adresse.")
+        raise HTTPException(status_code=400, detail={"code": "email_required", "message": "Für eine Einladung braucht die Person eine E-Mail-Adresse."})
     settings_row = db.get(PlatformNotificationSettings, 1)
     if not (settings_row and settings_row.email_enabled and settings_row.smtp_host and settings_row.email_from_address):
-        raise HTTPException(status_code=409, detail="Der E-Mail-Versand ist nicht eingerichtet.")
+        raise HTTPException(status_code=409, detail={"code": "email_not_configured", "message": "Der E-Mail-Versand ist nicht eingerichtet."})
     UserService().ensure_login_email_available(db, participant.email, excluding_user_id=participant.id)
     user_limit_service.ensure_login_capacity(db, participant.tenant_id)
     token = account_links.invite(db, participant, actor_user_id=user.user_id)

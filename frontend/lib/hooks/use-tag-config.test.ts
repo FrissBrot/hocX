@@ -12,6 +12,14 @@ vi.mock("@/contexts/toast-context", () => ({
   useToast: () => showToastMock,
 }));
 
+const confirmMock = vi.fn();
+vi.mock("@/contexts/confirm-context", () => ({
+  useConfirm: () => confirmMock,
+}));
+
+// Antwort auf die Zähl-Anfrage (dry_run) vor dem eigentlichen Umbenennen.
+const DRY_RUN = { updated: 0, events: 3, submission_assignments: 0, target_events: 0 };
+
 // Imported after the mocks are registered so useTagConfig picks up the mocked browserApiFetch/useToast.
 import { useTagConfig } from "./use-tag-config";
 
@@ -22,6 +30,8 @@ describe("useTagConfig.renameTag", () => {
     // Initial mount effect always calls GET /api/tag-config - resolve with a starting config
     // for every test unless a test overrides this first call itself.
     browserApiFetchMock.mockResolvedValue({ urgent: { color: "#ff0000" } });
+    confirmMock.mockReset();
+    confirmMock.mockResolvedValue(true);
   });
 
   afterEach(() => {
@@ -33,6 +43,7 @@ describe("useTagConfig.renameTag", () => {
     await waitFor(() => expect(result.current.tagConfig).toEqual({ urgent: { color: "#ff0000" } }));
 
     // rename-tag POST succeeds, tag-config PATCH succeeds too.
+    browserApiFetchMock.mockResolvedValueOnce(DRY_RUN); // POST rename-tag (dry_run)
     browserApiFetchMock.mockResolvedValueOnce(undefined); // POST /api/events/rename-tag
     browserApiFetchMock.mockResolvedValueOnce(undefined); // PATCH /api/tag-config
 
@@ -50,6 +61,7 @@ describe("useTagConfig.renameTag", () => {
 
     // The backend rejects the rename POST (e.g. duplicate tag name / validation error).
     browserApiFetchMock.mockReset();
+    browserApiFetchMock.mockResolvedValueOnce(DRY_RUN);
     browserApiFetchMock.mockRejectedValueOnce(new Error("Tag already exists"));
 
     let thrown: unknown = null;
@@ -91,6 +103,7 @@ describe("useTagConfig.renameTag", () => {
     await waitFor(() => expect(result.current.tagConfig).toEqual({ urgent: { color: "#ff0000" } }));
 
     browserApiFetchMock.mockReset();
+    browserApiFetchMock.mockResolvedValueOnce(DRY_RUN);
     browserApiFetchMock.mockResolvedValueOnce(undefined); // POST /api/events/rename-tag succeeds
     browserApiFetchMock.mockRejectedValueOnce(new Error("Speichern fehlgeschlagen")); // PATCH /api/tag-config fails
 
@@ -108,6 +121,7 @@ describe("useTagConfig.renameTag", () => {
     await waitFor(() => expect(result.current.tagConfig).toEqual({ urgent: { color: "#ff0000" } }));
 
     browserApiFetchMock.mockReset();
+    browserApiFetchMock.mockResolvedValueOnce(DRY_RUN);
     browserApiFetchMock.mockResolvedValueOnce(undefined); // POST rename-tag
     browserApiFetchMock.mockResolvedValueOnce(undefined); // PATCH tag-config
 
@@ -116,12 +130,35 @@ describe("useTagConfig.renameTag", () => {
     });
 
     expect(result.current.tagConfig).toEqual({ dringend: { color: "#ff0000" } });
-    const renameCall = browserApiFetchMock.mock.calls.find(([path]) => path === "/api/events/rename-tag");
+    const renameCall = browserApiFetchMock.mock.calls.find(
+      ([path, init]) => path === "/api/events/rename-tag" && !JSON.parse((init as RequestInit).body as string).dry_run
+    );
     expect(renameCall).toBeDefined();
     expect(JSON.parse((renameCall![1] as RequestInit).body as string)).toEqual({
       old_tag: "urgent",
       new_tag: "dringend",
     });
+  });
+
+  it("asks before merging into an existing tag and renames nothing when declined", async () => {
+    const { result } = renderHook(() => useTagConfig());
+    await waitFor(() => expect(result.current.tagConfig).toEqual({ urgent: { color: "#ff0000" } }));
+
+    browserApiFetchMock.mockReset();
+    browserApiFetchMock.mockResolvedValueOnce({ updated: 0, events: 2, submission_assignments: 1, target_events: 4 });
+    confirmMock.mockResolvedValueOnce(false);
+
+    let outcome: boolean | undefined;
+    await act(async () => {
+      outcome = await result.current.renameTag("urgent", "dringend");
+    });
+
+    expect(outcome).toBe(false);
+    expect(browserApiFetchMock).toHaveBeenCalledTimes(1);
+    expect(confirmMock).toHaveBeenCalledTimes(1);
+    expect(confirmMock.mock.calls[0][0].title).toBe("Tags zusammenführen?");
+    expect(confirmMock.mock.calls[0][0].message).toContain("dauerhaft");
+    expect(result.current.tagConfig).toEqual({ urgent: { color: "#ff0000" } });
   });
 });
 

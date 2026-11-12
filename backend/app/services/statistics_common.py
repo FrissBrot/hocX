@@ -32,9 +32,8 @@ from app.models.entities import (
     TodoStatus,
 )
 
-# Name of the list_definition that holds the tenant's group tags (event.tag values that
-# count as "groups" for stats/charts).
-GROUPS_LIST_NAME = "Gruppen"
+# Welche Listen die Gruppen liefern, markiert list_definition.is_group_source (Migration 0176,
+# vorher fest der Listenname «Gruppen» - eine umbenannte Liste liess den Abschnitt still leer).
 
 
 def chart_cycle_bounds(db: Session, tenant_id: int, config_id, offset: int = 0):
@@ -50,7 +49,10 @@ def chart_cycle_bounds(db: Session, tenant_id: int, config_id, offset: int = 0):
     ))
     if config is None:
         raise ValueError("Zyklus nicht gefunden")
-    year = next(iter(cycle_years_for_offsets(date.today(), config.reset_month, config.reset_day, [offset])))
+    from app.services.todo_fine_service import today as today_local
+
+    # Schweizer «heute», nicht UTC: sonst kippt der Zyklus am Reset-Tag erst 1-2 Stunden zu spät.
+    year = next(iter(cycle_years_for_offsets(today_local(), config.reset_month, config.reset_day, [offset])))
     # cycle_year ist das Startjahr, auch bei Kalenderjahren (Reset am 31.12.).
     boundary_year = year - 1 if config.reset_month == 12 and config.reset_day == 31 else year
     return (reset_boundary(boundary_year, config.reset_month, config.reset_day) + timedelta(days=1),
@@ -61,9 +63,20 @@ def _date_conditions(column, bounds):
     return [] if bounds is None else [column >= bounds[0], column <= bounds[1]]
 
 
+# Eingeschränkte Leser (nur bestimmten Vorlagen zugeordnet) sehen in der Statistik nur Zahlen aus
+# diesen Vorlagen (Audit 07, C9): ``template_ids`` None = alle Vorlagen des Mandanten, sonst die
+# lesbaren. Eine leere Menge ergibt keine Zeilen.
+def _template_sql(template_ids: set[int] | None, alias: str = "p") -> tuple[str, dict]:
+    if template_ids is None:
+        return "", {}
+    return f" AND {alias}.template_id = ANY(:template_ids)", {"template_ids": sorted(template_ids) or [0]}  # sql-ok: fester Alias aus dem Code
+
+
 # ── Attendance ────────────────────────────────────────────────────────────────
 
-def fetch_attendance_blocks(db: Session, tenant_id: int, bounds: tuple[date, date] | None = None) -> list[tuple[date, dict]]:
+def fetch_attendance_blocks(
+    db: Session, tenant_id: int, bounds: tuple[date, date] | None = None, template_ids: set[int] | None = None,
+) -> list[tuple[date, dict]]:
     """Raw (protocol_date, configuration_snapshot_json) rows for every attendance block
     that counts towards statistics/charts.
 
@@ -85,6 +98,7 @@ def fetch_attendance_blocks(db: Session, tenant_id: int, bounds: tuple[date, dat
             Protocol.status.in_(["durchgeführt", "abgeschlossen"]),
             ProtocolElementBlock.element_type_id == attendance_type_id,
             *_date_conditions(Protocol.protocol_date, bounds),
+            *([] if template_ids is None else [Protocol.template_id.in_(template_ids)]),
         )
         .order_by(Protocol.protocol_date)
     ).all()
@@ -161,7 +175,11 @@ def aggregate_attendance(
 
 # ── Todos ─────────────────────────────────────────────────────────────────────
 
-def fetch_todo_rows(db: Session, tenant_id: int, bounds: tuple[date, date] | None = None) -> list[Row]:
+def fetch_todo_rows(
+    db: Session, tenant_id: int, bounds: tuple[date, date] | None = None, template_ids: set[int] | None = None,
+) -> list[Row]:
+    """template_ids (eingeschränkte Leser): nur Todos aus Protokollen dieser Vorlagen; freie Todos
+    ohne Protokoll zählen dann nicht."""
     return db.execute(
         select(TodoStatus.code, ProtocolTodo.completed_at)
         # LEFT JOINs - protocol_element_block_id is nullable (standalone todos and
@@ -174,6 +192,7 @@ def fetch_todo_rows(db: Session, tenant_id: int, bounds: tuple[date, date] | Non
         .join(TodoStatus, TodoStatus.id == ProtocolTodo.todo_status_id)
         .where(ProtocolTodo.tenant_id == tenant_id)
         .where(*_date_conditions(func.coalesce(Protocol.protocol_date, cast(ProtocolTodo.created_at, Date)), bounds))
+        .where(*([] if template_ids is None else [Protocol.template_id.in_(template_ids)]))
     ).all()
 
 
@@ -185,7 +204,9 @@ def aggregate_todo_counts(rows: list[Row]) -> tuple[int, int]:
 
 # ── Fines ─────────────────────────────────────────────────────────────────────
 
-def fetch_fines_by_participant(db: Session, tenant_id: int, bounds: tuple[date, date] | None = None) -> list[Row]:
+def fetch_fines_by_participant(
+    db: Session, tenant_id: int, bounds: tuple[date, date] | None = None, template_ids: set[int] | None = None,
+) -> list[Row]:
     """SUM() on the DB side over the Numeric(15,2) amount column, instead of repeated
     Python float additions of CHF amounts (audit finding M12) - same pattern already used
     by the finance-by-month report. Returns (name, count, amount) rows with amount as
@@ -200,8 +221,10 @@ def fetch_fines_by_participant(db: Session, tenant_id: int, bounds: tuple[date, 
 
     Beträge werden je Währung des Kontos getrennt (MAIN-BE-019) - eine Person mit Bussen in
     zwei Währungen ergibt zwei Zeilen. Mit Begründung gelöschte Bussen zählen nicht."""
+    template_filter, template_params = _template_sql(template_ids)
     return db.execute(
-        text("""
+        text(  # sql-ok: nur feste Teilabfragen/Ausdrücke aus diesem Modul, Werte gebunden
+            f"""
             SELECT
                 MAX(COALESCE(p2.display_name, af.participant_name_snapshot)) AS name,
                 COALESCE('id:' || af.participant_id::text, 'name:' || af.participant_name_snapshot) AS participant_key,
@@ -216,17 +239,22 @@ def fetch_fines_by_participant(db: Session, tenant_id: int, bounds: tuple[date, 
               AND af.status <> 'deleted'
               AND (CAST(:date_start AS date) IS NULL OR p.protocol_date >= :date_start)
               AND (CAST(:date_end AS date) IS NULL OR p.protocol_date <= :date_end)
+              {template_filter}
             GROUP BY COALESCE('id:' || af.participant_id::text, 'name:' || af.participant_name_snapshot), fa.currency_label
         """),
-        {"tenant_id": tenant_id, "date_start": bounds[0] if bounds else None, "date_end": bounds[1] if bounds else None},
+        {"tenant_id": tenant_id, "date_start": bounds[0] if bounds else None, "date_end": bounds[1] if bounds else None, **template_params},
     ).all()
 
 
-def fetch_fines_by_type(db: Session, tenant_id: int, bounds: tuple[date, date] | None = None) -> list[Row]:
+def fetch_fines_by_type(
+    db: Session, tenant_id: int, bounds: tuple[date, date] | None = None, template_ids: set[int] | None = None,
+) -> list[Row]:
     """SUM() on the DB side, see fetch_fines_by_participant. Returns (fine_type, currency,
     count, amount) rows with amount as Decimal, one row per type and currency."""
+    template_filter, template_params = _template_sql(template_ids)
     return db.execute(
-        text("""
+        text(  # sql-ok: nur feste Teilabfragen/Ausdrücke aus diesem Modul, Werte gebunden
+            f"""
             SELECT
                 af.fine_type AS fine_type,
                 fa.currency_label AS currency,
@@ -239,9 +267,10 @@ def fetch_fines_by_type(db: Session, tenant_id: int, bounds: tuple[date, date] |
               AND af.status <> 'deleted'
               AND (CAST(:date_start AS date) IS NULL OR p.protocol_date >= :date_start)
               AND (CAST(:date_end AS date) IS NULL OR p.protocol_date <= :date_end)
+              {template_filter}
             GROUP BY af.fine_type, fa.currency_label
         """),
-        {"tenant_id": tenant_id, "date_start": bounds[0] if bounds else None, "date_end": bounds[1] if bounds else None},
+        {"tenant_id": tenant_id, "date_start": bounds[0] if bounds else None, "date_end": bounds[1] if bounds else None, **template_params},
     ).all()
 
 
@@ -274,6 +303,7 @@ def fetch_finance_by_account_month(db: Session, tenant_id: int, bounds: tuple[da
             SELECT
                 ft.account_id,
                 fa.name AS account_name,
+                fa.currency_label AS currency,
                 to_char(ft.transaction_date, 'YYYY-MM') AS month,
                 SUM(CASE WHEN ft.amount > 0 THEN ft.amount ELSE 0 END) AS income,
                 SUM(CASE WHEN ft.amount < 0 THEN ABS(ft.amount) ELSE 0 END) AS expenses
@@ -282,7 +312,7 @@ def fetch_finance_by_account_month(db: Session, tenant_id: int, bounds: tuple[da
             WHERE fa.tenant_id = :tenant_id
               AND (CAST(:date_start AS date) IS NULL OR ft.transaction_date >= :date_start)
               AND (CAST(:date_end AS date) IS NULL OR ft.transaction_date <= :date_end)
-            GROUP BY ft.account_id, fa.name, month
+            GROUP BY ft.account_id, fa.name, fa.currency_label, month
             ORDER BY month
         """),
         {"tenant_id": tenant_id, "date_start": bounds[0] if bounds else None, "date_end": bounds[1] if bounds else None},
@@ -291,8 +321,9 @@ def fetch_finance_by_account_month(db: Session, tenant_id: int, bounds: tuple[da
 
 # ── Groups ────────────────────────────────────────────────────────────────────
 #
-# A tenant's "groups" are event.tag values that match an entry in their "Gruppen" list
-# (a ListDefinition/ListEntry pair, not a dedicated table). The list has two generic
+# A tenant's "groups" are event.tag values that match an entry in a list marked as group
+# source (list_definition.is_group_source, Migration 0176 - a ListDefinition/ListEntry pair,
+# not a dedicated table). The list has two generic
 # columns and nothing forces the group name text into column one specifically - a tenant
 # is free to set it up with the text in column two. Entries of value_type "text" are the
 # only ones that ever populate a "text_value" key (participant/participants/event-typed
@@ -304,15 +335,16 @@ _GROUP_TAGS_SUBQUERY = """
     SELECT COALESCE(le.column_one_value_json->>'text_value', le.column_two_value_json->>'text_value')
     FROM list_definition ld
     JOIN list_entry le ON le.list_definition_id = ld.id
-    WHERE ld.tenant_id = :tenant_id AND ld.name = :groups_list_name
+    WHERE ld.tenant_id = :tenant_id AND ld.is_group_source
 """
 
 
 def fetch_group_tagged_cycles(db: Session, tenant_id: int, bounds: tuple[date, date] | None = None) -> list[Row]:
     """Distinct (cycle_config_id, cycle_year) pairs among events whose tag matches a
-    'Gruppen' list entry - powers the cycle filter/list in the statistics UI."""
+    group-source list entry - powers the cycle filter/list in the statistics UI."""
     return db.execute(
-        text(f"""
+        text(  # sql-ok: nur feste Teilabfragen/Ausdrücke aus diesem Modul, Werte gebunden
+            f"""
             SELECT DISTINCT ec.cycle_config_id, ec.cycle_year
             FROM event_cycle ec
             JOIN event e ON e.id = ec.event_id
@@ -322,15 +354,16 @@ def fetch_group_tagged_cycles(db: Session, tenant_id: int, bounds: tuple[date, d
               AND e.tag IN ({_GROUP_TAGS_SUBQUERY})
             ORDER BY ec.cycle_config_id, ec.cycle_year
         """),
-        {"tenant_id": tenant_id, "groups_list_name": GROUPS_LIST_NAME, "date_start": bounds[0] if bounds else None, "date_end": bounds[1] if bounds else None},
+        {"tenant_id": tenant_id, "date_start": bounds[0] if bounds else None, "date_end": bounds[1] if bounds else None},
     ).all()
 
 
 def fetch_group_session_rows(db: Session, tenant_id: int, bounds: tuple[date, date] | None = None) -> list[Row]:
     """Session-count / avg-participant-count stats per (event.tag, cycle_config_id,
-    cycle_year), restricted to event tags that match a 'Gruppen' list entry."""
+    cycle_year), restricted to event tags that match a group-source list entry."""
     return db.execute(
-        text(f"""
+        text(  # sql-ok: nur feste Teilabfragen/Ausdrücke aus diesem Modul, Werte gebunden
+            f"""
             SELECT
                 e.tag AS group_name,
                 ec.cycle_config_id,
@@ -348,7 +381,7 @@ def fetch_group_session_rows(db: Session, tenant_id: int, bounds: tuple[date, da
             GROUP BY e.tag, ec.cycle_config_id, ec.cycle_year
             ORDER BY e.tag, ec.cycle_year
         """),
-        {"tenant_id": tenant_id, "groups_list_name": GROUPS_LIST_NAME, "date_start": bounds[0] if bounds else None, "date_end": bounds[1] if bounds else None},
+        {"tenant_id": tenant_id, "date_start": bounds[0] if bounds else None, "date_end": bounds[1] if bounds else None},
     ).all()
 
 

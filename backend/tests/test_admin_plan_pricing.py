@@ -497,3 +497,49 @@ def test_delete_assigned_catalog_entry_preserves_assignment(db, kind):
         assert db.get(Tenant, tenant.id).plan_code == code
     else:
         assert db.query(TenantStoragePackage).filter_by(tenant_id=tenant.id, package_code=code).count() == 1
+
+
+def test_changing_a_plan_updates_tenants_already_on_it(db):
+    """Audit 08 (2026-11): upsert_plan änderte nur plan_feature - Mandanten auf dem Plan behielten
+    entfernte Module und bekamen neue nicht."""
+    from app.core.features_generated import FEATURES
+
+    admin_service = AdminTenantService()
+    admin = make_platform_admin(db, email="plan-sync-admin@example.com")
+    tenant = make_tenant(db, features=())
+
+    def plan(feature_codes):
+        return AdminPlanWrite(
+            name="Test Plan Sync", price_monthly_rp=None, price_yearly_rp=None, included_user_limit=None,
+            included_storage_bytes=None, sort_order=0, feature_codes=feature_codes,
+        )
+
+    admin_service.upsert_plan(db, "test_plan_sync", plan(["finance"]))
+    admin_service.update_tenant_subscription(
+        db, tenant.id, AdminTenantSubscriptionUpdate(plan_code="test_plan_sync", billing_cycle="monthly"), admin_id=admin.id
+    )
+
+    admin_service.upsert_plan(db, "test_plan_sync", plan(["abgabebox"]), admin_id=admin.id)
+
+    rows = {row.feature_code: row for row in db.query(TenantFeature).filter(TenantFeature.tenant_id == tenant.id)}
+    assert rows["abgabebox"].access == "full" and rows["abgabebox"].source == "plan"
+    if FEATURES["finance"].downgrade == "read_only":
+        assert rows["finance"].access == "read_only"
+    else:
+        assert "finance" not in rows
+
+
+def test_subscription_lists_read_only_modules_without_charging_them(db):
+    """Audit 08 (2026-11): Nur-Lesen-Module nach einem Downgrade fehlten auf «Abo & Nutzung»."""
+    tenant = make_tenant(db, features=())
+    actor = CurrentUser(
+        user_id=1, user_public_id=tenant.public_id, first_name="Test", last_name="Admin", display_name="Test Admin",
+        email="test@example.com", preferred_language="de", current_tenant_id=tenant.id,
+        current_tenant_public_id=tenant.public_id, current_tenant_name=tenant.name, current_tenant_profile_image_path=None,
+        permissions=system_role_permissions("admin"), current_tenant_features=frozenset(),
+        current_tenant_read_only_features=frozenset({"finance"}),
+    )
+    subscription = TenantService().get_subscription(db, tenant.id, actor)
+    assert subscription is not None
+    finance = next(feature for feature in subscription.features if feature.code == "finance")
+    assert finance.read_only is True

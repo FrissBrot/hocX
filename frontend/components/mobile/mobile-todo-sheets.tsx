@@ -17,7 +17,9 @@ import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
-import { browserApiFetch } from "@/lib/api/client";
+import { ApiError, browserApiFetch } from "@/lib/api/client";
+import { featureAccess } from "@/lib/permissions";
+import { TodoFineSection } from "@/components/finances/todo-fine-section";
 import type { TagConfig } from "@/lib/hooks/use-tag-config";
 import type { ParticipantSummary, TodoListItem } from "@/types/api";
 
@@ -76,6 +78,15 @@ export function TodoDetailSheet({
   const overdue = isTodoOverdue(todo);
   const dueLabel = todoDueLabel(todo, locale);
 
+  const session = useMobileSession();
+  const finesEnabled = featureAccess(session, "todo_fines") !== "none";
+
+  /** Eigene laufende Busse (409 todo_fine_running) verständlich melden. */
+  function errorText(error: unknown, fallback: string): string {
+    if (error instanceof ApiError && (error.detail as { code?: unknown } | undefined)?.code === "todo_fine_running") return tTodos("fineRunningLocked");
+    return error instanceof Error ? error.message : fallback;
+  }
+
   async function patch(body: PatchBody, optimistic: TodoOverride = {}) {
     const previous = todo;
     onChange({ ...todo, ...optimistic });
@@ -84,7 +95,7 @@ export function TodoDetailSheet({
       onChange({ ...previous, ...optimistic, ...(updated ?? {}) });
     } catch (error) {
       onChange(previous);
-      showToast(error instanceof Error ? error.message : tTodos("saveFailed"), "error");
+      showToast(errorText(error, tTodos("saveFailed")), "error");
     }
   }
 
@@ -110,7 +121,7 @@ export function TodoDetailSheet({
       }
       onClose();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : tTodos("deleteFailed"), "error");
+      showToast(errorText(error, tTodos("deleteFailed")), "error");
     } finally {
       setBusy(false);
     }
@@ -253,6 +264,13 @@ export function TodoDetailSheet({
             ) : null}
           </div>
         </div>
+
+        {finesEnabled ? (
+          <div className="mobile-field-block">
+            {/* Busse nur anzeigen; von Hand festlegen geht im Desktop-Popup */}
+            <TodoFineSection todoId={todo.id} readOnly />
+          </div>
+        ) : null}
 
         {todo.protocol_id ? (
           <div className="mobile-field-block">

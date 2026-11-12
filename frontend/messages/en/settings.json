@@ -47,6 +47,10 @@
         }
       },
       "securityNote": "Security notices (password or second factor changed) and password reset links are always sent."
+    },
+    "docs": {
+      "notifications": "More about email notifications",
+      "security": "More about password and second factor"
     }
   },
   "logoutFailed": "Logout failed. Please try again.",

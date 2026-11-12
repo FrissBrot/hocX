@@ -32,7 +32,8 @@
     "cancel": "Abbrechen",
     "uploading": "Lädt hoch…",
     "uploadCount": "{count, plural, one {# Datei hochladen} other {# Dateien hochladen}}",
-    "upload": "Hochladen"
+    "upload": "Hochladen",
+    "progress": "{sent} von {total} übertragen"
   },
   "errors": {
     "uploadFailed": "Upload fehlgeschlagen"

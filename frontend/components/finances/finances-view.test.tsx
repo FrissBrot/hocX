@@ -17,7 +17,7 @@ async function openForm(transactions: FinanceTransaction[] = []) {
   render(<FinancesView initialAccounts={[account]} canWrite />);
   fireEvent.click(screen.getByRole("button", { name: /Vereinskasse/ }));
   await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-  fireEvent.click(screen.getByRole("button", { name: "+ Transaktion" }));
+  fireEvent.click(screen.getByRole("button", { name: "+ Buchung" }));
 }
 
 beforeEach(() => { fetchMock.mockReset(); toastMock.mockReset(); });
@@ -69,12 +69,38 @@ describe("Konflikte aus dem Backend", () => {
     fireEvent.click(screen.getByRole("button", { name: "Abbrechen" }));
     await screen.findByText("Raummiete");
     fetchMock.mockImplementation((url: string, options?: { method?: string }) => {
-      if (options?.method === "PATCH") return Promise.reject(Object.assign(new Error("raw backend detail"), { status: 409 }));
+      if (options?.method === "PATCH") return Promise.reject(Object.assign(new Error("raw backend detail"), { status: 409, detail: { code: "fine_transaction", message: "raw backend detail" } }));
       return Promise.resolve(url === "/api/finance/accounts" ? [account] : [expense]);
     });
     fireEvent.click(screen.getAllByRole("button", { name: "Bearbeiten" }).at(-1)!);
     fireEvent.click(screen.getByRole("button", { name: "Aktualisieren" }));
     await waitFor(() => expect(toastMock).toHaveBeenCalledWith(expect.stringContaining("einkassierten Busse"), "error"));
     expect(toastMock).not.toHaveBeenCalledWith("raw backend detail", "error");
+  });
+});
+
+describe("Gesperrte Buchungen und Jahressicht", () => {
+  it("zeigt bei einer Pendenzen-Bussen-Buchung ein Schloss statt Bearbeiten/Löschen", async () => {
+    const locked: FinanceTransaction = { ...expense, id: "tx-2", description: "Busse Pendenz", locked_reason: "todo_fine_transaction", locked_detail: "Max Muster" };
+    await openForm([locked]);
+    fireEvent.click(screen.getByRole("button", { name: "Abbrechen" }));
+    await screen.findByText("Busse Pendenz");
+    expect(screen.queryAllByRole("button", { name: "Bearbeiten" })).toHaveLength(1); // nur das Konto
+    const lock = screen.getByRole("button", { name: /Gesperrte Buchung: .*Max Muster/ });
+    fireEvent.click(lock);
+    expect(toastMock).toHaveBeenCalledWith(expect.stringContaining("Pendenzen-Busse von Max Muster"), "info");
+  });
+
+  it("lädt die Jahressicht mit Jahresfilter", async () => {
+    const summary = { year: null, income: 100, expenses: -30, net: 70, opening_balance: 0, closing_balance: 70, transaction_count: 2, years: [2026, 2025] };
+    fetchMock.mockImplementation((url: string) => Promise.resolve(url === "/api/finance/accounts" ? [account] : url.includes("/summary") ? summary : [expense]));
+    render(<FinancesView initialAccounts={[account]} canWrite={false} readOnly />);
+    expect(screen.getByText(/nur noch lesbar/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Vereinskasse/ }));
+    await screen.findByText("Raummiete");
+    expect(fetchMock).toHaveBeenCalledWith(`/api/finance/accounts/${account.id}/summary`);
+    expect(screen.getByText("Einnahmen")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: "Zeitraum" }), { target: { value: "2025" } });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(`/api/finance/accounts/${account.id}/transactions?limit=50&year=2025`));
   });
 });

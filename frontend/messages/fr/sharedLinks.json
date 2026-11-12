@@ -17,14 +17,16 @@
     "metadataCaptureDateHelp": "Date et heure de la prise de vue.",
     "metadataCamera": "Appareil",
     "metadataCameraHelp": "Modèle, numéro de série, objectif et réglages d’exposition.",
-    "metadataHelp": "Les informations désactivées sont retirées des photos lors du téléchargement."
+    "metadataHelp": "Les informations désactivées sont retirées des photos lors du téléchargement.",
+    "albumLiveNotice": "Les liens d’album sont « en direct » : les photos ajoutées plus tard à l’album apparaissent automatiquement dans le lien – y compris celles classées automatiquement, dès leur validation.",
+    "linkHelp": "Toute personne disposant du lien peut voir et télécharger les photos sans connexion. Les informations désactivées (lieu, date, appareil) sont retirées des fichiers. Vous pouvez révoquer le lien à tout moment sous « Liens partagés »."
   },
   "emptyDescription": "Utilisez « Partager » sur des fichiers, photos ou un album photo pour créer un lien de téléchargement sans connexion.",
   "emptyTitle": "Aucun lien pour l'instant",
   "filterActive": "Actif",
   "filterAll": "Tous",
   "page": {
-    "description": "Liens de téléchargement publics pour les fichiers et photos de cette organisation.",
+    "description": "Liens de téléchargement publics pour les fichiers et photos de votre organisation.",
     "title": "Liens partagés"
   },
   "revokeConfirm": "Révoquer le lien « {name} » ? Il ne fonctionnera plus ensuite.",

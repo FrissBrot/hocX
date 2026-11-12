@@ -232,6 +232,7 @@ def delete_my_mfa_factor(
 @router.post("/me/password", response_model=UserRead)
 def change_my_password(
     payload: UserPasswordChange,
+    response: Response,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -241,6 +242,9 @@ def change_my_password(
         db.rollback()
         raise HTTPException(status_code=400, detail="Password could not be changed") from exc
     audit.log(db, action="user.password_changed", actor=user, entity_type="user", entity_id=user.user_id)
+    # session_revoke_at beendet alle anderen Sessions; die eigene bekommt ein neues Cookie (wie die
+    # MFA-Routen), sonst flöge die Person sofort nach dem Wechsel raus (Bereichs-Audit 05).
+    issue_session_cookie(response, user.user_id, mfa_verified=user.mfa_verified)
     return current
 
 
@@ -328,6 +332,9 @@ def patch_user(
     internal_user_id = _resolve_user_id(db, user_id)
     try:
         current = service.update_user(db, internal_user_id, payload, user)
+    except ValueError as exc:
+        # Kuratierte Validierung (z. B. Austritt vor Eintritt) vor jedem Schreiben - 400 statt 500.
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="User could not be updated") from exc

@@ -226,5 +226,16 @@
     "about": "Hilfe zu «{topic}»",
     "moreInDocs": "Mehr in der Anleitung",
     "guide": "Anleitung"
+  },
+  "tagRename": {
+    "title": "Tag umbenennen?",
+    "mergeTitle": "Tags zusammenführen?",
+    "confirm": "Umbenennen",
+    "mergeConfirm": "Zusammenführen",
+    "confirmEvents": "«{oldTag}» wird bei {count, plural, one {# Termin} other {# Terminen}} zu «{newTag}».",
+    "confirmAssignments": "{count, plural, one {# Abgabe filtert} other {# Abgaben filtern}} danach künftig nach dem neuen Tag.",
+    "confirmMerge": "«{newTag}» gibt es schon bei {count, plural, one {# Termin} other {# Terminen}}: beide Tags werden dauerhaft zu einem zusammengeführt.",
+    "colorSaveFailed": "Farbe konnte nicht gespeichert werden",
+    "importantSaveFailed": "Markierung konnte nicht gespeichert werden"
   }
 }

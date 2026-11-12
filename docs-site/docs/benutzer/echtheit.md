@@ -41,7 +41,7 @@ Unter **Mandanten-Einstellungen → Echtheitsprüfung** (nur Administratorinnen 
 Welche Angaben im PDF selbst stehen (Prüfadresse, Dokument-ID, QR-Code), legt das Corporate Design fest:
 **Dokument-Studio → Corporate Design**, Abschnitt «Echtheitsprüfung».
 
-## Verifizierte Organisation
+## Verifizierte Organisation {#verifizierung}
 
 hocX kann bestätigen, dass ein Konto wirklich zu einer Organisation gehört. Auf der Prüfseite
 erscheint dann das Abzeichen **«Verifizierte Organisation»** – aber nur, wenn Name und Logo
@@ -55,7 +55,7 @@ angezeigt werden. Ohne Verifizierung steht dort «Erstellt im hocX-Konto von …
 Bestätigt wird der Name zum Zeitpunkt des Antrags. **Ändert sich der Name des Vereins, wird die
 Verifizierung automatisch aufgehoben** und kann neu beantragt werden. Ein neues Logo ändert nichts.
 
-## Eigene Prüf-Domain
+## Eigene Prüf-Domain {#pruef-domain}
 
 Mit der Zusatzfunktion **«Eigene Prüf-Domain»** prüfen Empfänger Dokumente eines Vereins unter
 dessen eigener Adresse, zum Beispiel `verify.turnverein-seedorf.ch`. So sieht jede Person, dass ein
@@ -64,7 +64,7 @@ freigeschaltet, unabhängig von eigenen Domains für die App oder die Abgabebox.
 
 **Einrichten** (Administratorinnen und Administratoren):
 
-1. Unter **Mandanten-Einstellungen → Domains** auf **Domain hinzufügen** klicken, den Zweck
+1. Unter **[Mandanten-Einstellungen → Domains](einstellungen.md#domains)** auf **Domain hinzufügen** klicken, den Zweck
    **Prüfseite** wählen und die Domain eingeben. Der Name ist frei wählbar, `verify.` ist üblich.
 2. Die beiden angezeigten DNS-Einträge beim Domain-Anbieter setzen (TXT-Eintrag als
    Besitznachweis, CNAME auf die Abgabebox-Adresse von hocX) und **Jetzt prüfen** klicken.

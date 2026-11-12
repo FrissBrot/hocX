@@ -1,5 +1,6 @@
 import uuid
 from datetime import date
+from typing import Annotated
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -15,6 +16,7 @@ from app.schemas.finance import (
     FinanceAccountCreate,
     FinanceAccountRead,
     FinanceAccountUpdate,
+    FinancePeriodSummary,
     FinanceTransactionCreate,
     FinanceTransactionRead,
     FinanceTransactionUpdate,
@@ -25,6 +27,11 @@ from app.services.audit_service import AuditService
 router = APIRouter()
 repo = FinanceRepository()
 audit = AuditService()
+
+
+def _conflict(exc: FinanceConflictError) -> HTTPException:
+    """409 mit Code (Oberfläche übersetzt finances.errors.<code>) und deutscher Klartextmeldung."""
+    return HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"code": exc.code, "message": str(exc)})
 
 
 # ── Accounts ──────────────────────────────────────────────────────────────────
@@ -46,10 +53,16 @@ def create_account(
 ):
     require_permission(user, P.FINANCES_MANAGE)
     try:
-        return repo.create_account(db, user.current_tenant_id, payload)
+        created = repo.create_account(db, user.current_tenant_id, payload)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Account could not be created") from exc
+    audit.log(
+        db, action="finance_account.created", actor=user, entity_type="finance_account",
+        entity_id=public_id_service.resolve_internal_id(db, FinanceAccount, created.id, tenant_id=user.current_tenant_id),
+        details={"name": created.name, "currency_label": created.currency_label},
+    )
+    return created
 
 
 @router.patch("/finance/accounts/{account_id}", response_model=FinanceAccountRead)
@@ -63,9 +76,17 @@ def update_account(
     internal_id = public_id_service.resolve_internal_id(db, FinanceAccount, account_id, tenant_id=user.current_tenant_id)
     if internal_id is None:
         raise HTTPException(status_code=404, detail="Account not found")
-    result = repo.update_account(db, internal_id, user.current_tenant_id, payload)
+    try:
+        result = repo.update_account(db, internal_id, user.current_tenant_id, payload)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Account could not be updated") from exc
     if result is None:
         raise HTTPException(status_code=404, detail="Account not found")
+    audit.log(
+        db, action="finance_account.updated", actor=user, entity_type="finance_account", entity_id=internal_id,
+        details={"fields": sorted(payload.model_fields_set), "name": result.name},
+    )
     return result
 
 
@@ -82,7 +103,7 @@ def delete_account(
     try:
         deleted = repo.delete_account(db, internal_id, user.current_tenant_id)
     except FinanceConflictError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        raise _conflict(exc) from exc
     if not deleted:
         raise HTTPException(status_code=404, detail="Account not found")
     audit.log(db, action="finance_account.deleted", actor=user, entity_type="finance_account", entity_id=internal_id)
@@ -96,6 +117,7 @@ def list_transactions(
     account_id: uuid.UUID,
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
+    year: Annotated[int | None, Query(ge=1900, le=2999)] = None,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -103,7 +125,22 @@ def list_transactions(
     internal_id = public_id_service.resolve_internal_id(db, FinanceAccount, account_id, tenant_id=user.current_tenant_id)
     if internal_id is None:
         raise HTTPException(status_code=404, detail="Account not found")
-    return repo.list_transactions(db, internal_id, skip=skip, limit=limit)
+    return repo.list_transactions(db, internal_id, skip=skip, limit=limit, year=year)
+
+
+@router.get("/finance/accounts/{account_id}/summary", response_model=FinancePeriodSummary)
+def get_period_summary(
+    account_id: uuid.UUID,
+    year: Annotated[int | None, Query(ge=1900, le=2999)] = None,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Jahressicht: Einnahmen, Ausgaben, Anfangs-/Endsaldo und Jahre mit Buchungen."""
+    require_permission(user, P.FINANCES_READ)
+    internal_id = public_id_service.resolve_internal_id(db, FinanceAccount, account_id, tenant_id=user.current_tenant_id)
+    if internal_id is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+    return repo.period_summary(db, internal_id, year)
 
 
 @router.get("/finance/accounts/{account_id}/balance", response_model=dict[str, float])
@@ -135,6 +172,8 @@ def create_transaction(
         raise HTTPException(status_code=404, detail="Account not found")
     try:
         created = repo.create_transaction(db, internal_id, user.current_tenant_id, payload)
+    except FinanceConflictError as exc:
+        raise _conflict(exc) from exc
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Transaction could not be created") from exc
@@ -163,7 +202,10 @@ def update_transaction(
     try:
         result = repo.update_transaction(db, existing.id, user.current_tenant_id, payload)
     except FinanceConflictError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        raise _conflict(exc) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Transaction could not be updated") from exc
     if result is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
     audit.log(
@@ -186,7 +228,7 @@ def delete_transaction(
     try:
         deleted = repo.delete_transaction(db, existing.id, user.current_tenant_id)
     except FinanceConflictError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        raise _conflict(exc) from exc
     if not deleted:
         raise HTTPException(status_code=404, detail="Transaction not found")
     audit.log(db, action="finance_transaction.deleted", actor=user, entity_type="finance_transaction", entity_id=existing.id)

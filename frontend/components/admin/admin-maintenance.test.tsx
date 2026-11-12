@@ -65,7 +65,7 @@ describe("AdminMaintenance", () => {
     expect(screen.getByText("Wartung läuft · Volle Wartung")).toBeInTheDocument();
     expect(screen.getByLabelText("Laufzeit")).toHaveTextContent(/^00:4[12]:\d\d$/);
     expect(screen.getByText("Update auf Version 1.2.0")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Sicherheitsprüfungen vor dem Beenden" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^Sicherheitsprüfungen vor dem Beenden/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Wartung beenden" })).toBeEnabled();
   });
 

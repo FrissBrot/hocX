@@ -16,7 +16,8 @@ import { ActionMenu } from "@/components/ui/action-menu";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils/format";
 import { SearchInput } from "@/components/ui/search-input";
-import { browserApiFetch } from "@/lib/api/client";
+import { ApiError, browserApiFetch } from "@/lib/api/client";
+import { HelpPopover } from "@/components/ui/help-popover";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { useHistoricalList } from "@/lib/hooks/use-historical-list";
@@ -43,7 +44,21 @@ type ListDefinitionFormState = {
   column_two_title: string;
   column_two_value_type: StructuredListValueType;
   is_active: boolean;
+  is_group_source: boolean;
 };
+
+type ListUsage = { kind: "element" | "protocol"; name: string; number?: string };
+
+/** 409 beim Löschen: Fundstellen nennen statt nur «noch verknüpft» (Audit 07, U4). */
+export function listDeleteErrorMessage(error: unknown, t: TFunc): string | null {
+  if (!(error instanceof ApiError) || error.status !== 409) return null;
+  const detail = error.detail as { code?: string; usages?: ListUsage[] } | undefined;
+  if (detail?.code !== "list_in_use" || !Array.isArray(detail.usages)) return null;
+  const places = detail.usages
+    .map((usage) => (usage.kind === "protocol" ? t("usage.protocol", { number: usage.number ?? usage.name }) : t("usage.element", { name: usage.name })))
+    .join(", ");
+  return t("toasts.listInUse", { places });
+}
 
 type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
 
@@ -65,6 +80,7 @@ function initialFormState(t: TFunc): ListDefinitionFormState {
     column_two_title: t("defaultColumnTwo"),
     column_two_value_type: "text",
     is_active: true,
+    is_group_source: false,
   };
 }
 
@@ -77,6 +93,7 @@ function formFromDefinition(definition: StructuredListDefinition): ListDefinitio
     column_two_title: definition.column_two_title,
     column_two_value_type: definition.column_two_value_type,
     is_active: definition.is_active,
+    is_group_source: definition.is_group_source ?? false,
   };
 }
 
@@ -164,6 +181,7 @@ export function ListManager({
         column_two_title: form.column_two_title,
         column_two_value_type: form.column_two_value_type,
         is_active: form.is_active,
+        is_group_source: form.is_group_source,
       };
       const saved = editingListId
         ? await browserApiFetch<StructuredListDefinition>(`/api/lists/${editingListId}`, {
@@ -206,7 +224,7 @@ export function ListManager({
       setSelectedListId((current) => (current === listId ? (remainingLists[0]?.id ?? null) : current));
       showToast(t("toasts.listDeleted"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("toasts.listDeleteFailed"), "error");
+      showToast(listDeleteErrorMessage(error, t) ?? (error instanceof Error ? error.message : t("toasts.listDeleteFailed")), "error");
     }
   }
 
@@ -527,6 +545,12 @@ export function ListManager({
                 <label className="list-definition-title"><span className="list-definition-number">{index + 1}</span>
                   <input aria-label={t(index === 0 ? "formModal.column1" : "formModal.column2")} value={form[`column_${column}_title`]} onChange={(event) => setForm((current) => ({ ...current, [`column_${column}_title`]: event.target.value }))} required />
                 </label>
+                <span className="field-label list-definition-type-label">
+                  {t("formModal.dataType")}{" "}
+                  <HelpPopover topic={t("formModal.dataType")} docs={{ page: "listen", anchor: "datentypen" }}>
+                    {t("help.dataType")}
+                  </HelpPopover>
+                </span>
                 <div className="list-definition-types" role="group" aria-label={t("formModal.dataType")}>
                   {valueTypeOptions(t).map((option) => (
                     <button type="button" key={option.value} aria-pressed={form[`column_${column}_value_type`] === option.value}
@@ -539,6 +563,15 @@ export function ListManager({
                 </div>
               </fieldset>
             ))}
+          </div>
+          <div className="list-definition-group-source">
+            <label className="list-definition-active">
+              <input type="checkbox" role="switch" checked={form.is_group_source} onChange={(event) => setForm((current) => ({ ...current, is_group_source: event.target.checked }))} />
+              {t("formModal.groupSource")}
+            </label>
+            <HelpPopover topic={t("formModal.groupSource")} docs={{ page: "statistik", anchor: "gruppen" }}>
+              {t("help.groupSource")}
+            </HelpPopover>
           </div>
           <div className="field-stack"><span className="field-label">{t("formModal.preview")}</span>
             <div className="list-definition-preview"><table className="data-table"><thead><tr>{(["one", "two"] as const).map((column) => <th key={column}>{form[`column_${column}_title`]} <span className="muted">· {t(`valueTypes.${form[`column_${column}_value_type`]}`)}</span></th>)}</tr></thead>

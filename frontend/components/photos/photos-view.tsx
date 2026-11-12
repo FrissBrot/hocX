@@ -22,6 +22,8 @@ import { FilterTabs } from "@/components/ui/filter-tabs";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
 import { TagInput } from "@/components/ui/tag-input";
+import { useConfirm } from "@/contexts/confirm-context";
+import { HelpPopover } from "@/components/ui/help-popover";
 import { useToast } from "@/contexts/toast-context";
 import { MobileFab, MobileSegmented } from "@/components/mobile/mobile-ui";
 import { browserApiFetch } from "@/lib/api/client";
@@ -81,6 +83,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
   const embedded = Boolean(albumId);
   const router = useRouter();
   const showToast = useToast();
+  const confirm = useConfirm();
   const SORT_OPTIONS = sortOptions(t);
 
   const [tab, setTab] = useState<Tab>("all");
@@ -187,6 +190,25 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
       onReleased?.();
     } catch {
       showToast(t("releaseError"), "error");
+    }
+  }
+
+  async function removeSelectedFromAlbum() {
+    if (!albumId || selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+    const ok = await confirm({ message: t("removeFromAlbumConfirm", { count: ids.length }), confirmLabel: t("removeFromAlbumConfirmLabel") });
+    if (!ok) return;
+    try {
+      const result = await browserApiFetch<{ removed: number }>(`/api/files/albums/${albumId}/items/remove`, {
+        method: "POST",
+        body: JSON.stringify({ file_ids: ids }),
+      });
+      showToast(t("removedFromAlbumToast", { count: result?.removed ?? 0 }), "success");
+      setSelectedIds(new Set());
+      reload();
+      onReleased?.();
+    } catch {
+      showToast(t("removeFromAlbumError"), "error");
     }
   }
 
@@ -445,7 +467,8 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
     }
     recordJobResults(job);
     if (errors.length > 0) showToast(errors.join(" · "), "info");
-    if (job.error) showToast(job.error, "error");
+    // Kuratierter Fehlercode des Backends (GALLERY_JOB_FAILED_CODE) - nie interne Details.
+    if (job.error) showToast(job.error === "ingest_failed" ? t("galleryJobFailed") : job.error, "error");
     loadPendingReleases();
   }
 
@@ -468,7 +491,10 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
             </div>
             <div className="table-toolbar-actions photos-header-actions">
               {analysisProgress && analysisProgress.pending_images > 0 && (
-                <span className="pill">{t("analysisPill", { count: analysisProgress.active_job_image_count || analysisProgress.pending_images })}</span>
+                <>
+                  <span className="pill">{t("analysisPill", { count: analysisProgress.active_job_image_count || analysisProgress.pending_images })}</span>
+                  <HelpPopover topic={t("analysisHelpTopic")} docs={{ page: "fotos", anchor: "foto-analyse" }}>{t("analysisHelp")}</HelpPopover>
+                </>
               )}
               {galleryUploadJobs.length > 0 && (
                 <span className="pill">
@@ -631,6 +657,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
               onReleaseSelected={
                 albumId && items.some((item) => item.share_pending && selectedIds.has(item.id)) ? () => void releaseSelected() : undefined
               }
+              onRemoveFromAlbum={albumId ? () => void removeSelectedFromAlbum() : undefined}
             />
           )}
 

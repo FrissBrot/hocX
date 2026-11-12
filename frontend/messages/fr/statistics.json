@@ -48,5 +48,14 @@
   "viewByMember": "Par membre",
   "viewByTime": "Dans le temps",
   "withParticipants": "Avec participants",
-  "perPersonOwnHint": "Pour les amendes et les présences par personne, tu ne vois que tes propres valeurs."
+  "perPersonOwnHint": "Pour les amendes et les présences par personne, tu ne vois que tes propres valeurs.",
+  "fineType": {
+    "absent": "Non excusé",
+    "late": "En retard"
+  },
+  "kpiProtocolsSub": "tenus ou clôturés",
+  "groupsHelp": "Les groupes sont les entrées d’une liste de base marquée comme «Source des statistiques de groupes». Les événements dont l’étiquette correspond à une entrée sont comptés par cycle.",
+  "groupsEmptyNoSource": "Pas encore de groupes: sous Données de base › Listes de base, marquez une liste comme «Source des statistiques de groupes» et donnez aux événements l’étiquette correspondante.",
+  "groupsEmptyNoEvents": "Aucun événement avec une étiquette de la liste des groupes pour l’instant.",
+  "groupsDocsLink": "En savoir plus dans l’aide"
 }

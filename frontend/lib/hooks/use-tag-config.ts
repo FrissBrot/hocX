@@ -3,6 +3,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { browserApiFetch } from "@/lib/api/client";
 import { useTranslations } from "next-intl";
 import { useToast } from "@/contexts/toast-context";
+import { useConfirm } from "@/contexts/confirm-context";
+
+type RenameTagCounts = { updated: number; events: number; submission_assignments: number; target_events: number };
 
 export type TagConfigEntry = { color?: string; important?: boolean };
 export type TagConfig = Record<string, TagConfigEntry>;
@@ -23,6 +26,8 @@ export function useTagConfig() {
   configRef.current = tagConfig;
   const showToast = useToast();
   const tCommon = useTranslations("common");
+  const tEvents = useTranslations("common");
+  const confirm = useConfirm();
 
   useEffect(() => {
     browserApiFetch<TagConfig>("/api/tag-config")
@@ -55,18 +60,37 @@ export function useTagConfig() {
   }, [showToast]);
 
   const updateTagColor = useCallback(
-    (tag: string, color: string) => patchTagEntry(tag, { color }, "Farbe konnte nicht gespeichert werden"),
-    [patchTagEntry]
+    (tag: string, color: string) => patchTagEntry(tag, { color }, tEvents("tagRename.colorSaveFailed")),
+    [patchTagEntry, tEvents]
   );
 
   const toggleTagImportant = useCallback(
-    (tag: string) => patchTagEntry(tag, { important: !configRef.current[tag]?.important }, "Markierung konnte nicht gespeichert werden"),
-    [patchTagEntry]
+    (tag: string) => patchTagEntry(tag, { important: !configRef.current[tag]?.important }, tEvents("tagRename.importantSaveFailed")),
+    [patchTagEntry, tEvents]
   );
 
-  const renameTag = useCallback(async (oldTag: string, newTag: string): Promise<void> => {
+  const renameTag = useCallback(async (oldTag: string, newTag: string): Promise<boolean> => {
     const nt = newTag.trim();
-    if (!nt || nt === oldTag) return;
+    if (!nt || nt === oldTag) return false;
+    // Erst zählen, dann nachfragen: Umbenennen ändert alle Termine des Mandanten mit diesem Tag
+    // und die Filter der Abgaben; ist der neue Tag schon vergeben, verschmelzen beide dauerhaft.
+    const counts = await browserApiFetch<RenameTagCounts>("/api/events/rename-tag", {
+      method: "POST",
+      body: JSON.stringify({ old_tag: oldTag, new_tag: nt, dry_run: true }),
+    });
+    const parts = [tEvents("tagRename.confirmEvents", { oldTag, newTag: nt, count: counts.events })];
+    if (counts.submission_assignments > 0) {
+      parts.push(tEvents("tagRename.confirmAssignments", { count: counts.submission_assignments }));
+    }
+    if (counts.target_events > 0) {
+      parts.push(tEvents("tagRename.confirmMerge", { newTag: nt, count: counts.target_events }));
+    }
+    const ok = await confirm({
+      title: counts.target_events > 0 ? tEvents("tagRename.mergeTitle") : tEvents("tagRename.title"),
+      message: parts.join(" "),
+      confirmLabel: counts.target_events > 0 ? tEvents("tagRename.mergeConfirm") : tEvents("tagRename.confirm"),
+    });
+    if (!ok) return false;
     // No .catch() here on purpose: if the backend rejects the rename, the error
     // must propagate to the caller instead of us renaming the tag only locally.
     await browserApiFetch("/api/events/rename-tag", {
@@ -91,7 +115,8 @@ export function useTagConfig() {
       // loses its color with no indication anything went wrong.
       showToast(tCommon("clientErrors.tagColorTransferFailed"), "error");
     }
-  }, [showToast, tCommon]);
+    return true;
+  }, [showToast, tCommon, tEvents, confirm]);
 
   return { tagConfig, updateTagColor, toggleTagImportant, renameTag };
 }

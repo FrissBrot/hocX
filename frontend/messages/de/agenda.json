@@ -73,5 +73,7 @@
     "sectionLabel": "Traktandum",
     "sectionNone": "Weitere Anliegen (ohne Traktandum)"
   },
-  "cancel": "Abbrechen"
+  "cancel": "Abbrechen",
+  "boundHintNoProtocol": "Steht schon in einem Protokoll. Um Vorlage, Traktandum oder Termin zu ändern, das Anliegen vertagen.",
+  "scheduleHelp": "«Nächste Sitzung»: erscheint im nächsten geplanten oder vorbereiteten Protokoll dieser Vorlage. «Monat»: erscheint frühestens ab dem Monatsersten im nächsten Protokoll."
 }

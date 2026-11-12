@@ -8,6 +8,7 @@ import re
 import threading
 import time
 import uuid
+from typing import get_args
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from redis.exceptions import RedisError
@@ -35,6 +36,9 @@ from app.services.access_service import AccessService
 from app.services.collaboration_service import CollaborationService
 from app.services.protocol_service import ProtocolService
 from app.services.responsible_label_service import responsible_list_definition_ids
+from app.schemas.protocol import ProtocolStatus
+
+_PROTOCOL_STATUSES = frozenset(get_args(ProtocolStatus))
 
 router = APIRouter()
 access_service = AccessService()
@@ -483,7 +487,9 @@ async def protocol_collaboration(websocket: WebSocket, protocol_id: uuid.UUID) -
                         "display_name": user.display_name,
                     })
 
-            elif msg_type == "status_changed" and can_edit:
+            elif msg_type == "status_changed" and can_edit and payload.get("status") in _PROTOCOL_STATUSES:
+                # Nur bekannte Status weiterreichen: sonst konnte jeder Editor beliebigen Text als
+                # «Status» an alle Verbundenen senden (Toast + Neuladen bei allen).
                 await collab.publish(protocol_id, {
                     "type": "status_changed",
                     "status": payload.get("status"),

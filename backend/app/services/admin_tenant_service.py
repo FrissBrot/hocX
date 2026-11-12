@@ -397,16 +397,16 @@ class AdminTenantService:
         db.commit()
         return True
 
-    def create_plan(self, db: Session, payload: AdminPlanWrite) -> AdminPlanRead:
+    def create_plan(self, db: Session, payload: AdminPlanWrite, *, admin_id: int | None = None) -> AdminPlanRead:
         """Legt einen neuen Plan an. Ein vorgegebener Code darf noch nicht existieren (ValueError),
         sonst wuerde "Plan anlegen" still einen bestehenden Plan ueberschreiben."""
         if payload.code:
             if db.get(Plan, payload.code) is not None:
                 raise ValueError(f"Plan-Code '{payload.code}' ist bereits vergeben")
-            return self.upsert_plan(db, payload.code, payload)
-        return self.upsert_plan(db, self._generate_code(db, Plan, payload.name), payload)
+            return self.upsert_plan(db, payload.code, payload, admin_id=admin_id)
+        return self.upsert_plan(db, self._generate_code(db, Plan, payload.name), payload, admin_id=admin_id)
 
-    def upsert_plan(self, db: Session, code: str, payload: AdminPlanWrite) -> AdminPlanRead:
+    def upsert_plan(self, db: Session, code: str, payload: AdminPlanWrite, *, admin_id: int | None = None) -> AdminPlanRead:
         plan = db.get(Plan, code)
         if plan is None:
             plan = Plan(code=code)
@@ -434,7 +434,19 @@ class AdminTenantService:
                 db.delete(row)
         for feature_code in wanted - current.keys():
             db.add(PlanFeature(plan_code=code, feature_code=feature_code))
+        db.flush()
+
+        # Bestehende Mandanten auf diesem Plan nachführen (Audit 08, 2026-11): früher wirkte eine
+        # Änderung am Plan nur bei einer neuen Zuweisung - wer «custom_domain» aus dem Plan nahm,
+        # liess allen Mandanten Domain und Modul. Gleiche Regeln wie beim Planwechsel (nur lesen
+        # bzw. wegfallen), einzeln gebuchte Zusatzmodule bleiben unangetastet.
+        changed: set[str] = set()
+        for tenant_id in db.scalars(select(Tenant.id).where(Tenant.plan_code == code)).all():
+            changed |= self._apply_plan_features(db, tenant_id, code, admin_id=admin_id)
+            self.apply_effective_storage_quota(db, tenant_id)
         db.commit()
+        if _DOMAIN_FEATURES & changed:
+            traefik_config_service.regenerate(db)
         return self._plan_read_model(db, plan)
 
     def update_tenant_subscription(

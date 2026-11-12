@@ -226,5 +226,16 @@
     "about": "Aiuto su «{topic}»",
     "moreInDocs": "Altro nella guida",
     "guide": "Guida"
+  },
+  "tagRename": {
+    "title": "Rinominare il tag?",
+    "mergeTitle": "Unire i tag?",
+    "confirm": "Rinomina",
+    "mergeConfirm": "Unisci",
+    "confirmEvents": "«{oldTag}» diventa «{newTag}» in {count, plural, one {# appuntamento} other {# appuntamenti}}.",
+    "confirmAssignments": "{count, plural, one {# consegna filtrerà} other {# consegne filtreranno}} d'ora in poi secondo il nuovo tag.",
+    "confirmMerge": "«{newTag}» è già usato in {count, plural, one {# appuntamento} other {# appuntamenti}}: i due tag verranno uniti definitivamente.",
+    "colorSaveFailed": "Impossibile salvare il colore",
+    "importantSaveFailed": "Impossibile salvare la marcatura"
   }
 }

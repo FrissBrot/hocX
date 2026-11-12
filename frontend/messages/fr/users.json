@@ -1,35 +1,35 @@
 {
-  "pageTitle": "Participants",
-  "ownAccessOnlyHint": "Accès et rôles de cette organisation.",
-  "pageHint": "Les comptes de cette organisation et leurs rôles.",
-  "newUser": "Nouveau participant",
+  "pageTitle": "Accès et rôles",
+  "ownAccessOnlyHint": "Accès et rôles de votre association.",
+  "pageHint": "Qui peut se connecter et avec quels rôles. Les personnes elles-mêmes se gèrent sous « Membres ».",
+  "newUser": "Nouvelle personne",
   "emptyState": {
     "title": "Uniquement votre propre accès",
     "description": "Invitez d'autres personnes et attribuez-leur un rôle : Admin, Rédacteur, Trésorier ou Lecteur.",
-    "invite": "+ Inviter un participant"
+    "invite": "+ Inviter une personne"
   },
   "explainRoles": "Expliquer les rôles",
   "explainRolesDescription": "Chaque compte peut avoir plusieurs rôles et reçoit toutes leurs autorisations. Les rôles se gèrent sous « Rôles ».",
   "tabs": {
-    "active": "Participants avec connexion",
-    "participants": "Participants"
+    "active": "Avec accès",
+    "participants": "Sans accès"
   },
-  "searchUsers": "Rechercher des participants",
-  "searchParticipants": "Rechercher des participants",
+  "searchUsers": "Rechercher des accès",
+  "searchParticipants": "Rechercher des membres sans accès",
   "columns": {
     "displayName": "Nom affiché",
     "name": "Nom",
     "email": "E-mail",
     "role": "Rôle",
     "actions": "Actions",
-    "participantEmail": "E-mail (participant)"
+    "participantEmail": "E-mail"
   },
   "mfaButton": "MFA",
   "delete": "Supprimer",
   "close": "Fermer",
-  "editUserTitle": "Modifier l'participant",
-  "createUserTitle": "Créer un participant",
-  "userModalDescription": "Gérer les données du compte et le rôle.",
+  "editUserTitle": "Modifier la personne",
+  "createUserTitle": "Ajouter une personne",
+  "userModalDescription": "Nom, accès et rôles. Entrée, sortie et modèles se gèrent sous « Membres ».",
   "firstName": "Prénom",
   "lastName": "Nom",
   "displayName": "Nom affiché",
@@ -43,13 +43,13 @@
   "enableLogin": "Activer la connexion",
   "cancel": "Annuler",
   "save": "Enregistrer",
-  "enableLoginForTitle": "Activer la connexion pour {name}",
-  "enableLoginTitle": "Activer la connexion",
-  "enableLoginDescription": "Définissez une adresse e-mail et un mot de passe pour la connexion de ce participant.",
+  "enableLoginForTitle": "Accès pour {name}",
+  "enableLoginTitle": "Attribuer un accès",
+  "enableLoginDescription": "Le plus simple : par invitation, la personne définit elle-même son mot de passe.",
   "mfaTitle": "MFA de {name}",
   "mfaTitleFallback": "MFA",
   "roleDescriptions": {
-    "admin": "Accès complet au sein de l'organisation, y compris la structure (modèles, cycles, paramètres) et la gestion des participants.",
+    "admin": "Accès complet dans l'association, y compris la structure (modèles, cycles, paramètres), les membres, les accès et les rôles.",
     "writer": "Travaille dans la section procès-verbaux et gère les données opérationnelles, sans modifier la structure ni les finances.",
     "kassier": "Comme lecteur, avec en plus un accès en écriture complet aux finances et amendes.",
     "reader": "Accès en lecture seule, peut déclencher des exports PDF et ne voit que ses propres amendes."
@@ -57,11 +57,46 @@
   "toasts": {
     "loginEnabled": "Connexion activée",
     "loginEnableFailed": "La connexion n'a pas pu être activée",
-    "userSaved": "Participant enregistré",
-    "userCreated": "Participant créé",
-    "userSaveFailed": "L'participant n'a pas pu être enregistré",
-    "deleteConfirm": "Supprimer définitivement l'participant « {name} » ? Le compte et l'accès seront immédiatement perdus.",
-    "userDeleted": "Participant supprimé",
-    "userDeleteFailed": "L'participant n'a pas pu être supprimé"
+    "userSaved": "Enregistré",
+    "userCreated": "Personne ajoutée",
+    "userSaveFailed": "Impossible d'enregistrer",
+    "deleteConfirm": "Supprimer définitivement « {name} » ? La personne disparaît avec ses présences, amendes et tâches.",
+    "userDeleted": "Personne supprimée",
+    "userDeleteFailed": "La personne n'a pas pu être supprimée",
+    "inviteSent": "L'invitation à {email} va être envoyée.",
+    "inviteFailed": "L'invitation n'a pas pu être envoyée."
+  },
+  "inactiveBadge": "Inactif",
+  "emptySearch": "Aucun résultat pour cette recherche.",
+  "emptyWithLogin": "Personne n'a encore d'accès.",
+  "emptyWithoutLogin": "Tous les membres ont déjà un accès.",
+  "enableLoginInactive": "Les personnes inactives ne reçoivent pas d'accès. Activez-les d'abord sous « Membres ».",
+  "rolesDocs": "Les rôles dans le guide",
+  "rolesLabel": "Rôles",
+  "rolesHelp": "Un compte peut avoir plusieurs rôles et reçoit toutes leurs autorisations. Vous ne pouvez pas attribuer de rôles comportant des autorisations que vous n'avez pas.",
+  "loginHelp": "Avec un accès, la personne peut se connecter et voit ce que ses rôles permettent. Sans accès, elle reste membre (présences, amendes, tâches). Mieux vaut inviter par e-mail que fixer un mot de passe.",
+  "loginActive": "Accès actif (décocher pour retirer l'accès)",
+  "loginSetPassword": "Activer l'accès avec un mot de passe défini par vous",
+  "passwordHelpSet": "Au moins 12 caractères. Communiquez-le de manière sûre ; la personne peut ensuite le modifier dans son profil.",
+  "blockers": {
+    "displayName": "Enregistrement impossible : le nom affiché manque.",
+    "email": "Enregistrement impossible : un accès nécessite une adresse e-mail.",
+    "password": "Enregistrement impossible : le mot de passe doit comporter au moins 12 caractères.",
+    "tenant": "Enregistrement impossible : choisissez un mandant."
+  },
+  "loginMode": {
+    "label": "Comment la personne obtient-elle l'accès ?",
+    "invite": "Inviter par e-mail (recommandé)",
+    "inviteHelp": "La personne reçoit un lien (valable 7 jours) et définit elle-même son mot de passe. L'accès devient actif dès qu'elle accepte.",
+    "password": "Définir le mot de passe vous-même",
+    "mailOff": "L'envoi d'e-mails n'est pas configuré, aucune invitation n'est donc possible. Définissez un mot de passe et communiquez-le de manière sûre.",
+    "inviteSubmit": "Envoyer l'invitation"
+  },
+  "revokeLogin": {
+    "action": "Retirer l'accès",
+    "confirmTitle": "Retirer l'accès de {name} ?",
+    "confirmMessage": "{name} ne pourra plus se connecter ; les sessions en cours se terminent immédiatement. La personne reste membre avec présences, amendes et tâches. Vous pouvez la supprimer complètement sous « Membres ».",
+    "done": "Accès de {name} retiré",
+    "failed": "L'accès n'a pas pu être retiré"
   }
 }

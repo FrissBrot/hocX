@@ -15,6 +15,7 @@ from datetime import date, datetime
 from pathlib import Path
 from collections.abc import Callable
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
@@ -28,6 +29,15 @@ logger = logging.getLogger(__name__)
 # kleiner Screenshot unscharf. Sehr grosse Bilder werden für das PDF verkleinert.
 IMAGE_NATURAL_DPI = 96
 IMAGE_MAX_PIXELS = 2400
+
+
+# Fachliches «heute» ist immer Schweizer Zeit (Relativbereiche wie «dieses Jahr» kippen sonst
+# zwischen 00:00 und 01:00/02:00 auf den Vortag bzw. das Vorjahr).
+_SWISS_TZ = ZoneInfo("Europe/Zurich")
+
+
+def swiss_today() -> date:
+    return datetime.now(_SWISS_TZ).date()
 
 
 class DocumentPermissionError(PermissionError):
@@ -172,7 +182,7 @@ class BuildContext:
     tenant_id: int
     language: str
     user: CurrentUser | None = None
-    today: date = field(default_factory=date.today)
+    today: date = field(default_factory=swiss_today)
     protocol: Any | None = None
     public_base_url: str | None = None
     assets: AssetCollector = field(default_factory=AssetCollector)
@@ -226,6 +236,18 @@ class BuildContext:
                 raise DocumentPermissionError("finance")
             return
         raise DocumentPermissionError(access)
+
+    def own_fines_participant_id(self) -> int | None:
+        """Bussen sind Personendaten: wie ``GET /api/fines`` sieht nur, wer ``reports.personal``
+        hat, die Bussen aller Mitglieder. Alle anderen (z. B. Rolle «Leser» mit finances.read)
+        bekommen in Dokumenten und Exporten nur die eigenen Bussen. ``None`` = alle sichtbar;
+        sonst die Teilnehmer-ID des Kontos (Teilnehmer und Konto sind seit 0108 dieselbe Identität)."""
+        from app.core.permissions import P
+
+        user = self.user
+        if user is None or user.can(P.REPORTS_PERSONAL):
+            return None
+        return user.user_id
 
     def ensure_can_read_protocol(self, protocol_id: int) -> None:
         if self.user is None:

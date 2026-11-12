@@ -63,12 +63,22 @@ def verify_domain(domain: str, verification_token: str, expected_target_host: st
     Both checks must pass before a domain is activated - ownership alone would still allow
     routing/cert issuance for a domain that isn't actually pointed at us yet, and DNS-pointing
     alone would allow claiming a domain you don't control (e.g. via a stale/shared CNAME).
+
+    Rückgabe (ok, code): code ist "ok", "txt_missing" oder "not_routed" - die Oberfläche
+    übersetzt ihn (Audit 08, 2026-11: früher kam ein deutscher Text auch in EN/FR/IT an);
+    failure_message() liefert den deutschen Klartext als Rückfall.
     """
     txt_values = _txt_values(challenge_record_name(domain))
     if not any(verification_token in value for value in txt_values):
-        return False, f"TXT-Record {challenge_record_name(domain)} mit dem Verifizierungs-Token wurde nicht gefunden."
+        return False, "txt_missing"
 
     if not is_still_routable(domain, expected_target_host):
-        return False, f"{domain} zeigt (noch) nicht auf {expected_target_host}. Bitte DNS-Eintrag (CNAME/A) prüfen."
+        return False, "not_routed"
 
-    return True, "OK"
+    return True, "ok"
+
+
+def failure_message(code: str, domain: str, expected_target_host: str) -> str:
+    if code == "txt_missing":
+        return f"TXT-Record {challenge_record_name(domain)} mit dem Verifizierungs-Token wurde nicht gefunden."
+    return f"{domain} zeigt (noch) nicht auf {expected_target_host}. Bitte DNS-Eintrag (CNAME/A) prüfen."

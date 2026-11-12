@@ -1,22 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
+import { HelpPopover } from "@/components/ui/help-popover";
 import { Select } from "@/components/ui/select";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
+import { formatRappen } from "@/lib/utils/format";
 import type { FineSplitMode, TodoFineEvaluation, TodoFineMode, TodoFineRule } from "@/types/api";
 
 /**
  * Busse eines Todos (Pendenzen-Bussen): laufend, eingefroren oder warum keine anfällt. Wer
  * finances.manage hat, legt die Busse von Hand fest - nötig, wenn mehrere Regeln passen.
- * Speichert sofort (eigener Endpunkt, unabhängig vom Speichern des Todos).
+ * Speichert sofort (eigener Endpunkt, unabhängig vom Speichern des Todos) - darum als eigener
+ * Kasten mit eigenem Hinweis. `readOnly`: nur anzeigen (mobiles Sheet).
  */
-export function TodoFineSection({ todoId }: { todoId: string }) {
+export function TodoFineSection({ todoId, readOnly = false }: { todoId: string; readOnly?: boolean }) {
   const t = useTranslations("finances");
+  const locale = useLocale();
+  const [loadFailed, setLoadFailed] = useState(false);
   const showToast = useToast();
   const [evaluation, setEvaluation] = useState<TodoFineEvaluation | null>(null);
   const [rules, setRules] = useState<TodoFineRule[]>([]);
@@ -32,13 +37,17 @@ export function TodoFineSection({ todoId }: { todoId: string }) {
       .then((loaded) => {
         if (cancelled) return;
         apply(loaded);
-        if (loaded.can_manage) {
-          void browserApiFetch<TodoFineRule[]>("/api/todo-fines/rules").then((list) => { if (!cancelled) setRules(list); }).catch(() => undefined);
+        if (loaded.can_manage && !readOnly) {
+          void browserApiFetch<TodoFineRule[]>("/api/todo-fines/rules")
+            .then((list) => { if (!cancelled) setRules(list); })
+            .catch(() => { if (!cancelled) showToast(t("todoFines.todo.rulesLoadFailed"), "error"); });
         }
       })
-      .catch(() => { if (!cancelled) setEvaluation(null); });
+      .catch(() => { if (!cancelled) { setEvaluation(null); setLoadFailed(true); } });
     return () => { cancelled = true; };
-  }, [todoId]);
+    // showToast/t bewusst nicht als Abhängigkeit: nur beim Öffnen einer Pendenz laden
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todoId, readOnly]);
 
   function apply(loaded: TodoFineEvaluation) {
     setEvaluation(loaded);
@@ -69,7 +78,14 @@ export function TodoFineSection({ todoId }: { todoId: string }) {
     }
   }
 
-  if (!evaluation) return null;
+  if (!evaluation) {
+    return loadFailed ? (
+      <div className="field-stack todo-fine-section">
+        <span className="field-label">{t("todoFines.todo.label")}</span>
+        <StatusBanner tone="error" message={t("todoFines.todo.loadFailed")} />
+      </div>
+    ) : null;
+  }
   const invalid = (mode === "rule" && !ruleId) || (mode === "fixed" && (amount.trim() === "" || Number.isNaN(Number(amount)) || Number(amount) < 0));
   const changed = mode !== evaluation.fine_mode
     || (mode === "rule" && ruleId !== (evaluation.fine_rule_id ?? ""))
@@ -77,7 +93,12 @@ export function TodoFineSection({ todoId }: { todoId: string }) {
 
   return (
     <div className="field-stack todo-fine-section">
-      <span className="field-label">{t("todoFines.todo.label")}</span>
+      <span className="field-label">
+        {t("todoFines.todo.label")}{" "}
+        <HelpPopover topic={t("todoFines.todo.label")} docs={{ page: "bussen", anchor: evaluation.state === "conflict" ? "konflikt" : "einfrieren" }}>
+          {evaluation.state === "conflict" ? t("todoFines.help.conflict") : t("todoFines.help.todoFine")}
+        </HelpPopover>
+      </span>
       {evaluation.state === "conflict" ? (
         <StatusBanner tone="error" message={t("todoFines.todo.conflict", { rules: evaluation.matching_rules.map((rule) => rule.name).join(", ") })} />
       ) : null}
@@ -95,27 +116,33 @@ export function TodoFineSection({ todoId }: { todoId: string }) {
               {evaluation.lines.map((line, index) => (
                 <li key={line.participant_id ?? index}>
                   <span>{line.participant_name}{line.tariff_name ? <span className="muted"> · {line.tariff_name}</span> : null}</span>
-                  <strong>{line.amount.toFixed(2)}</strong>
+                  <strong>{formatRappen(Math.round(Number(line.amount) * 100), locale)}</strong>
                 </li>
               ))}
             </ul>
           ) : null}
+          {evaluation.frozen ? <span className="field-help">{t("todoFines.todo.frozenHint")}</span> : null}
+          {evaluation.running ? <span className="field-help">{t("todoFines.todo.runningHint")}</span> : null}
         </div>
       ) : evaluation.state !== "conflict" ? (
         <span className="muted">{t(`todoFines.todo.state.${evaluation.state}`)}</span>
       ) : null}
 
-      {evaluation.can_manage ? (
+      {evaluation.can_manage && !readOnly ? (
         <div className="todo-fine-settings">
-          <label className="field-stack">
-            <span className="field-label">{t("todoFines.todo.modeLabel")}</span>
-            <Select value={mode} onChange={(event) => setMode(event.target.value as TodoFineMode)}>
+          {/* div statt label: der «?»-Knopf darf nicht zum Bedienelement des Labels werden */}
+          <div className="field-stack">
+            <span className="field-label">
+              {t("todoFines.todo.modeLabel")}{" "}
+              <HelpPopover topic={t("todoFines.todo.modeLabel")} docs={{ page: "bussen", anchor: "von-hand" }}>{t("todoFines.help.mode")}</HelpPopover>
+            </span>
+            <Select aria-label={t("todoFines.todo.modeLabel")} value={mode} onChange={(event) => setMode(event.target.value as TodoFineMode)}>
               <option value="auto">{t("todoFines.todo.mode.auto")}</option>
               <option value="rule">{t("todoFines.todo.mode.rule")}</option>
               <option value="fixed">{t("todoFines.todo.mode.fixed")}</option>
               <option value="none">{t("todoFines.todo.mode.none")}</option>
             </Select>
-          </label>
+          </div>
           {mode === "rule" ? (
             <label className="field-stack">
               <span className="field-label">{t("todoFines.todo.ruleLabel")}</span>
@@ -141,10 +168,13 @@ export function TodoFineSection({ todoId }: { todoId: string }) {
             </div>
           ) : null}
           {changed ? (
-            <div>
-              <button type="button" className="button-secondary" disabled={saving || invalid} onClick={() => void save()}>
-                {t("todoFines.todo.apply")}
-              </button>
+            <div className="field-stack">
+              <div>
+                <button type="button" className="button-secondary" disabled={saving || invalid} onClick={() => void save()}>
+                  {t("todoFines.todo.apply")}
+                </button>
+              </div>
+              <span className="field-help">{invalid ? t("todoFines.todo.applyInvalid") : t("todoFines.todo.applyHint")}</span>
             </div>
           ) : null}
         </div>

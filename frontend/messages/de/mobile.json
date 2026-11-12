@@ -3,9 +3,9 @@
     "ariaLabel": "Hauptnavigation",
     "overview": "Übersicht",
     "events": "Termine",
-    "todos": "Todos",
+    "todos": "Pendenzen",
     "more": "Mehr",
-    "overdueBadge": "{count, plural, one {# überfälliges Todo} other {# überfällige Todos}}"
+    "overdueBadge": "{count, plural, one {# überfällige Pendenz} other {# überfällige Pendenzen}}"
   },
   "common": {
     "all": "Alle",
@@ -37,9 +37,9 @@
     "allExpected": "{count, plural, one {# Person erwartet} other {Alle # erwartet}}",
     "nobodyExcused": "Noch niemand entschuldigt",
     "excused": "Entschuldigt",
-    "myTodos": "Meine Todos",
+    "myTodos": "Meine Pendenzen",
     "overdue": "{count} überfällig",
-    "noTodos": "Keine offenen Todos.",
+    "noTodos": "Keine offenen Pendenzen.",
     "upcomingEvents": "Kommende Termine",
     "noEvents": "Keine kommenden Termine.",
     "finePeople": "{count, plural, one {# Person} other {# Personen}}"
@@ -86,21 +86,21 @@
     "formDesktopHint": "Personen, Zyklen und Spezialfelder bearbeitest du am Computer."
   },
   "todos": {
-    "searchPlaceholder": "Todos durchsuchen",
+    "searchPlaceholder": "Pendenzen durchsuchen",
     "mine": "Meine",
     "groupOverdue": "Überfällig",
     "groupSoon": "Nächste 2 Wochen",
     "groupLater": "Später",
     "groupUndated": "Ohne Fälligkeit",
-    "emptyTitle": "Keine Todos",
+    "emptyTitle": "Keine Pendenzen",
     "emptyHint": "Alles erledigt – oder Filter anpassen.",
-    "fab": "Todo",
+    "fab": "Pendenz",
     "toggleDone": "Erledigt umschalten",
-    "completed": "Todo erledigt",
+    "completed": "Pendenz erledigt",
     "tagMore": "{tag} +{count}",
     "fromProtocol": "Aus {number}",
     "manual": "Manuell erfasst",
-    "backToTodo": "Todo",
+    "backToTodo": "Pendenz",
     "dueOverdue": "{date} · überfällig",
     "removeTag": "Tag {tag} entfernen",
     "addTag": "+ Tag",
@@ -109,18 +109,18 @@
     "untilEvent": "Bis zu einem Termin",
     "tagSearchPlaceholder": "Tag suchen oder neu anlegen",
     "createTag": "«{tag}» anlegen",
-    "deleted": "Todo gelöscht",
-    "newTitle": "Neues Todo",
+    "deleted": "Pendenz gelöscht",
+    "newTitle": "Neue Pendenz",
     "newPlaceholder": "Was ist zu tun?",
     "assignToMe": "Mir zuweisen",
     "untilNextSession": "Bis nächster Hock",
-    "create": "Todo erstellen",
-    "created": "Todo erstellt"
+    "create": "Pendenz erstellen",
+    "created": "Pendenz erstellt"
   },
   "editor": {
     "activeNow": "Gerade aktiv",
     "addPhoto": "Foto hinzufügen",
-    "addTodo": "Todo hinzufügen",
+    "addTodo": "Pendenz hinzufügen",
     "attPresent": "Anwesend",
     "attExcused": "Entsch.",
     "attAbsent": "Unentsch.",
@@ -145,7 +145,7 @@
     "inThisProtocol": "In diesem Protokoll",
     "lockedBy": "{name} bearbeitet gerade",
     "more": "Mehr",
-    "newTodoPlaceholder": "Neues Todo …",
+    "newTodoPlaceholder": "Neue Pendenz …",
     "notes": "Notizen",
     "notesConflict": "Die Notizen wurden inzwischen von jemand anderem geändert. Bitte neu laden.",
     "notesHint": "Private Arbeitsnotizen – erscheinen nicht im fertigen Protokoll.",
@@ -172,7 +172,7 @@
     "tapToWrite": "Tippen zum Schreiben",
     "textConflict": "Diese Stelle wurde inzwischen von jemand anderem gespeichert. Bitte Protokoll neu laden – deine Änderung wurde nicht übernommen.",
     "textTitle": "Text · {section}",
-    "todoCreated": "Todo im Protokoll erfasst",
+    "todoCreated": "Pendenz im Protokoll erfasst",
     "tools": "Werkzeuge",
     "unassigned": "Nicht zugewiesen",
     "you": "{name} (du)",
@@ -221,7 +221,7 @@
     "finesCount": "{count, plural, one {# Busse} other {# Bussen}}",
     "attendancePerMember": "Anwesenheit pro Mitglied",
     "cardTitle": "Statistik · letzte 6 Monate",
-    "todosOpen": "Todos offen"
+    "todosOpen": "Pendenzen offen"
   },
   "submissions": {
     "fab": "Abgabe"

@@ -67,7 +67,7 @@
     "releasedToast": "{count, plural, one {1 Foto freigegeben.} other {# Fotos freigegeben.}}",
     "releasing": "Wird freigegeben…",
     "shareLink": "Link teilen",
-    "shareWithTenant": "Mit anderem Mandanten teilen",
+    "shareWithTenant": "Mit anderem Verein teilen",
     "sharedBadge": "Geteilt",
     "sharedByBadge": "Geteilt von {name}",
     "sharedBySuffix": " · Geteilt von {name}",
@@ -77,10 +77,28 @@
     "statusActive": "aktiv",
     "statusDeclined": "abgelehnt",
     "statusPending": "angefragt",
-    "unknownTenant": "Mandant {id}",
+    "unknownTenant": "Verein {id}",
     "myPhotosPublicLabel": "Meine Fotos in öffentlichen Links zeigen",
     "myShareError": "Einstellung konnte nicht gespeichert werden.",
-    "publicLinksNotAllowed": "Der Besitzer erlaubt für dieses Album keine öffentlichen Links."
+    "publicLinksNotAllowed": "Der Besitzer erlaubt für dieses Album keine öffentlichen Links.",
+    "renameAction": "Umbenennen",
+    "deleteAction": "Album löschen",
+    "manageAlbum": "Album verwalten",
+    "renameModalTitle": "Album umbenennen",
+    "renameSubmit": "Speichern",
+    "renaming": "Wird gespeichert…",
+    "renamedToast": "Album umbenannt.",
+    "renameError": "Album konnte nicht umbenannt werden.",
+    "deleteConfirm": "Album «{name}» löschen? Die Fotos bleiben erhalten, nur das Album verschwindet. Öffentliche Links auf dieses Album funktionieren danach nicht mehr.",
+    "deleteConfirmShared": "Album «{name}» löschen? Es ist mit anderen Vereinen geteilt – sie verlieren den Zugriff, und öffentliche Links auf dieses Album funktionieren nicht mehr. Die Fotos selbst bleiben bei ihren Vereinen erhalten.",
+    "deleteConfirmLabel": "Album löschen",
+    "deletedToast": "Album gelöscht. Die Fotos sind weiterhin unter «Alle Fotos».",
+    "deleteError": "Album konnte nicht gelöscht werden.",
+    "helpTopic": "Album",
+    "helpOwner": "Fotos fügst du über «Vorhandene Fotos hinzufügen» oder beim Hochladen hinzu. Zum Herausnehmen Fotos auswählen und «Aus Album nehmen» wählen – gelöscht wird dabei nichts. Über das Menü ⋮ kannst du das Album umbenennen oder löschen.",
+    "helpPartner": "Dieses Album gehört einem anderen Verein. Du kannst eigene Fotos hinzufügen und wieder herausnehmen; umbenennen oder löschen kann es nur der Verein, dem es gehört.",
+    "pendingHelpTopic": "Vorgemerkte Fotos",
+    "pendingHelp": "Automatisch einsortierte Fotos (z. B. aus Abgaben) sieht in einem geteilten Album zuerst nur dein Verein. Erst nach «Freigeben» sehen sie auch die Partner und öffentliche Album-Links."
   },
   "bulkBar": {
     "addTags": "Tags hinzufügen",
@@ -112,7 +130,9 @@
     "download": "Herunterladen",
     "selectAll": "Alle auswählen",
     "selectionActions": "Auswahlaktionen",
-    "downloadError": "Fotos konnten nicht heruntergeladen werden."
+    "downloadError": "Fotos konnten nicht heruntergeladen werden.",
+    "removeFromAlbum": "Aus Album nehmen",
+    "bestHelp": "Jedes Album hat eine Auswahl der besten Fotos. hocX schlägt sie anhand der Foto-Analyse vor. Mit dem Stern nimmst du ein Foto fest in die Auswahl auf oder schliesst es fest aus; das bleibt auch bei späteren Neuberechnungen so. In «Alle Fotos» wirkt der Stern auf alle Alben, in denen das Foto liegt."
   },
   "dateGroups": {
     "groupCount": "· {count, plural, one {# Foto} other {# Fotos}}",
@@ -123,7 +143,7 @@
   "galleryUpload": {
     "browse": "Dateien auswählen",
     "cancel": "Abbrechen",
-    "description": "Bilder bis 100 MiB, ZIPs bis 10 GiB, auch ganze Ordner. Grosse Auswahlen werden automatisch in mehrere Aufträge geteilt; im ZIP bis 10 000 Einträge und 20 GiB entpackt. Die Bilder werden vorab im Browser geprüft, bereits vorhandene nicht erneut übertragen, und virengeprüft.",
+    "description": "Bilder bis 100 MB, ZIPs bis 10 GB, auch ganze Ordner. Grosse Auswahlen werden automatisch in mehrere Aufträge geteilt; im ZIP bis 10 000 Einträge und 20 GB entpackt. Die Bilder werden vorab im Browser geprüft, bereits vorhandene nicht erneut übertragen, und virengeprüft.",
     "dropActive": "Zum Hochladen loslassen",
     "dropHint": "Bilder hierher ziehen",
     "formatsAriaLabel": "Unterstützte Formate",
@@ -133,7 +153,7 @@
     "queueHeading": "Warteschlange",
     "releaseCheckboxLabel": "Bilder direkt freigeben und mit allen teilen, die Zugriff auf das Album haben",
     "removeAriaLabel": "{name} entfernen",
-    "shareNotice": "Die Bilder landen im geteilten Album {albums}. Ohne Freigabe sind sie dort zunächst nur für deinen Mandanten sichtbar.",
+    "shareNotice": "Die Bilder landen im geteilten Album {albums}. Ohne Freigabe sind sie dort zunächst nur für deinen Verein sichtbar.",
     "statusClip": "Live-Photo-Video, gehört zum gleichnamigen Bild",
     "statusReady": "Bereit zum Hochladen",
     "statusUploaded": "Hochgeladen, wird übernommen…",
@@ -168,7 +188,10 @@
       "helpSet": "Gilt nur für Bilder ohne Aufnahmedatum ({date}). Echte Aufnahmedaten werden nie überschrieben."
     },
     "largeZipHint": "Grosse ZIP-Datei: Bei langsamer Verbindung kann der Upload nach einer Stunde abbrechen. Teile das Archiv besser in mehrere kleinere ZIPs auf oder lade die Fotos direkt hoch.",
-    "includeGps": "GPS-Daten des Bildes mitsenden"
+    "includeGps": "GPS-Daten des Bildes mitsenden",
+    "helpTopic": "Fotos hochladen",
+    "help": "Einzelbilder bis 100 MB, ZIP-Dateien bis 10 GB. Exakt gleiche Bilder werden nicht doppelt gespeichert; neue Fotos sind erst nach der Virenprüfung überall sichtbar.",
+    "helpLabel": "Grenzen, Duplikate und Virenprüfung"
   },
   "shareModal": {
     "actionAriaLabelActive": "Freigabe für {name} entfernen",
@@ -176,15 +199,15 @@
     "cancel": "Abbrechen",
     "clearAriaLabel": "Eingabe leeren",
     "declinedOn": "abgelehnt am {date}",
-    "description": "Der Mandant erhält eine Einladung. Nach dem Annehmen erscheint «{albumName}» bei ihm unter Alben.",
+    "description": "Der Verein erhält eine Einladung. Nach dem Annehmen erscheint «{albumName}» bei ihm unter Alben.",
     "endedToast": "Freigabe beendet.",
     "eyebrow": "Album teilen",
-    "fieldHint": "ID unter Mandant-Einstellungen → Allgemein",
-    "fieldLabel": "Mandanten-ID oder Name",
-    "foundGeneric": "Mandant gefunden",
+    "fieldHint": "Die Vereins-ID findet der andere Verein in seinen Vereinseinstellungen unter «Allgemein» (mit Kopieren-Knopf).",
+    "fieldLabel": "Vereins-ID oder Name",
+    "foundGeneric": "Verein gefunden",
     "foundGenericHint": "Name und Profilbild werden sichtbar, sobald er eine Einladung angenommen hat.",
     "foundMark": "✓ Gefunden",
-    "inputPlaceholder": "Mandanten-ID einfügen",
+    "inputPlaceholder": "Vereins-ID einfügen",
     "invite": "Einladen",
     "inviteError": "Einladung konnte nicht gesendet werden.",
     "inviteNamed": "{name} einladen",
@@ -192,12 +215,12 @@
     "invitedToast": "Einladung an {name} gesendet.",
     "invitedToastNoName": "Einladung gesendet.",
     "inviting": "Wird eingeladen…",
-    "lookupNotFound": "Kein Mandant mit dieser ID gefunden.",
-    "noSuggestionsHint": "Kein bekannter Mandant mit diesem Namen. Neue Mandanten findest du nur über ihre Mandanten-ID.",
+    "lookupNotFound": "Kein Verein mit dieser ID gefunden.",
+    "noSuggestionsHint": "Kein bekannter Verein mit diesem Namen. Neue Vereine findest du nur über ihre Vereins-ID.",
     "participantsSuffix": "{count, plural, one {# Teilnehmer} other {# Teilnehmer}}",
     "removeLabel": "Entfernen",
-    "revokeConfirmGenericActive": "Diesem Mandanten den Zugriff auf dieses Album entziehen?",
-    "revokeConfirmGenericPending": "Einladung an diesen Mandanten zurückziehen?",
+    "revokeConfirmGenericActive": "Diesem Verein den Zugriff auf dieses Album entziehen?",
+    "revokeConfirmGenericPending": "Einladung an diesen Verein zurückziehen?",
     "revokeConfirmNamedActive": "„{name}“ den Zugriff auf dieses Album entziehen?",
     "revokeConfirmNamedPending": "Einladung an „{name}“ zurückziehen?",
     "revokeError": "Freigabe konnte nicht beendet werden.",
@@ -208,9 +231,9 @@
       "declined": "Abgelehnt",
       "pending": "Einladung offen"
     },
-    "suggestionsAriaLabel": "Bekannte Mandanten",
-    "title": "Mit anderem Mandanten teilen",
-    "unknownTenant": "Unbekannter Mandant",
+    "suggestionsAriaLabel": "Bekannte Vereine",
+    "title": "Mit anderem Verein teilen",
+    "unknownTenant": "Unbekannter Verein",
     "withdrawLabel": "Zurückziehen",
     "withdrawnToast": "Einladung zurückgezogen.",
     "shareLocationLabel": "Standort teilen",
@@ -221,18 +244,22 @@
     "publicLinksShort": "Öffentliche Links",
     "publicLinksAriaLabel": "{name} darf dieses Album öffentlich verlinken",
     "publicLinksError": "Einstellung für öffentliche Links konnte nicht gespeichert werden.",
-    "partnerPhotosHidden": "Fotos dieses Partners erscheinen nicht in öffentlichen Links."
+    "partnerPhotosHidden": "Fotos dieses Partners erscheinen nicht in öffentlichen Links.",
+    "helpTopic": "Album teilen",
+    "help": "1. Der andere Verein kopiert seine Vereins-ID (Vereinseinstellungen → Allgemein) und schickt sie dir. 2. Du fügst sie hier ein und lädst ein. 3. Nach dem Annehmen sehen beide Vereine das Album und können eigene Fotos beitragen. Standort und öffentliche Links steuerst du pro Partner."
   },
   "shareRelease": {
     "confirmLabel": "Hinzufügen und teilen",
-    "noOwnerMessage": "{count, plural, one {„{albumName}“ ist geteilt. 1 Foto wird damit sofort für alle Mandanten und Links freigegeben, die Zugriff auf das Album haben.} other {„{albumName}“ ist geteilt. # Fotos werden damit sofort für alle Mandanten und Links freigegeben, die Zugriff auf das Album haben.}}",
+    "noOwnerMessage": "{count, plural, one {„{albumName}“ ist geteilt. 1 Foto wird damit sofort für alle Vereine und Links freigegeben, die Zugriff auf das Album haben.} other {„{albumName}“ ist geteilt. # Fotos werden damit sofort für alle Vereine und Links freigegeben, die Zugriff auf das Album haben.}}",
     "ownerMessage": "{count, plural, one {„{albumName}“ wird von {owner} geteilt. 1 Foto ist danach für alle Beteiligten sichtbar.} other {„{albumName}“ wird von {owner} geteilt. # Fotos sind danach für alle Beteiligten sichtbar.}}",
     "title": "Fotos werden geteilt"
   },
   "similarity": {
     "pending": "Die Fotos werden im Hintergrund gruppiert. Das Ergebnis erscheint hier in wenigen Minuten.",
     "tooMany": "Zu viele Fotos für die automatische Gruppierung (höchstens {max, number}).",
-    "computedAt": "Stand {time} · neue Fotos erscheinen nach wenigen Minuten."
+    "computedAt": "Stand {time} · neue Fotos erscheinen nach wenigen Minuten.",
+    "helpTopic": "Ähnliche Fotos",
+    "help": "Duplikate sind praktisch gleiche Bilder, Serien kurz nacheinander aufgenommene Fotos. «Nur beste behalten» löscht die übrigen direkt hochgeladenen Fotos endgültig."
   },
   "similarGroups": {
     "bestChoice": "Beste Wahl",
@@ -278,11 +305,16 @@
   },
   "tile": {
     "bestBadge": "★ Best-of",
-    "deselectAriaLabel": "Auswahl aufheben",
+    "deselectAriaLabel": "Auswahl von {name} aufheben",
     "liveBadge": "LIVE",
     "pendingBadge": "Nicht freigegeben",
-    "selectAriaLabel": "Auswählen",
-    "openAriaLabel": "{name} öffnen"
+    "selectAriaLabel": "{name} auswählen",
+    "openAriaLabel": "{name} öffnen",
+    "scanningBadge": "Wird geprüft",
+    "blockedBadge": "Gesperrt",
+    "scanningHint": "Virenprüfung läuft – die Vorschau erscheint gleich.",
+    "blockedHint": "Gesperrt: Die Datei konnte nicht auf Viren geprüft werden.",
+    "previewUnavailable": "Vorschau nicht verfügbar"
   },
   "view": {
     "albumLinkWithCount": "{name} ({count})",
@@ -292,7 +324,7 @@
     "bestError": "Best-of-Status konnte nicht geändert werden.",
     "bestUnscopedError": "Dieses Foto gehört zu keinem Album - Best-of ist nur innerhalb eines Albums möglich.",
     "createAssignmentButton": "Abgabebox erstellen",
-    "description": "Alle Fotos dieses Mandanten - aus Protokollen, Abgaben und direkt hochgeladenen Galerie-Bildern.",
+    "description": "Alle Fotos deines Vereins – aus Protokollen, Abgaben und direkt hochgeladenen Galerie-Bildern.",
     "dropOverlayHint": "Bilder oder ZIP-Dateien - danach stellst du den Upload ein.",
     "dropOverlayTitle": "Zum Hochladen loslassen",
     "emptyDescription": "Sobald Bilder in Protokollen eingefügt, über eine Abgabebox eingereicht oder hier hochgeladen werden, erscheinen sie in dieser Galerie.",
@@ -341,7 +373,14 @@
     "uploadPillTotal": "Galerie-Upload läuft · {processed} von {total} Bildern",
     "uploadQueuedToast": "Wird hochgeladen und im Hintergrund verarbeitet…",
     "uploadedToast": "{count, plural, one {1 Bild hochgeladen.} other {# Bilder hochgeladen.}}",
-    "loadedOfTotal": "{count} von {total} Fotos geladen."
+    "loadedOfTotal": "{count} von {total} Fotos geladen.",
+    "removeFromAlbumConfirm": "{count, plural, one {1 Foto aus diesem Album nehmen? Das Foto bleibt in «Alle Fotos» erhalten.} other {# Fotos aus diesem Album nehmen? Die Fotos bleiben in «Alle Fotos» erhalten.}}",
+    "removeFromAlbumConfirmLabel": "Aus Album nehmen",
+    "removedFromAlbumToast": "{count, plural, one {1 Foto aus dem Album genommen.} other {# Fotos aus dem Album genommen.}}",
+    "removeFromAlbumError": "Die Fotos konnten nicht aus dem Album genommen werden. In einem geteilten Album kannst du nur Fotos deines eigenen Vereins entfernen.",
+    "galleryJobFailed": "Der Upload konnte wegen eines technischen Fehlers nicht abgeschlossen werden. Bereits gespeicherte Fotos bleiben erhalten – bitte die übrigen erneut hochladen.",
+    "analysisHelpTopic": "Foto-Analyse",
+    "analysisHelp": "Im Hintergrund werden Schärfe, Belichtung und Gesichter bewertet. Daraus entstehen die Sortierung nach Qualität und die Vorschläge für «Best-of». Die Analyse verändert keine Fotos."
   },
   "viewer": {
     "analysisPending": "Analyse ausstehend",
@@ -407,7 +446,9 @@
       "unknownNote": "Datei enthält kein Aufnahmedatum – einsortiert unter dem Uploaddatum",
       "change": "Ändern",
       "done": "Fertig"
-    }
+    },
+    "bestHelpTopic": "Best-of",
+    "bestHelp": "Jedes Album hat eine Auswahl der besten Fotos. hocX schlägt sie anhand der Foto-Analyse vor. Mit dem Stern nimmst du ein Foto fest in die Auswahl auf oder schliesst es fest aus; das bleibt auch bei späteren Neuberechnungen so. In «Alle Fotos» wirkt der Stern auf alle Alben, in denen das Foto liegt."
   },
   "dateMarker": {
     "estimated": "Geschätztes Aufnahmedatum",

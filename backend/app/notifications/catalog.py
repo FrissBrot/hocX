@@ -54,6 +54,8 @@ KINDS: dict[str, Kind] = {
     "security.password_changed": Kind("security.password_changed", "account", "account.security"),
     "security.mfa_added": Kind("security.mfa_added", "account", "account.security"),
     "security.mfa_removed": Kind("security.mfa_removed", "account", "account.security"),
+    # Login-E-Mail geändert: eigene Gruppe, geht an die ALTE Adresse (payload old_email, dispatch)
+    "security.email_changed": Kind("security.email_changed", "account", "account.email_changed"),
     # Vereins-Datenexport fertig oder fehlgeschlagen (Besteller)
     "export.ready": Kind("export.ready", "exports", "export"),
     "export.failed": Kind("export.failed", "exports", "export"),

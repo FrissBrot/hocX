@@ -1,7 +1,7 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import ElementDefinition, Event, ListDefinition, Participant, TemplateElement, Tenant
+from app.models import ElementDefinition, Event, Participant, TemplateElement, Tenant
 from app.repositories.element_definition_repository import ElementDefinitionRepository
 from app.schemas.template import (
     ElementDefinitionCreate,
@@ -12,6 +12,7 @@ from app.services import public_id_service
 from app.core.element_types import allows_multiple_values, is_known_element_type, render_type_id
 from app.services.block_config_ids import decode_block_config, encode_block_config
 from app.services.element_config import upgrade_definition_block, validate_block_config
+from app.services.list_service import lock_linked_list_definitions
 
 
 class ElementDefinitionService:
@@ -87,9 +88,10 @@ class ElementDefinitionService:
             participant_ids, event_ids = self._referenced_participant_and_event_ids(config)
             referenced_participant_ids |= participant_ids
             referenced_event_ids |= event_ids
-        for list_id in referenced_list_ids:
-            list_definition = db.get(ListDefinition, list_id)
-            if list_definition is None or list_definition.tenant_id != tenant_id:
+        # Sperrt die Listen bis zum Commit, damit gleichzeitiges Löschen nicht dazwischenkommt (C10)
+        found_list_ids = lock_linked_list_definitions(db, referenced_list_ids, tenant_id=tenant_id)
+        for list_id in sorted(referenced_list_ids):
+            if list_id not in found_list_ids:
                 raise ValueError(f"Linked list {list_id} not found")
         for participant_id in referenced_participant_ids:
             participant = db.get(Participant, participant_id)

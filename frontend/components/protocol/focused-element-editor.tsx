@@ -275,7 +275,7 @@ function FocusedElementEditorImpl({
   autoFocusToken?: number;
   tagConfig: TagConfig;
   updateTagColor: (tag: string, color: string) => Promise<void>;
-  renameTag: (oldTag: string, newTag: string) => Promise<void>;
+  renameTag: (oldTag: string, newTag: string) => Promise<void | boolean>;
 }) {
   const isParticipantSelectable = useParticipantSelectable();
   const participantNames = useParticipantNameSource(availableParticipants);

@@ -28,6 +28,7 @@ import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import type { ParticipantSummary, TemplateSummary } from "@/types/api";
 import { can } from "@/lib/permissions";
+import { parseParticipantCsv } from "@/lib/utils/participant-csv";
 
 type ImportResult = { imported: ParticipantSummary[]; duplicates: string[]; errors: string[] };
 type StatusFilter = "active" | "inactive" | "all";
@@ -69,7 +70,12 @@ export function MobileParticipants({ initialParticipants, templates, tenantId }:
   }
 
   async function bulkDelete() {
-    if (!selected.length || !(await confirm({ message: t("toasts.bulkDeleteConfirmMessage", { count: selected.length }), tone: "danger", confirmLabel: t("toasts.deleteConfirmLabel") }))) return;
+    if (!selected.length || !(await confirm({
+      title: t("deleteDialog.bulkTitle", { count: selected.length }),
+      message: t("deleteDialog.bulkMessage"),
+      tone: "danger",
+      confirmLabel: t("deleteDialog.confirm"),
+    }))) return;
     try {
       await browserApiFetch("/api/participants", { method: "DELETE", body: JSON.stringify({ participant_ids: selected }) });
       setParticipants((list) => list.filter((participant) => !selected.includes(participant.id)));
@@ -293,7 +299,12 @@ function ParticipantSheet({
   }
 
   async function remove() {
-    if (!participant || !(await confirm({ message: t("toasts.deleteConfirmMessage"), tone: "danger", confirmLabel: t("toasts.deleteConfirmLabel") }))) return;
+    if (!participant || !(await confirm({
+      title: t("deleteDialog.title", { name: participant.display_name }),
+      message: participant.login_enabled ? t("deleteDialog.messageWithLogin") : t("deleteDialog.message"),
+      tone: "danger",
+      confirmLabel: t("deleteDialog.confirm"),
+    }))) return;
     try {
       await browserApiFetch(`/api/participants/${participant.id}`, { method: "DELETE" });
       showToast(t("toasts.deletedSingle", { name: participant.display_name }), "success");
@@ -419,9 +430,9 @@ function ImportSheet({ onClose, onImported }: { onClose: () => void; onImported:
     const chosen = event.target.files?.[0] ?? null;
     event.target.value = "";
     if (!chosen) return;
-    const lines = (await chosen.text()).split(/\r?\n/).filter((line) => line.trim());
+    // Gleiche Auswertung wie Desktop und Backend (Spaltennamen, Anführungszeichen).
     setFile(chosen);
-    setRowCount(Math.max(0, lines.length - 1));
+    setRowCount(parseParticipantCsv(await chosen.text()).rows.length);
   }
 
   async function runImport() {
@@ -453,7 +464,7 @@ function ImportSheet({ onClose, onImported }: { onClose: () => void; onImported:
             {result ? t("importResult.close") : t("csvPreview.cancel")}
           </button>
           {!result ? (
-            <button type="button" className="button-primary" disabled={!file || busy} onClick={() => void runImport()}>
+            <button type="button" className="button-primary" disabled={!file || busy || rowCount === 0} onClick={() => void runImport()}>
               {busy ? t("csvPreview.importing") : t("csvPreview.importEntries", { count: rowCount })}
             </button>
           ) : null}
@@ -470,6 +481,7 @@ function ImportSheet({ onClose, onImported }: { onClose: () => void; onImported:
           </div>
         ) : file ? (
           <div className="mobile-card mobile-group-card">
+            {rowCount === 0 ? <MobileListRow label={t("csvPreview.noRows")} /> : null}
             <MobileListRow
               leading={<FileTypeTile name={file.name} />}
               label={
@@ -482,9 +494,12 @@ function ImportSheet({ onClose, onImported }: { onClose: () => void; onImported:
             />
           </div>
         ) : (
-          <button type="button" className="button-secondary mobile-button-block" onClick={() => inputRef.current?.click()}>
-            {tMobile("participants.chooseCsv")}
-          </button>
+          <>
+            <p className="field-help">{t("csvPreview.columns")}</p>
+            <button type="button" className="button-secondary mobile-button-block" onClick={() => inputRef.current?.click()}>
+              {tMobile("participants.chooseCsv")}
+            </button>
+          </>
         )}
       </div>
     </Modal>

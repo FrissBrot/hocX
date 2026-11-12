@@ -7,9 +7,12 @@ import { AlbumPhotoPicker } from "./album-photo-picker";
 import { AlbumReleaseNotice } from "./album-share-release";
 import { AlbumShareModal } from "./album-share-modal";
 import { PhotosView } from "./photos-view";
+import { ActionMenu, ActionMenuItem } from "@/components/ui/action-menu";
 import { Badge } from "@/components/ui/badge";
+import { HelpPopover } from "@/components/ui/help-popover";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { ShareLinkModal } from "@/components/ui/share-link-modal";
+import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { AlbumShareRequest, PhotoAlbum as Album, PhotoAlbumKind } from "@/types/api";
@@ -79,7 +82,10 @@ export function PhotoAlbums({
 } = {}) {
   const t = useTranslations("photos.albums");
   const toast = useToast();
+  const confirm = useConfirm();
   const [albums, setAlbums] = useState<Album[]>([]);
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
   const [active, setActive] = useState<Album | null>(null);
   const [myShareBusy, setMyShareBusy] = useState(false);
   const [pendingRequests, setPendingRequests] = useState<AlbumShareRequest[]>([]);
@@ -168,6 +174,44 @@ export function PhotoAlbums({
     } finally { setBusy(false); }
   }
 
+  async function renameAlbum(event: React.FormEvent) {
+    event.preventDefault();
+    if (!active || busy || !renameValue.trim()) return;
+    setBusy(true);
+    try {
+      const updated = await browserApiFetch<Album>(`/api/files/albums/${active.id}`, {
+        method: "PATCH", body: JSON.stringify({ name: renameValue.trim() }),
+      });
+      const nextName = updated?.name ?? renameValue.trim();
+      setActive((current) => (current ? { ...current, name: nextName } : current));
+      setAlbums((current) => current.map((album) => (album.id === active.id ? { ...album, name: nextName } : album)));
+      setRenaming(false);
+      toast(t("renamedToast"), "success");
+    } catch {
+      toast(t("renameError"), "error");
+    } finally { setBusy(false); }
+  }
+
+  async function deleteAlbum(album: Album) {
+    const shared = album.shared_with.some((share) => share.status === "accepted");
+    const ok = await confirm({
+      tone: "danger",
+      message: shared ? t("deleteConfirmShared", { name: album.name }) : t("deleteConfirm", { name: album.name }),
+      confirmLabel: t("deleteConfirmLabel"),
+    });
+    if (!ok) return;
+    try {
+      await browserApiFetch(`/api/files/albums/${album.id}`, { method: "DELETE" });
+      setAlbums((current) => current.filter((candidate) => candidate.id !== album.id));
+      setActive(null);
+      setPendingOnly(false);
+      toast(t("deletedToast"), "success");
+      onReleaseChanged?.();
+    } catch {
+      toast(t("deleteError"), "error");
+    }
+  }
+
   async function setMyPhotosPublic(album: Album, value: boolean) {
     setMyShareBusy(true);
     try {
@@ -185,6 +229,13 @@ export function PhotoAlbums({
 
   if (active) {
     const publicLinksBlocked = Boolean(active.my_share && !active.my_share.public_links_allowed);
+    const isOwner = !active.owner_tenant_name;
+    const manageItems: ActionMenuItem[] = isOwner
+      ? [
+          { label: t("renameAction"), onClick: () => { setRenameValue(active.name); setRenaming(true); } },
+          ...(active.kind === "manual" ? [{ label: t("deleteAction"), onClick: () => void deleteAlbum(active), danger: true }] : []),
+        ]
+      : [];
     return (
       <div className="grid">
         <div className="page-header">
@@ -223,12 +274,19 @@ export function PhotoAlbums({
             {!active.owner_tenant_name && (
               <button type="button" className="button-secondary" onClick={() => setSharingTenant(true)}>{t("shareWithTenant")}</button>
             )}
+            <HelpPopover topic={t("helpTopic")} docs={{ page: "fotos", anchor: "alben" }}>
+              {isOwner ? t("helpOwner") : t("helpPartner")}
+            </HelpPopover>
+            {manageItems.length > 0 && <ActionMenu items={manageItems} ariaLabel={t("manageAlbum")} />}
           </div>
         </div>
         {active.pending_share_count > 0 && (
           <AlbumReleaseNotice
             message={t("pendingNotice", { count: active.pending_share_count })}
           >
+            <HelpPopover topic={t("pendingHelpTopic")} docs={{ page: "fotos", anchor: "geteilte-alben" }}>
+              {t("pendingHelp")}
+            </HelpPopover>
             <button type="button" className="button-ghost" onClick={() => setPendingOnly((current) => !current)}>
               {pendingOnly ? t("showAll") : t("showPendingOnly")}
             </button>
@@ -247,6 +305,17 @@ export function PhotoAlbums({
           <AlbumPhotoPicker album={active} onClose={() => setPicking(false)} onAdded={() => setRevision((value) => value + 1)} />
         )}
         <ShareLinkModal open={sharingLink} onClose={() => setSharingLink(false)} albumId={active.id} defaultName={active.name} />
+        {renaming && (
+          <Modal open title={t("renameModalTitle")} onClose={() => { if (!busy) setRenaming(false); }}>
+            <ModalSaveForm className="grid" onSubmit={renameAlbum}>
+              <label className="field-stack">
+                <span className="field-label">{t("nameLabel")}</span>
+                <input autoFocus required maxLength={120} value={renameValue} onChange={(event) => setRenameValue(event.target.value)} />
+              </label>
+              <button className="button-secondary" data-modal-save type="submit" disabled={busy || !renameValue.trim()}>{busy ? t("renaming") : t("renameSubmit")}</button>
+            </ModalSaveForm>
+          </Modal>
+        )}
         {sharingTenant && (
           <AlbumShareModal
             open={sharingTenant}

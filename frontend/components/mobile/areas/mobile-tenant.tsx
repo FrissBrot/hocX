@@ -6,7 +6,7 @@ import { useLocale, useTranslations } from "next-intl";
 
 import { MobileActionSheet, MobileCard, MobileCardHeader, MobileEmpty, MobileFab, MobileGroupCard, MobileListRow, MobileProgress, MobileStat } from "@/components/mobile/mobile-ui";
 import { initials } from "@/components/protocol/collaboration-presence";
-import { bookablePurposes, domainPurposeLabel, domainStatus } from "@/components/settings/tenant-domain-row";
+import { bookablePurposes, domainPurposeLabel, domainsDescriptionText, domainStatus, useMainAppDomain } from "@/components/settings/tenant-domain-row";
 import { useTenantDomains } from "@/components/settings/tenant-domains-manager";
 import { useTenantGeneralForm } from "@/components/settings/tenant-general-settings";
 import { FEATURE_ICONS, subscriptionCostRp, SubscriptionDiscountNote, useTenantSubscriptionData } from "@/components/settings/tenant-subscription-view";
@@ -32,9 +32,13 @@ function DomainRow({ domain, onClick }: { domain: TenantDomain; onClick?: () => 
       label={
         <span className="mobile-row-stack">
           <span className="mobile-row-title mobile-tenant-domain-host">{domain.domain}</span>
-          <span className={`mobile-row-meta tenant-domain-row-status-${status.variant}`} title={status.title}>
+          <span className={`mobile-row-meta tenant-domain-row-status-${status.variant}`}>
             {domainPurposeLabel(domain.purpose, t)} · {status.label}
           </span>
+          {status.hint ? <span className="mobile-row-meta">{status.hint}</span> : null}
+          {domain.status === "pending" && domain.replaces_domain ? (
+            <span className="mobile-row-meta">{t("replacesDomainHint", { domain: domain.replaces_domain })}</span>
+          ) : null}
         </span>
       }
       trailing={<span className={`record-list-row-dot record-list-row-dot-${status.variant}`} />}
@@ -97,6 +101,7 @@ export function MobileTenantGeneral({ initialTenant }: { initialTenant: TenantSu
             autoCorrect="off"
             spellCheck={false}
           />
+          <span className="field-help">{t("help.publicSlug")}</span>
         </label>
         <div className="field-stack">
           <span className="field-label">{t("tenantIdLabel")}</span>
@@ -125,7 +130,8 @@ export function MobileTenantDomains({ initialTenant }: { initialTenant: TenantSu
   const tMobile = useTranslations("mobile");
   const purposes = bookablePurposes(initialTenant.enabled_features);
   const hasCustomDomainFeature = purposes.length > 0;
-  const { domains, loadDomains, deleteDomain } = useTenantDomains(initialTenant.id);
+  const { domains, loadDomains, deleteDomain, loadError } = useTenantDomains(initialTenant.id);
+  const mainDomain = useMainAppDomain();
   const [actionsFor, setActionsFor] = useState<TenantDomain | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardDomain, setWizardDomain] = useState<TenantDomain | null>(null);
@@ -137,7 +143,14 @@ export function MobileTenantDomains({ initialTenant }: { initialTenant: TenantSu
 
   return (
     <>
-      {domains.length === 0 ? (
+      {loadError ? (
+        <div className="mobile-section">
+          <p className="mobile-hint-box">{t("domainsLoadFailed")}</p>
+          <button type="button" className="button-secondary mobile-button-block" onClick={() => void loadDomains()}>
+            {t("retryLoad")}
+          </button>
+        </div>
+      ) : domains.length === 0 ? (
         <MobileEmpty
           title={t("emptyDomainTitle")}
           hint={`${t("emptyDomainDescription")} ${hasCustomDomainFeature ? t("emptyDomainHintWithFeature") : t("emptyDomainHintWithoutFeature")}`}
@@ -149,7 +162,7 @@ export function MobileTenantDomains({ initialTenant }: { initialTenant: TenantSu
               <DomainRow key={domain.id} domain={domain} onClick={() => setActionsFor(domain)} />
             ))}
           </div>
-          <p className="mobile-hint-box">{t("domainsDescription")}</p>
+          <p className="mobile-hint-box">{domainsDescriptionText(t, mainDomain)}</p>
         </div>
       )}
 
@@ -161,12 +174,13 @@ export function MobileTenantDomains({ initialTenant }: { initialTenant: TenantSu
           onClose={() => setActionsFor(null)}
           actions={[
             ...(actionsFor.status === "pending" ? [{ label: tMobile("tenant.resumeSetup"), onClick: () => openWizard(actionsFor) }] : []),
+            ...(actionsFor.status === "active" && !actionsFor.is_healthy ? [{ label: t("recheckDomain"), onClick: () => openWizard(actionsFor) }] : []),
             { label: tMobile("common.delete"), onClick: () => void deleteDomain(actionsFor.id, actionsFor.domain), danger: true },
           ]}
         />
       ) : null}
 
-      <DomainWizardModal open={wizardOpen} onClose={() => setWizardOpen(false)} tenantId={initialTenant.id} domain={wizardDomain} purposes={purposes} onChanged={loadDomains} />
+      <DomainWizardModal open={wizardOpen} onClose={() => setWizardOpen(false)} tenantId={initialTenant.id} domain={wizardDomain} purposes={purposes} onChanged={loadDomains} domains={domains} />
     </>
   );
 }
@@ -275,14 +289,15 @@ export function MobileTenantSubscription({ initialTenant }: { initialTenant: Ten
                 <span className="mobile-row-stack">
                   <span className="mobile-row-title">{feature.name}</span>
                   {feature.description ? <span className="mobile-row-meta mobile-row-meta-wrap">{feature.description}</span> : null}
-                  {!feature.included_in_plan && feature.standalone_price_monthly_rp !== null ? (
+                  {feature.read_only ? <span className="mobile-row-meta mobile-row-meta-wrap">{t("moduleReadOnlyHint")}</span> : null}
+                  {!feature.included_in_plan && !feature.read_only && feature.standalone_price_monthly_rp !== null ? (
                     <span className="mobile-row-meta">{t("pricePerMonth", { price: formatRappen(feature.standalone_price_monthly_rp, locale) })}</span>
                   ) : null}
                 </span>
               }
               trailing={
-                <Badge variant="success" dot>
-                  {t("moduleActive")}
+                <Badge variant={feature.read_only ? "warning" : "success"} dot>
+                  {feature.read_only ? t("moduleReadOnly") : t("moduleActive")}
                 </Badge>
               }
             />

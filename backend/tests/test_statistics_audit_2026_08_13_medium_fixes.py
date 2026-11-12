@@ -109,7 +109,7 @@ def test_m4_attendance_survives_participant_rename(db):
 
 def test_m10_groups_list_reads_column_two(db):
     tenant = make_tenant(db)
-    list_def = make_list_definition(db, tenant.id, name="Gruppen")
+    list_def = make_list_definition(db, tenant.id, name="Gruppen", is_group_source=True)
     # Tenant put the group-name text in column TWO, not column one.
     make_list_entry(db, list_def.id, column_one_value={}, column_two_value={"text_value": "Adler"})
     # Control: a second group with the text in the "normal" column one, to make sure that

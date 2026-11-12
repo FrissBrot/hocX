@@ -86,5 +86,39 @@
     "setUpAt": "Eingerichtet: {date}",
     "lastUsedAt": "Zuletzt verwendet: {date}",
     "delete": "Löschen"
+  },
+  "passwordChange": {
+    "title": "Passwort ändern",
+    "description": "Danach bleibst du hier angemeldet; alle anderen Sitzungen (z. B. auf einem anderen Gerät) werden beendet. Du bekommst einen Hinweis per E-Mail.",
+    "current": "Aktuelles Passwort",
+    "new": "Neues Passwort",
+    "newHelp": "Mindestens {count} Zeichen.",
+    "repeat": "Neues Passwort wiederholen",
+    "submit": "Passwort ändern",
+    "saving": "Wird gespeichert…",
+    "success": "Passwort geändert. Andere Sitzungen wurden beendet.",
+    "failed": "Das Passwort konnte nicht geändert werden.",
+    "reasons": {
+      "current": "Gib zuerst dein aktuelles Passwort ein.",
+      "tooShort": "Das neue Passwort braucht mindestens {count} Zeichen.",
+      "mismatch": "Die beiden neuen Passwörter stimmen nicht überein."
+    }
+  },
+  "apiErrors": {
+    "invalid_credentials": "E-Mail oder Passwort ist ungültig.",
+    "login_email_taken": "Diese E-Mail-Adresse wird bereits für einen Login verwendet.",
+    "wrong_current_password": "Das aktuelle Passwort ist nicht korrekt.",
+    "already_has_login": "Diese Person hat bereits einen Login.",
+    "inactive_person": "Inaktive Personen können nicht eingeladen werden.",
+    "email_required": "Für eine Einladung braucht die Person eine gespeicherte E-Mail-Adresse.",
+    "email_not_configured": "Der E-Mail-Versand ist nicht eingerichtet. Bitte die Plattform-Betreiber fragen.",
+    "last_admin": "Der Verein braucht mindestens ein aktives Konto, das Logins und Rollen verwalten darf.",
+    "own_access_management": "Die eigene Benutzerverwaltung kannst du dir nicht selbst entziehen. Das macht ein anderer Administrator.",
+    "role_name_taken": "Eine Rolle mit diesem Namen gibt es bereits.",
+    "too_many_roles": "Der Verein hat bereits die Höchstzahl an Rollen.",
+    "admin_role_fixed": "Die Rolle Administrator ist fest und kann nicht geändert werden.",
+    "system_role_not_deletable": "Standardrollen können nicht gelöscht werden.",
+    "role_in_use": "Die Rolle ist noch Konten zugewiesen. Entferne sie zuerst dort.",
+    "permission_not_held": "Nur Berechtigungen, die du selbst hast, kannst du vergeben oder verwalten."
   }
 }

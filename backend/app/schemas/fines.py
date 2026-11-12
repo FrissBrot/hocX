@@ -76,6 +76,21 @@ class AttendanceFineListItem(AttendanceFineRead):
     currency_label: str | None = None
 
 
+class OpenFinesCurrencyTotal(BaseModel):
+    currency_label: str
+    amount: FinanceDecimal
+    count: int
+
+
+class OpenFinesSummary(BaseModel):
+    """Offene Bussen fürs Dashboard: Summe je Währung über alle offenen Bussen (serverseitig,
+    nicht aus einer Seite der Liste) und Anzahl betroffener Personen."""
+    totals: list[OpenFinesCurrencyTotal]
+    count: int
+    people: int
+    own_only: bool
+
+
 class CollectFinePayload(BaseModel):
     collecting_protocol_id: uuid.UUID | None = None
 

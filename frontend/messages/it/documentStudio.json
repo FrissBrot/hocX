@@ -1830,7 +1830,8 @@
       "split": "Diviso"
     },
     "zoomIn": "Ingrandisci",
-    "zoomOut": "Riduci"
+    "zoomOut": "Riduci",
+    "modeHelp": "«Semplice»: aspetto, contenuto e pagina in pochi passi. «Avanzata»: impaginazione libera con spaziature, colonne, condizioni e componenti propri. Entrambe le modalità modificano lo stesso modello, cambiando non si perde nulla."
   },
   "appearance": {
     "baseTitle": "Stile di base",

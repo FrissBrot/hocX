@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
@@ -30,6 +31,8 @@ from app.services.notification_settings_service import NotificationSettingsServi
 _logger = logging.getLogger(__name__)
 
 NOTIFY_GRACE = timedelta(seconds=90)
+# Eine fehlschlagende DB-Prüfung erst melden, wenn sie anhält (einzelne Lock-Timeouts sind Rauschen).
+CHECK_FAILED_GRACE = timedelta(minutes=15)
 RESTART_LOOP_WINDOW = timedelta(minutes=15)
 RESTART_LOOP_COUNT = 3
 # Ein Loop, der nie gemeldet hat, ist direkt nach dem Start normal (erster Tick läuft noch).
@@ -106,6 +109,16 @@ _JOB_REASONS_DE = {
     "overdue": "ist überfällig",
     "never_run": "ist noch nie gelaufen",
 }
+
+
+_TZ = ZoneInfo("Europe/Zurich")
+
+
+def format_local(value: datetime) -> str:
+    """Zeitpunkt für ntfy-/Ereignistexte in Schweizer Zeit (statt UTC zum Selbst-Umrechnen)."""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(_TZ).strftime("%d.%m.%Y %H:%M")
 
 
 def _instance_label() -> str:
@@ -263,6 +276,15 @@ def derive_problems(
                     f"{count} Neustarts in den letzten {int(RESTART_LOOP_WINDOW.total_seconds() // 60)} Minuten.",
                 ))
         for check in snapshot.checks:
+            if check.status == "unknown" and check.error:
+                # Reine DB-Prüfung wirft (Bug, siehe system_health_service._run_check): früher
+                # blieb sie still grau. Erst nach CHECK_FAILED_GRACE als Warnung melden.
+                problems.append(_problem(
+                    f"check:{check.key}", "check", check.key, "check_failed", "warning",
+                    f"Prüfung {_CHECK_TITLES_DE.get(check.key, check.key)} schlägt fehl",
+                    f"{_check_message(check)} - Details im Fehlerprotokoll.",
+                ))
+                continue
             if check.status not in ("warning", "critical"):
                 continue
             problems.append(_problem(
@@ -283,7 +305,7 @@ def derive_problems(
         elif job.state == "overdue":
             severity = "critical" if definition and definition.category == "backup" else "warning"
             last = max((value for value in (job.last_finished_at, job.last_heartbeat_at) if value), default=None)
-            message = f"Letztes Lebenszeichen: {last:%d.%m.%Y %H:%M} UTC." if last else "Noch kein Lebenszeichen."
+            message = f"Letztes Lebenszeichen: {format_local(last)}." if last else "Noch kein Lebenszeichen."
         elif job.state == "never_run" and definition and definition.kind in ("loop", "worker"):
             # Host-Cronjobs bewusst nicht: die sind registriert, bevor sie eingerichtet werden.
             # Die Schonfrist nach dem Start gilt nur für die erste Meldung (evaluate_and_notify) -
@@ -325,10 +347,16 @@ def _click_path(source: str) -> str:
 
 
 def _event(kind: str, subject: str, reason: str | None, severity: str, title: str, message: str, now: datetime) -> SystemHealthEvent:
-    return SystemHealthEvent(kind=kind, subject=subject, reason=reason, severity=severity, title=title, message=message, created_at=now, notified_at=now)
+    return SystemHealthEvent(kind=kind, subject=subject, reason=reason, severity=severity, title=title, message=message, created_at=now, notified_at=None)
 
 
 def evaluate_and_notify(db: Session, snapshot: SystemHealthSnapshot | None, *, now: datetime | None = None) -> None:
+    """Probleme ableiten, Statuswechsel als Ereignis festhalten und per ntfy melden.
+
+    Ein Ereignis gilt erst als gemeldet (notified_at), wenn ntfy es angenommen hat (Audit 08,
+    2026-11): Ist ntfy kurz weg oder ausgeschaltet, bleibt es offen und wird bei einem späteren
+    Durchlauf nachgesendet, solange es jünger als RESEND_WINDOW ist. Erinnerungen ("Weiterhin")
+    verschieben last_notified_at ebenfalls erst nach erfolgreichem Versand."""
     now = now or datetime.now(timezone.utc)
     settings_service = NotificationSettingsService()
     notification_settings = settings_service.get_row(db)
@@ -338,7 +366,10 @@ def evaluate_and_notify(db: Session, snapshot: SystemHealthSnapshot | None, *, n
         snapshot, AdminJobStatusService().get_overview(db, now=now), now=now, restart_counts=recent_restart_counts(db, now)
     )}
     states = {row.problem_key: row for row in db.scalars(select(SystemAlertState))}
-    outgoing: list[ntfy_client.NtfyMessage] = []
+    # Nachrichten mit Titelpräfix für die in diesem Durchlauf neu angelegten Ereignisse.
+    fresh_messages: dict[int, ntfy_client.NtfyMessage] = {}
+    fresh_events: list[tuple[SystemHealthEvent, ntfy_client.NtfyMessage]] = []
+    reminders: list[tuple[SystemAlertState, ntfy_client.NtfyMessage]] = []
 
     for key, problem in problems.items():
         row = states.get(key)
@@ -353,7 +384,7 @@ def evaluate_and_notify(db: Session, snapshot: SystemHealthSnapshot | None, *, n
 
         prefix = None
         if row.notified_severity is None:
-            grace_over = now - row.first_seen_at >= NOTIFY_GRACE
+            grace_over = now - row.first_seen_at >= (CHECK_FAILED_GRACE if problem.reason == "check_failed" else NOTIFY_GRACE)
             if problem.reason == "never_run":
                 # Direkt nach dem Start hat noch kein Loop getickt - erst melden, wenn er es in
                 # der Schonfrist nicht geschafft hat.
@@ -366,56 +397,117 @@ def evaluate_and_notify(db: Session, snapshot: SystemHealthSnapshot | None, *, n
             prefix = "Weiterhin: "
         if prefix is None:
             continue
-        if prefix != "Weiterhin: ":
-            db.add(_event("problem", key, problem.reason, problem.severity, problem.title, problem.message, now))
-        row.notified_severity = problem.severity
-        row.last_notified_at = now
-        outgoing.append(ntfy_client.NtfyMessage(
+        message = ntfy_client.NtfyMessage(
             title=f"[{_instance_label()}] {prefix}{problem.title}",
             message=problem.message,
             priority=_PRIORITY[problem.severity],
             tags=_TAGS[problem.severity],
             click=_click_path(problem.source),
-        ))
+        )
+        if prefix == "Weiterhin: ":
+            reminders.append((row, message))
+            continue
+        # notified_severity heisst "Statuswechsel als Ereignis erfasst" - die Zustellung selbst
+        # verfolgt das Ereignis (notified_at), damit ein Ausfall nicht zu doppelten Ereignissen führt.
+        row.notified_severity = problem.severity
+        row.last_notified_at = now
+        fresh_events.append((_event("problem", key, problem.reason, problem.severity, problem.title, problem.message, now), message))
 
     for key, row in states.items():
         if key in problems:
             continue
         if row.notified_severity is not None:
-            db.add(_event("resolved", key, row.reason, "info", f"Behoben: {row.title}", row.message, now))
-            outgoing.append(ntfy_client.NtfyMessage(
-                title=f"[{_instance_label()}] Behoben: {row.title}",
-                message=f"Seit {row.first_seen_at:%d.%m.%Y %H:%M} UTC offen gewesen.",
-                priority=_PRIORITY["resolved"],
-                tags=_TAGS["resolved"],
-                click=_click_path(key.split(":", 1)[0]),
+            fresh_events.append((
+                _event("resolved", key, row.reason, "info", f"Behoben: {row.title}", row.message, now),
+                ntfy_client.NtfyMessage(
+                    title=f"[{_instance_label()}] Behoben: {row.title}",
+                    message=f"Seit {format_local(row.first_seen_at)} offen gewesen.",
+                    priority=_PRIORITY["resolved"],
+                    tags=_TAGS["resolved"],
+                    click=_click_path(key.split(":", 1)[0]),
+                ),
             ))
         db.execute(delete(SystemAlertState).where(SystemAlertState.problem_key == key))
 
-    for event in db.scalars(select(SystemHealthEvent).where(SystemHealthEvent.kind == "container_restart", SystemHealthEvent.notified_at.is_(None))):
-        event.notified_at = now
-        outgoing.append(ntfy_client.NtfyMessage(
-            title=f"[{_instance_label()}] {event.title}", message=event.message,
-            priority=_PRIORITY["warning"], tags=["arrows_counterclockwise"], click="/admin/system",
-        ))
+    for event, message in fresh_events:
+        db.add(event)
+    db.flush()
+    for event, message in fresh_events:
+        fresh_messages[event.id] = message
     db.commit()
 
-    if outgoing and notification_settings.ntfy_enabled:
-        _send_all(db, settings_service, outgoing)
+    if not notification_settings.ntfy_enabled:
+        return
+    pending = list(db.scalars(
+        select(SystemHealthEvent)
+        .where(
+            SystemHealthEvent.kind.in_(_NOTIFIED_EVENT_KINDS),
+            SystemHealthEvent.notified_at.is_(None),
+            SystemHealthEvent.created_at >= now - RESEND_WINDOW,
+        )
+        .order_by(SystemHealthEvent.created_at, SystemHealthEvent.id)
+    ))
+    outgoing: list[_Outgoing] = [
+        (fresh_messages.get(event.id) or _event_message(event), [event], []) for event in pending
+    ]
+    outgoing.extend((message, [], [row]) for row, message in reminders)
+    if not outgoing:
+        return
+    _send_all(db, settings_service, outgoing, now=now)
+    db.commit()
 
 
-def _send_all(db: Session, settings_service: NotificationSettingsService, messages: list[ntfy_client.NtfyMessage]) -> None:
-    if len(messages) > MAX_INDIVIDUAL_MESSAGES:
-        worst = max(messages, key=lambda message: message.priority)
-        messages = [ntfy_client.NtfyMessage(
-            title=f"[{_instance_label()}] {len(messages)} Statusänderungen",
-            message="\n".join(f"• {message.title.split('] ', 1)[-1]}" for message in messages),
+_NOTIFIED_EVENT_KINDS = ("problem", "resolved", "container_restart")
+# Wie lange ein nicht zugestelltes Ereignis nachgesendet wird (danach wäre es nur noch Lärm).
+RESEND_WINDOW = timedelta(hours=24)
+
+
+def _event_message(event: SystemHealthEvent) -> ntfy_client.NtfyMessage:
+    """Nachricht für ein Ereignis aus einem früheren Durchlauf (Nachsenden, Container-Neustart)."""
+    if event.kind == "container_restart":
+        return ntfy_client.NtfyMessage(
+            title=f"[{_instance_label()}] {event.title}", message=event.message,
+            priority=_PRIORITY["warning"], tags=["arrows_counterclockwise"], click="/admin/system",
+        )
+    tone = "resolved" if event.kind == "resolved" else (event.severity if event.severity in _TAGS else "warning")
+    return ntfy_client.NtfyMessage(
+        title=f"[{_instance_label()}] {event.title}",
+        message=event.message,
+        priority=_PRIORITY[tone],
+        tags=_TAGS[tone],
+        click=_click_path(event.subject.split(":", 1)[0]),
+    )
+
+
+_Outgoing = tuple[ntfy_client.NtfyMessage, list[SystemHealthEvent], list[SystemAlertState]]
+
+
+def _mark_delivered(items: list[_Outgoing], now: datetime) -> None:
+    for _message, events, rows in items:
+        for event in events:
+            event.notified_at = now
+        for row in rows:
+            row.last_notified_at = now
+
+
+def _send_all(db: Session, settings_service: NotificationSettingsService, items: list[_Outgoing], *, now: datetime) -> bool:
+    """Sendet die Nachrichten und markiert jede erst nach erfolgreichem Versand als zugestellt.
+    Beim ersten Fehler wird abgebrochen (ntfy ist dann meist ganz weg); der Rest folgt beim
+    nächsten Durchlauf. True nur, wenn alles angenommen wurde."""
+    batches: list[tuple[ntfy_client.NtfyMessage, list[_Outgoing]]]
+    if len(items) > MAX_INDIVIDUAL_MESSAGES:
+        worst = max((message for message, _events, _rows in items), key=lambda message: message.priority)
+        batches = [(ntfy_client.NtfyMessage(
+            title=f"[{_instance_label()}] {len(items)} Statusänderungen",
+            message="\n".join(f"• {message.title.split('] ', 1)[-1]}" for message, _events, _rows in items),
             priority=worst.priority,
             tags=worst.tags,
             click="/admin/system",
-        )]
+        ), items)]
+    else:
+        batches = [(item[0], [item]) for item in items]
     previous_error = settings_service.get_row(db).last_send_error
-    for message in messages:
+    for message, covered in batches:
         try:
             settings_service.send(db, message)
         except ntfy_client.NtfyError as exc:
@@ -425,7 +517,10 @@ def _send_all(db: Session, settings_service: NotificationSettingsService, messag
             if str(exc)[:500] != previous_error:
                 record_system_error(db, exc=exc)
             _logger.warning("ntfy-Benachrichtigung fehlgeschlagen: %s", exc)
-            return
+            return False
+        _mark_delivered(covered, now)
+        db.commit()
+    return True
 
 
 def run_monitor_tick(db: Session) -> None:

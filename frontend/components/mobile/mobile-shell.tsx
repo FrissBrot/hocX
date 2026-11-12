@@ -70,10 +70,10 @@ type Tab = { key: TabKey; href: string | null; icon: MobileIconName; labelKey: s
 // Nur die Bereiche aus dem Mobile-Design. Alle anderen Seiten bleiben per Link erreichbar,
 // tauchen in der mobilen Navigation aber bewusst nicht auf (nicht fuers Handy optimiert).
 function buildTabs(session: SessionInfo | null): Tab[] {
-  const isWriter = can(session, "meetings.edit");
   return [
     { key: "overview", href: "/", icon: "overview", labelKey: "tabs.overview" },
-    ...(isWriter ? [{ key: "events" as const, href: "/events", icon: "calendar" as const, labelKey: "tabs.events" }] : []),
+    // Termine sind auch mit reinem Leserecht sichtbar (Leseansicht ohne Bearbeiten).
+    ...(can(session, "meetings.read") ? [{ key: "events" as const, href: "/events", icon: "calendar" as const, labelKey: "tabs.events" }] : []),
     { key: "todos", href: "/todos", icon: "todos", labelKey: "tabs.todos" },
     { key: "more", href: null, icon: "menu", labelKey: "tabs.more" },
   ];

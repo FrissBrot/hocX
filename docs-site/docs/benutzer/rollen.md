@@ -6,9 +6,10 @@ braucht pro Verein ein eigenes Konto (mit eigener E-Mail-Adresse).
 Was ein Konto darf, bestimmen seine **Rollen**. Eine Rolle bündelt **Berechtigungen**; ein Konto
 kann mehrere Rollen haben und erhält dann alle Berechtigungen dieser Rollen zusammen. Rollen
 verwaltet, wer die Berechtigung «Benutzer & Rollen verwalten» hat, unter
-**Teilnehmer mit Login → Rollen**.
+**Logins & Rollen → Rollen**. Wer überhaupt einen Login bekommt, steht unter
+[Mitglieder & Logins](mitglieder.md#login).
 
-## Standardrollen
+## Standardrollen {#standardrollen}
 
 Jeder Verein startet mit vier Standardrollen. Sie entsprechen den früheren festen Rollen; ohne
 Zutun ändert sich für bestehende Konten nichts.
@@ -24,7 +25,7 @@ Schreiber, Kassier und Leser lassen sich umbenennen und anpassen, aber nicht lö
 (z. B. «Revisor» oder «Protokollführung») legt man zusätzlich an. Wer Schreib- und Kassierrechte
 braucht, bekommt einfach beide Rollen.
 
-## Berechtigungen
+## Berechtigungen {#berechtigungen}
 
 | Bereich | Berechtigung | Erlaubt |
 |---|---|---|
@@ -43,11 +44,15 @@ braucht, bekommt einfach beide Rollen.
 | | Benutzer & Rollen verwalten | Logins, Rollen, Rollenzuweisungen, MFA anderer zurücksetzen |
 | | Datenexporte | Gesamtexport des Vereins, Datenauskunft für andere Personen |
 
+Im Rollen-Dialog bedeutet das Abzeichen **MFA**, dass sich mit dieser Berechtigung nur mit zweitem
+Faktor anmelden lässt; **Modul nicht gebucht** heisst, dass sie erst mit dem Abo-Modul wirkt.
+Ausgegraute Berechtigungen hast du selbst nicht oder sie ergeben sich aus einer anderen.
+
 Berechtigungen eines nicht gebuchten Moduls (Finanzen, Abgabebox) wirken erst, wenn das Modul
 gebucht ist. Eigene Daten (Profil, Passwort, MFA, eigene Bussen und Aufgaben, eigene Kalender-Abos)
 sind immer zugänglich.
 
-## Schutzregeln
+## Schutzregeln {#schutzregeln}
 
 - Man kann nur Rollen vergeben, ändern oder anlegen, deren Berechtigungen man selbst hat, und nur
   Konten verwalten, die nicht mehr Rechte haben als man selbst.
@@ -57,7 +62,7 @@ sind immer zugänglich.
 - Wer eine Administrationsberechtigung hat, muss sich mit MFA anmelden.
 - Rechteänderungen wirken sofort, auch in bereits geöffneten Sitzungen.
 
-## Mandantenübergreifender Zugriff
+## Mandantenübergreifender Zugriff {#mandantenuebergreifend}
 
 Kein normaler Vereins-Account kann auf einen anderen Verein zugreifen. Eine
 mandantenübergreifende Sicht existiert ausschliesslich im getrennten

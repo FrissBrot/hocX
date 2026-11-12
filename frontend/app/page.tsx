@@ -8,7 +8,7 @@ import { MobileDashboard } from "@/components/mobile/mobile-dashboard";
 import { dashboardPermissions } from "@/components/dashboard/dashboard-permissions";
 import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
-import { AttendanceFineListItem, NextSessionInfo, ProtocolSummary, TodoListItem } from "@/types/api";
+import { AttendanceFineListItem, NextSessionInfo, OpenFinesSummary, ProtocolSummary, TodoListItem } from "@/types/api";
 import "@/app/styles/home.css";
 
 export default async function HomePage() {
@@ -17,11 +17,13 @@ export default async function HomePage() {
   const access = { permissions: session.permissions ?? [], features: session.current_tenant?.enabled_features ?? [] };
   const permissions = dashboardPermissions(access);
 
-  // Bussen nur laden, wenn Finanzen gebucht sind (sonst 403). Limit 200 = Backend-Maximum, damit
-  // Summe und Personenzahl der offenen Bussen nicht nach 50 Eintraegen abbrechen.
-  const [todos, fines, upcomingSessions, protocols] = await Promise.all([
+  // Bussen nur laden, wenn Finanzen gebucht sind (sonst 403). Die Liste zeigt nur offene Bussen
+  // (die neuesten zuerst); Summe je Währung und Personenzahl rechnet der Server über ALLE offenen
+  // Bussen (/api/fines/open-summary) - früher: Summe aus den 200 neuesten aller Status, Währungen gemischt.
+  const [todos, fines, fineSummary, upcomingSessions, protocols] = await Promise.all([
     backendFetchWithSession<TodoListItem[]>("/api/todos"),
-    permissions.hasFinance ? backendFetchWithSession<AttendanceFineListItem[]>("/api/fines?limit=200") : Promise.resolve([]),
+    permissions.hasFinance ? backendFetchWithSession<AttendanceFineListItem[]>("/api/fines?status=pending&limit=50") : Promise.resolve([]),
+    permissions.hasFinance ? backendFetchWithSession<OpenFinesSummary>("/api/fines/open-summary") : Promise.resolve(null),
     backendFetchWithSession<NextSessionInfo[]>("/api/protocols/upcoming-sessions"),
     backendFetchWithSession<ProtocolSummary[]>("/api/protocols?limit=1"),
   ]);
@@ -38,6 +40,7 @@ export default async function HomePage() {
             <MobileDashboard
               todos={todos ?? []}
               fines={fines ?? []}
+              fineSummary={fineSummary ?? null}
               upcomingSessions={upcomingSessions ?? []}
               access={access}
               hasProtocols={hasProtocols}
@@ -49,6 +52,7 @@ export default async function HomePage() {
               <DashboardView
                 todos={todos ?? []}
                 fines={fines ?? []}
+                fineSummary={fineSummary ?? null}
                 upcomingSessions={upcomingSessions ?? []}
                 access={access}
                 hasProtocols={hasProtocols}

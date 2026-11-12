@@ -2191,6 +2191,29 @@ input[type="color"]::-moz-color-swatch {
   background: color-mix(in srgb, var(--accent) 8%, transparent 92%);
 }
 
+/* Titel einer klickbaren Tabellenzeile als Link/Button: per Tastatur erreichbar, Optik wie Text. */
+.table-row-link,
+button.table-row-link {
+  display: inline;
+  width: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: none;
+  box-shadow: none;
+  color: inherit;
+  font-weight: 700;
+  text-align: left;
+  text-decoration: none;
+}
+
+.table-row-link:hover,
+button.table-row-link:hover {
+  background: none;
+  text-decoration: underline;
+}
+
 .table-row-cancelled td {
   opacity: 0.62;
 }
@@ -13259,6 +13282,16 @@ a.mobile-list-row { color: var(--text); }
   gap: var(--space-4);
   min-width: 320px;
 }
+/* Hinweis bei gebundenen Anliegen mit «Vertagen» direkt daneben (Audit 07, U1). */
+.agenda-bound-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.agenda-bound-hint > :first-child {
+  flex: 1 1 240px;
+}
 .data-table-agenda td {
   vertical-align: top;
 }
@@ -14073,6 +14106,29 @@ a.export-step-meta {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+.fine-rule-templates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.fine-rule-advanced summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.fine-rule-advanced summary .muted {
+  font-size: var(--text-sm);
+  font-weight: 400;
+}
+
+.fine-rule-advanced-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
 }
 
 .fine-rule-section h3 {

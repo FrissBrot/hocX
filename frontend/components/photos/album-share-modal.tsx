@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { HelpPopover } from "@/components/ui/help-popover";
 
 import { initials } from "@/components/protocol/collaboration-presence";
 import { Badge, BadgeVariant } from "@/components/ui/badge";
@@ -222,6 +223,7 @@ export function AlbumShareModal({
       <ModalSaveForm id={FORM_ID} className="grid album-share-form" onSubmit={invite}>
         <div className="album-share-field-head">
           <label className="field-label" htmlFor="album-share-tenant-id">{t("fieldLabel")}</label>
+          <HelpPopover topic={t("helpTopic")} docs={{ page: "fotos", anchor: "geteilte-alben" }}>{t("help")}</HelpPopover>
           <span className="album-share-field-hint">{t("fieldHint")}</span>
         </div>
         <div className="album-share-input">

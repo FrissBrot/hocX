@@ -322,7 +322,16 @@ export function ElementDefinitionManager({
       <DataTable className="data-table-lg" columns={[t("page.colElement"), t("page.colBlocks"), t("page.colActions")]}>
         {filteredDefinitions.map((definition) => (
           <tr key={definition.id} className={`table-row-clickable${selectedId === definition.id ? " table-row-active" : ""}`} onClick={() => openDefinition(definition)}>
-            <td><strong>{definition.title}</strong></td>
+            <td>
+              {/* Als Button per Tastatur erreichbar; die Zeile bleibt für die Maus klickbar. */}
+              <button
+                type="button"
+                className="table-row-link"
+                onClick={(event) => { event.stopPropagation(); openDefinition(definition); }}
+              >
+                <strong>{definition.title}</strong>
+              </button>
+            </td>
             <td>{t("page.blockCount", { count: definition.blocks.length })}</td>
             <td>
               <div className="table-actions">

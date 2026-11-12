@@ -44,7 +44,7 @@ from app.documents import brand_service, template_service
 from app.documents.brand import BrandTokens, apply_overrides
 from app.documents.catalog import BlockSpec
 from app.documents.compiler import CompiledDocument, CompileInput, Diagnostic, compile_document
-from app.documents.context import AssetCollector, BuildContext, DocumentNotFoundError, DocumentPermissionError
+from app.documents.context import AssetCollector, BuildContext, DocumentNotFoundError, DocumentPermissionError, swiss_today
 from app.documents.doc_types import get_type
 from app.documents.hashing import content_hash, design_hash
 from app.documents.layout import LayoutJson, TemplateContent, content_json, parse_content
@@ -331,7 +331,7 @@ def prepare(
     language = normalize_language(content.settings.language or request.language or (tenant.document_language if tenant else None))
     strings = strings_for(language)
     ctx = BuildContext(
-        db=db, tenant_id=tenant_id, language=language, user=user, today=today or date.today(), protocol=protocol,
+        db=db, tenant_id=tenant_id, language=language, user=user, today=today or swiss_today(), protocol=protocol,
         public_base_url=_public_base_url(), session_template=session_template, assets=assets if assets is not None else AssetCollector(),
     )
     if protocol is not None:

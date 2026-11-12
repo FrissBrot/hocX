@@ -610,6 +610,15 @@ DNS oder ein abgelaufenes Zertifikat der Website-Domain.
 - „Container-Status nicht verfügbar“: `docker compose ps docker-socket-proxy`, Logs des
   Proxys; läuft das Backend im Netz `docker-api`?
 - Virensignaturen veraltet: Logs des `clamav`-Containers (freshclam) prüfen.
+- **ntfy fällt aus**: Alarme gehen nicht verloren. Ein Ereignis gilt erst als gemeldet, wenn ntfy
+  es angenommen hat (`system_health_event.notified_at`); bis dahin sendet der Loop
+  `system_monitor` es bei jedem Lauf erneut, höchstens 24 Stunden lang. Der letzte Sendefehler
+  steht unter `/admin/notifications`, im Fehlerprotokoll nur beim ersten Auftreten. Solange ntfy
+  weg ist, `/admin/system` direkt ansehen (oder Uptime Kuma). Ist ntfy ausgeschaltet, werden
+  Ereignisse der letzten 24 Stunden nach dem Einschalten nachgeliefert.
+- **„Prüfung … schlägt fehl“** (Grund `check_failed`): Eine reine DB-Prüfung des Systemstatus
+  wirft seit mindestens 15 Minuten eine Exception, meist nach einer Migration. Details im
+  Fehlerprotokoll (`/admin/error-logs`), dort steht der Traceback.
 
 ## 13. Öffentliche Prüfseite (Echtheit von PDFs)
 
@@ -832,3 +841,45 @@ Imports wird freier Speicher geprüft.
 
 PostgreSQL läuft mit `max_connections=150` (Budget rund 100, siehe Kommentar in der Compose-Datei).
 Wer Pools oder Worker erhöht, rechnet das Budget nach.
+
+## 18. Eigene Domains der Mandanten
+
+Mandanten tragen eigene Domains selbst ein (Mandant-Einstellungen → Domains, Benutzer-Doku
+`benutzer/einstellungen.md`). Das Backend schreibt daraus die Traefik-Datei
+`infra/traefik/dynamic/tenant-domains.yml` (im Container `/app/traefik_dynamic`), nur für aktive
+Domains mit gebuchtem Feature; Traefik lädt sie ohne Neustart und holt das Zertifikat über
+`letsencrypt` (HTTP-Challenge, die Domain muss also schon auf den Server zeigen).
+
+- **Ablauf**: Eine neue Domain ist `pending`, bis TXT-Besitznachweis und CNAME/A-Routing geprüft
+  sind. Hat der Mandant für denselben Zweck schon eine aktive Domain, bleibt diese bis zur
+  erfolgreichen Prüfung der neuen aktiv; erst dann tauscht `verify_domain` beide in einer
+  Transaktion (Migration 0179: je Zweck höchstens eine aktive und eine ausstehende Domain).
+- **Kontingente je Mandant und Stunde**: 5× anlegen, 20× prüfen, 10× löschen.
+- **Zertifikat fehlt / Browser-Warnung**: Traefik-Logs nach der Domain durchsuchen (ACME-Fehler).
+  Häufig zeigt die Domain (noch) nicht auf den Server oder ein CAA-Eintrag verbietet Let's Encrypt.
+  Nach der Korrektur genügt es, die Seite erneut aufzurufen; Traefik versucht es selbst wieder.
+- **„Nicht erreichbar“**: Der Loop `domain_health_check` prüft aktive Domains alle 30 Minuten (`DOMAIN_HEALTH_CHECK_INTERVAL_MINUTES`). Eine
+  Domain, die nicht mehr auf den Server zeigt oder deren Feature nicht mehr gebucht ist, wird als
+  ungesund markiert. Ungesunde, aber gebuchte Domains bleiben bewusst geroutet (DNS-Prüfungen können kurz falsch negativ sein); ohne gebuchtes Feature entfernt `regenerate()` den Router.
+- **Domain manuell entfernen**: `/admin/domains` → Domain löschen (auditiert, schreibt die
+  Traefik-Datei neu). Nie die YAML-Datei von Hand bearbeiten: sie wird beim nächsten
+  `regenerate()` überschrieben.
+- **Plan-Änderung**: Entfernt ein Admin `custom_domain`/`verify_domain` aus einem Plan, verlieren
+  alle Mandanten auf diesem Plan das Feature sofort und die Traefik-Datei wird neu geschrieben.
+
+## 19. Cashflow und Forderungen
+
+`/admin/cashflow` zeigt Kosten und Forderungen. Forderungen entstehen je Abrechnungsperiode ab dem
+Abo-Start beim Öffnen der Übersicht, der Forderungsliste oder der Mandantenseite «Abo & Nutzung»
+(`cashflow_service.sync_charges`). Der Abgleich ist idempotent (Cursor
+`tenant.billing_charged_until`, eindeutig je Mandant und Periodenbeginn) und läuft unter dem
+Advisory-Lock `202600040`; lesende Aufrufe warten nicht darauf, sondern überspringen den Abgleich,
+wenn er gerade anderswo läuft.
+
+- **Forderung fehlt**: Abo-Start und Plan des Mandanten prüfen; Perioden ohne Preis werden
+  übersprungen, der Cursor rückt trotzdem vor (keine rückwirkenden Forderungen nach einer
+  Preisänderung).
+- **Abo-Start geändert**: offene Forderungen werden verworfen und neu erzeugt, bezahlte und
+  erlassene bleiben.
+- **Fehler beim Abgleich**: Auf der Mandantenseite werden dann die bisherigen Forderungen gezeigt
+  und der Fehler landet im Fehlerprotokoll; im Adminportal antwortet die Übersicht mit 500.

@@ -60,6 +60,7 @@
   "protocolLabel": "Procès-verbal",
   "saveButton": "Enregistrer",
   "saveFailed": "La tâche n'a pas pu être enregistrée",
+  "fineRunningLocked": "Tu ne peux pas supprimer ta propre amende en cours en modifiant l'échéance, les responsables ou les tags, en annulant ou en supprimant la tâche. Seule une personne qui gère les finances le peut.",
   "savingEllipsis": "Enregistrement…",
   "scopeAll": "Toutes",
   "scopeMine": "Les miennes",
@@ -127,5 +128,6 @@
     "endOfNextMonth": "fin de mois",
     "endOfYear": "Saint-Sylvestre"
   },
-  "dueSearchPlaceholder": "Rechercher une date ou un rendez-vous …"
+  "dueSearchPlaceholder": "Rechercher une date ou un rendez-vous …",
+  "fineRunningBadge": "Amende en cours"
 }

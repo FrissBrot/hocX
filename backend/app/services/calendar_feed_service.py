@@ -17,7 +17,8 @@ from __future__ import annotations
 import hashlib
 import secrets
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import exists, or_, select
 from sqlalchemy.orm import Session
@@ -50,6 +51,9 @@ _TOKEN_BYTES = 24
 # deckt aber den ueblichen Blick zurueck und die Jahresplanung ab.
 WINDOW_PAST_DAYS = 180
 WINDOW_FUTURE_DAYS = 730
+# Termine mit Uhrzeit (z. B. Sitzungen) haben kein Ende - angenommene Dauer im Kalender.
+TIMED_EVENT_DURATION = timedelta(hours=1)
+_LOCAL_TZ = ZoneInfo("Europe/Zurich")
 # Obergrenze fuer die Todo-Abfrage - die Listing-Helfer paginieren, ein Feed will alles im Fenster.
 _TODO_LIMIT = 5000
 # last_accessed_at nur so oft schreiben - Kalender-Apps fragen teils minuetlich.
@@ -242,6 +246,8 @@ class _Entry:
     location: str | None = None
     cancelled: bool = False
     transparent: bool = False
+    # Uhrzeit in Schweizer Zeit (nur eintägige Termine); None = ganztägig.
+    start_time: time | None = None
 
 
 def _render_calendar(name: str, entries: list[_Entry]) -> str:
@@ -265,11 +271,21 @@ def _render_calendar(name: str, entries: list[_Entry]) -> str:
             # byte-gleich und der ETag-Abgleich (304) der Route greift.
             f"DTSTAMP:{modified}",
             f"LAST-MODIFIED:{modified}",
-            f"DTSTART;VALUE=DATE:{_date(entry.start)}",
-            # DTEND ist bei Ganztagesterminen exklusiv - der Tag nach dem letzten Tag.
-            f"DTEND;VALUE=DATE:{_date(entry.end_inclusive + timedelta(days=1))}",
-            f"SUMMARY:{_escape(entry.summary)}",
         ]
+        if entry.start_time is not None and entry.end_inclusive == entry.start:
+            # Mit Uhrzeit: in UTC ausgeben (Suffix Z), dann braucht es keinen VTIMEZONE-Block.
+            start_utc = datetime.combine(entry.start, entry.start_time, tzinfo=_LOCAL_TZ).astimezone(UTC)
+            lines += [
+                f"DTSTART:{start_utc.strftime('%Y%m%dT%H%M%SZ')}",
+                f"DTEND:{(start_utc + TIMED_EVENT_DURATION).strftime('%Y%m%dT%H%M%SZ')}",
+            ]
+        else:
+            lines += [
+                f"DTSTART;VALUE=DATE:{_date(entry.start)}",
+                # DTEND ist bei Ganztagesterminen exklusiv - der Tag nach dem letzten Tag.
+                f"DTEND;VALUE=DATE:{_date(entry.end_inclusive + timedelta(days=1))}",
+            ]
+        lines.append(f"SUMMARY:{_escape(entry.summary)}")
         if entry.description:
             lines.append(f"DESCRIPTION:{_escape(entry.description)}")
         if entry.location:
@@ -310,6 +326,7 @@ def _event_entries(db: Session, feed: CalendarFeed, user: CurrentUser, *, today:
                 description=None if feed.hide_details else (event.description or None),
                 location=None if feed.hide_details else (event.location or None),
                 cancelled=event.is_cancelled,
+                start_time=event.start_time,
             )
         )
     return entries
@@ -374,7 +391,8 @@ def _todo_entries(db: Session, feed: CalendarFeed, user: CurrentUser, *, today: 
 
 def render(db: Session, feed: CalendarFeed, user: CurrentUser, *, now: datetime | None = None) -> str:
     now = now or datetime.now(UTC)
-    today = now.date()
+    # Fachliches «heute» in Schweizer Zeit (Fenstergrenzen, überfällige Pendenzen).
+    today = (now if now.tzinfo else now.replace(tzinfo=UTC)).astimezone(_LOCAL_TZ).date()
     if feed.kind == "events":
         entries = _event_entries(db, feed, user, today=today)
     else:

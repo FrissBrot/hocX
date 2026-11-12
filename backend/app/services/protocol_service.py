@@ -3,7 +3,7 @@ from datetime import date, timedelta
 from types import SimpleNamespace
 
 from fastapi import HTTPException
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -31,6 +31,20 @@ from app.models import (
     TodoStatus,
 )
 from app.services.access_service import AccessService
+
+# Namensraum für pg_advisory_xact_lock(ns, template_id): Nummernvergabe und Umnummerierung
+# einer Vorlage nacheinander (Audit 2026-11). Andere Namensräume: upload_lock (909100001),
+# submission_service (909100002).
+PROTOCOL_NUMBERING_LOCK_NAMESPACE = 909100011
+
+
+def lock_protocol_numbering(db: Session, template_id: int) -> None:
+    """Transaktions-Lock je Vorlage (frei bei Commit/Rollback). Zwei gleichzeitige Erstellungen
+    derselben Vorlage verschoben sonst dieselben späteren Geschwister doppelt."""
+    db.execute(
+        text("SELECT pg_advisory_xact_lock(:ns, :template_id)"),
+        {"ns": PROTOCOL_NUMBERING_LOCK_NAMESPACE, "template_id": template_id},
+    )
 from app.services.block_behavior import resolve_block_behavior
 from app.services.event_filter import event_matches_filter, normalize_event_filter, resolve_cycle_event_ids, sort_and_limit
 from app.repositories.participant_repository import participant_eligible_on
@@ -1512,6 +1526,10 @@ class ProtocolService:
         if template_id is None:
             raise ValueError("Template not found")
         template = db.get(Template, template_id)
+        if not payload.protocol_number:
+            # Vor dem Zählen sperren: Zählung, Umnummerierung und Einfügen derselben Vorlage
+            # laufen damit nacheinander statt verschränkt.
+            lock_protocol_numbering(db, template.id)
         event_id: int | None = None
         if payload.event_id is not None:
             # event_id is client-supplied - without this check a writer could link a
@@ -2744,6 +2762,7 @@ class ProtocolService:
         template = db.get(Template, protocol.template_id)
         if template is None or (not template.protocol_number_pattern and not template.title_pattern):
             return
+        lock_protocol_numbering(db, template.id)
         cycle_cfg = db.get(CycleConfig, template.cycle_config_id) if template.cycle_config_id else None
         reset_month = cycle_cfg.reset_month if cycle_cfg else 12
         reset_day = cycle_cfg.reset_day if cycle_cfg else 31

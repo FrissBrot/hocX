@@ -255,7 +255,8 @@
         "restart_loop": "Il container {subject} si riavvia continuamente"
       },
       "check": {
-        "unreachable": "{subject} non raggiungibile"
+        "unreachable": "{subject} non raggiungibile",
+        "checkFailed": "Il controllo «{subject}» non riesce (vedi registro errori)"
       },
       "job": {
         "failing": "Il job {subject} non è riuscito",
@@ -625,7 +626,8 @@
       "neverSent": "Ancora nulla inviato",
       "lastError": "Ultimo errore ({date}): {error}",
       "queue": "In attesa: {pending} · Non riusciti: {failed}"
-    }
+    },
+    "reminderPopover": "Se un problema resta aperto, dopo questo numero di ore arriva il promemoria «Ancora: …». 0 disattiva i promemoria. Se ntfy non ha potuto recapitare un messaggio, hocX lo reinvia per al massimo 24 ore."
   },
   "login": {
     "title": "Accesso amministratore",
@@ -1196,7 +1198,9 @@
         "0": "Priorità bassa",
         "2": "Priorità alta"
       }
-    }
+    },
+    "planChangeAffectsTenants": "Le modifiche ai moduli valgono subito anche per tutte le organizzazioni che hanno già questo piano.",
+    "planChangeAffectsTenantsHelp": "Un modulo aggiunto viene prenotato completamente per tutte le organizzazioni con questo piano. Un modulo rimosso passa a «sola lettura» (i dati restano) o viene eliminato (domini). I moduli prenotati singolarmente restano invariati."
   },
   "catalogImport": {
     "title": "Importa configurazione",

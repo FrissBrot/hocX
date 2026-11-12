@@ -1,6 +1,6 @@
 import { SVGProps } from "react";
 
-export type ActionIconKey = "edit" | "delete" | "close" | "add" | "copy" | "upload" | "download" | "link" | "hide" | "postpone";
+export type ActionIconKey = "edit" | "delete" | "close" | "add" | "copy" | "upload" | "download" | "link" | "hide" | "postpone" | "lock";
 
 type IconProps = Omit<SVGProps<SVGSVGElement>, "viewBox" | "fill">;
 
@@ -84,6 +84,12 @@ const ICONS: Record<ActionIconKey, (props: IconProps) => React.ReactElement> = {
     <Icon {...props}>
       <rect x="8" y="8" width="12" height="12" rx="2" />
       <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+    </Icon>
+  ),
+  lock: (props) => (
+    <Icon {...props}>
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
     </Icon>
   ),
 };

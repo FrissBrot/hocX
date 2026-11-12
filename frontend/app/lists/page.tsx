@@ -21,19 +21,15 @@ export default async function ListsPage() {
     redirect("/");
   }
 
-  const [lists, participants, events] = await Promise.all([
+  // Einträge aller Listen in einem Aufruf (Audit 07, C6: vorher ein Request je Liste).
+  const [lists, entriesByList, participants, events] = await Promise.all([
     backendFetchWithSession<StructuredListDefinition[]>("/api/lists"),
+    backendFetchWithSession<Record<string, StructuredListEntry[]>>("/api/list-entries"),
     backendFetchWithSession<ParticipantSummary[]>("/api/participants?limit=2000"),
     backendFetchWithSession<EventSummary[]>("/api/events"),
   ]);
 
-  const listEntryPairs = await Promise.all(
-    (lists ?? []).map(async (definition) => ({
-      listId: definition.id,
-      entries: (await backendFetchWithSession<StructuredListEntry[]>(`/api/lists/${definition.id}/entries`)) ?? [],
-    }))
-  );
-  const initialEntriesByList = Object.fromEntries(listEntryPairs.map((pair) => [pair.listId, pair.entries]));
+  const initialEntriesByList = Object.fromEntries((lists ?? []).map((definition) => [definition.id, entriesByList?.[definition.id] ?? []]));
 
   return (
     <AppShell initialSession={session}>

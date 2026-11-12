@@ -11,6 +11,8 @@ import { StatusBanner } from "@/components/ui/status-banner";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
+import { apiErrorMessage } from "@/lib/api/error-message";
+import { HelpPopover } from "@/components/ui/help-popover";
 import { expandPermissions, minimalPermissions, roleName } from "@/lib/permissions";
 import { PERMISSION_AREAS, PERMISSIONS, type PermissionKey } from "@/lib/permissions.generated";
 import type { RoleRead } from "@/types/api";
@@ -58,6 +60,7 @@ export function RoleManagement({ initialRoles, actorPermissions, enabledFeatures
   const t = useTranslations("roles");
   const tNav = useTranslations("nav");
   const tUsers = useTranslations("users");
+  const tSecurity = useTranslations("security");
   const showToast = useToast();
   const confirm = useConfirm();
   const [roles, setRoles] = useState(initialRoles);
@@ -107,7 +110,7 @@ export function RoleManagement({ initialRoles, actorPermissions, enabledFeatures
       setForm(null);
       showToast(form.id ? t("toasts.saved") : t("toasts.created"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("toasts.saveFailed"), "error");
+      showToast(apiErrorMessage(error, tSecurity, "apiErrors", t("toasts.saveFailed")), "error");
     } finally {
       setSaving(false);
     }
@@ -121,7 +124,7 @@ export function RoleManagement({ initialRoles, actorPermissions, enabledFeatures
       setRoles((current) => current.filter((item) => item.id !== role.id));
       showToast(t("toasts.deleted"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("toasts.deleteFailed"), "error");
+      showToast(apiErrorMessage(error, tSecurity, "apiErrors", t("toasts.deleteFailed")), "error");
     }
   }
 
@@ -196,7 +199,10 @@ export function RoleManagement({ initialRoles, actorPermissions, enabledFeatures
             </div>
 
             <div className="field-stack">
-              <span className="field-label">{t("fields.permissions")}</span>
+              <span className="field-label">
+                {t("fields.permissions")}{" "}
+                <HelpPopover topic={t("fields.permissions")} docs={{ page: "rollen", anchor: "berechtigungen" }}>{t("permissionsHelp")}</HelpPopover>
+              </span>
               <div className="roles-permission-areas">
                 {PERMISSION_AREAS.map((area) => (
                   <fieldset key={area} className="roles-permission-area">
@@ -216,6 +222,7 @@ export function RoleManagement({ initialRoles, actorPermissions, enabledFeatures
                               {permission.feature && !enabledFeatures.includes(permission.feature) ? <Badge variant="neutral">{t("featureMissing")}</Badge> : null}
                             </span>
                             <span className="field-help">{t(`permissions.${permission.key}.description`)}</span>
+                            {!form.locked && !checked && !own.has(permission.key) ? <span className="field-help">{t("notOwnPermission")}</span> : null}
                             {implied && impliers.length > 0 ? (
                               <span className="field-help">{t("impliedBy", { permissions: impliers.map((key) => t(`permissions.${key}.label`)).join(", ") })}</span>
                             ) : null}
@@ -229,6 +236,7 @@ export function RoleManagement({ initialRoles, actorPermissions, enabledFeatures
             </div>
 
             <div className="modal-actions">
+              {!form.locked && nameMissing ? <span className="field-help">{t("nameMissing")}</span> : null}
               <button type="button" className="button-ghost" onClick={() => setForm(null)}>
                 {form.locked ? t("close") : t("cancel")}
               </button>

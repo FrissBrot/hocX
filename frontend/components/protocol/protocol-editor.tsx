@@ -14,6 +14,7 @@ import { ParticipantDateContext } from "@/contexts/participant-date-context";
 import { ParticipantDirectoryContext } from "@/contexts/participant-directory-context";
 import { SessionPanel, SessionPanelHandle } from "@/components/protocol/session-panel";
 import { Modal } from "@/components/ui/modal";
+import { HelpPopover } from "@/components/ui/help-popover";
 import { Badge } from "@/components/ui/badge";
 import { NavIcon } from "@/components/ui/nav-icons";
 import { QuickActionsPill } from "@/components/protocol/quick-actions-pill";
@@ -68,6 +69,8 @@ import { AgendaItemsSection } from "@/components/protocol/agenda-items-section";
 import { AgendaQuickCreateModal } from "@/components/protocol/agenda-quick-create-modal";
 import { AgendaPostponeModal } from "@/components/agenda/agenda-item-modal";
 import { ProtocolSearchModal } from "@/components/protocol/protocol-search";
+import { createDebouncedSaveQueue } from "@/components/protocol/debounced-save-queue";
+import { decideDraftRestore, textDraftBaseKey, textDraftKey } from "@/components/protocol/text-drafts";
 import {
   animateScroll,
   measureSections,
@@ -430,12 +433,27 @@ export function ProtocolEditor({
   };
 
 
+  // Vor jedem Statuswechsel: entprellte Text- und Notiz-Speicherungen sofort auslösen und
+  // abwarten. Sonst kam der PATCH auf «abgeschlossen» vor dem letzten PUT an, der Text-Save
+  // scheiterte mit 409 und der letzte Satz fehlte im eingefrorenen Protokoll und im PDF.
+  const flushPendingSaves = async (): Promise<boolean> => {
+    const [textOk, notesOk] = await Promise.all([
+      textSaveQueue.flushAll(),
+      sessionPanelRef.current?.flushPendingSaves() ?? Promise.resolve(true),
+    ]);
+    return textOk && notesOk;
+  };
+
   const performStatusTransition = async () => {
     const next = workflowMeta[protocolStatus]?.nextStatus;
     if (!next) return;
 
     setTransitioningStatus(true);
     try {
+      if (!(await flushPendingSaves())) {
+        showToast(t("statusChangeUnsavedChanges"), "error");
+        return;
+      }
       await browserApiFetch(`/api/protocols/${protocol.id}`, {
         method: "PATCH",
         body: JSON.stringify({ status: next }),
@@ -456,14 +474,28 @@ export function ProtocolEditor({
       router.refresh();
       router.push("/protocols");
     } catch (err: unknown) {
-      if (err instanceof Error) showToast(err.message);
+      showToast(err instanceof Error && err.message ? err.message : t("statusChangeFailed"), "error");
     } finally {
       setTransitioningStatus(false);
     }
   };
 
-  const transitionStatus = () => {
-    if (!workflowMeta[protocolStatus]?.nextStatus) return;
+  const transitionStatus = async () => {
+    const next = workflowMeta[protocolStatus]?.nextStatus;
+    if (!next || transitioningStatus) return;
+    // «Sitzung abschliessen» und vor allem «Protokoll abschliessen» haben Folgen, die sich
+    // nicht mit einem Klick zurücknehmen lassen (Einfrieren, signiertes PDF, Mails): immer
+    // nachfragen, auch wenn niemand sonst mitarbeitet.
+    if (next === "abgeschlossen" || next === "durchgeführt") {
+      const consequences = next === "abgeschlossen" ? t("finishProtocolConfirmMessage") : t("finishSessionConfirmMessage");
+      const ok = await confirm({
+        title: next === "abgeschlossen" ? t("finishProtocolConfirmTitle") : t("finishSessionConfirmTitle"),
+        message: collab.hasOtherActiveEditors ? t("confirmWithOtherEditors", { consequences }) : consequences,
+        confirmLabel: workflowMeta[protocolStatus]?.ctaLabel,
+      });
+      if (ok) void performStatusTransition();
+      return;
+    }
     if (collab.hasOtherActiveEditors) {
       setShowStatusChangeWarning(true);
       return;
@@ -478,7 +510,6 @@ export function ProtocolEditor({
   const closeProtocol = () => {
     router.push("/protocols");
   };
-  const timers = useRef<Record<string, number>>({});
   // Per text block: the content the server is known to hold right now - the
   // optimistic-concurrency baseline sent as expected_content (see handleTextChange). Only
   // ever set from a confirmed server state (save response, conflict refresh, another user's
@@ -490,7 +521,13 @@ export function ProtocolEditor({
   const textBaselineRef = useRef<Record<string, string>>({});
   // Per text block: the currently running save. Saves of the same block are serialized so a
   // save never reads the baseline before the previous save's response has updated it.
-  const textSaveChainRef = useRef<Record<string, Promise<void>>>({});
+  // Umgesetzt in createDebouncedSaveQueue (debounced-save-queue.ts).
+  const sendTextSaveRef = useRef<(blockId: string, content: string) => Promise<boolean>>(async () => true);
+  const [textSaveQueue] = useState(() =>
+    createDebouncedSaveQueue<string>(700, (blockId, content) => sendTextSaveRef.current(blockId, content))
+  );
+  // Funktionsdeklaration (gehoistet), liest bei jedem Aufruf den aktuellen Render-Stand.
+  sendTextSaveRef.current = sendTextSave;
   const shouldScrollToElementRef = useRef(false);
   // Separate from shouldScrollToElementRef: only an explicit jump (sidebar/keyboard/search,
   // set in focusElement below) should steal focus into a field. Restoring the remembered
@@ -527,31 +564,53 @@ export function ProtocolEditor({
     // Slight delay lets the browser finish layout before scrolling
     const t = window.setTimeout(() => {
       const top = el.getBoundingClientRect().top + window.scrollY - 24;
-      window.scrollTo({ top, behavior: "smooth" });
+      window.scrollTo({ top, behavior: prefersReducedMotion() ? "auto" : "smooth" });
     }, 120);
     return () => window.clearTimeout(t);
   }, []);
 
   useEffect(() => {
     return () => {
-      Object.values(timers.current).forEach((timerId) => window.clearTimeout(timerId));
+      textSaveQueue.cancelAll();
     };
-  }, []);
+  }, [textSaveQueue]);
 
   // Recover text that was typed before a tab/browser crash or a failed request. A draft is
   // only ever removed after the backend confirmed the exact value.
+  // Ein Entwurf, dessen Baseline nicht mehr dem Serverstand entspricht (jemand anderes hat
+  // inzwischen gespeichert), wird nicht automatisch übernommen, sondern nur auf Wunsch.
   useEffect(() => {
-    const restoredDrafts = Object.keys(textDrafts).flatMap((blockId) => {
-      const draft = readDraft(`protocol-text:${blockId}`);
-      return draft !== null && draft !== textDrafts[blockId] ? [[blockId, draft] as const] : [];
-    });
-    if (restoredDrafts.length === 0) return;
-    setTextDrafts((current) => {
-      const next = { ...current };
-      for (const [blockId, draft] of restoredDrafts) next[blockId] = draft;
-      return next;
-    });
-    showToast(t("draftsRestoredToast", { count: restoredDrafts.length }), "info");
+    const restoredDrafts: (readonly [string, string])[] = [];
+    const conflictingDrafts: (readonly [string, string])[] = [];
+    for (const blockId of Object.keys(textDrafts)) {
+      const draft = readDraft(textDraftKey(blockId));
+      const decision = decideDraftRestore(draft, readDraft(textDraftBaseKey(blockId)), textDrafts[blockId]);
+      if (decision === "restore") restoredDrafts.push([blockId, draft as string]);
+      if (decision === "conflict") conflictingDrafts.push([blockId, draft as string]);
+    }
+    const applyDrafts = (drafts: (readonly [string, string])[]) =>
+      setTextDrafts((current) => {
+        const next = { ...current };
+        for (const [blockId, draft] of drafts) next[blockId] = draft;
+        return next;
+      });
+    if (restoredDrafts.length > 0) {
+      applyDrafts(restoredDrafts);
+      showToast(t("draftsRestoredToast", { count: restoredDrafts.length }), "info");
+    }
+    if (conflictingDrafts.length > 0) {
+      showToast(t("draftsConflictToast", { count: conflictingDrafts.length }), "error", {
+        action: {
+          label: t("draftsConflictApply"),
+          onClick: () => {
+            // Ausdrücklich gewählt: Entwurf übernehmen, die neue Baseline ist der aktuelle
+            // Serverstand, damit die nächste Speicherung nicht als Konflikt scheitert.
+            for (const [blockId] of conflictingDrafts) saveDraft(textDraftBaseKey(blockId), knownServerText(blockId));
+            applyDrafts(conflictingDrafts);
+          },
+        },
+      });
+    }
   // Initial server values are deliberately compared exactly once per mounted protocol.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [protocol.id]);
@@ -562,6 +621,7 @@ export function ProtocolEditor({
       if (!key?.startsWith("protocol-text:")) return;
       clearDraft(key);
       const blockId = key.slice("protocol-text:".length);
+      if (blockId) clearDraft(textDraftBaseKey(blockId));
       if (blockId) setStatus(blockId, "saved");
     };
     window.addEventListener("hocx:mutation-flushed", flushed);
@@ -1388,7 +1448,9 @@ export function ProtocolEditor({
   }
 
   function handleTextChange(protocolElementBlockId: string, content: string) {
-    const mutationKey = `protocol-text:${protocolElementBlockId}`;
+    const mutationKey = textDraftKey(protocolElementBlockId);
+    // Baseline nur beim ersten Tastendruck eines Entwurfs festhalten (siehe text-drafts.ts).
+    if (readDraft(mutationKey) === null) saveDraft(textDraftBaseKey(protocolElementBlockId), knownServerText(protocolElementBlockId));
     saveDraft(mutationKey, content);
     queueMutation({
       key: mutationKey,
@@ -1399,19 +1461,14 @@ export function ProtocolEditor({
     setTextDrafts((current) => ({ ...current, [protocolElementBlockId]: content }));
     setStatus(protocolElementBlockId, "saving");
 
-    if (timers.current[protocolElementBlockId]) {
-      window.clearTimeout(timers.current[protocolElementBlockId]);
-    }
-
-    timers.current[protocolElementBlockId] = window.setTimeout(() => {
-      const previousSave = textSaveChainRef.current[protocolElementBlockId] ?? Promise.resolve();
-      textSaveChainRef.current[protocolElementBlockId] = previousSave.then(() => sendTextSave(protocolElementBlockId, content));
-    }, 700);
+    // Entprellt (700 ms) und pro Block serialisiert; flushPendingSaves() löst wartende
+    // Speicherungen vor einem Statuswechsel sofort aus und wartet sie ab.
+    textSaveQueue.schedule(protocolElementBlockId, content);
   }
 
   // Runs serialized per block (see textSaveChainRef), so expected_content is read only after
   // any previous save of this block has landed and updated the baseline.
-  async function sendTextSave(protocolElementBlockId: string, content: string) {
+  async function sendTextSave(protocolElementBlockId: string, content: string): Promise<boolean> {
     const mutationKey = `protocol-text:${protocolElementBlockId}`;
     const expectedContent = knownServerText(protocolElementBlockId);
     // The user may have kept typing while this save was waiting/in flight; that newer text
@@ -1432,6 +1489,7 @@ export function ProtocolEditor({
       if (isLatestEdit()) {
         setStatus(protocolElementBlockId, "saved");
         clearDraft(mutationKey);
+        clearDraft(textDraftBaseKey(protocolElementBlockId));
         removeMutation(mutationKey);
       }
       collab.sendFieldUpdate(`block-${protocolElementBlockId}`, {
@@ -1439,6 +1497,7 @@ export function ProtocolEditor({
         tracked_dirty: result.tracked_dirty,
         tracked_baseline_content: result.tracked_baseline_content,
       });
+      return true;
     } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
       if (err instanceof ApiError && err.kind === "conflict") {
@@ -1460,9 +1519,10 @@ export function ProtocolEditor({
           "error",
           { onMessageClick: () => void refreshBlockTextFromServer(protocolElementBlockId) }
         );
-        return;
+        return false;
       }
-      if (!isLatestEdit()) return;
+      // Ein neuerer Stand desselben Blocks ist schon unterwegs; dessen Ergebnis zählt.
+      if (!isLatestEdit()) return true;
       queueMutation({
         key: mutationKey,
         path: `/api/protocol-element-blocks/${protocolElementBlockId}/text`,
@@ -1471,6 +1531,7 @@ export function ProtocolEditor({
         lastError: err instanceof Error ? err.message : t("textSaveFailed"),
       });
       showToast(t("textSavedLocallyOffline"), "error");
+      return false;
     }
   }
 
@@ -2190,7 +2251,7 @@ export function ProtocolEditor({
               type="button"
               className="button-primary"
               disabled={transitioningStatus}
-              onClick={transitionStatus}
+              onClick={() => void transitionStatus()}
             >
               {transitioningStatus ? "…" : workflowMeta[protocolStatus]?.ctaLabel}
             </button>
@@ -2200,7 +2261,12 @@ export function ProtocolEditor({
 
       <div className="status-row">
         <span className="pill">{protocol.protocol_number}</span>
-        <span className="pill">{workflowMeta[protocolStatus]?.modeLabel ?? protocolStatusLabel(protocolStatus, tRoot)}</span>
+        <span className="pill">
+          {workflowMeta[protocolStatus]?.modeLabel ?? protocolStatusLabel(protocolStatus, tRoot)}{" "}
+          <HelpPopover topic={t("workflowHelpTopic")} docs={{ page: "protokolle", anchor: "status" }}>
+            {t("workflowHelp")}
+          </HelpPopover>
+        </span>
         {protocol.created_at && (
           <span className="pill">{t("createdAtPill", { date: formatDateTime(protocol.created_at, locale) })}</span>
         )}
@@ -2215,6 +2281,11 @@ export function ProtocolEditor({
           >
             {t("openOriginalDocument")}
           </a>
+        )}
+        {protocolStatus === "geplant" && !isReadOnly && (
+          <HelpPopover topic={t("trackChangesHelpTopic")} docs={{ page: "protokolle", anchor: "nachverfolgen" }}>
+            {t("trackChangesHelp")}
+          </HelpPopover>
         )}
         {protocolStatus === "geplant" && !isReadOnly && (
           <TodoMiniMenu label={trackChangesEnabled ? t("trackChangesOn") : t("trackChangesOff")} compact>
@@ -2471,7 +2542,7 @@ export function ProtocolEditor({
             ctaLabel={!isReadOnly ? workflowMeta[protocolStatus]?.ctaLabel : undefined}
             onCta={() => {
               setCollabStatusPanelOpen(false);
-              transitionStatus();
+              void transitionStatus();
             }}
             ctaBusy={transitioningStatus}
             onMouseEnter={cancelCollabHoverClose}

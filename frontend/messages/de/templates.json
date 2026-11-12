@@ -34,12 +34,12 @@
       "label": "Ein-/Austritte"
     },
     "17": {
-      "description": "Zeigt die freien Sitzungsnotizen im Protokoll an (ohne Todos)",
+      "description": "Zeigt die freien Sitzungsnotizen im Protokoll an (ohne Pendenzen)",
       "label": "Sitzungsnotizen"
     },
     "2": {
       "description": "Checkliste oder Aufgabenliste",
-      "label": "Todo"
+      "label": "Pendenz"
     },
     "3": {
       "description": "Bild-Upload mit Vorschau",
@@ -195,8 +195,8 @@
     "titlePatternPlaceholder": "z. B. Sitzung '{n}' - '{date:DD.MM.YYYY}'",
     "titlePreviewHelp": "Wenn Verantwortliche gesetzt sind, werden sie später im Protokoll direkt hinter dem Elementtitel angezeigt.",
     "titlePreviewLabel": "Titelvorschau",
-    "todoEventTagHelp": "Nur Termine mit diesem Tag werden in der Todo-Fällig-Auswahl angezeigt. Leer = alle Termine.",
-    "todoEventTagLabel": "Todo-Termin-Tag",
+    "todoEventTagHelp": "Nur Termine mit diesem Tag werden in der Fälligkeitsauswahl der Pendenzen angezeigt. Leer = alle Termine.",
+    "todoEventTagLabel": "Pendenzen-Termin-Tag",
     "unarchive": "Aus Archiv zurückholen",
     "unarchivedToast": "Vorlage aus dem Archiv zurückgeholt",
     "unknownList": "Unbekannte Liste",
@@ -342,8 +342,8 @@
     "titlePatternPlaceholder": "z. B. Sitzung '{n}' - '{date:DD.MM.YYYY}'",
     "titlePreviewHelp": "Wenn Verantwortliche gesetzt sind, werden sie später im Protokoll direkt hinter dem Elementtitel angezeigt.",
     "titlePreviewLabel": "Titelvorschau",
-    "todoEventTagHelp": "Nur Termine mit diesem Tag werden in der Todo-Fällig-Auswahl angezeigt. Leer = alle Termine.",
-    "todoEventTagLabel": "Todo-Termin-Tag",
+    "todoEventTagHelp": "Nur Termine mit diesem Tag werden in der Fälligkeitsauswahl der Pendenzen angezeigt. Leer = alle Termine.",
+    "todoEventTagLabel": "Pendenzen-Termin-Tag",
     "unarchive": "Aus Archiv zurückholen",
     "unarchivedToast": "Vorlage aus dem Archiv zurückgeholt",
     "unknownList": "Unbekannte Liste",
@@ -373,7 +373,8 @@
       "liveHint": "Änderungen gelten sofort für alle offenen Protokolle dieser Vorlage. Bereits erfasste Bussen behalten ihren Betrag.",
       "saved": "Bussentarif der Vorlage gespeichert",
       "saveFailed": "Bussentarif konnte nicht gespeichert werden",
-      "loadFailed": "Bussentarif konnte nicht geladen werden"
+      "loadFailed": "Bussentarif konnte nicht geladen werden",
+      "docsLink": "Mehr zum Bussentarif in der Hilfe"
     },
     "invitationVisible": "In Einladung und Traktandenliste",
     "invitationToggleFailed": "Einstellung konnte nicht gespeichert werden."
@@ -465,32 +466,32 @@
     },
     "repeat": {
       "title": "Wiederholung",
-      "description": "Der Block erscheint einmal oder einmal pro passendem Termin bzw. Todo.",
+      "description": "Der Block erscheint einmal oder einmal pro passendem Termin bzw. passender Pendenz.",
       "option": {
         "none": "Einmalig",
         "event": "Pro Termin",
-        "todo": "Pro Todo"
+        "todo": "Pro Pendenz"
       },
       "optionHelp": {
         "none": "Der Block erscheint genau einmal im Element.",
         "event": "Für jeden passenden Termin entsteht ein eigener Block.",
-        "todo": "Für jedes passende Todo entsteht ein eigener Block."
+        "todo": "Für jede passende Pendenz entsteht ein eigener Block."
       },
       "unsupported": "Dieser Typ ist für Wiederholungen nicht vorgesehen. Die bestehende Einstellung bleibt, bis du «Einmalig» wählst.",
       "includeUnlistedPast": "Vergangene passende Termine nachziehen, die in den letzten 3 Protokollen noch nicht vorkamen",
       "eventTokens": "Platzhalter: {tokens}",
       "todoTokens": "Platzhalter: {tokens}",
-      "todoBlockTitle": "Todo-Blocktitel enthält",
-      "todoText": "Todo-Text enthält",
-      "todoOpenOnly": "Nur offene Todos",
+      "todoBlockTitle": "Pendenzen-Blocktitel enthält",
+      "todoText": "Pendenzen-Text enthält",
+      "todoOpenOnly": "Nur offene Pendenzen",
       "syncLabel": {
         "event": "In Termin-Feld speichern (optional)",
-        "todo": "In Todo-Feld speichern (optional)"
+        "todo": "In Pendenzen-Feld speichern (optional)"
       },
       "syncNone": "Nicht speichern",
       "syncHelp": {
         "event": "Der Blockinhalt wird zusätzlich in dieses Feld des Termins geschrieben (immer überschrieben). Beim Word-Import entscheidet bei abweichendem Wert die Prüfung.",
-        "todo": "Der Blockinhalt wird zusätzlich in dieses Feld des Todos geschrieben (immer überschrieben)."
+        "todo": "Der Blockinhalt wird zusätzlich in dieses Feld der Pendenz geschrieben (immer überschrieben)."
       }
     },
     "syncField": {
@@ -542,14 +543,14 @@
       "template": "Zyklus der Vorlage"
     },
     "todo": {
-      "title": "Todo-Einstellungen",
+      "title": "Pendenzen-Einstellungen",
       "description": "Regeln für Aufgaben in diesem Block.",
       "dueTagFilter": "Termine für das Fälligkeitsdatum",
       "dueTagFilterPlaceholder": "Alle Termine",
       "dueTagFilterHelp": "Beim Setzen der Fälligkeit werden nur Termine mit diesen Tags vorgeschlagen.",
-      "assignee": "Offene Todos übernehmen von",
+      "assignee": "Offene Pendenzen übernehmen von",
       "assigneeAll": "Allen Personen",
-      "assigneeHelp": "Offene Todos aus dem letzten Protokoll werden übernommen; mit Person nur ihre."
+      "assigneeHelp": "Offene Pendenzen aus dem letzten Protokoll werden übernommen; mit Person nur ihre."
     },
     "attendance": {
       "title": "Anwesenheit",
@@ -832,7 +833,7 @@
         "fines_by_type": "Bussen nach Typ",
         "groups_sessions": "Termine pro Gruppe",
         "groups_avg": "Ø Teilnehmer pro Gruppe",
-        "todos": "Todos-Übersicht"
+        "todos": "Pendenzen-Übersicht"
       }
     },
     "entryExit": {

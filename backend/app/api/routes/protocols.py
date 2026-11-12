@@ -17,7 +17,7 @@ from app.core.db import get_db
 from app.core.redis_client import publish_best_effort
 from app.schemas.protocol import AttendanceExcusePayload, NextSessionRead, ProtocolCreateFromTemplate, ProtocolCycleEventsRead, ProtocolListCycle, ProtocolRead, ProtocolTemplateSyncRead, ProtocolTodoRead, ProtocolUpdate, QuickTodoCreate, TodoListItem
 from app.schemas.deletion import DeletionPreview, DeletionRequest, DeletionResultRead
-from app.services import deletion_service, document_render_jobs, protocol_period_service, public_id_service
+from app.services import deletion_service, document_render_jobs, protocol_period_service, public_id_service, todo_fine_service
 from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
 from app.services.collaboration_service import protocol_channel
@@ -64,6 +64,22 @@ def _get_readable_protocol_or_404(db: Session, protocol_id: uuid.UUID, user: Cur
     protocol = _get_protocol_or_404(db, protocol_id, user)
     access_service.ensure_can_read_protocol(db, user, protocol.id)
     return protocol
+
+
+def _get_writable_protocol_or_404(db: Session, protocol_id: uuid.UUID, user: CurrentUser) -> Protocol:
+    """Einheitlicher Guard der Schreibrouten (Patch, Zurückstufen, Löschen, Vorlage neu laden):
+    Mandant plus dieselben Ressourcenregeln wie beim Lesen. Wer ein Protokoll nicht lesen darf,
+    bekommt 404 statt 403 (kein Existenz-Orakel, SECURITY-RULES 1.6). Das Schreibrecht selbst
+    prüft die Route vorher mit require_permission."""
+    protocol = _get_protocol_or_404(db, protocol_id, user)
+    if not access_service.can_read_protocol(db, user, protocol.id):
+        raise HTTPException(status_code=404, detail="Protocol not found")
+    return protocol
+
+
+# Felder, die ein abgeschlossenes Protokoll inhaltlich ändern würden. Nur der Status darf sich
+# noch ändern (Zurückstufen); expected_session_notes ist eine Vorbedingung, kein Feld.
+_FROZEN_CONTENT_FIELDS = frozenset({"title", "protocol_date", "event_id", "session_notes", "track_changes_enabled"})
 
 
 def _cycle_configs_by_template(db: Session, template_ids: set[int]) -> dict[int, CycleConfig]:
@@ -139,7 +155,8 @@ def _build_protocol_reads(db: Session, protocols: list) -> list[ProtocolRead]:
 
     cycle_by_template = _cycle_configs_by_template(db, {p.template_id for p in protocols})
     ProtocolRead.prime_public_ids(db, protocols)
-    today = date.today()
+    # Aktueller Zyklus nach Schweizer Datum (sonst zwischen 00:00 und 02:00 der falsche).
+    today = todo_fine_service.today()
 
     result = []
     for p in protocols:
@@ -171,7 +188,6 @@ def list_protocols(
     restricted_reader = access_service._is_restricted_reader(db, user)
     if not access_service.sees_all_protocols(user) and not restricted_reader:
         status_filter = "abgeschlossen"
-        q = None
     protocols = service.list_protocols(
         db,
         tenant_id=user.current_tenant_id,
@@ -320,16 +336,23 @@ def patch_protocol(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.MEETINGS_EDIT)
-    existing = _get_protocol_or_404(db, protocol_id, user)
+    existing = _get_writable_protocol_or_404(db, protocol_id, user)
     protocol_id = existing.id
-    # Vor dem Update festhalten: existing ist dasselbe Objekt, das update_protocol ändert.
-    previous_status = existing.status
-    if payload.session_notes is not None and payload.expected_session_notes is not None:
+    if payload.status is not None or (payload.session_notes is not None and payload.expected_session_notes is not None):
         # Audit MAIN-BE-011: Protokollzeile bis zum Commit sperren und frisch lesen, damit
         # zwei gleichzeitige Saves mit gleichem erwarteten Stand nicht beide durchgehen.
+        # Ebenso beim Statuswechsel (Audit 2026-11): klicken zwei Personen gleichzeitig
+        # «abschliessen», sieht die zweite den neuen Status und löst die Übergangs-Hooks
+        # (PDF, Benachrichtigungen, Momentaufnahmen) nicht ein zweites Mal aus.
         existing = db.scalar(
             select(Protocol).where(Protocol.id == protocol_id).with_for_update().execution_options(populate_existing=True)
         )
+    # Vor dem Update festhalten: existing ist dasselbe Objekt, das update_protocol ändert.
+    previous_status = existing.status
+    if previous_status == "abgeschlossen" and _FROZEN_CONTENT_FIELDS & payload.model_fields_set:
+        # Abgeschlossen = eingefrorener Stand, zu dem das signierte PDF passt. Ändern nur nach
+        # dem Zurückstufen (Audit 2026-11, vorher liefen Titel/Datum/Notizen hier durch).
+        raise HTTPException(status_code=409, detail="Protocol is already abgeschlossen")
     if (
         payload.session_notes is not None
         and payload.expected_session_notes is not None
@@ -372,8 +395,15 @@ def revert_protocol_status(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.MEETINGS_EDIT)
-    existing = _get_protocol_or_404(db, protocol_id, user)
-    prev = _PREVIOUS_STATUS.get(existing.status)
+    existing = _get_writable_protocol_or_404(db, protocol_id, user)
+    # Zeile sperren wie beim Vorwärts-Statuswechsel (patch_protocol).
+    existing = db.scalar(
+        select(Protocol).where(Protocol.id == existing.id).with_for_update().execution_options(populate_existing=True)
+    )
+    # Vor dem Update sichern: update_protocol ändert dasselbe ORM-Objekt, danach wäre
+    # existing.status schon der neue Status und das Audit-Log hielte from == to fest.
+    current_status = existing.status
+    prev = _PREVIOUS_STATUS.get(current_status)
     if prev is None:
         raise HTTPException(status_code=400, detail="Protocol is already at the initial status")
     try:
@@ -384,7 +414,7 @@ def revert_protocol_status(
     if protocol is None:
         raise HTTPException(status_code=404, detail="Protocol not found")
     audit.log(db, action="protocol.status_reverted", actor=user, entity_type="protocol", entity_id=existing.id,
-              details={"from": existing.status, "to": prev})
+              details={"from": current_status, "to": prev})
     return protocol
 
 
@@ -398,8 +428,7 @@ def sync_protocol_with_template(
     """Elemente eines offenen Protokolls aus der aktuellen Vorlage neu laden, erfasste Daten
     bleiben erhalten. Mit dry_run=true nur die Übersicht der Änderungen."""
     require_permission(user, P.MEETINGS_EDIT)
-    existing = _get_protocol_or_404(db, protocol_id, user)
-    access_service.ensure_can_read_protocol(db, user, existing.id)
+    existing = _get_writable_protocol_or_404(db, protocol_id, user)
     try:
         summary = service.sync_with_template(db, existing.id, dry_run=dry_run)
     except ValueError as exc:
@@ -554,7 +583,7 @@ def delete_protocol_with_selection(
 ):
     """Löscht das Protokoll; gewählte Bilder werden mitgelöscht, die übrigen in die Galerie übernommen."""
     require_permission(user, P.MEETINGS_EDIT)
-    existing = _get_protocol_or_404(db, protocol_id, user)
+    existing = _get_writable_protocol_or_404(db, protocol_id, user)
     return _delete_protocol_with_files(db, existing, user, set(payload.delete_file_ids))
 
 
@@ -566,7 +595,7 @@ def delete_protocol(
 ):
     """Ohne Auswahl: alle Bilder, die nur dieses Protokoll verwendet, werden mitgelöscht."""
     require_permission(user, P.MEETINGS_EDIT)
-    existing = _get_protocol_or_404(db, protocol_id, user)
+    existing = _get_writable_protocol_or_404(db, protocol_id, user)
     _delete_protocol_with_files(db, existing, user, None)
     return {"message": "Protocol deleted"}
 

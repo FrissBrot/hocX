@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useConfirm } from "@/contexts/confirm-context";
 import { ActionIcon } from "@/components/ui/action-icons";
-import { browserApiFetch } from "@/lib/api/client";
+import { HelpPopover } from "@/components/ui/help-popover";
+import { ApiError, browserApiFetch } from "@/lib/api/client";
 import { CycleConfigSummary } from "@/types/api";
 import { formatCycleName } from "@/lib/utils/cycle";
 
@@ -96,7 +97,10 @@ function CycleForm({
           </label>
         </div>
         <p className="field-help" style={{ marginTop: "calc(-1 * var(--space-2))" }}>
-          {t("resetHelp")}
+          {t("resetHelp")}{" "}
+          <HelpPopover topic={t("resetLabelHelpTopic")} docs={{ page: "zyklen", anchor: "stichtag" }}>
+            {t("resetReassignHelp")}
+          </HelpPopover>
         </p>
 
         <label className="field-stack">
@@ -235,7 +239,13 @@ export function CycleConfigManager({ initialConfigs }: { initialConfigs: CycleCo
       setConfigs((prev) => prev.filter((c) => c.id !== id));
       if (editId === id) setEditId(null);
     } catch (err: unknown) {
-      setDeleteError(err instanceof Error ? err.message : t("deleteFailedGeneric"));
+      setDeleteError(
+        err instanceof ApiError && err.status === 409
+          ? t("deleteInUse")
+          : err instanceof Error
+            ? err.message
+            : t("deleteFailedGeneric")
+      );
     }
   }
 

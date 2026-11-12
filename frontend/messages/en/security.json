@@ -86,5 +86,39 @@
     "setUpAt": "Set up: {date}",
     "lastUsedAt": "Last used: {date}",
     "delete": "Delete"
+  },
+  "passwordChange": {
+    "title": "Change password",
+    "description": "You stay signed in here; all other sessions (e.g. on another device) are ended. You will receive a notice by email.",
+    "current": "Current password",
+    "new": "New password",
+    "newHelp": "At least {count} characters.",
+    "repeat": "Repeat new password",
+    "submit": "Change password",
+    "saving": "Saving…",
+    "success": "Password changed. Other sessions have been ended.",
+    "failed": "The password could not be changed.",
+    "reasons": {
+      "current": "Enter your current password first.",
+      "tooShort": "The new password needs at least {count} characters.",
+      "mismatch": "The two new passwords do not match."
+    }
+  },
+  "apiErrors": {
+    "invalid_credentials": "Email or password is invalid.",
+    "login_email_taken": "This email address is already used for a login.",
+    "wrong_current_password": "The current password is not correct.",
+    "already_has_login": "This person already has a login.",
+    "inactive_person": "Inactive people cannot be invited.",
+    "email_required": "An invitation needs a saved email address for this person.",
+    "email_not_configured": "Email sending is not set up. Please ask the platform operator.",
+    "last_admin": "The club needs at least one active account that may manage logins and roles.",
+    "own_access_management": "You cannot remove your own user management. Another administrator has to do that.",
+    "role_name_taken": "A role with this name already exists.",
+    "too_many_roles": "The club already has the maximum number of roles.",
+    "admin_role_fixed": "The administrator role is fixed and cannot be changed.",
+    "system_role_not_deletable": "Default roles cannot be deleted.",
+    "role_in_use": "The role is still assigned to accounts. Remove it there first.",
+    "permission_not_held": "You can only grant or manage permissions you have yourself."
   }
 }

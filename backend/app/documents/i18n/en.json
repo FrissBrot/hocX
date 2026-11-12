@@ -1,5 +1,13 @@
 {
   "apiError": {
+    "agendaBoundOnlyPostpone": "The topic is already part of a protocol. Use «Postpone» to move it.",
+    "agendaItemFrozen": "The topic belongs to a closed protocol and can no longer be changed.",
+    "agendaItemNotFound": "The topic was not found.",
+    "agendaMonthRequired": "Please choose a month.",
+    "agendaPointMismatch": "The selected item does not belong to this template.",
+    "agendaProtocolClosed": "The protocol is already closed.",
+    "agendaSaveFailed": "The topic could not be saved.",
+    "agendaTitleRequired": "Please enter a title.",
     "assetInUse": "The file is still used by a brand profile, a template or a component.",
     "assetNotFound": "The selected file does not belong to this tenant or has the wrong type.",
     "assignmentScope": "This document type cannot be assigned to a protocol template.",
@@ -359,6 +367,10 @@
     "greeting": "Hello {name}",
     "noLoginHint": "Questions about this message? Please contact {tenant}.",
     "security": {
+      "emailChanged": "Login email changed ({at})",
+      "emailChangedByAdmin": "Login email changed by the club administration ({at})",
+      "emailChangedIntro": "The login email of your account at {tenant} was changed. This address is no longer used for signing in, so this is the last message sent here:",
+      "emailChangedSubject": "{tenant}: Your login email was changed",
       "hint": "Wasn't you? Contact {tenant} immediately.",
       "intro": "The following was changed on your account at {tenant}:",
       "mandatory": "Security notices are always sent and can't be turned off.",
@@ -459,6 +471,7 @@
     "earlierProtocol": "an earlier protocol",
     "open": "Open"
   },
+  "fineTransaction": "Fine {type}: {name}",
   "fineType": {
     "absent": "Unexcused absence",
     "late": "Late"

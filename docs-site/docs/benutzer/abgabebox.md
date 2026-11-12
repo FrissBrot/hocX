@@ -322,7 +322,7 @@ Eingereichte Dateien bleiben nicht nur in der Abgabe:
 
 **Wie viel Platz haben wir?**
 Die Einreichungen zählen zum Speicherkontingent deines Vereins. Ist es erreicht, lehnt die
-Abgabebox weitere Uploads mit einem Hinweis ab. Den Stand siehst du in den Mandant-Einstellungen im Tab *Abo & Nutzung*.
+Abgabebox weitere Uploads mit einem Hinweis ab. Den Stand siehst du in den Mandant-Einstellungen im Tab [*Abo & Nutzung*](einstellungen.md#abo).
 
 **Wie viele Dateien gehen auf einmal?**
 In einem Upload-Vorgang sind höchstens 50 Dateien möglich. Wer mehr hat, lädt in mehreren
@@ -346,7 +346,7 @@ Nur wenn die einreichende Person «GPS-Daten des Bildes mitsenden» angehakt lä
 werden die Standortdaten vor dem Speichern entfernt.
 
 **Werden Einreichungen irgendwann gelöscht?**
-Nur wenn ihr das wollt: In den Mandant-Einstellungen gibt es unter den Aufbewahrungsfristen die
+Nur wenn ihr das wollt: In den Mandant-Einstellungen gibt es unter den [Aufbewahrungsfristen](einstellungen.md#aufbewahrung) die
 Regel «Einreichungen der Abgabebox nach Abgabeschluss löschen». Sie ist ausgeschaltet, bis ihr
 sie einschaltet. Löschst du eine ganze Abgabe, werden alle ihre eingereichten Dateien
 mitgelöscht.

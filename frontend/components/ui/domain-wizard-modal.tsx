@@ -3,11 +3,14 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
+import { domainErrorMessage } from "@/components/settings/tenant-domain-row";
 import { CopyField } from "@/components/ui/copy-field";
+import { DocsLink, HelpPopover } from "@/components/ui/help-popover";
 import { Modal } from "@/components/ui/modal";
 import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
+import { StatusBanner } from "@/components/ui/status-banner";
 import { TenantDomain, TenantDomainPurpose } from "@/types/api";
 
 type Props = {
@@ -19,6 +22,8 @@ type Props = {
   /** Zwecke, die das Abo erlaubt (custom_domain: app/abgabebox, verify_domain: verify). */
   purposes: TenantDomainPurpose[];
   onChanged: () => void;
+  /** Bestehende Domains des Mandanten - für den Hinweis, welche aktive Domain ersetzt würde. */
+  domains?: TenantDomain[];
 };
 
 const PURPOSE_CARDS: { purpose: TenantDomainPurpose; title: string; description: string }[] = [
@@ -43,7 +48,7 @@ function CheckIcon() {
   );
 }
 
-export function DomainWizardModal({ open, onClose, tenantId, domain, purposes, onChanged }: Props) {
+export function DomainWizardModal({ open, onClose, tenantId, domain, purposes, onChanged, domains = [] }: Props) {
   const t = useTranslations("tenantSettings");
   const tCommon = useTranslations("common");
   const showToast = useToast();
@@ -67,7 +72,8 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, purposes, o
     if (domain) {
       setActiveDomain(domain);
       setPurpose(domain.purpose);
-      setStep(domain.status === "active" ? "success" : "dns");
+      // Aktive, aber unerreichbare Domain: zurück in die DNS-Ansicht zum erneuten Prüfen.
+      setStep(domain.status === "active" && domain.is_healthy ? "success" : "dns");
     } else {
       setActiveDomain(null);
       setPurpose(purposes[0] ?? "app");
@@ -90,7 +96,7 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, purposes, o
       onChanged();
       setStep("dns");
     } catch (error) {
-      setErrorMsg(error instanceof Error ? error.message : t("addDomainFailed"));
+      setErrorMsg(domainErrorMessage(error, t, "addDomainFailed"));
     } finally {
       setBusy(false);
     }
@@ -108,7 +114,7 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, purposes, o
       onChanged();
       setStep("success");
     } catch (error) {
-      setErrorMsg(error instanceof Error ? error.message : t("verifyFailed"));
+      setErrorMsg(domainErrorMessage(error, t, "verifyFailed"));
     } finally {
       setBusy(false);
     }
@@ -131,7 +137,7 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, purposes, o
       onChanged();
       onClose();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("deleteDomainFailed"), "error");
+      showToast(domainErrorMessage(error, t, "deleteDomainFailed"), "error");
     } finally {
       setBusy(false);
     }
@@ -143,6 +149,7 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, purposes, o
   }
 
   const stepIndex = STEPS.findIndex((s) => s.key === step);
+  const activeForPurpose = domains.find((row) => row.purpose === purpose && row.status === "active") ?? null;
 
   return (
     <Modal open={open} onClose={onClose} title={t("wizardTitle")} description={t("wizardDescription")}>
@@ -168,6 +175,7 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, purposes, o
                 key={card.purpose}
                 type="button"
                 className={`wizard-purpose-card${purpose === card.purpose ? " is-selected" : ""}`}
+                aria-pressed={purpose === card.purpose}
                 onClick={() => setPurpose(card.purpose)}
               >
                 <span className="wizard-purpose-title">{t(card.title)}</span>
@@ -185,6 +193,10 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, purposes, o
               autoFocus
             />
           </label>
+          {activeForPurpose ? (
+            // Die laufende Domain bleibt bis zur erfolgreichen Prüfung der neuen aktiv (Audit 08)
+            <StatusBanner tone="neutral" message={t("replaceNotice", { domain: activeForPurpose.domain })} />
+          ) : null}
           <div className="wizard-footer">
             <span />
             <div className="wizard-footer-actions">
@@ -200,8 +212,17 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, purposes, o
       {step === "dns" && activeDomain && (
         <>
           <p className="muted">
-            {t("dnsIntro", { domain: activeDomain.domain })}
+            {t("dnsIntroShort", { domain: activeDomain.domain })}{" "}
+            <HelpPopover topic={t("stepDns")} docs={{ page: "einstellungen", anchor: "domains" }}>
+              {t("help.dns")}
+            </HelpPopover>
           </p>
+          {activeDomain.status === "pending" && activeDomain.replaces_domain ? (
+            <StatusBanner tone="neutral" message={t("replaceNotice", { domain: activeDomain.replaces_domain })} />
+          ) : null}
+          {activeDomain.status === "active" && !activeDomain.is_healthy ? (
+            <StatusBanner tone="error" message={t("statusUnreachableHint")} />
+          ) : null}
 
           <div className="wizard-dns-block">
             <span className="wizard-dns-label">{t("dnsStep1")}</span>
@@ -220,6 +241,10 @@ export function DomainWizardModal({ open, onClose, tenantId, domain, purposes, o
               <CopyField label={t("targetHostLabel")} value={activeDomain.target_host} />
             </div>
           )}
+
+          <p className="field-help">
+            {t("dnsWaitHint")} <DocsLink page="einstellungen" anchor="domains">{t("docsLink")}</DocsLink>
+          </p>
 
           <div className="wizard-footer">
             <button type="button" className="button-ghost wizard-remove-link" disabled={busy} onClick={removeAndClose}>

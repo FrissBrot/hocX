@@ -232,6 +232,10 @@ export function AgendaListView({ items: initialItems, templates, preferredTempla
           canEdit={canEdit}
           onClose={() => setEditId(null)}
           onSaved={upsert}
+          onPostpone={() => {
+            setEditId(null);
+            setPostponeId(editing.id);
+          }}
         />
       )}
       {postponing && <AgendaPostponeModal item={postponing} onClose={() => setPostponeId(null)} onPostponed={upsert} />}

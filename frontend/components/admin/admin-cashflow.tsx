@@ -57,6 +57,13 @@ function monthLabel(month: string, locale: string, style: "long" | "short" = "lo
   return new Date(year, value - 1, 1).toLocaleDateString(toIntlLocale(locale), { month: style, year: style === "long" ? "numeric" : "2-digit" });
 }
 
+/** Heute als ISO-Datum in der Ortszeit des Browsers - toISOString() lieferte zwischen 0 und 2 Uhr
+ *  Schweizer Zeit noch das gestrige UTC-Datum (Audit 08). */
+export function todayLocalIso(now: Date = new Date()): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
 /** Letzter Tag einer Periode (period_end ist exklusiv). */
 function periodLastDay(periodEnd: string): string {
   const [year, month, day] = periodEnd.split("-").map(Number);
@@ -507,7 +514,7 @@ function ChargeModal({ t, charge, onClose, onSave }: {
 }) {
   const locale = useLocale();
   const [status, setStatus] = useState<TenantChargeStatus>(charge.status);
-  const [paidOn, setPaidOn] = useState(charge.paid_on ?? new Date().toISOString().slice(0, 10));
+  const [paidOn, setPaidOn] = useState(charge.paid_on ?? todayLocalIso());
   const [note, setNote] = useState(charge.note ?? "");
   const [busy, setBusy] = useState(false);
 
@@ -597,7 +604,7 @@ function CostsTab({ t, costs, onEdit, onChanged }: {
   const list = useMemo(() => (costs ?? []).filter((cost) => filter === "all" || cost.status === filter), [costs, filter]);
   const count = (status: CashflowCostStatus) => (costs ?? []).filter((cost) => cost.status === status).length;
   const monthly = (status: CashflowCostStatus) =>
-    (costs ?? []).filter((cost) => cost.status === status && cost.kind === "fixed" && (!cost.end_date || cost.end_date >= new Date().toISOString().slice(0, 10)))
+    (costs ?? []).filter((cost) => cost.status === status && cost.kind === "fixed" && (!cost.end_date || cost.end_date >= todayLocalIso()))
       .reduce((sum, cost) => sum + cost.monthly_equivalent_rp, 0);
 
   async function setStatus(cost: CashflowCost, status: CashflowCostStatus) {
@@ -713,7 +720,7 @@ function CostModal({ t, cost, onClose, onSaved }: { t: TFunc; cost: CashflowCost
   const [amount, setAmount] = useState(toFrancs(cost?.amount_rp ?? null));
   const [percent, setPercent] = useState(cost?.percent_bp != null ? String(cost.percent_bp / 100) : "");
   const [costInterval, setCostInterval] = useState(cost?.interval ?? "monthly");
-  const [startDate, setStartDate] = useState(cost?.start_date ?? new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState(cost?.start_date ?? todayLocalIso());
   const [endDate, setEndDate] = useState(cost?.end_date ?? "");
   const [status, setStatus] = useState<CashflowCostStatus>(cost?.status ?? "active");
   const [note, setNote] = useState(cost?.note ?? "");

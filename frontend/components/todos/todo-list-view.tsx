@@ -17,6 +17,8 @@ import { TODO_STATUS } from "@/components/protocol/protocol-editor-shared";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
+import { Badge } from "@/components/ui/badge";
+import { useRunningTodoFines } from "@/components/todos/use-running-todo-fines";
 import { formatDate } from "@/lib/utils/format";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { ParticipantSummary, TodoBlock, TodoListItem } from "@/types/api";
@@ -51,6 +53,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
   const [sortKey, setSortKey] = useState<SortKey>("task");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [busy, setBusy] = useState<Record<string, boolean>>({});
+  const runningFines = useRunningTodoFines(finesEnabled);
   const [todos, setTodos] = useState<{ all: TodoListItem[]; my: TodoListItem[] }>({
     all: allTodos ?? [],
     my: myTodos,
@@ -355,6 +358,12 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
               </td>
               <td>
                 <span className="todo-row-task-text">{todo.task}</span>
+                {!isDone && runningFines.has(todo.id) ? (
+                  <>
+                    {" "}
+                    <Badge variant="danger">{t("fineRunningBadge")}</Badge>
+                  </>
+                ) : null}
               </td>
               <td>
                 {tags.length > 0 ? (

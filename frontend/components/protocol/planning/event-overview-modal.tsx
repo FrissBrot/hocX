@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { useConfirm } from "@/contexts/confirm-context";
+import { useConfirmEventDelete } from "@/components/events/use-confirm-event-delete";
 import { Modal } from "@/components/ui/modal";
 import { DateInput } from "@/components/ui/date-input";
 import { TagInput } from "@/components/ui/tag-input";
@@ -38,7 +38,7 @@ type EventOverviewModalProps = {
   knownEventTags: string[];
   tagConfig: TagConfig;
   onTagColorChange: (tag: string, color: string) => Promise<void>;
-  onTagRename: (oldTag: string, newTag: string) => Promise<void>;
+  onTagRename: (oldTag: string, newTag: string) => Promise<void | boolean>;
   onCreateEvent: (draft: NewEventDraft) => Promise<EventSummary | null>;
   onUpdateEvent: (eventId: string, patch: Partial<EventSummary>) => Promise<boolean>;
   onDeleteEvent: (eventId: string) => Promise<void>;
@@ -93,7 +93,7 @@ export function EventOverviewModal({
   const [detailEvent, setDetailEvent] = useState<EventSummary | null>(null);
   const t = useTranslations("events");
   const tCommon = useTranslations("common");
-  const confirm = useConfirm();
+  const confirmEventDelete = useConfirmEventDelete();
 
   const visibleIds = new Set(visibleEvents.map((e) => e.id));
 
@@ -158,14 +158,7 @@ export function EventOverviewModal({
     : detailEvent;
 
   async function handleDelete(eventId: string, title: string) {
-    if (
-      !(await confirm({
-        message: t("overviewModal.deleteConfirm", { title }),
-        tone: "danger",
-        confirmLabel: t("delete")
-      }))
-    )
-      return;
+    if (!(await confirmEventDelete(eventId, title))) return;
     await onDeleteEvent(eventId);
   }
 

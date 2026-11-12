@@ -1269,6 +1269,12 @@
         "meetings.edit"
       ]
     },
+    "GET /api/events/{event_id}/delete-impact": {
+      "handler": "events.event_delete_impact",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
     "GET /api/files": {
       "handler": "files.list_files",
       "requires": [
@@ -1299,8 +1305,26 @@
         "files.manage"
       ]
     },
+    "DELETE /api/files/albums/{album_id}": {
+      "handler": "files.delete_album",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "PATCH /api/files/albums/{album_id}": {
+      "handler": "files.rename_album",
+      "requires": [
+        "files.manage"
+      ]
+    },
     "POST /api/files/albums/{album_id}/items": {
       "handler": "files.add_album_items",
+      "requires": [
+        "files.manage"
+      ]
+    },
+    "POST /api/files/albums/{album_id}/items/remove": {
+      "handler": "files.remove_album_items",
       "requires": [
         "files.manage"
       ]
@@ -1327,6 +1351,9 @@
       "handler": "files.respond_album_share",
       "requires": [
         "files.manage"
+      ],
+      "features": [
+        "photo_sharing"
       ]
     },
     "POST /api/files/albums/{album_id}/shares": {
@@ -1461,6 +1488,12 @@
         "finances.read"
       ]
     },
+    "GET /api/finance/accounts/{account_id}/summary": {
+      "handler": "finance.get_period_summary",
+      "requires": [
+        "finances.read"
+      ]
+    },
     "GET /api/finance/accounts/{account_id}/transactions": {
       "handler": "finance.list_transactions",
       "requires": [
@@ -1488,7 +1521,7 @@
     "GET /api/fines": {
       "handler": "fines.list_fines",
       "features": [
-        "finance"
+        "finance (lesen)"
       ],
       "branches": [
         "reports.personal"
@@ -1501,13 +1534,23 @@
         "finances.manage"
       ]
     },
+    "GET /api/fines/open-summary": {
+      "handler": "fines.open_fines_summary",
+      "features": [
+        "finance (lesen)"
+      ],
+      "branches": [
+        "reports.personal"
+      ],
+      "note": "Summe der eigenen Bussen; alle nur mit reports.personal (im Rumpf, wie list_fines)"
+    },
     "GET /api/fines/tariff": {
       "handler": "fines.get_fine_tariff",
       "requires": [
         "meetings.read"
       ],
       "features": [
-        "finance"
+        "finance (lesen)"
       ]
     },
     "PUT /api/fines/tariff": {
@@ -1541,6 +1584,12 @@
       "handler": "fines.restore_fine",
       "requires": [
         "finances.manage"
+      ]
+    },
+    "GET /api/list-entries": {
+      "handler": "lists.list_all_entries",
+      "requires": [
+        "meetings.edit"
       ]
     },
     "DELETE /api/list-entries/{list_entry_id}": {
@@ -1788,6 +1837,9 @@
       "requires": [
         "meetings.edit",
         "meetings.read"
+      ],
+      "branches": [
+        "finances.manage"
       ]
     },
     "PATCH /api/protocol-todos/{todo_id}": {
@@ -1795,6 +1847,9 @@
       "requires": [
         "meetings.edit",
         "meetings.read"
+      ],
+      "branches": [
+        "finances.manage"
       ]
     },
     "POST /api/protocol-todos/{todo_id}/accept-tracked-change": {
@@ -1967,7 +2022,7 @@
         "reports.personal"
       ],
       "features": [
-        "finance"
+        "finance (lesen)"
       ]
     },
     "GET /api/protocols/{protocol_id}/pdf-coverage": {
@@ -1982,7 +2037,7 @@
         "reports.personal"
       ],
       "features": [
-        "finance"
+        "finance (lesen)"
       ]
     },
     "GET /api/protocols/{protocol_id}/pending-todos": {

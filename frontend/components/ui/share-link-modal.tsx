@@ -5,6 +5,8 @@ import { useTranslations } from "next-intl";
 
 import { CopyField } from "@/components/ui/copy-field";
 import { DateInput } from "@/components/ui/date-input";
+import { HelpPopover } from "@/components/ui/help-popover";
+import { StatusBanner } from "@/components/ui/status-banner";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
@@ -80,6 +82,7 @@ export function ShareLinkModal({ open, onClose, fileIds, albumId, defaultName = 
       {created ? (
         <div className="grid">
           <p className="muted">{t("createModal.createdIntro")}</p>
+          {albumId && <p className="muted">{t("createModal.albumLiveNotice")}</p>}
           <label className="field-stack">
             <span className="field-label">{t("createModal.shareLinkLabel")}</span>
             <CopyField label={t("createModal.shareLinkLabel")} value={`${window.location.origin}${created.url}`} />
@@ -90,6 +93,7 @@ export function ShareLinkModal({ open, onClose, fileIds, albumId, defaultName = 
         </div>
       ) : (
         <ModalSaveForm className="grid" onSubmit={create}>
+          {albumId && <StatusBanner tone="neutral" message={t("createModal.albumLiveNotice")} />}
           <label className="field-stack">
             <span className="field-label">{t("createModal.nameLabel")}</span>
             <input autoFocus required maxLength={120} value={name} onChange={(event) => setName(event.target.value)} />
@@ -100,7 +104,12 @@ export function ShareLinkModal({ open, onClose, fileIds, albumId, defaultName = 
             <span className="field-help">{t("createModal.expiryHelp")}</span>
           </label>
           <fieldset className="share-metadata-fieldset">
-            <legend className="field-label">{t("createModal.metadataLegend")}</legend>
+            <legend className="field-label">
+              {t("createModal.metadataLegend")}{" "}
+              <HelpPopover topic={t("createModal.metadataLegend")} docs={{ page: "fotos", anchor: "freigabe-links" }}>
+                {t("createModal.linkHelp")}
+              </HelpPopover>
+            </legend>
             {METADATA_OPTIONS.map((option) => (
               <label key={option.key} className="share-metadata-option">
                 <input

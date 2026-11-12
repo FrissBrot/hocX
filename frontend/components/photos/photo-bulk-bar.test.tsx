@@ -113,3 +113,24 @@ describe("PhotoBulkBar toggleBest", () => {
     expect(showToastMock).toHaveBeenCalledWith("Zu Best-of hinzugefügt.", "success");
   });
 });
+
+describe("PhotoBulkBar Aus Album nehmen", () => {
+  beforeEach(() => {
+    browserApiFetchMock.mockReset();
+    browserApiFetchMock.mockResolvedValue([]);
+  });
+
+  it("zeigt die Aktion nur in der Albumansicht und ruft sie auf", () => {
+    const onRemove = vi.fn();
+    const { rerender } = render(
+      <PhotoBulkBar selectedIds={["a"]} tagSuggestions={[]} onClearSelection={vi.fn()} onDone={vi.fn()} />
+    );
+    expect(screen.queryByRole("button", { name: "Aus Album nehmen" })).toBeNull();
+
+    rerender(
+      <PhotoBulkBar selectedIds={["a"]} tagSuggestions={[]} onClearSelection={vi.fn()} onDone={vi.fn()} onRemoveFromAlbum={onRemove} />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Aus Album nehmen" }));
+    expect(onRemove).toHaveBeenCalledOnce();
+  });
+});

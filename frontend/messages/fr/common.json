@@ -226,5 +226,16 @@
     "about": "Aide sur « {topic} »",
     "moreInDocs": "Plus dans le guide",
     "guide": "Guide"
+  },
+  "tagRename": {
+    "title": "Renommer le tag ?",
+    "mergeTitle": "Fusionner les tags ?",
+    "confirm": "Renommer",
+    "mergeConfirm": "Fusionner",
+    "confirmEvents": "«{oldTag}» devient «{newTag}» sur {count, plural, one {# rendez-vous} other {# rendez-vous}}.",
+    "confirmAssignments": "{count, plural, one {# dépôt filtrera} other {# dépôts filtreront}} désormais selon le nouveau tag.",
+    "confirmMerge": "«{newTag}» est déjà utilisé sur {count, plural, one {# rendez-vous} other {# rendez-vous}} : les deux tags seront fusionnés définitivement.",
+    "colorSaveFailed": "La couleur n'a pas pu être enregistrée",
+    "importantSaveFailed": "Le marquage n'a pas pu être enregistré"
   }
 }

@@ -1,5 +1,13 @@
 {
   "apiError": {
+    "agendaBoundOnlyPostpone": "L’argomento è già in un verbale. Usa «Rinvia» per spostarlo.",
+    "agendaItemFrozen": "L’argomento appartiene a un verbale chiuso e non può più essere modificato.",
+    "agendaItemNotFound": "L’argomento non è stato trovato.",
+    "agendaMonthRequired": "Scegli un mese.",
+    "agendaPointMismatch": "Il punto scelto non appartiene a questo modello.",
+    "agendaProtocolClosed": "Il verbale è già chiuso.",
+    "agendaSaveFailed": "Non è stato possibile salvare l’argomento.",
+    "agendaTitleRequired": "Inserisci un titolo.",
     "assetInUse": "Il file è ancora usato da un profilo brand, un modello o un componente.",
     "assetNotFound": "Il file scelto non appartiene a questo mandante o è del tipo sbagliato.",
     "assignmentScope": "Questo tipo di documento non può essere assegnato a un modello di verbale.",
@@ -359,6 +367,10 @@
     "greeting": "Ciao {name}",
     "noLoginHint": "Domande su questo messaggio? Rivolgiti a {tenant}.",
     "security": {
+      "emailChanged": "E-mail di accesso modificata ({at})",
+      "emailChangedByAdmin": "E-mail di accesso modificata dall’amministrazione dell’associazione ({at})",
+      "emailChangedIntro": "L’e-mail di accesso del tuo account presso {tenant} è stata modificata. Questo indirizzo non viene più usato per l’accesso, perciò questo è l’ultimo messaggio inviato qui:",
+      "emailChangedSubject": "{tenant}: la tua e-mail di accesso è stata modificata",
       "hint": "Non sei stato tu? Contatta subito {tenant}.",
       "intro": "Sul tuo account presso {tenant} è stato modificato quanto segue:",
       "mandatory": "Gli avvisi di sicurezza vengono sempre inviati e non si possono disattivare.",
@@ -459,6 +471,7 @@
     "earlierProtocol": "un verbale precedente",
     "open": "Aperta"
   },
+  "fineTransaction": "Multa {type}: {name}",
   "fineType": {
     "absent": "Assenza ingiustificata",
     "late": "In ritardo"

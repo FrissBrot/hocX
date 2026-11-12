@@ -34,7 +34,7 @@ audit = AuditService()
 
 def _sync(db: Session) -> None:
     try:
-        cashflow_service.sync_charges(db)
+        cashflow_service.sync_charges(db, wait=False)
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=500, detail="Forderungen konnten nicht erzeugt werden") from exc

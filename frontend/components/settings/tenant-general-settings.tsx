@@ -8,6 +8,8 @@ import { initials } from "@/components/protocol/collaboration-presence";
 import { domainStatus, TenantDomainRowContent } from "@/components/settings/tenant-domain-row";
 import { useTenantDomains } from "@/components/settings/tenant-domains-manager";
 import { CopyField } from "@/components/ui/copy-field";
+import { HelpPopover } from "@/components/ui/help-popover";
+import { useConfirm } from "@/contexts/confirm-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
 import { PROFILE_IMAGE_ACCEPT, profileImageProblem } from "@/lib/utils/profile-image";
@@ -29,6 +31,7 @@ export function useTenantGeneralForm(initialTenant: TenantSummary) {
   const t = useTranslations("tenantSettings");
   const router = useRouter();
   const showToast = useToast();
+  const confirm = useConfirm();
   const tenantId = initialTenant.id;
 
   const [tenantForm, setTenantForm] = useState<TenantFormState>({
@@ -42,6 +45,15 @@ export function useTenantGeneralForm(initialTenant: TenantSummary) {
 
   async function submitTenant(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (saving) return;
+    // Namensänderung hebt die Bestätigung durch hocX auf - vorher fragen statt erst im Toast (Audit 08)
+    if (initialTenant.identity_verified && tenantForm.name.trim() !== initialTenant.name) {
+      const ok = await confirm({
+        message: t("renameRevokesVerificationConfirm"),
+        confirmLabel: t("renameConfirmLabel"),
+      });
+      if (!ok) return;
+    }
     setSaving(true);
     try {
       const formData = new FormData();
@@ -76,7 +88,7 @@ export function TenantGeneralSettings({ initialTenant }: Props) {
   const t = useTranslations("tenantSettings");
   const tCommon = useTranslations("common");
   const showToast = useToast();
-  const { tenantForm, setTenantForm, submitTenant, primaryDomain } = useTenantGeneralForm(initialTenant);
+  const { tenantForm, setTenantForm, submitTenant, saving, primaryDomain } = useTenantGeneralForm(initialTenant);
   const profileImageInputRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -119,7 +131,12 @@ export function TenantGeneralSettings({ initialTenant }: Props) {
               <input value={tenantForm.name} onChange={(event) => setTenantForm((current) => ({ ...current, name: event.target.value }))} required />
             </label>
             <label className="field-stack">
-              <span className="field-label">{t("publicSlugLabel")}</span>
+              <span className="field-label">
+                {t("publicSlugLabel")}{" "}
+                <HelpPopover topic={t("publicSlugLabel")} docs={{ page: "einstellungen", anchor: "stammdaten" }}>
+                  {t("help.publicSlug")}
+                </HelpPopover>
+              </span>
               <input
                 value={tenantForm.publicSlug}
                 onChange={(event) => setTenantForm((current) => ({ ...current, publicSlug: event.target.value.toLowerCase() }))}
@@ -142,7 +159,7 @@ export function TenantGeneralSettings({ initialTenant }: Props) {
             </div>
           ) : null}
           <div className="table-actions table-actions-start">
-            <button type="submit" className="button-primary">
+            <button type="submit" className="button-primary" disabled={saving}>
               {tCommon("save")}
             </button>
           </div>

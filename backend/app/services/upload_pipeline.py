@@ -21,11 +21,12 @@ from __future__ import annotations
 import logging
 import hashlib
 import io
+import re
 import zipfile
 import zlib
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from uuid import uuid4
 
 import imagehash
@@ -246,6 +247,17 @@ class GalleryZipClip:
     content: bytes
 
 
+_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def safe_entry_name(name: str) -> str:
+    """Reiner Dateiname aus einem ZIP-/Upload-Namen: Windows-ZIPs trennen Ordner mit «\\», die
+    beim späteren ZIP-Download sonst als Pfad gelesen würden (Audit Dateien/Fotos). Steuerzeichen
+    werden entfernt."""
+    cleaned = _CONTROL_CHARS.sub("", (name or "").replace("\\", "/"))
+    return PurePosixPath(cleaned).name
+
+
 def inspect_gallery_zip(path: Path) -> int:
     """Prüft Metadaten ohne Entpacken; liefert eine konservative Speicherreservierung."""
     try:
@@ -257,7 +269,7 @@ def inspect_gallery_zip(path: Path) -> int:
                 raise HTTPException(400, "Passwortgeschützte ZIP-Dateien werden nicht unterstützt")
             expanded = sum(info.file_size for info in entries)
             if expanded > GALLERY_ZIP_MAX_EXPANDED_BYTES:
-                raise HTTPException(413, "ZIP ist entpackt grösser als 20 GiB")
+                raise HTTPException(413, "ZIP ist entpackt grösser als 20 GB")
             return expanded
     except (zipfile.BadZipFile, OSError) as exc:
         raise HTTPException(400, "ZIP-Datei ist beschädigt oder ungültig") from exc
@@ -274,14 +286,16 @@ def iter_gallery_zip_entries(path: Path) -> Iterator[tuple[str, bytes] | Gallery
         entries = [info for info in archive.infolist() if not info.is_dir()]
         clip_for_image = pair_live_clips([info.filename for info in entries])
         paired_clip_indexes = set(clip_for_image.values())
+        skipped_non_images = 0
+        matched_any = False
         for index, info in enumerate(entries):
             if index in paired_clip_indexes:
                 continue
-            name = Path(info.filename).name
+            name = safe_entry_name(info.filename)
             if not name or name.startswith("."):
                 continue
             if info.file_size > GALLERY_DIRECT_IMAGE_MAX_BYTES:
-                yield f"{name}: zu gross (maximal 100 MiB), übersprungen"
+                yield f"{name}: zu gross (maximal 100 MB), übersprungen"
                 continue
             try:
                 with archive.open(info) as source:
@@ -293,7 +307,9 @@ def iter_gallery_zip_entries(path: Path) -> Iterator[tuple[str, bytes] | Gallery
                 yield f"{name}: beschädigter oder nicht unterstützter ZIP-Eintrag, übersprungen"
                 continue
             if _sniff_image_mime(entry_bytes) is None:
+                skipped_non_images += 1
                 continue
+            matched_any = True
             yield (name, entry_bytes)
             clip_index = clip_for_image.get(index)
             if clip_index is None:
@@ -310,6 +326,14 @@ def iter_gallery_zip_entries(path: Path) -> Iterator[tuple[str, bytes] | Gallery
                 continue
             if len(clip_bytes) <= MAX_LIVE_CLIP_BYTES and _sniff_live_clip_mime(clip_bytes) is not None:
                 yield GalleryZipClip(image_name=name, content=clip_bytes)
+        # Nicht-Bilder (PDF, Video …) nicht still verschwinden lassen (Audit Dateien/Fotos) - ein
+        # zusammengefasster Hinweis. Ohne ein einziges Bild meldet _ingest_gallery_zip ohnehin
+        # «ZIP enthält keine Bilddateien».
+        if skipped_non_images and matched_any:
+            if skipped_non_images == 1:
+                yield "1 Datei ohne Bildinhalt übersprungen (kein Bild)"
+            else:
+                yield f"{skipped_non_images} Dateien ohne Bildinhalt übersprungen (kein Bild)"
 
 
 STAGE_CHUNK_BYTES = 4 * 1024 * 1024  # 4 MB
@@ -331,7 +355,7 @@ async def stage_upload_to_disk(file: UploadFile, *, target_dir: Path, max_bytes:
     from starlette.concurrency import run_in_threadpool
 
     if file.size is not None and file.size > max_bytes:
-        raise HTTPException(413, f"{file.filename or 'Datei'}: zu gross (maximal {max_bytes // 1024**2} MiB)")
+        raise HTTPException(413, f"{file.filename or 'Datei'}: zu gross (maximal {max_bytes // 1024**2} MB)")
     target_dir.mkdir(parents=True, exist_ok=True)
     from app.gallery_upload_route import GalleryTemporaryFile
     if isinstance(file.file, GalleryTemporaryFile):
@@ -345,7 +369,7 @@ async def stage_upload_to_disk(file: UploadFile, *, target_dir: Path, max_bytes:
             while chunk := await file.read(STAGE_CHUNK_BYTES):
                 written += len(chunk)
                 if written > max_bytes:
-                    raise HTTPException(413, f"{file.filename or 'Datei'}: zu gross (maximal {max_bytes // 1024**2} MiB)")
+                    raise HTTPException(413, f"{file.filename or 'Datei'}: zu gross (maximal {max_bytes // 1024**2} MB)")
                 if file.size is None:
                     _ensure_free_space(target_dir, len(chunk))
                 await run_in_threadpool(handle.write, chunk)
@@ -630,7 +654,7 @@ def ingest_file(
     if mime is None:
         raise UploadRejected(400, unsupported_format_message, code="unsupported_format")
     if scan_status == "error":
-        raise UploadRejected(422, "Datei konnte nicht auf Schadsoftware geprüft werden (maximal 100 MiB)", code="scan_failed")
+        raise UploadRejected(422, "Datei konnte nicht auf Schadsoftware geprüft werden (maximal 100 MB)", code="scan_failed")
     if scan_status == "infected":
         raise UploadRejected(400, infected_message, code="infected")
 

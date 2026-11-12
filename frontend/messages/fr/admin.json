@@ -255,7 +255,8 @@
         "restart_loop": "Le conteneur {subject} redémarre sans cesse"
       },
       "check": {
-        "unreachable": "{subject} injoignable"
+        "unreachable": "{subject} injoignable",
+        "checkFailed": "La vérification «{subject}» échoue (voir le journal des erreurs)"
       },
       "job": {
         "failing": "La tâche {subject} a échoué",
@@ -625,7 +626,8 @@
       "neverSent": "Rien envoyé pour l'instant",
       "lastError": "Dernière erreur ({date}) : {error}",
       "queue": "En attente : {pending} · Échecs : {failed}"
-    }
+    },
+    "reminderPopover": "Si un problème reste ouvert, le rappel «Toujours : …» est envoyé après ce nombre d'heures. 0 désactive les rappels. Si ntfy n'a pas pu livrer un message, hocX le renvoie pendant 24 heures au maximum."
   },
   "login": {
     "title": "Connexion administrateur",
@@ -1196,7 +1198,9 @@
         "0": "Priorité basse",
         "2": "Priorité haute"
       }
-    }
+    },
+    "planChangeAffectsTenants": "Les modifications des modules s'appliquent immédiatement à toutes les organisations qui ont déjà ce plan.",
+    "planChangeAffectsTenantsHelp": "Un module ajouté est entièrement réservé pour toutes les organisations de ce plan. Un module retiré passe en «lecture seule» (les données restent) ou disparaît (domaines). Les modules réservés individuellement restent inchangés."
   },
   "catalogImport": {
     "title": "Importer la configuration",

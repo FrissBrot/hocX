@@ -47,6 +47,10 @@
         }
       },
       "securityNote": "Gli avvisi di sicurezza (password o secondo fattore modificati) e i link per reimpostare la password vengono sempre inviati."
+    },
+    "docs": {
+      "notifications": "Ulteriori informazioni sulle notifiche e-mail",
+      "security": "Ulteriori informazioni su password e secondo fattore"
     }
   },
   "logoutFailed": "Disconnessione non riuscita. Riprova.",

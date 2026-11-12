@@ -373,7 +373,8 @@
       "liveHint": "Le modifiche valgono subito per tutti i verbali aperti di questo modello. Le multe già registrate mantengono il loro importo.",
       "saved": "Tariffa multe del modello salvata",
       "saveFailed": "Impossibile salvare la tariffa multe",
-      "loadFailed": "Impossibile caricare la tariffa multe"
+      "loadFailed": "Impossibile caricare la tariffa multe",
+      "docsLink": "Maggiori informazioni sulla tariffa delle multe nella guida"
     },
     "invitationVisible": "Nell’invito e nell’ordine del giorno",
     "invitationToggleFailed": "Impossibile salvare l’impostazione."

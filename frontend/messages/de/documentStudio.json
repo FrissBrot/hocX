@@ -731,7 +731,7 @@
     "desc": "Absteigend",
     "description": "Beschreibung",
     "done": "Erledigte",
-    "doneTodos": "Erledigte Todos",
+    "doneTodos": "Erledigte Pendenzen",
     "due": "Fällig",
     "email": "E-Mail",
     "events": "Termine",
@@ -752,7 +752,7 @@
     "month": "Pro Monat",
     "none": "Keine",
     "open": "Offene",
-    "openTodos": "Offene Todos",
+    "openTodos": "Offene Pendenzen",
     "organizers": "Organisation",
     "participant_count": "Teilnehmende",
     "person": "Person",
@@ -766,7 +766,7 @@
     "text": "Nur Text",
     "text_and_todos": "Text und Pendenzen",
     "title": "Titel",
-    "todos": "Todos",
+    "todos": "Pendenzen",
     "year": "Pro Jahr",
     "in_progress": "In Arbeit"
   },
@@ -1330,7 +1330,7 @@
     "highlight_empty": "Leere Werte hervorheben",
     "include_cancelled": "Abgesagte Termine einbeziehen",
     "include_images": "Bilder einbeziehen",
-    "include_session_todos": "Todos anzeigen",
+    "include_session_todos": "Pendenzen anzeigen",
     "label": "Bezeichnung",
     "label_heading": "Spaltenkopf links",
     "last_n": "Nur die letzten Buchungen",
@@ -1830,7 +1830,8 @@
       "split": "Geteilt"
     },
     "zoomIn": "Vergrössern",
-    "zoomOut": "Verkleinern"
+    "zoomOut": "Verkleinern",
+    "modeHelp": "«Einfach»: Aussehen, Inhalt und Seite in wenigen Schritten. «Erweitert»: freie Gestaltung mit Abständen, Spalten, Bedingungen und eigenen Komponenten. Beide Modi bearbeiten dieselbe Vorlage, beim Wechseln geht nichts verloren."
   },
   "appearance": {
     "baseTitle": "Grundstil",

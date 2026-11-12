@@ -86,5 +86,39 @@
     "setUpAt": "Configuré : {date}",
     "lastUsedAt": "Dernière utilisation : {date}",
     "delete": "Supprimer"
+  },
+  "passwordChange": {
+    "title": "Changer le mot de passe",
+    "description": "Vous restez connecté ici ; toutes les autres sessions (p. ex. sur un autre appareil) sont fermées. Vous recevez un avis par e-mail.",
+    "current": "Mot de passe actuel",
+    "new": "Nouveau mot de passe",
+    "newHelp": "Au moins {count} caractères.",
+    "repeat": "Répéter le nouveau mot de passe",
+    "submit": "Changer le mot de passe",
+    "saving": "Enregistrement…",
+    "success": "Mot de passe modifié. Les autres sessions ont été fermées.",
+    "failed": "Le mot de passe n'a pas pu être modifié.",
+    "reasons": {
+      "current": "Saisissez d'abord votre mot de passe actuel.",
+      "tooShort": "Le nouveau mot de passe doit comporter au moins {count} caractères.",
+      "mismatch": "Les deux nouveaux mots de passe ne correspondent pas."
+    }
+  },
+  "apiErrors": {
+    "invalid_credentials": "E-mail ou mot de passe invalide.",
+    "login_email_taken": "Cette adresse e-mail est déjà utilisée pour un accès.",
+    "wrong_current_password": "Le mot de passe actuel n'est pas correct.",
+    "already_has_login": "Cette personne a déjà un accès.",
+    "inactive_person": "Les personnes inactives ne peuvent pas être invitées.",
+    "email_required": "Une invitation nécessite une adresse e-mail enregistrée pour cette personne.",
+    "email_not_configured": "L'envoi d'e-mails n'est pas configuré. Veuillez contacter l'exploitant de la plateforme.",
+    "last_admin": "L'association a besoin d'au moins un compte actif autorisé à gérer les accès et les rôles.",
+    "own_access_management": "Vous ne pouvez pas vous retirer vous-même la gestion des utilisateurs. Un autre administrateur doit le faire.",
+    "role_name_taken": "Un rôle portant ce nom existe déjà.",
+    "too_many_roles": "L'association a déjà le nombre maximal de rôles.",
+    "admin_role_fixed": "Le rôle administrateur est fixe et ne peut pas être modifié.",
+    "system_role_not_deletable": "Les rôles standard ne peuvent pas être supprimés.",
+    "role_in_use": "Le rôle est encore attribué à des comptes. Retirez-le d'abord.",
+    "permission_not_held": "Vous ne pouvez attribuer ou gérer que les autorisations que vous possédez vous-même."
   }
 }

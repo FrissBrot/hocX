@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useLocale } from "next-intl";
 
 import { effectiveEndDate } from "@/components/events/event-utils";
 import { useAllEvents, useAllPages } from "@/components/mobile/mobile-data";
 import { isTodoDone, isTodoOverdue, todayIso } from "@/components/mobile/mobile-utils";
 import { browserApiFetch } from "@/lib/api/client";
-import type { AttendanceFineListItem, FinanceAccount, SubmissionAssignment, TodoListItem } from "@/types/api";
+import { fineTotalsByCurrency, formatFineTotals } from "@/lib/utils/fine-stats";
+import { formatMoney } from "@/lib/utils/format";
+import type { AttendanceFineListItem, FinanceAccount, OpenFinesSummary, SubmissionAssignment, TodoListItem } from "@/types/api";
 
 import type { DashboardPermissions } from "./dashboard-permissions";
 
@@ -34,13 +37,17 @@ function useOptionalFetch<T>(path: string, enabled: boolean): T[] {
 export function useDashboardData({
   todos: initialTodos,
   fines,
+  fineSummary = null,
   permissions,
 }: {
   todos: TodoListItem[];
   fines: AttendanceFineListItem[];
+  /** Summe der offenen Bussen je Währung vom Server (GET /api/fines/open-summary). */
+  fineSummary?: OpenFinesSummary | null;
   permissions: DashboardPermissions;
 }) {
   const today = todayIso();
+  const locale = useLocale();
   const [todos, setTodos] = useState<TodoListItem[]>(initialTodos);
   const [mine] = useAllPages<TodoListItem>("/api/todos/my", null);
   const [events, setEvents] = useAllEvents(null);
@@ -68,9 +75,14 @@ export function useDashboardData({
     () => fines.filter((fine) => fine.status === "pending").sort((a, b) => (b.protocol_date ?? "").localeCompare(a.protocol_date ?? "")),
     [fines]
   );
-  const fineTotal = openFines.reduce((sum, fine) => sum + fine.amount, 0);
-  const fineCurrency = openFines[0]?.currency_label ?? "";
-  const finePeople = new Set(openFines.map((fine) => fine.participant_id ?? fine.participant_name_snapshot)).size;
+  // Summe je Währung über ALLE offenen Bussen: bevorzugt serverseitig (die Liste ist nur eine
+  // Seite), sonst aus der geladenen Liste. Verschiedene Währungen werden nie addiert.
+  const fineTotals = fineSummary
+    ? fineSummary.totals.map((total) => ({ currency: total.currency_label, count: total.count, amount: total.amount }))
+    : fineTotalsByCurrency(openFines.map((fine) => ({ count: 1, amount: fine.amount, currency: fine.currency_label ?? "" })));
+  const fineTotalLabel = formatFineTotals(fineTotals, (amount) => formatMoney(amount, "", locale));
+  const fineCount = fineSummary ? fineSummary.count : openFines.length;
+  const finePeople = fineSummary ? fineSummary.people : new Set(openFines.map((fine) => fine.participant_id ?? fine.participant_name_snapshot)).size;
 
   // Abgaben, deren Frist noch bevorsteht - die naechste zuerst.
   const upcomingDeadlines = useMemo(
@@ -91,8 +103,8 @@ export function useDashboardData({
     overdueCount,
     upcomingEvents,
     openFines,
-    fineTotal,
-    fineCurrency,
+    fineTotalLabel,
+    fineCount,
     finePeople,
     accounts,
     upcomingDeadlines,

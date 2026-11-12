@@ -32,7 +32,8 @@
     "cancel": "Annulla",
     "uploading": "Caricamento…",
     "uploadCount": "{count, plural, one {Carica # file} other {Carica # file}}",
-    "upload": "Carica"
+    "upload": "Carica",
+    "progress": "{sent} di {total} trasferiti"
   },
   "errors": {
     "uploadFailed": "Caricamento non riuscito"

@@ -48,5 +48,14 @@
   "viewByMember": "Per member",
   "viewByTime": "Over time",
   "withParticipants": "With participants",
-  "perPersonOwnHint": "For fines and attendance per person, you only see your own figures."
+  "perPersonOwnHint": "For fines and attendance per person, you only see your own figures.",
+  "fineType": {
+    "absent": "Unexcused",
+    "late": "Late"
+  },
+  "kpiProtocolsSub": "held or closed",
+  "groupsHelp": "Groups are the entries of a master list marked as «Source for group statistics». Events whose tag matches an entry are counted per cycle.",
+  "groupsEmptyNoSource": "No groups yet: under Master data › Master lists, mark a list as «Source for group statistics» and give the events the matching tag.",
+  "groupsEmptyNoEvents": "No events with a tag from the group list yet.",
+  "groupsDocsLink": "Learn more in the help"
 }

@@ -1,12 +1,13 @@
 from sqlalchemy.orm import Session
 
-from app.models import ElementDefinition, ListDefinition, Template, TemplateElement
+from app.models import ElementDefinition, Template, TemplateElement
 from app.repositories.template_element_repository import TemplateElementRepository
 from app.schemas.template import TemplateElementBehaviorUpdate, TemplateElementCreate, TemplateElementRead, TemplateElementUpdate
 from app.services import public_id_service
 from app.services.block_behavior import block_defaults, BEHAVIOR_FIELDS, resolve_block_behavior, resolve_element_wide_behavior
 from app.services.block_config_ids import decode_block_config, encode_block_config
 from app.services.element_definition_service import ElementDefinitionService
+from app.services.list_service import lock_linked_list_definitions
 
 
 class TemplateElementService:
@@ -92,9 +93,11 @@ class TemplateElementService:
         point at a ListDefinition that actually exists and belongs to the same tenant as the
         template - otherwise a foreign or stale id gets stored silently and only surfaces
         much later as a crash when a protocol snapshot tries to resolve it."""
-        for list_id in self._referenced_list_definition_ids(config):
-            list_definition = db.get(ListDefinition, list_id)
-            if list_definition is None or list_definition.tenant_id != tenant_id:
+        referenced = self._referenced_list_definition_ids(config)
+        # Sperrt die Listen bis zum Commit, damit gleichzeitiges Löschen nicht dazwischenkommt (C10)
+        found = lock_linked_list_definitions(db, referenced, tenant_id=tenant_id)
+        for list_id in sorted(referenced):
+            if list_id not in found:
                 raise ValueError(f"Linked list {list_id} not found")
 
     def create_template_element(self, db: Session, template_id: int, payload: TemplateElementCreate):

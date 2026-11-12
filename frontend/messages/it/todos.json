@@ -60,6 +60,7 @@
   "protocolLabel": "Verbale",
   "saveButton": "Salva",
   "saveFailed": "L'attività non può essere salvata",
+  "fineRunningLocked": "Non puoi eliminare la tua multa in corso modificando scadenza, responsabili o tag, annullando o eliminando il compito. Può farlo solo chi gestisce le finanze.",
   "savingEllipsis": "Salvataggio…",
   "scopeAll": "Tutte",
   "scopeMine": "Le mie",
@@ -127,5 +128,6 @@
     "endOfNextMonth": "fine del mese",
     "endOfYear": "San Silvestro"
   },
-  "dueSearchPlaceholder": "Cerca data o appuntamento …"
+  "dueSearchPlaceholder": "Cerca data o appuntamento …",
+  "fineRunningBadge": "Multa in corso"
 }

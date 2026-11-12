@@ -161,9 +161,11 @@ def test_zip_yields_the_clip_right_after_its_image_and_skips_orphan_clips(tmp_pa
 
     items = list(iter_gallery_zip_entries(zip_path))
 
-    assert [type(item) for item in items] == [tuple, GalleryZipClip]
+    # Der verwaiste Clip ist kein Bild: er wird nicht importiert, aber zusammengefasst gemeldet.
+    assert [type(item) for item in items] == [tuple, GalleryZipClip, str]
     assert items[0][0] == "IMG_1.HEIC"
     assert items[1].image_name == "IMG_1.HEIC"
+    assert "kein Bild" in items[2]
 
 
 # --- Speichern ----------------------------------------------------------------------------

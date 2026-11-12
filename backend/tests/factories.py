@@ -102,6 +102,7 @@ def make_list_definition(
     column_one_value_type: str = "text",
     column_two_title: str = "Wert",
     column_two_value_type: str = "text",
+    is_group_source: bool = False,
 ) -> ListDefinition:
     definition = ListDefinition(
         tenant_id=tenant_id,
@@ -110,6 +111,7 @@ def make_list_definition(
         column_one_value_type=column_one_value_type,
         column_two_title=column_two_title,
         column_two_value_type=column_two_value_type,
+        is_group_source=is_group_source,
     )
     db.add(definition)
     db.flush()

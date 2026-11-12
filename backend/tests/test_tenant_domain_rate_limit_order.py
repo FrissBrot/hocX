@@ -12,7 +12,7 @@ def test_foreign_user_gets_403_and_does_not_count_against_quota(db):
     victim = make_tenant(db, "Opfer")
     attacker_tenant = make_tenant(db, "Angreifer")
     attacker = make_current_user(attacker_tenant.id, role="admin")
-    key = f"ratelimit:tenant-domain-mutation:{victim.id}"
+    key = f"ratelimit:tenant-domain-create:{victim.id}"
     redis = get_redis_sync()
     redis.delete(key)
 

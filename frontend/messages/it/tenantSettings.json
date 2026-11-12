@@ -4,7 +4,7 @@
   "masterDataEyebrow": "Anagrafica",
   "changeProfileImage": "Cambia immagine del profilo",
   "tenantNameLabel": "Nome organizzazione",
-  "publicSlugLabel": "Slug pubblico (URL consegna file)",
+  "publicSlugLabel": "Nome breve",
   "publicSlugPlaceholder": "ad es. associazione-esempio",
   "tenantIdLabel": "ID organizzazione",
   "tenantIdHelp": "Necessario ad esempio per condividere un album fotografico con questa organizzazione.",
@@ -26,7 +26,7 @@
   "emptyDomainHintWithFeature": "Fino ad allora l'organizzazione resta raggiungibile all'indirizzo predefinito.",
   "emptyDomainHintWithoutFeature": "I domini personalizzati devono essere aggiunti all'abbonamento (scheda «Abbonamento e utilizzo»). Fino ad allora l'organizzazione resta raggiungibile all'indirizzo predefinito.",
   "domainsEyebrow": "Domini",
-  "domainsDescription": "Domini personalizzati per l'app hocX, la consegna file e la pagina di verifica. hocx.example.com e il dominio predefinito per la consegna file restano comunque sempre raggiungibili.",
+  "domainsDescription": "Domini propri per l'app hocX, la casella di consegna e la pagina di verifica. Gli indirizzi standard di hocX restano sempre raggiungibili.",
   "wizardTitle": "Configura dominio personalizzato",
   "wizardDescription": "Collega un dominio personalizzato per questa organizzazione in tre passaggi.",
   "stepDomain": "Dominio",
@@ -40,7 +40,7 @@
   "verifyFailed": "Verifica non riuscita",
   "removeDomainConfirm": "Eliminare definitivamente il dominio \"{domain}\"? La configurazione DNS dovrà essere riavviata in seguito.",
   "continueLabel": "Continua",
-  "dnsIntro": "Imposta due record per {domain} presso il tuo provider di dominio, poi verifica. hocx.example.com e il dominio predefinito per la consegna file restano comunque sempre raggiungibili.",
+  "dnsIntro": "Imposta due record per {domain} presso il tuo provider del dominio, poi verifica. Gli indirizzi standard di hocX restano sempre raggiungibili.",
   "dnsStep1": "1. Prova di proprietà · Record TXT",
   "dnsStep2": "2. Routing · Record CNAME/A",
   "nameLabel": "Nome",
@@ -82,7 +82,7 @@
   "noModulesBooked": "Nessun modulo prenotato.",
   "pricePerMonth": "+{price}/mese",
   "moduleActive": "Attivo",
-  "saveSuccessVerificationRevoked": "Salvato. Poiché il nome è cambiato, la verifica da parte di hocX è stata revocata (Modelli → Verifica di autenticità).",
+  "saveSuccessVerificationRevoked": "Salvato. Poiché il nome è cambiato, la verifica da parte di hocX è stata revocata (Impostazioni organizzazione → Verifica di autenticità).",
   "purposeVerify": "Pagina di verifica",
   "wizardPurposeVerifyDescription": "Fai verificare i tuoi documenti con il tuo indirizzo, ad es. verify.associazione.ch.",
   "domainPlaceholderVerify": "ad es. verify.associazione.ch",
@@ -255,5 +255,34 @@
       "spezial_text2": "Testo speciale 2",
       "spezial_text3": "Testo speciale 3"
     }
-  }
+  },
+  "replacesDomainHint": "Sostituisce {domain} dopo una verifica riuscita. Fino ad allora {domain} resta attivo senza modifiche.",
+  "recheckDomain": "Verifica di nuovo",
+  "domainsLoadFailed": "Non è stato possibile caricare i domini. I domini già configurati non ne sono interessati.",
+  "retryLoad": "Ricarica",
+  "domainsDescriptionWithDomain": "Domini propri per l'app hocX, la casella di consegna e la pagina di verifica. {appDomain} e l'indirizzo standard della casella di consegna restano sempre raggiungibili.",
+  "dnsIntroShort": "Imposta questi due record per {domain} presso il tuo provider del dominio (dove il dominio è registrato), poi clicca su «Verifica ora».",
+  "replaceNotice": "Per questo scopo è attivo {domain}. Il nuovo dominio lo sostituisce solo quando la sua verifica è riuscita – fino ad allora {domain} continua a funzionare senza modifiche.",
+  "dnsWaitHint": "I nuovi record DNS richiedono spesso alcuni minuti, a volte fino ad alcune ore. Verifica solo quando entrambi i record sono impostati: sono possibili 20 verifiche all'ora. Con «Completa più tardi» puoi tornare in qualsiasi momento.",
+  "docsLink": "Maggiori informazioni nella guida",
+  "help": {
+    "domains": "Un dominio proprio (ad es. app.club.ch) rende hocX, la casella di consegna o la pagina di verifica raggiungibili al vostro indirizzo. Per ogni scopo c'è un dominio attivo; uno nuovo lo sostituisce solo dopo una verifica riuscita.",
+    "dns": "Il record TXT dimostra che il dominio vi appartiene. Il record CNAME inoltra l'indirizzo a hocX. Presso molti provider un dominio principale senza prefisso (club.ch) non può avere un CNAME – usa allora un sottodominio come app.club.ch o un record A verso lo stesso indirizzo IP della destinazione.",
+    "publicSlug": "Nome breve e univoco del vostro club, composto da lettere minuscole, cifre e trattini. Altre organizzazioni vi trovano tramite questo nome, ad es. quando condividono un album fotografico. I link della casella di consegna non ne dipendono e restano validi in caso di modifica.",
+    "modules": "«Attivo» significa pienamente utilizzabile. «Sola lettura» significa che il modulo non fa più parte dell'abbonamento, ma i vostri dati restano conservati e leggibili; le modifiche sono bloccate finché il modulo non viene prenotato di nuovo."
+  },
+  "errors": {
+    "rateLimited": "Troppi tentativi in poco tempo. Attendi circa un'ora e riprova.",
+    "domain_invalid_format": "Questo non è un dominio valido. Esempio: app.club.ch (senza https:// e senza percorso).",
+    "domain_reserved": "Questo dominio appartiene a hocX stesso e non può essere aggiunto.",
+    "domain_domain_taken": "Questo dominio è già attivo per un'altra organizzazione.",
+    "domain_already_active": "Questo dominio è già attivo per questo scopo.",
+    "domain_txt_missing": "Il record TXT {record} con il valore di verifica non è ancora stato trovato. Controlla nome e valore presso il provider o attendi che la modifica si propaghi.",
+    "domain_not_routed": "{domain} non punta ancora a {target}. Controlla il record CNAME o A o attendi che la modifica si propaghi."
+  },
+  "renameRevokesVerificationConfirm": "Il vostro club è verificato da hocX. Se modifichi il nome, questa verifica viene revocata e i nuovi PDF non risulteranno più verificati. Potrai richiederla di nuovo in Impostazioni organizzazione → Verifica di autenticità. Salvare comunque?",
+  "renameConfirmLabel": "Modifica nome",
+  "moduleReadOnly": "Sola lettura",
+  "moduleReadOnlyHint": "Non più nell'abbonamento: i dati restano leggibili, le modifiche sono bloccate.",
+  "changePlanHint": "Per cambiare piano o prenotare moduli, rivolgiti al gestore della tua istanza hocX."
 }

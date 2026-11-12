@@ -145,5 +145,8 @@
         "description": "Gesamtexport des Vereins und Datenauskunft für andere Personen."
       }
     }
-  }
+  },
+  "permissionsHelp": "Eine Rolle bündelt Berechtigungen; ein Konto bekommt alle Berechtigungen seiner Rollen. «MFA» heisst: wer sie hat, meldet sich mit zweitem Faktor an. «Modul nicht gebucht»: wirkt erst mit dem Abo-Modul. Ausgegraut: hast du selbst nicht oder ergibt sich aus einer anderen Berechtigung.",
+  "notOwnPermission": "Gesperrt: diese Berechtigung hast du selbst nicht.",
+  "nameMissing": "Gib der Rolle einen Namen."
 }

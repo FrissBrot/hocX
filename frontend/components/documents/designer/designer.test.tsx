@@ -350,7 +350,7 @@ describe("TemplateDesigner", () => {
     const left = screen.getByRole("complementary", { name: "Bausteine" });
     expect(within(left).getByText("Finanzen")).toBeInTheDocument();
     // Ohne eigenen Titel: Name des Bausteintyps
-    fireEvent.click(await within(left).findByRole("button", { name: "Todo" }));
+    fireEvent.click(await within(left).findByRole("button", { name: "Pendenz" }));
     const panel = screen.getByRole("complementary", { name: "Eigenschaften" });
     expect(within(panel).getByText("Traktandum: Finanzen")).toBeInTheDocument();
     fireEvent.change(within(panel).getByRole("combobox", { name: "Pendenzen" }), { target: { value: "checklist" } });

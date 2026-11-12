@@ -9,7 +9,7 @@ from typing import Annotated, Literal
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from app.models.entities import CycleConfig, Event, GalleryUploadJob, PhotoAlbum, PhotoAlbumItem, PhotoAlbumTenantShare, SubmissionAssignment
-from app.schemas.files import PhotoAlbumCreate, PhotoAlbumItemBestUpdate, PhotoAlbumRead, PhotoAlbumItemsUpdate
+from app.schemas.files import PhotoAlbumCreate, PhotoAlbumItemBestUpdate, PhotoAlbumItemsRemoveResult, PhotoAlbumRead, PhotoAlbumItemsUpdate, PhotoAlbumUpdate
 from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
@@ -61,10 +61,11 @@ from app.services import apple_media
 from app.services.apple_media import pair_live_clips, MAX_LIVE_CLIP_BYTES
 from app.core.storage import MAIN, ObjectNotFound, _content_disposition, get_object_store, object_response, read_bytes_or_404, write_object_to_zip
 from app.services.photo_metadata_privacy import MetadataPolicy, sanitize_image
-from app.services.file_service import MAX_UPLOAD_BYTES, FileService
+from app.services.file_service import BLOCKED_SCAN_STATUSES, MAX_UPLOAD_BYTES, FileService
+from app.services.file_eraser import FileEraser
 from app.services import submission_upload_rules
 from app.services.submission_service import SubmissionService, _element_ref, _parse_element_ref
-from app.services.upload_pipeline import GALLERY_DIRECT_IMAGE_MAX_BYTES, GALLERY_ZIP_MAX_BYTES, stage_upload_to_disk, inspect_gallery_zip, _enforce_tenant_storage_quota
+from app.services.upload_pipeline import GALLERY_DIRECT_IMAGE_MAX_BYTES, GALLERY_ZIP_MAX_BYTES, stage_upload_to_disk, inspect_gallery_zip, _enforce_tenant_storage_quota, safe_entry_name
 from app.repositories.file_repository import StoredFileRepository
 from app.services.upload_lock import acquire_upload_lock
 from starlette.concurrency import run_in_threadpool
@@ -1178,13 +1179,13 @@ def download_stored_file(
     try:
         with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_STORED) as archive:
             if export_content is not None:
-                archive.writestr(Path(stored_file.original_name).name, export_content)
+                archive.writestr((safe_entry_name(stored_file.original_name) or "foto"), export_content)
             else:
-                write_object_to_zip(archive, MAIN, stored_file.storage_path, Path(stored_file.original_name).name)
+                write_object_to_zip(archive, MAIN, stored_file.storage_path, (safe_entry_name(stored_file.original_name) or "foto"))
             if cleanup_video is not None:
-                archive.write(cleanup_video, arcname=Path(live_video.original_name).name)
+                archive.write(cleanup_video, arcname=(safe_entry_name(live_video.original_name) or "video"))
             else:
-                write_object_to_zip(archive, MAIN, live_video.storage_path, Path(live_video.original_name).name)
+                write_object_to_zip(archive, MAIN, live_video.storage_path, (safe_entry_name(live_video.original_name) or "video"))
     except ObjectNotFound as exc:
         zip_path.unlink(missing_ok=True)
         raise HTTPException(status_code=404, detail="File missing on filesystem") from exc
@@ -1447,6 +1448,10 @@ def respond_album_share(
     Pfad noetig, da nur der eingeladene Mandant selbst (user.current_tenant_id) je antworten
     darf, siehe photo_album_share_service.respond."""
     require_permission(user, P.FILES_MANAGE)
+    if payload.accept:
+        # Annehmen öffnet mandantenübergreifenden Zugriff - nur mit Feature «Foto-Teilen» (Audit
+        # Dateien/Fotos). Ablehnen bleibt immer möglich, damit keine Einladung hängen bleibt.
+        require_feature(user, F.PHOTO_SHARING, write=True)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     try:
@@ -1489,14 +1494,76 @@ def create_album(payload: PhotoAlbumCreate, db: Session = Depends(get_db), user:
     require_permission(user, P.FILES_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
-    name = payload.name.strip()
-    if not name or len(name) > 120:
-        raise HTTPException(status_code=422, detail="Albumname muss zwischen 1 und 120 Zeichen lang sein")
+    try:
+        name = photo_album_service.normalize_album_name(payload.name)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
     album = PhotoAlbum(tenant_id=user.current_tenant_id, name=name, kind="manual")
     db.add(album)
     db.commit()
     db.refresh(album)
     return PhotoAlbumRead(id=album.id, name=album.name, kind=album.kind)
+
+
+def _get_own_album(db: Session, user: CurrentUser, album_id: uuid.UUID) -> PhotoAlbum:
+    """Album des eigenen Mandanten (Besitzer) - Partner eines geteilten Albums dürfen es weder
+    umbenennen noch löschen (E-7). Fremde und unbekannte IDs: gleiche 404 (kein Existenz-Orakel)."""
+    require_permission(user, P.FILES_MANAGE)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    album = db.scalar(select(PhotoAlbum).where(PhotoAlbum.id == album_id, PhotoAlbum.tenant_id == user.current_tenant_id))
+    if album is None:
+        raise HTTPException(status_code=404, detail="Album nicht gefunden")
+    return album
+
+
+@router.patch("/files/albums/{album_id}", response_model=PhotoAlbumRead)
+def rename_album(
+    album_id: uuid.UUID, payload: PhotoAlbumUpdate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)
+):
+    """Album umbenennen - gleiche Rechte wie beim Anlegen (files.manage), nur der Besitzer-Mandant."""
+    album = _get_own_album(db, user, album_id)
+    try:
+        photo_album_service.rename_album(db, album, payload.name)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    db.commit()
+    db.refresh(album)
+    return PhotoAlbumRead(id=album.id, name=album.name, kind=album.kind)
+
+
+@router.delete("/files/albums/{album_id}", status_code=204)
+def delete_album(album_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Album löschen, die Fotos bleiben erhalten (nur die Album-Einträge, Freigaben und Album-Links
+    verschwinden). Nur der Besitzer-Mandant und nur manuell angelegte Alben."""
+    album = _get_own_album(db, user, album_id)
+    try:
+        photo_album_service.delete_album(db, album)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    db.commit()
+
+
+@router.post("/files/albums/{album_id}/items/remove", response_model=PhotoAlbumItemsRemoveResult)
+def remove_album_items(
+    album_id: uuid.UUID, payload: PhotoAlbumItemsUpdate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)
+):
+    """Fotos aus einem Album nehmen, ohne sie zu löschen. Der Besitzer darf jedes Foto entfernen,
+    ein Partner eines geteilten Albums nur Fotos seines eigenen Vereins (E-7)."""
+    album = _get_album(db, user, album_id)
+    ids = list(dict.fromkeys(payload.file_ids))
+    if not ids or len(ids) > 200:
+        raise HTTPException(status_code=422, detail="Bitte 1 bis 200 Fotos auswählen")
+    in_album = photo_album_service.album_item_ids(db, album, ids)
+    if album.tenant_id != user.current_tenant_id:
+        own = {item.id for item in service.list_tenant_files(db, user.current_tenant_id, file_ids=ids, limit=len(ids))}
+        in_album &= own
+    if in_album != set(ids):
+        raise HTTPException(status_code=404, detail="Foto nicht gefunden")
+    removed = photo_album_service.remove_items(db, album, ids)
+    db.commit()
+    photo_album_service.recompute_best_of(db, service, album)
+    return PhotoAlbumItemsRemoveResult(removed=removed)
 
 
 @router.post("/files/albums/{album_id}/items", status_code=204)
@@ -1508,6 +1575,11 @@ def add_album_items(album_id: uuid.UUID, payload: PhotoAlbumItemsUpdate, db: Ses
     photos = service.list_tenant_files(db, user.current_tenant_id, only_images=True, file_ids=list(ids), limit=200)
     if {photo.id for photo in photos} != ids:
         raise HTTPException(status_code=404, detail="Foto nicht gefunden")
+    if any(photo.scan_status in BLOCKED_SCAN_STATUSES for photo in photos):
+        # Gesperrte Fotos (Scan-Fehler) sieht im geteilten Album und im Link ohnehin niemand -
+        # gar nicht erst aufnehmen (Audit Dateien/Fotos). "pending" bleibt erlaubt: frisch
+        # hochgeladene Fotos werden direkt nach dem Upload ins Album gelegt.
+        raise HTTPException(status_code=422, detail="Gesperrte Fotos (Virenprüfung) können nicht in ein Album aufgenommen werden.")
     # Manuell hinzugefuegt = bewusst geteilt (das Frontend warnt vorher bei geteilten Alben).
     photo_album_service.add_items(db, album, list(ids), release=True)
     db.commit()
@@ -1565,18 +1637,14 @@ def bulk_delete_files(payload: FileBulkDelete, db: Session = Depends(get_db), us
     ids = list(dict.fromkeys(payload.file_ids))
     if not ids or len(ids) > 200:
         raise HTTPException(status_code=422, detail="Bitte 1 bis 200 Dateien auswählen")
-    # Nur die eigenen Dateien duerfen aus einem (ggf. mandantenuebergreifend geteilten) Album
-    # entfernt werden - drop_items_for_files ist selbst nicht mandantengescoped (photo_album_item
-    # hat keine FK), ein fremder file_id in payload.file_ids darf also nicht einfach aus dem
-    # Album verschwinden, nur weil delete_gallery_images ihn ohnehin nicht loeschen wird.
-    owned_ids = {item.id for item in service.list_tenant_files(db, user.current_tenant_id, file_ids=ids, limit=len(ids))}
-    touched_album_ids = photo_album_service.drop_items_for_files(db, [file_id for file_id in ids if file_id in owned_ids])
-    deleted, errors = service.delete_gallery_images(db, user.current_tenant_id, ids)
+    # Erst berechtigen, dann atomar handeln (Audit Dateien/Fotos): delete_gallery_images prüft
+    # Mandant und Quelle je Datei, und nur tatsächlich gelöschte Dateien verlieren ihre Album- und
+    # Linkeinträge (FileEraser.erase). Abgelehnte Fotos bleiben in allen Alben. Ein einziger Commit;
+    # Vorschaubilder und «beste Bilder» erst danach.
+    eraser = FileEraser(service)
+    deleted, errors = service.delete_gallery_images(db, user.current_tenant_id, ids, eraser=eraser)
     db.commit()
-    for album_id in touched_album_ids:
-        album = db.get(PhotoAlbum, album_id)
-        if album is not None:
-            photo_album_service.recompute_best_of(db, service, album)
+    eraser.after_commit(db)
     return FileBulkDeleteResult(deleted_ids=deleted, errors=errors)
 
 

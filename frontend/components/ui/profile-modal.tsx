@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { MfaProfilePanel } from "@/components/security/mfa-profile-panel";
+import { PasswordChangePanel } from "@/components/security/password-change-panel";
+import { DocsLink } from "@/components/ui/help-popover";
 import { NotificationPreferencesPanel } from "@/components/notifications/notification-preferences-panel";
 import { Modal } from "@/components/ui/modal";
 import { ProtectedExportForm } from "@/components/ui/protected-export-modal";
@@ -117,12 +119,23 @@ export function ProfileModal({
           {
             id: "benachrichtigungen",
             label: t("tabs.notifications"),
-            content: <NotificationPreferencesPanel open={open && activeTab === "benachrichtigungen"} />,
+            content: (
+              <div className="grid">
+                <NotificationPreferencesPanel open={open && activeTab === "benachrichtigungen"} />
+                <DocsLink page="benachrichtigungen">{t("docs.notifications")}</DocsLink>
+              </div>
+            ),
           },
           {
             id: "sicherheit",
             label: t("tabs.security"),
-            content: <MfaProfilePanel open={open && activeTab === "sicherheit"} />,
+            content: (
+              <div className="grid">
+                <PasswordChangePanel />
+                <MfaProfilePanel open={open && activeTab === "sicherheit"} />
+                <DocsLink page="konto" anchor="mfa">{t("docs.security")}</DocsLink>
+              </div>
+            ),
           },
           {
             id: "daten",

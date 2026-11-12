@@ -8,6 +8,8 @@ const browserApiFetchMock = vi.fn();
 vi.mock("@/lib/api/client", () => ({
   browserApiBaseUrl: "",
   browserApiFetch: (...args: unknown[]) => browserApiFetchMock(...args),
+  // Der Upload läuft über XHR (Byte-Fortschritt); für die Tests wie ein POST über browserApiFetch.
+  browserApiUpload: (path: string, body: FormData) => browserApiFetchMock(path, { method: "POST", body }),
 }));
 
 import { DocumentUploadModal } from "./document-upload-modal";

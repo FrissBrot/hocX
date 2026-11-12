@@ -75,7 +75,16 @@
     "special3Label": "Special 3",
     "specialText1Label": "Special text 1",
     "specialText2Label": "Special text 2",
-    "specialText3Label": "Special text 3"
+    "specialText3Label": "Special text 3",
+    "readOnlyHint": "View only: you need the «Edit meetings» permission to make changes.",
+    "saveStatus": {
+      "idle": "Changes are saved automatically.",
+      "saving": "Saving…",
+      "saved": "All changes saved",
+      "error": "Not saved – please try again."
+    },
+    "fieldSettingsHint": "The «Special» fields can be renamed or hidden.",
+    "fieldSettingsLink": "Go to settings"
   },
   "detailModal": {
     "fallbackTitle": "Event"
@@ -115,13 +124,14 @@
     "endDate": "End date",
     "location": "Location",
     "locationPlaceholder": "e.g. community hall, sports field",
-    "noCycles": "No cycles available (create cycles under Structure → Cycles)",
+    "noCycles": "No cycles available (create cycles under Configuration → Workflows → Cycles)",
     "participantCount": "Number of participants",
     "people": "People",
     "startDate": "Start date",
     "tag": "Tag",
     "tagPlaceholder": "e.g. meeting, camp, parents' evening",
-    "title": "Title"
+    "title": "Title",
+    "noCyclesAskAdmin": "No cycles yet. Cycles are created by someone with the «Manage templates» permission."
   },
   "importModal": {
     "cancel": "Cancel",
@@ -162,7 +172,9 @@
     "summaryQuery": "{count, plural, one {# event} other {# events}} for “{query}”",
     "summaryTag": "{count, plural, one {# event} other {# events}} tagged “{tag}”",
     "summaryTagQuery": "{count, plural, one {# event} other {# events}} tagged “{tag}” for “{query}”",
-    "today": "Today · {date}"
+    "today": "Today · {date}",
+    "partialLoaded": "Search and filters only cover the {count} loaded events.",
+    "loadAll": "Load all events"
   },
   "loadMore": "Load more ({count} loaded)",
   "loadingMore": "Loading more events…",
@@ -174,7 +186,6 @@
     "createEventButton": "Create event",
     "currentCycleScope": "Current cycle",
     "deleteButtonTitle": "Permanently delete event",
-    "deleteConfirm": "Permanently delete event \"{title}\"? This removes it from all minutes.",
     "newEventButton": "+ New event",
     "noEventsShown": "No events shown.",
     "noMatchingEvents": "No matching events found.",
@@ -194,7 +205,7 @@
   "rowFieldsSection": "Show in row",
   "searchPlaceholder": "Search events",
   "selectedCount": "{count} selected",
-  "showAllPeriods": "Show all cycle periods",
+  "showAllPeriods": "Also show earlier and later cycles",
   "cycleFilter": {
     "title": "Cycle",
     "all": "All cycles"
@@ -225,5 +236,30 @@
     "previewFailed": "Preview failed",
     "saveFailed": "Event could not be saved"
   },
-  "view": "View"
+  "view": "View",
+  "help": {
+    "tag": "A tag classifies the event (e.g. «Meeting», «Camp»). Protocol blocks and submissions filter by it; a filter matches every tag that contains the search text. Renaming changes the tag on all events and in submissions.",
+    "cycles": "By default an event belongs to the cycle its date falls into. A manual assignment is kept even if the date changes and controls in which cycle filters (protocols, submissions, photo albums) the event appears.",
+    "currentCycle": "By default the list only shows events of the current cycle (e.g. the running club year). With this switch, events of earlier and later cycles appear too.",
+    "csvImport": "Start date and title are required. hocX does not check for duplicates: importing a file twice creates the events twice. Imported events are assigned to their cycle by date.",
+    "docsLink": "Guide to events",
+    "calendarDocsLink": "Subscribe to events in your own calendar",
+    "roles": "Assign people to the event's roles. The «Special» fields are free to use; they can be renamed or hidden in the tenant settings."
+  },
+  "deleteDialog": {
+    "title": "Delete event?",
+    "message": "The event will be deleted permanently and removed from all protocols.",
+    "messageWithTitle": "«{title}» will be deleted permanently and removed from all protocols.",
+    "submissions": "Warning: {count, plural, one {# submission} other {# submissions}} with {files, plural, one {# file} other {# files}} for this event will be deleted irrevocably as well.",
+    "submissionsUnknown": "Any submissions for this event will be deleted irrevocably together with their files.",
+    "cancelInstead": "If the event just isn't taking place, mark it as cancelled instead."
+  },
+  "csvErrors": {
+    "startDateMissing": "Row {row}: start date missing",
+    "titleMissing": "Row {row}: title missing",
+    "startDateFormat": "Row {row}: start date «{value}» has an unknown format",
+    "endDateFormat": "Row {row}: end date «{value}» has an unknown format",
+    "endBeforeStart": "Row {row}: end date is before the start date",
+    "participantCountInvalid": "Row {row}: participant count is not a whole number"
+  }
 }

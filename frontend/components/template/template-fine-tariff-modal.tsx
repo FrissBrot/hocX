@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
+import { DocsLink } from "@/components/ui/help-popover";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { useToast } from "@/contexts/toast-context";
@@ -137,6 +138,7 @@ export function TemplateFineTariffModal({ open, templateId, accounts, onClose, o
           </>
         ) : null}
         <StatusBanner tone="neutral" message={t("liveHint")} />
+        <DocsLink page="vorlagen" anchor="bussentarif">{t("docsLink")}</DocsLink>
         <div className="modal-actions">
           <button type="button" className="button-ghost" onClick={onClose}>{tCommon("cancel")}</button>
           <button data-modal-save type="submit" className="button-primary" disabled={!loaded || !valid || saving}>{tCommon("save")}</button>

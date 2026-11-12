@@ -1830,7 +1830,8 @@
       "split": "Split"
     },
     "zoomIn": "Zoom in",
-    "zoomOut": "Zoom out"
+    "zoomOut": "Zoom out",
+    "modeHelp": "«Simple»: look, content and page in a few steps. «Advanced»: free layout with spacing, columns, conditions and custom components. Both modes edit the same template; nothing is lost when switching."
   },
   "appearance": {
     "baseTitle": "Base style",

@@ -4,7 +4,7 @@
   "masterDataEyebrow": "Données de base",
   "changeProfileImage": "Changer la photo de profil",
   "tenantNameLabel": "Nom de l'organisation",
-  "publicSlugLabel": "Slug public (URL du dépôt)",
+  "publicSlugLabel": "Nom court",
   "publicSlugPlaceholder": "p. ex. club-exemple",
   "tenantIdLabel": "ID de l'organisation",
   "tenantIdHelp": "Nécessaire par exemple pour partager un album photo avec cette organisation.",
@@ -26,7 +26,7 @@
   "emptyDomainHintWithFeature": "En attendant, l'organisation reste accessible à l'adresse par défaut.",
   "emptyDomainHintWithoutFeature": "Les domaines personnalisés doivent être ajoutés à l'abonnement (onglet « Abonnement et utilisation »). En attendant, l'organisation reste accessible à l'adresse par défaut.",
   "domainsEyebrow": "Domaines",
-  "domainsDescription": "Domaines personnalisés pour l'application hocX, le dépôt de fichiers et la page de vérification. hocx.example.com et le domaine de dépôt par défaut restent également toujours accessibles.",
+  "domainsDescription": "Domaines propres pour l'application hocX, la boîte de dépôt et la page de vérification. Les adresses standard de hocX restent toujours accessibles en plus.",
   "wizardTitle": "Configurer un domaine personnalisé",
   "wizardDescription": "Connectez un domaine personnalisé pour cette organisation en trois étapes.",
   "stepDomain": "Domaine",
@@ -40,7 +40,7 @@
   "verifyFailed": "Échec de la vérification",
   "removeDomainConfirm": "Supprimer définitivement le domaine « {domain} » ? La configuration DNS devra être recommencée ensuite.",
   "continueLabel": "Continuer",
-  "dnsIntro": "Définissez deux enregistrements pour {domain} chez votre fournisseur de domaine, puis vérifiez. hocx.example.com et le domaine de dépôt par défaut restent également toujours accessibles.",
+  "dnsIntro": "Ajoute deux enregistrements pour {domain} chez ton fournisseur de domaine, puis vérifie. Les adresses standard de hocX restent toujours accessibles en plus.",
   "dnsStep1": "1. Preuve de propriété · Enregistrement TXT",
   "dnsStep2": "2. Routage · Enregistrement CNAME/A",
   "nameLabel": "Nom",
@@ -82,7 +82,7 @@
   "noModulesBooked": "Aucun module réservé.",
   "pricePerMonth": "+{price}/mois",
   "moduleActive": "Actif",
-  "saveSuccessVerificationRevoked": "Enregistré. Le nom ayant changé, la vérification par hocX a été révoquée (Modèles → Vérification d’authenticité).",
+  "saveSuccessVerificationRevoked": "Enregistré. Comme le nom a changé, la vérification par hocX a été retirée (Paramètres de l'organisation → Vérification d’authenticité).",
   "purposeVerify": "Page de vérification",
   "wizardPurposeVerifyDescription": "Faire vérifier vos documents sous votre propre adresse, p. ex. verify.club.ch.",
   "domainPlaceholderVerify": "p. ex. verify.club.ch",
@@ -255,5 +255,34 @@
       "spezial_text2": "Texte spécial 2",
       "spezial_text3": "Texte spécial 3"
     }
-  }
+  },
+  "replacesDomainHint": "Remplace {domain} dès que la vérification a réussi. D'ici là, {domain} reste actif sans changement.",
+  "recheckDomain": "Vérifier à nouveau",
+  "domainsLoadFailed": "Les domaines n'ont pas pu être chargés. Les domaines déjà configurés ne sont pas concernés.",
+  "retryLoad": "Recharger",
+  "domainsDescriptionWithDomain": "Domaines propres pour l'application hocX, la boîte de dépôt et la page de vérification. {appDomain} et l'adresse standard de la boîte de dépôt restent toujours accessibles en plus.",
+  "dnsIntroShort": "Ajoute ces deux enregistrements pour {domain} chez ton fournisseur de domaine (là où le domaine est enregistré), puis clique sur «Vérifier maintenant».",
+  "replaceNotice": "{domain} est actif pour cet usage. Le nouveau domaine ne le remplace qu'une fois sa vérification réussie – d'ici là, {domain} continue de fonctionner sans changement.",
+  "dnsWaitHint": "Les nouveaux enregistrements DNS prennent souvent quelques minutes, parfois jusqu'à quelques heures. Ne vérifie qu'une fois les deux enregistrements en place : 20 vérifications par heure sont possibles. Avec «Terminer plus tard», tu peux revenir à tout moment.",
+  "docsLink": "En savoir plus dans l'aide",
+  "help": {
+    "domains": "Un domaine propre (p. ex. app.club.ch) rend hocX, la boîte de dépôt ou la page de vérification accessibles sous votre adresse. Il y a un domaine actif par usage ; un nouveau ne le remplace qu'après une vérification réussie.",
+    "dns": "L'enregistrement TXT prouve que le domaine vous appartient. L'enregistrement CNAME redirige l'adresse vers hocX. Chez beaucoup de fournisseurs, un domaine racine sans préfixe (club.ch) ne peut pas avoir de CNAME – utilise alors un sous-domaine comme app.club.ch ou un enregistrement A vers la même adresse IP que la cible.",
+    "publicSlug": "Nom court et unique de votre club, en minuscules, chiffres et tirets. D'autres organisations vous trouvent grâce à lui, p. ex. lors du partage d'un album photo. Les liens de la boîte de dépôt n'en dépendent pas et restent valables en cas de modification.",
+    "modules": "«Actif» signifie pleinement utilisable. «Lecture seule» signifie que le module ne fait plus partie de l'abonnement, mais vos données sont conservées et lisibles ; les modifications sont bloquées jusqu'à ce que le module soit à nouveau réservé."
+  },
+  "errors": {
+    "rateLimited": "Trop de tentatives en peu de temps. Merci d'attendre environ une heure avant de réessayer.",
+    "domain_invalid_format": "Ce n'est pas un domaine valide. Exemple : app.club.ch (sans https:// ni chemin).",
+    "domain_reserved": "Ce domaine appartient à hocX lui-même et ne peut pas être ajouté.",
+    "domain_domain_taken": "Ce domaine est déjà actif pour une autre organisation.",
+    "domain_already_active": "Ce domaine est déjà actif pour cet usage.",
+    "domain_txt_missing": "L'enregistrement TXT {record} avec la valeur de vérification n'a pas encore été trouvé. Vérifie le nom et la valeur chez ton fournisseur ou attends que la modification soit propagée.",
+    "domain_not_routed": "{domain} ne pointe pas encore vers {target}. Vérifie l'enregistrement CNAME ou A ou attends que la modification soit propagée."
+  },
+  "renameRevokesVerificationConfirm": "Votre club est vérifié par hocX. Si tu modifies le nom, cette vérification est retirée et les nouveaux PDF ne seront plus indiqués comme vérifiés. Tu pourras la redemander sous Paramètres de l'organisation → Vérification d’authenticité. Enregistrer quand même ?",
+  "renameConfirmLabel": "Modifier le nom",
+  "moduleReadOnly": "Lecture seule",
+  "moduleReadOnlyHint": "Plus inclus dans l'abonnement : les données restent lisibles, les modifications sont bloquées.",
+  "changePlanHint": "Pour changer de plan ou réserver des modules, contacte l'exploitant de ton instance hocX."
 }

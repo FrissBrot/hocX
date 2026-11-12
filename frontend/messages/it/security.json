@@ -86,5 +86,39 @@
     "setUpAt": "Configurato: {date}",
     "lastUsedAt": "Ultimo utilizzo: {date}",
     "delete": "Elimina"
+  },
+  "passwordChange": {
+    "title": "Cambia password",
+    "description": "Rimani connesso qui; tutte le altre sessioni (ad es. su un altro dispositivo) vengono chiuse. Riceverai un avviso via e-mail.",
+    "current": "Password attuale",
+    "new": "Nuova password",
+    "newHelp": "Almeno {count} caratteri.",
+    "repeat": "Ripeti la nuova password",
+    "submit": "Cambia password",
+    "saving": "Salvataggio…",
+    "success": "Password cambiata. Le altre sessioni sono state chiuse.",
+    "failed": "Impossibile cambiare la password.",
+    "reasons": {
+      "current": "Inserisci prima la password attuale.",
+      "tooShort": "La nuova password deve avere almeno {count} caratteri.",
+      "mismatch": "Le due nuove password non coincidono."
+    }
+  },
+  "apiErrors": {
+    "invalid_credentials": "E-mail o password non validi.",
+    "login_email_taken": "Questo indirizzo e-mail è già usato per un accesso.",
+    "wrong_current_password": "La password attuale non è corretta.",
+    "already_has_login": "Questa persona ha già un accesso.",
+    "inactive_person": "Le persone inattive non possono essere invitate.",
+    "email_required": "Per un invito la persona deve avere un indirizzo e-mail salvato.",
+    "email_not_configured": "L'invio di e-mail non è configurato. Rivolgiti al gestore della piattaforma.",
+    "last_admin": "L'associazione ha bisogno di almeno un account attivo che possa gestire accessi e ruoli.",
+    "own_access_management": "Non puoi toglierti da solo la gestione utenti. Deve farlo un altro amministratore.",
+    "role_name_taken": "Esiste già un ruolo con questo nome.",
+    "too_many_roles": "L'associazione ha già il numero massimo di ruoli.",
+    "admin_role_fixed": "Il ruolo amministratore è fisso e non può essere modificato.",
+    "system_role_not_deletable": "I ruoli standard non possono essere eliminati.",
+    "role_in_use": "Il ruolo è ancora assegnato ad account. Rimuovilo prima da lì.",
+    "permission_not_held": "Puoi assegnare o gestire solo le autorizzazioni che possiedi tu stesso."
   }
 }

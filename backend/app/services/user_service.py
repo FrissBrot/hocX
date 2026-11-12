@@ -197,7 +197,10 @@ class UserService:
 
     def _update_user_core(self, db: Session, user: AppUser, payload: UserUpdate, actor: CurrentUser | None):
         was_login_enabled = bool(user.login_enabled)
+        old_email = user.email
         values = payload.model_dump(exclude_unset=True, exclude={"password", "role_ids", "system_role"})
+        if values.get("notify_without_login", False) is None:
+            values.pop("notify_without_login")
         if "email" in values:
             values["email"] = values["email"].strip().lower() if values["email"] and values["email"].strip() else None
         if actor is not None and user.id != actor.user_id:
@@ -249,6 +252,9 @@ class UserService:
         if payload.password and was_login_enabled:
             # Neues Passwort durch die Verwaltung: Hinweis an die Person (nicht beim erstmaligen Login)
             account_notifications.notify_security(db, user, "security.password_changed", by_admin=actor is None or actor.user_id != user.id)
+        if was_login_enabled and "email" in values:
+            # Login-E-Mail geändert: Hinweis an die bisherige Adresse (Audit Bereich 05)
+            account_notifications.notify_email_changed(db, user, old_email, by_admin=actor is None or actor.user_id != user.id)
         db.commit()
         return self._read_model(db, user)
 
@@ -261,7 +267,7 @@ class UserService:
         with tenant_scope_suspended(db):  # rls-ok: plattformweite Eindeutigkeit, liefert nur Ja/Nein
             taken = db.scalar(statement) is not None
         if taken:
-            raise HTTPException(status_code=409, detail="Diese E-Mail-Adresse wird bereits für einen Login verwendet")
+            raise HTTPException(status_code=409, detail={"code": "login_email_taken", "message": "Diese E-Mail-Adresse wird bereits für einen Login verwendet"})
 
     def delete_user(self, db: Session, user_id: int, actor: CurrentUser) -> bool:
         require_permission(actor, P.ACCESS_MANAGE)
@@ -310,7 +316,7 @@ class UserService:
         check_account_lockout(lockout_key, limit=_PASSWORD_CHANGE_ATTEMPT_LIMIT)
         if not user.password_hash or not verify_password(payload.current_password, user.password_hash):
             record_failed_attempt(lockout_key, period_seconds=_PASSWORD_CHANGE_WINDOW_SECONDS)
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Aktuelles Passwort ist nicht korrekt")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "wrong_current_password", "message": "Aktuelles Passwort ist nicht korrekt"})
 
         self.repository.update(
             db,

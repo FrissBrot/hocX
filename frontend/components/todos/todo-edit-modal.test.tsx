@@ -7,6 +7,7 @@ const toast = vi.hoisted(() => vi.fn());
 // Notizen/Dateien (GET details) und die Dateisuche laufen über sideApi, damit die Zählungen
 // der Todo-Anfragen in den bestehenden Tests unverändert bleiben.
 vi.mock("@/lib/api/client", () => ({
+  ApiError: class ApiError extends Error { constructor(message: string, public kind?: string, public status?: number, public detail?: unknown) { super(message); } },
   browserApiFetch: (url: string, init?: { method?: string }) =>
     (url.endsWith('/details') && !init?.method) || url.startsWith('/api/files') ? sideApi(url, init) : api(url, init),
 }));
@@ -45,8 +46,28 @@ it('saves the draft in one request', async () => {
   expect(api).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
   await waitFor(() => expect(saved).toHaveBeenCalledOnce());
-  expect(JSON.parse(api.mock.calls[0][1].body)).toMatchObject({ task: 'Neue Aufgabe', todo_status_id: 2, tags: ['Finanzen'] });
+  expect(JSON.parse(api.mock.calls[0][1].body)).toMatchObject({ task: 'Neue Aufgabe', todo_status_id: 2 });
   expect(api).toHaveBeenCalledOnce();
+});
+it('does not resend unchanged status, tags or assignees (keeps the completion date)', async () => {
+  render(<TodoEditModal todo={{ ...todo, todo_status_id: 3, todo_status_code: 'done' }} canEdit participants={[]} tagSuggestions={[]} onSaved={saved} onClose={closed} onDeleted={vi.fn()} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+  await waitFor(() => expect(saved).toHaveBeenCalledOnce());
+  expect(JSON.parse(api.mock.calls[0][1].body)).toEqual({ task: 'Bankvollmacht einreichen' });
+});
+it('escape discards the draft instead of saving', () => {
+  mount();
+  fireEvent.change(screen.getByLabelText('Aufgabe'), { target: { value: 'Neue Aufgabe' } });
+  fireEvent.keyDown(window, { key: 'Escape' });
+  expect(closed).toHaveBeenCalledOnce();
+  expect(api).not.toHaveBeenCalled();
+});
+it('explains a refused change of the own running fine', async () => {
+  const { ApiError } = await import("@/lib/api/client");
+  api.mockRejectedValue(new ApiError('x', 'conflict', 409, { code: 'todo_fine_running', message: 'x' }));
+  mount();
+  fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+  await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.stringContaining('Busse'), 'error'));
 });
 it('keeps the dialog open if saving fails', async () => {
   api.mockRejectedValue(new Error('Fehler'));
@@ -61,7 +82,7 @@ it('prevents editing with read-only access', () => {
   expect(screen.getByLabelText('Aufgabe')).toBeDisabled();
   expect(screen.getByRole('button', { name: 'In Arbeit' })).toBeDisabled();
   expect(screen.queryByRole('button', { name: 'Speichern' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Todo löschen' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Pendenz löschen' })).not.toBeInTheDocument();
 });
 it('sets a custom due date for a standalone todo and saves all due fields', async () => {
   api.mockResolvedValueOnce({ events: [], next_event_id: null, tag_filter: null });
@@ -83,19 +104,18 @@ it('shows package origin and preserves all assignees when saving', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Zugewiesen an' }));
   expect(screen.getByRole('option', { name: /Ben/ })).toHaveAttribute('aria-selected', 'true');
   fireEvent.click(screen.getByRole('option', { name: /Ben/ }));
-  fireEvent.click(screen.getByRole('option', { name: /Ben/ }));
   fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
   await waitFor(() => expect(saved).toHaveBeenCalledOnce());
-  expect(JSON.parse(api.mock.calls[0][1].body)).toMatchObject({ assigned_participant_ids: ['anna', 'ben'] });
+  expect(JSON.parse(api.mock.calls[0][1].body)).toMatchObject({ assigned_participant_ids: ['anna'] });
 });
 it('allows selecting and clearing multiple assignees', async () => {
   const people = [{ id: 'anna', display_name: 'Anna' }, { id: 'ben', display_name: 'Ben' }];
   render(<TodoEditModal todo={todo} canEdit participants={people as ParticipantSummary[]} tagSuggestions={[]} onSaved={saved} onClose={closed} onDeleted={vi.fn()} />);
   fireEvent.click(screen.getByRole('button', { name: 'Zugewiesen an' }));
-  for (const name of ['Anna', 'Ben', 'Anna', 'Ben']) fireEvent.click(screen.getByRole('option', { name: new RegExp(name) }));
+  for (const name of ['Anna', 'Ben', 'Anna']) fireEvent.click(screen.getByRole('option', { name: new RegExp(name) }));
   fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
   await waitFor(() => expect(saved).toHaveBeenCalledOnce());
-  expect(JSON.parse(api.mock.calls[0][1].body).assigned_participant_ids).toEqual([]);
+  expect(JSON.parse(api.mock.calls[0][1].body).assigned_participant_ids).toEqual(['ben']);
 });
 it('shows notes and linked files from the details endpoint', async () => {
   sideApi.mockImplementation(() => Promise.resolve({ notes: '**Bank** anrufen', files: [files[0]] }));

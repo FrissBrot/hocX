@@ -5,7 +5,7 @@ from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated
 
-from pydantic import BaseModel, PlainSerializer
+from pydantic import BaseModel, Field, PlainSerializer, StringConstraints
 
 _CENTS = Decimal("0.01")
 
@@ -22,16 +22,27 @@ def _decimal_to_json_float(value: Decimal) -> float:
 FinanceDecimal = Annotated[Decimal, PlainSerializer(_decimal_to_json_float, return_type=float, when_used="json")]
 
 
+# Eingabegrenzen: Beträge passen in Numeric(15,2), Texte haben eine sinnvolle Länge. Sonst
+# endeten zu grosse Werte als 400/500 aus der Datenbank statt als 422 mit Feldhinweis.
+MAX_AMOUNT = Decimal("9999999999999.99")
+AccountName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+CurrencyLabel = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=20)]
+AccountDescription = Annotated[str, StringConstraints(max_length=2000)]
+TransactionDescription = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
+AmountInput = Annotated[Decimal, Field(ge=-MAX_AMOUNT, le=MAX_AMOUNT)]
+
+
 class FinanceAccountCreate(BaseModel):
-    name: str
-    currency_label: str = "CHF"
-    description: str | None = None
+    name: AccountName
+    currency_label: CurrencyLabel = "CHF"
+    description: AccountDescription | None = None
 
 
 class FinanceAccountUpdate(BaseModel):
-    name: str | None = None
-    currency_label: str | None = None
-    description: str | None = None
+    name: AccountName | None = None
+    currency_label: CurrencyLabel | None = None
+    # null bzw. "" leert die Beschreibung (Repository wertet model_fields_set aus)
+    description: AccountDescription | None = None
 
 
 class FinanceAccountRead(BaseModel):
@@ -49,15 +60,15 @@ class FinanceAccountRead(BaseModel):
 
 
 class FinanceTransactionCreate(BaseModel):
-    amount: FinanceDecimal
-    description: str
+    amount: AmountInput
+    description: TransactionDescription
     transaction_date: date
     protocol_id: uuid.UUID | None = None
 
 
 class FinanceTransactionUpdate(BaseModel):
-    amount: FinanceDecimal | None = None
-    description: str | None = None
+    amount: AmountInput | None = None
+    description: TransactionDescription | None = None
     transaction_date: date | None = None
 
 
@@ -76,3 +87,20 @@ class FinanceTransactionRead(BaseModel):
     # Only populated by list_transactions; single-transaction create/update responses
     # leave this None since it isn't cheap to recompute for one row in isolation.
     running_balance: FinanceDecimal | None = None
+    # Gesperrte Buchung (nicht direkt änderbar): "fine_transaction" / "todo_fine_transaction"
+    # (Name der Person in locked_detail) oder "protocol_finalized" (Protokollnummer).
+    locked_reason: str | None = None
+    locked_detail: str | None = None
+
+
+class FinancePeriodSummary(BaseModel):
+    """Jahressicht eines Kontos (Kassenbericht in der App): Einnahmen, Ausgaben (negativ),
+    Saldo am Anfang/Ende des Zeitraums und die Jahre mit Buchungen."""
+    year: int | None
+    income: FinanceDecimal
+    expenses: FinanceDecimal
+    net: FinanceDecimal
+    opening_balance: FinanceDecimal
+    closing_balance: FinanceDecimal
+    transaction_count: int
+    years: list[int]

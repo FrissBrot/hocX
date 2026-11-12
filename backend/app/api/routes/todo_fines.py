@@ -216,6 +216,11 @@ def delete_rule(rule_id: uuid.UUID, db: Session = Depends(get_db), user: Current
     if rule is None:
         raise HTTPException(status_code=404, detail="Rule not found")
     internal_id, name = rule.id, rule.name
+    # Von Hand zugewiesene Regel (fine_mode "rule"): Löschen setzte fine_rule_id still auf NULL
+    # und die Busse fiel weg ("rule_missing"). Solche Regeln nur deaktivieren.
+    in_use = config.rule_usage(db, tenant_id, internal_id)
+    if in_use:
+        raise HTTPException(status_code=409, detail={"code": "rule_in_use", "count": in_use, "message": "Rule is assigned to todos; deactivate it instead"})
     try:
         config.delete_rule(db, rule)
     except SQLAlchemyError as exc:
@@ -231,10 +236,14 @@ FinedPerson = aliased(Participant)
 
 
 def _stored_items(db: Session, tenant_id: int, participant_id: int | None) -> list[TodoFineListItem]:
-    query = _stored_query().where(TodoFine.tenant_id == tenant_id).order_by(TodoFine.created_at.desc()).limit(LIST_LIMIT)
+    """Offene eingefrorene Bussen immer vollständig (die muss jemand bearbeiten); die erledigte
+    Historie (einkassiert, erlassen) nur die neuesten LIST_LIMIT."""
+    base = _stored_query().where(TodoFine.tenant_id == tenant_id)
     if participant_id is not None:
-        query = query.where(TodoFine.participant_id == participant_id)
-    return [_stored_item(row) for row in db.execute(query)]
+        base = base.where(TodoFine.participant_id == participant_id)
+    pending = base.where(TodoFine.status == "pending").order_by(TodoFine.created_at.desc())
+    history = base.where(TodoFine.status != "pending").order_by(TodoFine.created_at.desc()).limit(LIST_LIMIT)
+    return [_stored_item(row) for row in db.execute(pending)] + [_stored_item(row) for row in db.execute(history)]
 
 
 def _stored_item(row) -> TodoFineListItem:
@@ -255,6 +264,14 @@ def _open_items(db: Session, tenant_id: int, participant_id: int | None) -> list
     open_items = fines.open_items(db, tenant_id, participant_id=participant_id)
     people_ids = {line.participant_id for item in open_items for line in item.evaluation.lines}
     people = public_id_service.resolve_public_ids(db, Participant, list(people_ids)) if people_ids else {}
+    account_ids = {item.evaluation.account_id for item in open_items if item.evaluation.account_id}
+    accounts = {
+        row.id: row for row in db.execute(
+            select(FinanceAccount.id, FinanceAccount.public_id, FinanceAccount.currency_label).where(
+                FinanceAccount.id.in_(account_ids), FinanceAccount.tenant_id == tenant_id
+            )
+        )
+    } if account_ids else {}
     rule_refs = lambda evaluation: [TodoFineRuleRef(id=rule.public_id, name=rule.name) for rule in evaluation.matching]  # noqa: E731
     for item in open_items:
         evaluation, facts = item.evaluation, item.facts
@@ -272,6 +289,8 @@ def _open_items(db: Session, tenant_id: int, participant_id: int | None) -> list
                 id=None, status="running", todo_id=facts.public_id, task=facts.task, participant_id=people.get(line.participant_id),
                 participant_name=line.name, tariff_name=line.tariff_name, rule_name=evaluation.rule.name if evaluation.rule else None,
                 due_date=facts.due, days_late=evaluation.days_late, amount=line.amount,
+                account_id=account.public_id if (account := accounts.get(evaluation.account_id)) else None,
+                currency_label=account.currency_label if account else None,
             ))
     return items
 
@@ -404,12 +423,19 @@ def _evaluation(db: Session, user: CurrentUser, todo: ProtocolTodo) -> TodoFineE
         .where(TodoFine.protocol_todo_id == todo.id, TodoFine.status != "deleted")
     ).all()
     people = public_id_service.resolve_public_ids(db, Participant, [line.participant_id for line in evaluation.lines])
-    if stored:
-        lines = [
-            (fine.participant_id, TodoFineLine(participant_id=public_id, participant_name=fine.participant_name_snapshot, tariff_name=fine.tariff_name_snapshot, amount=fine.amount))
-            for fine, public_id in stored
+    # Eingefrorene Bussen bleiben auch nach dem Wiedereröffnen stehen; eine laufende Busse haben nur
+    # Personen ohne gespeicherte Busse (erlassene zählen mit, wie in sync_todo).
+    with_stored = fines.stored_participants(db, [todo.id]).get(todo.id, set())
+    lines = [
+        (fine.participant_id, TodoFineLine(participant_id=public_id, participant_name=fine.participant_name_snapshot, tariff_name=fine.tariff_name_snapshot, amount=fine.amount))
+        for fine, public_id in stored
+    ]
+    if facts.status_code in fines.OPEN_STATUS_CODES:
+        lines += [
+            (line.participant_id, TodoFineLine(participant_id=people.get(line.participant_id), participant_name=line.name, tariff_name=line.tariff_name, amount=line.amount))
+            for line in evaluation.lines if line.participant_id not in with_stored
         ]
-    else:
+    elif not stored:
         lines = [
             (line.participant_id, TodoFineLine(participant_id=people.get(line.participant_id), participant_name=line.name, tariff_name=line.tariff_name, amount=line.amount))
             for line in evaluation.lines
@@ -430,7 +456,8 @@ def _evaluation(db: Session, user: CurrentUser, todo: ProtocolTodo) -> TodoFineE
         matching_rules=[TodoFineRuleRef(id=rule.public_id, name=rule.name) for rule in evaluation.matching],  # type: ignore[arg-type]
         due_date=evaluation.due,
         days_late=evaluation.days_late,
-        running=evaluation.state == "ok" and facts.status_code in fines.OPEN_STATUS_CODES,
+        running=evaluation.state == "ok" and facts.status_code in fines.OPEN_STATUS_CODES
+        and any(line.participant_id not in with_stored for line in evaluation.lines),
         frozen=bool(stored),
         split_mode=evaluation.split_mode,  # type: ignore[arg-type]
         lines=visible,
@@ -451,7 +478,8 @@ def get_todo_fine(todo_id: uuid.UUID, db: Session = Depends(get_db), user: Curre
 @router.put("/protocol-todos/{todo_id}/fine", response_model=TodoFineEvaluation)
 def put_todo_fine(todo_id: uuid.UUID, payload: TodoFineSettings, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     """Busse von Hand festlegen: automatisch, bestimmte Regel, fixer Betrag oder keine Busse.
-    Ein erledigtes Todo bekommt seine offenen Bussen neu gerechnet."""
+    Ein erledigtes Todo bekommt seine offenen eingefrorenen Bussen neu gerechnet - der einzige Weg
+    neben dem Erlassen, eine eingefrorene Busse zu ändern; die verworfenen stehen im Audit-Log."""
     tenant_id = _manage(user)
     todo = _todo_for(db, user, todo_id)
     rule_id = None
@@ -469,13 +497,16 @@ def put_todo_fine(todo_id: uuid.UUID, payload: TodoFineSettings, db: Session = D
     todo.fine_split_mode = payload.fine_split_mode if payload.fine_mode == "fixed" else None
     try:
         db.flush()
-        fines.sync_todo(db, todo)
+        replaced = fines.sync_todo(db, todo, recalculate=True)
         db.commit()
     except SQLAlchemyError as exc:
         raise _bad_request(db, exc, "Fine could not be saved") from exc
     audit.log(
         db, action="todo_fine.todo_settings_changed", actor=user, entity_type="protocol_todo", entity_id=todo.id,
-        details={"fine_mode": payload.fine_mode, "fixed": float(payload.fine_fixed_amount) if payload.fine_fixed_amount is not None else None},
+        details={
+            "fine_mode": payload.fine_mode, "fixed": float(payload.fine_fixed_amount) if payload.fine_fixed_amount is not None else None,
+            "replaced_pending_fines": replaced,
+        },
     )
     db.refresh(todo)
     return _evaluation(db, user, todo)

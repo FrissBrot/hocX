@@ -25,9 +25,11 @@ type Props = {
   onClose: () => void;
   onSaved: (item: AgendaItem) => void;
   onTemplateRemembered?: (templateId: string) => void;
+  /** Gebundene Anliegen: «Vertagen» direkt aus dem Dialog öffnen (Audit 07, U1). */
+  onPostpone?: () => void;
 };
 
-export function AgendaItemModal({ item, templates, preferredTemplateId, canEdit, onClose, onSaved, onTemplateRemembered }: Props) {
+export function AgendaItemModal({ item, templates, preferredTemplateId, canEdit, onClose, onSaved, onTemplateRemembered, onPostpone }: Props) {
   const t = useTranslations("agenda");
   const showToast = useToast();
   const isCreate = !item;
@@ -50,7 +52,9 @@ export function AgendaItemModal({ item, templates, preferredTemplateId, canEdit,
     () => [...(template?.points ?? []), { id: NO_POINT, name: t("pointNone") }],
     [template, t]
   );
-  const effectivePointId = pointId || (template?.points[0]?.id ?? NO_POINT);
+  // Ohne Wahl «ohne Traktandum» statt still des ersten Punkts (Audit 07, U8): sonst landete
+  // ein Anliegen unbemerkt z. B. unter «Begrüssung».
+  const effectivePointId = pointId || NO_POINT;
 
   async function save() {
     if (!title.trim() || !templateId) return;
@@ -103,8 +107,18 @@ export function AgendaItemModal({ item, templates, preferredTemplateId, canEdit,
         }}
       >
         {item && !item.can_edit && <StatusBanner tone="neutral" message={t("frozenHint")} />}
-        {item && item.can_edit && item.is_bound && item.protocol && (
-          <StatusBanner tone="neutral" message={t("boundHint", { number: item.protocol.protocol_number })} />
+        {item && item.can_edit && item.is_bound && (
+          <div className="agenda-bound-hint">
+            <StatusBanner
+              tone="neutral"
+              message={item.protocol ? t("boundHint", { number: item.protocol.protocol_number }) : t("boundHintNoProtocol")}
+            />
+            {editable && onPostpone ? (
+              <button type="button" className="button-secondary" onClick={onPostpone}>
+                {t("actionPostpone")}
+              </button>
+            ) : null}
+          </div>
         )}
         <label className="field-stack">
           <span className="field-label">{t("fieldTitle")}</span>

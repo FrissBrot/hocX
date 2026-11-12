@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import { FineTariffModal } from "@/components/finances/fine-tariff-modal";
 import { TodoFineRules } from "@/components/finances/todo-fine-rules";
 import { TodoFineTariffs } from "@/components/finances/todo-fine-tariffs";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { Tabs } from "@/components/ui/tabs";
+import { formatMoney } from "@/lib/utils/format";
+import { DocsLink } from "@/components/ui/help-popover";
 import type { FinanceAccount, FineTariff, FineTariffGroup, TodoFineRule } from "@/types/api";
 
 type Props = {
@@ -29,6 +31,7 @@ const noop = async () => undefined;
  */
 export function FineSettingsView({ initialTariff, initialTariffs, initialRules, accounts, canManage, todoFinesAccess }: Props) {
   const t = useTranslations("finances");
+  const locale = useLocale();
   const [tariff, setTariff] = useState<FineTariff | null>(initialTariff);
   const [tariffs, setTariffs] = useState(initialTariffs);
   const [rules, setRules] = useState(initialRules);
@@ -42,8 +45,8 @@ export function FineSettingsView({ initialTariff, initialTariffs, initialRules, 
         <div className="fine-settings-summary">
           <dl className="fine-settings-values">
             <div><dt>{t("fineSettings.account")}</dt><dd>{tariff.account_id ? accountName(tariff.account_id) : t("tariffNotSet")}</dd></div>
-            <div><dt>{t("fineSettings.amountLate")}</dt><dd>{tariff.amount_late.toFixed(2)}</dd></div>
-            <div><dt>{t("fineSettings.amountAbsent")}</dt><dd>{tariff.amount_absent.toFixed(2)}</dd></div>
+            <div><dt>{t("fineSettings.amountLate")}</dt><dd>{formatMoney(tariff.amount_late, "", locale)}</dd></div>
+            <div><dt>{t("fineSettings.amountAbsent")}</dt><dd>{formatMoney(tariff.amount_absent, "", locale)}</dd></div>
           </dl>
           {canManage ? <button type="button" className="button-secondary" onClick={() => setTariffOpen(true)}>{t("tariffButton")}</button> : null}
         </div>
@@ -58,7 +61,9 @@ export function FineSettingsView({ initialTariff, initialTariffs, initialRules, 
       <div className="page-header">
         <div>
           <h1 className="page-title">{t("fineSettings.pageTitle")}</h1>
-          <p className="muted">{t("fineSettings.description")}</p>
+          <p className="muted">
+            {t("fineSettings.description")} <DocsLink page="finanzen" anchor="bussentarif">{t("docsLink")}</DocsLink>
+          </p>
         </div>
       </div>
       {todoFinesAccess === "read_only" ? <StatusBanner tone="neutral" message={t("todoFines.readOnlyNotice")} /> : null}

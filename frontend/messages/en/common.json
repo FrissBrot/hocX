@@ -226,5 +226,16 @@
     "about": "Help on “{topic}”",
     "moreInDocs": "More in the guide",
     "guide": "Guide"
+  },
+  "tagRename": {
+    "title": "Rename tag?",
+    "mergeTitle": "Merge tags?",
+    "confirm": "Rename",
+    "mergeConfirm": "Merge",
+    "confirmEvents": "«{oldTag}» becomes «{newTag}» on {count, plural, one {# event} other {# events}}.",
+    "confirmAssignments": "{count, plural, one {# submission will} other {# submissions will}} filter by the new tag from now on.",
+    "confirmMerge": "«{newTag}» is already used on {count, plural, one {# event} other {# events}}: both tags will be merged into one permanently.",
+    "colorSaveFailed": "Colour could not be saved",
+    "importantSaveFailed": "Marking could not be saved"
   }
 }

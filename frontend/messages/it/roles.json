@@ -145,5 +145,8 @@
         "description": "Esportazione completa dell’organizzazione e diritto d’accesso per altre persone."
       }
     }
-  }
+  },
+  "permissionsHelp": "Un ruolo raggruppa autorizzazioni; un account riceve tutte le autorizzazioni dei suoi ruoli. «MFA»: chi la possiede accede con un secondo fattore. «Modulo non prenotato»: vale solo con quel modulo dell'abbonamento. In grigio: non la possiedi tu stesso oppure deriva da un'altra autorizzazione.",
+  "notOwnPermission": "Bloccato: non possiedi tu stesso questa autorizzazione.",
+  "nameMissing": "Dai un nome al ruolo."
 }

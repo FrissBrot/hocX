@@ -18,6 +18,7 @@ from app.core.db import get_db
 from app.core.redis_client import publish_best_effort
 from app.core.permissions import P
 from app.core.security import CurrentUser, get_current_user, require_permission
+from app.documents.strings import normalize_language, text
 from app.models.entities import (
     AgendaItem,
     Protocol,
@@ -50,6 +51,22 @@ access_service = AccessService()
 audit = AuditService()
 
 
+def _msg(user: CurrentUser, key: str) -> str:
+    """API-Meldung in der Sprache des Benutzers (Audit 07, U2: vorher englisch im Toast)."""
+    return text(normalize_language(user.preferred_language), f"apiError.{key}")
+
+
+# Kuratierte ValueError-Meldungen des Service → Übersetzungsschlüssel.
+_VALUE_ERROR_KEYS = {
+    "Title is required": "agendaTitleRequired",
+    "Month is required": "agendaMonthRequired",
+    "Bound agenda items can only be postponed": "agendaBoundOnlyPostpone",
+    "Template element does not belong to the template": "agendaPointMismatch",
+    "Protocol element does not belong to the protocol": "agendaPointMismatch",
+    "Template does not belong to the tenant": "notFound",
+}
+
+
 def _schedule(payload: AgendaSchedule) -> Schedule:
     return Schedule(kind=payload.kind, month=payload.month)
 
@@ -64,26 +81,26 @@ def _readable_template_ids(db: Session, user: CurrentUser) -> set[int] | None:
 def _get_item_or_404(db: Session, item_id: uuid.UUID, user: CurrentUser, *, for_write: bool = False) -> AgendaItem:
     item = public_id_service.get_by_public_id(db, AgendaItem, item_id, tenant_id=user.current_tenant_id)
     if item is None or not access_service.can_read_template(db, user, item.template_id):
-        raise HTTPException(status_code=404, detail="Agenda item not found")
+        raise HTTPException(status_code=404, detail=_msg(user, "agendaItemNotFound"))
     if for_write and service.is_frozen(db, item):
-        raise HTTPException(status_code=409, detail="Agenda item belongs to a closed protocol")
+        raise HTTPException(status_code=409, detail=_msg(user, "agendaItemFrozen"))
     return item
 
 
 def _get_template_or_404(db: Session, template_id: uuid.UUID, user: CurrentUser) -> Template:
     template = public_id_service.get_by_public_id(db, Template, template_id, tenant_id=user.current_tenant_id)
     if template is None or not access_service.can_read_template(db, user, template.id):
-        raise HTTPException(status_code=404, detail="Template not found")
+        raise HTTPException(status_code=404, detail=_msg(user, "notFound"))
     return template
 
 
-def _resolve_point(db: Session, template: Template, point_id: uuid.UUID | None) -> int | None:
+def _resolve_point(db: Session, template: Template, point_id: uuid.UUID | None, user: CurrentUser) -> int | None:
     if point_id is None:
         return None
     # nosemgrep: public-id-lookup-without-tenant -- template_element hat keine tenant_id; Zugehörigkeit zur (mandantengeprüften) Vorlage folgt direkt
     element = public_id_service.get_by_public_id(db, TemplateElement, point_id)
     if element is None or element.template_id != template.id:
-        raise HTTPException(status_code=404, detail="Template element not found")
+        raise HTTPException(status_code=404, detail=_msg(user, "notFound"))
     return element.id
 
 
@@ -181,12 +198,12 @@ def _read_one(db: Session, item: AgendaItem, user: CurrentUser) -> AgendaItemRea
     return _build_reads(db, [item], user)[0]
 
 
-def _write_error(exc: Exception, fallback: str) -> HTTPException:
+def _write_error(exc: Exception, user: CurrentUser) -> HTTPException:
     if isinstance(exc, AgendaItemFrozenError):
-        return HTTPException(status_code=409, detail="Agenda item belongs to a closed protocol")
+        return HTTPException(status_code=409, detail=_msg(user, "agendaItemFrozen"))
     if isinstance(exc, ValueError):
-        return HTTPException(status_code=400, detail=str(exc))
-    return HTTPException(status_code=400, detail=fallback)
+        return HTTPException(status_code=400, detail=_msg(user, _VALUE_ERROR_KEYS.get(str(exc), "agendaSaveFailed")))
+    return HTTPException(status_code=400, detail=_msg(user, "agendaSaveFailed"))
 
 
 # ── Liste und Erstell-Popup ──────────────────────────────────────────────
@@ -239,7 +256,7 @@ def create_agenda_item(
 ):
     require_permission(user, P.MEETINGS_EDIT)
     template = _get_template_or_404(db, payload.template_id, user)
-    point_id = _resolve_point(db, template, payload.template_element_id)
+    point_id = _resolve_point(db, template, payload.template_element_id, user)
     try:
         item = service.create(
             db,
@@ -253,7 +270,7 @@ def create_agenda_item(
         )
     except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
-        raise _write_error(exc, "Agenda item could not be created") from exc
+        raise _write_error(exc, user) from exc
     audit.log(db, action="agenda_item.created", actor=user, entity_type="agenda_item", entity_id=item.id)
     _broadcast(_affected_protocol_ids(db, item), user)
     return _read_one(db, item, user)
@@ -273,7 +290,7 @@ def update_agenda_item(
     point_id = None
     if "template_element_id" in fields:
         point_template = template or db.get(Template, item.template_id)
-        point_id = _resolve_point(db, point_template, payload.template_element_id)
+        point_id = _resolve_point(db, point_template, payload.template_element_id, user)
     if "template_id" in fields and template is None:
         fields.discard("template_id")
     if "schedule" in fields and payload.schedule is None:
@@ -292,7 +309,10 @@ def update_agenda_item(
         )
     except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
-        raise _write_error(exc, "Agenda item could not be updated") from exc
+        raise _write_error(exc, user) from exc
+    # Audit 07, C12: auch Änderungen an Vorlage, Punkt, Termin und Text nachvollziehbar.
+    audit.log(db, action="agenda_item.updated", actor=user, entity_type="agenda_item", entity_id=item.id,
+              details={"fields": sorted(fields), "earliest_date": item.earliest_date.isoformat()})
     _broadcast(before | _affected_protocol_ids(db, item), user)
     return _read_one(db, item, user)
 
@@ -311,7 +331,7 @@ def postpone_agenda_item(
         item = service.postpone(db, item, _schedule(payload.schedule))
     except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
-        raise _write_error(exc, "Agenda item could not be postponed") from exc
+        raise _write_error(exc, user) from exc
     audit.log(db, action="agenda_item.postponed", actor=user, entity_type="agenda_item", entity_id=item.id,
               details={"schedule_kind": item.schedule_kind, "earliest_date": item.earliest_date.isoformat()})
     _broadcast(before | _affected_protocol_ids(db, item), user)
@@ -332,7 +352,7 @@ def delete_agenda_item(
         service.delete(db, item)
     except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
-        raise _write_error(exc, "Agenda item could not be deleted") from exc
+        raise _write_error(exc, user) from exc
     audit.log(db, action="agenda_item.deleted", actor=user, entity_type="agenda_item", entity_id=internal_id)
     _broadcast(before, user)
 
@@ -344,7 +364,7 @@ def _get_protocol_or_404(db: Session, protocol_id: uuid.UUID, user: CurrentUser)
     protocol = public_id_service.get_by_public_id(db, Protocol, protocol_id, tenant_id=user.current_tenant_id)
     # 404 statt 403 auch für nicht zugewiesene Protokolle: kein Existenz-Orakel.
     if protocol is None or not access_service.can_read_protocol(db, user, protocol.id):
-        raise HTTPException(status_code=404, detail="Protocol not found")
+        raise HTTPException(status_code=404, detail=_msg(user, "notFound"))
     return protocol
 
 
@@ -396,16 +416,16 @@ def create_protocol_agenda_item(
         # nosemgrep: public-id-lookup-without-tenant -- protocol_element hat keine tenant_id; Zugehörigkeit zum (mandantengeprüften) Protokoll folgt direkt
         element = public_id_service.get_by_public_id(db, ProtocolElement, payload.protocol_element_id)
         if element is None or element.protocol_id != protocol.id:
-            raise HTTPException(status_code=404, detail="Protocol element not found")
+            raise HTTPException(status_code=404, detail=_msg(user, "notFound"))
     if protocol.status == "abgeschlossen":
-        raise HTTPException(status_code=409, detail="Protocol is already abgeschlossen")
+        raise HTTPException(status_code=409, detail=_msg(user, "agendaProtocolClosed"))
     try:
         item = service.create_in_protocol(
             db, protocol=protocol, protocol_element=element, title=payload.title, body=payload.body, created_by=user.user_id,
         )
     except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
-        raise _write_error(exc, "Agenda item could not be created") from exc
+        raise _write_error(exc, user) from exc
     audit.log(db, action="agenda_item.created", actor=user, entity_type="agenda_item", entity_id=item.id)
     _broadcast({protocol.id}, user)
     return _protocol_reads(db, protocol, [item])[0]

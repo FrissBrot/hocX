@@ -24,5 +24,8 @@
   "editCycleEyebrow": "Zyklus bearbeiten",
   "resetLabel": "Reset {date}",
   "currentLabel": "Aktuell:",
-  "editButton": "Bearbeiten"
+  "editButton": "Bearbeiten",
+  "resetLabelHelpTopic": "Stichtag",
+  "resetReassignHelp": "Jeder Termin gehört standardmässig zum Zyklus, in den sein Datum fällt. Ein neuer Zyklus übernimmt alle bestehenden Termine so; wird der Stichtag geändert, wandern diese Standard-Zuordnungen mit. Manuell gesetzte Zuordnungen bleiben unverändert.",
+  "deleteInUse": "Dieser Zyklus wird noch von einer Vorlage oder einer Abgabe verwendet und kann nicht gelöscht werden."
 }

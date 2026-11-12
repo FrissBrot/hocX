@@ -58,6 +58,25 @@
 
 .finance-account-card:hover { background: color-mix(in srgb, var(--accent) 6%, var(--panel) 94%); }
 
+/* Kontokarte: der Auswahl-Knopf trägt Name/Saldo, Aktionen stehen daneben (kein verschachtelter Button) */
+.finance-account-open {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.finance-account-open:hover,
+.finance-account-open:active { background: transparent; transform: none; box-shadow: none; }
+
 .finance-account-card-active,
 .finance-account-card-active:hover { background: var(--accent-soft) !important; border-color: transparent !important; }
 
@@ -367,4 +386,49 @@
 .finance-sidebar {
     padding: var(--space-4);
   }
+}
+
+/* Aktionen im Kopf des Kontos (Exportieren, Buchung hinzufügen) */
+.finance-main-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+/* Jahressicht: Auswahl und Summen (Anfangssaldo, Einnahmen, Ausgaben, Endsaldo) */
+.finance-period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-4);
+}
+
+.finance-period-year { min-width: 160px; }
+
+.finance-period-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin: 0;
+}
+
+.finance-period-totals dt {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.finance-period-totals dd {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.finance-tx-lock { color: var(--muted); }
+
+@media (max-width: 640px) {
+  .finance-main-header { flex-wrap: wrap; }
+  .finance-main-actions { justify-content: flex-start; }
+  .finance-period-year { min-width: 0; width: 100%; }
 }

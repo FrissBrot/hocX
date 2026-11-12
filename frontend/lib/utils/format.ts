@@ -226,7 +226,8 @@ export function formatDateTileParts(input: string | null | undefined, locale?: s
   };
 }
 
-export function formatFileSize(bytes: number | null | undefined) {
+/** Dateigrösse; mit `locale` das Dezimalzeichen der UI-Sprache (z. B. «1,5 MB» auf Französisch). */
+export function formatFileSize(bytes: number | null | undefined, locale?: string) {
   if (bytes === null || bytes === undefined || Number.isNaN(bytes)) {
     return "";
   }
@@ -240,7 +241,11 @@ export function formatFileSize(bytes: number | null | undefined) {
     value /= 1024;
     unitIndex += 1;
   }
-  return `${value.toFixed(value < 10 ? 1 : 0)} ${units[unitIndex]}`;
+  const digits = value < 10 ? 1 : 0;
+  const number = locale
+    ? new Intl.NumberFormat(toIntlLocale(locale), { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value)
+    : value.toFixed(digits);
+  return `${number} ${units[unitIndex]}`;
 }
 
 // Preise werden als Rappen (Integer) gespeichert, nie als Franken/Float (Rundungsfehler) -
@@ -256,4 +261,23 @@ export function formatRappen(rp: number | null | undefined, locale?: string): st
 /** Prozentzahl (z.B. Rabatt) mit höchstens zwei Nachkommastellen, ohne Prozentzeichen. */
 export function formatPercentNumber(value: number, locale?: string): string {
   return new Intl.NumberFormat(toIntlLocale(locale), { maximumFractionDigits: 2 }).format(value);
+}
+
+/**
+ * Geldbetrag in Franken/Konto-Währung mit zwei Nachkommastellen und Schweizer Tausendertrennung
+ * (1’234.50). `currency` ist die freie Währungsbezeichnung des Kontos (CHF, EUR, «Fr.» …), daher
+ * kein Intl-Currency-Stil. Negativ mit echtem Minuszeichen; `sign` zeigt bei positiven Beträgen «+».
+ */
+export function formatMoney(
+  amount: number | null | undefined,
+  currency = "",
+  locale?: string,
+  { currencyFirst = false, sign = false }: { currencyFirst?: boolean; sign?: boolean } = {}
+): string {
+  const value = Number(amount ?? 0);
+  const formatted = new Intl.NumberFormat(toIntlLocale(locale), { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(value));
+  const prefix = value < 0 ? "−" : sign && value > 0 ? "+" : "";
+  const number = `${prefix}${formatted}`;
+  if (!currency) return number;
+  return currencyFirst ? `${currency} ${number}` : `${number} ${currency}`;
 }
