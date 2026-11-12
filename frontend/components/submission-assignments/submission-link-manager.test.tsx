@@ -83,7 +83,7 @@ describe("SubmissionLinkManager", () => {
 
   it("warns about affected Abgaben, then deletes and tells the parent", async () => {
     confirmMock.mockResolvedValue(true);
-    browserApiFetchMock.mockResolvedValue({ message: "Link geloescht" });
+    browserApiFetchMock.mockResolvedValue({ message: "Link gelöscht" });
     const onLinksChange = vi.fn();
     const onLinkRemoved = vi.fn();
 

@@ -295,7 +295,7 @@ def _resolve_upload_target(
     if sum([event_id is not None, submission_assignment_id is not None, cycle_config_id is not None]) > 1:
         raise HTTPException(status_code=422, detail="Nur ein Zielbezug (Termin, Abgabe-Element oder Zyklus) gleichzeitig erlaubt")
     if (submission_assignment_id is None) != (submission_element_ref is None):
-        raise HTTPException(status_code=422, detail="Abgabe und Abgabe-Element muessen zusammen angegeben werden")
+        raise HTTPException(status_code=422, detail="Abgabe und Abgabe-Element müssen zusammen angegeben werden")
 
     target = _UploadTarget()
 
@@ -314,7 +314,7 @@ def _resolve_upload_target(
         try:
             parsed_event_id, parsed_list_entry_id = _parse_element_ref(db, submission_element_ref)
         except ValueError:
-            raise HTTPException(status_code=422, detail="Ungueltige Abgabe-Element-Referenz") from None
+            raise HTTPException(status_code=422, detail="Ungültige Abgabe-Element-Referenz") from None
         # _parse_element_ref resolves the event/list-entry public id without a tenant
         # filter (see its docstring) - only trust it once it's confirmed as one of *this*
         # (already tenant-scoped) assignment's own elements, otherwise a writer could point

@@ -611,7 +611,7 @@ function FocusedElementEditorImpl({
     }
     const selectedParticipants = participantNames.filter((participant) => selectedIds.includes(participant.id));
     if (!selectedParticipants.length) {
-      return `${selectedIds.length} ausgewaehlt`;
+      return `${selectedIds.length} ausgewählt`;
     }
     // Alle Namen ausschreiben; zu lange Listen kürzt das CSS mit Ellipse (voller Text im Tooltip).
     return selectedParticipants.map((participant) => participant.display_name).join(", ");
@@ -4124,7 +4124,7 @@ function FocusedElementEditorImpl({
         </label>
         {!multiParticipantPicker?.singleSelect && (
           <div className="status-row">
-            <span className="pill">{multiParticipantPicker?.selectedIds.length ?? 0} ausgewaehlt</span>
+            <span className="pill">{multiParticipantPicker?.selectedIds.length ?? 0} ausgewählt</span>
             <span className="pill">{filteredParticipants.length} sichtbar</span>
           </div>
         )}

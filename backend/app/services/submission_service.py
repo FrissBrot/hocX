@@ -86,18 +86,18 @@ def _parse_element_ref(db: Session, element_ref: str) -> tuple[int | None, int |
     try:
         public_id = uuid.UUID(raw_id)
     except ValueError:
-        raise ValueError("Ungueltige Element-Referenz") from None
+        raise ValueError("Ungültige Element-Referenz") from None
     if kind == "event":
         internal_id = public_id_service.resolve_internal_id(db, Event, public_id)
         if internal_id is None:
-            raise ValueError("Ungueltige Element-Referenz")
+            raise ValueError("Ungültige Element-Referenz")
         return internal_id, None
     if kind == "entry":
         internal_id = public_id_service.resolve_internal_id(db, ListEntry, public_id)
         if internal_id is None:
-            raise ValueError("Ungueltige Element-Referenz")
+            raise ValueError("Ungültige Element-Referenz")
         return None, internal_id
-    raise ValueError("Ungueltige Element-Referenz")
+    raise ValueError("Ungültige Element-Referenz")
 
 
 def _value_label(
@@ -267,12 +267,12 @@ class SubmissionService:
         # close_element/reopen_element), statt an ein festes Zeitfenster gebunden zu sein.
         if values["source_type"] == "events":
             if not values.get("tag_filter"):
-                raise ValueError("tag_filter ist fuer Termin-Abgaben erforderlich")
+                raise ValueError("tag_filter ist für Termin-Abgaben erforderlich")
             if values.get("list_definition_id") is not None or values.get("deadline") is not None:
                 raise ValueError("list_definition_id/deadline duerfen bei Termin-Abgaben nicht gesetzt sein")
             # Zyklus-Filter: Konfiguration und Zyklen gehoeren zusammen (ohne beides = alle Termine).
             if (values.get("cycle_config_id") is None) != (not values.get("cycle_offsets")):
-                raise ValueError("cycle_config_id und cycle_offsets muessen zusammen gesetzt sein")
+                raise ValueError("cycle_config_id und cycle_offsets müssen zusammen gesetzt sein")
         elif values["source_type"] == "manual":
             if (
                 values.get("tag_filter") is not None
@@ -285,7 +285,7 @@ class SubmissionService:
                 raise ValueError("cycle_config_id/cycle_offsets duerfen bei manuellen Abgaben nicht gesetzt sein")
         else:
             if values.get("list_definition_id") is None:
-                raise ValueError("list_definition_id ist fuer Listen-Abgaben erforderlich")
+                raise ValueError("list_definition_id ist für Listen-Abgaben erforderlich")
             if values.get("tag_filter") is not None or values.get("offset_days_before") is not None or values.get("offset_days_after") is not None:
                 raise ValueError("tag_filter/offset_days_* duerfen bei Listen-Abgaben nicht gesetzt sein")
             if values.get("cycle_config_id") is not None or values.get("cycle_offsets"):

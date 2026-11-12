@@ -305,7 +305,7 @@ class AdminTenantService:
         return self.get_tenant(db, tenant_id)
 
     def list_public_customers(self, db: Session) -> list[PublicCustomerRead]:
-        """Fuer die Website freigegebene Mandanten, alphabetisch."""
+        """Für die Website freigegebene Mandanten, alphabetisch."""
         names = db.scalars(select(Tenant.name).where(Tenant.show_on_website.is_(True)).order_by(func.lower(Tenant.name)))
         return [PublicCustomerRead(name=name) for name in names]
 

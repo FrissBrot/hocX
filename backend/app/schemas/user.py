@@ -18,7 +18,7 @@ def _validate_preferred_language(value: str | None) -> str | None:
     # "Zentrale Fehlererfassung"): eine unbekannte Locale ist ein erwarteter Validierungsfehler,
     # kein unerwarteter Serverfehler, und landet deshalb nicht in system_error_log.
     if value is not None and value not in SUPPORTED_LOCALES:
-        raise ValueError(f"Unbekannte Sprache: {value!r} (unterstuetzt: {sorted(SUPPORTED_LOCALES)})")
+        raise ValueError(f"Unbekannte Sprache: {value!r} (unterstützt: {sorted(SUPPORTED_LOCALES)})")
     return value
 
 class TenantRead(BaseModel):

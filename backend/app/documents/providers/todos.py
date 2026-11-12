@@ -12,7 +12,7 @@ from app.documents.model import Cell, TableColumn, TableData, TableGroup, TableR
 from app.documents.providers.common import col, sort_key, spec_fields, status_cell, tags_cell, text_cell
 
 TODO_STATUS_ORDER = {"open": 0, "in_progress": 1, "done": 2, "cancelled": 3}
-_DUE_MARKER_KEYS = {"naechste Sitzung": "due.nextSession", "letzte Sitzung": "due.lastSession"}
+_DUE_MARKER_KEYS = {"nächste Sitzung": "due.nextSession", "letzte Sitzung": "due.lastSession"}
 _LIMIT = 10_000
 
 

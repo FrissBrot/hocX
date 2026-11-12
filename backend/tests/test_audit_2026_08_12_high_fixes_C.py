@@ -52,7 +52,7 @@ def test_h7_delete_blocked_when_referenced_by_template_element_block(db):
     db.flush()
 
     result = lists_route.delete_definition(definition.public_id, db=db, user=user)
-    assert result == {"message": "Liste geloescht"}
+    assert result == {"message": "Liste gelöscht"}
     assert db.get(ListDefinition, definition.id) is None
 
 
@@ -110,7 +110,7 @@ def test_h7_delete_succeeds_when_unreferenced(db):
     user = make_current_user(tenant.id)
 
     result = lists_route.delete_definition(definition.public_id, db=db, user=user)
-    assert result == {"message": "Liste geloescht"}
+    assert result == {"message": "Liste gelöscht"}
     assert db.get(ListDefinition, definition.id) is None
 
 

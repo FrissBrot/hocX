@@ -71,7 +71,7 @@ export function compareIsoDate(left: string | null | undefined, right: string | 
 // und damit ohne Zugriff auf useTranslations().
 export const ATTENDANCE_OPTIONS = [
   { value: "present", label: "Anwesend" },
-  { value: "late", label: "Verspaetet" },
+  { value: "late", label: "Verspätet" },
   { value: "excused", label: "Entschuldigt" },
   { value: "absent", label: "Unentschuldigt" },
 ] as const;
@@ -379,7 +379,7 @@ export function createMatrixEmbeddedBlock(
       configuration_snapshot_json: {
         block_kind: blockKind,
         selected_date: protocol.protocol_date ?? "",
-        session_label: rowLabel || "Naechste Sitzung",
+        session_label: rowLabel || "Nächste Sitzung",
         session_tag: "next_session",
         ...override,
       },

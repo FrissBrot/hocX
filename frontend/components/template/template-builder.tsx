@@ -1292,7 +1292,7 @@ export function TemplateEditor({
             <SearchInput value={participantPickerSearch} onChange={setParticipantPickerSearch} placeholder={t("searchParticipantsPlaceholder")} autoFocus />
           </label>
           <div className="status-row">
-            <span className="pill">{assignedParticipantIds.length} ausgewaehlt</span>
+            <span className="pill">{assignedParticipantIds.length} ausgewählt</span>
             <span className="pill">{excludedAttendanceCount} ohne Anwesenheitskontrolle</span>
             <span className="pill">{filteredPickerParticipants.length} sichtbar</span>
           </div>
@@ -1310,7 +1310,7 @@ export function TemplateEditor({
                 })
               }
             >
-              Alle auswaehlen
+              Alle auswählen
             </button>
           </div>
           <div className="selection-list">

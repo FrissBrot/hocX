@@ -142,7 +142,7 @@ def upsert(db: Session, *, user: CurrentUser, kind: str, settings: FeedSettings)
 
 
 def regenerate_token(db: Session, feed: CalendarFeed) -> CalendarFeed:
-    """Neue URL - die alte ist ab sofort ungueltig (bestehende Abos muessen neu eingerichtet werden)."""
+    """Neue URL - die alte ist ab sofort ungültig (bestehende Abos müssen neu eingerichtet werden)."""
     _assign_new_token(feed)
     feed.updated_at = datetime.now(UTC)
     db.commit()

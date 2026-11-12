@@ -204,7 +204,7 @@ def create_template_structure(db, tenant: Tenant, created_by: AppUser) -> Templa
     template = Template(
         tenant_id=tenant.id,
         name="Sitzungsprotokoll",
-        description="Vorlage fuer die woechentliche Vorstandssitzung",
+        description="Vorlage für die wöchentliche Vorstandssitzung",
         protocol_number_pattern="Sitzung {n}",
         title_pattern="Sitzung {n} - {date:DD.MM.YYYY}",
         auto_create_next_protocol=False,
@@ -216,7 +216,7 @@ def create_template_structure(db, tenant: Tenant, created_by: AppUser) -> Templa
 
     text_def = ElementDefinition(
         tenant_id=tenant.id, element_type_id=ELEMENT_TYPE_TEXT, render_type_id=RENDER_TYPE_PARAGRAPH,
-        title="Besprechung", display_title="Besprechung", description="Freitext fuer die Sitzungsnotizen",
+        title="Besprechung", display_title="Besprechung", description="Freitext für die Sitzungsnotizen",
         is_editable=True, allows_multiple_values=False, export_visible=True,
         configuration_json={"blocks": [{"id": 1, "title": "Besprechungstext", "block_title": "Besprechungstext",
                                          "render_type_id": RENDER_TYPE_PARAGRAPH, "element_type_id": ELEMENT_TYPE_TEXT,
@@ -350,22 +350,22 @@ def create_protocols(db, tenant: Tenant, template: Template, events: list[Event]
     session_events = [e for e in events if e.event_date <= date.today()][:3]
     protocol_contents = [
         (
-            "Traktandenliste besprochen, Budget fuers Herbstlager verabschiedet. "
-            "Alle Gruppenleitenden bestaetigen ihre Teilnahme am naechsten Weiterbildungstag."
+            "Traktandenliste besprochen, Budget fürs Herbstlager verabschiedet. "
+            "Alle Gruppenleitenden bestätigen ihre Teilnahme am nächsten Weiterbildungstag."
         ),
         (
             "Rueckblick auf das Sommerlager: durchwegs positives Feedback von Teilnehmenden und Eltern. "
-            "Kueche und Programm werden fuers naechste Mal in der bisherigen Form uebernommen."
+            "Küche und Programm werden fürs nächste Mal in der bisherigen Form übernommen."
         ),
         (
-            "Planung des Spielabends abgeschlossen. Vorschlag fuer neue T-Shirts wird an der naechsten "
+            "Planung des Spielabends abgeschlossen. Vorschlag für neue T-Shirts wird an der nächsten "
             "Sitzung dem gesamten Team praesentiert."
         ),
     ]
     todo_specs = [
-        [("Offerten fuer Zelte einholen", TODO_STATUS_OPEN), ("Kuechenteam fuers Herbstlager anfragen", TODO_STATUS_OPEN)],
+        [("Offerten für Zelte einholen", TODO_STATUS_OPEN), ("Küchenteam fürs Herbstlager anfragen", TODO_STATUS_OPEN)],
         [("Dankesbrief an Elternrat verschicken", TODO_STATUS_DONE), ("Fotos aus dem Lager sichten und hochladen", TODO_STATUS_OPEN)],
-        [("Material fuer Spielabend einkaufen", TODO_STATUS_OPEN)],
+        [("Material für Spielabend einkaufen", TODO_STATUS_OPEN)],
     ]
     photo_index = 0
     for i, event in enumerate(session_events):
@@ -427,7 +427,7 @@ def create_submission_assignment(db, tenant: Tenant, list_definition: ListDefini
         db,
         SubmissionAssignmentCreate(
             title="Fotos vom Sommerlager hochladen",
-            description="Bitte alle Fotos vom Sommerlager hier hochladen, damit wir sie fuers Jahresheft verwenden koennen.",
+            description="Bitte alle Fotos vom Sommerlager hier hochladen, damit wir sie fürs Jahresheft verwenden können.",
             public_slug="fotos-sommerlager",
             source_type="list",
             list_definition_id=list_definition.public_id,

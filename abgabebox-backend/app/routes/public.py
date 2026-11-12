@@ -343,7 +343,7 @@ async def _verify_captcha_impl(request: Request, link_token: str, assignment_slu
     if element is None:
         raise HTTPException(status_code=400, detail="Element ist nicht (mehr) offen")
     if not await verify_captcha(captcha_solution):
-        raise HTTPException(status_code=400, detail="Captcha ungueltig")
+        raise HTTPException(status_code=400, detail="Captcha ungültig")
     token = mint_captcha_session_token(link_token, assignment_slug, element_ref, client_ip=_client_ip(request))
     return CaptchaVerifyResult(session_token=token, expires_in_seconds=settings.captcha_session_ttl_minutes * 60)
 
@@ -389,7 +389,7 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
 
     if not files:
         _log("validation_failed", "Keine Datei ausgewählt")
-        raise HTTPException(status_code=400, detail="Keine Datei ausgewaehlt")
+        raise HTTPException(status_code=400, detail="Keine Datei ausgewählt")
 
     # Checked before anything about any of `files` is read or scanned - see
     # _exceeds_max_files_per_request's docstring above.
@@ -568,7 +568,7 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
                 )
                 if already_uploaded + len(contents) > max_files:
                     remaining = max(0, max_files - already_uploaded)
-                    _log("validation_failed", f"Zu viele Dateien (max. {max_files} insgesamt, {remaining} noch moeglich)")
+                    _log("validation_failed", f"Zu viele Dateien (max. {max_files} insgesamt, {remaining} noch möglich)")
                     raise HTTPException(
                         status_code=400,
                         detail=f"Maximal {max_files} Dateien insgesamt erlaubt ({remaining} noch möglich)",

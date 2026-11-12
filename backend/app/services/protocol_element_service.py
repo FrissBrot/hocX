@@ -228,7 +228,7 @@ class ProtocolElementService:
         selected_date = config.get("selected_date")
         parsed_date = date.fromisoformat(selected_date) if isinstance(selected_date, str) and selected_date else None
         parsed_time = parse_session_time(config.get("selected_time"))
-        title = (config.get("session_label") or "Naechste Sitzung").strip() or "Naechste Sitzung"
+        title = (config.get("session_label") or "Nächste Sitzung").strip() or "Nächste Sitzung"
         tag = (config.get("session_tag") or "next_session").strip() or "next_session"
 
         if not parsed_date:

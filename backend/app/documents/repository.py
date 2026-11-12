@@ -93,7 +93,7 @@ def _todo_query():
             ).label("resolved_due_date"),
             case(
                 (ProtocolTodo.due_event_id.is_not(None), due_event.c.title),
-                (ProtocolTodo.due_marker == "next_session", "naechste Sitzung"),
+                (ProtocolTodo.due_marker == "next_session", "nächste Sitzung"),
                 (ProtocolTodo.due_marker == "last_session", "letzte Sitzung"),
                 else_=None,
             ).label("resolved_due_label"),

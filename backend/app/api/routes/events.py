@@ -62,7 +62,7 @@ def _parse_column_map(column_map: str) -> dict[str, str] | None:
     try:
         parsed = json.loads(column_map)
     except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=400, detail="column_map ist kein gueltiges JSON") from exc
+        raise HTTPException(status_code=400, detail="column_map ist kein gültiges JSON") from exc
     if not isinstance(parsed, dict):
         raise HTTPException(status_code=400, detail="column_map muss ein Objekt sein")
     return {str(key): str(value) for key, value in parsed.items()}

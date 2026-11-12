@@ -212,7 +212,7 @@ class FinesRepository:
             participant_name_snapshot=payload.participant_name_snapshot,
         ) is not None:
             raise DuplicateFineError(
-                f"Fuer {payload.participant_name_snapshot} existiert in diesem Protokoll bereits eine Busse vom Typ '{payload.fine_type}'"
+                f"Für {payload.participant_name_snapshot} existiert in diesem Protokoll bereits eine Busse vom Typ '{payload.fine_type}'"
             )
         fine = AttendanceFine(
             protocol_id=protocol_internal_id,

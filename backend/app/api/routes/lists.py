@@ -152,16 +152,16 @@ def delete_definition(
     if _list_definition_in_use(db, current.id, user.current_tenant_id):
         raise HTTPException(
             status_code=409,
-            detail="Liste ist noch mit einem Template-Baustein oder Protokoll verknuepft und kann nicht geloescht werden",
+            detail="Liste ist noch mit einem Template-Baustein oder Protokoll verknüpft und kann nicht gelöscht werden",
         )
     try:
         deleted = service.delete_definition(db, current.id)
     except SQLAlchemyError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Liste konnte nicht geloescht werden") from exc
+        raise HTTPException(status_code=400, detail="Liste konnte nicht gelöscht werden") from exc
     if not deleted:
         raise HTTPException(status_code=404, detail="Liste nicht gefunden")
-    return {"message": "Liste geloescht"}
+    return {"message": "Liste gelöscht"}
 
 
 @router.get("/lists/{list_definition_id}/entries", response_model=list[ListEntryRead])
@@ -228,8 +228,8 @@ def delete_entry(
         deleted = service.delete_entry(db, current.id)
     except SQLAlchemyError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Eintrag konnte nicht geloescht werden") from exc
+        raise HTTPException(status_code=400, detail="Eintrag konnte nicht gelöscht werden") from exc
     if not deleted:
         raise HTTPException(status_code=404, detail="Eintrag nicht gefunden")
     sync_packages_after_change(db, tenant_id=user.current_tenant_id, list_definition_id=list_definition_id)
-    return {"message": "Eintrag geloescht"}
+    return {"message": "Eintrag gelöscht"}

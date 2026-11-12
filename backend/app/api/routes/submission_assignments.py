@@ -132,10 +132,10 @@ def delete_link(
         link_service.delete_link(db, link)
     except SQLAlchemyError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Link konnte nicht geloescht werden") from exc
+        raise HTTPException(status_code=400, detail="Link konnte nicht gelöscht werden") from exc
     for assignment in affected:
         service.refresh_todo_links(db, assignment)
-    return {"message": "Link geloescht"}
+    return {"message": "Link gelöscht"}
 
 
 @router.get("/submission-assignments", response_model=list[SubmissionAssignmentRead])
@@ -189,7 +189,7 @@ def _delete_assignment_with_files(db: Session, current: SubmissionAssignment, us
         result = deletion_service.delete_assignment(db, current, delete_file_ids=delete_file_ids, actor_user_id=user.user_id, file_service=file_service)
     except SQLAlchemyError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Abgabe konnte nicht geloescht werden") from exc
+        raise HTTPException(status_code=400, detail="Abgabe konnte nicht gelöscht werden") from exc
     audit.log(
         db, action="submission_assignment.deleted", actor=user, entity_type="submission_assignment", entity_id=assignment_id,
         details={"title": title, "deleted_files": result.deleted_files, "kept_files": result.kept_files},
@@ -232,7 +232,7 @@ def delete_assignment(
     require_permission(user, P.SUBMISSIONS_MANAGE)
     current = _get_assignment_or_404(db, assignment_id, user)
     _delete_assignment_with_files(db, current, user, None)
-    return {"message": "Abgabe geloescht"}
+    return {"message": "Abgabe gelöscht"}
 
 
 def _get_own_upload_or_404(db: Session, upload_id: uuid.UUID, user: CurrentUser) -> SubmissionUpload:
@@ -263,7 +263,7 @@ def delete_submission_upload(
             db.commit()
     except SQLAlchemyError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Einreichung konnte nicht geloescht werden") from exc
+        raise HTTPException(status_code=400, detail="Einreichung konnte nicht gelöscht werden") from exc
     audit.log(db, action="submission_upload.deleted", actor=user, entity_type="submission_upload", entity_id=upload_internal_id, details={"deleted_files": deleted})
     return {"deleted_files": deleted}
 
@@ -286,7 +286,7 @@ def delete_submission_file(
         deleted = deletion_service.delete_submission_files(db, rows, file_service=file_service)
     except SQLAlchemyError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Datei konnte nicht geloescht werden") from exc
+        raise HTTPException(status_code=400, detail="Datei konnte nicht gelöscht werden") from exc
     audit.log(db, action="submission_file.deleted", actor=user, entity_type="submission_upload", entity_id=upload_internal_id, details={"deleted_files": deleted})
     return {"deleted_files": deleted}
 

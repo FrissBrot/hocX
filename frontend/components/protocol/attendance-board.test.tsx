@@ -41,7 +41,7 @@ describe("AttendanceBoard", () => {
 
   it("filters by status tile and by search", () => {
     renderBoard();
-    fireEvent.click(within(screen.getByRole("group", { name: "Nach Status filtern" })).getByRole("button", { name: /Verspaetet/ }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Nach Status filtern" })).getByRole("button", { name: /Verspätet/ }));
     expect(screen.getByRole("button", { name: /Luca Meier/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Anna Berger/ })).not.toBeInTheDocument();
     fireEvent.click(within(screen.getByRole("group", { name: "Nach Status filtern" })).getByRole("button", { name: /Alle/ }));

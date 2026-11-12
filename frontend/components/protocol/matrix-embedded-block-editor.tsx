@@ -253,11 +253,11 @@ export function MatrixEmbeddedBlockEditor({
   function embeddedParticipantSummary(row: Record<string, any>) {
     const selectedIds = Array.isArray(row.participant_ids) ? row.participant_ids.map(String) : [];
     if (!selectedIds.length) {
-      return "Teilnehmer waehlen";
+      return "Teilnehmer wählen";
     }
     const selectedParticipants = participantNames.filter((participant) => selectedIds.includes(participant.id));
     if (!selectedParticipants.length) {
-      return `${selectedIds.length} ausgewaehlt`;
+      return `${selectedIds.length} ausgewählt`;
     }
     return selectedParticipants.map((participant) => participant.display_name).join(", ");
   }
@@ -1201,7 +1201,7 @@ export function MatrixEmbeddedBlockEditor({
       return (
         <div className={embeddedBlockClassName}>
           <div className="matrix-static-value">
-            {String(embeddedConfig.session_label ?? "").trim() || "Naechste Sitzung"}
+            {String(embeddedConfig.session_label ?? "").trim() || "Nächste Sitzung"}
             {String(embeddedConfig.selected_date ?? "").trim() ? `: ${formatShortDate(String(embeddedConfig.selected_date))}` : ""}
             {String(embeddedConfig.selected_date ?? "").trim() && String(embeddedConfig.selected_time ?? "").trim() ? `, ${String(embeddedConfig.selected_time)}` : ""}
           </div>
