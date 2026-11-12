@@ -553,13 +553,14 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
             # Ebenfalls im Lock neu pruefen: eine parallele Abgabe kann das Element inzwischen
             # automatisch geschlossen haben (auto_close), nachdem resolve_single_element oben noch
             # "offen" gesehen hat.
-            if (assignment.get("auto_close") or "never") != "never":
-                latest_status = repository.latest_status_by_element(db, assignment_id=assignment["id"]).get(
-                    (element["event_id"], element["list_entry_id"])
-                )
-                if latest_status == "closed":
-                    _log("element_closed", "Element ist nicht (mehr) offen")
-                    raise HTTPException(status_code=400, detail="Element ist nicht (mehr) offen")
+            # Auch von Hand geschlossen (Verwaltung) - nicht nur auto_close. Die endgültige Prüfung
+            # macht insert_full_upload unter dem Element-Lock.
+            latest_status = repository.latest_status_by_element(db, assignment_id=assignment["id"]).get(
+                (element["event_id"], element["list_entry_id"])
+            )
+            if latest_status == "closed":
+                _log("element_closed", "Element ist nicht (mehr) offen")
+                raise HTTPException(status_code=400, detail="Element ist nicht (mehr) offen")
 
             already_uploaded = 0
             if max_files is not None:
@@ -675,6 +676,7 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
                 close_after=_closes_after_upload(assignment, files_after_upload=already_uploaded + len(saved_files)),
             )
         except Exception as exc:
+            closed_meanwhile = isinstance(exc, repository.ElementClosedError)
             # M16: files were already moved out of quarantine (Step 4) before this insert, and
             # regular storage - unlike quarantine/ - has no age-based cleanup loop at all (see
             # cleanup_stale_quarantine_files's docstring in storage.py), so a failed insert here
@@ -689,6 +691,10 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
                     db.commit()
                 except Exception:
                     db.rollback()
+            if closed_meanwhile:
+                _log("element_closed", "Element wurde während des Uploads geschlossen")
+                # erwarteter Fall (kein Programmfehler), daher nicht ins Fehlerprotokoll
+                raise HTTPException(status_code=400, detail="Element ist nicht (mehr) offen") from None
             _log("upload_error", f"Datenbankfehler: {exc}")
             raise
 

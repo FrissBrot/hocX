@@ -271,8 +271,9 @@ def test_linked_upload_counts_as_submission(db, monkeypatch, image, closed, scan
     assert element.submitted_at is not None
     assert [file.id for file in element.files] == [items[0].id]
     assert element.files[0].content_url == service.build_content_url(items[0].id)
-    assert submissions.repository.count_submissions_summary(db, assignment_id=assignment.id) == {
-        "submitted": 1, "clean": int(scan_status == "clean"),
+    summary = submissions.summaries(db, [assignment])[assignment.id]
+    assert {key: summary[key] for key in ("closed", "submitted", "quarantine", "infected")} == {
+        "closed": 0, "submitted": int(scan_status == "clean"),
         "quarantine": int(scan_status == "pending"), "infected": 0,
     }
     assert load_rules(db, assignment, ref).remaining == 2
@@ -287,6 +288,6 @@ def test_linked_upload_counts_as_submission(db, monkeypatch, image, closed, scan
     db.flush()
     _add_abgabebox_file(db, tenant.id, public_upload)
     assert len(submissions.get_assignment_elements(db, assignment)[0].files) == 2
-    counts = submissions.repository.count_submissions_summary(db, assignment_id=assignment.id)
-    assert counts["submitted"] == counts["clean"] == 1
+    counts = submissions.summaries(db, [assignment])[assignment.id]
+    assert counts["submitted"] == 1
     assert load_rules(db, assignment, ref).remaining == 1

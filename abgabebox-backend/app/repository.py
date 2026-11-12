@@ -260,7 +260,16 @@ def count_files_by_element(db: Session, *, assignment_id: int) -> dict[tuple[int
         .where(submission_upload_table.c.assignment_id == assignment_id)
         .group_by(submission_upload_table.c.event_id, submission_upload_table.c.list_entry_id)
     )
-    return {(row.event_id, row.list_entry_id): row.file_count for row in rows}
+    counts = {(row.event_id, row.list_entry_id): row.file_count for row in rows}
+    # In der App direkt verknüpfte Dateien zählen wie im Backend (submission_upload_rules) mit; die
+    # Rolle darf gallery_image nicht lesen, die Funktion liefert nur Zahlen (Migration 0175)
+    for row in db.execute(
+        text("SELECT event_id, list_entry_id, file_count FROM public.submission_linked_file_counts(:assignment_id)"),
+        {"assignment_id": assignment_id},
+    ):
+        key = (row.event_id, row.list_entry_id)
+        counts[key] = counts.get(key, 0) + row.file_count
+    return counts
 
 
 def insert_upload_log(
@@ -282,6 +291,14 @@ def insert_upload_log(
     db.commit()
 
 
+# Gemeinsam mit backend/app/services/submission_service.py (SUBMISSION_ELEMENT_LOCK_NAMESPACE)
+SUBMISSION_ELEMENT_LOCK_NAMESPACE = 909100002
+
+
+class ElementClosedError(Exception):
+    """Das Element wurde geschlossen, während der Upload lief."""
+
+
 def insert_full_upload(
     db: Session,
     *,
@@ -295,7 +312,18 @@ def insert_full_upload(
 
     close_after: zusaetzlich eine status='closed'-Zeile hinter der Abgabe einfuegen (automatisches
     Schliessen, siehe submission_assignment.auto_close) - in derselben Transaktion, damit das
-    Element nie mit der Abgabe, aber ohne die Schliessung sichtbar wird."""
+    Element nie mit der Abgabe, aber ohne die Schliessung sichtbar wird.
+
+    Unter dem Element-Lock der Abgabe (gemeinsam mit backend submission_service.close_element):
+    wurde das Element inzwischen von Hand geschlossen, wird nichts gespeichert (ElementClosedError).
+    """
+    db.execute(
+        text("SELECT pg_advisory_xact_lock(:ns, :assignment_id)"),
+        {"ns": SUBMISSION_ELEMENT_LOCK_NAMESPACE, "assignment_id": assignment_id},
+    )
+    if latest_status_by_element(db, assignment_id=assignment_id).get((event_id, list_entry_id)) == "closed":
+        db.rollback()
+        raise ElementClosedError()
     upload_result = db.execute(
         insert(submission_upload_table)
         .values(

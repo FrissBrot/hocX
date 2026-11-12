@@ -28,14 +28,16 @@ from app.schemas.submission import (
     SubmissionLinkCreate,
     SubmissionLinkRead,
     SubmissionLinkUpdate,
+    SubmissionSummaryRead,
     SubmissionUploadLogEntry,
 )
 from app.schemas.deletion import DeletionPreview, DeletionRequest, DeletionResultRead
 from app.services import deletion_service, public_id_service
 from app.services.audit_service import AuditService
-from app.core.storage import ABGABEBOX, get_object_store, object_response, write_object_to_zip
+from app.core.storage import ABGABEBOX, MAIN, get_object_store, object_response, write_object_to_zip
 from app.services.file_service import FileService
 from app.services.submission_link_service import SubmissionLinkService
+from app.services.stored_file_location import abgabebox_stored_file_ids
 from app.services.submission_service import SubmissionService
 
 router = APIRouter()
@@ -489,7 +491,19 @@ def get_clamav_status(
         return {"status": "offline", "version": None}
 
 
-@router.get("/submission-assignments/{assignment_id}/summary")
+@router.get("/submission-assignments/summaries", response_model=dict[str, SubmissionSummaryRead])
+def get_assignment_summaries(
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Fortschritt aller Abgaben des Mandanten auf einmal (Liste), Schlüssel = öffentliche ID."""
+    require_permission(user, P.SUBMISSIONS_READ)
+    assignments = service.repository.list_assignments(db, tenant_id=user.current_tenant_id)
+    summaries = service.summaries(db, assignments)
+    return {str(assignment.public_id): summaries[assignment.id] for assignment in assignments}
+
+
+@router.get("/submission-assignments/{assignment_id}/summary", response_model=SubmissionSummaryRead)
 def get_assignment_summary(
     assignment_id: uuid.UUID,
     db: Session = Depends(get_db),
@@ -497,20 +511,7 @@ def get_assignment_summary(
 ):
     require_permission(user, P.SUBMISSIONS_READ)
     assignment = _get_assignment_or_404(db, assignment_id, user)
-    counts = service.repository.count_submissions_summary(db, assignment_id=assignment.id)
-    total = None
-    if assignment.source_type == "list" and assignment.list_definition_id:
-        total = service.repository.count_list_entries(db, list_definition_id=assignment.list_definition_id)
-    elif assignment.source_type == "events":
-        total = len(service.list_assignment_events(db, assignment))
-    elif assignment.source_type == "manual":
-        total = 1
-    return {
-        "submitted": counts["clean"],
-        "quarantine": counts["quarantine"],
-        "infected": counts["infected"],
-        "total": total,
-    }
+    return service.summaries(db, [assignment])[assignment.id]
 
 
 @router.post("/submission-assignments/{assignment_id}/rescan-pending")
@@ -536,6 +537,22 @@ def get_upload_log(
     return service.get_upload_log(db, assignment_id=assignment.id, element_ref=element_ref)
 
 
+def _zip_segment(label: str) -> str:
+    """Ordnername im ZIP aus der Element-Bezeichnung (kein Pfadtrenner, keine Steuerzeichen)."""
+    cleaned = re.sub(r"[\x00-\x1f/\\:*?\"<>|]+", "_", label or "").strip(" .")
+    return cleaned[:80] or "element"
+
+
+def _unique_arcname(name: str, used: set[str]) -> str:
+    candidate, counter = name, 0
+    while candidate in used:
+        counter += 1
+        stem, dot, ext = name.rpartition(".")
+        candidate = f"{stem}_{counter}.{ext}" if dot and "/" not in ext else f"{name}_{counter}"
+    used.add(candidate)
+    return candidate
+
+
 @router.get("/submission-assignments/{assignment_id}/download-zip")
 def download_all_files_zip(
     assignment_id: uuid.UUID,
@@ -546,40 +563,39 @@ def download_all_files_zip(
     assignment = _get_assignment_or_404(db, assignment_id, user)
 
     elements = service.get_assignment_elements(db, assignment)
+    # Alle Dateien aller Einreichungen eines Elements, auch nach dem Schliessen und auch die in der
+    # App verknüpften (vorher nur die der jüngsten Zeile, nach dem Schliessen also nichts).
+    file_ids = [file.id for element in elements for file in element.files if file.scan_status == "clean"]
+    stored_files = {
+        row.public_id: row
+        for row in db.scalars(
+            select(StoredFile).where(StoredFile.public_id.in_(file_ids), StoredFile.tenant_id == assignment.tenant_id)
+        )
+    } if file_ids else {}
+    box_file_ids = abgabebox_stored_file_ids(db, [row.id for row in stored_files.values()])
 
     # Auf der Platte statt im Speicher (Concurrency-Audit CONC-009): eine grosse Abgabe (viele
     # Fotos) lag vorher vollständig als BytesIO im Backend-Prozess.
     work_dir = Path(settings.upload_root) / "_staging" / "download"
     work_dir.mkdir(parents=True, exist_ok=True)
     zip_path = work_dir / f"{uuid.uuid4().hex}.zip"
-    used_names: dict[str, int] = {}
+    used_names: set[str] = set()
+    folder_per_element = len(elements) > 1
     try:
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for element in elements:
-                if not element.files or element.upload_id is None:
-                    continue
-                upload = public_id_service.get_by_public_id(db, SubmissionUpload, element.upload_id)
-                if upload is None:
-                    continue
+                folder = _zip_segment(element.label) if folder_per_element else ""
                 for file in element.files:
-                    stored_file_row = public_id_service.get_by_public_id(db, StoredFile, file.id)
-                    if stored_file_row is None:
-                        continue
-                    _, stored_file = service.get_stored_file_for_upload(
-                        db, upload_id=upload.id, stored_file_id=stored_file_row.id
-                    )
+                    stored_file = stored_files.get(file.id)
                     if stored_file is None or stored_file.scan_status != "clean":
                         continue
-                    if not get_object_store().exists(ABGABEBOX, stored_file.storage_path):
+                    namespace = ABGABEBOX if stored_file.id in box_file_ids else MAIN
+                    if not get_object_store().exists(namespace, stored_file.storage_path):
                         continue
-                    arcname = stored_file.original_name
-                    if arcname in used_names:
-                        used_names[arcname] += 1
-                        stem, _, ext = arcname.rpartition(".")
-                        arcname = f"{stem}_{used_names[arcname]}.{ext}" if ext else f"{arcname}_{used_names[arcname]}"
-                    else:
-                        used_names[arcname] = 0
-                    write_object_to_zip(zf, ABGABEBOX, stored_file.storage_path, arcname)
+                    # Dateiname ohne Pfadanteile: «../x» darf beim Entpacken nicht aus dem Ordner führen
+                    name = _zip_segment(stored_file.original_name.replace("\\", "/").rsplit("/", 1)[-1])
+                    arcname = _unique_arcname(f"{folder}/{name}" if folder else name, used_names)
+                    write_object_to_zip(zf, namespace, stored_file.storage_path, arcname)
     except BaseException:
         zip_path.unlink(missing_ok=True)
         raise

@@ -115,6 +115,17 @@ class SubmissionFileRead(BaseModel):
     scan_status: str = "clean"
 
 
+class SubmissionSummaryRead(BaseModel):
+    """Fortschritt einer Abgabe; jedes Element zählt höchstens einmal (siehe
+    SubmissionRepository.summarize_states)."""
+
+    submitted: int
+    quarantine: int
+    infected: int
+    closed: int
+    total: int
+
+
 class SubmissionElementRead(BaseModel):
     element_ref: str
     label: str

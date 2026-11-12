@@ -138,6 +138,20 @@ class SubmissionRepository:
         )
         return [(row.SubmissionUploadFile, row.StoredFile) for row in db.execute(statement)]
 
+    def list_files_for_uploads(self, db: Session, *, upload_ids: list[int]) -> dict[int, list[StoredFile]]:
+        """Dateien mehrerer Einreichungen in einer Abfrage (statt list_upload_files je Zeile)."""
+        if not upload_ids:
+            return {}
+        files: dict[int, list[StoredFile]] = {}
+        for upload_id, stored_file in db.execute(
+            select(SubmissionUploadFile.upload_id, StoredFile)
+            .join(StoredFile, StoredFile.id == SubmissionUploadFile.stored_file_id)
+            .where(SubmissionUploadFile.upload_id.in_(upload_ids))
+            .order_by(SubmissionUploadFile.upload_id, SubmissionUploadFile.sort_index.asc())
+        ):
+            files.setdefault(upload_id, []).append(stored_file)
+        return files
+
     def get_upload_file(self, db: Session, upload_file_id: int) -> SubmissionUploadFile | None:
         return db.get(SubmissionUploadFile, upload_file_id)
 
@@ -216,37 +230,75 @@ class SubmissionRepository:
         )
         return [row[0] for row in db.execute(statement)]
 
-    def count_submissions_summary(self, db: Session, *, assignment_id: int) -> dict:
-        """Count distinct elements across public submissions and linked in-app uploads."""
-        public_files = db.execute(
-            select(Event.public_id, ListEntry.public_id, StoredFile.scan_status)
+    def element_states(self, db: Session, *, assignment_ids: list[int]) -> dict[int, dict[str, dict]]:
+        """Zustand je Element für mehrere Abgaben in drei Abfragen (Fortschritt der Abgaben-Liste):
+        {assignment_id: {element_ref: {"scan": {scan_status, ...}, "latest": status der jüngsten Zeile}}}.
+        Umfasst Einreichungen der Abgabebox und in der App verknüpfte Dateien."""
+        if not assignment_ids:
+            return {}
+        states: dict[int, dict[str, dict]] = {}
+
+        def entry(assignment_id: int, ref: str) -> dict:
+            return states.setdefault(assignment_id, {}).setdefault(ref, {"scan": set(), "latest": None})
+
+        def ref_of(event_id, entry_id) -> str:
+            return f"event-{event_id}" if event_id else f"entry-{entry_id}" if entry_id else "manual"
+
+        for assignment_id, event_id, entry_id, status in db.execute(
+            select(SubmissionUpload.assignment_id, Event.public_id, ListEntry.public_id, StoredFile.scan_status)
             .select_from(SubmissionUpload)
             .join(SubmissionUploadFile, SubmissionUploadFile.upload_id == SubmissionUpload.id)
             .join(StoredFile, StoredFile.id == SubmissionUploadFile.stored_file_id)
             .outerjoin(Event, Event.id == SubmissionUpload.event_id)
             .outerjoin(ListEntry, ListEntry.id == SubmissionUpload.list_entry_id)
-            .where(SubmissionUpload.assignment_id == assignment_id)
-        )
-        files = [
-            (f"event-{event_id}" if event_id else f"entry-{entry_id}" if entry_id else "manual", status)
-            for event_id, entry_id, status in public_files
-        ]
-        files.extend(db.execute(
-            select(GalleryImage.submission_element_ref, StoredFile.scan_status)
+            .where(SubmissionUpload.assignment_id.in_(assignment_ids))
+        ):
+            entry(assignment_id, ref_of(event_id, entry_id))["scan"].add(status)
+        for assignment_id, ref, status in db.execute(
+            select(GalleryImage.submission_assignment_id, GalleryImage.submission_element_ref, StoredFile.scan_status)
             .join(StoredFile, StoredFile.id == GalleryImage.stored_file_id)
             .join(SubmissionAssignment, SubmissionAssignment.id == GalleryImage.submission_assignment_id)
             .where(
-                GalleryImage.submission_assignment_id == assignment_id,
+                GalleryImage.submission_assignment_id.in_(assignment_ids),
                 GalleryImage.tenant_id == SubmissionAssignment.tenant_id,
                 StoredFile.tenant_id == SubmissionAssignment.tenant_id,
             )
-        ).all())
-        return {
-            "submitted": len({ref for ref, _ in files}),
-            "quarantine": len({ref for ref, status in files if status == "pending"}),
-            "infected": len({ref for ref, status in files if status == "infected"}),
-            "clean": len({ref for ref, status in files if status == "clean"}),
-        }
+        ):
+            if ref:
+                entry(assignment_id, ref)["scan"].add(status)
+        # Von Hand geschlossen: jüngste Zeile des Elements ist «closed» (siehe get_assignment_elements)
+        for assignment_id, event_id, entry_id, status in db.execute(
+            select(SubmissionUpload.assignment_id, Event.public_id, ListEntry.public_id, SubmissionUpload.status)
+            .select_from(SubmissionUpload)
+            .outerjoin(Event, Event.id == SubmissionUpload.event_id)
+            .outerjoin(ListEntry, ListEntry.id == SubmissionUpload.list_entry_id)
+            .where(SubmissionUpload.assignment_id.in_(assignment_ids))
+            .order_by(SubmissionUpload.id)
+        ):
+            entry(assignment_id, ref_of(event_id, entry_id))["latest"] = status
+        return states
+
+    @staticmethod
+    def summarize_states(states: dict[str, dict], element_refs: list[str]) -> dict:
+        """Fortschritt einer Abgabe. Jedes Element zählt genau einmal, in der ersten passenden
+        Gruppe: geprüfte Datei → Quarantäne (im Scan oder Scanfehler) → nur infiziert → von Hand
+        geschlossen → offen. Nur Elemente, die heute zur Abgabe gehören (gelöschte Termine,
+        andere Zyklen fallen weg), daher nie mehr als `total`."""
+        counts = {"submitted": 0, "quarantine": 0, "infected": 0, "closed": 0}
+        for ref in element_refs:
+            state = states.get(ref)
+            if state is None:
+                continue
+            scan = state["scan"]
+            if "clean" in scan:
+                counts["submitted"] += 1
+            elif scan & {"pending", "error"}:
+                counts["quarantine"] += 1
+            elif "infected" in scan:
+                counts["infected"] += 1
+            elif state["latest"] == "closed":
+                counts["closed"] += 1
+        return {**counts, "total": len(element_refs)}
 
     def count_list_entries(self, db: Session, *, list_definition_id: int) -> int:
         stmt = select(func.count()).where(ListEntry.list_definition_id == list_definition_id)

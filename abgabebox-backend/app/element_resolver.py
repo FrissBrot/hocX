@@ -8,11 +8,19 @@ Service unterlaufen.
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
 from app import repository
+
+# Wie das Backend (todo_fine_service.TZ): Zeitfenster gelten in Schweizer Zeit, der Container läuft in UTC.
+_TZ = ZoneInfo("Europe/Zurich")
+
+
+def local_today() -> date:
+    return datetime.now(_TZ).date()
 
 # element_ref des einzigen Elements einer manuellen Abgabe (Duplikation aus
 # backend/app/repositories/submission_repository.py, siehe Modul-Docstring).
@@ -97,7 +105,7 @@ def _sort_elements(elements: list[dict], sort_order: str, sort_dates: dict[str, 
     if sort_order == "alphabetical":
         return sorted(elements, key=lambda el: el["label"].lower())
     if sort_order == "proximity":
-        today = date.today()
+        today = local_today()
         return sorted(
             elements,
             key=lambda el: abs((d - today).days) if (d := sort_dates.get(el["element_ref"])) is not None else float("inf"),
@@ -115,7 +123,7 @@ def resolve_open_elements(db: Session, assignment: dict) -> list[dict]:
     """Liefert alle Elemente, deren (optionales) Fenster/Frist aktuell laeuft UND die nicht
     manuell geschlossen wurden. Kumulatives Modell (seit 2026-08-17): ein Element mit Status
     'submitted' bleibt sichtbar/offen fuer weitere Uploads, nur 'closed' blendet es aus."""
-    today = date.today()
+    today = local_today()
     # Option «nach dem Enddatum offen halten» (Migration 0173): das Ende des Fensters bzw. der
     # Stichtag schliesst nichts mehr; es gelten nur auto_close und das Schliessen von Hand.
     keep_open = bool(assignment.get("keep_open_after_end"))

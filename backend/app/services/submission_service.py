@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, date, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -14,7 +14,7 @@ from app.core.error_log import record_system_error
 from app.core.cycle_utils import cycle_years_for_offsets
 from app import scanner
 from app.core.features_generated import F
-from app.models import CycleConfig, GalleryImage, Event, ListDefinition, ListEntry, Participant, ProtocolTodo, StoredFile, SubmissionAssignment, SubmissionUpload, TenantFeature, TodoStatus, ProtocolTodoFile
+from app.models import CycleConfig, GalleryImage, Event, ListDefinition, ListEntry, Participant, ProtocolTodo, StoredFile, SubmissionAssignment, SubmissionUpload, TenantFeature, TodoFine, TodoStatus, ProtocolTodoFile
 from app.repositories.submission_repository import MANUAL_ELEMENT_REF, SubmissionRepository
 from app.schemas.submission import (
     SubmissionAssignmentCreate,
@@ -51,6 +51,37 @@ def _move_from_quarantine(db: Session, quarantine_rel_path: str) -> str:
     new_rel = quarantine_target_key(quarantine_rel_path)
     get_object_store().move(db, ABGABEBOX, quarantine_rel_path, new_rel)
     return new_rel
+
+
+# Busse für Aufgaben, die der Trigger erledigt hat, nur so lange nachfrieren (siehe
+# SubmissionService._freeze_fines_after_trigger). Der Job läuft alle 15 Minuten; zwei Tage decken
+# auch einen längeren Ausfall ab.
+TRIGGER_FINE_WINDOW = timedelta(days=2)
+
+# Gemeinsam mit abgabebox-backend/app/repository.py (SUBMISSION_ELEMENT_LOCK_NAMESPACE): Schliessen
+# von Hand und das Speichern einer Einreichung laufen je Abgabe nacheinander, damit ein Upload, der
+# gerade läuft, ein eben geschlossenes Element nicht wieder öffnet.
+SUBMISSION_ELEMENT_LOCK_NAMESPACE = 909100002
+
+
+def local_today() -> date:
+    """Heute in Schweizer Zeit wie die Abgabebox (element_resolver) und die Bussen; der Container
+    läuft in UTC, sonst öffnen und schliessen Zeitfenster nachts bis zu zwei Stunden zu spät."""
+    return todo_fine_service.today()
+
+
+def lock_submission_element(db: Session, assignment_id: int) -> None:
+    """Transaktions-Lock je Abgabe (wird mit Commit/Rollback frei)."""
+    db.execute(
+        text("SELECT pg_advisory_xact_lock(:ns, :assignment_id)"),
+        {"ns": SUBMISSION_ELEMENT_LOCK_NAMESPACE, "assignment_id": assignment_id},
+    )
+
+
+def element_has_clean_files(element: SubmissionElementRead) -> bool:
+    """Einheitliche Regel für «abgegeben»: mindestens eine sauber geprüfte Datei. Dateien im
+    Virenscan, mit Scanfehler oder infizierte zählen nicht."""
+    return any(file.scan_status == "clean" for file in element.files)
 
 
 def _element_ref(*, event_public_id: uuid.UUID | None, list_entry_public_id: uuid.UUID | None) -> str:
@@ -237,7 +268,7 @@ class SubmissionService:
         if assignment.cycle_config_id is not None:
             config = self.repository.get_cycle_config(db, assignment.cycle_config_id)
             cycle_years = (
-                cycle_years_for_offsets(date.today(), config.reset_month, config.reset_day, assignment.cycle_offsets)
+                cycle_years_for_offsets(local_today(), config.reset_month, config.reset_day, assignment.cycle_offsets)
                 if config is not None else set()
             )
         return self.repository.list_events_by_tag(
@@ -381,7 +412,7 @@ class SubmissionService:
         if sort_order == "alphabetical":
             return sorted(raw, key=lambda item: item["label"].lower())
         if sort_order == "proximity":
-            today = date.today()
+            today = local_today()
             return sorted(
                 raw,
                 key=lambda item: abs((item["sort_date"] - today).days) if item["sort_date"] is not None else float("inf"),
@@ -400,6 +431,28 @@ class SubmissionService:
             participant_ids.update(int(pid) for pid in value_json.get("participant_ids", []))
         elif value_type == "event" and value_json.get("event_id"):
             event_ids.add(int(value_json["event_id"]))
+
+    def element_refs(self, db: Session, assignment: SubmissionAssignment) -> list[str]:
+        """Referenzen aller Elemente, die heute zur Abgabe gehören - ohne Bezeichnungen und
+        Verantwortliche (für den Fortschritt, günstiger als _resolve_raw_elements)."""
+        if assignment.source_type == "manual":
+            return [MANUAL_ELEMENT_REF]
+        if assignment.source_type == "events":
+            return [f"event-{event.public_id}" for event in self.list_assignment_events(db, assignment)]
+        if assignment.list_definition_id is None:
+            return []
+        return [
+            f"entry-{entry.public_id}"
+            for entry in self.repository.list_list_entries(db, list_definition_id=assignment.list_definition_id)
+        ]
+
+    def summaries(self, db: Session, assignments: list[SubmissionAssignment]) -> dict[int, dict]:
+        """Fortschritt mehrerer Abgaben: Element-Zustände in einer Runde Abfragen statt je Abgabe."""
+        states = self.repository.element_states(db, assignment_ids=[assignment.id for assignment in assignments])
+        return {
+            assignment.id: self.repository.summarize_states(states.get(assignment.id, {}), self.element_refs(db, assignment))
+            for assignment in assignments
+        }
 
     def get_assignment_elements(self, db: Session, assignment: SubmissionAssignment) -> list[SubmissionElementRead]:
         """Abgaben sind kumulativ (siehe 2026-08-17 Umstellung): jede oeffentliche Einreichung
@@ -435,6 +488,10 @@ class SubmissionService:
         ):
             linked_files.setdefault(gallery_image.submission_element_ref, []).append(stored_file)
 
+        files_by_upload = self.repository.list_files_for_uploads(db, upload_ids=[upload.id for upload in uploads])
+        all_responsible = {pid for raw in raw_elements for pid in (raw.get("responsible_participant_ids") or [])}
+        participant_public_ids = public_id_service.resolve_public_ids(db, Participant, list(all_responsible)) if all_responsible else {}
+
         results: list[SubmissionElementRead] = []
         for raw in raw_elements:
             key = (raw["event_id"], raw["list_entry_id"])
@@ -445,7 +502,7 @@ class SubmissionService:
             for upload in element_uploads:
                 if upload.submitted_at is not None and (submitted_at is None or upload.submitted_at > submitted_at):
                     submitted_at = upload.submitted_at
-                for _upload_file, stored_file in self.repository.list_upload_files(db, upload_id=upload.id):
+                for stored_file in files_by_upload.get(upload.id, []):
                     files.append(
                         SubmissionFileRead(
                             id=stored_file.public_id,
@@ -484,8 +541,7 @@ class SubmissionService:
                 status = "open"
 
             responsible_ids = raw.get("responsible_participant_ids") or []
-            mapping = public_id_service.resolve_public_ids(db, Participant, responsible_ids) if responsible_ids else {}
-            responsible_public_ids = [mapping[pid] for pid in responsible_ids if pid in mapping]
+            responsible_public_ids = [participant_public_ids[pid] for pid in responsible_ids if pid in participant_public_ids]
             results.append(
                 SubmissionElementRead(
                     element_ref=element_ref,
@@ -505,6 +561,14 @@ class SubmissionService:
     def _latest_upload_for_element(
         self, db: Session, assignment: SubmissionAssignment, element_ref: str
     ) -> tuple[int | None, int | None, SubmissionUpload | None]:
+        # Nur Elemente dieser Abgabe (und damit dieses Mandanten): eine fremde oder erfundene
+        # Referenz darf weder eine Zeile anlegen noch verraten, ob es den Termin gibt.
+        known = {
+            _element_ref(event_public_id=raw["event_public_id"], list_entry_public_id=raw["list_entry_public_id"])
+            for raw in self._resolve_raw_elements(db, assignment)
+        }
+        if element_ref not in known:
+            raise ValueError("Element gehört nicht zu dieser Abgabe")
         event_id, list_entry_id = _parse_element_ref(db, element_ref)
         uploads = self.repository.list_uploads_for_assignment(db, assignment_id=assignment.id)
         matching = [u for u in uploads if u.event_id == event_id and u.list_entry_id == list_entry_id]
@@ -514,6 +578,7 @@ class SubmissionService:
         """Schliesst ein Element manuell (keine weiteren Uploads mehr moeglich), unabhaengig
         davon, ob schon Dateien eingegangen sind - das Gegenstueck zu reopen_element, seit
         Abgaben ohne Tage-Fenster sonst unbegrenzt offen blieben."""
+        lock_submission_element(db, assignment.id)
         event_id, list_entry_id, latest = self._latest_upload_for_element(db, assignment, element_ref)
         if latest is not None and latest.status == "closed":
             raise ValueError("Element ist bereits geschlossen")
@@ -528,8 +593,7 @@ class SubmissionService:
                 submitted_at=None,
             ),
         )
-        elements = self.get_assignment_elements(db, assignment)
-        return next(element for element in elements if element.element_ref == element_ref)
+        return self._element_with_todo_sync(db, assignment, element_ref)
 
     def reopen_element(self, db: Session, assignment: SubmissionAssignment, element_ref: str) -> SubmissionElementRead:
         """Hebt eine manuelle Schliessung wieder auf. Bereits eingereichte Dateien bleiben
@@ -549,8 +613,63 @@ class SubmissionService:
                 submitted_at=None,
             ),
         )
-        elements = self.get_assignment_elements(db, assignment)
-        return next(element for element in elements if element.element_ref == element_ref)
+        return self._element_with_todo_sync(db, assignment, element_ref)
+
+    def _element_with_todo_sync(self, db: Session, assignment: SubmissionAssignment, element_ref: str) -> SubmissionElementRead:
+        """Nach Schliessen/Wiederöffnen: Element neu lesen und seine Aufgabe nachführen."""
+        element = next(
+            (element for element in self.get_assignment_elements(db, assignment) if element.element_ref == element_ref),
+            None,
+        )
+        if element is None:
+            raise ValueError("Element gehört nicht zu dieser Abgabe")
+        todo = db.scalar(
+            select(ProtocolTodo).where(
+                ProtocolTodo.submission_assignment_id == assignment.id,
+                ProtocolTodo.element_ref == element.element_ref,
+                ProtocolTodo.tenant_id == assignment.tenant_id,
+                ProtocolTodo.pending_delete.is_(False),
+            )
+        )
+        if todo is not None and self._apply_element_state(db, todo, element):
+            db.commit()
+        return element
+
+    @staticmethod
+    def _apply_element_state(db: Session, todo: ProtocolTodo, element: SubmissionElementRead) -> bool:
+        """Aufgabe eines Elements nach seinem Zustand (Entscheid 2026-11-12):
+
+        - geprüfte Datei vorhanden → erledigt (Busse einfrieren, Mail «Abgabe eingegangen»)
+        - von Hand geschlossen ohne geprüfte Datei → eine offene Aufgabe wird abgebrochen (keine
+          Busse). Eine von Hand erledigte oder abgebrochene bleibt, wie sie ist.
+        - wieder geöffnet ohne geprüfte Datei → eine abgebrochene Aufgabe wird wieder offen.
+
+        Dateien im Virenscan zählen nicht: der Scan oder der Job submission_todo_sync erledigen
+        die Aufgabe, sobald sie sauber sind. Liefert True, wenn sich etwas geändert hat (ohne Commit)."""
+        statuses = dict(db.execute(select(TodoStatus.code, TodoStatus.id)).all())
+        current = next((code for code, status_id in statuses.items() if status_id == todo.todo_status_id), None)
+        if element_has_clean_files(element):
+            target = "done"
+        elif element.status == "closed":
+            target = "cancelled" if current in ("open", "in_progress") else None
+        else:
+            target = "open" if current == "cancelled" else None
+        target_id = statuses.get(target) if target else None
+        if target_id is None or todo.todo_status_id == target_id:
+            return False
+        todo.todo_status_id = target_id
+        if target == "open":
+            todo.completed_at = None
+        elif target == "done":
+            todo.completed_at = element.submitted_at or datetime.now(UTC)
+        else:
+            todo.completed_at = datetime.now(UTC)
+        db.add(todo)
+        db.flush()
+        todo_fine_service.sync_todo(db, todo)
+        if target == "done":
+            todo_notifications.on_submission_done(db, todo)
+        return True
 
     def sync_todos_for_event(self, db: Session, event: Event) -> None:
         """Nach Anlegen/Ändern eines Termins. Gleicht alle Abgaben des Mandanten ab, nicht nur
@@ -658,7 +777,7 @@ class SubmissionService:
             state = states.get(element_ref)
             # Nur geprüfte Dateien erledigen die Pendenz; Quarantäne/Scanfehler nicht (der Job
             # holt das nach, sobald der Scan sauber ist)
-            has_files = bool(state and any(file.scan_status == "clean" for file in state.files))
+            has_files = bool(state and element_has_clean_files(state))
 
             todo = todos_by_ref.get(element_ref)
             if todo is None:
@@ -689,15 +808,12 @@ class SubmissionService:
                 set_todo_assignees(db, todo, participant_ids)
                 # Abgabe-Aufgaben haben kein Protokoll: neu Verantwortliche sofort (gebündelt) melden
                 todo_notifications.on_assignees_added(db, todo, [pid for pid in participant_ids if pid not in previous])
-            if has_files and todo.todo_status_id not in closed_ids:
-                todo.todo_status_id = done_id
-                todo.completed_at = state.submitted_at or datetime.now(UTC)
-                db.add(todo)
-                db.flush()
-                # Zu spät abgegeben: Pendenzen-Busse einfrieren (todo_fine_service).
-                todo_fine_service.sync_todo(db, todo)
-                # Abgabe eingegangen: Verantwortliche per Mail informieren
-                todo_notifications.on_submission_done(db, todo)
+            if state is not None and (has_files or state.status == "closed"):
+                # Datei geprüft → erledigt (auch aus «abgebrochen»: geschlossen, während die Datei
+                # noch im Scan war); von Hand ohne Datei geschlossen → abgebrochen, keine Busse
+                self._apply_element_state(db, todo, state)
+            if has_files and todo.todo_status_id == done_id and todo.completed_at is not None:
+                self._freeze_fines_after_trigger(db, todo)
             db.add(todo)
 
         for element_ref, todo in todos_by_ref.items():
@@ -716,6 +832,18 @@ class SubmissionService:
 
         db.commit()
         return {"created": created, "updated": updated, "removed": removed}
+
+    @staticmethod
+    def _freeze_fines_after_trigger(db: Session, todo: ProtocolTodo) -> None:
+        """Der Datenbank-Trigger (Einreichung in der Abgabebox) erledigt die Aufgabe ohne Python,
+        also ohne Pendenzen-Busse. Der Abgleich friert sie nach: nur für frisch erledigte
+        Aufgaben (Fenster TRIGGER_FINE_WINDOW) ohne bisherige Busse, damit spätere Änderungen an
+        den Regeln alte Abschlüsse nicht neu bewerten."""
+        if datetime.now(UTC) - todo.completed_at > TRIGGER_FINE_WINDOW:
+            return
+        if db.scalar(select(TodoFine.id).where(TodoFine.protocol_todo_id == todo.id).limit(1)) is not None:
+            return
+        todo_fine_service.sync_todo(db, todo)
 
     def refresh_todo_links(self, db: Session, assignment: SubmissionAssignment) -> None:
         """Points the reference_link of the Abgabe's existing todos at the current preferred
@@ -778,6 +906,12 @@ class SubmissionService:
             else:
                 self.repository.create_upload_log(db, assignment_id=assignment_id, element_ref=element_ref, status="rescan_pending", error_message="ClamAV nicht erreichbar")
                 results["still_pending"] += 1
+        if results["clean"]:
+            # Freigegebene Dateien erledigen ihre Aufgabe gleich (der Trigger greift nur beim
+            # Einreichen mit sofort sauberer Datei)
+            assignment = self.repository.get_assignment(db, assignment_id)
+            if assignment is not None:
+                self.sync_todos_if_tracked(db, assignment)
         return results
 
     def rescan_all_pending(self, db: Session) -> dict:

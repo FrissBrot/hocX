@@ -29,6 +29,7 @@ def setup_upload(monkeypatch):
     monkeypatch.setattr(public.repository, "get_tenant_storage_quota_bytes", lambda *a, **k: None)
     monkeypatch.setattr(public.repository, "get_tenant_storage_usage_bytes", lambda *a, **k: 0)
     monkeypatch.setattr(public.repository, 'list_assignment_image_hashes', lambda *a, **k: [])
+    monkeypatch.setattr(public.repository, 'latest_status_by_element', lambda *a, **k: {})
 
 
 def upload(contents):

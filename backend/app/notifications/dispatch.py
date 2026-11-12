@@ -150,8 +150,15 @@ def run(db: Session) -> dict[str, int]:
         db.commit()
         return dict(counts)
     # Von der Abgabebox erledigte Abgabe-Aufgaben (Datenbank-Trigger) nachtragen
-    counts["submission_done"] = todos.scan_submission_done(db, now=now)
-    db.commit()
+    # (ein Fehler hier darf den Versand der übrigen Mails nicht anhalten)
+    try:
+        counts["submission_done"] = todos.scan_submission_done(db, now=now)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        _logger.exception("Abgabe-Mails konnten nicht nachgetragen werden")
+        record_system_error(db, exc=exc)
+        counts["error"] += 1
     groups = db.execute(
         select(Notification.tenant_id, Notification.recipient_id, Notification.group_key)
         .where(Notification.status == "pending")

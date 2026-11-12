@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy import select, update
 
-from app.models import Notification, ProtocolTodo, SubmissionAssignment, SubmissionUpload
+from app.models import Notification, ProtocolTodo, StoredFile, SubmissionAssignment, SubmissionUpload, SubmissionUploadFile
 from app.notifications import dispatch, email_transport
 from app.notifications import preferences as notification_preferences
 from app.notifications import todos as todo_notifications
@@ -55,10 +55,17 @@ def box(db):
 
 
 def _submit(db, box, *, submitted_at=None):
-    db.add(SubmissionUpload(
+    """Einreichung mit geprüfter Datei: der Trigger (0175) erledigt die Aufgabe beim Einfügen der Datei."""
+    upload = SubmissionUpload(
         assignment_id=box["assignment"].id, event_id=box["event"].id, status="submitted",
         submitted_at=submitted_at or datetime.now(UTC),
-    ))
+    )
+    db.add(upload)
+    db.flush()
+    stored = StoredFile(tenant_id=box["tenant"].id, original_name="bericht.pdf", mime_type="application/pdf", storage_path="t/bericht.pdf")
+    db.add(stored)
+    db.flush()
+    db.add(SubmissionUploadFile(upload_id=upload.id, stored_file_id=stored.id, sort_index=0))
     db.flush()
     db.expire(box["todo"])
 
@@ -120,9 +127,7 @@ def test_dispatch_sends_the_mail_and_respects_the_setting(db, box, sent):
 def test_reopened_task_drops_the_pending_mail_and_resubmission_sends_a_new_one(db, box, sent):
     _submit(db, box)
     todo_notifications.scan_submission_done(db)
-    # Element wieder geöffnet (Trigger: status reopened) und erneut abgegeben
-    db.add(SubmissionUpload(assignment_id=box["assignment"].id, event_id=box["event"].id, status="reopened"))
-    db.flush()
+    # Aufgabe wieder geöffnet und erneut abgegeben
     db.execute(update(ProtocolTodo).where(ProtocolTodo.id == box["todo"].id).values(
         todo_status_id=DONE, completed_at=datetime.now(UTC) + timedelta(minutes=1),
     ))

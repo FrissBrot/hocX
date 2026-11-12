@@ -39,6 +39,7 @@ def _setup(monkeypatch, saved):
     monkeypatch.setattr(public.repository, "get_tenant_storage_usage_bytes", lambda *a, **k: 0)
     monkeypatch.setattr(public.repository, "list_assignment_image_hashes", lambda *a, **k: [])
     monkeypatch.setattr(public.repository, "count_files_by_element", lambda *a, **k: {})
+    monkeypatch.setattr(public.repository, "latest_status_by_element", lambda *a, **k: {})
     monkeypatch.setattr(public, "save_to_quarantine", lambda db, content, **k: (saved.append(content) or "quarantine/x.jpg", hashlib.sha256(content).hexdigest()))
     monkeypatch.setattr(public, "move_from_quarantine", lambda *a: "x.jpg")
     monkeypatch.setattr(public.repository, "insert_full_upload", lambda *a, **k: saved.append(k["files"]))

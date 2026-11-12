@@ -2233,6 +2233,13 @@
         "submissions.manage"
       ]
     },
+    "GET /api/submission-assignments/summaries": {
+      "handler": "submission_assignments.get_assignment_summaries",
+      "requires": [
+        "submissions.manage",
+        "submissions.read"
+      ]
+    },
     "DELETE /api/submission-assignments/{assignment_id}": {
       "handler": "submission_assignments.delete_assignment",
       "requires": [

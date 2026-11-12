@@ -429,7 +429,7 @@ def test_count_submissions_summary_ignores_closed_element_with_no_files(db):
     service = SubmissionService()
     service.close_element(db, assignment, f"entry-{entry.public_id}")
 
-    counts = service.repository.count_submissions_summary(db, assignment_id=assignment.id)
+    counts = service.summaries(db, [assignment])[assignment.id]
 
     assert counts["submitted"] == 0
 
@@ -439,7 +439,7 @@ def test_count_submissions_summary_counts_element_with_files(db):
     _make_submitted_upload(db, assignment_id=assignment.id, list_entry_id=entry.id, tenant_id=tenant.id, filename="foto.pdf")
     service = SubmissionService()
 
-    counts = service.repository.count_submissions_summary(db, assignment_id=assignment.id)
+    counts = service.summaries(db, [assignment])[assignment.id]
 
     assert counts["submitted"] == 1
 
@@ -526,7 +526,7 @@ def test_manual_assignment_is_counted_in_the_summary(db):
     _make_manual_upload(db, assignment_id=assignment.id, tenant_id=tenant.id, filename="b.pdf")
     service = SubmissionService()
 
-    counts = service.repository.count_submissions_summary(db, assignment_id=assignment.id)
+    counts = service.summaries(db, [assignment])[assignment.id]
 
     assert counts["submitted"] == 1
 
