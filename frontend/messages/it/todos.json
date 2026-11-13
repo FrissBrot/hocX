@@ -129,5 +129,10 @@
     "endOfYear": "San Silvestro"
   },
   "dueSearchPlaceholder": "Cerca data o appuntamento …",
-  "fineRunningBadge": "Multa in corso"
+  "fineRunningBadge": "Multa in corso",
+  "errors": {
+    "todo_assignee_unavailable": "La persona responsabile non è più disponibile per questo verbale (p. es. rimossa dal modello o inattiva). Scegliere un’altra persona.",
+    "todo_due_event_unavailable": "La scadenza scelta non è più disponibile.",
+    "todo_invalid": "Il compito non è stato salvato: dato non valido."
+  }
 }

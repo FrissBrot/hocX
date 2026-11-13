@@ -129,5 +129,10 @@
     "endOfYear": "year end New Year's Eve"
   },
   "dueSearchPlaceholder": "Search date or event …",
-  "fineRunningBadge": "Fine running"
+  "fineRunningBadge": "Fine running",
+  "errors": {
+    "todo_assignee_unavailable": "The responsible person is no longer available for this protocol (e.g. removed from the template or inactive). Please choose someone else.",
+    "todo_due_event_unavailable": "The selected due event is no longer available.",
+    "todo_invalid": "The task could not be saved: invalid input."
+  }
 }

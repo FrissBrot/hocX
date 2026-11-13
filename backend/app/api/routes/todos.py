@@ -275,6 +275,19 @@ def get_todo_due_events(
     }
 
 
+
+# Validierungsfehler aus ProtocolTodoService.update_todo → stabiler Code und lesbare Meldung
+_TODO_VALUE_ERRORS = {
+    "Assigned participant is not available for this template": (
+        "todo_assignee_unavailable",
+        "Die verantwortliche Person ist für dieses Protokoll nicht mehr verfügbar (z. B. aus der Vorlage entfernt oder inaktiv). Bitte eine andere Person wählen.",
+    ),
+    "Assigned participants must be a list": ("todo_invalid", "Die Pendenz konnte nicht gespeichert werden: ungültige Angabe."),
+    "Due event is not available for this tenant": ("todo_due_event_unavailable", "Der gewählte Fälligkeitstermin ist nicht mehr verfügbar."),
+    "Assigned user is not available for this tenant": ("todo_assignee_unavailable", "Die verantwortliche Person ist nicht mehr verfügbar. Bitte eine andere Person wählen."),
+    "Unknown todo status": ("todo_invalid", "Unbekannter Status."),
+}
+
 @router.patch("/protocol-todos/{todo_id}", response_model=ProtocolTodoRead)
 def patch_todo(
     todo_id: uuid.UUID,
@@ -310,7 +323,13 @@ def patch_todo(
     except todo_fine_service.TodoFineError as exc:
         # Die Prüfung läuft vor jedem Schreiben - nichts zurückzurollen
         raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)}) from exc
-    except (SQLAlchemyError, ValueError) as exc:
+    except ValueError as exc:
+        # Erwartete Validierung (nicht ins Fehlerprotokoll): Grund mit stabilem Code zurückgeben,
+        # statt ihn hinter «Todo could not be updated» zu verstecken
+        db.rollback()
+        code, message = _TODO_VALUE_ERRORS.get(str(exc), ("todo_invalid", "Die Pendenz konnte nicht gespeichert werden: ungültige Angabe."))
+        raise HTTPException(status_code=400, detail={"code": code, "message": message}) from exc
+    except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Todo could not be updated") from exc
     if todo is None:

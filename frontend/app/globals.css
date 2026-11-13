@@ -13936,7 +13936,11 @@ a.export-step-meta {
   padding: var(--space-1) var(--space-3);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-pill);
-  background: var(--panel-solid);
+  /* Über --button-bg/--button-hover-bg: die globale Hover-Regel (button:hover) nimmt sonst
+     --primary als Hintergrund, und der dunkle Text wird unlesbar */
+  --button-bg: var(--panel-solid);
+  --button-hover-bg: var(--neutral-bg);
+  background: var(--button-bg);
   color: var(--text);
   font-size: var(--text-sm);
   font-weight: 600;
@@ -13951,7 +13955,8 @@ a.export-step-meta {
 
 .fine-members-chip-active {
   border-color: var(--accent);
-  background: var(--accent);
+  --button-bg: var(--accent);
+  --button-hover-bg: var(--accent-strong);
   color: var(--on-solid);
 }
 
@@ -13984,7 +13989,9 @@ a.export-step-meta {
   padding: var(--space-1) var(--space-3);
   border: 1px solid color-mix(in srgb, var(--on-solid) 35%, transparent 65%);
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--on-solid) 10%, transparent 90%);
+  --button-bg: color-mix(in srgb, var(--on-solid) 10%, transparent 90%);
+  --button-hover-bg: color-mix(in srgb, var(--on-solid) 22%, transparent 78%);
+  background: var(--button-bg);
   color: var(--on-solid);
   font-size: var(--text-sm);
   font-weight: 600;
@@ -13993,7 +14000,8 @@ a.export-step-meta {
 .fine-members-bulk .fine-members-bulk-clear {
   margin-left: auto;
   border: none;
-  background: none;
+  --button-bg: transparent;
+  --button-hover-bg: color-mix(in srgb, var(--on-solid) 12%, transparent 88%);
 }
 
 .fine-members-row {
@@ -14080,7 +14088,9 @@ a.export-step-meta {
   padding: var(--space-1) var(--space-3);
   border: none;
   border-radius: var(--radius-xs);
-  background: transparent;
+  --button-bg: transparent;
+  --button-hover-bg: color-mix(in srgb, var(--panel-solid) 60%, transparent 40%);
+  background: var(--button-bg);
   color: var(--muted);
   font-size: var(--text-sm);
   font-weight: 600;
@@ -14088,7 +14098,8 @@ a.export-step-meta {
 }
 
 .fine-members-segment .fine-members-segment-active {
-  background: var(--panel-solid);
+  --button-bg: var(--panel-solid);
+  --button-hover-bg: var(--panel-solid);
   color: var(--accent);
   box-shadow: var(--shadow-soft);
 }
@@ -14188,14 +14199,25 @@ a.export-step-meta {
 .fine-rule-filters {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: var(--space-3);
+  gap: var(--space-2) var(--space-3);
 }
 
+/* Label und Feld als Subgrid: ein zweizeiliges Label («Rollen der Verantwortlichen») macht die
+   Label-Zeile für alle Filter gleich hoch, die Felder bleiben auf einer Linie. */
 .fine-rule-filter {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  display: grid;
+  grid-row: span 2;
+  grid-template-rows: subgrid;
+  row-gap: var(--space-2);
   min-width: 0;
+}
+
+.fine-rule-filter > .field-label {
+  align-self: end;
+}
+
+.fine-rule-filter > .fine-chip-field {
+  align-self: start;
 }
 
 .fine-chip-field {
@@ -14231,7 +14253,8 @@ a.export-step-meta {
   min-height: 0;
   padding: 0 var(--space-1);
   border: none;
-  background: none;
+  --button-bg: transparent;
+  background: var(--button-bg);
   color: inherit;
   font-size: var(--text-base);
   line-height: 1;
@@ -14241,6 +14264,11 @@ a.export-step-meta {
 .fine-chip-field .fine-chip-add {
   margin-left: auto;
   width: auto;
+  /* So breit wie «+ Wählen», nicht wie die längste Option; sonst springt der Knopf je Feld */
+  field-sizing: content;
+  max-width: 100%;
+  text-align: right;
+  text-align-last: right;
   min-height: 30px;
   border: none;
   background: none;

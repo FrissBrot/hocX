@@ -64,7 +64,10 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
 
   /** Laufende Busse der eigenen Person (409 todo_fine_running) verständlich melden. */
   function todoErrorMessage(error: unknown, fallback: string): string {
-    if (error instanceof ApiError && (error.detail as { code?: unknown } | undefined)?.code === "todo_fine_running") return t("fineRunningLocked");
+    const code = error instanceof ApiError ? (error.detail as { code?: unknown } | undefined)?.code : undefined;
+    if (code === "todo_fine_running") return t("fineRunningLocked");
+    // Validierungsfehler mit stabilem Code (routes/todos.py::_TODO_VALUE_ERRORS)
+    if (typeof code === "string" && /^[a-z_]+$/.test(code) && t.has(`errors.${code}`)) return t(`errors.${code}`);
     return error instanceof Error ? error.message : fallback;
   }
 

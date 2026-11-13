@@ -59,3 +59,20 @@ def test_foreign_tenant_cannot_touch_standalone_todo(db):
 
     assert patch_error.value.status_code == 404
     assert delete_error.value.status_code == 404
+
+
+def test_unavailable_assignee_returns_specific_error(db):
+    """Validierungsfehler kommen mit Code und lesbarer Meldung statt «Todo could not be updated»."""
+    from tests.factories import make_participant
+
+    tenant = make_tenant(db, "Tenant Fehlermeldung")
+    other = make_tenant(db, "Tenant Fremdperson")
+    foreign_person = make_participant(db, other.id)
+    todo = _standalone_todo(db, tenant.id)
+
+    with pytest.raises(HTTPException) as excinfo:
+        todos_route.patch_todo(
+            todo.public_id, ProtocolTodoUpdate(assigned_participant_ids=[foreign_person.public_id]), db=db, user=make_current_user(tenant.id)
+        )
+    assert excinfo.value.status_code == 400
+    assert excinfo.value.detail["code"] == "todo_assignee_unavailable"

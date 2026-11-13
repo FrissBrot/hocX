@@ -129,5 +129,10 @@
     "endOfYear": "Saint-Sylvestre"
   },
   "dueSearchPlaceholder": "Rechercher une date ou un rendez-vous …",
-  "fineRunningBadge": "Amende en cours"
+  "fineRunningBadge": "Amende en cours",
+  "errors": {
+    "todo_assignee_unavailable": "La personne responsable n’est plus disponible pour ce procès-verbal (p. ex. retirée du modèle ou inactive). Veuillez choisir une autre personne.",
+    "todo_due_event_unavailable": "L’échéance choisie n’est plus disponible.",
+    "todo_invalid": "La tâche n’a pas pu être enregistrée : saisie invalide."
+  }
 }

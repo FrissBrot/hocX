@@ -129,5 +129,10 @@
     "endOfYear": "Jahresende Silvester"
   },
   "dueSearchPlaceholder": "Datum oder Termin suchen …",
-  "fineRunningBadge": "Busse läuft"
+  "fineRunningBadge": "Busse läuft",
+  "errors": {
+    "todo_assignee_unavailable": "Die verantwortliche Person ist für dieses Protokoll nicht mehr verfügbar (z. B. aus der Vorlage entfernt oder inaktiv). Bitte eine andere Person wählen.",
+    "todo_due_event_unavailable": "Der gewählte Fälligkeitstermin ist nicht mehr verfügbar.",
+    "todo_invalid": "Die Pendenz konnte nicht gespeichert werden: ungültige Angabe."
+  }
 }

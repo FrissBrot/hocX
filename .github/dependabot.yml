@@ -29,3 +29,34 @@ updates:
     groups:
       base-images:
         patterns: ["*"]
+
+  # Python- und npm-Pakete (gepinnt in requirements*.txt bzw. package-lock.json). Neue Versionen
+  # erst nach 14 Tagen (Lieferkettenrisiko; Sicherheitsupdates kommen trotzdem sofort). Patch und
+  # Minor gesammelt je Verzeichnis, Major einzeln. Getestet werden die PRs nachts vom Nachtlauf
+  # (Kommentar im PR); gemergt wird von Hand.
+  - package-ecosystem: pip
+    directories:
+      - /backend
+      - /abgabebox-backend
+      - /photo-analysis-worker
+      - /docs-site
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    open-pull-requests-limit: 10
+    groups:
+      python-minor-patch:
+        update-types: ["minor", "patch"]
+  - package-ecosystem: npm
+    directories:
+      - /frontend
+      - /abgabebox-frontend
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    open-pull-requests-limit: 10
+    groups:
+      npm-minor-patch:
+        update-types: ["minor", "patch"]
