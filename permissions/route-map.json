@@ -1195,6 +1195,9 @@
       "handler": "templates.create_element_definition",
       "requires": [
         "templates.edit"
+      ],
+      "branches": [
+        "finances.read"
       ]
     },
     "DELETE /api/element-definitions/{element_definition_id}": {
@@ -1213,6 +1216,9 @@
       "handler": "templates.patch_element_definition",
       "requires": [
         "templates.edit"
+      ],
+      "branches": [
+        "finances.read"
       ]
     },
     "GET /api/event-field-config": {
@@ -1456,6 +1462,18 @@
       "handler": "files.set_file_best_everywhere",
       "requires": [
         "files.manage"
+      ]
+    },
+    "GET /api/finance-settings": {
+      "handler": "finance_settings.get_finance_settings",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "PATCH /api/finance-settings": {
+      "handler": "finance_settings.update_finance_settings",
+      "requires": [
+        "settings.manage"
       ]
     },
     "GET /api/finance/accounts": {
@@ -2679,6 +2697,9 @@
       "handler": "templates.create_template_element",
       "requires": [
         "templates.edit"
+      ],
+      "branches": [
+        "finances.read"
       ]
     },
     "GET /api/templates/{template_id}/fine-tariff": {

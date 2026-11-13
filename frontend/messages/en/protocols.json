@@ -558,7 +558,8 @@
     "keyHint": "Click: next status · long press: choose · Tab/hover + <key>1–4</key>",
     "emptySearch": "No person found for “{query}”",
     "emptyFilter": "Nobody with this status",
-    "fine": "CHF {amount, number}",
+    "fine": "{currency} {amount, number}",
+    "fineAmount": "{amount, number}",
     "fineTitle": "Fine is created automatically",
     "helpTopic": "Recording attendance",
     "help": "Clicking a person switches to the next status, a long press opens the selection. Use Tab to reach a person and 1–4 to set the status. “Mark remaining present” sets everyone still open. If a fine for lateness or absence is configured, it is created automatically."

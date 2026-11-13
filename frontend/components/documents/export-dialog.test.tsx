@@ -155,9 +155,34 @@ describe("DocumentExportDialog", () => {
     const formats = screen.getByRole("radiogroup", { name: "Format" });
     expect(within(formats).getAllByRole("radio").map((item) => item.textContent)).toEqual(["PDFZum Drucken", "CSV.csv", "Excel.xlsx"]);
     fireEvent.click(within(formats).getByRole("radio", { name: /Excel/ }));
-    fireEvent.click(await screen.findByRole("button", { name: /^Excel herunterladen/ }));
+    // Personendaten: ohne gültiges, zweimal gleiches Passwort kein Download
+    const run = await screen.findByRole("button", { name: /^Excel herunterladen/ });
+    expect(run).toBeDisabled();
+    const password = "geheim-und-lang-genug";
+    fireEvent.change(screen.getByLabelText("Passwort"), { target: { value: password } });
+    fireEvent.change(screen.getByLabelText("Passwort wiederholen"), { target: { value: "anders" } });
+    expect(screen.getByText("Die Passwörter stimmen nicht überein.")).toBeInTheDocument();
+    expect(run).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Passwort wiederholen"), { target: { value: password } });
+    fireEvent.click(run);
     await waitFor(() => expect(api.saveBlob).toHaveBeenCalledWith(blob, "pendenzen.xlsx"));
     expect(api.exportDocumentFile.mock.calls[0][1]).toBe("xlsx");
+    expect(api.exportDocumentFile.mock.calls[0][3]).toBe(password);
+    // Standard: Excel mit Passwort (öffnet ohne Zusatzsoftware)
+    expect(api.exportDocumentFile.mock.calls[0][4]).toBe("excel");
+    // Variante AES-ZIP wählbar
+    fireEvent.change(screen.getByLabelText("Art der Verschlüsselung"), { target: { value: "zip" } });
+    expect(screen.getByText(/Windows-Explorer und macOS können sie nicht öffnen/)).toBeInTheDocument();
+    fireEvent.click(run);
+    await waitFor(() => expect(api.exportDocumentFile).toHaveBeenCalledTimes(2));
+    expect(api.exportDocumentFile.mock.calls[1][4]).toBe("zip");
+
+    // Verschlüsselung bewusst abwählen: kein Passwort nötig, Download ohne Passwort
+    fireEvent.click(screen.getByLabelText("Datei verschlüsseln (empfohlen)"));
+    expect(screen.queryByLabelText("Passwort")).not.toBeInTheDocument();
+    fireEvent.click(run);
+    await waitFor(() => expect(api.exportDocumentFile).toHaveBeenCalledTimes(3));
+    expect(api.exportDocumentFile.mock.calls[2][3]).toBeUndefined();
   });
 
   it("blocks the export when no published template exists", async () => {

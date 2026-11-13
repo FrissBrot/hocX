@@ -81,6 +81,8 @@ function whatsappText(text: string): ReactNode[] {
   });
 }
 
+const MIN_EXPORT_PASSWORD_LENGTH = 12;
+
 export function DocumentExportDialog({ open, onClose, context, onExported }: Props) {
   const t = useTranslations("documentStudio");
   const toast = useToast();
@@ -101,6 +103,13 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
   const [previewState, setPreviewState] = useState<"idle" | "loading" | "error">("idle");
   const [previewError, setPreviewError] = useState("");
   const [busy, setBusy] = useState(false);
+  // CSV/Excel enthalten Personendaten: standardmässig als Excel mit Passwort (SECURITY-RULES §4.4),
+  // bewusst abwählbar
+  const [encrypt, setEncrypt] = useState(true);
+  // Standard: Excel mit Passwort (öffnet ohne Zusatzsoftware); AES-ZIP nur auf Wunsch
+  const [encryption, setEncryption] = useState<"excel" | "zip">("excel");
+  const [zipPassword, setZipPassword] = useState("");
+  const [zipPasswordRepeat, setZipPasswordRepeat] = useState("");
   // Spalten für CSV, Excel und Text: alle angeboten, abgewählte gelten nur für diesen Export
   const [columns, setColumns] = useState<string[]>([]);
   const [excludedColumns, setExcludedColumns] = useState<string[]>([]);
@@ -181,6 +190,8 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
   // werden gecacht; CSV/Excel/Text kommen gekürzt von /documents/export/preview.
   const requestKey = JSON.stringify(request);
   const dataFormat = format === "csv" || format === "xlsx" || format === "markdown" ? format : null;
+  const offersEncryption = format === "csv" || format === "xlsx";
+  const needsPassword = offersEncryption && encrypt;
   const excludedKey = JSON.stringify(excludedColumns);
   useEffect(() => {
     if (!open || !templateId || format === "ics") return;
@@ -288,8 +299,9 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
       if (format === "pdf") await createPdf();
       else if (format === "markdown") await copyMarkdown();
       else {
-        const { blob, filename } = await exportDocumentFile(request, format, format === "ics" ? [] : excludedColumns);
+        const { blob, filename } = await exportDocumentFile(request, format, format === "ics" ? [] : excludedColumns, needsPassword ? zipPassword : undefined, encryption);
         saveBlob(blob, filename);
+        if (needsPassword) toast(t(encryption === "zip" ? "export.encryptedSavedZip" : "export.encryptedSaved"), "success");
       }
     } catch (error) {
       toast(apiErrorMessage(error, t("export.failed")), "error");
@@ -302,7 +314,8 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
   const selected = templates?.find((item) => item.id === templateId) ?? null;
   const showColumns = format !== "pdf" && format !== "ics" && columns.length > 0;
   const runLabel = selectedTodos === null ? t(`export.run.${format}`) : t("export.runCount", { label: t(`export.run.${format}`), count: selectedTodos });
-  const runDisabled = busy || !templateId || selectedTodos === 0;
+  const passwordValid = zipPassword.trim().length >= MIN_EXPORT_PASSWORD_LENGTH && zipPassword === zipPasswordRepeat;
+  const runDisabled = busy || !templateId || selectedTodos === 0 || (needsPassword && !passwordValid);
   const optionBits = [
     language ? t(`language.${language}`) : null,
     options.title ? t("export.summaryTitle") : null,
@@ -347,6 +360,35 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
             );
           })}
           <span className="field-help">{t("export.columnsHelp")}</span>
+        </div>
+      )}
+      {offersEncryption && (
+        <label className="export-encrypt-toggle">
+          <input type="checkbox" checked={encrypt} onChange={(event) => setEncrypt(event.target.checked)} />
+          <span>{t("export.encrypt")}</span>
+        </label>
+      )}
+      {offersEncryption && !encrypt && <StatusBanner tone="neutral" message={t("export.encryptOffHint")} />}
+      {needsPassword && (
+        <div className="export-password" role="group" aria-label={t("export.passwordGroup")}>
+          <label className="field-stack export-password-method">
+            <span className="field-label">{t("export.encryptionMethod")}</span>
+            <Select value={encryption} onChange={(event) => setEncryption(event.target.value === "zip" ? "zip" : "excel")}>
+              <option value="excel">{t("export.encryptionExcel")}</option>
+              <option value="zip">{t("export.encryptionZip")}</option>
+            </Select>
+          </label>
+          <label className="field-stack">
+            <span className="field-label">{t("export.password")}</span>
+            <input type="password" autoComplete="new-password" value={zipPassword} onChange={(event) => setZipPassword(event.target.value)} />
+          </label>
+          <label className="field-stack">
+            <span className="field-label">{t("export.passwordRepeat")}</span>
+            <input type="password" autoComplete="new-password" value={zipPasswordRepeat} onChange={(event) => setZipPasswordRepeat(event.target.value)} />
+          </label>
+          <span className="field-help">
+            {zipPasswordRepeat && zipPassword !== zipPasswordRepeat ? t("export.passwordMismatch") : t(encryption === "zip" ? "export.passwordHelpZip" : "export.passwordHelp", { min: MIN_EXPORT_PASSWORD_LENGTH })}
+          </span>
         </div>
       )}
       <div className="export-footer-row">

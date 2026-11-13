@@ -8,6 +8,13 @@ from datetime import date
 import pytest
 
 from tests.render_helpers import render_now
+import io
+import secrets
+
+import msoffcrypto
+import pyzipper
+from msoffcrypto.exceptions import InvalidKeyError
+from openpyxl import load_workbook
 from fastapi import HTTPException
 
 from app.api.routes import documents as routes
@@ -133,17 +140,73 @@ def test_canvas_returns_hints_brand_and_snippets_with_studio_rights(db, setup):
     assert excinfo.value.status_code == 404
 
 
+# Zur Laufzeit erzeugt (SECURITY-RULES §5.1), mindestens 12 Zeichen
+EXPORT_PASSWORD = secrets.token_urlsafe(16)
+
+
+def _decrypt(response, *, binary: bool = False):
+    """Verschlüsselte Exporte kommen als Excel mit Passwort (SECURITY-RULES §4.4): entschlüsseln und
+    alle Zellen als Text (oder die entschlüsselte .xlsx) zurückgeben."""
+    assert response.media_type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    office = msoffcrypto.OfficeFile(io.BytesIO(response.body))
+    office.load_key(password=EXPORT_PASSWORD)
+    plain = io.BytesIO()
+    office.decrypt(plain)
+    if binary:
+        return plain.getvalue()
+    workbook = load_workbook(plain)
+    return "\n".join(";".join(str(value) for value in row if value is not None) for sheet in workbook for row in sheet.iter_rows(values_only=True))
+
+
+def test_csv_and_xlsx_exports_require_a_password_and_are_encrypted(db, setup):
+    """Exporte mit Personendaten verlassen den Server nur verschlüsselt."""
+    with pytest.raises(HTTPException) as excinfo:
+        routes.export_document_format(routes.FormatExportRequest(document_type="todos", format="csv"), db=db, user=setup["reader"])
+    assert excinfo.value.status_code == 422
+    with pytest.raises(HTTPException) as excinfo:
+        routes.export_document_format(routes.FormatExportRequest(document_type="todos", format="csv", password=" " * 12), db=db, user=setup["reader"])
+    assert excinfo.value.status_code == 422
+    response = routes.export_document_format(routes.FormatExportRequest(document_type="todos", format="csv", password=EXPORT_PASSWORD), db=db, user=setup["reader"])
+    assert "Getränke besorgen".encode("utf-8") not in response.body
+    # Auch «CSV» kommt verschlüsselt als Excel (reiner Text kann kein Passwort tragen)
+    assert response.headers["content-disposition"].endswith('.xlsx"')
+    wrong = msoffcrypto.OfficeFile(io.BytesIO(response.body))
+    wrong.load_key(password="falsches-passwort-123")
+    with pytest.raises(InvalidKeyError):
+        wrong.decrypt(io.BytesIO())
+    assert "Getränke besorgen" in _decrypt(response)
+
+    # Variante AES-ZIP: CSV bleibt CSV, nur mit dem Passwort lesbar
+    zipped = routes.export_document_format(
+        routes.FormatExportRequest(document_type="todos", format="csv", password=EXPORT_PASSWORD, encryption="zip"), db=db, user=setup["reader"]
+    )
+    assert zipped.media_type == "application/zip" and zipped.headers["content-disposition"].endswith('.csv.zip"')
+    assert "Getränke besorgen".encode("utf-8") not in zipped.body
+    with pyzipper.AESZipFile(io.BytesIO(zipped.body)) as archive:
+        archive.setpassword(b"falsches-passwort-123")
+        with pytest.raises(RuntimeError):
+            archive.read(archive.namelist()[0])
+        archive.setpassword(EXPORT_PASSWORD.encode("utf-8"))
+        (name,) = archive.namelist()
+        assert name.endswith(".csv") and "Getränke besorgen" in archive.read(name).decode("utf-8")
+
+    # Bewusst abgewählt: unverschlüsselte Datei, im Audit vermerkt
+    plain = routes.export_document_format(routes.FormatExportRequest(document_type="todos", format="csv", encrypt=False), db=db, user=setup["reader"])
+    assert plain.media_type.startswith("text/csv") and "Getränke besorgen" in plain.body.decode("utf-8")
+
+
 def test_extra_formats(db, setup):
-    csv = routes.export_document_format(routes.FormatExportRequest(document_type="todos", format="csv"), db=db, user=setup["reader"])
-    assert "Getränke besorgen" in csv.body.decode("utf-8")
+    csv = routes.export_document_format(routes.FormatExportRequest(document_type="todos", format="csv", password=EXPORT_PASSWORD), db=db, user=setup["reader"])
+    assert "Getränke besorgen" in _decrypt(csv)
     markdown = routes.export_document_format(routes.FormatExportRequest(document_type="todos", format="markdown"), db=db, user=setup["reader"])
     assert "Getränke besorgen" in markdown.body.decode("utf-8")
     ics = routes.export_document_format(routes.FormatExportRequest(document_type="events", format="ics"), db=db, user=setup["reader"])
     assert "BEGIN:VCALENDAR" in ics.body.decode("utf-8") and "Sommerfest" in ics.body.decode("utf-8")
-    xlsx = routes.export_document_format(routes.FormatExportRequest(protocol_id=setup["protocol"].public_id, format="xlsx"), db=db, user=setup["kassier"])
-    assert xlsx.body[:2] == b"PK"
+    xlsx = routes.export_document_format(routes.FormatExportRequest(protocol_id=setup["protocol"].public_id, format="xlsx", password=EXPORT_PASSWORD), db=db, user=setup["kassier"])
+    assert xlsx.headers["content-disposition"].endswith('.xlsx"')
+    assert _decrypt(xlsx, binary=True)[:2] == b"PK"
     with pytest.raises(HTTPException) as excinfo:
-        routes.export_document_format(routes.FormatExportRequest(document_type="form", format="csv"), db=db, user=setup["reader"])
+        routes.export_document_format(routes.FormatExportRequest(document_type="form", format="csv", password=EXPORT_PASSWORD), db=db, user=setup["reader"])
     assert excinfo.value.status_code == 422
 
 
@@ -153,8 +216,9 @@ def test_export_columns_can_be_deselected(db, setup):
     assert "Aufgabe" in columns and "Fällig" in columns
 
     csv = routes.export_document_format(
-        routes.FormatExportRequest(document_type="todos", format="csv", exclude_columns=["Fällig"]), db=db, user=setup["reader"]
-    ).body.decode("utf-8")
+        routes.FormatExportRequest(document_type="todos", format="csv", password=EXPORT_PASSWORD, exclude_columns=["Fällig"]), db=db, user=setup["reader"]
+    )
+    csv = _decrypt(csv)
     assert "Getränke besorgen" in csv and "Fällig" not in csv
 
     markdown = routes.export_document_format(
@@ -168,7 +232,7 @@ def test_export_columns_can_be_deselected(db, setup):
 
     with pytest.raises(HTTPException) as excinfo:
         routes.export_document_format(
-            routes.FormatExportRequest(document_type="todos", format="csv", exclude_columns=columns), db=db, user=setup["reader"]
+            routes.FormatExportRequest(document_type="todos", format="csv", password=EXPORT_PASSWORD, exclude_columns=columns), db=db, user=setup["reader"]
         )
     assert excinfo.value.status_code == 422
 
@@ -176,10 +240,10 @@ def test_export_columns_can_be_deselected(db, setup):
 def test_page_params_reach_matching_components(db, setup):
     # Filter der Todo-Seite: nur erledigte - keine Zeile, also keine Tabelle für CSV
     with pytest.raises(HTTPException) as excinfo:
-        routes.export_document_format(routes.FormatExportRequest(document_type="todos", format="csv", params={"status": "done"}), db=db, user=setup["reader"])
+        routes.export_document_format(routes.FormatExportRequest(document_type="todos", format="csv", password=EXPORT_PASSWORD, params={"status": "done"}), db=db, user=setup["reader"])
     assert excinfo.value.status_code == 422
-    csv = routes.export_document_format(routes.FormatExportRequest(document_type="todos", format="csv", params={"status": "all"}), db=db, user=setup["reader"])
-    assert "Getränke besorgen" in csv.body.decode("utf-8")
+    csv = routes.export_document_format(routes.FormatExportRequest(document_type="todos", format="csv", password=EXPORT_PASSWORD, params={"status": "all"}), db=db, user=setup["reader"])
+    assert "Getränke besorgen" in _decrypt(csv)
 
 
 def test_sources_are_tenant_scoped(db, setup):
@@ -294,9 +358,9 @@ def test_todo_export_filters_by_due_date_tag_and_manual_selection(db, setup):
 
     def exported(**params) -> str:
         try:
-            return routes.export_document_format(
-                routes.FormatExportRequest(document_type="todos", format="csv", params={"status": "all", **params}), db=db, user=setup["reader"]
-            ).body.decode("utf-8")
+            return _decrypt(routes.export_document_format(
+                routes.FormatExportRequest(document_type="todos", format="csv", password=EXPORT_PASSWORD, params={"status": "all", **params}), db=db, user=setup["reader"]
+            ))
         except HTTPException as exc:
             assert exc.status_code == 422  # keine Zeile mehr -> keine Tabelle
             return ""

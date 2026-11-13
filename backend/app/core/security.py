@@ -41,6 +41,8 @@ class CurrentUser:
     current_tenant_public_id: uuid.UUID
     current_tenant_name: str
     current_tenant_profile_image_path: str | None
+    # Währung des Vereins (tenant.finance_currency) für die Anzeige von Bussen und Konten
+    current_tenant_currency: str = "CHF"
     protocol_accordion_enabled: bool = True
     # Rad-Effekt beim Scrollen im Protokoll-Editor; an = Akkordeon aus (Design «Protokoll-Editor v2»)
     # Rad-Effekt standardmässig aus (ruckelte bei grossen Protokollen), nur ausdrücklich eingeschaltet an
@@ -235,6 +237,7 @@ def build_current_user(db: Session, user: AppUser, *, mfa_verified: bool = False
         current_tenant_public_id=tenant.public_id,
         current_tenant_name=tenant.name,
         current_tenant_profile_image_path=tenant.profile_image_path,
+        current_tenant_currency=tenant.finance_currency or "CHF",
         mfa_verified=mfa_verified,
         current_tenant_features=tenant_features,
         current_tenant_read_only_features=read_only_features,

@@ -914,7 +914,20 @@
     "previewMoreRows": "… and {count, plural, one {# more row} other {# more rows}}",
     "previewWhatsapp": "This is how the text appears in WhatsApp",
     "previewNone": "Calendar files have no preview.",
-    "previewEmpty": "No rows for this selection."
+    "previewEmpty": "No rows for this selection.",
+    "passwordGroup": "Password for the file",
+    "password": "Password",
+    "passwordRepeat": "Repeat password",
+    "passwordHelp": "The file contains personal data and is delivered as a password-protected Excel file, also for CSV (CSV cannot carry a password). Excel, Numbers and LibreOffice ask for it when opening. At least {min} characters.",
+    "passwordMismatch": "The passwords do not match.",
+    "encryptedSaved": "Password-protected Excel file saved. Opening it requires the password.",
+    "encrypt": "Encrypt file (recommended)",
+    "encryptOffHint": "The file is downloaded unencrypted. It may contain personal data: only share it with people allowed to see it.",
+    "encryptionMethod": "Encryption type",
+    "encryptionExcel": "Excel with password – opens without extra software",
+    "encryptionZip": "ZIP file (AES-256) – CSV stays CSV, needs 7-Zip, Keka or WinRAR",
+    "passwordHelpZip": "The file comes in a password-protected ZIP file (AES-256). Windows Explorer and macOS cannot open it; you need 7-Zip, Keka or WinRAR. At least {min} characters.",
+    "encryptedSavedZip": "Password-protected ZIP file saved. Open it with 7-Zip, Keka or WinRAR."
   },
   "exports": {
     "allTypes": "All document types",

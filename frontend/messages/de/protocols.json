@@ -558,7 +558,8 @@
     "keyHint": "Klick: nächster Status · lang drücken: Auswahl · Tab/Maus + <key>1–4</key>",
     "emptySearch": "Keine Person gefunden für «{query}»",
     "emptyFilter": "Niemand mit diesem Status",
-    "fine": "CHF {amount, number}",
+    "fine": "{currency} {amount, number}",
+    "fineAmount": "{amount, number}",
     "fineTitle": "Busse wird automatisch erstellt",
     "helpTopic": "Anwesenheit erfassen",
     "help": "Ein Klick auf eine Person schaltet zum nächsten Status, langes Drücken öffnet die Auswahl. Mit Tab zur Person springen und mit 1–4 den Status setzen. «Übrige auf anwesend» setzt alle noch offenen Personen. Ist eine Busse für Verspätung oder Fehlen hinterlegt, entsteht sie automatisch."

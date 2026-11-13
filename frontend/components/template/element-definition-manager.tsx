@@ -9,6 +9,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
+import { apiErrorMessage } from "@/lib/api/error-message";
 import { elementTypeLabels } from "@/lib/constants/element-types";
 import { useTagConfig } from "@/lib/hooks/use-tag-config";
 import type { CycleConfigSummary, ElementDefinition, ElementDefinitionBlock, EventSummary, ParticipantSummary, StructuredListDefinition, StructuredListEntry } from "@/types/api";
@@ -27,6 +28,8 @@ type ElementDefinitionManagerProps = {
   availableAccounts?: { id: string; name: string; currency_label: string }[];
   tenantId: string | null;
   autoOpenCreate?: boolean;
+  /** Bussenliste nur mit Finanzzugriff (finances.read) anlegen/einstellen. */
+  canConfigureFines?: boolean;
 };
 
 /** Offener Block-Dialog: neues Element, neuer Block in einem Element oder bestehender Block. */
@@ -51,6 +54,7 @@ export function ElementDefinitionManager({
   availableAccounts = [],
   tenantId,
   autoOpenCreate = false,
+  canConfigureFines = true,
 }: ElementDefinitionManagerProps) {
   const t = useTranslations("templates.elementEditor");
   const tTypes = useTranslations("templates");
@@ -123,6 +127,7 @@ export function ElementDefinitionManager({
     tagConfig,
     accounts: availableAccounts,
     cycleConfigs,
+    canConfigureFines,
   };
 
   function replaceDefinition(updated: ElementDefinition) {
@@ -166,7 +171,7 @@ export function ElementDefinitionManager({
       showToast(message, "success");
       return updated;
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("toast.blockSaveFailed"), "error");
+      showToast(apiErrorMessage(error, t, "errors", t("toast.blockSaveFailed")), "error");
       return null;
     }
   }
@@ -190,7 +195,7 @@ export function ElementDefinitionManager({
         showToast(t("toast.elementCreated", { title: created.title }), "success");
         return true;
       } catch (error) {
-        showToast(error instanceof Error ? error.message : t("toast.elementCreateFailed"), "error");
+        showToast(apiErrorMessage(error, t, "errors", t("toast.elementCreateFailed")), "error");
         return false;
       }
     }
@@ -224,7 +229,7 @@ export function ElementDefinitionManager({
       showToast(t("toast.elementSaved", { title: updated.title }), "success");
       setSelectedId(null);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("toast.elementSaveFailed"), "error");
+      showToast(apiErrorMessage(error, t, "errors", t("toast.elementSaveFailed")), "error");
     }
   }
 
@@ -474,6 +479,7 @@ export function ElementDefinitionManager({
       <TypePickerModal
         open={Boolean(session) && typePickerOpen}
         activeTypeId={session?.form.element_type_id ?? 1}
+        hiddenCodes={canConfigureFines ? [] : ["fine_list"]}
         onPick={(typeId) => {
           if (session) updateForm(changeElementType(session.form, typeId, session.mode));
           setTypePickerOpen(false);

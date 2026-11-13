@@ -34,12 +34,15 @@ AmountInput = Annotated[Decimal, Field(ge=-MAX_AMOUNT, le=MAX_AMOUNT)]
 
 class FinanceAccountCreate(BaseModel):
     name: AccountName
-    currency_label: CurrencyLabel = "CHF"
+    # Veraltet: die Währung kommt aus den Mandanten-Einstellungen (tenant.finance_currency);
+    # ein gesendeter Wert wird ignoriert, damit ältere Clients nicht scheitern.
+    currency_label: CurrencyLabel | None = None
     description: AccountDescription | None = None
 
 
 class FinanceAccountUpdate(BaseModel):
     name: AccountName | None = None
+    # Veraltet, wird ignoriert (siehe FinanceAccountCreate)
     currency_label: CurrencyLabel | None = None
     # null bzw. "" leert die Beschreibung (Repository wertet model_fields_set aus)
     description: AccountDescription | None = None

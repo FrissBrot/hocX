@@ -19,18 +19,21 @@ export default async function FinancesPage() {
   if (!hasFinanceRole || !hasFinanceFeature) redirect("/");
 
   const accounts = await backendFetchWithSession<FinanceAccount[]>("/api/finance/accounts") ?? [];
+  // Eine Währung je Verein, gesetzt in den Mandanten-Einstellungen
+  const currency = session.current_tenant?.finance_currency ?? accounts[0]?.currency_label ?? "";
 
   return (
     <AppShell initialSession={session}>
       <ResponsiveView
         // can() berücksichtigt den Nur-Lesen-Zustand nach einem Downgrade schon (finances.manage ist
         // keine Lese-Berechtigung des Features «finance»): canWrite ist dann false.
-        mobile={<MobileFinances initialAccounts={accounts} canWrite={can(session, "finances.manage")} readOnly={featureAccess(session, "finance") === "read_only"} />}
+        mobile={<MobileFinances initialAccounts={accounts} currency={currency} canWrite={can(session, "finances.manage")} readOnly={featureAccess(session, "finance") === "read_only"} />}
         desktop={
           <>
           <RouteTabs tabs={financeTabs(t)} activeHref="/finances" />
           <FinancesView
             initialAccounts={accounts}
+            currency={currency}
             canWrite={can(session, "finances.manage")}
             readOnly={featureAccess(session, "finance") === "read_only"}
           />

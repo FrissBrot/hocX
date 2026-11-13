@@ -621,7 +621,8 @@
       },
       "rangeHelp": "Fines of this protocol are always shown.",
       "openOnly": "Open fines only",
-      "byParticipant": "Order by person"
+      "byParticipant": "Order by person",
+      "financeRequired": "Only people with access to finances can add or configure a fine list. The fine list shows the fines of all members."
     },
     "image": {
       "title": "Image",
@@ -919,6 +920,9 @@
       "blockOrderSaved": "Order was saved",
       "blockSaveFailed": "Block could not be saved",
       "listEntriesFailed": "List entries could not be loaded"
+    },
+    "errors": {
+      "fine_list_requires_finance": "Only people with access to finances may add or configure a fine list."
     }
   },
   "studio": {

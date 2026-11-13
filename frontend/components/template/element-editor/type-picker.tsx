@@ -145,16 +145,19 @@ export function TypePickerModal({
   activeTypeId,
   onPick,
   onClose,
+  hiddenCodes = [],
 }: {
   open: boolean;
   activeTypeId: number;
+  /** Typen, die dieser Benutzer nicht neu wählen darf (z. B. Bussenliste ohne Finanzzugriff). */
+  hiddenCodes?: string[];
   onPick: (elementTypeId: number) => void;
   onClose: () => void;
 }) {
   const t = useTranslations("templates.elementEditor");
   const tTypes = useTranslations("templates");
   const options = elementTypeOptions(tTypes);
-  const pickable = pickableElementTypes();
+  const pickable = pickableElementTypes().filter((type) => type.id === activeTypeId || !hiddenCodes.includes(type.code));
   return (
     <Modal open={open} onClose={onClose} title={t("typePicker.title")} description={t("typePicker.description")} size="fullscreen">
       <div className="grid">

@@ -16,7 +16,7 @@
   "accountModalDescription": "Gérer les revenus et dépenses dans un compte dédié.",
   "nameLabel": "Nom",
   "namePlaceholder": "p. ex. Caisse du club",
-  "currencyLabel": "Libellé de la devise",
+  "currencyLabel": "Devise",
   "descriptionLabel": "Description (facultatif)",
   "descriptionPlaceholder": "Description…",
   "saving": "Enregistrement…",
@@ -372,8 +372,8 @@
   "provisionalHelp": "Somme des amendes encore ouvertes (présence et tâches) qui seront comptabilisées sur ce compte lors de l’encaissement. Elle n’est pas encore comprise dans le solde.",
   "lockedHelpTopic": "écritures verrouillées",
   "lockedHelp": "Les écritures avec un cadenas appartiennent à une amende encaissée ou à un procès-verbal clôturé et ne peuvent pas être modifiées directement.",
-  "currencyHelpTopic": "désignation de la monnaie",
-  "currencyHelp": "Simple libellé (p. ex. CHF, EUR). hocX ne convertit pas ; les totaux sont affichés séparément par monnaie.",
+  "currencyHelpTopic": "Devise",
+  "currencyHelp": "S’applique à tous les comptes et amendes de l’association. Ce n’est qu’une désignation (p. ex. CHF, EUR, Fr.) : hocX ne convertit pas les montants.",
   "finesHelpTopic": "amendes",
   "finesHelp": "Les amendes ouvertes sont reportées au procès-verbal suivant. L’encaissement comptabilise le montant sur le compte des amendes, la réouverture l’annule. Les amendes supprimées plus tard nécessitent une justification.",
   "docsLink": "Aide sur les finances",
@@ -391,5 +391,6 @@
   "periodExpenses": "Dépenses",
   "periodClosing": "Solde final",
   "exportButton": "Exporter",
-  "reopenConfirm": "Annuler l’encaissement de {amount} pour {name} ? L’écriture dans les finances sera supprimée et l’amende sera de nouveau ouverte."
+  "reopenConfirm": "Annuler l’encaissement de {amount} pour {name} ? L’écriture dans les finances sera supprimée et l’amende sera de nouveau ouverte.",
+  "currencyFromSettings": "Tous les comptes et amendes utilisent la devise de l’association {currency}. Elle se définit dans les réglages « Organisation »."
 }

@@ -149,6 +149,7 @@ class TenantService:
             created_at=tenant.created_at,
             updated_at=tenant.updated_at,
             enabled_features=sorted(actor.current_tenant_features),
+            finance_currency=tenant.finance_currency,
             identity_verified=tenant.identity_verified_at is not None,
         )
 

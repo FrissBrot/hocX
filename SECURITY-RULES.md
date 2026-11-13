@@ -76,7 +76,11 @@ derselben Zeile **begründet** markiert; eine Markierung ohne echten Grund ist e
 3. Fehler: `raise HTTPException(...) from exc` in jedem `except`-Block (siehe CLAUDE.md, Zentrale
    Fehlererfassung). Interne Details (Stacktraces, SQL, Pfade) gehören ins Fehlerprotokoll, nicht in
    die Antwort.
-4. Exporte mit Personendaten verlassen den Server nur verschlüsselt (`export_crypto.py`).
+4. Exporte mit Personendaten verlassen den Server nur verschlüsselt (`export_crypto.py`). Einzige
+   Ausnahme: Tabellenexporte aus dem Document Studio (CSV/Excel) sind standardmässig verschlüsselt
+   (Excel mit Passwort, `documents/exports.py::encrypt_xlsx`, wahlweise AES-ZIP), die Person kann
+   die Verschlüsselung im Export-Dialog aber bewusst abwählen (auditiert, `document.export_*` mit
+   `encrypted: false`).
 
 ## 5. Secrets und Abhängigkeiten
 

@@ -9,6 +9,7 @@ import { useEventFieldConfig } from "@/lib/hooks/use-event-field-config";
 
 import { ChartCycleSelection } from "@/components/protocol/chart-cycle-selection";
 import { DataTable } from "@/components/ui/data-table";
+import { StatusBanner } from "@/components/ui/status-banner";
 import { DateInput } from "@/components/ui/date-input";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { SearchableMultiSelect, SearchableSelect } from "@/components/ui/searchable-select";
@@ -28,6 +29,8 @@ import { Select } from "@/components/ui/select";
 export type BlockEditorData = RowInspectorData & {
   accounts: { id: string; name: string; currency_label: string }[];
   cycleConfigs: CycleConfigSummary[];
+  /** Bussenliste anlegen/einstellen nur mit Finanzzugriff (finances.read); das Backend prüft es auch. */
+  canConfigureFines?: boolean;
 };
 
 const EVENT_FIELDS = [
@@ -401,6 +404,8 @@ export function BlockEditor({
 
         {code === "fine_list" ? (
           <SettingsSection title={t("fineList.title")} description={t("fineList.description")}>
+            {data.canConfigureFines === false ? <StatusBanner tone="neutral" message={t("fineList.financeRequired")} /> : null}
+            <fieldset className="fieldset-plain grid" disabled={data.canConfigureFines === false}>
             <div className="two-col">
               <label className="field-stack">
                 <span className="field-label">{t("fineList.account")}</span>
@@ -431,6 +436,7 @@ export function BlockEditor({
                 <span><strong>{t("fineList.byParticipant")}</strong></span>
               </label>
             </div>
+            </fieldset>
           </SettingsSection>
         ) : null}
 

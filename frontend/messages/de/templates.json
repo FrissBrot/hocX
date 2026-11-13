@@ -621,7 +621,8 @@
       },
       "rangeHelp": "Die Bussen dieses Protokolls erscheinen immer.",
       "openOnly": "Nur offene Bussen",
-      "byParticipant": "Nach Person ordnen"
+      "byParticipant": "Nach Person ordnen",
+      "financeRequired": "Nur wer Zugriff auf die Finanzen hat, kann eine Bussenliste anlegen oder einstellen. Die Bussenliste zeigt die Bussen aller Mitglieder."
     },
     "image": {
       "title": "Bild",
@@ -919,6 +920,9 @@
       "blockOrderSaved": "Reihenfolge wurde gespeichert",
       "blockSaveFailed": "Block konnte nicht gespeichert werden",
       "listEntriesFailed": "Listeneinträge konnten nicht geladen werden"
+    },
+    "errors": {
+      "fine_list_requires_finance": "Eine Bussenliste anlegen oder einstellen darf nur, wer Zugriff auf die Finanzen hat."
     }
   },
   "studio": {

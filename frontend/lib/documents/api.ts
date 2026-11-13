@@ -566,13 +566,18 @@ export async function exportPreview(
 export async function exportDocumentFile(
   request: DocumentRequest,
   format: "csv" | "xlsx" | "ics" | "markdown",
-  excludeColumns: string[] = []
+  excludeColumns: string[] = [],
+  // CSV/XLSX: mit Passwort verschlüsselt (Personendaten, SECURITY-RULES §4.4) - «excel» = Excel-Datei
+  // mit Passwort (öffnet ohne Zusatzsoftware), «zip» = AES-ZIP; ohne Passwort ausdrücklich
+  // unverschlüsselt (im Dialog abgewählt). Im Body, nie in der URL.
+  password?: string,
+  encryption: "excel" | "zip" = "excel"
 ): Promise<{ blob: Blob; filename: string }> {
   const response = await fetch("/api/documents/export", {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...request, format, exclude_columns: excludeColumns }),
+    body: JSON.stringify({ ...request, format, exclude_columns: excludeColumns, ...(password ? { password, encryption } : format === "csv" || format === "xlsx" ? { encrypt: false } : {}) }),
     signal: AbortSignal.timeout(DOCUMENT_TIMEOUT_MS),
   });
   if (!response.ok) {

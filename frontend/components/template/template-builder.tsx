@@ -56,6 +56,8 @@ type TemplateEditorProps = {
   availableCycleConfigs: CycleConfigSummary[];
   // Nur mit gebuchten Finanzen (sonst kein Bussentarif, siehe require_feature im Backend).
   financeAccounts?: FinanceAccount[] | null;
+  /** Bussenliste nur mit Finanzzugriff (finances.read) anlegen/einstellen. */
+  canConfigureFines?: boolean;
   // Einstellungen, Teilnehmende und Bussentarif: nur Admins; Traktanden und Gestaltung auch Schreibende
   canManage?: boolean;
   knownEventTags?: string[];
@@ -516,6 +518,7 @@ export function TemplateEditor({
   initialAssignedParticipants,
   availableCycleConfigs,
   financeAccounts = null,
+  canConfigureFines = true,
   canManage = true,
   knownEventTags = [],
 }: TemplateEditorProps) {
@@ -674,6 +677,7 @@ export function TemplateEditor({
     tagConfig,
     accounts: financeAccounts ?? [],
     cycleConfigs: availableCycleConfigs,
+    canConfigureFines,
   };
 
   useEffect(() => {

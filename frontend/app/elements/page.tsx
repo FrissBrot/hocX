@@ -49,6 +49,7 @@ export default async function ElementsPage({ searchParams }: { searchParams: Pro
               availableAccounts={accounts}
               tenantId={session.current_tenant?.id ?? null}
               autoOpenCreate={create === "1"}
+              canConfigureFines={can(session, "finances.read")}
             />
           </section>
           {capabilities ? (

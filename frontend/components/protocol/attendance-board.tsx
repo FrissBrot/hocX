@@ -31,6 +31,8 @@ type Props = {
   editable: boolean;
   /** Offene Busse je Teilnehmer-ID (Betrag), nur wenn Bussen konfiguriert sind */
   fineAmountById: Map<string, number>;
+  /** Vereinswährung (Mandanten-Einstellungen); leer = Betrag ohne Währung. */
+  fineCurrency?: string;
   onChange: (participant: ParticipantSummary, status: AttendanceStatus) => Promise<void> | void;
   onMarkOpenPresent: (participants: ParticipantSummary[]) => Promise<void> | void;
 };
@@ -56,7 +58,7 @@ function isFormField(target: EventTarget | null) {
   return Boolean(el && (["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName) || el.isContentEditable));
 }
 
-export function AttendanceBoard({ participants, statusById, editable, fineAmountById, onChange, onMarkOpenPresent }: Props) {
+export function AttendanceBoard({ participants, statusById, editable, fineAmountById, fineCurrency = "", onChange, onMarkOpenPresent }: Props) {
   const t = useTranslations("protocols.attendanceBoard");
   const tStatus = useTranslations("protocols.attendance");
   const [query, setQuery] = useState("");
@@ -252,7 +254,7 @@ export function AttendanceBoard({ participants, statusById, editable, fineAmount
                 </span>
                 {fineAmount != null ? (
                   <span className="attendance-card-fine" title={t("fineTitle")}>
-                    {t("fine", { amount: fineAmount })}
+                    {fineCurrency ? t("fine", { amount: fineAmount, currency: fineCurrency }) : t("fineAmount", { amount: fineAmount })}
                   </span>
                 ) : null}
               </button>

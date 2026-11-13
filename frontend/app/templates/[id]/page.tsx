@@ -52,6 +52,7 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
               initialAssignedParticipants={selectedParticipants ?? []}
               availableCycleConfigs={cycleConfigs ?? []}
               financeAccounts={financeAccounts}
+              canConfigureFines={can(session, "finances.read")}
             />
           </section>
           </>

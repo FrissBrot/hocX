@@ -914,7 +914,20 @@
     "previewMoreRows": "… et {count, plural, one {# autre ligne} other {# autres lignes}}",
     "previewWhatsapp": "Voici comment le texte apparaît dans WhatsApp",
     "previewNone": "Pas d’aperçu pour les fichiers de calendrier.",
-    "previewEmpty": "Aucune ligne pour cette sélection."
+    "previewEmpty": "Aucune ligne pour cette sélection.",
+    "passwordGroup": "Mot de passe du fichier",
+    "password": "Mot de passe",
+    "passwordRepeat": "Répéter le mot de passe",
+    "passwordHelp": "Le fichier contient des données personnelles et est fourni comme fichier Excel protégé par mot de passe, même pour le CSV (un CSV ne peut pas porter de mot de passe). Excel, Numbers et LibreOffice le demandent à l’ouverture. Au moins {min} caractères.",
+    "passwordMismatch": "Les mots de passe ne correspondent pas.",
+    "encryptedSaved": "Fichier Excel protégé par mot de passe enregistré. Le mot de passe est nécessaire pour l’ouvrir.",
+    "encrypt": "Chiffrer le fichier (recommandé)",
+    "encryptOffHint": "Le fichier est téléchargé sans chiffrement. Il peut contenir des données personnelles : ne le transmettre qu’aux personnes autorisées.",
+    "encryptionMethod": "Type de chiffrement",
+    "encryptionExcel": "Excel avec mot de passe – s’ouvre sans logiciel supplémentaire",
+    "encryptionZip": "Fichier ZIP (AES-256) – le CSV reste CSV, nécessite 7-Zip, Keka ou WinRAR",
+    "passwordHelpZip": "Le fichier est fourni dans un fichier ZIP protégé par mot de passe (AES-256). L’Explorateur Windows et macOS ne peuvent pas l’ouvrir ; il faut 7-Zip, Keka ou WinRAR. Au moins {min} caractères.",
+    "encryptedSavedZip": "Fichier ZIP protégé par mot de passe enregistré. À ouvrir avec 7-Zip, Keka ou WinRAR."
   },
   "exports": {
     "allTypes": "Tous les types de document",

@@ -6,7 +6,7 @@ from app.schemas.template import TemplateElementBehaviorUpdate, TemplateElementC
 from app.services import public_id_service
 from app.services.block_behavior import block_defaults, BEHAVIOR_FIELDS, resolve_block_behavior, resolve_element_wide_behavior
 from app.services.block_config_ids import decode_block_config, encode_block_config
-from app.services.element_definition_service import ElementDefinitionService
+from app.services.element_definition_service import ElementDefinitionService, ensure_fine_lists_allowed
 from app.services.list_service import lock_linked_list_definitions
 
 
@@ -100,7 +100,7 @@ class TemplateElementService:
             if list_id not in found:
                 raise ValueError(f"Linked list {list_id} not found")
 
-    def create_template_element(self, db: Session, template_id: int, payload: TemplateElementCreate):
+    def create_template_element(self, db: Session, template_id: int, payload: TemplateElementCreate, *, can_configure_fines: bool = True):
         existing_rows = self.repository.list_for_template(db, template_id)
         existing_sort_indexes = [template_element.sort_index for template_element, _definition in existing_rows]
         next_sort_index = payload.sort_index
@@ -121,6 +121,8 @@ class TemplateElementService:
         if element_definition_id is None:
             raise ValueError("Element definition not found")
         definition = db.get(ElementDefinition, element_definition_id)
+        # Ein Baustein mit Bussenliste bringt sie in die Vorlage: wie Neuanlegen nur mit Finanzzugriff
+        ensure_fine_lists_allowed([], (definition.configuration_json or {}).get("blocks"), can_configure_fines=can_configure_fines)
         decoded_config = decode_block_config(db, payload.configuration_json, tenant_id=template.tenant_id)
         self._validate_linked_lists(db, decoded_config, tenant_id=template.tenant_id)
         entity = TemplateElement(

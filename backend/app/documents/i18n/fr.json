@@ -27,6 +27,7 @@
     "noTable": "Le document ne contient aucun tableau pour ce format.",
     "noTemplate": "Aucun modèle n’est disponible pour ce type de document.",
     "notFound": "L’élément demandé est introuvable.",
+    "passwordRequired": "CSV et Excel nécessitent un mot de passe d’au moins 12 caractères : le fichier contient des données personnelles et est chiffré.",
     "permission": "Vous n’avez pas l’autorisation pour ce contenu.",
     "previewOnly": "Ces indications ne sont autorisées que dans l’aperçu.",
     "protocolRequired": "Ce type de document nécessite un procès-verbal.",

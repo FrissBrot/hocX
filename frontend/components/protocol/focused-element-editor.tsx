@@ -3409,6 +3409,7 @@ function FocusedElementEditorImpl({
                     statusById={statusById}
                     editable={blockEditable}
                     fineAmountById={fineAmountById}
+                    fineCurrency={availableAccounts[0]?.currency_label ?? ""}
                     onChange={(participant, status) => (blockEditable ? handleAttendanceChange(participant, status) : undefined)}
                     onMarkOpenPresent={async (open) => {
                       if (!blockEditable) return;

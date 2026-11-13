@@ -284,5 +284,13 @@
   "renameConfirmLabel": "Modifica nome",
   "moduleReadOnly": "Sola lettura",
   "moduleReadOnlyHint": "Non più nell'abbonamento: i dati restano leggibili, le modifiche sono bloccate.",
-  "changePlanHint": "Per cambiare piano o prenotare moduli, rivolgiti al gestore della tua istanza hocX."
+  "changePlanHint": "Per cambiare piano o prenotare moduli, rivolgiti al gestore della tua istanza hocX.",
+  "finance": {
+    "eyebrow": "Finanze",
+    "currencyLabel": "Valuta",
+    "currencyHelp": "Vale per tutti i conti e le multe dell’associazione, p. es. CHF, EUR o Fr.",
+    "currencyHelpPopover": "hocX non converte: una modifica cambia solo la denominazione su tutti i conti, multe ed esportazioni. Gli importi restano invariati.",
+    "saved": "Valuta salvata: {currency}",
+    "saveFailed": "Non è stato possibile salvare la valuta."
+  }
 }

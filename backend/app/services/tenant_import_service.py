@@ -413,6 +413,7 @@ class TenantImportService:
         list_definition_map = self._import_simple(ListDefinition, self._t("list_definition"), "list_definition", {"tenant_id": new_tenant.id})
         list_entry_map = self._import_list_entries(list_definition_map, participant_map, event_map)
         finance_account_map = self._import_simple(FinanceAccount, self._t("finance_account"), "finance_account", {"tenant_id": new_tenant.id})
+        self._align_finance_currency(new_tenant)
         self._import_fine_tariff(new_tenant.id, finance_account_map)
         element_definition_map = self._import_element_definitions(
             new_tenant.id, participant_map=participant_map, event_map=event_map,
@@ -517,6 +518,20 @@ class TenantImportService:
             self.db.commit()
 
     # ── tenant base ───────────────────────────────────────────────────────
+
+    def _align_finance_currency(self, tenant: Tenant) -> None:
+        """Eine Währung je Verein (Migration 0180): Exporte vor 0180 kennen tenant.finance_currency
+        nicht - dann gilt die häufigste Kontowährung. Danach tragen alle Konten die Vereinswährung."""
+        from collections import Counter
+
+        accounts = self.db.scalars(select(FinanceAccount).where(FinanceAccount.tenant_id == tenant.id)).all()
+        if "finance_currency" not in (self.tables.get("tenant") or {}):
+            labels = Counter((account.currency_label or "").strip() for account in accounts if (account.currency_label or "").strip())
+            if labels:
+                tenant.finance_currency = labels.most_common(1)[0][0][:20]
+        for account in accounts:
+            account.currency_label = tenant.finance_currency
+        self.db.commit()
 
     def _import_tenant_base(self, new_name: str) -> Tenant:
         data = self._resolve_row("tenant", self.tables["tenant"])

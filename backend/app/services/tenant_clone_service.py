@@ -384,6 +384,7 @@ class TenantCloneService:
             tag_config_json=copy.deepcopy(source.tag_config_json or {}),
             event_field_config_json=copy.deepcopy(source.event_field_config_json or {}),
             public_slug=None,
+            finance_currency=source.finance_currency,
         )
         db.add(new_tenant)
         db.commit()

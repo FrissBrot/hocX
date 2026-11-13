@@ -21,6 +21,7 @@ function renderBoard(overrides: Partial<Parameters<typeof AttendanceBoard>[0]> =
       statusById={new Map([["p1", "present"], ["p2", "late"], ["p4", "absent"]])}
       editable
       fineAmountById={new Map([["p4", 20]])}
+      fineCurrency="CHF"
       {...handlers}
       {...overrides}
     />

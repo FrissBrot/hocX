@@ -21,6 +21,12 @@ Im Tab **Allgemein** stehen Name, Profilbild (Logo), Kurzname und die Vereins-ID
   einer Änderung gültig.
 - **Vereins-ID**: technische Kennung zum Kopieren, z. B. für eine Album-Freigabe.
 
+## Finanzen {#finanzen}
+
+Ebenfalls im Tab **Allgemein**: die **Währung** des Vereins (z. B. «CHF», «EUR» oder «Fr.»). Sie
+gilt für alle [Konten und Bussen](finanzen.md). hocX rechnet nicht um: eine Änderung ändert nur
+die Bezeichnung bei allen Konten, Bussen und Exporten, die Beträge bleiben gleich.
+
 ## Eigene Domains {#domains}
 
 Mit einer eigenen Domain ist hocX unter eurer Adresse erreichbar. Es gibt drei Zwecke:

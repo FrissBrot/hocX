@@ -38,6 +38,20 @@ in der Statistik. Er öffnet den Export-Dialog:
 4. **PDF erstellen.** Das PDF öffnet sich in einem neuen Tab. Je nach Dokument gibt es zusätzlich
    **CSV**, **Excel**, **Kalender (ICS)** oder **Text (Markdown)**. Diese Formate enthalten
    dieselben Daten, aber kein Layout.
+   - **CSV und Excel** enthalten fast immer Personendaten (Namen in Pendenzen, Bussen,
+     Anwesenheit, Organisatoren). Standardmässig ist deshalb **Datei verschlüsseln** an: du legst
+     im Dialog ein Passwort mit mindestens 12 Zeichen fest und bekommst eine **Excel-Datei mit
+     Passwort** – auch bei CSV, weil eine CSV-Datei kein Passwort tragen kann. Excel, Numbers und
+     LibreOffice fragen beim Öffnen nach dem Passwort, zusätzliche Software braucht es nicht.
+   - Unter **Art der Verschlüsselung** gibt es alternativ eine **ZIP-Datei (AES-256)**: Die CSV
+     bleibt dann eine CSV-Datei. Öffnen lässt sich die ZIP aber nur mit 7-Zip (Windows), Keka
+     (macOS) oder WinRAR – der Explorer von Windows und das Archivprogramm von macOS können
+     AES-verschlüsselte ZIP-Dateien nicht öffnen.
+   - Wer die Datei unverschlüsselt braucht (z. B. als CSV für ein anderes Programm), nimmt den
+     Haken bei **Datei verschlüsseln** weg. Der Export wird dann als unverschlüsselt protokolliert;
+     gib die Datei nur an Personen weiter, die die Daten sehen dürfen.
+   - **Kalender (ICS)** enthält nur Titel, Datum, Ort und Beschreibung der Termine und bleibt
+     unverschlüsselt. **Text (Markdown)** wird nur in die Zwischenablage kopiert.
 
 Welche Vorlage vorgewählt ist, entscheidet hocX in dieser Reihenfolge:
 

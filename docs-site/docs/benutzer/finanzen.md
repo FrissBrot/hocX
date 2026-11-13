@@ -19,11 +19,11 @@ Buchung auf dem Konto, das im Bussentarif hinterlegt ist.
 
 ## Konten {#konten}
 
-- **Konto anlegen**: In *Finanzen* auf **Konto anlegen** (bzw. **+** neben «Konten»). Name und
-  **Währungsbezeichnung** (frei, z. B. «CHF», «EUR» oder «Fr.») sind Pflicht, die Beschreibung
-  ist optional und lässt sich jederzeit wieder leeren.
-- Die Währungsbezeichnung ist nur eine Beschriftung: hocX rechnet nicht um. Summen über Konten
-  mit verschiedener Währung werden immer getrennt je Währung angezeigt.
+- **Konto anlegen**: In *Finanzen* auf **Konto anlegen** (bzw. **+** neben «Konten»). Der Name
+  ist Pflicht, die Beschreibung ist optional und lässt sich jederzeit wieder leeren.
+- **Währung**: gilt für den ganzen Verein, also für alle Konten und Bussen. Ändern lässt sie sich
+  unter *Mandant-Einstellungen → Allgemein → Finanzen* ([Einstellungen](einstellungen.md#finanzen)).
+  Sie ist nur eine Beschriftung (z. B. «CHF», «EUR» oder «Fr.»): hocX rechnet nicht um.
 - **Konto löschen** geht nur, solange es keine Buchungen und keine Bussen hat. So geht keine
   Finanzhistorie verloren. Ein Konto mit Buchungen benennst du stattdessen um.
 

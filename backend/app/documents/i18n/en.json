@@ -27,6 +27,7 @@
     "noTable": "The document contains no table for this format.",
     "noTemplate": "No template is available for this document type.",
     "notFound": "The requested item was not found.",
+    "passwordRequired": "CSV and Excel need a password of at least 12 characters: the file contains personal data and is encrypted.",
     "permission": "You do not have permission for this content.",
     "previewOnly": "These settings are only allowed in the preview.",
     "protocolRequired": "This document type requires a protocol.",

@@ -37,6 +37,14 @@ mehrere Vorlagen einfügen; Änderungen am Baustein gelten für künftig erstell
 Baustein mit einer [Stammliste](listen.md#verknuepfen) verknüpft, lässt sich diese Liste nicht
 löschen, solange die Verknüpfung besteht.
 
+## Bussenliste {#bussenliste}
+
+Der Baustein **Bussenliste** zeigt im Protokoll und im PDF die Bussen aller Mitglieder. Anlegen,
+einstellen (Konto, Zeitraum, nur offene, nach Person) oder als Baustein aus der Bibliothek in eine
+Vorlage einfügen kann ihn deshalb nur, wer Zugriff auf die Finanzen hat (Berechtigung
+«Kassenbuch ansehen»).
+Titel und Darstellung ändern und den Baustein entfernen geht auch ohne.
+
 ## Bussentarif {#bussentarif}
 
 Über *Bussentarif* in der Vorlage legt man fest, welche Bussen die Anwesenheitsblöcke dieser

@@ -16,7 +16,7 @@
   "accountModalDescription": "Verwalte Einnahmen und Ausgaben in einem eigenen Konto.",
   "nameLabel": "Name",
   "namePlaceholder": "z. B. Vereinskasse",
-  "currencyLabel": "Währungsbezeichnung",
+  "currencyLabel": "Währung",
   "descriptionLabel": "Beschreibung (optional)",
   "descriptionPlaceholder": "Beschreibung…",
   "saving": "Speichern…",
@@ -372,8 +372,8 @@
   "provisionalHelp": "Summe der noch offenen Bussen (Präsenz- und Pendenzen-Bussen), die beim Einkassieren auf dieses Konto gebucht werden. Sie ist noch nicht im Saldo enthalten.",
   "lockedHelpTopic": "gesperrte Buchungen",
   "lockedHelp": "Buchungen mit Schloss gehören zu einer einkassierten Busse oder zu einem abgeschlossenen Protokoll und lassen sich nicht direkt ändern.",
-  "currencyHelpTopic": "Währungsbezeichnung",
-  "currencyHelp": "Nur eine Beschriftung (z. B. CHF, EUR, Fr.). hocX rechnet nicht um; Summen werden je Währung getrennt angezeigt.",
+  "currencyHelpTopic": "Währung",
+  "currencyHelp": "Gilt für alle Konten und Bussen des Vereins. Nur eine Bezeichnung (z. B. CHF, EUR, Fr.): hocX rechnet nicht um.",
   "finesHelpTopic": "Bussen",
   "finesHelp": "Offene Bussen werden ins nächste Protokoll mitgeführt. Einkassieren bucht den Betrag aufs Bussenkonto, Wiedereröffnen nimmt das zurück. Später gelöschte Bussen brauchen eine Begründung.",
   "docsLink": "Hilfe zu Finanzen",
@@ -391,5 +391,6 @@
   "periodExpenses": "Ausgaben",
   "periodClosing": "Endsaldo",
   "exportButton": "Exportieren",
-  "reopenConfirm": "Einkassierung von {amount} für {name} rückgängig machen? Die Buchung in den Finanzen wird gelöscht und die Busse ist wieder offen."
+  "reopenConfirm": "Einkassierung von {amount} für {name} rückgängig machen? Die Buchung in den Finanzen wird gelöscht und die Busse ist wieder offen.",
+  "currencyFromSettings": "Alle Konten und Bussen verwenden die Vereinswährung {currency}. Sie wird in den Mandant-Einstellungen festgelegt."
 }

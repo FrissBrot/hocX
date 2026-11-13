@@ -41,7 +41,7 @@ function money(amount: number, currency?: string | null) {
 
 type TxFilter = "all" | "income" | "expense" | "year";
 
-export function MobileFinances({ initialAccounts, canWrite, readOnly = false }: { initialAccounts: FinanceAccount[]; canWrite: boolean; readOnly?: boolean }) {
+export function MobileFinances({ initialAccounts, currency, canWrite, readOnly = false }: { initialAccounts: FinanceAccount[]; currency: string; canWrite: boolean; readOnly?: boolean }) {
   const t = useTranslations("finances");
   const tMobile = useTranslations("mobile");
   const locale = useLocale();
@@ -240,6 +240,7 @@ export function MobileFinances({ initialAccounts, canWrite, readOnly = false }: 
       ) : null}
       {accountSheet ? (
         <AccountSheet
+          currency={currency}
           account={accountSheet === "new" ? null : accountSheet}
           onClose={() => setAccountSheet(null)}
           onDelete={(account) => void deleteAccount(account)}
@@ -357,11 +358,13 @@ function TransactionSheet({
 }
 
 function AccountSheet({
+  currency,
   account,
   onClose,
   onSaved,
   onDelete,
 }: {
+  currency: string;
   account: FinanceAccount | null;
   onClose: () => void;
   onSaved: (account: FinanceAccount) => Promise<void>;
@@ -371,15 +374,14 @@ function AccountSheet({
   const tMobile = useTranslations("mobile");
   const showToast = useToast();
   const [name, setName] = useState(account?.name ?? "");
-  const [currency, setCurrency] = useState(account?.currency_label ?? "CHF");
   const [description, setDescription] = useState(account?.description ?? "");
   const [saving, setSaving] = useState(false);
-  const valid = name.trim().length > 0 && currency.trim().length > 0;
+  const valid = name.trim().length > 0;
 
   async function save() {
     if (!valid || saving) return;
     setSaving(true);
-    const body = JSON.stringify({ name: name.trim(), currency_label: currency.trim(), description: description.trim() || null });
+    const body = JSON.stringify({ name: name.trim(), description: description.trim() || null });
     try {
       const saved = account
         ? await browserApiFetch<FinanceAccount>(`/api/finance/accounts/${account.id}`, { method: "PATCH", body })
@@ -423,10 +425,10 @@ function AccountSheet({
           <span className="field-label">{t("nameLabel")}</span>
           <input value={name} onChange={(event) => setName(event.target.value)} placeholder={t("namePlaceholder")} />
         </label>
-        <label className="field-stack">
+        <div className="field-stack">
           <span className="field-label">{t("currencyLabel")}</span>
-          <input value={currency} onChange={(event) => setCurrency(event.target.value)} />
-        </label>
+          <span className="field-help">{t("currencyFromSettings", { currency })}</span>
+        </div>
         <label className="field-stack">
           <span className="field-label">{t("descriptionLabel")}</span>
           <input value={description} onChange={(event) => setDescription(event.target.value)} placeholder={t("descriptionPlaceholder")} />

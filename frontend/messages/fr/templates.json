@@ -621,7 +621,8 @@
       },
       "rangeHelp": "Les amendes de ce procès-verbal apparaissent toujours.",
       "openOnly": "Amendes ouvertes seulement",
-      "byParticipant": "Trier par personne"
+      "byParticipant": "Trier par personne",
+      "financeRequired": "Seules les personnes ayant accès aux finances peuvent ajouter ou configurer une liste des amendes. Elle affiche les amendes de tous les membres."
     },
     "image": {
       "title": "Image",
@@ -919,6 +920,9 @@
       "blockOrderSaved": "L’ordre a été enregistré",
       "blockSaveFailed": "Impossible d’enregistrer le bloc",
       "listEntriesFailed": "Impossible de charger les entrées"
+    },
+    "errors": {
+      "fine_list_requires_finance": "Seules les personnes ayant accès aux finances peuvent ajouter ou configurer une liste des amendes."
     }
   },
   "studio": {

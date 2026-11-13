@@ -284,5 +284,13 @@
   "renameConfirmLabel": "Change name",
   "moduleReadOnly": "Read only",
   "moduleReadOnlyHint": "No longer in your subscription: data stays readable, changes are blocked.",
-  "changePlanHint": "To change your plan or book modules, contact the operator of your hocX instance."
+  "changePlanHint": "To change your plan or book modules, contact the operator of your hocX instance.",
+  "finance": {
+    "eyebrow": "Finances",
+    "currencyLabel": "Currency",
+    "currencyHelp": "Applies to all accounts and fines of the club, e.g. CHF, EUR or Fr.",
+    "currencyHelpPopover": "hocX does not convert: a change only updates the label on all accounts, fines and exports. The amounts stay the same.",
+    "saved": "Currency saved: {currency}",
+    "saveFailed": "The currency could not be saved."
+  }
 }

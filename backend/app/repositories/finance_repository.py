@@ -7,7 +7,7 @@ from decimal import Decimal
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
-from app.models.entities import AttendanceFine, FinanceAccount, FinanceTransaction, Protocol, TodoFine
+from app.models.entities import AttendanceFine, FinanceAccount, FinanceTransaction, Protocol, Tenant, TodoFine
 from app.services import public_id_service
 from app.schemas.finance import (
     FinanceAccountCreate,
@@ -116,10 +116,12 @@ class FinanceRepository:
         return self._account_with_balance(db, account)
 
     def create_account(self, db: Session, tenant_id: int, payload: FinanceAccountCreate) -> FinanceAccountRead:
+        # Die Währung gilt für den ganzen Verein (tenant.finance_currency, Mandanten-Einstellungen)
+        currency = db.scalar(select(Tenant.finance_currency).where(Tenant.id == tenant_id)) or "CHF"
         account = FinanceAccount(
             tenant_id=tenant_id,
             name=payload.name,
-            currency_label=payload.currency_label,
+            currency_label=currency,
             description=payload.description,
         )
         db.add(account)
@@ -138,8 +140,6 @@ class FinanceRepository:
             return None
         if payload.name is not None:
             account.name = payload.name
-        if payload.currency_label is not None:
-            account.currency_label = payload.currency_label
         # Beschreibung: ein ausdrücklich gesendetes null/"" leert sie (nicht gesendet = unverändert)
         if "description" in payload.model_fields_set:
             account.description = (payload.description or "").strip() or None

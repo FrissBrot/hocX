@@ -621,7 +621,8 @@
       },
       "rangeHelp": "Le multe di questo verbale appaiono sempre.",
       "openOnly": "Solo multe aperte",
-      "byParticipant": "Ordina per persona"
+      "byParticipant": "Ordina per persona",
+      "financeRequired": "Solo chi ha accesso alle finanze può aggiungere o configurare un elenco delle multe. L’elenco mostra le multe di tutti i membri."
     },
     "image": {
       "title": "Immagine",
@@ -919,6 +920,9 @@
       "blockOrderSaved": "Ordine salvato",
       "blockSaveFailed": "Impossibile salvare il blocco",
       "listEntriesFailed": "Impossibile caricare le voci"
+    },
+    "errors": {
+      "fine_list_requires_finance": "Solo chi ha accesso alle finanze può aggiungere o configurare un elenco delle multe."
     }
   },
   "studio": {

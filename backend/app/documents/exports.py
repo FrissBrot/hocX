@@ -198,6 +198,19 @@ def to_xlsx(tables: list[tuple[str, list[list[str]]]]) -> bytes:
     return buffer.getvalue()
 
 
+def encrypt_xlsx(content: bytes, password: str) -> bytes:
+    """Excel-Datei mit Passwort (Office-Verschlüsselung «Agile», AES). Excel, Numbers und
+    LibreOffice fragen beim Öffnen nach dem Passwort - ohne Zusatzsoftware (anders als AES-ZIP)."""
+    from msoffcrypto.format.ooxml import OOXMLFile
+
+    secret = (password or "").strip()
+    if len(secret) < 12:
+        raise ValueError("passwordRequired")
+    target = io.BytesIO()
+    OOXMLFile(io.BytesIO(content)).encrypt(secret, target)
+    return target.getvalue()
+
+
 # ── ICS und Markdown aus den Fachkomponenten der Vorlage ─────────────────────
 
 EVENT_COMPONENTS = ("event_table", "event_calendar_month", "event_agenda")

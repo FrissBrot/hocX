@@ -27,6 +27,7 @@
     "noTable": "Das Dokument enthält keine Tabelle für dieses Format.",
     "noTemplate": "Für diesen Dokumenttyp ist keine Vorlage verfügbar.",
     "notFound": "Das gewünschte Objekt wurde nicht gefunden.",
+    "passwordRequired": "Für CSV und Excel braucht es ein Passwort mit mindestens 12 Zeichen: die Datei enthält Personendaten und wird verschlüsselt.",
     "permission": "Für diesen Inhalt fehlt die Berechtigung.",
     "previewOnly": "Diese Angaben sind nur in der Vorschau erlaubt.",
     "protocolRequired": "Dieser Dokumenttyp braucht ein Protokoll.",

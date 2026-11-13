@@ -10293,6 +10293,13 @@ button.table-row-link:hover {
 
 /* Teilen-Dialog (share-link-modal.tsx): welche Foto-Metadaten der öffentliche Link mitgibt.
    Schalter-Optik geteilt mit .album-picker-switch oben. */
+/* Gruppe ohne Rahmen, nur um Felder gemeinsam zu sperren (disabled) */
+.fieldset-plain {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
 .share-metadata-fieldset {
   display: flex;
   flex-direction: column;
@@ -13681,6 +13688,26 @@ a.export-step-meta {
 }
 .export-columns .field-help {
   flex-basis: 100%;
+}
+.export-encrypt-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 600;
+}
+.export-password {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-3);
+}
+.export-password .field-help,
+.export-password-method {
+  grid-column: 1 / -1;
+}
+@media (max-width: 640px) {
+  .export-password {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .export-footer-row {
   display: flex;

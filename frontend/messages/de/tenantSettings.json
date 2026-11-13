@@ -284,5 +284,13 @@
   "renameConfirmLabel": "Name ändern",
   "moduleReadOnly": "Nur lesen",
   "moduleReadOnlyHint": "Nicht mehr im Abo: Daten bleiben lesbar, Ändern ist gesperrt.",
-  "changePlanHint": "Plan ändern oder Module dazubuchen: Wende dich an den Betreiber eurer hocX-Instanz."
+  "changePlanHint": "Plan ändern oder Module dazubuchen: Wende dich an den Betreiber eurer hocX-Instanz.",
+  "finance": {
+    "eyebrow": "Finanzen",
+    "currencyLabel": "Währung",
+    "currencyHelp": "Gilt für alle Konten und Bussen des Vereins, z. B. CHF, EUR oder Fr.",
+    "currencyHelpPopover": "hocX rechnet nicht um: eine Änderung ändert nur die Bezeichnung bei allen Konten, Bussen und Exporten. Die Beträge bleiben gleich.",
+    "saved": "Währung gespeichert: {currency}",
+    "saveFailed": "Die Währung konnte nicht gespeichert werden."
+  }
 }

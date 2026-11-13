@@ -106,9 +106,28 @@ Installationen aktualisieren können.
   Kalender-Abo mit Uhrzeit.
 - Plan-Änderungen gelten sofort für alle Organisationen auf dem Plan; «Abo & Nutzung» zeigt Module
   im Zustand «Nur lesen».
-- Migrationen 0176–0179 (Gruppenquelle für Listen, Bewertungsmerker für Pendenzen-Bussen,
-  Nachtrag der Zyklus-Zuordnung, ausstehende Domain-Ersetzung). Die Wanderplaner-Migration muss
-  damit ab 0180 nummeriert werden.
+- Migrationen 0176–0180 (Gruppenquelle für Listen, Bewertungsmerker für Pendenzen-Bussen,
+  Nachtrag der Zyklus-Zuordnung, ausstehende Domain-Ersetzung, Vereinswährung). Die
+  Wanderplaner-Migration muss damit ab 0181 nummeriert werden.
+- **Eine Währung je Verein.** Die Währung der Konten und Bussen wird unter *Mandant-Einstellungen →
+  Allgemein → Finanzen* gesetzt und gilt für alle Konten; das Feld «Währungsbezeichnung» je Konto
+  entfällt. Migration `0180_tenant_finance_currency` übernimmt je Verein die häufigste
+  Kontowährung und gleicht alle Konten daran an (nur die Bezeichnung, keine Umrechnung). Die
+  Anwesenheitsbusse im Protokoll zeigt die Vereinswährung statt fest «CHF».
+- **CSV- und Excel-Exporte aus dem Document Studio sind standardmässig verschlüsselt.** Sie
+  enthalten Personendaten und kommen als Excel-Datei mit Passwort (Office-Verschlüsselung, AES;
+  Passwort im Export-Dialog, mindestens 12 Zeichen) – auch bei CSV. Excel, Numbers und LibreOffice
+  öffnen sie ohne Zusatzsoftware. Wahlweise gibt es eine AES-256-ZIP-Datei, in der CSV eine
+  CSV-Datei bleibt (braucht 7-Zip, Keka oder WinRAR; `encryption: "zip"`). Die Verschlüsselung
+  lässt sich im Dialog bewusst abwählen
+  (auditiert als `encrypted: false`, Ausnahme in SECURITY-RULES §4.4). Kalender (ICS, ohne
+  Personendaten) und Text (nur Zwischenablage) bleiben unverschlüsselt. `POST /api/documents/export`
+  verlangt für `csv`/`xlsx` das Feld `password` oder `encrypt: false`. Neue Abhängigkeit
+  `msoffcrypto-tool` (mit `olefile`).
+- **Bussenliste nur mit Finanzzugriff.** Den Baustein «Bussenliste» anlegen, seine Bussen-Einstellungen
+  ändern oder ihn aus der Bibliothek in eine Vorlage einfügen geht nur mit «Kassenbuch ansehen»
+  (`finances.read`), sonst 403 `fine_list_requires_finance`. Titel, Darstellung und Entfernen bleiben
+  mit «Vorlagen bearbeiten» möglich.
 - **Von Hand geschlossene Abgabefelder zählen als erledigt.** Der Fortschrittsbalken zeigt sie
   als eigenes Segment («4 von 5 erledigt · 1 geschlossen»). Die Aufgabe des Elements wird beim
   Schliessen ohne geprüfte Datei «abgebrochen» (keine Verspätungsbusse), mit Datei bleibt sie

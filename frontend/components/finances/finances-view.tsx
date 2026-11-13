@@ -23,13 +23,15 @@ const PAGE_SIZE = 50;
 
 type Props = {
   initialAccounts: FinanceAccount[];
+  /** Vereinswährung aus den Mandanten-Einstellungen (gilt für alle Konten). */
+  currency: string;
   /** finances.manage und Feature «finance» mit Vollzugriff (nicht nur lesend nach Downgrade). */
   canWrite: boolean;
   /** Feature «finance» nur noch lesend (Downgrade): Hinweisbanner statt Schreibaktionen. */
   readOnly?: boolean;
 };
 
-export function FinancesView({ initialAccounts, canWrite, readOnly = false }: Props) {
+export function FinancesView({ initialAccounts, currency: tenantCurrency, canWrite, readOnly = false }: Props) {
   const t = useTranslations("finances");
   const tCommon = useTranslations("common");
   const locale = useLocale();
@@ -50,7 +52,7 @@ export function FinancesView({ initialAccounts, canWrite, readOnly = false }: Pr
   // Account form
   const [showAccountForm, setShowAccountForm] = useState(false);
   const [editingAccount, setEditingAccount] = useState<FinanceAccount | null>(null);
-  const [accountDraft, setAccountDraft] = useState({ name: "", currency_label: "CHF", description: "" });
+  const [accountDraft, setAccountDraft] = useState({ name: "", description: "" });
   const [savingAccount, setSavingAccount] = useState(false);
 
   // Transaction form
@@ -142,13 +144,13 @@ export function FinancesView({ initialAccounts, canWrite, readOnly = false }: Pr
 
   function startCreateAccount() {
     setEditingAccount(null);
-    setAccountDraft({ name: "", currency_label: "CHF", description: "" });
+    setAccountDraft({ name: "", description: "" });
     setShowAccountForm(true);
   }
 
   function startEditAccount(account: FinanceAccount) {
     setEditingAccount(account);
-    setAccountDraft({ name: account.name, currency_label: account.currency_label, description: account.description ?? "" });
+    setAccountDraft({ name: account.name, description: account.description ?? "" });
     setShowAccountForm(true);
   }
 
@@ -159,7 +161,7 @@ export function FinancesView({ initialAccounts, canWrite, readOnly = false }: Pr
       if (editingAccount) {
         const updated = await browserApiFetch<FinanceAccount>(`/api/finance/accounts/${editingAccount.id}`, {
           method: "PATCH",
-          body: JSON.stringify({ name: accountDraft.name, currency_label: accountDraft.currency_label, description: accountDraft.description || null }),
+          body: JSON.stringify({ name: accountDraft.name, description: accountDraft.description || null }),
         });
         if (updated) {
           setAccounts((prev) => prev.map((a) => a.id === updated.id ? { ...a, name: updated.name, currency_label: updated.currency_label, description: updated.description } : a));
@@ -168,7 +170,7 @@ export function FinancesView({ initialAccounts, canWrite, readOnly = false }: Pr
       } else {
         const created = await browserApiFetch<FinanceAccount>("/api/finance/accounts", {
           method: "POST",
-          body: JSON.stringify({ name: accountDraft.name, currency_label: accountDraft.currency_label, description: accountDraft.description || null }),
+          body: JSON.stringify({ name: accountDraft.name, description: accountDraft.description || null }),
         });
         if (created) setAccounts((prev) => [...prev, created]);
       }
@@ -267,13 +269,13 @@ export function FinancesView({ initialAccounts, canWrite, readOnly = false }: Pr
             <span className="field-label">{t("nameLabel")}</span>
             <input value={accountDraft.name} onChange={(e) => setAccountDraft((d) => ({ ...d, name: e.target.value }))} placeholder={t("namePlaceholder")} required autoFocus />
           </label>
-          <label className="field-stack">
+          <div className="field-stack">
             <span className="field-label">
               {t("currencyLabel")}{" "}
               <HelpPopover topic={t("currencyHelpTopic")} docs={{ page: "finanzen", anchor: "konten" }}>{t("currencyHelp")}</HelpPopover>
             </span>
-            <input value={accountDraft.currency_label} onChange={(e) => setAccountDraft((d) => ({ ...d, currency_label: e.target.value }))} placeholder="CHF" />
-          </label>
+            <span className="field-help">{t("currencyFromSettings", { currency: tenantCurrency })}</span>
+          </div>
           <label className="field-stack">
             <span className="field-label">{t("descriptionLabel")}</span>
             <textarea rows={3} value={accountDraft.description} onChange={(e) => setAccountDraft((d) => ({ ...d, description: e.target.value }))} placeholder={t("descriptionPlaceholder")} />

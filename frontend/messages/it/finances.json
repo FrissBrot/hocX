@@ -16,7 +16,7 @@
   "accountModalDescription": "Gestisci entrate e uscite in un conto dedicato.",
   "nameLabel": "Nome",
   "namePlaceholder": "ad es. Cassa dell'associazione",
-  "currencyLabel": "Etichetta valuta",
+  "currencyLabel": "Valuta",
   "descriptionLabel": "Descrizione (facoltativa)",
   "descriptionPlaceholder": "Descrizione…",
   "saving": "Salvataggio…",
@@ -372,8 +372,8 @@
   "provisionalHelp": "Somma delle multe ancora aperte (presenze e attività) che verranno registrate su questo conto all’incasso. Non è ancora compresa nel saldo.",
   "lockedHelpTopic": "registrazioni bloccate",
   "lockedHelp": "Le registrazioni con il lucchetto appartengono a una multa incassata o a un verbale concluso e non si possono modificare direttamente.",
-  "currencyHelpTopic": "denominazione della valuta",
-  "currencyHelp": "Solo un’etichetta (p. es. CHF, EUR). hocX non converte; i totali sono mostrati separatamente per valuta.",
+  "currencyHelpTopic": "Valuta",
+  "currencyHelp": "Vale per tutti i conti e le multe dell’associazione. È solo una denominazione (p. es. CHF, EUR, Fr.): hocX non converte gli importi.",
   "finesHelpTopic": "multe",
   "finesHelp": "Le multe aperte vengono riportate nel verbale successivo. L’incasso registra l’importo sul conto delle multe, la riapertura lo annulla. Le multe eliminate in seguito richiedono una motivazione.",
   "docsLink": "Aiuto sulle finanze",
@@ -391,5 +391,6 @@
   "periodExpenses": "Uscite",
   "periodClosing": "Saldo finale",
   "exportButton": "Esporta",
-  "reopenConfirm": "Annullare l’incasso di {amount} per {name}? La registrazione nelle finanze verrà eliminata e la multa sarà di nuovo aperta."
+  "reopenConfirm": "Annullare l’incasso di {amount} per {name}? La registrazione nelle finanze verrà eliminata e la multa sarà di nuovo aperta.",
+  "currencyFromSettings": "Tutti i conti e le multe usano la valuta dell’associazione {currency}. Si imposta nelle impostazioni «Organizzazione»."
 }

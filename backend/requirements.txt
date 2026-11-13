@@ -38,3 +38,9 @@ boto3==1.43.120
 # (app/services/personal_data_export_service.py, Datenschutz-Audit Paket 5/6) - lesbar mit 7-Zip,
 # Keka und WinRAR (nicht mit dem eingebauten Entpacker von macOS).
 pyzipper==0.4.0
+
+# Passwortgeschützte Excel-Dateien (Office-Verschlüsselung «Agile», AES) für die Tabellenexporte des
+# Document Studio (app/documents/exports.py::encrypt_xlsx) - öffnen ohne Zusatzsoftware in Excel,
+# Numbers und LibreOffice. olefile ist die Abhängigkeit von msoffcrypto-tool.
+msoffcrypto-tool==5.4.2
+olefile==0.47

@@ -106,6 +106,8 @@ export type TenantSummary = {
   updated_at?: string | null;
   enabled_features: string[];
   read_only_features?: string[];
+  /** Währung des Vereins für Konten und Bussen (Mandanten-Einstellungen). */
+  finance_currency?: string;
   // Nur in der Antwort auf eine Änderung: die Namensänderung hat die Verifizierung durch hocX aufgehoben
   identity_verification_revoked?: boolean;
   /** Organisation durch hocX bestätigt - eine Namensänderung hebt das auf. */

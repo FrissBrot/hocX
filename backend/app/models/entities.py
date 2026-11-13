@@ -95,6 +95,8 @@ class Tenant(Base, TimestampMixin):
     # Bussen und Anwesenheit je Person in der Statistik für alle Mitglieder sichtbar (0138). Standard
     # aus: Leser sehen dort nur ihre eigene Zeile, wie in der Bussenliste (Datenschutz-Audit PRIV-001).
     statistics_per_person_public: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"), default=False)
+    # Eine Währung für alle Konten und Bussen des Vereins (Migration 0180, routes/finance_settings.py)
+    finance_currency: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'CHF'"), default="CHF")
     # Identität der Organisation durch einen Plattform-Admin bestätigt (Abzeichen auf der
     # Prüfseite). Eine Namensänderung hebt die Bestätigung auf (revoked_*).
     identity_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

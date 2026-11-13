@@ -39,6 +39,7 @@ from app.models import DocumentExport, DocumentTemplate, DocumentTemplateRevisio
 from app.services import document_render_jobs, public_id_service
 from app.services.access_service import FINAL_PROTOCOL_STATUS, AccessService
 from app.services.audit_service import AuditService
+from app.services.data_export.archive import encrypt_single
 
 router = APIRouter()
 audit = AuditService()
@@ -55,6 +56,7 @@ _VALUE_ERRORS = {
     "noTable": "apiError.noTable",
     "noColumns": "apiError.noColumns",
     "previewOnly": "apiError.previewOnly",
+    "passwordRequired": "apiError.passwordRequired",
 }
 
 
@@ -331,11 +333,27 @@ class FormatExportRequest(DocumentRequest):
     format: Literal["csv", "xlsx", "ics", "markdown"] = "csv"
     # Im Export-Dialog abgewählte Spalten (Spaltenköpfe in der Dokumentsprache)
     exclude_columns: list[Annotated[str, StringConstraints(max_length=200)]] = Field(default_factory=list, max_length=100)
+    # CSV/XLSX enthalten fast immer Personendaten (Namen in Pendenzen, Bussen, Anwesenheit,
+    # Organisatoren von Terminen) und gehen deshalb standardmässig als Excel-Datei mit diesem
+    # Passwort raus (SECURITY-RULES §4.4) - auch bei «CSV», weil reiner Text kein Passwort tragen
+    # kann. Im Body, nie in der URL. ICS (nur Termine ohne Personen) und Markdown (wird nur in die
+    # Zwischenablage kopiert, keine Datei) brauchen keins.
+    password: str | None = Field(None, min_length=12, max_length=200)
+    # Standard an. Abwählen ist eine bewusste Entscheidung im Export-Dialog und wird auditiert
+    # (Ausnahme zu SECURITY-RULES §4.4, Entscheid 2026-11-13).
+    encrypt: bool = True
+    # Art der Verschlüsselung: «excel» (Standard) = Excel-Datei mit Passwort, öffnet ohne
+    # Zusatzsoftware in Excel/Numbers/LibreOffice, auch bei CSV; «zip» = AES-256-ZIP, CSV bleibt CSV,
+    # braucht aber 7-Zip, Keka oder WinRAR (Windows-Explorer und macOS können kein AES-ZIP).
+    encryption: Literal["excel", "zip"] = "excel"
 
 
 class ExportColumnsRead(BaseModel):
     columns: list[str]
 
+
+# Dateiexporte mit Personendaten: standardmässig verschlüsselt (FormatExportRequest.password/encrypt)
+ENCRYPTED_FORMATS = frozenset({"csv", "xlsx"})
 
 _FORMAT_TYPES = {
     "csv": ("text/csv; charset=utf-8", "csv"),
@@ -350,7 +368,9 @@ def export_document_format(body: FormatExportRequest, db: Session = Depends(get_
     """CSV/XLSX aus den Tabellen, ICS aus den Termin-Komponenten, Markdown aus den
     Aufgaben-Komponenten der aufgelösten Vorlage - immer aus den fachlichen Daten."""
     permissions.require_export(user)
-    request = DocumentRequest.model_validate(body.model_dump(exclude={"format", "exclude_columns"}))
+    if body.format in ENCRYPTED_FORMATS and body.encrypt and not body.password:
+        raise http_error(user, ValueError("passwordRequired"))
+    request = DocumentRequest.model_validate(body.model_dump(exclude={"format", "exclude_columns", "password", "encrypt", "encryption"}))
     savepoint = db.begin_nested()
     try:
         prepared = document_service.prepare(db, user, user.current_tenant_id, request)
@@ -358,7 +378,9 @@ def export_document_format(body: FormatExportRequest, db: Session = Depends(get_
             tables = extra_formats.all_tables(
                 prepared.compiled.blocks, prepared.compiled.data, prepared.compiled.data["strings"], exclude_columns=body.exclude_columns
             )
-            content = extra_formats.to_csv(tables) if body.format == "csv" else extra_formats.to_xlsx(tables)
+            # «Excel mit Passwort» macht aus CSV eine Excel-Datei (Text kann kein Passwort tragen)
+            as_excel = body.format == "xlsx" or (body.encrypt and body.encryption == "excel")
+            content = extra_formats.to_xlsx(tables) if as_excel else extra_formats.to_csv(tables)
         elif body.format == "ics":
             content = extra_formats.ics_content(prepared)
         else:
@@ -368,9 +390,26 @@ def export_document_format(body: FormatExportRequest, db: Session = Depends(get_
     finally:
         if savepoint.is_active:
             savepoint.rollback()
-    audit.log(db, action=f"document.export_{body.format}", actor=user, details={"document_type": prepared.document_type})
     media_type, extension = _FORMAT_TYPES[body.format]
     filename = f"{document_service._filename(prepared.meta.title, None)[:-4]}.{extension}"
+    encrypted = body.format in ENCRYPTED_FORMATS and body.encrypt
+    if encrypted and body.encryption == "zip":
+        try:
+            content = encrypt_single(filename, content, body.password or "")
+        except ValueError as exc:
+            raise http_error(user, ValueError("passwordRequired")) from exc
+        filename, media_type = f"{filename}.zip", "application/zip"
+    elif encrypted:
+        try:
+            content = extra_formats.encrypt_xlsx(content, body.password or "")
+        except ValueError as exc:
+            raise http_error(user, exc) from exc
+        media_type, extension = _FORMAT_TYPES["xlsx"]
+        filename = f"{filename.rsplit('.', 1)[0]}.{extension}"
+    audit.log(
+        db, action=f"document.export_{body.format}", actor=user,
+        details={"document_type": prepared.document_type, "encrypted": encrypted, "encryption": body.encryption if encrypted else None},
+    )
     return Response(content=content, media_type=media_type, headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 
@@ -397,7 +436,7 @@ def export_document_preview(body: FormatExportRequest, db: Session = Depends(get
     permissions.require_export(user)
     if body.format == "ics":
         raise HTTPException(status_code=422, detail="Keine Vorschau für Kalenderdateien")
-    request = DocumentRequest.model_validate(body.model_dump(exclude={"format", "exclude_columns"}))
+    request = DocumentRequest.model_validate(body.model_dump(exclude={"format", "exclude_columns", "password", "encrypt", "encryption"}))
     savepoint = db.begin_nested()
     try:
         prepared = document_service.prepare(db, user, user.current_tenant_id, request)

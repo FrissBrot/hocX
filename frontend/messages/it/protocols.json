@@ -558,7 +558,8 @@
     "keyHint": "Clic: stato successivo · pressione lunga: scegli · Tab/passaggio + <key>1–4</key>",
     "emptySearch": "Nessuna persona trovata per «{query}»",
     "emptyFilter": "Nessuno con questo stato",
-    "fine": "CHF {amount, number}",
+    "fine": "{currency} {amount, number}",
+    "fineAmount": "{amount, number}",
     "fineTitle": "La multa viene creata automaticamente",
     "helpTopic": "Registrare le presenze",
     "help": "Un clic su una persona passa allo stato successivo, una pressione lunga apre la selezione. Con Tab raggiungi una persona e con 1–4 imposti lo stato. «Segna gli altri presenti» imposta tutte le persone ancora aperte. Se è prevista una multa per ritardo o assenza, viene creata automaticamente."

@@ -31,8 +31,7 @@ Abo ab:
 | **Übersicht** | Todos erledigt/offen, Bussen nach Art, Bussen je Person (Top 10) |
 
 Die Zeitreihen lassen sich auf die letzten 3, 6 oder 12 Monate einschränken. Beträge erscheinen
-in der Währung des jeweiligen Kontos; Konten in verschiedenen Währungen werden nicht
-zusammengezählt.
+in der Währung des Vereins ([Einstellungen](einstellungen.md#finanzen)).
 
 ### Woher die Zahlen kommen {#herkunft}
 

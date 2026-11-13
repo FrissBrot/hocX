@@ -11,7 +11,7 @@ from sqlalchemy.pool import NullPool
 from starlette.requests import cookie_parser
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
-from app.api.routes import activity, admin, agenda_items, admin_auth, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_storage, maintenance_public, auth, calendar_feeds, collaboration_ws, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, fines, lists, participants, privacy_settings, protocol_elements, protocols, public_catalog, public_share, retention, roles, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, event_field_config, task_packages, templates, tenant_data_export, tenants, todo_fines, todos, users, word_import
+from app.api.routes import activity, admin, agenda_items, admin_auth, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_storage, maintenance_public, auth, calendar_feeds, collaboration_ws, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, finance_settings, fines, lists, participants, privacy_settings, protocol_elements, protocols, public_catalog, public_share, retention, roles, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, event_field_config, task_packages, templates, tenant_data_export, tenants, todo_fines, todos, users, word_import
 from app.core import runtime_metrics
 from app.core.loops import BACKEND_LOOPS
 from app.core.db import SessionLocal, engine
@@ -452,6 +452,7 @@ app.include_router(documents.router, prefix="/api", tags=["documents"])
 app.include_router(document_studio.router, prefix="/api", tags=["document-studio"])
 app.include_router(document_verification.router, prefix="/api", tags=["documents"])
 app.include_router(privacy_settings.router, prefix="/api", tags=["privacy"])
+app.include_router(finance_settings.router, prefix="/api", tags=["finance"])
 app.include_router(activity.router, prefix="/api", tags=["privacy"])
 app.include_router(tenant_data_export.router, prefix="/api", tags=["privacy"])
 app.include_router(retention.router, prefix="/api", tags=["privacy"])

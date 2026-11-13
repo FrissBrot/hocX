@@ -33,6 +33,8 @@ class TenantRead(BaseModel):
     updated_at: datetime | None = None
     tag_config_json: dict[str, Any] = {}
     enabled_features: list[str] = []
+    # Währung des Vereins für Bussen und Konten (Mandanten-Einstellungen)
+    finance_currency: str = "CHF"
     # Nach Downgrade nur noch lesend gebuchte Features (permissions/features.json)
     read_only_features: list[str] = []
     # Nur in der Antwort auf eine Änderung: die Namensänderung hat die Bestätigung der

@@ -284,5 +284,13 @@
   "renameConfirmLabel": "Modifier le nom",
   "moduleReadOnly": "Lecture seule",
   "moduleReadOnlyHint": "Plus inclus dans l'abonnement : les données restent lisibles, les modifications sont bloquées.",
-  "changePlanHint": "Pour changer de plan ou réserver des modules, contacte l'exploitant de ton instance hocX."
+  "changePlanHint": "Pour changer de plan ou réserver des modules, contacte l'exploitant de ton instance hocX.",
+  "finance": {
+    "eyebrow": "Finances",
+    "currencyLabel": "Devise",
+    "currencyHelp": "S’applique à tous les comptes et amendes de l’association, p. ex. CHF, EUR ou Fr.",
+    "currencyHelpPopover": "hocX ne convertit pas : un changement modifie seulement la désignation sur tous les comptes, amendes et exports. Les montants restent identiques.",
+    "saved": "Devise enregistrée : {currency}",
+    "saveFailed": "La devise n’a pas pu être enregistrée."
+  }
 }

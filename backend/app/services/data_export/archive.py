@@ -6,6 +6,7 @@ AES-ZIP mit einem Passwort, das nur der Admin kennt, erfüllt beides.
 """
 from __future__ import annotations
 
+import io
 import tempfile
 from collections.abc import Iterable
 from pathlib import Path
@@ -67,6 +68,17 @@ class EncryptedZip:
             self._zip.close()
         finally:
             self.path.unlink(missing_ok=True)
+
+
+def encrypt_single(name: str, data: bytes, password: str) -> bytes:
+    """Eine einzelne, kleine Datei (z. B. CSV/XLSX aus dem Document Studio) als AES-ZIP im Speicher."""
+    secret = validate_password(password).encode("utf-8")
+    buffer = io.BytesIO()
+    with pyzipper.AESZipFile(buffer, "w", compression=pyzipper.ZIP_DEFLATED, encryption=pyzipper.WZ_AES) as archive:
+        archive.setpassword(secret)
+        archive.setencryption(pyzipper.WZ_AES, nbits=256)
+        archive.writestr(safe_name(name, "export"), data)
+    return buffer.getvalue()
 
 
 def safe_name(value: str | None, fallback: str = "Datei", max_length: int = 80) -> str:

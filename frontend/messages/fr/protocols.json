@@ -558,7 +558,8 @@
     "keyHint": "Clic : statut suivant · appui long : choisir · Tab/survol + <key>1–4</key>",
     "emptySearch": "Aucune personne trouvée pour « {query} »",
     "emptyFilter": "Personne avec ce statut",
-    "fine": "CHF {amount, number}",
+    "fine": "{currency} {amount, number}",
+    "fineAmount": "{amount, number}",
     "fineTitle": "L'amende est créée automatiquement",
     "helpTopic": "Saisir les présences",
     "help": "Un clic sur une personne passe au statut suivant, un appui long ouvre la sélection. Avec Tab, atteins une personne et règle le statut avec 1–4. « Marquer les autres présents » règle toutes les personnes encore ouvertes. Si une amende pour retard ou absence est définie, elle est créée automatiquement."

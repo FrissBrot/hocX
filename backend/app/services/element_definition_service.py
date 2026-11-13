@@ -9,10 +9,37 @@ from app.schemas.template import (
     ElementDefinitionUpdate,
 )
 from app.services import public_id_service
-from app.core.element_types import allows_multiple_values, is_known_element_type, render_type_id
+from app.core.element_types import allows_multiple_values, element_type_code, is_known_element_type, render_type_id
 from app.services.block_config_ids import decode_block_config, encode_block_config
 from app.services.element_config import upgrade_definition_block, validate_block_config
 from app.services.list_service import lock_linked_list_definitions
+
+
+class FineListPermissionError(PermissionError):
+    """Bussenliste anlegen oder konfigurieren ohne Finanzzugriff (finances.read)."""
+
+
+def fine_list_settings(blocks: list[dict] | None) -> dict[str, dict]:
+    """Bussenlisten-Blöcke je Block-ID mit ihren Bussen-Einstellungen (Konto, Zeitraum, Status,
+    Gruppierung). Titel und Darstellung zählen nicht: die darf ändern, wer Vorlagen bearbeitet."""
+    result: dict[str, dict] = {}
+    for block in blocks or []:
+        if element_type_code(block.get("element_type_id")) != "fine_list":
+            continue
+        config = block.get("configuration_json") or {}
+        result[str(block.get("id"))] = {key: value for key, value in config.items() if key.startswith("fine_list_")}
+    return result
+
+
+def ensure_fine_lists_allowed(before: list[dict] | None, after: list[dict] | None, *, can_configure_fines: bool) -> None:
+    """Die Bussenliste zeigt die Bussen aller Mitglieder. Neu anlegen oder umkonfigurieren darf sie
+    deshalb nur, wer Finanzen sehen darf; Entfernen und unveränderte Bussenlisten bleiben frei."""
+    if can_configure_fines:
+        return
+    existing = fine_list_settings(before)
+    for block_id, settings in fine_list_settings(after).items():
+        if existing.get(block_id) != settings:
+            raise FineListPermissionError("fine_list_requires_finance")
 
 
 class ElementDefinitionService:
@@ -166,8 +193,9 @@ class ElementDefinitionService:
         entity = self.repository.get(db, element_definition_id)
         return self._read_model(db, entity) if entity else None
 
-    def create_element_definition(self, db: Session, payload: ElementDefinitionCreate, *, tenant_id: int):
+    def create_element_definition(self, db: Session, payload: ElementDefinitionCreate, *, tenant_id: int, can_configure_fines: bool = True):
         normalized_blocks = self._normalize_blocks(db, [block.model_dump() for block in payload.blocks], tenant_id=tenant_id)
+        ensure_fine_lists_allowed([], normalized_blocks, can_configure_fines=can_configure_fines)
         self._validate_linked_lists(db, normalized_blocks, tenant_id=tenant_id)
         entity = ElementDefinition(
             tenant_id=tenant_id,
@@ -186,7 +214,7 @@ class ElementDefinitionService:
         created = self.repository.create(db, entity)
         return self._read_model(db, created)
 
-    def update_element_definition(self, db: Session, element_definition_id: int, payload: ElementDefinitionUpdate):
+    def update_element_definition(self, db: Session, element_definition_id: int, payload: ElementDefinitionUpdate, *, can_configure_fines: bool = True):
         entity = self.repository.get(db, element_definition_id)
         if entity is None:
             return None
@@ -194,6 +222,7 @@ class ElementDefinitionService:
         values = payload.model_dump(exclude_unset=True)
         if "blocks" in values:
             normalized_blocks = self._normalize_blocks(db, values.pop("blocks"), tenant_id=entity.tenant_id)
+            ensure_fine_lists_allowed((entity.configuration_json or {}).get("blocks"), normalized_blocks, can_configure_fines=can_configure_fines)
             self._validate_linked_lists(db, normalized_blocks, tenant_id=entity.tenant_id)
             values["configuration_json"] = {"blocks": normalized_blocks}
         if "title" in values:

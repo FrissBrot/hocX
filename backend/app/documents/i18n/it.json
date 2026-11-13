@@ -27,6 +27,7 @@
     "noTable": "Il documento non contiene alcuna tabella per questo formato.",
     "noTemplate": "Per questo tipo di documento non è disponibile alcun modello.",
     "notFound": "L’elemento richiesto non è stato trovato.",
+    "passwordRequired": "CSV ed Excel richiedono una password di almeno 12 caratteri: il file contiene dati personali e viene cifrato.",
     "permission": "Non hai l’autorizzazione per questo contenuto.",
     "previewOnly": "Queste indicazioni sono consentite solo nell’anteprima.",
     "protocolRequired": "Questo tipo di documento richiede un verbale.",

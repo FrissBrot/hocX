@@ -16,7 +16,7 @@
   "accountModalDescription": "Manage income and expenses in a dedicated account.",
   "nameLabel": "Name",
   "namePlaceholder": "e.g. Club treasury",
-  "currencyLabel": "Currency label",
+  "currencyLabel": "Currency",
   "descriptionLabel": "Description (optional)",
   "descriptionPlaceholder": "Description…",
   "saving": "Saving…",
@@ -372,8 +372,8 @@
   "provisionalHelp": "Sum of fines still open (attendance and task fines) that will be booked to this account when collected. It is not yet included in the balance.",
   "lockedHelpTopic": "locked entries",
   "lockedHelp": "Entries with a lock belong to a collected fine or a finalized protocol and cannot be changed directly.",
-  "currencyHelpTopic": "currency label",
-  "currencyHelp": "Just a label (e.g. CHF, EUR). hocX does not convert; totals are shown separately per currency.",
+  "currencyHelpTopic": "Currency",
+  "currencyHelp": "Applies to all accounts and fines of the club. Only a label (e.g. CHF, EUR, Fr.): hocX does not convert amounts.",
   "finesHelpTopic": "fines",
   "finesHelp": "Open fines are carried over to the next protocol. Collecting books the amount to the fines account, reopening undoes it. Fines deleted later need a reason.",
   "docsLink": "Help on finances",
@@ -391,5 +391,6 @@
   "periodExpenses": "Expenses",
   "periodClosing": "Closing balance",
   "exportButton": "Export",
-  "reopenConfirm": "Undo the collection of {amount} for {name}? The finance booking will be deleted and the fine is open again."
+  "reopenConfirm": "Undo the collection of {amount} for {name}? The finance booking will be deleted and the fine is open again.",
+  "currencyFromSettings": "All accounts and fines use the club currency {currency}. It is set in the organization settings."
 }

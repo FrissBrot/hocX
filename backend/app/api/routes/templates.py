@@ -26,7 +26,7 @@ from app.schemas.template import (
 from app.schemas.fines import TemplateFineTariffRead, TemplateFineTariffUpdate
 from app.services import fine_tariff_service, public_id_service
 from app.services.audit_service import AuditService
-from app.services.element_definition_service import ElementDefinitionService
+from app.services.element_definition_service import ElementDefinitionService, FineListPermissionError
 from app.services.access_service import AccessService
 from app.services.template_element_service import TemplateElementService
 from app.services.template_service import TemplateService
@@ -213,7 +213,10 @@ def create_template_element(
     require_permission(user, P.TEMPLATES_EDIT)
     template = _get_template_or_404(db, template_id, user)
     try:
-        return template_element_service.create_template_element(db, template.id, payload)
+        return template_element_service.create_template_element(db, template.id, payload, can_configure_fines=user.can(P.FINANCES_READ))
+    except FineListPermissionError as exc:
+        # Geprüft wird vor jedem Schreiben: nichts zurückzurollen
+        raise _fine_list_forbidden(exc) from exc
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except SQLAlchemyError as exc:
@@ -334,6 +337,14 @@ def get_element_definition(
     return element_definition_service.get_element_definition(db, definition.id)
 
 
+def _fine_list_forbidden(exc: FineListPermissionError) -> HTTPException:
+    """Bussenliste ohne Finanzzugriff: erwartete Ablehnung mit stabilem Code fürs Frontend."""
+    return HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={"code": "fine_list_requires_finance", "message": "Eine Bussenliste anlegen oder einstellen darf nur, wer Zugriff auf die Finanzen hat."},
+    )
+
+
 @router.post("/element-definitions", response_model=ElementDefinitionRead, status_code=status.HTTP_201_CREATED)
 def create_element_definition(
     payload: ElementDefinitionCreate,
@@ -342,7 +353,12 @@ def create_element_definition(
 ):
     require_permission(user, P.TEMPLATES_EDIT)
     try:
-        return element_definition_service.create_element_definition(db, payload, tenant_id=user.current_tenant_id)
+        return element_definition_service.create_element_definition(
+            db, payload, tenant_id=user.current_tenant_id, can_configure_fines=user.can(P.FINANCES_READ)
+        )
+    except FineListPermissionError as exc:
+        # Geprüft wird vor jedem Schreiben: nichts zurückzurollen
+        raise _fine_list_forbidden(exc) from exc
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -361,7 +377,12 @@ def patch_element_definition(
     require_permission(user, P.TEMPLATES_EDIT)
     current = _get_element_definition_or_404(db, element_definition_id, user)
     try:
-        element_definition = element_definition_service.update_element_definition(db, current.id, payload)
+        element_definition = element_definition_service.update_element_definition(
+            db, current.id, payload, can_configure_fines=user.can(P.FINANCES_READ)
+        )
+    except FineListPermissionError as exc:
+        # Geprüft wird vor jedem Schreiben: nichts zurückzurollen
+        raise _fine_list_forbidden(exc) from exc
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -26,8 +26,9 @@ import { SearchInput } from "@/components/ui/search-input";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
+import { apiErrorMessage } from "@/lib/api/error-message";
 import { elementTypeLabels } from "@/lib/constants/element-types";
-import { elementType } from "@/lib/element-types/registry";
+import { elementType, elementTypeCode } from "@/lib/element-types/registry";
 import { avatarTone } from "@/lib/utils/avatar";
 import type { CycleConfigSummary, ElementDefinition, ElementDefinitionBlock, TemplateElement, TemplateElementBlock } from "@/types/api";
 
@@ -167,7 +168,7 @@ export function SessionTemplateWorkspace({ templateId, elements, onElementsChang
       });
       replaceElement(updated);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("toast.saveFailed"), "error");
+      showToast(apiErrorMessage(error, tEditor, "errors", t("toast.saveFailed")), "error");
     }
   }
 
@@ -179,7 +180,7 @@ export function SessionTemplateWorkspace({ templateId, elements, onElementsChang
       });
       replaceElement(updated);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("toast.saveFailed"), "error");
+      showToast(apiErrorMessage(error, tEditor, "errors", t("toast.saveFailed")), "error");
     }
   }
 
@@ -212,7 +213,7 @@ export function SessionTemplateWorkspace({ templateId, elements, onElementsChang
       if (created) setSelection({ kind: "element", id: created.id });
       showToast(t("toast.elementAdded", { title: definition.title }), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("toast.saveFailed"), "error");
+      showToast(apiErrorMessage(error, tEditor, "errors", t("toast.saveFailed")), "error");
     }
   }
 
@@ -302,7 +303,7 @@ export function SessionTemplateWorkspace({ templateId, elements, onElementsChang
       setSelection(null);
       showToast(t("toast.elementRemoved"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("toast.saveFailed"), "error");
+      showToast(apiErrorMessage(error, tEditor, "errors", t("toast.saveFailed")), "error");
     }
   }
 
@@ -320,7 +321,7 @@ export function SessionTemplateWorkspace({ templateId, elements, onElementsChang
       setLibrary(rows ?? []);
       showToast(t("toast.savedToLibrary", { title: element.title }), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("toast.saveFailed"), "error");
+      showToast(apiErrorMessage(error, tEditor, "errors", t("toast.saveFailed")), "error");
     }
   }
 
@@ -330,13 +331,16 @@ export function SessionTemplateWorkspace({ templateId, elements, onElementsChang
       replaceElement(updated);
       showToast(t("toast.detached"), "success");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("toast.saveFailed"), "error");
+      showToast(apiErrorMessage(error, tEditor, "errors", t("toast.saveFailed")), "error");
     }
   }
 
   const blockCount = ordered.reduce((count, element) => count + element.blocks.length, 0);
   const librarySearchId = `session-library-search-${templateId}`;
-  const filteredLibrary = library.filter((definition) => !librarySearch.trim() || definition.title.toLowerCase().includes(librarySearch.trim().toLowerCase()));
+  // Bausteine mit Bussenliste kann ohne Finanzzugriff niemand einfügen (Backend prüft es auch)
+  const filteredLibrary = library
+    .filter((definition) => blockEditorData.canConfigureFines !== false || !definition.blocks.some((block) => elementTypeCode(block.element_type_id) === "fine_list"))
+    .filter((definition) => !librarySearch.trim() || definition.title.toLowerCase().includes(librarySearch.trim().toLowerCase()));
   const blockName = (block: TemplateElementBlock) => block.block_title?.trim() || block.title?.trim() || typeLabels[block.element_type_id] || "";
 
   // ── Darstellung ───────────────────────────────────────────────────────────
@@ -639,6 +643,7 @@ export function SessionTemplateWorkspace({ templateId, elements, onElementsChang
       <TypePickerModal
         open={Boolean(session) && typePickerOpen}
         activeTypeId={session?.form.element_type_id ?? 1}
+        hiddenCodes={blockEditorData.canConfigureFines === false ? ["fine_list"] : []}
         onPick={(typeId) => {
           if (session) setSession({ ...session, form: changeElementType(session.form, typeId, session.mode) });
           setTypePickerOpen(false);
