@@ -4,6 +4,7 @@ import { useParticipantSelectable } from "@/contexts/participant-date-context";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
+import type { Route } from "next";
 import Link from "next/link";
 
 import { Tabs } from "@/components/ui/tabs";
@@ -454,7 +455,7 @@ export function EventDetailForm({
               {fieldSettingsHref && !readOnly ? (
                 <p className="field-help">
                   {t("detailForm.fieldSettingsHint")}{" "}
-                  <Link href={fieldSettingsHref}>{t("detailForm.fieldSettingsLink")}</Link>
+                  <Link href={fieldSettingsHref as Route}>{t("detailForm.fieldSettingsLink")}</Link>
                 </p>
               ) : null}
             </div>
