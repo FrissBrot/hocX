@@ -10,6 +10,7 @@ finances.manage sichtbar. Die Bussenliste zeigt ohne reports.personal nur die ei
 """
 from __future__ import annotations
 
+import dataclasses
 import uuid
 from decimal import Decimal
 
@@ -22,7 +23,7 @@ from app.core.db import get_db
 from app.core.features_generated import F
 from app.core.permissions import P
 from app.core.security import CurrentUser, get_current_user, require_feature, require_permission
-from app.models import FinanceAccount, Participant, ProtocolTodo, TodoFine, TodoFineRule
+from app.models import FinanceAccount, Participant, ProtocolTodo, Tenant, TodoFine, TodoFineRule
 from app.schemas.todo_fines import (
     FineTariffAssignment,
     FineTariffGroupOrder,
@@ -410,11 +411,14 @@ def _todo_for(db: Session, user: CurrentUser, todo_id: uuid.UUID) -> ProtocolTod
     return todo
 
 
-def _evaluation(db: Session, user: CurrentUser, todo: ProtocolTodo) -> TodoFineEvaluation:
+def _evaluation(db: Session, user: CurrentUser, todo: ProtocolTodo, *, settings: dict | None = None) -> TodoFineEvaluation:
+    """``settings`` (nur Vorschau): Einstellung so rechnen, als wäre sie gespeichert."""
     ctx = fines.TenantFineContext(db, todo.tenant_id)
     facts = fines.load_facts(db, todo)
     if facts is None:
         raise HTTPException(status_code=404, detail="Todo not found")
+    if settings is not None:
+        facts = dataclasses.replace(facts, **settings)
     evaluation = fines.evaluate(ctx, facts)
     can_manage = user.can(P.FINANCES_MANAGE)
     sees_all = can_manage or user.can(P.REPORTS_PERSONAL)
@@ -463,7 +467,28 @@ def _evaluation(db: Session, user: CurrentUser, todo: ProtocolTodo) -> TodoFineE
         lines=visible,
         total=fines.money(sum((line.amount for line in visible), Decimal("0"))),
         can_manage=can_manage,
+        auto_rules=[TodoFineRuleRef(id=rule.public_id, name=rule.name) for rule in fines.matching_rules(ctx, facts)] if can_manage else [],  # type: ignore[arg-type]
+        currency=db.scalar(select(Tenant.finance_currency).where(Tenant.id == todo.tenant_id)) or "CHF",
     )
+
+
+def _settings(db: Session, tenant_id: int, payload: TodoFineSettings) -> dict:
+    """Einstellung prüfen und in interne Werte übersetzen (PUT und Vorschau)."""
+    rule_id = None
+    if payload.fine_mode == "rule":
+        if payload.fine_rule_id is None:
+            raise HTTPException(status_code=400, detail="Rule is required")
+        rule_id = public_id_service.resolve_internal_id(db, TodoFineRule, payload.fine_rule_id, tenant_id=tenant_id)
+        if rule_id is None:
+            raise HTTPException(status_code=400, detail="Unknown rule")
+    if payload.fine_mode == "fixed" and payload.fine_fixed_amount is None:
+        raise HTTPException(status_code=400, detail="Amount is required")
+    return {
+        "fine_mode": payload.fine_mode,
+        "fine_rule_id": rule_id,
+        "fine_fixed_amount": payload.fine_fixed_amount if payload.fine_mode == "fixed" else None,
+        "fine_split_mode": payload.fine_split_mode if payload.fine_mode == "fixed" else None,
+    }
 
 
 @router.get("/protocol-todos/{todo_id}/fine", response_model=TodoFineEvaluation)
@@ -475,6 +500,15 @@ def get_todo_fine(todo_id: uuid.UUID, db: Session = Depends(get_db), user: Curre
     return _evaluation(db, user, _todo_for(db, user, todo_id))
 
 
+@router.post("/protocol-todos/{todo_id}/fine/preview", response_model=TodoFineEvaluation)
+def preview_todo_fine(todo_id: uuid.UUID, payload: TodoFineSettings, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Vorschau im Pendenzen-Popup: Beträge je Person für eine noch nicht gespeicherte Einstellung
+    (Regel, Fixbetrag, keine Busse). Speichert nichts; nur für die Kasse wie das Festlegen."""
+    tenant_id = _manage(user)
+    todo = _todo_for(db, user, todo_id)
+    return _evaluation(db, user, todo, settings=_settings(db, tenant_id, payload))
+
+
 @router.put("/protocol-todos/{todo_id}/fine", response_model=TodoFineEvaluation)
 def put_todo_fine(todo_id: uuid.UUID, payload: TodoFineSettings, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     """Busse von Hand festlegen: automatisch, bestimmte Regel, fixer Betrag oder keine Busse.
@@ -482,19 +516,11 @@ def put_todo_fine(todo_id: uuid.UUID, payload: TodoFineSettings, db: Session = D
     neben dem Erlassen, eine eingefrorene Busse zu ändern; die verworfenen stehen im Audit-Log."""
     tenant_id = _manage(user)
     todo = _todo_for(db, user, todo_id)
-    rule_id = None
-    if payload.fine_mode == "rule":
-        if payload.fine_rule_id is None:
-            raise HTTPException(status_code=400, detail="Rule is required")
-        rule_id = public_id_service.resolve_internal_id(db, TodoFineRule, payload.fine_rule_id, tenant_id=tenant_id)
-        if rule_id is None:
-            raise HTTPException(status_code=400, detail="Unknown rule")
-    if payload.fine_mode == "fixed" and payload.fine_fixed_amount is None:
-        raise HTTPException(status_code=400, detail="Amount is required")
-    todo.fine_mode = payload.fine_mode
-    todo.fine_rule_id = rule_id
-    todo.fine_fixed_amount = payload.fine_fixed_amount if payload.fine_mode == "fixed" else None
-    todo.fine_split_mode = payload.fine_split_mode if payload.fine_mode == "fixed" else None
+    values = _settings(db, tenant_id, payload)
+    todo.fine_mode = values["fine_mode"]
+    todo.fine_rule_id = values["fine_rule_id"]
+    todo.fine_fixed_amount = values["fine_fixed_amount"]
+    todo.fine_split_mode = values["fine_split_mode"]
     try:
         db.flush()
         replaced = fines.sync_todo(db, todo, recalculate=True)

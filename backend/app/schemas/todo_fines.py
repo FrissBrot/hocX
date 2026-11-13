@@ -180,6 +180,11 @@ class TodoFineEvaluation(BaseModel):
     lines: list[TodoFineLine] = Field(default_factory=list)
     total: FinanceDecimal = Decimal("0")
     can_manage: bool = False
+    # Nur für die Kasse: Regeln, die im Modus «automatisch» passen würden (unabhängig vom gewählten
+    # Modus) - für «passt» im Regel-Menü des Popups
+    auto_rules: list["TodoFineRuleRef"] = Field(default_factory=list)
+    # Vereinswährung (tenant.finance_currency) für die Anzeige der Beträge
+    currency: str = "CHF"
 
 
 class TodoFineRuleRef(BaseModel):

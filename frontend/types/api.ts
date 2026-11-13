@@ -2556,6 +2556,10 @@ export type TodoFineEvaluation = {
   lines: { participant_id: string | null; participant_name: string; tariff_name: string | null; amount: number }[];
   total: number;
   can_manage: boolean;
+  /** Nur für die Kasse: Regeln, die im Modus «automatisch» passen würden («passt» im Menü). */
+  auto_rules?: TodoFineRuleRef[];
+  /** Vereinswährung (Mandanten-Einstellungen). */
+  currency?: string;
 };
 
 // ── E-Mail-Benachrichtigungen (backend/app/notifications, Migration 0170) ──

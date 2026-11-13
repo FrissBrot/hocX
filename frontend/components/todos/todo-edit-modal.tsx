@@ -19,7 +19,7 @@ import { useToast } from "@/contexts/toast-context";
 import { formatDate, formatFileSize } from "@/lib/utils/format";
 import type { ParticipantSummary, TodoDetails, TodoListItem } from "@/types/api";
 import { useConfirm } from "@/contexts/confirm-context";
-import { TodoFineSection } from "@/components/finances/todo-fine-section";
+import { TodoFineSection, type TodoFineDraft } from "@/components/finances/todo-fine-section";
 
 export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onClose, onSaved, onDeleted, showFine = false }: {
   todo: TodoListItem;
@@ -40,6 +40,8 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
   const assignedLabel = assignedIds.map((id) => participants.find((person) => person.id === id)?.display_name).filter(Boolean).join(", ") || draft.assigned_participant_name || t("nobodyLabel");
   const [duePatch, setDuePatch] = useState<DuePatch | null>(null);
   const [busy, setBusy] = useState(false);
+  // Busse-Einstellung der Kasse (Busse v2): wird mit «Speichern» gespeichert, null = unverändert
+  const [fineDraft, setFineDraft] = useState<TodoFineDraft | null>(null);
   // Notizen und Dateien kommen aus einem eigenen Endpunkt (nicht Teil der Todo-Liste/Exporte).
   const [details, setDetails] = useState<TodoDetails | null>(null);
   const [detailsDraft, setDetailsDraft] = useState<TodoDetails | null>(null);
@@ -77,6 +79,11 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
     try {
       // Nur Geändertes senden: ein mitgeschickter, unveränderter Status setzte früher das
       // Erledigungsdatum neu (und konnte eine Busse auslösen).
+      // Busse zuerst: wird die Pendenz im selben Schritt erledigt, friert sie mit der neuen Einstellung ein
+      if (fineDraft) {
+        await browserApiFetch(`/api/protocol-todos/${todo.id}/fine`, { method: "PUT", body: JSON.stringify(fineDraft) });
+        setFineDraft(null);
+      }
       const originalIds = todo.assigned_participant_ids?.length ? todo.assigned_participant_ids : todo.assigned_participant_id ? [todo.assigned_participant_id] : [];
       const updated = await browserApiFetch<TodoListItem>(`/api/protocol-todos/${todo.id}`, {
         method: "PATCH",
@@ -185,7 +192,7 @@ export function TodoEditModal({ todo, canEdit, participants, tagSuggestions, onC
           {duePatch && <small className="muted">{t("appliedOnSaveHint")}</small>}
           {!duePatch && overdueDays > 0 && !['done', 'cancelled'].includes(draft.todo_status_code || '') && <small className="todo-edit-overdue">{t("overdueSince", { count: overdueDays })}</small>} {/* i18n-ok: JS-Ausdruck, kein UI-Text */}
         </div>
-        {showFine && <TodoFineSection todoId={todo.id} />}
+        {showFine && <TodoFineSection todoId={todo.id} assigneeCount={assignedIds.length} onDraftChange={canEdit ? setFineDraft : undefined} />}
       </aside>
     </div>
     <footer className="todo-edit-footer">

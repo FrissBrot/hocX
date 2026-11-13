@@ -129,6 +129,37 @@ def test_two_matching_rules_are_a_conflict_until_resolved_by_hand(db, setup):
     assert resolved.state == "ok" and resolved.rule_name == "Alle"
 
 
+
+def test_preview_calculates_unsaved_settings_without_saving(db, setup):
+    """Popup «Busse v2»: Vorschau für Regel (auch eine, deren Filter nicht passt), Fixbetrag und
+    «keine Busse», ohne etwas zu speichern; «passt» kommt aus auto_rules."""
+    s = setup
+    _rule(db, s, "Alle")
+    material = _rule(db, s, "Material", tags=("material",))
+    todo = _todo(db, s, days_late=2, people=("anna", "ben"))
+    saved = route.get_todo_fine(todo.public_id, db=db, user=s["manager"])
+    assert saved.state == "ok" and saved.rule_name == "Alle" and [r.name for r in saved.auto_rules] == ["Alle"]
+    assert saved.currency == "CHF"
+
+    # Regel, deren Tag-Filter nicht passt: gilt trotzdem, wenn fest zugewiesen
+    preview = route.preview_todo_fine(todo.public_id, TodoFineSettings(fine_mode="rule", fine_rule_id=material.id), db=db, user=s["manager"])
+    assert preview.state == "ok" and preview.rule_name == "Material" and preview.fine_mode == "rule"
+    fixed = route.preview_todo_fine(
+        todo.public_id, TodoFineSettings(fine_mode="fixed", fine_fixed_amount=Decimal("40"), fine_split_mode="split"), db=db, user=s["manager"]
+    )
+    assert fixed.total == Decimal("40.00") and {line.amount for line in fixed.lines} == {Decimal("20.00")}
+    assert route.preview_todo_fine(todo.public_id, TodoFineSettings(fine_mode="none"), db=db, user=s["manager"]).state == "none"
+
+    # Nichts gespeichert
+    db.refresh(todo)
+    assert todo.fine_mode == "auto" and todo.fine_rule_id is None and todo.fine_fixed_amount is None
+
+    # Nur die Kasse: Leser bekommt 403
+    reader = make_current_user(s["tenant"].id, role="reader", features=FEATURES)
+    with pytest.raises(HTTPException) as excinfo:
+        route.preview_todo_fine(todo.public_id, TodoFineSettings(fine_mode="none"), db=db, user=reader)
+    assert excinfo.value.status_code == 403
+
 def test_rule_with_tag_filter_ignores_other_todos_and_applies_from(db, setup):
     s = setup
     _rule(db, s, tags=("material",))

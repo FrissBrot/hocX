@@ -1920,6 +1920,18 @@
         "reports.personal"
       ]
     },
+    "POST /api/protocol-todos/{todo_id}/fine/preview": {
+      "handler": "todo_fines.preview_todo_fine",
+      "requires": [
+        "finances.manage"
+      ],
+      "features": [
+        "todo_fines"
+      ],
+      "branches": [
+        "reports.personal"
+      ]
+    },
     "GET /api/protocols": {
       "handler": "protocols.list_protocols",
       "requires": [

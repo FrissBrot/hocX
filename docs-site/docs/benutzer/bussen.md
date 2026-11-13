@@ -159,17 +159,25 @@ Pendenz-Popup öffnen und eine bestimmte Regel, einen fixen Betrag oder «Keine 
 
 ## Busse von Hand festlegen {#von-hand}
 
-Im Pendenz-Popup gibt es den Kasten **Busse**. Unter «Busse festlegen» wählst du:
+Im Pendenz-Popup steht rechts der Bereich **Busse**. Ändern dürfen ihn nur Personen mit
+«Finanzen verwalten»; alle anderen sehen nur, ob und wie viel Busse läuft.
 
-| Modus | Bedeutung |
+- **Fixbetrag (optional):** Ein eingetippter Betrag geht immer vor – unabhängig von Regeln und
+  Verspätung. Bei mehreren Verantwortlichen wählst du **Je Person** (jede Person zahlt den
+  Betrag) oder **Aufteilen** (der Betrag wird geteilt). Feld leeren = wieder nach Regel rechnen.
+- **Regel-Zeile** darunter, mit einem Menü:
+
+| Auswahl | Bedeutung |
 |---|---|
-| **Automatisch nach Regeln** | Standard. Die passende Regel bestimmt die Busse. |
-| **Bestimmte Regel** | Diese eine Regel gilt, egal welche Filter passen. |
-| **Fixer Betrag** | Ein fester Betrag, unabhängig von der Verspätung. |
-| **Keine Busse** | Für diese Pendenz fällt keine Busse an. |
+| **Automatisch** | Standard. Die passende Regel bestimmt die Busse; das Menü zeigt, welche passt. |
+| **Regel fest zuweisen** | Diese eine Regel gilt – auch wenn ihre Filter nicht passen (im Menü ohne «passt»). |
+| **Keine Busse** | Für diese Pendenz fällt nie eine Busse an, auch wenn eine Regel passt. |
 
-Der Kasten speichert separat mit **Übernehmen** – unabhängig vom Speichern der Pendenz.
-Ändern dürfen das nur Personen mit «Finanzen verwalten».
+Darunter siehst du pro Person mit Tarif, was die Busse heute kostet, und das Total. Passen
+mehrere Regeln, zeigt hocX sie mit ihrem Total zur Auswahl ([Konflikt](#konflikt)).
+
+Gespeichert wird mit **Speichern** der Pendenz. Auf der Seite *Bussen* (Konflikt auflösen)
+gibt es dafür den Knopf **Übernehmen**.
 
 Ist die Pendenz bereits erledigt, rechnet hocX dabei die **offenen eingefrorenen** Bussen neu.
 Die ersetzten Bussen stehen im Audit-Log.

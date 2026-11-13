@@ -14561,3 +14561,285 @@ a.export-step-meta {
   display: grid;
   gap: var(--space-2);
 }
+
+/* Busse v2 im Pendenzen-Popup (todo-fine-section.tsx, Design «hocX Todo Busse») */
+.todo-fine-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.todo-fine-amount {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 42px;
+  padding: 0 var(--space-1) 0 var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--panel-solid);
+  cursor: text;
+}
+
+.todo-fine-amount:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.todo-fine-amount-invalid {
+  border-color: var(--danger);
+}
+
+.todo-fine-amount-currency {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.todo-fine-amount input {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  font-weight: 600;
+}
+
+.todo-fine-amount input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.todo-fine-split {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: var(--radius-sm);
+  background: var(--neutral-bg);
+}
+
+.todo-fine-split button {
+  flex: 1;
+  min-height: 30px;
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-xs);
+  --button-bg: transparent;
+  --button-hover-bg: color-mix(in srgb, var(--panel-solid) 60%, transparent 40%);
+  background: var(--button-bg);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.todo-fine-split .todo-fine-split-active {
+  --button-bg: var(--panel-solid);
+  --button-hover-bg: var(--panel-solid);
+  color: var(--text);
+  box-shadow: var(--shadow-soft);
+}
+
+.todo-fine-rule-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 48px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  --button-bg: var(--panel-solid);
+  --button-hover-bg: var(--neutral-bg);
+  background: var(--button-bg);
+  color: var(--text);
+  text-align: left;
+  font-weight: 400;
+}
+
+.todo-fine-rule-button[aria-expanded="true"] {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.todo-fine-rule-button-muted {
+  color: var(--muted);
+}
+
+.todo-fine-rule-button-conflict {
+  border-color: var(--warning);
+}
+
+.todo-fine-rule-text,
+.todo-fine-menu-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 0;
+}
+
+.todo-fine-rule-kicker {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.todo-fine-rule-label {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.todo-fine-rule-caret {
+  flex: none;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.todo-fine-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 360px;
+  padding: var(--space-1);
+  overflow-y: auto;
+}
+
+.todo-fine-menu-divider {
+  padding: var(--space-2) var(--space-2) var(--space-1);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.todo-fine-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 0;
+  padding: var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  --button-bg: transparent;
+  --button-hover-bg: var(--neutral-bg);
+  background: var(--button-bg);
+  color: var(--text);
+  text-align: left;
+  font-weight: 400;
+}
+
+.todo-fine-menu-item-selected {
+  --button-bg: var(--accent-soft);
+  --button-hover-bg: var(--accent-soft);
+}
+
+.todo-fine-menu-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.todo-fine-menu-sub {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.todo-fine-menu-meta {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.todo-fine-menu-check {
+  width: 14px;
+  color: var(--accent);
+  text-align: right;
+}
+
+.todo-fine-conflict {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-sm);
+  background: var(--warning-bg);
+}
+
+.todo-fine-conflict-text {
+  color: var(--warning-fg);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.todo-fine-conflict-rule {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  --button-bg: var(--panel-solid);
+  --button-hover-bg: var(--panel-solid);
+  background: var(--button-bg);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-align: left;
+}
+
+.todo-fine-conflict-rule:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.todo-fine-lines-box {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-solid);
+}
+
+.todo-fine-lines-box .todo-fine-lines {
+  gap: 0;
+}
+
+.todo-fine-lines-box .todo-fine-lines li {
+  align-items: baseline;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.todo-fine-lines-box .todo-fine-lines strong {
+  font-weight: 600;
+}
+
+.todo-fine-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: var(--space-2) 0 var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.todo-fine-total strong {
+  font-size: var(--text-md);
+  font-weight: 700;
+}
+
+.todo-fine-error {
+  color: var(--danger);
+}
