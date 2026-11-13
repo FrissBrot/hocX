@@ -4,12 +4,12 @@ uvicorn[standard]==0.54.0
 sqlalchemy==2.1.6
 alembic==1.20.1
 psycopg[binary]==3.3.6
-pydantic==2.14.1
-pydantic-settings==2.16.1
+pydantic==2.14.2
+pydantic-settings==2.16.2
 python-multipart==0.0.32
 pyclamd==0.4.0
 redis==8.1.0
-dnspython==2.9.0
+dnspython==2.9.1
 PyYAML==6.0.3
 PyJWT[crypto]==2.15.1
 cryptography==50.0.2
@@ -32,7 +32,7 @@ pillow-heif==1.8.1
 ImageHash==4.3.2
 
 # S3-Objektspeicher (app/core/objstore_client.py, docs-site/docs/technik/storage/architektur.md)
-boto3==1.43.120
+boto3==1.43.123
 
 # Passwortgeschützte ZIP-Dateien (AES-256, WinZip-AE-2) für Datenauskunft und Vereinsexport
 # (app/services/personal_data_export_service.py, Datenschutz-Audit Paket 5/6) - lesbar mit 7-Zip,
