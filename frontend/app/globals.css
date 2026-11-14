@@ -14523,6 +14523,9 @@ a.export-step-meta {
 
 .todo-fine-section {
   gap: var(--space-2);
+  /* Eine Spalte, die nie breiter als die Seitenleiste wird (sonst setzt die Eigenbreite des
+     Betragsfelds die Spaltenbreite und der Block ragt über den Dialogrand). */
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .todo-fine-summary {
@@ -14599,6 +14602,7 @@ a.export-step-meta {
 
 .todo-fine-amount input {
   flex: 1;
+  width: 100%;
   min-width: 0;
   min-height: 0;
   padding: 0;

@@ -19,7 +19,7 @@ import {
   TemplateSummary,
   TodoListItem,
 } from "@/types/api";
-import { can } from "@/lib/permissions";
+import { can, featureAccess } from "@/lib/permissions";
 
 export default async function ProtocolDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -150,6 +150,11 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
               initialPendingTodos={pendingTodos}
               forceReadOnly={isRestricted}
               canManageFinances={can(session, "finances.manage")}
+              todoFines={{
+                visible: can(session, "finances.read") && featureAccess(session, "todo_fines") !== "none",
+                manage: can(session, "finances.manage") && featureAccess(session, "todo_fines") === "full",
+                currency: session.current_tenant?.finance_currency ?? "CHF",
+              }}
               canViewFines={canViewFines}
               accordionEnabled={session.user?.protocol_accordion_enabled ?? true}
               wheelEnabled={session.user?.protocol_wheel_enabled ?? false}

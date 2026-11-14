@@ -2000,6 +2000,11 @@
        "title": "Protocol Id",
        "x-source": "protocols"
       },
+      "show_fines": {
+       "default": true,
+       "title": "Show Fines",
+       "type": "boolean"
+      },
       "status": {
        "default": "open",
        "enum": [

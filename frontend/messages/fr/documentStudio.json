@@ -1376,7 +1376,8 @@
     "with_place_date": "Champ « Lieu, date »",
     "invitation_only": "Seulement les points de l’invitation",
     "include_undated": "Inclure les tâches sans échéance",
-    "overdue_only": "Seulement en retard"
+    "overdue_only": "Seulement en retard",
+    "show_fines": "Colonne « Amende » (si présente)"
   },
   "preview": {
     "chooseProtocol": "Choisir un procès-verbal",

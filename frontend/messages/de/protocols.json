@@ -424,6 +424,19 @@
   "sessionDatePickerHint": "Klicke auf einen Tag, um ihn zu übernehmen.",
   "sessionDatePickerTitle": "Datum für den nächsten Hock",
   "sessionPanel": {
+    "fine": {
+      "label": "Busse",
+      "ruleApplies": "Busse nach Regel «{name}»",
+      "conflict": "{count, plural, one {# Regel passt} other {# Regeln passen}} - Busse in der Pendenz festlegen",
+      "roleCondition": "nur für bestimmte Rollen",
+      "noDue": "Fällt erst mit einer Fälligkeit an.",
+      "choiceAuto": "Busse: automatisch nach Regel",
+      "choiceFixed": "Busse: Fixbetrag",
+      "choiceRule": "Regel: {name}",
+      "choiceNone": "Keine Busse",
+      "amountLabel": "Fixbetrag",
+      "saveFailed": "Die Pendenz ist erfasst, die Busse konnte aber nicht gespeichert werden."
+    },
     "assignPlaceholder": "Person zuweisen…",
     "createTodoButton": "Pendenz erstellen",
     "createTodoFailed": "Pendenz konnte nicht erstellt werden",

@@ -1376,7 +1376,8 @@
     "with_place_date": "Feld «Ort, Datum»",
     "invitation_only": "Nur Traktanden der Einladung",
     "include_undated": "Ohne Fälligkeit mitnehmen",
-    "overdue_only": "Nur überfällige"
+    "overdue_only": "Nur überfällige",
+    "show_fines": "Spalte «Busse» (wenn vorhanden)"
   },
   "preview": {
     "chooseProtocol": "Protokoll wählen",

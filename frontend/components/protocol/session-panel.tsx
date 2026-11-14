@@ -14,6 +14,7 @@ import { formatDateRange } from "@/lib/utils/format";
 import { NavIcon } from "@/components/ui/nav-icons";
 import { ActionIcon } from "@/components/ui/action-icons";
 import { EventSummary, ParticipantSummary, ProtocolSummary } from "@/types/api";
+import { QuickTodoFine, quickTodoFineInvalid, quickTodoFineSettings, type QuickTodoFineAccess, type QuickTodoFineChoice } from "@/components/protocol/quick-todo-fine";
 
 type DueDraft =
   | { type: "none" }
@@ -27,6 +28,8 @@ type SessionPanelProps = {
   currentSectionName?: string | null;
   onSessionNotesChange?: (notes: string) => void;
   onQuickTodoCreated?: (blockId: string, todoId: string, elementId: string) => void;
+  /** Pendenzen-Bussen: Regel zum Tag anzeigen, mit finances.manage auch festlegen */
+  todoFines?: QuickTodoFineAccess;
 };
 
 export type SessionPanelHandle = {
@@ -41,7 +44,7 @@ export type SessionPanelHandle = {
 type ActivePanel = "notes" | "todo" | null;
 
 export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProps>(
-  function SessionPanel({ protocol, participants, dueEvents = [], currentSectionName, onSessionNotesChange, onQuickTodoCreated }, ref) {
+  function SessionPanel({ protocol, participants, dueEvents = [], currentSectionName, onSessionNotesChange, onQuickTodoCreated, todoFines }, ref) {
     const isParticipantSelectable = useParticipantSelectable();
     const t = useTranslations("protocols.sessionPanel");
     const tCommon = useTranslations("common");
@@ -54,6 +57,7 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
     const [creatingTodo, setCreatingTodo] = useState(false);
     const [todoSaved, setTodoSaved] = useState(false);
     const [openedByHover, setOpenedByHover] = useState(false);
+    const [fineChoice, setFineChoice] = useState<QuickTodoFineChoice>({ mode: "auto" });
     const notesMutationKey = `protocol-notes:${protocol.id}`;
     const notesServerValueRef = useRef(protocol.session_notes ?? "");
     const latestNotesRef = useRef(notes);
@@ -258,7 +262,7 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
 
     const handleCreateTodo = async () => {
       const task = todoTask.trim();
-      if (!task || creatingTodo) return false;
+      if (!task || creatingTodo || quickTodoFineInvalid(fineChoice)) return false;
       setCreatingTodo(true);
       try {
         const result = await browserApiFetch<{ block_id: string; todo_id: string; element_id: string }>(
@@ -278,8 +282,19 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
             body: JSON.stringify(patch),
           });
         }
+        // Busse wie im Pendenzen-Popup (PUT /fine); «automatisch» braucht nichts. Scheitert nur das,
+        // bleibt die Pendenz bestehen - die Busse lässt sich dort nachtragen.
+        const fineSettings = todoFines?.manage ? quickTodoFineSettings(fineChoice) : null;
+        if (fineSettings) {
+          try {
+            await browserApiFetch(`/api/protocol-todos/${result.todo_id}/fine`, { method: "PUT", body: JSON.stringify(fineSettings) });
+          } catch {
+            showToast(t("fine.saveFailed"), "error");
+          }
+        }
         onQuickTodoCreated?.(result.block_id, result.todo_id, result.element_id);
         setTodoTask("");
+        setFineChoice({ mode: "auto" });
         setAssigneeSearch("");
         setAssigneeId(null);
         setAssigneeConfirmed(false);
@@ -580,10 +595,20 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
               onChange={(e) => setTodoTag(e.target.value)}
               placeholder={t("tagPlaceholder")}
             />
+            {todoFines ? (
+              <QuickTodoFine
+                access={todoFines}
+                tag={todoTag}
+                assigneeId={assigneeId}
+                hasDue={newDue.type !== "none"}
+                value={fineChoice}
+                onChange={setFineChoice}
+              />
+            ) : null}
             <button
               type="button"
               className="session-panel-btn"
-              disabled={creatingTodo || !todoTask.trim()}
+              disabled={creatingTodo || !todoTask.trim() || quickTodoFineInvalid(fineChoice)}
               onClick={() => void handleCreateTodo()}
             >
               {todoSaved ? `✓ ${t("createdBadge")}` : creatingTodo ? "…" : t("createTodoButton")}

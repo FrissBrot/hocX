@@ -4,12 +4,13 @@ Todos aus Protokollen mit Zugriff plus ihnen direkt zugewiesene."""
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 from typing import Any, Iterable
 
 from app.documents.catalog import BlockSpec, TodoTableParams
-from app.documents.context import BuildContext, format_date
+from app.documents.context import BuildContext, format_amount, format_date
 from app.documents.model import Cell, TableColumn, TableData, TableGroup, TableRow, TodoTableBlock
-from app.documents.providers.common import col, sort_key, spec_fields, status_cell, tags_cell, text_cell
+from app.documents.providers.common import amount_cell, col, sort_key, spec_fields, status_cell, tags_cell, text_cell
 
 TODO_STATUS_ORDER = {"open": 0, "in_progress": 1, "done": 2, "cancelled": 3}
 _DUE_MARKER_KEYS = {"nächste Sitzung": "due.nextSession", "letzte Sitzung": "due.lastSession"}
@@ -54,7 +55,83 @@ def protocol_label(row: Any) -> str:
     return " · ".join(parts)
 
 
-def todo_columns(columns: Iterable[str]) -> list[TableColumn]:
+class TodoFines:
+    """Bussen je Pendenz für Dokumente und Exporte, sichtbar wie im Pendenzen-Popup
+    (``GET /protocol-todos/{id}/fine``): eingefrorene Bussen (ohne gelöschte/erlassene) plus die
+    laufende Busse der Personen ohne gespeicherte Busse. Beträge anderer Personen nur mit
+    ``reports.personal`` oder ``finances.manage``, sonst nur die eigene Busse."""
+
+    def __init__(self, totals: dict[int, Decimal], currency: str) -> None:
+        self.totals = totals
+        self.currency = currency
+
+    def text(self, row: Any) -> str:
+        total = self.totals.get(row.ProtocolTodo.id)
+        return f"{format_amount(total)} {self.currency}".strip() if total else ""
+
+
+def load_todo_fines(ctx: BuildContext, rows: list[Any]) -> TodoFines | None:
+    """``None``, wenn der Mandant das Modul nicht hat oder keine Pendenz eine Busse trägt; dann
+    erscheint auch keine Spalte."""
+    from sqlalchemy import select
+
+    from app.core.features_generated import F
+    from app.core.permissions import P
+    from app.models import ProtocolTodo, Tenant, TodoFine
+    from app.models.entities import TenantFeature
+    from app.services import todo_fine_service as fines
+
+    todo_ids = [row.ProtocolTodo.id for row in rows if getattr(getattr(row, "ProtocolTodo", None), "id", None) is not None]
+    if not todo_ids:
+        return None
+    booked = ctx.db.scalar(
+        select(TenantFeature.id).where(
+            TenantFeature.tenant_id == ctx.tenant_id, TenantFeature.feature_code == F.TODO_FINES, TenantFeature.access.in_(("full", "read_only"))
+        ).limit(1)
+    )
+    if booked is None:
+        return None
+    user = ctx.user
+    only_participant = None if user is None or user.can(P.FINANCES_MANAGE) else ctx.own_fines_participant_id()
+
+    def visible(participant_id: int | None) -> bool:
+        return only_participant is None or participant_id == only_participant
+
+    totals: dict[int, Decimal] = {}
+    stored: dict[int, set[int]] = {}
+    for todo_id, participant_id, amount, status in ctx.db.execute(
+        select(TodoFine.protocol_todo_id, TodoFine.participant_id, TodoFine.amount, TodoFine.status).where(
+            TodoFine.tenant_id == ctx.tenant_id, TodoFine.protocol_todo_id.in_(todo_ids)
+        )
+    ):
+        # Gespeichert (jeder Status) heisst: keine laufende Busse mehr für diese Person
+        stored.setdefault(todo_id, set()).add(participant_id)
+        if status != "deleted" and visible(participant_id):
+            totals[todo_id] = totals.get(todo_id, Decimal("0")) + Decimal(amount)
+
+    fine_ctx = fines.TenantFineContext(ctx.db, ctx.tenant_id)
+    facts_rows = ctx.db.execute(fines._facts_query(ctx.tenant_id).where(ProtocolTodo.id.in_(todo_ids))).all()
+    all_facts = [fines._facts_from_row(row) for row in facts_rows]
+    fine_ctx.people([pid for facts in all_facts for pid in facts.assignee_ids])
+    for facts in all_facts:
+        # Erledigte Pendenzen: nur eingefrorene Bussen (wie im Popup nach dem Einfrieren)
+        if facts.status_code not in fines.OPEN_STATUS_CODES and facts.id in stored:
+            continue
+        evaluation = fines.evaluate(fine_ctx, facts, on=ctx.today)
+        if evaluation.state != "ok":
+            continue
+        for line in evaluation.lines:
+            if line.participant_id in stored.get(facts.id, set()) or not visible(line.participant_id):
+                continue
+            totals[facts.id] = totals.get(facts.id, Decimal("0")) + line.amount
+    totals = {todo_id: fines.money(total) for todo_id, total in totals.items() if total > 0}
+    if not totals:
+        return None
+    currency = ctx.db.scalar(select(Tenant.finance_currency).where(Tenant.id == ctx.tenant_id)) or "CHF"
+    return TodoFines(totals, currency)
+
+
+def todo_columns(columns: Iterable[str], *, with_fine: bool = False) -> list[TableColumn]:
     wanted = list(columns)
     result: list[TableColumn] = []
     if "status" in wanted:
@@ -68,10 +145,12 @@ def todo_columns(columns: Iterable[str]) -> list[TableColumn]:
         result.append(col("protocol", "col.protocol"))
     if "tags" in wanted:
         result.append(col("tags", "col.tags"))
+    if with_fine:
+        result.append(col("fine", "col.fine", align="right"))
     return result
 
 
-def todo_row(row: Any, columns: list[TableColumn], tag_config: dict | None = None) -> TableRow:
+def todo_row(row: Any, columns: list[TableColumn], tag_config: dict | None = None, fines: TodoFines | None = None) -> TableRow:
     code = status_code(row)
     cells: list[Cell] = []
     for column in columns:
@@ -87,6 +166,8 @@ def todo_row(row: Any, columns: list[TableColumn], tag_config: dict | None = Non
             cells.append(text_cell(protocol_label(row)))
         elif column.key == "tags":
             cells.append(tags_cell(todo_tags(row), tag_config))
+        elif column.key == "fine":
+            cells.append(amount_cell(fines.text(row) if fines else ""))
     return TableRow(cells=cells, muted=code in ("done", "cancelled"))
 
 
@@ -105,10 +186,12 @@ def sort_rows(rows: list[Any]) -> list[Any]:
     )
 
 
-def todo_table(rows: list[Any], columns: list[TableColumn], *, group_by: str = "none", tag_config: dict | None = None) -> TableData:
+def todo_table(
+    rows: list[Any], columns: list[TableColumn], *, group_by: str = "none", tag_config: dict | None = None, fines: TodoFines | None = None
+) -> TableData:
     rows = sort_rows(rows)
     if group_by == "none" or not rows:
-        return TableData(columns=columns, groups=[TableGroup(rows=[todo_row(row, columns, tag_config) for row in rows])] if rows else [])
+        return TableData(columns=columns, groups=[TableGroup(rows=[todo_row(row, columns, tag_config, fines) for row in rows])] if rows else [])
 
     groups: dict[str, TableGroup] = {}
     order: list[tuple[Any, str]] = []
@@ -117,7 +200,7 @@ def todo_table(rows: list[Any], columns: list[TableColumn], *, group_by: str = "
         if key not in groups:
             groups[key] = group
             order.append((rank, key))
-        groups[key].rows.append(todo_row(row, columns, tag_config))
+        groups[key].rows.append(todo_row(row, columns, tag_config, fines))
 
     for row in rows:
         if group_by == "person":
@@ -199,9 +282,11 @@ def _tag_config(ctx: BuildContext) -> dict:
 
 def provide(ctx: BuildContext, spec: BlockSpec, params: TodoTableParams):
     rows = filter_rows(ctx, list_tenant_todo_rows(ctx), params)
-    columns = todo_columns(params.columns)
+    # Busse erscheint automatisch, sobald eine der Pendenzen eine trägt (abwählbar im Export-Dialog)
+    fines = load_todo_fines(ctx, rows) if params.show_fines else None
+    columns = todo_columns(params.columns, with_fine=fines is not None)
     tag_config = _tag_config(ctx) if "tags" in params.columns else None
-    return [TodoTableBlock(**spec_fields(spec), table=todo_table(rows, columns, group_by=params.group_by, tag_config=tag_config))]
+    return [TodoTableBlock(**spec_fields(spec), table=todo_table(rows, columns, group_by=params.group_by, tag_config=tag_config, fines=fines))]
 
 
 def markdown(
@@ -213,6 +298,7 @@ def markdown(
     show_status: bool,
     today: date,
     exclude_columns: set[str] | None = None,
+    fines: TodoFines | None = None,
 ) -> str:
     """Todo-Liste für WhatsApp: nur Formatierung, die WhatsApp kennt (*fett*, _kursiv_,
     ~durchgestrichen~), keine Tabellen oder Überschriften. Aufgabe fett, darunter je Feld eine
@@ -251,6 +337,8 @@ def markdown(
             lines.append(field("col.protocol", plain(protocol_label(row))))
         if wanted("col.tags") and todo_tags(row):
             lines.append(field("col.tags", ", ".join(plain(tag) for tag in todo_tags(row))))
+        if fines is not None and wanted("col.fine") and fines.text(row):
+            lines.append(field("col.fine", plain(fines.text(row))))
         return lines
 
     as_of = strings["label.asOf"].replace("{date}", format_date(today))

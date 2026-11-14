@@ -424,6 +424,19 @@
   "sessionDatePickerHint": "Click a day to select it.",
   "sessionDatePickerTitle": "Date for the next session",
   "sessionPanel": {
+    "fine": {
+      "label": "Fine",
+      "ruleApplies": "Fine under rule “{name}”",
+      "conflict": "{count, plural, one {# rule matches} other {# rules match}} - set the fine in the to-do",
+      "roleCondition": "only for certain roles",
+      "noDue": "Only applies once there is a due date.",
+      "choiceAuto": "Fine: automatic by rule",
+      "choiceFixed": "Fine: fixed amount",
+      "choiceRule": "Rule: {name}",
+      "choiceNone": "No fine",
+      "amountLabel": "Fixed amount",
+      "saveFailed": "The to-do was created, but the fine could not be saved."
+    },
     "assignPlaceholder": "Assign person…",
     "createTodoButton": "Create todo",
     "createTodoFailed": "Todo could not be created",

@@ -13,6 +13,7 @@ import { useToast } from "@/contexts/toast-context";
 import { ParticipantDateContext } from "@/contexts/participant-date-context";
 import { ParticipantDirectoryContext } from "@/contexts/participant-directory-context";
 import { SessionPanel, SessionPanelHandle } from "@/components/protocol/session-panel";
+import type { QuickTodoFineAccess } from "@/components/protocol/quick-todo-fine";
 import { Modal } from "@/components/ui/modal";
 import { HelpPopover } from "@/components/ui/help-popover";
 import { Badge } from "@/components/ui/badge";
@@ -106,6 +107,8 @@ type ProtocolEditorProps = {
   canViewFines?: boolean;
   /** Transaktionen direkt im Block «Transaktionen» erfassen (finances.manage) */
   canManageFinances?: boolean;
+  /** Pendenzen-Bussen in «Schnelle Pendenz» (Sitzungsmenü) */
+  todoFines?: QuickTodoFineAccess;
   accordionEnabled?: boolean;
   /** Rad-Effekt beim Scrollen (Profileinstellung); wirkt nur zusammen mit dem Akkordeon */
   wheelEnabled?: boolean;
@@ -136,6 +139,7 @@ export function ProtocolEditor({
   forceReadOnly = false,
   canViewFines = true,
   canManageFinances = false,
+  todoFines,
   accordionEnabled: accordionPreference = true,
   wheelEnabled = false,
 }: ProtocolEditorProps) {
@@ -2525,6 +2529,7 @@ export function ProtocolEditor({
           currentSectionName={selectedElement ? trimSectionName(selectedElement.section_name_snapshot) : null}
           onSessionNotesChange={setSessionNotes}
           onQuickTodoCreated={elementHandlers.handleQuickTodoCreated}
+          todoFines={todoFines}
         />
       )}
 

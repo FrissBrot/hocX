@@ -424,6 +424,19 @@
   "sessionDatePickerHint": "Cliquez sur un jour pour le sélectionner.",
   "sessionDatePickerTitle": "Date de la prochaine séance",
   "sessionPanel": {
+    "fine": {
+      "label": "Amende",
+      "ruleApplies": "Amende selon la règle « {name} »",
+      "conflict": "{count, plural, one {# règle correspond} other {# règles correspondent}} - fixer l'amende dans la tâche",
+      "roleCondition": "seulement pour certains rôles",
+      "noDue": "S'applique seulement avec une échéance.",
+      "choiceAuto": "Amende : automatique selon la règle",
+      "choiceFixed": "Amende : montant fixe",
+      "choiceRule": "Règle : {name}",
+      "choiceNone": "Pas d'amende",
+      "amountLabel": "Montant fixe",
+      "saveFailed": "La tâche a été créée, mais l'amende n'a pas pu être enregistrée."
+    },
     "assignPlaceholder": "Attribuer à une personne…",
     "createTodoButton": "Créer une tâche",
     "createTodoFailed": "La tâche n'a pas pu être créée",

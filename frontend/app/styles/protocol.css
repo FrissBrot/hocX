@@ -4007,3 +4007,91 @@
 .record-list-row-link:hover {
   text-decoration: underline;
 }
+
+/* Busse in «Schnelle Pendenz» (quick-todo-fine.tsx): Regel zum Tag, für die Kasse Auswahl/Fixbetrag */
+.quick-todo-fine {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.quick-todo-fine-hint {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--info-bg);
+  color: var(--info-fg);
+  font-size: var(--text-xs);
+  line-height: 1.35;
+}
+
+.quick-todo-fine-hint-warning {
+  background: var(--warning-bg);
+  color: var(--warning-fg);
+}
+
+.quick-todo-fine-muted {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.quick-todo-fine-hint .quick-todo-fine-muted {
+  color: inherit;
+  opacity: 0.85;
+}
+
+.quick-todo-fine-row {
+  display: flex;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.quick-todo-fine-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.quick-todo-fine-amount {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  width: 120px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--panel-solid);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.quick-todo-fine-amount:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.quick-todo-fine-amount-invalid {
+  border-color: var(--danger);
+}
+
+.quick-todo-fine-amount input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.quick-todo-fine-amount input:focus {
+  outline: none;
+  box-shadow: none;
+}

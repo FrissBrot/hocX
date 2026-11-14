@@ -254,7 +254,7 @@ def ics_content(prepared: Any) -> bytes:
 
 def markdown_columns(strings: dict[str, str]) -> list[str]:
     """Felder des Markdown-Exports (Aufgabe steht immer da)."""
-    return [strings[key] for key in ("col.status", "col.assignee", "col.due", "col.protocol", "col.tags") if key in strings]
+    return [strings[key] for key in ("col.status", "col.assignee", "col.due", "col.protocol", "col.tags", "col.fine") if key in strings]
 
 
 def markdown_content(prepared: Any, *, exclude_columns: Iterable[str] = ()) -> bytes:
@@ -273,7 +273,8 @@ def markdown_content(prepared: Any, *, exclude_columns: Iterable[str] = ()) -> b
         group_by_person = group_by_person or params.group_by == "person"
         show_status = show_status or params.status != "open"
     strings = prepared.compiled.data["strings"]
+    show_fines = any(validate_spec(spec).show_fines for spec in specs)
     return todos.markdown(
         rows, strings=strings, title=prepared.meta.title, group_by_person=group_by_person, show_status=show_status,
-        today=ctx.today, exclude_columns=set(exclude_columns),
+        today=ctx.today, exclude_columns=set(exclude_columns), fines=todos.load_todo_fines(ctx, rows) if show_fines else None,
     ).encode("utf-8")

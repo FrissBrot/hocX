@@ -424,6 +424,19 @@
   "sessionDatePickerHint": "Clicca su un giorno per selezionarlo.",
   "sessionDatePickerTitle": "Data della prossima sessione",
   "sessionPanel": {
+    "fine": {
+      "label": "Multa",
+      "ruleApplies": "Multa secondo la regola «{name}»",
+      "conflict": "{count, plural, one {# regola corrisponde} other {# regole corrispondono}} - stabilire la multa nell'attività",
+      "roleCondition": "solo per determinati ruoli",
+      "noDue": "Si applica solo con una scadenza.",
+      "choiceAuto": "Multa: automatica secondo regola",
+      "choiceFixed": "Multa: importo fisso",
+      "choiceRule": "Regola: {name}",
+      "choiceNone": "Nessuna multa",
+      "amountLabel": "Importo fisso",
+      "saveFailed": "L'attività è stata creata, ma la multa non è stata salvata."
+    },
     "assignPlaceholder": "Assegna persona…",
     "createTodoButton": "Crea attività",
     "createTodoFailed": "Impossibile creare l'attività",

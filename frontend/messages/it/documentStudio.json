@@ -1376,7 +1376,8 @@
     "with_place_date": "Campo «Luogo, data»",
     "invitation_only": "Solo i punti dell’invito",
     "include_undated": "Includi attività senza scadenza",
-    "overdue_only": "Solo scadute"
+    "overdue_only": "Solo scadute",
+    "show_fines": "Colonna «Multa» (se presente)"
   },
   "preview": {
     "chooseProtocol": "Scegli verbale",

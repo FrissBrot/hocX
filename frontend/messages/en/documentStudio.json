@@ -1376,7 +1376,8 @@
     "with_place_date": "“Place, date” field",
     "invitation_only": "Only agenda items of the invitation",
     "include_undated": "Include tasks without due date",
-    "overdue_only": "Overdue only"
+    "overdue_only": "Overdue only",
+    "show_fines": "“Fine” column (if any)"
   },
   "preview": {
     "chooseProtocol": "Choose protocol",
