@@ -2620,3 +2620,9 @@ export type ParticipantInvite = {
   sent_at: string | null;
   expires_at: string | null;
 };
+
+/** POST /api/search (routes/search.py): Treffer der globalen Suche aus der Datenbank. */
+export type GlobalSearchResult = {
+  people: { id: string; name: string; email: string | null; is_active: boolean }[];
+  files: { id: string; name: string; is_image: boolean; context: string }[];
+};

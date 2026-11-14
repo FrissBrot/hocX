@@ -94,6 +94,7 @@ export function MobileShell({
   themeReady,
   onSelectTheme,
   onOpenProfile,
+  onOpenSearch,
   onLogout,
 }: {
   session: SessionInfo | null;
@@ -102,6 +103,7 @@ export function MobileShell({
   themeReady: boolean;
   onSelectTheme: (theme: ThemePreference) => void;
   onOpenProfile: () => void;
+  onOpenSearch: () => void;
   onLogout: () => void;
 }) {
   const t = useTranslations("mobile");
@@ -167,6 +169,7 @@ export function MobileShell({
             themeReady={themeReady}
             onSelectTheme={onSelectTheme}
             onOpenProfile={onOpenProfile}
+            onOpenSearch={() => { setMoreOpen(false); onOpenSearch(); }}
             onLogout={onLogout}
           />
         ) : null}
@@ -217,6 +220,7 @@ function MobileMorePanel({
   themeReady,
   onSelectTheme,
   onOpenProfile,
+  onOpenSearch,
   onLogout,
 }: {
   session: SessionInfo | null;
@@ -224,10 +228,12 @@ function MobileMorePanel({
   themeReady: boolean;
   onSelectTheme: (theme: ThemePreference) => void;
   onOpenProfile: () => void;
+  onOpenSearch: () => void;
   onLogout: () => void;
 }) {
   const t = useTranslations("mobile");
   const tNav = useTranslations("nav");
+  const tCommon = useTranslations("common");
   const pathname = usePathname();
   const name = session?.user?.display_name ?? "…";
   const subtitle = [session?.current_tenant?.name, formatRoleLabel(session, tNav)].filter(Boolean).join(" · ");
@@ -247,6 +253,14 @@ function MobileMorePanel({
           <div className="mobile-muted-sm">{subtitle}</div>
         </div>
       </div>
+
+      <button type="button" className="mobile-card global-search-mobile-trigger" onClick={onOpenSearch}>
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <circle cx="7" cy="7" r="5.25" stroke="currentColor" strokeWidth="1.5" />
+          <path d="M11 11L14.5 14.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+        <span>{tCommon("globalSearch")}</span>
+      </button>
 
       {mobileMoreGroups(session).map((group) => (
         <MobileGroup key={group.titleKey} label={tNav(group.titleKey)}>

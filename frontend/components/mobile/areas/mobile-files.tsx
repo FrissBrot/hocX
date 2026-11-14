@@ -14,6 +14,7 @@ import { uploadResultsSummary } from "@/components/files/upload-results-modal";
 import { countUploadResults } from "@/lib/utils/upload-results";
 import { FileDetailModal } from "@/components/files/file-detail-modal";
 import { SearchInput } from "@/components/ui/search-input";
+import { useOpenRequest } from "@/lib/search/handoff";
 import { ShareLinkModal } from "@/components/ui/share-link-modal";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
@@ -65,6 +66,8 @@ export function MobileFiles({ initialItems }: { initialItems: FileOverviewItem[]
   const [uploading, setUploading] = useState(false);
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
   const mounted = useRef(false);
+  // Treffer aus der globalen Suche (?open=<id>)
+  useOpenRequest(items, (item) => setDetail(item), (text) => { setSearch(text); setSearchOpen(true); });
 
   function url(skip: number) {
     const [sortBy, sortDir] = sort.split(":");

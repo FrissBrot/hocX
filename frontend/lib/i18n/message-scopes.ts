@@ -26,6 +26,7 @@ export const GLOBAL_NAMESPACES = [
   "mobile",
   "nav",
   "overload",
+  "search",
   "security",
   "settings",
 ] as const;

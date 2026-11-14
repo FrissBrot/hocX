@@ -2221,6 +2221,19 @@
         "custom_roles"
       ]
     },
+    "POST /api/search": {
+      "handler": "search.global_search",
+      "requires_any": [
+        [
+          "files.manage",
+          "participants.manage"
+        ]
+      ],
+      "branches": [
+        "files.manage",
+        "participants.manage"
+      ]
+    },
     "GET /api/share-links": {
       "handler": "share_links.list_share_links",
       "requires": [

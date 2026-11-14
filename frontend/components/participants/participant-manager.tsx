@@ -13,6 +13,7 @@ import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { ProtectedExportModal } from "@/components/ui/protected-export-modal";
 import { SearchInput } from "@/components/ui/search-input";
+import { useOpenRequest } from "@/lib/search/handoff";
 import { browserApiFetch, LONG_RUNNING_TIMEOUT_MS } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
@@ -255,6 +256,9 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
       setInviteBusy(false);
     }
   }
+
+  // Treffer aus der globalen Suche (?open=<id>): Person direkt bearbeiten
+  useOpenRequest(participants, (participant) => void openEdit(participant));
 
   async function openEdit(participant: ParticipantSummary) {
     setSelectedParticipant(participant);

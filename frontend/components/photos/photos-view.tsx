@@ -21,6 +21,7 @@ import { FileDropOverlay } from "@/components/ui/file-drop-overlay";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
+import { useOpenRequest } from "@/lib/search/handoff";
 import { TagInput } from "@/components/ui/tag-input";
 import { useConfirm } from "@/contexts/confirm-context";
 import { HelpPopover } from "@/components/ui/help-popover";
@@ -103,6 +104,9 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
   const [isReloading, setIsReloading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  // Treffer aus der globalen Suche (?open=<id>): Suche mit dem Dateinamen vorbelegen und das Foto
+  // im Viewer öffnen, sobald es in der geladenen Liste steht.
+  useOpenRequest(items, (_item, index) => setViewerIndex(index), setSearch);
   const [analysisProgress, setAnalysisProgress] = useState<ProgressData | null>(null);
   const [queuedUploadId, setQueuedUploadId] = useState<string | undefined>();
   const [galleryUploadJobs, setGalleryUploadJobs] = useState<GalleryUploadJob[]>([]);

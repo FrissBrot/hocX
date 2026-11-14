@@ -23,6 +23,7 @@ import { FileTypeTile } from "@/components/mobile/areas/mobile-files";
 import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
+import { useOpenRequest } from "@/lib/search/handoff";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
@@ -55,6 +56,8 @@ export function MobileParticipants({ initialParticipants, templates, tenantId }:
   const [selected, setSelected] = useState<string[]>([]);
   const [editing, setEditing] = useState<ParticipantSummary | "new" | null>(null);
   const [importing, setImporting] = useState(false);
+  // Treffer aus der globalen Suche (?open=<id>)
+  useOpenRequest(participants, (participant) => setEditing(participant));
 
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();

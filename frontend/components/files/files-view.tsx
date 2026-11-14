@@ -16,6 +16,7 @@ import { FileDropOverlay } from "@/components/ui/file-drop-overlay";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SearchInput } from "@/components/ui/search-input";
+import { useOpenRequest } from "@/lib/search/handoff";
 import { ShareLinkModal } from "@/components/ui/share-link-modal";
 import { TagInput } from "@/components/ui/tag-input";
 import { useToast } from "@/contexts/toast-context";
@@ -103,6 +104,10 @@ export function FilesView({ initialItems }: Props) {
     params.set("sort_dir", sortDir);
     return `/api/files?${params.toString()}`;
   }
+
+  // Treffer aus der globalen Suche (?open=<id>): Suche mit dem Dateinamen vorbelegen und die
+  // Datei öffnen, sobald sie in der (neu geladenen) Liste steht.
+  useOpenRequest(items, (item) => setDetailItem(item), setSearch);
 
   // Filters are applied server-side (the tenant can have far more files than one page),
   // so every filter change re-queries from skip=0 instead of re-filtering what's loaded.

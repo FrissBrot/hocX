@@ -2230,7 +2230,8 @@ export function ProtocolEditor({
   return (
     <ParticipantDateContext.Provider value={protocol.protocol_date ?? null}>
     <ParticipantDirectoryContext.Provider value={directoryWithSnapshotNames}>
-    <div className="grid" ref={editorRef}>
+    {/* data-own-find: Ctrl+F öffnet hier die Kapitelsuche des Editors, nicht die Listensuche der Shell */}
+    <div className="grid" ref={editorRef} data-own-find>
       <div className="protocol-document-header">
         <a href="/protocols" className="button-secondary protocol-document-back">{t("backToProtocols")}</a>
         <Badge variant={protocolStatusVariant(protocolStatus)} className="protocol-document-badge">

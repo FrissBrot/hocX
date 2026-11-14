@@ -3,7 +3,7 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import type { Route } from "next";
-import { ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
@@ -25,6 +25,14 @@ import { CopyrightNotice } from "@/components/ui/copyright-notice";
 import { MobileShell } from "@/components/mobile/mobile-shell";
 import { useIsMobile } from "@/lib/hooks/use-is-mobile";
 import { InstallAppPrompt } from "@/components/ui/install-app-prompt";
+import { findListSearchInput } from "@/lib/search/list-search";
+import { useGlobalSearchShortcuts, useModifierLabel } from "@/lib/search/shortcuts";
+import type { GlobalSearchAction } from "@/components/search/global-search";
+
+// Globale Suche (Ctrl+K): erst beim ersten Öffnen laden.
+const GlobalSearch = dynamic(() => import("@/components/search/global-search").then((m) => m.GlobalSearch), {
+  ssr: false,
+});
 
 // Erst beim Oeffnen laden (MFA-Verwaltung, geschuetzter Export, Sprachwahl).
 const ProfileModal = dynamic(() => import("@/components/ui/profile-modal").then((m) => m.ProfileModal), {
@@ -104,6 +112,25 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
   const [protocolAccordionEnabled, setProtocolAccordionEnabled] = useState(true);
   const [protocolWheelEnabled, setProtocolWheelEnabled] = useState(false);
   const [sessionStatus, setSessionStatus] = useState(initialSession?.authenticated ? t("sessionReady") : t("sessionLoading"));
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchListInput, setSearchListInput] = useState<HTMLInputElement | null>(null);
+  const modifierLabel = useModifierLabel();
+
+  // Ctrl+K öffnet (und schliesst) die globale Suche; das Suchfeld einer Liste auf der Seite wird
+  // beim Öffnen gemerkt, bevor das Suchfenster selbst der oberste Dialog ist.
+  const searchOpenRef = useRef(false);
+  useEffect(() => {
+    searchOpenRef.current = searchOpen;
+  }, [searchOpen]);
+  const openSearch = useCallback(() => {
+    setSearchListInput(findListSearchInput());
+    setSearchOpen(true);
+  }, []);
+  const toggleSearch = useCallback(() => {
+    if (searchOpenRef.current) setSearchOpen(false);
+    else openSearch();
+  }, [openSearch]);
+  useGlobalSearchShortcuts(toggleSearch, session?.authenticated !== false);
 
   const navGroups = useMemo(() => buildNav(session), [session]);
   const activeNavGroup = useMemo(
@@ -287,6 +314,15 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
     }
   }
 
+  function runSearchAction(action: GlobalSearchAction) {
+    if (action === "profile") setProfileModalOpen(true);
+    else selectTheme(action === "theme-light" ? "light" : action === "theme-dark" ? "dark" : "auto");
+  }
+
+  const globalSearch = searchOpen ? (
+    <GlobalSearch open onClose={() => setSearchOpen(false)} session={session} listInput={searchListInput} onAction={runSearchAction} />
+  ) : null;
+
   const profileModal = profileModalOpen ? (
     <ProfileModal
       open
@@ -313,11 +349,13 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
           themeReady={themeReady}
           onSelectTheme={selectTheme}
           onOpenProfile={() => setProfileModalOpen(true)}
+          onOpenSearch={openSearch}
           onLogout={() => void logout()}
         >
           {children}
         </MobileShell>
         {profileModal}
+        {globalSearch}
       </>
     );
   }
@@ -441,6 +479,14 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
               ) : null}
               <span className="topbar-breadcrumb-page">{activeCrumb.label}</span>
             </nav>
+            <button type="button" className="global-search-trigger" onClick={openSearch} aria-keyshortcuts="Control+K Meta+K">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <circle cx="7" cy="7" r="5.25" stroke="currentColor" strokeWidth="1.5" />
+                <path d="M11 11L14.5 14.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+              <span className="global-search-trigger-label">{tCommon("globalSearch")}</span>
+              <kbd className="global-search-kbd">{modifierLabel} K</kbd>
+            </button>
             <Popover open={avatarMenuOpen} onOpenChange={setAvatarMenuOpen} anchorRef={avatarTriggerRef} align="start">
               <Menu>
                 <div className="menu-header">
@@ -494,6 +540,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
       </div>
 
       {profileModal}
+      {globalSearch}
     </main>
   );
 }
