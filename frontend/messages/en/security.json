@@ -119,6 +119,9 @@
     "admin_role_fixed": "The administrator role is fixed and cannot be changed.",
     "system_role_not_deletable": "Default roles cannot be deleted.",
     "role_in_use": "The role is still assigned to accounts. Remove it there first.",
-    "permission_not_held": "You can only grant or manage permissions you have yourself."
+    "permission_not_held": "You can only grant or manage permissions you have yourself.",
+    "login_disabled": "Sign-in is disabled for this account.",
+    "mfa_flow_expired": "The sign-in has expired. Please sign in again.",
+    "totp_invalid": "The code is not valid. Please check your device's time and try again."
   }
 }

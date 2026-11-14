@@ -119,6 +119,9 @@
     "admin_role_fixed": "Le rôle administrateur est fixe et ne peut pas être modifié.",
     "system_role_not_deletable": "Les rôles standard ne peuvent pas être supprimés.",
     "role_in_use": "Le rôle est encore attribué à des comptes. Retirez-le d'abord.",
-    "permission_not_held": "Vous ne pouvez attribuer ou gérer que les autorisations que vous possédez vous-même."
+    "permission_not_held": "Vous ne pouvez attribuer ou gérer que les autorisations que vous possédez vous-même.",
+    "login_disabled": "La connexion est désactivée pour ce compte.",
+    "mfa_flow_expired": "La connexion a expiré. Veuillez vous reconnecter.",
+    "totp_invalid": "Le code n'est pas valide. Vérifiez l'heure de votre appareil et réessayez."
   }
 }

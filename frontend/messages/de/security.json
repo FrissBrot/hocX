@@ -119,6 +119,9 @@
     "admin_role_fixed": "Die Rolle Administrator ist fest und kann nicht geändert werden.",
     "system_role_not_deletable": "Standardrollen können nicht gelöscht werden.",
     "role_in_use": "Die Rolle ist noch Konten zugewiesen. Entferne sie zuerst dort.",
-    "permission_not_held": "Nur Berechtigungen, die du selbst hast, kannst du vergeben oder verwalten."
+    "permission_not_held": "Nur Berechtigungen, die du selbst hast, kannst du vergeben oder verwalten.",
+    "login_disabled": "Die Anmeldung ist für dieses Konto deaktiviert.",
+    "mfa_flow_expired": "Die Anmeldung ist abgelaufen. Bitte melde dich erneut an.",
+    "totp_invalid": "Der Code ist nicht gültig. Bitte prüfe die Uhrzeit deines Geräts und versuche es erneut."
   }
 }
