@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { browserApiFetch } from "@/lib/api/client";
@@ -30,10 +30,14 @@ export default function BridgePage() {
   const [preview, setPreview] = useState<BridgePreview | null>(null);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Das Fragment wird beim ersten Lesen entfernt; React StrictMode (Entwicklung) führt den Effekt
+  // ein zweites Mal aus - der Ref überlebt das und liefert dann dasselbe Token statt eines leeren.
+  const fragmentTokenRef = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    const fragmentToken = readTokenFromFragment();
+    fragmentTokenRef.current ??= readTokenFromFragment();
+    const fragmentToken = fragmentTokenRef.current;
     if (!fragmentToken) {
       setFailed(true);
       return;
