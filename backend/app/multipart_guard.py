@@ -34,8 +34,13 @@ class MultipartGuardMiddleware:
         default_max_bytes: int,
         path_limits: tuple[tuple[str, int], ...] = (),
         skip_prefixes: tuple[str, ...] = (),
+        token_paths: tuple[tuple[str, str, object], ...] = (),
     ):
         self.app = app
+        # Öffentliche Uploads mit eigenem Zugangs-Token im Header statt Session-Cookie
+        # (persönlicher Abgabe-Link): (Pfad, Header-Name, Prüffunktion token -> bool). Die Prüfung
+        # (DB-Abfrage) läuft im Threadpool, VOR dem Lesen des Bodys.
+        self.token_paths = token_paths
         self.default_max_bytes = default_max_bytes
         # Längstes Präfix zuerst, damit spezifischere Grenzen gewinnen.
         self.path_limits = tuple(sorted(path_limits, key=lambda item: len(item[0]), reverse=True))
@@ -75,7 +80,14 @@ class MultipartGuardMiddleware:
         if not headers.get(b"content-type", b"").lower().startswith(b"multipart/"):
             return await self.app(scope, receive, send)
 
-        if not self._is_authenticated(path, headers):
+        token_rule = next((rule for rule in self.token_paths if path == rule[0]), None)
+        if token_rule is not None:
+            from starlette.concurrency import run_in_threadpool
+
+            token = headers.get(token_rule[1].lower().encode(), b"").decode("latin-1")
+            if not token or not await run_in_threadpool(token_rule[2], token):
+                return await JSONResponse({"detail": {"code": "link_invalid", "message": "Link ungültig oder abgelaufen"}}, 404)(scope, receive, send)
+        elif not self._is_authenticated(path, headers):
             return await JSONResponse({"detail": "Not authenticated"}, 401)(scope, receive, send)
 
         max_bytes = self._limit_for(path)

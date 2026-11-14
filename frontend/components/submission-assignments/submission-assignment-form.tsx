@@ -41,6 +41,9 @@ export type FormState = {
   /** Nach dem Enddatum offen halten, bis auto_close oder Schliessen von Hand (Migration 0173). */
   keep_open_after_end: boolean;
   responsible_participant_source: string;
+  owner_access: "off" | "view" | "manage";
+  owner_access_days: number | "";
+  owner_resubmit_only_personal: boolean;
   link_ids: string[];
 };
 
@@ -63,6 +66,10 @@ export const initialForm: FormState = {
   auto_close: "never",
   keep_open_after_end: false,
   responsible_participant_source: "",
+  // Neue Abgaben: Verantwortliche verwalten ihre Abgabe über den persönlichen Link
+  owner_access: "manage",
+  owner_access_days: 30,
+  owner_resubmit_only_personal: false,
   link_ids: [],
 };
 
@@ -145,6 +152,9 @@ export function formFromAssignment(assignment: SubmissionAssignment): FormState 
     auto_close: assignment.auto_close ?? "never",
     keep_open_after_end: assignment.keep_open_after_end ?? false,
     responsible_participant_source: assignment.responsible_participant_source ?? "",
+    owner_access: assignment.owner_access ?? "off",
+    owner_access_days: assignment.owner_access_days ?? 30,
+    owner_resubmit_only_personal: assignment.owner_resubmit_only_personal ?? false,
     link_ids: assignment.link_ids,
   };
 }
@@ -173,6 +183,9 @@ export function assignmentPayload(form: FormState) {
     auto_close: form.auto_close,
     keep_open_after_end: hasEnd(form) && form.keep_open_after_end,
     responsible_participant_source: form.source_type === "manual" ? null : form.responsible_participant_source || null,
+    owner_access: form.owner_access,
+    owner_access_days: form.owner_access_days === "" ? 30 : Math.min(90, Math.max(1, Math.round(Number(form.owner_access_days)))),
+    owner_resubmit_only_personal: form.owner_access === "manage" && form.owner_resubmit_only_personal,
     link_ids: form.link_ids,
   };
 }
@@ -586,6 +599,49 @@ export function SubmissionAssignmentFormModal({
                     : t("responsiblePersonHelpList")}
                 </span>
               </div>
+            ) : null}
+
+            {form.responsible_participant_source && form.source_type !== "manual" ? (
+              <label className="field-stack">
+                <span className="field-label">
+                  {t("ownerAccessLabel")}
+                  <HelpPopover topic={t("ownerAccessLabel")} docs={help("persoenlicher-link")}>{t("helpOwnerAccess")}</HelpPopover>
+                </span>
+                <Select value={form.owner_access} onChange={(event) => setForm((c) => ({ ...c, owner_access: event.target.value as FormState["owner_access"] }))}>
+                  <option value="manage">{t("ownerAccess.manage")}</option>
+                  <option value="view">{t("ownerAccess.view")}</option>
+                  <option value="off">{t("ownerAccess.off")}</option>
+                </Select>
+                <span className="field-help">{t(`ownerAccessHelp.${form.owner_access}`)}</span>
+              </label>
+            ) : null}
+            {form.responsible_participant_source && form.source_type !== "manual" && form.owner_access !== "off" ? (
+              <>
+                <label className="field-stack">
+                  <span className="field-label">{t("ownerAccessDaysLabel")}</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={90}
+                    value={form.owner_access_days}
+                    onChange={(event) => setForm((c) => ({ ...c, owner_access_days: event.target.value === "" ? "" : Number(event.target.value) }))}
+                  />
+                  <span className="field-help">{t("ownerAccessDaysHelp")}</span>
+                </label>
+                {form.owner_access === "manage" ? (
+                  <label className="checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={form.owner_resubmit_only_personal}
+                      onChange={(event) => setForm((c) => ({ ...c, owner_resubmit_only_personal: event.target.checked }))}
+                    />
+                    <span>
+                      {t("ownerResubmitOnlyPersonalLabel")}
+                      <span className="field-help"> {t("ownerResubmitOnlyPersonalHelp")}</span>
+                    </span>
+                  </label>
+                ) : null}
+              </>
             ) : null}
 
             <div className={advancedOpen ? "subm-edit-advanced subm-edit-advanced-open" : "subm-edit-advanced"}>

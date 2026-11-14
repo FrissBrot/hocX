@@ -55,6 +55,7 @@
     "import": "import word tools",
     "profile": "profile account password language mfa security",
     "connections": "calendar subscription connections ics",
-    "theme": "appearance theme dark light mode"
+    "theme": "appearance theme dark light mode",
+    "tenant-settings-links": "links shares public access sharing drop box calendar"
   }
 }

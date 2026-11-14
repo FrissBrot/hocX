@@ -1,7 +1,7 @@
 # Einstellungen und Domains
 
 Unter **Mandant-Einstellungen** verwaltest du die Grunddaten eures Vereins: Name und Logo, eigene
-Domains, das Abo, die Echtheitsprüfung, den Datenschutz, Aufbewahrungsfristen und den Verlauf.
+Domains, das Abo, die Echtheitsprüfung, den Datenschutz, die Zugangslinks, Aufbewahrungsfristen und den Verlauf.
 
 !!! info "Berechtigungen"
     Die Mandant-Einstellungen sehen nur Konten mit «Einstellungen verwalten» (Standardrolle:
@@ -117,6 +117,24 @@ durch hocX funktioniert, steht unter [Echtheit prüfen](echtheit.md).
 Im Tab **Datenschutz** legst du fest, wer welche Personendaten sieht (z. B. ob Bussen und
 Anwesenheit je Person in der Statistik für alle sichtbar sind), und erstellst den
 **Vereinsexport** mit allen Daten des Vereins.
+
+## Zugangslinks {#zugangslinks}
+
+Der Tab **Zugangslinks** zeigt alles, worüber jemand **ohne Anmeldung** an Daten eures Vereins kommt:
+
+| Art | Was der Link erlaubt | Läuft ab |
+|---|---|---|
+| Dateien, Album | Freigabelink: Dateien oder ein Album ansehen und herunterladen | am gewählten Datum oder nie |
+| Album · Partner-Link | ein Partnerverein hat auf euer geteiltes Album einen öffentlichen Link erstellt | wie beim Partner eingestellt |
+| Abgabebox | Dateien für die verknüpften Abgaben hochladen | solange die Abgaben offen sind |
+| Kalender | Kalender-Abo (Termine oder Aufgaben) einer Person in ihrer Kalender-App | nie (die Person kann den Link neu erzeugen) |
+| Einladung, Passwort | Einmal-Link aus einer E-Mail, um ein Konto einzurichten oder das Passwort neu zu setzen | nach Gebrauch oder nach 7 Tagen bzw. 60 Minuten |
+| Partnerverein | ein Album ist mit einem anderen Verein geteilt | bis die Freigabe aufgehoben wird |
+
+Abgelaufene, widerrufene und benutzte Links erscheinen nicht. Über **Verwalten** gelangst du zur
+Seite, auf der du den Link änderst oder widerrufst. Links, die nie ablaufen, sind orange markiert:
+prüfe ab und zu, ob sie noch gebraucht werden. Kommt in hocX eine neue Art von Link dazu, erscheint
+sie hier automatisch. Den Tab sehen nur Personen mit dem Recht, die Vereinseinstellungen zu verwalten.
 
 ## Aufbewahrung {#aufbewahrung}
 

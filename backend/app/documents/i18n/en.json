@@ -361,11 +361,50 @@
       "failed": "The data export could not be created. Please request it again in hocX under Club settings > Privacy.",
       "openButton": "Open export",
       "ready": "The data export “{filename}” is ready. You can download it in hocX under Club settings > Privacy.",
+      "readyBody": "The data export is ready. You can download it in hocX under Club settings › Privacy.",
       "subjectFailed": "{tenant}: Data export failed",
       "subjectReady": "{tenant}: Data export ready"
     },
+    "fine": {
+      "countOne": "1 fine",
+      "countOther": "{count} fines",
+      "daysLeftOne": "1 day left",
+      "daysLeftOther": "{count} days left",
+      "fixed": "Fixed amount",
+      "from": "from {date}",
+      "issuedIntro": "{tenant} has charged you the following fines:",
+      "issuedOn": "on {date}",
+      "issuedSubjectOne": "{tenant}: New fine of {amount}",
+      "issuedSubjectOther": "{tenant}: New fines totalling {amount}",
+      "moreUpcoming": "More to-dos with a fine",
+      "openFines": "View my fines",
+      "openTodo": "Open to-do",
+      "openTotal": "Total open fines at {tenant}",
+      "payment": "Fines are paid to the club treasurer. Is a fine wrong? Contact {tenant}.",
+      "rule": "Rule “{name}”",
+      "tariff": "Tariff {name}",
+      "todoLate": "To-do late: {task}",
+      "upcomingIntro": "This to-do is due on {date}. If it isn't done by then, {tenant} will charge a fine.",
+      "upcomingIntroRising": "This to-do is due on {date}. If it isn't done by then, {tenant} will charge a fine – and it grows the longer the to-do stays open.",
+      "upcomingSubject": "{tenant}: Fine ahead – to-do due in {days} days",
+      "upcomingSubjectOne": "{tenant}: Fine ahead – to-do due tomorrow",
+      "upcomingTitle": "Finish “{task}” by {weekday}"
+    },
     "footer": "This message comes from {tenant} via hocX.",
     "greeting": "Hello {name}",
+    "kicker": {
+      "account": "Account",
+      "export": "Data export",
+      "fineIssued": "New fine",
+      "fineUpcoming": "Fine ahead",
+      "invite": "Invitation",
+      "reminder": "Reminder",
+      "security": "Security",
+      "submission": "Submission",
+      "submissionWithdrawn": "Submission withdrawn",
+      "test": "Sending works",
+      "todos": "To-dos"
+    },
     "noLoginHint": "Questions about this message? Please contact {tenant}.",
     "security": {
       "emailChanged": "Login email changed ({at})",
@@ -374,6 +413,15 @@
       "emailChangedSubject": "{tenant}: Your login email was changed",
       "hint": "Wasn't you? Contact {tenant} immediately.",
       "intro": "The following was changed on your account at {tenant}:",
+      "label": {
+        "emailChanged": "Login email changed",
+        "emailChangedByAdmin": "Login email changed by the club administration",
+        "mfaAdded": "Second factor added",
+        "mfaRemoved": "Second factor removed",
+        "mfaRemovedByAdmin": "Second factor removed by the club administration",
+        "passwordChanged": "Password changed",
+        "passwordChangedByAdmin": "Password reset by the club administration"
+      },
       "mandatory": "Security notices are always sent and can't be turned off.",
       "mfaAdded": "Second factor added ({at})",
       "mfaRemoved": "Second factor removed ({at})",
@@ -383,17 +431,46 @@
       "subject": "{tenant}: Security notice for your account"
     },
     "settingsHint": "Choose which emails you receive in your settings: {url}",
+    "settingsHintHtml": "You choose which emails you receive in your {link}.",
+    "settingsLink": "settings",
+    "submission": {
+      "filesOne": "1 file",
+      "filesOther": "{count} files",
+      "openButton": "View submissions",
+      "openLink": "View submissions: {url}",
+      "withdrawnBy": "by {person} · {at}",
+      "withdrawnHint": "The files are not deleted: under “Submissions” they can be restored for 30 days. The to-do is open again.",
+      "withdrawnIntro": "At {tenant}, a responsible person withdrew their submission using their personal link.",
+      "withdrawnSubjectOne": "{tenant}: submission withdrawn",
+      "withdrawnSubjectOther": "{tenant}: {count} submissions withdrawn"
+    },
+    "system": "System",
     "test": {
       "body": "This test email confirms that email delivery from hocX works.",
       "subject": "hocX: Test email"
+    },
+    "title": {
+      "emailChanged": "Your login email was changed",
+      "exportFailed": "Export failed",
+      "exportReady": "Your export is ready",
+      "invite": "Welcome to hocX",
+      "reminder": "Your to-dos",
+      "security": "Changes to your account",
+      "submissionDone": "Submission received",
+      "submissionWithdrawn": "Submission withdrawn",
+      "test": "Test email",
+      "todosNew": "New to-dos for you"
     },
     "todo": {
       "due": "due {date}",
       "introNew": "You have new tasks at {tenant}.",
       "introReminder": "Here is a short overview of your tasks at {tenant}.",
       "introSubmissionDone": "A submission was received at {tenant}. The related task is now done.",
+      "manageSubmission": "View and manage my submission",
+      "noDue": "no due date",
       "openButton": "View tasks",
       "openLink": "View all tasks: {url}",
+      "sectionCount": "{title} · {count}",
       "sectionDueSoon": "Due in 3 days",
       "sectionNew": "New tasks",
       "sectionOverdue": "Overdue since yesterday",
@@ -401,7 +478,18 @@
       "subjectNew": "{tenant}: New tasks for you",
       "subjectReminder": "{tenant}: Reminder about your tasks",
       "subjectSubmissionDone": "{tenant}: Submission received",
-      "submitted": "submitted {at}"
+      "submitted": "submitted {at}",
+      "viewSubmission": "View my submission"
+    },
+    "via": "via hocX",
+    "weekday": {
+      "0": "Monday",
+      "1": "Tuesday",
+      "2": "Wednesday",
+      "3": "Thursday",
+      "4": "Friday",
+      "5": "Saturday",
+      "6": "Sunday"
     }
   },
   "empty": {

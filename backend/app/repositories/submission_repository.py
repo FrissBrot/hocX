@@ -146,7 +146,8 @@ class SubmissionRepository:
         for upload_id, stored_file in db.execute(
             select(SubmissionUploadFile.upload_id, StoredFile)
             .join(StoredFile, StoredFile.id == SubmissionUploadFile.stored_file_id)
-            .where(SubmissionUploadFile.upload_id.in_(upload_ids))
+            # Zurückgezogene Dateien (persönlicher Link, 0181) gehören nicht mehr zum Element
+            .where(SubmissionUploadFile.upload_id.in_(upload_ids), SubmissionUploadFile.withdrawn_at.is_(None))
             .order_by(SubmissionUploadFile.upload_id, SubmissionUploadFile.sort_index.asc())
         ):
             files.setdefault(upload_id, []).append(stored_file)
@@ -251,7 +252,7 @@ class SubmissionRepository:
             .join(StoredFile, StoredFile.id == SubmissionUploadFile.stored_file_id)
             .outerjoin(Event, Event.id == SubmissionUpload.event_id)
             .outerjoin(ListEntry, ListEntry.id == SubmissionUpload.list_entry_id)
-            .where(SubmissionUpload.assignment_id.in_(assignment_ids))
+            .where(SubmissionUpload.assignment_id.in_(assignment_ids), SubmissionUploadFile.withdrawn_at.is_(None))
         ):
             entry(assignment_id, ref_of(event_id, entry_id))["scan"].add(status)
         for assignment_id, ref, status in db.execute(
@@ -260,6 +261,7 @@ class SubmissionRepository:
             .join(SubmissionAssignment, SubmissionAssignment.id == GalleryImage.submission_assignment_id)
             .where(
                 GalleryImage.submission_assignment_id.in_(assignment_ids),
+                GalleryImage.submission_withdrawn_at.is_(None),
                 GalleryImage.tenant_id == SubmissionAssignment.tenant_id,
                 StoredFile.tenant_id == SubmissionAssignment.tenant_id,
             )

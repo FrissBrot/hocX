@@ -2,11 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { StatusBanner } from "@/components/ui/status-banner";
 
 import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { ActionIcon } from "@/components/ui/action-icons";
 import { DataTable } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
+import { FilterTabs } from "@/components/ui/filter-tabs";
 import { DocsLink } from "@/components/ui/help-popover";
 import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
@@ -311,6 +313,8 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
   const [logEntries, setLogEntries] = useState<SubmissionUploadLogEntry[]>([]);
   const [logLoading, setLogLoading] = useState(false);
   const [search, setSearch] = useState("");
+  // Reiter «Offen» / «Abgeschlossen» (completed_at, docs/SUBMISSION_OWNER_ACCESS.md Teil 2)
+  const [completion, setCompletion] = useState<"open" | "completed">("open");
   const [createdAssignment, setCreatedAssignment] = useState<SubmissionAssignment | null>(null);
 
   const availableTags = Array.from(
@@ -329,9 +333,10 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
       .catch(() => {});
   }, []);
 
-  const filteredAssignments = search.trim()
-    ? assignments.filter((a) => a.title.toLowerCase().includes(search.toLowerCase()))
-    : assignments;
+  const completedCount = assignments.filter((a) => a.completed_at).length;
+  const filteredAssignments = assignments
+    .filter((a) => (completion === "completed" ? Boolean(a.completed_at) : !a.completed_at))
+    .filter((a) => !search.trim() || a.title.toLowerCase().includes(search.toLowerCase()));
 
   function openCreate() {
     setEditingId(null);
@@ -385,6 +390,13 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
     // Refresh summary for this assignment
     void browserApiFetch<AssignmentSummary>(`/api/submission-assignments/${assignmentId}/summary`)
       .then((s) => setSummaries((prev) => ({ ...prev, [assignmentId]: s })))
+      .catch(() => {});
+    // «Abgeschlossen» kann sich nach Schliessen/Wiederöffnen ändern
+    void browserApiFetch<SubmissionAssignment[]>("/api/submission-assignments")
+      .then((fresh) => {
+        const completedById = new Map(fresh.map((item) => [item.id, item.completed_at ?? null]));
+        setAssignments((current) => current.map((item) => (completedById.has(item.id) ? { ...item, completed_at: completedById.get(item.id) } : item)));
+      })
       .catch(() => {});
     return data;
   }
@@ -582,6 +594,20 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
     }
   }
 
+  async function restoreWithdrawn(assignmentId: string, elementRef: string) {
+    try {
+      const updated = await browserApiFetch<SubmissionElementStatusEntry>(
+        `/api/submission-assignments/${assignmentId}/elements/${elementRef}/restore-withdrawn`,
+        { method: "POST" }
+      );
+      setElements((current) => current.map((el) => (el.element_ref === elementRef ? updated : el)));
+      setElementModal((current) => (current?.element_ref === elementRef ? updated : current));
+      showToast(t("withdrawnRestoredToast"), "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : t("withdrawnRestoreFailed"), "error");
+    }
+  }
+
   async function closeElement(assignmentId: string, elementRef: string) {
     try {
       const updated = await browserApiFetch<SubmissionElementStatusEntry>(
@@ -672,7 +698,14 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
       ) : (
       <>
       <div className="list-filter-row">
-        <div />
+        <FilterTabs
+          options={[
+            { value: "open", label: t("completionTabs.open"), count: assignments.length - completedCount },
+            { value: "completed", label: t("completionTabs.completed"), count: completedCount },
+          ]}
+          value={completion}
+          onChange={setCompletion}
+        />
         <div className="list-filter-search">
           <SearchInput value={search} onChange={setSearch} placeholder={t("searchAssignmentsPlaceholder")} />
         </div>
@@ -681,7 +714,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
       <DataTable
         className="data-table-lg"
         columns={[t("colTitle"), t("colSourcePeriod"), t("colProgress"), t("colActions")]}
-        emptyMessage={t("noMatches")}
+        emptyMessage={search.trim() ? t("noMatches") : completion === "completed" ? t("completedEmpty") : t("openEmpty")}
       >
           {filteredAssignments.map((assignment) => (
             <tr
@@ -691,6 +724,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
             >
               <td className="table-cell-wrap">
                 <strong>{assignment.title}</strong>
+                {assignment.completed_at ? <> <Badge variant="success">{t("completedBadge")}</Badge></> : null}
               </td>
               <td className="table-cell-wrap">
                 <span className="muted">{metaLine(assignment)}</span>
@@ -891,7 +925,20 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
               )}
             </div>
 
+            {elementModal.withdrawn_count ? (
+              <StatusBanner tone="neutral" message={t("withdrawnInfo", { count: elementModal.withdrawn_count })} />
+            ) : null}
+
             <div className="table-toolbar-actions">
+              {elementModal.withdrawn_count ? (
+                <button
+                  type="button"
+                  className="button-ghost button-secondary"
+                  onClick={() => selectedId && void restoreWithdrawn(selectedId, elementModal.element_ref)}
+                >
+                  {t("restoreWithdrawnAction")}
+                </button>
+              ) : null}
               {elementModal.status === "closed" ? (
                 <button
                   type="button"

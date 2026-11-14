@@ -15060,3 +15060,103 @@ a.export-step-meta {
     display: none;
   }
 }
+
+/* Zugangslinks (components/settings/public-links-overview.tsx) */
+.public-links-label {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.public-links-reason {
+  margin-top: 2px;
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.public-links-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.public-links-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  min-width: 0;
+}
+
+.public-links-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.public-links-card-action {
+  align-self: flex-start;
+  margin-top: var(--space-1);
+}
+
+/* «Meine Abgabe» (components/submission-access/submission-access-page.tsx): persönlicher Link ohne Login */
+.submission-access-panel {
+  gap: var(--space-4);
+}
+
+.submission-access-eyebrow {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.submission-access-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.submission-access-description {
+  margin: 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.submission-access-files {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.submission-access-files li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.submission-access-files li + li {
+  border-top: 1px solid var(--border);
+}
+
+.submission-access-file-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.submission-access-privacy {
+  margin-top: var(--space-2);
+}

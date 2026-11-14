@@ -21,6 +21,8 @@ class Category:
     # False: Pflichtmitteilung (Konto und Sicherheit), erscheint nicht in den Einstellungen und
     # lässt sich nicht abschalten.
     configurable: bool = True
+    # Nur für Konten mit dieser Berechtigung in den Einstellungen sichtbar (Mails an die Verwaltung)
+    permission: str | None = None
 
 
 @dataclass(frozen=True)
@@ -36,6 +38,10 @@ CATEGORIES: dict[str, Category] = {
     "todo_reminders": Category("todo_reminders"),
     "todo_submissions": Category("todo_submissions"),
     "exports": Category("exports"),
+    # Bussen (Design «hocX E-Mails», M11/M12): droht in 3 Tagen, neu verrechnet
+    "fines": Category("fines"),
+    # Verwaltung: Änderungen an Abgaben durch Verantwortliche (persönlicher Link, Teil 3)
+    "submission_changes": Category("submission_changes", permission="submissions.manage"),
     "account": Category("account", configurable=False),
 }
 
@@ -56,6 +62,15 @@ KINDS: dict[str, Kind] = {
     "security.mfa_removed": Kind("security.mfa_removed", "account", "account.security"),
     # Login-E-Mail geändert: eigene Gruppe, geht an die ALTE Adresse (payload old_email, dispatch)
     "security.email_changed": Kind("security.email_changed", "account", "account.email_changed"),
+    # Busse droht: 3 Tage vor der Fälligkeit einer offenen Aufgabe mit Pendenzen-Busse, ersetzt für
+    # diese Aufgabe die Erinnerung «in 3 Tagen fällig» (todos.scan_reminders)
+    "fine.upcoming": Kind("fine.upcoming", "fines", "fine.upcoming"),
+    # Busse erhalten: Anwesenheitsbussen beim Abschluss des Protokolls, Pendenzen-Bussen beim
+    # Einfrieren (todo_fine_service.sync_todo). Mehrere in einer Mail.
+    "fine.issued": Kind("fine.issued", "fines", "fine.issued", timedelta(minutes=10)),
+    # Verantwortliche Person hat ihre Abgabe über den persönlichen Link zurückgezogen (an alle mit
+    # submissions.manage). Kurz warten: mehrere Elemente nacheinander in einer Mail.
+    "submission.withdrawn": Kind("submission.withdrawn", "submission_changes", "submission.withdrawn", timedelta(minutes=5)),
     # Vereins-Datenexport fertig oder fehlgeschlagen (Besteller)
     "export.ready": Kind("export.ready", "exports", "export"),
     "export.failed": Kind("export.failed", "exports", "export"),

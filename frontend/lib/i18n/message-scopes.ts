@@ -74,6 +74,7 @@ export const AREA_NAMESPACES = {
   ],
   share: ["share"],
   statistics: ["documentStudio", "statistics"],
+  submissionAccess: ["submissionAccess"],
   submissionAssignments: ["files", "sharedLinks", "submissionAssignments"],
   taskPackages: ["files", "photos", "protocols", "sharedLinks", "taskPackages"],
   templates: ["documentPdf", "documentStudio", "finances", "protocols", "submissionAssignments", "templates"],

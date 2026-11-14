@@ -321,6 +321,31 @@ def reopen_element(
         raise HTTPException(status_code=400, detail=detail) from exc
 
 
+@router.post("/submission-assignments/{assignment_id}/elements/{element_ref}/restore-withdrawn", response_model=SubmissionElementRead)
+def restore_withdrawn_element(
+    assignment_id: uuid.UUID,
+    element_ref: str,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Über den persönlichen Link zurückgezogene Dateien wieder zur Abgabe nehmen (0181)."""
+    from app.services import submission_access_service
+
+    require_permission(user, P.SUBMISSIONS_MANAGE)
+    assignment = _get_assignment_or_404(db, assignment_id, user)
+    try:
+        service._latest_upload_for_element(db, assignment, element_ref)  # nur Elemente dieser Abgabe
+        restored = submission_access_service.restore(db, assignment, element_ref)
+        audit.log(db, action="submission.withdrawn_restored", actor=user, entity_type="submission_assignment", entity_id=assignment.id,
+                  details={"element_ref": element_ref, "files": restored})
+        db.commit()
+        return service._element_with_todo_sync(db, assignment, element_ref)
+    except (SQLAlchemyError, ValueError) as exc:
+        db.rollback()
+        detail = str(exc) if isinstance(exc, ValueError) else "Dateien konnten nicht wiederhergestellt werden"
+        raise HTTPException(status_code=400, detail=detail) from exc
+
+
 @router.post("/submission-assignments/{assignment_id}/elements/{element_ref}/close", response_model=SubmissionElementRead)
 def close_element(
     assignment_id: uuid.UUID,

@@ -120,6 +120,19 @@ def _sort_elements(elements: list[dict], sort_order: str, sort_dates: dict[str, 
 
 
 def resolve_open_elements(db: Session, assignment: dict) -> list[dict]:
+    """Offene Elemente (siehe _resolve_open_elements). Mit «nach dem Zurückziehen nur über den
+    persönlichen Link» (Migration 0182) fallen Elemente weg, deren Abgabe die verantwortliche Person
+    zurückgezogen hat: neu abgeben geht dann nur über ihren Link im Haupt-Backend."""
+    elements = _resolve_open_elements(db, assignment)
+    if not assignment.get("owner_resubmit_only_personal") or not elements:
+        return elements
+    locked = repository.withdrawn_elements(db, assignment_id=assignment["id"])
+    if not locked:
+        return elements
+    return [element for element in elements if (element["event_id"], element["list_entry_id"]) not in locked]
+
+
+def _resolve_open_elements(db: Session, assignment: dict) -> list[dict]:
     """Liefert alle Elemente, deren (optionales) Fenster/Frist aktuell laeuft UND die nicht
     manuell geschlossen wurden. Kumulatives Modell (seit 2026-08-17): ein Element mit Status
     'submitted' bleibt sichtbar/offen fuer weitere Uploads, nur 'closed' blendet es aus."""

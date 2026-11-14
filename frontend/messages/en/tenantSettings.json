@@ -292,5 +292,71 @@
     "currencyHelpPopover": "hocX does not convert: a change only updates the label on all accounts, fines and exports. The amounts stay the same.",
     "saved": "Currency saved: {currency}",
     "saveFailed": "The currency could not be saved."
+  },
+  "publicLinks": {
+    "intro": "All links through which someone can reach your club's data without logging in – with the reason, expiry and where you manage them. Expired, revoked and used links are not shown.",
+    "neverExpiringHint": "{count, plural, one {# link does} other {# links do}} not expire on {count, plural, one {its} other {their}} own. Check whether {count, plural, one {it is} other {they are}} still needed.",
+    "group": {
+      "all": "All",
+      "files": "Files & albums",
+      "submissions": "Drop box",
+      "calendar": "Calendar",
+      "accounts": "Accounts",
+      "partners": "Partner clubs",
+      "other": "Other"
+    },
+    "col": {
+      "kind": "Type",
+      "link": "Link and reason",
+      "created": "Created",
+      "expiry": "Valid",
+      "lastUsed": "Last used",
+      "manage": "Manage"
+    },
+    "kind": {
+      "share_files": "Files",
+      "share_album": "Album",
+      "share_album_partner": "Album · partner link",
+      "submission_link": "Drop box",
+      "calendar_events": "Calendar",
+      "calendar_todos": "Calendar",
+      "account_invite": "Invitation",
+      "account_password_reset": "Password",
+      "album_partner": "Partner club",
+      "submission_access": "Personal submission"
+    },
+    "reason": {
+      "share_files": "Public link to {count, plural, one {# file} other {# files}}",
+      "share_album": "Public link to the album “{album}” ({count, plural, one {# photo} other {# photos}})",
+      "share_album_partner": "{partner} created a public link to your album “{album}”",
+      "submission_link": "{count, plural, =0 {Drop box link, currently without an active submission} one {Upload files for # submission: {assignments}} other {Upload files for # submissions: {assignments}}}",
+      "calendar_events": "Calendar subscription to the events, by {person}",
+      "calendar_todos": "{scope, select, all {Calendar subscription to all to-dos, by {person}} other {Calendar subscription to {person}'s own to-dos}}",
+      "account_invite": "Invitation to {person}: set up the account{sent, select, 0 { (being sent)} other {}}",
+      "account_password_reset": "Password reset link for {person}",
+      "album_partner": "Album shared with {partner}{status, select, pending { (invitation pending)} other {}}{publicLinks, select, 1 {; the partner may create public links} other {}}",
+      "unknown": "Public access (new type)",
+      "submission_access": "Personal link of {person} for “{assignment}”: {level, select, manage {view, withdraw and resubmit} other {view}}"
+    },
+    "expiry": {
+      "date": "until {date}",
+      "never": "does not expire",
+      "singleUse": "single use",
+      "singleUseUntil": "single use, until {date}",
+      "window": "while the submissions are open"
+    },
+    "createdBy": "by {name}",
+    "notTracked": "—",
+    "manage": "Manage",
+    "manageElsewhere": {
+      "files": "at the partner club",
+      "submissions": "—",
+      "calendar": "only the person",
+      "accounts": "—",
+      "partners": "—",
+      "other": "—"
+    },
+    "empty": "There are currently no public links.",
+    "emptyFilter": "No links in this selection."
   }
 }

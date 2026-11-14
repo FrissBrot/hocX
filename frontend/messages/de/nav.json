@@ -65,5 +65,6 @@
   "roleManagement": "Rollen",
   "workflows": "Abläufe",
   "design": "Gestaltung",
-  "fineSettings": "Bussen-Konfiguration"
+  "fineSettings": "Bussen-Konfiguration",
+  "publicLinks": "Zugangslinks"
 }

@@ -19,6 +19,8 @@ Welche E-Mails du bekommst, stellst du selbst ein: **Profil** (oben rechts) → 
 | **Neue Aufgaben** | Eine Sammelmail, wenn du neue Aufgaben bekommst. Aufgaben aus einem Protokoll kommen erst, wenn das Protokoll abgeschlossen ist – dann alle offenen auf einmal. Aufgaben ohne Protokoll werden etwa 10 Minuten gesammelt, damit mehrere Änderungen in einer Mail landen. |
 | **Erinnerungen an Aufgaben** | Je Aufgabe einmal 3 Tage vor der Fälligkeit und einmal am Tag nach der Fälligkeit, falls sie dann noch offen ist. Erinnerungen gehen ab 07:00 Uhr hinaus. |
 | **Abgabe eingegangen** | Wenn eine Einreichung in der [Abgabebox](abgabebox.md) deine Abgabe-Aufgabe erledigt. |
+| **Bussen** | 3 Tage bevor eine Aufgabe fällig wird, für die bei Verspätung eine [Busse](bussen.md) anfällt: «Busse droht», mit den Beträgen, die je nach Verspätung fällig würden. Diese Mail ersetzt für die Aufgabe die normale Erinnerung. Ausserdem eine Mail, wenn dir Bussen verrechnet werden: Anwesenheitsbussen mit dem Abschluss des Protokolls, Bussen für zu spät erledigte Aufgaben nach dem Erledigen – mit dem Total deiner offenen Bussen. |
+| **Änderungen an Abgaben** | Nur für Personen, die Abgaben verwalten: wenn eine verantwortliche Person ihre Abgabe über den [persönlichen Link](abgabebox.md#persoenlicher-link) zurückzieht. Mehrere innert weniger Minuten kommen in einer Mail. Ist die Abgabe bis zum Versand schon wiederhergestellt, kommt keine Mail. |
 | **Datenexport fertig** | Nur wenn du einen Vereins-Datenexport bestellst: sobald er bereitliegt oder fehlgeschlagen ist. |
 
 Alle Einstellungen sind zu Beginn eingeschaltet. Bevor eine E-Mail hinausgeht, prüft hocX noch
@@ -43,8 +45,9 @@ Mitglieder ohne eigenen Login bekommen normalerweise keine E-Mails. Die Verwaltu
 einer Person einschalten: **Mitglieder** → Person öffnen → **E-Mail-Benachrichtigungen senden,
 obwohl die Person kein Login hat**. Dafür braucht die Person eine E-Mail-Adresse.
 
-Sie bekommt dann neue Aufgaben und Erinnerungen an die hinterlegte Adresse. Die Mails enthalten
-keine Links in die App, weil die Person sich nicht anmelden kann. Ohne Login kann sie die
+Sie bekommt dann neue Aufgaben, Erinnerungen und Bussen an die hinterlegte Adresse. Die Mails enthalten
+keine Links in die App, weil die Person sich nicht anmelden kann. Ausnahme: der
+[persönliche Link zur eigenen Abgabe](abgabebox.md#persoenlicher-link). Ohne Login kann sie die
 Einstellungen nicht selbst ändern; möchte sie keine Mails mehr, schaltet die Verwaltung den
 Schalter wieder aus.
 

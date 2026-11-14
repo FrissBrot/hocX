@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, date, datetime, timedelta
 
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -14,7 +14,7 @@ from app.core.error_log import record_system_error
 from app.core.cycle_utils import cycle_years_for_offsets
 from app import scanner
 from app.core.features_generated import F
-from app.models import CycleConfig, GalleryImage, Event, ListDefinition, ListEntry, Participant, ProtocolTodo, StoredFile, SubmissionAssignment, SubmissionUpload, TenantFeature, TodoStatus, ProtocolTodoFile
+from app.models import CycleConfig, GalleryImage, Event, ListDefinition, ListEntry, Participant, ProtocolTodo, StoredFile, SubmissionAssignment, SubmissionUpload, SubmissionUploadFile, TenantFeature, TodoStatus, ProtocolTodoFile
 from app.repositories.submission_repository import MANUAL_ELEMENT_REF, SubmissionRepository
 from app.schemas.submission import (
     SubmissionAssignmentCreate,
@@ -196,6 +196,9 @@ class SubmissionService:
         values = payload.model_dump(exclude_unset=True)
         if values.get("keep_open_after_end", False) is None:
             values.pop("keep_open_after_end")  # null = unverändert (Spalte ist NOT NULL)
+        for key in ("owner_access", "owner_access_days", "owner_resubmit_only_personal"):
+            if key in values and values[key] is None:
+                values.pop(key)  # null = unverändert (Spalten sind NOT NULL)
         link_ids = values.pop("link_ids", None)
         if link_ids is not None:
             assignment.links = submission_link_service.resolve_links(db, link_ids, tenant_id=assignment.tenant_id)
@@ -479,12 +482,30 @@ class SubmissionService:
                 GalleryImage.tenant_id == assignment.tenant_id,
                 StoredFile.tenant_id == assignment.tenant_id,
                 GalleryImage.submission_assignment_id == assignment.id,
+                GalleryImage.submission_withdrawn_at.is_(None),
             )
             .order_by(GalleryImage.id)
         ):
             linked_files.setdefault(gallery_image.submission_element_ref, []).append(stored_file)
 
         files_by_upload = self.repository.list_files_for_uploads(db, upload_ids=[upload.id for upload in uploads])
+        withdrawn_by_key: dict[tuple[int | None, int | None], int] = {}
+        if uploads:
+            for event_id, list_entry_id, count in db.execute(
+                select(SubmissionUpload.event_id, SubmissionUpload.list_entry_id, func.count(SubmissionUploadFile.id))
+                .join(SubmissionUploadFile, SubmissionUploadFile.upload_id == SubmissionUpload.id)
+                .where(SubmissionUpload.assignment_id == assignment.id, SubmissionUploadFile.withdrawn_at.is_not(None))
+                .group_by(SubmissionUpload.event_id, SubmissionUpload.list_entry_id)
+            ):
+                withdrawn_by_key[(event_id, list_entry_id)] = int(count)
+        withdrawn_linked = dict(db.execute(
+            select(GalleryImage.submission_element_ref, func.count(GalleryImage.id))
+            .where(
+                GalleryImage.tenant_id == assignment.tenant_id, GalleryImage.submission_assignment_id == assignment.id,
+                GalleryImage.submission_withdrawn_at.is_not(None),
+            )
+            .group_by(GalleryImage.submission_element_ref)
+        ).all())
         all_responsible = {pid for raw in raw_elements for pid in (raw.get("responsible_participant_ids") or [])}
         participant_public_ids = public_id_service.resolve_public_ids(db, Participant, list(all_responsible)) if all_responsible else {}
 
@@ -550,6 +571,7 @@ class SubmissionService:
                     files=files,
                     responsible_participant_id=responsible_public_ids[0] if responsible_public_ids else None,
                     responsible_participant_ids=responsible_public_ids,
+                    withdrawn_count=withdrawn_by_key.get(key, 0) + int(withdrawn_linked.get(element_ref, 0)),
                 )
             )
         return results
@@ -627,9 +649,41 @@ class SubmissionService:
                 ProtocolTodo.pending_delete.is_(False),
             )
         )
-        if todo is not None and self._apply_element_state(db, todo, element):
+        changed = todo is not None and self._apply_element_state(db, todo, element)
+        if self.refresh_completion(db, assignment) or changed:
             db.commit()
         return element
+
+    def assignment_completion(self, db: Session, assignment: SubmissionAssignment) -> bool:
+        """Regel «abgeschlossen» (docs/SUBMISSION_OWNER_ACCESS.md, Teil 2):
+
+        - Jedes bekannte Element ist geschlossen oder hat eine geprüfte Datei (Quarantäne zählt nicht).
+        - Und es kann nichts mehr dazukommen: manuell sofort; Termine/Zyklus, wenn kein Fenster mehr
+          in der Zukunft endet; Listen, wenn der Stichtag vorbei ist (ohne Stichtag zählt der Stand).
+        Ohne Elemente ist eine Abgabe nie abgeschlossen."""
+        elements = self.get_assignment_elements(db, assignment)
+        if not elements:
+            return False
+        if not all(element.status == "closed" or element_has_clean_files(element) for element in elements):
+            return False
+        today = local_today()
+        if assignment.source_type == "manual":
+            return True
+        if assignment.source_type == "list":
+            return assignment.deadline is None or assignment.deadline < today
+        return not any(element.window_end is not None and element.window_end >= today for element in elements)
+
+    def refresh_completion(self, db: Session, assignment: SubmissionAssignment) -> bool:
+        """completed_at nachführen (ohne Commit). Liefert True bei einer Änderung."""
+        done = self.assignment_completion(db, assignment)
+        if done and assignment.completed_at is None:
+            assignment.completed_at = datetime.now(UTC)
+        elif not done and assignment.completed_at is not None:
+            assignment.completed_at = None
+        else:
+            return False
+        db.add(assignment)
+        return True
 
     @staticmethod
     def _apply_element_state(db: Session, todo: ProtocolTodo, element: SubmissionElementRead) -> bool:
@@ -696,10 +750,19 @@ class SubmissionService:
         )
         rows = db.execute(
             select(SubmissionAssignment.id, SubmissionAssignment.tenant_id)
-            .where(SubmissionAssignment.tenant_id.in_(booked), SubmissionAssignment.source_type != "manual")
+            .where(SubmissionAssignment.tenant_id.in_(booked))
             .order_by(SubmissionAssignment.id)
         ).all()
         synced = failed = 0
+        # Persönliche Links und zurückgezogene Dateien aufräumen (Fehler nicht stumm, Abgleich läuft weiter)
+        try:
+            from app.services import submission_access_service
+
+            submission_access_service.cleanup(db)
+        except Exception as exc:
+            db.rollback()
+            record_system_error(db, exc=exc)
+            failed += 1
         for assignment_id, tenant_id in rows:
             assignment = db.get(SubmissionAssignment, assignment_id)
             if assignment is None:
@@ -719,10 +782,13 @@ class SubmissionService:
         Ohne erreichbaren Link gibt es nichts abzugleichen (erwarteter Zustand, kein Fehler).
         Ein unerwarteter Fehler bricht die auslösende Änderung nicht ab, landet aber im
         Fehlerprotokoll. Rückgabe False nur bei einem solchen Fehler."""
-        if submission_link_service.preferred_link(assignment) is None:
-            return True
         tenant_id = assignment.tenant_id
         try:
+            if submission_link_service.preferred_link(assignment) is None or assignment.source_type == "manual":
+                # Keine Aufgaben abzugleichen, «abgeschlossen» trotzdem nachführen
+                if self.refresh_completion(db, assignment):
+                    db.commit()
+                return True
             self.sync_submission_todos(db, assignment)
         except Exception as exc:
             # Nur ein Datenbankfehler hinterlässt eine abgebrochene Transaktion; alles andere
@@ -826,6 +892,7 @@ class SubmissionService:
                     db.delete(todo)
                 removed += 1
 
+        self.refresh_completion(db, assignment)
         db.commit()
         return {"created": created, "updated": updated, "removed": removed}
 

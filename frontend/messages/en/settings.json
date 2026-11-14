@@ -37,9 +37,17 @@
           "label": "Task reminders",
           "hint": "Once 3 days before the due date and once the day after, if still open."
         },
+        "fines": {
+          "label": "Fines",
+          "hint": "“Fine ahead” 3 days before a to-do with a fine is due (instead of the normal reminder), and an email when fines are charged to you."
+        },
         "todo_submissions": {
           "label": "Submission received",
           "hint": "When a submission in the drop box completes your submission task."
+        },
+        "submission_changes": {
+          "label": "Changes to submissions",
+          "hint": "When a responsible person withdraws their submission using their personal link. Only for people who manage submissions."
         },
         "exports": {
           "label": "Data export ready",

@@ -1,0 +1,37 @@
+{
+  "title": "La mia consegna",
+  "loading": "Caricamento della consegna …",
+  "invalid": "Questo link non è valido o è scaduto. Ne riceverai uno nuovo con la prossima e-mail su questa consegna.",
+  "failed": "Non ha funzionato. Riprova più tardi.",
+  "rateLimited": "Troppi tentativi. Attendi qualche minuto.",
+  "greeting": "Ciao {name} – questa è la tua consegna per «{element}».",
+  "until": "fino al {date}",
+  "submittedAt": "consegnato il {date}",
+  "status": {
+    "open": "Ancora aperta",
+    "submitted": "Consegnata",
+    "closed": "Chiusa"
+  },
+  "files": "I tuoi file",
+  "noFiles": "Nessun file ancora consegnato.",
+  "download": "Scarica",
+  "scan": {
+    "pending": "in verifica",
+    "blocked": "bloccato"
+  },
+  "closedHint": "Questa consegna è chiusa. Per modifiche rivolgiti all'amministrazione della tua associazione.",
+  "viewOnlyHint": "Con questo link puoi vedere la tua consegna. L'amministrazione della tua associazione può modificarla.",
+  "withdraw": "Ritira la consegna",
+  "withdrawConfirm": "Ritirare la consegna? I tuoi file non contano più e l'attività è di nuovo aperta. L'amministrazione può ripristinarli.",
+  "withdrawn": "Consegna ritirata.",
+  "withdrawHint": "Qualcuno ha consegnato qualcosa di sbagliato per te? Ritira la consegna e carica i file giusti.",
+  "upload": "Consegna file",
+  "uploadMore": "Consegna altri file",
+  "uploading": "Caricamento … {percent} %",
+  "uploaded": "File consegnati.",
+  "rules": "Al massimo {size} MB per file, consentiti: {types}.",
+  "anyType": "documenti e foto",
+  "remaining": "{count, plural, =0 {Nessun altro file possibile.} one {Ancora # file possibile.} other {Ancora # file possibili.}}",
+  "privacyHint": "Questo link è solo tuo. Non inoltrarlo – chi lo ha può vedere la tua consegna.",
+  "downloadFailed": "Non è stato possibile scaricare il file."
+}

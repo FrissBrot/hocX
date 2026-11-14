@@ -611,7 +611,11 @@
       "subjectSubmissionDone": "{tenant}: Submission received",
       "introSubmissionDone": "A submission was received at {tenant}. The related task is now done.",
       "sectionSubmissionDone": "Completed submissions",
-      "submitted": "submitted {at}"
+      "submitted": "submitted {at}",
+      "sectionCount": "{title} · {count}",
+      "noDue": "no due date",
+      "manageSubmission": "View and manage my submission",
+      "viewSubmission": "View my submission"
     },
     "test": {
       "subject": "hocX: Test email",
@@ -642,14 +646,98 @@
       "emailChanged": "Login email changed ({at})",
       "emailChangedByAdmin": "Login email changed by the club administration ({at})",
       "emailChangedSubject": "{tenant}: Your login email was changed",
-      "emailChangedIntro": "The login email of your account at {tenant} was changed. This address is no longer used for signing in, so this is the last message sent here:"
+      "emailChangedIntro": "The login email of your account at {tenant} was changed. This address is no longer used for signing in, so this is the last message sent here:",
+      "label": {
+        "passwordChanged": "Password changed",
+        "passwordChangedByAdmin": "Password reset by the club administration",
+        "mfaAdded": "Second factor added",
+        "mfaRemoved": "Second factor removed",
+        "mfaRemovedByAdmin": "Second factor removed by the club administration",
+        "emailChanged": "Login email changed",
+        "emailChangedByAdmin": "Login email changed by the club administration"
+      }
     },
     "export": {
       "subjectReady": "{tenant}: Data export ready",
       "subjectFailed": "{tenant}: Data export failed",
       "ready": "The data export “{filename}” is ready. You can download it in hocX under Club settings > Privacy.",
       "failed": "The data export could not be created. Please request it again in hocX under Club settings > Privacy.",
-      "openButton": "Open export"
+      "openButton": "Open export",
+      "readyBody": "The data export is ready. You can download it in hocX under Club settings › Privacy."
+    },
+    "via": "via hocX",
+    "system": "System",
+    "settingsLink": "settings",
+    "settingsHintHtml": "You choose which emails you receive in your {link}.",
+    "kicker": {
+      "todos": "To-dos",
+      "reminder": "Reminder",
+      "submission": "Submission",
+      "account": "Account",
+      "invite": "Invitation",
+      "security": "Security",
+      "export": "Data export",
+      "test": "Sending works",
+      "fineUpcoming": "Fine ahead",
+      "fineIssued": "New fine",
+      "submissionWithdrawn": "Submission withdrawn"
+    },
+    "title": {
+      "todosNew": "New to-dos for you",
+      "reminder": "Your to-dos",
+      "submissionDone": "Submission received",
+      "invite": "Welcome to hocX",
+      "security": "Changes to your account",
+      "emailChanged": "Your login email was changed",
+      "exportReady": "Your export is ready",
+      "exportFailed": "Export failed",
+      "test": "Test email",
+      "submissionWithdrawn": "Submission withdrawn"
+    },
+    "weekday": {
+      "0": "Monday",
+      "1": "Tuesday",
+      "2": "Wednesday",
+      "3": "Thursday",
+      "4": "Friday",
+      "5": "Saturday",
+      "6": "Sunday"
+    },
+    "fine": {
+      "upcomingSubject": "{tenant}: Fine ahead – to-do due in {days} days",
+      "upcomingSubjectOne": "{tenant}: Fine ahead – to-do due tomorrow",
+      "upcomingTitle": "Finish “{task}” by {weekday}",
+      "upcomingIntro": "This to-do is due on {date}. If it isn't done by then, {tenant} will charge a fine.",
+      "upcomingIntroRising": "This to-do is due on {date}. If it isn't done by then, {tenant} will charge a fine – and it grows the longer the to-do stays open.",
+      "from": "from {date}",
+      "daysLeftOne": "1 day left",
+      "daysLeftOther": "{count} days left",
+      "rule": "Rule “{name}”",
+      "fixed": "Fixed amount",
+      "tariff": "Tariff {name}",
+      "moreUpcoming": "More to-dos with a fine",
+      "openTodo": "Open to-do",
+      "issuedIntro": "{tenant} has charged you the following fines:",
+      "countOne": "1 fine",
+      "countOther": "{count} fines",
+      "issuedOn": "on {date}",
+      "openTotal": "Total open fines at {tenant}",
+      "payment": "Fines are paid to the club treasurer. Is a fine wrong? Contact {tenant}.",
+      "openFines": "View my fines",
+      "issuedSubjectOne": "{tenant}: New fine of {amount}",
+      "issuedSubjectOther": "{tenant}: New fines totalling {amount}",
+      "todoLate": "To-do late: {task}"
+    },
+    "submission": {
+      "withdrawnIntro": "At {tenant}, a responsible person withdrew their submission using their personal link.",
+      "withdrawnBy": "by {person} · {at}",
+      "withdrawnHint": "The files are not deleted: under “Submissions” they can be restored for 30 days. The to-do is open again.",
+      "openButton": "View submissions",
+      "openLink": "View submissions: {url}",
+      "withdrawnSubjectOne": "{tenant}: submission withdrawn",
+      "withdrawnSubjectOther": "{tenant}: {count} submissions withdrawn",
+      "filesOne": "1 file",
+      "filesOther": "{count} files"
     }
   },
   "eventField": {

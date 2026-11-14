@@ -1,6 +1,6 @@
 # Plan: Abgaben abschliessen und persönlicher Link für Verantwortliche
 
-Stand 2026-11-12, noch nicht umgesetzt. Baut auf der Mail «Abgabe eingegangen»
+Stand 2026-11-14: **Teil 3 umgesetzt** (Migration 0181, siehe «Umsetzung» unten); Teil 1 und 2 offen. Baut auf der Mail «Abgabe eingegangen»
 (`todo.submission_done`, Branch `feat/submission-done-mail`) auf.
 
 ## Ziel
@@ -228,3 +228,61 @@ Jeder Schritt ist einzeln lauffähig und kann einzeln ausgeliefert werden.
    Abgabebox zeigt sie schon heute nicht mehr, sobald alle Elemente geschlossen sind.
 3. Zurückgezogene Dateien bleiben 30 Tage für Verwalter wiederherstellbar.
 4. Personen ohne Login bekommen den Link, wenn «auch ohne Login benachrichtigen» gesetzt ist.
+
+
+## Umsetzung Teil 3 (2026-11-14)
+
+Abweichungen vom Plan oben, bewusst einfacher:
+
+- `owner_access` (`off`/`view`/`manage`). Neue Abgaben starten im Formular mit `manage`, bestehende
+  bleiben `off`. `owner_access_days` und `owner_resubmit_only_personal` kamen mit 0182 dazu (siehe
+  unten).
+- Links entstehen in allen Mails zur Abgabe-Pendenz (neu, Erinnerung, «Abgabe eingegangen»), nicht
+  nur in «Abgabe eingegangen». Ältere Links bleiben gültig (höchstens 5 je Person und Element),
+  damit ein Link aus einer früheren Mail nicht plötzlich ins Leere führt.
+- Zurückziehen markiert die Dateien (`submission_upload_file.withdrawn_at`,
+  `gallery_image.submission_withdrawn_at`) statt einer `withdrawn`-Zeile; alle Zählstellen (Element,
+  Höchstzahl, Fortschritt, Abgabebox inkl. `submission_linked_file_counts`) übergehen sie. Die
+  Verwaltung stellt sie mit `POST …/elements/{ref}/restore-withdrawn` wieder her. Seit 0182 löscht
+  der Job `submission_todo_sync` sie nach 30 Tagen (siehe unten).
+- Neu abgeben nur im Zeitfenster des Elements (nach dem Ende mit `keep_open_after_end` oder nach
+  einem Zurückziehen), nicht bei geschlossenem Element oder deaktivierter Abgabe (dann nur `view`).
+- Neu abgeben über `save_document_uploads(..., allow_images=True)` (Dokumente und Fotos ohne HEIC),
+  ohne Captcha: der Link selbst ist ein 256-Bit-Geheimnis, dazu Rate-Limits je IP und Link.
+- Zurückziehen schreibt den Audit-Eintrag `submission.withdrawn_by_owner` und seit 0182 eine Mail an
+  die Verwaltung (siehe unten).
+- Code: `app/services/submission_access_service.py`, `app/api/routes/public_submission_access.py`,
+  Seite `frontend/app/abgabe/verwalten`, Anbieter `submission_access` in `app/public_links`.
+
+## Umsetzung Teil 2 und Rest von Teil 3 (2026-11-15, Migration 0182)
+
+- **Abgeschlossen:** `submission_assignment.completed_at`; die Regel steht in
+  `SubmissionService.assignment_completion`, `refresh_completion` führt das Feld nach. Aufrufer:
+  `_element_with_todo_sync` (Schliessen, Wiederöffnen, Wiederherstellen, Upload über den Link),
+  `sync_submission_todos` (Anlegen, Ändern, Termine, Listen), `sync_todos_if_tracked` auch ohne Link
+  und für Einzelabgaben, der Job `submission_todo_sync` jetzt für alle Abgaben, sowie
+  `submission_access_service.withdraw`. Oberfläche: `FilterTabs` «Offen/Abgeschlossen» mit
+  Zählern und `Badge` in der Desktop- und der Mobile-Liste.
+- **`owner_access_days`** (1–90, Standard 30, `CHECK`) bestimmt `expires_at` beim Ausstellen.
+- **`owner_resubmit_only_personal`:** die Abgabebox (`element_resolver.resolve_open_elements`)
+  blendet Elemente aus, für die `submission_withdrawn_elements(assignment_id)` (SECURITY DEFINER,
+  nur im Mandanten des gesetzten Links, `EXECUTE` nur für `hocx_abgabebox`) zurückgezogene Dateien
+  meldet. Die Rolle `hocx_abgabebox` bekommt dafür keine Tabellenrechte.
+- **Mail an die Verwaltung:** Art `submission.withdrawn`, Kategorie `submission_changes` (nur für
+  Konten mit `submissions.manage` in den Einstellungen sichtbar, `Category.permission`), Empfänger
+  über die effektiven Rechte aller Rollen (`notifications/submissions.managers`), ohne die Person
+  selbst. Beim Versand überholt, wenn nichts mehr zurückgezogen ist.
+- **Aufräumen** (`submission_access_service.cleanup`, im Job `submission_todo_sync`, Fehler ins
+  Fehlerprotokoll): abgelaufene oder widerrufene Links 30 Tage danach löschen, zurückgezogene
+  Dateien nach 30 Tagen über `deletion_service.delete_submission_files` löschen (höchstens 500 je
+  Lauf), zurückgezogene verknüpfte Bilder nach 30 Tagen von der Abgabe lösen.
+
+Bewusste Abweichungen vom Plan:
+
+- **Kein Captcha** beim Hochladen über den persönlichen Link: der Link ist ein 256-Bit-Geheimnis,
+  nur der Hash liegt in der Datenbank, dazu Rate-Limits je IP und je Link und der Multipart-Schutz,
+  der den Token vor dem Lesen des Bodys prüft. Ein Captcha bringt dagegen nichts Zusätzliches.
+- **Höchstens 5 gültige Links je Person und Element** statt nur des neuesten, damit ein Link aus
+  einer früheren Mail weiter funktioniert.
+- Neu abgeben über den persönlichen Link geht immer (im Zeitfenster), nicht nur mit
+  `owner_resubmit_only_personal`; die Option sperrt nur den gemeinsamen Weg.

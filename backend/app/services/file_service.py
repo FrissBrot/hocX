@@ -378,6 +378,12 @@ class _IngestYield(Exception):
     """Galerie-Ingest gibt seine Zeitscheibe ab (andere Mandanten warten)."""
 
 
+def _owner_image_mime(data: bytes) -> str | None:
+    """Bilder für Uploads über den persönlichen Abgabe-Link (ohne HEIC, siehe save_document_uploads)."""
+    mime = _sniff_image_mime(data)
+    return None if mime in (None, "image/heic", "image/heif") else mime
+
+
 class FileService:
     def __init__(
         self,
@@ -1715,6 +1721,7 @@ class FileService:
         upload_element_label: str | None = None,
         upload_cycle_config_id: int | None = None,
         file_results: list[dict] | None = None,
+        allow_images: bool = False,
     ) -> tuple[list[FileOverviewItem], list[str]]:
         """"Dateien"-page counterpart of save_gallery_uploads for non-image documents (PDF,
         Office/OpenDocument, RTF, plain text, ZIP - see _sniff_document_mime). Same shared
@@ -1770,7 +1777,11 @@ class FileService:
                     scan_status=scan_status,
                     # ingest_file's sniff callback only receives the bytes - the filename's
                     # extension is what picks the signature to check them against.
-                    sniff=lambda data, name=filename: _sniff_document_mime(data, name or ""),
+                    # allow_images (persönlicher Abgabe-Link): Fotos zählen wie Dokumente, ohne
+                    # Galerie-Verarbeitung; HEIC bleibt aussen vor (bräuchte die Umwandlung)
+                    sniff=lambda data, name=filename: _sniff_document_mime(data, name or "") or (
+                        _owner_image_mime(data) if allow_images else None
+                    ),
                     max_bytes=MAX_UPLOAD_BYTES,
                     storage_subdir_parts=(f"tenant-{tenant_id}", "documents"),
                     enable_perceptual_dedupe=False,

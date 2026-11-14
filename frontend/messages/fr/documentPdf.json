@@ -611,7 +611,11 @@
       "subjectSubmissionDone": "{tenant} : remise reçue",
       "introSubmissionDone": "Une remise a été reçue chez {tenant}. La tâche correspondante est donc terminée.",
       "sectionSubmissionDone": "Remises terminées",
-      "submitted": "remis le {at}"
+      "submitted": "remis le {at}",
+      "sectionCount": "{title} · {count}",
+      "noDue": "sans échéance",
+      "manageSubmission": "Voir et gérer mon dépôt",
+      "viewSubmission": "Voir mon dépôt"
     },
     "test": {
       "subject": "hocX : e-mail de test",
@@ -642,14 +646,98 @@
       "emailChanged": "E-mail de connexion modifié ({at})",
       "emailChangedByAdmin": "E-mail de connexion modifié par l’administration de l’association ({at})",
       "emailChangedSubject": "{tenant} : ton e-mail de connexion a été modifié",
-      "emailChangedIntro": "L’e-mail de connexion de ton compte chez {tenant} a été modifié. Cette adresse n’est plus utilisée pour la connexion, ce message est donc le dernier envoyé ici :"
+      "emailChangedIntro": "L’e-mail de connexion de ton compte chez {tenant} a été modifié. Cette adresse n’est plus utilisée pour la connexion, ce message est donc le dernier envoyé ici :",
+      "label": {
+        "passwordChanged": "Mot de passe modifié",
+        "passwordChangedByAdmin": "Mot de passe redéfini par l'administration de l'association",
+        "mfaAdded": "Deuxième facteur ajouté",
+        "mfaRemoved": "Deuxième facteur supprimé",
+        "mfaRemovedByAdmin": "Deuxième facteur supprimé par l'administration de l'association",
+        "emailChanged": "E-mail de connexion modifié",
+        "emailChangedByAdmin": "E-mail de connexion modifié par l'administration de l'association"
+      }
     },
     "export": {
       "subjectReady": "{tenant} : export de données prêt",
       "subjectFailed": "{tenant} : échec de l’export de données",
       "ready": "L’export de données « {filename} » est prêt. Tu peux le télécharger dans hocX sous Paramètres de l’association > Protection des données.",
       "failed": "L’export de données n’a pas pu être créé. Merci de le redemander dans hocX sous Paramètres de l’association > Protection des données.",
-      "openButton": "Ouvrir l’export"
+      "openButton": "Ouvrir l’export",
+      "readyBody": "L'export de données est prêt. Tu peux le télécharger dans hocX sous Réglages de l'association › Protection des données."
+    },
+    "via": "via hocX",
+    "system": "Système",
+    "settingsLink": "réglages",
+    "settingsHintHtml": "Tu choisis les e-mails que tu reçois dans tes {link}.",
+    "kicker": {
+      "todos": "Tâches",
+      "reminder": "Rappel",
+      "submission": "Dépôt",
+      "account": "Compte",
+      "invite": "Invitation",
+      "security": "Sécurité",
+      "export": "Export de données",
+      "test": "L'envoi fonctionne",
+      "fineUpcoming": "Amende en vue",
+      "fineIssued": "Nouvelle amende",
+      "submissionWithdrawn": "Remise retirée"
+    },
+    "title": {
+      "todosNew": "Nouvelles tâches pour toi",
+      "reminder": "Tes tâches",
+      "submissionDone": "Dépôt reçu",
+      "invite": "Bienvenue sur hocX",
+      "security": "Modifications de ton compte",
+      "emailChanged": "Ton e-mail de connexion a été modifié",
+      "exportReady": "Ton export est prêt",
+      "exportFailed": "L'export a échoué",
+      "test": "E-mail de test",
+      "submissionWithdrawn": "Remise retirée"
+    },
+    "weekday": {
+      "0": "lundi",
+      "1": "mardi",
+      "2": "mercredi",
+      "3": "jeudi",
+      "4": "vendredi",
+      "5": "samedi",
+      "6": "dimanche"
+    },
+    "fine": {
+      "upcomingSubject": "{tenant} : amende en vue – tâche à rendre dans {days} jours",
+      "upcomingSubjectOne": "{tenant} : amende en vue – tâche à rendre demain",
+      "upcomingTitle": "Termine « {task} » d'ici {weekday}",
+      "upcomingIntro": "Cette tâche est à rendre le {date}. Si elle n'est pas terminée d'ici là, {tenant} facturera une amende.",
+      "upcomingIntroRising": "Cette tâche est à rendre le {date}. Si elle n'est pas terminée d'ici là, {tenant} facturera une amende – qui augmente tant que la tâche reste ouverte.",
+      "from": "dès le {date}",
+      "daysLeftOne": "encore 1 jour",
+      "daysLeftOther": "encore {count} jours",
+      "rule": "Règle « {name} »",
+      "fixed": "Montant fixe",
+      "tariff": "Tarif {name}",
+      "moreUpcoming": "Autres tâches avec amende",
+      "openTodo": "Ouvrir la tâche",
+      "issuedIntro": "{tenant} t'a facturé les amendes suivantes :",
+      "countOne": "1 amende",
+      "countOther": "{count} amendes",
+      "issuedOn": "du {date}",
+      "openTotal": "Total des amendes ouvertes chez {tenant}",
+      "payment": "Les amendes se paient à la caisse de l'association. Une amende est fausse ? Adresse-toi à {tenant}.",
+      "openFines": "Voir mes amendes",
+      "issuedSubjectOne": "{tenant} : nouvelle amende de {amount}",
+      "issuedSubjectOther": "{tenant} : nouvelles amendes pour {amount}",
+      "todoLate": "Tâche en retard : {task}"
+    },
+    "submission": {
+      "withdrawnIntro": "Chez {tenant}, une personne responsable a retiré sa remise via son lien personnel.",
+      "withdrawnBy": "par {person} · {at}",
+      "withdrawnHint": "Les fichiers ne sont pas supprimés : sous « Remises », ils peuvent être restaurés pendant 30 jours. La tâche est de nouveau ouverte.",
+      "openButton": "Voir les remises",
+      "openLink": "Voir les remises : {url}",
+      "withdrawnSubjectOne": "{tenant} : remise retirée",
+      "withdrawnSubjectOther": "{tenant} : {count} remises retirées",
+      "filesOne": "1 fichier",
+      "filesOther": "{count} fichiers"
     }
   },
   "eventField": {

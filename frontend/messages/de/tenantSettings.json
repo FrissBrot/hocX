@@ -292,5 +292,71 @@
     "currencyHelpPopover": "hocX rechnet nicht um: eine Änderung ändert nur die Bezeichnung bei allen Konten, Bussen und Exporten. Die Beträge bleiben gleich.",
     "saved": "Währung gespeichert: {currency}",
     "saveFailed": "Die Währung konnte nicht gespeichert werden."
+  },
+  "publicLinks": {
+    "intro": "Alle Links, über die jemand ohne Anmeldung an Daten deines Vereins kommt – mit Grund, Ablauf und dem Ort, an dem du sie verwaltest. Abgelaufene, widerrufene und benutzte Links erscheinen nicht.",
+    "neverExpiringHint": "{count, plural, one {# Link läuft} other {# Links laufen}} nicht von selbst ab. Prüfe, ob {count, plural, one {er} other {sie}} noch gebraucht {count, plural, one {wird} other {werden}}.",
+    "group": {
+      "all": "Alle",
+      "files": "Dateien & Alben",
+      "submissions": "Abgabebox",
+      "calendar": "Kalender",
+      "accounts": "Konten",
+      "partners": "Partnervereine",
+      "other": "Weitere"
+    },
+    "col": {
+      "kind": "Art",
+      "link": "Link und Grund",
+      "created": "Erstellt",
+      "expiry": "Gültig",
+      "lastUsed": "Zuletzt genutzt",
+      "manage": "Verwalten"
+    },
+    "kind": {
+      "share_files": "Dateien",
+      "share_album": "Album",
+      "share_album_partner": "Album · Partner-Link",
+      "submission_link": "Abgabebox",
+      "calendar_events": "Kalender",
+      "calendar_todos": "Kalender",
+      "account_invite": "Einladung",
+      "account_password_reset": "Passwort",
+      "album_partner": "Partnerverein",
+      "submission_access": "Persönliche Abgabe"
+    },
+    "reason": {
+      "share_files": "Öffentlicher Link zu {count, plural, one {# Datei} other {# Dateien}}",
+      "share_album": "Öffentlicher Link zum Album «{album}» ({count, plural, one {# Foto} other {# Fotos}})",
+      "share_album_partner": "{partner} hat einen öffentlichen Link auf euer Album «{album}» erstellt",
+      "submission_link": "{count, plural, =0 {Abgabebox-Link, zurzeit ohne aktive Abgabe} one {Dateien hochladen für # Abgabe: {assignments}} other {Dateien hochladen für # Abgaben: {assignments}}}",
+      "calendar_events": "Kalender-Abo der Termine von {person}",
+      "calendar_todos": "{scope, select, all {Kalender-Abo aller Aufgaben, abonniert von {person}} other {Kalender-Abo der eigenen Aufgaben von {person}}}",
+      "account_invite": "Einladung an {person}: Konto einrichten{sent, select, 0 { (wird gerade versendet)} other {}}",
+      "account_password_reset": "Link zum Zurücksetzen des Passworts von {person}",
+      "album_partner": "Album mit {partner} geteilt{status, select, pending { (Einladung noch offen)} other {}}{publicLinks, select, 1 {; der Partner darf öffentliche Links erstellen} other {}}",
+      "unknown": "Öffentlicher Zugang (neue Art)",
+      "submission_access": "Persönlicher Link von {person} für «{assignment}»: {level, select, manage {ansehen, zurückziehen und neu abgeben} other {ansehen}}"
+    },
+    "expiry": {
+      "date": "bis {date}",
+      "never": "läuft nicht ab",
+      "singleUse": "einmalig",
+      "singleUseUntil": "einmalig, bis {date}",
+      "window": "solange die Abgaben offen sind"
+    },
+    "createdBy": "von {name}",
+    "notTracked": "—",
+    "manage": "Verwalten",
+    "manageElsewhere": {
+      "files": "beim Partnerverein",
+      "submissions": "—",
+      "calendar": "nur die Person selbst",
+      "accounts": "—",
+      "partners": "—",
+      "other": "—"
+    },
+    "empty": "Zurzeit gibt es keine öffentlichen Links.",
+    "emptyFilter": "Keine Links in dieser Auswahl."
   }
 }

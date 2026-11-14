@@ -193,6 +193,14 @@ export type SubmissionAssignment = {
   /** Nach dem Enddatum offen halten (Migration 0173) */
   keep_open_after_end?: boolean;
   responsible_participant_source: string | null;
+  /** Persönlicher Link für Verantwortliche (Migration 0181) */
+  owner_access?: "off" | "view" | "manage";
+  /** Gültigkeit des persönlichen Links in Tagen (1–90, Migration 0182) */
+  owner_access_days?: number;
+  /** Nach dem Zurückziehen nur noch über den persönlichen Link abgeben (0182) */
+  owner_resubmit_only_personal?: boolean;
+  /** Gesetzt, sobald alle Elemente abgegeben oder geschlossen sind (Reiter «Abgeschlossen», 0182) */
+  completed_at?: string | null;
   link_ids: string[];
   created_at: string;
   updated_at: string;
@@ -670,6 +678,8 @@ export type SubmissionElementStatusEntry = {
   responsible_participant_id: string | null;
   /** Alle Verantwortlichen (mehrere = gemeinsam); responsible_participant_id ist die erste */
   responsible_participant_ids?: string[];
+  /** Über den persönlichen Link zurückgezogene Dateien, wiederherstellbar */
+  withdrawn_count?: number;
 };
 
 export type PlatformOidcConfigPublic = { enabled: boolean; issuer_url: string };
@@ -2597,7 +2607,7 @@ export type EmailSettingsWrite = {
   email_link_base_url: string | null;
 };
 
-export type NotificationCategory = "todo_new" | "todo_reminders" | "todo_submissions" | "exports";
+export type NotificationCategory = "todo_new" | "todo_reminders" | "todo_submissions" | "fines" | "submission_changes" | "exports";
 
 export type NotificationPreferences = {
   preferences: { category: NotificationCategory; enabled: boolean }[];
@@ -2625,4 +2635,37 @@ export type ParticipantInvite = {
 export type GlobalSearchResult = {
   people: { id: string; name: string; email: string | null; is_active: boolean }[];
   files: { id: string; name: string; is_image: boolean; context: string }[];
+};
+
+/** GET /api/public-links (app/public_links): gerade gültige Zugangswege ohne Anmeldung. */
+export type PublicLinkItem = {
+  kind: string;
+  id: string;
+  label: string;
+  params: Record<string, string | number>;
+  created_at: string | null;
+  created_by: string | null;
+  expiry: "date" | "never" | "single_use" | "window";
+  expires_at: string | null;
+  last_used_at: string | null;
+  manage_href: string | null;
+};
+
+/** POST /api/public/submission-access/view: eigene Abgabe über den persönlichen Link. */
+export type SubmissionAccessView = {
+  tenant_name: string;
+  person_name: string;
+  title: string;
+  description: string | null;
+  element_label: string;
+  window_start: string | null;
+  window_end: string | null;
+  status: "open" | "submitted" | "closed";
+  submitted_at: string | null;
+  files: { id: string; name: string; size: number | null; scan_status: string }[];
+  can_withdraw: boolean;
+  can_upload: boolean;
+  allowed_file_types: string[];
+  max_file_size_mb: number;
+  remaining_files: number | null;
 };

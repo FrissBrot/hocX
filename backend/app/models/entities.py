@@ -1754,6 +1754,8 @@ class GalleryImage(Base, TimestampMixin):
     )
     submission_element_ref: Mapped[str | None] = mapped_column(Text)
     submission_element_label: Mapped[str | None] = mapped_column(Text)
+    # Über den persönlichen Link zurückgezogen (0181): zählt nicht mehr zum Element
+    submission_withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
 
 
@@ -2036,6 +2038,8 @@ class SubmissionAssignment(Base, TimestampMixin, UpdatedAtMixin):
     __table_args__ = (
         UniqueConstraint("tenant_id", "public_slug", name="uq_submission_assignment_tenant_slug"),
         CheckConstraint("source_type IN ('events', 'list', 'manual')", name="ck_submission_assignment_source_type"),
+        CheckConstraint("owner_access IN ('off', 'view', 'manage')", name="ck_submission_assignment_owner_access"),
+        CheckConstraint("owner_access_days BETWEEN 1 AND 90", name="ck_submission_assignment_owner_access_days"),
         CheckConstraint(
             # Tage vor/nach Termin bzw. Stichtag sind bewusst optional (siehe Migration
             # 0056_submission_flexible_window): NULL = kein Zeitfenster, die Abgabe bleibt offen,
@@ -2097,6 +2101,14 @@ class SubmissionAssignment(Base, TimestampMixin, UpdatedAtMixin):
     # greift (Migration 0173); die Pendenz bleibt am Enddatum fällig.
     keep_open_after_end: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     responsible_participant_source: Mapped[str | None] = mapped_column(Text)
+    # Persönlicher Link für Verantwortliche (Migration 0181): off · view · manage
+    owner_access: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'off'"), default="off")
+    # Gültigkeit des persönlichen Links in Tagen (0182)
+    owner_access_days: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("30"), default=30)
+    # Nach dem Zurückziehen nur noch über den persönlichen Link abgeben (0182, Abgabebox sperrt das Element)
+    owner_resubmit_only_personal: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    # Alle Elemente abgegeben oder geschlossen, nichts kommt mehr dazu (0182, Reiter «Abgeschlossen»)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Ueber welche Abgabe-Links (SubmissionLink) diese Abgabe oeffentlich erreichbar ist. Ohne
     # Link ist sie ueber die Abgabebox nicht erreichbar.
     links: Mapped[list["SubmissionLink"]] = relationship(
@@ -2206,6 +2218,8 @@ class SubmissionUploadFile(Base, TimestampMixin):
     # idempotent). Bounds that periodic sweep to new-since-last-tick rows instead of
     # re-scanning every clean image submission ever uploaded on every tick, forever.
     album_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Über den persönlichen Link zurückgezogen (0181): zählt nicht mehr, wiederherstellbar
+    withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class OverloadRejection(Base):
@@ -2443,6 +2457,30 @@ class Notification(Base):
     last_error: Mapped[str | None] = mapped_column(Text)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+
+
+class SubmissionAccessToken(Base):
+    """Persönlicher Link einer verantwortlichen Person auf ihr Element einer Abgabe (Migration
+    0181, docs/SUBMISSION_OWNER_ACCESS.md). Nur der SHA-256-Hash wird gespeichert; das Token
+    entsteht beim Versand der Mail (notifications/submission_access.py)."""
+
+    __tablename__ = "submission_access_token"
+    __table_args__ = (
+        UniqueConstraint("token_hash", name="uq_submission_access_token_hash"),
+        Index("idx_submission_access_token_tenant", "tenant_id"),
+        Index("idx_submission_access_token_element", "assignment_id", "element_ref", "participant_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    assignment_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("submission_assignment.id", ondelete="CASCADE"), nullable=False)
+    element_ref: Mapped[str] = mapped_column(Text, nullable=False)
+    participant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False)
+    token_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class AccountToken(Base):

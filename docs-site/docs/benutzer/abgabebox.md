@@ -205,6 +205,42 @@ Fällt ein Abgabefeld weg (Termin gelöscht, Tag oder Zyklus gewechselt, verantw
 entfernt), verschwindet seine offene Pendenz. Hat jemand in der Pendenz schon Notizen oder
 Dateien erfasst, wird sie stattdessen abgebrochen. Erledigte Pendenzen bleiben stehen.
 
+## Persönlicher Link für Verantwortliche {#persoenlicher-link}
+
+Verantwortliche bekommen in den Mails zu ihrer Abgabe-Pendenz (neue Pendenz, Erinnerung,
+«Abgabe eingegangen») einen **eigenen Link** zu ihrem Abgabefeld – auch Personen ohne Login, wenn
+für sie Mails ohne Login eingeschaltet sind. Was der Link erlaubt, stellst du bei der Abgabe unter
+**Persönlicher Link für Verantwortliche** ein:
+
+| Einstellung | Was die Person kann |
+|---|---|
+| **Ansehen, zurückziehen und neu abgeben** (Standard für neue Abgaben) | Dateien und Stand sehen und herunterladen, die Abgabe zurückziehen und neue Dateien hochladen |
+| **Nur ansehen** | Dateien und Stand sehen und herunterladen |
+| **Kein persönlicher Link** | nichts, die Mails enthalten keinen Link (Standard für bestehende Abgaben) |
+
+Wofür das gut ist: Gibt jemand über den gemeinsamen Abgabebox-Link etwas Falsches für eine Person
+ab, erfährt sie es per Mail und kann die Abgabe selbst korrigieren.
+
+- **Zurückziehen** löscht nicht sofort. Die Dateien zählen danach nicht mehr zur Abgabe, die
+  Pendenz ist wieder offen, und alle, die Abgaben verwalten, bekommen eine Mail
+  ([Änderungen an Abgaben](benachrichtigungen.md#kategorien)). Im Abgabefeld steht, wie viele
+  Dateien zurückgezogen wurden; mit **Zurückgezogene wiederherstellen** nimmst du sie wieder zur
+  Abgabe. Nach **30 Tagen** löscht hocX zurückgezogene Dateien endgültig. Direkt verknüpfte Fotos
+  werden dann nur von der Abgabe gelöst und bleiben unter «Dateien».
+- **Nach dem Zurückziehen nur noch über den persönlichen Link** (Option bei «Ansehen, zurückziehen
+  und neu abgeben»): Das Abgabefeld verschwindet dann aus der gemeinsamen Abgabebox, bis die
+  zurückgezogenen Dateien wiederhergestellt oder gelöscht sind. So kann niemand anderes erneut
+  etwas Falsches abgeben, die verantwortliche Person gibt über ihren Link neu ab.
+- **Neu abgeben** prüft die Dateien wie jede Abgabe (Dateitypen, Grösse, Anzahl, Virenprüfung)
+  und geht im Zeitfenster der Abgabe. Nach dem Ende nur mit «Nach dem Ende offen halten» oder
+  nachdem die Person ihre Abgabe zurückgezogen hat. Ein geschlossenes Abgabefeld und eine
+  deaktivierte Abgabe lassen sich über den Link nur noch ansehen.
+- Jeder Link gilt ab dem Versand der Mail so viele Tage, wie unter **Gültigkeit des Links** steht
+  (1–90, Standard **30**), und nur für diese Person und dieses Abgabefeld. Ist die Person nicht
+  mehr verantwortlich, schaltest du die Option aus oder ist die Abgabe gelöscht, funktioniert er
+  nicht mehr. Alle gültigen Links siehst du unter
+  [Mandant-Einstellungen › Zugangslinks](einstellungen.md#zugangslinks).
+
 ## Upload-Links {#links}
 
 Die öffentliche Abgabebox ist nur über einen Link erreichbar. Die Adresse enthält einen
@@ -257,6 +293,20 @@ Ein Klick auf eine Abgabe öffnet die Abgabefelder mit ihrem Status:
 | **Nicht abgegeben** | Das Zeitfenster bzw. der Stichtag ist vorbei, ohne Einreichung. |
 
 Bei Abgaben mit verantwortlicher Person steht unter jedem Abgabefeld, wer verantwortlich ist.
+
+### Offen und abgeschlossen {#abgeschlossen}
+
+Über der Liste wählst du zwischen **Offen** und **Abgeschlossen**. Eine Abgabe ist abgeschlossen,
+sobald jedes Abgabefeld eine geprüfte Datei hat oder geschlossen ist (Dateien in der Virenprüfung
+zählen noch nicht) und nichts mehr dazukommen kann:
+
+- **Einzelabgabe**: sofort,
+- **Termine**: kein Zeitfenster endet mehr in der Zukunft,
+- **Liste**: der Stichtag ist vorbei; ohne Stichtag zählt der aktuelle Stand der Liste.
+
+Abgeschlossene Abgaben bleiben voll bearbeitbar. Kommt ein neues Abgabefeld dazu (neuer Termin,
+neuer Listeneintrag) oder öffnest du eines wieder, ist die Abgabe automatisch wieder offen. Der
+Stand wird bei jeder Änderung und zusätzlich regelmässig im Hintergrund nachgeführt.
 
 ## Abgabefeld schliessen und wieder öffnen {#schliessen}
 

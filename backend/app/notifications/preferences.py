@@ -19,11 +19,16 @@ def read(db: Session, user_id: int, tenant_id: int) -> NotificationPreferencesRe
     ).all())
     person = db.get(Participant, user_id)
     platform = db.get(PlatformNotificationSettings, 1)
+    permissions: frozenset[str] | None = None
+    if any(category.permission for category in CATEGORIES.values()):
+        from app.core.security import load_role_permissions
+
+        permissions = load_role_permissions(db, user_id)[0]
     return NotificationPreferencesRead(
         preferences=[
             NotificationPreferenceRead(category=key, enabled=bool(stored.get(key, category.default)))  # type: ignore[arg-type]
             for key, category in CATEGORIES.items()
-            if category.configurable
+            if category.configurable and (category.permission is None or (permissions is not None and category.permission in permissions))
         ],
         has_email=bool(person and (person.email or "").strip()),
         email_enabled=bool(platform and platform.email_enabled),

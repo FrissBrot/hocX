@@ -1,0 +1,37 @@
+{
+  "title": "Meine Abgabe",
+  "loading": "Abgabe wird geladen …",
+  "invalid": "Dieser Link ist ungültig oder abgelaufen. Mit der nächsten Mail zu dieser Abgabe bekommst du einen neuen.",
+  "failed": "Das hat nicht geklappt. Bitte versuche es später nochmals.",
+  "rateLimited": "Zu viele Versuche. Bitte warte ein paar Minuten.",
+  "greeting": "Hallo {name} – das ist deine Abgabe für «{element}».",
+  "until": "bis {date}",
+  "submittedAt": "abgegeben {date}",
+  "status": {
+    "open": "Noch offen",
+    "submitted": "Abgegeben",
+    "closed": "Geschlossen"
+  },
+  "files": "Deine Dateien",
+  "noFiles": "Noch keine Dateien abgegeben.",
+  "download": "Herunterladen",
+  "scan": {
+    "pending": "wird geprüft",
+    "blocked": "gesperrt"
+  },
+  "closedHint": "Diese Abgabe ist geschlossen. Für Änderungen melde dich bei der Verwaltung deines Vereins.",
+  "viewOnlyHint": "Über diesen Link kannst du deine Abgabe ansehen. Ändern kann sie die Verwaltung deines Vereins.",
+  "withdraw": "Abgabe zurückziehen",
+  "withdrawConfirm": "Abgabe zurückziehen? Deine Dateien zählen danach nicht mehr, die Aufgabe ist wieder offen. Die Verwaltung kann sie wiederherstellen.",
+  "withdrawn": "Abgabe zurückgezogen.",
+  "withdrawHint": "Hat jemand etwas Falsches für dich abgegeben? Zieh die Abgabe zurück und lade die richtigen Dateien hoch.",
+  "upload": "Dateien abgeben",
+  "uploadMore": "Weitere Dateien abgeben",
+  "uploading": "Wird hochgeladen … {percent} %",
+  "uploaded": "Dateien abgegeben.",
+  "rules": "Höchstens {size} MB je Datei, erlaubt: {types}.",
+  "anyType": "Dokumente und Fotos",
+  "remaining": "{count, plural, =0 {Keine weiteren Dateien möglich.} one {Noch # Datei möglich.} other {Noch # Dateien möglich.}}",
+  "privacyHint": "Dieser Link gehört nur dir. Gib ihn nicht weiter – wer ihn hat, kann deine Abgabe sehen.",
+  "downloadFailed": "Die Datei konnte nicht heruntergeladen werden."
+}

@@ -87,6 +87,7 @@ def load_rules(db: Session, assignment: SubmissionAssignment, element_ref: str) 
             .join(SubmissionUpload, SubmissionUpload.id == SubmissionUploadFile.upload_id)
             .where(
                 SubmissionUpload.assignment_id == assignment.id,
+                SubmissionUploadFile.withdrawn_at.is_(None),
                 SubmissionUpload.event_id == event_id if event_id is not None else SubmissionUpload.event_id.is_(None),
                 SubmissionUpload.list_entry_id == list_entry_id
                 if list_entry_id is not None
@@ -97,6 +98,7 @@ def load_rules(db: Session, assignment: SubmissionAssignment, element_ref: str) 
             select(func.count(GalleryImage.id)).where(
                 GalleryImage.submission_assignment_id == assignment.id,
                 GalleryImage.submission_element_ref == element_ref,
+                GalleryImage.submission_withdrawn_at.is_(None),
             )
         ) or 0
         remaining = max(0, assignment.max_files_per_element - abgabebox_files - in_app_files)

@@ -27,6 +27,7 @@ import {
 } from "@/components/submission-assignments/submission-assignment-form";
 import { SubmissionLinkManager } from "@/components/submission-assignments/submission-link-manager";
 import { SubmissionCreatedModal } from "@/components/submission-assignments/submission-share-link";
+import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
 import { useConfirm } from "@/contexts/confirm-context";
@@ -95,6 +96,7 @@ export function MobileSubmissions({
   const [summaries, setSummaries] = useState<Record<string, AssignmentSummary>>({});
   const [clamav, setClamav] = useState<"online" | "offline" | "unknown">("unknown");
   const [search, setSearch] = useState("");
+  const [completion, setCompletion] = useState<"open" | "completed">("open");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [elements, setElements] = useState<SubmissionElementStatusEntry[]>([]);
   const [elementFilter, setElementFilter] = useState<ElementFilter>("all");
@@ -423,7 +425,10 @@ export function MobileSubmissions({
     );
   }
 
-  const visible = assignments.filter((assignment) => !search.trim() || assignment.title.toLowerCase().includes(search.trim().toLowerCase()));
+  const completedCount = assignments.filter((assignment) => assignment.completed_at).length;
+  const visible = assignments
+    .filter((assignment) => (completion === "completed" ? Boolean(assignment.completed_at) : !assignment.completed_at))
+    .filter((assignment) => !search.trim() || assignment.title.toLowerCase().includes(search.trim().toLowerCase()));
   return (
     <div className="mobile-page mobile-page-list">
       <MobileSubHeader
@@ -441,6 +446,14 @@ export function MobileSubmissions({
         <p className={clamav === "offline" ? "mobile-clamav mobile-clamav-offline" : "mobile-clamav"}>
           {clamav === "online" ? t("clamavActive") : clamav === "offline" ? t("clamavOfflineHint") : t("clamavChecking")} · {t("linksCount", { count: links.length })}
         </p>
+        <FilterTabs
+          options={[
+            { value: "open", label: t("completionTabs.open"), count: assignments.length - completedCount },
+            { value: "completed", label: t("completionTabs.completed"), count: completedCount },
+          ]}
+          value={completion}
+          onChange={setCompletion}
+        />
         <SearchInput value={search} onChange={setSearch} placeholder={t("searchAssignmentsPlaceholder")} />
       </div>
       {visible.length > 0 ? (
@@ -473,7 +486,7 @@ export function MobileSubmissions({
           </div>
         </div>
       ) : (
-        <MobileEmpty title={assignments.length ? t("noMatches") : t("noAssignmentsSetUp")} hint={assignments.length ? undefined : t("noAssignmentsDescription")} />
+        <MobileEmpty title={!assignments.length ? t("noAssignmentsSetUp") : search.trim() ? t("noMatches") : completion === "completed" ? t("completedEmpty") : t("openEmpty")} hint={assignments.length ? undefined : t("noAssignmentsDescription")} />
       )}
       <MobileFab
         label={tMobile("submissions.fab")}

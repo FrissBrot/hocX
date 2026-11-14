@@ -208,6 +208,7 @@ def list_checksums_for_element(
             submission_upload_table.c.assignment_id == assignment_id,
             submission_upload_table.c.event_id == event_id,
             submission_upload_table.c.list_entry_id == list_entry_id,
+            submission_upload_file_table.c.withdrawn_at.is_(None),
             stored_file_table.c.checksum_sha256.is_not(None),
         )
     )
@@ -257,7 +258,7 @@ def count_files_by_element(db: Session, *, assignment_id: int) -> dict[tuple[int
                 submission_upload_table.c.id == submission_upload_file_table.c.upload_id,
             )
         )
-        .where(submission_upload_table.c.assignment_id == assignment_id)
+        .where(submission_upload_table.c.assignment_id == assignment_id, submission_upload_file_table.c.withdrawn_at.is_(None))
         .group_by(submission_upload_table.c.event_id, submission_upload_table.c.list_entry_id)
     )
     counts = {(row.event_id, row.list_entry_id): row.file_count for row in rows}
@@ -270,6 +271,16 @@ def count_files_by_element(db: Session, *, assignment_id: int) -> dict[tuple[int
         key = (row.event_id, row.list_entry_id)
         counts[key] = counts.get(key, 0) + row.file_count
     return counts
+
+
+def withdrawn_elements(db: Session, *, assignment_id: int) -> set[tuple[int | None, int | None]]:
+    """Elemente mit zurückgezogenen Dateien (Migration 0182, SECURITY DEFINER, nur im Mandanten
+    des gesetzten Links)."""
+    rows = db.execute(
+        text("SELECT event_id, list_entry_id FROM public.submission_withdrawn_elements(:assignment_id)"),
+        {"assignment_id": assignment_id},
+    ).all()
+    return {(row[0], row[1]) for row in rows}
 
 
 def insert_upload_log(

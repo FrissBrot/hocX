@@ -572,6 +572,7 @@ const TENANT_TABS = [
   { href: "/tenant-settings/abo", key: "subscription" },
   { href: "/tenant-settings/verification", key: "verification" },
   { href: "/tenant-settings/privacy", key: "privacy" },
+  { href: "/tenant-settings/links", key: "links" },
   { href: "/tenant-settings/retention", key: "retention" },
   { href: "/tenant-settings/activity", key: "activity" },
 ] as const;
@@ -585,18 +586,15 @@ export function MobileTenantSettings({ title, children }: { title: string; child
   const pathname = usePathname();
   const openMore = useOpenMore();
   const active = TENANT_TABS.find((tab) => tab.href === pathname)?.key ?? "general";
-  const labels = { general: tNav("general"), domains: tNav("domains"), subscription: tNav("subscriptionAndUsage"), verification: tNav("documentVerification"), privacy: tNav("privacy"), retention: tNav("retention"), activity: tNav("activity") };
+  const labels = { general: tNav("general"), domains: tNav("domains"), subscription: tNav("subscriptionAndUsage"), verification: tNav("documentVerification"), privacy: tNav("privacy"), links: tNav("publicLinks"), retention: tNav("retention"), activity: tNav("activity") };
   return (
     <div className={`mobile-page${active === "domains" ? " mobile-page-list" : ""}`}>
       <MobileSubHeader title={title} backLabel={tMobile("tabs.more")} onBack={openMore} />
       <div className="mobile-section">
-        <MobileSegmented<(typeof TENANT_TABS)[number]["key"]>
-          ariaLabel={title}
-          compact
-          value={active}
-          onChange={(key) => router.push(TENANT_TABS.find((tab) => tab.key === key)!.href as Route)}
-          options={TENANT_TABS.map((tab) => ({ value: tab.key, label: labels[tab.key] }))}
-        />
+        {/* Acht Bereiche passen nicht als Segment in 390 px: Auswahlliste statt Segment */}
+        <Select aria-label={title} value={active} onChange={(event) => router.push(TENANT_TABS.find((tab) => tab.key === event.target.value)!.href as Route)}>
+          {TENANT_TABS.map((tab) => <option key={tab.key} value={tab.key}>{labels[tab.key]}</option>)}
+        </Select>
       </div>
       {children}
     </div>

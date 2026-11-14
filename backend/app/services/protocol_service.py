@@ -2689,6 +2689,10 @@ class ProtocolService:
                         from app.notifications import todos as todo_notifications
 
                         todo_notifications.on_protocol_closed(db, protocol_id, actor_user_id=notify_actor_id)
+                        # Anwesenheitsbussen sind erst mit dem Abschluss verbindlich (Mail «Busse erhalten»)
+                        from app.notifications import fines as fine_notifications
+
+                        fine_notifications.on_protocol_closed(db, updated)
         elif new_idx < prev_idx and previous_status == "abgeschlossen":
             # Zurücksetzen verwirft die Momentaufnahme (das Frontend warnt davor): das
             # Protokoll zeigt wieder die Live-Todos, inkl. aller Änderungen seit Abschluss.

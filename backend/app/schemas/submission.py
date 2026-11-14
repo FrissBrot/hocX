@@ -42,6 +42,10 @@ class SubmissionAssignmentBase(BaseModel):
     # Nach dem Enddatum offen halten, bis auto_close oder Schliessen von Hand (Migration 0173)
     keep_open_after_end: bool = False
     responsible_participant_source: str | None = None
+    # Persönlicher Link für Verantwortliche (Migration 0181): off · view · manage
+    owner_access: Literal["off", "view", "manage"] = "off"
+    owner_access_days: int = Field(default=30, ge=1, le=90)
+    owner_resubmit_only_personal: bool = False
 
 
 class SubmissionAssignmentCreate(SubmissionAssignmentBase):
@@ -70,6 +74,9 @@ class SubmissionAssignmentUpdate(BaseModel):
     auto_close: SubmissionAutoClose | None = None
     keep_open_after_end: bool | None = None
     responsible_participant_source: str | None = None
+    owner_access: Literal["off", "view", "manage"] | None = None
+    owner_access_days: int | None = Field(default=None, ge=1, le=90)
+    owner_resubmit_only_personal: bool | None = None
     # None = Link-Zuordnung unveraendert lassen.
     link_ids: list[uuid.UUID] | None = None
 
@@ -81,6 +88,8 @@ class SubmissionAssignmentRead(PublicIdModel, SubmissionAssignmentBase):
     tenant_id: uuid.UUID
     public_slug: str
     link_ids: list[uuid.UUID] = Field(default_factory=list)
+    # Alle Elemente abgegeben oder geschlossen (Reiter «Abgeschlossen», Migration 0182)
+    completed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -138,6 +147,12 @@ class SubmissionElementRead(BaseModel):
     responsible_participant_id: uuid.UUID | None = None
     # Alle Verantwortlichen (mehrere = gemeinsam); responsible_participant_id ist die erste
     responsible_participant_ids: list[uuid.UUID] = Field(default_factory=list)
+    # Über den persönlichen Link zurückgezogene Dateien (0181), wiederherstellbar
+    withdrawn_count: int = 0
+
+
+class SubmissionElementRestore(BaseModel):
+    element_ref: str = Field(min_length=1, max_length=200)
 
 
 class SubmissionUploadLogEntry(PublicIdModel):

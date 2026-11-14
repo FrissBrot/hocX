@@ -179,7 +179,7 @@ def scan_reminders(db: Session, *, now: datetime | None = None) -> dict[str, int
 
     now = now or now_local()
     if now.timetz().replace(tzinfo=None) < time(REMINDER_HOUR):
-        return {"due_soon": 0, "overdue": 0}
+        return {"due_soon": 0, "overdue": 0, "fine_upcoming": 0}
     today = now.date()
     due_soon, overdue = today + timedelta(days=DUE_SOON_DAYS), today - timedelta(days=1)
     query, *_ = ProtocolTodoRepository()._base_todo_query()
@@ -189,7 +189,11 @@ def scan_reminders(db: Session, *, now: datetime | None = None) -> dict[str, int
         ProtocolTodo.due_date.in_((due_soon, overdue)) | ProtocolTodo.due_event_id.is_not(None) | ProtocolTodo.due_marker.is_not(None),
         ProtocolTodo.protocol_element_block_id.is_(None) | (Protocol.status == "abgeschlossen"),
     )
-    counts = {"due_soon": 0, "overdue": 0}
+    from app.notifications.dispatch import preference_enabled
+    from app.notifications.fines import UpcomingCalculator
+
+    counts = {"due_soon": 0, "overdue": 0, "fine_upcoming": 0}
+    calculator = UpcomingCalculator(db)
     for row in db.execute(query):
         todo: ProtocolTodo = row[0]
         due: date | None = row.resolved_due_date
@@ -197,10 +201,20 @@ def scan_reminders(db: Session, *, now: datetime | None = None) -> dict[str, int
         if kind is None:
             continue
         recipients = list(row.assignee_ids or []) or ([todo.assigned_participant_id] if todo.assigned_participant_id else [])
+        if kind == "todo.due_soon":
+            # Droht bei Verspätung eine Busse, ersetzt «Busse droht» die normale Erinnerung (nichts
+            # doppelt) - nur bei Personen, die Bussen-Mails nicht abgeschaltet haben.
+            fined = [pid for pid in recipients if preference_enabled(db, pid, "fines") and calculator.steps(todo, pid)[0]]
+            if fined:
+                counts["fine_upcoming"] += publish(
+                    db, kind="fine.upcoming", tenant_id=todo.tenant_id, recipient_ids=fined, subject_id=todo.id,
+                    payload={"due": due.isoformat()}, dedupe=f"{todo.id}:{due.isoformat()}",
+                )
+                recipients = [pid for pid in recipients if pid not in fined]
         counts[kind.split(".")[1]] += publish(
             db, kind=kind, tenant_id=todo.tenant_id, recipient_ids=recipients, subject_id=todo.id,
             payload={"due": due.isoformat()}, dedupe=f"{todo.id}:{due.isoformat()}",
-        )
+        ) if recipients else 0
     db.commit()
     return counts
 
@@ -208,7 +222,29 @@ def scan_reminders(db: Session, *, now: datetime | None = None) -> dict[str, int
 # ── Beim Versand ─────────────────────────────────────────────────────
 
 
-def items_for(db: Session, notifications: list, recipient_id: int, **_) -> dict[int, dict]:
+def _submission_links(db: Session, rows: dict, recipient_id: int, base_url: str | None) -> dict[int, tuple[str, str]]:
+    """Persönlicher Abgabe-Link je Abgabe-Aufgabe (submission_access_service): erst beim Versand
+    erzeugt, nur im URL-Fragment. Auch für Personen ohne Login - es ist ihr einziger Weg."""
+    from app.models import SubmissionAssignment
+    from app.services import submission_access_service
+
+    links: dict[int, tuple[str, str]] = {}
+    if not base_url:
+        return links
+    for todo_id, row in rows.items():
+        todo = row[0]
+        if not todo.submission_assignment_id or not todo.element_ref:
+            continue
+        assignment = db.get(SubmissionAssignment, todo.submission_assignment_id)
+        if assignment is None or assignment.tenant_id != todo.tenant_id:
+            continue
+        token = submission_access_service.issue(db, assignment=assignment, element_ref=todo.element_ref, participant_id=recipient_id)
+        if token:
+            links[todo_id] = (f"{base_url}/abgabe/verwalten#{token}", assignment.owner_access)
+    return links
+
+
+def items_for(db: Session, notifications: list, recipient_id: int, *, base_url: str | None = None, **_) -> dict[int, dict]:
     """Aktuelle Daten der Aufgaben je Benachrichtigung. Fehlt eine Benachrichtigung im Ergebnis,
     ist sie überholt (gelöscht, erledigt, nicht mehr verantwortlich, Fälligkeit geändert)."""
     from app.repositories.protocol_todo_repository import ProtocolTodoRepository
@@ -248,4 +284,11 @@ def items_for(db: Session, notifications: list, recipient_id: int, **_) -> dict[
             "due": due,
             "source": row.task_package_name or (row.protocol_number if row.protocol_id else None),
         }
+    # Persönlicher Abgabe-Link nur für Aufgaben, die in der Mail stehen und noch die Person betreffen
+    listed = {notification.subject_id for notification in notifications if notification.id in items}
+    links = _submission_links(db, {todo_id: rows[todo_id] for todo_id in listed if todo_id in rows}, recipient_id, base_url)
+    for notification in notifications:
+        item = items.get(notification.id)
+        if item is not None and notification.subject_id in links:
+            item["submission_link"], item["submission_level"] = links[notification.subject_id]
     return items

@@ -278,5 +278,32 @@
   "createdIntro": "Condividi questo link con chi deve consegnare qualcosa. Non serve il login.",
   "createdNoLink": "La consegna non è ancora raggiungibile tramite alcun link. Scegli un link modificandola.",
   "openBox": "Apri la casella di consegna",
-  "done": "Fatto"
+  "done": "Fatto",
+  "ownerAccessLabel": "Link personale per i responsabili",
+  "helpOwnerAccess": "I responsabili ricevono nelle e-mail sulla loro attività di consegna un link personale, anche senza login. Con esso vedono la loro consegna e, a seconda dell'impostazione, possono ritirarla e riconsegnare – ad esempio se qualcuno ha consegnato qualcosa di sbagliato per loro tramite il link comune.",
+  "ownerAccess": {
+    "manage": "Vedere, ritirare e riconsegnare",
+    "view": "Solo vedere",
+    "off": "Nessun link personale"
+  },
+  "ownerAccessHelp": {
+    "manage": "I file ritirati vengono conservati e possono essere ripristinati qui.",
+    "view": "La persona vede i suoi file e lo stato; solo l'amministrazione può modificarli.",
+    "off": "Le e-mail non contengono un link alla consegna."
+  },
+  "ownerAccessDaysLabel": "Validità del link (giorni)",
+  "ownerAccessDaysHelp": "Per quanto tempo un link è valido dopo l'invio dell'e-mail (1–90 giorni). Ogni nuova e-mail contiene un nuovo link.",
+  "ownerResubmitOnlyPersonalLabel": "Dopo il ritiro, solo tramite il link personale",
+  "ownerResubmitOnlyPersonalHelp": "La casella di consegna non accetta più nulla per questo elemento tramite il link comune, così nessun altro può consegnare di nuovo qualcosa di sbagliato.",
+  "withdrawnInfo": "{count, plural, one {# file è stato ritirato} other {# file sono stati ritirati}} tramite il link personale. Non contano più per la consegna.",
+  "restoreWithdrawnAction": "Ripristina i file ritirati",
+  "withdrawnRestoredToast": "File ripristinati.",
+  "withdrawnRestoreFailed": "Non è stato possibile ripristinare i file.",
+  "completionTabs": {
+    "open": "Aperte",
+    "completed": "Concluse"
+  },
+  "completedBadge": "Conclusa",
+  "completedEmpty": "Ancora nessuna consegna conclusa. Una consegna è conclusa quando tutti gli elementi sono consegnati o chiusi.",
+  "openEmpty": "Nessuna consegna aperta."
 }

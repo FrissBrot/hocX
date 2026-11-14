@@ -361,11 +361,50 @@
       "failed": "Non è stato possibile creare l’esportazione dati. Richiedila di nuovo in hocX in Impostazioni associazione > Protezione dei dati.",
       "openButton": "Apri esportazione",
       "ready": "L’esportazione dati «{filename}» è pronta. Puoi scaricarla in hocX in Impostazioni associazione > Protezione dei dati.",
+      "readyBody": "L'esportazione dei dati è pronta. Puoi scaricarla in hocX sotto Impostazioni dell'associazione › Protezione dei dati.",
       "subjectFailed": "{tenant}: esportazione dati non riuscita",
       "subjectReady": "{tenant}: esportazione dati pronta"
     },
+    "fine": {
+      "countOne": "1 multa",
+      "countOther": "{count} multe",
+      "daysLeftOne": "ancora 1 giorno",
+      "daysLeftOther": "ancora {count} giorni",
+      "fixed": "Importo fisso",
+      "from": "dal {date}",
+      "issuedIntro": "{tenant} ti ha addebitato le seguenti multe:",
+      "issuedOn": "del {date}",
+      "issuedSubjectOne": "{tenant}: nuova multa di {amount}",
+      "issuedSubjectOther": "{tenant}: nuove multe per {amount}",
+      "moreUpcoming": "Altre attività con multa",
+      "openFines": "Vedi le mie multe",
+      "openTodo": "Apri l'attività",
+      "openTotal": "Totale multe aperte presso {tenant}",
+      "payment": "Le multe si pagano alla cassa dell'associazione. Una multa è sbagliata? Rivolgiti a {tenant}.",
+      "rule": "Regola «{name}»",
+      "tariff": "Tariffa {name}",
+      "todoLate": "Attività in ritardo: {task}",
+      "upcomingIntro": "Questa attività scade il {date}. Se non è completata entro allora, {tenant} addebiterà una multa.",
+      "upcomingIntroRising": "Questa attività scade il {date}. Se non è completata entro allora, {tenant} addebiterà una multa – che aumenta finché l'attività resta aperta.",
+      "upcomingSubject": "{tenant}: multa in arrivo – attività in scadenza tra {days} giorni",
+      "upcomingSubjectOne": "{tenant}: multa in arrivo – attività in scadenza domani",
+      "upcomingTitle": "Completa «{task}» entro {weekday}"
+    },
     "footer": "Questo messaggio proviene da {tenant} tramite hocX.",
     "greeting": "Ciao {name}",
+    "kicker": {
+      "account": "Account",
+      "export": "Esportazione dati",
+      "fineIssued": "Nuova multa",
+      "fineUpcoming": "Multa in arrivo",
+      "invite": "Invito",
+      "reminder": "Promemoria",
+      "security": "Sicurezza",
+      "submission": "Consegna",
+      "submissionWithdrawn": "Consegna ritirata",
+      "test": "L'invio funziona",
+      "todos": "Attività"
+    },
     "noLoginHint": "Domande su questo messaggio? Rivolgiti a {tenant}.",
     "security": {
       "emailChanged": "E-mail di accesso modificata ({at})",
@@ -374,6 +413,15 @@
       "emailChangedSubject": "{tenant}: la tua e-mail di accesso è stata modificata",
       "hint": "Non sei stato tu? Contatta subito {tenant}.",
       "intro": "Sul tuo account presso {tenant} è stato modificato quanto segue:",
+      "label": {
+        "emailChanged": "E-mail di accesso modificata",
+        "emailChangedByAdmin": "E-mail di accesso modificata dall'amministrazione dell'associazione",
+        "mfaAdded": "Secondo fattore aggiunto",
+        "mfaRemoved": "Secondo fattore rimosso",
+        "mfaRemovedByAdmin": "Secondo fattore rimosso dall'amministrazione dell'associazione",
+        "passwordChanged": "Password modificata",
+        "passwordChangedByAdmin": "Password reimpostata dall'amministrazione dell'associazione"
+      },
       "mandatory": "Gli avvisi di sicurezza vengono sempre inviati e non si possono disattivare.",
       "mfaAdded": "Secondo fattore aggiunto ({at})",
       "mfaRemoved": "Secondo fattore rimosso ({at})",
@@ -383,17 +431,46 @@
       "subject": "{tenant}: avviso di sicurezza sul tuo account"
     },
     "settingsHint": "Scegli quali e-mail ricevere nelle tue impostazioni: {url}",
+    "settingsHintHtml": "Scegli quali e-mail ricevere nelle tue {link}.",
+    "settingsLink": "impostazioni",
+    "submission": {
+      "filesOne": "1 file",
+      "filesOther": "{count} file",
+      "openButton": "Vedi consegne",
+      "openLink": "Vedi consegne: {url}",
+      "withdrawnBy": "da {person} · {at}",
+      "withdrawnHint": "I file non sono eliminati: in «Consegne» si possono ripristinare per 30 giorni. L'attività è di nuovo aperta.",
+      "withdrawnIntro": "Presso {tenant} una persona responsabile ha ritirato la sua consegna tramite il link personale.",
+      "withdrawnSubjectOne": "{tenant}: consegna ritirata",
+      "withdrawnSubjectOther": "{tenant}: {count} consegne ritirate"
+    },
+    "system": "Sistema",
     "test": {
       "body": "Questa e-mail di prova conferma che l'invio di e-mail da hocX funziona.",
       "subject": "hocX: e-mail di prova"
+    },
+    "title": {
+      "emailChanged": "L'e-mail di accesso è stata modificata",
+      "exportFailed": "Esportazione non riuscita",
+      "exportReady": "La tua esportazione è pronta",
+      "invite": "Benvenuto su hocX",
+      "reminder": "Le tue attività",
+      "security": "Modifiche al tuo account",
+      "submissionDone": "Consegna ricevuta",
+      "submissionWithdrawn": "Consegna ritirata",
+      "test": "E-mail di prova",
+      "todosNew": "Nuove attività per te"
     },
     "todo": {
       "due": "scadenza {date}",
       "introNew": "Hai nuovi compiti presso {tenant}.",
       "introReminder": "Ecco una breve panoramica dei tuoi compiti presso {tenant}.",
       "introSubmissionDone": "Presso {tenant} è arrivata una consegna. Il compito corrispondente è quindi completato.",
+      "manageSubmission": "Vedere e gestire la mia consegna",
+      "noDue": "senza scadenza",
       "openButton": "Vedi i compiti",
       "openLink": "Vedi tutti i compiti: {url}",
+      "sectionCount": "{title} · {count}",
       "sectionDueSoon": "In scadenza tra 3 giorni",
       "sectionNew": "Nuovi compiti",
       "sectionOverdue": "Scaduti da ieri",
@@ -401,7 +478,18 @@
       "subjectNew": "{tenant}: nuovi compiti per te",
       "subjectReminder": "{tenant}: promemoria dei tuoi compiti",
       "subjectSubmissionDone": "{tenant}: consegna ricevuta",
-      "submitted": "consegnato il {at}"
+      "submitted": "consegnato il {at}",
+      "viewSubmission": "Vedere la mia consegna"
+    },
+    "via": "tramite hocX",
+    "weekday": {
+      "0": "lunedì",
+      "1": "martedì",
+      "2": "mercoledì",
+      "3": "giovedì",
+      "4": "venerdì",
+      "5": "sabato",
+      "6": "domenica"
     }
   },
   "empty": {

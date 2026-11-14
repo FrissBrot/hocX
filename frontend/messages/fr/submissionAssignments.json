@@ -278,5 +278,32 @@
   "createdIntro": "Partagez ce lien avec toutes les personnes qui doivent remettre quelque chose. Aucune connexion n'est nécessaire.",
   "createdNoLink": "Le dépôt n'est encore accessible par aucun lien. Choisissez un lien en le modifiant.",
   "openBox": "Ouvrir la boîte de dépôt",
-  "done": "Terminé"
+  "done": "Terminé",
+  "ownerAccessLabel": "Lien personnel pour les responsables",
+  "helpOwnerAccess": "Les responsables reçoivent dans les e-mails concernant leur tâche de dépôt un lien personnel, même sans connexion. Ils y voient leur dépôt et peuvent, selon le réglage, le retirer et redéposer – par exemple si quelqu'un a déposé quelque chose de faux pour eux via le lien commun.",
+  "ownerAccess": {
+    "manage": "Consulter, retirer et redéposer",
+    "view": "Consulter seulement",
+    "off": "Pas de lien personnel"
+  },
+  "ownerAccessHelp": {
+    "manage": "Les fichiers retirés sont conservés et peuvent être restaurés ici.",
+    "view": "La personne voit ses fichiers et l'état ; seule l'administration peut les modifier.",
+    "off": "Les e-mails ne contiennent pas de lien vers le dépôt."
+  },
+  "ownerAccessDaysLabel": "Validité du lien (jours)",
+  "ownerAccessDaysHelp": "Durée de validité d'un lien après l'envoi de l'e-mail (1 à 90 jours). Chaque nouvel e-mail contient un nouveau lien.",
+  "ownerResubmitOnlyPersonalLabel": "Après le retrait, uniquement via le lien personnel",
+  "ownerResubmitOnlyPersonalHelp": "La boîte de remise n'accepte alors plus rien pour cet élément via le lien commun, ainsi personne d'autre ne peut à nouveau remettre quelque chose d'erroné.",
+  "withdrawnInfo": "{count, plural, one {# fichier a été retiré} other {# fichiers ont été retirés}} via le lien personnel. {count, plural, one {Il ne compte} other {Ils ne comptent}} plus pour le dépôt.",
+  "restoreWithdrawnAction": "Restaurer les fichiers retirés",
+  "withdrawnRestoredToast": "Fichiers restaurés.",
+  "withdrawnRestoreFailed": "Les fichiers n'ont pas pu être restaurés.",
+  "completionTabs": {
+    "open": "Ouvertes",
+    "completed": "Terminées"
+  },
+  "completedBadge": "Terminée",
+  "completedEmpty": "Aucune remise terminée pour l'instant. Une remise est terminée dès que tous les éléments sont remis ou fermés.",
+  "openEmpty": "Aucune remise ouverte."
 }

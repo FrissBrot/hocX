@@ -16,9 +16,9 @@ from sqlalchemy.orm import Session
 
 from app.core.error_log import record_system_error
 from app.models import AccountToken, Notification, NotificationPreference, Participant, PlatformNotificationSettings, Tenant
-from app.notifications import account, email_transport, exports, todos
+from app.notifications import account, email_transport, exports, fines, submissions, todos
 from app.notifications.catalog import CATEGORIES, GROUPS_WITHOUT_LOGIN, KINDS
-from app.notifications.render import render
+from app.notifications.render import Brand, render
 
 _logger = logging.getLogger(__name__)
 
@@ -28,6 +28,8 @@ RETRY_MINUTES = (5, 15, 60, 240)
 # Ohne konfigurierten Versand bleiben Einträge so lange liegen, danach verfallen sie.
 PENDING_EXPIRY = timedelta(days=7)
 RETENTION = timedelta(days=90)
+# Grössere Logos nicht in jede Mail packen (Profilbilder sind normalisierte PNGs, meist klein)
+LOGO_MAX_BYTES = 200_000
 # Aktuelle Daten je Gruppe; fehlt eine Benachrichtigung im Ergebnis, ist sie überholt.
 ITEM_LOADERS = {
     "todo.new": todos.items_for,
@@ -38,7 +40,28 @@ ITEM_LOADERS = {
     "account.security": account.security_items_for,
     "account.email_changed": account.email_changed_items_for,
     "export": exports.items_for,
+    "fine.upcoming": fines.upcoming_items_for,
+    "fine.issued": fines.issued_items_for,
+    "submission.withdrawn": submissions.items_for,
 }
+
+
+def tenant_brand(db: Session, tenant_id: int) -> Brand:
+    """Kopf der Mail: Vereinsname und Logo (aus dem Objektspeicher, eingebettet statt verlinkt).
+    Ohne Logo oder wenn es nicht lesbar ist: Initialen (bewusst ohne Fehler, rein kosmetisch)."""
+    tenant = db.get(Tenant, tenant_id)
+    if tenant is None:
+        return Brand("hocX")
+    logo = None
+    if tenant.profile_image_path and tenant.profile_image_path.lower().endswith(".png"):
+        try:
+            from app.core.storage import MAIN, get_object_store
+
+            data = get_object_store().get_bytes(MAIN, tenant.profile_image_path)
+            logo = data if len(data) <= LOGO_MAX_BYTES else None
+        except Exception:  # noqa: BLE001 - Logo ist Zierde, die Mail geht ohne raus
+            _logger.warning("Vereinslogo für Mail nicht lesbar (Mandant %s)", tenant_id)
+    return Brand(tenant.name or "hocX", logo)
 
 
 def preference_enabled(db: Session, user_id: int, category: str) -> bool:
@@ -112,13 +135,15 @@ def _deliver_group(db: Session, config: email_transport.EmailConfig, tenant_id: 
     target = items[rows[-1].id].get("to")
     if target:
         rows = [row for row in rows if items[row.id].get("to") == target]
-    tenant_name = db.scalar(select(Tenant.name).where(Tenant.id == tenant_id)) or "hocX"
+    brand = tenant_brand(db, tenant_id)
     rendered = render(
         lang=person.preferred_language, group=group, items=[items[row.id] for row in rows], recipient_name=person.first_name or person.display_name,
-        tenant_name=tenant_name, base_url=config.link_base_url, can_login=person.login_enabled,
+        tenant_name=brand.name, base_url=config.link_base_url, can_login=person.login_enabled, brand=brand,
     )
     try:
-        email_transport.send(config, email_transport.OutgoingEmail(to=target or person.email.strip(), subject=rendered.subject, text=rendered.text, html=rendered.html))
+        email_transport.send(config, email_transport.OutgoingEmail(
+            to=target or person.email.strip(), subject=rendered.subject, text=rendered.text, html=rendered.html, images=rendered.images,
+        ))
     except email_transport.EmailError as exc:
         _fail(db, rows, str(exc))
         return "failed"

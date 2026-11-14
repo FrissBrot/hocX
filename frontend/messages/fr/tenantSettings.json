@@ -292,5 +292,71 @@
     "currencyHelpPopover": "hocX ne convertit pas : un changement modifie seulement la désignation sur tous les comptes, amendes et exports. Les montants restent identiques.",
     "saved": "Devise enregistrée : {currency}",
     "saveFailed": "La devise n’a pas pu être enregistrée."
+  },
+  "publicLinks": {
+    "intro": "Tous les liens par lesquels quelqu'un accède aux données de ton association sans connexion – avec le motif, l'échéance et l'endroit où tu les gères. Les liens expirés, révoqués ou utilisés n'apparaissent pas.",
+    "neverExpiringHint": "{count, plural, one {# lien n'expire} other {# liens n'expirent}} pas d'eux-mêmes. Vérifie s'{count, plural, one {il est} other {ils sont}} encore nécessaire{count, plural, one {} other {s}}.",
+    "group": {
+      "all": "Tous",
+      "files": "Fichiers & albums",
+      "submissions": "Boîte de dépôt",
+      "calendar": "Calendrier",
+      "accounts": "Comptes",
+      "partners": "Associations partenaires",
+      "other": "Autres"
+    },
+    "col": {
+      "kind": "Type",
+      "link": "Lien et motif",
+      "created": "Créé",
+      "expiry": "Validité",
+      "lastUsed": "Dernière utilisation",
+      "manage": "Gérer"
+    },
+    "kind": {
+      "share_files": "Fichiers",
+      "share_album": "Album",
+      "share_album_partner": "Album · lien partenaire",
+      "submission_link": "Boîte de dépôt",
+      "calendar_events": "Calendrier",
+      "calendar_todos": "Calendrier",
+      "account_invite": "Invitation",
+      "account_password_reset": "Mot de passe",
+      "album_partner": "Association partenaire",
+      "submission_access": "Dépôt personnel"
+    },
+    "reason": {
+      "share_files": "Lien public vers {count, plural, one {# fichier} other {# fichiers}}",
+      "share_album": "Lien public vers l'album « {album} » ({count, plural, one {# photo} other {# photos}})",
+      "share_album_partner": "{partner} a créé un lien public vers votre album « {album} »",
+      "submission_link": "{count, plural, =0 {Lien de la boîte de dépôt, actuellement sans dépôt actif} one {Déposer des fichiers pour # dépôt : {assignments}} other {Déposer des fichiers pour # dépôts : {assignments}}}",
+      "calendar_events": "Abonnement au calendrier des événements, par {person}",
+      "calendar_todos": "{scope, select, all {Abonnement au calendrier de toutes les tâches, par {person}} other {Abonnement au calendrier des tâches de {person}}}",
+      "account_invite": "Invitation à {person} : configurer le compte{sent, select, 0 { (en cours d'envoi)} other {}}",
+      "account_password_reset": "Lien de réinitialisation du mot de passe de {person}",
+      "album_partner": "Album partagé avec {partner}{status, select, pending { (invitation en attente)} other {}}{publicLinks, select, 1 { ; le partenaire peut créer des liens publics} other {}}",
+      "unknown": "Accès public (nouveau type)",
+      "submission_access": "Lien personnel de {person} pour « {assignment} » : {level, select, manage {consulter, retirer et redéposer} other {consulter}}"
+    },
+    "expiry": {
+      "date": "jusqu'au {date}",
+      "never": "n'expire pas",
+      "singleUse": "usage unique",
+      "singleUseUntil": "usage unique, jusqu'au {date}",
+      "window": "tant que les dépôts sont ouverts"
+    },
+    "createdBy": "par {name}",
+    "notTracked": "—",
+    "manage": "Gérer",
+    "manageElsewhere": {
+      "files": "chez l'association partenaire",
+      "submissions": "—",
+      "calendar": "seulement la personne",
+      "accounts": "—",
+      "partners": "—",
+      "other": "—"
+    },
+    "empty": "Il n'y a actuellement aucun lien public.",
+    "emptyFilter": "Aucun lien dans cette sélection."
   }
 }

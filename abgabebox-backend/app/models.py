@@ -87,6 +87,8 @@ submission_assignment_table = Table(
     Column("sort_order", Text),
     Column("auto_close", Text),
     Column("keep_open_after_end", Boolean),
+    # Migration 0182: nach dem Zurückziehen nur noch über den persönlichen Link (Haupt-Backend)
+    Column("owner_resubmit_only_personal", Boolean),
 )
 
 # cycle_config/event_cycle: nur fuer den Zyklus-Filter der Termin-Abgaben. Spalten-SELECT
@@ -178,6 +180,8 @@ submission_upload_file_table = Table(
     Column("upload_id", BigInteger),
     Column("stored_file_id", BigInteger),
     Column("sort_index", Integer),
+    # Über den persönlichen Link zurückgezogen (Migration 0181): zählt nicht mehr
+    Column("withdrawn_at", DateTime(timezone=True)),
 )
 
 submission_upload_log_table = Table(

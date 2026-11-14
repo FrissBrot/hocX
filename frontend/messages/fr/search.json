@@ -55,6 +55,7 @@
     "import": "import word outils",
     "profile": "profil compte mot de passe langue mfa sécurité",
     "connections": "calendrier abonnement liaisons ics",
-    "theme": "apparence thème sombre clair mode"
+    "theme": "apparence thème sombre clair mode",
+    "tenant-settings-links": "liens partages public accès boîte de dépôt calendrier"
   }
 }

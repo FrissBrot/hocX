@@ -55,6 +55,7 @@
     "import": "importazione word strumenti",
     "profile": "profilo account password lingua mfa sicurezza",
     "connections": "calendario abbonamento collegamenti ics",
-    "theme": "aspetto tema scuro chiaro modalità"
+    "theme": "aspetto tema scuro chiaro modalità",
+    "tenant-settings-links": "link condivisioni pubblico accesso casella calendario"
   }
 }

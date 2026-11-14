@@ -31,6 +31,7 @@ ALLOWED = {
     # Öffentlich bzw. Anmeldung: eigenes Sicherheitsmodell (Token, Rate-Limit, Login-Ablauf).
     "auth.*": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung",
     "public_share.*": "öffentliche Freigabelinks: Token + Rate-Limit (share_link_service)",
+    "public_submission_access.*": "persönlicher Abgabe-Link: Token im Body + Rate-Limit (submission_access_service)",
     "public_catalog.*": "öffentlicher Preis-/Kundenkatalog der Website",
     "maintenance_public.*": "öffentlicher Wartungsstatus",
     "system_status.*": "Status-Token (kein Benutzer)",

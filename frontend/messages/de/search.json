@@ -55,6 +55,7 @@
     "import": "Import Word Werkzeuge",
     "profile": "Profil Konto Passwort Sprache MFA Sicherheit",
     "connections": "Kalender Abo Verknüpfungen ICS",
-    "theme": "Darstellung Design Dunkel Hell Modus"
+    "theme": "Darstellung Design Dunkel Hell Modus",
+    "tenant-settings-links": "Links Freigaben öffentlich Zugriff teilen Abgabebox Kalender"
   }
 }

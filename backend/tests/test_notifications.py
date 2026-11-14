@@ -145,10 +145,10 @@ def test_reminders_once_per_todo_and_only_after_seven(db, club):
     in_open_protocol.due_date = today + timedelta(days=3)
     db.flush()
     early = datetime(2026, 11, 11, 6, 30, tzinfo=TZ)
-    assert todo_notifications.scan_reminders(db, now=early) == {"due_soon": 0, "overdue": 0}
+    assert todo_notifications.scan_reminders(db, now=early) == {"due_soon": 0, "overdue": 0, "fine_upcoming": 0}
     morning = datetime(2026, 11, 11, 7, 5, tzinfo=TZ)
-    assert todo_notifications.scan_reminders(db, now=morning) == {"due_soon": 1, "overdue": 1}
-    assert todo_notifications.scan_reminders(db, now=morning) == {"due_soon": 0, "overdue": 0}
+    assert todo_notifications.scan_reminders(db, now=morning) == {"due_soon": 1, "overdue": 1, "fine_upcoming": 0}
+    assert todo_notifications.scan_reminders(db, now=morning) == {"due_soon": 0, "overdue": 0, "fine_upcoming": 0}
     kinds = {(r.subject_id, r.kind) for r in _pending(db) if r.kind != "todo.assigned"}
     assert kinds == {(soon.id, "todo.due_soon"), (late.id, "todo.overdue")}
     assert other.id not in {r.subject_id for r in _pending(db) if r.kind != "todo.assigned"}
@@ -222,7 +222,7 @@ def test_dispatch_retries_on_smtp_error(db, club):
 def test_preferences_default_on_and_scoped_to_own_account(db, club):
     other_tenant = make_tenant(db, "Anderer Verein")
     result = notification_preferences.read(db, club["anna"].id, club["tenant"].id)
-    assert {p.category: p.enabled for p in result.preferences} == {"todo_new": True, "todo_reminders": True, "todo_submissions": True, "exports": True}
+    assert {p.category: p.enabled for p in result.preferences} == {"todo_new": True, "todo_reminders": True, "todo_submissions": True, "fines": True, "exports": True}
     notification_preferences.write(
         db, club["anna"].id, club["tenant"].id,
         NotificationPreferencesWrite(preferences=[NotificationPreferenceRead(category="todo_reminders", enabled=False)]),

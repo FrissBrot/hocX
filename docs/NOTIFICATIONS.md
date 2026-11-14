@@ -53,11 +53,35 @@ weitere Kanäle. Code: `backend/app/notifications/`, Migrationen `0170_notificat
 | `account.invite` | `account` (Pflicht) | `account.invite` | – |
 | `security.password_changed`, `security.mfa_added`, `security.mfa_removed` | `account` (Pflicht) | `account.security` | – |
 | `export.ready`, `export.failed` | `exports` | `export` | – |
+| `fine.upcoming` | `fines` | `fine.upcoming` | – |
+| `fine.issued` | `fines` | `fine.issued` | 10 Minuten |
 
 Kategorien schalten Personen im Profil (Reiter «Benachrichtigungen») ein oder aus; Standard ist ein.
 Die Kategorie `account` ist Pflicht (`configurable=False`): sie erscheint nicht in den Einstellungen und
 erreicht die Person immer. Einladungen (`account.invite`) gehen auch an Konten ohne Login
 (`GROUPS_WITHOUT_LOGIN`), alles andere nur mit Login oder `notify_without_login`.
+
+## Bussen-Mails (Design «hocX E-Mails», M11/M12)
+
+Code: `backend/app/notifications/fines.py`.
+
+- **Busse droht** (`fine.upcoming`): Der Loop `todo_reminders` prüft bei «in 3 Tagen fällig», ob
+  bei Verspätung eine Pendenzen-Busse anfiele (Regel oder Fixbetrag, Modul `todo_fines` voll
+  gebucht). Dann bekommt die Person statt der normalen Erinnerung diese Mail, mit der Staffel der
+  ersten drei Beträge (`todo_fine_service.evaluate` für die Tage nach der Fälligkeit, Tarif der
+  Person). Hat die Person Bussen-Mails abgeschaltet, kommt die normale Erinnerung.
+- **Busse erhalten** (`fine.issued`): Anwesenheitsbussen beim Abschluss des Protokolls (vorher
+  sind sie Entwurf), Pendenzen-Bussen beim Einfrieren (`sync_todo`). Mehrere in einer Mail, mit
+  der Summe aller offenen Bussen der Person. Gelöschte oder kassierte Bussen fallen beim Versand weg.
+
+## Aussehen (render.py)
+
+Ein Rahmen für alle Mails (Design «hocX E-Mails» in claude.ai/design): Vereinslogo und -name,
+weisse Karte mit Rubrik, Titel und höchstens einer Aktion, Fusszeile ausserhalb. Das HTML ist mit
+Tabellen und Inline-Styles gebaut (Outlook, Gmail), ohne Webfonts und ohne nachgeladene Bilder. Das
+Vereinslogo reist als eingebettetes Bild (`cid:`, multipart/related) mit, sonst stehen die
+Initialen. Aktionen in die App und der Link zu den Einstellungen erscheinen nur für Personen mit
+Login; ohne Login steht «Fragen zu dieser Nachricht? Wende dich an …».
 
 ## Einmal-Links: «Passwort vergessen» und Einladung (Phase 3)
 

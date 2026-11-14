@@ -72,3 +72,29 @@ def test_real_app_rejects_anonymous_csv_import():
 
     response = TestClient(app).post("/api/events/import-csv", files={"file": ("a.csv", b"x" * 10)})
     assert response.status_code == 401
+
+
+def test_token_path_checks_the_access_token_before_parsing():
+    """Persönlicher Abgabe-Link: Token im Header statt Session, geprüft vor dem Lesen des Bodys."""
+    calls: list[str] = []
+    checked: list[str] = []
+    app = FastAPI()
+    app.add_middleware(
+        MultipartGuardMiddleware,
+        default_max_bytes=1024,
+        token_paths=(("/api/public/token-upload", "X-Access-Token", lambda token: checked.append(token) or token == "gut"),),
+    )
+
+    async def handler(file: UploadFile = File(...)):
+        calls.append("token-upload")
+        return {"size": len(await file.read())}
+
+    app.post("/api/public/token-upload")(handler)
+    client = TestClient(app)
+    files = {"file": ("a.bin", b"x" * 10)}
+    assert client.post("/api/public/token-upload", files=files).status_code == 404
+    assert client.post("/api/public/token-upload", files=files, headers={"X-Access-Token": "falsch"}).status_code == 404
+    assert calls == [] and checked == ["falsch"]
+    assert client.post("/api/public/token-upload", files=files, headers={"X-Access-Token": "gut"}).json() == {"size": 10}
+    # Grössenlimit gilt weiterhin
+    assert client.post("/api/public/token-upload", files={"file": ("a.bin", b"x" * 4000)}, headers={"X-Access-Token": "gut"}).status_code == 413

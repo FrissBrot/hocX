@@ -402,17 +402,24 @@ def sync_todo(db: Session, todo: ProtocolTodo, *, ctx: TenantFineContext | None 
     if evaluation.state != "ok":
         return removed
     settled = set(db.scalars(select(TodoFine.participant_id).where(TodoFine.protocol_todo_id == todo.id)))
+    frozen: list[TodoFine] = []
     for line in evaluation.lines:
         if line.participant_id in settled or line.amount <= 0:
             continue
-        db.add(TodoFine(
+        frozen.append(TodoFine(
             tenant_id=facts.tenant_id, protocol_todo_id=facts.id, rule_id=evaluation.rule.id if evaluation.rule else None,
             participant_id=line.participant_id, participant_name_snapshot=line.name, task_snapshot=facts.task,
             rule_name_snapshot=evaluation.rule.name if evaluation.rule else None, tariff_name_snapshot=line.tariff_name,
             due_date=facts.due, completed_on=facts.completed_on, days_late=evaluation.days_late, amount=line.amount,
             account_id=evaluation.account_id, status="pending",
         ))
+        db.add(frozen[-1])
     db.flush()
+    if frozen:
+        # Mail «Busse erhalten» (app/notifications/fines.py), in derselben Transaktion
+        from app.notifications import fines as fine_notifications
+
+        fine_notifications.on_todo_fines_frozen(db, frozen)
     return removed
 
 

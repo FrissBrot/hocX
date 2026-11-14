@@ -43,6 +43,8 @@ class OutgoingEmail:
     subject: str
     text: str
     html: str
+    # Eingebettete Bilder (Vereinslogo) als multipart/related zum HTML-Teil, referenziert über cid:
+    images: tuple = ()
 
 
 Transport = Callable[[EmailConfig, OutgoingEmail], None]
@@ -83,6 +85,10 @@ def _message(config: EmailConfig, email: OutgoingEmail) -> EmailMessage:
     message["Auto-Submitted"] = "auto-generated"
     message.set_content(email.text)
     message.add_alternative(email.html, subtype="html")
+    if email.images:
+        html_part = message.get_payload()[1]
+        for image in email.images:
+            html_part.add_related(image.data, maintype="image", subtype=image.subtype, cid=f"<{image.cid}>", disposition="inline")
     return message
 
 

@@ -1,0 +1,37 @@
+{
+  "title": "Mon dépôt",
+  "loading": "Chargement du dépôt …",
+  "invalid": "Ce lien n'est pas valable ou a expiré. Tu en recevras un nouveau avec le prochain e-mail concernant ce dépôt.",
+  "failed": "Cela n'a pas fonctionné. Réessaie plus tard.",
+  "rateLimited": "Trop de tentatives. Attends quelques minutes.",
+  "greeting": "Bonjour {name} – voici ton dépôt pour « {element} ».",
+  "until": "jusqu'au {date}",
+  "submittedAt": "déposé le {date}",
+  "status": {
+    "open": "Encore ouvert",
+    "submitted": "Déposé",
+    "closed": "Fermé"
+  },
+  "files": "Tes fichiers",
+  "noFiles": "Aucun fichier déposé pour l'instant.",
+  "download": "Télécharger",
+  "scan": {
+    "pending": "en vérification",
+    "blocked": "bloqué"
+  },
+  "closedHint": "Ce dépôt est fermé. Pour toute modification, adresse-toi à l'administration de ton association.",
+  "viewOnlyHint": "Avec ce lien, tu peux consulter ton dépôt. L'administration de ton association peut le modifier.",
+  "withdraw": "Retirer le dépôt",
+  "withdrawConfirm": "Retirer le dépôt ? Tes fichiers ne comptent plus et la tâche est de nouveau ouverte. L'administration peut les restaurer.",
+  "withdrawn": "Dépôt retiré.",
+  "withdrawHint": "Quelqu'un a déposé quelque chose de faux pour toi ? Retire le dépôt et téléverse les bons fichiers.",
+  "upload": "Déposer des fichiers",
+  "uploadMore": "Déposer d'autres fichiers",
+  "uploading": "Téléversement … {percent} %",
+  "uploaded": "Fichiers déposés.",
+  "rules": "Au maximum {size} Mo par fichier, autorisés : {types}.",
+  "anyType": "documents et photos",
+  "remaining": "{count, plural, =0 {Plus aucun fichier possible.} one {Encore # fichier possible.} other {Encore # fichiers possibles.}}",
+  "privacyHint": "Ce lien n'appartient qu'à toi. Ne le transmets pas – quiconque l'a peut voir ton dépôt.",
+  "downloadFailed": "Le fichier n'a pas pu être téléchargé."
+}

@@ -171,13 +171,14 @@ function errorFromResponse(status: number, text: string): ApiError {
 export function browserApiUpload<T>(
   path: string,
   body: FormData,
-  options: { timeoutMs: number; onProgress?: (loaded: number, total: number) => void; signal?: AbortSignal },
+  options: { timeoutMs: number; onProgress?: (loaded: number, total: number) => void; signal?: AbortSignal; headers?: Record<string, string> },
 ): Promise<T> {
   if (typeof navigator !== "undefined" && !navigator.onLine) return Promise.reject(new ApiError(clientMessage("offline"), "offline"));
   return new Promise<T>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${publicApiUrl}${path}`);
     xhr.withCredentials = true;
+    for (const [name, value] of Object.entries(options.headers ?? {})) xhr.setRequestHeader(name, value);
     xhr.timeout = options.timeoutMs;
     if (options.onProgress) {
       const onProgress = options.onProgress;

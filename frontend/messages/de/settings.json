@@ -37,9 +37,17 @@
           "label": "Erinnerungen an Aufgaben",
           "hint": "Einmal 3 Tage vor der Fälligkeit und einmal am Tag nach der Fälligkeit, falls noch offen."
         },
+        "fines": {
+          "label": "Bussen",
+          "hint": "«Busse droht» 3 Tage vor der Fälligkeit einer Aufgabe mit Busse (statt der normalen Erinnerung) und eine Mail, wenn dir Bussen verrechnet werden."
+        },
         "todo_submissions": {
           "label": "Abgabe eingegangen",
           "hint": "Wenn eine Abgabe in der Abgabebox deine Abgabe-Aufgabe erledigt."
+        },
+        "submission_changes": {
+          "label": "Änderungen an Abgaben",
+          "hint": "Wenn eine verantwortliche Person ihre Abgabe über den persönlichen Link zurückzieht. Nur für Personen, die Abgaben verwalten."
         },
         "exports": {
           "label": "Datenexport fertig",

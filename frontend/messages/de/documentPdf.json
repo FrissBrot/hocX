@@ -611,7 +611,11 @@
       "subjectSubmissionDone": "{tenant}: Abgabe eingegangen",
       "introSubmissionDone": "Bei {tenant} ist eine Abgabe eingegangen. Die zugehörige Aufgabe ist damit erledigt.",
       "sectionSubmissionDone": "Erledigte Abgaben",
-      "submitted": "abgegeben {at}"
+      "submitted": "abgegeben {at}",
+      "sectionCount": "{title} · {count}",
+      "noDue": "ohne Fälligkeit",
+      "manageSubmission": "Meine Abgabe ansehen und verwalten",
+      "viewSubmission": "Meine Abgabe ansehen"
     },
     "test": {
       "subject": "hocX: Test-E-Mail",
@@ -642,14 +646,98 @@
       "emailChanged": "Login-E-Mail geändert ({at})",
       "emailChangedByAdmin": "Login-E-Mail durch die Vereinsverwaltung geändert ({at})",
       "emailChangedSubject": "{tenant}: Deine Login-E-Mail wurde geändert",
-      "emailChangedIntro": "Die Login-E-Mail deines Kontos bei {tenant} wurde geändert. Diese Adresse gilt ab jetzt nicht mehr für die Anmeldung, du bekommst diese Nachricht deshalb ein letztes Mal hierhin:"
+      "emailChangedIntro": "Die Login-E-Mail deines Kontos bei {tenant} wurde geändert. Diese Adresse gilt ab jetzt nicht mehr für die Anmeldung, du bekommst diese Nachricht deshalb ein letztes Mal hierhin:",
+      "label": {
+        "passwordChanged": "Passwort geändert",
+        "passwordChangedByAdmin": "Passwort durch die Vereinsverwaltung neu gesetzt",
+        "mfaAdded": "Zweiter Faktor hinzugefügt",
+        "mfaRemoved": "Zweiter Faktor entfernt",
+        "mfaRemovedByAdmin": "Zweiter Faktor durch die Vereinsverwaltung entfernt",
+        "emailChanged": "Login-E-Mail geändert",
+        "emailChangedByAdmin": "Login-E-Mail durch die Vereinsverwaltung geändert"
+      }
     },
     "export": {
       "subjectReady": "{tenant}: Datenexport bereit",
       "subjectFailed": "{tenant}: Datenexport fehlgeschlagen",
       "ready": "Der Datenexport «{filename}» ist fertig. Du kannst ihn in hocX unter Vereinseinstellungen > Datenschutz herunterladen.",
       "failed": "Der Datenexport konnte nicht erstellt werden. Bitte bestelle ihn in hocX unter Vereinseinstellungen > Datenschutz erneut.",
-      "openButton": "Export öffnen"
+      "openButton": "Export öffnen",
+      "readyBody": "Der Datenexport ist fertig. Du kannst ihn in hocX unter Vereinseinstellungen › Datenschutz herunterladen."
+    },
+    "via": "über hocX",
+    "system": "System",
+    "settingsLink": "Einstellungen",
+    "settingsHintHtml": "Welche E-Mails du bekommst, stellst du in deinen {link} ein.",
+    "kicker": {
+      "todos": "Aufgaben",
+      "reminder": "Erinnerung",
+      "submission": "Abgabe",
+      "account": "Konto",
+      "invite": "Einladung",
+      "security": "Sicherheit",
+      "export": "Datenexport",
+      "test": "Versand funktioniert",
+      "fineUpcoming": "Busse droht",
+      "fineIssued": "Neue Busse",
+      "submissionWithdrawn": "Abgabe zurückgezogen"
+    },
+    "title": {
+      "todosNew": "Neue Aufgaben für dich",
+      "reminder": "Deine Aufgaben",
+      "submissionDone": "Abgabe eingegangen",
+      "invite": "Willkommen bei hocX",
+      "security": "Änderungen an deinem Konto",
+      "emailChanged": "Deine Login-E-Mail wurde geändert",
+      "exportReady": "Dein Export ist fertig",
+      "exportFailed": "Export fehlgeschlagen",
+      "test": "Test-E-Mail",
+      "submissionWithdrawn": "Abgabe zurückgezogen"
+    },
+    "weekday": {
+      "0": "Montag",
+      "1": "Dienstag",
+      "2": "Mittwoch",
+      "3": "Donnerstag",
+      "4": "Freitag",
+      "5": "Samstag",
+      "6": "Sonntag"
+    },
+    "fine": {
+      "upcomingSubject": "{tenant}: Busse droht – Aufgabe in {days} Tagen fällig",
+      "upcomingSubjectOne": "{tenant}: Busse droht – Aufgabe morgen fällig",
+      "upcomingTitle": "Erledige «{task}» bis {weekday}",
+      "upcomingIntro": "Diese Aufgabe ist am {date} fällig. Ist sie dann nicht erledigt, wird bei {tenant} eine Busse fällig.",
+      "upcomingIntroRising": "Diese Aufgabe ist am {date} fällig. Ist sie dann nicht erledigt, wird bei {tenant} eine Busse fällig – und sie steigt, je länger die Aufgabe offen bleibt.",
+      "from": "ab {date}",
+      "daysLeftOne": "noch 1 Tag",
+      "daysLeftOther": "noch {count} Tage",
+      "rule": "Regel «{name}»",
+      "fixed": "Fixbetrag",
+      "tariff": "Tarif {name}",
+      "moreUpcoming": "Weitere Aufgaben mit Busse",
+      "openTodo": "Aufgabe öffnen",
+      "issuedIntro": "Bei {tenant} wurden dir folgende Bussen verrechnet:",
+      "countOne": "1 Busse",
+      "countOther": "{count} Bussen",
+      "issuedOn": "vom {date}",
+      "openTotal": "Total offene Bussen bei {tenant}",
+      "payment": "Bezahlt wird bei der Kasse des Vereins. Ist eine Busse falsch? Melde dich bei {tenant}.",
+      "openFines": "Meine Bussen ansehen",
+      "issuedSubjectOne": "{tenant}: Neue Busse über {amount}",
+      "issuedSubjectOther": "{tenant}: Neue Bussen über {amount}",
+      "todoLate": "Pendenz zu spät: {task}"
+    },
+    "submission": {
+      "withdrawnIntro": "Bei {tenant} hat eine verantwortliche Person ihre Abgabe über den persönlichen Link zurückgezogen.",
+      "withdrawnBy": "von {person} · {at}",
+      "withdrawnHint": "Die Dateien sind nicht gelöscht: unter «Abgaben» lassen sie sich 30 Tage lang wiederherstellen. Die Aufgabe ist wieder offen.",
+      "openButton": "Abgaben ansehen",
+      "openLink": "Abgaben ansehen: {url}",
+      "withdrawnSubjectOne": "{tenant}: Abgabe zurückgezogen",
+      "withdrawnSubjectOther": "{tenant}: {count} Abgaben zurückgezogen",
+      "filesOne": "1 Datei",
+      "filesOther": "{count} Dateien"
     }
   },
   "eventField": {

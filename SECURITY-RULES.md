@@ -66,6 +66,11 @@ derselben Zeile **begründet** markiert; eine Markierung ohne echten Grund ist e
    `session_revoke_at`.
 4. Öffentliche und Login-nahe Endpunkte haben ein Rate-Limit (`enforce_rate_limit`).
 5. Redirects nur auf relative Pfade oder fest konfigurierte Domains (kein Open Redirect).
+6. **Jede Art von öffentlichem Link** (Token, Slug, Einmal-Link, Zugriff ohne Anmeldung) wird in
+   `backend/app/public_links/providers.py` registriert, damit Vereins-Admins sie unter
+   Mandant-Einstellungen › Zugangslinks sehen. `tests/test_public_link_registry.py` schlägt fehl,
+   solange eine Token-Spalte oder eine Route ohne Anmeldung weder einem Anbieter zugeordnet noch in
+   `EXEMPT_COLUMNS`/`EXEMPT_PUBLIC_ROUTES` begründet ausgenommen ist.
 
 ## 4. Dateien, Eingaben, Ausgaben
 

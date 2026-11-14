@@ -2115,6 +2115,12 @@
         "meetings.edit"
       ]
     },
+    "GET /api/public-links": {
+      "handler": "public_links.list_public_links",
+      "requires": [
+        "settings.manage"
+      ]
+    },
     "GET /api/public/calendar/{token}.ics": {
       "handler": "calendar_feeds.get_calendar_feed",
       "note": "öffentlicher .ics-Abruf: Token + can_subscribe in calendar_feed_service.resolve"
@@ -2154,6 +2160,22 @@
     "GET /api/public/share/{token}/files/{file_id}/view": {
       "handler": "public_share.view_public_share_file",
       "note": "öffentliche Freigabelinks: Token + Rate-Limit (share_link_service)"
+    },
+    "POST /api/public/submission-access/download": {
+      "handler": "public_submission_access.download_submission_file",
+      "note": "persönlicher Abgabe-Link: Token im Body + Rate-Limit (submission_access_service)"
+    },
+    "POST /api/public/submission-access/upload": {
+      "handler": "public_submission_access.upload_submission",
+      "note": "persönlicher Abgabe-Link: Token im Body + Rate-Limit (submission_access_service)"
+    },
+    "POST /api/public/submission-access/view": {
+      "handler": "public_submission_access.view_submission",
+      "note": "persönlicher Abgabe-Link: Token im Body + Rate-Limit (submission_access_service)"
+    },
+    "POST /api/public/submission-access/withdraw": {
+      "handler": "public_submission_access.withdraw_submission",
+      "note": "persönlicher Abgabe-Link: Token im Body + Rate-Limit (submission_access_service)"
     },
     "GET /api/retention/policy": {
       "handler": "retention.get_retention_policy",
@@ -2385,6 +2407,12 @@
     },
     "POST /api/submission-assignments/{assignment_id}/elements/{element_ref}/reopen": {
       "handler": "submission_assignments.reopen_element",
+      "requires": [
+        "submissions.manage"
+      ]
+    },
+    "POST /api/submission-assignments/{assignment_id}/elements/{element_ref}/restore-withdrawn": {
+      "handler": "submission_assignments.restore_withdrawn_element",
       "requires": [
         "submissions.manage"
       ]

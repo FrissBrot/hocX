@@ -278,5 +278,32 @@
   "createdIntro": "Share this link with everyone who should submit something. They don't need to log in.",
   "createdNoLink": "The submission cannot be reached through any link yet. Choose a link when editing it.",
   "openBox": "Open submission box",
-  "done": "Done"
+  "done": "Done",
+  "ownerAccessLabel": "Personal link for responsible people",
+  "helpOwnerAccess": "Responsible people get their own link in the emails about their submission to-do, even without a login. With it they see their submission and, depending on the setting, can withdraw it and resubmit – for example if someone submitted something wrong for them via the shared drop box link.",
+  "ownerAccess": {
+    "manage": "View, withdraw and resubmit",
+    "view": "View only",
+    "off": "No personal link"
+  },
+  "ownerAccessHelp": {
+    "manage": "Withdrawn files are kept and can be restored here.",
+    "view": "The person sees their files and the status; only the administration can change them.",
+    "off": "The emails contain no link to the submission."
+  },
+  "ownerAccessDaysLabel": "Link validity (days)",
+  "ownerAccessDaysHelp": "How long a link is valid after the email is sent (1–90 days). Every new email contains a new link.",
+  "ownerResubmitOnlyPersonalLabel": "After withdrawing, only via the personal link",
+  "ownerResubmitOnlyPersonalHelp": "The submission box then no longer accepts anything for this element via the shared link, so nobody else can submit the wrong thing again.",
+  "withdrawnInfo": "{count, plural, one {# file was} other {# files were}} withdrawn via the personal link. They no longer count for the submission.",
+  "restoreWithdrawnAction": "Restore withdrawn files",
+  "withdrawnRestoredToast": "Files restored.",
+  "withdrawnRestoreFailed": "Files could not be restored.",
+  "completionTabs": {
+    "open": "Open",
+    "completed": "Completed"
+  },
+  "completedBadge": "Completed",
+  "completedEmpty": "No completed submissions yet. A submission is completed once all elements are submitted or closed.",
+  "openEmpty": "No open submissions."
 }

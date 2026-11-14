@@ -137,6 +137,8 @@ async function route(request: NextRequest, requestHeaders: Headers) {
     rewrittenPathname === "/auth/bridge" ||
     rewrittenPathname === "/auth/forgot-password" ||
     rewrittenPathname === "/auth/set-password" ||
+    // Persönlicher Abgabe-Link (Token im URL-Fragment, backend public_submission_access.py)
+    rewrittenPathname === "/abgabe/verwalten" ||
     rewrittenPathname === "/share" ||
     rewrittenPathname.startsWith("/share/") ||
     rewrittenPathname === WEBSITE_PATH ||

@@ -11,7 +11,7 @@ from sqlalchemy.pool import NullPool
 from starlette.requests import cookie_parser
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
-from app.api.routes import activity, admin, agenda_items, admin_auth, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_storage, maintenance_public, auth, calendar_feeds, collaboration_ws, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, finance_settings, fines, lists, participants, privacy_settings, protocol_elements, protocols, public_catalog, public_share, retention, roles, search, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, event_field_config, task_packages, templates, tenant_data_export, tenants, todo_fines, todos, users, word_import
+from app.api.routes import activity, admin, agenda_items, admin_auth, admin_backups, admin_cashflow, admin_document_templates, admin_identity_verification, admin_maintenance, admin_storage, maintenance_public, auth, calendar_feeds, collaboration_ws, cycle_configs, document_studio, document_verification, documents, events, files, managed_documents, finance, finance_settings, fines, lists, participants, privacy_settings, protocol_elements, protocols, public_catalog, public_links, public_share, public_submission_access, retention, roles, search, share_links, statistics, storage, submission_assignments, system_status, table_snapshots, tag_config, event_field_config, task_packages, templates, tenant_data_export, tenants, todo_fines, todos, users, word_import
 from app.core import runtime_metrics
 from app.core.loops import BACKEND_LOOPS
 from app.core.db import SessionLocal, engine
@@ -289,8 +289,10 @@ app.add_middleware(
         ("/api/files/document-uploads", files.MAX_DOCUMENT_UPLOAD_BATCH_BYTES + _MULTIPART_OVERHEAD_BYTES),
         ("/api/tools/word-import/", word_import.MAX_WORD_IMPORT_BATCH_BYTES + _MULTIPART_OVERHEAD_BYTES),
         ("/api/admin/tenants/import", admin.MAX_TENANT_IMPORT_UPLOAD_BYTES + _MULTIPART_OVERHEAD_BYTES),
+        (public_submission_access.UPLOAD_PATH, public_submission_access.MAX_UPLOAD_REQUEST_BYTES),
     ),
     skip_prefixes=("/api/files/gallery-uploads",),
+    token_paths=((public_submission_access.UPLOAD_PATH, public_submission_access.TOKEN_HEADER, public_submission_access.upload_token_valid),),
 )
 
 # MAIN-OPS-013: übrige Bodies (JSON etc.) begrenzen; Multipart deckt der Guard oben ab.
@@ -341,7 +343,7 @@ app.add_middleware(
     allow_origins=_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Cookie", "Authorization"],
+    allow_headers=["Content-Type", "Cookie", "Authorization", "X-Submission-Access-Token"],
 )
 
 
@@ -470,12 +472,14 @@ app.include_router(protocol_elements.router, prefix="/api", tags=["protocol-elem
 app.include_router(todos.router, prefix="/api", tags=["todos"])
 app.include_router(agenda_items.router, prefix="/api", tags=["agenda-items"])
 app.include_router(files.router, prefix="/api", tags=["files"])
+app.include_router(public_links.router, prefix="/api", tags=["public-links"])
 app.include_router(search.router, prefix="/api", tags=["search"])
 # Logische Dokumente (Dateien-Tab, feature/document-management): GET /api/documents/{uuid}… -
 # bewusst nach dem Router der Dokument-Engine, damit feste Pfade wie /documents/exports vorgehen.
 app.include_router(managed_documents.router, prefix="/api", tags=["managed-documents"])
 app.include_router(share_links.router, prefix="/api", tags=["share-links"])
 app.include_router(public_share.router, prefix="/api", tags=["public-share"])
+app.include_router(public_submission_access.router, prefix="/api", tags=["public-submission-access"])
 app.include_router(public_catalog.router, prefix="/api", tags=["public-catalog"])
 app.include_router(calendar_feeds.router, prefix="/api", tags=["calendar-feeds"])
 app.include_router(storage.router, prefix="/api", tags=["storage"])

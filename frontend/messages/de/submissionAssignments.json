@@ -278,5 +278,32 @@
   "createdIntro": "Teile diesen Link mit allen, die etwas abgeben sollen. Sie brauchen kein Login.",
   "createdNoLink": "Die Abgabe ist noch über keinen Link erreichbar. Wähle beim Bearbeiten einen Link aus.",
   "openBox": "Abgabebox öffnen",
-  "done": "Fertig"
+  "done": "Fertig",
+  "ownerAccessLabel": "Persönlicher Link für Verantwortliche",
+  "helpOwnerAccess": "Verantwortliche bekommen in den Mails zu ihrer Abgabe-Pendenz einen eigenen Link, auch ohne Login. Darüber sehen sie ihre Abgabe und können sie je nach Einstellung zurückziehen und neu abgeben – zum Beispiel, wenn jemand über den gemeinsamen Abgabebox-Link etwas Falsches für sie abgegeben hat.",
+  "ownerAccess": {
+    "manage": "Ansehen, zurückziehen und neu abgeben",
+    "view": "Nur ansehen",
+    "off": "Kein persönlicher Link"
+  },
+  "ownerAccessHelp": {
+    "manage": "Zurückgezogene Dateien bleiben erhalten und lassen sich hier wiederherstellen.",
+    "view": "Die Person sieht ihre Dateien und den Stand, ändern kann nur die Verwaltung.",
+    "off": "Die Mails enthalten keinen Link zur Abgabe."
+  },
+  "ownerAccessDaysLabel": "Gültigkeit des Links (Tage)",
+  "ownerAccessDaysHelp": "So lange gilt ein Link ab dem Versand der Mail (1–90 Tage). Jede neue Mail bringt einen neuen Link.",
+  "ownerResubmitOnlyPersonalLabel": "Nach dem Zurückziehen nur noch über den persönlichen Link",
+  "ownerResubmitOnlyPersonalHelp": "Die Abgabebox nimmt für dieses Element dann nichts mehr über den gemeinsamen Link an. So kann niemand anderes erneut etwas Falsches abgeben.",
+  "withdrawnInfo": "{count, plural, one {# Datei wurde} other {# Dateien wurden}} über den persönlichen Link zurückgezogen. Sie zählen nicht mehr zur Abgabe.",
+  "restoreWithdrawnAction": "Zurückgezogene wiederherstellen",
+  "withdrawnRestoredToast": "Dateien wiederhergestellt.",
+  "withdrawnRestoreFailed": "Dateien konnten nicht wiederhergestellt werden.",
+  "completionTabs": {
+    "open": "Offen",
+    "completed": "Abgeschlossen"
+  },
+  "completedBadge": "Abgeschlossen",
+  "completedEmpty": "Noch keine abgeschlossenen Abgaben. Eine Abgabe ist abgeschlossen, sobald alle Elemente abgegeben oder geschlossen sind.",
+  "openEmpty": "Keine offenen Abgaben."
 }

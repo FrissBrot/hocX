@@ -37,9 +37,17 @@
           "label": "Rappels de tâches",
           "hint": "Une fois 3 jours avant l'échéance et une fois le lendemain, si elles sont encore ouvertes."
         },
+        "fines": {
+          "label": "Amendes",
+          "hint": "« Amende en vue » 3 jours avant l'échéance d'une tâche avec amende (au lieu du rappel normal) et un e-mail quand des amendes te sont facturées."
+        },
         "todo_submissions": {
           "label": "Remise reçue",
           "hint": "Lorsqu’une remise dans la boîte de dépôt termine ta tâche de remise."
+        },
+        "submission_changes": {
+          "label": "Modifications des remises",
+          "hint": "Quand une personne responsable retire sa remise via son lien personnel. Uniquement pour les personnes qui gèrent les remises."
         },
         "exports": {
           "label": "Export de données prêt",

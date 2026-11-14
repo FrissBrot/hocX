@@ -292,5 +292,71 @@
     "currencyHelpPopover": "hocX non converte: una modifica cambia solo la denominazione su tutti i conti, multe ed esportazioni. Gli importi restano invariati.",
     "saved": "Valuta salvata: {currency}",
     "saveFailed": "Non è stato possibile salvare la valuta."
+  },
+  "publicLinks": {
+    "intro": "Tutti i link tramite i quali qualcuno accede ai dati della tua associazione senza login – con motivo, scadenza e il luogo in cui li gestisci. I link scaduti, revocati o usati non vengono mostrati.",
+    "neverExpiringHint": "{count, plural, one {# link non scade} other {# link non scadono}} da {count, plural, one {solo} other {soli}}. Verifica se {count, plural, one {serve} other {servono}} ancora.",
+    "group": {
+      "all": "Tutti",
+      "files": "File e album",
+      "submissions": "Casella di consegna",
+      "calendar": "Calendario",
+      "accounts": "Account",
+      "partners": "Associazioni partner",
+      "other": "Altri"
+    },
+    "col": {
+      "kind": "Tipo",
+      "link": "Link e motivo",
+      "created": "Creato",
+      "expiry": "Validità",
+      "lastUsed": "Ultimo uso",
+      "manage": "Gestisci"
+    },
+    "kind": {
+      "share_files": "File",
+      "share_album": "Album",
+      "share_album_partner": "Album · link partner",
+      "submission_link": "Casella di consegna",
+      "calendar_events": "Calendario",
+      "calendar_todos": "Calendario",
+      "account_invite": "Invito",
+      "account_password_reset": "Password",
+      "album_partner": "Associazione partner",
+      "submission_access": "Consegna personale"
+    },
+    "reason": {
+      "share_files": "Link pubblico a {count, plural, one {# file} other {# file}}",
+      "share_album": "Link pubblico all'album «{album}» ({count, plural, one {# foto} other {# foto}})",
+      "share_album_partner": "{partner} ha creato un link pubblico al vostro album «{album}»",
+      "submission_link": "{count, plural, =0 {Link della casella di consegna, attualmente senza consegna attiva} one {Caricare file per # consegna: {assignments}} other {Caricare file per # consegne: {assignments}}}",
+      "calendar_events": "Abbonamento al calendario degli eventi, di {person}",
+      "calendar_todos": "{scope, select, all {Abbonamento al calendario di tutte le attività, di {person}} other {Abbonamento al calendario delle attività di {person}}}",
+      "account_invite": "Invito a {person}: configurare l'account{sent, select, 0 { (in invio)} other {}}",
+      "account_password_reset": "Link per reimpostare la password di {person}",
+      "album_partner": "Album condiviso con {partner}{status, select, pending { (invito in sospeso)} other {}}{publicLinks, select, 1 {; il partner può creare link pubblici} other {}}",
+      "unknown": "Accesso pubblico (nuovo tipo)",
+      "submission_access": "Link personale di {person} per «{assignment}»: {level, select, manage {visualizzare, ritirare e riconsegnare} other {visualizzare}}"
+    },
+    "expiry": {
+      "date": "fino al {date}",
+      "never": "non scade",
+      "singleUse": "monouso",
+      "singleUseUntil": "monouso, fino al {date}",
+      "window": "finché le consegne sono aperte"
+    },
+    "createdBy": "di {name}",
+    "notTracked": "—",
+    "manage": "Gestisci",
+    "manageElsewhere": {
+      "files": "presso l'associazione partner",
+      "submissions": "—",
+      "calendar": "solo la persona",
+      "accounts": "—",
+      "partners": "—",
+      "other": "—"
+    },
+    "empty": "Al momento non ci sono link pubblici.",
+    "emptyFilter": "Nessun link in questa selezione."
   }
 }

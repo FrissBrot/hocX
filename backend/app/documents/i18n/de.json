@@ -361,11 +361,50 @@
       "failed": "Der Datenexport konnte nicht erstellt werden. Bitte bestelle ihn in hocX unter Vereinseinstellungen > Datenschutz erneut.",
       "openButton": "Export öffnen",
       "ready": "Der Datenexport «{filename}» ist fertig. Du kannst ihn in hocX unter Vereinseinstellungen > Datenschutz herunterladen.",
+      "readyBody": "Der Datenexport ist fertig. Du kannst ihn in hocX unter Vereinseinstellungen › Datenschutz herunterladen.",
       "subjectFailed": "{tenant}: Datenexport fehlgeschlagen",
       "subjectReady": "{tenant}: Datenexport bereit"
     },
+    "fine": {
+      "countOne": "1 Busse",
+      "countOther": "{count} Bussen",
+      "daysLeftOne": "noch 1 Tag",
+      "daysLeftOther": "noch {count} Tage",
+      "fixed": "Fixbetrag",
+      "from": "ab {date}",
+      "issuedIntro": "Bei {tenant} wurden dir folgende Bussen verrechnet:",
+      "issuedOn": "vom {date}",
+      "issuedSubjectOne": "{tenant}: Neue Busse über {amount}",
+      "issuedSubjectOther": "{tenant}: Neue Bussen über {amount}",
+      "moreUpcoming": "Weitere Aufgaben mit Busse",
+      "openFines": "Meine Bussen ansehen",
+      "openTodo": "Aufgabe öffnen",
+      "openTotal": "Total offene Bussen bei {tenant}",
+      "payment": "Bezahlt wird bei der Kasse des Vereins. Ist eine Busse falsch? Melde dich bei {tenant}.",
+      "rule": "Regel «{name}»",
+      "tariff": "Tarif {name}",
+      "todoLate": "Pendenz zu spät: {task}",
+      "upcomingIntro": "Diese Aufgabe ist am {date} fällig. Ist sie dann nicht erledigt, wird bei {tenant} eine Busse fällig.",
+      "upcomingIntroRising": "Diese Aufgabe ist am {date} fällig. Ist sie dann nicht erledigt, wird bei {tenant} eine Busse fällig – und sie steigt, je länger die Aufgabe offen bleibt.",
+      "upcomingSubject": "{tenant}: Busse droht – Aufgabe in {days} Tagen fällig",
+      "upcomingSubjectOne": "{tenant}: Busse droht – Aufgabe morgen fällig",
+      "upcomingTitle": "Erledige «{task}» bis {weekday}"
+    },
     "footer": "Diese Nachricht kommt von {tenant} über hocX.",
     "greeting": "Hallo {name}",
+    "kicker": {
+      "account": "Konto",
+      "export": "Datenexport",
+      "fineIssued": "Neue Busse",
+      "fineUpcoming": "Busse droht",
+      "invite": "Einladung",
+      "reminder": "Erinnerung",
+      "security": "Sicherheit",
+      "submission": "Abgabe",
+      "submissionWithdrawn": "Abgabe zurückgezogen",
+      "test": "Versand funktioniert",
+      "todos": "Aufgaben"
+    },
     "noLoginHint": "Fragen zu dieser Nachricht? Wende dich an {tenant}.",
     "security": {
       "emailChanged": "Login-E-Mail geändert ({at})",
@@ -374,6 +413,15 @@
       "emailChangedSubject": "{tenant}: Deine Login-E-Mail wurde geändert",
       "hint": "Warst du das nicht? Melde dich sofort bei {tenant}.",
       "intro": "An deinem Konto bei {tenant} wurde Folgendes geändert:",
+      "label": {
+        "emailChanged": "Login-E-Mail geändert",
+        "emailChangedByAdmin": "Login-E-Mail durch die Vereinsverwaltung geändert",
+        "mfaAdded": "Zweiter Faktor hinzugefügt",
+        "mfaRemoved": "Zweiter Faktor entfernt",
+        "mfaRemovedByAdmin": "Zweiter Faktor durch die Vereinsverwaltung entfernt",
+        "passwordChanged": "Passwort geändert",
+        "passwordChangedByAdmin": "Passwort durch die Vereinsverwaltung neu gesetzt"
+      },
       "mandatory": "Sicherheitshinweise bekommst du immer, sie lassen sich nicht abbestellen.",
       "mfaAdded": "Zweiter Faktor hinzugefügt ({at})",
       "mfaRemoved": "Zweiter Faktor entfernt ({at})",
@@ -383,17 +431,46 @@
       "subject": "{tenant}: Sicherheitshinweis zu deinem Konto"
     },
     "settingsHint": "Welche E-Mails du bekommst, stellst du in deinen Einstellungen ein: {url}",
+    "settingsHintHtml": "Welche E-Mails du bekommst, stellst du in deinen {link} ein.",
+    "settingsLink": "Einstellungen",
+    "submission": {
+      "filesOne": "1 Datei",
+      "filesOther": "{count} Dateien",
+      "openButton": "Abgaben ansehen",
+      "openLink": "Abgaben ansehen: {url}",
+      "withdrawnBy": "von {person} · {at}",
+      "withdrawnHint": "Die Dateien sind nicht gelöscht: unter «Abgaben» lassen sie sich 30 Tage lang wiederherstellen. Die Aufgabe ist wieder offen.",
+      "withdrawnIntro": "Bei {tenant} hat eine verantwortliche Person ihre Abgabe über den persönlichen Link zurückgezogen.",
+      "withdrawnSubjectOne": "{tenant}: Abgabe zurückgezogen",
+      "withdrawnSubjectOther": "{tenant}: {count} Abgaben zurückgezogen"
+    },
+    "system": "System",
     "test": {
       "body": "Diese Test-E-Mail bestätigt, dass der E-Mail-Versand von hocX funktioniert.",
       "subject": "hocX: Test-E-Mail"
+    },
+    "title": {
+      "emailChanged": "Deine Login-E-Mail wurde geändert",
+      "exportFailed": "Export fehlgeschlagen",
+      "exportReady": "Dein Export ist fertig",
+      "invite": "Willkommen bei hocX",
+      "reminder": "Deine Aufgaben",
+      "security": "Änderungen an deinem Konto",
+      "submissionDone": "Abgabe eingegangen",
+      "submissionWithdrawn": "Abgabe zurückgezogen",
+      "test": "Test-E-Mail",
+      "todosNew": "Neue Aufgaben für dich"
     },
     "todo": {
       "due": "fällig {date}",
       "introNew": "Bei {tenant} hast du neue Aufgaben.",
       "introReminder": "Hier ist eine kurze Übersicht deiner Aufgaben bei {tenant}.",
       "introSubmissionDone": "Bei {tenant} ist eine Abgabe eingegangen. Die zugehörige Aufgabe ist damit erledigt.",
+      "manageSubmission": "Meine Abgabe ansehen und verwalten",
+      "noDue": "ohne Fälligkeit",
       "openButton": "Aufgaben ansehen",
       "openLink": "Alle Aufgaben ansehen: {url}",
+      "sectionCount": "{title} · {count}",
       "sectionDueSoon": "In 3 Tagen fällig",
       "sectionNew": "Neue Aufgaben",
       "sectionOverdue": "Seit gestern überfällig",
@@ -401,7 +478,18 @@
       "subjectNew": "{tenant}: Neue Aufgaben für dich",
       "subjectReminder": "{tenant}: Erinnerung an deine Aufgaben",
       "subjectSubmissionDone": "{tenant}: Abgabe eingegangen",
-      "submitted": "abgegeben {at}"
+      "submitted": "abgegeben {at}",
+      "viewSubmission": "Meine Abgabe ansehen"
+    },
+    "via": "über hocX",
+    "weekday": {
+      "0": "Montag",
+      "1": "Dienstag",
+      "2": "Mittwoch",
+      "3": "Donnerstag",
+      "4": "Freitag",
+      "5": "Samstag",
+      "6": "Sonntag"
     }
   },
   "empty": {

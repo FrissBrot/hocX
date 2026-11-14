@@ -1,0 +1,37 @@
+{
+  "title": "My submission",
+  "loading": "Loading submission …",
+  "invalid": "This link is invalid or has expired. You will get a new one with the next email about this submission.",
+  "failed": "That did not work. Please try again later.",
+  "rateLimited": "Too many attempts. Please wait a few minutes.",
+  "greeting": "Hello {name} – this is your submission for “{element}”.",
+  "until": "until {date}",
+  "submittedAt": "submitted {date}",
+  "status": {
+    "open": "Still open",
+    "submitted": "Submitted",
+    "closed": "Closed"
+  },
+  "files": "Your files",
+  "noFiles": "No files submitted yet.",
+  "download": "Download",
+  "scan": {
+    "pending": "being checked",
+    "blocked": "blocked"
+  },
+  "closedHint": "This submission is closed. For changes, contact your club's administration.",
+  "viewOnlyHint": "With this link you can view your submission. Your club's administration can change it.",
+  "withdraw": "Withdraw submission",
+  "withdrawConfirm": "Withdraw the submission? Your files no longer count and the to-do is open again. The administration can restore them.",
+  "withdrawn": "Submission withdrawn.",
+  "withdrawHint": "Did someone submit something wrong for you? Withdraw the submission and upload the right files.",
+  "upload": "Submit files",
+  "uploadMore": "Submit more files",
+  "uploading": "Uploading … {percent} %",
+  "uploaded": "Files submitted.",
+  "rules": "At most {size} MB per file, allowed: {types}.",
+  "anyType": "documents and photos",
+  "remaining": "{count, plural, =0 {No more files possible.} one {# more file possible.} other {# more files possible.}}",
+  "privacyHint": "This link is yours alone. Do not pass it on – anyone who has it can see your submission.",
+  "downloadFailed": "The file could not be downloaded."
+}

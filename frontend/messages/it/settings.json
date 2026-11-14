@@ -37,9 +37,17 @@
           "label": "Promemoria compiti",
           "hint": "Una volta 3 giorni prima della scadenza e una volta il giorno dopo, se ancora aperti."
         },
+        "fines": {
+          "label": "Multe",
+          "hint": "«Multa in arrivo» 3 giorni prima della scadenza di un'attività con multa (al posto del promemoria normale) e un'e-mail quando ti vengono addebitate multe."
+        },
         "todo_submissions": {
           "label": "Consegna ricevuta",
           "hint": "Quando una consegna nella casella di consegna completa il tuo compito di consegna."
+        },
+        "submission_changes": {
+          "label": "Modifiche alle consegne",
+          "hint": "Quando una persona responsabile ritira la sua consegna tramite il link personale. Solo per chi gestisce le consegne."
         },
         "exports": {
           "label": "Esportazione dati pronta",
