@@ -267,7 +267,7 @@ export default function LoginPage() {
       });
       finishLogin(session);
     } catch (error) {
-      setStatusMsg(error instanceof Error ? error.message : t("status.codeCheckFailed"));
+      setStatusMsg(apiErrorMessage(error, tSecurity, "apiErrors", t("status.codeCheckFailed")));
     } finally {
       setLoading(false);
     }
@@ -388,7 +388,7 @@ export default function LoginPage() {
       setTotpLabel("");
       setStatusMsg("");
     } catch (error) {
-      setStatusMsg(error instanceof Error ? error.message : t("status.totpSetupStartFailed"));
+      setStatusMsg(apiErrorMessage(error, tSecurity, "apiErrors", t("status.totpSetupStartFailed")));
     } finally {
       setLoading(false);
     }
@@ -409,7 +409,7 @@ export default function LoginPage() {
       });
       finishLogin(session);
     } catch (error) {
-      setStatusMsg(error instanceof Error ? error.message : t("status.totpActivateFailed"));
+      setStatusMsg(apiErrorMessage(error, tSecurity, "apiErrors", t("status.totpActivateFailed")));
     } finally {
       setLoading(false);
     }
@@ -458,7 +458,7 @@ export default function LoginPage() {
       });
       finishLogin(session);
     } catch (error) {
-      setStatusMsg(error instanceof Error ? error.message : t("status.passkeyFailed"));
+      setStatusMsg(apiErrorMessage(error, tSecurity, "apiErrors", t("status.passkeyFailed")));
     } finally {
       setLoading(false);
     }

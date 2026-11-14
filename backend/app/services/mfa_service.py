@@ -75,7 +75,7 @@ class MfaService:
     def _load_flow(self, token: str, *, expected_kind: str) -> dict[str, Any]:
         raw = self._redis().get(f"{_FLOW_PREFIX}{token}")
         if raw is None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="MFA-Vorgang ist abgelaufen")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "mfa_flow_expired", "message": "MFA-Vorgang ist abgelaufen"})
         try:
             data = json.loads(raw)
         except json.JSONDecodeError as exc:
@@ -388,7 +388,7 @@ class MfaService:
         enforce_rate_limit(f"mfa-enroll-totp:{flow_token}", limit=10, period_seconds=_FLOW_TTL_SECONDS)
         counter = verify_totp_code(secret, code)
         if counter is None:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Der TOTP-Code ist nicht gültig")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "totp_invalid", "message": "Der TOTP-Code ist nicht gültig"})
         factor = UserMfaFactor(
             user_id=user.id,
             factor_type="totp",
@@ -668,7 +668,7 @@ class MfaService:
         if user is None or not user.is_active:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Benutzerkonto ist nicht mehr aktiv")
         if not user.login_enabled:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Login ist für dieses Konto deaktiviert")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "login_disabled", "message": "Login ist für dieses Konto deaktiviert"})
         current_user = build_current_user(db, user, mfa_verified=False)
         return PendingLoginContext(user=user, current_user=current_user, request_host=flow.get("request_host"))
 
@@ -710,7 +710,7 @@ class MfaService:
             db, action="user.mfa_failed", outcome="failure", tenant_id=context.user.tenant_id,
             actor_user_id=context.user.id, details={"factor": "totp"},
         )
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Der TOTP-Code ist nicht gültig")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "totp_invalid", "message": "Der TOTP-Code ist nicht gültig"})
 
     def start_login_passkey_assertion(
         self,

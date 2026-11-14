@@ -119,6 +119,9 @@
     "admin_role_fixed": "Il ruolo amministratore è fisso e non può essere modificato.",
     "system_role_not_deletable": "I ruoli standard non possono essere eliminati.",
     "role_in_use": "Il ruolo è ancora assegnato ad account. Rimuovilo prima da lì.",
-    "permission_not_held": "Puoi assegnare o gestire solo le autorizzazioni che possiedi tu stesso."
+    "permission_not_held": "Puoi assegnare o gestire solo le autorizzazioni che possiedi tu stesso.",
+    "login_disabled": "L'accesso è disattivato per questo account.",
+    "mfa_flow_expired": "L'accesso è scaduto. Effettua di nuovo l'accesso.",
+    "totp_invalid": "Il codice non è valido. Controlla l'ora del tuo dispositivo e riprova."
   }
 }
