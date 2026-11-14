@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 
@@ -45,4 +46,12 @@ it("shows an invalid link without a token", async () => {
   render(<SetPasswordPage />);
   expect(await screen.findByText(/ungültig, abgelaufen/)).toBeInTheDocument();
   expect(api).not.toHaveBeenCalled();
+});
+
+it("keeps the token under React StrictMode (effects run twice in development)", async () => {
+  render(<StrictMode><SetPasswordPage /></StrictMode>);
+  expect(await screen.findByRole("heading", { name: "Konto einrichten" })).toBeInTheDocument();
+  expect(await screen.findAllByLabelText(/Passwort/)).toHaveLength(2);
+  expect(screen.queryByText(/ungültig, abgelaufen/)).not.toBeInTheDocument();
+  expect(window.location.hash).toBe("");
 });

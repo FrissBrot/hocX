@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { browserApiFetch } from "@/lib/api/client";
@@ -38,10 +38,14 @@ export default function SetPasswordPage() {
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
   const [inviteLink, setInviteLink] = useState(false);
+  // Das Fragment wird beim ersten Lesen entfernt; React StrictMode (Entwicklung) führt den Effekt
+  // ein zweites Mal aus - der Ref überlebt das und liefert dann dasselbe Token statt eines leeren.
+  const fragmentRef = useRef<{ token: string; invite: boolean } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    const { token: fragmentToken, invite: fragmentInvite } = readTokenFromFragment();
+    fragmentRef.current ??= readTokenFromFragment();
+    const { token: fragmentToken, invite: fragmentInvite } = fragmentRef.current;
     setInviteLink(fragmentInvite);
     if (!fragmentToken) {
       setInvalid(true);
