@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { browserApiFetch } from "@/lib/api/client";
+import { fetchAllPages } from "@/components/mobile/mobile-data";
 import { formatDate } from "@/lib/utils/format";
 import { CycleConfigSummary, EventSummary, SubmissionAssignment, SubmissionElementStatusEntry } from "@/types/api";
 
@@ -75,7 +76,9 @@ export function useUploadTarget() {
   const [selectedCycleConfigId, setSelectedCycleConfigId] = useState("");
 
   useEffect(() => {
-    browserApiFetch<EventSummary[]>("/api/events").then((data) => setEvents(data ?? [])).catch(() => {});
+    // Alle Termine, nicht nur die neusten 100 (Standardseite von GET /api/events): Bilder werden
+    // oft nachträglich mit älteren Anlässen verknüpft.
+    fetchAllPages<EventSummary>("/api/events").then((data) => setEvents(data)).catch(() => {});
     browserApiFetch<SubmissionAssignment[]>("/api/submission-assignments").then((data) => setAssignments(data ?? [])).catch(() => {});
     browserApiFetch<CycleConfigSummary[]>("/api/cycle-configs").then((data) => setCycleConfigs(data ?? [])).catch(() => {});
   }, []);
