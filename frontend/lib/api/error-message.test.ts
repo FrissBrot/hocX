@@ -29,4 +29,9 @@ describe("apiErrorMessage", () => {
     expect(apiErrorCode(new ApiError("x", "backend", 400, { code: "../evil" }))).toBeNull();
     expect(apiErrorCode(new ApiError("x", "backend", 400, "nur Text"))).toBeNull();
   });
+
+  it("erkennt ein 429 ohne Code (z. B. vom Proxy) als rate_limited", () => {
+    expect(apiErrorCode(new ApiError("Too Many Requests", "backend", 429))).toBe("rate_limited");
+    expect(apiErrorCode(new ApiError("x", "backend", 429, { code: "login_locked" }))).toBe("login_locked");
+  });
 });

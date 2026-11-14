@@ -119,6 +119,19 @@
     "admin_role_fixed": "Die Rolle Administrator ist fest und kann nicht geändert werden.",
     "system_role_not_deletable": "Standardrollen können nicht gelöscht werden.",
     "role_in_use": "Die Rolle ist noch Konten zugewiesen. Entferne sie zuerst dort.",
-    "permission_not_held": "Nur Berechtigungen, die du selbst hast, kannst du vergeben oder verwalten."
+    "permission_not_held": "Nur Berechtigungen, die du selbst hast, kannst du vergeben oder verwalten.",
+    "login_disabled": "Die Anmeldung ist für dieses Konto deaktiviert.",
+    "mfa_flow_expired": "Die Anmeldung ist abgelaufen. Bitte melde dich erneut an.",
+    "totp_invalid": "Der Code ist nicht gültig. Bitte prüfe die Uhrzeit deines Geräts und versuche es erneut.",
+    "mfa_flow_invalid": "Dieser Anmeldevorgang ist ungültig. Bitte melde dich erneut an.",
+    "passkey_host_invalid": "Passkeys funktionieren auf dieser Adresse nicht. Bitte öffne hocX über die normale Vereinsadresse.",
+    "account_inactive": "Dieses Konto ist nicht mehr aktiv.",
+    "totp_not_configured": "Für dieses Konto ist keine Authenticator-App eingerichtet.",
+    "passkey_not_registered": "Für dieses Konto ist auf dieser Adresse kein Passkey hinterlegt.",
+    "passkey_invalid": "Der Passkey konnte nicht geprüft werden. Bitte versuche es erneut.",
+    "passkey_unknown": "Dieser Passkey gehört nicht zu diesem Konto.",
+    "passkey_already_registered": "Dieser Passkey ist bereits hinterlegt.",
+    "rate_limited": "Zu viele Versuche. Bitte warte einen Moment und versuche es dann erneut.",
+    "login_locked": "Zu viele fehlgeschlagene Anmeldungen. Bitte warte 15 Minuten und versuche es dann erneut."
   }
 }

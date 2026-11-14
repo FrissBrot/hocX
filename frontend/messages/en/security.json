@@ -119,6 +119,19 @@
     "admin_role_fixed": "The administrator role is fixed and cannot be changed.",
     "system_role_not_deletable": "Default roles cannot be deleted.",
     "role_in_use": "The role is still assigned to accounts. Remove it there first.",
-    "permission_not_held": "You can only grant or manage permissions you have yourself."
+    "permission_not_held": "You can only grant or manage permissions you have yourself.",
+    "login_disabled": "Sign-in is disabled for this account.",
+    "mfa_flow_expired": "The sign-in has expired. Please sign in again.",
+    "totp_invalid": "The code is not valid. Please check your device's time and try again.",
+    "mfa_flow_invalid": "This sign-in attempt is invalid. Please sign in again.",
+    "passkey_host_invalid": "Passkeys do not work on this address. Please open hocX via your club's usual address.",
+    "account_inactive": "This account is no longer active.",
+    "totp_not_configured": "No authenticator app is set up for this account.",
+    "passkey_not_registered": "No passkey is registered for this account on this address.",
+    "passkey_invalid": "The passkey could not be verified. Please try again.",
+    "passkey_unknown": "This passkey does not belong to this account.",
+    "passkey_already_registered": "This passkey is already registered.",
+    "rate_limited": "Too many attempts. Please wait a moment and try again.",
+    "login_locked": "Too many failed sign-ins. Please wait 15 minutes and try again."
   }
 }

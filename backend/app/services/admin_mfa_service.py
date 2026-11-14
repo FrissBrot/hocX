@@ -88,13 +88,13 @@ class AdminMfaService:
     def _load_flow(self, token: str, *, expected_kind: str) -> dict[str, Any]:
         raw = self._redis().get(f"{_FLOW_PREFIX}{token}")
         if raw is None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="MFA-Vorgang ist abgelaufen")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "mfa_flow_expired", "message": "MFA-Vorgang ist abgelaufen"})
         try:
             data = json.loads(raw)
         except json.JSONDecodeError as exc:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Ungültiger MFA-Vorgang") from exc
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "mfa_flow_invalid", "message": "Ungültiger MFA-Vorgang"}) from exc
         if data.get("kind") != expected_kind:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Ungültiger MFA-Vorgang")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "mfa_flow_invalid", "message": "Ungültiger MFA-Vorgang"})
         return data
 
     def _delete_flow(self, token: str) -> None:
@@ -193,7 +193,7 @@ class AdminMfaService:
         if settings.traefik_domain:
             return settings.traefik_domain
         if not request_host:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Passkeys benötigen einen gültigen Hostnamen")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "passkey_host_invalid", "message": "Passkeys benötigen einen gültigen Hostnamen"})
         return request_host
 
     def start_self_passkey_registration(
@@ -245,7 +245,7 @@ class AdminMfaService:
     ) -> UserMfaFactor:
         flow = self._load_flow(flow_token, expected_kind="admin_self_passkey_registration")
         if int(flow["admin_id"]) != actor.admin_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Dieser MFA-Vorgang gehört zu einem anderen Konto")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "mfa_flow_invalid", "message": "Dieser MFA-Vorgang gehört zu einem anderen Konto"})
         admin = db.get(PlatformAdmin, actor.admin_id)
         if admin is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admin not found")
@@ -262,7 +262,7 @@ class AdminMfaService:
             select(UserMfaFactor).where(UserMfaFactor.webauthn_credential_id == registered.credential_id)
         )
         if existing is not None:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Diese Passkey-Anmeldung ist bereits hinterlegt")
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"code": "passkey_already_registered", "message": "Diese Passkey-Anmeldung ist bereits hinterlegt"})
         factor = self._create_passkey_factor(db, admin, registered, rp_id=str(flow["rp_id"]), label=label)
         self._delete_flow(flow_token)
         return factor
@@ -353,7 +353,7 @@ class AdminMfaService:
         flow = self._load_flow(ticket, expected_kind="admin_login_ticket")
         admin = db.get(PlatformAdmin, int(flow["admin_id"]))
         if admin is None or not admin.is_active:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Admin-Konto ist nicht mehr aktiv")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "account_inactive", "message": "Admin-Konto ist nicht mehr aktiv"})
         return AdminPendingLoginContext(admin=admin)
 
     def _consume_login_ticket(self, db: Session, ticket: str) -> AdminPendingLoginContext:
@@ -417,7 +417,7 @@ class AdminMfaService:
     ) -> UserMfaFactor:
         flow = self._load_flow(flow_token, expected_kind=expected_kind)
         if int(flow["admin_id"]) != expected_admin_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Dieser MFA-Vorgang gehört zu einem anderen Konto")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "mfa_flow_invalid", "message": "Dieser MFA-Vorgang gehört zu einem anderen Konto"})
         admin = db.get(PlatformAdmin, expected_admin_id)
         if admin is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admin not found")
@@ -425,7 +425,7 @@ class AdminMfaService:
         enforce_rate_limit(f"admin-mfa-enroll-totp:{flow_token}", limit=10, period_seconds=_FLOW_TTL_SECONDS)
         counter = verify_totp_code(secret, code)
         if counter is None:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Der TOTP-Code ist nicht gültig")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "totp_invalid", "message": "Der TOTP-Code ist nicht gültig"})
         factor = UserMfaFactor(
             platform_admin_id=admin.id,
             factor_type="totp",
@@ -462,7 +462,7 @@ class AdminMfaService:
             db.commit()
             return
         record_failed_attempt(account_lockout_key, period_seconds=_ACCOUNT_TOTP_WINDOW_SECONDS)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Der TOTP-Code ist nicht gültig")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "totp_invalid", "message": "Der TOTP-Code ist nicht gültig"})
 
     def verify_login_totp(self, db: Session, *, ticket: str, code: str) -> AdminPendingLoginContext:
         context = self._load_login_ticket(db, ticket)
@@ -475,7 +475,7 @@ class AdminMfaService:
         enforce_rate_limit(f"admin-mfa-login-totp:{ticket}", limit=10, period_seconds=_FLOW_TTL_SECONDS)
         factors = self._list_factors(db, context.admin.id)
         if not factors:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Für dieses Konto ist kein TOTP-Faktor hinterlegt")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "totp_not_configured", "message": "Für dieses Konto ist kein TOTP-Faktor hinterlegt"})
         for factor in factors:
             if not factor.secret_encrypted:
                 continue
@@ -492,4 +492,4 @@ class AdminMfaService:
             db.commit()
             return self._consume_login_ticket(db, ticket)
         record_failed_attempt(account_lockout_key, period_seconds=_ACCOUNT_TOTP_WINDOW_SECONDS)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Der TOTP-Code ist nicht gültig")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "totp_invalid", "message": "Der TOTP-Code ist nicht gültig"})

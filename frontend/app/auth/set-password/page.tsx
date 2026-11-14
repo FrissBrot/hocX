@@ -1,9 +1,10 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { browserApiFetch } from "@/lib/api/client";
+import { apiErrorCode } from "@/lib/api/error-message";
 import type { AccountLinkPreview } from "@/types/api";
 
 const MIN_PASSWORD_LENGTH = 12;
@@ -32,16 +33,22 @@ export default function SetPasswordPage() {
   const [token, setToken] = useState("");
   const [preview, setPreview] = useState<AccountLinkPreview | null>(null);
   const [invalid, setInvalid] = useState(false);
+  // 429 beim Prüfen des Links: der Link ist nicht ungültig, nur kurz gesperrt
+  const [rateLimited, setRateLimited] = useState(false);
   const [password, setPassword] = useState("");
   const [repeat, setRepeat] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
   const [inviteLink, setInviteLink] = useState(false);
+  // Das Fragment wird beim ersten Lesen entfernt; React StrictMode (Entwicklung) führt den Effekt
+  // ein zweites Mal aus - der Ref überlebt das und liefert dann dasselbe Token statt eines leeren.
+  const fragmentRef = useRef<{ token: string; invite: boolean } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    const { token: fragmentToken, invite: fragmentInvite } = readTokenFromFragment();
+    fragmentRef.current ??= readTokenFromFragment();
+    const { token: fragmentToken, invite: fragmentInvite } = fragmentRef.current;
     setInviteLink(fragmentInvite);
     if (!fragmentToken) {
       setInvalid(true);
@@ -50,7 +57,11 @@ export default function SetPasswordPage() {
     setToken(fragmentToken);
     browserApiFetch<AccountLinkPreview>("/api/auth/account-link/preview", { method: "POST", body: JSON.stringify({ token: fragmentToken }) })
       .then((loaded) => { if (!cancelled) setPreview(loaded); })
-      .catch(() => { if (!cancelled) setInvalid(true); });
+      .catch((caught: unknown) => {
+        if (cancelled) return;
+        if (apiErrorCode(caught) === "rate_limited") setRateLimited(true);
+        else setInvalid(true);
+      });
     return () => { cancelled = true; };
   }, []);
 
@@ -68,7 +79,9 @@ export default function SetPasswordPage() {
       await browserApiFetch("/api/auth/account-link/complete", { method: "POST", body: JSON.stringify({ token, password }) });
       setDone(true);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : t("failed"));
+      const code = apiErrorCode(caught);
+      if (code === "link_invalid") setInvalid(true);
+      else setError(code === "rate_limited" ? t("rateLimited") : t("failed"));
     } finally {
       setBusy(false);
     }
@@ -95,6 +108,8 @@ export default function SetPasswordPage() {
               <a className="button-primary" href="/login">{t("toLogin")}</a>
             </div>
           </>
+        ) : rateLimited ? (
+          <p className="login-status" role="alert">{t("rateLimited")}</p>
         ) : done ? (
           <>
             <p className="login-status">{invite ? t("inviteDone") : t("resetDone")}</p>
@@ -117,7 +132,7 @@ export default function SetPasswordPage() {
             <div className="table-actions table-actions-start">
               <button type="submit" className="button-primary" disabled={!canSubmit}>{busy ? "…" : invite ? t("inviteSubmit") : t("resetSubmit")}</button>
             </div>
-            {error ? <p className="login-status">{error}</p> : null}
+            {error ? <p className="login-status" role="alert">{error}</p> : null}
             {!invite ? <p className="muted">{t("mfaHint")}</p> : null}
           </form>
         ) : (

@@ -240,7 +240,7 @@ def account_link_preview(payload: AccountLinkToken, request: Request, db: Sessio
     enforce_rate_limit(f"account-link-ip:{client_ip(request)}", limit=30, period_seconds=15 * 60)
     preview = account_links.preview(db, payload.token)
     if preview is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Der Link ist ungültig oder abgelaufen.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"code": "link_invalid", "message": "Der Link ist ungültig oder abgelaufen."})
     return AccountLinkPreviewRead(**preview)
 
 

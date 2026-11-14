@@ -6,3 +6,6 @@ httpx2>=2.0.0,<3
 # Only used to synthesize PDF test fixtures for the word-import E2E tests
 # (tests/word_import_fixtures.py) - never imported by the app itself.
 reportlab==5.1.0
+# Sicherheitsprüfung der Abhängigkeiten im Test-Container (Nachtlauf, lokal); dieselbe Version
+# installiert die CI (.github/workflows/ci.yml, Job dependency-audit)
+pip-audit==2.10.1

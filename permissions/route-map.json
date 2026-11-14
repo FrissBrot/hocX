@@ -1407,7 +1407,8 @@
     "POST /api/files/document-uploads": {
       "handler": "files.upload_documents",
       "requires": [
-        "files.manage"
+        "files.manage",
+        "submissions.manage"
       ]
     },
     "GET /api/files/gallery-upload-jobs": {
@@ -1425,7 +1426,8 @@
     "POST /api/files/gallery-uploads": {
       "handler": "files.upload_gallery_images",
       "requires": [
-        "files.manage"
+        "files.manage",
+        "submissions.manage"
       ]
     },
     "GET /api/files/similarity-groups": {
@@ -1455,7 +1457,8 @@
     "GET /api/files/upload-target-shared-albums": {
       "handler": "files.list_upload_target_shared_albums",
       "requires": [
-        "files.manage"
+        "files.manage",
+        "submissions.manage"
       ]
     },
     "PATCH /api/files/{file_id}/best": {

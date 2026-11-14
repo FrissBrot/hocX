@@ -15,8 +15,10 @@ export function apiErrorCode(error: unknown): string | null {
   const detail = error.detail;
   if (detail && typeof detail === "object" && !Array.isArray(detail)) {
     const code = (detail as { code?: unknown }).code;
-    return typeof code === "string" && /^[a-z_]+$/.test(code) ? code : null;
+    if (typeof code === "string" && /^[a-z_]+$/.test(code)) return code;
   }
+  // 429 ohne eigenen Code (z. B. vom Traefik-Rate-Limit vor dem Backend)
+  if (error.status === 429) return "rate_limited";
   return null;
 }
 

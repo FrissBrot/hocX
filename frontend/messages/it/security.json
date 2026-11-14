@@ -119,6 +119,19 @@
     "admin_role_fixed": "Il ruolo amministratore è fisso e non può essere modificato.",
     "system_role_not_deletable": "I ruoli standard non possono essere eliminati.",
     "role_in_use": "Il ruolo è ancora assegnato ad account. Rimuovilo prima da lì.",
-    "permission_not_held": "Puoi assegnare o gestire solo le autorizzazioni che possiedi tu stesso."
+    "permission_not_held": "Puoi assegnare o gestire solo le autorizzazioni che possiedi tu stesso.",
+    "login_disabled": "L'accesso è disattivato per questo account.",
+    "mfa_flow_expired": "L'accesso è scaduto. Effettua di nuovo l'accesso.",
+    "totp_invalid": "Il codice non è valido. Controlla l'ora del tuo dispositivo e riprova.",
+    "mfa_flow_invalid": "Questo tentativo di accesso non è valido. Accedi di nuovo.",
+    "passkey_host_invalid": "Le passkey non funzionano su questo indirizzo. Apri hocX tramite l'indirizzo abituale della società.",
+    "account_inactive": "Questo account non è più attivo.",
+    "totp_not_configured": "Per questo account non è configurata alcuna app di autenticazione.",
+    "passkey_not_registered": "Per questo account non è registrata alcuna passkey su questo indirizzo.",
+    "passkey_invalid": "Non è stato possibile verificare la passkey. Riprova.",
+    "passkey_unknown": "Questa passkey non appartiene a questo account.",
+    "passkey_already_registered": "Questa passkey è già registrata.",
+    "rate_limited": "Troppi tentativi. Attendi un momento e riprova.",
+    "login_locked": "Troppi accessi non riusciti. Attendi 15 minuti e riprova."
   }
 }

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { browserApiFetch, browserApiBaseUrl } from "@/lib/api/client";
+import { apiErrorMessage } from "@/lib/api/error-message";
 import { AdminLoginResponse, AdminSessionInfo, PendingMfaLogin, PlatformOidcConfigPublic, TotpEnrollmentStart } from "@/types/api";
 import { CopyrightNotice } from "@/components/ui/copyright-notice";
 import { TotpEnrollCard } from "@/components/security/totp-enroll-card";
@@ -16,6 +17,9 @@ function sanitizeTotpCode(value: string) {
 
 export default function AdminLoginPage() {
   const t = useTranslations("admin.login");
+  // Fehlercodes des Backends (invalid_credentials, totp_invalid, rate_limited …) teilt sich der
+  // Admin-Login mit dem Mandanten-Login
+  const tSecurity = useTranslations("security");
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -92,7 +96,7 @@ export default function AdminLoginPage() {
       }
       setStatusMsg(t("status.loginIncomplete"));
     } catch (error) {
-      setStatusMsg(error instanceof Error ? error.message : t("status.loginFailed"));
+      setStatusMsg(apiErrorMessage(error, tSecurity, "apiErrors", t("status.loginFailed")));
     } finally {
       setLoading(false);
     }
@@ -114,7 +118,7 @@ export default function AdminLoginPage() {
       }
       setStatusMsg(t("status.codeCheckFailed"));
     } catch (error) {
-      setStatusMsg(error instanceof Error ? error.message : t("status.codeCheckFailed"));
+      setStatusMsg(apiErrorMessage(error, tSecurity, "apiErrors", t("status.codeCheckFailed")));
     } finally {
       setLoading(false);
     }
@@ -134,7 +138,7 @@ export default function AdminLoginPage() {
       setTotpLabel("");
       setStatusMsg("");
     } catch (error) {
-      setStatusMsg(error instanceof Error ? error.message : t("status.totpSetupStartFailed"));
+      setStatusMsg(apiErrorMessage(error, tSecurity, "apiErrors", t("status.totpSetupStartFailed")));
     } finally {
       setLoading(false);
     }
@@ -159,7 +163,7 @@ export default function AdminLoginPage() {
       }
       setStatusMsg(t("status.totpActivateFailed"));
     } catch (error) {
-      setStatusMsg(error instanceof Error ? error.message : t("status.totpActivateFailed"));
+      setStatusMsg(apiErrorMessage(error, tSecurity, "apiErrors", t("status.totpActivateFailed")));
     } finally {
       setLoading(false);
     }
@@ -273,7 +277,7 @@ export default function AdminLoginPage() {
 
         {!pendingMfa ? renderPasswordStep() : pendingMfa.status === "setup_required" ? renderSetupStep() : renderVerifyStep()}
 
-        {statusMsg && <p className="muted">{statusMsg}</p>}
+        {statusMsg && <p className="muted" role="alert">{statusMsg}</p>}
       </section>
       <CopyrightNotice className="login-copyright" />
     </main>

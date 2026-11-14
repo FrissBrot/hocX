@@ -143,7 +143,7 @@ def complete(db: Session, token: str, password: str) -> str:
 
     found = _valid_token(db, token)
     if found is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Der Link ist ungültig oder abgelaufen.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "link_invalid", "message": "Der Link ist ungültig oder abgelaufen."})
     row, user = found
     # Gegen gleichzeitiges zweites Einlösen: Zeile sperren und erneut prüfen
     # populate_existing: row liegt schon in der Identity-Map; ohne die Option lieferte die Sperrabfrage
@@ -153,7 +153,7 @@ def complete(db: Session, token: str, password: str) -> str:
         locked is None or locked.used_at is not None or locked.revoked_at is not None
         or locked.expires_at is None or locked.expires_at <= _now()
     ):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Der Link ist ungültig oder abgelaufen.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "link_invalid", "message": "Der Link ist ungültig oder abgelaufen."})
     now = _now()
     if row.purpose == "invite":
         UserService().ensure_login_email_available(db, user.email, excluding_user_id=user.id)

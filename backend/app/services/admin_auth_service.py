@@ -41,7 +41,7 @@ class AdminAuthService:
                 actor_email=admin.email if admin is not None else None,
                 details={"reason": "unknown_account" if admin is None else ("inactive" if not admin.is_active else "password")},
             )
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="E-Mail oder Passwort ist ungültig.")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "invalid_credentials", "message": "E-Mail oder Passwort ist ungültig."})
 
         # Audit finding, 2026-08-27: a correct password alone used to grant a full,
         # unprotected session for the highest-privilege account tier in this system.

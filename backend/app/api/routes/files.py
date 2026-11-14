@@ -305,6 +305,10 @@ def _resolve_upload_target(
         if target.event_id is None:
             raise HTTPException(status_code=404, detail="Termin nicht gefunden")
     elif submission_assignment_id is not None:
+        # Ein Abgabe-Bezug schreibt in die Abgabe (Elementkapazität, Übersicht, Pendenzen):
+        # dasselbe Recht wie die Abgabenverwaltung, inkl. Feature-Prüfung (kein Schreiben im
+        # Nur-Lesen-Zustand nach einem Downgrade). files.manage allein reicht nicht.
+        require_permission(user, P.SUBMISSIONS_MANAGE)
         target.assignment_id = public_id_service.resolve_internal_id(
             db, SubmissionAssignment, submission_assignment_id, tenant_id=user.current_tenant_id
         )

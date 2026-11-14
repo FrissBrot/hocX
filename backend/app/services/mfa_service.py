@@ -75,13 +75,13 @@ class MfaService:
     def _load_flow(self, token: str, *, expected_kind: str) -> dict[str, Any]:
         raw = self._redis().get(f"{_FLOW_PREFIX}{token}")
         if raw is None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="MFA-Vorgang ist abgelaufen")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "mfa_flow_expired", "message": "MFA-Vorgang ist abgelaufen"})
         try:
             data = json.loads(raw)
         except json.JSONDecodeError as exc:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Ungültiger MFA-Vorgang") from exc
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "mfa_flow_invalid", "message": "Ungültiger MFA-Vorgang"}) from exc
         if data.get("kind") != expected_kind:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Ungültiger MFA-Vorgang")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "mfa_flow_invalid", "message": "Ungültiger MFA-Vorgang"})
         return data
 
     def _delete_flow(self, token: str) -> None:
@@ -111,7 +111,7 @@ class MfaService:
 
     def rp_id_for_request_host(self, request_host: str | None) -> str:
         if not request_host:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Passkeys benötigen einen gültigen Hostnamen")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "passkey_host_invalid", "message": "Passkeys benötigen einen gültigen Hostnamen"})
         if settings.traefik_domain:
             return settings.traefik_domain
         return request_host
@@ -380,7 +380,7 @@ class MfaService:
     ) -> UserMfaFactor:
         flow = self._load_flow(flow_token, expected_kind=expected_kind)
         if int(flow["user_id"]) != expected_user_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Dieser MFA-Vorgang gehört zu einem anderen Benutzer")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "mfa_flow_invalid", "message": "Dieser MFA-Vorgang gehört zu einem anderen Benutzer"})
         user = db.get(AppUser, expected_user_id)
         if user is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
@@ -388,7 +388,7 @@ class MfaService:
         enforce_rate_limit(f"mfa-enroll-totp:{flow_token}", limit=10, period_seconds=_FLOW_TTL_SECONDS)
         counter = verify_totp_code(secret, code)
         if counter is None:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Der TOTP-Code ist nicht gültig")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "totp_invalid", "message": "Der TOTP-Code ist nicht gültig"})
         factor = UserMfaFactor(
             user_id=user.id,
             factor_type="totp",
@@ -543,7 +543,7 @@ class MfaService:
     ) -> UserMfaFactor:
         flow = self._load_flow(flow_token, expected_kind=expected_kind)
         if int(flow["user_id"]) != expected_user_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Dieser MFA-Vorgang gehört zu einem anderen Benutzer")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "mfa_flow_invalid", "message": "Dieser MFA-Vorgang gehört zu einem anderen Benutzer"})
         user = db.get(AppUser, expected_user_id)
         if user is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
@@ -555,12 +555,12 @@ class MfaService:
                 expected_rp_id=str(flow["rp_id"]),
             )
         except WebauthnError as exc:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "passkey_invalid", "message": str(exc)}) from exc
         existing = db.scalar(
             select(UserMfaFactor).where(UserMfaFactor.webauthn_credential_id == registered.credential_id)
         )
         if existing is not None:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Diese Passkey-Anmeldung ist bereits hinterlegt")
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"code": "passkey_already_registered", "message": "Diese Passkey-Anmeldung ist bereits hinterlegt"})
         factor = self._create_passkey_factor(db, user, registered, rp_id=str(flow["rp_id"]), label=label)
         self._delete_flow(flow_token)
         return factor
@@ -666,9 +666,9 @@ class MfaService:
         flow = self._load_flow(ticket, expected_kind="login_ticket")
         user = db.get(AppUser, int(flow["user_id"]))
         if user is None or not user.is_active:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Benutzerkonto ist nicht mehr aktiv")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "account_inactive", "message": "Benutzerkonto ist nicht mehr aktiv"})
         if not user.login_enabled:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Login ist für dieses Konto deaktiviert")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "login_disabled", "message": "Login ist für dieses Konto deaktiviert"})
         current_user = build_current_user(db, user, mfa_verified=False)
         return PendingLoginContext(user=user, current_user=current_user, request_host=flow.get("request_host"))
 
@@ -687,7 +687,7 @@ class MfaService:
         enforce_rate_limit(f"mfa-login-totp:{ticket}", limit=10, period_seconds=_FLOW_TTL_SECONDS)
         factors = self._list_factors(db, context.user.id, factor_type="totp")
         if not factors:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Für dieses Konto ist kein TOTP-Faktor hinterlegt")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "totp_not_configured", "message": "Für dieses Konto ist kein TOTP-Faktor hinterlegt"})
         for factor in factors:
             if not factor.secret_encrypted:
                 continue
@@ -710,7 +710,7 @@ class MfaService:
             db, action="user.mfa_failed", outcome="failure", tenant_id=context.user.tenant_id,
             actor_user_id=context.user.id, details={"factor": "totp"},
         )
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Der TOTP-Code ist nicht gültig")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "totp_invalid", "message": "Der TOTP-Code ist nicht gültig"})
 
     def start_login_passkey_assertion(
         self,
@@ -728,7 +728,7 @@ class MfaService:
             if factor.webauthn_rp_id == rp_id and factor.webauthn_credential_id
         ]
         if not factors:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Für dieses Konto ist kein Passkey auf dieser Domain hinterlegt")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "passkey_not_registered", "message": "Für dieses Konto ist kein Passkey auf dieser Domain hinterlegt"})
         challenge = generate_challenge()
         flow_token = self._create_flow(
             "login_passkey_assertion",
@@ -768,7 +768,7 @@ class MfaService:
         context = self._load_login_ticket(db, ticket)
         credential_id = credential.get("rawId") or credential.get("id")
         if not isinstance(credential_id, str) or not credential_id:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Passkey-Antwort enthält keine Credential-ID")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "passkey_invalid", "message": "Passkey-Antwort enthält keine Credential-ID"})
         factor = db.scalar(
             select(UserMfaFactor).where(
                 UserMfaFactor.user_id == context.user.id,
@@ -778,7 +778,7 @@ class MfaService:
             )
         )
         if factor is None or not factor.webauthn_public_key_pem:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unbekannte Passkey-Anmeldung")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "passkey_unknown", "message": "Unbekannte Passkey-Anmeldung"})
         try:
             result = verify_assertion(
                 credential,
@@ -790,7 +790,7 @@ class MfaService:
                 expected_credential_id=credential_id,
             )
         except WebauthnError as exc:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "passkey_invalid", "message": str(exc)}) from exc
         factor.webauthn_sign_count = result.sign_count
         factor.last_used_at = datetime.now(UTC)
         db.add(factor)

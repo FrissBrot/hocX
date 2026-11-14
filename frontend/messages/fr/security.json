@@ -119,6 +119,19 @@
     "admin_role_fixed": "Le rôle administrateur est fixe et ne peut pas être modifié.",
     "system_role_not_deletable": "Les rôles standard ne peuvent pas être supprimés.",
     "role_in_use": "Le rôle est encore attribué à des comptes. Retirez-le d'abord.",
-    "permission_not_held": "Vous ne pouvez attribuer ou gérer que les autorisations que vous possédez vous-même."
+    "permission_not_held": "Vous ne pouvez attribuer ou gérer que les autorisations que vous possédez vous-même.",
+    "login_disabled": "La connexion est désactivée pour ce compte.",
+    "mfa_flow_expired": "La connexion a expiré. Veuillez vous reconnecter.",
+    "totp_invalid": "Le code n'est pas valide. Vérifiez l'heure de votre appareil et réessayez.",
+    "mfa_flow_invalid": "Cette tentative de connexion n'est pas valide. Veuillez vous reconnecter.",
+    "passkey_host_invalid": "Les passkeys ne fonctionnent pas à cette adresse. Veuillez ouvrir hocX via l'adresse habituelle de votre société.",
+    "account_inactive": "Ce compte n'est plus actif.",
+    "totp_not_configured": "Aucune application d'authentification n'est configurée pour ce compte.",
+    "passkey_not_registered": "Aucune passkey n'est enregistrée pour ce compte à cette adresse.",
+    "passkey_invalid": "La passkey n'a pas pu être vérifiée. Veuillez réessayer.",
+    "passkey_unknown": "Cette passkey n'appartient pas à ce compte.",
+    "passkey_already_registered": "Cette passkey est déjà enregistrée.",
+    "rate_limited": "Trop de tentatives. Veuillez patienter un instant puis réessayer.",
+    "login_locked": "Trop de connexions échouées. Veuillez patienter 15 minutes puis réessayer."
   }
 }

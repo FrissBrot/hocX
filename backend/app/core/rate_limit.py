@@ -16,7 +16,7 @@ def enforce_rate_limit(key: str, *, limit: int, period_seconds: int) -> None:
     if count == 1:
         redis.expire(redis_key, period_seconds)
     if count > limit:
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests, please try again later")
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail={"code": "rate_limited", "message": "Too many requests, please try again later"})
 
 
 def check_account_lockout(key: str, *, limit: int) -> None:
@@ -30,7 +30,7 @@ def check_account_lockout(key: str, *, limit: int) -> None:
     if count is not None and int(count) >= limit:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many failed login attempts for this account, please try again later",
+            detail={"code": "login_locked", "message": "Too many failed login attempts for this account, please try again later"},
         )
 
 

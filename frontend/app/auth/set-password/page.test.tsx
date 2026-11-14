@@ -1,9 +1,14 @@
+import { StrictMode } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/api/client", () => ({ browserApiFetch: (url: string, init?: { method?: string; body?: string }) => api(url, init) }));
+vi.mock("@/lib/api/client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/client")>();
+  return { ...actual, browserApiFetch: (url: string, init?: { method?: string; body?: string }) => api(url, init) };
+});
 
+import { ApiError } from "@/lib/api/client";
 import SetPasswordPage from "./page";
 
 const PASSWORD = "ein-sehr-langes-passwort";
@@ -45,4 +50,19 @@ it("shows an invalid link without a token", async () => {
   render(<SetPasswordPage />);
   expect(await screen.findByText(/ungültig, abgelaufen/)).toBeInTheDocument();
   expect(api).not.toHaveBeenCalled();
+});
+
+it("keeps the token under React StrictMode (effects run twice in development)", async () => {
+  render(<StrictMode><SetPasswordPage /></StrictMode>);
+  expect(await screen.findByRole("heading", { name: "Konto einrichten" })).toBeInTheDocument();
+  expect(await screen.findAllByLabelText(/Passwort/)).toHaveLength(2);
+  expect(screen.queryByText(/ungültig, abgelaufen/)).not.toBeInTheDocument();
+  expect(window.location.hash).toBe("");
+});
+
+it("shows a rate limit instead of «link invalid» when the preview answers 429", async () => {
+  api.mockRejectedValue(new ApiError("Too many requests", "backend", 429, { code: "rate_limited", message: "Too many requests" }));
+  render(<SetPasswordPage />);
+  expect(await screen.findByRole("alert")).toHaveTextContent("Zu viele Versuche.");
+  expect(screen.queryByText(/ungültig, abgelaufen/)).not.toBeInTheDocument();
 });
