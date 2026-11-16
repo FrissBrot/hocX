@@ -3,3 +3,5 @@
 b1f4617c0aa1a3cf290c674da7141be5ea076550:backend/tests/test_process_kind_secrets.py:generic-api-key:14
 # Kein Secret: `insecure=args.s3_insecure` (CLI-Schalter) in der Recovery-CLI:
 bb7dc166a7f40c69bc057947a355f920d7ec782e:backend/app/backup/cli.py:generic-api-key:201
+# Kein Secret: Rate-Limit-Schlüssel mit Hash-Präfix und Limit «per_token» in den öffentlichen Abgabe-Zugangsrouten:
+20f6f9b4cff8094c53529d23369ea3965f2e7bce:backend/app/api/routes/public_submission_access.py:generic-api-key:87

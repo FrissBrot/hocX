@@ -38,6 +38,14 @@ FEATURES = DEFAULT_TEST_FEATURES | {"todo_fines"}
 TODAY = fines.today()
 
 
+@pytest.fixture(autouse=True)
+def _fresh_today():
+    # TODAY je Test neu bestimmen: beim Import berechnet, lag es nach Mitternacht (Zürich) einen
+    # Tag hinter fines.today() des Service (CI-Lauf über Mitternacht, 8 rote Tests).
+    global TODAY
+    TODAY = fines.today()
+
+
 def _status(db, code: str) -> int:
     return db.scalar(select(TodoStatus.id).where(TodoStatus.code == code))
 

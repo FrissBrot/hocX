@@ -40,6 +40,9 @@ from app.schemas.todo_fines import (
 )
 from app.services.submission_link_service import SubmissionLinkService
 from app.services.submission_service import SubmissionService
+# Fälligkeit und Verspätung rechnen in Europe/Zurich; date.today() (UTC im Container) wich zwischen
+# 23 und 24 Uhr UTC um einen Tag ab (CI-Lauf über Mitternacht).
+from app.services.todo_fine_service import today as swiss_today
 from tests.factories import (
     DEFAULT_TEST_FEATURES,
     GRANDFATHERED_FEATURES,
@@ -60,11 +63,11 @@ def box(db):
     anna = make_participant(db, tenant.id, display_name="Anna Muster")
     event = make_event(db, tenant.id, title="Badetag")
     event.tag = "lager"
-    event.event_date = date.today() - timedelta(days=20)
+    event.event_date = swiss_today() - timedelta(days=20)
     event.spezial1_ids = [anna.id]
     second = make_event(db, tenant.id, title="Wanderung")
     second.tag = "lager"
-    second.event_date = date.today() - timedelta(days=20)
+    second.event_date = swiss_today() - timedelta(days=20)
     db.flush()
     link = SubmissionLinkService().create_link(db, SubmissionLinkCreate(name="Leiter"), tenant_id=tenant.id)
     created = service.create_assignment(
