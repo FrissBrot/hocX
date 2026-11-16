@@ -2419,10 +2419,13 @@ class ProtocolService:
                 db.add(protocol_block)
             elif block["element_type_id"] == session_date_type_id:
                 next_event = db.get(Event, template.next_event_id) if template.next_event_id else None
+                # Ist der «nächste» Termin die Sitzung dieses Protokolls selbst (Folgeprotokoll),
+                # ist die nächste Sitzung noch offen: nur Bezeichnung und Tag übernehmen.
+                upcoming = next_event if next_event is not None and next_event.id != protocol.event_id else None
                 protocol_block.configuration_snapshot_json = {
                     **(protocol_block.configuration_snapshot_json or {}),
-                    "selected_date": next_event.event_date.isoformat() if next_event else None,
-                    "selected_time": next_event.start_time.strftime("%H:%M") if next_event and next_event.start_time else None,
+                    "selected_date": upcoming.event_date.isoformat() if upcoming else None,
+                    "selected_time": upcoming.start_time.strftime("%H:%M") if upcoming and upcoming.start_time else None,
                     "session_label": next_event.title if next_event else "Nächste Sitzung",
                     "session_tag": next_event.tag if next_event else "next_session",
                 }

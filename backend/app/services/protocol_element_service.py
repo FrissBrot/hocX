@@ -240,6 +240,12 @@ class ProtocolElementService:
             return
 
         next_event = db.get(Event, template.next_event_id) if template.next_event_id else None
+        if next_event is not None and next_event.id == protocol.event_id:
+            # Das Folgeprotokoll hängt an genau dem Termin, den das vorherige Protokoll als
+            # «nächste Sitzung» angelegt hat. Seine eigene nächste Sitzung ist ein neuer Termin -
+            # sonst würde die Sitzung dieses Protokolls (samt Pendenzen «bis nächste Sitzung»)
+            # auf das neue Datum verschoben.
+            next_event = None
         if next_event is None:
             category_id = db.scalar(select(EventCategory.id).where(EventCategory.code == "group_session"))
             if category_id is None:
