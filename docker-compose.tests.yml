@@ -205,6 +205,9 @@ services:
     volumes:
       - ./frontend:/app
       - frontend-test-node-modules:/app/node_modules
+      # Gemeinsame Prüfkorpora mit dem Backend (PDF-Integrität, Terminfilter-Parität); die Tests
+      # lesen sie über ../backend/tests - ohne diese Einbindung scheiterten sie nur lokal.
+      - ./backend/tests:/backend/tests:ro
     command: npm test
     profiles: [tests]
 
