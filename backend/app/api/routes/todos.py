@@ -45,6 +45,16 @@ def _todo_or_404(db: Session, user: CurrentUser, todo_id: uuid.UUID) -> Protocol
     return todo
 
 
+def _todo_block_or_404(db: Session, user: CurrentUser, block_id: uuid.UUID) -> ProtocolElementBlock:
+    """Block des eigenen Mandanten. ProtocolElementBlock hat keine eigene tenant_id (tenant_id= an
+    public_id_service ist dort wirkungslos): über das Protokoll prüfen, damit ein fremder Block
+    wie ein unbekannter 404 ergibt statt 403 (Existenz-Orakel, SECURITY-RULES 1.6)."""
+    block = public_id_service.get_by_public_id(db, ProtocolElementBlock, block_id)  # nosemgrep: public-id-lookup-without-tenant -- Mandant über das Protokoll direkt danach
+    if block is None or user.current_tenant_id is None or service.repository.tenant_id_for_block(db, block.id) != user.current_tenant_id:
+        raise HTTPException(status_code=404, detail="Protocol element block not found")
+    return block
+
+
 def _get_protocol_or_404(db: Session, protocol_id: int):
     """Todos leben über ihr Protokoll hinaus: auch nach "abgeschlossen" dürfen sie angelegt,
     bearbeitet, erledigt und gelöscht werden. Deshalb hier bewusst nicht
@@ -122,9 +132,7 @@ def list_todos(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.MEETINGS_READ)
-    block = public_id_service.get_by_public_id(db, ProtocolElementBlock, protocol_element_block_id, tenant_id=user.current_tenant_id)
-    if block is None:
-        raise HTTPException(status_code=404, detail="Protocol element block not found")
+    block = _todo_block_or_404(db, user, protocol_element_block_id)
     # Gleiche Prüfung wie ensure_can_read_protocol_block, aber das Protokoll nur einmal ermitteln
     protocol_id = access_service.repository.protocol_id_for_block(db, protocol_element_block_id=block.id)
     if protocol_id is None:
@@ -206,9 +214,7 @@ def create_todo(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.MEETINGS_EDIT)
-    block = public_id_service.get_by_public_id(db, ProtocolElementBlock, protocol_element_block_id, tenant_id=user.current_tenant_id)
-    if block is None:
-        raise HTTPException(status_code=404, detail="Protocol element block not found")
+    block = _todo_block_or_404(db, user, protocol_element_block_id)
     access_service.ensure_can_read_protocol_block(db, user, block.id)
     protocol_id = access_service.repository.protocol_id_for_block(db, protocol_element_block_id=block.id)
     protocol = _get_protocol_or_404(db, protocol_id)

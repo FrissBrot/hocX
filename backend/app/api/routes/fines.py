@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated, Literal
 
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -72,11 +73,16 @@ def _resolve_protocol_id(db: Session, protocol_id: uuid.UUID, user: CurrentUser)
     return internal_id
 
 
-def _resolve_fine_id(db: Session, fine_id: uuid.UUID) -> int:
-    # Fine tenant-scoping happens inside the repository methods themselves (they all take
-    # tenant_id directly) - this just needs *an* internal id to pass through, same 404 on a
-    # bare miss as a real tenant mismatch would eventually produce.
-    internal_id = public_id_service.resolve_internal_id(db, AttendanceFine, fine_id)
+def _resolve_fine_id(db: Session, fine_id: uuid.UUID, user: CurrentUser) -> int:
+    # AttendanceFine hat keine eigene tenant_id (tenant_id= an public_id_service wäre wirkungslos):
+    # über das Ursprungsprotokoll auf den eigenen Mandanten einschränken. Vorher lieferte eine
+    # fremde Busse eine andere 404-Meldung als eine unbekannte ID (Existenz-Orakel,
+    # SECURITY-RULES 1.6); die Repository-Methoden prüfen den Mandanten zusätzlich selbst.
+    internal_id = db.scalar(
+        select(AttendanceFine.id)
+        .join(Protocol, Protocol.id == AttendanceFine.protocol_id)
+        .where(AttendanceFine.public_id == fine_id, Protocol.tenant_id == user.current_tenant_id)
+    )
     if internal_id is None:
         raise HTTPException(status_code=404, detail="Fine not found")
     return internal_id
@@ -185,7 +191,7 @@ def delete_fine(
     """Offene Busse löschen. Im offenen Ursprungsprotokoll hart, sonst mit Begründung
     (Status `deleted`, aufgeführt im Protokoll `protocol_id` bzw. im nächsten offenen)."""
     require_permission(user, P.FINANCES_MANAGE)
-    internal_id = _resolve_fine_id(db, fine_id)
+    internal_id = _resolve_fine_id(db, fine_id, user)
     payload = payload or DeleteFinePayload()
     protocol_context_id = None
     if payload.protocol_id is not None:
@@ -220,7 +226,7 @@ def restore_fine(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.FINANCES_MANAGE)
-    internal_id = _resolve_fine_id(db, fine_id)
+    internal_id = _resolve_fine_id(db, fine_id, user)
     try:
         result = repo.restore_fine(db, internal_id, user.current_tenant_id)
     except SQLAlchemyError as exc:
@@ -240,7 +246,7 @@ def collect_fine(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.FINANCES_MANAGE)
-    internal_id = _resolve_fine_id(db, fine_id)
+    internal_id = _resolve_fine_id(db, fine_id, user)
     collecting_protocol_internal_id = None
     if payload.collecting_protocol_id is not None:
         collecting_protocol_internal_id = public_id_service.resolve_internal_id(
@@ -266,7 +272,7 @@ def reopen_fine(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.FINANCES_MANAGE)
-    internal_id = _resolve_fine_id(db, fine_id)
+    internal_id = _resolve_fine_id(db, fine_id, user)
     try:
         result = repo.reopen_fine(db, internal_id, user.current_tenant_id)
     except SQLAlchemyError as exc:
