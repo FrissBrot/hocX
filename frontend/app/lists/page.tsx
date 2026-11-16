@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 
 import { ListManager } from "@/components/lists/list-manager";
 import { AppShell } from "@/components/ui/app-shell";
-import { backendFetchWithSession, requireSession } from "@/lib/api/server";
+import { backendFetchAllPagesWithSession, backendFetchWithSession, requireSession } from "@/lib/api/server";
 import {
   EventSummary,
   ParticipantSummary,
@@ -26,7 +26,9 @@ export default async function ListsPage() {
     backendFetchWithSession<StructuredListDefinition[]>("/api/lists"),
     backendFetchWithSession<Record<string, StructuredListEntry[]>>("/api/list-entries"),
     backendFetchWithSession<ParticipantSummary[]>("/api/participants?limit=2000"),
-    backendFetchWithSession<EventSummary[]>("/api/events"),
+    // Alle Seiten: GET /api/events liefert pro Aufruf nur die neusten Termine, ältere fehlten sonst
+    // in der Terminauswahl der Listen.
+    backendFetchAllPagesWithSession<EventSummary>("/api/events"),
   ]);
 
   const initialEntriesByList = Object.fromEntries((lists ?? []).map((definition) => [definition.id, entriesByList?.[definition.id] ?? []]));
