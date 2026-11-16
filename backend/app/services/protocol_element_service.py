@@ -231,8 +231,27 @@ class ProtocolElementService:
         title = (config.get("session_label") or "Nächste Sitzung").strip() or "Nächste Sitzung"
         tag = (config.get("session_tag") or "next_session").strip() or "next_session"
 
+        # Gibt es von dieser Vorlage schon ein späteres Protokoll, gehört template.next_event_id
+        # (und damit der verknüpfte Termin) zur Kette dieses späteren Protokolls. Eine Korrektur im
+        # älteren Protokoll darf ihn weder verschieben noch leeren - sie bleibt nur im Block (PDF).
+        newer_protocol_exists = db.scalar(
+            select(Protocol.id)
+            .where(
+                Protocol.tenant_id == protocol.tenant_id,
+                Protocol.template_id == protocol.template_id,
+                Protocol.protocol_date > protocol.protocol_date,
+            )
+            .limit(1)
+        )
+        if newer_protocol_exists is not None:
+            return
+
         if not parsed_date:
-            template.next_event_id = None
+            # Folgeprotokoll ohne eigene «nächste Sitzung» (Vorbelegung leer): der Zeiger zeigt noch
+            # auf die Sitzung dieses Protokolls. Nicht leeren, sonst verlieren offene Pendenzen
+            # «bis nächste Sitzung» ihr Datum, nur weil hier z. B. die Bezeichnung geändert wurde.
+            if template.next_event_id is not None and template.next_event_id != protocol.event_id:
+                template.next_event_id = None
             if protocol.event_id:
                 template.last_event_id = protocol.event_id
             db.add(template)

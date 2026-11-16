@@ -93,3 +93,60 @@ def test_followup_protocol_does_not_prefill_its_own_date_as_next_session(db):
     )
     assert config["selected_date"] is None
     assert config["session_label"] == "Hock"
+
+
+def _chain(db):
+    """Sitzung 01.12. setzt 14.12.; Folgeprotokoll 14.12. hängt an diesem Termin."""
+    tenant = make_tenant(db)
+    template = make_template(db, tenant.id)
+    service = ProtocolElementService()
+    first = make_protocol(db, tenant.id, template.id, protocol_number="P-1", protocol_date=date(2026, 12, 1))
+    first_block = _session_block(db, first, "2026-12-14")
+    service._sync_session_date_marker(db, first_block)
+    own_event_id = db.get(Template, template.id).next_event_id
+    followup = make_protocol(db, tenant.id, template.id, protocol_number="P-2", protocol_date=date(2026, 12, 14))
+    followup.event_id = own_event_id
+    db.flush()
+    return service, template, first_block, followup, own_event_id
+
+
+def test_followup_without_date_keeps_pointer_to_its_own_session(db):
+    # Folgeprotokoll speichert den Block ohne Datum (z. B. nur die Bezeichnung geändert): Pendenzen
+    # «bis nächste Sitzung» behalten ihr Datum (template.next_event_id bleibt).
+    service, template, _first_block, followup, own_event_id = _chain(db)
+    service._sync_session_date_marker(db, _session_block(db, followup, None))
+    assert db.get(Template, template.id).next_event_id == own_event_id
+    assert db.get(Template, template.id).last_event_id == own_event_id
+    assert db.get(Event, own_event_id).event_date == date(2026, 12, 14)
+
+
+def test_editing_older_protocol_does_not_move_the_newer_chain(db):
+    # Folgeprotokoll hat die übernächste Sitzung gesetzt; danach wird im älteren Protokoll das Datum
+    # geändert. Weder der Termin des Folgeprotokolls noch der neue «nächste» Termin dürfen wandern.
+    service, template, first_block, followup, own_event_id = _chain(db)
+    service._sync_session_date_marker(db, _session_block(db, followup, "2027-01-11"))
+    next_event_id = db.get(Template, template.id).next_event_id
+
+    first_block.configuration_snapshot_json = {"block_kind": "session_date", "selected_date": "2026-12-15"}
+    db.flush()
+    service._sync_session_date_marker(db, first_block)
+
+    assert db.get(Template, template.id).next_event_id == next_event_id
+    assert db.get(Event, next_event_id).event_date == date(2027, 1, 11)
+    assert db.get(Event, own_event_id).event_date == date(2026, 12, 14)
+
+
+def test_newest_protocol_still_moves_its_next_session(db):
+    # Unverändert: Im neusten Protokoll verschiebt eine Datumskorrektur den eigenen «nächsten» Termin.
+    tenant = make_tenant(db)
+    template = make_template(db, tenant.id)
+    service = ProtocolElementService()
+    first = make_protocol(db, tenant.id, template.id, protocol_number="P-1", protocol_date=date(2026, 12, 1))
+    block = _session_block(db, first, "2026-12-14")
+    service._sync_session_date_marker(db, block)
+    event_id = db.get(Template, template.id).next_event_id
+    block.configuration_snapshot_json = {"block_kind": "session_date", "selected_date": "2026-12-15"}
+    db.flush()
+    service._sync_session_date_marker(db, block)
+    assert db.get(Template, template.id).next_event_id == event_id
+    assert db.get(Event, event_id).event_date == date(2026, 12, 15)
