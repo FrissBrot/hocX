@@ -8,144 +8,21 @@ Installationen aktualisieren können.
 
 ## [Unreleased]
 
-### Hinzugefügt
+## [1.3.0] - 2026-11-16
 
-- **Alben verwalten.** Alben lassen sich umbenennen und löschen (die Fotos bleiben erhalten),
-  Fotos lassen sich aus einem Album nehmen, ohne sie zu löschen.
-- **Pendenzen** zeigen in der Liste (auch mobil) den Hinweis «Busse läuft»; neue Bussenregeln
-  lassen sich aus Vorlagen anlegen, Filter und Konto stehen unter «Erweitert». In der Oberfläche
-  heisst es einheitlich «Pendenz».
-- **Sicherheitshinweis** an die bisherige Adresse, wenn die Login-E-Mail geändert wird.
-- **Passwort ändern** im Profil unter «Sicherheit»; andere Sitzungen enden, die aktuelle bleibt.
-- **Finanzen:** Jahressicht mit Einnahmen, Ausgaben, Anfangs- und Endsaldo und «Exportieren».
-- **Stammlisten:** Eine Liste lässt sich als Quelle der Gruppenstatistik markieren; die Statistik
-  hängt nicht mehr am Listennamen «Gruppen».
-- **Hilfe und Doku in allen Bereichen.** Neue Anleitungen zu Bussen, Aufgabenpaketen,
-  Benachrichtigungen, Konto, Fotos und Alben, Statistik und Dashboard, Zyklen sowie Einstellungen
-  und Domains; Protokolle, Termine, Mitglieder, Finanzen und Stammlisten neu geschrieben. «?»-Hilfen
-  und Doku-Links in Protokollen, Terminen, Bussen, Finanzen, Mitgliedern, Fotos, Listen, Anliegen,
-  Statistik, Document Studio und Einstellungen.
-- **Mail «Abgabe eingegangen».** Erledigt eine Einreichung in der Abgabebox eine Abgabe-Aufgabe,
-  bekommen alle Verantwortlichen der Aufgabe eine Mail (mehrere Abgaben kurz nacheinander in einer
-  Mail). Abschaltbar im Profil unter «Benachrichtigungen» («Abgabe eingegangen», Standard ein). Von
-  Hand erledigte Aufgaben lösen keine Mail aus. Beim ersten Lauf nach dem Update werden Abgaben der
-  letzten 24 Stunden noch gemeldet.
-- **Abgaben einfacher einrichten.** Vorlagen zum Schnellstart («Berichte pro Termin», «Formular
-  bis Stichtag», «Fotos nach Anlass»), selten gebrauchte Einstellungen unter «Erweitert», ein
-  Beispiel mit echtem Datum zum Zeitfenster, ein Hinweis neben dem gesperrten «Speichern», was
-  noch fehlt, und nach dem Anlegen ein Fenster mit dem Link zum Kopieren. Der Link steht auch in
-  der Detailansicht. Auf dem Handy stehen Zusammenfassung und Link oben.
-- **Hilfe im Formular.** Kleine «?»-Knöpfe erklären Quelle, Zeitfenster, Stichtag, Zyklus,
-  Dateien, automatisches Schliessen, Verantwortliche und Links und führen zum passenden Abschnitt
-  der neu geschriebenen Anleitung «Abgabebox». Der Link braucht `TRAEFIK_DOCS_DOMAIN` (bereits
-  vorhanden, wird neu auch ans Frontend gegeben); ohne Wert erscheinen keine Doku-Links.
-- **Abgabebox:** Fortschrittsbalken beim Hochladen, die Beschreibung der Abgabe auch auf der
-  Upload-Seite, bei nur einem Dokument direkt das Upload-Formular und eine genauere Meldung bei
-  nicht erlaubten Dateitypen.
-
-### Behoben
-
-- **Pendenzen-Bussen.** Nachträgliches Bearbeiten einer erledigten Pendenz verschiebt das
-  Erledigungsdatum nicht mehr und löst keine falsche Busse mehr aus. Eingefrorene Bussen bleiben
-  bestehen, auch beim Wiedereröffnen, Verschieben oder Löschen der Pendenz; ändern oder erlassen
-  kann sie nur, wer Finanzen verwaltet (mit Audit-Eintrag). Die gebüsste Person kann ihre laufende
-  Busse nicht mehr durch Verschieben, Umverteilen, Abbrechen oder Löschen loswerden. Abgabe-
-  Pendenzen werden auch nach längerem Ausfall des Abgleichs korrekt bewertet.
-- **Protokoll abschliessen** fragt nach und erklärt die Folgen; vorher wird alles noch Getippte
-  gespeichert, der letzte Satz fehlt nicht mehr im PDF. Abgeschlossene Protokolle lassen sich nicht
-  mehr umbenennen oder umdatieren, lokale Entwürfe überschreiben keine neuere fremde Fassung.
-- **Termin-Formular** speichert nicht mehr bei jedem Tastendruck, sondern nach einer kurzen Pause,
-  der Reihe nach und mit Statusanzeige; beim Schliessen geht nichts verloren. Per CSV importierte
-  Termine und neue Zyklen ordnen Termine dem Zyklus zu, fehlende Zuordnungen werden nachgetragen.
-  Der Löschdialog nennt die mitgelöschten Abgabe-Einreichungen und Dateien.
-- **Datenschutz:** Bussen-Exporte im Document Studio enthalten ohne «Personenbezogene Daten aller»
-  nur noch die eigenen Bussen. Pendenzen-Routen antworten bei fremden Pendenzen mit 404.
-- **Finanzen:** Buchungen aus Pendenzen-Bussen sind gesperrt (Schloss mit Erklärung). Nach einem
-  Abo-Downgrade bleiben die Bussen lesbar. Das Dashboard summiert offene Bussen korrekt je Währung.
-- **Domains:** Eine neue eigene Domain ersetzt die laufende erst nach erfolgreicher DNS-Prüfung; ein
-  Tippfehler legt die Vereinsadresse nicht mehr lahm. Prüfen und Löschen haben eigene Kontingente.
-- **Mitglieder:** «E-Mail-Benachrichtigungen ohne Login» bleibt beim Speichern durch Admins
-  erhalten. Der CSV-Import erkennt Duplikate über alle Mitglieder (auch per E-Mail).
-- **Fotos:** «Löschen» nimmt Fotos, die nicht gelöscht werden dürfen, nicht mehr still aus Alben.
-  Fehler beim Galerie-Upload landen im Fehlerprotokoll statt als Rohtext beim Benutzer.
-- «Rückgängig» bei einer einkassierten Busse fragt nach, weil die Buchung gelöscht wird.
-- **Systemalarme** gehen bei einem ntfy-Ausfall nicht mehr verloren und werden nachgesendet;
-  fehlschlagende Systemprüfungen und Fehler der PDF-Aufträge werden gemeldet.
-- **Schweizer Zeit:** «Heute» gilt in Terminen, Anliegen, Statistik, Protokollen, Finanzen und
-  Document Studio nach Schweizer Datum statt UTC.
-- **Statistik:** Bussenarten in der gewählten Sprache, Diagramme in der Kontowährung, «Protokolle»
-  zählt nur durchgeführte und abgeschlossene; Leser mit zugewiesenen Vorlagen sehen nur deren Zahlen.
-- **Verspätungsbussen bei Abgaben über die Abgabebox.** Eine Einreichung erledigte die Pendenz
-  in der Datenbank ohne die Pendenzen-Busse festzuschreiben. Der Abgleich-Job friert sie jetzt für
-  Abschlüsse der letzten zwei Tage nach (fehlende ältere werden bewusst nicht nachgerechnet).
-- **Dateien im Virenscan erledigten die Pendenz.** Erst eine sauber geprüfte Datei erledigt sie
-  (Migration `0175_submission_clean_files`); was der erneute Scan freigibt, erledigt der Scan bzw.
-  der Abgleich-Job, inklusive Busse und Mail. Erledigt-Zeitpunkt ist die Einreichung.
-- **«Alle Dateien (.zip)»** enthielt nur die Dateien der letzten Einreichung und nach dem
-  Schliessen gar nichts; jetzt alle geprüften Dateien aller Einreichungen und der in der App
-  verknüpften, ein Ordner je Abgabefeld.
-- **Schliessen/Wiederöffnen** mit einer fremden oder unbekannten Element-Referenz legte erst eine
-  Zeile an und endete dann mit Serverfehler; jetzt 400 ohne Änderung.
-- **Schliessen während eines Uploads**: Ein laufender Upload konnte ein eben geschlossenes
-  Abgabefeld wieder öffnen. Beide laufen jetzt unter einem gemeinsamen Lock je Abgabe; die
-  Abgabebox prüft das Schliessen von Hand nicht mehr nur bei automatischem Schliessen.
-- **Höchstzahl Dateien**: Die Abgabebox zählt in der App verknüpfte Dateien jetzt mit, wie die App.
-- **Fortschritt** zählt jedes Abgabefeld nur einmal und nur, wenn es noch zur Abgabe gehört
-  (nie mehr als 100 %). Die Abgaben-Liste lädt ihn in einer Anfrage
-  (`GET /api/submission-assignments/summaries`) statt einer je Abgabe.
-- Ein Fehler beim Nachtragen der Mails «Abgabe eingegangen» hielt den ganzen Mailversand an.
-- Datumsangaben im Abgabefeld-Fenster formatiert, uneinheitliche Begriffe (Abgabefeld, Stichtag,
-  Einzelabgabe) und fehlende Mehrzahlformen vereinheitlicht, Dauer-Animationen respektieren
-  «Bewegung reduzieren».
-
-### Geändert
-
-- **Begriffe:** «Mitglieder» und «Logins & Rollen» sind klar getrennt; in der Login-Liste wird nur
-  noch der Login entzogen. Logins werden standardmässig per E-Mail-Einladung vergeben.
-- Termine sind mit reinem Leserecht als Leseansicht sichtbar; Sitzungen mit Uhrzeit erscheinen im
-  Kalender-Abo mit Uhrzeit.
-- Plan-Änderungen gelten sofort für alle Organisationen auf dem Plan; «Abo & Nutzung» zeigt Module
-  im Zustand «Nur lesen».
-- Migrationen 0176–0180 (Gruppenquelle für Listen, Bewertungsmerker für Pendenzen-Bussen,
-  Nachtrag der Zyklus-Zuordnung, ausstehende Domain-Ersetzung, Vereinswährung). Die
-  Wanderplaner-Migration muss damit ab 0181 nummeriert werden.
-- **Eine Währung je Verein.** Die Währung der Konten und Bussen wird unter *Mandant-Einstellungen →
-  Allgemein → Finanzen* gesetzt und gilt für alle Konten; das Feld «Währungsbezeichnung» je Konto
-  entfällt. Migration `0180_tenant_finance_currency` übernimmt je Verein die häufigste
-  Kontowährung und gleicht alle Konten daran an (nur die Bezeichnung, keine Umrechnung). Die
-  Anwesenheitsbusse im Protokoll zeigt die Vereinswährung statt fest «CHF».
-- **CSV- und Excel-Exporte aus dem Document Studio sind standardmässig verschlüsselt.** Sie
-  enthalten Personendaten und kommen als Excel-Datei mit Passwort (Office-Verschlüsselung, AES;
-  Passwort im Export-Dialog, mindestens 12 Zeichen) – auch bei CSV. Excel, Numbers und LibreOffice
-  öffnen sie ohne Zusatzsoftware. Wahlweise gibt es eine AES-256-ZIP-Datei, in der CSV eine
-  CSV-Datei bleibt (braucht 7-Zip, Keka oder WinRAR; `encryption: "zip"`). Die Verschlüsselung
-  lässt sich im Dialog bewusst abwählen
-  (auditiert als `encrypted: false`, Ausnahme in SECURITY-RULES §4.4). Kalender (ICS, ohne
-  Personendaten) und Text (nur Zwischenablage) bleiben unverschlüsselt. `POST /api/documents/export`
-  verlangt für `csv`/`xlsx` das Feld `password` oder `encrypt: false`. Neue Abhängigkeit
-  `msoffcrypto-tool` (mit `olefile`).
-- **Bussenliste nur mit Finanzzugriff.** Den Baustein «Bussenliste» anlegen, seine Bussen-Einstellungen
-  ändern oder ihn aus der Bibliothek in eine Vorlage einfügen geht nur mit «Kassenbuch ansehen»
-  (`finances.read`), sonst 403 `fine_list_requires_finance`. Titel, Darstellung und Entfernen bleiben
-  mit «Vorlagen bearbeiten» möglich.
-- **Von Hand geschlossene Abgabefelder zählen als erledigt.** Der Fortschrittsbalken zeigt sie
-  als eigenes Segment («4 von 5 erledigt · 1 geschlossen»). Die Aufgabe des Elements wird beim
-  Schliessen ohne geprüfte Datei «abgebrochen» (keine Verspätungsbusse), mit Datei bleibt sie
-  «erledigt»; eine von Hand erledigte oder abgebrochene Aufgabe bleibt unverändert. Wiederöffnen
-  öffnet eine abgebrochene Aufgabe wieder. Bereits geschlossene Elemente gleicht der Abgleich-Job nach dem
-  Update nach.
-
-## [1.2.6] - 2026-11-12
-
-Konto und Sicherheit per E-Mail («Passwort vergessen», Einladung, Sicherheitshinweise,
-«Datenexport fertig»), eine gemeinsame Bussenliste, die Bussen-Konfiguration unter Konfiguration
-mit neuem Regel-Dialog und neuer Tarif-Ansicht, Tarife auch für Verspätung und Absenz, Abgaben,
-die nach dem Enddatum offen bleiben können, sowie ein Fix für das Mausrad im Protokoll und
-durchgehend Umlaute statt «ae/oe/ue». Vier neue Migrationen, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
+Konto und Sicherheit per E-Mail («Passwort vergessen», Einladung, Sicherheitshinweise), globale
+Suche (Ctrl+K), ein persönlicher Abgabe-Link für Verantwortliche, Abgaben, die abgeschlossen oder
+nach dem Enddatum offen gehalten werden, eine Bussenliste mit eigener Konfiguration, eine Währung je
+Verein, Zugangslinks im Überblick, Hilfe und Doku in allen Bereichen sowie ein neues Mail-Design.
+Enthält die nie einzeln veröffentlichte Version 1.2.6. Zwölf neue Migrationen, keine neuen Secrets,
+eine neue optionale Umgebungsvariable (`TRAEFIK_DOCS_DOMAIN`), keine Breaking Changes.
 
 ### Update
 
-- Von **1.2.5**: `./scripts/deploy.sh <test|prod>`. Migrationen `0171_account_tokens`,
+- Von **1.2.5**: `./scripts/deploy.sh <test|prod>`. Vor dem Update legt `deploy.sh` ein
+  Offsite-Backup an, wenn das Borg-Backup eingerichtet ist. Von älteren Ständen gelten zusätzlich
+  die Hinweise von 1.2.5 und 1.2.4.
+- Migrationen `0171_account_tokens`,
   `0172_fine_tariff_attendance` und `0173_submission_keep_open` legen nur eine neue Tabelle und
   Spalten mit Standardwerten an und lassen sich zurückrollen. `0174_umlaut_session_label` ersetzt
   den gespeicherten Titel «Naechste Sitzung» durch «Nächste Sitzung» (Vorlagen und nicht
@@ -153,6 +30,21 @@ durchgehend Umlaute statt «ae/oe/ue». Vier neue Migrationen, keine neuen Secre
 - «Passwort vergessen» und «Per E-Mail einladen» erscheinen erst, wenn der E-Mail-Versand unter
   `/admin/notifications` eingerichtet ist. Für die Links in den Mails muss die Basis-URL stimmen
   («Basis-URL für Links», sonst `https://<TRAEFIK_DOMAIN>`).
+- Migrationen `0175`–`0182`: `0175_submission_clean_files` erledigt Abgabe-Pendenzen erst mit
+  geprüften Dateien, `0176_list_group_source` markiert bestehende Listen «Gruppen» als Quelle der
+  Gruppenstatistik (Statistik unverändert), `0177_todo_fine_evaluated` und
+  `0179_domain_pending_replacement` ergänzen Spalten bzw. Regeln, `0180_tenant_finance_currency`
+  übernimmt je Verein die häufigste Kontowährung (nur Bezeichnung, keine Umrechnung),
+  `0181_submission_owner_access` und `0182_submission_completion` legen den persönlichen
+  Abgabe-Link (Standard «aus» für bestehende Abgaben) und den Abschluss von Abgaben an.
+  `0178_event_cycle_backfill` trägt Zyklus-Zuordnungen für Termine ganz ohne Zuordnung nach; ein
+  Rückrollen entfernt diese Zuordnungen nicht wieder.
+- `TRAEFIK_DOCS_DOMAIN` (optional, bereits in `.env.prod.example`): Domain der Doku-Seite für die
+  Hilfe-Links in der App; leer = keine Links.
+- Release-Ablauf: Die Version kommt jetzt aus diesem Changelog. «Promote tested release images»
+  fragt keinen `release_tag` mehr ab, sondern liest die Version aus dem obersten
+  Versionsabschnitt des getesteten Commits und prüft, dass jedes Image dieselbe Version als Label
+  trägt (siehe RUNBOOK Abschnitt 3).
 
 ### Neu: Konto und Sicherheit per E-Mail
 
@@ -206,6 +98,75 @@ durchgehend Umlaute statt «ae/oe/ue». Vier neue Migrationen, keine neuen Secre
   letzter Tag des Termins plus «Tage danach», Listen- und Einzelabgaben: Stichtag).
 - Migration `0173_submission_keep_open`.
 
+### Hinzugefügt
+
+- **Alben verwalten.** Alben lassen sich umbenennen und löschen (die Fotos bleiben erhalten),
+  Fotos lassen sich aus einem Album nehmen, ohne sie zu löschen.
+- **Pendenzen** zeigen in der Liste (auch mobil) den Hinweis «Busse läuft»; neue Bussenregeln
+  lassen sich aus Vorlagen anlegen, Filter und Konto stehen unter «Erweitert». In der Oberfläche
+  heisst es einheitlich «Pendenz».
+- **Sicherheitshinweis** an die bisherige Adresse, wenn die Login-E-Mail geändert wird.
+- **Passwort ändern** im Profil unter «Sicherheit»; andere Sitzungen enden, die aktuelle bleibt.
+- **Finanzen:** Jahressicht mit Einnahmen, Ausgaben, Anfangs- und Endsaldo und «Exportieren».
+- **Stammlisten:** Eine Liste lässt sich als Quelle der Gruppenstatistik markieren; die Statistik
+  hängt nicht mehr am Listennamen «Gruppen».
+- **Hilfe und Doku in allen Bereichen.** Neue Anleitungen zu Bussen, Aufgabenpaketen,
+  Benachrichtigungen, Konto, Fotos und Alben, Statistik und Dashboard, Zyklen sowie Einstellungen
+  und Domains; Protokolle, Termine, Mitglieder, Finanzen und Stammlisten neu geschrieben. «?»-Hilfen
+  und Doku-Links in Protokollen, Terminen, Bussen, Finanzen, Mitgliedern, Fotos, Listen, Anliegen,
+  Statistik, Document Studio und Einstellungen.
+- **Mail «Abgabe eingegangen».** Erledigt eine Einreichung in der Abgabebox eine Abgabe-Aufgabe,
+  bekommen alle Verantwortlichen der Aufgabe eine Mail (mehrere Abgaben kurz nacheinander in einer
+  Mail). Abschaltbar im Profil unter «Benachrichtigungen» («Abgabe eingegangen», Standard ein). Von
+  Hand erledigte Aufgaben lösen keine Mail aus. Beim ersten Lauf nach dem Update werden Abgaben der
+  letzten 24 Stunden noch gemeldet.
+- **Abgaben einfacher einrichten.** Vorlagen zum Schnellstart («Berichte pro Termin», «Formular
+  bis Stichtag», «Fotos nach Anlass»), selten gebrauchte Einstellungen unter «Erweitert», ein
+  Beispiel mit echtem Datum zum Zeitfenster, ein Hinweis neben dem gesperrten «Speichern», was
+  noch fehlt, und nach dem Anlegen ein Fenster mit dem Link zum Kopieren. Der Link steht auch in
+  der Detailansicht. Auf dem Handy stehen Zusammenfassung und Link oben.
+- **Hilfe im Formular.** Kleine «?»-Knöpfe erklären Quelle, Zeitfenster, Stichtag, Zyklus,
+  Dateien, automatisches Schliessen, Verantwortliche und Links und führen zum passenden Abschnitt
+  der neu geschriebenen Anleitung «Abgabebox». Der Link braucht `TRAEFIK_DOCS_DOMAIN` (bereits
+  vorhanden, wird neu auch ans Frontend gegeben); ohne Wert erscheinen keine Doku-Links.
+- **Abgabebox:** Fortschrittsbalken beim Hochladen, die Beschreibung der Abgabe auch auf der
+  Upload-Seite, bei nur einem Dokument direkt das Upload-Formular und eine genauere Meldung bei
+  nicht erlaubten Dateitypen.
+
+### Geändert
+
+- **Begriffe:** «Mitglieder» und «Logins & Rollen» sind klar getrennt; in der Login-Liste wird nur
+  noch der Login entzogen. Logins werden standardmässig per E-Mail-Einladung vergeben.
+- Termine sind mit reinem Leserecht als Leseansicht sichtbar; Sitzungen mit Uhrzeit erscheinen im
+  Kalender-Abo mit Uhrzeit.
+- Plan-Änderungen gelten sofort für alle Organisationen auf dem Plan; «Abo & Nutzung» zeigt Module
+  im Zustand «Nur lesen».
+- **Eine Währung je Verein.** Die Währung der Konten und Bussen wird unter *Mandant-Einstellungen →
+  Allgemein → Finanzen* gesetzt und gilt für alle Konten; das Feld «Währungsbezeichnung» je Konto
+  entfällt. Migration `0180_tenant_finance_currency` übernimmt je Verein die häufigste
+  Kontowährung und gleicht alle Konten daran an (nur die Bezeichnung, keine Umrechnung). Die
+  Anwesenheitsbusse im Protokoll zeigt die Vereinswährung statt fest «CHF».
+- **CSV- und Excel-Exporte aus dem Document Studio sind standardmässig verschlüsselt.** Sie
+  enthalten Personendaten und kommen als Excel-Datei mit Passwort (Office-Verschlüsselung, AES;
+  Passwort im Export-Dialog, mindestens 12 Zeichen) – auch bei CSV. Excel, Numbers und LibreOffice
+  öffnen sie ohne Zusatzsoftware. Wahlweise gibt es eine AES-256-ZIP-Datei, in der CSV eine
+  CSV-Datei bleibt (braucht 7-Zip, Keka oder WinRAR; `encryption: "zip"`). Die Verschlüsselung
+  lässt sich im Dialog bewusst abwählen
+  (auditiert als `encrypted: false`, Ausnahme in SECURITY-RULES §4.4). Kalender (ICS, ohne
+  Personendaten) und Text (nur Zwischenablage) bleiben unverschlüsselt. `POST /api/documents/export`
+  verlangt für `csv`/`xlsx` das Feld `password` oder `encrypt: false`. Neue Abhängigkeit
+  `msoffcrypto-tool` (mit `olefile`).
+- **Bussenliste nur mit Finanzzugriff.** Den Baustein «Bussenliste» anlegen, seine Bussen-Einstellungen
+  ändern oder ihn aus der Bibliothek in eine Vorlage einfügen geht nur mit «Kassenbuch ansehen»
+  (`finances.read`), sonst 403 `fine_list_requires_finance`. Titel, Darstellung und Entfernen bleiben
+  mit «Vorlagen bearbeiten» möglich.
+- **Von Hand geschlossene Abgabefelder zählen als erledigt.** Der Fortschrittsbalken zeigt sie
+  als eigenes Segment («4 von 5 erledigt · 1 geschlossen»). Die Aufgabe des Elements wird beim
+  Schliessen ohne geprüfte Datei «abgebrochen» (keine Verspätungsbusse), mit Datei bleibt sie
+  «erledigt»; eine von Hand erledigte oder abgebrochene Aufgabe bleibt unverändert. Wiederöffnen
+  öffnet eine abgebrochene Aufgabe wieder. Bereits geschlossene Elemente gleicht der Abgleich-Job nach dem
+  Update nach.
+
 ### Behoben
 
 - Protokoll, Rad-Effekt bzw. Akkordeon: Beim Scrollen mit dem Mausrad sprang der Editor zurück
@@ -221,6 +182,69 @@ durchgehend Umlaute statt «ae/oe/ue». Vier neue Migrationen, keine neuen Secre
 - Abgabebox: Bei mehrtägigen Terminen schloss das Abgabefeld schon «Tage danach» nach dem
   *ersten* Tag des Termins, die Pendenz war aber erst nach dem *letzten* Tag fällig. Beide rechnen
   jetzt ab dem letzten Tag.
+- **Pendenzen-Bussen.** Nachträgliches Bearbeiten einer erledigten Pendenz verschiebt das
+  Erledigungsdatum nicht mehr und löst keine falsche Busse mehr aus. Eingefrorene Bussen bleiben
+  bestehen, auch beim Wiedereröffnen, Verschieben oder Löschen der Pendenz; ändern oder erlassen
+  kann sie nur, wer Finanzen verwaltet (mit Audit-Eintrag). Die gebüsste Person kann ihre laufende
+  Busse nicht mehr durch Verschieben, Umverteilen, Abbrechen oder Löschen loswerden. Abgabe-
+  Pendenzen werden auch nach längerem Ausfall des Abgleichs korrekt bewertet.
+- **Protokoll abschliessen** fragt nach und erklärt die Folgen; vorher wird alles noch Getippte
+  gespeichert, der letzte Satz fehlt nicht mehr im PDF. Abgeschlossene Protokolle lassen sich nicht
+  mehr umbenennen oder umdatieren, lokale Entwürfe überschreiben keine neuere fremde Fassung.
+- **Termin-Formular** speichert nicht mehr bei jedem Tastendruck, sondern nach einer kurzen Pause,
+  der Reihe nach und mit Statusanzeige; beim Schliessen geht nichts verloren. Per CSV importierte
+  Termine und neue Zyklen ordnen Termine dem Zyklus zu, fehlende Zuordnungen werden nachgetragen.
+  Der Löschdialog nennt die mitgelöschten Abgabe-Einreichungen und Dateien.
+- **Datenschutz:** Bussen-Exporte im Document Studio enthalten ohne «Personenbezogene Daten aller»
+  nur noch die eigenen Bussen. Pendenzen-Routen antworten bei fremden Pendenzen mit 404.
+- **Finanzen:** Buchungen aus Pendenzen-Bussen sind gesperrt (Schloss mit Erklärung). Nach einem
+  Abo-Downgrade bleiben die Bussen lesbar. Das Dashboard summiert offene Bussen korrekt je Währung.
+- **Domains:** Eine neue eigene Domain ersetzt die laufende erst nach erfolgreicher DNS-Prüfung; ein
+  Tippfehler legt die Vereinsadresse nicht mehr lahm. Prüfen und Löschen haben eigene Kontingente.
+- **Mitglieder:** «E-Mail-Benachrichtigungen ohne Login» bleibt beim Speichern durch Admins
+  erhalten. Der CSV-Import erkennt Duplikate über alle Mitglieder (auch per E-Mail).
+- **Fotos:** «Löschen» nimmt Fotos, die nicht gelöscht werden dürfen, nicht mehr still aus Alben.
+  Fehler beim Galerie-Upload landen im Fehlerprotokoll statt als Rohtext beim Benutzer.
+- «Rückgängig» bei einer einkassierten Busse fragt nach, weil die Buchung gelöscht wird.
+- **Systemalarme** gehen bei einem ntfy-Ausfall nicht mehr verloren und werden nachgesendet;
+  fehlschlagende Systemprüfungen und Fehler der PDF-Aufträge werden gemeldet.
+- **Schweizer Zeit:** «Heute» gilt in Terminen, Anliegen, Statistik, Protokollen, Finanzen und
+  Document Studio nach Schweizer Datum statt UTC.
+- **Statistik:** Bussenarten in der gewählten Sprache, Diagramme in der Kontowährung, «Protokolle»
+  zählt nur durchgeführte und abgeschlossene; Leser mit zugewiesenen Vorlagen sehen nur deren Zahlen.
+- **Verspätungsbussen bei Abgaben über die Abgabebox.** Eine Einreichung erledigte die Pendenz
+  in der Datenbank ohne die Pendenzen-Busse festzuschreiben. Der Abgleich-Job friert sie jetzt für
+  Abschlüsse der letzten zwei Tage nach (fehlende ältere werden bewusst nicht nachgerechnet).
+- **Dateien im Virenscan erledigten die Pendenz.** Erst eine sauber geprüfte Datei erledigt sie
+  (Migration `0175_submission_clean_files`); was der erneute Scan freigibt, erledigt der Scan bzw.
+  der Abgleich-Job, inklusive Busse und Mail. Erledigt-Zeitpunkt ist die Einreichung.
+- **«Alle Dateien (.zip)»** enthielt nur die Dateien der letzten Einreichung und nach dem
+  Schliessen gar nichts; jetzt alle geprüften Dateien aller Einreichungen und der in der App
+  verknüpften, ein Ordner je Abgabefeld.
+- **Schliessen/Wiederöffnen** mit einer fremden oder unbekannten Element-Referenz legte erst eine
+  Zeile an und endete dann mit Serverfehler; jetzt 400 ohne Änderung.
+- **Schliessen während eines Uploads**: Ein laufender Upload konnte ein eben geschlossenes
+  Abgabefeld wieder öffnen. Beide laufen jetzt unter einem gemeinsamen Lock je Abgabe; die
+  Abgabebox prüft das Schliessen von Hand nicht mehr nur bei automatischem Schliessen.
+- **Höchstzahl Dateien**: Die Abgabebox zählt in der App verknüpfte Dateien jetzt mit, wie die App.
+- **Fortschritt** zählt jedes Abgabefeld nur einmal und nur, wenn es noch zur Abgabe gehört
+  (nie mehr als 100 %). Die Abgaben-Liste lädt ihn in einer Anfrage
+  (`GET /api/submission-assignments/summaries`) statt einer je Abgabe.
+- Ein Fehler beim Nachtragen der Mails «Abgabe eingegangen» hielt den ganzen Mailversand an.
+- Datumsangaben im Abgabefeld-Fenster formatiert, uneinheitliche Begriffe (Abgabefeld, Stichtag,
+  Einzelabgabe) und fehlende Mehrzahlformen vereinheitlicht, Dauer-Animationen respektieren
+  «Bewegung reduzieren».
+- **«Nächste Sitzung» im Folgeprotokoll** verschiebt nicht mehr die eigene Sitzung: Setzt ein
+  Folgeprotokoll die übernächste Sitzung, entsteht ein neuer Termin, statt dass der Termin des
+  Folgeprotokolls (samt Kalender-Abo und Pendenzen «bis nächste Sitzung») wandert. Das Datum ist im
+  Folgeprotokoll nicht mehr mit dem eigenen Datum vorbelegt. Ändert man den Block in einem älteren
+  Protokoll, nachdem schon ein späteres derselben Vorlage existiert, bleiben die Termine unverändert
+  (die Änderung gilt nur für dieses Protokoll und sein PDF); speichert ein Folgeprotokoll den Block
+  ohne Datum, behalten offene Pendenzen «bis nächste Sitzung» ihr Datum.
+- **Tag umbenennen** zieht Aufgabenpakete («pro Termin») und den Fälligkeits-Tag der Vorlagen mit.
+- **Listen:** Die Terminauswahl lädt alle Termine statt nur die 100 neusten.
+- **Zyklusjahr im Frontend** bei einem Stichtag, den es im Jahr nicht gibt (z. B. 29.02.), wie im
+  Backend (letzter Tag des Monats).
 
 ## [1.2.5] - 2026-11-11
 
