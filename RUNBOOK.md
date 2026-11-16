@@ -120,7 +120,13 @@ Wenn Test erfolgreich war:
 1. In GitHub → Actions den Workflow `Promote tested release images` starten.
 2. Eingaben:
    - `source_tag`: genau der getestete Candidate-Tag, z.B. `test-20260825-abc1234-r42`
-   - `release_tag`: finaler Semver-Tag, z.B. `v1.2.0`
+   - **Keine Versionseingabe:** Der Release-Tag kommt aus `CHANGELOG.md` des getesteten Commits
+     (oberster Versionsabschnitt, z.B. `## [1.3.0] - 2026-11-16`; `[Unreleased]` muss leer sein).
+     `Build test candidate images` schreibt dieselbe Version als Label
+     `org.opencontainers.image.version` in jedes Image (Zusammenfassung des Builds: «release
+     version»); die Promotion bricht ab, wenn ein Image eine andere oder keine Version trägt oder
+     die Version unter der zuletzt veröffentlichten liegt. Ein Kandidat mit «unreleased» ist nur
+     ein Testbuild: erst den Versionsabschnitt im Changelog anlegen, dann neu bauen.
    - `update_latest`: in der Regel `true`
    - `confirm_production`: zur Fehlklick-Sicherung exakt `DEPLOY`
 3. Der Workflow verlangt einen erfolgreichen, von `verify_release.sh test` erzeugten
@@ -133,8 +139,8 @@ Wenn Test erfolgreich war:
    den GitHub-Release mit Git-Tag auf dem getesteten Commit. Die Release Notes enthalten
    den passenden Versionsabschnitt aus `CHANGELOG.md` dieses Commits sowie die Image-Tags.
    Der Abschnitt (z.B. `## [1.2.0]`) muss bereits im Testkandidaten vorhanden und gefuellt
-   sein; sonst stoppt der Workflow vor der Promotion. `Unveröffentlicht` wird nicht verwendet.
-   Erlaubt sind stabile Versionen wie `v1.2.0` oder `1.2.0`; `update_latest` steuert auch
+   sein; sonst stoppt der Workflow vor der Promotion. `[Unreleased]` wird nicht verwendet.
+   `update_latest` steuert auch
    die GitHub-Markierung als neuester Release. Bereits veroeffentlichte Releases werden
    bei Wiederholungen beibehalten; ein Tag auf einem anderen Commit fuehrt zum Abbruch.
 

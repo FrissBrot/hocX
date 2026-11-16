@@ -7,10 +7,6 @@ on:
         description: "Bereits getesteter Image-Tag, z. B. test-20260825-abc1234-r42"
         required: true
         type: string
-      release_tag:
-        description: "Finaler Release-Tag, z. B. v1.2.0"
-        required: true
-        type: string
       update_latest:
         description: "Zusätzlich den moving tag 'latest' auf dieses Release zeigen lassen"
         required: true
@@ -41,7 +37,7 @@ jobs:
     outputs:
       candidate_sha: ${{ steps.proof.outputs.candidate_sha }}
       source_tag: ${{ steps.normalize.outputs.source_tag }}
-      release_tag: ${{ steps.normalize.outputs.release_tag }}
+      release_tag: ${{ steps.release.outputs.release_tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -59,16 +55,13 @@ jobs:
         id: normalize
         env:
           SOURCE_TAG: ${{ inputs.source_tag }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           set -euo pipefail
           echo "source_tag=$(printf '%s' "$SOURCE_TAG" | xargs)" >> "$GITHUB_OUTPUT"
-          echo "release_tag=$(printf '%s' "$RELEASE_TAG" | xargs)" >> "$GITHUB_OUTPUT"
 
       - name: Validate production confirmation and tags
         env:
           SOURCE_TAG: ${{ steps.normalize.outputs.source_tag }}
-          RELEASE_TAG: ${{ steps.normalize.outputs.release_tag }}
           CONFIRM_PRODUCTION: ${{ inputs.confirm_production }}
         run: |
           set -euo pipefail
@@ -79,11 +72,6 @@ jobs:
           }
           [[ "$SOURCE_TAG" =~ ^test-[0-9]{8}-[0-9a-f]{7,40}-r[0-9]+$ ]] || {
             echo "source_tag ist kein hocX Candidate-Tag: $SOURCE_TAG" >&2
-            exit 1
-          }
-          tag_regex='^v?[0-9]+\.[0-9]+\.[0-9]+$'
-          [[ "$RELEASE_TAG" =~ $tag_regex ]] || {
-            echo "Ungueltiger release_tag: $RELEASE_TAG" >&2
             exit 1
           }
 
@@ -118,13 +106,34 @@ jobs:
           echo "Testnachweis $deployment_id fuer $SOURCE_TAG ist erfolgreich."
           echo "candidate_sha=$deployment_sha" >> "$GITHUB_OUTPUT"
 
-      - name: Prepare changelog and check existing tag
+      # Die Version wird nicht eingegeben, sondern aus dem CHANGELOG des getesteten Commits gelesen
+      # (oberster Versionsabschnitt, [Unreleased] leer). scan-candidate prüft zusätzlich, dass jedes
+      # Image dieselbe Version als Label org.opencontainers.image.version trägt.
+      - name: Derive release tag from candidate CHANGELOG
+        id: release
         env:
           CANDIDATE_SHA: ${{ steps.proof.outputs.candidate_sha }}
-          RELEASE_TAG: ${{ steps.normalize.outputs.release_tag }}
         run: |
           set -euo pipefail
           git fetch origin "$CANDIDATE_SHA"
+          git show "$CANDIDATE_SHA:CHANGELOG.md" > "$RUNNER_TEMP/candidate-changelog.md"
+          release_tag="$(python3 scripts/release_notes.py --version "$RUNNER_TEMP/candidate-changelog.md")"
+          # Nie unter eine bereits veröffentlichte Version zurück (gleicher Tag = Wiederholung, unten geprüft).
+          latest="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -n1)"
+          if [ -n "$latest" ] && [ "$latest" != "$release_tag" ] \
+            && [ "$(printf '%s\n%s\n' "$latest" "$release_tag" | sort -V | tail -n1)" != "$release_tag" ]; then
+            echo "CHANGELOG nennt $release_tag, veröffentlicht ist bereits $latest." >&2
+            exit 1
+          fi
+          echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
+          echo "Release-Version aus CHANGELOG: $release_tag" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Prepare changelog and check existing tag
+        env:
+          CANDIDATE_SHA: ${{ steps.proof.outputs.candidate_sha }}
+          RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
+        run: |
+          set -euo pipefail
           if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
             [ "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" = "$CANDIDATE_SHA" ] || {
               echo "Release-Tag zeigt auf einen anderen Commit." >&2
@@ -161,6 +170,44 @@ jobs:
     steps:
       - name: Lowercase image owner
         run: echo "OWNER_LC=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # Jedes Image muss die Version tragen, die das CHANGELOG des getesteten Commits nennt (Label
+      # aus build-test-images.yml). Hier im Gate-Job, damit bei einer Abweichung kein einziges Image
+      # promotet wird.
+      - name: Image version label matches CHANGELOG
+        env:
+          IMAGE: ghcr.io/${{ env.OWNER_LC }}/hocx-${{ matrix.service }}:${{ needs.verify-tested-candidate.outputs.source_tag }}
+          RELEASE_TAG: ${{ needs.verify-tested-candidate.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect "$IMAGE" --format '{{json .Image}}' > "$RUNNER_TEMP/image.json"
+          label="$(python3 -c 'import json,sys
+          found=set()
+          def walk(n):
+              if isinstance(n,dict):
+                  for k,v in n.items():
+                      if k=="Labels" and isinstance(v,dict) and "org.opencontainers.image.version" in v:
+                          found.add(v["org.opencontainers.image.version"])
+                      walk(v)
+              elif isinstance(n,list):
+                  for v in n: walk(v)
+          walk(json.load(open(sys.argv[1])))
+          print(found.pop() if len(found)==1 else "")' "$RUNNER_TEMP/image.json")"
+          if [ "$label" != "$RELEASE_TAG" ]; then
+            echo "::error::Image $IMAGE trägt Version '${label:-keine}', das CHANGELOG des Commits nennt $RELEASE_TAG. Kandidat mit fertigem Versionsabschnitt neu bauen (Build test candidate images)."
+            exit 1
+          fi
+          echo "$IMAGE: Version $label" >> "$GITHUB_STEP_SUMMARY"
 
       # Kritische Schwachstellen mit verfügbarem Fix stoppen die Freigabe (Abhilfe: Images neu bauen,
       # Basis-Images aktualisieren). HIGH steht nur in der Summary. Trivy per Digest gepinnt, wie

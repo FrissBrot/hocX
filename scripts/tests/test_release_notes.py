@@ -25,3 +25,21 @@ class ReleaseNotesTests(unittest.TestCase):
         ]:
             with self.subTest(changelog=changelog, tag=tag), self.assertRaises(ValueError):
                 module.release_notes(changelog, tag)
+
+
+class ReleaseVersionTests(unittest.TestCase):
+    def test_top_version_with_empty_unreleased(self):
+        for head in ["", "## [Unreleased]\n\n", "## [Unveröffentlicht]\n"]:
+            changelog = f"# Changelog\n\n{head}## [1.3.0] - 2026-11-16\n\n### Neu\n- A\n\n## [1.2.6]\nAlt\n"
+            with self.subTest(head=head):
+                self.assertEqual(module.release_version(changelog), "v1.3.0")
+
+    def test_unreleased_with_content_or_no_version_fails(self):
+        for changelog in [
+            "## [Unreleased]\n- offen\n\n## [1.3.0]\nA\n",
+            "## [1.3.0]\n\n## [1.2.0]\nAlt\n",
+            "## Notizen\nx\n\n## [1.3.0]\nA\n",
+            "# Changelog\nnichts\n",
+        ]:
+            with self.subTest(changelog=changelog), self.assertRaises(ValueError):
+                module.release_version(changelog)

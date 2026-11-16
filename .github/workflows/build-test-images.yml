@@ -15,13 +15,35 @@ jobs:
       git_ref: ${{ steps.meta.outputs.git_ref }}
       git_sha: ${{ steps.meta.outputs.git_sha }}
       image_tag: ${{ steps.meta.outputs.image_tag }}
+      release_version: ${{ steps.version.outputs.release_version }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+
+      # Die Release-Version steht im CHANGELOG dieses Commits (oberster Versionsabschnitt) und wird
+      # als OCI-Label org.opencontainers.image.version in jedes Image geschrieben. Die Promotion liest
+      # sie von dort - beim Auslösen kann keine andere Version entstehen. Hat [Unreleased] noch
+      # Einträge, ist der Kandidat ein reiner Testbuild (Label "unreleased") und nicht promotebar.
+      - name: Read release version from CHANGELOG
+        id: version
+        run: |
+          set -euo pipefail
+          if version="$(python3 scripts/release_notes.py --version CHANGELOG.md 2>"$RUNNER_TEMP/version-error")"; then
+            echo "release_version=${version}" >> "$GITHUB_OUTPUT"
+          else
+            echo "release_version=unreleased" >> "$GITHUB_OUTPUT"
+            echo "::notice::Kein Release-Kandidat: $(cat "$RUNNER_TEMP/version-error")"
+          fi
+
       - name: Derive candidate metadata
         id: meta
         env:
           GIT_REF: ${{ github.ref_name }}
           GIT_SHA: ${{ github.sha }}
           RUN_NUMBER: ${{ github.run_number }}
+          RELEASE_VERSION: ${{ steps.version.outputs.release_version }}
         run: |
           set -euo pipefail
           short_sha="${GIT_SHA::7}"
@@ -36,6 +58,7 @@ jobs:
             echo "- ref: \`${GIT_REF}\`"
             echo "- sha: \`${GIT_SHA}\`"
             echo "- image tag: \`${image_tag}\`"
+            echo "- release version (CHANGELOG): \`${RELEASE_VERSION}\`"
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -82,6 +105,9 @@ jobs:
           context: ${{ matrix.service.context }}
           push: true
           tags: ghcr.io/${{ env.OWNER_LC }}/hocx-${{ matrix.service.name }}:${{ needs.prepare.outputs.image_tag }}
+          labels: |
+            org.opencontainers.image.version=${{ needs.prepare.outputs.release_version }}
+            org.opencontainers.image.revision=${{ needs.prepare.outputs.git_sha }}
           cache-from: type=gha,scope=${{ matrix.service.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service.name }}
 
@@ -99,6 +125,7 @@ jobs:
           GIT_REF: ${{ needs.prepare.outputs.git_ref }}
           GIT_SHA: ${{ needs.prepare.outputs.git_sha }}
           IMAGE_TAG: ${{ needs.prepare.outputs.image_tag }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.release_version }}
         run: |
           {
             echo "### ${SERVICE}"
@@ -106,6 +133,7 @@ jobs:
             echo "- ref: \`${GIT_REF}\`"
             echo "- sha: \`${GIT_SHA}\`"
             echo "- candidate tag: \`${IMAGE_TAG}\`"
+            echo "- release version: \`${RELEASE_VERSION}\`"
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
 
