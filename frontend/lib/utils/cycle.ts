@@ -11,8 +11,18 @@ export function getCycleYear(isoDate: string, resetMonth: number, resetDay: numb
   if (!isoDate) return new Date().getFullYear();
   const d = new Date(isoDate + "T00:00:00");
   const year = d.getFullYear();
-  const boundary = new Date(year, resetMonth - 1, resetDay);
-  return d > boundary ? year : year - 1;
+  return d > resetBoundary(year, resetMonth, resetDay) ? year : year - 1;
+}
+
+/**
+ * Stichtag im Jahr `year`. Gibt es den Tag im Monat nicht (29.02. ausserhalb von Schaltjahren,
+ * 31.04., 30.02.), gilt der letzte Tag des Monats - wie `reset_boundary()` in
+ * backend/app/core/cycle_utils.py. `new Date(year, 1, 29)` würde sonst in den März überlaufen
+ * und Termine um den Monatswechsel einem anderen Zyklusjahr zuordnen als das Backend.
+ */
+function resetBoundary(year: number, resetMonth: number, resetDay: number): Date {
+  const lastDayOfMonth = new Date(year, resetMonth, 0).getDate();
+  return new Date(year, resetMonth - 1, Math.min(resetDay, lastDayOfMonth));
 }
 
 export function formatCycleName(pattern: string | null | undefined, cycleYear: number): string {
