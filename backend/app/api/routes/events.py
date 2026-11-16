@@ -18,7 +18,7 @@ from app.services.submission_service import SubmissionService
 from app.services.audit_service import AuditService
 from app.services import photo_event_link_service
 from app.services.task_package_service import sync_packages_after_change
-from app.models.entities import Event, SubmissionAssignment
+from app.models.entities import Event, SubmissionAssignment, TaskPackage, TaskPackageItem, Template
 from app.core.offload import run_coroutine_in_thread
 
 router = APIRouter()
@@ -267,6 +267,28 @@ def rename_tag(
             .where(SubmissionAssignment.tenant_id == tenant_id, SubmissionAssignment.tag_filter == old_tag)
             .values(tag_filter=new_tag)
         ).rowcount
+    # Ebenso Aufgabenpakete «pro Termin» (exakter Tag-Vergleich in occurrences_for) und der
+    # Fälligkeits-Tag der Vorlagen: sonst entstehen für Termine mit dem neuen Tag keine Aufgaben
+    # mehr bzw. bleibt die Terminauswahl «fällig am» leer.
+    moved_package_items = 0
+    moved_templates = 0
+    if new_tag:
+        package_items = db.scalars(
+            select(TaskPackageItem)
+            .join(TaskPackage, TaskPackage.id == TaskPackageItem.task_package_id)
+            .where(
+                TaskPackage.tenant_id == tenant_id,
+                TaskPackageItem.recurrence_json.contains({"type": "events", "event_tag": old_tag}),
+            )
+        ).all()
+        for item in package_items:
+            item.recurrence_json = {**item.recurrence_json, "event_tag": new_tag}
+        moved_package_items = len(package_items)
+        moved_templates = db.execute(
+            update(Template)
+            .where(Template.tenant_id == tenant_id, Template.todo_due_event_tag == old_tag)
+            .values(todo_due_event_tag=new_tag)
+        ).rowcount
     db.commit()
     audit.log(
         db,
@@ -278,6 +300,8 @@ def rename_tag(
             "new_tag": new_tag or None,
             "events": int(result.rowcount),
             "submission_assignments": int(moved_assignments),
+            "task_package_items": int(moved_package_items),
+            "templates": int(moved_templates),
             "merged": bool(target_count),
         },
     )
