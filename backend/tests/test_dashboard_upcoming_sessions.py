@@ -56,3 +56,27 @@ def test_upcoming_attendance_and_excuses_are_separate_per_protocol(db):
         service.set_attendance_excused(db, protocols[1].id, person.id, True)
         sessions = service.get_upcoming_sessions_attendance(db, tenant.id)
         assert [s.entries[0].status for s in sessions] == ["absent", "excused"]
+
+
+def test_members_without_draft_access_get_no_draft_notes(db):
+    """Das Dashboard zeigt allen Mitgliedern die kommenden Sitzungen. Wer Entwürfe nicht lesen darf
+    (GET /protocols/{id} ergibt 404, RBAC S-2), bekommt dort auch keine Sitzungsnotizen des
+    Entwurfs - nur Nummer, Titel, Datum und die Anwesenheit für die Entschuldigen-Chips."""
+    from app.api.routes.protocols import get_next_session, get_upcoming_sessions
+    from tests.factories import make_app_user, make_current_user
+
+    tenant = make_tenant(db)
+    template = make_template(db, tenant.id)
+    protocol = make_protocol(db, tenant.id, template.id, protocol_number="P-9", protocol_date=date(2099, 1, 1), status="vorbereitet")
+    protocol.session_notes = "Vertraulich: Ausschluss von M. besprechen"
+    member = make_app_user(db, email="mitglied@example.com", first_name="Mia", last_name="Mitglied", tenant_id=tenant.id)
+    db.flush()
+
+    reader = make_current_user(tenant.id, role="reader", user_id=member.id)
+    sessions = get_upcoming_sessions(db=db, user=reader)
+    assert [s.protocol.protocol_number for s in sessions] == ["P-9"]
+    assert sessions[0].protocol.session_notes is None
+    assert get_next_session(db=db, user=reader).protocol.session_notes is None
+
+    writer = make_current_user(tenant.id, role="writer", user_id=member.id)
+    assert get_upcoming_sessions(db=db, user=writer)[0].protocol.session_notes == protocol.session_notes

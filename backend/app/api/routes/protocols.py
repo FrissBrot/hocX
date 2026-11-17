@@ -257,6 +257,20 @@ def create_protocol_from_template(
     return {"id": protocol_public_id}
 
 
+# Inhalt eines Entwurfs, den nur sieht, wer das Protokoll lesen darf (GET /protocols/{id}).
+_DRAFT_ONLY_FIELDS = {"session_notes": None, "latest_pdf_url": None, "import_source_filename": None, "import_source_url": None}
+
+
+def _without_draft_content(sessions: list[NextSessionRead]) -> list[NextSessionRead]:
+    """Kommende Sitzungen sind geplant/vorbereitet, also Entwürfe. Mitglieder ohne
+    meetings.read_drafts (und ohne Zuordnung) sehen sie auf dem Dashboard nur als Termin mit
+    Anwesenheit, nicht deren Sitzungsnotizen (RBAC S-2: der Entwurf selbst ergibt 404)."""
+    return [
+        session.model_copy(update={"protocol": session.protocol.model_copy(update=_DRAFT_ONLY_FIELDS)}) if session.protocol else session
+        for session in sessions
+    ]
+
+
 @router.get("/protocols/next-session", response_model=NextSessionRead)
 def get_next_session(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     require_permission(user, P.MEETINGS_READ)
@@ -265,16 +279,19 @@ def get_next_session(db: Session = Depends(get_db), user: CurrentUser = Depends(
         protocol_ids = access_service.repository.list_protocol_ids(db, user_id=user.user_id, tenant_id=user.current_tenant_id)
         sessions = service.get_upcoming_sessions_attendance(db, user.current_tenant_id, protocol_ids=protocol_ids)
         return sessions[0] if sessions else NextSessionRead()
-    return service.get_next_session_attendance(db, user.current_tenant_id)
+    next_session = service.get_next_session_attendance(db, user.current_tenant_id)
+    return next_session if access_service.sees_all_protocols(user) else _without_draft_content([next_session])[0]
 
 
 @router.get("/protocols/upcoming-sessions", response_model=list[NextSessionRead])
 def get_upcoming_sessions(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     require_permission(user, P.MEETINGS_READ)
-    protocol_ids = None
     if access_service._is_restricted_reader(db, user):
+        # Zugeordnete Protokolle darf ein eingeschränkter Leser in jedem Status lesen.
         protocol_ids = access_service.repository.list_protocol_ids(db, user_id=user.user_id, tenant_id=user.current_tenant_id)
-    return service.get_upcoming_sessions_attendance(db, user.current_tenant_id, protocol_ids=protocol_ids)
+        return service.get_upcoming_sessions_attendance(db, user.current_tenant_id, protocol_ids=protocol_ids)
+    sessions = service.get_upcoming_sessions_attendance(db, user.current_tenant_id)
+    return sessions if access_service.sees_all_protocols(user) else _without_draft_content(sessions)
 
 
 @router.post("/protocols/{protocol_id}/attendance/{participant_id}/excuse", response_model=dict[str, str])
