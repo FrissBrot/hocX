@@ -24,7 +24,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.models.entities import PhotoAlbum, PhotoAlbumItem, PhotoAlbumTenantShare, ShareLink, StoredFile, Tenant
@@ -267,6 +267,13 @@ def revoke(db: Session, *, album_id: uuid.UUID, tenant_id: int, acting_tenant_id
     if share is None:
         raise AlbumShareError("Keine Freigabe für diesen Mandanten gefunden.")
     db.delete(share)
+    # Die Fotos des ausscheidenden Partners gehen mit (nur die Album-Einträge, die Dateien bleiben
+    # in seinem Mandanten): sonst blieben sie beim Besitzer sichtbar und tauchten in dessen
+    # öffentlichen Links auf - auch wenn der Partner sie dort ausgeblendet hatte
+    # (partner_photos_public hing an der eben gelöschten Freigabezeile).
+    if tenant_id != album_owner_tenant_id:
+        partner_files = select(StoredFile.public_id).where(StoredFile.tenant_id == tenant_id)
+        db.execute(delete(PhotoAlbumItem).where(PhotoAlbumItem.album_id == album_id, PhotoAlbumItem.file_id.in_(partner_files)))
     # Audit MAIN-SEC-003: öffentliche Links, die der Partner auf dieses Album angelegt hat,
     # enden mit der Freigabe (resolve_active prüft den Zugriff zusätzlich beim Abruf).
     db.execute(

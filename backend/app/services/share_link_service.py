@@ -132,6 +132,16 @@ def file_ids_for_link(db: Session, link: ShareLink) -> list[uuid.UUID]:
         # Noch nicht freigegebene Fotos (share_pending) gehoeren nicht in den oeffentlichen Link,
         # ebenso Fotos von Partnern, die das fuer ihre Fotos abgeschaltet haben (SEC-002).
         statement = select(PhotoAlbumItem.file_id).where(PhotoAlbumItem.album_id == link.album_id, PhotoAlbumItem.share_pending.is_(False))
+        # Nur Fotos von Besitzer und angenommenen Partnern: Einträge eines Mandanten, dessen
+        # Freigabe endete (Altbestand vor photo_album_share_service.revoke), bleiben draussen.
+        statement = statement.where(
+            select(StoredFile.id)
+            .where(
+                StoredFile.public_id == PhotoAlbumItem.file_id,
+                StoredFile.tenant_id.in_(photo_album_share_service.accessible_tenant_ids_for_album(db, link.album_id)),
+            )
+            .exists()
+        )
         hidden_tenant_ids = photo_album_share_service.tenants_hidden_from_public_links(db, link.album_id, link.tenant_id)
         if hidden_tenant_ids:
             statement = statement.where(
@@ -158,6 +168,9 @@ def link_contains_file(db: Session, link: ShareLink, file_id: uuid.UUID) -> bool
         )
         if in_album is None:
             return False
+        file_tenant_id = db.scalar(select(StoredFile.tenant_id).where(StoredFile.public_id == file_id))
+        if file_tenant_id not in photo_album_share_service.accessible_tenant_ids_for_album(db, link.album_id):
+            return False  # Freigabe des Mandanten beendet, siehe file_ids_for_link
         hidden_tenant_ids = photo_album_share_service.tenants_hidden_from_public_links(db, link.album_id, link.tenant_id)
         if hidden_tenant_ids:
             hidden = db.scalar(

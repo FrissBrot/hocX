@@ -184,3 +184,42 @@ def test_partner_album_link_needs_the_owners_permission(db):
     assert not photo_album_share_service.may_create_public_link(db, album, partner.id)
     assert photo_album_share_service.may_create_public_link(db, album, owner.id)
     assert share_link_service.resolve_active(db, link.token) is None
+
+
+@pytest.mark.parametrize("acting", ["partner", "owner"])
+def test_partner_photos_leave_the_album_and_its_public_links_with_the_share(db, acting):
+    """Endet die Freigabe (Partner tritt aus oder Besitzer widerruft), dürfen die Fotos des
+    Partners weder im Album des Besitzers bleiben noch in dessen öffentlichem Link auftauchen -
+    vorher hielt sie nur die (jetzt gelöschte) Freigabezeile mit partner_photos_public=False
+    aus dem Link heraus."""
+    owner, partner = make_tenant(db, "Besitzer"), make_tenant(db, "Partner")
+    album = _shared_album(db, owner.id, partner.id)
+    own_photo, partner_photo = _make_file(db, owner.id, "eigen.png"), _make_file(db, partner.id, "partner.png")
+    db.add_all([PhotoAlbumItem(album_id=album.id, file_id=own_photo.public_id), PhotoAlbumItem(album_id=album.id, file_id=partner_photo.public_id)])
+    db.commit()
+    photo_album_share_service.set_my_photos_public(db, album_id=album.id, tenant_id=partner.id, value=False)
+    link = share_link_service.create_for_album(db, tenant_id=owner.id, name="Link", album=album, expires_at=None, created_by=None)
+    assert share_link_service.file_ids_for_link(db, link) == [own_photo.public_id]
+
+    photo_album_share_service.revoke(
+        db, album_id=album.id, tenant_id=partner.id, acting_tenant_id=partner.id if acting == "partner" else owner.id, album_owner_tenant_id=owner.id
+    )
+
+    assert share_link_service.file_ids_for_link(db, link) == [own_photo.public_id]
+    assert not share_link_service.link_contains_file(db, link, partner_photo.public_id)
+    assert {row.file_id for row in db.query(PhotoAlbumItem).filter_by(album_id=album.id)} == {own_photo.public_id}
+
+
+def test_album_link_hides_photos_of_tenants_without_an_accepted_share(db):
+    """Altbestand: Album-Einträge eines Mandanten, dessen Freigabe schon vor dem Fix endete."""
+    owner, former = make_tenant(db, "Besitzer"), make_tenant(db, "Ehemaliger Partner")
+    album = PhotoAlbum(tenant_id=owner.id, name="Album", kind="manual")
+    db.add(album)
+    db.flush()
+    own_photo, stale = _make_file(db, owner.id, "eigen.png"), _make_file(db, former.id, "alt.png")
+    db.add_all([PhotoAlbumItem(album_id=album.id, file_id=own_photo.public_id), PhotoAlbumItem(album_id=album.id, file_id=stale.public_id)])
+    db.commit()
+    link = share_link_service.create_for_album(db, tenant_id=owner.id, name="Link", album=album, expires_at=None, created_by=None)
+
+    assert share_link_service.file_ids_for_link(db, link) == [own_photo.public_id]
+    assert not share_link_service.link_contains_file(db, link, stale.public_id)
