@@ -13,6 +13,7 @@ from typing import Any, Iterable
 
 from app.documents.catalog import BlockSpec
 from app.documents.model import Cell, ProtocolElementBlock, TableColumn, TableData, TextSpan
+from app.services.data_export.workbook import excel_text
 
 
 def _walk_blocks(blocks: list[Any]):
@@ -178,7 +179,7 @@ def to_xlsx(tables: list[tuple[str, list[list[str]]]]) -> bytes:
     workbook.remove(workbook.active)
     used: set[str] = set()
     for title, rows in tables:
-        name = "".join(char for char in title if char not in "[]:*?/\\")[:28] or "Tabelle"
+        name = "".join(char for char in excel_text(title) if char not in "[]:*?/\\\n")[:28] or "Tabelle"
         candidate, counter = name, 2
         while candidate in used:
             candidate = f"{name[:25]} {counter}"
@@ -186,7 +187,7 @@ def to_xlsx(tables: list[tuple[str, list[list[str]]]]) -> bytes:
         used.add(candidate)
         sheet = workbook.create_sheet(candidate)
         for row_index, row in enumerate(rows, start=1):
-            sheet.append(row)
+            sheet.append([excel_text(cell) for cell in row])
             if row_index == 1:
                 for cell in sheet[1]:
                     cell.font = Font(bold=True)
