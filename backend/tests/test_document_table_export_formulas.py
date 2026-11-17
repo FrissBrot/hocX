@@ -43,6 +43,20 @@ def test_csv_neutralises_formula_prefixes():
         assert cell == "'" + value
 
 
+def test_data_export_workbook_never_stores_cell_values_as_formulas():
+    """Datenauskunft/Mandantenexport (Anliegen, Listen, Personen) nutzt eine eigene Arbeitsmappe."""
+    from app.services.data_export import workbook
+
+    content = workbook.build([workbook.Sheet(title="Anliegen", headers=["Titel", "Betrag"],
+                                             rows=[[value, 5] for value in DANGEROUS])])
+    sheet = load_workbook(io.BytesIO(content)).active
+    for row_index, value in enumerate(DANGEROUS, start=2):
+        cell = sheet.cell(row=row_index, column=1)
+        assert cell.data_type == "s", f"{value!r} wurde als Formel gespeichert"
+        assert cell.value == value
+        assert sheet.cell(row=row_index, column=2).value == 5
+
+
 def test_csv_keeps_plain_values_and_numbers_unchanged():
     plain = ["Anna Muster", "-3", "+5", "-1.5", "12,5%", "—", "", "a=b", "E-Mail"]
     content = exports.to_csv(_tables(plain)).decode("utf-8").lstrip("﻿")

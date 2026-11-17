@@ -51,9 +51,13 @@ def build(sheets: Iterable[Sheet]) -> bytes:
                 widths[index] = max(widths[index], min(len(str(value or "")), 60))
         for index, width in enumerate(widths, start=1):
             ws.column_dimensions[get_column_letter(index)].width = width + 2
-        for row in ws.iter_rows(min_row=2):
+        for row in ws.iter_rows(min_row=1):
             for cell in row:
-                if isinstance(cell.value, datetime):
+                # openpyxl speichert Strings mit führendem «=» als Formel; Inhalte stammen von
+                # Mitgliedern (Anliegen, Listen, Namen) und bleiben immer Text (Formel-Injection).
+                if isinstance(cell.value, str) and cell.data_type == "f":
+                    cell.data_type = "s"
+                elif isinstance(cell.value, datetime):
                     cell.number_format = "DD.MM.YYYY HH:MM"
                 elif isinstance(cell.value, date):
                     cell.number_format = "DD.MM.YYYY"
