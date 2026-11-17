@@ -46,6 +46,23 @@ def redact(text: str) -> str:
     return text
 
 
+# Öffentliche Routen, deren Pfad selbst das Zugangsgeheimnis trägt (Kalender-Abo, Freigabe-Link;
+# Kalender-Apps können keine Header senden). Der Pfad landet sonst samt Token im Fehlerprotokoll
+# bzw. im Log - wer es liest, könnte den Feed/die Freigabe danach selbst abrufen (SECURITY-RULES 5.1).
+_PATH_SECRETS = (
+    (re.compile(r"^/api/public/calendar/[^/]+?(\.ics)?$"), r"/api/public/calendar/<token>\1"),
+    (re.compile(r"^/api/public/share/[^/]+"), "/api/public/share/<token>"),
+)
+
+
+def redact_path(path: str | None) -> str | None:
+    if path is None:
+        return None
+    for pattern, replacement in _PATH_SECRETS:
+        path = pattern.sub(replacement, path, count=1)
+    return path
+
+
 def record_system_error(
     db: Session,
     *,
@@ -66,7 +83,7 @@ def record_system_error(
             actor_user_id=actor_user_id,
             actor_admin_id=actor_admin_id,
             request_method=request.method if request is not None else None,
-            request_path=request.url.path if request is not None else None,
+            request_path=redact_path(request.url.path) if request is not None else None,
             status_code=status_code,
             error_type=type(exc).__name__,
             error_message=redact(str(exc))[:_MAX_MESSAGE_LENGTH],
@@ -155,7 +172,7 @@ async def record_request_error(request: Request, exc: Exception, status_code: in
     from starlette.concurrency import run_in_threadpool
 
     if not _ERROR_LOG_SLOTS.acquire(blocking=False):
-        logger.error("Fehlerprotokoll überlastet, Eintrag nur im Log: %s %s -> %s: %s", request.method, request.url.path, type(exc).__name__, redact(str(exc)))
+        logger.error("Fehlerprotokoll überlastet, Eintrag nur im Log: %s %s -> %s: %s", request.method, redact_path(request.url.path), type(exc).__name__, redact(str(exc)))
         return
     try:
         await run_in_threadpool(_record_request_error_sync, request, exc, status_code)
