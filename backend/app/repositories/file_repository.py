@@ -413,6 +413,7 @@ class StoredFileRepository:
         album_id: uuid.UUID | None = None,
         exclude_album_id: uuid.UUID | None = None,
         album_share_pending: bool | None = None,
+        viewer_tenant_id: int | None = None,
     ) -> list[Row]:
         """Every "Dateien"/"Fotos" the tenant has produced by uploading something - protocol
         images, the raw .docx/.pdf a word-import was read from, abgabebox submission uploads,
@@ -439,7 +440,12 @@ class StoredFileRepository:
         dense (a client-side filter would leave pages that are mostly or entirely empty).
 
         album_share_pending (nur zusammen mit album_id) filtert auf photo_album_item.share_pending:
-        False blendet noch nicht freigegebene Fotos aus (Partner-Sicht), True zeigt nur diese."""
+        False blendet noch nicht freigegebene Fotos aus (Partner-Sicht), True zeigt nur diese.
+
+        viewer_tenant_id (geteilte Alben): Fotos anderer Mandanten findet die Suche nur über den
+        Dateinamen und der Tag-Filter gar nicht - Tags, Termin-/Abgabe-Titel und Herkunft des
+        Besitzers sieht der Partner nicht (FileService.list_tenant_files), also darf er sie auch
+        nicht über Suchtreffer abfragen."""
         branches = self._files_overview_branches(tenant_id)
         selected = [branch for key, branch in branches.items() if source is None or source == key]
         union_query = union_all(*selected).subquery("files_overview")
@@ -471,15 +477,15 @@ class StoredFileRepository:
             # Termin (ref_label/context_label), the computed origin_tag and the user tags
             # (jsonb array matched as its text form - good enough for a substring search).
             pattern = f"%{search}%"
-            query = query.where(
-                or_(
-                    union_query.c.original_name.ilike(pattern),
-                    cast(union_query.c.ref_label, String).ilike(pattern),
-                    cast(union_query.c.context_label, String).ilike(pattern),
-                    cast(union_query.c.origin_tag, String).ilike(pattern),
-                    cast(union_query.c.tags, String).ilike(pattern),
-                )
+            context_match = or_(
+                cast(union_query.c.ref_label, String).ilike(pattern),
+                cast(union_query.c.context_label, String).ilike(pattern),
+                cast(union_query.c.origin_tag, String).ilike(pattern),
+                cast(union_query.c.tags, String).ilike(pattern),
             )
+            if viewer_tenant_id is not None:
+                context_match = and_(union_query.c.tenant_id == viewer_tenant_id, context_match)
+            query = query.where(or_(union_query.c.original_name.ilike(pattern), context_match))
         if tags:
             # AND across selected tags (each further tag narrows the result), OR within a
             # single tag between a user-assigned tag (jsonb containment) and the computed
@@ -502,6 +508,8 @@ class StoredFileRepository:
                     ]
                 )
             )
+            if viewer_tenant_id is not None:
+                query = query.where(union_query.c.tenant_id == viewer_tenant_id)
 
         sort_column = {
             "created_at": union_query.c.created_at,

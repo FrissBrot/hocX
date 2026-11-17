@@ -384,6 +384,23 @@ def _owner_image_mime(data: bytes) -> str | None:
     return None if mime in (None, "image/heic", "image/heif") else mime
 
 
+# Herkunft eines Fotos aus einem fremden Mandanten (geteiltes Album) - wie die übrigen
+# origin_tag-Werte ("Direkt hochgeladen") ein fester Text aus dem Backend.
+SHARED_ALBUM_ORIGIN_TAG = "Geteiltes Album"
+
+
+def _hide_owner_context(item: FileOverviewItem) -> None:
+    """Kontext des Besitzer-Mandanten aus einem Übersichtseintrag entfernen (Partner-Sicht)."""
+    item.ref_label = ""
+    item.ref_date = None
+    item.ref_end_date = None
+    item.ref_href = None
+    item.context_label = None
+    item.tags = []
+    item.origin_tag = SHARED_ALBUM_ORIGIN_TAG
+    item.document = None
+
+
 class FileService:
     def __init__(
         self,
@@ -504,13 +521,18 @@ class FileService:
         album_id: uuid.UUID | None = None,
         exclude_album_id: uuid.UUID | None = None,
         album_share_pending: bool | None = None,
+        viewer_tenant_id: int | None = None,
     ) -> list[FileOverviewItem]:
         """tenant_id=None drops the tenant filter entirely (see
         StoredFileRepository._files_overview_branches) - used when album_id or file_ids
         already fully scope the result to a specific, already-access-checked set (a
         mandantenuebergreifend geteiltes Album's items can span two tenants' StoredFile
         rows; recompute_best_of/cover-thumbnail lookups pass an explicit file_ids list),
-        so no separate single-tenant filter is needed on top."""
+        so no separate single-tenant filter is needed on top.
+
+        viewer_tenant_id (geteilte Alben): Fotos anderer Mandanten kommen ohne deren Kontext -
+        der Partner sieht nur die Fotos, nicht die Termine, Abgaben, Zyklen, Protokolle und Tags
+        des Besitzers (siehe photo_album_share_service)."""
         rows = self.stored_file_repository.list_tenant_files(
             db,
             tenant_id,
@@ -527,9 +549,14 @@ class FileService:
             album_id=album_id,
             exclude_album_id=exclude_album_id,
             album_share_pending=album_share_pending,
+            viewer_tenant_id=viewer_tenant_id,
         )
         items = [self._build_overview_item(row) for row in rows]
         self._attach_documents(db, rows, items)
+        if viewer_tenant_id is not None:
+            for row, item in zip(rows, items):
+                if row.tenant_id != viewer_tenant_id:
+                    _hide_owner_context(item)
         return items
 
     def _attach_documents(self, db: Session, rows, items: list[FileOverviewItem]) -> None:
