@@ -108,7 +108,11 @@ den Nachtläufen. Eine Migration, keine neuen Secrets oder Umgebungsvariablen, k
 ### Sicherheit und Abhängigkeiten
 
 - next 16.4.3 → 16.4.5 (GHSA-mfr8-8qww-v76h, GHSA-vc7v-qv4w-wrv8) (#44), vitest 5.1.0 (#45),
-  SQLAlchemy 2.1.8 (#47).
+  SQLAlchemy 2.1.8 (#47), starlette ≥ 1.10 (#30, #32), httpx2 ≥ 2.16 (nur Tests, #31), Traefik
+  3.7.18 und ClamAV (#38, ohne den Major-Sprung auf Redis 8), GitHub Actions login/cosign (#22).
+- `npm audit` blockiert weiterhin ab «high»; picomatch GHSA-fc5q-39xc-vjpf (nur in
+  Entwicklungswerkzeugen, noch kein Fix) ist bis 18.12. begründet ausgenommen
+  (`.github/npm-audit-allowlist.json`).
 
 ## [1.3.0] - 2026-11-16
 
