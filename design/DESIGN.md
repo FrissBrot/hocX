@@ -68,7 +68,7 @@ Alle in `frontend/components/ui/` (Import: `@/components/ui/<name>`). Erst hier 
 | Auswahl aus Liste (Einzel) | `SearchableSelect` | Standard für Auswahl mit Suche, 73 Verwendungen |
 | Auswahl aus Liste (Mehrfach) | `SearchableMultiSelect` | |
 | Kurze feste Auswahl (<7 Optionen, ohne Suche) | `Select` | Echtes `<select>` mit hocX-Liste statt OS-Liste; API wie natives Select (`value`, `onChange`, `<option>`/`<optgroup>`). Auf Touch-Geräten bleibt die native Auswahl. Die Abgabebox führt eine identische Kopie (`abgabebox-frontend/components/ui/select.tsx`, der Checker vergleicht beide) |
-| Uhrzeit | `TimeInput` | Wert `HH:MM`, Eingabe per Tastatur, Liste im Viertelstunden-Takt |
+| Uhrzeit | `TimeInput` | Standard für jede Uhrzeit: versteht 1130, 11:30, 230, 9h30, 14 Uhr …, korrigiert auf `HH:MM` (Abschnitt 6) |
 | Farbe (Daten, z. B. Brand-Farben) | `ColorInput` | Popover mit Fläche, Farbton, Hex und `swatches`; nie `<input type="color">` |
 | Aktionen einer Zeile/Karte | `ActionMenu` (`items: {label, onClick, danger?}[]`) | Kebab-Menü statt vieler Buttons |
 | Filter-/Options-Menü mit Checkboxen (Ansicht, Spalten, Fälligkeit) | CSS-Klassen `.mini-menu-*` aus `globals.css` | Eingebetteter Trigger + Popover mit Sections/Checkboxen, kein Klick-Aktionsmenü für ein Objekt — dafür `ActionMenu` |
@@ -117,7 +117,7 @@ Varianten: `dropdown-panel-up` (öffnet nach oben), `dropdown-trigger` (Auslöse
 
 Dropdowns in einem `Modal` oder über anderen Ebenen brauchen die Portal-Ebene (`--z-portal`); `SearchableSelect` macht das schon.
 
-## 6. Datum
+## 6. Datum und Uhrzeit
 
 Für **jedes** Datumsfeld: `DateInput` aus `@/components/ui/date-input`. Nie `<input type="date">` roh, auch nicht versteckt hinter eigenem CSS — die native Optik unterscheidet sich je Browser/OS und lässt sich nicht themen.
 
@@ -135,6 +135,23 @@ Für **jedes** Datumsfeld: `DateInput` aus `@/components/ui/date-input`. Nie `<i
 - **Zeitraum (von/bis):** zwei eigenständige `DateInput`-Felder nebeneinander in `.two-col`, je mit eigenem `field-label` ("Datum" / "Enddatum" o. ä.). Kein kombiniertes Range-Picker-Widget.
 - **Tabellenzeile/kompakter Kontext:** `DateInput` bleibt gleich, nur der Picker-Button darf über eine Feature-Klasse verschmälert werden (z. B. `.event-field-date .date-input-picker { width: 40px; }`), niemals Inline-Style.
 - Optionales Datum (z. B. Enddatum): leerer String bzw. `null` beim Speichern, nicht `undefined` oder ein Platzhalterdatum.
+
+### Uhrzeit
+
+Für **jede** Uhrzeit (Beginn, Ende, Erinnerung, Zeitfenster …): `TimeInput` aus `@/components/ui/time-input`. Nie `<input type="time">`, nie ein Textfeld mit eigenem Parsen und keine eigene Zeit-Regex: Formate und Korrektur gibt es genau einmal, in `parseTimeInputValue` (`lib/utils/time.ts`, mit Tests).
+
+```tsx
+<label className="field-stack">
+  <span className="field-label">Beginn</span>
+  <TimeInput value={formatTimeValue(event.start_time)} onChange={(value) => onUpdate({ start_time: value || null })} />
+</label>
+```
+
+- **Eingabe** frei per Tastatur, korrigiert beim Verlassen oder mit Enter auf `HH:MM` (24 h): `9` → 09:00, `930`/`9.30`/`9,30`/`9h30` → 09:30, `1130`/`11:30` → 11:30, `230` → 02:30, `11:5` → 11:05, `14 Uhr`/`14h` → 14:00, `13:30:00` → 13:30, `7pm` → 19:00. Ungültiges (`25`, `9:75`) markiert das Feld, der alte Wert bleibt.
+- **Wert** immer `HH:MM` oder `""`; beim Speichern `""` → `null`. Werte aus der API (`HH:MM:SS`) mit `formatTimeValue` anzeigen bzw. ins Feld geben.
+- Liste im Viertelstunden-Takt über den Button rechts (Teil von `TimeInput`, `step` anpassbar), kein zusätzlicher Button.
+- **Zeitraum (von/bis):** zwei `TimeInput` nebeneinander in `.two-col`, je mit eigenem `field-label`.
+- Neue Formate gehören in `parseTimeInputValue` + `lib/utils/time.test.ts`, nie in eine Komponente. Der Checker meldet Zeitfelder ohne `TimeInput` (`zeit`).
 
 ## 7. Buttons
 

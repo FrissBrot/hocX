@@ -1,24 +1,20 @@
 "use client";
 
-// Zeitfeld im hocX-Look statt <input type="time">: Eingabe per Tastatur (930, 9.30, 9:30 → 09:30),
-// dazu eine Liste im Viertelstunden-Takt (gleiche Optik wie Select). Wert immer «HH:MM» oder "".
+// Standard-Zeitfeld für jede Uhrzeit in hocX (statt <input type="time"> oder eigener Felder):
+// versteht freie Eingaben (1130, 11:30, 230, 9h30, 14 Uhr, 7pm …, siehe lib/utils/time.ts) und
+// korrigiert sie beim Verlassen oder mit Enter auf «HH:MM»; dazu eine Liste im Viertelstunden-Takt
+// (gleiche Optik wie Select). Wert immer «HH:MM» oder "".
 
 import { CSSProperties, FocusEvent, InputHTMLAttributes, KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { createPortal } from "react-dom";
 
+import { parseTimeInputValue } from "@/lib/utils/time";
+
 import { computePopoverPosition, usePopoverDismiss } from "./popover";
 
-/** «HH:MM» aus einer Eingabe wie 9, 930, 0930, 9:30 oder 9.30; null, wenn ungültig. */
-export function parseTimeInputValue(raw: string): string | null {
-  const text = raw.trim();
-  const match = /^(\d{1,2})(?:[:.h]?(\d{2}))?$/.exec(text) ?? /^(\d{1,2})(\d{2})$/.exec(text);
-  if (!match) return null;
-  const hours = Number(match[1]);
-  const minutes = Number(match[2] ?? "0");
-  if (hours > 23 || minutes > 59) return null;
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
-}
+// Parser (Formate, Korrektur) liegt in lib/utils/time.ts - einziger Standard für Uhrzeiten in hocX.
+export { parseTimeInputValue } from "@/lib/utils/time";
 
 type TimeInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "value" | "onChange" | "step"> & {
   value: string | null | undefined;
@@ -128,6 +124,11 @@ export function TimeInput({ value, onChange, className, disabled, readOnly, plac
             event.target.setCustomValidity("");
             onChange(normalized);
           }
+        }}
+        onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
+          // Enter korrigiert sofort (z. B. 1130 → 11:30), das Formular sendet danach wie gewohnt
+          if (event.key === "Enter") commit(event.currentTarget.value, event.currentTarget);
+          props.onKeyDown?.(event);
         }}
         onBlur={(event: FocusEvent<HTMLInputElement>) => {
           commit(event.target.value, event.target);

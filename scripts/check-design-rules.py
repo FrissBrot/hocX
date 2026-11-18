@@ -44,6 +44,12 @@ NATIVE_PICKER_FILES = {
     "abgabebox-frontend/components/ui/select.tsx",
 }
 
+# Einziger Ort für das Parsen/Eingeben von Uhrzeiten (Standard, siehe DESIGN.md Abschnitt 6)
+TIME_STANDARD_FILES = {
+    "frontend/components/ui/time-input.tsx",
+    "frontend/lib/utils/time.ts",
+}
+
 SPACE_SCALE = {4, 8, 12, 16, 24, 32}
 DEPRECATED = {
     "button-inline": "button-secondary",
@@ -164,6 +170,15 @@ def check_line(path: Path, no: int, line: str, defined: set[str], is_css: bool) 
             if m:
                 component = {"date": "DateInput", "datetime-local": "DateInput + TimeInput", "time": "TimeInput", "color": "ColorInput"}[m.group(1)]
                 report(path, no, "auswahl", f"Natives type=\"{m.group(1)}\" - {component} nutzen")
+            # Uhrzeit als einfaches Textfeld (Platzhalter hh:mm oder Wert/Name eines Zeitfelds):
+            # nur TimeInput versteht 1130, 230, 14 Uhr … und korrigiert auf HH:MM (DESIGN.md Abschnitt 6)
+            if r not in TIME_STANDARD_FILES and (
+                re.search(r"<input\b[^>]*placeholder=[\"'{][^\"'}]*\b[hH]{1,2}[:.][mM]{2}\b", code)
+                or re.search(r"<input\b[^>]*\b(?:value|name)=\{?[^}>]*(?:_time|Time)\b(?!stamp|zone|out)", code)
+            ):
+                report(path, no, "zeit", "Uhrzeit-Eingabe ohne TimeInput - TimeInput aus @/components/ui/time-input nutzen")
+            if r not in TIME_STANDARD_FILES and re.search(r"/\^?\(?\\d\{1,2\}\)?\s?(?:\[[^\]]*\]|:|\\.)", code):
+                report(path, no, "zeit", "Eigene Zeit-Regex - parseTimeInputValue aus @/lib/utils/time nutzen")
 
 
 # Bausteine, die die Abgabebox als Kopie der (dort getesteten) Hauptanwendung fuehrt: muessen

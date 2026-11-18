@@ -7,6 +7,8 @@ import { ActionMenu } from "@/components/ui/action-menu";
 import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
+import { TimeInput } from "@/components/ui/time-input";
+import { parseTimeInputValue } from "@/lib/utils/time";
 import { HelpPopover } from "@/components/ui/help-popover";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { StatusBanner } from "@/components/ui/status-banner";
@@ -52,9 +54,9 @@ export function formatClock(seconds: number): string {
 
 function combine(date: string, time: string): string | null {
   if (!date) return null;
-  const match = /^(\d{1,2}):(\d{2})$/.exec(time.trim() || "00:00");
-  if (!match) return null;
-  const local = new Date(`${date}T${match[1].padStart(2, "0")}:${match[2]}:00`);
+  const normalized = time.trim() ? parseTimeInputValue(time) : "00:00";
+  if (!normalized) return null;
+  const local = new Date(`${date}T${normalized}:00`);
   return Number.isNaN(local.getTime()) ? null : local.toISOString();
 }
 
@@ -493,7 +495,7 @@ function PlanModal({ t, locale, onClose, onSaved }: { t: TFunc; locale: string; 
               </label>
               <label className="field-stack">
                 <span className="field-label">{t("form.startTime")}</span>
-                <input className="input" inputMode="numeric" placeholder="22:00" value={startTime} onChange={(event) => setStartTime(event.target.value)} />
+                <TimeInput value={startTime} onChange={setStartTime} placeholder="22:00" />
               </label>
             </div>
           ) : null}
@@ -504,7 +506,7 @@ function PlanModal({ t, locale, onClose, onSaved }: { t: TFunc; locale: string; 
             </label>
             <label className="field-stack">
               <span className="field-label">{t("form.endTime")}</span>
-              <input className="input" inputMode="numeric" placeholder="23:30" value={endTime} onChange={(event) => setEndTime(event.target.value)} />
+              <TimeInput value={endTime} onChange={setEndTime} placeholder="23:30" />
             </label>
           </div>
           <span className="field-help">{t("form.endHelp")}</span>
