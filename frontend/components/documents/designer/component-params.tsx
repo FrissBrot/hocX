@@ -23,7 +23,7 @@ type Props = {
 
 const sourceCache = new Map<string, Promise<SourceOption[]>>();
 
-export function loadSource(source: string, protocolId?: string | null, extra?: Record<string, string>): Promise<SourceOption[]> {
+export function loadSource(source: string, protocolId?: string | null, extra?: Record<string, string>): Promise<SourceOption[]> { // i18n-ok: TypeScript-Signatur, kein UI-Text
   const key = `${source}:${protocolId ?? ""}:${JSON.stringify(extra ?? {})}`;
   if (!sourceCache.has(key)) {
     sourceCache.set(

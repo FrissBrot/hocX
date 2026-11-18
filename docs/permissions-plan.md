@@ -14,6 +14,19 @@ angepasst.
   Rollen-Code-Vergleiche, wöchentliches RBAC-Audit, Registry öffentlicher Links
   (`backend/app/public_links/providers.py`). Phase 0/1 ergänzen das, statt es neu zu bauen.
 
+**Entscheide zu den offenen Fragen (18.11.2026):**
+- Teilnehmende ohne Login gibt es (Personen ohne Login-Zugang); Freigaben an «alle Teilnehmenden»
+  wirken nur für Personen mit Login.
+- Eigene Pendenzen abhaken: heute nur mit `meetings.edit`. Neues Recht «eigene Pendenzen
+  erledigen» (Reichweite eigene), bei der Migration für **alle Rollen inkl. Leser**; entziehbar –
+  ohne dieses Recht ist der Zugang rein lesend (read-only Benutzer).
+- Vier-Augen-Prinzip: **pro Organisation wählbar** (Einstellung, Standard aus). An: der Verfasser
+  darf sein eigenes Protokoll nicht abschliessen; zusätzlich braucht Abschliessen das Recht
+  «Protokolle freigeben».
+- Zielgruppe «Gruppen» = **Rollen** (Freigabe an eine oder mehrere Rollen des Mandanten).
+- Ordner-Freigaben in der Ablage: nein.
+- Umsetzung «alles auf einmal» in 1.4.0 (ein Zweig, Commits je Phase).
+
 ## Arbeitsweise
 - Phasenweise in der angegebenen Reihenfolge, jede Phase eigener Zweig mit eigenen Commits.
 - Nach jeder Phase: alle bestehenden Tests und die Berechtigungsmatrix (Phase 0) grün.

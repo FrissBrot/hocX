@@ -134,7 +134,7 @@
   gap: var(--space-2);
 }
 
-.invite-inline-toggle {
+.invite-inline-toggle { /* design-ok: Text-Umschalter (Passwort anzeigen, Schlüssel), kein Aktionsbutton */
   min-height: 28px;
   padding: 0 var(--space-1);
   font-size: var(--text-sm);
@@ -154,7 +154,7 @@
   color: var(--danger-fg);
 }
 
-.invite-submit {
+.invite-submit { /* design-ok: einzige, breite Hauptaktion je Schritt */
   width: 100%;
   min-height: 46px;
   justify-content: center;
@@ -430,7 +430,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .invite-submit {
+  .invite-submit { /* design-ok: einzige, breite Hauptaktion je Schritt */
     min-height: 54px;
   }
 
