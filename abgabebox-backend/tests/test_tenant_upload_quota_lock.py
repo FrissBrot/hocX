@@ -12,14 +12,30 @@ tenant id that nothing else in this suite touches.
 """
 from __future__ import annotations
 
+import pytest
+
 import threading
+import uuid
 import time
 
 from app.db import SessionLocal, tenant_upload_lock
 from app.storage import NAMESPACE, get_store, save_to_quarantine, tenant_storage_bytes
 
 # Arbitrary, high enough to not collide with any real or other-test tenant id.
-_TENANT_ID = 999001
+# Je Lauf neu: gelöschte Objekte früherer Läufe stehen bis zum Purge noch in der Objektliste.
+_TENANT_ID = 999_001_000_000 + uuid.uuid4().int % 1_000_000
+
+
+@pytest.fixture(autouse=True)
+def _usage_from_object_listing(monkeypatch):
+    """storage_usage_bytes() gibt der Rolle hocx_abgabebox seit Migration 0183 nur die Belegung des
+    Mandanten hinter dem gebundenen Upload-Link; der synthetische Testmandant hat keinen (die Rolle
+    kann keine Links anlegen). Hier geht es um Sperre/Event-Loop, nicht um die Funktion: die
+    Belegung kommt deshalb aus der Objektliste desselben Speichers."""
+    store = get_store()
+    monkeypatch.setattr(
+        type(store), "usage_bytes", lambda self, db, namespace, prefix: sum(info.size for info in self.list(namespace, prefix))
+    )
 
 
 def _reset():

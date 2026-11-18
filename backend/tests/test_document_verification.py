@@ -131,13 +131,13 @@ def test_other_restricted_roles_cannot_call_the_function(db, setup):
         db.execute(text("RESET ROLE"))
 
 
-def test_restricted_role_still_reads_the_columns_the_abgabebox_needs(db, setup):
-    tenant, _, _ = setup
+def test_restricted_role_still_reads_the_quota_the_abgabebox_needs(db, setup):
+    """Das Kontingent liest die Abgabebox seit 0183_abgabebox_link_scope nur noch über
+    abgabebox_storage_quota() (Mandant des gebundenen Links), nicht mehr direkt aus tenant."""
     savepoint = db.begin_nested()
     try:
         db.execute(text(f"SET LOCAL ROLE {ROLE}"))
-        row = db.execute(text("SELECT id, storage_quota_bytes FROM tenant WHERE id = :id"), {"id": tenant.id}).one()
-        assert row.id == tenant.id
+        assert db.execute(text("SELECT public.abgabebox_storage_quota()")).scalar() is None  # ohne Link: nichts
     finally:
         savepoint.rollback()
         db.execute(text("RESET ROLE"))
