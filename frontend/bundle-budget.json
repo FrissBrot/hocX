@@ -4,7 +4,7 @@
     "/": {
       "js_gzip_kb": 262,
       "css_gzip_kb": 45,
-      "css_raw_kb": 285
+      "css_raw_kb": 286
     },
     "/_global-error": {
       "js_gzip_kb": 188,
@@ -14,7 +14,7 @@
     "/_not-found": {
       "js_gzip_kb": 205,
       "css_gzip_kb": 43,
-      "css_raw_kb": 276
+      "css_raw_kb": 277
     },
     "/abgabe/verwalten": {
       "js_gzip_kb": 213,
@@ -129,12 +129,12 @@
     "/agenda": {
       "js_gzip_kb": 237,
       "css_gzip_kb": 43,
-      "css_raw_kb": 276
+      "css_raw_kb": 277
     },
     "/auth/bridge": {
       "js_gzip_kb": 207,
       "css_gzip_kb": 43,
-      "css_raw_kb": 276
+      "css_raw_kb": 277
     },
     "/auth/forgot-password": {
       "js_gzip_kb": 208,
@@ -154,7 +154,7 @@
     "/cycles": {
       "js_gzip_kb": 246,
       "css_gzip_kb": 43,
-      "css_raw_kb": 276
+      "css_raw_kb": 277
     },
     "/documents": {
       "js_gzip_kb": 287,
@@ -204,7 +204,7 @@
     "/files": {
       "js_gzip_kb": 257,
       "css_gzip_kb": 51,
-      "css_raw_kb": 312
+      "css_raw_kb": 314
     },
     "/finances": {
       "js_gzip_kb": 249,
@@ -219,7 +219,7 @@
     "/fines": {
       "js_gzip_kb": 249,
       "css_gzip_kb": 43,
-      "css_raw_kb": 276
+      "css_raw_kb": 277
     },
     "/lists": {
       "js_gzip_kb": 265,
@@ -229,32 +229,37 @@
     "/login": {
       "js_gzip_kb": 226,
       "css_gzip_kb": 44,
-      "css_raw_kb": 280
+      "css_raw_kb": 281
     },
     "/maintenance": {
       "js_gzip_kb": 209,
       "css_gzip_kb": 43,
-      "css_raw_kb": 276
+      "css_raw_kb": 277
+    },
+    "/my-tasks": {
+      "js_gzip_kb": 275,
+      "css_gzip_kb": 49,
+      "css_raw_kb": 314
     },
     "/overload": {
       "js_gzip_kb": 208,
       "css_gzip_kb": 43,
-      "css_raw_kb": 276
+      "css_raw_kb": 277
     },
     "/participants": {
       "js_gzip_kb": 264,
       "css_gzip_kb": 46,
-      "css_raw_kb": 288
+      "css_raw_kb": 289
     },
     "/pdf-loading": {
       "js_gzip_kb": 205,
       "css_gzip_kb": 45,
-      "css_raw_kb": 283
+      "css_raw_kb": 284
     },
     "/photos": {
       "js_gzip_kb": 275,
       "css_gzip_kb": 50,
-      "css_raw_kb": 311
+      "css_raw_kb": 313
     },
     "/protocols": {
       "js_gzip_kb": 251,
@@ -269,12 +274,12 @@
     "/settings": {
       "js_gzip_kb": 205,
       "css_gzip_kb": 43,
-      "css_raw_kb": 276
+      "css_raw_kb": 277
     },
     "/settings/verification": {
       "js_gzip_kb": 205,
       "css_gzip_kb": 43,
-      "css_raw_kb": 276
+      "css_raw_kb": 277
     },
     "/share/[token]": {
       "js_gzip_kb": 210,
@@ -284,7 +289,7 @@
     "/shared-links": {
       "js_gzip_kb": 245,
       "css_gzip_kb": 43,
-      "css_raw_kb": 276
+      "css_raw_kb": 277
     },
     "/statistics": {
       "js_gzip_kb": 254,
@@ -299,7 +304,7 @@
     "/task-packages": {
       "js_gzip_kb": 284,
       "css_gzip_kb": 51,
-      "css_raw_kb": 314
+      "css_raw_kb": 316
     },
     "/templates": {
       "js_gzip_kb": 532,
@@ -364,32 +369,32 @@
     "/tools": {
       "js_gzip_kb": 205,
       "css_gzip_kb": 52,
-      "css_raw_kb": 320
+      "css_raw_kb": 322
     },
     "/tools/import": {
       "js_gzip_kb": 278,
       "css_gzip_kb": 52,
-      "css_raw_kb": 320
+      "css_raw_kb": 322
     },
     "/tools/import/[id]": {
       "js_gzip_kb": 299,
       "css_gzip_kb": 52,
-      "css_raw_kb": 320
+      "css_raw_kb": 322
     },
     "/tools/word-import": {
       "js_gzip_kb": 299,
       "css_gzip_kb": 52,
-      "css_raw_kb": 320
+      "css_raw_kb": 322
     },
     "/users": {
       "js_gzip_kb": 247,
       "css_gzip_kb": 43,
-      "css_raw_kb": 276
+      "css_raw_kb": 277
     },
     "/users/roles": {
       "js_gzip_kb": 237,
       "css_gzip_kb": 43,
-      "css_raw_kb": 276
+      "css_raw_kb": 277
     },
     "/website": {
       "js_gzip_kb": 211,
