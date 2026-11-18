@@ -8,8 +8,18 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 
 from openpyxl import Workbook
+from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 from openpyxl.styles import Font
 from openpyxl.utils import get_column_letter
+
+
+def excel_text(value: object) -> object:
+    """Steuerzeichen, die Excel/openpyxl ablehnen (IllegalCharacterError), aus Texten entfernen.
+    Ein einzelnes Anliegen oder Listenfeld mit z. B. \\x0b (manueller Zeilenumbruch aus Word)
+    liess sonst den ganzen Export scheitern; \\x0b/\\x0c werden zu Zeilenumbrüchen."""
+    if not isinstance(value, str):
+        return value
+    return ILLEGAL_CHARACTERS_RE.sub("", value.replace("\x0b", "\n").replace("\x0c", "\n"))
 
 
 @dataclass
@@ -20,7 +30,7 @@ class Sheet:
 
 
 def _sheet_title(value: str, used: set[str]) -> str:
-    title = "".join(ch for ch in value if ch not in "[]:*?/\\")[:31] or "Tabelle"
+    title = "".join(ch for ch in excel_text(value) if ch not in "[]:*?/\\\n")[:31] or "Tabelle"
     base, counter = title, 2
     while title in used:
         title = f"{base[:28]} {counter}"
@@ -35,7 +45,7 @@ def build(sheets: Iterable[Sheet]) -> bytes:
     used: set[str] = set()
     for sheet in sheets:
         ws = workbook.create_sheet(_sheet_title(sheet.title, used))
-        ws.append(list(sheet.headers))
+        ws.append([excel_text(header) for header in sheet.headers])
         for cell in ws[1]:
             cell.font = Font(bold=True)
         ws.freeze_panes = "A2"
@@ -45,7 +55,7 @@ def build(sheets: Iterable[Sheet]) -> bytes:
             for value in row:
                 if isinstance(value, datetime) and value.tzinfo is not None:
                     value = value.replace(tzinfo=None)
-                values.append(value)
+                values.append(excel_text(value))
             ws.append(values)
             for index, value in enumerate(values[: len(widths)]):
                 widths[index] = max(widths[index], min(len(str(value or "")), 60))
