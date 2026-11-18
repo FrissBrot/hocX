@@ -15,7 +15,8 @@ Einstellungen, eine Fotogalerie mit Zeitstrahl und ruhigem Scrollen, gesperrte u
 ausgetretene Personen, ein Versandprotokoll aller E-Mails im Admin-Portal, neutrale Begriffe
 («Organisation» statt «Verein») in allen Sprachen sowie 15 Sicherheits- und Datenschutz-Fixes aus
 den Nachtläufen. Dazu Termine mit Uhrzeiten, Programm und Markdown-Texten, ein neu gestalteter
-Tabellenblock und ein einheitliches, tolerantes Uhrzeitfeld. Zwei Migrationen, keine neuen Secrets
+Tabellenblock mit Assistent, ein einheitliches, tolerantes Uhrzeitfeld, Dateien als Kacheln mit
+PDF-Vorschau und gekennzeichnete Entwürfe, wenn einem Export Berechtigungen fehlen. Zwei Migrationen, keine neuen Secrets
 oder Umgebungsvariablen, keine Breaking Changes.
 
 ### Update
@@ -87,6 +88,31 @@ oder Umgebungsvariablen, keine Breaking Changes.
 - Bei «Pro Pendenz» übernimmt der Block Felder der Pendenz («+ Feld aus Pendenz»: Aufgabe,
   Beschreibung, Zugewiesen an, Fällig, Status, Herkunft). Sie stehen zuoberst, im Protokoll nur
   lesend und live aus der Pendenz, im PDF ohne leere Zeilen.
+- Der Block-Dialog ist in Reiter gegliedert (Inhalt, Wiederholung, Grundlagen, Verhalten). Ein
+  neuer Tabellenblock startet mit einem Assistenten: wiederholen, filtern, Quelle, Vorlage.
+
+### Neu: Exporte ohne alle Berechtigungen sind gekennzeichnete Entwürfe
+
+- Fehlen einer Person Berechtigungen für Teile eines Protokolls (z. B. Pendenzen anderer, Bussen,
+  Entwürfe), warnt der Export-Dialog und nennt die fehlenden Berechtigungen genau.
+- Solche PDFs sind immer Entwürfe ohne Versionsnummer, mit Banner und Platzhaltern dort, wo Daten
+  fehlen - es fällt nichts unbemerkt weg. Die Prüfseite weist sie als eingeschränkte Fassung aus.
+- Entwürfe tragen jetzt immer das Wasserzeichen «Entwurf»; das Abschalten entfällt.
+
+### Neu: Dateien als Kacheln mit PDF-Vorschau
+
+- Der Dateien-Tab zeigt Dateien standardmässig als Kacheln mit der ersten PDF-Seite, wahlweise als
+  Liste (pro Gerät gemerkt). Ohne Vorschau zeigt die Kachel, ob die Datei noch verarbeitet wird,
+  die Verarbeitung fehlgeschlagen ist oder es keine PDF-Ansicht gibt.
+- Ein Menü «···» bündelt: PDF öffnen und herunterladen, Originaldatei, Link teilen, Details & Tags,
+  Versionen und - bei Fehlern - erneut verarbeiten.
+- Hat eine hochgeladene Word-Datei eine automatisch erzeugte PDF-Ansicht, zeigt hocX überall diese:
+  Name mit `.pdf`, PDF-Symbol, Öffnen öffnet das PDF. Das Original bleibt über das Menü und die
+  Details erreichbar.
+
+### Geändert: Tastenkürzel auf dem Mac
+
+- Auf Mac, iPhone und iPad zeigt hocX Kürzel mit ⌘ (z. B. ⌘K für die Suche), sonst mit Strg/Ctrl.
 
 ### Neu: Seitenleiste nach Tätigkeiten
 
