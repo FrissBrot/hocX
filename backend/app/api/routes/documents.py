@@ -552,18 +552,20 @@ def update_document_settings(body: DocumentSettings, db: Session = Depends(get_d
 
 
 class SourceOption(BaseModel):
-    id: uuid.UUID
+    # Meist eine public_id; Spalten einer Liste haben ihren Spalten-Key (list_column.key)
+    id: uuid.UUID | str
     label: str
     detail: str | None = None
 
 
-SOURCES = {"participants", "protocols", "protocol_elements", "protocol_blocks", "images", "cycles", "templates", "lists", "events", "finance_accounts"}
+SOURCES = {"participants", "protocols", "protocol_elements", "protocol_blocks", "images", "cycles", "templates", "lists", "list_columns", "events", "finance_accounts"}
 
 
 @router.get("/documents/sources/{source}", response_model=list[SourceOption])
 def list_source_options(
     source: str,
     protocol_id: uuid.UUID | None = None,
+    list_id: uuid.UUID | None = None,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -652,6 +654,15 @@ def list_source_options(
         require_permission(user, P.MEETINGS_EDIT)
         rows = db.scalars(select(ListDefinition).where(ListDefinition.tenant_id == tenant_id, ListDefinition.is_active.is_(True)).order_by(ListDefinition.name))
         return [SourceOption(id=row.public_id, label=row.name) for row in rows]
+    if source == "list_columns":
+        # Spalten der gewählten Liste (Gruppieren, Sortieren, Filtern, sichtbare Spalten)
+        require_permission(user, P.MEETINGS_EDIT)
+        definition = public_id_service.get_by_public_id(db, ListDefinition, list_id, tenant_id=tenant_id) if list_id else None
+        if definition is None:
+            return []
+        from app.services import list_columns
+
+        return [SourceOption(id=column.key, label=column.title) for column in list_columns.columns_of(definition)]
     if source == "events":
         rows = db.scalars(select(Event).where(Event.tenant_id == tenant_id, Event.is_session_marker.is_(False)).order_by(Event.event_date.desc()).limit(500))
         return [SourceOption(id=row.public_id, label=row.title, detail=format_date(row.event_date)) for row in rows]

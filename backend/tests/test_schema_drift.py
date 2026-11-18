@@ -35,7 +35,17 @@ _KNOWN_UNMAPPED_TABLES = {
     "document_recipe_legacy",
     "document_studio_legacy_ref",
 }
-_KNOWN_UNMAPPED_COLUMNS: set[tuple[str, str]] = set()
+# Feste Listenspalten vor 0186: bleiben in der Datenbank (nullable, ohne Dual-Write), damit der
+# Downgrade von 0186 sie aus den ersten zwei Spalten wieder füllen kann; das Modell kennt sie nicht
+# mehr (Semgrep no-legacy-list-columns). Entfallen mit der Aufräum-Migration (R2).
+_KNOWN_UNMAPPED_COLUMNS: set[tuple[str, str]] = {
+    ("list_definition", "column_one_title"),
+    ("list_definition", "column_one_value_type"),
+    ("list_definition", "column_two_title"),
+    ("list_definition", "column_two_value_type"),
+    ("list_entry", "column_one_value_json"),
+    ("list_entry", "column_two_value_json"),
+}
 
 
 def test_migrated_schema_matches_orm_models(db):

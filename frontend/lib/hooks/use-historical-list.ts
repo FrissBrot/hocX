@@ -3,6 +3,8 @@ import { useTranslations } from "next-intl";
 
 import { browserApiFetch } from "@/lib/api/client";
 import {
+  ListColumn,
+  ListValues,
   StructuredListDefinition,
   StructuredListEntry,
   StructuredListValueType,
@@ -11,20 +13,32 @@ import {
   TableSnapshotRowsRead,
 } from "@/types/api";
 
-/** snapshot_json rows are raw column dicts (see backend row_to_dict()) - column names
- * match the ORM model, not the frontend's schema-renamed field names (e.g.
- * column_one_value_json, not column_one_value). Maps a historical list_definition row
- * into the same shape the live list manager already renders. */
+/** snapshot_json rows are raw column dicts (see backend row_to_dict()); the API adds the
+ * list's `columns` and its roles as column keys (older backups are upgraded server-side,
+ * Migration 0186). Draft columns carry their key as `key` instead of `id`. Maps a historical
+ * list_definition row into the same shape the live list manager already renders. */
+function mapColumns(raw: unknown): ListColumn[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((column, index) => {
+    const item = column as Record<string, unknown>;
+    return {
+      id: String(item.id ?? item.key ?? ""),
+      title: String(item.title ?? ""),
+      value_type: (item.value_type as StructuredListValueType) ?? "text",
+      sort_index: Number(item.sort_index ?? (index + 1) * 10),
+    };
+  });
+}
+
 function mapDefinitionRow(row: Record<string, unknown>): StructuredListDefinition {
   return {
     id: String(row.public_id ?? ""),
     tenant_id: String(row.tenant_id ?? ""),
     name: String(row.name ?? ""),
     description: (row.description as string | null) ?? null,
-    column_one_title: String(row.column_one_title ?? ""),
-    column_one_value_type: row.column_one_value_type as StructuredListValueType,
-    column_two_title: String(row.column_two_title ?? ""),
-    column_two_value_type: row.column_two_value_type as StructuredListValueType,
+    columns: mapColumns(row.columns),
+    label_column_id: (row.label_column_id as string | null) ?? null,
+    responsible_column_id: (row.responsible_column_id as string | null) ?? null,
     is_active: Boolean(row.is_active),
     content_version: Number(row.content_version ?? 0),
     created_at: String(row.created_at ?? ""),
@@ -37,24 +51,20 @@ function mapEntryRow(row: Record<string, unknown>, listDefinitionPublicId: strin
     id: String(row.public_id ?? ""),
     list_definition_id: listDefinitionPublicId,
     sort_index: Number(row.sort_index ?? 0),
-    column_one_value: (row.column_one_value_json as Record<string, unknown>) ?? {},
-    column_two_value: (row.column_two_value_json as Record<string, unknown>) ?? {},
+    values: (row.values_json as ListValues) ?? {},
     created_at: String(row.created_at ?? ""),
     updated_at: String(row.updated_at ?? ""),
   };
 }
 
-/** Draft entries (from the reconstruct-draft endpoint) already use the un-suffixed
- * frontend field names except column_one_value_json/column_two_value_json, which the
- * backend keeps as-is since that's the shape it round-trips back into the reconstruct
- * POST. */
+/** Draft entries (from the reconstruct-draft endpoint) keep `values_json`, the shape the
+ * backend round-trips back into the reconstruct POST. */
 function mapDraftEntry(row: Record<string, unknown>, listDefinitionPublicId: string): StructuredListEntry {
   return {
     id: String(row.public_id ?? ""),
     list_definition_id: listDefinitionPublicId,
     sort_index: Number(row.sort_index ?? 0),
-    column_one_value: (row.column_one_value_json as Record<string, unknown>) ?? {},
-    column_two_value: (row.column_two_value_json as Record<string, unknown>) ?? {},
+    values: (row.values_json as ListValues) ?? {},
     created_at: "",
     updated_at: "",
   };
@@ -79,13 +89,13 @@ export type HistoricalListState = {
   unlockEditing: () => void;
   saveHistoricalEntry: (
     entryPublicId: string,
-    values: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>
+    values: Partial<{ sort_index: number; values: ListValues }>
   ) => Promise<void>;
   deleteHistoricalEntry: (entryPublicId: string) => Promise<void>;
   /** Reconstruction-mode-only: edits stay purely local until confirmReconstruction(). */
   updateDraftEntry: (
     entryPublicId: string,
-    values: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>
+    values: Partial<{ sort_index: number; values: ListValues }>
   ) => void;
   deleteDraftEntry: (entryPublicId: string) => void;
   confirmReconstruction: () => Promise<void>;
@@ -240,13 +250,16 @@ export function useHistoricalList(selectedListId: string | null): HistoricalList
   const saveHistoricalEntry = useCallback(
     async (
       entryPublicId: string,
-      values: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>
+      values: Partial<{ sort_index: number; values: ListValues }>
     ) => {
       if (!selected || !selectedListId) throw new Error(tCommon("clientErrors.noHistoricalCycleSelected"));
       const backendValues: Record<string, unknown> = {};
       if (values.sort_index !== undefined) backendValues.sort_index = values.sort_index;
-      if (values.column_one_value !== undefined) backendValues.column_one_value_json = values.column_one_value;
-      if (values.column_two_value !== undefined) backendValues.column_two_value_json = values.column_two_value;
+      if (values.values !== undefined) {
+        // Das Backend ersetzt values_json ganz: unveränderte Spalten mitschicken
+        const current = entries.find((entry) => entry.id === entryPublicId)?.values ?? {};
+        backendValues.values_json = { ...current, ...values.values };
+      }
       const updated = await browserApiFetch<Record<string, unknown>>(
         `/api/table-snapshots/${selected.cycleConfigId}/${selected.cycleYear}/list_entry/rows/${entryPublicId}`,
         { method: "PUT", body: JSON.stringify({ values: backendValues, confirm_historical_edit: true }) }
@@ -256,7 +269,7 @@ export function useHistoricalList(selectedListId: string | null): HistoricalList
         current.map((entry) => (entry.id === entryPublicId ? mapEntryRow(updated, selectedListId) : entry))
       );
     },
-    [selected, selectedListId, tCommon]
+    [selected, selectedListId, entries, tCommon]
   );
 
   const deleteHistoricalEntry = useCallback(
@@ -275,9 +288,11 @@ export function useHistoricalList(selectedListId: string | null): HistoricalList
   const updateDraftEntry = useCallback(
     (
       entryPublicId: string,
-      values: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>
+      values: Partial<{ sort_index: number; values: ListValues }>
     ) => {
-      setEntries((current) => current.map((entry) => (entry.id === entryPublicId ? { ...entry, ...values } : entry)));
+      setEntries((current) => current.map((entry) => (entry.id === entryPublicId
+        ? { ...entry, ...(values.sort_index !== undefined ? { sort_index: values.sort_index } : {}), values: { ...entry.values, ...(values.values ?? {}) } }
+        : entry)));
     },
     []
   );
@@ -296,18 +311,12 @@ export function useHistoricalList(selectedListId: string | null): HistoricalList
           definition_values: {
             name: definition.name,
             description: definition.description,
-            column_one_title: definition.column_one_title,
-            column_one_value_type: definition.column_one_value_type,
-            column_two_title: definition.column_two_title,
-            column_two_value_type: definition.column_two_value_type,
             is_active: definition.is_active,
+            columns: definition.columns.map((column) => ({ key: column.id, title: column.title, value_type: column.value_type })),
+            label_column_id: definition.label_column_id,
+            responsible_column_id: definition.responsible_column_id,
           },
-          entries: entries.map((entry) => ({
-            public_id: entry.id,
-            sort_index: entry.sort_index,
-            column_one_value_json: entry.column_one_value,
-            column_two_value_json: entry.column_two_value,
-          })),
+          entries: entries.map((entry) => ({ public_id: entry.id, sort_index: entry.sort_index, values_json: entry.values })),
         }),
       }
     );

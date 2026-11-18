@@ -231,10 +231,14 @@ class EventAgendaParams(EventSelectionParams):
 
 class ListTableParams(_Params):
     list_id: uuid.UUID | None = Field(None, json_schema_extra=_source("lists"))
-    group_by: Literal["", "column_one", "column_two"] = ""
-    sort_by: Literal["", "column_one", "column_two"] = ""
+    # Spalten-Keys der Liste (list_column.public_id, Migration 0186); Auswahl im Studio über die
+    # Quelle «list_columns», die die Spalten der gewählten Liste (``list_id``) lädt
+    group_by: str = Field("", max_length=64, json_schema_extra={**_source("list_columns"), "x-source-param": "list_id"})
+    sort_by: str = Field("", max_length=64, json_schema_extra={**_source("list_columns"), "x-source-param": "list_id"})
     sort_direction: Literal["asc", "desc"] = "asc"
-    filter_column: Literal["", "column_one", "column_two"] = ""
+    filter_column: str = Field("", max_length=64, json_schema_extra={**_source("list_columns"), "x-source-param": "list_id"})
+    # Sichtbare Spalten in dieser Reihenfolge; leer = alle Spalten der Liste
+    visible_columns: list[str] = Field(default_factory=list, max_length=20, json_schema_extra={**_source("list_columns"), "x-source-param": "list_id"})
     filter_participant_id: uuid.UUID | None = Field(None, json_schema_extra=_source("participants"))
     filter_event_id: uuid.UUID | None = Field(None, json_schema_extra=_source("events"))
     filter_text: str | None = Field(None, max_length=200)

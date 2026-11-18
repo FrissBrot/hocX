@@ -48,7 +48,7 @@ def _upload_file(content: bytes, filename: str) -> UploadFile:
 def _make_assignment(db, tenant_id, *, allowed=(), max_files=None, max_mb=20):
     """A list-backed Abgabe with one element - returns (assignment, element_ref, upload)."""
     definition = make_list_definition(db, tenant_id, name=f"Liste {uuid.uuid4().hex[:8]}")
-    entry = make_list_entry(db, definition.id, column_one_value={"text_value": "Gruppe Adler"})
+    entry = make_list_entry(db, definition.id, first_value={"text_value": "Gruppe Adler"})
     assignment = SubmissionAssignment(
         tenant_id=tenant_id, title="Sommerlager Abgabe", public_slug=f"abgabe-{entry.id}", source_type="list",
         list_definition_id=definition.id, allowed_file_types=list(allowed), max_files_per_element=max_files,

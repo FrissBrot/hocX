@@ -491,23 +491,23 @@ type EventDraft = {
 type ListDraft = {
   table_index: number;
   row_index: number;
-  column_one_raw: string;
-  column_two_raw: string;
-  column_one_type: string;
-  column_two_type: string;
-  column_one_names: WordImportNameResolution[];
-  column_two_names: WordImportNameResolution[];
+  first_raw: string;
+  second_raw: string;
+  first_type: string;
+  second_type: string;
+  first_names: WordImportNameResolution[];
+  second_names: WordImportNameResolution[];
   status: ListRowStatus;
   candidates: WordImportListEntryCandidate[];
   linked_entry_id: string | null;
-  column_two_source: FieldSource;
+  second_source: FieldSource;
   has_snapshot_target: boolean;
   approved: boolean;
   // Explicit "Ignorieren" decision on a row that couldn't be auto-resolved (see
   // listStillOpen) - distinct from a row that's simply unapproved-by-default (new entry,
   // nothing missing). Drives the third "Unvollständig" pill state below.
   dismissed: boolean;
-  // True when column_one_raw/column_two_raw's grouping value was inferred (fill-down/
+  // True when first_raw/second_raw's grouping value was inferred (fill-down/
   // exploded repeat) rather than literally present in this document row - see
   // WordImportListRowMapping.group_filled. Flags this row for a closer look.
   group_filled: boolean;
@@ -599,7 +599,7 @@ function resolveEventFinal(entry: EventDraft): { title: string; date: string; en
 
 function resolveListColumnTwoRaw(entry: ListDraft): string {
   const linked = entry.candidates.find((candidate) => candidate.entry_id === entry.linked_entry_id);
-  return entry.column_two_source === "existing" && linked ? linked.column_two_display : entry.column_two_raw;
+  return entry.second_source === "existing" && linked ? linked.second_display : entry.second_raw;
 }
 
 // A found link is the decision: once a Termin IS matched, any title/date conflict
@@ -628,7 +628,7 @@ function eventNeedsReview(entry: EventDraft): boolean {
 
 // Mirrors eventStillOpen: a found link is the decision, so a matched entry auto-takes
 // even if its column-2 value conflicts with the document (falls back to "existing
-// wins" via column_two_source, still reachable/editable by opening the row). A
+// wins" via second_source, still reachable/editable by opening the row). A
 // brand-new entry (no match at all) always needs an explicit decision before it's
 // committed, same as a name that couldn't be matched to any participant - neither
 // case had an automatic assignment made for it. Split out from listNeedsReview so
@@ -636,7 +636,7 @@ function eventNeedsReview(entry: EventDraft): boolean {
 // updateListName) without going through the `approved` short-circuit below.
 function listStillOpen(entry: ListDraft): boolean {
   if (!entry.has_snapshot_target) return false;
-  const hasUnmatchedName = [...entry.column_one_names, ...entry.column_two_names].some(
+  const hasUnmatchedName = [...entry.first_names, ...entry.second_names].some(
     (name) => name.participant_id === null && !name.no_link
   );
   return entry.linked_entry_id === null || hasUnmatchedName;
@@ -890,7 +890,7 @@ function buildRecurringNameGroups(
     });
   });
   lists.forEach((row) => {
-    [...row.column_one_names, ...row.column_two_names].forEach((name) => {
+    [...row.first_names, ...row.second_names].forEach((name) => {
       // no_link excludes an explicit "Keinen verknüpfen" decision from still counting as
       // open - without it, a name that only ever occurs in lists/matrices/plural form
       // fields (never in Anwesenheit, where "Keinen verknüpfen" already worked via
@@ -1471,7 +1471,7 @@ export function WordImportWizard({
         <div className="word-import-text-row word-import-text-row-muted" key={key}>
           <div className="word-import-text-row-head">
             <span className="word-import-text-row-title">
-              {entry.column_one_raw} → {entry.column_two_raw}
+              {entry.first_raw} → {entry.second_raw}
             </span>
             <span className="word-import-text-row-summary is-ignored">{t("skippedLower")}</span>
           </div>
@@ -1482,17 +1482,17 @@ export function WordImportWizard({
       );
     }
     const linked = entry.candidates.find((candidate) => candidate.entry_id === entry.linked_entry_id);
-    const col2Differs = !!linked && linked.column_two_display !== entry.column_two_raw;
-    const col2IsText = entry.column_two_type === "text";
-    const col1IsNames = NAME_COLUMN_TYPES.has(entry.column_one_type);
-    const col2IsNames = NAME_COLUMN_TYPES.has(entry.column_two_type);
+    const col2Differs = !!linked && linked.second_display !== entry.second_raw;
+    const col2IsText = entry.second_type === "text";
+    const col1IsNames = NAME_COLUMN_TYPES.has(entry.first_type);
+    const col2IsNames = NAME_COLUMN_TYPES.has(entry.second_type);
     const flagged = listNeedsReview(entry);
     const isOpen = flagged || expandedLists.has(index);
     const decision = decisionState(entry.approved, flagged);
     const isIgnored = decision === "ignore";
     const titleLabel = col1IsNames
-      ? entry.column_one_names.map((name) => name.raw_name).join(", ") || entry.column_one_raw
-      : entry.column_one_raw;
+      ? entry.first_names.map((name) => name.raw_name).join(", ") || entry.first_raw
+      : entry.first_raw;
     return (
       <div
         className={`word-import-text-row${flagged ? " word-import-flag" : ""}${isIgnored ? " word-import-text-row-muted" : ""}`}
@@ -1507,7 +1507,7 @@ export function WordImportWizard({
         >
           <span className="word-import-text-row-title">
             {titleLabel}
-            {!col2IsNames && entry.column_two_raw && <span className="muted"> · {entry.column_two_raw}</span>}
+            {!col2IsNames && entry.second_raw && <span className="muted"> · {entry.second_raw}</span>}
             {entry.group_filled && (
               <span className="muted" title={t("autoFilledGroupingTitle")} style={{ marginLeft: "var(--space-2)" }}>
                 ✨
@@ -1525,7 +1525,7 @@ export function WordImportWizard({
                   ) : (
                     <CheckIcon />
                   )}{" "}
-                  {linked.column_one_display} → {linked.column_two_display}
+                  {linked.first_display} → {linked.second_display}
                 </span>
               ) : (
                 <span className="word-import-text-row-summary is-new">
@@ -1549,20 +1549,20 @@ export function WordImportWizard({
           <div className="grid" style={{ gap: "var(--space-3)" }}>
             <TodoAssigneeMenu
               isOptionSelectable={isImportParticipantSelectable}
-              label={linked ? `${linked.column_one_display} → ${linked.column_two_display}` : "🆕 Neu (nur in diesem Protokoll)"}
+              label={linked ? `${linked.first_display} → ${linked.second_display}` : "🆕 Neu (nur in diesem Protokoll)"}
               nullLabel={t("createNewThisProtocolOnly")}
               activeId={entry.linked_entry_id}
               participants={entry.candidates.map(
                 (candidate): AssigneeOption<string> => ({
                   id: candidate.entry_id,
-                  display_name: `${candidate.column_one_display} → ${candidate.column_two_display}`,
+                  display_name: `${candidate.first_display} → ${candidate.second_display}`,
                 })
               )}
               onChange={(option) =>
                 setLists((current) =>
                   current.map((row, rowIndex) => {
                     if (rowIndex !== index) return row;
-                    const updatedRow = { ...row, linked_entry_id: option.id, column_two_source: "doc" as FieldSource };
+                    const updatedRow = { ...row, linked_entry_id: option.id, second_source: "doc" as FieldSource };
                     // Mirrors updateEventField: picking a link here IS the decision, so
                     // recompute approved right away instead of leaving it false and
                     // having decisionState(false, false) misread the row as "Ignorieren".
@@ -1571,33 +1571,33 @@ export function WordImportWizard({
                 )
               }
             />
-            {(entry.column_one_type === "text" || entry.column_two_type === "text") && (
+            {(entry.first_type === "text" || entry.second_type === "text") && (
               <div className="grid" style={{ gap: "0.35rem", gridTemplateColumns: "1fr 1fr" }}>
-                {entry.column_one_type === "text" && (
+                {entry.first_type === "text" && (
                   <div className="field-stack">
                     <span className="muted">{t("column1")}</span>
                     <input
                       type="text"
-                      value={entry.column_one_raw}
+                      value={entry.first_raw}
                       onChange={(event) => {
                         const value = event.target.value;
                         setLists((current) =>
-                          current.map((row, rowIndex) => (rowIndex === index ? { ...row, column_one_raw: value } : row))
+                          current.map((row, rowIndex) => (rowIndex === index ? { ...row, first_raw: value } : row))
                         );
                       }}
                     />
                   </div>
                 )}
-                {entry.column_two_type === "text" && (
+                {entry.second_type === "text" && (
                   <div className="field-stack">
                     <span className="muted">{t("column2")}</span>
                     <input
                       type="text"
-                      value={entry.column_two_raw}
+                      value={entry.second_raw}
                       onChange={(event) => {
                         const value = event.target.value;
                         setLists((current) =>
-                          current.map((row, rowIndex) => (rowIndex === index ? { ...row, column_two_raw: value } : row))
+                          current.map((row, rowIndex) => (rowIndex === index ? { ...row, second_raw: value } : row))
                         );
                       }}
                     />
@@ -1607,7 +1607,7 @@ export function WordImportWizard({
             )}
             {col1IsNames && (
               <div className="grid" style={{ gap: "0.35rem" }}>
-                {entry.column_one_names.map((name, nameIndex) => (
+                {entry.first_names.map((name, nameIndex) => (
                   <div key={nameIndex} className="field-stack">
                     <span className="muted">{name.raw_name}</span>
                     <TodoAssigneeMenu
@@ -1624,7 +1624,7 @@ export function WordImportWizard({
             )}
             {col2IsNames ? (
               <div className="grid" style={{ gap: "0.35rem" }}>
-                {entry.column_two_names.map((name, nameIndex) => (
+                {entry.second_names.map((name, nameIndex) => (
                   <div key={nameIndex} className="field-stack">
                     <span className="muted">{name.raw_name}</span>
                     <TodoAssigneeMenu
@@ -1637,7 +1637,7 @@ export function WordImportWizard({
                     />
                   </div>
                 ))}
-                {linked && col2Differs && <div className="muted">bisher: {linked.column_two_display}</div>}
+                {linked && col2Differs && <div className="muted">bisher: {linked.second_display}</div>}
               </div>
             ) : (
               linked &&
@@ -1651,31 +1651,31 @@ export function WordImportWizard({
                       <label className="field-radio-option">
                         <input
                           type="radio"
-                          checked={entry.column_two_source === "doc"}
+                          checked={entry.second_source === "doc"}
                           onChange={() =>
                             setLists((current) =>
-                              current.map((row, rowIndex) => (rowIndex === index ? { ...row, column_two_source: "doc" } : row))
+                              current.map((row, rowIndex) => (rowIndex === index ? { ...row, second_source: "doc" } : row))
                             )
                           }
                         />
                         <span>
                           <span className="field-radio-option-label">{t("fromDocument")}</span>
-                          <strong>{entry.column_two_raw}</strong>
+                          <strong>{entry.second_raw}</strong>
                         </span>
                       </label>
                       <label className="field-radio-option">
                         <input
                           type="radio"
-                          checked={entry.column_two_source === "existing"}
+                          checked={entry.second_source === "existing"}
                           onChange={() =>
                             setLists((current) =>
-                              current.map((row, rowIndex) => (rowIndex === index ? { ...row, column_two_source: "existing" } : row))
+                              current.map((row, rowIndex) => (rowIndex === index ? { ...row, second_source: "existing" } : row))
                             )
                           }
                         />
                         <span>
                           <span className="field-radio-option-label">{t("existing")}</span>
-                          <strong>{linked.column_two_display}</strong>
+                          <strong>{linked.second_display}</strong>
                         </span>
                       </label>
                     </div>
@@ -1817,16 +1817,16 @@ export function WordImportWizard({
       const draft: ListDraft = {
         table_index: mapping.table_index,
         row_index: mapping.row_index,
-        column_one_raw: mapping.column_one_raw,
-        column_two_raw: mapping.column_two_raw,
-        column_one_type: mapping.column_one_type,
-        column_two_type: mapping.column_two_type,
-        column_one_names: mapping.column_one_names,
-        column_two_names: mapping.column_two_names,
+        first_raw: mapping.first_raw,
+        second_raw: mapping.second_raw,
+        first_type: mapping.first_type,
+        second_type: mapping.second_type,
+        first_names: mapping.first_names,
+        second_names: mapping.second_names,
         status: mapping.status,
         candidates: mapping.candidates,
         linked_entry_id: mapping.status !== "new" ? mapping.matched_entry_id : null,
-        column_two_source: "existing",
+        second_source: "existing",
         has_snapshot_target: mapping.has_snapshot_target,
         approved: false,
         dismissed: false,
@@ -2113,7 +2113,7 @@ export function WordImportWizard({
     setLists((current) =>
       current.map((row, index) => {
         if (index !== rowIndex) return row;
-        const key = column === "one" ? "column_one_names" : "column_two_names";
+        const key = column === "one" ? "first_names" : "second_names";
         const updatedNames = row[key].map((name, i) =>
           i === nameIndex ? { ...name, participant_id: participantId, no_link: participantId === null } : name
         );
@@ -2224,13 +2224,13 @@ export function WordImportWizard({
         // explicit "Ignorieren" decision would be silently reverted to "Übernehmen" by
         // clarifying an unrelated name (real bug: listStillOpen/matrixStillOpen were
         // being recomputed for the whole table on every call, not just affected rows).
-        if (!row.column_one_names.some(matches) && !row.column_two_names.some(matches)) return row;
+        if (!row.first_names.some(matches) && !row.second_names.some(matches)) return row;
         const updated = {
           ...row,
-          column_one_names: row.column_one_names.map((name) =>
+          first_names: row.first_names.map((name) =>
             matches(name) ? { ...name, participant_id: participantId, no_link: optionId === null } : name
           ),
-          column_two_names: row.column_two_names.map((name) =>
+          second_names: row.second_names.map((name) =>
             matches(name) ? { ...name, participant_id: participantId, no_link: optionId === null } : name
           ),
         };
@@ -2349,10 +2349,10 @@ export function WordImportWizard({
           table_index: entry.table_index,
           // Non-null: approvedLists is already filtered to rows with a resolved list_definition_id above.
           list_definition_id: tableRoles[entry.table_index]?.list_definition_id as string,
-          column_one_raw: entry.column_one_raw,
-          column_two_raw: resolveListColumnTwoRaw(entry),
-          column_one_names: entry.column_one_names,
-          column_two_names: entry.column_two_names,
+          first_raw: entry.first_raw,
+          second_raw: resolveListColumnTwoRaw(entry),
+          first_names: entry.first_names,
+          second_names: entry.second_names,
           approved: true,
           linked_entry_id: entry.linked_entry_id,
           originally_suggested_entry_id: entry.originallySuggestedEntryId,

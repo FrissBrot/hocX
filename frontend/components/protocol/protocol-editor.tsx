@@ -47,6 +47,7 @@ import {
   ProtocolTodo,
   SaveState,
   StructuredListDefinition,
+  ListValues,
   StructuredListEntry,
   TemplateSummary,
   TodoListItem,
@@ -1939,7 +1940,7 @@ export function ProtocolEditor({
   async function createListEntryFromBlock(
     protocolElementBlockId: string,
     listDefinitionId: string,
-    payload: { sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> } // i18n-ok: TS-Generic-Signatur, kein UI-Text
+    payload: { sort_index: number; values: ListValues }
   ) {
     setStatus(protocolElementBlockId, "saving");
     try {
@@ -1968,11 +1969,7 @@ export function ProtocolEditor({
     protocolElementBlockId: string,
     listDefinitionId: string,
     entryId: string,
-    payload: Partial<{
-      sort_index: number;
-      column_one_value: Record<string, unknown>;
-      column_two_value: Record<string, unknown>;
-    }>
+    payload: Partial<{ sort_index: number; values: ListValues }>
   ) {
     setStatus(protocolElementBlockId, "saving");
     try {

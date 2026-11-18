@@ -131,7 +131,7 @@ def test_clone_full_remaps_matrix_block_list_links(db):
     cloned list/entry, not left pointing at the source tenant's ids."""
     source = make_tenant(db, "Quelle")
     source_list = make_list_definition(db, source.id, name="Leitende")
-    source_entry = make_list_entry(db, source_list.id, column_one_value={"text_value": "Anna"})
+    source_entry = make_list_entry(db, source_list.id, first_value={"text_value": "Anna"})
     make_element_definition(
         db, source.id, "Matrix",
         blocks=[{
@@ -171,8 +171,8 @@ def test_clone_full_remaps_responsible_assignments_and_block_repeat_sources(db):
     pointing at the source tenant's participants/list entries/events/todos."""
     source = make_tenant(db, "Quelle")
     participant = make_participant(db, source.id, "Anna")
-    definition = make_list_definition(db, source.id, column_one_value_type="participant")
-    entry = make_list_entry(db, definition.id, column_one_value={"participant_id": participant.id})
+    definition = make_list_definition(db, source.id, first_type="participant")
+    entry = make_list_entry(db, definition.id, first_value={"participant_id": participant.id})
     event = make_event(db, source.id, title="Lager")
     template = make_template(db, source.id)
     protocol = make_protocol(db, source.id, template.id)

@@ -108,7 +108,7 @@ def test_todo_table_filters_and_grouping(db, world):
 
 def test_foreign_list_and_account_are_not_found(db, world):
     foreign_list = make_list_definition(db, world["other"].id)
-    make_list_entry(db, foreign_list.id, column_one_value={"text_value": "Geheim"})
+    make_list_entry(db, foreign_list.id, first_value={"text_value": "Geheim"})
     ctx = _ctx(db, world)
     with pytest.raises(DocumentNotFoundError):
         build_blocks(ctx, [BlockSpec(type="list_table", params={"list_id": str(foreign_list.public_id)})])
@@ -122,7 +122,7 @@ def test_foreign_list_and_account_are_not_found(db, world):
 def test_foreign_refs_in_protocol_block_config_are_ignored(db, world):
     foreign_account = make_finance_account(db, world["other"].id)
     foreign_list = make_list_definition(db, world["other"].id)
-    make_list_entry(db, foreign_list.id, column_one_value={"text_value": "Geheim"})
+    make_list_entry(db, foreign_list.id, first_value={"text_value": "Geheim"})
     element = make_protocol_element(db, world["protocol"].id, sort_index=5, section_name="Finanzen")
     make_protocol_element_block(db, element.id, {"finance_account_id": foreign_account.id}, element_type_code="finance_balance")
     make_protocol_element_block(db, element.id, {"linked_list_id": foreign_list.id}, element_type_code="form", sort_index=1)

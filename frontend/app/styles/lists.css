@@ -28,6 +28,13 @@
   table-layout: fixed;
 }
 
+/* Viele Spalten (bis 20): Tabelle scrollt waagrecht, die erste Spalte bleibt stehen */
+.list-manager-content .structured-list-table.structured-list-wide { table-layout: auto; min-width: 100%; }
+.list-manager-content .structured-list-wide th,
+.list-manager-content .structured-list-wide td { min-width: 160px; }
+.list-manager-content .structured-list-wide th:first-child,
+.list-manager-content .structured-list-wide td:first-child { position: sticky; left: 0; z-index: 1; background: var(--panel-solid); }
+
 .list-manager-content .structured-list-table th,
 .list-manager-content .structured-list-table td {
   white-space: normal;
@@ -117,19 +124,12 @@
 
 .list-definition-number { display: grid; place-items: center; width: 28px; height: 28px; flex-shrink: 0; background: var(--accent); color: var(--on-solid); border-radius: var(--radius-sm); font-weight: 700; }
 
-.list-definition-types { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
 
-.list-definition-type { display: flex; align-items: center; gap: var(--space-2); text-align: left; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel-solid); color: var(--text); min-height: 56px; }
 
-.list-definition-type:hover { background: var(--accent-soft); transform: none; }
 
-.list-definition-type-selected { border-color: var(--accent); box-shadow: var(--focus-ring); background: var(--accent-soft); }
 
-.list-definition-type .muted { display: block; font-size: var(--text-sm); font-weight: 400; }
 
-.list-definition-type-icon { display: grid; place-items: center; width: 32px; height: 32px; flex-shrink: 0; background: var(--neutral-bg); color: var(--neutral-fg); border-radius: var(--radius-sm); }
 
-.list-definition-type-selected .list-definition-type-icon { background: var(--accent); color: var(--on-solid); }
 
 .list-definition-preview { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
 
@@ -148,7 +148,6 @@
 /* Markierung «Quelle der Gruppenstatistik» mit Hilfe daneben (Audit 07, C3). */
 .list-definition-group-source { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
 
-.list-definition-type-label { display: flex; align-items: center; gap: var(--space-1); }
 
 .list-definition-active input { appearance: none; width: 36px; height: 22px; border-radius: var(--radius-pill); background: var(--border-strong); padding: 2px; cursor: pointer; }
 
@@ -166,9 +165,7 @@
 
 .list-manager-tabs .badge { font-size: var(--text-xs); }
 
-.list-definition-type { --button-bg: var(--panel-solid); --button-hover-bg: var(--accent-soft); }
 
-.list-definition-type-selected { --button-bg: var(--accent-soft); }
 
 .list-definition-preview .data-table th { text-transform: none; letter-spacing: 0; font-size: var(--text-base); color: var(--text); }
 
@@ -187,3 +184,15 @@
 .list-manager-tabs .tabs-trigger { flex-shrink: 0; }
 
 .lists-page > .grid { min-width: 0; grid-template-columns: minmax(0, 1fr); }
+
+/* Spalten im Listen-Dialog (beliebig viele, Migration 0186) */
+.list-definition-columns { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.list-definition-column-row { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 200px) auto; align-items: center; gap: var(--space-2); }
+.list-definition-column-actions { display: flex; gap: var(--space-1); }
+.list-definition-column-warning { grid-column: 2 / -1; color: var(--warning-fg); }
+
+@media (max-width: 640px) {
+  .list-definition-column-row { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .list-definition-column-row .select-wrap,
+  .list-definition-column-row select { grid-column: 2 / 3; }
+}

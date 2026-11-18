@@ -596,6 +596,8 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: semgrep scan --config .semgrep/tenant-scope.yml --baseline-commit "$BASE_SHA" --error --metrics off backend/app
+      - name: Keine festen Listenspalten ausserhalb des v1-Adapters
+        run: semgrep scan --config .semgrep/no-legacy-list-columns.yml --error --metrics off backend/app frontend/app frontend/components frontend/lib frontend/types
       - name: Neue Verstösse gegen SECURITY-RULES.md suchen
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}

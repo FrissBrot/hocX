@@ -65,9 +65,9 @@ def sample(db):
     for offset, amount, description in ((-40, 500, "Mitgliederbeiträge"), (-20, -120.5, "Material"), (-5, 80, "Spende")):
         db.add(FinanceTransaction(account_id=account.id, amount=amount, description=description, transaction_date=today + timedelta(days=offset)))
     make_fine(db, protocol.id, account.id, amount=5, participant_name_snapshot="Ben Beispiel")
-    material = make_list_definition(db, tenant.id, name="Material", column_one_title="Gegenstand", column_two_title="Verantwortlich")
+    material = make_list_definition(db, tenant.id, name="Material", first_title="Gegenstand", second_title="Verantwortlich")
     for index, (item, owner) in enumerate((("Zelt", "Anna"), ("Grill", "Ben"), ("Lautsprecher", ""))):
-        make_list_entry(db, material.id, sort_index=index, column_one_value={"text_value": item}, column_two_value={"text_value": owner})
+        make_list_entry(db, material.id, sort_index=index, first_value={"text_value": item}, second_value={"text_value": owner})
     db.flush()
     return {"tenant": tenant, "protocol": protocol, "list": material}
 

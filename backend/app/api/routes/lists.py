@@ -1,17 +1,36 @@
 import uuid
+from typing import Annotated
 
 from sqlalchemy import Text, cast, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Path, status
 
 from app.core.db import get_db
 from app.core.error_log import record_system_error
 from app.core.permissions import P
 from app.core.security import CurrentUser, get_current_user, require_permission
-from app.models import ElementDefinition, ListDefinition, ListEntry, Protocol, ProtocolElement, ProtocolElementBlock
+from app.models import (
+    DocumentTemplate,
+    DocumentTemplateRevision,
+    ElementDefinition,
+    ListColumn,
+    ListDefinition,
+    ListEntry,
+    Protocol,
+    ProtocolElement,
+    ProtocolElementBlock,
+    SubmissionAssignment,
+    Template,
+    TemplateElement,
+    TemplateElementBlock,
+)
 from app.schemas.list_definition import (
+    ListColumnCreate,
+    ListColumnOrder,
+    ListColumnUpdate,
+    ListColumnUsage,
     ListDefinitionCreate,
     ListDefinitionRead,
     ListDefinitionUpdate,
@@ -175,6 +194,151 @@ def patch_definition(
     if updated is None:
         raise HTTPException(status_code=404, detail="Liste nicht gefunden")
     return updated
+
+
+# ── Spalten ────────────────────────────────────────────────────────────────────────────────
+
+
+def _get_column_or_404(definition: ListDefinition, column_id: str) -> ListColumn:
+    column = service.repository.get_column(definition, column_id)
+    if column is None:
+        raise HTTPException(status_code=404, detail="Spalte nicht gefunden")
+    return column
+
+
+def _column_change(db: Session, user: CurrentUser, definition: ListDefinition, action):
+    try:
+        result = action()
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Spalte konnte nicht gespeichert werden") from exc
+    _sync_after_entry_change(db, tenant_id=user.current_tenant_id, list_definition_id=definition.id)
+    return result
+
+
+@router.post("/lists/{list_definition_id}/columns", response_model=ListDefinitionRead, status_code=status.HTTP_201_CREATED)
+def create_column(
+    list_definition_id: uuid.UUID,
+    payload: ListColumnCreate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_permission(user, P.MEETINGS_EDIT)
+    definition = _get_definition_or_404(db, list_definition_id, user)
+    return _column_change(db, user, definition, lambda: service.add_column(db, definition, payload))
+
+
+@router.patch("/lists/{list_definition_id}/columns/{column_id}", response_model=ListDefinitionRead)
+def patch_column(
+    list_definition_id: uuid.UUID,
+    column_id: Annotated[str, Path(max_length=64)],
+    payload: ListColumnUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_permission(user, P.MEETINGS_EDIT)
+    definition = _get_definition_or_404(db, list_definition_id, user)
+    column = _get_column_or_404(definition, column_id)
+    return _column_change(db, user, definition, lambda: service.update_column(db, definition, column, payload))
+
+
+@router.delete("/lists/{list_definition_id}/columns/{column_id}", response_model=ListDefinitionRead)
+def delete_column(
+    list_definition_id: uuid.UUID,
+    column_id: Annotated[str, Path(max_length=64)],
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_permission(user, P.MEETINGS_EDIT)
+    definition = _get_definition_or_404(db, list_definition_id, user)
+    column = _get_column_or_404(definition, column_id)
+    return _column_change(db, user, definition, lambda: service.delete_column(db, definition, column))
+
+
+@router.put("/lists/{list_definition_id}/columns/order", response_model=ListDefinitionRead)
+def reorder_columns(
+    list_definition_id: uuid.UUID,
+    payload: ListColumnOrder,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_permission(user, P.MEETINGS_EDIT)
+    definition = _get_definition_or_404(db, list_definition_id, user)
+    return _column_change(db, user, definition, lambda: service.reorder_columns(db, definition, payload.column_ids))
+
+
+def column_usages(db: Session, *, tenant_id: int, column_key: str, limit: int = 20) -> list[ListColumnUsage]:
+    """Wo ein Spalten-Key in Konfigurationen steht (Gruppieren, Sortieren, Filtern, feste Spalte,
+    Matrix-Quelle, Abgabe-Verantwortliche, Dokumentvorlagen). Der Key ist eine UUID: ein
+    Textvergleich auf dem JSON trifft genau ihn. Offene Protokolle zählen, abgeschlossene nicht
+    (eingefroren, lesen über den v1/v2-Snapshot)."""
+    # Key als Text, nicht als LIKE-Muster (%, _ und \\ aus einem importierten Key sind Zeichen)
+    escaped = column_key.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    pattern = f"%{escaped}%"
+    usages: list[ListColumnUsage] = []
+    for public_id, title in db.execute(
+        select(ElementDefinition.public_id, ElementDefinition.title).where(
+            ElementDefinition.tenant_id == tenant_id, cast(ElementDefinition.configuration_json, Text).like(pattern, escape="\\")
+        )
+    ).all():
+        usages.append(ListColumnUsage(kind="element", label=title, href=f"/elements?open={public_id}"))
+    template_hits = db.execute(
+        select(Template.public_id, Template.name)
+        .join(TemplateElement, TemplateElement.template_id == Template.id)
+        .outerjoin(TemplateElementBlock, TemplateElementBlock.template_element_id == TemplateElement.id)
+        .where(
+            Template.tenant_id == tenant_id,
+            or_(
+                cast(TemplateElement.configuration_json, Text).like(pattern, escape="\\"),
+                cast(TemplateElementBlock.configuration_override_json, Text).like(pattern, escape="\\"),
+            ),
+        )
+        .distinct()
+    ).all()
+    for public_id, name in template_hits:
+        usages.append(ListColumnUsage(kind="template", label=name, href=f"/templates/{public_id}"))
+    for public_id, number, title in db.execute(
+        select(Protocol.public_id, Protocol.protocol_number, Protocol.title)
+        .join(ProtocolElement, ProtocolElement.protocol_id == Protocol.id)
+        .join(ProtocolElementBlock, ProtocolElementBlock.protocol_element_id == ProtocolElement.id)
+        .where(
+            Protocol.tenant_id == tenant_id,
+            Protocol.status != "abgeschlossen",
+            cast(ProtocolElementBlock.configuration_snapshot_json, Text).like(pattern, escape="\\"),
+        )
+        .distinct()
+    ).all():
+        usages.append(ListColumnUsage(kind="protocol", label=title or number or "", href=f"/protocols/{public_id}"))
+    for public_id, title in db.execute(
+        select(SubmissionAssignment.public_id, SubmissionAssignment.title).where(
+            SubmissionAssignment.tenant_id == tenant_id, SubmissionAssignment.responsible_participant_source == column_key
+        )
+    ).all():
+        usages.append(ListColumnUsage(kind="submission", label=title, href=f"/submission-assignments?open={public_id}"))
+    for public_id, name in db.execute(
+        select(DocumentTemplate.public_id, DocumentTemplate.name)
+        .join(DocumentTemplateRevision, DocumentTemplateRevision.template_id == DocumentTemplate.id)
+        .where(DocumentTemplate.tenant_id == tenant_id, cast(DocumentTemplateRevision.content_json, Text).like(pattern, escape="\\"))
+        .distinct()
+    ).all():
+        usages.append(ListColumnUsage(kind="document", label=name, href=f"/document-studio?template={public_id}"))
+    return usages[:limit]
+
+
+@router.get("/lists/{list_definition_id}/columns/{column_id}/usages", response_model=list[ListColumnUsage])
+def get_column_usages(
+    list_definition_id: uuid.UUID,
+    column_id: Annotated[str, Path(max_length=64)],
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_permission(user, P.MEETINGS_EDIT)
+    definition = _get_definition_or_404(db, list_definition_id, user)
+    column = _get_column_or_404(definition, column_id)
+    return column_usages(db, tenant_id=user.current_tenant_id, column_key=column.key)
 
 
 @router.delete("/lists/{list_definition_id}", response_model=dict[str, str])

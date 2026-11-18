@@ -494,11 +494,16 @@ class FormConfig(BlockConfigBase):
     left_column_heading: str | None = None
     value_column_heading: str | None = None
     linked_list_id: Any = None
-    linked_list_group_by: Literal["column_one", "column_two"] | None = None
-    linked_list_sort_by: Literal["column_one", "column_two"] | None = None
+    # Spalten-Keys der verknüpften Liste (list_column.public_id, Migration 0186). Ob die Spalte
+    # zur Liste gehört, prüft element_definition_service beim Speichern; unbekannte Keys
+    # behandeln die Leser wie «keine» (list_columns.resolve_column).
+    linked_list_group_by: str | None = Field(default=None, max_length=64)
+    linked_list_sort_by: str | None = Field(default=None, max_length=64)
     linked_list_sort_direction: Literal["asc", "desc"] | None = None
     linked_list_highlight_empty: bool = False
-    linked_list_filter_column: Literal["column_one", "column_two"] | None = None
+    linked_list_filter_column: str | None = Field(default=None, max_length=64)
+    # Sichtbare Spalten des Listen-Blocks in dieser Reihenfolge; None = alle Spalten der Liste
+    linked_list_visible_columns: list[str] | None = Field(default=None, max_length=20)
     linked_list_filter_text: str | None = None
     event_fields: list[EventFieldConfig] | None = None
     # «Pro Pendenz»: Felder der Pendenz, für die der Block entsteht (gleiches Format wie event_fields)

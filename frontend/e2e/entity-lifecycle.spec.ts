@@ -15,9 +15,10 @@ test("creates, reads, edits and deletes core entities", async ({ request, page }
     const changedParticipant = await json(request, "patch", `/api/participants/${participant.id}`, { display_name: `E2E Teilnehmer geändert ${suffix}` });
     expect(changedParticipant.display_name).toContain("geändert");
 
-    const list = await json(request, "post", "/api/lists", { name: `E2E Liste ${suffix}`, column_one_title: "Name", column_one_value_type: "text", column_two_title: "Info", column_two_value_type: "text" });
+    const list = await json(request, "post", "/api/lists", { name: `E2E Liste ${suffix}`, columns: [{ title: "Name", value_type: "text" }, { title: "Info", value_type: "text" }] });
     cleanup.push(["list", list.id]);
-    const entry = await json(request, "post", `/api/lists/${list.id}/entries`, { column_one_value: { text: "Alpha" }, column_two_value: { text: "Beta" } });
+    const [nameKey, infoKey] = list.columns.map((column: { id: string }) => column.id);
+    const entry = await json(request, "post", `/api/lists/${list.id}/entries`, { values: { [nameKey]: { text_value: "Alpha" }, [infoKey]: { text_value: "Beta" } } });
     expect((await (await request.get(`/api/lists/${list.id}/entries`)).json()).some((item: { id: string }) => item.id === entry.id)).toBeTruthy();
 
     const session = await (await request.get("/api/auth/session")).json();

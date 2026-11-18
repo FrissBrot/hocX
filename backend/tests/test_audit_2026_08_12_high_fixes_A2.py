@@ -28,12 +28,12 @@ def _make_protocol_with_responsible_elements(db):
     protocol = make_protocol(db, tenant.id, template.id, status="durchgeführt")
 
     definition = make_list_definition(
-        db, tenant.id, column_one_value_type="participant", column_two_value_type="text"
+        db, tenant.id, first_type="participant", second_type="text"
     )
     p1 = make_participant(db, tenant.id, display_name="Alice Muster")
     p2 = make_participant(db, tenant.id, display_name="Bob Beispiel")
-    entry1 = make_list_entry(db, definition.id, column_one_value={"participant_id": p1.id})
-    entry2 = make_list_entry(db, definition.id, column_one_value={"participant_id": p2.id})
+    entry1 = make_list_entry(db, definition.id, first_value={"participant_id": p1.id})
+    entry2 = make_list_entry(db, definition.id, first_value={"participant_id": p2.id})
 
     el1 = make_protocol_element(db, protocol.id, sort_index=0, section_name="Traktandum 1 (stale)")
     el1.element_title_snapshot = "Traktandum 1"

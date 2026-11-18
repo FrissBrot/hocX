@@ -16,6 +16,7 @@ from app.models import (
     event_cycle_table,
     event_table,
     list_definition_table,
+    list_column_table,
     list_entry_table,
     participant_table,
     stored_file_table,
@@ -140,6 +141,24 @@ def get_list_definition(db: Session, *, list_definition_id: int) -> dict | None:
         select(list_definition_table).where(list_definition_table.c.id == list_definition_id)
     ).mappings().first()
     return dict(row) if row else None
+
+
+def get_label_column(db: Session, *, definition: dict) -> dict | None:
+    """Spalte, die einen Listeneintrag benennt - gleiche Regel wie das Backend
+    (app/services/list_columns.py::label_column): Rolle der Liste, sonst die erste Text- oder
+    Termin-Spalte, sonst die erste Spalte."""
+    rows = [
+        dict(row)
+        for row in db.execute(
+            select(list_column_table)
+            .where(list_column_table.c.list_definition_id == definition["id"])
+            .order_by(list_column_table.c.sort_index.asc(), list_column_table.c.id.asc())
+        ).mappings()
+    ]
+    role = next((row for row in rows if row["id"] == definition.get("label_column_id")), None)
+    if role is not None:
+        return role
+    return next((row for row in rows if row["value_type"] in ("text", "event")), rows[0] if rows else None)
 
 
 def list_list_entries(db: Session, *, list_definition_id: int) -> list[dict]:

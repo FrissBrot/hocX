@@ -210,7 +210,7 @@ def _event_agenda(spec, params, strings):
 
 
 def _list_table(spec, params, strings):
-    columns = [TableColumn(key="column_one", label=_t(strings, "listColumn1"), width="fill"), TableColumn(key="column_two", label=_t(strings, "listColumn2"))]
+    columns = [TableColumn(key="sample-a", label=_t(strings, "listColumn1"), width="fill"), TableColumn(key="sample-b", label=_t(strings, "listColumn2"))]
     rows = [TableRow(cells=[_text(_t(strings, f"event{index}")), _text(_t(strings, f"person{index}"))]) for index in range(1, 4)]
     return [ListTableBlock(**_fields(spec), table=TableData(columns=columns, groups=[TableGroup(rows=rows)]))]
 

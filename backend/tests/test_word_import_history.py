@@ -16,7 +16,7 @@ def setup_history(db):
     template = make_template(db, tenant.id)
     template.cycle_config_id = cycle.id
     definition = make_list_definition(db, tenant.id)
-    entry = make_list_entry(db, definition.id, column_one_value={"text_value": "Feuer"}, column_two_value={"text_value": "LIVE"})
+    entry = make_list_entry(db, definition.id, first_value={"text_value": "Feuer"}, second_value={"text_value": "LIVE"})
     db.flush()
     return tenant, cycle, template, definition, entry
 
@@ -26,7 +26,7 @@ def record(db, seed, protocol_date, value, *, number="P-1", cycle_id=None):
     protocol = make_protocol(db, tenant.id, template.id, protocol_date=protocol_date, protocol_number=number)
     record_imported_list_history(db, tenant_id=tenant.id, cycle_config_id=cycle_id if cycle_id is not None else cycle.id,
         protocol_id=protocol.id, definitions={definition.id: definition}, rows_by_list={definition.id: [{
-            "id": entry.id, "sort_index": 10, "column_one_value": {"text_value": "Feuer"}, "column_two_value": {"text_value": value},
+            "id": entry.id, "sort_index": 10, "values": {"k1": {"text_value": "Feuer"}, "k2": {"text_value": value}},
         }]})
     db.flush()
     return protocol
@@ -43,7 +43,7 @@ def test_regular_unedited_snapshot_is_not_overwritten(db):
     before = [deepcopy(row.snapshot_json) for row in snapshots(db, cycle)]
     record(db, seed, date(2024, 7, 31), "IMPORTED")
     assert [row.snapshot_json for row in snapshots(db, cycle)] == before
-    assert entry.column_two_value_json == {"text_value": "LIVE"}
+    assert (entry.values_json or {}).get("k2", {}) == {"text_value": "LIVE"}
 
 
 def test_equal_date_preserves_first_reviewed_source_and_other_lists(db):
@@ -53,16 +53,20 @@ def test_equal_date_preserves_first_reviewed_source_and_other_lists(db):
     before = [deepcopy(row.snapshot_json) for row in snapshots(db, cycle)]
     record(db, seed, date(2024, 2, 29), "SECOND", number="P-2")
     assert [row.snapshot_json for row in snapshots(db, cycle)] == before
-    assert before[0][0][SOURCE_KEY]["protocol_id"] == str(first.public_id)
+    tables = [row.table_name for row in snapshots(db, cycle)]
+    assert before[tables.index("list_definition")][0][SOURCE_KEY]["protocol_id"] == str(first.public_id)
     other = make_list_definition(db, tenant.id, name="Other")
     record_imported_list_history(db, tenant_id=tenant.id, cycle_config_id=cycle.id, protocol_id=first.id,
         definitions={other.id: other}, rows_by_list={other.id: [{"id": -1, "sort_index": 10,
-        "column_one_value": {"text_value": "Other"}, "column_two_value": {"text_value": "UNRELATED"}}]})
+        "values": {"k1": {"text_value": "Other"}, "k2": {"text_value": "UNRELATED"}}}]})
     db.flush()
     record(db, seed, date(2024, 7, 31), "NEWER", number="P-3")
-    definitions, entries = snapshots(db, cycle)
+    by_table = {row.table_name: row for row in snapshots(db, cycle)}
+    definitions, entries = by_table["list_definition"], by_table["list_entry"]
     assert {row["id"] for row in definitions.snapshot_json} == {definition.id, other.id}
-    assert {row["column_two_value_json"]["text_value"] for row in entries.snapshot_json} == {"NEWER", "UNRELATED"}
+    assert {row["values_json"]["k2"]["text_value"] for row in entries.snapshot_json} == {"NEWER", "UNRELATED"}
+    # Spalten der Listen sind mitgesichert (Migration 0186)
+    assert {row["list_definition_id"] for row in by_table["list_column"].snapshot_json} == {definition.id, other.id}
 
 
 def test_foreign_cycle_is_not_written(db):

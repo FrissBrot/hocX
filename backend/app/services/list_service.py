@@ -6,9 +6,12 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Event, ListDefinition, ListEntry, Participant
+from app.models import Event, ListColumn, ListDefinition, ListEntry, Participant
 from app.repositories.list_repository import ListRepository
 from app.schemas.list_definition import (
+    ListColumnCreate,
+    ListColumnRead,
+    ListColumnUpdate,
     ListDefinitionCreate,
     ListDefinitionRead,
     ListDefinitionUpdate,
@@ -16,7 +19,7 @@ from app.schemas.list_definition import (
     ListEntryRead,
     ListEntryUpdate,
 )
-from app.services import public_id_service
+from app.services import list_columns, public_id_service
 
 
 def lock_linked_list_definitions(db: Session, list_ids, *, tenant_id: int | None) -> set[int]:
@@ -84,7 +87,7 @@ class ListService:
 
     def _denormalize_value(self, db: Session, value_type: str, stored_value: dict[str, Any] | None) -> dict[str, Any]:
         """Inverse of _normalize_value - translates the internal ids stored in
-        column_one/two_value_json back to public UUIDs before a value crosses the API."""
+        list_entry.values_json back to public UUIDs before a value crosses the API."""
         value = stored_value or {}
         if value_type == "participant" and value.get("participant_id") is not None:
             public_id = public_id_service.resolve_public_id(db, Participant, value["participant_id"])
@@ -98,21 +101,53 @@ class ListService:
         return dict(value)
 
     def _definition_read(self, definition: ListDefinition) -> ListDefinitionRead:
-        return ListDefinitionRead.model_validate(definition)
+        columns = list_columns.columns_of(definition)
+        by_id = {column.id: column for column in columns}
+        role = lambda column_id: by_id[column_id].key if column_id in by_id else None  # noqa: E731
+        return ListDefinitionRead.model_validate(definition).model_copy(
+            update={
+                "columns": [
+                    ListColumnRead(id=column.key, title=column.title, value_type=column.value_type, sort_index=column.sort_index)
+                    for column in columns
+                ],
+                "label_column_id": role(definition.label_column_id),
+                "responsible_column_id": role(definition.responsible_column_id),
+            }
+        )
 
     def _entry_read(self, db: Session, entry: ListEntry, *, definition: ListDefinition | None = None) -> ListEntryRead:
         definition = definition or self.repository.get_definition(db, entry.list_definition_id)
-        column_one_type = definition.column_one_value_type if definition else "text"
-        column_two_type = definition.column_two_value_type if definition else "text"
+        values = {}
+        for column in list_columns.columns_of(definition):
+            value = self._denormalize_value(db, column.value_type, list_columns.get_value(entry, column))
+            if value:
+                values[column.key] = value
         return ListEntryRead(
             id=entry.public_id,
             list_definition_id=public_id_service.resolve_public_id(db, ListDefinition, entry.list_definition_id),
             sort_index=entry.sort_index,
-            column_one_value=self._denormalize_value(db, column_one_type, entry.column_one_value_json),
-            column_two_value=self._denormalize_value(db, column_two_type, entry.column_two_value_json),
+            values=values,
             created_at=entry.created_at,
             updated_at=entry.updated_at,
         )
+
+    def _normalize_values(
+        self, db: Session, definition: ListDefinition, raw: dict[str, Any] | None, *, current: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Werte aus der API (öffentliche IDs) je Spalte prüfen und intern speichern. Unbekannte
+        Spalten-Keys sind ein Fehler; ``current`` wird mit den genannten Spalten überschrieben."""
+        by_key = {column.key: column for column in definition.columns}
+        result = dict(current or {})
+        for key, value in (raw or {}).items():
+            column = by_key.get(str(key))
+            if column is None:
+                raise ValueError("Unknown list column")
+            normalized = self._normalize_value(db, definition.tenant_id, column.value_type, value)
+            if normalized:
+                result[column.key] = normalized
+            else:
+                result.pop(column.key, None)
+        return result
 
     def list_definitions(self, db: Session, *, tenant_id: int) -> list[ListDefinitionRead]:
         return [self._definition_read(item) for item in self.repository.list_definitions(db, tenant_id=tenant_id)]
@@ -125,14 +160,22 @@ class ListService:
             tenant_id=tenant_id,
             name=payload.name,
             description=payload.description,
-            column_one_title=payload.column_one_title,
-            column_one_value_type=payload.column_one_value_type,
-            column_two_title=payload.column_two_title,
-            column_two_value_type=payload.column_two_value_type,
             is_active=payload.is_active,
             is_group_source=payload.is_group_source,
         )
+        # Mindestens eine Spalte; Rollen wie bei der Migration: erste Text-/Personen-Spalte
+        starts = payload.columns or [ListColumnCreate(title="Name", value_type="text")]
+        entity.columns = [
+            ListColumn(title=column.title.strip(), value_type=column.value_type, sort_index=(index + 1) * 10)
+            for index, column in enumerate(starts[: list_columns.MAX_COLUMNS])
+        ]
         created = self.repository.create_definition(db, entity)
+        label = next((c for c in created.columns if c.value_type in list_columns.LABEL_TYPES), None)
+        responsible = next((c for c in created.columns if c.value_type in list_columns.PARTICIPANT_TYPES), None)
+        if label is not None or responsible is not None:
+            created = self.repository.update_definition(
+                db, created, {"label_column_id": label.id if label else None, "responsible_column_id": responsible.id if responsible else None}
+            )
         return self._definition_read(created)
 
     def update_definition(
@@ -142,10 +185,62 @@ class ListService:
         if definition is None:
             return None
         values = payload.model_dump(exclude_unset=True)
+        by_key = {column.key: column for column in definition.columns}
+        for role, allowed in (("label_column_id", list_columns.LABEL_TYPES), ("responsible_column_id", list_columns.PARTICIPANT_TYPES)):
+            if role not in values:
+                continue
+            if values[role] is None:
+                continue
+            column = by_key.get(str(values[role]))
+            if column is None:
+                raise ValueError("Unknown list column")
+            if column.value_type not in allowed:
+                raise ValueError("List column type does not fit the role")
+            values[role] = column.id
         if not values:
             return self._definition_read(definition)
         updated = self.repository.update_definition(db, definition, values)
         return self._definition_read(updated)
+
+    # ── Spalten ────────────────────────────────────────────────────────────────────────────
+
+    def add_column(self, db: Session, definition: ListDefinition, payload: ListColumnCreate) -> ListDefinitionRead:
+        # Liste sperren, damit gleichzeitige Anfragen die Grenze nicht gemeinsam überschreiten
+        db.execute(select(ListDefinition.id).where(ListDefinition.id == definition.id).with_for_update())
+        db.refresh(definition, attribute_names=["columns"])
+        if len(definition.columns) >= list_columns.MAX_COLUMNS:
+            raise ValueError("Too many list columns")
+        last = max((column.sort_index for column in definition.columns), default=0)
+        column = ListColumn(title=payload.title.strip(), value_type=payload.value_type, sort_index=last + 10)
+        self.repository.add_column(db, definition, column)
+        return self._definition_read(definition)
+
+    def update_column(self, db: Session, definition: ListDefinition, column: ListColumn, payload: ListColumnUpdate) -> ListDefinitionRead:
+        values = payload.model_dump(exclude_unset=True, exclude_none=True)
+        if "title" in values:
+            values["title"] = values["title"].strip()
+        type_changed = "value_type" in values and values["value_type"] != column.value_type
+        if type_changed:
+            # Rollen, deren Typ nicht mehr passt, entfallen
+            if definition.label_column_id == column.id and values["value_type"] not in list_columns.LABEL_TYPES:
+                definition.label_column_id = None
+            if definition.responsible_column_id == column.id and values["value_type"] not in list_columns.PARTICIPANT_TYPES:
+                definition.responsible_column_id = None
+        self.repository.update_column(db, definition, column, values, clear_values=type_changed)
+        return self._definition_read(definition)
+
+    def delete_column(self, db: Session, definition: ListDefinition, column: ListColumn) -> ListDefinitionRead:
+        if len(definition.columns) <= 1:
+            raise ValueError("A list needs at least one column")
+        self.repository.delete_column(db, definition, column)
+        return self._definition_read(definition)
+
+    def reorder_columns(self, db: Session, definition: ListDefinition, column_ids: list[str]) -> ListDefinitionRead:
+        by_key = {column.key: column for column in definition.columns}
+        if set(column_ids) != set(by_key) or len(column_ids) != len(by_key):
+            raise ValueError("Column order must name every column once")
+        self.repository.reorder_columns(db, definition, [by_key[column_id] for column_id in column_ids])
+        return self._definition_read(definition)
 
     def delete_definition(self, db: Session, list_definition_id: int) -> bool:
         definition = self.repository.get_definition(db, list_definition_id)
@@ -198,12 +293,11 @@ class ListService:
             if isinstance(value, int) and not isinstance(value, bool):
                 wanted[model].add(value)
 
+        columns = list_columns.columns_of(definition)
         for entry in entries:
-            for value_type, stored in (
-                (definition.column_one_value_type if definition else "text", entry.column_one_value_json),
-                (definition.column_two_value_type if definition else "text", entry.column_two_value_json),
-            ):
-                value = stored or {}
+            for column in columns:
+                value_type = column.value_type
+                value = list_columns.get_value(entry, column)
                 if value_type == "participant":
                     add(Participant, value.get("participant_id"))
                 elif value_type == "participants" and isinstance(value.get("participant_ids"), list):
@@ -225,8 +319,7 @@ class ListService:
         entity = ListEntry(
             list_definition_id=list_definition_id,
             sort_index=payload.sort_index,
-            column_one_value_json=self._normalize_value(db, definition.tenant_id, definition.column_one_value_type, payload.column_one_value),
-            column_two_value_json=self._normalize_value(db, definition.tenant_id, definition.column_two_value_type, payload.column_two_value),
+            values_json=self._normalize_values(db, definition, payload.values),
         )
         created = self.repository.create_entry(db, entity)
         return self._entry_read(db, created, definition=definition)
@@ -239,14 +332,10 @@ class ListService:
         if definition is None:
             raise ValueError("Liste nicht gefunden")
         values = payload.model_dump(exclude_unset=True)
-        if "column_one_value" in values:
-            values["column_one_value_json"] = self._normalize_value(
-                db, definition.tenant_id, definition.column_one_value_type, values.pop("column_one_value")
-            )
-        if "column_two_value" in values:
-            values["column_two_value_json"] = self._normalize_value(
-                db, definition.tenant_id, definition.column_two_value_type, values.pop("column_two_value")
-            )
+        if "values" in values:
+            raw = values.pop("values")
+            if raw is not None:
+                values["values_json"] = self._normalize_values(db, definition, raw, current=entry.values_json)
         if not values:
             return self._entry_read(db, entry, definition=definition)
         updated = self.repository.update_entry(db, entry, values)

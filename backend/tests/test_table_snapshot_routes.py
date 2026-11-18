@@ -18,6 +18,7 @@ from app.schemas.table_snapshot import TableSnapshotListReconstructRequest, Tabl
 from app.services.table_snapshot_service import TableSnapshotService
 
 from tests.factories import (
+    list_column_key,
     make_current_user,
     make_cycle_config,
     make_list_definition,
@@ -173,11 +174,15 @@ def test_update_snapshot_row_success_sets_is_edited_and_writes_audit_log(db):
     assert len(audit_rows) == 1
 
 
+def _columns(definition):
+    return [{"key": column.key, "title": column.title, "value_type": column.value_type} for column in sorted(definition.columns, key=lambda c: c.sort_index)]
+
+
 def test_reconstruction_draft_from_live_when_no_snapshots_exist(db):
     tenant = make_tenant(db)
     cycle_config = make_cycle_config(db, tenant.id)
     definition = make_list_definition(db, tenant.id, name="Alice's List")
-    make_list_entry(db, definition.id, sort_index=0, column_one_value={"text_value": "a"})
+    make_list_entry(db, definition.id, sort_index=0, first_value={"text_value": "a"})
     writer = make_current_user(tenant.id, role="writer")
 
     draft = table_snapshots.get_reconstruction_draft(cycle_config.public_id, 2020, definition.public_id, db=db, user=writer)
@@ -186,7 +191,9 @@ def test_reconstruction_draft_from_live_when_no_snapshots_exist(db):
     assert draft.source_cycle_year is None
     assert draft.definition_values["name"] == "Alice's List"
     assert len(draft.entries) == 1
-    assert draft.entries[0]["column_one_value_json"] == {"text_value": "a"}
+    key = list_column_key(definition, 0)
+    assert draft.entries[0]["values_json"][key] == {"text_value": "a"}
+    assert [column["title"] for column in draft.definition_values["columns"]] == ["Name", "Wert"]
 
 
 def test_reconstruction_draft_picks_nearest_existing_snapshot_by_distance(db):
@@ -200,13 +207,13 @@ def test_reconstruction_draft_picks_nearest_existing_snapshot_by_distance(db):
     TableSnapshotService().reconstruct_list_period(
         db, tenant_id=tenant.id, cycle_config=cycle_config, cycle_year=2018,
         list_public_id=str(definition.public_id),
-        definition_values={"name": "From 2018", "column_one_title": "x", "column_one_value_type": "text", "column_two_title": "y", "column_two_value_type": "text", "is_active": True},
+        definition_values={"name": "From 2018", "columns": _columns(definition), "is_active": True},
         entry_payloads=[], edited_by=1,
     )
     TableSnapshotService().reconstruct_list_period(
         db, tenant_id=tenant.id, cycle_config=cycle_config, cycle_year=2021,
         list_public_id=str(definition.public_id),
-        definition_values={"name": "From 2021", "column_one_title": "x", "column_one_value_type": "text", "column_two_title": "y", "column_two_value_type": "text", "is_active": True},
+        definition_values={"name": "From 2021", "columns": _columns(definition), "is_active": True},
         entry_payloads=[], edited_by=1,
     )
     writer = make_current_user(tenant.id, role="writer")
@@ -249,19 +256,14 @@ def test_reconstruct_list_period_succeeds_as_writer(db):
     tenant = make_tenant(db)
     cycle_config = make_cycle_config(db, tenant.id)
     definition = make_list_definition(db, tenant.id, name="Alice's List")
-    entry = make_list_entry(db, definition.id, column_one_value={"text_value": "a"})
+    entry = make_list_entry(db, definition.id, first_value={"text_value": "a"})
     writer = make_current_user(tenant.id, role="writer")
 
     table_snapshots.reconstruct_list_period(
         cycle_config.public_id, 2020, definition.public_id,
         TableSnapshotListReconstructRequest(
-            definition_values={
-                "name": definition.name, "column_one_title": definition.column_one_title,
-                "column_one_value_type": definition.column_one_value_type,
-                "column_two_title": definition.column_two_title,
-                "column_two_value_type": definition.column_two_value_type, "is_active": True,
-            },
-            entries=[{"public_id": str(entry.public_id), "sort_index": 0, "column_one_value_json": {"text_value": "a"}, "column_two_value_json": {}}],
+            definition_values={"name": definition.name, "columns": _columns(definition), "is_active": True},
+            entries=[{"public_id": str(entry.public_id), "sort_index": 0, "values_json": {list_column_key(definition, 0): {"text_value": "a"}}}],
         ),
         db=db, user=writer,
     )

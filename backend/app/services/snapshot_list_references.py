@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from sqlalchemy import or_, select
 
 from app.models import Event, Participant
+from app.services.list_legacy_adapter import legacy_value_fields
 
 # Grösster Wert einer BIGINT-Spalte; grössere Zahlen können keine id sein (und liessen die
 # Abfrage scheitern)
@@ -28,6 +29,22 @@ def _split_reference_values(wanted: set[str]) -> tuple[set[int], set[uuid.UUID]]
     return internal_ids, public_ids
 
 
+def _row_holders(row: dict) -> list[tuple[dict, str]]:
+    """(Behälter, Schlüssel) aller Listenwerte einer Backup-Zeile: ``values_json`` je Spalte
+    (aktuelles Format, Migration 0186) oder die alten Wertfelder (v1). Der Behälter
+    ``values_json`` wird dabei kopiert, damit das Original unverändert bleibt."""
+    if isinstance(row.get("values_json"), dict):
+        row["values_json"] = dict(row["values_json"])
+        return [(row["values_json"], key) for key in row["values_json"]]
+    return [(row, field) for field in legacy_value_fields(row, "_value_json")]
+
+
+def _row_values(row: dict) -> list[dict]:
+    if isinstance(row.get("values_json"), dict):
+        return [value for value in row["values_json"].values() if isinstance(value, dict)]
+    return [row.get(field) or {} for field in legacy_value_fields(row, "_value_json")]
+
+
 def snapshot_list_rows(db, rows: list[dict], tenant_id: int, *, public: bool = False) -> list[dict]:
     # Beide ID-Formen lesen: ältere Snapshots enthalten interne IDs, historische
     # Bearbeitungen vor dieser Korrektur teilweise schon öffentliche UUIDs.
@@ -35,8 +52,7 @@ def snapshot_list_rows(db, rows: list[dict], tenant_id: int, *, public: bool = F
     for model, key in ((Participant, "participant"), (Event, "event")):
         wanted = set()
         for row in rows:
-            for column in ("column_one_value_json", "column_two_value_json"):
-                value = row.get(column) or {}
+            for value in _row_values(row):
                 wanted.update(str(item) for item in value.get(f"{key}_ids", []))
                 if value.get(f"{key}_id") is not None:
                     wanted.add(str(value[f"{key}_id"]))
@@ -67,10 +83,9 @@ def snapshot_list_rows(db, rows: list[dict], tenant_id: int, *, public: bool = F
     result = []
     for row in rows:
         copied = dict(row)
-        for column in ("column_one_value_json", "column_two_value_json"):
-            if column not in row:
-                continue
-            value = dict(row.get(column) or {})
+        holders = _row_holders(copied)
+        for container, column in holders:
+            value = dict(container.get(column) or {})
             for key in ("participant", "event"):
                 singular = f"{key}_id"
                 plural = f"{key}_ids"
@@ -98,6 +113,6 @@ def snapshot_list_rows(db, rows: list[dict], tenant_id: int, *, public: bool = F
                     value[f"{key}_public_ids"] = public_ids
                     if key == "participant":
                         value["participant_names"] = names
-            copied[column] = value
+            container[column] = value
         result.append(copied)
     return result

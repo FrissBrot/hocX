@@ -58,7 +58,7 @@ test.describe("Word import testbook", () => {
       const analysis = await response.json();
       expect(analysis.protocol_date).toBe("2024-02-29");
       expect(analysis.tables[0].list_definition_id).toBe(seed.list.id);
-      expect(analysis.list_mappings.map((row: any) => [row.column_one_raw, row.column_two_raw])).toEqual(cases.find((f) => f.file === "leap-day.docx")!.rows);
+      expect(analysis.list_mappings.map((row: any) => [row.first_raw, row.second_raw])).toEqual(cases.find((f) => f.file === "leap-day.docx")!.rows);
     }
   });
 

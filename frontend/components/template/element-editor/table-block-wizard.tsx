@@ -222,7 +222,7 @@ export function TableBlockWizard({
                   {data.lists.map((list) => (
                     <button key={list.id} type="button" className={card(list.id === form.config.linked_list_id)} aria-pressed={list.id === form.config.linked_list_id} onClick={() => setConfig({ linked_list_id: list.id })}>
                       <strong>{list.name}</strong>
-                      <span className="muted">{`${list.column_one_title} · ${list.column_two_title}`}</span>
+                      <span className="muted">{[...list.columns].sort((left, right) => left.sort_index - right.sort_index).map((column) => column.title).join(" · ")}</span>
                     </button>
                   ))}
                 </div>

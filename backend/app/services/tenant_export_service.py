@@ -71,6 +71,7 @@ from app.models import (
     GalleryImage,
     GroupEntity,
     Leader,
+    ListColumn,
     ListDefinition,
     ListEntry,
     Participant,
@@ -136,7 +137,7 @@ from app.services.tenant_transfer_common import (
 # Bumped 8 -> 9: Rollen je Mandant (RBAC, Migration 0156): tenant_role (inkl. Berechtigungen) und an
 # jedem app_user "role_refs" (exportierte tenant_role-IDs) statt role_id als Code. Ältere Formate
 # importiert TenantImportService weiter (Code -> Standardrolle).
-FORMAT_VERSION = 9  # 9: Rollen je Mandant; 8: Baustein-Bibliothek (element_definition.is_library); 7: Document Studio (Brand-Profile, Assets, Vorlagen, Komponenten, Zuweisungen); 6: Dokumentenregister; 5: Dokument-Engine (Hausstile, Stil-Assets, Rezepte, document_export)
+FORMAT_VERSION = 10  # 10: Listenspalten (list_column, list_entry.values_json; ältere Exporte über den v1-Adapter); 9: Rollen je Mandant; 8: Baustein-Bibliothek (element_definition.is_library); 7: Document Studio (Brand-Profile, Assets, Vorlagen, Komponenten, Zuweisungen); 6: Dokumentenregister; 5: Dokument-Engine (Hausstile, Stil-Assets, Rezepte, document_export)
 ExportScope = Literal["structure", "structure_lists", "full", "full_abgabebox"]
 
 
@@ -405,6 +406,10 @@ class TenantExportService:
             else []
         )
         tables["list_entry"] = self._rows(list_entries, "list_entry")
+        tables["list_column"] = self._rows(
+            db.scalars(select(ListColumn).where(ListColumn.list_definition_id.in_(list_definition_ids))).all() if list_definition_ids else [],
+            "list_column",
+        )
 
     # ── full scope ────────────────────────────────────────────────────────
 

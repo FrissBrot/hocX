@@ -1378,10 +1378,12 @@ export type StructuredListDefinition = {
   tenant_id: string;
   name: string;
   description: string | null;
-  column_one_title: string;
-  column_one_value_type: StructuredListValueType;
-  column_two_title: string;
-  column_two_value_type: StructuredListValueType;
+  /** Spalten in Reihenfolge (Migration 0186); `id` ist der Spalten-Key in `values`. */
+  columns: ListColumn[];
+  /** Rolle «Bezeichnung»: Spalte, die einen Eintrag benennt (Abgabe-Label, Matrix-Titel, Gruppe). */
+  label_column_id: string | null;
+  /** Rolle «Verantwortliche»: Personen-Spalte mit den Verantwortlichen. */
+  responsible_column_id: string | null;
   is_active: boolean;
   /** Einträge zählen in der Statistik als Gruppen (Termin-Tags), Migration 0176. */
   is_group_source?: boolean;
@@ -1390,23 +1392,34 @@ export type StructuredListDefinition = {
   updated_at: string;
 };
 
+/** Spalte einer Liste. `id` ist ein undurchsichtiger Spalten-Key - nie auf einen Wert prüfen. */
+export type ListColumn = {
+  id: string;
+  title: string;
+  value_type: StructuredListValueType;
+  sort_index: number;
+};
+
+/** Werte eines Eintrags je Spalten-Key ({text_value} | {participant_id} | {participant_ids} | {event_id}). */
+export type ListValues = Record<string, Record<string, unknown>>;
+
+/** Eingefrorene Liste in einem Protokoll-Block (Format v2; ältere stuft das Backend hoch). */
 export type ListSnapshot = {
+  snapshot_version?: number;
   synced_version: number;
-  column_one_title: string;
-  column_one_value_type: StructuredListValueType;
-  column_two_title: string;
-  column_two_value_type: StructuredListValueType;
+  columns: ListColumn[];
+  label_column_id: string | null;
+  responsible_column_id: string | null;
   previous: ListSnapshot | null;
 };
 
-export type TrackedListValues = { column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> };
+export type TrackedListValues = { values: ListValues };
 
 export type WholeListSnapshot = ListSnapshot & {
   entries: {
     id: string;
     sort_index: number;
-    column_one_value: Record<string, unknown>;
-    column_two_value: Record<string, unknown>;
+    values: ListValues;
     _tracked?: "added" | "changed" | "removed";
     _tracked_before?: TrackedListValues;
   }[];
@@ -1416,8 +1429,7 @@ export type RowListSnapshot =
   | { synced_version: number; entry_exists: false; _tracked?: undefined; _tracked_before?: undefined }
   | (ListSnapshot & {
       entry_exists: true;
-      column_one_value: Record<string, unknown>;
-      column_two_value: Record<string, unknown>;
+      values: ListValues;
       _tracked?: "changed" | "removed";
       _tracked_before?: TrackedListValues;
     });
@@ -1426,8 +1438,7 @@ export type StructuredListEntry = {
   id: string;
   list_definition_id: string;
   sort_index: number;
-  column_one_value: Record<string, unknown>;
-  column_two_value: Record<string, unknown>;
+  values: ListValues;
   created_at: string;
   updated_at: string;
 };

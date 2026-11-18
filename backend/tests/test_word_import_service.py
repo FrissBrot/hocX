@@ -2,7 +2,7 @@
 after a real imported document ("1. Hock vom 14.10.2026.docx", word_import_document
 id=32) showed a "Sponsoring" list row ("Enea" | "Omlin & Partner Gmbh, Felsenheim,
 Dolomiten Sport") getting garbled: the template groups this list by the responsible
-person (column_two), so the document writes one row per person with all their
+person (second column), so the document writes one row per person with all their
 sponsors crammed into a single comma-separated cell, but the importer mapped cells
 1:1 onto columns and ran the sponsor list through participant-name splitting (which
 also incorrectly split on "&", breaking "Omlin & Partner Gmbh" into two pieces).
@@ -10,25 +10,30 @@ also incorrectly split on "&", breaking "Omlin & Partner Gmbh" into two pieces).
 These are pure unit tests against the private grouping helpers - no DB needed, since
 _build_list_row_variants/_score_list_variant/_select_list_row_variant only read plain
 attributes off ListDefinition/ListEntry instances that are never persisted here."""
-from app.models import ListDefinition, ListEntry
+from app.models import ListColumn, ListDefinition, ListEntry
 from app.services import word_import_service as svc
 
 
+def _definition(name: str, first: tuple[str, str], second: tuple[str, str]) -> ListDefinition:
+    """Ungespeicherte Liste mit zwei Spalten (Keys k1/k2), wie sie die Helfer lesen."""
+    definition = ListDefinition(name=name)
+    definition.columns = [
+        ListColumn(key="k1", title=first[0], value_type=first[1], sort_index=10),
+        ListColumn(key="k2", title=second[0], value_type=second[1], sort_index=20),
+    ]
+    return definition
+
+
+def _entry(first: dict, second: dict) -> ListEntry:
+    return ListEntry(values_json={"k1": first, "k2": second})
+
+
 def _sponsoring_definition() -> ListDefinition:
-    return ListDefinition(
-        name="Sponsoring",
-        column_one_title="Sponsor",
-        column_one_value_type="text",
-        column_two_title="Verantwortlich",
-        column_two_value_type="participant",
-    )
+    return _definition("Sponsoring", ("Sponsor", "text"), ("Verantwortlich", "participant"))
 
 
 def _sponsoring_entry(sponsor: str, participant_id: int) -> ListEntry:
-    return ListEntry(
-        column_one_value_json={"text_value": sponsor},
-        column_two_value_json={"participant_id": participant_id},
-    )
+    return _entry({"text_value": sponsor}, {"participant_id": participant_id})
 
 
 def test_flat_variant_wins_when_document_already_matches_column_order():
@@ -40,7 +45,7 @@ def test_flat_variant_wins_when_document_already_matches_column_order():
 
     assert strategy == "flat"
     assert needs_manual is False
-    assert [(c.column_one_raw, c.column_two_raw) for c in candidates] == [("Raiffeisen", "Lauri")]
+    assert [(c.first_raw, c.second_raw) for c in candidates] == [("Raiffeisen", "Lauri")]
 
 
 def test_explode_variant_resolves_the_real_enea_sponsoring_row():
@@ -65,13 +70,13 @@ def test_explode_variant_resolves_the_real_enea_sponsoring_row():
     # "/" and ";" never occur in this document column, so they must never be offered.
     assert "explode_swap:slash" not in available
     assert "explode_swap:semicolon" not in available
-    enea_rows = {(c.column_one_raw, c.column_two_raw) for c in candidates if c.column_two_raw == "Enea"}
+    enea_rows = {(c.first_raw, c.second_raw) for c in candidates if c.second_raw == "Enea"}
     assert enea_rows == {
         ("Omlin & Partner Gmbh", "Enea"),
         ("Felsenheim", "Enea"),
         ("Dolomiten Sport", "Enea"),
     }
-    assert all(c.group_filled for c in candidates if c.column_two_raw == "Enea")
+    assert all(c.group_filled for c in candidates if c.second_raw == "Enea")
 
 
 def test_best_delimiter_wins_when_several_are_present_in_the_same_cell():
@@ -93,23 +98,15 @@ def test_best_delimiter_wins_when_several_are_present_in_the_same_cell():
     assert strategy == "explode_swap:semicolon"
     assert needs_manual is False
     assert "explode_swap:comma" in available  # a real, considered-but-rejected candidate
-    assert {(c.column_one_raw, c.column_two_raw) for c in candidates} == {
+    assert {(c.first_raw, c.second_raw) for c in candidates} == {
         ("Müller, Meier & Partner", "Nevio"),
         ("Huber AG", "Nevio"),
     }
 
 
 def test_fill_down_variant_recovers_rows_with_blank_first_cell():
-    definition = ListDefinition(
-        name="Gruppen",
-        column_one_title="Name",
-        column_one_value_type="text",
-        column_two_title="Leiter",
-        column_two_value_type="participants",
-    )
-    existing = [
-        ListEntry(column_one_value_json={"text_value": "Bigfoots"}, column_two_value_json={"participant_ids": [1, 2]}),
-    ]
+    definition = _definition("Gruppen", ("Name", "text"), ("Leiter", "participants"))
+    existing = [_entry({"text_value": "Bigfoots"}, {"participant_ids": [1, 2]})]
     rows = [
         ["Bigfoots", "Jan"],
         ["", "Archie"],
@@ -119,12 +116,12 @@ def test_fill_down_variant_recovers_rows_with_blank_first_cell():
 
     assert "fill_down" in variants
     filled = variants["fill_down"]
-    assert [(c.column_one_raw, c.column_two_raw, c.group_filled) for c in filled] == [
+    assert [(c.first_raw, c.second_raw, c.group_filled) for c in filled] == [
         ("Bigfoots", "Jan", False),
         ("Bigfoots", "Archie", True),
     ]
     # Today's flat variant drops the blank-first-cell row entirely.
-    assert [(c.column_one_raw, c.column_two_raw) for c in variants["flat"]] == [("Bigfoots", "Jan")]
+    assert [(c.first_raw, c.second_raw) for c in variants["flat"]] == [("Bigfoots", "Jan")]
 
 
 def test_needs_manual_grouping_when_target_list_has_no_entries_yet():
@@ -135,7 +132,7 @@ def test_needs_manual_grouping_when_target_list_has_no_entries_yet():
 
     assert needs_manual is True
     assert strategy == "flat"
-    assert [(c.column_one_raw, c.column_two_raw) for c in candidates] == [
+    assert [(c.first_raw, c.second_raw) for c in candidates] == [
         ("Enea", "Omlin & Partner Gmbh, Felsenheim, Dolomiten Sport")
     ]
     # The manual picker still needs to know an "explode:comma" split exists to offer it.

@@ -15,14 +15,16 @@ export async function seedImport(request: APIRequestContext) {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
   const cycle = await api(request, "post", "/api/cycle-configs", { name: `Import E2E ${suffix}`, reset_month: 7, reset_day: 31 });
   const list = await api(request, "post", "/api/lists", {
-    name: `E2E Historische Aufgaben ${suffix}`, column_one_title: "Aufgabe", column_one_value_type: "text",
-    column_two_title: "Wert", column_two_value_type: "text",
+    name: `E2E Historische Aufgaben ${suffix}`,
+    columns: [{ title: "Aufgabe", value_type: "text" }, { title: "Wert", value_type: "text" }],
   });
+  // Spalten-Keys der Liste (undurchsichtig, aus der Antwort)
+  const [taskKey, valueKey] = [...list.columns].sort((a: any, b: any) => a.sort_index - b.sort_index).map((column: any) => column.id);
   const entries = [];
   for (const task of ["Feuer", "Küche"]) {
     entries.push(await api(request, "post", `/api/lists/${list.id}/entries`, {
       sort_index: (entries.length + 1) * 10,
-      column_one_value: { text_value: task }, column_two_value: { text_value: "LIVE HEUTE" },
+      values: { [taskKey]: { text_value: task }, [valueKey]: { text_value: "LIVE HEUTE" } },
     }));
   }
   const template = await api(request, "post", "/api/templates", {
@@ -53,7 +55,8 @@ export async function historicalRows(request: APIRequestContext, seed: ImportSee
 
 export async function expectHistoricalRows(request: APIRequestContext, seed: ImportSeed, year: number, expected: string[][]) {
   const rows = await historicalRows(request, seed, year);
-  expect(rows.map((row: any) => [row.column_one_value_json.text_value, row.column_two_value_json.text_value])).toEqual(expected);
+  const [taskKey, valueKey] = listKeys(seed);
+  expect(rows.map((row: any) => [row.values_json[taskKey]?.text_value, row.values_json[valueKey]?.text_value])).toEqual(expected);
   for (const row of rows) expect(row.public_id).toMatch(uuidPattern);
   return rows;
 }
@@ -92,13 +95,18 @@ export async function reanalyze(request: APIRequestContext, seed: ImportSeed, do
   return analysis;
 }
 
+/** Spalten-Keys der Testliste in ihrer Reihenfolge (Aufgabe, Wert) */
+export function listKeys(seed: ImportSeed): string[] {
+  return [...seed.list.columns].sort((a: any, b: any) => a.sort_index - b.sort_index).map((column: any) => column.id);
+}
+
 export function commitPayload(seed: ImportSeed, analysis: any, protocolDate: string) {
   return {
     template_id: seed.template.id, protocol_date: protocolDate,
     lists: analysis.list_mappings.map((row: any) => ({
       table_index: row.table_index, list_definition_id: seed.list.id, approved: true,
-      column_one_raw: row.column_one_raw, column_two_raw: row.column_two_raw,
-      linked_entry_id: seed.entries.find((entry) => entry.column_one_value.text_value === row.column_one_raw)?.id ?? null,
+      first_raw: row.first_raw, second_raw: row.second_raw,
+      linked_entry_id: seed.entries.find((entry) => entry.values[listKeys(seed)[0]]?.text_value === row.first_raw)?.id ?? null,
     })),
     tables: [{ header_signature: "aufgabe|wert", role: "list", list_definition_id: seed.list.id, list_grouping_strategy: "flat" }],
   };
@@ -119,7 +127,8 @@ export async function verifyImported(request: APIRequestContext, seed: ImportSee
   const block = elements.flatMap((element: any) => element.blocks).find((item: any) => item.configuration_snapshot_json.list_snapshot);
   expect(block).toBeTruthy();
   const rows = block.configuration_snapshot_json.list_snapshot.entries;
-  expect(rows.map((row: any) => [row.column_one_value.text_value, row.column_two_value.text_value])).toEqual(expectedRows);
+  const [taskKey, valueKey] = listKeys(seed);
+  expect(rows.map((row: any) => [row.values[taskKey]?.text_value, row.values[valueKey]?.text_value])).toEqual(expectedRows);
   expect(await api(request, "get", `/api/lists/${seed.list.id}/entries`)).toEqual(seed.entries);
   return { protocol, rows, block };
 }

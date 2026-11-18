@@ -68,7 +68,7 @@ from app.schemas.word_import import (
     WordImportTextMapping,
     WordImportTextTarget,
 )
-from app.services import block_field_sync
+from app.services import block_field_sync, list_columns, list_legacy_adapter
 from app.services.event_filter import event_matches_filter, normalize_event_filter
 from app.services.event_service import EventService
 from app.services.participant_service import ParticipantService
@@ -1476,8 +1476,53 @@ def _nearest_previous_protocol_id(db: Session, *, tenant_id: int, template_id: i
     )
 
 
+
+# ── Listen-Spalten im Word-Import (Migration 0186) ─────────────────────────────────────────
+# Eine Word-Tabellenzeile hat zwei Zellen («first»/«second»). Sie gehen in die erste und zweite
+# Spalte der Liste (Reihenfolge der Liste); weitere Spalten bleiben unberührt (N Spalten im
+# Word-Import: Plan R3).
+
+
+def _word_column(definition: ListDefinition | None, position: int):
+    columns = list_columns.columns_of(definition)
+    return columns[position] if position < len(columns) else None
+
+
+def _word_column_type(definition: ListDefinition | None, position: int) -> str:
+    column = _word_column(definition, position)
+    return column.value_type if column is not None else "text"
+
+
+def _word_value(entry: ListEntry, definition: ListDefinition | None, position: int) -> dict:
+    return list_columns.get_value(entry, _word_column(definition, position))
+
+
+def _word_snapshot_value(entry: dict | None, definition: ListDefinition | None, position: int) -> dict:
+    column = _word_column(definition, position)
+    values = (entry or {}).get("values") or {}
+    value = values.get(column.key) if column is not None else None
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _word_values(definition: ListDefinition | None, first: dict, second: dict, *, base: dict | None = None) -> dict:
+    """Werte eines Snapshot-Eintrags: erste/zweite Spalte gesetzt, weitere Spalten bleiben."""
+    values = dict(base or {})
+    for position, value in ((0, first), (1, second)):
+        column = _word_column(definition, position)
+        if column is None:
+            continue
+        if value:
+            values[column.key] = value
+        else:
+            values.pop(column.key, None)
+    return values
+
+
+def list_columns_snapshot_upgrade(snapshot, definition):
+    return list_legacy_adapter.upgrade_list_snapshot(snapshot, definition=definition) if isinstance(snapshot, dict) else snapshot
+
 def _list_snapshot_entries_by_id(db: Session, *, protocol_id: int, list_definition_id: int) -> dict[int, dict]:
-    """entry_id -> frozen {"column_one_value", "column_two_value"} from a previous
+    """entry_id -> frozen entry {"values": {spalten-key: wert}} from a previous
     protocol's whole-list "form" block for this list, or {} if it has none. Used as the
     diff baseline for matched/changed instead of today's live value, since an old
     document should be compared against what was true back then, not today's data."""
@@ -1489,7 +1534,9 @@ def _list_snapshot_entries_by_id(db: Session, *, protocol_id: int, list_definiti
     for config in configs:
         if not config or config.get("linked_list_id") != list_definition_id:
             continue
-        entries = (config.get("list_snapshot") or {}).get("entries") or []
+        # Abgeschlossene Protokolle haben teils noch v1-Snapshots: hochstufen (gleiche Keys wie live)
+        snapshot = list_columns_snapshot_upgrade(config.get("list_snapshot"), db.get(ListDefinition, list_definition_id)) or {}
+        entries = snapshot.get("entries") or []
         return {entry["id"]: entry for entry in entries if isinstance(entry, dict) and entry.get("id") is not None}
     return {}
 
@@ -1565,7 +1612,7 @@ def _value_key(value_type: str, value_json: dict) -> str:
 
 @dataclass
 class ListRowCandidate:
-    """One resolved (column_one_raw, column_two_raw) pair produced by a grouping
+    """One resolved (first_raw, second_raw) pair produced by a grouping
     variant - source_row_index points back at the originating document row (several
     candidates from an "explode" variant can share the same source_row_index).
     group_filled marks a value that was inferred (fill-down/exploded repeat) rather
@@ -1573,23 +1620,23 @@ class ListRowCandidate:
     review."""
 
     source_row_index: int
-    column_one_raw: str
-    column_two_raw: str
+    first_raw: str
+    second_raw: str
     group_filled: bool = False
 
 
 def _flat_list_rows(rows: list[list[str]]) -> list[ListRowCandidate]:
     """The importer's original behaviour: row N's cell 0/1 map straight to
-    column_one_raw/column_two_raw, rows with an empty first cell are dropped. Kept as
+    first_raw/second_raw, rows with an empty first cell are dropped. Kept as
     its own variant (rather than inlined in the loop) so it can be scored against the
     alternatives below and stays the default when nothing scores better."""
     candidates: list[ListRowCandidate] = []
     for row_index, cells in enumerate(rows):
-        column_one_raw = cells[0] if len(cells) > 0 else ""
-        column_two_raw = cells[1] if len(cells) > 1 else ""
-        if not column_one_raw:
+        first_raw = cells[0] if len(cells) > 0 else ""
+        second_raw = cells[1] if len(cells) > 1 else ""
+        if not first_raw:
             continue
-        candidates.append(ListRowCandidate(row_index, column_one_raw, column_two_raw))
+        candidates.append(ListRowCandidate(row_index, first_raw, second_raw))
     return candidates
 
 
@@ -1599,11 +1646,11 @@ def _swapped_list_rows(rows: list[list[str]]) -> list[ListRowCandidate]:
     order."""
     candidates: list[ListRowCandidate] = []
     for row_index, cells in enumerate(rows):
-        column_one_raw = cells[1] if len(cells) > 1 else ""
-        column_two_raw = cells[0] if len(cells) > 0 else ""
-        if not column_one_raw:
+        first_raw = cells[1] if len(cells) > 1 else ""
+        second_raw = cells[0] if len(cells) > 0 else ""
+        if not first_raw:
             continue
-        candidates.append(ListRowCandidate(row_index, column_one_raw, column_two_raw))
+        candidates.append(ListRowCandidate(row_index, first_raw, second_raw))
     return candidates
 
 
@@ -1614,19 +1661,19 @@ def _fill_down_list_rows(rows: list[list[str]]) -> list[ListRowCandidate]:
     _flat_list_rows silently drops today. Carries the previous non-empty first-cell
     value down onto blank-first-cell rows instead."""
     candidates: list[ListRowCandidate] = []
-    last_column_one = ""
+    last_first = ""
     for row_index, cells in enumerate(rows):
-        column_one_raw = (cells[0] if len(cells) > 0 else "").strip()
-        column_two_raw = cells[1] if len(cells) > 1 else ""
+        first_raw = (cells[0] if len(cells) > 0 else "").strip()
+        second_raw = cells[1] if len(cells) > 1 else ""
         group_filled = False
-        if column_one_raw:
-            last_column_one = column_one_raw
-        elif last_column_one and column_two_raw.strip():
-            column_one_raw = last_column_one
+        if first_raw:
+            last_first = first_raw
+        elif last_first and second_raw.strip():
+            first_raw = last_first
             group_filled = True
-        if not column_one_raw:
+        if not first_raw:
             continue
-        candidates.append(ListRowCandidate(row_index, column_one_raw, column_two_raw, group_filled))
+        candidates.append(ListRowCandidate(row_index, first_raw, second_raw, group_filled))
     return candidates
 
 
@@ -1694,9 +1741,9 @@ def _build_list_row_variants(rows: list[list[str]], definition: ListDefinition) 
         "swap": _swapped_list_rows(rows),
     }
     text_target: str | None = None
-    if definition.column_one_value_type == "text" and definition.column_two_value_type != "text":
+    if _word_column_type(definition, 0) == "text" and _word_column_type(definition, 1) != "text":
         text_target = "one"
-    elif definition.column_two_value_type == "text" and definition.column_one_value_type != "text":
+    elif _word_column_type(definition, 1) == "text" and _word_column_type(definition, 0) != "text":
         text_target = "two"
     if text_target is not None:
         for text_raw_index, prefix in ((0, "explode"), (1, "explode_swap")):
@@ -1736,7 +1783,7 @@ def _score_list_variant(
 ) -> tuple[int, int]:
     """Scores one variant's candidate rows against the list's live entries: how many
     resolve confidently, i.e. the best _column_display_score() against any existing
-    entry's column_one display value clears _LIST_VARIANT_CONFIDENT_SCORE. This is the
+    entry's first display value clears _LIST_VARIANT_CONFIDENT_SCORE. This is the
     "meiste Zuweisungen" signal used to pick the best grouping interpretation of an
     ambiguous document table - reuses the exact same comparison the main per-row
     candidate list below already does, just condensed to a best-score count instead of
@@ -1746,9 +1793,9 @@ def _score_list_variant(
         best_score = 0.0
         for entry in existing_entries:
             score = _column_display_score(
-                definition.column_one_value_type,
-                candidate.column_one_raw,
-                _display_value(definition.column_one_value_type, entry.column_one_value_json or {}, participants_by_id),
+                _word_column_type(definition, 0),
+                candidate.first_raw,
+                _display_value(_word_column_type(definition, 0), _word_value(entry, definition, 0), participants_by_id),
             )
             if score > best_score:
                 best_score = score
@@ -2675,7 +2722,7 @@ class WordImportService:
                 db.execute(select(ListEntry).where(ListEntry.list_definition_id == list_definition_id)).scalars()
             )
             existing_by_key = {
-                _value_key(definition.column_one_value_type, entry.column_one_value_json or {}): entry
+                _value_key(_word_column_type(definition, 0), _word_value(entry, definition, 0)): entry
                 for entry in existing_entries
             }
             if list_definition_id not in previous_entries_by_list:
@@ -2698,17 +2745,17 @@ class WordImportService:
                 table_preview.needs_manual_grouping = needs_manual_grouping
                 table_preview.available_grouping_strategies = available_grouping_strategies
             for list_row_index, row_candidate in enumerate(row_candidates):
-                column_one_raw = row_candidate.column_one_raw
-                column_two_raw = row_candidate.column_two_raw
+                first_raw = row_candidate.first_raw
+                second_raw = row_candidate.second_raw
                 col1_value, col1_names = _build_column_value(
-                    definition.column_one_value_type, column_one_raw, participants, participant_name_overrides, rejected_candidates,
+                    _word_column_type(definition, 0), first_raw, participants, participant_name_overrides, rejected_candidates,
                     participant_match_threshold,
                 )
                 col2_value, col2_names = _build_column_value(
-                    definition.column_two_value_type, column_two_raw, participants, participant_name_overrides, rejected_candidates,
+                    _word_column_type(definition, 1), second_raw, participants, participant_name_overrides, rejected_candidates,
                     participant_match_threshold,
                 )
-                key = _value_key(definition.column_one_value_type, col1_value)
+                key = _value_key(_word_column_type(definition, 0), col1_value)
                 existing = existing_by_key.get(key)
                 # Diff/display against the nearest earlier protocol's frozen snapshot value
                 # for this same entry when available (a list drifts over time - comparing
@@ -2717,22 +2764,22 @@ class WordImportService:
                 # actually changed about back then), otherwise fall back to the live value.
                 baseline_col2 = None
                 if existing is not None:
-                    baseline_col2 = (previous_entries.get(existing.id) or {}).get("column_two_value")
+                    baseline_col2 = _word_snapshot_value(previous_entries.get(existing.id), definition, 1)
                     if baseline_col2 is None:
-                        baseline_col2 = existing.column_two_value_json or {}
+                        baseline_col2 = _word_value(existing, definition, 1)
                 # See A.4 / WordImportService.commit's rejection_key=f"list_entry:..." -
                 # written on every commit but never read back until now, so a reviewer's
                 # earlier correction (rejecting a wrong auto-suggested entry for this exact
                 # list+raw text) never actually demoted that entry the next time the same
                 # text recurred.
-                rejected_entry_ids = _rejected_ids_for(f"list_entry:{list_definition_id}:{_normalize(column_one_raw)}")
+                rejected_entry_ids = _rejected_ids_for(f"list_entry:{list_definition_id}:{_normalize(first_raw)}")
                 scored_entries = sorted(
                     (
                         (
                             _column_display_score(
-                                definition.column_one_value_type,
-                                column_one_raw,
-                                _display_value(definition.column_one_value_type, entry.column_one_value_json or {}, participants_by_id),
+                                _word_column_type(definition, 0),
+                                first_raw,
+                                _display_value(_word_column_type(definition, 0), _word_value(entry, definition, 0), participants_by_id),
                             )
                             - (_REJECTED_CANDIDATE_PENALTY if entry.id in rejected_entry_ids else 0.0),
                             entry,
@@ -2745,12 +2792,12 @@ class WordImportService:
                 candidates = [
                     WordImportListEntryCandidate(
                         entry_id=entry.id,
-                        column_one_display=_display_value(definition.column_one_value_type, entry.column_one_value_json or {}, participants_by_id),
-                        column_two_display=_display_value(definition.column_two_value_type, entry.column_two_value_json or {}, participants_by_id),
+                        first_display=_display_value(_word_column_type(definition, 0), _word_value(entry, definition, 0), participants_by_id),
+                        second_display=_display_value(_word_column_type(definition, 1), _word_value(entry, definition, 1), participants_by_id),
                         score=round(score, 3),
                         reason=_text_match_reason(
-                            column_one_raw,
-                            _display_value(definition.column_one_value_type, entry.column_one_value_json or {}, participants_by_id),
+                            first_raw,
+                            _display_value(_word_column_type(definition, 0), _word_value(entry, definition, 0), participants_by_id),
                             score,
                         ),
                     )
@@ -2763,15 +2810,15 @@ class WordImportService:
                     # enough to appear in `candidates` above via the generic scored-entries
                     # comprehension, that copy still shows today's LIVE value; replacing it
                     # here ensures the one candidate the wizard defaults "Bestehend" to
-                    # (linked_entry_id == matched_entry_id, see column_two_source=="existing"
+                    # (linked_entry_id == matched_entry_id, see second_source=="existing"
                     # in the frontend) always reflects baseline_col2, not live data.
                     candidates = [candidate for candidate in candidates if candidate.entry_id != existing.id]
                     candidates.insert(
                         0,
                         WordImportListEntryCandidate(
                             entry_id=existing.id,
-                            column_one_display=_display_value(definition.column_one_value_type, existing.column_one_value_json or {}, participants_by_id),
-                            column_two_display=_display_value(definition.column_two_value_type, baseline_col2, participants_by_id),
+                            first_display=_display_value(_word_column_type(definition, 0), _word_value(existing, definition, 0), participants_by_id),
+                            second_display=_display_value(_word_column_type(definition, 1), baseline_col2, participants_by_id),
                             score=1.0,
                             reason="Bereits mit dieser Dokumentzeile verknüpfter Eintrag",
                         ),
@@ -2780,8 +2827,8 @@ class WordImportService:
                     status = "new"
                     matched_entry_id = None
                 else:
-                    baseline_col2_key = _value_key(definition.column_two_value_type, baseline_col2)
-                    new_col2_key = _value_key(definition.column_two_value_type, col2_value)
+                    baseline_col2_key = _value_key(_word_column_type(definition, 1), baseline_col2)
+                    new_col2_key = _value_key(_word_column_type(definition, 1), col2_value)
                     status = "matched" if baseline_col2_key == new_col2_key else "changed"
                     matched_entry_id = existing.id
                 unmatched_names = [
@@ -2793,14 +2840,14 @@ class WordImportService:
                     WordImportListRowMapping(
                         table_index=table.index,
                         row_index=list_row_index,
-                        column_one_raw=column_one_raw,
-                        column_two_raw=column_two_raw,
-                        column_one_type=definition.column_one_value_type,
-                        column_two_type=definition.column_two_value_type,
+                        first_raw=first_raw,
+                        second_raw=second_raw,
+                        first_type=_word_column_type(definition, 0),
+                        second_type=_word_column_type(definition, 1),
                         status=status,
                         matched_entry_id=matched_entry_id,
-                        column_one_names=col1_names,
-                        column_two_names=col2_names,
+                        first_names=col1_names,
+                        second_names=col2_names,
                         candidates=candidates,
                         has_snapshot_target=has_snapshot_target,
                         group_filled=row_candidate.group_filled,
@@ -2829,9 +2876,10 @@ class WordImportService:
             doc_column_labels = table.header_cells[1:]
 
             def _entry_title(entry: ListEntry) -> str:
-                col1 = entry.column_one_value_json if isinstance(entry.column_one_value_json, dict) else {}
-                col2 = entry.column_two_value_json if isinstance(entry.column_two_value_json, dict) else {}
-                return str(col1.get("text_value") or col2.get("text_value") or f"Eintrag {entry.id}")
+                # Titel aus der Spalte mit der Rolle «Bezeichnung» (wie protocol_service)
+                definition_for_title = db.get(ListDefinition, entry.list_definition_id)
+                label = list_columns.get_value(entry, list_columns.label_column(definition_for_title))
+                return str(label.get("text_value") or f"Eintrag {entry.id}")
 
             # Column resolution is computed once per table (shared across all rows),
             # same idea as row resolution below - column_resolution[col_idx] = (chosen
@@ -4030,9 +4078,9 @@ class WordImportService:
                 _log_outcome(
                     "list_entry_match", list_commit.originally_suggested_score,
                     list_commit.originally_suggested_entry_id, list_commit.linked_entry_id,
-                    rejection_key=f"list_entry:{list_commit.list_definition_id}:{_normalize(list_commit.column_one_raw)}",
+                    rejection_key=f"list_entry:{list_commit.list_definition_id}:{_normalize(list_commit.first_raw)}",
                 )
-                for name_resolution in list_commit.column_one_names + list_commit.column_two_names:
+                for name_resolution in list_commit.first_names + list_commit.second_names:
                     # See the form-block name_match -> participant_match note above.
                     _log_outcome(
                         "participant_match", name_resolution.originally_suggested_score,
@@ -4212,11 +4260,11 @@ class WordImportService:
                         # live, see WordImportListRowMapping.has_snapshot_target).
                         continue
                     definition = definitions_cache[list_commit.list_definition_id]
-                    col1_value = _resolved_value_json(definition.column_one_value_type, list_commit.column_one_raw, list_commit.column_one_names)
-                    col2_value = _resolved_value_json(definition.column_two_value_type, list_commit.column_two_raw, list_commit.column_two_names)
+                    col1_value = _resolved_value_json(_word_column_type(definition, 0), list_commit.first_raw, list_commit.first_names)
+                    col2_value = _resolved_value_json(_word_column_type(definition, 1), list_commit.second_raw, list_commit.second_names)
                     for block in target_blocks:
                         config = dict(block.configuration_snapshot_json or {})
-                        list_snapshot = dict(config.get("list_snapshot") or {})
+                        list_snapshot = dict(list_columns_snapshot_upgrade(config.get("list_snapshot"), definition) or {})
                         entries = list(list_snapshot.get("entries") or [])
                         target_index = (
                             next(
@@ -4227,7 +4275,7 @@ class WordImportService:
                             else None
                         )
                         if target_index is not None:
-                            entries[target_index] = {**entries[target_index], "column_one_value": col1_value, "column_two_value": col2_value}
+                            entries[target_index] = {**entries[target_index], "values": _word_values(definition, col1_value, col2_value, base=entries[target_index].get("values"))}
                         else:
                             # No live counterpart (or it wasn't found in this block's frozen
                             # entries) - append a snapshot-only row with a synthetic negative id,
@@ -4249,8 +4297,7 @@ class WordImportService:
                                 {
                                     "id": list_commit.linked_entry_id if list_commit.linked_entry_id is not None else synthetic_id,
                                     "sort_index": next_sort_index,
-                                    "column_one_value": col1_value,
-                                    "column_two_value": col2_value,
+                                    "values": _word_values(definition, col1_value, col2_value),
                                 }
                             )
                         list_snapshot["entries"] = entries

@@ -323,17 +323,13 @@ def fetch_finance_by_account_month(db: Session, tenant_id: int, bounds: tuple[da
 #
 # A tenant's "groups" are event.tag values that match an entry in a list marked as group
 # source (list_definition.is_group_source, Migration 0176 - a ListDefinition/ListEntry pair,
-# not a dedicated table). The list has two generic
-# columns and nothing forces the group name text into column one specifically - a tenant
-# is free to set it up with the text in column two. Entries of value_type "text" are the
-# only ones that ever populate a "text_value" key (participant/participants/event-typed
-# entries store participant_id/participant_ids/event_id instead, see
-# word_import_service._resolved_value_json) - so COALESCE-ing column_one and column_two's
-# text_value safely finds the group name regardless of which column it lives in, without
-# risk of accidentally picking up an unrelated id (audit finding M10).
+# not a dedicated table). Der Gruppenname steht in der Spalte mit der Rolle «Bezeichnung»
+# (list_definition.label_column_id, Migration 0186); nur Text-Werte haben text_value, eine
+# Personen- oder Termin-Spalte als Bezeichnung ergibt keine Gruppe (audit finding M10).
 _GROUP_TAGS_SUBQUERY = """
-    SELECT COALESCE(le.column_one_value_json->>'text_value', le.column_two_value_json->>'text_value')
+    SELECT le.values_json -> lc.key ->> 'text_value'
     FROM list_definition ld
+    JOIN list_column lc ON lc.id = ld.label_column_id
     JOIN list_entry le ON le.list_definition_id = ld.id
     WHERE ld.tenant_id = :tenant_id AND ld.is_group_source
 """

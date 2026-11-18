@@ -12,6 +12,9 @@ from app.services.table_snapshot_service import ReconstructionIdentityError, Tab
 from tests.factories import make_cycle_config, make_list_definition, make_list_entry, make_tenant
 
 
+# Spalten der Fabrik-Listen (tests/factories.py: Keys k1/k2)
+TWO_COLUMNS = [{"key": "k1", "title": "Name", "value_type": "text"}, {"key": "k2", "title": "Wert", "value_type": "text"}]
+
 def _by_table(written):
     return {row.table_name: row for row in written}
 
@@ -49,8 +52,8 @@ def test_create_snapshot_list_entry_via_transitive_join(db):
     tenant = make_tenant(db)
     cycle_config = make_cycle_config(db, tenant.id)
     definition = make_list_definition(db, tenant.id)
-    make_list_entry(db, definition.id, sort_index=0, column_one_value={"text_value": "a"})
-    make_list_entry(db, definition.id, sort_index=1, column_one_value={"text_value": "b"})
+    make_list_entry(db, definition.id, sort_index=0, first_value={"text_value": "a"})
+    make_list_entry(db, definition.id, sort_index=1, first_value={"text_value": "b"})
 
     written = TableSnapshotService().create_snapshot(db, tenant_id=tenant.id, cycle_config=cycle_config, cycle_year=2024)
 
@@ -65,8 +68,8 @@ def test_create_snapshot_list_entry_is_scoped_to_tenant(db):
     cycle_config = make_cycle_config(db, tenant_a.id)
     definition_a = make_list_definition(db, tenant_a.id)
     definition_b = make_list_definition(db, tenant_b.id)
-    make_list_entry(db, definition_a.id, column_one_value={"text_value": "in tenant a"})
-    make_list_entry(db, definition_b.id, column_one_value={"text_value": "in tenant b"})
+    make_list_entry(db, definition_a.id, first_value={"text_value": "in tenant a"})
+    make_list_entry(db, definition_b.id, first_value={"text_value": "in tenant b"})
 
     written = TableSnapshotService().create_snapshot(db, tenant_id=tenant_a.id, cycle_config=cycle_config, cycle_year=2024)
 
@@ -93,7 +96,7 @@ def test_reconstruct_list_period_creates_gap_snapshot_from_live_data(db):
     tenant = make_tenant(db)
     cycle_config = make_cycle_config(db, tenant.id)
     definition = make_list_definition(db, tenant.id, name="Alice's List")
-    entry = make_list_entry(db, definition.id, sort_index=0, column_one_value={"text_value": "a"})
+    entry = make_list_entry(db, definition.id, sort_index=0, first_value={"text_value": "a"})
 
     TableSnapshotService().reconstruct_list_period(
         db,
@@ -104,14 +107,11 @@ def test_reconstruct_list_period_creates_gap_snapshot_from_live_data(db):
         definition_values={
             "name": "Alice's List (reconstructed)",
             "description": None,
-            "column_one_title": definition.column_one_title,
-            "column_one_value_type": definition.column_one_value_type,
-            "column_two_title": definition.column_two_title,
-            "column_two_value_type": definition.column_two_value_type,
+            "columns": TWO_COLUMNS,
             "is_active": True,
         },
         entry_payloads=[
-            {"public_id": str(entry.public_id), "sort_index": 0, "column_one_value_json": {"text_value": "reconstructed"}, "column_two_value_json": {}},
+            {"public_id": str(entry.public_id), "sort_index": 0, "values_json": {"k1": {"text_value": "reconstructed"}}},
         ],
         edited_by=1,
     )
@@ -129,7 +129,7 @@ def test_reconstruct_list_period_creates_gap_snapshot_from_live_data(db):
     ).one()
     assert entry_snapshot.row_count == 1
     assert entry_snapshot.snapshot_json[0]["id"] == entry.id
-    assert entry_snapshot.snapshot_json[0]["column_one_value_json"] == {"text_value": "reconstructed"}
+    assert entry_snapshot.snapshot_json[0]["values_json"] == {"k1": {"text_value": "reconstructed"}}
 
 
 def test_reconstruct_list_period_resolves_multiple_entries_from_mixed_live_and_snapshot_sources(db):
@@ -141,8 +141,8 @@ def test_reconstruct_list_period_resolves_multiple_entries_from_mixed_live_and_s
     tenant = make_tenant(db)
     cycle_config = make_cycle_config(db, tenant.id)
     definition = make_list_definition(db, tenant.id, name="Mixed List")
-    still_live_entry = make_list_entry(db, definition.id, sort_index=0, column_one_value={"text_value": "live"})
-    gone_entry = make_list_entry(db, definition.id, sort_index=1, column_one_value={"text_value": "will be deleted"})
+    still_live_entry = make_list_entry(db, definition.id, sort_index=0, first_value={"text_value": "live"})
+    gone_entry = make_list_entry(db, definition.id, sort_index=1, first_value={"text_value": "will be deleted"})
 
     # An older snapshot captures gone_entry before it's deleted from the live table.
     TableSnapshotService().create_snapshot(db, tenant_id=tenant.id, cycle_config=cycle_config, cycle_year=2019)
@@ -158,13 +158,12 @@ def test_reconstruct_list_period_resolves_multiple_entries_from_mixed_live_and_s
         list_public_id=str(definition.public_id),
         definition_values={
             "name": definition.name, "description": None,
-            "column_one_title": definition.column_one_title, "column_one_value_type": definition.column_one_value_type,
-            "column_two_title": definition.column_two_title, "column_two_value_type": definition.column_two_value_type,
+            "columns": TWO_COLUMNS,
             "is_active": True,
         },
         entry_payloads=[
-            {"public_id": str(still_live_entry.public_id), "sort_index": 0, "column_one_value_json": {"text_value": "live"}, "column_two_value_json": {}},
-            {"public_id": gone_entry_public_id, "sort_index": 1, "column_one_value_json": {"text_value": "restored"}, "column_two_value_json": {}},
+            {"public_id": str(still_live_entry.public_id), "sort_index": 0, "values_json": {"k1": {"text_value": "live"}}},
+            {"public_id": gone_entry_public_id, "sort_index": 1, "values_json": {"k1": {"text_value": "restored"}}},
         ],
         edited_by=1,
     )
@@ -183,14 +182,14 @@ def test_reconstruct_list_period_does_not_disturb_other_lists_in_same_period(db)
     cycle_config = make_cycle_config(db, tenant.id)
     definition_a = make_list_definition(db, tenant.id, name="List A")
     definition_b = make_list_definition(db, tenant.id, name="List B")
-    entry_b = make_list_entry(db, definition_b.id, column_one_value={"text_value": "b1"})
+    entry_b = make_list_entry(db, definition_b.id, first_value={"text_value": "b1"})
 
     # List B already has a snapshot for 2020 (e.g. reconstructed earlier or auto-captured).
     TableSnapshotService().reconstruct_list_period(
         db, tenant_id=tenant.id, cycle_config=cycle_config, cycle_year=2020,
         list_public_id=str(definition_b.public_id),
-        definition_values={"name": definition_b.name, "column_one_title": "x", "column_one_value_type": "text", "column_two_title": "y", "column_two_value_type": "text", "is_active": True},
-        entry_payloads=[{"public_id": str(entry_b.public_id), "sort_index": 0, "column_one_value_json": {"text_value": "b1"}, "column_two_value_json": {}}],
+        definition_values={"name": definition_b.name, "columns": TWO_COLUMNS, "is_active": True},
+        entry_payloads=[{"public_id": str(entry_b.public_id), "sort_index": 0, "values_json": {"k1": {"text_value": "b1"}}}],
         edited_by=1,
     )
 
@@ -198,7 +197,7 @@ def test_reconstruct_list_period_does_not_disturb_other_lists_in_same_period(db)
     TableSnapshotService().reconstruct_list_period(
         db, tenant_id=tenant.id, cycle_config=cycle_config, cycle_year=2020,
         list_public_id=str(definition_a.public_id),
-        definition_values={"name": definition_a.name, "column_one_title": "x", "column_one_value_type": "text", "column_two_title": "y", "column_two_value_type": "text", "is_active": True},
+        definition_values={"name": definition_a.name, "columns": TWO_COLUMNS, "is_active": True},
         entry_payloads=[],
         edited_by=1,
     )
@@ -223,8 +222,8 @@ def test_reconstruct_list_period_rejects_unknown_entry(db):
         TableSnapshotService().reconstruct_list_period(
             db, tenant_id=tenant.id, cycle_config=cycle_config, cycle_year=2020,
             list_public_id=str(definition.public_id),
-            definition_values={"name": definition.name, "column_one_title": "x", "column_one_value_type": "text", "column_two_title": "y", "column_two_value_type": "text", "is_active": True},
-            entry_payloads=[{"public_id": "00000000-0000-0000-0000-000000000000", "sort_index": 0, "column_one_value_json": {}, "column_two_value_json": {}}],
+            definition_values={"name": definition.name, "columns": TWO_COLUMNS, "is_active": True},
+            entry_payloads=[{"public_id": "00000000-0000-0000-0000-000000000000", "sort_index": 0, "values_json": {"k1": {}}}],
             edited_by=1,
         )
 

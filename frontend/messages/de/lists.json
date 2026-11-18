@@ -57,7 +57,7 @@
   "formModal": {
     "createTitle": "Liste erstellen",
     "editTitle": "Liste bearbeiten",
-    "description": "Jede Liste hat genau zwei Spalten. Der Datentyp bestimmt, welche Eingabe später im Tabellenblock und im Protokoll sichtbar ist.",
+    "description": "Eine Liste hat eine oder mehrere Spalten. Der Datentyp bestimmt, welche Eingabe später im Tabellenblock und im Protokoll sichtbar ist.",
     "name": "Listenname",
     "active": "Aktiv",
     "description2": "Beschreibung",
@@ -71,7 +71,7 @@
     "namePlaceholder": "z. B. Ämtli",
     "optional": "optional",
     "columns": "Spalten",
-    "columnsHint": "Immer zwei – Titel und Datentyp sind frei wählbar.",
+    "columnsHint": "Bis zu 20 Spalten – Titel, Datentyp und Reihenfolge sind frei wählbar.",
     "preview": "So erscheint die Liste im Tabellenblock",
     "cancel": "Abbrechen",
     "groupSource": "Quelle der Gruppenstatistik"
@@ -178,5 +178,27 @@
   "usage": {
     "element": "Baustein «{name}»",
     "protocol": "Protokoll {number}"
+  },
+  "columns": {
+    "add": "Spalte hinzufügen",
+    "newTitle": "Spalte {number}",
+    "titleLabel": "Titel von Spalte {number}",
+    "typeLabel": "Datentyp von Spalte {number}",
+    "moveUp": "«{title}» nach oben",
+    "moveDown": "«{title}» nach unten",
+    "remove": "«{title}» entfernen",
+    "limit": "Höchstens {max} Spalten.",
+    "typeChangeHint": "Neuer Datentyp: die bisherigen Werte dieser Spalte werden beim Speichern geleert.",
+    "typeChangeConfirm": "Datentyp ändern bei: {titles}. Die bisherigen Werte dieser Spalten werden in allen Einträgen geleert.",
+    "typeChangeLabel": "Datentyp ändern",
+    "deleteConfirm": "Spalte «{title}» mit allen Werten löschen?",
+    "deleteConfirmUsed": "Spalte «{title}» wird noch verwendet: {places}. Dort entfallen Gruppierung, Sortierung oder Filter. Trotzdem mit allen Werten löschen?",
+    "deleteLabel": "Spalte löschen",
+    "roleLabel": "Bezeichnung",
+    "roleLabelHelp": "Benennt einen Eintrag: Titel in Abgaben, Matrix und Gruppenstatistik.",
+    "roleResponsible": "Verantwortliche",
+    "roleResponsibleHelp": "Personen-Spalte für Ämtli, Abgaben und Verantwortlichen-Anzeigen.",
+    "roleNone": "Keine",
+    "count": "{count, plural, one {# Spalte} other {# Spalten}}"
   }
 }

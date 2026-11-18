@@ -234,7 +234,7 @@ def _form_block(ctx: BuildContext, config: dict, fields: dict):
     linked_list_id = ctx.ref_to_internal_id(ListDefinition, config.get("linked_list_id"))
     if linked_list_id:
         table = list_provider.list_table(ctx, linked_list_id, config)
-        return ListTableBlock(**fields, table=table or TableData(columns=[TableColumn(key="column_one")]))
+        return ListTableBlock(**fields, table=table or TableData(columns=[TableColumn(key="value")]))
     rows: list[FormRow] = _event_field_rows(ctx, config)
     for row in config.get("rows") or []:
         if not isinstance(row, dict):

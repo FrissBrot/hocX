@@ -19,22 +19,12 @@ def _responsible_participant_name(participant: Participant | None, *, mode: str,
 
 
 def _list_entry_participant_ids(entry: ListEntry, definition: ListDefinition) -> list[int]:
-    """Find whichever column of the list holds participant data and read its current
-    value from the given entry. Mirrors eligibleResponsibleList()/listParticipantIds()
-    in frontend/components/template/template-builder.tsx."""
-    if definition.column_one_value_type in ("participant", "participants"):
-        value = entry.column_one_value_json or {}
-    elif definition.column_two_value_type in ("participant", "participants"):
-        value = entry.column_two_value_json or {}
-    else:
-        return []
-    participant_id = value.get("participant_id")
-    if participant_id:
-        return [int(participant_id)]
-    participant_ids = value.get("participant_ids")
-    if isinstance(participant_ids, list):
-        return [int(pid) for pid in participant_ids if pid]
-    return []
+    """Verantwortliche eines Eintrags: Werte der Spalte mit der Rolle «Verantwortliche»
+    (list_definition.responsible_column_id, sonst die erste Personen-Spalte). Gegenstück im
+    Frontend: lib/utils/responsible-lists.ts."""
+    from app.services import list_columns
+
+    return list_columns.responsible_ids_of(entry, definition)
 
 
 def _resolve_ids_for_assignments(

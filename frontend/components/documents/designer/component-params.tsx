@@ -23,12 +23,12 @@ type Props = {
 
 const sourceCache = new Map<string, Promise<SourceOption[]>>();
 
-export function loadSource(source: string, protocolId?: string | null): Promise<SourceOption[]> {
-  const key = `${source}:${protocolId ?? ""}`;
+export function loadSource(source: string, protocolId?: string | null, extra?: Record<string, string>): Promise<SourceOption[]> {
+  const key = `${source}:${protocolId ?? ""}:${JSON.stringify(extra ?? {})}`;
   if (!sourceCache.has(key)) {
     sourceCache.set(
       key,
-      fetchSourceOptions(source, protocolId).catch(() => {
+      fetchSourceOptions(source, protocolId, extra).catch(() => {
         sourceCache.delete(key);
         return [];
       })
@@ -37,18 +37,27 @@ export function loadSource(source: string, protocolId?: string | null): Promise<
   return sourceCache.get(key)!;
 }
 
-function useSource(source: string | undefined, protocolId?: string | null) {
+/** Quelle mit Abhängigkeit (``x-source-param``): ``dependency`` ist der Wert des Parameters,
+ * ohne ihn gibt es nichts zu wählen (z. B. Spalten erst nach der Liste). */
+function useSource(source: string | undefined, protocolId?: string | null, dependency?: { name: string; value: string | null }) {
   const [options, setOptions] = useState<SourceOption[]>([]);
+  const dependencyName = dependency?.name;
+  const dependencyValue = dependency?.value ?? null;
   useEffect(() => {
     if (!source) return;
     let active = true;
-    void loadSource(source, protocolId).then((loaded) => {
+    if (dependencyName && !dependencyValue) {
+      setOptions([]);
+      return;
+    }
+    const extra = dependencyName && dependencyValue ? { [dependencyName]: dependencyValue } : undefined;
+    void loadSource(source, protocolId, extra).then((loaded) => {
       if (active) setOptions(loaded);
     });
     return () => {
       active = false;
     };
-  }, [source, protocolId]);
+  }, [source, protocolId, dependencyName, dependencyValue]);
   return options;
 }
 
@@ -56,9 +65,9 @@ function optionLabel(option: SourceOption) {
   return option.detail ? `${option.label} · ${option.detail}` : option.label;
 }
 
-function SourceField({ source, value, onChange, protocolId, multiple }: { source: string; value: unknown; onChange: (value: unknown) => void; protocolId?: string | null; multiple: boolean }) {
+function SourceField({ source, value, onChange, protocolId, multiple, dependency }: { source: string; value: unknown; onChange: (value: unknown) => void; protocolId?: string | null; multiple: boolean; dependency?: { name: string; value: string | null } }) {
   const t = useTranslations("documentStudio");
-  const options = useSource(source, protocolId);
+  const options = useSource(source, protocolId, dependency);
   if (multiple) {
     const values = Array.isArray(value) ? (value as string[]) : [];
     return (
@@ -138,6 +147,8 @@ export function ComponentParamForm({ schema, params, onChange, protocolId }: Pro
         const value = params[name] ?? (raw.default as unknown) ?? null;
         const label = t(`params.${name}`);
         const source = property["x-source"] ?? raw["x-source"] ?? property.items?.["x-source"];
+        const sourceParam = property["x-source-param"] ?? raw["x-source-param"] ?? property.items?.["x-source-param"];
+        const dependency = sourceParam ? { name: sourceParam, value: typeof params[sourceParam] === "string" && params[sourceParam] ? (params[sourceParam] as string) : null } : undefined;
 
         if (property.type === "boolean") {
           return (
@@ -152,7 +163,7 @@ export function ComponentParamForm({ schema, params, onChange, protocolId }: Pro
         if (property.type === "array") {
           const items = resolveSchema(property.items ?? {}, schema);
           if (source) {
-            control = <SourceField source={source} value={value} onChange={(next) => set(name, next)} protocolId={contextProtocol} multiple />;
+            control = <SourceField source={source} value={value} onChange={(next) => set(name, next)} protocolId={contextProtocol} multiple dependency={dependency} />;
           } else if (items.enum) {
             const selected = Array.isArray(value) ? (value as string[]) : [];
             control = (
@@ -188,7 +199,7 @@ export function ComponentParamForm({ schema, params, onChange, protocolId }: Pro
             control = <textarea rows={4} value={lines.join("\n")} onChange={(event) => set(name, event.target.value.split("\n").filter((line) => line.trim()))} />;
           }
         } else if (source) {
-          control = <SourceField source={source} value={value} onChange={(next) => set(name, next)} protocolId={contextProtocol} multiple={false} />;
+          control = <SourceField source={source} value={value} onChange={(next) => set(name, next)} protocolId={contextProtocol} multiple={false} dependency={dependency} />;
         } else if (property.enum) {
           control = (
             <Select value={String(value ?? "")} onChange={(event) => set(name, typeof property.enum?.[0] === "number" ? Number(event.target.value) : event.target.value)}>

@@ -25,7 +25,7 @@ from app.schemas.submission import (
     SubmissionUploadLogEntry,
 )
 from app.notifications import todos as todo_notifications
-from app.services import public_id_service, submission_link_service, todo_fine_service
+from app.services import list_columns, public_id_service, submission_link_service, todo_fine_service
 from app.services.task_package_service import set_todo_assignees, todo_assignee_ids
 from app.core.storage import ABGABEBOX, ObjectNotFound, get_object_store, validate_key
 
@@ -95,14 +95,15 @@ def _resolve_event_responsible(event: Event, source: str | None) -> list[int]:
     return list(dict.fromkeys(int(pid) for pid in (getattr(event, source, None) or []) if pid))
 
 
-def _resolve_list_responsible(entry: object, source: str | None) -> list[int]:
+def _resolve_list_responsible(entry: ListEntry, definition: ListDefinition, source: str | None) -> list[int]:
+    """Verantwortliche eines Listeneintrags: die gewählte Personen-Spalte (``source`` = Spalten-Key;
+    alte Werte der festen Spalten vor 0186 löst der v1-Adapter auf). Ohne Quelle niemand."""
     if not source:
         return []
-    value_json: dict = (
-        getattr(entry, "column_one_value_json", {}) if source == "column_one"
-        else getattr(entry, "column_two_value_json", {})
-    ) or {}
-    ids = [value_json.get("participant_id")] + list(value_json.get("participant_ids") or [])
+    column = list_columns.resolve_column(definition, source)
+    if column is None or column.value_type not in list_columns.PARTICIPANT_TYPES:
+        return []
+    ids = list_columns.participant_ids_of(list_columns.get_value(entry, column), column.value_type)
     return list(dict.fromkeys(int(pid) for pid in ids if pid))
 
 
@@ -372,8 +373,11 @@ class SubmissionService:
         entries = self.repository.list_list_entries(db, list_definition_id=definition.id)
         participant_ids: set[int] = set()
         event_ids: set[int] = set()
+        # Bezeichnung der Abgabe-Einträge aus der Spalte mit der Rolle «Bezeichnung» (0186)
+        label_column = list_columns.label_column(definition)
+        label_type = label_column.value_type if label_column else "text"
         for entry in entries:
-            self._collect_referenced_ids(definition.column_one_value_type, entry.column_one_value_json, participant_ids, event_ids)
+            self._collect_referenced_ids(label_type, list_columns.get_value(entry, label_column), participant_ids, event_ids)
         participants_by_id = self.repository.get_participants(db, participant_ids=list(participant_ids))
         events_by_id = {eid: event for eid in event_ids if (event := self.repository.get_event(db, eid)) is not None}
 
@@ -384,8 +388,8 @@ class SubmissionService:
                 "list_entry_id": entry.id,
                 "list_entry_public_id": entry.public_id,
                 "label": _value_label(
-                    definition.column_one_value_type,
-                    entry.column_one_value_json,
+                    label_type,
+                    list_columns.get_value(entry, label_column),
                     participants_by_id=participants_by_id,
                     events_by_id=events_by_id,
                 ),
@@ -395,7 +399,7 @@ class SubmissionService:
                 "sort_date": None,
                 "window_start": None,
                 "window_end": assignment.deadline,
-                "responsible_participant_ids": _resolve_list_responsible(entry, source),
+                "responsible_participant_ids": _resolve_list_responsible(entry, definition, source),
             }
             for entry in entries
         ]

@@ -3,6 +3,7 @@ import uuid
 
 from sqlalchemy import select
 
+from app.services.list_legacy_adapter import legacy_value_fields, legacy_value_types
 from app.models import Event, FinanceAccount, ListDefinition, ListEntry, Participant
 
 
@@ -193,9 +194,6 @@ def _is_internal_id(value) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
 
 
-_LIST_VALUE_KEYS = ("column_one_value", "column_two_value")
-
-
 def _map_list_value(value_type: str, value: dict, convert) -> dict:
     """Wendet convert(model, ref) auf die Personen-/Termin-Referenzen eines Listenwerts an.
     convert liefert den neuen Wert oder None (= Referenz entfernen)."""
@@ -213,21 +211,28 @@ def _map_list_value(value_type: str, value: dict, convert) -> dict:
 def _map_list_snapshot(snapshot, convert):
     """Eingefrorener Listen-Snapshot (Block «Gekoppelte Liste» bzw. Formularzeile «Zeile aus
     Liste», list_snapshot_service.py): Werte stehen wie in list_entry mit internen ids,
-    ebenso _tracked_before und die Rückgängig-Kopie 'previous' (eigene Spaltentypen)."""
+    ebenso _tracked_before und die Rückgängig-Kopie 'previous'. Beide Formate: v2 (``values``
+    je Spalten-Key, Typen aus ``columns``) und v1 (alte Wertfelder, Typen über den Adapter)."""
     if not isinstance(snapshot, dict):
         return snapshot
-    types = {
-        "column_one_value": str(snapshot.get("column_one_value_type") or "text"),
-        "column_two_value": str(snapshot.get("column_two_value_type") or "text"),
+    column_types = {
+        str(column.get("id")): str(column.get("value_type") or "text")
+        for column in (snapshot.get("columns") or []) if isinstance(column, dict)
     }
+    legacy_types = legacy_value_types(snapshot)
 
     def map_holder(holder):
         if not isinstance(holder, dict):
             return holder
         result = dict(holder)
-        for key in _LIST_VALUE_KEYS:
-            if isinstance(result.get(key), dict):
-                result[key] = _map_list_value(types[key], result[key], convert)
+        if isinstance(result.get("values"), dict):
+            result["values"] = {
+                key: _map_list_value(column_types.get(key, "text"), value, convert) if isinstance(value, dict) else value
+                for key, value in result["values"].items()
+            }
+        for field in legacy_value_fields(result):
+            if isinstance(result.get(field), dict):
+                result[field] = _map_list_value(legacy_types.get(field, "text"), result[field], convert)
         if isinstance(result.get("_tracked_before"), dict):
             result["_tracked_before"] = map_holder(result["_tracked_before"])
         return result
@@ -281,7 +286,11 @@ def translate_list_snapshot_refs(db, config: dict, tenant_id: int, *, refs: Snap
     list_entry.column_*_value_json), StructuredListTable vergleicht aber mit public UUIDs
     und verwirft nicht-String-ids - Personen-Spalten erschienen im Protokoll leer, eine
     Gruppierung danach landete komplett in «Ohne Wert» (Bug 2026-11-08). Übersetzt an der
-    API-Grenze, tenant-gebunden; nicht auflösbare ints fallen weg, UUID-Strings bleiben."""
+    API-Grenze, tenant-gebunden; nicht auflösbare ints fallen weg, UUID-Strings bleiben.
+    Eingefrorene v1-Snapshots (vor Migration 0186) kommen dabei im v2-Format heraus."""
+    from app.services.list_columns import upgrade_frozen_config
+
+    config = upgrade_frozen_config(db, config, tenant_id=tenant_id)
     if not _has_list_snapshots(config):
         return config
     wanted = _list_snapshot_internal_ids(config)

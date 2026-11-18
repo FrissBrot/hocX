@@ -662,7 +662,9 @@
       "valueWord": "Valeur",
       "filterColumn": "N’afficher que les lignes dont la colonne …",
       "noFilter": "Toutes les lignes",
-      "filterText": "… contient ce texte"
+      "filterText": "… contient ce texte",
+      "visibleColumns": "Colonnes visibles",
+      "allColumns": "Toutes les colonnes"
     },
     "eventField": {
       "title": "Titre",
@@ -794,7 +796,8 @@
         "list": "Valeur de la liste"
       },
       "noAutoValue": "Aucune valeur",
-      "autoValueHelp": "Prérempli dans chaque colonne créée automatiquement."
+      "autoValueHelp": "Prérempli dans chaque colonne créée automatiquement.",
+      "valueColumn": "Valeur de la colonne"
     },
     "rowType": {
       "text": "Texte libre",

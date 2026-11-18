@@ -19,11 +19,11 @@ def test_responsible_list_ids_include_linked_lists_of_own_tenant_only(db):
     other = make_tenant(db)
     template = make_template(db, tenant.id)
     protocol = make_protocol(db, tenant.id, template.id)
-    own_list = make_list_definition(db, tenant.id, column_one_value_type="participant", column_two_value_type="text")
-    foreign_list = make_list_definition(db, other.id, column_one_value_type="participant", column_two_value_type="text")
+    own_list = make_list_definition(db, tenant.id, first_type="participant", second_type="text")
+    foreign_list = make_list_definition(db, other.id, first_type="participant", second_type="text")
     person = make_participant(db, tenant.id, display_name="Alice Muster")
-    own_entry = make_list_entry(db, own_list.id, column_one_value={"participant_id": person.id})
-    foreign_entry = make_list_entry(db, foreign_list.id, column_one_value={"participant_id": person.id})
+    own_entry = make_list_entry(db, own_list.id, first_value={"participant_id": person.id})
+    foreign_entry = make_list_entry(db, foreign_list.id, first_value={"participant_id": person.id})
 
     element = make_protocol_element(db, protocol.id, sort_index=0, section_name="Traktandum")
     element.responsible_assignments_snapshot = [
@@ -39,10 +39,10 @@ def test_responsible_list_ids_include_linked_lists_of_own_tenant_only(db):
 
 def test_template_label_reads_current_list_row(db):
     tenant = make_tenant(db)
-    definition = make_list_definition(db, tenant.id, column_one_value_type="participant", column_two_value_type="text")
+    definition = make_list_definition(db, tenant.id, first_type="participant", second_type="text")
     before = make_participant(db, tenant.id, display_name="Alice Muster")
     now = make_participant(db, tenant.id, display_name="Bob Beispiel")
-    entry = make_list_entry(db, definition.id, column_one_value={"participant_id": now.id})
+    entry = make_list_entry(db, definition.id, first_value={"participant_id": now.id})
     manual = make_participant(db, tenant.id, display_name="Carla Fix")
     configuration = {
         "responsibility": {

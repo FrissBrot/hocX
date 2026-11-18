@@ -21,11 +21,12 @@ from app.schemas.table_snapshot import (
     TableSnapshotRowsRead,
     TableSnapshotTableSummary,
 )
-from app.services import public_id_service
+from app.services import list_legacy_adapter, public_id_service
 from app.services.audit_service import AuditService
 from app.services.snapshot_list_references import snapshot_list_rows
 from app.services.table_snapshot_config import SNAPSHOT_TABLES
 from app.services.table_snapshot_service import (
+    snapshot_columns_by_definition,
     ReconstructionIdentityError,
     TableSnapshotService,
     build_reconstruction_draft,
@@ -140,9 +141,51 @@ def get_snapshot_table(
         cycle_year=cycle_year,
         row_count=snapshot.row_count,
         is_edited=snapshot.is_edited,
-        rows=snapshot_list_rows(db, snapshot.snapshot_json, user.current_tenant_id, public=True)
-        if table_name == "list_entry" else snapshot.snapshot_json,
+        rows=_rows_for_read(db, user.current_tenant_id, cfg.id, cycle_year, table_name, snapshot.snapshot_json),
     )
+
+
+def _sibling_rows(db: Session, tenant_id: int, cycle_config_id: int, cycle_year: int, table_name: str) -> list[dict]:
+    sibling = db.scalar(
+        select(TableSnapshot).where(
+            TableSnapshot.tenant_id == tenant_id,
+            TableSnapshot.cycle_config_id == cycle_config_id,
+            TableSnapshot.cycle_year == cycle_year,
+            TableSnapshot.table_name == table_name,
+        )
+    )
+    return list(sibling.snapshot_json) if sibling else []
+
+
+def _rows_for_read(db: Session, tenant_id: int, cycle_config_id: int, cycle_year: int, table_name: str, rows: list[dict]) -> list[dict]:
+    """Backup-Zeilen fürs Frontend immer im aktuellen Format (Migration 0186): Listen tragen ihre
+    Spalten (``columns``) und Rollen als Spalten-Keys, Einträge ``values_json`` je Spalten-Key.
+    Ältere Backups stuft der v1-Adapter beim Lesen hoch, gespeichert wird dabei nichts."""
+    if table_name not in ("list_definition", "list_entry"):
+        return rows
+    definition_rows = rows if table_name == "list_definition" else _sibling_rows(db, tenant_id, cycle_config_id, cycle_year, "list_definition")
+    columns_by_definition = snapshot_columns_by_definition(
+        db, tenant_id=tenant_id, definition_rows=definition_rows,
+        column_rows=_sibling_rows(db, tenant_id, cycle_config_id, cycle_year, "list_column"),
+    )
+    if table_name == "list_entry":
+        upgraded = list_legacy_adapter.upgrade_table_snapshot_rows("list_entry", rows, columns_by_definition=columns_by_definition)
+        return snapshot_list_rows(db, upgraded, tenant_id, public=True)
+    result = []
+    for row in list_legacy_adapter.upgrade_table_snapshot_rows("list_definition", rows):
+        columns = columns_by_definition.get(row.get("id"), [])
+        by_id = {column.get("id"): column for column in columns if column.get("id") is not None}
+        role = lambda column_id: str(by_id[column_id]["key"]) if column_id in by_id else None  # noqa: E731
+        result.append({
+            **row,
+            "columns": [
+                {"id": str(column["key"]), "title": column.get("title") or "", "value_type": column.get("value_type") or "text", "sort_index": column.get("sort_index") or 0}
+                for column in columns
+            ],
+            "label_column_id": role(row.get("label_column_id")) or next((str(c["key"]) for c in columns if c.get("value_type") in ("text", "event")), None),
+            "responsible_column_id": role(row.get("responsible_column_id")) or next((str(c["key"]) for c in columns if c.get("value_type") in ("participant", "participants")), None),
+        })
+    return result
 
 
 @router.get(
@@ -270,6 +313,22 @@ def update_snapshot_row(
     # regardless of what payload.values happens to contain.
     updated_row = {**row, **payload.values, "id": row["id"], "public_id": row["public_id"]}
     if table_name == "list_entry":
+        # Bearbeitete Zeile ins aktuelle Format heben (Entscheid 9.4): values_json je Spalten-Key,
+        # alte Wertfelder fallen weg. Nur Keys der Spalten dieser Liste.
+        definition_rows = _sibling_rows(db, user.current_tenant_id, cfg.id, cycle_year, "list_definition")
+        columns_by_definition = snapshot_columns_by_definition(
+            db, tenant_id=user.current_tenant_id, definition_rows=definition_rows,
+            column_rows=_sibling_rows(db, user.current_tenant_id, cfg.id, cycle_year, "list_column"),
+        )
+        upgraded = list_legacy_adapter.upgrade_table_snapshot_rows("list_entry", [row], columns_by_definition=columns_by_definition)[0]
+        allowed = {str(column["key"]) for column in columns_by_definition.get(row.get("list_definition_id"), [])}
+        new_values = payload.values.get("values_json") if isinstance(payload.values.get("values_json"), dict) else upgraded.get("values_json", {})
+        updated_row = {
+            **{k: v for k, v in upgraded.items() if k != "values_json"},
+            "sort_index": payload.values.get("sort_index", upgraded.get("sort_index", 0)),
+            "values_json": {key: value for key, value in new_values.items() if key in allowed and isinstance(value, dict)},
+            "id": row["id"], "public_id": row["public_id"],
+        }
         updated_row = snapshot_list_rows(db, [updated_row], user.current_tenant_id)[0]
     updated_rows = list(snapshot.snapshot_json)
     updated_rows[index] = updated_row
@@ -287,8 +346,7 @@ def update_snapshot_row(
         entity_id=row.get("id"),
         details={"cycle_config_id": cfg.id, "cycle_year": cycle_year, "changed_fields": list(payload.values.keys())},
     )
-    return (snapshot_list_rows(db, [updated_row], user.current_tenant_id, public=True)[0]
-            if table_name == "list_entry" else updated_row)
+    return _rows_for_read(db, user.current_tenant_id, cfg.id, cycle_year, table_name, [updated_row])[0]
 
 
 @router.delete(

@@ -140,7 +140,7 @@ class ParticipantService:
         return updated
 
     def _clear_orphaned_list_references(self, db: Session, tenant_id: int, participant_ids: set[int]) -> None:
-        """ListEntry.column_one/two_value_json has no FK to Participant (it's a JSONB
+        """ListEntry.values_json has no FK to Participant (it's a JSONB
         value, not a real column), so deleting a participant otherwise leaves a dangling
         participant_id/participant_ids reference behind - list_service._normalize_value
         only validates on write, never on the referenced participant's later deletion
@@ -149,26 +149,33 @@ class ParticipantService:
         than leaving stale ids that a future entry read/write could stumble over."""
         if not participant_ids:
             return
-        entries = list(
-            db.scalars(
-                select(ListEntry)
-                .join(ListDefinition, ListDefinition.id == ListEntry.list_definition_id)
-                .where(ListDefinition.tenant_id == tenant_id)
-            )
-        )
+        from app.services import list_columns
+
+        definitions = {
+            definition.id: definition
+            for definition in db.scalars(select(ListDefinition).where(ListDefinition.tenant_id == tenant_id))
+        }
+        entries = list(db.scalars(select(ListEntry).where(ListEntry.list_definition_id.in_(definitions)))) if definitions else []
         for entry in entries:
+            # Alle Spalten: auch eine dritte oder vierte Personen-Spalte darf keine Waise behalten
+            values = dict(entry.values_json or {})
             changed = False
-            for column in ("column_one_value_json", "column_two_value_json"):
-                value = getattr(entry, column) or {}
+            for column in list_columns.columns_of(definitions.get(entry.list_definition_id)):
+                value = values.get(column.key) or {}
                 pid = value.get("participant_id")
                 pids = value.get("participant_ids")
                 if pid is not None and int(pid) in participant_ids:
-                    setattr(entry, column, {})
+                    values.pop(column.key, None)
                     changed = True
                 elif isinstance(pids, list) and any(int(x) in participant_ids for x in pids if x is not None):
-                    setattr(entry, column, {**value, "participant_ids": [x for x in pids if int(x) not in participant_ids]})
+                    remaining = [x for x in pids if int(x) not in participant_ids]
+                    if remaining:
+                        values[column.key] = {**value, "participant_ids": remaining}
+                    else:
+                        values.pop(column.key, None)
                     changed = True
             if changed:
+                entry.values_json = values
                 db.add(entry)
 
     def delete_participant(self, db: Session, participant_id: int, *, tenant_id: int) -> bool:

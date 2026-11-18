@@ -160,7 +160,7 @@ def test_export_bundles_only_own_users_and_nulls_foreign_references(db):
         assert "foreign@x.example" not in json.dumps(manifest)
         assert manifest["tables"]["template"][0]["created_by"] is None
         assert "user_tenant_role" not in manifest["tables"]
-        assert manifest["format_version"] == 9
+        assert manifest["format_version"] == 10
     finally:
         zip_path.unlink(missing_ok=True)
 
@@ -741,7 +741,7 @@ def test_export_import_roundtrip_remaps_matrix_auto_source_list_link(db):
 def test_export_import_roundtrip_remaps_matrix_row_list_entry_link(db):
     tenant_a = make_tenant(db, "Tenant A")
     source_list = make_list_definition(db, tenant_a.id, name="Leitende")
-    source_entry = make_list_entry(db, source_list.id, column_one_value={"text_value": "Anna"})
+    source_entry = make_list_entry(db, source_list.id, first_value={"text_value": "Anna"})
     make_element_definition(
         db, tenant_a.id, "Tabelle",
         blocks=[{
@@ -782,7 +782,7 @@ def test_export_import_roundtrip_remaps_protocol_block_row_list_entry_link(db):
     block is copied from its template onto a concrete protocol."""
     tenant_a = make_tenant(db, "Tenant A")
     source_list = make_list_definition(db, tenant_a.id, name="Leitende")
-    source_entry = make_list_entry(db, source_list.id, column_one_value={"text_value": "Anna"})
+    source_entry = make_list_entry(db, source_list.id, first_value={"text_value": "Anna"})
     template = make_template(db, tenant_a.id)
     protocol = make_protocol(db, tenant_a.id, template.id, protocol_number="P-1")
     protocol_element = make_protocol_element(db, protocol.id)
@@ -1142,8 +1142,8 @@ def test_export_import_roundtrip_remaps_responsible_assignments_snapshot(db):
     tenant = make_tenant(db, "Verantwortliche")
     participant = make_participant(db, tenant.id, "Anna")
     gone = make_participant(db, tenant.id, "Wird geloescht")
-    definition = make_list_definition(db, tenant.id, column_one_value_type="participant")
-    entry = make_list_entry(db, definition.id, column_one_value={"participant_id": participant.id})
+    definition = make_list_definition(db, tenant.id, first_type="participant")
+    entry = make_list_entry(db, definition.id, first_value={"participant_id": participant.id})
     template = make_template(db, tenant.id)
     protocol = make_protocol(db, tenant.id, template.id)
     element = make_protocol_element(db, protocol.id)
@@ -1319,8 +1319,8 @@ def test_export_import_roundtrip_restores_table_snapshots(db):
     tenant = make_tenant(db, "Snapshots")
     cycle = make_cycle_config(db, tenant.id)
     participant = make_participant(db, tenant.id, "Anna")
-    definition = make_list_definition(db, tenant.id, column_one_value_type="participant")
-    entry = make_list_entry(db, definition.id, column_one_value={"participant_id": participant.id})
+    definition = make_list_definition(db, tenant.id, first_type="participant")
+    entry = make_list_entry(db, definition.id, first_value={"participant_id": participant.id})
     deleted_entry_row = {"id": 987_654, "public_id": "0190a000-0000-7000-8000-000000000001",
                          "list_definition_id": definition.id, "column_one_value_json": {}}
     db.add_all([
@@ -1427,7 +1427,7 @@ def test_word_import_analysis_is_remapped():
         "attendance_mappings": [{"suggested_participant_id": 1, "candidates": [{"participant_id": 1}]}],
         "event_mappings": [{"matched_event_id": 2, "candidates": [{"event_id": 2}], "matrix_key": "5:0", "column_key": "gen-e-2"}],
         "list_definitions": [{"id": 3, "name": "Material"}, {"id": 99, "name": "Fremd"}],
-        "list_mappings": [{"matched_entry_id": 4, "column_one_names": [dict(name)], "column_two_names": [], "candidates": [{"entry_id": 4}]}],
+        "list_mappings": [{"matched_entry_id": 4, "first_names": [dict(name)], "second_names": [], "candidates": [{"entry_id": 4}]}],
         "matrix_options": [{"matrix_key": "5:0"}, {"matrix_key": "9:0"}],
         "matrix_mappings": [{"matrix_key": "5:0", "column_key": "gen-l-4", "column_candidates": [{"column_key": "gen-p-77"}, {"column_key": "fix"}], "names": []},
                             {"matrix_key": "9:9", "names": []}],
@@ -1447,7 +1447,7 @@ def test_word_import_analysis_is_remapped():
     assert result["event_mappings"] == [{"matched_event_id": 102, "candidates": [{"event_id": 102}], "matrix_key": "105:0", "column_key": "gen-e-102"}]
     assert result["list_definitions"] == [{"id": 103, "name": "Material"}]
     assert result["list_mappings"][0]["matched_entry_id"] == 104
-    assert result["list_mappings"][0]["column_one_names"] == [remapped_name]
+    assert result["list_mappings"][0]["first_names"] == [remapped_name]
     assert result["list_mappings"][0]["candidates"] == [{"entry_id": 104}]
     assert result["matrix_options"] == [{"matrix_key": "105:0"}]
     assert result["matrix_mappings"] == [{"matrix_key": "105:0", "column_key": "gen-l-104", "column_candidates": [{"column_key": "fix"}], "names": []}]

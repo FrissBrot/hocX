@@ -1,53 +1,50 @@
 import { StructuredListDefinition, StructuredListEntry } from "@/types/api";
 
-// Listen, deren Zeilen Verantwortliche liefern (z. B. eine Ämtliliste): eine Textspalte für die
-// Bezeichnung plus eine Personenspalte. Gemeinsam genutzt von den Verantwortlichen im
-// Protokoll-Vorlagen-Editor (template-builder.tsx) und den Aufgabenpaketen; das Backend löst
-// dieselbe Form in responsible_label_service._list_entry_participant_ids auf.
+// Listen, deren Zeilen Verantwortliche liefern (z. B. eine Ämtliliste): die Spalte mit der Rolle
+// «Bezeichnung» benennt die Zeile, die Spalte mit der Rolle «Verantwortliche» liefert die Personen
+// (Migration 0186; ohne Rollen: erste Text- bzw. erste Personen-Spalte). Gemeinsam genutzt von den
+// Verantwortlichen im Protokoll-Vorlagen-Editor (template-builder.tsx) und den Aufgabenpaketen; das
+// Backend löst dieselbe Regel in responsible_label_service bzw. services/list_columns.py auf.
 
 export type EligibleResponsibleList = {
   definition: StructuredListDefinition;
-  textColumn: "column_one" | "column_two";
-  participantColumn: "column_one" | "column_two";
+  /** Spalten-Key der Bezeichnung */
+  textColumn: string;
+  /** Spalten-Key der Verantwortlichen */
+  participantColumn: string;
   participantValueType: "participant" | "participants";
 };
 
-export function eligibleResponsibleList(definition: StructuredListDefinition): EligibleResponsibleList | null {
-  const firstIsText = definition.column_one_value_type === "text";
-  const secondIsText = definition.column_two_value_type === "text";
-  const firstIsParticipants = definition.column_one_value_type === "participant" || definition.column_one_value_type === "participants";
-  const secondIsParticipants = definition.column_two_value_type === "participant" || definition.column_two_value_type === "participants";
+const isPersonType = (type: string) => type === "participant" || type === "participants";
 
-  if (firstIsText && secondIsParticipants) {
-    return {
-      definition,
-      textColumn: "column_one",
-      participantColumn: "column_two",
-      participantValueType: definition.column_two_value_type === "participant" ? "participant" : "participants",
-    };
-  }
-  if (secondIsText && firstIsParticipants) {
-    return {
-      definition,
-      textColumn: "column_two",
-      participantColumn: "column_one",
-      participantValueType: definition.column_one_value_type === "participant" ? "participant" : "participants",
-    };
-  }
-  return null;
+export function eligibleResponsibleList(definition: StructuredListDefinition): EligibleResponsibleList | null {
+  const columns = [...definition.columns].sort((left, right) => left.sort_index - right.sort_index);
+  const byId = (id: string | null) => columns.find((column) => column.id === id) ?? null;
+  const responsible =
+    (byId(definition.responsible_column_id) && isPersonType(byId(definition.responsible_column_id)!.value_type) ? byId(definition.responsible_column_id) : null)
+    ?? columns.find((column) => isPersonType(column.value_type)) ?? null;
+  const label =
+    (byId(definition.label_column_id)?.value_type === "text" ? byId(definition.label_column_id) : null)
+    ?? columns.find((column) => column.value_type === "text") ?? null;
+  if (!responsible || !label) return null;
+  return {
+    definition,
+    textColumn: label.id,
+    participantColumn: responsible.id,
+    participantValueType: responsible.value_type === "participant" ? "participant" : "participants",
+  };
 }
 
-export function listTextValue(entry: StructuredListEntry, column: "column_one" | "column_two") {
-  const value = column === "column_one" ? entry.column_one_value : entry.column_two_value;
-  return String(value?.text_value ?? "").trim();
+export function listTextValue(entry: StructuredListEntry, column: string) {
+  return String(entry.values?.[column]?.text_value ?? "").trim();
 }
 
 export function listParticipantIds(
   entry: StructuredListEntry,
-  column: "column_one" | "column_two",
+  column: string,
   valueType: "participant" | "participants"
 ): string[] {
-  const value = column === "column_one" ? entry.column_one_value : entry.column_two_value;
+  const value = entry.values?.[column];
   if (valueType === "participant") {
     const participantId = typeof value?.participant_id === "string" ? value.participant_id : null;
     return participantId ? [participantId] : [];

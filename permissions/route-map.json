@@ -1663,6 +1663,36 @@
         "meetings.edit"
       ]
     },
+    "POST /api/lists/{list_definition_id}/columns": {
+      "handler": "lists.create_column",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "PUT /api/lists/{list_definition_id}/columns/order": {
+      "handler": "lists.reorder_columns",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "DELETE /api/lists/{list_definition_id}/columns/{column_id}": {
+      "handler": "lists.delete_column",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "PATCH /api/lists/{list_definition_id}/columns/{column_id}": {
+      "handler": "lists.patch_column",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
+    "GET /api/lists/{list_definition_id}/columns/{column_id}/usages": {
+      "handler": "lists.get_column_usages",
+      "requires": [
+        "meetings.edit"
+      ]
+    },
     "GET /api/lists/{list_definition_id}/entries": {
       "handler": "lists.list_entries",
       "requires": [

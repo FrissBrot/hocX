@@ -7,18 +7,19 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { StructuredListTable } from "@/components/lists/structured-list-table";
 import {
   EventSummary,
+  ListValues,
   ParticipantSummary,
   StructuredListDefinition,
   StructuredListEntry,
 } from "@/types/api";
 import { Select } from "@/components/ui/select";
 
-type SortColumn = "" | "column_one" | "column_two";
+/** Spalten-Key der Liste oder "" (keine Gruppierung/Sortierung) */
+type SortColumn = string;
 
 type EntryPayload = {
   sort_index: number;
-  column_one_value: Record<string, unknown>;
-  column_two_value: Record<string, unknown>;
+  values: ListValues;
 };
 
 type StructuredListEditModalProps = {
@@ -29,6 +30,8 @@ type StructuredListEditModalProps = {
   availableParticipants: ParticipantSummary[];
   availableEvents: EventSummary[];
   groupByColumn: SortColumn;
+  /** Sichtbare Spalten des Blocks (Spalten-Keys), sonst alle */
+  visibleColumns?: string[] | null;
   sortByColumn: SortColumn;
   sortDirection: "asc" | "desc";
   onChangeGroupBy: (value: SortColumn) => void;
@@ -53,6 +56,7 @@ export function StructuredListEditModal({
   availableParticipants,
   availableEvents,
   groupByColumn,
+  visibleColumns = null,
   sortByColumn,
   sortDirection,
   onChangeGroupBy,
@@ -63,10 +67,9 @@ export function StructuredListEditModal({
   onDeleteEntry,
 }: StructuredListEditModalProps) {
   const t = useTranslations("protocols");
-  const listColOptions: { value: SortColumn; label: string }[] = [
-    { value: "column_one", label: definition.column_one_title },
-    { value: "column_two", label: definition.column_two_title },
-  ];
+  const listColOptions: { value: SortColumn; label: string }[] = [...definition.columns]
+    .sort((left, right) => left.sort_index - right.sort_index)
+    .map((column) => ({ value: column.id, label: column.title }));
 
   return (
     <Modal open={open} onClose={onClose} title={t("editListTitle")} description={definition.name} size="wide">
@@ -113,6 +116,7 @@ export function StructuredListEditModal({
         fullWidth
         emptyMessage={t("noListEntriesYet")}
         groupByColumn={groupByColumn}
+        visibleColumns={visibleColumns}
         sortByColumn={sortByColumn}
         sortDirection={sortDirection}
         onCreateEntry={onCreateEntry}

@@ -169,21 +169,22 @@ def test_remap_block_configuration_keeps_public_id_refs():
 
 
 def _list_snapshot(person, people, event, *, types=("participant", "participants")):
+    """Listen-Snapshot im Format v2 (Spalten-Keys k1/k2), mit Undo-Stufe in eigenen Spaltentypen."""
     return {
+        "snapshot_version": 2,
         "synced_version": 1,
-        "column_one_value_type": "text",
-        "column_two_value_type": types[0],
+        "columns": [{"id": "k1", "title": "A", "value_type": "text", "sort_index": 10}, {"id": "k2", "title": "B", "value_type": types[0], "sort_index": 20}],
         "entries": [
-            {"id": 1, "sort_index": 10, "column_one_value": {"text_value": "Karo"}, "column_two_value": {"participant_id": person}},
+            {"id": 1, "sort_index": 10, "values": {"k1": {"text_value": "Karo"}, "k2": {"participant_id": person}}},
             {
-                "id": 2, "sort_index": 20, "column_one_value": {"text_value": "Bati"}, "column_two_value": {"participant_id": person},
-                "_tracked": "changed", "_tracked_before": {"column_one_value": {"text_value": "Bati"}, "column_two_value": {"participant_id": person}},
+                "id": 2, "sort_index": 20, "values": {"k1": {"text_value": "Bati"}, "k2": {"participant_id": person}},
+                "_tracked": "changed", "_tracked_before": {"values": {"k1": {"text_value": "Bati"}, "k2": {"participant_id": person}}},
             },
         ],
         "previous": {
-            "column_one_value_type": types[1],
-            "column_two_value_type": "event",
-            "entries": [{"id": 1, "column_one_value": {"participant_ids": people}, "column_two_value": {"event_id": event}}],
+            "snapshot_version": 2,
+            "columns": [{"id": "k1", "title": "A", "value_type": types[1], "sort_index": 10}, {"id": "k2", "title": "B", "value_type": "event", "sort_index": 20}],
+            "entries": [{"id": 1, "values": {"k1": {"participant_ids": people}, "k2": {"event_id": event}}}],
         },
     }
 
@@ -200,29 +201,30 @@ def test_translates_list_snapshot_refs_and_back(db):
         "linked_list_id": 1,
         "list_snapshot": _list_snapshot(anna.id, [anna.id, ben.id, foreign.id], event.id),
         "rows": [{"id": "r1", "value_type": "list_entry", "list_snapshot": {
-            "entry_exists": True, "column_one_value_type": "participant", "column_two_value_type": "text",
-            "column_one_value": {"participant_id": ben.id}, "column_two_value": {"text_value": "x"},
+            "snapshot_version": 2, "entry_exists": True,
+            "columns": [{"id": "k1", "title": "A", "value_type": "participant", "sort_index": 10}, {"id": "k2", "title": "B", "value_type": "text", "sort_index": 20}],
+            "values": {"k1": {"participant_id": ben.id}, "k2": {"text_value": "x"}},
         }}],
     }
 
     public = translate_list_snapshot_refs(db, stored, tenant.id)
 
     entries = public["list_snapshot"]["entries"]
-    assert entries[0]["column_two_value"] == {"participant_id": str(anna.public_id)}
-    assert entries[1]["_tracked_before"]["column_two_value"] == {"participant_id": str(anna.public_id)}
+    assert entries[0]["values"]["k2"] == {"participant_id": str(anna.public_id)}
+    assert entries[1]["_tracked_before"]["values"]["k2"] == {"participant_id": str(anna.public_id)}
     previous = public["list_snapshot"]["previous"]["entries"][0]
-    assert previous["column_one_value"] == {"participant_ids": [str(anna.public_id), str(ben.public_id)]}
-    assert previous["column_two_value"] == {"event_id": str(event.public_id)}
-    assert public["rows"][0]["list_snapshot"]["column_one_value"] == {"participant_id": str(ben.public_id)}
-    assert entries[0]["column_one_value"] == {"text_value": "Karo"}
+    assert previous["values"]["k1"] == {"participant_ids": [str(anna.public_id), str(ben.public_id)]}
+    assert previous["values"]["k2"] == {"event_id": str(event.public_id)}
+    assert public["rows"][0]["list_snapshot"]["values"]["k1"] == {"participant_id": str(ben.public_id)}
+    assert entries[0]["values"]["k1"] == {"text_value": "Karo"}
     # Gespeicherter Stand bleibt unveraendert
-    assert stored["list_snapshot"]["entries"][0]["column_two_value"] == {"participant_id": anna.id}
+    assert stored["list_snapshot"]["entries"][0]["values"]["k2"] == {"participant_id": anna.id}
 
     back = normalize_list_snapshot_refs(db, public, tenant.id)
 
     assert back["list_snapshot"]["entries"] == stored["list_snapshot"]["entries"]
-    assert back["list_snapshot"]["previous"]["entries"][0]["column_one_value"] == {"participant_ids": [anna.id, ben.id]}
-    assert back["list_snapshot"]["previous"]["entries"][0]["column_two_value"] == {"event_id": event.id}
+    assert back["list_snapshot"]["previous"]["entries"][0]["values"]["k1"] == {"participant_ids": [anna.id, ben.id]}
+    assert back["list_snapshot"]["previous"]["entries"][0]["values"]["k2"] == {"event_id": event.id}
     assert back["rows"] == stored["rows"]
 
 
@@ -233,8 +235,8 @@ def test_normalize_list_snapshot_keeps_foreign_and_invalid_refs(db):
 
     result = normalize_list_snapshot_refs(db, config, tenant.id)
 
-    assert result["list_snapshot"]["entries"][0]["column_two_value"] == {"participant_id": str(foreign.public_id)}
-    assert result["list_snapshot"]["previous"]["entries"][0]["column_one_value"] == {"participant_ids": ["kaputt"]}
+    assert result["list_snapshot"]["entries"][0]["values"]["k2"] == {"participant_id": str(foreign.public_id)}
+    assert result["list_snapshot"]["previous"]["entries"][0]["values"]["k1"] == {"participant_ids": ["kaputt"]}
 
 
 def test_block_read_returns_public_ids_in_list_snapshot(db):
@@ -249,7 +251,7 @@ def test_block_read_returns_public_ids_in_list_snapshot(db):
 
     read = _block_to_read(db, block)
 
-    assert read.configuration_snapshot_json["list_snapshot"]["entries"][0]["column_two_value"] == {"participant_id": str(anna.public_id)}
+    assert read.configuration_snapshot_json["list_snapshot"]["entries"][0]["values"]["k2"] == {"participant_id": str(anna.public_id)}
 
 
 def test_participant_display_names_cover_ints_uuids_and_stay_in_tenant(db):
@@ -319,3 +321,28 @@ def test_public_reference_ids_cover_list_matrix_columns(db):
     config = {"columns": [{"id": f"gen-l-{entry.id}"}, {"id": "gen-l-6b0f2c1e"}, {"id": "manual-1"}]}
 
     assert snapshot_reference_ids(db, config, tenant.id)["list_entries"] == {str(entry.id): str(entry.public_id)}
+
+
+def test_frozen_v1_list_snapshot_is_served_as_v2(db):
+    """Abgeschlossene Protokolle behalten v1-Snapshots (vor Migration 0186); an der API kommen sie
+    im v2-Format mit synthetischen Keys heraus, wenn die Liste nicht mehr existiert."""
+    tenant = make_tenant(db)
+    anna = make_participant(db, tenant.id, display_name="Anna")
+    stored = {
+        "linked_list_id": 999_999,
+        "linked_list_group_by": "column_two",
+        "list_snapshot": {
+            "synced_version": 1, "column_one_title": "Ämtli", "column_one_value_type": "text",
+            "column_two_title": "Wer", "column_two_value_type": "participant",
+            "entries": [{"id": 1, "sort_index": 10, "column_one_value": {"text_value": "Kasse"}, "column_two_value": {"participant_id": anna.id}}],
+        },
+    }
+
+    public = translate_list_snapshot_refs(db, stored, tenant.id)
+
+    snapshot = public["list_snapshot"]
+    assert snapshot["snapshot_version"] == 2
+    assert [column["id"] for column in snapshot["columns"]] == ["legacy:column_one", "legacy:column_two"]
+    assert snapshot["entries"][0]["values"]["legacy:column_two"] == {"participant_id": str(anna.public_id)}
+    assert public["linked_list_group_by"] == "legacy:column_two"
+    assert "column_one_value" not in snapshot["entries"][0]

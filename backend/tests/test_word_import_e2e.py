@@ -76,13 +76,13 @@ def _build_template(db):
 
     amtli = make_list_definition(
         db, tenant.id, name="Ämtli",
-        column_one_title="Amt", column_one_value_type="text",
-        column_two_title="Person", column_two_value_type="participant",
+        first_title="Amt", first_type="text",
+        second_title="Person", second_type="participant",
     )
     existing_feuer_entry = make_list_entry(
         db, amtli.id, sort_index=0,
-        column_one_value={"text_value": "Feuer"},
-        column_two_value={"participant_id": nevio.id},  # deliberately different from the doc -> "changed"
+        first_value={"text_value": "Feuer"},
+        second_value={"participant_id": nevio.id},  # deliberately different from the doc -> "changed"
     )
 
     attendance_type = element_type_id(db, "attendance")
@@ -244,10 +244,10 @@ def _commit_payload_from_analysis(analysis, *, template_id) -> WordImportCommit:
         WordImportListRowCommit(
             table_index=mapping.table_index,
             list_definition_id=next(t.list_definition_id for t in analysis.tables if t.index == mapping.table_index),
-            column_one_raw=mapping.column_one_raw,
-            column_two_raw=mapping.column_two_raw,
-            column_one_names=mapping.column_one_names,
-            column_two_names=mapping.column_two_names,
+            first_raw=mapping.first_raw,
+            second_raw=mapping.second_raw,
+            first_names=mapping.first_names,
+            second_names=mapping.second_names,
             approved=True,
             linked_entry_id=mapping.matched_entry_id,
             originally_suggested_entry_id=mapping.matched_entry_id,
@@ -364,12 +364,12 @@ def _assert_full_import(db, ctx, protocol_id):
     # --- Ämtli (list, snapshot-only) ----------------------------------------------
     amtli_block = _block_by_section(db, protocol_id, "Ämtli")
     snapshot_entries = amtli_block.configuration_snapshot_json["list_snapshot"]["entries"]
-    by_col1 = {e["column_one_value"].get("text_value"): e for e in snapshot_entries}
-    assert by_col1["Feuer"]["column_two_value"]["participant_id"] == participants["Timo Weber"].id
-    assert by_col1["Fahrer"]["column_two_value"]["participant_id"] == participants["Sandro Keller"].id
+    by_col1 = {e["values"]["k1"].get("text_value"): e for e in snapshot_entries}
+    assert by_col1["Feuer"]["values"]["k2"]["participant_id"] == participants["Timo Weber"].id
+    assert by_col1["Fahrer"]["values"]["k2"]["participant_id"] == participants["Sandro Keller"].id
     # The live ListEntry must NEVER be mutated by an import - lists are snapshot-only.
     live_feuer = db.get(ListEntry, ctx["existing_feuer_entry"].id)
-    assert live_feuer.column_two_value_json["participant_id"] == participants["Nevio Muster"].id
+    assert (live_feuer.values_json or {}).get("k2", {})["participant_id"] == participants["Nevio Muster"].id
 
     # --- Scharanlässe (form block) -------------------------------------------------
     scharanlaesse_block = _block_by_section(db, protocol_id, "Scharanlässe")

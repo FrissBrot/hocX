@@ -5,12 +5,11 @@ import uuid
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.models import Event, ListDefinition, ListEntry, Participant
+from app.models import Event, ListColumn, ListDefinition, ListEntry, Participant
 from app.services import public_id_service
 
-_COLUMN_STRUCTURE_FIELDS = {
-    "column_one_title", "column_one_value_type", "column_two_title", "column_two_value_type",
-}
+# Rollenwechsel ändern, wie Blöcke einen Eintrag benennen - verlinkte Snapshots neu bewerten
+_STRUCTURE_FIELDS = {"label_column_id", "responsible_column_id"}
 
 
 class ListRepository:
@@ -54,36 +53,63 @@ class ListRepository:
         return definition
 
     def update_definition(self, db: Session, definition: ListDefinition, values: dict) -> ListDefinition:
-        # A column's value_type change (e.g. "text" -> "participant") invalidates the shape
-        # of every existing entry's value for that column (list_service._normalize_value
-        # produces "text_value"/"participant_id"/"participant_ids"/"event_id" keys depending
-        # on value_type - there's no generic semantic conversion between them). Rather than
-        # leaving entries in the old, now-invalid shape, clear them to {} - a valid "empty"
-        # value for every value_type - before applying the type change.
-        value_columns_to_clear = []
-        if "column_one_value_type" in values and values["column_one_value_type"] != definition.column_one_value_type:
-            value_columns_to_clear.append(ListEntry.column_one_value_json)
-        if "column_two_value_type" in values and values["column_two_value_type"] != definition.column_two_value_type:
-            value_columns_to_clear.append(ListEntry.column_two_value_json)
-
         for key, value in values.items():
             setattr(definition, key, value)
         db.add(definition)
-
-        if value_columns_to_clear:
-            db.execute(
-                update(ListEntry)
-                .where(ListEntry.list_definition_id == definition.id)
-                .values(**{column.key: {} for column in value_columns_to_clear})
-            )
-            db.flush()
-
-        if _COLUMN_STRUCTURE_FIELDS & values.keys():
+        if _STRUCTURE_FIELDS & values.keys():
             db.flush()
             self._bump_content_version(db, definition.id)
         db.commit()
         db.refresh(definition)
         return definition
+
+    # ── Spalten (jede Änderung erhöht content_version: verlinkte Blöcke sehen sie) ──────────
+
+    def _finish_column_change(self, db: Session, definition: ListDefinition) -> None:
+        db.flush()
+        self._bump_content_version(db, definition.id)
+        db.commit()
+        db.refresh(definition)
+
+    def add_column(self, db: Session, definition: ListDefinition, column: ListColumn) -> ListColumn:
+        definition.columns.append(column)
+        db.add(definition)
+        self._finish_column_change(db, definition)
+        return column
+
+    def _clear_column_values(self, db: Session, definition: ListDefinition, column: ListColumn) -> None:
+        # Ein Typwechsel macht die gespeicherte Wertform ungültig (text_value vs. participant_id
+        # ...), es gibt keine sinnvolle Umwandlung: Werte der Spalte in allen Einträgen leeren.
+        db.execute(
+            update(ListEntry)
+            .where(ListEntry.list_definition_id == definition.id, ListEntry.values_json.has_key(column.key))
+            .values(values_json=ListEntry.values_json - column.key)
+        )
+
+    def update_column(self, db: Session, definition: ListDefinition, column: ListColumn, values: dict, *, clear_values: bool) -> ListColumn:
+        changed = any(getattr(column, key) != value for key, value in values.items())
+        for key, value in values.items():
+            setattr(column, key, value)
+        if clear_values:
+            self._clear_column_values(db, definition, column)
+        if changed or clear_values:
+            self._finish_column_change(db, definition)
+        return column
+
+    def delete_column(self, db: Session, definition: ListDefinition, column: ListColumn) -> None:
+        self._clear_column_values(db, definition, column)
+        definition.columns.remove(column)
+        db.delete(column)
+        self._finish_column_change(db, definition)
+
+    def reorder_columns(self, db: Session, definition: ListDefinition, ordered: list[ListColumn]) -> None:
+        for index, column in enumerate(ordered):
+            column.sort_index = (index + 1) * 10
+        self._finish_column_change(db, definition)
+
+    def get_column(self, definition: ListDefinition, key: str) -> ListColumn | None:
+        """Spalte über ihren Key - immer innerhalb einer bereits mandantengebunden geladenen Liste."""
+        return next((column for column in definition.columns if column.key == key), None)
 
     def delete_definition(self, db: Session, definition: ListDefinition) -> None:
         db.delete(definition)

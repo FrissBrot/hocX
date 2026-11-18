@@ -27,7 +27,7 @@ def record_imported_list_history(db, *, tenant_id, cycle_config_id, protocol_id,
     snapshots = {row.table_name: row for row in db.scalars(select(TableSnapshot).where(
         TableSnapshot.tenant_id == tenant_id, TableSnapshot.cycle_config_id == cycle.id,
         TableSnapshot.cycle_year == year,
-        TableSnapshot.table_name.in_(["list_definition", "list_entry"]),
+        TableSnapshot.table_name.in_(["list_definition", "list_column", "list_entry"]),
     ).with_for_update())}
     source = {"protocol_id": str(protocol.public_id), "protocol_date": protocol.protocol_date.isoformat()}
     synthetic_index = 0
@@ -60,11 +60,13 @@ def record_imported_list_history(db, *, tenant_id, cycle_config_id, protocol_id,
                 internal_id = -((protocol.id << 32) + synthetic_index)
                 public_id = str(uuid.uuid5(protocol.public_id, f"list:{list_id}:row:{index}"))
             entries.append({"id": internal_id, "public_id": public_id, "list_definition_id": list_id,
-                            "sort_index": row["sort_index"], "column_one_value_json": row["column_one_value"],
-                            "column_two_value_json": row["column_two_value"]})
+                            "sort_index": row["sort_index"], "values_json": dict(row.get("values") or {})})
         new_definition = {**row_to_dict(definition), SOURCE_KEY: source}
+        # Spalten der Liste mit ins Backup (Migration 0186), damit die Werte-Keys lesbar bleiben
+        new_columns = [row_to_dict(column) for column in definition.columns]
         for table_name, new_rows, foreign_key in (
-            ("list_definition", [new_definition], "id"), ("list_entry", entries, "list_definition_id")
+            ("list_definition", [new_definition], "id"), ("list_column", new_columns, "list_definition_id"),
+            ("list_entry", entries, "list_definition_id"),
         ):
             snapshot = snapshots.get(table_name)
             if snapshot is None:

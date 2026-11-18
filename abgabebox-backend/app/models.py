@@ -117,11 +117,19 @@ list_definition_table = Table(
     Column("id", BigInteger, primary_key=True),
     Column("tenant_id", BigInteger),
     Column("name", Text),
-    Column("column_one_title", Text),
-    Column("column_one_value_type", Text),
-    Column("column_two_title", Text),
-    Column("column_two_value_type", Text),
+    # Spalten liegen seit 0186 in list_column; label_column_id ist die Rolle «Bezeichnung»
+    Column("label_column_id", BigInteger),
     Column("is_active", Boolean),
+)
+
+list_column_table = Table(
+    "list_column",
+    metadata,
+    Column("id", BigInteger, primary_key=True),
+    Column("list_definition_id", BigInteger),
+    Column("key", Text),
+    Column("value_type", Text),
+    Column("sort_index", Integer),
 )
 
 list_entry_table = Table(
@@ -131,8 +139,8 @@ list_entry_table = Table(
     Column("public_id", UUID(as_uuid=True)),
     Column("list_definition_id", BigInteger),
     Column("sort_index", Integer),
-    Column("column_one_value_json", JSONB),
-    Column("column_two_value_json", JSONB),
+    # Werte je Spalten-Key (list_column.key), Migration 0186
+    Column("values_json", JSONB),
 )
 
 # Seit 0108 sind Teilnehmer Zeilen in app_user; hocx_abgabebox darf dort nur diese Spalten

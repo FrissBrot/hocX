@@ -57,7 +57,7 @@
   "formModal": {
     "createTitle": "Create list",
     "editTitle": "Edit list",
-    "description": "Every list has exactly two columns. The data type determines what input is later visible in the table block and in the protocol.",
+    "description": "A list has one or more columns. The data type decides which input appears later in the table block and in the minutes.",
     "name": "List name",
     "active": "Active",
     "description2": "Description",
@@ -71,7 +71,7 @@
     "namePlaceholder": "e.g. Roles",
     "optional": "optional",
     "columns": "Columns",
-    "columnsHint": "Always two – choose any title and data type.",
+    "columnsHint": "Up to 20 columns – title, data type and order are up to you.",
     "preview": "How the list appears in the table block",
     "cancel": "Cancel",
     "groupSource": "Source for group statistics"
@@ -178,5 +178,27 @@
   "usage": {
     "element": "building block «{name}»",
     "protocol": "protocol {number}"
+  },
+  "columns": {
+    "add": "Add column",
+    "newTitle": "Column {number}",
+    "titleLabel": "Title of column {number}",
+    "typeLabel": "Data type of column {number}",
+    "moveUp": "Move “{title}” up",
+    "moveDown": "Move “{title}” down",
+    "remove": "Remove “{title}”",
+    "limit": "At most {max} columns.",
+    "typeChangeHint": "New data type: the existing values of this column are cleared when saving.",
+    "typeChangeConfirm": "Change data type of: {titles}. The existing values of these columns are cleared in all entries.",
+    "typeChangeLabel": "Change data type",
+    "deleteConfirm": "Delete column “{title}” with all its values?",
+    "deleteConfirmUsed": "Column “{title}” is still used: {places}. Grouping, sorting or filters there are dropped. Delete it with all values anyway?",
+    "deleteLabel": "Delete column",
+    "roleLabel": "Label",
+    "roleLabelHelp": "Names an entry: title in submissions, matrix and group statistics.",
+    "roleResponsible": "Responsible",
+    "roleResponsibleHelp": "People column for duties, submissions and responsible labels.",
+    "roleNone": "None",
+    "count": "{count, plural, one {# column} other {# columns}}"
   }
 }

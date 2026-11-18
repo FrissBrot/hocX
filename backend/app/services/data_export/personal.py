@@ -157,10 +157,11 @@ def collect(db: Session, person: AppUser) -> dict[str, list[dict[str, Any]]]:
     data["lists"] = [dict(row) for row in _rows(db, """
         SELECT d.name AS list, e.sort_index + 1 AS position
         FROM list_entry e JOIN list_definition d ON d.id = e.list_definition_id
-        WHERE d.tenant_id = :tenant_id AND (
-            e.column_one_value_json ->> 'participant_id' = CAST(:pid AS text) OR e.column_two_value_json ->> 'participant_id' = CAST(:pid AS text)
-            OR e.column_one_value_json -> 'participant_ids' @> CAST(:id_array AS jsonb)
-            OR e.column_two_value_json -> 'participant_ids' @> CAST(:id_array AS jsonb))
+        WHERE d.tenant_id = :tenant_id AND EXISTS (
+            -- alle Spalten des Eintrags (values_json, Migration 0186)
+            SELECT 1 FROM jsonb_each(e.values_json) AS v(key, value)
+             WHERE v.value ->> 'participant_id' = CAST(:pid AS text)
+                OR v.value -> 'participant_ids' @> CAST(:id_array AS jsonb))
         ORDER BY d.name, e.sort_index
     """, {**params, "id_array": json.dumps([pid])})]
 

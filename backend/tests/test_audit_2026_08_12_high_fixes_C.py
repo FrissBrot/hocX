@@ -8,11 +8,13 @@ from fastapi import HTTPException
 
 from app.api.routes import lists as lists_route
 from app.models import ListDefinition, ListEntry
-from app.schemas.list_definition import ListDefinitionUpdate
+from app.schemas.list_definition import ListDefinitionUpdate, ListColumnUpdate
 from app.services import list_snapshot_service
 from app.services.list_service import ListService
 
+from app.services import list_columns
 from tests.factories import (
+    entry_value,
     make_current_user,
     make_element_definition,
     make_list_definition,
@@ -120,45 +122,40 @@ def test_h7_delete_succeeds_when_unreferenced(db):
 def test_h8_column_value_type_change_clears_stale_entry_values(db):
     tenant = make_tenant(db)
     definition = make_list_definition(
-        db, tenant.id, column_one_value_type="text", column_two_value_type="text"
+        db, tenant.id, first_type="text", second_type="text"
     )
     entry = make_list_entry(
         db,
         definition.id,
-        column_one_value={"text_value": "Hello"},
-        column_two_value={"text_value": "Untouched"},
+        first_value={"text_value": "Hello"},
+        second_value={"text_value": "Untouched"},
     )
 
     service = ListService()
-    service.update_definition(
-        db, definition.id, ListDefinitionUpdate(column_one_value_type="participant")
-    )
+    first = list_columns.columns_of(definition)[0]
+    service.update_column(db, definition, first, ListColumnUpdate(value_type="participant"))
 
     db.expire_all()
     refreshed_entry = db.get(ListEntry, entry.id)
-    # The old text-shaped value must not survive under the new participant-typed column.
-    assert refreshed_entry.column_one_value_json == {}
-    assert "text_value" not in refreshed_entry.column_one_value_json
-    # column_two's value_type was untouched, so its value must be left alone.
-    assert refreshed_entry.column_two_value_json == {"text_value": "Untouched"}
-
     refreshed_definition = db.get(ListDefinition, definition.id)
-    assert refreshed_definition.column_one_value_type == "participant"
+    # The old text-shaped value must not survive under the new participant-typed column.
+    assert entry_value(refreshed_entry, refreshed_definition, 0) == {}
+    # The second column's value_type was untouched, so its value must be left alone.
+    assert entry_value(refreshed_entry, refreshed_definition, 1) == {"text_value": "Untouched"}
+    assert list_columns.columns_of(refreshed_definition)[0].value_type == "participant"
 
 
 def test_h8_column_value_type_unchanged_leaves_entries_untouched(db):
     tenant = make_tenant(db)
-    definition = make_list_definition(db, tenant.id, column_one_value_type="text")
-    entry = make_list_entry(db, definition.id, column_one_value={"text_value": "Hello"})
+    definition = make_list_definition(db, tenant.id, first_type="text")
+    entry = make_list_entry(db, definition.id, first_value={"text_value": "Hello"})
 
     service = ListService()
     # Setting the same value_type again (a no-op change) must not clear the value.
-    service.update_definition(
-        db, definition.id, ListDefinitionUpdate(column_one_value_type="text")
-    )
+    service.update_column(db, definition, list_columns.columns_of(definition)[0], ListColumnUpdate(value_type="text"))
 
     refreshed_entry = db.get(ListEntry, entry.id)
-    assert refreshed_entry.column_one_value_json == {"text_value": "Hello"}
+    assert entry_value(refreshed_entry, definition, 0) == {"text_value": "Hello"}
 
 
 # --- H9: Deleted source list never marked as deleted in table-block mode --------------
@@ -167,7 +164,7 @@ def test_h8_column_value_type_unchanged_leaves_entries_untouched(db):
 def test_h9_deleted_source_list_marks_entry_exists_false_in_table_block(db):
     tenant = make_tenant(db)
     definition = make_list_definition(db, tenant.id)
-    make_list_entry(db, definition.id, column_one_value={"text_value": "a"})
+    make_list_entry(db, definition.id, first_value={"text_value": "a"})
     template = make_template(db, tenant.id)
     protocol = make_protocol(db, tenant.id, template.id)
     element = make_protocol_element(db, protocol.id)

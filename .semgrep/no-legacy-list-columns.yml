@@ -1,0 +1,28 @@
+# Listen mit dynamischen Spalten (Migrationen 0186/0187): die festen Spaltennamen der alten Listen
+# kennt nur noch der v1-Adapter (backend/app/services/list_legacy_adapter.py), die Umstellung der
+# Konfigurationen (list_column_migration.py) und die Migrationen. Kein anderer Code prüft auf
+# einen bestimmten Spalten-Key oder leitet aus ihm Position oder Bedeutung ab - Spalten werden
+# über list_columns.py gelesen, Bedeutung kommt aus den Rollen der Liste.
+# CI: .github/workflows/ci.yml (Job tenant-scope-lint). Lokal:
+#   semgrep scan --config .semgrep/no-legacy-list-columns.yml backend/app frontend
+rules:
+  - id: no-legacy-list-columns
+    languages: [python, typescript]
+    severity: ERROR
+    message: >-
+      Feste Listenspalte (column_one/column_two): Spalten über list_columns.py bzw. die Spalten der
+      Liste lesen; alte Daten übersetzt nur list_legacy_adapter.py.
+    patterns:
+      - pattern: '"$TEXT"'
+      - metavariable-regex:
+          metavariable: $TEXT
+          regex: '(?<![\w-])column_(one|two)(_|$)'
+    paths:
+      exclude:
+        - backend/app/services/list_legacy_adapter.py
+        - backend/app/services/list_column_migration.py
+        - backend/alembic/versions/
+        - backend/tests/
+        - "*.test.ts"
+        - "*.test.tsx"
+        - frontend/e2e/

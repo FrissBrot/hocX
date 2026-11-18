@@ -57,7 +57,7 @@
   "formModal": {
     "createTitle": "Crea lista",
     "editTitle": "Modifica lista",
-    "description": "Ogni lista ha esattamente due colonne. Il tipo di dato determina quale input sarà visibile in seguito nel blocco tabella e nel verbale.",
+    "description": "Un elenco ha una o più colonne. Il tipo di dati determina quale campo appare poi nel blocco tabella e nel verbale.",
     "name": "Nome lista",
     "active": "Attivo",
     "description2": "Descrizione",
@@ -71,7 +71,7 @@
     "namePlaceholder": "ad es. Incarichi",
     "optional": "facoltativo",
     "columns": "Colonne",
-    "columnsHint": "Sempre due – titolo e tipo di dati a scelta.",
+    "columnsHint": "Fino a 20 colonne – titolo, tipo di dati e ordine a scelta.",
     "preview": "Anteprima della lista nel blocco tabella",
     "cancel": "Annulla",
     "groupSource": "Fonte delle statistiche dei gruppi"
@@ -178,5 +178,27 @@
   "usage": {
     "element": "blocco «{name}»",
     "protocol": "verbale {number}"
+  },
+  "columns": {
+    "add": "Aggiungi colonna",
+    "newTitle": "Colonna {number}",
+    "titleLabel": "Titolo della colonna {number}",
+    "typeLabel": "Tipo di dati della colonna {number}",
+    "moveUp": "Sposta «{title}» in su",
+    "moveDown": "Sposta «{title}» in giù",
+    "remove": "Rimuovi «{title}»",
+    "limit": "Al massimo {max} colonne.",
+    "typeChangeHint": "Nuovo tipo di dati: i valori attuali di questa colonna vengono cancellati al salvataggio.",
+    "typeChangeConfirm": "Cambiare il tipo di dati di: {titles}. I valori attuali di queste colonne vengono cancellati in tutte le voci.",
+    "typeChangeLabel": "Cambia tipo",
+    "deleteConfirm": "Eliminare la colonna «{title}» con tutti i valori?",
+    "deleteConfirmUsed": "La colonna «{title}» è ancora usata: {places}. Raggruppamento, ordinamento o filtri lì decadono. Eliminarla comunque con tutti i valori?",
+    "deleteLabel": "Elimina colonna",
+    "roleLabel": "Designazione",
+    "roleLabelHelp": "Dà il nome a una voce: titolo in consegne, matrice e statistiche dei gruppi.",
+    "roleResponsible": "Responsabili",
+    "roleResponsibleHelp": "Colonna di persone per incarichi, consegne e indicazione dei responsabili.",
+    "roleNone": "Nessuna",
+    "count": "{count, plural, one {# colonna} other {# colonne}}"
   }
 }
