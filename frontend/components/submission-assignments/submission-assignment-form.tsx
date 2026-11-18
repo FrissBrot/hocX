@@ -8,7 +8,7 @@ import { DateInput } from "@/components/ui/date-input";
 import { HelpPopover } from "@/components/ui/help-popover";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { ActionIcon } from "@/components/ui/action-icons";
-import { SearchableSelect } from "@/components/ui/searchable-select";
+import { SearchableMultiSelect, SearchableSelect } from "@/components/ui/searchable-select";
 import { formatDate, formatDateInputValue } from "@/lib/utils/format";
 import {
   CycleConfigSummary,
@@ -16,6 +16,7 @@ import {
   SubmissionAssignment,
   SubmissionAutoClose,
   SubmissionLink,
+  SubmissionReviewerCandidate,
   SubmissionSortOrder,
   SubmissionSourceType,
 } from "@/types/api";
@@ -45,6 +46,8 @@ export type FormState = {
   owner_access_days: number | "";
   owner_resubmit_only_personal: boolean;
   link_ids: string[];
+  /** Prüfer (Konten mit Login, Migration 0195) */
+  reviewer_ids: string[];
 };
 
 export const initialForm: FormState = {
@@ -71,6 +74,7 @@ export const initialForm: FormState = {
   owner_access_days: 30,
   owner_resubmit_only_personal: false,
   link_ids: [],
+  reviewer_ids: [],
 };
 
 type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
@@ -156,6 +160,7 @@ export function formFromAssignment(assignment: SubmissionAssignment): FormState 
     owner_access_days: assignment.owner_access_days ?? 30,
     owner_resubmit_only_personal: assignment.owner_resubmit_only_personal ?? false,
     link_ids: assignment.link_ids,
+    reviewer_ids: assignment.reviewer_ids ?? [],
   };
 }
 
@@ -187,6 +192,7 @@ export function assignmentPayload(form: FormState) {
     owner_access_days: form.owner_access_days === "" ? 30 : Math.min(90, Math.max(1, Math.round(Number(form.owner_access_days)))),
     owner_resubmit_only_personal: form.owner_access === "manage" && form.owner_resubmit_only_personal,
     link_ids: form.link_ids,
+    reviewer_ids: form.reviewer_ids,
   };
 }
 
@@ -345,6 +351,8 @@ type Props = {
   availableCycleConfigs: CycleConfigSummary[];
   /** Termine für das Beispiel zum Zeitfenster (optional). */
   availableEvents?: (ExampleEvent & { tag: string | null })[];
+  /** Wählbare Prüfer (aktive Konten mit Login, Migration 0195) */
+  availableReviewers?: SubmissionReviewerCandidate[];
   onSubmit: () => void | Promise<void>;
   onClose: () => void;
   onManageLinks: () => void;
@@ -361,6 +369,7 @@ export function SubmissionAssignmentFormModal({
   availableTags,
   availableCycleConfigs,
   availableEvents = [],
+  availableReviewers = [],
   onSubmit,
   onClose,
   onManageLinks,
@@ -869,6 +878,20 @@ export function SubmissionAssignmentFormModal({
                 </>
               )}
             </div>
+
+            <label className="field-stack">
+              <span className="field-label">{t("reviewers.label")}</span>
+              <SearchableMultiSelect
+                options={availableReviewers}
+                getId={(reviewer) => reviewer.id}
+                getLabel={(reviewer) => reviewer.display_name}
+                values={form.reviewer_ids}
+                onChange={(ids) => setForm((c) => ({ ...c, reviewer_ids: ids }))}
+                emptySelectionLabel={t("reviewers.none")}
+                emptyLabel={t("reviewers.noCandidates")}
+              />
+              <span className="field-help">{t("reviewers.help")}</span>
+            </label>
           </aside>
         </div>
 

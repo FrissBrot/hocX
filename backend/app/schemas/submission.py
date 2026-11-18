@@ -53,6 +53,8 @@ class SubmissionAssignmentCreate(SubmissionAssignmentBase):
     # Ueber welche Links die Abgabe erreichbar ist. None = die Standard-Links des Mandanten
     # (Verhalten fuer API-Clients ohne Link-Auswahl); [] = ueber keinen Link erreichbar.
     link_ids: list[uuid.UUID] | None = None
+    # Prüfer (Konten mit Login, Migration 0195); None/[] = keine
+    reviewer_ids: list[uuid.UUID] | None = Field(default=None, max_length=100)
 
 
 class SubmissionAssignmentUpdate(BaseModel):
@@ -79,6 +81,8 @@ class SubmissionAssignmentUpdate(BaseModel):
     owner_resubmit_only_personal: bool | None = None
     # None = Link-Zuordnung unveraendert lassen.
     link_ids: list[uuid.UUID] | None = None
+    # None = Prüfer unverändert lassen; [] = alle entfernen (Migration 0195)
+    reviewer_ids: list[uuid.UUID] | None = Field(default=None, max_length=100)
 
 
 class SubmissionAssignmentRead(PublicIdModel, SubmissionAssignmentBase):
@@ -88,10 +92,19 @@ class SubmissionAssignmentRead(PublicIdModel, SubmissionAssignmentBase):
     tenant_id: uuid.UUID
     public_slug: str
     link_ids: list[uuid.UUID] = Field(default_factory=list)
+    # Prüfer des Auftrags (öffentliche Konto-IDs, Migration 0195)
+    reviewer_ids: list[uuid.UUID] = Field(default_factory=list)
     # Alle Elemente abgegeben oder geschlossen (Reiter «Abgeschlossen», Migration 0182)
     completed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class SubmissionReviewerCandidate(BaseModel):
+    """Wählbarer Prüfer im Auftragsformular: aktives Konto mit Login des Mandanten."""
+
+    id: uuid.UUID
+    display_name: str
 
 
 class SubmissionLinkCreate(BaseModel):

@@ -5,37 +5,64 @@ import { redirect } from "next/navigation";
 import { SubmissionAssignmentManager } from "@/components/submission-assignments/submission-assignment-manager";
 import { AppShell } from "@/components/ui/app-shell";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
-import { CycleConfigSummary, EventSummary, ParticipantSummary, StructuredListDefinition, SubmissionAssignment, SubmissionLink } from "@/types/api";
+import {
+  CycleConfigSummary,
+  EventSummary,
+  ParticipantSummary,
+  StructuredListDefinition,
+  SubmissionAssignment,
+  SubmissionLink,
+  SubmissionReviewerCandidate,
+} from "@/types/api";
 import { can, featureAccess } from "@/lib/permissions";
 
 export default async function SubmissionAssignmentsPage({ searchParams }: { searchParams: Promise<{ assignment?: string }> }) {
   const session = await requireSession();
   // ?assignment=<public_id> öffnet die Abgabe direkt (Link aus der Dateiübersicht)
   const { assignment: initialAssignmentId } = await searchParams;
-  const canWrite = can(session, "submissions.manage");
+  // Lesen genügt (Prüfer, Plan «Berechtigungen» Phase 4); Verwalten und Prüfen schalten die Aktionen frei.
+  const canRead = can(session, "submissions.read");
+  const canManage = can(session, "submissions.manage");
+  const canReview = can(session, "submissions.review");
   const hasAbgabeboxFeature = featureAccess(session, "abgabebox") !== "none";
 
-  if (!canWrite || !hasAbgabeboxFeature) {
+  if (!canRead || !hasAbgabeboxFeature) {
     redirect("/");
   }
 
-  const [assignments, links, lists, events, participants, cycleConfigs] = await Promise.all([
+  // Links (mit Token) und Prüfer-Kandidaten nur für die Verwaltung; die übrigen Listen dienen der
+  // Anzeige (Quelle, Verantwortliche) und werden nur mit dem jeweiligen Leserecht geladen.
+  const [assignments, links, lists, events, participants, cycleConfigs, reviewerCandidates] = await Promise.all([
     backendFetchWithSession<SubmissionAssignment[]>("/api/submission-assignments"),
-    backendFetchWithSession<SubmissionLink[]>("/api/submission-links"),
-    backendFetchWithSession<StructuredListDefinition[]>("/api/lists"),
-    backendFetchWithSession<EventSummary[]>("/api/events"),
-    backendFetchWithSession<ParticipantSummary[]>("/api/participants?limit=500"),
-    backendFetchWithSession<CycleConfigSummary[]>("/api/cycle-configs"),
+    canManage ? backendFetchWithSession<SubmissionLink[]>("/api/submission-links") : Promise.resolve(null),
+    can(session, "meetings.edit") ? backendFetchWithSession<StructuredListDefinition[]>("/api/lists") : Promise.resolve(null),
+    can(session, "meetings.read") ? backendFetchWithSession<EventSummary[]>("/api/events") : Promise.resolve(null),
+    can(session, "participants.read") ? backendFetchWithSession<ParticipantSummary[]>("/api/participants?limit=500") : Promise.resolve(null),
+    can(session, "meetings.read") ? backendFetchWithSession<CycleConfigSummary[]>("/api/cycle-configs") : Promise.resolve(null),
+    canManage ? backendFetchWithSession<SubmissionReviewerCandidate[]>("/api/submission-assignments/reviewer-candidates") : Promise.resolve(null),
   ]);
+
+  const shared = {
+    initialAssignments: assignments ?? [],
+    initialLinks: links ?? [],
+    availableLists: lists ?? [],
+    availableEvents: events ?? [],
+    availableParticipants: participants ?? [],
+    availableCycleConfigs: cycleConfigs ?? [],
+    availableReviewers: reviewerCandidates ?? [],
+    tenantName: session.current_tenant?.name ?? null,
+    canManage,
+    canReview,
+  };
 
   return (
     <AppShell initialSession={session}>
       <ResponsiveView
-        mobile={<MobileSubmissions initialAssignments={assignments ?? []} initialLinks={links ?? []} availableLists={lists ?? []} availableEvents={events ?? []} availableParticipants={participants ?? []} availableCycleConfigs={cycleConfigs ?? []} tenantName={session.current_tenant?.name ?? null} />}
+        mobile={<MobileSubmissions {...shared} />}
         desktop={
           <>
           <section className="panel">
-            <SubmissionAssignmentManager initialAssignments={assignments ?? []} initialLinks={links ?? []} availableLists={lists ?? []} availableEvents={events ?? []} availableParticipants={participants ?? []} availableCycleConfigs={cycleConfigs ?? []} tenantName={session.current_tenant?.name ?? null} initialSelectedId={initialAssignmentId ?? null} />
+            <SubmissionAssignmentManager {...shared} initialSelectedId={initialAssignmentId ?? null} />
           </section>
           </>
         }

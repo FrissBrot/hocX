@@ -305,5 +305,15 @@
   },
   "completedBadge": "Completed",
   "completedEmpty": "No completed submissions yet. A submission is completed once all elements are submitted or closed.",
-  "openEmpty": "No open submissions."
+  "openEmpty": "No open submissions.",
+  "reviewers": {
+    "label": "Reviewers",
+    "none": "No reviewers",
+    "noCandidates": "No people with login",
+    "help": "People with login who may see and review this submission, even if their role only allows assigned submissions."
+  },
+  "readOnly": {
+    "emptyTitle": "No submissions",
+    "emptyDescription": "No submissions have been assigned to you yet."
+  }
 }

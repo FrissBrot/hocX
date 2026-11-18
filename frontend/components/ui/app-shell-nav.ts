@@ -77,7 +77,8 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
       titleKey: "groups.tasks",
       links: [
         { href: "/todos", labelKey: "todos", icon: "todos" },
-        ...(can(session, "submissions.manage") ? [{ href: "/submission-assignments", labelKey: "submissions", icon: "submissions" as const }] : []),
+        // Lesezugang für Prüfer und Leser (Phase 4); die Liste filtert das Backend nach Reichweite
+        ...(can(session, "submissions.read") ? [{ href: "/submission-assignments", labelKey: "submissions", icon: "submissions" as const }] : []),
       ],
       settings: managesTemplates ? { href: "/task-packages", labelKey: "taskPackages", icon: "cycles" } : undefined,
     },

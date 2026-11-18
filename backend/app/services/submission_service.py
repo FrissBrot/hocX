@@ -180,7 +180,7 @@ class SubmissionService:
     ) -> SubmissionAssignmentRead:
         self._validate_source_fields(payload)
         list_definition_id = self._resolve_list_definition_tenant(db, payload.list_definition_id, tenant_id=tenant_id)
-        values = payload.model_dump()
+        values = payload.model_dump(exclude={"reviewer_ids"})  # Prüfer setzt die Route (submission_reviewer_service)
         link_ids = values.pop("link_ids")
         values["list_definition_id"] = list_definition_id
         values["cycle_config_id"] = self._resolve_cycle_config_tenant(db, payload.cycle_config_id, tenant_id=tenant_id)
@@ -207,6 +207,7 @@ class SubmissionService:
         for key in ("owner_access", "owner_access_days", "owner_resubmit_only_personal"):
             if key in values and values[key] is None:
                 values.pop(key)  # null = unverändert (Spalten sind NOT NULL)
+        values.pop("reviewer_ids", None)  # Prüfer setzt die Route (submission_reviewer_service)
         link_ids = values.pop("link_ids", None)
         if link_ids is not None:
             assignment.links = submission_link_service.resolve_links(db, link_ids, tenant_id=assignment.tenant_id)

@@ -14,7 +14,8 @@ import { browserApiFetch } from "@/lib/api/client";
 import { apiErrorMessage } from "@/lib/api/error-message";
 import { HelpPopover } from "@/components/ui/help-popover";
 import { roleNeedsMfa } from "@/components/users/access-helpers";
-import { expandPermissions, minimalPermissions, roleName } from "@/lib/permissions";
+import { Select } from "@/components/ui/select";
+import { SCOPED_PERMISSIONS, expandPermissions, minimalPermissions, resolveScopes, roleName, type PermissionScope } from "@/lib/permissions";
 import { PERMISSION_AREAS, PERMISSIONS, type PermissionKey } from "@/lib/permissions.generated";
 import type { RoleRead } from "@/types/api";
 
@@ -22,6 +23,8 @@ type Props = {
   initialRoles: RoleRead[];
   // Eigene effektive Berechtigungen: nur diese lassen sich vergeben (keine Rechteausweitung).
   actorPermissions: string[];
+  // Eigene Rechte, die nur für zugewiesene Objekte gelten: diese lassen sich nicht «für alle» vergeben.
+  actorAssignedOnly?: string[];
   enabledFeatures: string[];
   // Eigene Rollen anlegen/ändern (Abo-Feature custom_roles); sonst nur ansehen und zuweisen
   canCustomize: boolean;
@@ -29,12 +32,17 @@ type Props = {
   initialRoleId?: string | null;
 };
 
+// Ausdrücklich gewählte Reichweite je Recht mit Reichweite
+type ScopeMap = Partial<Record<PermissionKey, PermissionScope>>;
+
 type RoleForm = {
   id?: string;
   name: string;
   description: string;
   // Explizit gewählte Berechtigungen; Implikationen setzt das Formular selbst.
   selected: Set<PermissionKey>;
+  // Ausdrücklich gewählte Reichweiten (Migration 0195); implizierte Rechte erben sonst.
+  scopes: ScopeMap;
   systemKey: RoleRead["system_key"];
   locked: boolean;
   // MFA für alle Konten mit dieser Rolle (Migration 0192)
@@ -56,12 +64,27 @@ function RoleBadge({ role }: { role: RoleRead }) {
 }
 
 function emptyForm(): RoleForm {
-  return { name: "", description: "", selected: new Set(), systemKey: null, locked: false, requireMfa: false };
+  return { name: "", description: "", selected: new Set(), scopes: {}, systemKey: null, locked: false, requireMfa: false };
+}
+
+/** Ausdrückliche Reichweiten für das Formular: die der gewählten Rechte, dazu die eines
+ * implizierten Rechts nur, wo sie von der geerbten abweicht (sonst ginge z. B. «Abgaben ansehen:
+ * alle» neben «Abgaben prüfen: nur zugewiesene» beim Öffnen verloren). */
+function explicitScopes(selected: Set<PermissionKey>, stored: RoleRead["scopes"]): ScopeMap {
+  const scopes: ScopeMap = {};
+  for (const [key, value] of Object.entries(stored ?? {})) {
+    if (selected.has(key as PermissionKey)) scopes[key as PermissionKey] = value;
+  }
+  const inherited = resolveScopes(selected, scopes);
+  for (const [key, value] of Object.entries(stored ?? {})) {
+    if (inherited.get(key as PermissionKey) !== value) scopes[key as PermissionKey] = value;
+  }
+  return scopes;
 }
 
 /** Rollen des Mandanten: anlegen, benennen, Berechtigungen zuordnen, löschen. Die Bereiche sind
  * nur Anzeige-Kategorien (permissions/catalog.json), keine eigenen Objekte. */
-export function RoleManagement({ initialRoles, actorPermissions, enabledFeatures, canCustomize, initialRoleId = null }: Props) {
+export function RoleManagement({ initialRoles, actorPermissions, actorAssignedOnly = [], enabledFeatures, canCustomize, initialRoleId = null }: Props) {
   const t = useTranslations("roles");
   const tNav = useTranslations("nav");
   const tUsers = useTranslations("users");
@@ -72,17 +95,24 @@ export function RoleManagement({ initialRoles, actorPermissions, enabledFeatures
   const [form, setForm] = useState<RoleForm | null>(null);
   const [saving, setSaving] = useState(false);
   const own = useMemo(() => new Set(actorPermissions), [actorPermissions]);
+  const ownAssignedOnly = useMemo(() => new Set(actorAssignedOnly), [actorAssignedOnly]);
 
   const effective = form ? expandPermissions(form.selected) : new Set<PermissionKey>();
-  const exceedsOwn = form ? [...effective].some((key) => !own.has(key)) : false;
+  const scopes = form ? resolveScopes(form.selected, form.scopes) : new Map<PermissionKey, PermissionScope>();
+  // Keine Rechteausweitung, auch nicht über die Reichweite (Backend: role_service._ensure_subset)
+  const exceedsOwn = form
+    ? [...effective].some((key) => !own.has(key) || (ownAssignedOnly.has(key) && scopes.get(key) === "all"))
+    : false;
   const nameMissing = !!form && !form.systemKey && form.name.trim() === "";
 
   function openRole(role: RoleRead) {
+    const selected = minimalPermissions(role.permissions);
     setForm({
       id: role.id,
       name: role.name ?? "",
       description: role.description ?? "",
-      selected: minimalPermissions(role.permissions),
+      selected,
+      scopes: explicitScopes(selected, role.scopes),
       systemKey: role.system_key,
       locked: role.locked || !canCustomize,
       requireMfa: Boolean(role.require_mfa),
@@ -105,8 +135,16 @@ export function RoleManagement({ initialRoles, actorPermissions, enabledFeatures
       const selected = new Set(current.selected);
       if (checked) selected.add(key);
       else selected.delete(key);
-      return { ...current, selected: minimalPermissions(selected) };
+      // Wer ein Recht selbst nur für zugewiesene hat, vergibt es standardmässig ebenso
+      const scopes = checked && SCOPED_PERMISSIONS.has(key) && ownAssignedOnly.has(key) && !current.scopes[key]
+        ? { ...current.scopes, [key]: "assigned" as PermissionScope }
+        : current.scopes;
+      return { ...current, selected: minimalPermissions(selected), scopes };
     });
+  }
+
+  function setScope(key: PermissionKey, scope: PermissionScope) {
+    setForm((current) => (current ? { ...current, scopes: { ...current.scopes, [key]: scope } } : current));
   }
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -117,6 +155,8 @@ export function RoleManagement({ initialRoles, actorPermissions, enabledFeatures
       name: form.name.trim(),
       description: form.description.trim() || null,
       permissions: [...form.selected],
+      // Aufgelöste Reichweite aller Rechte mit Reichweite der Rolle (eindeutig, auch für implizierte)
+      scopes: Object.fromEntries(scopes),
       require_mfa: form.requireMfa,
     });
     try {
@@ -239,8 +279,14 @@ export function RoleManagement({ initialRoles, actorPermissions, enabledFeatures
                       const checked = form.locked || effective.has(permission.key);
                       const disabled = form.locked || implied || (!checked && !own.has(permission.key));
                       const impliers = (IMPLIED_BY.get(permission.key) ?? []).filter((key) => form.selected.has(key));
+                      const scoped = SCOPED_PERMISSIONS.has(permission.key) && checked;
+                      // Ein implizierendes Recht mit «alle» lässt sich hier nicht einschränken
+                      const scopeFixed = (IMPLIED_BY.get(permission.key) ?? []).some(
+                        (key) => effective.has(key) && (!SCOPED_PERMISSIONS.has(key) || scopes.get(key) === "all"),
+                      );
                       return (
-                        <label key={permission.key} className="roles-permission-option">
+                        <div key={permission.key} className="roles-permission-entry">
+                        <label className="roles-permission-option">
                           <input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => toggle(permission.key, event.target.checked)} />
                           <span className="roles-checklist-text">
                             <span className="roles-checklist-name">
@@ -255,6 +301,21 @@ export function RoleManagement({ initialRoles, actorPermissions, enabledFeatures
                             ) : null}
                           </span>
                         </label>
+                        {scoped ? (
+                          <label className="field-stack roles-scope-field">
+                            <span className="field-label">{t("scopes.label")}</span>
+                            <Select
+                              value={scopes.get(permission.key) ?? "all"}
+                              disabled={form.locked || scopeFixed}
+                              onChange={(event) => setScope(permission.key, event.target.value as PermissionScope)}
+                            >
+                              <option value="all" disabled={ownAssignedOnly.has(permission.key)}>{t("scopes.all")}</option>
+                              <option value="assigned">{t("scopes.assigned")}</option>
+                            </Select>
+                            {scopeFixed ? <span className="field-help">{t("scopes.fixedHelp")}</span> : null}
+                          </label>
+                        ) : null}
+                        </div>
                       );
                     })}
                   </fieldset>

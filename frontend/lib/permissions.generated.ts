@@ -5,6 +5,7 @@ export type PermissionKey = "meetings.read" | "meetings.read_drafts" | "meetings
 export type PermissionArea = "meetings" | "templates" | "participants" | "finances" | "reports" | "files" | "submissions" | "administration";
 export type PermissionFeature = "finance" | "abgabebox" | "custom_domain" | "verify_domain" | "task_packages" | "custom_roles" | "photo_sharing" | "document_designer" | "todo_fines";
 export type SystemRoleKey = "admin" | "writer" | "kassier" | "reader";
+export type PermissionScope = "all" | "assigned";
 
 export type PermissionInfo = {
   key: PermissionKey;
@@ -12,38 +13,40 @@ export type PermissionInfo = {
   feature: PermissionFeature | null;
   requiresMfa: boolean;
   implies: PermissionKey[];
+  /** Mögliche Reichweiten ("all" zuerst = Standard); leer = Recht ohne Reichweite. */
+  scopes: PermissionScope[];
 };
 
 export const PERMISSION_AREAS: readonly PermissionArea[] = ["meetings", "templates", "participants", "finances", "reports", "files", "submissions", "administration"];
 
 export const PERMISSIONS: readonly PermissionInfo[] = [
-  { key: "meetings.read", area: "meetings", feature: null, requiresMfa: false, implies: [] },
-  { key: "meetings.read_drafts", area: "meetings", feature: null, requiresMfa: false, implies: ["meetings.read"] },
-  { key: "meetings.edit", area: "meetings", feature: null, requiresMfa: false, implies: ["meetings.read_drafts"] },
-  { key: "meetings.approve", area: "meetings", feature: null, requiresMfa: false, implies: ["meetings.read_drafts"] },
-  { key: "todos.complete_own", area: "meetings", feature: null, requiresMfa: false, implies: [] },
-  { key: "templates.edit", area: "templates", feature: null, requiresMfa: false, implies: ["meetings.read"] },
-  { key: "templates.manage", area: "templates", feature: null, requiresMfa: false, implies: ["templates.edit"] },
-  { key: "participants.read", area: "participants", feature: null, requiresMfa: false, implies: [] },
-  { key: "participants.contacts", area: "participants", feature: null, requiresMfa: false, implies: ["participants.read"] },
-  { key: "participants.manage", area: "participants", feature: null, requiresMfa: false, implies: ["participants.contacts"] },
-  { key: "participants.export", area: "participants", feature: null, requiresMfa: true, implies: ["participants.read"] },
-  { key: "finances.read", area: "finances", feature: "finance", requiresMfa: false, implies: [] },
-  { key: "finances.manage", area: "finances", feature: "finance", requiresMfa: false, implies: ["finances.read"] },
-  { key: "fines.manage", area: "finances", feature: "finance", requiresMfa: false, implies: ["finances.read"] },
-  { key: "reports.personal", area: "reports", feature: null, requiresMfa: false, implies: [] },
-  { key: "files.read", area: "files", feature: null, requiresMfa: false, implies: [] },
-  { key: "files.manage", area: "files", feature: null, requiresMfa: false, implies: ["files.read"] },
-  { key: "photos.read", area: "files", feature: null, requiresMfa: false, implies: [] },
-  { key: "photos.manage", area: "files", feature: null, requiresMfa: false, implies: ["photos.read"] },
-  { key: "sharing.public", area: "files", feature: null, requiresMfa: false, implies: [] },
-  { key: "submissions.read", area: "submissions", feature: "abgabebox", requiresMfa: false, implies: [] },
-  { key: "submissions.review", area: "submissions", feature: "abgabebox", requiresMfa: false, implies: ["submissions.read"] },
-  { key: "submissions.manage", area: "submissions", feature: "abgabebox", requiresMfa: false, implies: ["submissions.read"] },
-  { key: "settings.manage", area: "administration", feature: null, requiresMfa: true, implies: [] },
-  { key: "activity.read", area: "administration", feature: null, requiresMfa: true, implies: [] },
-  { key: "access.manage", area: "administration", feature: null, requiresMfa: true, implies: [] },
-  { key: "data.export", area: "administration", feature: null, requiresMfa: true, implies: [] },
+  { key: "meetings.read", area: "meetings", feature: null, requiresMfa: false, implies: [], scopes: [] },
+  { key: "meetings.read_drafts", area: "meetings", feature: null, requiresMfa: false, implies: ["meetings.read"], scopes: [] },
+  { key: "meetings.edit", area: "meetings", feature: null, requiresMfa: false, implies: ["meetings.read_drafts"], scopes: [] },
+  { key: "meetings.approve", area: "meetings", feature: null, requiresMfa: false, implies: ["meetings.read_drafts"], scopes: [] },
+  { key: "todos.complete_own", area: "meetings", feature: null, requiresMfa: false, implies: [], scopes: [] },
+  { key: "templates.edit", area: "templates", feature: null, requiresMfa: false, implies: ["meetings.read"], scopes: [] },
+  { key: "templates.manage", area: "templates", feature: null, requiresMfa: false, implies: ["templates.edit"], scopes: [] },
+  { key: "participants.read", area: "participants", feature: null, requiresMfa: false, implies: [], scopes: [] },
+  { key: "participants.contacts", area: "participants", feature: null, requiresMfa: false, implies: ["participants.read"], scopes: [] },
+  { key: "participants.manage", area: "participants", feature: null, requiresMfa: false, implies: ["participants.contacts"], scopes: [] },
+  { key: "participants.export", area: "participants", feature: null, requiresMfa: true, implies: ["participants.read"], scopes: [] },
+  { key: "finances.read", area: "finances", feature: "finance", requiresMfa: false, implies: [], scopes: [] },
+  { key: "finances.manage", area: "finances", feature: "finance", requiresMfa: false, implies: ["finances.read"], scopes: [] },
+  { key: "fines.manage", area: "finances", feature: "finance", requiresMfa: false, implies: ["finances.read"], scopes: [] },
+  { key: "reports.personal", area: "reports", feature: null, requiresMfa: false, implies: [], scopes: [] },
+  { key: "files.read", area: "files", feature: null, requiresMfa: false, implies: [], scopes: [] },
+  { key: "files.manage", area: "files", feature: null, requiresMfa: false, implies: ["files.read"], scopes: [] },
+  { key: "photos.read", area: "files", feature: null, requiresMfa: false, implies: [], scopes: [] },
+  { key: "photos.manage", area: "files", feature: null, requiresMfa: false, implies: ["photos.read"], scopes: [] },
+  { key: "sharing.public", area: "files", feature: null, requiresMfa: false, implies: [], scopes: [] },
+  { key: "submissions.read", area: "submissions", feature: "abgabebox", requiresMfa: false, implies: [], scopes: ["all", "assigned"] },
+  { key: "submissions.review", area: "submissions", feature: "abgabebox", requiresMfa: false, implies: ["submissions.read"], scopes: ["all", "assigned"] },
+  { key: "submissions.manage", area: "submissions", feature: "abgabebox", requiresMfa: false, implies: ["submissions.read"], scopes: [] },
+  { key: "settings.manage", area: "administration", feature: null, requiresMfa: true, implies: [], scopes: [] },
+  { key: "activity.read", area: "administration", feature: null, requiresMfa: true, implies: [], scopes: [] },
+  { key: "access.manage", area: "administration", feature: null, requiresMfa: true, implies: [], scopes: [] },
+  { key: "data.export", area: "administration", feature: null, requiresMfa: true, implies: [], scopes: [] },
 ];
 
 export const PERMISSION_KEYS: readonly PermissionKey[] = PERMISSIONS.map((permission) => permission.key);

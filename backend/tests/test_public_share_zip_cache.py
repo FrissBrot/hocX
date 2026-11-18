@@ -83,7 +83,7 @@ def test_submission_zip_is_built_on_disk_not_in_memory(monkeypatch, tmp_path, db
     from tests.factories import make_current_user
 
     monkeypatch.setattr(routes.settings, "upload_root", str(tmp_path))
-    monkeypatch.setattr(routes, "_get_assignment_or_404", lambda db, assignment_id, user: SimpleNamespace(id=1, title="Sommerlager Fotos"))
+    monkeypatch.setattr(routes, "_get_readable_assignment_or_404", lambda db, assignment_id, user: SimpleNamespace(id=1, title="Sommerlager Fotos"))
     monkeypatch.setattr(routes.service, "get_assignment_elements", lambda db, assignment: [])
     response = routes.download_all_files_zip(uuid.uuid4(), db=db, user=make_current_user(1, role="admin"))
     assert isinstance(response, FileResponse)

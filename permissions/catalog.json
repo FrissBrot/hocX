@@ -180,6 +180,10 @@
       "area": "submissions",
       "feature": "abgabebox",
       "requires_mfa": false,
+      "scopes": [
+        "all",
+        "assigned"
+      ],
       "implies": []
     },
     {
@@ -187,6 +191,10 @@
       "area": "submissions",
       "feature": "abgabebox",
       "requires_mfa": false,
+      "scopes": [
+        "all",
+        "assigned"
+      ],
       "implies": [
         "submissions.read"
       ]

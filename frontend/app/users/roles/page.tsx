@@ -29,6 +29,7 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
         <RoleManagement
           initialRoles={roles ?? []}
           actorPermissions={session.permissions ?? []}
+          actorAssignedOnly={session.assigned_only ?? []}
           enabledFeatures={session.current_tenant?.enabled_features ?? []}
           canCustomize={customRoles === "full"}
           initialRoleId={role ?? null}

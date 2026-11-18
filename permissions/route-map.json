@@ -2480,11 +2480,17 @@
     "GET /api/submission-assignments": {
       "handler": "submission_assignments.list_assignments",
       "requires": [
-        "submissions.manage"
+        "submissions.read"
       ]
     },
     "POST /api/submission-assignments": {
       "handler": "submission_assignments.create_assignment",
+      "requires": [
+        "submissions.manage"
+      ]
+    },
+    "GET /api/submission-assignments/reviewer-candidates": {
+      "handler": "submission_assignments.list_reviewer_candidates",
       "requires": [
         "submissions.manage"
       ]

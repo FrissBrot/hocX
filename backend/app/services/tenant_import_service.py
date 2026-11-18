@@ -636,6 +636,7 @@ class TenantImportService:
                 description=row.get("description"),
                 permissions=row.get("permissions") or [],
                 require_mfa=bool(row.get("require_mfa")),
+                scopes=row.get("permission_scopes") or {},
             )
             self._role_map[row["id"]] = role.id
         self.db.commit()

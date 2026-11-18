@@ -17,7 +17,7 @@ from app.core.config import settings
 from app.core.db import get_db
 from app.core.locale_config_generated import LOCALE_COOKIE_NAME, normalize_locale
 from app.core.mfa_policy import account_requires_mfa, mfa_grace_until
-from app.core.permissions import CATALOG, P, effective_permissions
+from app.core.permissions import CATALOG, P, assigned_only_permissions, effective_permissions
 from app.core.features_generated import FEATURES
 from app.core.tenant_mfa import tenant_requires_mfa
 from app.core.tenant_scope import bind_tenant_scope
@@ -65,6 +65,9 @@ class CurrentUser:
     # Implikationen, bei jedem Request frisch aus user_role/tenant_role geladen - Rollenänderungen
     # wirken damit sofort, auch in laufenden Sessions. Leer = default deny.
     permissions: frozenset[str] = frozenset()
+    # Rechte mit Reichweite, die das Konto über keine Rolle für alle hat (Migration 0195): für sie
+    # gelten nur zugewiesene Objekte (resource_assignment). Leer = überall «alle» (bisher).
+    assigned_only: frozenset[str] = frozenset()
     # Interne IDs der zugewiesenen tenant_role-Zeilen (für die Schutzregeln der Rollenverwaltung).
     role_ids: tuple[int, ...] = ()
     # Anzeige in der Session (Name bzw. system_key der Standardrolle).
@@ -78,6 +81,11 @@ class CurrentUser:
         if definition.feature is not None and not self.has_feature(definition.feature, write=permission not in FEATURES[definition.feature].read_permissions):
             return False
         return permission in self.permissions
+
+    def sees_all(self, permission: P) -> bool:
+        """Reichweite «alle» für ein Recht mit Reichweite (sonst nur zugewiesene Objekte). Prüft
+        nicht, ob das Recht vorhanden ist - dafür require_permission/can."""
+        return permission.value not in self.assigned_only
 
     def has_feature(self, code: str, *, write: bool = True) -> bool:
         """Feature gebucht; ``write=False`` lässt auch den Nur-Lesen-Zustand nach einem Downgrade zu."""
@@ -201,7 +209,10 @@ def parse_session_token(token: str | None) -> dict | None:
 
 def _load_role_rows(db: Session, user_id: int):
     return db.execute(
-        select(TenantRole.id, TenantRole.public_id, TenantRole.name, TenantRole.system_key, TenantRolePermission.permission_key)
+        select(
+            TenantRole.id, TenantRole.public_id, TenantRole.name, TenantRole.system_key,
+            TenantRolePermission.permission_key, TenantRolePermission.scope,
+        )
         .select_from(UserRole)
         .join(TenantRole, TenantRole.id == UserRole.role_id)
         .outerjoin(TenantRolePermission, TenantRolePermission.role_id == TenantRole.id)
@@ -214,6 +225,21 @@ def _effective(rows) -> frozenset[str]:
         (row.permission_key for row in rows if row.permission_key is not None),
         (row.system_key for row in rows),
     ))
+
+
+def _assigned_only(rows) -> frozenset[str]:
+    roles: dict[int, tuple[str | None, list[tuple[str, str | None]]]] = {}
+    for row in rows:
+        entry = roles.setdefault(row.id, (row.system_key, []))
+        if row.permission_key is not None:
+            entry[1].append((row.permission_key, row.scope))
+    return frozenset(str(key) for key in assigned_only_permissions(roles.values()))
+
+
+def load_role_scopes(db: Session, user_id: int) -> frozenset[str]:
+    """Rechte mit Reichweite, die das Konto nur für zugewiesene Objekte hat (Schutzregel 1 der
+    Rollenverwaltung: keine Ausweitung von «zugewiesene» auf «alle»)."""
+    return _assigned_only(_load_role_rows(db, user_id))
 
 
 def load_role_permissions(db: Session, user_id: int) -> tuple[frozenset[str], tuple[int, ...]]:
@@ -249,6 +275,7 @@ def build_current_user(db: Session, user: AppUser, *, mfa_verified: bool = False
         current_tenant_features=tenant_features,
         current_tenant_read_only_features=read_only_features,
         permissions=_effective(rows),
+        assigned_only=_assigned_only(rows),
         role_ids=tuple(sorted(summaries)),
         roles=tuple(summaries[role_id] for role_id in sorted(summaries)),
     )

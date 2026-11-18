@@ -37,6 +37,7 @@ import {
   SubmissionElementStatusEntry,
   SubmissionFile,
   SubmissionLink,
+  SubmissionReviewerCandidate,
   SubmissionUploadLogEntry,
 } from "@/types/api";
 
@@ -104,6 +105,12 @@ type Props = {
   tenantName?: string | null;
   /** Öffnet diese Abgabe beim Laden (``?assignment=`` aus der Dateiübersicht). */
   initialSelectedId?: string | null;
+  /** Wählbare Prüfer (Konten mit Login, nur mit submissions.manage geladen) */
+  availableReviewers?: SubmissionReviewerCandidate[];
+  /** submissions.manage: Aufträge, Links, Dateien verwalten. Ohne: nur lesen (Prüfer, Phase 4) */
+  canManage?: boolean;
+  /** submissions.review: Elemente schliessen und wieder öffnen */
+  canReview?: boolean;
 };
 
 function statusLabel(element: SubmissionElementStatusEntry, t: TFunc): string {
@@ -280,7 +287,7 @@ function VerifiedIcon() {
   );
 }
 
-export function SubmissionAssignmentManager({ initialAssignments, initialLinks, availableLists, availableEvents, availableParticipants, availableCycleConfigs, tenantName = null, initialSelectedId = null }: Props) {
+export function SubmissionAssignmentManager({ initialAssignments, initialLinks, availableLists, availableEvents, availableParticipants, availableCycleConfigs, tenantName = null, initialSelectedId = null, availableReviewers = [], canManage = true, canReview = true }: Props) {
   const t = useTranslations("submissionAssignments");
   const locale = useLocale();
   const tHelp = useTranslations("common.help");
@@ -435,7 +442,8 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
     try {
       const data = await refreshElements(assignmentId);
       const hasPending = data.some((el) => el.files.some((f) => f.scan_status === "pending"));
-      if (hasPending) {
+      // Nachscannen ist eine Verwaltungsaktion (POST …/rescan-pending verlangt submissions.manage)
+      if (hasPending && canManage) {
         scheduleAutoRescan(assignmentId, 5000);
       }
     } catch (error) {
@@ -673,10 +681,12 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
             <span className="subm-clamav-dot" />
             {clamavStatus === "online" ? t("clamavActive") : clamavStatus === "offline" ? t("clamavOffline") : t("clamavChecking")}
           </span>
-          <button type="button" className="button-ghost" onClick={() => setLinksModalOpen(true)}>
-            {t("linksCount", { count: links.length })}
-          </button>
-          {hasNoAssignments ? null : (
+          {canManage ? (
+            <button type="button" className="button-ghost" onClick={() => setLinksModalOpen(true)}>
+              {t("linksCount", { count: links.length })}
+            </button>
+          ) : null}
+          {hasNoAssignments || !canManage ? null : (
             <button type="button" className="button-primary subm-new-button" onClick={openCreate}>
               {t("newAssignmentPlus")}
             </button>
@@ -685,16 +695,20 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
       </div>
 
       {hasNoAssignments ? (
-        <EmptyState
-          title={t("noAssignmentsSetUp")}
-          description={t("noAssignmentsDescription")}
-          actions={
-            <button type="button" className="button-primary" onClick={openCreate}>
-              {t("newAssignmentPlus")}
-            </button>
-          }
-          hint={t("emptyStateHint")}
-        />
+        canManage ? (
+          <EmptyState
+            title={t("noAssignmentsSetUp")}
+            description={t("noAssignmentsDescription")}
+            actions={
+              <button type="button" className="button-primary" onClick={openCreate}>
+                {t("newAssignmentPlus")}
+              </button>
+            }
+            hint={t("emptyStateHint")}
+          />
+        ) : (
+          <EmptyState title={t("readOnly.emptyTitle")} description={t("readOnly.emptyDescription")} />
+        )
       ) : (
       <>
       <div className="list-filter-row">
@@ -713,7 +727,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
 
       <DataTable
         className="data-table-lg"
-        columns={[t("colTitle"), t("colSourcePeriod"), t("colProgress"), t("colActions")]}
+        columns={canManage ? [t("colTitle"), t("colSourcePeriod"), t("colProgress"), t("colActions")] : [t("colTitle"), t("colSourcePeriod"), t("colProgress")]}
         emptyMessage={search.trim() ? t("noMatches") : completion === "completed" ? t("completedEmpty") : t("openEmpty")}
       >
           {filteredAssignments.map((assignment) => (
@@ -732,6 +746,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
               <td>
                 <SummaryBar summary={summaries[assignment.id]} />
               </td>
+              {canManage ? (
               <td>
                 <div className="table-actions table-actions-start">
                   <button
@@ -754,6 +769,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
                   </button>
                 </div>
               </td>
+              ) : null}
             </tr>
           ))}
       </DataTable>
@@ -771,7 +787,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
         {selectedId !== null ? (
           <div className="grid subm-detail">
             <SummaryBar summary={summaries[selectedId]} size="detail" />
-            {selectedAssignment ? <AssignmentLinkField assignment={selectedAssignment} links={links} /> : null}
+            {selectedAssignment && canManage ? <AssignmentLinkField assignment={selectedAssignment} links={links} /> : null}
 
             {hasPendingFiles && (
               <Badge variant="warning" className="subm-pulse">
@@ -910,15 +926,17 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
                           {scanStatusLabel(t)[file.scan_status] ?? file.scan_status}
                         </Badge>
                       )}
-                      <button
-                        type="button"
-                        className="button-icon-soft button-icon-soft-danger"
-                        aria-label={t("deleteFileAction")}
-                        title={t("deleteFileAction")}
-                        onClick={() => void deleteSubmittedFile(file)}
-                      >
-                        <ActionIcon name="delete" />
-                      </button>
+                      {canManage ? (
+                        <button
+                          type="button"
+                          className="button-icon-soft button-icon-soft-danger"
+                          aria-label={t("deleteFileAction")}
+                          title={t("deleteFileAction")}
+                          onClick={() => void deleteSubmittedFile(file)}
+                        >
+                          <ActionIcon name="delete" />
+                        </button>
+                      ) : null}
                     </div>
                   ))}
                 </div>
@@ -930,7 +948,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
             ) : null}
 
             <div className="table-toolbar-actions">
-              {elementModal.withdrawn_count ? (
+              {elementModal.withdrawn_count && canManage ? (
                 <button
                   type="button"
                   className="button-ghost button-secondary"
@@ -939,7 +957,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
                   {t("restoreWithdrawnAction")}
                 </button>
               ) : null}
-              {elementModal.status === "closed" ? (
+              {!canReview ? null : elementModal.status === "closed" ? (
                 <button
                   type="button"
                   className="button-ghost button-secondary subm-reopen-button"
@@ -1011,6 +1029,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
         availableTags={availableTags}
         availableCycleConfigs={availableCycleConfigs}
         availableEvents={availableEvents}
+        availableReviewers={availableReviewers}
         onSubmit={submit}
         onClose={() => setModalOpen(false)}
         onManageLinks={openLinksFromForm}
