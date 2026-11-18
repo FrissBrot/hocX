@@ -1,5 +1,7 @@
 "use client";
 
+import type { Route } from "next";
+
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -82,7 +84,7 @@ export function AccessOverview({ users, invites, roles, tenantRequiresMfa }: Pro
           <tr
             key={user.id}
             className={`table-row-clickable${status === "inactive" ? " participant-row-inactive" : ""}`}
-            onClick={() => router.push(`/participants/${user.id}`)}
+            onClick={() => router.push(`/participants/${user.id}` as Route)}
           >
             <td>
               <div className="participant-name-cell">

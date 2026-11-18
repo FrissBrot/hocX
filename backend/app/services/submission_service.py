@@ -60,6 +60,13 @@ def _move_from_quarantine(db: Session, quarantine_rel_path: str) -> str:
 SUBMISSION_ELEMENT_LOCK_NAMESPACE = 909100002
 
 
+def window_expired(element: SubmissionElementRead, assignment: SubmissionAssignment, today: date) -> bool:
+    """Element automatisch zu: Fenster bzw. Stichtag vorbei und die Abgabe hält es danach nicht
+    offen (``keep_open_after_end``, Migration 0173). Gleiche Regel wie die Abgabebox
+    (abgabebox-backend element_resolver: ``today > deadline and not keep_open``)."""
+    return element.window_end is not None and element.window_end < today and not assignment.keep_open_after_end
+
+
 def local_today() -> date:
     """Heute in Schweizer Zeit wie die Abgabebox (element_resolver) und die Bussen; der Container
     läuft in UTC, sonst öffnen und schliessen Zeitfenster nachts bis zu zwei Stunden zu spät."""
@@ -653,7 +660,9 @@ class SubmissionService:
                 ProtocolTodo.pending_delete.is_(False),
             )
         )
-        changed = todo is not None and self._apply_element_state(db, todo, element)
+        changed = todo is not None and self._apply_element_state(
+            db, todo, element, expired=window_expired(element, assignment, local_today())
+        )
         if self.refresh_completion(db, assignment) or changed:
             db.commit()
         return element
@@ -690,13 +699,17 @@ class SubmissionService:
         return True
 
     @staticmethod
-    def _apply_element_state(db: Session, todo: ProtocolTodo, element: SubmissionElementRead) -> bool:
-        """Aufgabe eines Elements nach seinem Zustand (Entscheid 2026-11-12):
+    def _apply_element_state(db: Session, todo: ProtocolTodo, element: SubmissionElementRead, *, expired: bool = False) -> bool:
+        """Aufgabe eines Elements nach seinem Zustand (Entscheid 2026-11-12, ergänzt 2026-11-18):
 
         - geprüfte Datei vorhanden → erledigt (Busse einfrieren, Mail «Abgabe eingegangen»)
         - von Hand geschlossen ohne geprüfte Datei → eine offene Aufgabe wird abgebrochen (keine
           Busse). Eine von Hand erledigte oder abgebrochene bleibt, wie sie ist.
-        - wieder geöffnet ohne geprüfte Datei → eine abgebrochene Aufgabe wird wieder offen.
+        - automatisch geschlossen (``expired``: Fenster/Stichtag vorbei, ohne «nach dem Ende offen
+          halten») ohne geprüfte Datei → wie von Hand geschlossen: abgebrochen. Mit «offen halten»
+          bleibt sie offen und wird überfällig (Busse läuft ab der Fälligkeit = letzter Tag).
+        - wieder geöffnet (von Hand oder Frist verlängert) ohne geprüfte Datei → eine abgebrochene
+          Aufgabe wird wieder offen, samt Busse, falls eine Regel greift.
 
         Dateien im Virenscan zählen nicht: der Scan oder der Job submission_todo_sync erledigen
         die Aufgabe, sobald sie sauber sind. Liefert True, wenn sich etwas geändert hat (ohne Commit)."""
@@ -704,7 +717,7 @@ class SubmissionService:
         current = next((code for code, status_id in statuses.items() if status_id == todo.todo_status_id), None)
         if element_has_clean_files(element):
             target = "done"
-        elif element.status == "closed":
+        elif element.status == "closed" or expired:
             target = "cancelled" if current in ("open", "in_progress") else None
         else:
             target = "open" if current == "cancelled" else None
@@ -828,6 +841,7 @@ class SubmissionService:
         closed_ids = {statuses[code] for code in ("done", "cancelled") if code in statuses}
 
         created = updated = removed = 0
+        today = local_today()
         base_url = submission_link_service.abgabebox_base_url(db, assignment.tenant_id)
         current_refs: set[str] = set()
 
@@ -841,6 +855,7 @@ class SubmissionService:
             task = f"{assignment.title}: {raw['label']}"
             due_date = raw.get("window_end")
             state = states.get(element_ref)
+            expired = state is not None and window_expired(state, assignment, today)
             # Nur geprüfte Dateien erledigen die Pendenz; Quarantäne/Scanfehler nicht (der Job
             # holt das nach, sobald der Scan sauber ist)
             has_files = bool(state and element_has_clean_files(state))
@@ -865,6 +880,7 @@ class SubmissionService:
                 created += 1
             else:
                 updated += 1
+            previous_due = todo.due_date
             todo.task = task
             todo.due_date = due_date
             todo.reference_link = url
@@ -874,10 +890,18 @@ class SubmissionService:
                 set_todo_assignees(db, todo, participant_ids)
                 # Abgabe-Aufgaben haben kein Protokoll: neu Verantwortliche sofort (gebündelt) melden
                 todo_notifications.on_assignees_added(db, todo, [pid for pid in participant_ids if pid not in previous])
-            if state is not None and (has_files or state.status == "closed"):
+            # Frist verlängert: war das Element automatisch zu (alte Frist vorbei) und ist es jetzt
+            # wieder offen, geht die Aufgabe wieder auf. Nur dann - eine von Hand abgebrochene
+            # Aufgabe eines laufenden Elements bleibt abgebrochen.
+            reopened_by_extension = (
+                todo.todo_status_id == cancelled_id and not expired and previous_due is not None
+                and previous_due < today and (due_date is None or due_date >= today)
+            )
+            if state is not None and (has_files or state.status == "closed" or expired or reopened_by_extension):
                 # Datei geprüft → erledigt (auch aus «abgebrochen»: geschlossen, während die Datei
-                # noch im Scan war); von Hand ohne Datei geschlossen → abgebrochen, keine Busse
-                self._apply_element_state(db, todo, state)
+                # noch im Scan war); ohne Datei geschlossen (von Hand oder Frist vorbei) →
+                # abgebrochen, keine Busse; Frist verlängert → wieder offen
+                self._apply_element_state(db, todo, state, expired=expired)
             if has_files and todo.todo_status_id == done_id and todo.completed_at is not None:
                 self._freeze_fines_after_trigger(db, todo)
             db.add(todo)

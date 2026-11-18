@@ -2,7 +2,7 @@
 Aufgabe abgebrochen (keine Busse), mit Datei bleibt sie erledigt, Wiederöffnen öffnet sie wieder."""
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from sqlalchemy import select
@@ -13,6 +13,11 @@ from app.services.submission_link_service import SubmissionLinkService
 from app.services.submission_service import SubmissionService
 from tests.factories import make_event, make_participant, make_tenant
 
+
+# Laufendes Abgabefenster: ein Termin in der Vergangenheit wäre automatisch geschlossen
+# (Fenster vorbei → Aufgabe abgebrochen, Entscheid 2026-11-18).
+_SOON = date.today() + timedelta(days=3)
+
 service = SubmissionService()
 
 
@@ -21,7 +26,7 @@ def box(db):
     tenant = make_tenant(db)
     other = make_tenant(db)
     anna = make_participant(db, tenant.id, display_name="Anna Muster")
-    event = make_event(db, tenant.id, title="Badetag")
+    event = make_event(db, tenant.id, title="Badetag", event_date=_SOON)
     event.tag = "lager"
     event.spezial1_ids = [anna.id]
     db.flush()
@@ -100,3 +105,58 @@ def test_closed_count_is_per_assignment(db, box):
     other_event.tag = "lager"
     db.flush()
     assert service.summaries(db, [assignment])[assignment.id]["closed"] == 1
+
+
+# ── Automatisch geschlossen (Fenster/Stichtag vorbei), Entscheid 2026-11-18 ─────────────────────
+
+
+def _sync_on(db, monkeypatch, assignment, day):
+    from app.services import submission_service as module
+
+    monkeypatch.setattr(module, "local_today", lambda: day)
+    service.sync_submission_todos(db, assignment)
+
+
+def test_task_due_date_is_the_last_day_of_the_window(db, box):
+    from datetime import timedelta
+
+    event, todo = box["event"], box["todo"]
+    db.refresh(todo)
+    assert todo.due_date == (event.event_end_date or event.event_date) + timedelta(days=7)
+
+
+def test_window_end_without_keep_open_cancels_the_task_and_extension_reopens_it(db, box, monkeypatch):
+    from datetime import timedelta
+
+    todo, assignment = box["todo"], box["assignment"]
+    db.refresh(todo)
+    after_end = todo.due_date + timedelta(days=1)
+    _sync_on(db, monkeypatch, assignment, todo.due_date)  # letzter Tag: noch offen
+    assert _code(db, todo) == "open"
+    _sync_on(db, monkeypatch, assignment, after_end)
+    assert _code(db, todo) == "cancelled"
+
+    # Frist verlängert: das Element ist wieder offen, die Aufgabe auch
+    assignment.offset_days_after = 30
+    db.flush()
+    _sync_on(db, monkeypatch, assignment, after_end)
+    assert _code(db, todo) == "open" and todo.completed_at is None
+
+
+def test_keep_open_after_end_leaves_the_task_open_and_overdue(db, box, monkeypatch):
+    from datetime import timedelta
+
+    todo, assignment = box["todo"], box["assignment"]
+    assignment.keep_open_after_end = True
+    db.flush()
+    db.refresh(todo)
+    _sync_on(db, monkeypatch, assignment, todo.due_date + timedelta(days=10))
+    assert _code(db, todo) == "open"  # überfällig, Busse läuft ab der Fälligkeit
+
+
+def test_manually_cancelled_task_of_a_running_window_stays_cancelled(db, box, monkeypatch):
+    todo, assignment = box["todo"], box["assignment"]
+    db.refresh(todo)
+    db.execute(ProtocolTodo.__table__.update().where(ProtocolTodo.id == todo.id).values(todo_status_id=_status_id(db, "cancelled")))
+    _sync_on(db, monkeypatch, assignment, todo.due_date)
+    assert _code(db, todo) == "cancelled"

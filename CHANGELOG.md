@@ -159,6 +159,16 @@ Drei Migrationen, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Ch
   der Bibliothek samt ihrer Blöcke (öffnet Element bzw. Block im Editor). Jede Gruppe erscheint nur
   mit dem Recht, die Zielseite zu öffnen (Elemente: `templates.edit`, Rollen: `access.manage`).
 
+### Geändert: Pendenzen aus Abgaben folgen dem Abgabefenster
+
+- Fällig ist eine Abgabe-Pendenz am letzten Tag des Abgabefensters (z. B. 14 Tage nach dem
+  Termin) bzw. am Stichtag; ab dann rechnen die Pendenzen-Bussen.
+- Läuft das Fenster ab, ohne dass «nach dem Ende offen halten» gesetzt ist, und ist nichts
+  eingegangen, wird die Pendenz wie beim Schliessen von Hand abgebrochen (keine weitere Busse).
+  Mit «offen halten» bleibt sie offen und überfällig, die Busse läuft weiter.
+- Wird die Frist verlängert (oder das Element von Hand wieder geöffnet), geht die Pendenz wieder
+  auf – samt Busse, falls eine Regel greift.
+
 ### Geändert: Bussen-Regeln neu gestaltet
 
 - Reiter mit Zählern, Übersicht des Bussentarifs mit Warnung, wenn kein Bussenkonto gesetzt ist,

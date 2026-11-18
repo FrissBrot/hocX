@@ -1,5 +1,7 @@
 "use client";
 
+import type { Route } from "next";
+
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -195,7 +197,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, r
   }, [permissions.access]);
 
   // Treffer aus der globalen Suche (?open=<id>): Personenseite öffnen
-  useOpenRequest(participants, (participant) => router.push(`/participants/${participant.id}`));
+  useOpenRequest(participants, (participant) => router.push(`/participants/${participant.id}` as Route));
 
   const today = todayIso();
   const tariffName = useMemo(() => new Map(tariffs.map((tariff) => [tariff.id, tariff.name])), [tariffs]);
@@ -545,7 +547,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, r
             <tr
               key={participant.id}
               className={`table-row-clickable${participant.is_active ? "" : " participant-row-inactive"}`}
-              onClick={() => router.push(`/participants/${participant.id}`)}>
+              onClick={() => router.push(`/participants/${participant.id}` as Route)}>
               <td onClick={(event) => event.stopPropagation()}>
                 <input
                   type="checkbox"

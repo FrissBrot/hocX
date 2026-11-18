@@ -53,6 +53,7 @@ from tests.factories import (
     make_tenant,
 )
 
+
 service = SubmissionService()
 
 
@@ -75,6 +76,9 @@ def box(db):
         SubmissionAssignmentCreate(
             title="Berichte", public_slug="berichte", source_type="events", tag_filter="lager",
             offset_days_before=30, offset_days_after=7, link_ids=[link.id], responsible_participant_source="spezial1_ids",
+            # Termine liegen 20 Tage zurück: nur mit «nach dem Ende offen halten» bleibt die
+            # Aufgabe offen und überfällig (sonst wäre das Fenster automatisch zu, 2026-11-18)
+            keep_open_after_end=True,
         ),
         tenant_id=tenant.id,
     )
