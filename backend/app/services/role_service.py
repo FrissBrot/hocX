@@ -471,6 +471,14 @@ def update_role(db: Session, actor: CurrentUser, role: TenantRole, payload: Role
         # zugewiesene» nicht stillschweigend auf «alle» ausweiten.
         requested = payload.scopes if new_scopes else {key: value for key, value in before_scopes.items() if value == SCOPE_ASSIGNED}
         after = _validated_permissions(raw)
+        if not new_scopes and requested:
+            # Neu dazukommende Rechte mit Reichweite übernehmen «nur zugewiesene» der Rolle - sonst
+            # machte z. B. review (ohne Angabe = alle) über die Implikation auch read wieder «alle»
+            # (Security-Review Phase 4)
+            scoped = {permission.value for permission in SCOPED_PERMISSIONS}
+            for key in after - before:
+                if key in scoped:
+                    requested.setdefault(key, SCOPE_ASSIGNED)
         after_scopes = _validated_scopes(raw, requested)
         _ensure_subset(actor, after, after_scopes)
     with admin_guard(db, role.tenant_id, actor, affects_actor=role.id in actor.role_ids):

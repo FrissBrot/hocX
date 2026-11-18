@@ -111,11 +111,34 @@ def reviewer_ids(db: Session, tenant_id: int, assignment_ids: Iterable[int]) -> 
 
 
 def candidates(db: Session, tenant_id: int) -> list[AppUser]:
-    """Wählbare Prüfer: aktive Konten mit Login des Mandanten."""
+    """Wählbare Prüfer: aktive Konten mit Login des Mandanten, die Abgaben überhaupt sehen dürfen
+    (submissions.read über eine Rolle - gespeichert inkl. Implikationen, also auch review/manage).
+    Sonst liessen sich Prüfer zuweisen, die nichts sehen, und die Liste zählte alle Logins auf
+    (Security-Review Phase 4)."""
+    from sqlalchemy import or_
+
+    from app.core.permissions import ADMIN_ROLE_KEY
+    from app.models import TenantRole, TenantRolePermission, UserRole
+
+    # Standardrolle admin hat immer alle Rechte, auch ohne gespeicherte Zeilen (effective_permissions)
+    can_read = (
+        select(UserRole.user_id)
+        .join(TenantRole, TenantRole.id == UserRole.role_id)
+        .where(
+            UserRole.tenant_id == tenant_id,
+            or_(
+                TenantRole.system_key == ADMIN_ROLE_KEY,
+                TenantRole.id.in_(select(TenantRolePermission.role_id).where(TenantRolePermission.permission_key == "submissions.read")),
+            ),
+        )
+    )
     return list(
         db.scalars(
             select(AppUser)
-            .where(AppUser.tenant_id == tenant_id, AppUser.is_active.is_(True), AppUser.login_enabled.is_(True))
+            .where(
+                AppUser.tenant_id == tenant_id, AppUser.is_active.is_(True), AppUser.login_enabled.is_(True),
+                AppUser.id.in_(can_read),
+            )
             .order_by(AppUser.display_name, AppUser.id)
         )
     )

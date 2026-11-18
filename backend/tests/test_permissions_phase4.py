@@ -358,3 +358,22 @@ def test_resource_assignment_rls(db, org):
         assert set(db.scalars(select(ResourceAssignment.tenant_id))) == {org.tenant.id}
     with as_app(db, org.other.id):
         assert set(db.scalars(select(ResourceAssignment.tenant_id))) == {org.other.id}
+
+
+def test_adding_a_scoped_right_without_scopes_keeps_assigned(db, org):
+    """Security-Review Phase 4: Nur Rechte ändern (ohne scopes) darf «nur zugewiesene» nicht über
+    ein neu dazukommendes Recht (review impliziert read) auf «alle» ausweiten."""
+    read_only = _role(db, org.admin_user, "Nur zugewiesen lesen", ["submissions.read"], {"submissions.read": "assigned"})
+    role_service.update_role(db, org.admin_user, read_only, RoleUpdate(permissions=["submissions.read", "submissions.review"]))
+    assert role_service.read_role(db, read_only).scopes == {"submissions.read": "assigned", "submissions.review": "assigned"}
+
+
+def test_reviewer_candidates_need_submission_read(db, org):
+    """Als Prüfer nur Konten anbieten, die Abgaben sehen dürfen (Security-Review Phase 4)."""
+    minutes_only = _role(db, org.admin_user, "Nur Sitzungen", ["meetings.read"])
+    clerk = make_app_user(db, "sitzungen@a.example", tenant_id=org.tenant.id, role_code="reader")
+    role_service.set_user_roles(db, None, clerk, [minutes_only])
+    db.flush()
+    candidates = {item.id for item in routes.list_reviewer_candidates(db=db, user=org.admin_user)}
+    assert clerk.public_id not in candidates
+    assert org.reviewer.public_id in candidates and org.admin.public_id in candidates
