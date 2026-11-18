@@ -3051,7 +3051,8 @@
     "POST /api/tools/word-import/commit": {
       "handler": "word_import.commit_word_import",
       "requires": [
-        "meetings.edit"
+        "meetings.edit",
+        "participants.manage"
       ]
     },
     "GET /api/tools/word-import/documents": {
@@ -3081,7 +3082,8 @@
     "POST /api/tools/word-import/documents/{document_id}/commit": {
       "handler": "word_import.commit_word_import_document",
       "requires": [
-        "meetings.edit"
+        "meetings.edit",
+        "participants.manage"
       ]
     },
     "PUT /api/tools/word-import/documents/{document_id}/draft": {
