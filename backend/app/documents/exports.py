@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 from typing import Any, Iterable
 
 from app.documents.catalog import BlockSpec
@@ -154,6 +155,19 @@ def _drop_columns(rows: list[list[str]], excluded: set[str]) -> list[list[str]]:
     return [[row[index] for index in keep if index < len(row)] for row in rows]
 
 
+# Formel-/CSV-Injection: Zellinhalte stammen von Mitgliedern (Namen, Listeneinträge,
+# Anliegen). Excel/LibreOffice werten Zellen mit diesen Anfangszeichen als Formel aus; in der
+# CSV-Datei bekommen sie ein führendes «'» (OWASP), reine Zahlen wie «-3» bleiben unverändert.
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+_PLAIN_NUMBER = re.compile(r"[+-]?\d+(?:[.,']\d+)*%?")
+
+
+def _csv_cell(value: Any) -> Any:
+    if isinstance(value, str) and value.startswith(_FORMULA_PREFIXES) and not _PLAIN_NUMBER.fullmatch(value):
+        return "'" + value
+    return value
+
+
 def to_csv(tables: list[tuple[str, list[list[str]]]]) -> bytes:
     if not tables:
         raise ValueError("noTable")
@@ -163,8 +177,8 @@ def to_csv(tables: list[tuple[str, list[list[str]]]]) -> bytes:
         if len(tables) > 1:
             if index:
                 writer.writerow([])
-            writer.writerow([title])
-        writer.writerows(rows)
+            writer.writerow([_csv_cell(title)])
+        writer.writerows([[_csv_cell(cell) for cell in row] for row in rows])
     # BOM, damit Excel UTF-8 erkennt
     return ("﻿" + buffer.getvalue()).encode("utf-8")
 
@@ -187,7 +201,12 @@ def to_xlsx(tables: list[tuple[str, list[list[str]]]]) -> bytes:
         used.add(candidate)
         sheet = workbook.create_sheet(candidate)
         for row_index, row in enumerate(rows, start=1):
+            # Steuerzeichen entfernt (#46); openpyxl speichert Strings mit führendem «=» als Formel:
+            # Zellinhalte sind immer Text (Formel-Injection, siehe _FORMULA_PREFIXES).
             sheet.append([excel_text(cell) for cell in row])
+            for cell in sheet[row_index]:
+                if isinstance(cell.value, str) and cell.data_type == "f":
+                    cell.data_type = "s"
             if row_index == 1:
                 for cell in sheet[1]:
                     cell.font = Font(bold=True)
