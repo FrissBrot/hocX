@@ -17,8 +17,8 @@ from app.core.permissions import CATALOG, P
 from app.core.features_generated import F
 from app.core.security import CurrentUser, get_current_user, require_feature, require_permission
 from app.models import AppUser
-from app.schemas.role import PermissionInfo, RoleCreate, RoleRead, RoleRef, RoleUpdate, UserRolesUpdate
-from app.services import public_id_service, role_service
+from app.schemas.role import AccessPreviewRead, PermissionInfo, RoleCreate, RoleRead, RoleRef, RoleUpdate, UserRolesUpdate
+from app.services import access_preview_service, public_id_service, role_service
 from app.services.audit_service import AuditService
 
 router = APIRouter()
@@ -115,3 +115,12 @@ def set_user_roles(user_id: uuid.UUID, payload: UserRolesUpdate, db: Session = D
         raise HTTPException(status_code=400, detail="Rollen konnten nicht gesetzt werden") from exc
     # Audit «user.roles_changed» (vorher/nachher) schreibt role_service.set_user_roles selbst
     return [role_service.role_ref(role) for role in role_service.roles_by_user(db, [target.id]).get(target.id, [])]
+
+
+@router.get("/users/{user_id}/access-preview", response_model=AccessPreviewRead)
+def get_access_preview(user_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """«Ansehen als …» (Plan «Berechtigungen», Phase 7): nur lesend, keine Sitzung des Kontos.
+    access.manage (verlangt MFA), nur eigener Mandant, nur Konten ohne mehr Rechte als man selbst;
+    jeder Aufruf steht im Verlauf (user.access_previewed) - siehe services/access_preview_service.py."""
+    require_permission(user, P.ACCESS_MANAGE)
+    return access_preview_service.preview(db, user, user_id)

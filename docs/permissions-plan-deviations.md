@@ -163,3 +163,54 @@ abweicht und warum. «OFFEN» markiert fachliche Punkte, die noch eine Entscheid
   (sonst würde «nur zugewiesene» still zu «alle»). Ältere Exporte ohne Feld: «alle» wie vorher.
   **OFFEN:** Prüfer-Zuweisungen (`resource_assignment`) sind nicht im Export – nach einem Import
   sieht ein «nur zugewiesene»-Prüfer nichts, bis man sie neu zuweist (sichere Richtung).
+
+## Phase 7 – Rollen-Dialog, Vorlagen, «Ansehen als …»
+
+- **Rollen-Dialog:** Gruppen, implizierte Rechte (angehakt, gesperrt, «Ergibt sich aus …»),
+  Reichweiten-Auswahl und Hilfetexte (`roles.permissions.<bereich>.<aktion>.description`) gab es
+  im Kern schon (Phase 3/4); Phase 7 vereinheitlicht nur: implizierte Rechte sind optisch
+  abgesetzt (gestrichelt, Klasse `roles-permission-option-implied`), Hinweistext «Ergibt sich aus»
+  statt «Automatisch enthalten in», «Effektive Berechtigungen» auf der Personenseite zeigen
+  «Nur zugewiesene». Kein Hilfetext im Katalog selbst – der Katalog enthält bewusst keine Texte
+  (Phase 1), die Übersetzungen sind die Quelle.
+- **Rollen-Vorlagen als Frontend-Konstante** (`frontend/lib/role-templates.ts`), keine Lese-Route,
+  keine Migration. Begründung: Vorlagen gewähren nichts (gespeichert wird über `POST /api/roles`,
+  `role_service` prüft wie immer), Name/Beschreibung sind Übersetzungen (`roles.templates.*`),
+  eine Backend-Kopie wäre eine zweite Quelle ohne Sicherheitsgewinn. `PermissionKey`-Typen und
+  `role-templates.test.ts` sichern, dass nur Katalog-Rechte vorkommen.
+- **Auswahl der Vorlagen-Rechte** (Vorschlag, fachlich prüfen): keine Vorlage enthält
+  MFA-/Administrationsrechte (dafür die Standardrolle Admin). Präsident: Sitzungen bearbeiten +
+  Protokolle freigeben, Vorlagen gestalten, Kontaktdaten, Kassenbuch, Personenbezogene Daten aller,
+  Dateien/Fotos/Abgaben ansehen. Aktuar: Sitzungen bearbeiten **ohne** Freigeben (Vier-Augen mit
+  dem Präsidenten), Vorlagen und Teilnehmende verwalten, Dateien/Fotos verwalten, öffentlich
+  teilen. Kassier: wie die Standardrolle, aber **ohne** `submissions.read` (siehe OFFEN in Phase 4)
+  und mit `participants.read`. Revisor: nur lesend inkl. Finanzen, ohne «eigene Pendenzen
+  erledigen» (rein lesender Zugang). Abgabe-Prüfer: `submissions.review` (+ `submissions.read`)
+  «Nur zugewiesene», Sitzungen ansehen. Mitglied: exakt `SYSTEM_ROLE_PERMISSIONS.reader`.
+- **Nur eigene Rechte:** Eine Vorlage übernimmt nur Rechte, die die handelnde Person selbst hat
+  (inkl. Implikationen; eigene «nur zugewiesene» bleiben zugewiesen). Die übrigen sind im Formular
+  wie bisher ausgegraut («Gesperrt: diese Berechtigung hast du selbst nicht»), die Auswahl zeigt
+  die Zahl, das Formular die Namen.
+- **«Ansehen als …» ohne Sitzungswechsel:** `GET /api/users/{id}/access-preview`
+  (`access.manage`, damit MFA wie Administration) berechnet mit `build_current_user` dasselbe wie
+  ein Request des Kontos (Rechte, Reichweiten, Module, MFA-Pflicht, sichtbare Abgaben) – kein
+  Token, keine Sitzung, kein Schreibweg. Schutzregeln: nur eigener Mandant (fremd/unbekannt 404),
+  nur Konten mit Teilmenge der eigenen Rechte inkl. Reichweite
+  (`role_service.ensure_can_manage_account`, sonst 403 `permission_not_held`; innerhalb des
+  Mandanten ist die Existenz eines Kontos kein Geheimnis). Verlauf `user.access_previewed`, auch
+  abgelehnte Versuche (`outcome=failure`). Audit auf einer GET-Route wie bei
+  `admin.user_viewed`.
+- **Navigation der Vorschau im Frontend:** Das Backend liefert Rechte und Module; die Menüpunkte
+  berechnet `buildNav` – dieselbe Funktion wie die echte Seitenleiste (Signatur auf
+  `NavSession = Pick<SessionInfo, "permissions" | "current_tenant">` gelockert). Eine zweite
+  Navigationslogik im Backend würde auseinanderlaufen.
+- **Ort:** Knopf «Ansehen als …» auf der Personenseite (Abschnitt Login), nicht in der Tabelle
+  Zugriff › Wer hat Zugriff (Zeilen führen dorthin). Die Vorschau zeigt den gespeicherten Stand.
+- **Security-Review (18.11.2026):** Titel zugewiesener Abgabe-Aufträge zeigt die Vorschau nur,
+  soweit der Akteur sie selbst lesen darf (hat er selbst nur «zugewiesene»: Schnittmenge; die
+  Teilmengen-Regel vergleicht Rechte und Reichweiten, nicht einzelne Zuweisungen). Die Anzahl
+  bleibt die des Kontos. Bewusst offen: der Knopf auf der Personenseite prüft nur Rechte, nicht
+  Reichweiten – ein Akteur mit nur «zugewiesene» kann klicken und bekommt dann die 403-Meldung
+  (nur Benutzerführung). Audit auf GET: per Top-Level-Navigation von fremder Seite liessen sich
+  Verlaufseinträge erzeugen, aber keine Daten lesen – als Lese-Audit gewollt.
+- Keine Migration in Phase 7.

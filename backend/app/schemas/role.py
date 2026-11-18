@@ -63,3 +63,49 @@ class PermissionInfo(BaseModel):
     requires_mfa: bool = False
     implies: list[str] = Field(default_factory=list)
     scopes: list[str] = Field(default_factory=list)
+
+
+# ── «Ansehen als …» (Plan «Berechtigungen», Phase 7) ─────────────────────────────────────────
+
+
+class AccessPreviewPermission(BaseModel):
+    key: str
+    # Reichweite bei Rechten mit Reichweite, sonst None
+    scope: Scope | None = None
+    # full = wirkt; read_only = Modul nur noch lesend (wirkt nur, wenn es ein Lese-Recht ist);
+    # none = Modul nicht gebucht (Recht wirkt nicht)
+    feature_access: Literal["full", "read_only", "none"] = "full"
+    # Wirkt im Moment tatsächlich (CurrentUser.can des Kontos)
+    effective: bool = True
+
+
+class AccessPreviewSubmission(BaseModel):
+    id: uuid.UUID
+    title: str
+
+
+class AccessPreviewSubmissions(BaseModel):
+    # all = alle Abgabe-Aufträge des Mandanten; assigned = nur die unten aufgeführten
+    scope: Scope
+    visible_count: int
+    # Bei «nur zugewiesene»: die zugewiesenen Aufträge (Titel), höchstens MAX_PREVIEW_SUBMISSIONS
+    assigned: list[AccessPreviewSubmission] = Field(default_factory=list)
+
+
+class AccessPreviewRead(BaseModel):
+    """Nur lesende Vorschau, was ein Konto sehen und tun darf - berechnet aus denselben Regeln wie
+    jeder Request (build_current_user), ohne Sitzung des Kontos und ohne fremde Inhalte."""
+
+    user_id: uuid.UUID
+    display_name: str
+    is_active: bool
+    login_enabled: bool
+    roles: list[RoleRef]
+    permissions: list[AccessPreviewPermission]
+    # Gebuchte bzw. nur noch lesende Module des Mandanten (für die Navigation im Frontend)
+    enabled_features: list[str]
+    read_only_features: list[str]
+    mfa_required: bool
+    mfa_active: bool
+    # None = Konto sieht keine Abgaben
+    submissions: AccessPreviewSubmissions | None = None

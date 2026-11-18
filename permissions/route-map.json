@@ -3358,6 +3358,12 @@
       "handler": "users.patch_user",
       "note": "UserService (access.manage)"
     },
+    "GET /api/users/{user_id}/access-preview": {
+      "handler": "roles.get_access_preview",
+      "requires": [
+        "access.manage"
+      ]
+    },
     "GET /api/users/{user_id}/mfa": {
       "handler": "users.get_user_mfa",
       "note": "MfaService._managed_user (access.manage)"

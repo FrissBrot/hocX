@@ -29,7 +29,7 @@
   "exceedsOwn": "Diese Rolle enthält Berechtigungen, die du selbst nicht hast. Du kannst sie deshalb nicht ändern.",
   "notOwned": "Enthält Berechtigungen, die du selbst nicht hast.",
   "featureMissing": "Modul nicht gebucht",
-  "impliedBy": "Automatisch enthalten in: {permissions}",
+  "impliedBy": "Ergibt sich aus: {permissions}",
   "deleteConfirm": "Rolle «{name}» löschen? Das geht nur, wenn sie keinem Konto mehr zugewiesen ist.",
   "fields": {
     "name": "Name",
@@ -214,5 +214,60 @@
     "all": "Alle",
     "assigned": "Nur zugewiesene",
     "fixedHelp": "Gilt für alle, weil ein anderes Recht dieser Rolle es für alle einschliesst."
+  },
+  "fromTemplate": "Aus Vorlage",
+  "templatePicker": {
+    "title": "Neue Rolle aus Vorlage",
+    "description": "Die Vorlage füllt das Formular vor. Gespeichert wird eine eigene Rolle, die du danach frei anpassen kannst; sie bleibt nicht mit der Vorlage verknüpft.",
+    "omitted": "{count, plural, one {# Berechtigung hast du selbst nicht, sie wird weggelassen.} other {# Berechtigungen hast du selbst nicht, sie werden weggelassen.}}"
+  },
+  "templateApplied": "Vorlage «{name}» übernommen. Prüfe die Berechtigungen und speichere die Rolle.",
+  "templateOmitted": "Nicht übernommen, weil du sie selbst nicht hast: {permissions}",
+  "templates": {
+    "president": {
+      "name": "Präsident",
+      "description": "Leitet Sitzungen und schliesst Protokolle ab, sieht Kasse, Mitglieder und Auswertungen."
+    },
+    "secretary": {
+      "name": "Aktuar",
+      "description": "Schreibt Protokolle, pflegt Vorlagen, Mitglieder und die Ablage."
+    },
+    "treasurer": {
+      "name": "Kassier",
+      "description": "Führt Kasse und Bussen, sieht Protokoll-Entwürfe und die Mitgliederliste."
+    },
+    "auditor": {
+      "name": "Revisor",
+      "description": "Nur lesend: Protokolle inkl. Entwürfe, Kasse, Mitglieder, Auswertungen und Ablage."
+    },
+    "reviewer": {
+      "name": "Abgabe-Prüfer",
+      "description": "Prüft nur die Abgaben, denen er zugewiesen ist."
+    },
+    "member": {
+      "name": "Mitglied",
+      "description": "Wie die Standardrolle Leser: Sitzungen ansehen, eigene Pendenzen erledigen."
+    }
+  },
+  "preview": {
+    "title": "Ansehen als {name}",
+    "description": "So sieht dieses Konto hocX mit seinen gespeicherten Rollen.",
+    "readOnlyHint": "Nur Vorschau: Es wird keine Sitzung des Kontos geöffnet und nichts geändert. Der Aufruf steht im Verlauf.",
+    "noLogin": "Das Konto kann sich zurzeit nicht anmelden. Gezeigt wird, was es nach der Anmeldung sähe.",
+    "loading": "Vorschau wird geladen …",
+    "loadFailed": "Vorschau konnte nicht geladen werden",
+    "noRoles": "Keine Rollen",
+    "mfa": "Zweiter Faktor",
+    "mfaRequired": "MFA Pflicht",
+    "mfaOptional": "MFA freiwillig",
+    "mfaActive": "Eingerichtet",
+    "mfaInactive": "Nicht eingerichtet",
+    "navigation": "Menüpunkte",
+    "navigationEmpty": "Keine Menüpunkte ausser der Startseite.",
+    "startGroup": "Start",
+    "featureReadOnly": "Modul nur lesend",
+    "submissions": "Abgaben",
+    "submissionsAll": "{count, plural, =0 {Alle Abgabe-Aufträge (zurzeit keine)} other {Alle Abgabe-Aufträge (#)}}",
+    "submissionsAssigned": "{count, plural, =0 {Nur zugewiesene Abgabe-Aufträge, zurzeit keiner} other {Nur zugewiesene Abgabe-Aufträge: #}}"
   }
 }

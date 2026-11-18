@@ -198,7 +198,11 @@
     "blockers": {
       "displayName": "Enregistrement bloqué : le nom affiché manque.",
       "dates": "Enregistrement bloqué : la sortie précède l'entrée."
-    }
+    },
+    "previewAction": "Voir en tant que …",
+    "previewHelp": "Montre quels éléments de menu, autorisations et remises ce compte voit (lecture seule, consigné dans l'historique).",
+    "previewSavedOnly": "L'aperçu montre l'état enregistré. Enregistre d'abord les rôles modifiés.",
+    "previewNotAllowed": "Uniquement pour les comptes qui n'ont pas plus d'autorisations que toi."
   },
   "newMember": {
     "description": "La personne apparaît ensuite dans la liste des membres. Sans invitation, elle reste membre sans connexion.",

@@ -237,6 +237,16 @@ Keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
   zugewiesen ist (Liste, Dateien, ZIP). «Abgaben verwalten» gilt immer für alle.
 - **Abgaben für Leser:** Die Seite Abgaben ist mit «Abgaben ansehen» erreichbar (nur lesen);
   Verwalten braucht weiterhin «Abgaben verwalten», Schliessen/Öffnen «Abgaben prüfen».
+- **Rollen-Dialog:** Implizierte Berechtigungen sind automatisch angehakt und ausgegraut, mit dem
+  Hinweis «Ergibt sich aus …»; die effektiven Berechtigungen auf der Personenseite zeigen «Nur
+  zugewiesene», wo keine Rolle das Recht für alle gibt.
+- **Rollen-Vorlagen:** Zugriff › Rollen › «Aus Vorlage» füllt das Formular mit Präsident, Aktuar,
+  Kassier, Revisor, Abgabe-Prüfer (Reichweite «Nur zugewiesene») oder Mitglied vor. Gespeichert
+  wird eine normale eigene Rolle, nicht mit der Vorlage verknüpft; Rechte, die man selbst nicht hat,
+  werden weggelassen und genannt.
+- **Ansehen als …:** Auf der Personenseite zeigt eine Vorschau Menüpunkte, Berechtigungen mit
+  Reichweite, MFA-Pflicht und sichtbare Abgaben eines Kontos – nur lesend, ohne Sitzung des Kontos,
+  nur für Konten ohne mehr Rechte als man selbst, im Verlauf vermerkt.
 - Für Entwickler: Rechte-Inventar `docs/permissions-inventory.md` und Berechtigungsmatrix
   (`permissions/permission-matrix.json`) werden generiert; ein Laufzeittest ruft jede GET-Route mit
   jeder Standardrolle auf. Abweichungen zum Plan: `docs/permissions-plan-deviations.md`.
