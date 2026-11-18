@@ -8,21 +8,6 @@ Installationen aktualisieren können.
 
 ## [Unreleased]
 
-### Neu
-
-- **Personen an einem Ort:** Personenseite `/participants/<id>` mit Stammdaten, Mitgliedschaft,
-  Bussentarif, Login & Rollen (Einladen, Passwort setzen, Rollen, MFA, Login entziehen),
-  Datenauskunft und Löschen; Änderungen sammelt eine gemeinsame Leiste «Ungespeicherte
-  Änderungen». Die Mitgliederliste ist der einzige Ort zum Anlegen («Neues Mitglied» mit Einladung,
-  Rolle und Tarif), zeigt Login, Rollen und Tarif, filtert danach (`?tariff=<id>` vorbelegt) und
-  kann mehrere Personen einladen, Rollen hinzufügen/entfernen, Tarif setzen und löschen.
-- **Zugriff** (vormals «Logins & Rollen»): Reiter Rollen (Deep-Link `/users/roles?role=<id>`),
-  «Wer hat Zugriff» (Übersicht mit Filter «MFA fehlt») und Sicherheit.
-- **MFA für alle Logins:** Admins mit «Benutzer & Rollen verwalten» können MFA für alle Logins der
-  Organisation verlangen (Migration `0188_tenant_require_mfa`, auditiert). Konten ohne Faktor
-  werden abgemeldet (API: 403 `mfa_setup_required`) und beim nächsten Login direkt in die
-  Einrichtung geführt.
-
 ## [1.4.0] - 2026-11-18
 
 Eine neu eingeteilte Seitenleiste nach Tätigkeiten mit «Meine Aufgaben» und gesammelten
@@ -33,7 +18,10 @@ den Nachtläufen. Dazu Termine mit Uhrzeiten, Programm und Markdown-Texten, ein 
 Tabellenblock mit Assistent, ein einheitliches, tolerantes Uhrzeitfeld, Dateien als Kacheln mit
 PDF-Vorschau, gekennzeichnete Entwürfe, wenn einem Export Berechtigungen fehlen, und eine
 Prüfseite, die veränderte Dateien über die Dokument-ID zuordnet und Seite für Seite vergleicht.
-Drei Migrationen, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
+Ausserdem Listen mit beliebig vielen Spalten, ein neues Dashboard und eine neue Statistik, alles zu
+einer Person auf einer Personenseite, MFA-Pflicht für ganze Organisationen, ein geführter
+Erstlogin über die Einladung und eine neu gestaltete öffentliche Teilen-Seite.
+Keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
 
 ### Update
 
@@ -50,8 +38,20 @@ Drei Migrationen, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Ch
 - Migration `0185_document_page_fingerprints`: neue, leere Spalte `page_fingerprints` im
   Dokumentenregister und die Funktion `verify_document_pages` (nur `EXECUTE` für die
   Abgabebox-Rolle). Seiten-Fingerabdrücke entstehen nur für PDFs ab dem Update.
-- Alle Adressen bleiben gleich, Lesezeichen und Links in Mails funktionieren weiter. Neu ist nur
-  `/my-tasks` («Meine Aufgaben»).
+- Migration `0186_list_columns`: neue Tabelle `list_column` (Spalten je Liste, RLS wie
+  `list_entry`) und `list_entry.values_json`; die zwei bisherigen festen Spalten samt Werten und den
+  Rollen «Bezeichnung»/«Verantwortlich» werden übernommen. Die alten Spalten bleiben (leer
+  beschreibbar) in der Datenbank, damit `alembic downgrade` sie wieder füllen kann – Werte ab der
+  dritten Spalte gehen dabei verloren, der sichere Rückweg ist das Backup vor dem Update.
+- Migration `0187_list_column_config_keys`: schreibt Spalten-Verweise in Elementen, Vorlagen,
+  offenen Protokollen, Dokumentvorlagen, Abgaben und Word-Import-Entwürfen auf die neuen
+  Spalten-Keys um (stapelweise). Wer während des Updates ein Protokoll offen hat, lädt danach neu.
+  Abgeschlossene Protokolle bleiben unverändert (alte Snapshots liest ein Adapter).
+- Migration `0188_tenant_require_mfa`: neue Spalte `tenant.require_mfa` (Standard aus).
+- Gesamtexporte haben jetzt Format 10 (Listen-Spalten); ältere Exporte lassen sich weiter
+  importieren.
+- Alle Adressen bleiben gleich, Lesezeichen und Links in Mails funktionieren weiter. Neu sind
+  `/my-tasks` («Meine Aufgaben») und `/participants/<id>` (Personenseite).
 - Ausgetretene Personen (Austrittsdatum vor heute) können sich ab dem Update nicht mehr anmelden,
   auch wenn ihr Login eingeschaltet ist; laufende Sitzungen enden. Wer das Austrittsdatum entfernt,
   gibt den Login wieder frei.
@@ -158,6 +158,54 @@ Drei Migrationen, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Ch
   Reiter, dazu Rollen (auch Standardrollen über ihren Namen in der eigenen Sprache) und Elemente
   der Bibliothek samt ihrer Blöcke (öffnet Element bzw. Block im Editor). Jede Gruppe erscheint nur
   mit dem Recht, die Zielseite zu öffnen (Elemente: `templates.edit`, Rollen: `access.manage`).
+
+### Neu: Listen mit beliebig vielen Spalten
+
+- Listen haben bis zu 20 Spalten (Text, Person, Personen, Termin) statt zwei fester; Spalten lassen
+  sich anlegen, umbenennen, umsortieren und löschen. Die Rolle «Bezeichnung» benennt Einträge (in
+  Abgaben, Matrix, Gruppenstatistik), «Verantwortlich» liefert die Personen für Abgaben und
+  Aufgaben.
+- Tabellenblöcke, Matrix, Protokoll-Editor, Word-Import, Document Studio, Mobile und die Abgabebox
+  arbeiten mit allen Spalten; Tabellenblöcke können sichtbare Spalten wählen.
+
+### Neu: Dashboard und Statistik
+
+- Startseite mit Kennzahlen (Anwesenheit im Jahr, offene Pendenzen, offene Bussen), nächster Sitzung,
+  «Termine & Fristen» nach Wochen, eigenen Pendenzen, offenen Bussen und Kontoständen – auch mobil.
+- Statistik mit Jahresauswahl und Vorjahresvergleich: Anwesenheit pro Monat, Pendenzen
+  (Erledigungsquote, überfällig, Ø Tage bis erledigt, offen je Person), Bussen (nach Art,
+  bezahlt/offen), Finanzen je Monat und Konto, Gruppen. Bussen erscheinen nur mit Finanzmodul,
+  Werte je Person nur mit «Personenbezogene Daten» (sonst nur die eigenen).
+
+### Neu: Personen an einem Ort und MFA-Pflicht
+
+- **Personen an einem Ort:** Personenseite `/participants/<id>` mit Stammdaten, Mitgliedschaft,
+  Bussentarif, Login & Rollen (Einladen, Passwort setzen, Rollen, MFA, Login entziehen),
+  Datenauskunft und Löschen; Änderungen sammelt eine gemeinsame Leiste «Ungespeicherte
+  Änderungen». Die Mitgliederliste ist der einzige Ort zum Anlegen («Neues Mitglied» mit Einladung,
+  Rolle und Tarif), zeigt Login, Rollen und Tarif, filtert danach (`?tariff=<id>` vorbelegt) und
+  kann mehrere Personen einladen, Rollen hinzufügen/entfernen, Tarif setzen und löschen.
+- **Zugriff** (vormals «Logins & Rollen»): Reiter Rollen (Deep-Link `/users/roles?role=<id>`),
+  «Wer hat Zugriff» (Übersicht mit Filter «MFA fehlt») und Sicherheit.
+- **MFA für alle Logins:** Admins mit «Benutzer & Rollen verwalten» können MFA für alle Logins der
+  Organisation verlangen (Migration `0188_tenant_require_mfa`, auditiert). Konten ohne Faktor
+  werden abgemeldet (API: 403 `mfa_setup_required`) und beim nächsten Login direkt in die
+  Einrichtung geführt.
+
+### Neu: Erstlogin über die Einladung
+
+- Die Einladung führt durch Passwort, zweiten Faktor (Passkey oder Authenticator-App, mobil mit
+  «In Authenticator-App öffnen») und «Alles bereit» – danach ist die Person direkt angemeldet.
+- Passwortstärke live; mindestens 12 Zeichen und Stufe «Mittel», Name, E-Mail und häufige Wörter
+  zählen als schwach (gilt auch beim Passwort-Reset, serverseitig geprüft).
+- Ist MFA Pflicht (Rolle oder Organisation), lässt sich der zweite Faktor nicht überspringen.
+- Eigene Seiten für ungültige Einladungen und für zu viele Versuche.
+
+### Geändert: Öffentliche Teilen-Seite
+
+- Neu gestaltet: Kopf mit «Auswählen» und «Alle herunterladen (ZIP)», Kacheln mit echter
+  Vorschau (Fotos, erste Dokumentseite) oder Liste, Fotoalben als Masonry, Vollbild-Ansicht mit
+  Pfeiltasten und Filmstreifen, Auswahl herunterladen.
 
 ### Geändert: Pendenzen aus Abgaben folgen dem Abgabefenster
 
