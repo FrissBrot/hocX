@@ -1,15 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+// Öffentliche Teilen-Seite /share/<token> (Design «hocX Public Teilen»): Kopf mit Absender und
+// Download-Aktionen, Titelbereich, Dateien als Kacheln oder Liste bzw. Fotoalbum als Masonry,
+// Vollbild-Ansicht mit Filmstreifen. Alle Daten kommen aus GET /api/public/share/<token>.
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { useLocale, useTranslations } from "next-intl";
 
+import { FileTypeIcon } from "@/components/files/file-type-icon";
 import { ActionIcon } from "@/components/ui/action-icons";
+import { fileExtension } from "@/lib/files/display";
 import { usePopupEscape, usePopupScrollLock } from "@/lib/hooks/use-popup-escape";
 import { formatFileSize, formatLongDateRange, formatShortMonthDate } from "@/lib/utils/format";
 import { PublicShare, PublicShareFile } from "@/types/api";
 
 const HOCX_LANDING_URL = "https://hocx.ch";
+
+type ShareView = "grid" | "list";
 
 function DownloadIcon() {
   return (
@@ -37,18 +44,60 @@ function CheckIcon() {
   );
 }
 
-function FileIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="32" height="32" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round">
-      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z" />
-      <path d="M14 3v5h5" />
-    </svg>
-  );
-}
-
 function initialsOf(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   return parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("");
+}
+
+/** Kennzeichen-Farbe je Dateiart, wie die Kacheln im Dateien-Tab. */
+function extensionTone(extension: string): string {
+  if (extension === "pdf") return "pdf";
+  if (["doc", "docx", "odt", "rtf", "txt", "md"].includes(extension)) return "doc";
+  if (["xls", "xlsx", "ods", "csv"].includes(extension)) return "sheet";
+  if (["zip", "rar", "7z", "tar", "gz"].includes(extension)) return "zip";
+  if (["jpg", "jpeg", "png", "gif", "webp", "heic", "svg"].includes(extension)) return "image";
+  if (["mp3", "wav", "m4a", "ogg", "flac"].includes(extension)) return "audio";
+  return "file";
+}
+
+function ExtensionBadge({ file }: { file: PublicShareFile }) {
+  const extension = fileExtension(file.original_name);
+  if (!extension) return null;
+  return <span className={`public-share-ext public-share-ext-${extensionTone(extension)}`}>{extension.slice(0, 5).toUpperCase()}</span>;
+}
+
+function FileMeta({ file }: { file: PublicShareFile }) {
+  const t = useTranslations("share.publicPage");
+  const parts: string[] = [];
+  if (file.page_count) parts.push(t("pageCount", { count: file.page_count }));
+  if (file.file_size_bytes) parts.push(formatFileSize(file.file_size_bytes));
+  return <>{parts.join(" · ")}</>;
+}
+
+/** Vorschau einer Datei: Foto bzw. erste Dokumentseite vom Server, sonst eine schlichte Typ-Kachel. */
+function FilePreview({ file, variant }: { file: PublicShareFile; variant: "tile" | "row" }) {
+  const [failed, setFailed] = useState(false);
+  if (file.thumbnail_url && !failed) {
+    return (
+      <span className={file.is_image ? `public-share-preview-photo public-share-preview-photo-${variant}` : `public-share-preview-page public-share-preview-page-${variant}`}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- Vorschau kommt vom öffentlichen Link-Endpunkt */}
+        <img src={file.thumbnail_url} alt="" loading="lazy" decoding="async" onError={() => setFailed(true)} />
+      </span>
+    );
+  }
+  return (
+    <span className={`public-share-preview-type public-share-preview-type-${variant}`}>
+      <FileTypeIcon name={file.original_name} />
+    </span>
+  );
+}
+
+function SelectCheck({ selected }: { selected: boolean }) {
+  return (
+    <span className={selected ? "public-share-check public-share-check-on" : "public-share-check"} aria-hidden="true">
+      {selected ? <CheckIcon /> : null}
+    </span>
+  );
 }
 
 export function PublicShareGallery({ share }: { share: PublicShare }) {
@@ -57,18 +106,20 @@ export function PublicShareGallery({ share }: { share: PublicShare }) {
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const [view, setView] = useState<ShareView>("grid");
 
-  const images = useMemo(() => share.files.filter((file) => file.is_image && file.view_url), [share.files]);
-  const allImages = images.length === share.files.length;
+  const files = share.files;
+  const isPhotoAlbum = files.length > 0 && files.every((file) => file.is_image && file.thumbnail_url);
   const dateRange = formatLongDateRange(share.date_from, share.date_to, locale);
+  const allSelected = files.length > 0 && selected.size === files.length;
 
   const selectedUrl = useMemo(() => {
     if (!share.download_all_url || selected.size === 0) return null;
-    if (selected.size === share.files.length) return share.download_all_url;
+    if (selected.size === files.length) return share.download_all_url;
     // Reihenfolge des Links beibehalten, nicht die Klick-Reihenfolge.
-    const ids = share.files.filter((file) => selected.has(file.id)).map((file) => file.id);
+    const ids = files.filter((file) => selected.has(file.id)).map((file) => file.id);
     return `${share.download_all_url}?ids=${ids.join(",")}`;
-  }, [selected, share.download_all_url, share.files]);
+  }, [selected, share.download_all_url, files]);
 
   function toggle(id: string) {
     setSelected((current) => {
@@ -79,15 +130,22 @@ export function PublicShareGallery({ share }: { share: PublicShare }) {
     });
   }
 
+  function toggleAll() {
+    setSelected(allSelected ? new Set() : new Set(files.map((file) => file.id)));
+  }
+
   function stopSelecting() {
     setSelecting(false);
     setSelected(new Set());
   }
 
-  function openFile(file: PublicShareFile) {
-    const index = images.findIndex((image) => image.id === file.id);
-    if (index >= 0) setViewerIndex(index);
-    else window.location.href = file.download_url;
+  function activate(index: number) {
+    if (selecting) toggle(files[index].id);
+    else setViewerIndex(index);
+  }
+
+  function tileLabel(file: PublicShareFile) {
+    return selecting ? t("toggleSelect", { name: file.original_name }) : t("open", { name: file.original_name });
   }
 
   return (
@@ -102,21 +160,25 @@ export function PublicShareGallery({ share }: { share: PublicShare }) {
             </div>
           </div>
           {share.download_all_url ? (
-            <div className="public-share-actions">
+            <div className={selecting ? "public-share-actions public-share-actions-selecting" : "public-share-actions"}>
               {selecting ? (
                 <>
+                  <span className="public-share-selected-count" role="status">{t("selectedCount", { count: selected.size })}</span>
+                  <button type="button" className="button-secondary" onClick={toggleAll}>
+                    {allSelected ? t("selectNone") : t("selectAll")}
+                  </button>
                   <button type="button" className="button-ghost" onClick={stopSelecting}>
                     {t("cancelSelect")}
                   </button>
                   {selectedUrl ? (
                     <a href={selectedUrl} className="button-primary public-share-download" download>
                       <DownloadIcon />
-                      {t("downloadSelected", { count: selected.size })}
+                      {t("downloadSelection")}
                     </a>
                   ) : (
                     <button type="button" className="button-primary public-share-download" disabled>
                       <DownloadIcon />
-                      {t("downloadSelected", { count: 0 })}
+                      {t("downloadSelection")}
                     </button>
                   )}
                 </>
@@ -138,21 +200,47 @@ export function PublicShareGallery({ share }: { share: PublicShare }) {
 
       <main className="public-share-main">
         <div className="public-share-hero">
-          {share.context ? <p className="public-share-eyebrow">{share.context}</p> : null}
-          <h1 className="public-share-title">{share.name}</h1>
-          <p className="public-share-meta muted">
-            <span>{allImages ? t("photoCount", { count: share.files.length }) : t("fileCount", { count: share.files.length })}</span>
-            {share.total_size_bytes > 0 ? <span>{formatFileSize(share.total_size_bytes)}</span> : null}
-            {dateRange ? <span>{dateRange}</span> : null}
-            {share.expires_at ? <span>{t("validUntil", { date: formatShortMonthDate(share.expires_at, locale) })}</span> : null}
-          </p>
+          <div className="public-share-hero-text">
+            <p className="public-share-eyebrow">{share.context ?? (share.is_album || isPhotoAlbum ? t("eyebrowAlbum") : t("eyebrowFiles"))}</p>
+            <h1 className="public-share-title">{share.name}</h1>
+            <p className="public-share-meta muted">
+              <span>{isPhotoAlbum ? t("photoCount", { count: files.length }) : t("fileCount", { count: files.length })}</span>
+              {share.total_size_bytes > 0 ? <span>{formatFileSize(share.total_size_bytes)}</span> : null}
+              {dateRange ? <span>{dateRange}</span> : null}
+              {share.expires_at ? <span>{t("validUntil", { date: formatShortMonthDate(share.expires_at, locale) })}</span> : null}
+            </p>
+          </div>
+          {!isPhotoAlbum && files.length > 0 ? (
+            <div className="public-share-view-toggle" role="group" aria-label={t("viewLabel")}>
+              <button
+                type="button"
+                className={view === "grid" ? "button-icon public-share-view-toggle-active" : "button-icon"}
+                aria-pressed={view === "grid"}
+                aria-label={t("viewGrid")}
+                title={t("viewGrid")}
+                onClick={() => setView("grid")}
+              >
+                <ActionIcon name="grid" />
+              </button>
+              <button
+                type="button"
+                className={view === "list" ? "button-icon public-share-view-toggle-active" : "button-icon"}
+                aria-pressed={view === "list"}
+                aria-label={t("viewList")}
+                title={t("viewList")}
+                onClick={() => setView("list")}
+              >
+                <ActionIcon name="list" />
+              </button>
+            </div>
+          ) : null}
         </div>
 
-        {share.files.length === 0 ? (
+        {files.length === 0 ? (
           <p className="muted">{t("noFiles")}</p>
-        ) : (
+        ) : isPhotoAlbum ? (
           <ul className={selecting ? "public-share-masonry public-share-masonry-selecting" : "public-share-masonry"}>
-            {share.files.map((file) => {
+            {files.map((file, index) => {
               const isSelected = selected.has(file.id);
               const ratio = file.width && file.height ? `${file.width} / ${file.height}` : undefined;
               return (
@@ -160,33 +248,95 @@ export function PublicShareGallery({ share }: { share: PublicShare }) {
                   <button
                     type="button"
                     className={isSelected ? "public-share-tile public-share-tile-selected" : "public-share-tile"}
-                    onClick={() => (selecting ? toggle(file.id) : openFile(file))}
+                    onClick={() => activate(index)}
                     aria-pressed={selecting ? isSelected : undefined}
-                    aria-label={selecting ? t("toggleSelect", { name: file.original_name }) : t("open", { name: file.original_name })}
+                    aria-label={tileLabel(file)}
                   >
-                    {file.thumbnail_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={file.thumbnail_url}
-                        alt=""
-                        loading="lazy"
-                        decoding="async"
-                        className="public-share-tile-img"
-                        style={ratio ? { aspectRatio: ratio } : undefined}
-                      />
-                    ) : (
-                      <span className="public-share-tile-file">
-                        <FileIcon />
-                        <span className="public-share-tile-file-name">{file.original_name}</span>
-                        <span className="muted">{formatFileSize(file.file_size_bytes)}</span>
-                      </span>
-                    )}
-                    {selecting ? (
-                      <span className="public-share-tile-check" aria-hidden="true">
-                        {isSelected ? <CheckIcon /> : null}
-                      </span>
-                    ) : null}
+                    {/* eslint-disable-next-line @next/next/no-img-element -- Vorschau kommt vom öffentlichen Link-Endpunkt */}
+                    <img
+                      src={file.thumbnail_url ?? ""}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      className="public-share-tile-img"
+                      style={ratio ? { aspectRatio: ratio } : undefined}
+                    />
+                    {selecting ? <SelectCheck selected={isSelected} /> : null}
                   </button>
+                </li>
+              );
+            })}
+          </ul>
+        ) : view === "grid" ? (
+          <ul className={selecting ? "public-share-grid public-share-grid-selecting" : "public-share-grid"}>
+            {files.map((file, index) => {
+              const isSelected = selected.has(file.id);
+              return (
+                <li key={file.id} className={isSelected ? "public-share-file public-share-file-selected" : "public-share-file"}>
+                  <button
+                    type="button"
+                    className="public-share-file-open"
+                    onClick={() => activate(index)}
+                    aria-pressed={selecting ? isSelected : undefined}
+                    aria-label={tileLabel(file)}
+                  >
+                    <span className="public-share-file-preview">
+                      <FilePreview file={file} variant="tile" />
+                      <ExtensionBadge file={file} />
+                      {selecting ? <SelectCheck selected={isSelected} /> : null}
+                    </span>
+                    <span className="public-share-file-name" title={file.original_name}>{file.original_name}</span>
+                  </button>
+                  <span className="public-share-file-meta">
+                    <span className="public-share-file-meta-text">
+                      <FileMeta file={file} />
+                    </span>
+                    <a
+                      href={file.download_url}
+                      className="button-icon-soft button-icon-soft-sm public-share-file-download"
+                      download
+                      aria-label={t("downloadFile", { name: file.original_name })}
+                      title={t("download")}
+                    >
+                      <ActionIcon name="download" />
+                    </a>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <ul className="public-share-list">
+            {files.map((file, index) => {
+              const isSelected = selected.has(file.id);
+              return (
+                <li key={file.id} className={isSelected ? "public-share-row public-share-row-selected" : "public-share-row"}>
+                  <button
+                    type="button"
+                    className="public-share-row-open"
+                    onClick={() => activate(index)}
+                    aria-pressed={selecting ? isSelected : undefined}
+                    aria-label={tileLabel(file)}
+                  >
+                    {selecting ? <SelectCheck selected={isSelected} /> : null}
+                    <FilePreview file={file} variant="row" />
+                    <span className="public-share-row-text">
+                      <span className="public-share-row-name" title={file.original_name}>{file.original_name}</span>
+                      <span className="public-share-row-meta">
+                        <ExtensionBadge file={file} />
+                        <FileMeta file={file} />
+                      </span>
+                    </span>
+                  </button>
+                  <a
+                    href={file.download_url}
+                    className="button-icon-soft public-share-row-download"
+                    download
+                    aria-label={t("downloadFile", { name: file.original_name })}
+                    title={t("download")}
+                  >
+                    <ActionIcon name="download" />
+                  </a>
                 </li>
               );
             })}
@@ -196,7 +346,7 @@ export function PublicShareGallery({ share }: { share: PublicShare }) {
 
       <footer className="public-share-footer">
         <div className="public-share-footer-inner">
-          <p>{t("footerNotice")}</p>
+          <p>{isPhotoAlbum ? t("footerNotice") : t("footerNoticeFiles")}</p>
           <p>
             {t.rich("sharedWith", {
               brand: (chunks) => (
@@ -209,38 +359,67 @@ export function PublicShareGallery({ share }: { share: PublicShare }) {
         </div>
       </footer>
 
-      {viewerIndex !== null && images[viewerIndex] ? (
-        <PublicShareViewer images={images} index={viewerIndex} onIndexChange={setViewerIndex} onClose={() => setViewerIndex(null)} />
+      {viewerIndex !== null && files[viewerIndex] ? (
+        <PublicShareViewer files={files} index={viewerIndex} onIndexChange={setViewerIndex} onClose={() => setViewerIndex(null)} />
       ) : null}
     </div>
   );
 }
 
+function ViewerStage({ file }: { file: PublicShareFile }) {
+  const t = useTranslations("share.publicPage");
+  const stop = (event: MouseEvent) => event.stopPropagation();
+  if (file.is_image && file.view_url) {
+    // eslint-disable-next-line @next/next/no-img-element -- Original kommt vom öffentlichen Link-Endpunkt
+    return <img key={file.id} src={file.view_url} alt={file.original_name} className="public-share-viewer-img" onClick={stop} />;
+  }
+  if (file.thumbnail_url) {
+    return (
+      <span className="public-share-viewer-page" onClick={stop}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- Seitenvorschau kommt vom öffentlichen Link-Endpunkt */}
+        <img key={file.id} src={file.thumbnail_url} alt={file.original_name} />
+      </span>
+    );
+  }
+  return (
+    <div className="public-share-viewer-empty" onClick={stop}>
+      <FileTypeIcon name={file.original_name} />
+      <strong>{file.original_name}</strong>
+      <span>{t("noPreview")}</span>
+      <a href={file.download_url} className="public-share-viewer-download" download>
+        <DownloadIcon />
+        {t("download")}
+      </a>
+    </div>
+  );
+}
+
 function PublicShareViewer({
-  images,
+  files,
   index,
   onIndexChange,
   onClose
 }: {
-  images: PublicShareFile[];
+  files: PublicShareFile[];
   index: number;
   onIndexChange: (index: number) => void;
   onClose: () => void;
 }) {
   const t = useTranslations("share.publicPage");
   const rootRef = useRef<HTMLDivElement>(null);
+  const stripRef = useRef<HTMLDivElement>(null);
   usePopupEscape(true, onClose, rootRef);
   usePopupScrollLock(true);
 
-  const file = images[index];
+  const file = files[index];
   const hasPrev = index > 0;
-  const hasNext = index < images.length - 1;
+  const hasNext = index < files.length - 1;
   const go = useCallback(
     (delta: number) => {
-      const next = Math.min(Math.max(index + delta, 0), images.length - 1);
+      const next = Math.min(Math.max(index + delta, 0), files.length - 1);
       if (next !== index) onIndexChange(next);
     },
-    [images.length, index, onIndexChange]
+    [files.length, index, onIndexChange]
   );
 
   useEffect(() => {
@@ -252,30 +431,40 @@ function PublicShareViewer({
     return () => window.removeEventListener("keydown", onKey);
   }, [go]);
 
+  useEffect(() => {
+    const active = stripRef.current?.querySelector<HTMLElement>("[aria-current='true']");
+    active?.scrollIntoView?.({ block: "nearest", inline: "center" });
+  }, [index]);
+
   if (typeof document === "undefined") return null;
 
   return createPortal(
     <div ref={rootRef} className="public-share-viewer" role="dialog" aria-modal="true" aria-label={file.original_name} onClick={onClose}>
       <div className="public-share-viewer-bar" onClick={(event) => event.stopPropagation()}>
         <div className="public-share-viewer-info">
-          <strong title={file.original_name}>{file.original_name}</strong>
-          <span>
-            {t("position", { index: index + 1, total: images.length })}
-            {file.file_size_bytes ? ` · ${formatFileSize(file.file_size_bytes)}` : null}
+          <ExtensionBadge file={file} />
+          <span className="public-share-viewer-title">
+            <strong title={file.original_name}>{file.original_name}</strong>
+            <span>
+              {t("position", { index: index + 1, total: files.length })}
+              {file.page_count ? ` · ${t("pageCount", { count: file.page_count })}` : null}
+              {file.file_size_bytes ? ` · ${formatFileSize(file.file_size_bytes)}` : null}
+            </span>
           </span>
         </div>
         <div className="public-share-viewer-actions">
-          <a href={file.download_url} className="public-share-viewer-download" download>
+          <a href={file.download_url} className="public-share-viewer-download" download aria-label={t("download")}>
             <DownloadIcon />
-            {t("download")}
+            <span className="public-share-viewer-download-label">{t("download")}</span>
           </a>
           <button type="button" className="public-share-viewer-round" onClick={onClose} aria-label={t("close")}>
             <ActionIcon name="close" width={18} height={18} />
           </button>
         </div>
       </div>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img key={file.id} src={file.view_url ?? ""} alt={file.original_name} className="public-share-viewer-img" onClick={(event) => event.stopPropagation()} />
+      <div className="public-share-viewer-stage">
+        <ViewerStage file={file} />
+      </div>
       {hasPrev ? (
         <button
           type="button"
@@ -301,6 +490,27 @@ function PublicShareViewer({
         >
           <ChevronIcon direction="right" />
         </button>
+      ) : null}
+      {files.length > 1 ? (
+        <div ref={stripRef} className="public-share-viewer-strip" role="group" aria-label={t("filmstrip")} onClick={(event) => event.stopPropagation()}>
+          {files.map((item, itemIndex) => (
+            <button
+              key={item.id}
+              type="button"
+              className={itemIndex === index ? "public-share-strip-item public-share-strip-item-active" : "public-share-strip-item"}
+              aria-current={itemIndex === index ? "true" : undefined}
+              aria-label={t("open", { name: item.original_name })}
+              onClick={() => onIndexChange(itemIndex)}
+            >
+              {item.thumbnail_url ? (
+                // eslint-disable-next-line @next/next/no-img-element -- Vorschau kommt vom öffentlichen Link-Endpunkt
+                <img src={item.thumbnail_url} alt="" loading="lazy" decoding="async" />
+              ) : (
+                <span className="public-share-strip-type">{(fileExtension(item.original_name) || "?").slice(0, 4).toUpperCase()}</span>
+              )}
+            </button>
+          ))}
+        </div>
       ) : null}
     </div>,
     document.body

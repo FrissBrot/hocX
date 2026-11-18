@@ -524,6 +524,8 @@ class PublicShareFile(BaseModel):
     # kann (JPEG/PNG/WebP/GIF), sonst die Vorschau; None fuer Nicht-Bilder.
     view_url: str | None = None
     download_url: str
+    # Seitenzahl eines Dokuments (PDF, Word, …), sobald die Dokument-Pipeline es gelesen hat.
+    page_count: int | None = None
 
 
 class PublicShareRead(BaseModel):

@@ -1374,13 +1374,16 @@ button:disabled {
 }
 
 /* A link styled as a primary button (e.g. "Protokoll ansehen"): the base chrome
-   (padding, height, radius, border) is only defined for <button>, so add it here. */
+   (padding, height, radius, border) is only defined for <button>, so add it here.
+   Höhe aus --button-height wie jeder Text-Button: a.button-primary ist spezifischer als die
+   Token-Regel unten, ein fester Wert machte Link-Buttons 8 px höher als ihre Nachbarn
+   (öffentliche Teilen-Seite: «Alle herunterladen» neben «Auswählen»). */
 a.button-primary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 48px;
-  padding: var(--space-3) var(--space-4);
+  min-height: var(--button-height);
+  padding: 0 var(--space-4);
   border: 1px solid transparent;
   border-radius: var(--radius-md);
   letter-spacing: -0.01em;
@@ -10091,37 +10094,6 @@ button.table-row-link:hover {
   font-size: var(--text-md);
 }
 
-.public-share-tile-file {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  aspect-ratio: 4 / 3;
-  padding: var(--space-4);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  color: var(--muted);
-  font-size: var(--text-sm);
-  text-align: center;
-}
-
-.public-share-tile-check {
-  position: absolute;
-  top: var(--space-2);
-  right: var(--space-2);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: 2px solid var(--on-solid);
-  background: color-mix(in srgb, var(--text) 30%, transparent);
-  color: var(--on-solid);
-  box-shadow: var(--shadow-soft);
-}
-
 .public-share-footer-inner {
   display: flex;
   align-items: center;
@@ -10148,7 +10120,7 @@ button.table-row-link:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 76px 80px 40px;
+  padding: 76px 80px 112px; /* design-ok: unten Platz für den Filmstreifen */
   background: var(--psv-scrim);
   backdrop-filter: blur(4px);
   animation: image-lightbox-fade var(--dur-base) ease-out;
@@ -10169,7 +10141,8 @@ button.table-row-link:hover {
 
 .public-share-viewer-info {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
   min-width: 0;
   line-height: 1.3;
 }
