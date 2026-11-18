@@ -40,8 +40,10 @@ test("Element-Editor: Anlegen, Bearbeiten und Matrix-Designer", async ({ page })
   await page.evaluate(() => localStorage.setItem("hocx-theme", "light"));
   await page.reload();
   const create = await openNewElement(page, "Terminliste");
-  await create.getByRole("textbox", { name: "Elementtitel", exact: true }).fill(title);
+  // Block-Dialog v2: Seiten links (Inhalt, Wiederholung, Grundlagen, Verhalten)
   await create.getByLabel("Welche Termine?").selectOption("window");
+  await create.getByRole("button", { name: /^Grundlagen/ }).click();
+  await create.getByRole("textbox", { name: "Elementtitel", exact: true }).fill(title);
   await create.getByRole("button", { name: "Element anlegen" }).click();
 
   const definition = page.getByRole("dialog", { name: `Element bearbeiten: ${title}` });
@@ -61,9 +63,10 @@ test("Element-Editor: Anlegen, Bearbeiten und Matrix-Designer", async ({ page })
     await ensureDefinitionOpen();
     if (!(await edit.isVisible())) await definition.getByRole("button", { name: "Bearbeiten" }).first().click({ timeout: 5_000 });
     await expect(edit).toBeVisible({ timeout: 5_000 });
-    // Gleiches Formular wie beim Anlegen: Verhalten und gespeicherter Zeitraum sind da.
-    await expect(edit.getByRole("checkbox", { name: /Im PDF ausgeben/ })).toBeVisible({ timeout: 5_000 });
+    // Gleiches Formular wie beim Anlegen: gespeicherter Zeitraum und (Seite «Verhalten») das Verhalten.
     await expect(edit.getByLabel("Welche Termine?")).toHaveValue("window", { timeout: 5_000 });
+    await edit.getByRole("button", { name: /^Verhalten/ }).click({ timeout: 5_000 });
+    await expect(edit.getByRole("checkbox", { name: /Im PDF ausgeben/ })).toBeVisible({ timeout: 5_000 });
   }).toPass({ timeout: 60_000 });
   await page.screenshot({ path: "test-results/elements-edit-light-1440.png", fullPage: true });
   if (await edit.isVisible()) await edit.getByRole("button", { name: "Abbrechen" }).click({ timeout: 5_000 }).catch(() => undefined);

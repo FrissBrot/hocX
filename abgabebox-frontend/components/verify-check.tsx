@@ -97,7 +97,16 @@ export function VerifyCheck({ documentId, site }: { documentId: string | null; s
       if (!read.documentId) return null;
       const result = await verifyHash(hash, read.documentId, read.fingerprints);
       const outcome = classifyResult(result, read.pageCount);
-      return outcome.kind === "modified" ? outcome : null;
+      if (outcome.kind !== "modified") return null;
+      // Nur die ID aus dem Link (die Datei trägt keine): zuordnen erst, wenn mindestens eine Seite
+      // übereinstimmt - sonst liesse sich jedes fremde PDF über einen präparierten Link einem
+      // hocX-Dokument zuschreiben (Sicherheitsreview 2026-11-18).
+      if (read.idSource === "link") {
+        const anyPageMatches =
+          outcome.pages !== "unknown" && outcome.originalPageCount !== null && outcome.changedPages.length < Math.min(outcome.originalPageCount, read.pageCount);
+        if (!anyPageMatches) return null;
+      }
+      return outcome;
     } catch {
       // Kein lesbares PDF oder Prüfung nicht möglich: bleibt «Nicht gefunden»
       return null;

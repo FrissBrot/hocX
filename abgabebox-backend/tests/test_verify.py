@@ -154,6 +154,15 @@ def test_restricted_role_can_call_verify_site():
 CHANGED_SHA = hashlib.sha256(b"%PDF-1.7 neu gespeichert").hexdigest()
 
 
+@pytest.fixture(autouse=True)
+def _reset_page_check_limit():
+    from app.routes import verify as verify_route
+
+    verify_route._page_checks.clear()
+    yield
+    verify_route._page_checks.clear()
+
+
 @pytest.fixture
 def pages(monkeypatch, registry):
     calls: list[tuple[str, list[str]]] = []
@@ -217,3 +226,14 @@ def test_restricted_role_can_call_verify_document_pages():
         assert repository.verify_document_pages(db, document_id=str(uuid.uuid4()), fingerprints=["a" * 16]) is None
     finally:
         db.close()
+
+
+def test_page_checks_are_limited_per_document_id(pages):
+    payload = {"sha256": CHANGED_SHA, "document_id": str(DOC_ID), "page_fingerprints": ["a" * 16]}
+    for _ in range(20):
+        assert client.post("/api/public/verify", json=payload).status_code == 200
+    # Gleiche Dokument-ID, anderer Hash: trotzdem begrenzt (kein Durchprobieren von Seitentexten)
+    assert client.post("/api/public/verify", json={**payload, "page_fingerprints": ["b" * 16]}).status_code == 429
+    # Andere Dokumente und die reine Hash-Prüfung bleiben unberührt
+    assert client.post("/api/public/verify", json={**payload, "document_id": str(uuid.uuid4())}).status_code == 200
+    assert client.post("/api/public/verify", json={"sha256": SHA}).json()["found"] is True

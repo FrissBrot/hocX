@@ -40,6 +40,15 @@ def _protocol(db, number: str, status: str = "durchgeführt"):
     return tenant, protocol
 
 
+def _change_text(db, protocol, text: str = "Geänderter Inhalt") -> None:
+    from app.models import ProtocolElement, ProtocolElementBlock, ProtocolText
+
+    block_ids = select(ProtocolElementBlock.id).join(ProtocolElement).where(ProtocolElement.protocol_id == protocol.id)
+    for row in db.scalars(select(ProtocolText).where(ProtocolText.protocol_element_block_id.in_(block_ids))):
+        row.content = text
+    db.flush()
+
+
 def _render(db, tenant, protocol):
     return asyncio.run(service.render(db, None, tenant.id, DocumentRequest(protocol_id=protocol.public_id, document_type="protocol")))
 
@@ -58,19 +67,27 @@ def _path(stored: StoredFile) -> _StoredObject:
     return _StoredObject(stored.storage_path)
 
 
-def test_repeated_protocol_export_keeps_only_the_newest_file(db):
+def test_repeated_protocol_export_never_piles_up_files(db):
+    """Seit 1.4.0: ohne Änderung kommt dasselbe PDF zurück (keine zweite Datei); mit Änderung
+    entsteht eine neue Version des Protokoll-Dokuments (Dateien-Tab), die frühere bleibt als
+    Version erhalten - nichts wächst unkontrolliert, nichts aus dem Versionsverlauf verschwindet."""
     tenant, protocol = _protocol(db, "RT-1")
     first = _render(db, tenant, protocol)
     first_path, first_file_id = _path(first.stored_file), first.stored_file.id
 
+    again = _render(db, tenant, protocol)
+    assert again.export.public_id == first.export.public_id and again.stored_file.id == first_file_id
+
+    _change_text(db, protocol)
     second = _render(db, tenant, protocol)
-    # S3-008: physisch entfernt erst der Purge-Job nach dem Commit.
+    assert second.export.public_id != first.export.public_id
     get_object_store().purge_deleted(db)
 
-    assert not first_path.exists() and db.get(StoredFile, first_file_id) is None
+    # Frühere Version gehört zum Versionsverlauf des Dokuments und bleibt
+    assert first_path.exists() and db.get(StoredFile, first_file_id) is not None
     assert _path(second.stored_file).exists()
     exports = db.scalars(select(DocumentExport).where(DocumentExport.protocol_id == protocol.id)).all()
-    assert len(exports) == 2 and [export.stored_file_id for export in exports].count(None) == 1
+    assert len(exports) == 2
     assert len(db.scalars(select(DocumentRegistry).where(DocumentRegistry.tenant_id == tenant.id)).all()) == 2
 
 

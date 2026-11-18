@@ -11,7 +11,7 @@ import { dateParts, relativeDay, tagColor, todayIso } from "@/components/mobile/
 import { ActionMenu } from "@/components/ui/action-menu";
 import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
-import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { LazyRichTextEditor as RichTextEditor } from "@/components/ui/rich-text-editor-lazy";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { useConfirmEventDelete } from "@/components/events/use-confirm-event-delete";
 import { useToast } from "@/contexts/toast-context";

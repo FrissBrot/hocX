@@ -97,3 +97,21 @@ def test_tariffs_need_only_the_finance_feature(db, club):
     without_finance = make_current_user(tenant_id, role="kassier", features=frozenset())
     with pytest.raises(HTTPException):
         route.list_tariffs(db=db, user=without_finance)
+
+
+def test_bulk_assignment_only_touches_own_tenant(db, club):
+    """Sammelzuweisung (Bussen-Konfiguration): fremde Personen bleiben unverändert und erscheinen
+    nicht in der Antwort; ein fremder Tarif wird abgelehnt."""
+    other = make_tenant(db, "Fremder Verein")
+    stranger = make_participant(db, other.id, "Fremd")
+    foreign_group = config.create_group(db, other.id, FineTariffGroupWrite(name="Fremdtarif"))
+    tenant_id = club["tenant"].id
+    ids = [club["ben"].public_id, club["cleo"].public_id, stranger.public_id]
+    members = config.assign_members(db, tenant_id, ids, club["learners"].public_id)
+    assert {member.display_name for member in members} == {"Ben", "Cleo"}
+    db.refresh(stranger)
+    assert stranger.fine_tariff_group_id is None
+    assert club["cleo"].fine_tariff_group_id == club["learners"].id
+    with pytest.raises(ValueError):
+        config.assign_members(db, tenant_id, ids, foreign_group.public_id)
+    assert {member.tariff_group_id for member in config.assign_members(db, tenant_id, ids, None)} == {None}

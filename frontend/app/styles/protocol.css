@@ -1010,7 +1010,7 @@
   min-height: 40px;
 }
 
-.todo-delete {
+.todo-delete { /* design-ok: kompakte Zeilenaktion */
   --button-hover-bg: color-mix(in srgb, var(--danger) 10%, transparent);
   display: inline-flex;
   align-items: center;
@@ -2147,7 +2147,7 @@
   overflow: visible;
 }
 
-.form-participant-picker-button {
+.form-participant-picker-button { /* design-ok: Auswahlfeld, kein Aktionsbutton */
   width: 100%;
   min-height: 48px;
   justify-content: flex-start;
@@ -2882,7 +2882,7 @@
   flex-shrink: 0;
 }
 
-.quick-flyout-close {
+.quick-flyout-close { /* design-ok: kleiner Schliessen-Button im Flyout */
   padding: var(--space-1) var(--space-2);
   flex-shrink: 0;
 }
@@ -2951,7 +2951,7 @@
   font-size: var(--text-base);
 }
 
-.collab-status-cta {
+.collab-status-cta { /* design-ok: einzelne breite Aktion im Status-Hinweis */
   width: 100%;
   padding: var(--space-3);
 }

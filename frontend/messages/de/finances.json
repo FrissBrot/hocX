@@ -260,7 +260,6 @@
     "loadFailed": "Laden fehlgeschlagen.",
     "saveFailed": "Speichern fehlgeschlagen.",
     "loading": "Wird geladen …",
-    "tariffDeleteConfirm": "Tarif «{name}» löschen? {count, plural, =0 {} one {# Person fällt auf den Standardtarif zurück.} other {# Personen fallen auf den Standardtarif zurück.}}",
     "tariffsDescription": "Tarife wie Lernende oder Vollverdiener. Je Tarif gibt es eigene Beträge für Verspätung und Absenz sowie in jeder Pendenzen-Regel. Wer keinen Tarif hat, zahlt nach dem Standardtarif.",
     "addTariff": "Tarif hinzufügen",
     "editTariff": "Tarif bearbeiten",
@@ -343,9 +342,6 @@
     "cardDefaultDetail": "{own} zugewiesen · {rest} ohne eigenen Tarif",
     "cardAllAssigned": "alle direkt zugewiesen",
     "cardNobody": "noch niemand zugewiesen",
-    "cardLate": "Verspätung {amount}",
-    "cardAbsent": "Absenz {amount}",
-    "cardClubTariff": "Verspätung/Absenz: Standardtarif",
     "selectedCount": "{count} ausgewählt",
     "bulkSet": "Tarif setzen:",
     "bulkClear": "Aufheben",
@@ -368,13 +364,25 @@
       "reopen": "Busse wieder geöffnet, Buchung gelöscht.",
       "restore": "Busse wiederhergestellt.",
       "waive": "Busse erlassen."
-    }
+    },
+    "firstTariff": "Ersten Tarif anlegen",
+    "noTariffsHint": "Ohne Tarif zahlen alle nach dem Bussentarif aus «Verspätung & Absenz». Der erste Tarif wird automatisch zum Standard.",
+    "chipLate": "Verspätung {amount}",
+    "chipAbsent": "Absenz {amount}",
+    "chipStandard": "Standard",
+    "tariffDeleteTitle": "Tarif «{name}» löschen?",
+    "tariffDeleteRest": "{count, plural, =0 {Niemandem ist dieser Tarif direkt zugewiesen.} one {# Person fällt auf den Standardtarif zurück.} other {# Personen fallen auf den Standardtarif zurück.}}",
+    "tariffCreated": "Tarif «{name}» angelegt",
+    "tariffSavedToast": "Tarif gespeichert",
+    "tariffDeleted": "Tarif «{name}» gelöscht",
+    "bulkDone": "{count, plural, one {# Person} other {# Personen}}: {tariff}",
+    "standardPlaceholder": "Standard ({amount})"
   },
   "colSource": "Protokoll / Pendenz",
   "todoFineReason": "Pendenz zu spät",
   "todoFineRunningHint": "Läuft, bis die Pendenz erledigt ist",
   "fineSettings": {
-    "pageTitle": "Bussen-Regeln",
+    "pageTitle": "Bussen-Konfiguration",
     "description": "Wie hoch Bussen sind: für Verspätung und Absenz, je Tarif und für zu spät erledigte Pendenzen. Die Bussen selbst stehen unter Kasse › Bussen.",
     "openSettings": "Bussen-Regeln",
     "tabAttendance": "Verspätung & Absenz",
@@ -388,7 +396,11 @@
     "colLate": "Verspätung",
     "colAbsent": "Absenz",
     "clubTariff": "Standardtarif",
-    "tariffAmountsHelp": "Leer lassen, um den Standardtarif zu verwenden. Die Beträge für Pendenzen stehen in den Pendenzen-Regeln."
+    "tariffAmountsHelp": "Leer lassen, um den Standardtarif zu verwenden. Die Beträge für Pendenzen stehen in den Pendenzen-Regeln.",
+    "attendanceHintBefore": "Eigene Beträge je Tarif (z. B. Lernende) stellst du im Reiter",
+    "attendanceHintAfter": "ein. Eine Protokollvorlage kann den Standardtarif übersteuern, dann gilt ihr Betrag für alle.",
+    "tariffsTabLink": "«Tarife»",
+    "attendanceGroup": "Anwesenheitsbussen"
   },
   "errors": {
     "fine_transaction": "Diese Buchung gehört zu einer einkassierten Busse. Öffne die Busse unter «Bussen» wieder, statt die Buchung zu ändern.",

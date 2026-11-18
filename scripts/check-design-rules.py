@@ -219,6 +219,123 @@ def check_shortcut_texts() -> None:
             walk(json.loads(file.read_text()), "", file)
 
 
+BUTTON_VARIANT = re.compile(r"\.button-(?:primary|secondary|danger|ghost)(?![\w-])")
+# Grundregeln der Varianten (nur in globals.css): Selektor besteht allein aus Button-Klassen
+BASE_BUTTON_SELECTOR = re.compile(r"^(?:a|button)?(?:\.button-[a-z-]+)+(?::[a-z-]+(?:\([^)]*\))?)*$|^:is\(\.button-")
+HEIGHT_PROPS = re.compile(r"(?:^|;)\s*(min-height|height|padding|padding-top|padding-bottom|padding-block)\s*:", re.IGNORECASE)
+BACKGROUND_PROP = re.compile(r"(?:^|;)\s*background(?:-color)?\s*:\s*([^;]+)", re.IGNORECASE)
+
+
+def _css_rules(text: str):
+    """(Selektor, Deklarationen, Zeile) aller innersten Regeln - einfacher Parser, genügt für
+    unser CSS (keine Strings mit Klammern)."""
+    # Kommentare entfernen, Zeilenumbrüche (Zeilennummern) und design-ok-Markierungen behalten
+    text = re.sub(r"/\*.*?\*/", lambda m: ("design-ok" if "design-ok" in m.group(0) else "") + "\n" * m.group(0).count("\n"), text, flags=re.S)
+    stack: list[tuple[str, int, int]] = []
+    start = 0
+    for index, char in enumerate(text):
+        if char == "{":
+            stack.append((text[start:index].strip(), index, text.count("\n", 0, index) + 1))
+            start = index + 1
+        elif char == "}":
+            if stack:
+                selector, open_index, line = stack.pop()
+                body = text[open_index + 1:index]
+                if "{" not in body:
+                    yield selector.split(";")[-1].strip(), body, line
+            start = index + 1
+        elif char == ";" and not stack:
+            start = index + 1
+
+
+def _split_selectors(selector: str) -> list[str]:
+    """Selektorliste an Kommas auf oberster Ebene trennen (nicht innerhalb von :is(...))."""
+    parts, depth, current = [], 0, ""
+    for char in selector:
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+        if char == "," and depth == 0:
+            parts.append(current)
+            current = ""
+        else:
+            current += char
+    return parts + [current]
+
+
+CLASSNAME_LITERAL = re.compile(r"""className=(?:"([^"]*)"|\{`([^`]*)`\}|\{"([^"]*)"\})""")
+ICON_OR_PILL = re.compile(r"(?<![\w-])button-(?:icon|icon-soft|icon-soft-sm|pill)(?![\w-])")
+TEXT_VARIANT = re.compile(r"(?<![\w-])button-(?:primary|secondary|danger|ghost)(?![\w-])")
+
+
+def _button_companions() -> set[str]:
+    """Klassen, die im TSX zusammen mit einer Text-Button-Variante vergeben werden
+    (z. B. ``button-primary participant-header-button``). Setzt eine solche Begleitklasse Höhe
+    oder vertikales Padding, ist der Button so ungleich hoch wie mit einer Varianten-Regel."""
+    companions: set[str] = set()
+    for base, globs in TSX_GLOBS:
+        for glob in globs:
+            for path in base.glob(glob):
+                if ".test." in path.name:
+                    continue
+                for match in CLASSNAME_LITERAL.finditer(path.read_text()):
+                    value = next(group for group in match.groups() if group is not None)
+                    if not TEXT_VARIANT.search(value) or ICON_OR_PILL.search(value):
+                        continue
+                    companions.update(
+                        token for token in re.split(r"[\s{}$?:\"'`()]+", value)
+                        if re.fullmatch(r"[a-z][a-z0-9-]+", token) and not token.startswith("button-")
+                    )
+    return companions
+
+
+def _vertical_padding(body: str) -> bool:
+    """Höhe oder vertikales Padding gesetzt (``padding: 0 x`` bzw. ``padding-inline`` sind ok)."""
+    for match in re.finditer(r"(?:^|;)\s*(min-height|height|padding|padding-top|padding-bottom|padding-block)\s*:\s*([^;]+)", body, re.IGNORECASE):
+        prop, value = match.group(1).lower(), match.group(2).strip()
+        if prop == "padding" and value.split()[0] in ("0", "0px"):
+            continue
+        return True
+    return False
+
+
+def check_button_variants() -> None:
+    """Button-Varianten bleiben überall gleich (DESIGN.md 7):
+    - [button-hoehe] Bereichs-CSS setzt keine Höhe/kein vertikales Padding einer Variante - sonst
+      sind Buttons nebeneinander verschieden hoch (Token --button-height).
+    - [button-hintergrund] Wer den Hintergrund einer Variante ändert, setzt --button-bg (und
+      --button-hover-bg), nicht ``background`` direkt - sonst springt er beim Überfahren auf
+      die Grundfarbe zurück.
+    Bewusste Ausnahmen mit ``design-ok`` und Begründung in der Regel."""
+    for path in CSS_FILES:
+        for selector, body, line in _css_rules(path.read_text()):
+            if not BUTTON_VARIANT.search(selector) or "design-ok" in body or "design-ok" in selector:
+                continue
+            selectors = [part.strip() for part in _split_selectors(selector)]
+            if path.name == "globals.css" and path.parent.name == "app" and all(BASE_BUTTON_SELECTOR.match(part) for part in selectors):
+                continue
+            if HEIGHT_PROPS.search(body):
+                report(path, line, "button-hoehe", f"«{selector[:80]}» ändert Höhe/Padding einer Button-Variante - Buttons nebeneinander wären verschieden hoch (--button-height)")
+            background = BACKGROUND_PROP.search(body)
+            if background and "--button-bg" not in body and not background.group(1).strip().startswith("var(--button-"):
+                report(path, line, "button-hintergrund", f"«{selector[:80]}» setzt background direkt - --button-bg/--button-hover-bg setzen")
+    # Begleitklassen (im TSX neben einer Variante): gleiche Höhenregel, sonst rutscht ein Button
+    # über eine Feature-Klasse aus --button-height (so «CSV-Import» 42 px neben 40 px).
+    companions = _button_companions()
+    for path in CSS_FILES:
+        for selector, body, line in _css_rules(path.read_text()):
+            if BUTTON_VARIANT.search(selector) or "design-ok" in body or "design-ok" in selector:
+                continue
+            for part in _split_selectors(selector):
+                last = re.split(r"[\s>+~]+", part.strip())[-1]
+                classes = set(re.findall(r"\.([a-z][a-z0-9-]*)", last.split(":")[0]))
+                hit = sorted(classes & companions)
+                if hit and _vertical_padding(body):
+                    report(path, line, "button-hoehe", f"«{part.strip()[:80]}» ändert Höhe/Padding von «.{hit[0]}», die im TSX neben einer Button-Variante steht (--button-height)")
+                    break
+
+
 def main() -> int:
     defined = defined_vars()
     targets = [Path(a).resolve() for a in sys.argv[1:]]
@@ -233,6 +350,8 @@ def main() -> int:
             check_line(path, no, line, defined, is_css)
 
     check_shared_copies()
+    if not targets or any(path.suffix == ".css" for path in targets):
+        check_button_variants()
     if not targets:
         check_shortcut_texts()
         # Bereichs-CSS: nur im Gesamtlauf, die Prüfung braucht den ganzen Importgraphen.

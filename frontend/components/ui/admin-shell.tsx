@@ -211,6 +211,11 @@ export function AdminShell({ children, session }: { children: ReactNode; session
   }, [pathname]);
 
   const activeLink = allNavLinks.find((link) => isActiveLink(link.href, pathname));
+  const activeNavGroup = navGroups.find((group) => group.links.some((link) => isActiveLink(link.href, pathname)))?.titleKey ?? null;
+  const [expandedNavGroup, setExpandedNavGroup] = useState<string | null>(activeNavGroup);
+  useEffect(() => {
+    setExpandedNavGroup(activeNavGroup);
+  }, [activeNavGroup, pathname]);
   // The backend's require_admin_write already rejects every create/update/delete for a
   // "support"-role admin with a 403 (see core/admin_security.py) - but until this fix,
   // nothing in the frontend ever read session.admin.role at all (audit finding,
@@ -241,26 +246,47 @@ export function AdminShell({ children, session }: { children: ReactNode; session
             </div>
           </div>
           <p className="muted sidebar-copy">{t("tagline")}</p>
+          {/* Wie die Seitenleiste der App (app-shell.tsx): Abschnitte klappen auf und zu, der
+              Abschnitt der aktuellen Seite ist offen, ein Klick öffnet einen anderen. */}
           <nav className="sidebar-nav admin-sidebar-nav">
-            {navGroups.map((group) => (
-              <div className="admin-nav-group" key={group.titleKey ?? "root"}>
-                {group.titleKey ? <div className="admin-nav-group-title">{t(group.titleKey)}</div> : null}
-                <div className="nav-links">
-                  {group.links.map((link) => (
-                    <Link
-                      href={link.href as Route}
-                      key={link.href}
-                      className={isActiveLink(link.href, pathname) ? "nav-link nav-link-active" : "nav-link"}
-                      onClick={() => setMobileNavOpen(false)}
-                    >
-                      <AdminNavIcon name={link.icon} />
-                      <span className="nav-link-label">{t(link.labelKey)}</span>
-                      {link.badge === "count" && tenantTotal !== null ? <span className="admin-nav-count">{tenantTotal}</span> : null}
-                    </Link>
-                  ))}
+            {navGroups.map((group) => {
+              const renderLink = (link: AdminNavLink) => (
+                <Link
+                  href={link.href as Route}
+                  key={link.href}
+                  className={isActiveLink(link.href, pathname) ? "nav-link nav-link-active" : "nav-link"}
+                  onClick={() => setMobileNavOpen(false)}
+                >
+                  <AdminNavIcon name={link.icon} />
+                  <span className="nav-link-label">{t(link.labelKey)}</span>
+                  {link.badge === "count" && tenantTotal !== null ? <span className="admin-nav-count">{tenantTotal}</span> : null}
+                </Link>
+              );
+              if (group.titleKey === null) {
+                return (
+                  <div className="nav-links" key="ungrouped">
+                    {group.links.map(renderLink)}
+                  </div>
+                );
+              }
+              const isExpanded = expandedNavGroup === group.titleKey;
+              return (
+                <div className={`nav-group${isExpanded ? " nav-group-expanded" : ""}`} key={group.titleKey}>
+                  <button
+                    type="button"
+                    className="nav-group-label"
+                    aria-expanded={isExpanded}
+                    onClick={() => setExpandedNavGroup(group.titleKey)}
+                  >
+                    <span>{t(group.titleKey)}</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" width={14} height={14} aria-hidden="true">
+                      <path d="M9 18l6-6-6-6" />
+                    </svg>
+                  </button>
+                  {isExpanded && <div className="nav-links">{group.links.map(renderLink)}</div>}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </nav>
           <div className="sidebar-footer">
             <div className="admin-identity">

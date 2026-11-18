@@ -260,7 +260,6 @@
     "loadFailed": "Loading failed.",
     "saveFailed": "Saving failed.",
     "loading": "Loading …",
-    "tariffDeleteConfirm": "Delete tariff “{name}”? {count, plural, =0 {} one {# person falls back to the default tariff.} other {# people fall back to the default tariff.}}",
     "tariffsDescription": "Tariffs such as apprentices or full earners. Each tariff has its own amounts for lateness and absence and in every task rule. Anyone without a tariff pays according to the default tariff.",
     "addTariff": "Add tariff",
     "editTariff": "Edit tariff",
@@ -343,9 +342,6 @@
     "cardDefaultDetail": "{own} assigned · {rest} without own tariff",
     "cardAllAssigned": "all assigned directly",
     "cardNobody": "nobody assigned yet",
-    "cardLate": "Lateness {amount}",
-    "cardAbsent": "Absence {amount}",
-    "cardClubTariff": "Lateness/absence: standard tariff",
     "selectedCount": "{count} selected",
     "bulkSet": "Set tariff:",
     "bulkClear": "Clear",
@@ -368,13 +364,25 @@
       "reopen": "Fine reopened, booking deleted.",
       "restore": "Fine restored.",
       "waive": "Fine waived."
-    }
+    },
+    "firstTariff": "Create first tariff",
+    "noTariffsHint": "Without a tariff, everyone pays the fine tariff from «Late & absent». The first tariff automatically becomes the default.",
+    "chipLate": "Late {amount}",
+    "chipAbsent": "Absent {amount}",
+    "chipStandard": "default",
+    "tariffDeleteTitle": "Delete tariff «{name}»?",
+    "tariffDeleteRest": "{count, plural, =0 {Nobody has this tariff assigned directly.} one {# person falls back to the default tariff.} other {# people fall back to the default tariff.}}",
+    "tariffCreated": "Tariff «{name}» created",
+    "tariffSavedToast": "Tariff saved",
+    "tariffDeleted": "Tariff «{name}» deleted",
+    "bulkDone": "{count, plural, one {# person} other {# people}}: {tariff}",
+    "standardPlaceholder": "Default ({amount})"
   },
   "colSource": "Minutes / task",
   "todoFineReason": "Task overdue",
   "todoFineRunningHint": "Running until the task is done",
   "fineSettings": {
-    "pageTitle": "Fine rules",
+    "pageTitle": "Fine settings",
     "description": "How much fines are: for lateness and absence, per tariff and for tasks completed late. The fines themselves are listed under Cash › Fines.",
     "openSettings": "Fine rules",
     "tabAttendance": "Lateness & absence",
@@ -388,7 +396,11 @@
     "colLate": "Lateness",
     "colAbsent": "Absence",
     "clubTariff": "Standard tariff",
-    "tariffAmountsHelp": "Leave empty to use the standard tariff. Amounts for tasks are set in the task rules."
+    "tariffAmountsHelp": "Leave empty to use the standard tariff. Amounts for tasks are set in the task rules.",
+    "attendanceHintBefore": "Set separate amounts per tariff (e.g. apprentices) in the tab",
+    "attendanceHintAfter": ". A protocol template can override the default tariff; its amount then applies to everyone.",
+    "tariffsTabLink": "«Tariffs»",
+    "attendanceGroup": "Attendance fines"
   },
   "errors": {
     "fine_transaction": "This entry belongs to a collected fine. Reopen the fine under “Fines” instead of changing the entry.",

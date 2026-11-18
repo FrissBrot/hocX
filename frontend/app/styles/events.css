@@ -108,7 +108,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-5);
+  padding-inline: var(--space-5);
 }
 
 .event-layout {
@@ -317,9 +317,6 @@
   min-height: 44px;
 }
 
-.event-view-trigger {
-  min-height: 44px;
-}
 
 .event-view-trigger-open {
   border-color: color-mix(in srgb, var(--accent) 34%, transparent 66%);

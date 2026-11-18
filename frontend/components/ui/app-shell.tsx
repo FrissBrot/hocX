@@ -131,6 +131,36 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
     else openSearch();
   }, [openSearch]);
   useGlobalSearchShortcuts(toggleSearch, session?.authenticated !== false);
+  // Tippen direkt nach Ctrl+K/⌘K, bevor das Suchfeld existiert (Fenster wird nachgeladen und
+  // montiert): die Zeichen sammeln und dem Feld übergeben, statt sie zu verlieren.
+  const pendingSearchKeys = useRef<{ text: string; consumed: boolean }>({ text: "", consumed: true });
+  useEffect(() => {
+    if (!searchOpen) return;
+    pendingSearchKeys.current = { text: "", consumed: false };
+    function collect(event: KeyboardEvent) {
+      if (pendingSearchKeys.current.consumed) return;
+      if (event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
+      if (event.target instanceof HTMLInputElement && event.target.getAttribute("role") === "combobox") return;
+      if (event.key.length === 1) {
+        pendingSearchKeys.current.text += event.key;
+        event.preventDefault();
+      } else if (event.key === "Backspace") {
+        pendingSearchKeys.current.text = pendingSearchKeys.current.text.slice(0, -1);
+        event.preventDefault();
+      }
+    }
+    window.addEventListener("keydown", collect, true);
+    return () => window.removeEventListener("keydown", collect, true);
+  }, [searchOpen]);
+  // Suchfenster im Leerlauf vorladen: beim ersten Ctrl+K/⌘K ist es sofort da, und kein
+  // Tastendruck geht verloren, während der Code noch geladen wird.
+  useEffect(() => {
+    if (session?.authenticated === false) return;
+    const preload = () => void import("@/components/search/global-search");
+    const idle = (window as Window & { requestIdleCallback?: (callback: () => void) => number }).requestIdleCallback;
+    if (idle) idle(preload);
+    else window.setTimeout(preload, 1500);
+  }, [session?.authenticated]);
 
   const navGroups = useMemo(() => buildNav(session), [session]);
   const activeNavGroup = useMemo(
@@ -322,7 +352,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
   }
 
   const globalSearch = searchOpen ? (
-    <GlobalSearch open onClose={() => setSearchOpen(false)} session={session} listInput={searchListInput} onAction={runSearchAction} />
+    <GlobalSearch open onClose={() => setSearchOpen(false)} session={session} listInput={searchListInput} onAction={runSearchAction} pendingKeys={pendingSearchKeys} />
   ) : null;
 
   const profileModal = profileModalOpen ? (

@@ -106,6 +106,9 @@
 
   /* --- Layout ---------------------------------------------------------------------- */
   --table-max-width: 1200px; /* gemeinsame Maximalbreite aller .table-shell, damit Listenseiten einheitlich wirken */
+  /* Einheitliche Höhe aller Text-Buttons (primary, secondary, danger, ghost): nebeneinander
+     immer gleich hoch. Auf dem Smartphone etwas grösser (Fingerziel), siehe unten. */
+  --button-height: 40px;
 
   /* --- Bewegung -------------------------------------------------------------------- */
   --dur-fast: 120ms;
@@ -203,5 +206,12 @@
     --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.45);
     --shadow-overlay: 0 20px 60px rgba(0, 0, 0, 0.5);
     --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 32%, transparent);
+  }
+}
+
+/* Smartphone: grössere Fingerziele für Buttons (Breakpoint wie DESIGN.md) */
+@media (max-width: 640px) {
+  :root {
+    --button-height: 44px;
   }
 }

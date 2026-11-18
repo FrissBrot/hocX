@@ -260,7 +260,6 @@
     "loadFailed": "Caricamento non riuscito.",
     "saveFailed": "Salvataggio non riuscito.",
     "loading": "Caricamento …",
-    "tariffDeleteConfirm": "Eliminare la tariffa «{name}»? {count, plural, =0 {} one {# persona torna alla tariffa standard.} other {# persone tornano alla tariffa standard.}}",
     "tariffsDescription": "Tariffe come apprendisti o salario pieno. Ogni tariffa ha importi propri per ritardi e assenze e in ogni regola dei compiti. Chi non ha una tariffa paga secondo la tariffa standard.",
     "addTariff": "Aggiungi tariffa",
     "editTariff": "Modifica tariffa",
@@ -343,9 +342,6 @@
     "cardDefaultDetail": "{own} assegnati · {rest} senza tariffa propria",
     "cardAllAssigned": "tutti assegnati direttamente",
     "cardNobody": "ancora nessuno assegnato",
-    "cardLate": "Ritardo {amount}",
-    "cardAbsent": "Assenza {amount}",
-    "cardClubTariff": "Ritardo/assenza: tariffa standard",
     "selectedCount": "{count} selezionati",
     "bulkSet": "Imposta tariffa:",
     "bulkClear": "Annulla",
@@ -368,13 +364,25 @@
       "reopen": "Multa riaperta, registrazione eliminata.",
       "restore": "Multa ripristinata.",
       "waive": "Multa condonata."
-    }
+    },
+    "firstTariff": "Crea la prima tariffa",
+    "noTariffsHint": "Senza tariffa, tutti pagano secondo la tariffa di «Ritardo & assenza». La prima tariffa diventa automaticamente quella standard.",
+    "chipLate": "Ritardo {amount}",
+    "chipAbsent": "Assenza {amount}",
+    "chipStandard": "standard",
+    "tariffDeleteTitle": "Eliminare la tariffa «{name}»?",
+    "tariffDeleteRest": "{count, plural, =0 {Nessuno ha questa tariffa assegnata direttamente.} one {# persona torna alla tariffa standard.} other {# persone tornano alla tariffa standard.}}",
+    "tariffCreated": "Tariffa «{name}» creata",
+    "tariffSavedToast": "Tariffa salvata",
+    "tariffDeleted": "Tariffa «{name}» eliminata",
+    "bulkDone": "{count, plural, one {# persona} other {# persone}}: {tariff}",
+    "standardPlaceholder": "Standard ({amount})"
   },
   "colSource": "Verbale / compito",
   "todoFineReason": "Compito in ritardo",
   "todoFineRunningHint": "In corso finché il compito non è concluso",
   "fineSettings": {
-    "pageTitle": "Regole delle multe",
+    "pageTitle": "Configurazione multe",
     "description": "Quanto costano le multe: per ritardi e assenze, per tariffa e per compiti conclusi in ritardo. Le multe stesse si trovano in Cassa › Multe.",
     "openSettings": "Regole delle multe",
     "tabAttendance": "Ritardo e assenza",
@@ -388,7 +396,11 @@
     "colLate": "Ritardo",
     "colAbsent": "Assenza",
     "clubTariff": "Tariffa standard",
-    "tariffAmountsHelp": "Lascia vuoto per usare la tariffa standard. Gli importi dei compiti si trovano nelle regole dei compiti."
+    "tariffAmountsHelp": "Lascia vuoto per usare la tariffa standard. Gli importi dei compiti si trovano nelle regole dei compiti.",
+    "attendanceHintBefore": "Gli importi propri di ogni tariffa (p. es. apprendisti) si impostano nella scheda",
+    "attendanceHintAfter": ". Un modello di verbale può sostituire la tariffa standard; il suo importo vale allora per tutti.",
+    "tariffsTabLink": "«Tariffe»",
+    "attendanceGroup": "Multe di presenza"
   },
   "errors": {
     "fine_transaction": "Questa registrazione appartiene a una multa incassata. Riapri la multa in «Multe» invece di modificare la registrazione.",

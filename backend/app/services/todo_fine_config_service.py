@@ -165,6 +165,27 @@ def assign_member(db: Session, tenant_id: int, participant_id: uuid.UUID, group_
     )
 
 
+def assign_members(db: Session, tenant_id: int, participant_ids: list[uuid.UUID], group_id: uuid.UUID | None) -> list[FineTariffMember]:
+    """Sammelzuweisung (Bussen-Konfiguration › Tarif je Person). Nur Personen des eigenen
+    Mandanten; unbekannte oder fremde IDs werden ohne Hinweis übergangen (kein Existenz-Orakel)."""
+    group = None
+    if group_id is not None:
+        group = get_group(db, tenant_id, group_id)
+        if group is None:
+            raise ValueError("Unknown tariff")
+    participants = db.execute(
+        select(Participant).where(Participant.tenant_id == tenant_id, Participant.public_id.in_(set(participant_ids)))
+    ).scalars().all()
+    for participant in participants:
+        participant.fine_tariff_group_id = group.id if group else None
+    db.commit()
+    return [
+        FineTariffMember(participant_id=participant.public_id, display_name=participant.display_name,
+                         tariff_group_id=group.public_id if group else None, is_active=participant.is_active)
+        for participant in participants
+    ]
+
+
 # ── Regeln ───────────────────────────────────────────────────────────
 
 

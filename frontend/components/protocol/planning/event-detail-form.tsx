@@ -9,7 +9,7 @@ import Link from "next/link";
 
 import { Tabs } from "@/components/ui/tabs";
 import { DateInput } from "@/components/ui/date-input";
-import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { LazyRichTextEditor as RichTextEditor } from "@/components/ui/rich-text-editor-lazy";
 import { TimeInput } from "@/components/ui/time-input";
 import { TagInput } from "@/components/ui/tag-input";
 import { HelpPopover } from "@/components/ui/help-popover";

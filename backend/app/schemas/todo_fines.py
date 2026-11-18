@@ -69,6 +69,11 @@ class FineTariffAssignment(BaseModel):
     tariff_group_id: uuid.UUID | None = None
 
 
+class FineTariffBulkAssignment(BaseModel):
+    participant_ids: list[uuid.UUID] = Field(min_length=1, max_length=1000)
+    tariff_group_id: uuid.UUID | None = None
+
+
 # ── Regeln ───────────────────────────────────────────────────────────
 
 

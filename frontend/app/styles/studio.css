@@ -366,7 +366,7 @@
   color: var(--text);
 }
 
-.studio-toolbar :is(.button-ghost, .button-secondary, .button-primary):not(.button-icon) {
+.studio-toolbar :is(.button-ghost, .button-secondary, .button-primary):not(.button-icon) { /* design-ok: kompakte Werkzeugleiste, alle Buttons darin gleich hoch */
   min-height: 36px;
   padding: var(--space-1) var(--space-3);
 }

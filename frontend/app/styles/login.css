@@ -237,7 +237,7 @@
     align-items: center;
   }
 
-  .mfa-primary-button {
+  .mfa-primary-button { /* design-ok: grosse Hauptaktion im MFA-Schritt */
     min-height: 56px;
   }
 

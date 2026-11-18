@@ -2941,6 +2941,15 @@
         "finance"
       ]
     },
+    "PUT /api/todo-fines/tariff-members": {
+      "handler": "todo_fines.assign_tariff_bulk",
+      "requires": [
+        "finances.manage"
+      ],
+      "features": [
+        "finance"
+      ]
+    },
     "PUT /api/todo-fines/tariff-members/{participant_id}": {
       "handler": "todo_fines.assign_tariff",
       "requires": [

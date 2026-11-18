@@ -57,8 +57,10 @@ def test_function_answers_only_match_or_mismatch_per_page(db):
     row = _pages(db, entry.public_id, ["a" * 16, "f" * 16])
     assert row["page_count"] == 3 and row["page_matches"] == [True, False, False]
     assert row["document_id"] == entry.public_id
-    # Ohne freigegebene Anzeige der Organisation kein Titel (es gab keinen Hash-Treffer)
+    # Ohne freigegebene Anzeige der Organisation nur die Zuordnung: kein Titel, Status, Datum,
+    # keine Version (es gab keinen Hash-Treffer, die ID allein darf nichts verraten)
     assert row["title"] is None and row["tenant_name"] is None
+    assert row["status_code"] is None and row["version_label"] is None and row["created_at"] is None
     assert "sha256" not in row and "page_fingerprints" not in row
 
     tenant.verify_show_identity = True

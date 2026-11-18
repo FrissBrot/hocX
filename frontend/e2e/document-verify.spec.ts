@@ -2,8 +2,9 @@ import { test, expect, request as playwrightRequest } from "@playwright/test";
 import { renderPdf } from "./render-pdf";
 
 // Öffentliche Echtheitsprüfung in der Abgabebox: ein exportiertes PDF wird als «Original» erkannt,
-// dieselbe Datei mit einem geänderten Byte als «nicht gefunden». Die Datei verlässt den Browser
-// nie - geprüft wird, dass nur der Hash an den Endpoint geht.
+// dieselbe Datei mit einem geänderten Byte als «neu gespeichert» (Zuordnung über die Dokument-ID,
+// Seitenvergleich), eine fremde Datei als «nicht gefunden». Die Datei verlässt den Browser nie -
+// geprüft wird, dass nur Hash, Dokument-ID und Seiten-Fingerabdrücke an den Endpoint gehen.
 test("verify page recognises the original and rejects a modified copy", async ({ page, request, browser }) => {
   test.setTimeout(150_000);
   const suffix = Date.now();
@@ -37,8 +38,17 @@ test("verify page recognises the original and rejects a modified copy", async ({
           await expect(verifyPage.getByText("unveränderte Kopie")).toBeVisible();
           await verifyPage.screenshot({ path: `test-results/verify-original-${theme}-${width}.png`, fullPage: true });
 
+          // Ein geändertes Byte: kein Original mehr, aber über die Dokument-ID zugeordnet und
+          // Seite für Seite verglichen - der Text ist gleich (Seitenvergleich, Migration 0185)
           await verifyPage.getByRole("button", { name: "Andere Datei prüfen" }).click();
           await verifyPage.locator("input[type=file]").setInputFiles({ name: "pendenzen-bearbeitet.pdf", mimeType: "application/pdf", buffer: modified });
+          await expect(verifyPage.getByRole("heading", { name: "Neu gespeichert – Text unverändert" })).toBeVisible({ timeout: 30_000 });
+          await expect(verifyPage.getByRole("heading", { name: "Original" })).toBeHidden();
+          await verifyPage.screenshot({ path: `test-results/verify-modified-${theme}-${width}.png`, fullPage: true });
+
+          // Keine hocX-Datei: nicht gefunden
+          await verifyPage.getByRole("button", { name: "Andere Datei prüfen" }).click();
+          await verifyPage.locator("input[type=file]").setInputFiles({ name: "fremd.pdf", mimeType: "application/pdf", buffer: Buffer.from("kein PDF aus hocX") });
           await expect(verifyPage.getByRole("heading", { name: "Nicht gefunden" })).toBeVisible({ timeout: 30_000 });
           await verifyPage.screenshot({ path: `test-results/verify-notfound-${theme}-${width}.png`, fullPage: true });
         }
@@ -46,8 +56,10 @@ test("verify page recognises the original and rejects a modified copy", async ({
       // Nur Hash und Dokument-ID gehen an den Server, nie die Datei
       expect(posted.length).toBeGreaterThan(0);
       for (const body of posted) {
-        expect(Object.keys(JSON.parse(body)).sort()).toEqual(["document_id", "sha256"]);
-        expect(body.length).toBeLessThan(200);
+        // Hash und Dokument-ID; bei veränderter Datei zusätzlich nur Fingerabdrücke der Seiten
+        const keys = Object.keys(JSON.parse(body)).sort();
+        expect([["document_id", "sha256"], ["document_id", "page_fingerprints", "sha256"]]).toContainEqual(keys);
+        expect(body.length).toBeLessThan(4096);
       }
     } finally {
       await context.close();

@@ -26,6 +26,7 @@ from app.core.security import CurrentUser, get_current_user, require_feature, re
 from app.models import FinanceAccount, Participant, ProtocolTodo, Tenant, TodoFine, TodoFineRule
 from app.schemas.todo_fines import (
     FineTariffAssignment,
+    FineTariffBulkAssignment,
     FineTariffGroupOrder,
     FineTariffGroupRead,
     FineTariffGroupWrite,
@@ -148,6 +149,18 @@ def delete_tariff(tariff_id: uuid.UUID, db: Session = Depends(get_db), user: Cur
 def list_tariff_members(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     # Der Tarif sagt etwas über die Person aus (Lernende, Verdienst) - nur für die Kasse.
     return config.list_members(db, _manage_tariffs(user))
+
+
+@router.put("/todo-fines/tariff-members", response_model=list[FineTariffMember])
+def assign_tariff_bulk(payload: FineTariffBulkAssignment, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    tenant_id = _manage_tariffs(user)
+    try:
+        members = config.assign_members(db, tenant_id, payload.participant_ids, payload.tariff_group_id)
+    except (SQLAlchemyError, ValueError) as exc:
+        raise _bad_request(db, exc, "Tariff could not be assigned") from exc
+    audit.log(db, action="todo_fine.tariff_assigned", actor=user, entity_type="fine_tariff_group", entity_id=None,
+              details={"tariff_id": str(payload.tariff_group_id) if payload.tariff_group_id else None, "count": len(members)})
+    return members
 
 
 @router.put("/todo-fines/tariff-members/{participant_id}", response_model=FineTariffMember)

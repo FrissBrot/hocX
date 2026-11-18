@@ -69,7 +69,7 @@
   "roleManagement": "Roles",
   "workflows": "Workflows",
   "design": "Design",
-  "fineSettings": "Fine rules",
+  "fineSettings": "Fine settings",
   "publicLinks": "Access links",
   "related": {
     "openSettings": "Open setting: {name}",

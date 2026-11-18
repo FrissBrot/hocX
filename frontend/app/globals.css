@@ -1140,8 +1140,11 @@ button {
 /* Hover falls back to the button's own resting background (--button-bg) rather
    than a hardcoded color, so a variant that forgets to set --button-hover-bg
    simply shows no hover change instead of flashing dark/black. Variants that
-   want a distinct hover color still set --button-hover-bg explicitly. */
-button:hover:not(:disabled) {
+   want a distinct hover color still set --button-hover-bg explicitly.
+   Nur für Buttons ohne Klasse (Primärbutton) und Button-Varianten (button-*): Kacheln, Karten
+   und Listenzeilen, die technisch ein <button> sind und ihren Hintergrund selbst setzen,
+   wurden sonst beim Überfahren dunkel (--button-bg = Primärfarbe), siehe DESIGN.md 7. */
+button:where(:not([class]), [class*="button-"]):hover:not(:disabled) {
   background: var(--button-hover-bg, var(--button-bg));
 }
 
@@ -1152,6 +1155,9 @@ button:disabled {
   box-shadow: none;
 }
 
+/* Nebenaktion: heller Hintergrund mit Rahmen - auf <button> wie auf <a>. Vorher fehlte der
+   Hintergrund hier, ein <button class="button-secondary"> erbte die dunkle Primärfarbe und
+   wurde je Bereich einzeln wieder hell gemacht. */
 .button-secondary {
   display: inline-flex;
   align-items: center;
@@ -1159,9 +1165,13 @@ button:disabled {
   gap: var(--space-2);
   width: auto;
   min-width: 0;
-  min-height: 0;
-  padding: var(--space-2) var(--space-4);
+  padding: 0 var(--space-4);
   line-height: 1.5;
+  --button-bg: var(--panel-solid);
+  --button-hover-bg: var(--neutral-bg);
+  background: var(--button-bg);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
 }
 
 .input {
@@ -1388,6 +1398,19 @@ a.button-secondary {
   transition: border-color var(--dur-base) ease, background var(--dur-base) ease;
 }
 a.button-secondary:hover { border-color: var(--border-strong); }
+
+/* Einheitliche Höhe aller Text-Buttons (Token --button-height): nebeneinander immer gleich hoch.
+   Icon-Buttons, Chips und Kompaktvarianten haben eigene Grössen. Bereichs-CSS überschreibt
+   Höhe/Padding einer Variante nicht (Checker-Regel «button-hoehe», DESIGN.md 7). */
+:is(.button-primary, .button-secondary, .button-danger, .button-ghost):where(:not(.button-icon, .button-icon-soft, .button-pill, .button-icon-soft-sm)) {
+  box-sizing: border-box; /* auch Labels/Links mit Button-Klasse: Rahmen zählt zur Höhe */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--button-height);
+  padding-block: 0;
+}
 
 .button-toggle {
   width: auto;
@@ -2432,7 +2455,6 @@ button.table-row-link:hover {
 .element-create-modal .modal-header { padding: var(--space-5) var(--space-6) var(--space-4); margin: 0; border-bottom: 1px solid var(--border); }
 .element-create-modal .modal-content { padding: 0; overflow: hidden; }
 .element-create-fields .two-col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.element-create-modal .button-secondary { --button-bg: var(--panel-solid); --button-hover-bg: var(--neutral-bg); background: var(--button-bg); color: var(--text); border: 1px solid var(--border-strong); }
 .element-create-fields { display: grid; align-content: start; gap: var(--space-5); padding: var(--space-5) var(--space-6); min-width: 0; }
 .element-event-fields { display: grid; gap: var(--space-3); min-width: 0; }
 .element-create-modal .mini-menu { width: 100%; min-width: 0; }
@@ -2645,8 +2667,6 @@ button.table-row-link:hover {
 
 .protocol-list-toolbar .button-secondary,
 .protocol-list-toolbar-right .button-secondary {
-  min-height: 0;
-  padding: var(--space-1) var(--space-4);
   font-size: var(--text-base);
 }
 
@@ -3210,6 +3230,17 @@ button.table-row-link:hover {
   color: var(--accent);
   border-bottom-color: var(--accent);
 }
+.tabs-count {
+  margin-left: var(--space-2);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--neutral-bg);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
 .tabs-note {
   margin-left: var(--space-2);
   color: var(--muted);
@@ -4082,7 +4113,7 @@ button.table-row-link:hover {
   border-radius: var(--radius-md);
 }
 
-.structured-list-table .structured-list-picker {
+.structured-list-table .structured-list-picker { /* design-ok: Auswahlfeld in der Tabellenzelle, kein Aktionsbutton */
   min-height: 36px;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
@@ -4168,6 +4199,9 @@ button.table-row-link:hover {
   overflow: hidden;
   background: color-mix(in srgb, var(--panel-solid) 60%, transparent);
 }
+
+/* Platzhalter, solange der Editor nachlädt (rich-text-editor-lazy.tsx): Höhe von Leiste + Feld */
+.rich-text-editor-loading { min-height: 120px; } /* design-ok: Höhe Werkzeugleiste + Mindesthöhe des Felds */
 
 .rich-text-toolbar {
   display: flex;
@@ -5403,8 +5437,8 @@ button.table-row-link:hover {
   flex-shrink: 0;
 }
 .gallery-upload-actions button { white-space: nowrap; min-height: 42px; border-radius: var(--radius-md); font-size: var(--text-base); font-weight: 600; padding: var(--space-2) var(--space-5); transition: background var(--dur-base) ease, box-shadow var(--dur-base) ease, transform var(--dur-fast) ease; }
-.gallery-upload-actions .button-ghost { border: 1px solid var(--border-strong); background: var(--panel-solid); }
-.gallery-upload-actions .button-secondary { background: var(--accent); color: var(--on-solid); box-shadow: 0 1px 2px rgba(16, 24, 40, 0.12), 0 4px 12px color-mix(in srgb, var(--accent) 30%, transparent); } /* design-ok: Akzent-Glow, kein Standardschatten */
+.gallery-upload-actions .button-ghost { border: 1px solid var(--border-strong); --button-bg: var(--panel-solid); background: var(--button-bg); }
+.gallery-upload-actions .button-secondary { --button-bg: var(--accent); --button-hover-bg: var(--accent-strong); background: var(--button-bg); color: var(--on-solid); box-shadow: 0 1px 2px rgba(16, 24, 40, 0.12), 0 4px 12px color-mix(in srgb, var(--accent) 30%, transparent); } /* design-ok: Akzent-Glow, kein Standardschatten */
 
 @media (max-width: 640px) {
   .gallery-upload-modal .modal-header { padding-inline: var(--space-4); }
@@ -5726,7 +5760,7 @@ button.table-row-link:hover {
   line-height: 1.35;
 }
 
-.mfa-primary-button {
+.mfa-primary-button { /* design-ok: einzelne grosse Hauptaktion im MFA-Schritt */
   min-height: 60px;
   padding: var(--space-4) var(--space-4);
   border-radius: var(--radius-lg);
@@ -5829,7 +5863,7 @@ button.table-row-link:hover {
   color: var(--neutral-fg);
 }
 
-.login-submit {
+.login-submit { /* design-ok: einzelner breiter Anmelde-Button */
   width: 100%;
   padding: var(--space-3) var(--space-4);
   font-size: var(--text-lg);
@@ -8074,7 +8108,7 @@ button.table-row-link:hover {
 .list-manager-content .structured-list-table input,
 .list-manager-content .structured-list-table textarea,
 .list-manager-content .structured-list-table select,
-.list-manager-content .structured-list-table .structured-list-picker {
+.list-manager-content .structured-list-table .structured-list-picker { /* design-ok: Auswahlfeld in der Tabellenzelle */
   width: 100%;
   max-width: 100%;
   min-height: 36px;
@@ -8599,16 +8633,6 @@ button.table-row-link:hover {
 .files-type-icon-audio .files-type-icon-extension,
 .files-type-icon-video .files-type-icon-extension { background: var(--accent-soft); color: var(--accent-strong); }
 
-/* Nebenaktionen als weisse Umriss-Buttons wie im Design (global ist button-secondary als
-   <button> dunkel, siehe a.button-secondary). */
-:is(.files-table-actions, .storage-page, .maintenance-page, .studio-header-actions, .session-studio) button.button-secondary {
-  --button-bg: var(--panel-solid);
-  --button-hover-bg: var(--neutral-bg);
-  border: 1px solid var(--border-strong);
-  background: var(--button-bg);
-  color: var(--text);
-}
-:is(.files-table-actions, .storage-page, .maintenance-page, .studio-header-actions, .session-studio) button.button-secondary:hover:not(:disabled) { background: var(--button-hover-bg); }
 .files-page-header > div:first-child { flex: 1; min-width: 0; }
 .files-page-header .muted { max-width: 640px; font-size: var(--text-base); }
 .files-card .table-shell { max-width: none; border: 0; border-radius: 0; box-shadow: none; }
@@ -8653,7 +8677,6 @@ button.table-row-link:hover {
 .todo-edit-actions button { width: auto; min-height: 41px; padding: var(--space-2) var(--space-4); border-radius: var(--radius-sm); }
 .todo-edit-files li { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
 
-.todo-edit-actions .button-secondary { --button-bg: var(--panel-solid); --button-hover-bg: var(--neutral-bg); background: var(--button-bg); color: var(--text); border-color: var(--border-strong); }
 
 /* Abgabe erstellen/bearbeiten (Aufbau wie der Todo-Editor: Kopf, Formular + Seitenleiste, Fuss) */
 .subm-edit-modal.modal-shell { width: min(1100px, 100%); padding: 0; grid-template-rows: minmax(0, 1fr); }
@@ -8687,7 +8710,6 @@ button.table-row-link:hover {
 .subm-edit-modal .subm-edit-manage { --button-bg: transparent; --button-hover-bg: transparent; width: auto; min-height: 0; flex-shrink: 0; padding: var(--space-2) 0; border: 0; color: var(--text); font-size: var(--text-base); font-weight: 600; }
 .subm-edit-actions { display: flex; flex-shrink: 0; gap: var(--space-3); margin-left: auto; }
 .subm-edit-actions button { width: auto; min-height: 41px; padding: var(--space-2) var(--space-4); border-radius: var(--radius-sm); }
-.subm-edit-actions .button-secondary { --button-bg: var(--panel-solid); --button-hover-bg: var(--neutral-bg); background: var(--button-bg); color: var(--text); border-color: var(--border-strong); }
 @media (max-width: 640px) {
   .subm-edit-footer { flex-wrap: wrap; padding: var(--space-4); }
 }
@@ -8877,21 +8899,7 @@ button.table-row-link:hover {
   color: var(--text);
 }
 
-/* Sidebar */
-.admin-sidebar-nav {
-  display: grid;
-  align-content: start;
-  gap: var(--space-4);
-}
-
-.admin-nav-group-title {
-  padding: 0 var(--space-3) var(--space-2);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
+/* Sidebar: Abschnitte wie in der App (.nav-group, zuklappbar), keine eigenen Abstände */
 
 .admin-nav-count {
   margin-left: auto;
@@ -8928,7 +8936,7 @@ button.table-row-link:hover {
   white-space: nowrap;
 }
 
-.admin-identity-logout {
+.admin-identity-logout { /* design-ok: kompakter Abmelden-Link im Identitätsblock */
   width: auto;
   min-height: 32px;
   padding: 0 var(--space-2);
@@ -9443,12 +9451,12 @@ button.table-row-link:hover {
   min-width: 140px;
 }
 
-.admin-user-table .button-ghost {
+.admin-user-table .button-ghost { /* design-ok: kompakte Zeilenaktion, alle Buttons der Zeile gleich klein */
   width: auto;
   min-height: 32px;
   padding: 0 var(--space-2);
 }
-.admin-user-table .button-danger {
+.admin-user-table .button-danger { /* design-ok: kompakte Zeilenaktion, alle Buttons der Zeile gleich klein */
   width: auto;
   min-height: 32px;
   padding: 0 var(--space-2);
@@ -9524,7 +9532,7 @@ button.table-row-link:hover {
   border-radius: var(--radius-sm);
 }
 
-.admin-package-row .button-ghost {
+.admin-package-row .button-ghost { /* design-ok: kompakte Zeilenaktion, alle Buttons der Zeile gleich klein */
   width: auto;
   min-height: 32px;
 }
@@ -9629,7 +9637,7 @@ button.table-row-link:hover {
   border-top: 1px solid var(--border);
 }
 
-.admin-plan-card-foot .button-ghost {
+.admin-plan-card-foot .button-ghost { /* design-ok: kompakte Zeilenaktion, alle Buttons der Zeile gleich klein */
   width: auto;
   min-height: 32px;
   padding: 0 var(--space-2);
@@ -10638,11 +10646,6 @@ button.table-row-link:hover {
   }
 }
 
-.event-header-actions .button-secondary,
-.event-new-button {
-  min-height: 44px;
-}
-
 .event-button-group > .button-secondary,
 .event-calendar-button,
 .event-view-trigger {
@@ -10747,7 +10750,7 @@ button.table-row-link:hover {
 .photos-page-header > div:first-child { flex: 1; min-width: 0; }
 .photos-page-header .muted { max-width: 720px; font-size: var(--text-base); }
 .photos-header-actions { flex-wrap: wrap; justify-content: flex-end; }
-.photos-header-actions .photos-upload-button { width: auto; min-height: 40px; padding: var(--space-2) var(--space-4); }
+.photos-header-actions .photos-upload-button { width: auto; padding-inline: var(--space-4); }
 .photos-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .photos-filter-row .list-filter-search { flex: 1 1 200px; min-width: 0; }
 .photos-filter-row .search-input input { min-height: 38px; border: 1px solid var(--border-strong); background: var(--panel-solid); border-radius: var(--radius-sm); }
@@ -10766,7 +10769,7 @@ button.table-row-link:hover {
 .photo-bulk-selection { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
 .photo-bulk-bar .photo-bulk-select-all { color: var(--info-fg); }
 .photo-bulk-actions { min-width: 0; max-width: 100%; display: flex; align-items: center; gap: var(--space-1); flex-wrap: wrap; margin-left: auto; }
-.photo-bulk-bar .button-secondary { min-height: 32px; padding: var(--space-1) var(--space-2); border: none; font-size: var(--text-sm); white-space: nowrap; }
+.photo-bulk-bar .button-secondary { /* design-ok: kompakte Auswahlleiste, alle Buttons darin gleich klein */ min-height: 32px; padding: var(--space-1) var(--space-2); border: none; font-size: var(--text-sm); white-space: nowrap; }
 .photo-bulk-bar .photo-bulk-delete { color: var(--danger-fg); border-left: 1px solid var(--border); border-radius: 0; margin-left: var(--space-2); padding-left: var(--space-4); }
 
 @media (max-width: 900px) {
@@ -11833,22 +11836,6 @@ body:has(.mobile-shell) .modal-shell::before {
 
 /* button-secondary ist global ein Primaer-Look - in der Mobile-Oberflaeche als Umriss-Button
    (gleiches Muster wie .todo-edit-actions). */
-.modal-sheet .button-secondary {
-  --button-bg: var(--panel-solid);
-  --button-hover-bg: var(--neutral-bg);
-  min-height: 48px;
-  border: 1px solid var(--border-strong);
-  background: var(--button-bg);
-  color: var(--text);
-}
-.mobile-editor .button-secondary {
-  --button-bg: var(--panel-solid);
-  --button-hover-bg: var(--neutral-bg);
-  min-height: 48px;
-  border: 1px solid var(--border-strong);
-  background: var(--button-bg);
-  color: var(--text);
-}
 
 .mobile-sheet-footer {
   display: flex;
@@ -11862,15 +11849,13 @@ body:has(.mobile-shell) .modal-shell::before {
 
 .mobile-sheet-footer-grow {
   flex: 1;
-  min-height: 48px;
 }
 
 .mobile-sheet-delete {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  min-height: 44px;
-  padding: 0 var(--space-4);
+  padding-inline: var(--space-4);
 }
 
 .mobile-sheet-body {
@@ -11953,7 +11938,6 @@ body:has(.mobile-shell) .modal-shell::before {
 
 .mobile-button-block {
   width: 100%;
-  min-height: 48px;
 }
 
 .mobile-tag-chip {
@@ -13950,6 +13934,88 @@ a.export-step-meta {
   font-size: var(--text-xs);
 }
 
+/* Beträge je Tarif als Chips; «Standard» (kein eigener Betrag) gedämpft */
+.fine-tariff-card-amounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+.fine-tariff-chip {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--neutral-bg);
+  color: var(--text);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.fine-tariff-chip-standard {
+  color: var(--muted);
+}
+
+/* Noch keine Tarife: gestrichelte Karte mit Einstieg */
+.fine-tariffs-empty {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  padding: var(--space-5);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+}
+
+.fine-tariffs-empty > div {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 240px;
+}
+
+/* Betragsfeld mit Währung davor */
+.fine-amount-input {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--panel-solid);
+  overflow: hidden;
+}
+
+.fine-amount-input:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.fine-amount-currency {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-3);
+  border-right: 1px solid var(--border);
+  background: var(--neutral-bg);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.fine-amount-input input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  box-shadow: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.fine-amount-input input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
 .fine-members-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -14547,6 +14613,36 @@ a.export-step-meta {
   margin: 0;
   font-size: var(--text-lg);
   font-weight: 600;
+}
+
+/* Beträge der Übersicht gross (Design «Bussen-Konfiguration») */
+.fine-settings-values dd.fine-settings-amount {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.fine-settings-values dt {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+
+/* Verweis auf den Reiter «Tarife» im Hinweistext: sieht aus wie ein Link */
+.fine-settings-tab-link {
+  display: inline;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.fine-settings-tab-link:hover {
+  background: none;
+  text-decoration: underline;
 }
 
 .todo-fine-toolbar {

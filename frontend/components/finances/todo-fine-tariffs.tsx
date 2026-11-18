@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import { ActionIcon } from "@/components/ui/action-icons";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,8 @@ import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { participantInitials } from "@/lib/utils/avatar";
-import type { FineTariffGroup, FineTariffMember } from "@/types/api";
+import { formatMoney } from "@/lib/utils/format";
+import type { FineTariff, FineTariffGroup, FineTariffMember } from "@/types/api";
 
 type MemberFilter = "all" | "none" | string;
 
@@ -20,13 +21,18 @@ type MemberFilter = "all" | "none" | string;
  * Ein Tarif gilt für Pendenzen-Bussen (Beträge je Regel) und für Anwesenheitsbussen (eigene
  * Beträge für Verspätung/Absenz, leer = Vereinstarif, Migration 0172). Nur mit finances.manage.
  */
-export function TodoFineTariffs({ tariffs, setTariffs, canManage, onChanged }: {
+export function TodoFineTariffs({ tariffs, setTariffs, canManage, clubTariff = null, currency = "", onChanged }: {
   tariffs: FineTariffGroup[];
   setTariffs: (tariffs: FineTariffGroup[]) => void;
   canManage: boolean;
+  /** Bussentarif aus «Verspätung & Absenz» - Platzhalter der leeren Tarif-Beträge */
+  clubTariff?: FineTariff | null;
+  currency?: string;
   onChanged: () => Promise<void>;
 }) {
   const t = useTranslations("finances");
+  const locale = useLocale();
+  const money = (amount: number | null | undefined) => formatMoney(amount, currency, locale, { currencyFirst: true });
   const tCommon = useTranslations("common");
   const confirm = useConfirm();
   const showToast = useToast();
@@ -80,6 +86,7 @@ export function TodoFineTariffs({ tariffs, setTariffs, canManage, onChanged }: {
         body: JSON.stringify({ name: name.trim(), is_default: isDefault, amount_late: parseAmount(amountLate), amount_absent: parseAmount(amountAbsent) }),
       });
       await reloadTariffs();
+      showToast(editing === "new" ? t("todoFines.tariffCreated", { name: name.trim() }) : t("todoFines.tariffSavedToast"), "success");
       setEditing(null);
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("todoFines.saveFailed"), "error");
@@ -89,27 +96,36 @@ export function TodoFineTariffs({ tariffs, setTariffs, canManage, onChanged }: {
   }
 
   async function remove(tariff: FineTariffGroup) {
-    const ok = await confirm({ message: t("todoFines.tariffDeleteConfirm", { name: tariff.name, count: tariff.member_count }), tone: "danger", confirmLabel: tCommon("delete") });
+    const ok = await confirm({
+      title: t("todoFines.tariffDeleteTitle", { name: tariff.name }),
+      message: t("todoFines.tariffDeleteRest", { count: tariff.member_count }),
+      tone: "danger",
+      confirmLabel: tCommon("delete"),
+    });
     if (!ok) return;
     try {
       await browserApiFetch(`/api/todo-fines/tariffs/${tariff.id}`, { method: "DELETE" });
       await reloadTariffs();
       setMembers((current) => current?.map((member) => member.tariff_group_id === tariff.id ? { ...member, tariff_group_id: null } : member) ?? null);
       if (filter === tariff.id) setFilter("all");
+      showToast(t("todoFines.tariffDeleted", { name: tariff.name }), "success");
       await onChanged();
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("todoFines.saveFailed"), "error");
     }
   }
 
-  async function assign(participantIds: string[], tariffId: string | null) {
+  async function assign(participantIds: string[], tariffId: string | null, label?: string) {
     try {
-      const updated = await Promise.all(participantIds.map((id) =>
-        browserApiFetch<FineTariffMember>(`/api/todo-fines/tariff-members/${id}`, { method: "PUT", body: JSON.stringify({ tariff_group_id: tariffId }) })
-      ));
-      const byId = new Map(updated.map((member) => [member.participant_id, member]));
+      // Sammelzuweisung in einer Anfrage (PUT /todo-fines/tariff-members)
+      const updated = await browserApiFetch<FineTariffMember[]>("/api/todo-fines/tariff-members", {
+        method: "PUT",
+        body: JSON.stringify({ participant_ids: participantIds, tariff_group_id: tariffId }),
+      });
+      const byId = new Map((updated ?? []).map((member) => [member.participant_id, member]));
       setMembers((current) => current?.map((item) => byId.get(item.participant_id) ?? item) ?? null);
       await reloadTariffs();
+      if (label) showToast(t("todoFines.bulkDone", { count: byId.size, tariff: label }), "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("todoFines.saveFailed"), "error");
     }
@@ -152,17 +168,30 @@ export function TodoFineTariffs({ tariffs, setTariffs, canManage, onChanged }: {
             <h2 className="section-title">{t("todoFines.tariffsTitle")}</h2>
             <p className="muted">{t("todoFines.tariffsDescription")}</p>
           </div>
-          {canManage ? <button type="button" className="button-primary" onClick={() => open("new")}>{t("todoFines.addTariff")}</button> : null}
+          {canManage ? (
+            <button type="button" className="button-primary" onClick={() => open("new")}>
+              <ActionIcon name="add" />
+              {t("todoFines.addTariff")}
+            </button>
+          ) : null}
         </div>
-        {tariffs.length === 0 ? <p className="muted">{t("todoFines.noTariffs")}</p> : (
+        {tariffs.length === 0 ? (
+          <div className="fine-tariffs-empty">
+            <div>
+              <strong>{t("todoFines.noTariffs")}</strong>
+              <span className="muted">{t("todoFines.noTariffsHint")}</span>
+            </div>
+            {canManage ? <button type="button" className="button-secondary" onClick={() => open("new")}>{t("todoFines.firstTariff")}</button> : null}
+          </div>
+        ) : (
           <div className="fine-tariff-cards">
             {tariffs.map((tariff) => {
               const own = ownCount(tariff.id);
               const total = own + (tariff.is_default ? withoutTariff : 0);
-              const attendance = [
-                tariff.amount_late != null ? t("todoFines.cardLate", { amount: tariff.amount_late.toFixed(2) }) : null,
-                tariff.amount_absent != null ? t("todoFines.cardAbsent", { amount: tariff.amount_absent.toFixed(2) }) : null,
-              ].filter(Boolean).join(" · ");
+              const amounts = [
+                { key: "late", label: t("todoFines.chipLate", { amount: tariff.amount_late != null ? money(tariff.amount_late) : t("todoFines.chipStandard") }), own: tariff.amount_late != null },
+                { key: "absent", label: t("todoFines.chipAbsent", { amount: tariff.amount_absent != null ? money(tariff.amount_absent) : t("todoFines.chipStandard") }), own: tariff.amount_absent != null },
+              ];
               return (
                 <div key={tariff.id} className={`fine-tariff-card${tariff.is_default ? " fine-tariff-card-default" : ""}`}>
                   <div className="fine-tariff-card-head">
@@ -184,7 +213,11 @@ export function TodoFineTariffs({ tariffs, setTariffs, canManage, onChanged }: {
                       ? t("todoFines.cardDefaultDetail", { own, rest: withoutTariff })
                       : own ? t("todoFines.cardAllAssigned") : t("todoFines.cardNobody")}
                   </span>
-                  <span className="muted fine-tariff-card-detail">{attendance || t("todoFines.cardClubTariff")}</span>
+                  <div className="fine-tariff-card-amounts">
+                    {amounts.map((amount) => (
+                      <span key={amount.key} className={amount.own ? "fine-tariff-chip" : "fine-tariff-chip fine-tariff-chip-standard"}>{amount.label}</span>
+                    ))}
+                  </div>
                 </div>
               );
             })}
@@ -217,7 +250,7 @@ export function TodoFineTariffs({ tariffs, setTariffs, canManage, onChanged }: {
               <span>{t("todoFines.bulkSet")}</span>
               <div className="fine-members-bulk-options">
                 {assignOptions.map((option) => (
-                  <button key={option.id ?? "default"} type="button" onClick={() => { void assign(selected, option.id); setSelected([]); }}>{option.label}</button>
+                  <button key={option.id ?? "default"} type="button" onClick={() => { void assign(selected, option.id, option.label); setSelected([]); }}>{option.label}</button>
                 ))}
               </div>
               <button type="button" className="fine-members-bulk-clear" onClick={() => setSelected([])}>{t("todoFines.bulkClear")}</button>
@@ -283,17 +316,30 @@ export function TodoFineTariffs({ tariffs, setTariffs, canManage, onChanged }: {
               </span>
             </span>
           </label>
-          <div className="two-col">
-            <label className="field-stack">
-              <span className="field-label">{t("fineSettings.amountLate")}</span>
-              <input type="number" min="0" step="0.50" inputMode="decimal" value={amountLate} placeholder={t("fineSettings.clubTariff")} onChange={(event) => setAmountLate(event.target.value)} />
-            </label>
-            <label className="field-stack">
-              <span className="field-label">{t("fineSettings.amountAbsent")}</span>
-              <input type="number" min="0" step="0.50" inputMode="decimal" value={amountAbsent} placeholder={t("fineSettings.clubTariff")} onChange={(event) => setAmountAbsent(event.target.value)} />
-            </label>
+          <div className="field-stack">
+            <span className="field-label">{t("fineSettings.attendanceGroup")}</span>
+            <div className="two-col">
+              <label className="field-stack">
+                <span className="field-help">{t("fineSettings.amountLate")}</span>
+                <span className="fine-amount-input">
+                  {currency ? <span className="fine-amount-currency" aria-hidden="true">{currency}</span> : null}
+                  <input type="number" min="0" step="0.50" inputMode="decimal" value={amountLate}
+                    placeholder={clubTariff ? t("todoFines.standardPlaceholder", { amount: money(clubTariff.amount_late) }) : t("fineSettings.clubTariff")}
+                    onChange={(event) => setAmountLate(event.target.value)} />
+                </span>
+              </label>
+              <label className="field-stack">
+                <span className="field-help">{t("fineSettings.amountAbsent")}</span>
+                <span className="fine-amount-input">
+                  {currency ? <span className="fine-amount-currency" aria-hidden="true">{currency}</span> : null}
+                  <input type="number" min="0" step="0.50" inputMode="decimal" value={amountAbsent}
+                    placeholder={clubTariff ? t("todoFines.standardPlaceholder", { amount: money(clubTariff.amount_absent) }) : t("fineSettings.clubTariff")}
+                    onChange={(event) => setAmountAbsent(event.target.value)} />
+                </span>
+              </label>
+            </div>
+            <span className="field-help">{t("fineSettings.tariffAmountsHelp")}</span>
           </div>
-          <span className="field-help">{t("fineSettings.tariffAmountsHelp")}</span>
           <div className="modal-actions">
             <button type="button" className="button-ghost" onClick={() => setEditing(null)}>{tCommon("cancel")}</button>
             <button data-modal-save type="submit" className="button-primary" disabled={!name.trim() || !amountsValid || saving}>{tCommon("save")}</button>

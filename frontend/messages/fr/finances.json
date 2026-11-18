@@ -260,7 +260,6 @@
     "loadFailed": "Échec du chargement.",
     "saveFailed": "Échec de l'enregistrement.",
     "loading": "Chargement …",
-    "tariffDeleteConfirm": "Supprimer le tarif « {name} » ? {count, plural, =0 {} one {# personne repasse au tarif standard.} other {# personnes repassent au tarif standard.}}",
     "tariffsDescription": "Tarifs comme apprentis ou plein salaire. Chaque tarif a ses propres montants pour les retards et absences et dans chaque règle de tâches. Sans tarif, on paie selon le tarif standard.",
     "addTariff": "Ajouter un tarif",
     "editTariff": "Modifier le tarif",
@@ -343,9 +342,6 @@
     "cardDefaultDetail": "{own} attribué(s) · {rest} sans tarif propre",
     "cardAllAssigned": "tous attribués directement",
     "cardNobody": "personne n’est encore attribué",
-    "cardLate": "Retard {amount}",
-    "cardAbsent": "Absence {amount}",
-    "cardClubTariff": "Retard/absence : tarif standard",
     "selectedCount": "{count} sélectionné(s)",
     "bulkSet": "Définir le tarif :",
     "bulkClear": "Annuler",
@@ -368,13 +364,25 @@
       "reopen": "Amende rouverte, écriture supprimée.",
       "restore": "Amende rétablie.",
       "waive": "Amende remise."
-    }
+    },
+    "firstTariff": "Créer le premier tarif",
+    "noTariffsHint": "Sans tarif, tout le monde paie selon le tarif d’amende de «Retard & absence». Le premier tarif devient automatiquement le tarif standard.",
+    "chipLate": "Retard {amount}",
+    "chipAbsent": "Absence {amount}",
+    "chipStandard": "standard",
+    "tariffDeleteTitle": "Supprimer le tarif «{name}» ?",
+    "tariffDeleteRest": "{count, plural, =0 {Personne n’a ce tarif attribué directement.} one {# personne revient au tarif standard.} other {# personnes reviennent au tarif standard.}}",
+    "tariffCreated": "Tarif «{name}» créé",
+    "tariffSavedToast": "Tarif enregistré",
+    "tariffDeleted": "Tarif «{name}» supprimé",
+    "bulkDone": "{count, plural, one {# personne} other {# personnes}} : {tariff}",
+    "standardPlaceholder": "Standard ({amount})"
   },
   "colSource": "Procès-verbal / tâche",
   "todoFineReason": "Tâche en retard",
   "todoFineRunningHint": "Court jusqu’à ce que la tâche soit terminée",
   "fineSettings": {
-    "pageTitle": "Règles des amendes",
+    "pageTitle": "Configuration des amendes",
     "description": "Montant des amendes : pour retards et absences, par tarif et pour les tâches terminées en retard. Les amendes elles-mêmes se trouvent sous Caisse › Amendes.",
     "openSettings": "Règles des amendes",
     "tabAttendance": "Retard & absence",
@@ -388,7 +396,11 @@
     "colLate": "Retard",
     "colAbsent": "Absence",
     "clubTariff": "Tarif standard",
-    "tariffAmountsHelp": "Laisser vide pour utiliser le tarif standard. Les montants des tâches se trouvent dans les règles des tâches."
+    "tariffAmountsHelp": "Laisser vide pour utiliser le tarif standard. Les montants des tâches se trouvent dans les règles des tâches.",
+    "attendanceHintBefore": "Les montants propres à chaque tarif (p. ex. apprentis) se règlent dans l’onglet",
+    "attendanceHintAfter": ". Un modèle de procès-verbal peut remplacer le tarif standard ; son montant s’applique alors à tous.",
+    "tariffsTabLink": "«Tarifs»",
+    "attendanceGroup": "Amendes de présence"
   },
   "errors": {
     "fine_transaction": "Cette écriture appartient à une amende encaissée. Rouvrez l’amende sous « Amendes » au lieu de modifier l’écriture.",

@@ -15,6 +15,8 @@ const LINK_DOCUMENT_ID = new RegExp(`[?&]id=(${UUID})`, "i");
 export type PdfFingerprints = {
   /** Aus dem XMP (hocx:documentId) oder dem Prüf-Link des QR-Codes; null, wenn nicht lesbar. */
   documentId: string | null;
+  /** Woher die ID stammt: aus der Datei selbst oder nur aus dem Link, über den die Seite geöffnet wurde. */
+  idSource: "file" | "link" | null;
   /** Seiten der hochgeladenen Datei (auch über MAX_FINGERPRINT_PAGES hinaus). */
   pageCount: number;
   /** Je Seite ein Fingerabdruck (leer ohne Dokument-ID: ohne sie gibt es kein Salz). */
@@ -95,9 +97,10 @@ export async function readPdfFingerprints(data: ArrayBuffer, fallbackDocumentId:
       }
       page.cleanup();
     }
+    const idSource = documentId ? "file" : fallbackDocumentId ? "link" : null;
     documentId = documentId ?? fallbackDocumentId;
     const fingerprints = documentId ? await Promise.all(texts.map((text) => pageFingerprint(documentId!, text))) : [];
-    return { documentId, pageCount: document.numPages, fingerprints };
+    return { documentId, idSource, pageCount: document.numPages, fingerprints };
   } finally {
     // Aufräumen über die Ladeaufgabe (gibt Dokument und Worker frei)
     await task.destroy();

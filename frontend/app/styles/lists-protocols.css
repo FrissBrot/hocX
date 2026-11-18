@@ -104,7 +104,7 @@
 
 .list-manager-table-shell .structured-list-table td:nth-child(2), .list-manager-table-shell .structured-list-table th:nth-child(2) { width: auto; }
 
-.list-manager-add-row { border: 0; min-height: 28px; }
+.list-manager-add-row { /* design-ok: Hinzufügen-Zeile am Tabellenende */ border: 0; min-height: 28px; }
 
 .list-manager-person.structured-list-departed { background: var(--warning-bg); color: var(--warning-fg); border-color: var(--warning); }
 

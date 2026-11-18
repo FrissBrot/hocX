@@ -6,7 +6,7 @@ import { useEventFieldConfig } from "@/lib/hooks/use-event-field-config";
 
 import { daySpan } from "@/components/events/event-utils";
 import { DateInput } from "@/components/ui/date-input";
-import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { LazyRichTextEditor as RichTextEditor } from "@/components/ui/rich-text-editor-lazy";
 import { TimeInput } from "@/components/ui/time-input";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { browserApiFetch } from "@/lib/api/client";

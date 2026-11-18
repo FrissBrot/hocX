@@ -1,7 +1,7 @@
 "use client";
 
 import type { Route } from "next";
-import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { KeyboardEvent, MutableRefObject, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
@@ -64,6 +64,7 @@ export function GlobalSearch({
   session,
   listInput,
   onAction,
+  pendingKeys,
 }: {
   open: boolean;
   onClose: () => void;
@@ -71,6 +72,8 @@ export function GlobalSearch({
   /** Suchfeld der Liste auf der aktuellen Seite (beim Öffnen ermittelt), sonst null */
   listInput: HTMLInputElement | null;
   onAction: (action: GlobalSearchAction) => void;
+  /** Zeichen, die vor dem Montieren getippt wurden (app-shell.tsx) */
+  pendingKeys?: MutableRefObject<{ text: string; consumed: boolean }>;
 }) {
   const t = useTranslations("search");
   const tNav = useTranslations("nav");
@@ -91,13 +94,29 @@ export function GlobalSearch({
 
   useEffect(() => {
     if (!open) return;
-    setQuery("");
+    // Das Fenster wird bei jedem Öffnen neu montiert (Zustand startet leer); die Suche nicht
+    // zurücksetzen - sonst gingen die vor dem Montieren getippten Zeichen verloren.
     setActiveIndex(0);
     setRemote(null);
     setRecent(readRecent(userId));
     const raf = window.requestAnimationFrame(() => inputRef.current?.focus());
     return () => window.cancelAnimationFrame(raf);
   }, [open, userId]);
+
+  // Das Fenster wird bei jedem Öffnen neu geladen und montiert (dynamic import). Der Fokus
+  // gehört ins Suchfeld, sobald es existiert - nicht nach einem Frame, in dem es noch fehlen
+  // kann (dann setzte der Dialog den Fokus auf sich selbst und Tippen ging ins Leere).
+  function focusOnMount(element: HTMLInputElement | null) {
+    inputRef.current = element;
+    if (!element) return;
+    if (document.activeElement !== element) element.focus({ preventScroll: true });
+    // Vor dem Montieren getippte Zeichen übernehmen (app-shell sammelt sie)
+    const pending = pendingKeys?.current;
+    if (pending && !pending.consumed) {
+      pending.consumed = true;
+      if (pending.text) setQuery(pending.text);
+    }
+  }
 
   const trimmed = query.trim();
 
@@ -198,7 +217,8 @@ export function GlobalSearch({
       <div className="global-search" data-global-search>
         <div className="global-search-field-row">
           <SearchInput
-            ref={inputRef}
+            ref={focusOnMount}
+            autoFocus
             value={query}
             onChange={setQuery}
             onKeyDown={handleKeyDown}

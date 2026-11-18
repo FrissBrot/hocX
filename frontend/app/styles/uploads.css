@@ -8,9 +8,8 @@
 }
 
 /* Teilnehmerliste: Kopf-Buttons mit Icon, Avatar + Name, Mitgliedschafts-Zeile mit Punkt */
+/* Höhe und Abstände kommen aus der einheitlichen Button-Regel (--button-height) */
 .participant-header-button {
-  min-height: 40px;
-  padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-sm);
   font-weight: 600;
 }
@@ -176,11 +175,9 @@
 
 .gallery-upload-actions { display: flex; justify-content: flex-end; gap: var(--space-3); }
 
-.gallery-upload-actions .button-secondary:hover:not(:disabled) { background: var(--accent-strong); }
-
 .gallery-upload-actions .button-secondary:active:not(:disabled) { transform: translateY(1px); }
 
-.gallery-upload-actions .button-secondary:disabled { background: color-mix(in srgb, var(--accent) 35%, var(--panel-solid)); box-shadow: none; opacity: 1; cursor: not-allowed; }
+.gallery-upload-actions .button-secondary:disabled { --button-bg: color-mix(in srgb, var(--accent) 35%, var(--panel-solid)); box-shadow: none; opacity: 1; cursor: not-allowed; }
 
 @media (max-width: 640px) {
   .gallery-upload-scroll { padding-inline: var(--space-4); }

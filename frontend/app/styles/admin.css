@@ -536,7 +536,7 @@
 
 .storage-test-running { background: var(--accent); }
 
-.storage-small-button { min-height: 30px; padding: var(--space-1) var(--space-3); font-size: var(--text-sm); }
+.storage-small-button { /* design-ok: kompakte Aktion in Speicher-Zeilen */ min-height: 30px; padding: var(--space-1) var(--space-3); font-size: var(--text-sm); }
 
 .storage-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: var(--space-3); align-items: start; }
 
@@ -556,7 +556,7 @@
 
 .storage-list-meta { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); }
 
-.storage-list-action { min-height: 30px; padding: var(--space-1) var(--space-3); font-size: var(--text-sm); }
+.storage-list-action { /* design-ok: kompakte Aktion in Speicher-Zeilen */ min-height: 30px; padding: var(--space-1) var(--space-3); font-size: var(--text-sm); }
 
 .storage-empty { display: flex; flex-direction: column; align-items: center; gap: var(--space-1); padding: var(--space-5); border: 1px dashed var(--border-strong); border-radius: var(--radius-md); text-align: center; }
 

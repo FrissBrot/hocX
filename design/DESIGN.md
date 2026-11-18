@@ -171,6 +171,11 @@ Regeln: Pro Bereich höchstens **ein** `button-primary`. Reihenfolge in Aktionsl
 
 Native `<button>` ohne Klasse ist ein Primärbutton (globaler Stil). Immer `type="button"` setzen, außer echtes Submit.
 
+**Höhe und Farbe kommen nur aus der Variante** (Checker-Regeln `button-hoehe`, `button-hintergrund`, E2E `button-consistency.spec.ts`):
+- Alle Text-Buttons (`primary`, `secondary`, `danger`, `ghost`) sind gleich hoch: Token `--button-height` (40 px, Smartphone 44 px). Bereichs-CSS setzt bei einer Variante **keine** `min-height`/`height`/vertikales `padding`. Das gilt auch für **Begleitklassen**, also Feature-Klassen, die im TSX neben einer Variante stehen (`className="button-secondary participant-header-button"`): sie dürfen Breite, Abstand und `padding-inline` setzen, aber keine Höhe. Bewusst kompakte Zeilen (Tabellenzeilen, Auswahlleisten), in denen *alle* Buttons gleich klein sind: `design-ok` mit Begründung in der Regel.
+- Einen anderen Hintergrund für eine Variante über `--button-bg` (und `--button-hover-bg`) setzen, nie `background` direkt - sonst springt der Button beim Überfahren auf die Grundfarbe.
+- Kacheln, Karten und Listenzeilen, die technisch ein `<button>` sind, bekommen eine **eigene** Klasse ohne `button-`-Präfix und setzen ihren Hintergrund selbst. Die globale Hover-Regel fasst nur Buttons ohne Klasse und `button-*`-Varianten an; eine Kachel wird beim Überfahren also nie dunkel.
+
 ## 8. Formulare, Tabellen, Seitenaufbau
 
 **Seitenaufbau**

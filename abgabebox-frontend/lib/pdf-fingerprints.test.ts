@@ -43,6 +43,7 @@ describe("Seiten-Fingerabdrücke", () => {
   it("berechnet für ein echtes hocX-PDF dieselben Werte wie das Backend", async () => {
     const read = await readPdfFingerprints(fixturePdf(), null);
     expect(read.documentId).toBe(expected.document_id);
+    expect(read.idSource).toBe("file");
     expect(read.pageCount).toBe(expected.fingerprints.length);
     expect(read.fingerprints).toEqual(expected.fingerprints);
   }, 30_000);

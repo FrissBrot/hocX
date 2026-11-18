@@ -69,7 +69,7 @@
   "roleManagement": "Rôles",
   "workflows": "Déroulements",
   "design": "Mise en page",
-  "fineSettings": "Règles des amendes",
+  "fineSettings": "Configuration des amendes",
   "publicLinks": "Liens d'accès",
   "related": {
     "openSettings": "Ouvrir le paramètre : {name}",

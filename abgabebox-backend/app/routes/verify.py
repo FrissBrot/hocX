@@ -11,6 +11,10 @@ serverseitig über das interne Netz mit dem Host der Anfrage auf.
 """
 from __future__ import annotations
 
+import threading
+import time
+from collections import OrderedDict, deque
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -21,6 +25,30 @@ from app.db import get_db
 from app.schemas import VerifyRequest, VerifyResult, VerifySiteRead
 
 router = APIRouter()
+
+# Seitenvergleich über die Dokument-ID (Migration 0185): höchstens so viele Vergleiche je Dokument
+# in diesem Zeitfenster und Prozess - zusätzlich zum Rate-Limit je IP in Traefik. Wer die ID
+# kennt, kann damit vermutete Seiteninhalte nicht in grosser Zahl durchprobieren (Review 2026-11-18).
+_PAGE_CHECKS_PER_DOCUMENT = 20
+_PAGE_CHECK_WINDOW_SECONDS = 600
+_PAGE_CHECK_MAX_DOCUMENTS = 10_000
+_page_checks: "OrderedDict[str, deque[float]]" = OrderedDict()
+_page_checks_lock = threading.Lock()
+
+
+def _allow_page_check(document_id: str) -> bool:
+    now = time.monotonic()
+    with _page_checks_lock:
+        hits = _page_checks.pop(document_id, None) or deque()
+        while hits and now - hits[0] > _PAGE_CHECK_WINDOW_SECONDS:
+            hits.popleft()
+        allowed = len(hits) < _PAGE_CHECKS_PER_DOCUMENT
+        if allowed:
+            hits.append(now)
+        _page_checks[document_id] = hits
+        while len(_page_checks) > _PAGE_CHECK_MAX_DOCUMENTS:
+            _page_checks.popitem(last=False)
+        return allowed
 
 
 @router.post("/public/verify", response_model=VerifyResult, response_model_exclude_none=True)
@@ -47,7 +75,12 @@ def _verify_by_id(db: Session, body: VerifyRequest) -> VerifyResult:
     """Zweiter Schritt der Prüfseite: Hash unbekannt, aber die Datei trägt eine Dokument-ID. Dann
     heisst es nie «Original», sondern «gehört zu Dokument X, wurde verändert», mit Seitenvergleich,
     falls das Register Fingerabdrücke hat. Unbekannte IDs ergeben dasselbe wie ein unbekannter Hash
-    (UUIDv7, nicht erratbar; Rate-Limit wie die Hash-Prüfung)."""
+    (UUIDv7, nicht erratbar; Rate-Limit wie die Hash-Prüfung, dazu je Dokument-ID).
+
+    Ohne freigegebene Anzeige der Organisation nur Zuordnung und Seitenvergleich: kein Titel,
+    Status, Datum oder Version (die Funktion liefert sie dann nicht)."""
+    if not _allow_page_check(str(body.document_id)):
+        raise HTTPException(status_code=429, detail="Zu viele Prüfungen für dieses Dokument. Bitte später erneut versuchen.")
     try:
         row = repository.verify_document_pages(db, document_id=str(body.document_id), fingerprints=list(body.page_fingerprints or []))
     except SQLAlchemyError as exc:

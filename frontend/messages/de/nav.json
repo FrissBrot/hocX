@@ -69,7 +69,7 @@
   "roleManagement": "Rollen",
   "workflows": "Abläufe",
   "design": "Gestaltung",
-  "fineSettings": "Bussen-Regeln",
+  "fineSettings": "Bussen-Konfiguration",
   "publicLinks": "Zugangslinks",
   "related": {
     "openSettings": "Einstellung öffnen: {name}",

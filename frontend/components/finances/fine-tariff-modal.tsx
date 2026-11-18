@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
+import { StatusBanner } from "@/components/ui/status-banner";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
@@ -35,6 +36,7 @@ export function FineTariffModal({ open, tariff, accounts, onClose, onSaved }: Pr
     setAmountAbsent(tariff.amount_absent ? String(tariff.amount_absent) : "");
   }, [open, tariff]);
 
+  const currency = accounts.find((account) => account.id === accountId)?.currency_label ?? "";
   const parse = (value: string) => Number(value.replace(",", ".") || "0");
   const valid = [amountLate, amountAbsent].every((value) => Number.isFinite(parse(value)) && parse(value) >= 0);
 
@@ -72,14 +74,21 @@ export function FineTariffModal({ open, tariff, accounts, onClose, onSaved }: Pr
           />
           <span className="field-help">{t("tariffAccountHelp")}</span>
         </label>
+        {accountId ? null : <StatusBanner tone="warning" message={t("tariffNotSet")} />}
         <div className="two-col">
           <label className="field-stack">
             <span className="field-label">{t("tariffLateLabel")}</span>
-            <input type="number" min="0" step="0.50" inputMode="decimal" value={amountLate} onChange={(event) => setAmountLate(event.target.value)} />
+            <span className="fine-amount-input">
+              {currency ? <span className="fine-amount-currency" aria-hidden="true">{currency}</span> : null}
+              <input type="number" min="0" step="0.50" inputMode="decimal" value={amountLate} onChange={(event) => setAmountLate(event.target.value)} />
+            </span>
           </label>
           <label className="field-stack">
             <span className="field-label">{t("tariffAbsentLabel")}</span>
-            <input type="number" min="0" step="0.50" inputMode="decimal" value={amountAbsent} onChange={(event) => setAmountAbsent(event.target.value)} />
+            <span className="fine-amount-input">
+              {currency ? <span className="fine-amount-currency" aria-hidden="true">{currency}</span> : null}
+              <input type="number" min="0" step="0.50" inputMode="decimal" value={amountAbsent} onChange={(event) => setAmountAbsent(event.target.value)} />
+            </span>
           </label>
         </div>
         <div className="modal-actions">

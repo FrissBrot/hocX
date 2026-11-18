@@ -5,8 +5,9 @@
   app/documents/page_fingerprints.py). Kein Text, kein PDF - nur für PDFs ab diesem Update.
 - Funktion verify_document_pages(document_id, fingerprints): SECURITY DEFINER wie
   verify_document. Für eine veränderte Datei (Hash unbekannt), deren Dokument-ID die Prüfseite im
-  Browser ausgelesen hat: dieselben Angaben wie verify_document (Titel nur bei freigegebener
-  Anzeige der Organisation), die Seitenzahl und je Seite nur «stimmt / stimmt nicht». Gespeicherte
+  Browser ausgelesen hat: Angaben wie verify_document nur bei freigegebener Anzeige der
+  Organisation, sonst nur Zuordnung; dazu die Seitenzahl und je Seite nur «stimmt / stimmt
+  nicht» (höchstens 150 Seiten). Gespeicherte
   Fingerabdrücke und der Hash verlassen die Datenbank nie. Die Rolle hocx_abgabebox bekommt nur
   EXECUTE.
 
@@ -49,12 +50,20 @@ STABLE
 SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
+    -- Ohne Hash-Treffer reicht die Dokument-ID allein: Angaben über das Dokument (Titel, Status,
+    -- Version, Datum) nur, wenn die Organisation ihre Anzeige freigegeben hat. Sonst nur die
+    -- Zuordnung und der Seitenvergleich (Sicherheitsreview 2026-11-18).
     SELECT v.document_id, v.document_type,
-           -- Titel nur, wenn die Organisation ihre Anzeige freigegeben hat (ohne Hash-Treffer)
            CASE WHEN v.tenant_name IS NOT NULL THEN v.title END,
-           v.status_code, v.version_label, v.created_at,
-           v.is_superseded, v.latest_version_label, v.tenant_name, v.tenant_public_id,
-           v.tenant_has_logo, v.organization_verified, v.import_unverified, v.title_overridden, v.verify_domain,
+           CASE WHEN v.tenant_name IS NOT NULL THEN v.status_code END,
+           CASE WHEN v.tenant_name IS NOT NULL THEN v.version_label END,
+           CASE WHEN v.tenant_name IS NOT NULL THEN v.created_at END,
+           CASE WHEN v.tenant_name IS NOT NULL THEN v.is_superseded END,
+           CASE WHEN v.tenant_name IS NOT NULL THEN v.latest_version_label END,
+           v.tenant_name, v.tenant_public_id, v.tenant_has_logo, v.organization_verified,
+           CASE WHEN v.tenant_name IS NOT NULL THEN v.import_unverified END,
+           CASE WHEN v.tenant_name IS NOT NULL THEN v.title_overridden END,
+           v.verify_domain,
            cardinality(r.page_fingerprints),
            CASE WHEN r.page_fingerprints IS NOT NULL THEN ARRAY(
                SELECT COALESCE(r.page_fingerprints[i] = p_fingerprints[i], false)
@@ -64,7 +73,7 @@ AS $$
     FROM public.document_registry r
     JOIN public.document_verification_public v ON v.document_id = r.public_id
     WHERE r.public_id = p_document_id
-      AND cardinality(COALESCE(p_fingerprints, ARRAY[]::text[])) <= 500
+      AND cardinality(COALESCE(p_fingerprints, ARRAY[]::text[])) <= 150
     LIMIT 1
 $$
 """

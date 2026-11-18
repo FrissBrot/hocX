@@ -24,12 +24,14 @@ test("Ctrl+K findet Einstellungen und Personen und öffnet sie", async ({ page, 
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/");
     await page.keyboard.press("Control+k");
+    // Direkt lostippen, ohne ins Feld zu klicken: der Fokus muss schon im Suchfeld sein
+    await page.keyboard.type("dsgvo");
     const dialog = page.getByRole("dialog", { name: "Suchen" });
     const input = dialog.getByRole("combobox");
     await expect(input).toBeFocused();
+    await expect(input).toHaveValue("dsgvo");
 
     // Einstellung über einen Suchbegriff (nicht im Titel)
-    await input.fill("dsgvo");
     await expect(dialog.getByRole("option", { name: /Datenschutz/ })).toBeVisible();
     await page.keyboard.press("Enter");
     // Erster Aufruf der Seite: der Next-Server des E2E-Stacks kompiliert sie erst (dauert >5 s)

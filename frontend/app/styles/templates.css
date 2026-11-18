@@ -388,7 +388,7 @@
 
 .session-studio-link,
 .session-studio-danger-link,
-.session-studio-back {
+.session-studio-back { /* design-ok: Links ohne Buttonfläche (Zurück, Studio, Löschen-Link) */
   --button-bg: transparent;
   --button-hover-bg: transparent;
   justify-self: start;
