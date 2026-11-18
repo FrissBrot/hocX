@@ -607,6 +607,10 @@ def list_source_options(
             for block in ordered
         ]
     if source == "images":
+        # Wie der Bild-Baustein (AccessService.ensure_can_read_stored_file): Dateien ausserhalb
+        # lesbarer Protokolle nur mit files.manage oder meetings.read_drafts - vorher bekam jeder
+        # Leser die Namen aller Bilder des Mandanten (Nachtlauf 2026-11-18, dokumente/rechte).
+        require_any_permission(user, P.FILES_MANAGE, P.MEETINGS_READ_DRAFTS)
         if access_service.is_restricted_reader(db, user):
             return []
         rows = db.scalars(
