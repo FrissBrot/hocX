@@ -244,9 +244,16 @@ def _submission_links(db: Session, rows: dict, recipient_id: int, base_url: str 
     return links
 
 
+# Erinnerungen mit festem Text gelten nur am Tag, für den der Text stimmt: «in 3 Tagen fällig» am
+# dritten Tag vor, «seit gestern überfällig» am Tag nach der Fälligkeit. Lagen sie länger in der
+# Warteschlange (Versand aus, SMTP-Störung), standen sonst beide für dieselbe Aufgabe in einer Mail.
+_REMINDER_DAY_OFFSET = {"todo.due_soon": -DUE_SOON_DAYS, "todo.overdue": 1}
+
+
 def items_for(db: Session, notifications: list, recipient_id: int, *, base_url: str | None = None, **_) -> dict[int, dict]:
     """Aktuelle Daten der Aufgaben je Benachrichtigung. Fehlt eine Benachrichtigung im Ergebnis,
-    ist sie überholt (gelöscht, erledigt, nicht mehr verantwortlich, Fälligkeit geändert)."""
+    ist sie überholt (gelöscht, erledigt, nicht mehr verantwortlich, Fälligkeit geändert,
+    Erinnerungstext stimmt nicht mehr)."""
     from app.repositories.protocol_todo_repository import ProtocolTodoRepository
 
     todo_ids = {n.subject_id for n in notifications if n.subject_id}
@@ -254,6 +261,7 @@ def items_for(db: Session, notifications: list, recipient_id: int, *, base_url: 
         return {}
     query, *_ = ProtocolTodoRepository()._base_todo_query()
     rows = {row[0].id: row for row in db.execute(query.where(ProtocolTodo.id.in_(todo_ids)))}
+    today = now_local().date()
     items: dict[int, dict] = {}
     for notification in notifications:
         row = rows.get(notification.subject_id)
@@ -277,6 +285,9 @@ def items_for(db: Session, notifications: list, recipient_id: int, *, base_url: 
             continue
         due = row.resolved_due_date
         if notification.kind != "todo.assigned" and (due is None or due.isoformat() != notification.payload.get("due")):
+            continue
+        offset = _REMINDER_DAY_OFFSET.get(notification.kind)
+        if offset is not None and today != due + timedelta(days=offset):
             continue
         items[notification.id] = {
             "kind": notification.kind,

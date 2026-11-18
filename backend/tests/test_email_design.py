@@ -44,6 +44,8 @@ def test_frame_has_brand_card_and_one_action_for_people_with_login():
     # Werte aus Daten escaped, kein Flexbox, keine nachgeladenen Ressourcen
     assert "Zelt &lt;flicken&gt;" in mail.html and "<flicken>" not in mail.html
     assert "display:flex" not in mail.html and "fonts.googleapis" not in mail.html
+    # Apple Mail macht «In 3 Tagen» sonst zu einem blauen Kalender-Link
+    assert 'content="telephone=no,date=no,address=no,email=no"' in mail.html and "x-apple-data-detectors" in mail.html
     # ohne Logo: Initialen, keine eingebetteten Bilder
     assert ">MS<" in mail.html and mail.images == ()
 

@@ -228,7 +228,13 @@ def _frame(*, brand: Brand | None, label: str, card: str, footer_html: str) -> s
         )
     return (
         '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-        '<meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"></head>'
+        '<meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light">'
+        # Apple Mail macht aus «In 3 Tagen», Daten und Adressen sonst blau unterstrichene Links
+        # (Kalender/Karten), die wie Aktionen aussehen. Der <style>-Block wirkt nur dort, andere
+        # Programme ignorieren ihn - die eigentliche Optik bleibt inline.
+        '<meta name="format-detection" content="telephone=no,date=no,address=no,email=no">'
+        '<style>a[x-apple-data-detectors]{color:inherit!important;text-decoration:none!important;font-size:inherit!important;'
+        'font-family:inherit!important;font-weight:inherit!important;line-height:inherit!important}</style></head>'
         f'<body style="margin:0;padding:0;background:{PAGE}">'
         f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:{PAGE}">'
         '<tr><td align="center" style="padding:28px 12px 32px">'

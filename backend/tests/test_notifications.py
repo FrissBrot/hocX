@@ -219,6 +219,57 @@ def test_dispatch_retries_on_smtp_error(db, club):
         email_transport.override_transport(None)
 
 
+def test_successful_retry_clears_the_last_error(db, club, sent):
+    """Ein einmaliger Fehler (z. B. 535 direkt nach dem Einrichten) darf nicht im Admin-Portal
+    stehen bleiben, wenn die Wiederholung zugestellt wurde."""
+    def fail(config, email):
+        raise email_transport.EmailError("SMTPAuthenticationError: (535, b'Incorrect authentication data')")
+
+    _standalone(db, club)
+    _enable_email(db)
+    _make_due(db)
+    email_transport.override_transport(fail)
+    try:
+        assert dispatch.run(db).get("failed") == 1
+    finally:
+        email_transport.override_transport(lambda config, email: sent.append(email))
+    settings_row = db.get(PlatformNotificationSettings, 1)
+    assert settings_row.email_last_error and settings_row.email_last_error_at
+    _make_due(db)  # Wiederholung fällig
+    assert dispatch.run(db).get("sent") == 1
+    db.refresh(settings_row)
+    assert len(sent) == 1
+    assert settings_row.email_last_error is None and settings_row.email_last_error_at is None
+    assert settings_row.email_last_sent_at is not None
+
+
+def test_reminders_from_the_queue_only_while_their_text_is_true(db, club, sent):
+    """Lagen Erinnerungen in der Warteschlange (Versand aus), kam dieselbe Aufgabe als «in 3 Tagen
+    fällig» und «seit gestern überfällig» in einer Mail. Gesendet wird nur, was heute stimmt."""
+    today = todo_notifications.now_local().date()
+    yesterday = today - timedelta(days=1)
+    stale = _standalone(db, club, due=yesterday)        # «in 3 Tagen» vom Tag X-3 liegt noch an
+    current = _standalone(db, club, due=today + timedelta(days=3))
+    long_overdue = _standalone(db, club, due=today - timedelta(days=3))
+    db.execute(Notification.__table__.delete())         # nur die Erinnerungen dieses Tests
+    for todo, kind, due in ((stale, "todo.due_soon", yesterday), (stale, "todo.overdue", yesterday),
+                            (current, "todo.due_soon", today + timedelta(days=3)),
+                            (long_overdue, "todo.overdue", today - timedelta(days=3))):
+        publish(db, kind=kind, tenant_id=club["tenant"].id, recipient_ids=[club["anna"].id], subject_id=todo.id,
+                payload={"due": due.isoformat()}, dedupe=f"{todo.id}:{due.isoformat()}")
+    _enable_email(db)
+    _make_due(db)
+    dispatch.run(db)
+    assert len(sent) == 1
+    rows = {(r.subject_id, r.kind): (r.status, r.skip_reason) for r in db.scalars(select(Notification))}
+    assert rows == {
+        (stale.id, "todo.due_soon"): ("skipped", "obsolete"),
+        (stale.id, "todo.overdue"): ("sent", None),
+        (current.id, "todo.due_soon"): ("sent", None),
+        (long_overdue.id, "todo.overdue"): ("skipped", "obsolete"),
+    }
+
+
 def test_preferences_default_on_and_scoped_to_own_account(db, club):
     other_tenant = make_tenant(db, "Anderer Verein")
     result = notification_preferences.read(db, club["anna"].id, club["tenant"].id)
