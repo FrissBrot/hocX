@@ -8,6 +8,8 @@ from __future__ import annotations
 import os
 import uuid
 
+import pytest
+
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.pool import NullPool
 
@@ -153,6 +155,72 @@ def test_cli_full_restore_into_new_database_and_new_provider(backup_env, tmp_pat
             pg.drop_database(target_db)
 
 
+def _local_s3_env(monkeypatch) -> None:
+    """LOCAL_S3_* wie im backup-worker beim geführten Restore (deploy.sh --restore-from-backup)."""
+    for name, value in (("LOCAL_S3_ENDPOINT", S3_ENDPOINT), ("LOCAL_S3_BUCKET", "hocx-main"), ("LOCAL_S3_ABGABEBOX_BUCKET", "hocx-abgabebox"),
+                        ("LOCAL_S3_ACCESS_KEY", os.environ["TEST_S3_ACCESS_KEY"]), ("LOCAL_S3_SECRET_KEY", os.environ["TEST_S3_SECRET_KEY"]),
+                        ("LOCAL_S3_ABGABEBOX_ACCESS_KEY", os.environ["TEST_S3_ACCESS_KEY"]),
+                        ("LOCAL_S3_ABGABEBOX_SECRET_KEY", os.environ["TEST_S3_SECRET_KEY"])):
+        monkeypatch.setenv(name, value)
+
+
+@pytest.mark.parametrize("backup_has_local_profile", [True, False])
+def test_cli_full_restore_into_local_s3_reuses_the_builtin_profile(backup_env, monkeypatch, backup_has_local_profile):  # noqa: F811
+    """--local-s3 (neuer Server): Ziel ist das Garage der Installation. Das eingebaute Profil
+    «Lokales S3» der Sicherung wird weiterverwendet - sonst legte das Backend beim Start ein
+    zweites an und die Abgabebox hätte im aktiven Profil keinen eingeschränkten Schlüssel."""
+    db, env, _ = backup_env
+    if not backup_has_local_profile:
+        db.execute(text("UPDATE storage_profile SET is_builtin = false"))  # committed_storage stellt es wieder her
+        db.commit()
+    builtin_before = db.execute(text(
+        "SELECT public_id FROM storage_profile WHERE provider = 'garage_local' AND is_builtin ORDER BY id LIMIT 1")).scalar()
+    tenant = make_committed_tenant(db, "Lokal")
+    key = f"uploads/tenant-{tenant.id}/l.bin"
+    put_object(db, key, b"lokal-inhalt")
+    db.add(StoredFile(tenant_id=tenant.id, original_name="l.bin", storage_path=key))
+    db.commit()
+    archive = db.get(BackupSet, run_backup_job(env).backup_set_id).archive_name
+    for name, value in (("BACKUP_REPOSITORY_URL", env.config.repository_url), ("BACKUP_PASSPHRASE_FILE", str(env.config.passphrase_file)),
+                        ("BACKUP_WORK_DIR", str(env.config.work_dir)), ("BACKUP_ENABLED", "true")):
+        monkeypatch.setenv(name, value)
+    _local_s3_env(monkeypatch)
+    target_db = f"hocx_cli_{uuid.uuid4().hex[:8]}"
+    generation = 1000 + uuid.uuid4().int % 100000  # eigener, leerer Bereich im geteilten Test-Bucket
+    try:
+        assert cli_main(["restore-full", "--archive", archive, "--target-db", target_db, "--local-s3", "--generation", str(generation),
+                         "--database-url", settings.database_url, "--yes"]) == 0
+        url = PgTarget.from_url(settings.database_url).with_database(target_db).sqlalchemy_url()
+        restored = create_engine(url, poolclass=NullPool)
+        with restored.connect() as conn:
+            active = conn.execute(text("""
+                SELECT p.public_id, p.provider, p.is_builtin, p.prefix, p.bucket, p.abgabebox_bucket, p.restricted_access_key_enc
+                FROM storage_state s JOIN storage_profile p ON p.id = s.active_profile_id WHERE s.active_generation = :g
+            """), {"g": generation}).one()
+            local_profiles = conn.execute(text("SELECT COUNT(*) FROM storage_profile WHERE provider = 'garage_local' AND is_builtin")).scalar()
+        restored.dispose()
+        assert (active.provider, active.is_builtin, active.prefix, active.bucket, active.abgabebox_bucket) == (
+            "garage_local", True, "hocx", "hocx-main", "hocx-abgabebox")
+        assert active.restricted_access_key_enc and local_profiles == 1
+        if backup_has_local_profile:
+            assert active.public_id == builtin_before
+        backend = S3Backend(ProfileConfig(profile_id=0, generation=generation, provider="garage_local", endpoint_url=S3_ENDPOINT,
+                                          region="garage", bucket="hocx-main", abgabebox_bucket="hocx-abgabebox", prefix="hocx",
+                                          addressing_style="path", access_key=os.environ["TEST_S3_ACCESS_KEY"],
+                                          secret_key=os.environ["TEST_S3_SECRET_KEY"], tls_verify=False))
+        assert b"".join(backend.open_read("main", key)) == b"lokal-inhalt"
+    finally:
+        with PgTools(PgTarget.from_url(settings.database_url)) as pg:
+            pg.drop_database(target_db)
+
+
+def test_cli_local_s3_rejects_explicit_s3_target():
+    """Widersprüchliche Zielangaben werden abgelehnt, bevor Repository oder Datenbank berührt werden."""
+    with pytest.raises(SystemExit, match="--local-s3 nicht zusammen"):
+        cli_main(["restore-full", "--archive", "x", "--target-db", "hocx_x", "--local-s3", "--s3-bucket", "fremd",
+                  "--database-url", settings.database_url, "--yes"])
+
+
 def test_cli_full_restore_resumes_after_abort_in_the_object_phase(backup_env, tmp_path, monkeypatch):  # noqa: F811
     """BORG-011: Abbruch in der Objektphase, Fortsetzung mit --resume ohne erneuten DB-Restore.
     Eine Zieldatenbank ohne Abschlussmarkierung wird dagegen nie übernommen."""
@@ -272,3 +340,19 @@ def test_interrupted_database_swap_is_recovered_on_worker_start(backup_env):  # 
                 if pg.database_exists(name):
                     pg.psql(f'ALTER DATABASE "{name}" WITH ALLOW_CONNECTIONS true;', database="postgres")
                     pg.drop_database(name)
+
+
+def test_cli_script_outputs_for_the_guided_restore(backup_env, monkeypatch, capsys):  # noqa: F811
+    """deploy.sh --restore-from-backup liest list --tsv und show --schema-state (ohne jq)."""
+    db, env, _ = backup_env
+    archive = db.get(BackupSet, run_backup_job(env).backup_set_id).archive_name
+    for name, value in (("BACKUP_REPOSITORY_URL", env.config.repository_url), ("BACKUP_PASSPHRASE_FILE", str(env.config.passphrase_file)),
+                        ("BACKUP_WORK_DIR", str(env.config.work_dir))):
+        monkeypatch.setenv(name, value)
+    capsys.readouterr()
+    assert cli_main(["list", "--details", "--tsv"]) == 0
+    rows = [line.split("\t") for line in capsys.readouterr().out.splitlines() if line]
+    row = next(row for row in rows if row[0] == archive)
+    assert len(row) == 5 and row[4] == "False" and row[2]  # Archiv, Zeit, Version, Objekte, ungültig
+    assert cli_main(["show", archive, "--schema-state"]) == 0
+    assert capsys.readouterr().out.strip() == "same"

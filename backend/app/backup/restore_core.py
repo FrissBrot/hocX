@@ -324,11 +324,13 @@ _PROFILE_TABLE = sa_table(
 
 
 def configure_restored_database(database_url: str, *, profile: dict[str, Any], generation: int, fallback_days: int = 14,
-                                note: str = "restore") -> dict[str, Any]:
+                                note: str = "restore", builtin: bool = False) -> dict[str, Any]:
     """Setzt in der wiederhergestellten Datenbank den Speicher auf die neue Generation des
     Zielprofils und räumt Zustände auf, die nur zur alten Umgebung gehörten (offene Migrationen,
     Storage-Wartungsfenster, Backup-Hold). profile enthält die Spalten aus PROFILE_COLUMNS
-    (Zugangsdaten bereits mit STORAGE_CREDENTIALS_KEY verschlüsselt) plus public_id und name."""
+    (Zugangsdaten bereits mit STORAGE_CREDENTIALS_KEY verschlüsselt) plus public_id und name.
+    builtin=True legt ein neues Profil als eingebautes lokales S3 an (Restore in das Garage einer
+    Installation, deren Sicherung noch kein lokales Profil hatte)."""
     engine = create_engine(database_url, poolclass=NullPool, hide_parameters=True)
     now = datetime.now(UTC)
     try:
@@ -348,7 +350,7 @@ def configure_restored_database(database_url: str, *, profile: dict[str, Any], g
                     name = f"{name} ({note} {now:%Y-%m-%d %H:%M})"
                 profile_id = int(conn.execute(
                     insert(_PROFILE_TABLE)
-                    .values(public_id=profile["public_id"], name=name, **values, is_enabled=True, is_builtin=False, last_test_ok=True)
+                    .values(public_id=profile["public_id"], name=name, **values, is_enabled=True, is_builtin=builtin, last_test_ok=True)
                     .returning(_PROFILE_TABLE.c.id)
                 ).scalar_one())
             existing = conn.execute(text("SELECT profile_id, status FROM storage_generation WHERE generation = :g"), {"g": generation}).first()

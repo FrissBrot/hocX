@@ -87,6 +87,7 @@ run_script_tests() {
   run_suite "Skripte: Job-Wrapper (Host-Cronjobs)" "$REPO_DIR/scripts/tests/test_run_job.sh"
   run_suite "Skripte: Upgrade-Tor nur S3" "$REPO_DIR/scripts/tests/test_storage_gate.sh"
   run_suite "Skripte: Backup/Restore" "$REPO_DIR/scripts/tests/test_backup_restore.sh"
+  run_suite "Skripte: Restore auf neuem Server" "$REPO_DIR/scripts/tests/test_restore_from_backup.sh"
   run_suite "Skripte: Alte Backup-Skripte neben Borg" "$REPO_DIR/scripts/tests/test_legacy_backup_guard.sh"
 }
 

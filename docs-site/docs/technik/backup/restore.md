@@ -97,7 +97,45 @@ Braucht weder laufendes Backend noch Redis noch eine hocX-Datenbank – nur Dock
 Repository-Zugang und die Notfallmappe (Passphrase, Borg-Schlüssel-Export, `.env` mit
 `STORAGE_CREDENTIALS_KEY`, `ADMIN_AUTH_SECRET`, `AUTH_SECRET`).
 
-### Server verloren
+### Server verloren: geführt mit `deploy.sh --restore-from-backup`
+
+Auf einem neuen, leeren Server (nach RUNBOOK Abschnitt 8 bis und mit
+`provision_deploy_user.sh`, als `hocx-deploy` im Repo):
+
+```bash
+./scripts/deploy.sh prod --restore-from-backup
+```
+
+Das Skript führt durch alles und macht danach den normalen Deploy:
+
+1. **Konfiguration:** Pfad zur gesicherten `.env` aus der Notfallmappe (empfohlen: sie enthält
+   `ADMIN_AUTH_SECRET`, `STORAGE_CREDENTIALS_KEY` und `EXPORT_ENCRYPTION_KEY`). Ohne sie legt es eine
+   neue an und fragt diese drei Schlüssel einzeln ab - leer gelassen müssen Zwei-Faktor-Apps neu
+   eingerichtet und gespeicherte Zugangsdaten neu eingegeben werden.
+2. **Storage Box:** fehlende Werte (Host, Benutzer, Passphrase, Repository-ID) werden abgefragt.
+   Für diesen Server entsteht ein neuer SSH-Schlüssel; das Skript zeigt die fertige Zeile für
+   `authorized_keys` (append-only, nur dieses Repository) und wartet, bis sie eingetragen ist. Der
+   Host-Key der Box wird angezeigt und nur nach Bestätigung des Fingerabdrucks übernommen.
+3. **Images** ziehen und Signaturen prüfen, wie bei jedem Deploy.
+4. **Wiederherstellungspunkt** wählen (neueste zuerst, ungültige ausgeblendet). Ist der Punkt
+   neuer als `HOCX_VERSION`, bricht das Skript mit einem Hinweis ab (Version anheben, neu starten);
+   ein älterer wird nach Rückfrage kontrolliert migriert.
+5. Nach Eingabe von `WIEDERHERSTELLEN`: `restore-full --local-s3` in die neue Datenbank
+   `hocx_restored` und das lokale S3 (das eingebaute Profil «Lokales S3» wird weiterverwendet),
+   danach `swap-database`. hocX startet in Wartung.
+6. Migrationen, Start, Smoke-Checks wie gewohnt; am Ende die Checkliste (DNS, Anmeldung prüfen,
+   Wartung freigeben, «Backup jetzt starten», alten Schlüssel aus `authorized_keys` entfernen,
+   `verify_release.sh`).
+
+Bricht der Lauf ab (Netz, Speicher, falscher Fingerabdruck), denselben Befehl erneut starten: der
+gewählte Punkt steht in `.releases/restore-in-progress`, eine vollständig wiederhergestellte
+Datenbank wird übernommen und nur fehlende Objekte werden noch übertragen. Auf einem Server mit
+laufendem Release oder vorhandener Datenbank verweigert das Skript den Start - dafür gibt es die
+[Voll-Restore im Admin-Portal](#voll-restore-im-admin-portal).
+
+Ziel ist immer das lokale S3 des Servers. Für ein externes S3 die Schritte unten von Hand.
+
+### Server verloren: von Hand
 
 1. Server nach RUNBOOK Abschnitt 8 aufsetzen, Repo-Checkout, `.env` aus der Notfallmappe,
    `BACKUP_SSH_KEY_PATH`/`BACKUP_KNOWN_HOSTS_PATH` neu anlegen (neuer Schlüssel auf der Box
