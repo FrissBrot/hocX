@@ -45,7 +45,7 @@ export function FinanceCurrencySettings({ initialCurrency }: { initialCurrency: 
   }
 
   return (
-    <section className="card">
+    <section className="card settings-anchor" id="currencies">
       <div className="eyebrow">{t("eyebrow")}</div>
       <form className="grid" onSubmit={submit}>
         <label className="field-stack">

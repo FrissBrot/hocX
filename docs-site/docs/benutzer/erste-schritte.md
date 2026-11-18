@@ -29,6 +29,21 @@ du unter **Mitglieder**, siehe [Mitglieder & Logins](mitglieder.md).
 5. **Abschliessen** – ein abgeschlossenes Protokoll ist unveränderlich (Snapshot) und
    kann als PDF exportiert werden.
 
+## Suchen (Ctrl+K / ⌘K)
+
+Mit **Ctrl+K** (Mac: **⌘K**) oder der Lupe in der Kopfleiste öffnet sich die Suche, man kann
+sofort lostippen. Sie findet:
+
+- Menüs und Reiter, z. B. «Bussen» oder «Datenschutz»,
+- einzelne Einstellungen, z. B. «Vereinsname», «Löschfristen» oder «Tarif je Person». Ein Klick
+  springt direkt in den passenden Abschnitt,
+- Rollen, auch die Standardrollen über ihren Namen,
+- Elemente der Bibliothek und ihre Blöcke. Ein Klick öffnet sie im Editor,
+- Personen und Dateien.
+
+Es erscheint nur, was man mit den eigenen Rechten auch öffnen darf. Auf Seiten mit einer Liste
+sucht **Ctrl+F** (⌘F) direkt in dieser Liste.
+
 ## Wichtig: Snapshot-Prinzip
 
 Ein Protokoll ist eine **eigenständige Kopie** der Vorlage zum Zeitpunkt seiner

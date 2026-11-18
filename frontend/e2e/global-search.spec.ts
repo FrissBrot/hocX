@@ -35,7 +35,7 @@ test("Ctrl+K findet Einstellungen und Personen und öffnet sie", async ({ page, 
     await expect(dialog.getByRole("option", { name: /Datenschutz/ })).toBeVisible();
     await page.keyboard.press("Enter");
     // Erster Aufruf der Seite: der Next-Server des E2E-Stacks kompiliert sie erst (dauert >5 s)
-    await expect(page).toHaveURL(/\/tenant-settings\/privacy$/, { timeout: 30_000 });
+    await expect(page).toHaveURL(/\/tenant-settings\/privacy(#[a-z-]+)?$/, { timeout: 30_000 });
 
     // Person aus der Datenbank, öffnet die Bearbeitung auf /participants
     await page.keyboard.press("Control+k");
@@ -49,6 +49,40 @@ test("Ctrl+K findet Einstellungen und Personen und öffnet sie", async ({ page, 
       .toBe(true);
   } finally {
     await request.delete(`/api/participants/${participant.id}`);
+  }
+});
+
+test("Ctrl+K findet einzelne Einstellungen, Rollen und Elemente", async ({ page, request }) => {
+  test.setTimeout(120_000);
+  const title = `E2E Suchelement ${Date.now()}`;
+  const created = await request.post("/api/element-definitions", { data: { title, blocks: [] } });
+  expect(created.ok(), await created.text()).toBeTruthy();
+  const element = await created.json();
+  try {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/");
+    const dialog = page.getByRole("dialog", { name: "Suchen" });
+
+    // Einzelne Einstellung: Reiter der Bussen-Konfiguration
+    await page.keyboard.press("Control+k");
+    await page.keyboard.type("Bussen-Tarife");
+    await dialog.getByRole("option", { name: /Bussen-Tarife/ }).click();
+    await expect(page).toHaveURL(/\/fine-settings\?tab=tariffs$/, { timeout: 30_000 });
+    await expect(page.getByRole("tab", { name: /Tarife/ })).toHaveAttribute("aria-selected", "true");
+
+    // Standardrolle über ihren übersetzten Namen
+    await page.keyboard.press("Control+k");
+    await page.keyboard.type("Kassier");
+    await dialog.getByRole("option", { name: /Kassier/ }).first().click();
+    await expect(page).toHaveURL(/\/users\/roles\?role=/, { timeout: 30_000 });
+
+    // Element der Bibliothek
+    await page.keyboard.press("Control+k");
+    await page.keyboard.type(title);
+    await dialog.getByRole("option", { name: new RegExp(title) }).click();
+    await expect(page).toHaveURL(new RegExp(`/elements\\?open=${element.id}`), { timeout: 30_000 });
+  } finally {
+    await request.delete(`/api/element-definitions/${element.id}`);
   }
 });
 

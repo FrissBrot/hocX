@@ -93,7 +93,7 @@ export function TenantGeneralSettings({ initialTenant }: Props) {
 
   return (
     <>
-      <section className="card">
+      <section className="card settings-anchor" id="stammdaten">
         <div className="eyebrow">{t("masterDataEyebrow")}</div>
         <form className="grid" onSubmit={submitTenant}>
           <div className="tenant-avatar-row">

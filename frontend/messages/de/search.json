@@ -18,7 +18,9 @@
     "pages": "Menüs",
     "settings": "Einstellungen",
     "people": "Personen",
-    "files": "Dateien"
+    "files": "Dateien",
+    "roles": "Rollen",
+    "elements": "Elemente und Blöcke"
   },
   "keywords": {
     "dashboard": "Start Übersicht Home Cockpit Dashboard",
@@ -67,5 +69,57 @@
     "organisationProfile": "Organisation Profil Allgemein Name Logo Einstellungen",
     "cycles": "Abläufe Zyklen Zyklen",
     "myTasks": "Meine Pendenzen Aufgaben To-do Abgaben"
+  },
+  "blockIn": "Block in «{element}»",
+  "roleLabel": "Rolle",
+  "settingEntries": {
+    "tenantName": {
+      "label": "Vereinsname",
+      "keywords": "Name Organisation Verein umbenennen Stammdaten"
+    },
+    "tenantLogo": {
+      "label": "Profilbild des Vereins",
+      "keywords": "Logo Bild Wappen Avatar"
+    },
+    "publicSlug": {
+      "label": "Öffentliche Adresse",
+      "keywords": "Slug Kurzname URL Link Adresse"
+    },
+    "eventFields": {
+      "label": "Felder für Termine",
+      "keywords": "Terminfelder Ort Treffpunkt Mitnehmen Kleidung Anlass"
+    },
+    "currencies": {
+      "label": "Währungen",
+      "keywords": "Währung CHF EUR Kasse Finanzen"
+    },
+    "privacyStatistics": {
+      "label": "Datenschutz-Statistik",
+      "keywords": "DSGVO DSG Personendaten Übersicht"
+    },
+    "privacyNotice": {
+      "label": "Datenschutzhinweis",
+      "keywords": "Datenschutzerklärung Hinweis DSGVO DSG"
+    },
+    "retentionRules": {
+      "label": "Aufbewahrungsregeln",
+      "keywords": "Aufbewahrung Löschfristen löschen Fristen"
+    },
+    "retentionProposals": {
+      "label": "Löschvorschläge",
+      "keywords": "Löschen Aufbewahrung Vorschläge alte Daten"
+    },
+    "fineTariff": {
+      "label": "Bussentarif (Verspätung & Absenz)",
+      "keywords": "Busse Verspätung Absenz Betrag Bussenkonto"
+    },
+    "fineTariffGroups": {
+      "label": "Bussen-Tarife",
+      "keywords": "Tarif Lernende Vollverdiener Busse"
+    },
+    "todoFineRules": {
+      "label": "Pendenzen-Bussen-Regeln",
+      "keywords": "Pendenzen Busse Regel zu spät Aufgaben"
+    }
   }
 }

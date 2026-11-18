@@ -18,7 +18,9 @@
     "pages": "Menu",
     "settings": "Impostazioni",
     "people": "Persone",
-    "files": "File"
+    "files": "File",
+    "roles": "Ruoli",
+    "elements": "Elementi e blocchi"
   },
   "keywords": {
     "dashboard": "inizio panoramica home Dashboard",
@@ -67,5 +69,57 @@
     "organisationProfile": "organizzazione profilo generale nome logo impostazioni",
     "cycles": "flussi cicli Cicli",
     "myTasks": "I miei compiti cose da fare consegne"
+  },
+  "blockIn": "Blocco in «{element}»",
+  "roleLabel": "Ruolo",
+  "settingEntries": {
+    "tenantName": {
+      "label": "Nome dell’organizzazione",
+      "keywords": "nome organizzazione società rinominare dati di base"
+    },
+    "tenantLogo": {
+      "label": "Immagine dell’organizzazione",
+      "keywords": "logo immagine stemma avatar"
+    },
+    "publicSlug": {
+      "label": "Indirizzo pubblico",
+      "keywords": "slug nome breve URL link indirizzo"
+    },
+    "eventFields": {
+      "label": "Campi degli appuntamenti",
+      "keywords": "campi appuntamenti luogo ritrovo materiale abbigliamento"
+    },
+    "currencies": {
+      "label": "Valute",
+      "keywords": "valuta CHF EUR cassa finanze"
+    },
+    "privacyStatistics": {
+      "label": "Statistica protezione dati",
+      "keywords": "GDPR LPD dati personali panoramica"
+    },
+    "privacyNotice": {
+      "label": "Informativa sulla privacy",
+      "keywords": "informativa privacy avviso GDPR"
+    },
+    "retentionRules": {
+      "label": "Regole di conservazione",
+      "keywords": "conservazione termini di cancellazione eliminare"
+    },
+    "retentionProposals": {
+      "label": "Proposte di eliminazione",
+      "keywords": "eliminare conservazione proposte dati vecchi"
+    },
+    "fineTariff": {
+      "label": "Tariffa multe (ritardo & assenza)",
+      "keywords": "multa ritardo assenza importo conto"
+    },
+    "fineTariffGroups": {
+      "label": "Tariffe multe",
+      "keywords": "tariffa apprendisti salariati multa"
+    },
+    "todoFineRules": {
+      "label": "Regole multe compiti",
+      "keywords": "compiti multa regola in ritardo"
+    }
   }
 }

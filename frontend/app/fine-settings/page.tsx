@@ -8,7 +8,8 @@ import type { FinanceAccount, FineTariff, FineTariffGroup, TodoFineRule } from "
 
 // Bussen-Konfiguration (Navigation: Konfiguration): Anwesenheitsbussen, Tarife, Pendenzen-Regeln.
 // Braucht das Feature finance und finances.read; ändern nur mit finances.manage.
-export default async function FineSettingsPage() {
+export default async function FineSettingsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  const { tab } = await searchParams;
   const session = await requireSession();
   if (featureAccess(session, "finance") === "none" || !can(session, "finances.read")) redirect("/");
   const canManage = can(session, "finances.manage");
@@ -29,6 +30,7 @@ export default async function FineSettingsPage() {
           accounts={accounts ?? []}
           canManage={canManage}
           todoFinesAccess={todoFinesAccess}
+          initialTab={tab}
         />
       </section>
     </AppShell>

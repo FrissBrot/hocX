@@ -38,7 +38,7 @@ export function PrivacySettings({ initialState }: { initialState: PrivacySetting
     <div className="docverify">
       <div className="grid docverify-main">
         <p className="muted docverify-intro">{t("intro")}</p>
-        <section className="card docverify-card">
+        <section className="card docverify-card settings-anchor" id="privacy-statistics">
           <div className="docverify-card-head">
             <h2 className="docverify-heading">{t("statisticsTitle")}</h2>
           </div>
@@ -57,7 +57,7 @@ export function PrivacySettings({ initialState }: { initialState: PrivacySetting
             </span>
           </label>
         </section>
-        <section className="card docverify-card">
+        <section className="card docverify-card settings-anchor" id="privacy-notice">
           <div className="docverify-card-head">
             <h2 className="docverify-heading">{t("noticeTitle")}</h2>
           </div>

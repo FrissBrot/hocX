@@ -70,8 +70,12 @@ describe("buildStaticEntries", () => {
   });
 
   it("führt jede Seite nur einmal", () => {
-    const hrefs = buildStaticEntries(sessionFor("admin"), tNav, tSearch).filter((entry) => entry.href).map((entry) => entry.href);
+    // Einzelne Einstellungen dürfen in denselben Abschnitt springen (z. B. Name, Bild und Adresse)
+    const entries = buildStaticEntries(sessionFor("admin"), tNav, tSearch);
+    const hrefs = entries.filter((entry) => entry.href && !entry.id.startsWith("setting:")).map((entry) => entry.href);
     expect(new Set(hrefs).size).toBe(hrefs.length);
+    const ids = entries.map((entry) => entry.id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });
 
@@ -173,5 +177,20 @@ describe("Tastenkürzel", () => {
     window.dispatchEvent(own);
     expect(own.defaultPrevented).toBe(false);
     hook.unmount();
+  });
+});
+
+
+describe("einzelne Einstellungen", () => {
+  it("erscheinen nur, wenn die Seite sichtbar ist, und springen in den Abschnitt", () => {
+    const admin = buildStaticEntries(sessionFor("admin"), tNav, tSearch);
+    const tariffs = admin.find((entry) => entry.id === "setting:fineTariffGroups");
+    expect(tariffs?.href).toBe("/fine-settings?tab=tariffs");
+    expect(tariffs?.group).toBe("settings");
+    expect(rankEntries(admin, "vereinsname", 3)[0]?.id).toBe("setting:tenantName");
+    expect(rankEntries(admin, "loschfristen", 5).map((entry) => entry.id)).toContain("setting:retentionRules");
+
+    const reader = buildStaticEntries(sessionFor("reader"), tNav, tSearch);
+    expect(reader.some((entry) => entry.id.startsWith("setting:tenant"))).toBe(false);
   });
 });

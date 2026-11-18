@@ -20,6 +20,8 @@ type Props = {
   canManage: boolean;
   /** Feature todo_fines: «none» blendet die Pendenzen-Regeln aus, «read_only» zeigt sie nur an. */
   todoFinesAccess: "none" | "read_only" | "full";
+  /** Reiter aus der Adresse (?tab=, z. B. aus der Suche) */
+  initialTab?: string;
 };
 
 const noop = async () => undefined;
@@ -29,14 +31,16 @@ const noop = async () => undefined;
  * eigenen Beträgen je Person (Verspätung, Abwesenheit, Pendenzen-Regeln) und die Regeln der
  * Pendenzen-Bussen. Die Bussen selbst stehen gemeinsam in einer Liste unter Finanzen > Bussen.
  */
-export function FineSettingsView({ initialTariff, initialTariffs, initialRules, accounts, canManage, todoFinesAccess }: Props) {
+export function FineSettingsView({ initialTariff, initialTariffs, initialRules, accounts, canManage, todoFinesAccess, initialTab }: Props) {
   const t = useTranslations("finances");
   const locale = useLocale();
   const [tariff, setTariff] = useState<FineTariff | null>(initialTariff);
   const [tariffs, setTariffs] = useState(initialTariffs);
   const [rules, setRules] = useState(initialRules);
   const [tariffOpen, setTariffOpen] = useState(false);
-  const [tab, setTab] = useState("attendance");
+  const [tab, setTab] = useState(
+    (initialTab === "tariffs" && canManage) || (initialTab === "rules" && todoFinesAccess !== "none") ? initialTab : "attendance",
+  );
   const accountName = (id: string | null) => accounts.find((account) => account.id === id)?.name ?? t("unknownAccount");
   // Währung des Bussenkontos (Beträge im Tarif sind ohne Währung gespeichert)
   const currency = accounts.find((account) => account.id === tariff?.account_id)?.currency_label ?? "";

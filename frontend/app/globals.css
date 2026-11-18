@@ -3230,6 +3230,11 @@ button.table-row-link:hover {
   color: var(--accent);
   border-bottom-color: var(--accent);
 }
+/* Sprungziel aus der Suche (Ctrl+K): Abstand unter der Kopfleiste */
+.settings-anchor {
+  scroll-margin-top: var(--space-6);
+}
+
 .tabs-count {
   margin-left: var(--space-2);
   padding: 1px var(--space-2);
@@ -13923,6 +13928,12 @@ a.export-step-meta {
   display: flex;
   align-items: baseline;
   gap: var(--space-2);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.fine-tariff-card-total:hover .muted {
+  color: var(--accent);
 }
 
 .fine-tariff-card-total strong {
@@ -14016,200 +14027,30 @@ a.export-step-meta {
   box-shadow: none;
 }
 
-.fine-members-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
-}
 
-.fine-members-search {
-  flex: 1;
-  min-width: 200px;
-  max-width: 320px;
-}
 
-.fine-members-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
 
-.fine-members-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 32px;
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-pill);
-  /* Über --button-bg/--button-hover-bg: die globale Hover-Regel (button:hover) nimmt sonst
-     --primary als Hintergrund, und der dunkle Text wird unlesbar */
-  --button-bg: var(--panel-solid);
-  --button-hover-bg: var(--neutral-bg);
-  background: var(--button-bg);
-  color: var(--text);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  white-space: nowrap;
-}
 
-.fine-members-chip span {
-  font-weight: 500;
-  opacity: 0.7;
-  font-variant-numeric: tabular-nums;
-}
 
-.fine-members-chip-active {
-  border-color: var(--accent);
-  --button-bg: var(--accent);
-  --button-hover-bg: var(--accent-strong);
-  color: var(--on-solid);
-}
 
-.fine-members {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--panel);
-  overflow: hidden;
-}
 
-.fine-members-bulk {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-4);
-  background: var(--accent);
-  color: var(--on-solid);
-  font-size: var(--text-sm);
-}
 
-.fine-members-bulk-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
 
-.fine-members-bulk button {
-  min-height: 28px;
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--on-solid) 35%, transparent 65%);
-  border-radius: var(--radius-sm);
-  --button-bg: color-mix(in srgb, var(--on-solid) 10%, transparent 90%);
-  --button-hover-bg: color-mix(in srgb, var(--on-solid) 22%, transparent 78%);
-  background: var(--button-bg);
-  color: var(--on-solid);
-  font-size: var(--text-sm);
-  font-weight: 600;
-}
 
-.fine-members-bulk .fine-members-bulk-clear {
-  margin-left: auto;
-  border: none;
-  --button-bg: transparent;
-  --button-hover-bg: color-mix(in srgb, var(--on-solid) 12%, transparent 88%);
-}
 
-.fine-members-row {
-  display: grid;
-  grid-template-columns: 28px minmax(160px, 1fr) auto;
-  gap: var(--space-3);
-  align-items: center;
-  padding: var(--space-2) var(--space-4);
-  border-bottom: 1px solid var(--border);
-}
 
-.fine-members-row:last-child {
-  border-bottom: none;
-}
 
-.fine-members-head {
-  background: var(--bg);
-  color: var(--muted);
-  font-size: var(--text-xs);
-  font-weight: 600;
-}
 
-.fine-members-row-selected {
-  background: var(--accent-soft);
-}
 
-.fine-members-row-inactive {
-  opacity: 0.6;
-}
 
-.fine-members-row input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  margin: 0;
-}
 
-.fine-members-person {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
-}
 
-.fine-members-avatar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: var(--neutral-bg);
-  color: var(--neutral-fg);
-  font-size: var(--text-xs);
-  font-weight: 700;
-}
 
-.fine-members-name {
-  font-weight: 600;
-}
 
-.fine-members-inactive,
-.fine-members-empty {
-  margin: 0;
-  font-size: var(--text-xs);
-}
 
-.fine-members-empty {
-  padding: var(--space-5) var(--space-4);
-}
 
-.fine-members-segment {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-  padding: 3px;
-  border-radius: var(--radius-sm);
-  background: var(--bg);
-  justify-self: end;
-}
 
-.fine-members-segment button {
-  min-height: 28px;
-  padding: var(--space-1) var(--space-3);
-  border: none;
-  border-radius: var(--radius-xs);
-  --button-bg: transparent;
-  --button-hover-bg: color-mix(in srgb, var(--panel-solid) 60%, transparent 40%);
-  background: var(--button-bg);
-  color: var(--muted);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  white-space: nowrap;
-}
 
-.fine-members-segment .fine-members-segment-active {
-  --button-bg: var(--panel-solid);
-  --button-hover-bg: var(--panel-solid);
-  color: var(--accent);
-  box-shadow: var(--shadow-soft);
-}
 
 .fine-tariff-default {
   padding: var(--space-3) var(--space-4);
@@ -14220,17 +14061,6 @@ a.export-step-meta {
 
 .fine-tariff-default-locked {
   cursor: default;
-}
-
-@media (max-width: 640px) {
-  .fine-members-row {
-    grid-template-columns: 28px 1fr;
-  }
-
-  .fine-members-segment {
-    grid-column: 2;
-    justify-self: start;
-  }
 }
 
 /* Dialog «Bussenregel» (todo-fine-rules.tsx, Design «hocX Bussenregel Dialog») */

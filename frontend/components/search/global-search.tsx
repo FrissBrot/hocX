@@ -9,19 +9,19 @@ import { Modal } from "@/components/ui/modal";
 import { NavIcon } from "@/components/ui/nav-icons";
 import { SearchInput } from "@/components/ui/search-input";
 import { browserApiFetch } from "@/lib/api/client";
-import { can } from "@/lib/permissions";
+import { can, roleName } from "@/lib/permissions";
 import { storeSearchHandoff } from "@/lib/search/handoff";
 import { focusListSearch } from "@/lib/search/list-search";
 import { rankEntries } from "@/lib/search/match";
 import { useShortcutLabel } from "@/lib/search/shortcuts";
 import { buildStaticEntries, type SearchEntry, type SearchGroup } from "@/lib/search/static-entries";
-import type { GlobalSearchResult, SessionInfo } from "@/types/api";
+import type { GlobalSearchResult, RoleRead, SessionInfo } from "@/types/api";
 
 const REMOTE_DEBOUNCE_MS = 200;
 const MIN_REMOTE_LENGTH = 2;
 const RECENT_KEY = "hocx-search-recent";
 const RECENT_LIMIT = 6;
-const GROUP_ORDER: SearchGroup[] = ["list", "recent", "pages", "settings", "people", "files"];
+const GROUP_ORDER: SearchGroup[] = ["list", "recent", "pages", "settings", "roles", "elements", "people", "files"];
 
 export type GlobalSearchAction = "profile" | "theme-light" | "theme-dark" | "theme-auto";
 
@@ -88,6 +88,9 @@ export function GlobalSearch({
   const userId = session?.user?.id != null ? String(session.user.id) : null;
   const searchesPeople = can(session, "participants.manage");
   const searchesFiles = can(session, "files.manage");
+  const searchesElements = can(session, "templates.edit");
+  const searchesRoles = can(session, "access.manage");
+  const [roles, setRoles] = useState<RoleRead[] | null>(null);
   const shortcut = useShortcutLabel();
 
   const staticEntries = useMemo(() => buildStaticEntries(session, tNav, t), [session, tNav, t]);
@@ -120,9 +123,20 @@ export function GlobalSearch({
 
   const trimmed = query.trim();
 
+  // Rollen: einmal je Öffnen laden (wenige Einträge), gesucht wird lokal über den angezeigten
+  // Namen - Standardrollen heissen je Sprache anders (name ist dort leer).
+  useEffect(() => {
+    if (!open || !searchesRoles || roles !== null || !trimmed) return;
+    let active = true;
+    browserApiFetch<RoleRead[]>("/api/roles")
+      .then((loaded) => { if (active) setRoles(loaded ?? []); })
+      .catch(() => { if (active) setRoles([]); });
+    return () => { active = false; };
+  }, [open, searchesRoles, roles, trimmed]);
+
   // Personen und Dateien: nach einer kurzen Tipppause, veraltete Anfragen werden abgebrochen
   useEffect(() => {
-    if (!open || (!searchesPeople && !searchesFiles) || trimmed.length < MIN_REMOTE_LENGTH) {
+    if (!open || (!searchesPeople && !searchesFiles && !searchesElements) || trimmed.length < MIN_REMOTE_LENGTH) {
       setRemote(null);
       setRemoteState("idle");
       return;
@@ -135,7 +149,7 @@ export function GlobalSearch({
         .catch(() => { if (!controller.signal.aborted) { setRemote(null); setRemoteState("error"); } });
     }, REMOTE_DEBOUNCE_MS);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [open, trimmed, searchesPeople, searchesFiles]);
+  }, [open, trimmed, searchesPeople, searchesFiles, searchesElements]);
 
   const entries = useMemo<SearchEntry[]>(() => {
     if (!trimmed) {
@@ -147,6 +161,36 @@ export function GlobalSearch({
     }
     const ranked = rankEntries(staticEntries, trimmed, 10);
     result.push(...ranked.filter((entry) => entry.group === "pages"), ...ranked.filter((entry) => entry.group === "settings"));
+    const roleEntries: SearchEntry[] = (roles ?? []).map((role) => ({
+      id: `role:${role.id}`,
+      group: "roles",
+      label: roleName(role, tNav),
+      sublabel: role.description || t("roleLabel"),
+      keywords: role.system_key ?? undefined,
+      icon: "users",
+      href: `/users/roles?role=${role.id}`,
+    }));
+    result.push(...rankEntries(roleEntries, trimmed, 5));
+    for (const element of remote?.elements ?? []) {
+      result.push({
+        id: `element:${element.id}`,
+        group: "elements",
+        label: element.title,
+        sublabel: element.description || undefined,
+        icon: "elements",
+        href: `/elements?open=${element.id}`,
+      });
+    }
+    for (const block of remote?.blocks ?? []) {
+      result.push({
+        id: `block:${block.element_id}:${block.block_id}`,
+        group: "elements",
+        label: block.title,
+        sublabel: t("blockIn", { element: block.element_title }),
+        icon: "elements",
+        href: `/elements?open=${block.element_id}&block=${block.block_id}`,
+      });
+    }
     for (const person of remote?.people ?? []) {
       result.push({
         id: `person:${person.id}`,
@@ -169,7 +213,7 @@ export function GlobalSearch({
       });
     }
     return result.sort((a, b) => GROUP_ORDER.indexOf(a.group) - GROUP_ORDER.indexOf(b.group));
-  }, [trimmed, recent, listInput, staticEntries, remote, t]);
+  }, [trimmed, recent, listInput, staticEntries, remote, t, roles, tNav]);
 
   useEffect(() => {
     setActiveIndex(0);

@@ -4,7 +4,9 @@ Menüs und Einstellungen sucht das Frontend selbst (aus der Navigation, ohne Ser
 in der Datenbank steht - und nur Gruppen, deren Seite die Person auch öffnen darf:
 - Personen mit participants.manage (Seite /participants),
 - Dateien und Fotos mit files.manage (Seiten /files, /photos), über dieselbe Abfrage wie die
-  Dateiliste (FileService.list_tenant_files) und damit mit derselben Mandantentrennung.
+  Dateiliste (FileService.list_tenant_files) und damit mit derselben Mandantentrennung,
+- Elemente der Bibliothek und ihre Blöcke mit templates.edit (Seite /elements).
+Rollen sucht das Frontend selbst (GET /api/roles, übersetzte Namen der Standardrollen).
 POST statt GET, obwohl nur gelesen wird: der Suchtext (oft ein Personenname) gehört nicht in
 Adresszeile und Zugriffslogs. Rate-Limit je Konto, weil das Frontend beim Tippen (verzögert)
 abfragt.
@@ -12,15 +14,15 @@ abfragt.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.permissions import P
 from app.core.rate_limit import enforce_rate_limit
 from app.core.security import CurrentUser, get_current_user, require_any_permission
-from app.models.entities import Participant
-from app.schemas.search import GlobalSearchQuery, GlobalSearchRead, SearchFile, SearchPerson
+from app.models.entities import ElementDefinition, Participant
+from app.schemas.search import GlobalSearchQuery, GlobalSearchRead, SearchBlock, SearchElement, SearchFile, SearchPerson
 from app.services.file_service import FileService
 
 router = APIRouter()
@@ -83,13 +85,66 @@ def search_files(db: Session, tenant_id: int, query: str, limit: int = GROUP_LIM
     ]
 
 
+def search_elements(db: Session, tenant_id: int, query: str, limit: int = GROUP_LIMIT) -> list[SearchElement]:
+    pattern = _like_pattern(query)
+    title = _fold(ElementDefinition.title)
+    rows = db.execute(
+        select(ElementDefinition.public_id, ElementDefinition.title, ElementDefinition.display_title, ElementDefinition.description)
+        .where(
+            ElementDefinition.tenant_id == tenant_id,
+            ElementDefinition.is_library.is_(True),
+            ElementDefinition.is_active.is_(True),
+            or_(
+                title.like(pattern, escape="\\"),
+                _fold(func.coalesce(ElementDefinition.display_title, "")).like(pattern, escape="\\"),
+                _fold(func.coalesce(ElementDefinition.description, "")).like(pattern, escape="\\"),
+            ),
+        )
+        .order_by(title.like(pattern[1:], escape="\\").desc(), ElementDefinition.title.asc(), ElementDefinition.id.asc())
+        .limit(limit)
+    ).all()
+    return [SearchElement(id=row.public_id, title=row.display_title or row.title, description=row.description) for row in rows]
+
+
+# Blöcke stehen als JSON-Liste in configuration_json.blocks (Titel, Blocktitel). Nur gebundene
+# Parameter; die Faltung entspricht _fold.
+_BLOCK_SQL = text(
+    """
+    SELECT ed.public_id AS element_id, COALESCE(NULLIF(ed.display_title, ''), ed.title) AS element_title,
+           (block ->> 'id') AS block_id,
+           COALESCE(NULLIF(block ->> 'title', ''), NULLIF(block ->> 'block_title', ''), '') AS title
+    FROM element_definition ed
+    CROSS JOIN LATERAL jsonb_array_elements(
+        CASE WHEN jsonb_typeof(ed.configuration_json -> 'blocks') = 'array' THEN ed.configuration_json -> 'blocks' ELSE '[]'::jsonb END
+    ) AS block
+    WHERE ed.tenant_id = :tenant_id AND ed.is_library AND ed.is_active
+      AND (block ->> 'id') ~ '^[0-9]+$'
+      AND (translate(lower(COALESCE(block ->> 'title', '')), :accents_from, :accents_to) LIKE :pattern ESCAPE '\\'
+           OR translate(lower(COALESCE(block ->> 'block_title', '')), :accents_from, :accents_to) LIKE :pattern ESCAPE '\\')
+    ORDER BY ed.title, ed.id, (block ->> 'id')
+    LIMIT :limit
+    """
+)
+
+
+def search_blocks(db: Session, tenant_id: int, query: str, limit: int = GROUP_LIMIT) -> list[SearchBlock]:
+    rows = db.execute(
+        _BLOCK_SQL,
+        {"tenant_id": tenant_id, "pattern": _like_pattern(query), "accents_from": _ACCENTS_FROM, "accents_to": _ACCENTS_TO, "limit": limit},
+    ).all()
+    return [
+        SearchBlock(element_id=row.element_id, element_title=row.element_title, block_id=int(row.block_id), title=row.title or row.element_title)
+        for row in rows
+    ]
+
+
 @router.post("/search", response_model=GlobalSearchRead)
 def global_search(
     payload: GlobalSearchQuery,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_any_permission(user, P.PARTICIPANTS_MANAGE, P.FILES_MANAGE)
+    require_any_permission(user, P.PARTICIPANTS_MANAGE, P.FILES_MANAGE, P.TEMPLATES_EDIT)
     tenant_id = user.current_tenant_id
     if tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
@@ -97,7 +152,10 @@ def global_search(
     query = " ".join(payload.q.split())
     if len(query) < 2:
         return GlobalSearchRead(people=[], files=[])
+    templates = user.can(P.TEMPLATES_EDIT)
     return GlobalSearchRead(
         people=search_people(db, tenant_id, query) if user.can(P.PARTICIPANTS_MANAGE) else [],
         files=search_files(db, tenant_id, query) if user.can(P.FILES_MANAGE) else [],
+        elements=search_elements(db, tenant_id, query) if templates else [],
+        blocks=search_blocks(db, tenant_id, query) if templates else [],
     )

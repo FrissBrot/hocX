@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from app.api.routes import search as route
 from app.schemas.files import FileOverviewItem
 from app.schemas.search import GlobalSearchQuery
-from tests.factories import make_current_user, make_participant, make_tenant
+from tests.factories import make_current_user, make_element_definition, make_participant, make_tenant
 
 
 @pytest.fixture(autouse=True)
@@ -98,3 +98,39 @@ def test_whitespace_only_query_returns_nothing(db, tenants):
     admin = make_current_user(own.id, role="admin")
     result = route.global_search(GlobalSearchQuery.model_construct(q="  "), db=db, user=admin)
     assert result.people == [] and result.files == []
+
+
+def test_elements_and_blocks_only_library_of_own_tenant(db, tenants, monkeypatch):
+    """Elemente und Blöcke (Ctrl+K): nur Bibliothek des eigenen Mandanten, nur aktive,
+    Umlaute egal, nur mit templates.edit."""
+    own, other = tenants
+    monkeypatch.setattr(route, "search_files", lambda *args, **kwargs: [])
+    library = make_element_definition(db, own.id, "Ämtliplan", [
+        {"id": 1, "title": "Küchenämtli", "block_title": None},
+        {"id": 2, "title": "", "block_title": "Abwasch Küche"},
+        {"id": "kaputt", "title": "Küche ohne Zahl"},
+    ])
+    single = make_element_definition(db, own.id, "Küche Einzelstück", [{"id": 1, "title": "Küche einzeln"}])
+    single.is_library = False
+    inactive = make_element_definition(db, own.id, "Küche alt", [{"id": 1, "title": "Küche alt"}])
+    inactive.is_active = False
+    make_element_definition(db, other.id, "Küche fremd", [{"id": 1, "title": "Küche fremd"}])
+    no_blocks = make_element_definition(db, own.id, "Kuchenliste", [])
+    no_blocks.configuration_json = {"blocks": "kein Array"}
+    db.flush()
+
+    writer = make_current_user(own.id, permissions=frozenset({"templates.edit"}))
+    result = route.global_search(GlobalSearchQuery.model_construct(q="kuche"), db=db, user=writer)
+    assert [element.title for element in result.elements] == ["Kuchenliste"]
+    assert [(block.element_id, block.block_id, block.title) for block in result.blocks] == [
+        (library.public_id, 1, "Küchenämtli"),
+        (library.public_id, 2, "Abwasch Küche"),
+    ]
+    assert result.people == []
+
+    result = route.global_search(GlobalSearchQuery.model_construct(q="amtli"), db=db, user=writer)
+    assert [element.title for element in result.elements] == ["Ämtliplan"]
+
+    people_only = make_current_user(own.id, permissions=frozenset({"participants.manage"}))
+    result = route.global_search(GlobalSearchQuery.model_construct(q="kuche"), db=db, user=people_only)
+    assert result.elements == [] and result.blocks == []

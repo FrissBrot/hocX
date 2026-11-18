@@ -134,6 +134,34 @@ Drei Migrationen, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Ch
 
 - Auf Mac, iPhone und iPad zeigt hocX Kürzel mit ⌘ (z. B. ⌘K für die Suche), sonst mit Strg/Ctrl.
 
+### Neu: Suche findet einzelne Einstellungen, Rollen, Elemente und Blöcke
+
+- Ctrl+K/⌘K: Das Suchfeld ist sofort aktiv, auch Zeichen, die schon beim Öffnen getippt werden,
+  kommen an.
+- Neben Menüs, Personen und Dateien findet die Suche jetzt einzelne Einstellungen (z. B.
+  «Vereinsname», «Löschfristen», «Tarif je Person») und springt direkt in den Abschnitt bzw.
+  Reiter, dazu Rollen (auch Standardrollen über ihren Namen in der eigenen Sprache) und Elemente
+  der Bibliothek samt ihrer Blöcke (öffnet Element bzw. Block im Editor). Jede Gruppe erscheint nur
+  mit dem Recht, die Zielseite zu öffnen (Elemente: `templates.edit`, Rollen: `access.manage`).
+
+### Geändert: Bussen-Regeln neu gestaltet
+
+- Reiter mit Zählern, Übersicht des Bussentarifs mit Warnung, wenn kein Bussenkonto gesetzt ist,
+  Tarifkarten mit Betrags-Chips («Standard» für Beträge aus dem Bussentarif), Einstieg ohne Tarife,
+  Löschrückfrage mit der Zahl der betroffenen Personen und Betragsfelder mit Währung.
+- «Tarif je Person» ist aus den Bussen-Regeln zu den Mitgliedern gezogen (Personenseite und
+  Mehrfachauswahl in der Mitgliederliste); jede Tarifkarte verlinkt mit «N Personen →» auf die
+  danach gefilterte Mitgliederliste. Mehrere Personen bekommen ihren Tarif in einer Anfrage
+  (`PUT /api/todo-fines/tariff-members`, nur Personen der eigenen Organisation).
+
+### Geändert: Admin-Panel und Buttons
+
+- Die Seitenleiste des Admin-Panels hat zuklappbare Abschnitte wie die App.
+- Buttons nebeneinander sind überall gleich hoch, Nebenaktionen nie mehr dunkel im hellen Design
+  (z. B. «Auswählen» auf geteilten Seiten, «CSV-Import» neben «Neues Mitglied»). Eine Höhe für alle
+  Text-Buttons (40 px, Smartphone 44 px); der Design-Checker und ein Browser-Test auf 13 Seiten in
+  Hell/Dunkel verhindern Rückfälle.
+
 ### Neu: Seitenleiste nach Tätigkeiten
 
 - Gruppen **Sitzungen** (Kalender, Anliegen, Protokolle), **Aufgaben** (Pendenzen, Abgaben),

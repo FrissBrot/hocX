@@ -114,7 +114,7 @@ export function RetentionSettings({ initialPolicy }: { initialPolicy: RetentionP
     <div className="docverify">
       <div className="grid docverify-main">
         <p className="muted docverify-intro">{t("intro")}</p>
-        <section className="card docverify-card">
+        <section className="card docverify-card settings-anchor" id="retention-rules">
           <div className="docverify-card-head">
             <h2 className="docverify-heading">{t("rulesTitle")}</h2>
           </div>
@@ -158,7 +158,7 @@ export function RetentionSettings({ initialPolicy }: { initialPolicy: RetentionP
           </div>
         </section>
 
-        <section className="card docverify-card">
+        <section className="card docverify-card settings-anchor" id="retention-proposals">
           <div className="docverify-card-head">
             <h2 className="docverify-heading">{t("proposalsTitle")}</h2>
             <button type="button" className="button-secondary" disabled={busy} onClick={() => void refresh()}>

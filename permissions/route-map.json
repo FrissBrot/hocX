@@ -2262,12 +2262,14 @@
       "requires_any": [
         [
           "files.manage",
-          "participants.manage"
+          "participants.manage",
+          "templates.edit"
         ]
       ],
       "branches": [
         "files.manage",
-        "participants.manage"
+        "participants.manage",
+        "templates.edit"
       ]
     },
     "GET /api/share-links": {

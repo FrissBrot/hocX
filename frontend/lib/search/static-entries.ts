@@ -14,8 +14,9 @@ import { can } from "@/lib/permissions";
 import type { RouteTab } from "@/components/ui/route-tabs";
 import { CONNECTIONS_HREF } from "@/lib/calendar-feeds";
 import type { SessionInfo } from "@/types/api";
+import { buildSettingEntries } from "@/lib/search/setting-entries";
 
-export type SearchGroup = "recent" | "list" | "pages" | "settings" | "people" | "files";
+export type SearchGroup = "recent" | "list" | "pages" | "settings" | "roles" | "elements" | "people" | "files";
 
 export type SearchEntry = {
   id: string;
@@ -99,6 +100,10 @@ export function buildStaticEntries(session: SessionInfo | null, tNav: TFunc, tSe
       }
     }
   }
+
+  // Einzelne Einstellungen (Abschnitte/Reiter) der sichtbaren Seiten
+  const labels = new Map(entries.map((entry) => [entry.href, entry.label]));
+  entries.push(...buildSettingEntries(seen, tSearch, (href) => labels.get(href)));
 
   const account = tNav("profileEdit");
   entries.push(

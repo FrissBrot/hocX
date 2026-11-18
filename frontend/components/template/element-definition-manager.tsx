@@ -28,6 +28,9 @@ type ElementDefinitionManagerProps = {
   availableAccounts?: { id: string; name: string; currency_label: string }[];
   tenantId: string | null;
   autoOpenCreate?: boolean;
+  /** Element (und Block) direkt öffnen, z. B. aus der Suche (?open=…&block=…) */
+  autoOpenId?: string | null;
+  autoOpenBlockId?: number | null;
   /** Bussenliste nur mit Finanzzugriff (finances.read) anlegen/einstellen. */
   canConfigureFines?: boolean;
 };
@@ -54,6 +57,8 @@ export function ElementDefinitionManager({
   availableAccounts = [],
   tenantId,
   autoOpenCreate = false,
+  autoOpenId = null,
+  autoOpenBlockId = null,
   canConfigureFines = true,
 }: ElementDefinitionManagerProps) {
   const t = useTranslations("templates.elementEditor");
@@ -98,6 +103,17 @@ export function ElementDefinitionManager({
     if (autoOpenCreate) startNewElement();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoOpenCreate]);
+
+  // Sprung aus der Suche (Ctrl+K): Element auswählen und ggf. den Block im Editor öffnen
+  useEffect(() => {
+    if (!autoOpenId) return;
+    const definition = definitions.find((item) => item.id === autoOpenId);
+    if (!definition) return;
+    openDefinition(definition);
+    const block = autoOpenBlockId != null ? definition.blocks.find((item) => item.id === autoOpenBlockId) : undefined;
+    if (block) startEditBlock(block);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenId, autoOpenBlockId]);
 
   // Einträge der Listen laden, auf die «Zeile aus Liste» schon verweist (Auswahl beim Öffnen).
   const referencedListIds = [...new Set(

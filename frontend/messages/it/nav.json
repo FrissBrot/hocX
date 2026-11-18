@@ -69,7 +69,7 @@
   "roleManagement": "Ruoli",
   "workflows": "Flussi di lavoro",
   "design": "Impaginazione",
-  "fineSettings": "Configurazione multe",
+  "fineSettings": "Regole delle multe",
   "publicLinks": "Link di accesso",
   "related": {
     "openSettings": "Apri impostazione: {name}",

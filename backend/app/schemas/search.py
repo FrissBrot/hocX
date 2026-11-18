@@ -21,6 +21,21 @@ class SearchFile(BaseModel):
     context: str
 
 
+class SearchElement(BaseModel):
+    """Element der Bibliothek (Seite /elements)."""
+    id: uuid.UUID
+    title: str
+    description: str | None = None
+
+
+class SearchBlock(BaseModel):
+    """Block eines Bibliothek-Elements (configuration_json.blocks[].id ist eine Zahl des Clients)."""
+    element_id: uuid.UUID
+    element_title: str
+    block_id: int
+    title: str
+
+
 class GlobalSearchQuery(BaseModel):
     q: str = Field(min_length=2, max_length=100)
 
@@ -28,3 +43,5 @@ class GlobalSearchQuery(BaseModel):
 class GlobalSearchRead(BaseModel):
     people: list[SearchPerson]
     files: list[SearchFile]
+    elements: list[SearchElement] = []
+    blocks: list[SearchBlock] = []

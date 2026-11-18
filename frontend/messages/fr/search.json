@@ -18,7 +18,9 @@
     "pages": "Menus",
     "settings": "Réglages",
     "people": "Personnes",
-    "files": "Fichiers"
+    "files": "Fichiers",
+    "roles": "Rôles",
+    "elements": "Éléments et blocs"
   },
   "keywords": {
     "dashboard": "accueil aperçu Tableau de bord",
@@ -67,5 +69,57 @@
     "organisationProfile": "organisation profil général nom logo paramètres",
     "cycles": "déroulements cycles Cycles",
     "myTasks": "Mes tâches à faire remises"
+  },
+  "blockIn": "Bloc dans «{element}»",
+  "roleLabel": "Rôle",
+  "settingEntries": {
+    "tenantName": {
+      "label": "Nom de l’organisation",
+      "keywords": "nom organisation société renommer données de base"
+    },
+    "tenantLogo": {
+      "label": "Image de l’organisation",
+      "keywords": "logo image blason avatar"
+    },
+    "publicSlug": {
+      "label": "Adresse publique",
+      "keywords": "slug nom court URL lien adresse"
+    },
+    "eventFields": {
+      "label": "Champs des rendez-vous",
+      "keywords": "champs rendez-vous lieu point de rencontre matériel tenue"
+    },
+    "currencies": {
+      "label": "Devises",
+      "keywords": "devise CHF EUR caisse finances"
+    },
+    "privacyStatistics": {
+      "label": "Statistique de protection des données",
+      "keywords": "RGPD LPD données personnelles aperçu"
+    },
+    "privacyNotice": {
+      "label": "Avis de confidentialité",
+      "keywords": "déclaration de confidentialité avis RGPD"
+    },
+    "retentionRules": {
+      "label": "Règles de conservation",
+      "keywords": "conservation délais de suppression supprimer"
+    },
+    "retentionProposals": {
+      "label": "Propositions de suppression",
+      "keywords": "supprimer conservation propositions anciennes données"
+    },
+    "fineTariff": {
+      "label": "Tarif des amendes (retard & absence)",
+      "keywords": "amende retard absence montant compte"
+    },
+    "fineTariffGroups": {
+      "label": "Tarifs d’amendes",
+      "keywords": "tarif apprentis salariés amende"
+    },
+    "todoFineRules": {
+      "label": "Règles d’amendes des tâches",
+      "keywords": "tâches amende règle en retard"
+    }
   }
 }

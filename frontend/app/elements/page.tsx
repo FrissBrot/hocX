@@ -13,8 +13,8 @@ import type { Capabilities } from "@/lib/documents/api";
 import { ElementDefinition, EventSummary, FinanceAccount, ParticipantSummary, StructuredListDefinition } from "@/types/api";
 import { can } from "@/lib/permissions";
 
-export default async function ElementsPage({ searchParams }: { searchParams: Promise<{ create?: string }> }) {
-  const { create } = await searchParams;
+export default async function ElementsPage({ searchParams }: { searchParams: Promise<{ create?: string; open?: string; block?: string }> }) {
+  const { create, open, block } = await searchParams;
   const session = await requireSession();
   const t = await getTranslations("nav");
   const canAdmin = can(session, "templates.manage");
@@ -49,6 +49,8 @@ export default async function ElementsPage({ searchParams }: { searchParams: Pro
               availableAccounts={accounts}
               tenantId={session.current_tenant?.id ?? null}
               autoOpenCreate={create === "1"}
+              autoOpenId={open ?? null}
+              autoOpenBlockId={block && /^\d+$/.test(block) ? Number(block) : null}
               canConfigureFines={can(session, "finances.read")}
             />
           </section>

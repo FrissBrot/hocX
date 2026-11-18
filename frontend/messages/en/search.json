@@ -18,7 +18,9 @@
     "pages": "Menus",
     "settings": "Settings",
     "people": "People",
-    "files": "Files"
+    "files": "Files",
+    "roles": "Roles",
+    "elements": "Elements and blocks"
   },
   "keywords": {
     "dashboard": "start overview home Dashboard",
@@ -67,5 +69,57 @@
     "organisationProfile": "organization profile general name logo settings",
     "cycles": "workflows cycles Cycles",
     "myTasks": "My to-dos tasks submissions"
+  },
+  "blockIn": "Block in «{element}»",
+  "roleLabel": "Role",
+  "settingEntries": {
+    "tenantName": {
+      "label": "Organisation name",
+      "keywords": "name organisation club rename master data"
+    },
+    "tenantLogo": {
+      "label": "Organisation picture",
+      "keywords": "logo image crest avatar"
+    },
+    "publicSlug": {
+      "label": "Public address",
+      "keywords": "slug short name URL link address"
+    },
+    "eventFields": {
+      "label": "Event fields",
+      "keywords": "event fields location meeting point bring clothing"
+    },
+    "currencies": {
+      "label": "Currencies",
+      "keywords": "currency CHF EUR cash finances"
+    },
+    "privacyStatistics": {
+      "label": "Privacy statistics",
+      "keywords": "GDPR personal data overview"
+    },
+    "privacyNotice": {
+      "label": "Privacy notice",
+      "keywords": "privacy policy notice GDPR"
+    },
+    "retentionRules": {
+      "label": "Retention rules",
+      "keywords": "retention deletion periods delete"
+    },
+    "retentionProposals": {
+      "label": "Deletion proposals",
+      "keywords": "delete retention proposals old data"
+    },
+    "fineTariff": {
+      "label": "Fine tariff (late & absent)",
+      "keywords": "fine late absent amount fine account"
+    },
+    "fineTariffGroups": {
+      "label": "Fine tariffs",
+      "keywords": "tariff apprentices full earners fine"
+    },
+    "todoFineRules": {
+      "label": "Task fine rules",
+      "keywords": "tasks fine rule late to-dos"
+    }
   }
 }

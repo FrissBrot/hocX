@@ -2674,6 +2674,9 @@ export type ParticipantInvite = {
 export type GlobalSearchResult = {
   people: { id: string; name: string; email: string | null; is_active: boolean }[];
   files: { id: string; name: string; is_image: boolean; context: string }[];
+  /** Elemente der Bibliothek und ihre Blöcke (nur mit templates.edit) */
+  elements?: { id: string; title: string; description: string | null }[];
+  blocks?: { element_id: string; element_title: string; block_id: number; title: string }[];
 };
 
 /** GET /api/public-links (app/public_links): gerade gültige Zugangswege ohne Anmeldung. */
