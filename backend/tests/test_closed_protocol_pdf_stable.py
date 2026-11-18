@@ -11,7 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.core.storage import MAIN, get_object_store
-from app.documents.service import DocumentRequest, _reuse_closed_export, _reuse_existing_export
+from app.documents.service import FULL_VIEW, DocumentRequest, _reuse_closed_export, _reuse_existing_export, document_view_key
 from app.models import DocumentExport, DocumentRegistry, StoredFile
 from app.schemas.protocol import ProtocolUpdate
 from app.services.protocol_service import ProtocolService
@@ -25,7 +25,9 @@ def _isolated_storage(monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "storage_root", str(tmp_path / "storage"))
 
 
-def _pdf(db, protocol, status: str, *, language: str = "de", options: dict | None = None, content: str = "inhalt", design: str = "design") -> DocumentExport:
+def _pdf(
+    db, protocol, status: str, *, language: str = "de", options: dict | None = None, content: str = "inhalt", design: str = "design", view: str = FULL_VIEW
+) -> DocumentExport:
     data = secrets.token_bytes(32)
     key = f"exports/generated/{secrets.token_hex(6)}.pdf"
     get_object_store().put_bytes(db, MAIN, key, data, content_type="application/pdf")
@@ -35,7 +37,7 @@ def _pdf(db, protocol, status: str, *, language: str = "de", options: dict | Non
     export = DocumentExport(
         tenant_id=protocol.tenant_id, protocol_id=protocol.id, document_type="protocol", title=protocol.title,
         stored_file_id=stored.id, language=language, content_hash=content, design_hash=design,
-        options_json={"options": options or DocumentRequest().options.model_dump(mode="json")},
+        options_json={"options": options or DocumentRequest().options.model_dump(mode="json"), "view": view},
     )
     db.add(export)
     db.flush()
@@ -69,7 +71,7 @@ def test_opening_a_closed_protocol_returns_the_existing_final_pdf(db):
 
     # Gleiches Dokument, auch wenn die Person eine andere UI-Sprache hat
     for language in ("de", "fr"):
-        reused = _reuse_closed_export(db, request, _prepared(protocol, language=language))
+        reused = _reuse_closed_export(db, request, _prepared(protocol, language=language), FULL_VIEW)
         assert reused is not None and reused.export.public_id == final.public_id
 
 
@@ -78,12 +80,12 @@ def test_explicit_variants_and_open_protocols_render_new(db):
     request = DocumentRequest(protocol_id=protocol.public_id, document_type="protocol")
     _pdf(db, protocol, "durchgeführt")
     # Noch nicht abgeschlossen: jedes Öffnen zeigt den aktuellen Stand
-    assert _reuse_closed_export(db, request, _prepared(protocol)) is None
+    assert _reuse_closed_export(db, request, _prepared(protocol), FULL_VIEW) is None
 
     ProtocolService().update_protocol(db, protocol.id, ProtocolUpdate(status="abgeschlossen"))
     _pdf(db, protocol, "abgeschlossen")
-    assert _reuse_closed_export(db, request.model_copy(update={"language": "fr"}), _prepared(protocol, language="fr")) is None
-    assert _reuse_closed_export(db, request, _prepared(protocol, title_overridden=True)) is None
+    assert _reuse_closed_export(db, request.model_copy(update={"language": "fr"}), _prepared(protocol, language="fr"), FULL_VIEW) is None
+    assert _reuse_closed_export(db, request, _prepared(protocol, title_overridden=True), FULL_VIEW) is None
 
 
 def test_reclosing_after_a_downgrade_creates_a_new_final_pdf(db):
@@ -95,7 +97,7 @@ def test_reclosing_after_a_downgrade_creates_a_new_final_pdf(db):
     service.update_protocol(db, protocol.id, ProtocolUpdate(status="durchgeführt"))
     service.update_protocol(db, protocol.id, ProtocolUpdate(status="abgeschlossen"))
     # Das PDF des früheren Abschlusses ist ersetzt: neues Rendern nötig
-    assert _reuse_closed_export(db, request, _prepared(protocol)) is None
+    assert _reuse_closed_export(db, request, _prepared(protocol), FULL_VIEW) is None
 
 
 def test_unchanged_draft_returns_the_latest_pdf_and_any_change_renders_new(db):
@@ -103,18 +105,35 @@ def test_unchanged_draft_returns_the_latest_pdf_and_any_change_renders_new(db):
     request = DocumentRequest(protocol_id=protocol.public_id, document_type="protocol")
     latest = _pdf(db, protocol, "durchgeführt")
 
-    reused = _reuse_existing_export(db, request, _prepared(protocol), None)
+    reused = _reuse_existing_export(db, request, _prepared(protocol), None, FULL_VIEW)
     assert reused is not None and reused.export.public_id == latest.public_id
     # Geänderter Inhalt, geänderte Gestaltung oder andere Sprache: neues PDF
-    assert _reuse_existing_export(db, request, _prepared(protocol, content="neu"), None) is None
-    assert _reuse_existing_export(db, request, _prepared(protocol, design="neu"), None) is None
-    assert _reuse_existing_export(db, request, _prepared(protocol, language="fr"), None) is None
+    assert _reuse_existing_export(db, request, _prepared(protocol, content="neu"), None, FULL_VIEW) is None
+    assert _reuse_existing_export(db, request, _prepared(protocol, design="neu"), None, FULL_VIEW) is None
+    assert _reuse_existing_export(db, request, _prepared(protocol, language="fr"), None, FULL_VIEW) is None
     # Anderer Prüf-Link (neue Prüf-Domain) ebenso
-    assert _reuse_existing_export(db, request, _prepared(protocol), "https://verify.example.org/d/x") is None
+    assert _reuse_existing_export(db, request, _prepared(protocol), "https://verify.example.org/d/x", FULL_VIEW) is None
 
 
 def test_status_change_renders_new_even_with_the_same_content(db):
     protocol = _protocol(db, "Statuswechsel")
     request = DocumentRequest(protocol_id=protocol.public_id, document_type="protocol")
     _pdf(db, protocol, "vorbereitet")
-    assert _reuse_existing_export(db, request, _prepared(protocol), None) is None
+    assert _reuse_existing_export(db, request, _prepared(protocol), None, FULL_VIEW) is None
+
+
+def test_a_restricted_view_never_gets_the_shared_pdf(db):
+    protocol = _protocol(db, "Sichten")
+    ProtocolService().update_protocol(db, protocol.id, ProtocolUpdate(status="abgeschlossen"))
+    final = _pdf(db, protocol, "abgeschlossen")  # z. B. Auto-PDF beim Abschliessen (ohne Person)
+    request = DocumentRequest(protocol_id=protocol.public_id, document_type="protocol")
+
+    assert _reuse_closed_export(db, request, _prepared(protocol), "user:42") is None
+    own = _pdf(db, protocol, "abgeschlossen", view="user:42")
+    assert _reuse_closed_export(db, request, _prepared(protocol), "user:42").export.public_id == own.public_id
+    # Das gemeinsame PDF bleibt für die uneingeschränkte Sicht dasselbe
+    assert _reuse_closed_export(db, request, _prepared(protocol), FULL_VIEW).export.public_id == final.public_id
+
+
+def test_view_key_without_person_is_the_full_view(db):
+    assert document_view_key(db, None) == FULL_VIEW

@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, true, update
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
@@ -713,7 +713,8 @@ async def render(db: Session, user: CurrentUser | None, tenant_id: int, request:
             lambda: verify_render_info(export_public_id, base=verify_domain_service.tenant_verify_base_url(db, tenant_id))
         )
         prepared = await _prepare_off_loop(db, user, tenant_id, request, render_info=render_info)
-        reused = await run_in_threadpool(_reuse_existing_export, db, request, prepared, render_info.verify_link)
+        view = await run_in_threadpool(document_view_key, db, user)
+        reused = await run_in_threadpool(_reuse_existing_export, db, request, prepared, render_info.verify_link, view)
         if reused is not None:
             return reused
         compiled = prepared.compiled
@@ -726,7 +727,39 @@ async def render(db: Session, user: CurrentUser | None, tenant_id: int, request:
     raise RuntimeError("Protokollversion änderte sich während des Exports wiederholt")
 
 
-def _reuse_existing_export(db: Session, request: DocumentRequest, prepared: PreparedDocument, verify_link: str | None) -> RenderResult | None:
+FULL_VIEW = "full"
+
+
+def document_view_key(db: Session, user: CurrentUser | None) -> str:
+    """Wovon der Inhalt eines PDFs beim Exportierenden abhängt: Bussen nur die eigenen ohne
+    finances.manage/reports.personal, Ranglisten nur die eigene Zeile ohne Personenauswertung,
+    eingeschränkte Leser nur ihre Vorlagen, Entwürfe ohne Wasserzeichen nur mit meetings.edit.
+    «full» = keine dieser Einschränkungen (auch das Auto-PDF ohne Person); sonst je Konto. Ein PDF
+    wird nur an dieselbe Sicht wiederverwendet - nie das PDF einer uneingeschränkten Person an
+    eine eingeschränkte."""
+    if user is None:
+        return FULL_VIEW
+    from app.core.permissions import P
+    from app.services.access_service import AccessService
+    from app.services.statistics_common import own_person_key
+
+    unrestricted = (
+        user.can(P.REPORTS_PERSONAL)
+        and user.can(P.FINANCES_MANAGE)
+        and user.can(P.MEETINGS_EDIT)
+        and own_person_key(db, user) is None
+        and not AccessService()._is_restricted_reader(db, user)
+    )
+    return FULL_VIEW if unrestricted else f"user:{user.user_id}"
+
+
+def _view_of(export: DocumentExport) -> str | None:
+    return (export.options_json or {}).get("view")
+
+
+def _reuse_existing_export(
+    db: Session, request: DocumentRequest, prepared: PreparedDocument, verify_link: str | None, view: str
+) -> RenderResult | None:
     """Ein Protokoll-PDF entsteht nur, wenn sich etwas geändert hat. Abgeschlossen: immer das finale
     PDF (_reuse_closed_export). Sonst das letzte PDF, wenn Inhalt (content_hash), Gestaltung
     (design_hash), Status, Sprache, Vorlage, Optionen und Prüf-Link gleich sind - gleiche
@@ -736,7 +769,7 @@ def _reuse_existing_export(db: Session, request: DocumentRequest, prepared: Prep
     if protocol is None or prepared.document_type != "protocol" or prepared.version is None or prepared.title_overridden:
         return None
     if protocol.status == "abgeschlossen":
-        return _reuse_closed_export(db, request, prepared)
+        return _reuse_closed_export(db, request, prepared, view)
     latest = db.execute(
         select(DocumentExport, DocumentRegistry.status_code)
         .join(DocumentRegistry, DocumentRegistry.public_id == DocumentExport.public_id)
@@ -745,6 +778,7 @@ def _reuse_existing_export(db: Session, request: DocumentRequest, prepared: Prep
             DocumentExport.protocol_id == protocol.id,
             DocumentExport.document_type == "protocol",
             DocumentExport.content_hash.is_not(None),
+            DocumentExport.options_json["view"].astext == view,
         )
         .order_by(DocumentExport.created_at.desc(), DocumentExport.id.desc())
         .limit(1)
@@ -771,7 +805,7 @@ def _reuse_existing_export(db: Session, request: DocumentRequest, prepared: Prep
     return RenderResult(export=export, stored_file=stored)
 
 
-def _reuse_closed_export(db: Session, request: DocumentRequest, prepared: PreparedDocument) -> RenderResult | None:
+def _reuse_closed_export(db: Session, request: DocumentRequest, prepared: PreparedDocument, view: str) -> RenderResult | None:
     """Abgeschlossenes Protokoll: das finale PDF bleibt dasselbe (gleiche Dokument-ID, gleiche
     Bytes, gleicher Prüf-Hash), egal wie oft es geöffnet wird - erst nach Zurückstufen und
     erneutem Abschluss entsteht eine neue Version (supersede_closed_exports gibt dann die alten
@@ -779,7 +813,8 @@ def _reuse_closed_export(db: Session, request: DocumentRequest, prepared: Prepar
     ausdrücklich etwas anderes verlangt: andere Sprache, andere Vorlage, andere Optionen oder ein
     abweichender Titel - oder wenn es noch kein finales PDF gibt.
 
-    Die Rechte prüft prepare() vorher wie bei jedem Export."""
+    Die Rechte prüft prepare() vorher wie bei jedem Export; geliefert wird nur ein PDF derselben
+    Sicht (document_view_key)."""
     protocol = prepared.protocol
     if protocol is None or prepared.document_type != "protocol" or protocol.status != "abgeschlossen" or prepared.title_overridden:
         return None
@@ -799,6 +834,8 @@ def _reuse_closed_export(db: Session, request: DocumentRequest, prepared: Prepar
             DocumentExport.document_type == "protocol",
             DocumentExport.stored_file_id.is_not(None),
             DocumentExport.public_id.in_(closed),
+            # Nur ein PDF derselben Sicht (document_view_key); ältere Exporte ohne Sicht nie
+            DocumentExport.options_json["view"].astext == view,
         )
         .order_by(DocumentExport.created_at.desc(), DocumentExport.id.desc())
     ).all()
@@ -842,7 +879,7 @@ def _finalize_render(
         locked = lock_row(db, prepared.protocol)
         # Gleichzeitig entstandenes PDF (z. B. Auto-PDF beim Abschliessen und «PDF öffnen»
         # parallel): unter der Sperre erneut prüfen, dann bleibt es bei einem einzigen.
-        reused = _reuse_existing_export(db, request, prepared, render_info.verify_link)
+        reused = _reuse_existing_export(db, request, prepared, render_info.verify_link, document_view_key(db, user))
         if reused is not None:
             db.rollback()  # Sperre freigeben; gespeichert wird nichts
             db.refresh(reused.export)
@@ -902,6 +939,8 @@ def _finalize_render(
                 "template_source": prepared.template_source,
                 # Prüf-Link genau wie im PDF (Prüf-Domain des Mandanten kann später wechseln)
                 "verify_url": render_info.verify_link,
+                # Sicht des Exportierenden (document_view_key): Wiederverwendung nur innerhalb derselben
+                "view": document_view_key(db, user),
             },
             language=prepared.language,
             stored_file_id=stored.id,
@@ -987,16 +1026,21 @@ def _release_files(db: Session, exports: list[DocumentExport]) -> list[str]:
 def _prune_superseded_files(db: Session, export: DocumentExport) -> list[str]:
     """Audit MAIN-BE-004 (aus main übernommen): Jeder Export legte eine neue Datei samt StoredFile
     an, die nie gelöscht wurde - das Speicherkontingent wuchs mit jedem Export. Bei Protokollen
-    bleibt nur die Datei des neuesten Exports; Auszüge und andere Dokumente sind jeweils eigene
-    Dokumente und laufen über die Altersfrist (cleanup_old_generated_exports)."""
+    bleibt nur die Datei des neuesten Exports je Sicht (document_view_key: das PDF einer
+    eingeschränkten Person verdrängt nicht das gemeinsame PDF und umgekehrt); ältere Exporte ohne
+    Sicht zählen zu jeder. Auszüge und andere Dokumente sind jeweils eigene Dokumente und laufen
+    über die Altersfrist (cleanup_old_generated_exports)."""
     if export.protocol_id is None or export.document_type != "protocol":
         return []
+    view_column = DocumentExport.options_json["view"].astext
+    view = _view_of(export)
     older = list(db.scalars(
         select(DocumentExport).where(
             DocumentExport.protocol_id == export.protocol_id,
             DocumentExport.document_type == "protocol",
             DocumentExport.id != export.id,
             DocumentExport.stored_file_id.is_not(None),
+            or_(view_column == view, view_column.is_(None)) if view else true(),
         )
     ))
     return _release_files(db, older)
@@ -1040,7 +1084,12 @@ def _protected_export_ids(db: Session) -> set[int]:
         select(
             DocumentExport.id,
             func.row_number()
-            .over(partition_by=DocumentExport.protocol_id, order_by=(DocumentExport.created_at.desc(), DocumentExport.id.desc()))
+            .over(
+                # je Sicht (document_view_key) das neueste - sonst verlöre das gemeinsame finale PDF
+                # seinen Schutz, sobald eine eingeschränkte Person exportiert
+                partition_by=(DocumentExport.protocol_id, DocumentExport.options_json["view"].astext),
+                order_by=(DocumentExport.created_at.desc(), DocumentExport.id.desc()),
+            )
             .label("rank"),
         )
         .join(Protocol, Protocol.id == DocumentExport.protocol_id)
