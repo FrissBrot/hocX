@@ -168,7 +168,32 @@
     "noticeTitle": "Informativa sulla privacy",
     "noticeUrl": "Link alla vostra informativa sulla privacy",
     "noticeUrlHint": "Prima del caricamento la casella di consegna indica che la vostra organizzazione è responsabile e rimanda a questa pagina. Vuoto = informativa predefinita della piattaforma.",
-    "noticeSave": "Salva link"
+    "noticeSave": "Salva link",
+    "fileVisibility": {
+      "title": "Visibilità dei file",
+      "intro": "Oltre ai diritti dei ruoli, i file possono essere condivisi con tutti i partecipanti con accesso – solo in visione, mai in modifica. Le persone senza accesso non vedono mai nulla.",
+      "module": {
+        "abgabe": "Consegne",
+        "protokoll": "Verbali",
+        "album": "Galleria foto"
+      },
+      "moduleHint": {
+        "abgabe": "File consegnati. Ogni consegna può sostituire l’impostazione predefinita.",
+        "protokoll": "I file nei verbali seguono sempre il verbale (bozze, assegnazione dei partecipanti).",
+        "album": "Foto della galleria."
+      },
+      "audienceLabel": "Visibile inoltre per",
+      "filterLabel": "Tipi di file",
+      "audience": {
+        "role_only": "Nessuno (solo diritti dei ruoli)",
+        "all_participants": "Tutti i partecipanti con accesso",
+        "own_submissions": "Solo la propria consegna"
+      },
+      "filter": {
+        "images": "Solo immagini",
+        "all": "Tutti i tipi di file"
+      }
+    }
   },
   "activity": {
     "intro": "Modifiche, accessi e consultazioni della piattaforma hocX sui dati di questa organizzazione. Senza indirizzi IP né e-mail.",

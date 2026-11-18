@@ -159,7 +159,8 @@
       "todo": "Attività",
       "user": "Account",
       "role": "Ruolo",
-      "public_link": "Link pubblico"
+      "public_link": "Link pubblico",
+      "context_visibility": "Visibilità dei file"
     },
     "verbs": {
       "loginFailed": "Accesso non riuscito",

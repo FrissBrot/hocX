@@ -315,5 +315,25 @@
   "readOnly": {
     "emptyTitle": "Keine Abgaben",
     "emptyDescription": "Dir sind noch keine Abgaben zugewiesen."
+  },
+  "fileVisibility": {
+    "label": "Wer darf eingereichte Dateien sehen?",
+    "default": "Standard der Organisation übernehmen",
+    "audience": {
+      "role_only": "Nur über Rollenrechte",
+      "all_participants": "Alle Teilnehmenden mit Login",
+      "own_submissions": "Nur die eigene Einreichung"
+    },
+    "help": {
+      "default": "Es gilt die Einstellung unter Organisation › Datenschutz › Sichtbarkeit von Dateien.",
+      "role_only": "Nur wer über seine Rolle Abgaben oder Fotos sehen darf.",
+      "all_participants": "Zusätzlich sieht jede Person mit Login die Dateien unter «Fotos aus Abgaben» – nur lesen.",
+      "own_submissions": "Zusätzlich sieht jede Person mit Login die Dateien, für die sie selbst verantwortlich ist – nur lesen."
+    },
+    "filterLabel": "Welche Dateien?",
+    "filter": {
+      "images": "Nur Bilder",
+      "all": "Alle Dateitypen"
+    }
   }
 }

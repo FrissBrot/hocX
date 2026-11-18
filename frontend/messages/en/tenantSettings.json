@@ -168,7 +168,32 @@
     "noticeTitle": "Privacy notice",
     "noticeUrl": "Link to your privacy notice",
     "noticeUrlHint": "Before uploading, the upload box shows that your organization is responsible and links to this page. Empty = the platform’s default notice.",
-    "noticeSave": "Save link"
+    "noticeSave": "Save link",
+    "fileVisibility": {
+      "title": "File visibility",
+      "intro": "In addition to role permissions, files can be shared with all participants who have a login – for viewing only, never for editing. People without a login never see anything.",
+      "module": {
+        "abgabe": "Submissions",
+        "protokoll": "Minutes",
+        "album": "Photo gallery"
+      },
+      "moduleHint": {
+        "abgabe": "Submitted files. Each submission can override the default.",
+        "protokoll": "Files in minutes always follow the minutes (drafts, participant assignment).",
+        "album": "Photos in the gallery."
+      },
+      "audienceLabel": "Additionally visible to",
+      "filterLabel": "File types",
+      "audience": {
+        "role_only": "Nobody (role permissions only)",
+        "all_participants": "All participants with a login",
+        "own_submissions": "Only their own submission"
+      },
+      "filter": {
+        "images": "Images only",
+        "all": "All file types"
+      }
+    }
   },
   "activity": {
     "intro": "Changes, sign-ins and accesses by the hocX platform to this organization's data. Without IP or email addresses.",

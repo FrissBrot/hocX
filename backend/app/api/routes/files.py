@@ -6,7 +6,7 @@ from datetime import date
 from pathlib import Path
 from typing import Annotated, Literal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from app.models.entities import CycleConfig, Event, GalleryUploadJob, PhotoAlbum, PhotoAlbumItem, PhotoAlbumTenantShare, SubmissionAssignment
 from app.schemas.files import PhotoAlbumCreate, PhotoAlbumItemBestUpdate, PhotoAlbumItemsRemoveResult, PhotoAlbumRead, PhotoAlbumItemsUpdate, PhotoAlbumUpdate
@@ -59,6 +59,7 @@ from app.schemas.protocol import ProtocolImageRead
 from app.services import image_export_service, image_metadata_service, photo_album_service, photo_album_share_service, public_id_service
 from app.services.access_service import AccessService
 from app.services import apple_media
+from app.services import context_visibility_service
 from app.services.apple_media import pair_live_clips, MAX_LIVE_CLIP_BYTES
 from app.core.storage import MAIN, ObjectNotFound, _content_disposition, get_object_store, object_response, read_bytes_or_404, write_object_to_zip
 from app.services.photo_metadata_privacy import MetadataPolicy, sanitize_image
@@ -165,6 +166,8 @@ def list_files(
         date_to=date_to,
         # Geteiltes Album: Fotos des anderen Mandanten ohne dessen Kontext (Tags, Titel).
         viewer_tenant_id=user.current_tenant_id if album_id is not None else None,
+        # Reichweite «nur zugewiesene» (Phase 4/5): Abgabe-Dateien anderer Aufträge ausblenden
+        readable_assignment_ids=context_visibility_service.readable_assignment_ids(db, user),
     )
     if album_id is not None:
         # is_best fetched only for this page's items (at most `limit`), not the whole
@@ -214,6 +217,7 @@ def files_timeline(
         raise HTTPException(status_code=400, detail="No active tenant")
     return service.tenant_files_timeline(
         db, user.current_tenant_id, sort_dir=sort_dir, only_images=only_images, search=search, tags=tags,
+        readable_assignment_ids=context_visibility_service.readable_assignment_ids(db, user),
     )
 
 
@@ -284,6 +288,7 @@ def list_similarity_groups(
         search=search,
         tags=tags,
         file_ids=file_ids,
+        readable_assignment_ids=context_visibility_service.readable_assignment_ids(db, user),
     )
 
 
@@ -1042,7 +1047,7 @@ def update_stored_file_tags(
     stored_file = public_id_service.get_by_public_id(db, StoredFile, stored_file_id, tenant_id=user.current_tenant_id)
     if stored_file is None or user.current_tenant_id is None:
         raise HTTPException(status_code=404, detail="Stored file not found")
-    access_service.ensure_can_read_stored_file(db, user, stored_file.id)
+    access_service.ensure_can_read_stored_file(db, user, stored_file.id, allow_context_grant=False)  # schreibt: nur Rollenrechte
     # Fotos verwaltet photos.manage, übrige Dateien files.manage (Plan «Berechtigungen», Phase 3)
     require_permission(user, P.PHOTOS_MANAGE if (stored_file.mime_type or "").startswith("image/") else P.FILES_MANAGE)
     return service.update_stored_file_tags(db, stored_file, payload.tags)
@@ -1089,7 +1094,7 @@ def update_stored_file_capture_date(
     stored_file = public_id_service.get_by_public_id(db, StoredFile, stored_file_id)
     if stored_file is None or user.current_tenant_id is None or stored_file.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Stored file not found")
-    access_service.ensure_can_read_stored_file(db, user, stored_file.id)
+    access_service.ensure_can_read_stored_file(db, user, stored_file.id, allow_context_grant=False)  # schreibt: nur Rollenrechte
     try:
         service.update_estimated_capture_date(db, stored_file, payload.estimated_taken_on, user_id=user.user_id)
     except ValueError as exc:
@@ -1161,6 +1166,9 @@ def download_stored_file(
         live_video = None
     if part == "video" and live_video is None:
         raise HTTPException(status_code=404, detail="Zu diesem Foto gibt es kein Live-Photo-Video")
+    if part != "image":
+        # Clip und ZIP nur mit Rollenrechten - eine Kontext-Freigabe (Phase 5) gibt nur das Bild
+        access_service.ensure_can_read_stored_file(db, user, stored_file.id, allow_context_grant=False)
 
     store = get_object_store()
     if part != "video" and not store.exists(MAIN, stored_file.storage_path):
@@ -1243,6 +1251,21 @@ def download_stored_file(
 
 
 ALBUM_INVITES_PER_HOUR = 30
+
+
+def _ensure_files_in_scope(db: Session, user: CurrentUser, public_ids: list[uuid.UUID]) -> None:
+    """Reichweite «nur zugewiesene» (Phase 4/5) auch für Mehrfachaktionen: Abgabe-Dateien nicht
+    lesbarer Aufträge sind 404 wie im Einzelabruf."""
+    readable = context_visibility_service.readable_assignment_ids(db, user)
+    if readable is None or not public_ids:
+        return
+    outside = db.scalar(
+        select(func.count()).select_from(StoredFile).where(
+            StoredFile.public_id.in_(public_ids), ~context_visibility_service.abgabe_scope_clause(StoredFile.id, readable),
+        )
+    )
+    if outside:
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden")
 
 
 def _get_album(db: Session, user: CurrentUser, album_id: uuid.UUID):
@@ -1615,7 +1638,10 @@ def add_album_items(album_id: uuid.UUID, payload: PhotoAlbumItemsUpdate, db: Ses
     ids = set(payload.file_ids)
     if not ids or len(ids) > 200:
         raise HTTPException(status_code=422, detail="Bitte 1 bis 200 Fotos auswählen")
-    photos = service.list_tenant_files(db, user.current_tenant_id, only_images=True, file_ids=list(ids), limit=200)
+    photos = service.list_tenant_files(
+        db, user.current_tenant_id, only_images=True, file_ids=list(ids), limit=200,
+        readable_assignment_ids=context_visibility_service.readable_assignment_ids(db, user),
+    )
     if {photo.id for photo in photos} != ids:
         raise HTTPException(status_code=404, detail="Foto nicht gefunden")
     if any(photo.scan_status in BLOCKED_SCAN_STATUSES for photo in photos):
@@ -1685,6 +1711,7 @@ def bulk_delete_files(payload: FileBulkDelete, db: Session = Depends(get_db), us
     # Mandant und Quelle je Datei, und nur tatsächlich gelöschte Dateien verlieren ihre Album- und
     # Linkeinträge (FileEraser.erase). Abgelehnte Fotos bleiben in allen Alben. Ein einziger Commit;
     # Vorschaubilder und «beste Bilder» erst danach.
+    _ensure_files_in_scope(db, user, ids)
     eraser = FileEraser(service)
     deleted, errors = service.delete_gallery_images(db, user.current_tenant_id, ids, eraser=eraser)
     db.commit()
@@ -1701,6 +1728,7 @@ def bulk_update_file_tags(payload: FileBulkTagsUpdate, db: Session = Depends(get
     ids = list(dict.fromkeys(payload.file_ids))
     if not ids or len(ids) > 200:
         raise HTTPException(status_code=422, detail="Bitte 1 bis 200 Dateien auswählen")
+    _ensure_files_in_scope(db, user, ids)
     # Dokumente (keine Bilder) taggt nur, wer die Ablage verwalten darf (Phase 3, wie beim Einzel-Tag)
     mimes = db.scalars(select(StoredFile.mime_type).where(StoredFile.tenant_id == user.current_tenant_id, StoredFile.public_id.in_(ids)))
     if any(not (mime or "").startswith("image/") for mime in mimes):

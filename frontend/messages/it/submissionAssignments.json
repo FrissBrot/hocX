@@ -315,5 +315,25 @@
   "readOnly": {
     "emptyTitle": "Nessuna consegna",
     "emptyDescription": "Non ti è ancora stata assegnata nessuna consegna."
+  },
+  "fileVisibility": {
+    "label": "Chi può vedere i file consegnati?",
+    "default": "Usa l’impostazione dell’organizzazione",
+    "audience": {
+      "role_only": "Solo tramite i diritti del ruolo",
+      "all_participants": "Tutti i partecipanti con accesso",
+      "own_submissions": "Solo la propria consegna"
+    },
+    "help": {
+      "default": "Vale l’impostazione in Organizzazione › Protezione dei dati › Visibilità dei file.",
+      "role_only": "Solo chi, tramite il proprio ruolo, può vedere consegne o foto.",
+      "all_participants": "Inoltre ogni persona con accesso vede i file in «Foto dalle consegne» – solo in lettura.",
+      "own_submissions": "Inoltre ogni persona con accesso vede i file di cui è responsabile – solo in lettura."
+    },
+    "filterLabel": "Quali file?",
+    "filter": {
+      "images": "Solo immagini",
+      "all": "Tutti i tipi di file"
+    }
   }
 }

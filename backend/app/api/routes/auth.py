@@ -33,7 +33,8 @@ from app.schemas.notifications import (
     PasswordResetAvailableRead,
     PasswordResetRequest,
 )
-from app.services import domain_bridge_service
+from app.core.permissions import P
+from app.services import context_visibility_service, domain_bridge_service
 from app.services.auth_service import AuthService
 from app.services.tenant_service import build_tenant_profile_image_url
 
@@ -177,7 +178,11 @@ def session(request: Request, response: Response, db: Session = Depends(get_db),
             user.current_tenant_id,
             mfa_verified=user.mfa_verified,
         )
-    return service.session(user, response, bridge_redirect_url)
+    result = service.session(user, response, bridge_redirect_url)
+    if user is not None and user.current_tenant_id is not None and user.can(P.MEETINGS_READ):
+        # Menüpunkt «Fotos aus Abgaben» nur, wenn der Verein Abgabe-Dateien freigibt (Phase 5)
+        result.shared_submission_photos = context_visibility_service.any_submission_grant(db, user.current_tenant_id)
+    return result
 
 
 @router.get("/bridge")

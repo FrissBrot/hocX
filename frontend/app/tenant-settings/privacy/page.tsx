@@ -9,6 +9,7 @@ import { RouteTabs } from "@/components/ui/route-tabs";
 import { tenantSettingsTabs } from "@/components/ui/section-tabs";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { can } from "@/lib/permissions";
+import { ContextVisibilityModule } from "@/types/api";
 
 // Datenschutz-Einstellungen des aktiven Mandanten (nur Mandanten-Admins).
 export default async function TenantPrivacyPage() {
@@ -16,12 +17,14 @@ export default async function TenantPrivacyPage() {
   if (!can(session, "settings.manage")) {
     redirect("/");
   }
-  const [t, tTenant, state] = await Promise.all([
+  const [t, tTenant, state, fileVisibility] = await Promise.all([
     getTranslations("nav"),
     getTranslations("tenantSettings"),
     backendFetchWithSession<PrivacySettingsState>("/api/privacy-settings"),
+    // Kontext-Freigaben (Plan «Berechtigungen», Phase 5)
+    backendFetchWithSession<ContextVisibilityModule[]>("/api/context-visibility"),
   ]);
-  const content = state ? <PrivacySettings initialState={state} /> : null;
+  const content = state ? <PrivacySettings initialState={state} fileVisibility={fileVisibility} /> : null;
 
   return (
     <AppShell initialSession={session}>

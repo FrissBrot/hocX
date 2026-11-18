@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 
+import { FileVisibilitySettings } from "@/components/settings/file-visibility-settings";
 import { TenantDataExportPanel } from "@/components/settings/tenant-data-export";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
+import { ContextVisibilityModule } from "@/types/api";
 
 export type PrivacySettingsState = {
   statistics_per_person_public: boolean;
@@ -15,7 +17,7 @@ export type PrivacySettingsState = {
 const API = "/api/privacy-settings";
 
 // Mandanten-Einstellungen → Datenschutz (nur Mandanten-Admins).
-export function PrivacySettings({ initialState }: { initialState: PrivacySettingsState }) {
+export function PrivacySettings({ initialState, fileVisibility }: { initialState: PrivacySettingsState; fileVisibility?: ContextVisibilityModule[] | null }) {
   const t = useTranslations("tenantSettings.privacy");
   const toast = useToast();
   const [state, setState] = useState(initialState);
@@ -77,6 +79,7 @@ export function PrivacySettings({ initialState }: { initialState: PrivacySetting
             </button>
           </div>
         </section>
+        {fileVisibility ? <FileVisibilitySettings initialModules={fileVisibility} /> : null}
         <TenantDataExportPanel />
       </div>
     </div>

@@ -221,6 +221,9 @@ class SessionRead(BaseModel):
     # Rechte mit Reichweite, die nur für zugewiesene Objekte gelten (Migration 0195) - nur zur
     # Benutzerführung, durchgesetzt wird im Backend.
     assigned_only: list[str] = Field(default_factory=list)
+    # Der Verein gibt Abgabe-Dateien über Kontext-Freigaben frei (Migration 0196) - nur zur
+    # Benutzerführung (Menüpunkt «Fotos aus Abgaben»), durchgesetzt wird im Backend.
+    shared_submission_photos: bool = False
     roles: list[RoleRef] = Field(default_factory=list)
     bridge_redirect_url: str | None = None
     # MFA ist Pflicht, aber das bestehende Konto hat noch Frist bis hierhin (Migration 0192)

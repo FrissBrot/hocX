@@ -168,7 +168,32 @@
     "noticeTitle": "Datenschutzhinweise",
     "noticeUrl": "Link zu euren Datenschutzhinweisen",
     "noticeUrlHint": "Die Abgabebox zeigt vor dem Hochladen, dass eure Organisation verantwortlich ist, und verlinkt diese Seite. Leer = Standardhinweis der Plattform.",
-    "noticeSave": "Link speichern"
+    "noticeSave": "Link speichern",
+    "fileVisibility": {
+      "title": "Sichtbarkeit von Dateien",
+      "intro": "Zusätzlich zu den Rollenrechten können Dateien für alle Teilnehmenden mit Login freigegeben werden – nur zum Ansehen, nie zum Ändern. Personen ohne Login sehen nie etwas.",
+      "module": {
+        "abgabe": "Abgaben",
+        "protokoll": "Protokolle",
+        "album": "Fotogalerie"
+      },
+      "moduleHint": {
+        "abgabe": "Eingereichte Dateien. Jeder Abgabe-Auftrag kann den Standard überschreiben.",
+        "protokoll": "Dateien in Protokollen folgen immer dem Protokoll (Entwürfe, Teilnehmer-Zuordnung).",
+        "album": "Fotos der Galerie."
+      },
+      "audienceLabel": "Zusätzlich sichtbar für",
+      "filterLabel": "Dateitypen",
+      "audience": {
+        "role_only": "Niemand (nur Rollenrechte)",
+        "all_participants": "Alle Teilnehmenden mit Login",
+        "own_submissions": "Nur die eigene Einreichung"
+      },
+      "filter": {
+        "images": "Nur Bilder",
+        "all": "Alle Dateitypen"
+      }
+    }
   },
   "activity": {
     "intro": "Änderungen, Anmeldungen und Zugriffe der hocX-Plattform auf Daten dieser Organisation. Ohne IP- und E-Mail-Adressen.",

@@ -72,6 +72,10 @@ Keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
   bisher) und Tabelle `resource_assignment` (Prüfer je Abgabe-Auftrag, RLS je Mandant). Keine
   Verhaltensänderung für bestehende Rollen. Rücknahme mit `alembic downgrade` entfernt Prüfer und
   Reichweiten; «nur zugewiesene» wirkt danach wieder auf alle Abgaben.
+- Migration `0196_context_visibility`: Tabelle `context_visibility` (Kontext-Freigaben je
+  Organisation und Abgabe-Auftrag, RLS je Mandant). Alle Organisationen starten mit «nur Rolle» –
+  nach dem Update sieht niemand eine Datei, die er vorher nicht sah. Rücknahme mit
+  `alembic downgrade` entfernt die Freigaben; danach gelten nur noch die Rollenrechte.
 
 ### Neu: Server aus dem Backup wiederherstellen
 
@@ -237,6 +241,14 @@ Keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
   zugewiesen ist (Liste, Dateien, ZIP). «Abgaben verwalten» gilt immer für alle.
 - **Abgaben für Leser:** Die Seite Abgaben ist mit «Abgaben ansehen» erreichbar (nur lesen);
   Verwalten braucht weiterhin «Abgaben verwalten», Schliessen/Öffnen «Abgaben prüfen».
+- **Sichtbarkeit von Dateien** (Organisation › Datenschutz): Abgaben und die Fotogalerie lassen
+  sich zusätzlich für alle Teilnehmenden mit Login freigeben, wahlweise nur Bilder – nur zum
+  Ansehen, nie zum Ändern oder öffentlich Teilen. Jeder Abgabe-Auftrag kann das überschreiben
+  («Wer darf eingereichte Dateien sehen?», auch «nur die eigene Einreichung»). Freigegebene Bilder
+  erscheinen unter Ablage › «Fotos aus Abgaben». Protokoll-Dateien folgen immer dem Protokoll.
+  Standard: nichts zusätzlich freigegeben. Änderungen stehen mit vorher/nachher im Verlauf.
+- **Prüfer «nur zugewiesene»** sehen Dateien aus anderen Abgaben auch in Fotogalerie, Ablage, Suche
+  und beim direkten Abruf nicht mehr.
 - Für Entwickler: Rechte-Inventar `docs/permissions-inventory.md` und Berechtigungsmatrix
   (`permissions/permission-matrix.json`) werden generiert; ein Laufzeittest ruft jede GET-Route mit
   jeder Standardrolle auf. Abweichungen zum Plan: `docs/permissions-plan-deviations.md`.

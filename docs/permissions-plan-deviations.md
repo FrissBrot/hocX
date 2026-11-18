@@ -163,3 +163,80 @@ abweicht und warum. «OFFEN» markiert fachliche Punkte, die noch eine Entscheid
   (sonst würde «nur zugewiesene» still zu «alle»). Ältere Exporte ohne Feld: «alle» wie vorher.
   **OFFEN:** Prüfer-Zuweisungen (`resource_assignment`) sind nicht im Export – nach einem Import
   sieht ein «nur zugewiesene»-Prüfer nichts, bis man sie neu zuweist (sichere Richtung).
+
+## Phase 5 – Kontext-Freigaben
+
+- **Tabelle** `context_visibility` (Migration 0196) statt `context_visibility(id, context_type,
+  context_id, audience, group_id, file_filter, show_in_gallery)`: Spalten `module`
+  (`abgabe|protokoll|album`, wie `stored_file.context_type`), `context_id` (NULL = Modul-Standard,
+  sonst Abgabe-Auftrag, mandantengleicher Fremdschlüssel mit ON DELETE CASCADE), `audience`,
+  `file_filter`, `updated_by/at`. Werte englisch wie die Rechte-Schlüssel: `nur_rolle` →
+  `role_only`, `alle_teilnehmenden` → `all_participants`, `einreichende_eigene` →
+  `own_submissions`; `alle|bilder` → `all|images`. Kein `group_id` («Gruppen» = Rollen; Rollen
+  geben Rechte bereits über Ebene 1), kein `show_in_gallery` (siehe unten).
+- **Overrides nur je Abgabe-Auftrag.** Alben haben keinen eigenen Kontext (`context_id` ist bei
+  `album` leer, Phase 2), Protokolle keine Freigabe. Die Datenbank erzwingt das per CHECK.
+- **Protokolle fest «nur Rolle»** (CHECK): Protokoll-Dateien folgen dem Protokoll (Entwurf,
+  Teilnehmer-Zuordnung); eine Freigabe an alle würde den Entwurfsschutz umgehen. In der Oberfläche
+  steht das Modul gesperrt mit Erklärung.
+- **Seed – Entscheid gegen den Plan-Standard.** Plan: Abgaben → alle Teilnehmenden (nur Bilder),
+  Alben → alle Teilnehmenden. Das wäre eine **Rechteausweitung**: die Standardrollen Leser und
+  Kassier haben kein `photos.read` (Phase 3) und sähen damit neu alle Galerie- und Abgabe-Fotos über
+  `/api/stored-files/*`; dasselbe gilt für eigene Rollen ohne Foto-Recht. Deshalb starten **alle
+  Module für alle Mandanten mit `role_only`** (bestehende per Migration, neue per Trigger
+  `trg_tenant_seed_context_visibility` wie die Standardrollen; fehlt eine Zeile, gilt im Code
+  dasselbe). Die Dateitypen sind wie im Plan vorbelegt (Abgaben nur Bilder, Alben alle), so dass ein
+  Verein nur noch die Zielgruppe wählen muss. Test: `test_default_seed_changes_nothing`.
+- **«Alle Teilnehmenden»** = jedes Konto mit Login des Mandanten. Teilnehmende ohne Login haben keine
+  Session und sehen nie etwas. Die Datei-Routen (`/api/stored-files/*`) verlangen wie bisher
+  `meetings.read` als Grundrecht (alle Standardrollen haben es); ein Konto ganz ohne
+  `meetings.read` sieht auch Freigaben nicht – bewusst keine schwächere Prüfung in der route-map.
+- **«Nur eigene Einreichung»** = Elemente, für die das Konto verantwortlich ist: Quelle der
+  Verantwortlichen der Abgabe oder zugewiesene Aufgabe des Elements – dieselbe Regel wie der
+  persönliche Abgabe-Link (`submission_access_service._still_responsible`).
+- **Zentrale Prüfung:** `context_visibility_service.context_grant_allows(db, user, stored_file)`
+  (Override → Modul-Standard → `DEFAULTS`), additiv in `access_service.ensure_can_read_stored_file`:
+  sie wird nur gefragt, wenn die Rollenprüfung mit 403/404 ablehnt. Damit gelten Inhalt, Vorschau,
+  Download und Metadaten gleich. Schreibrouten (Tags, Aufnahmedatum, Alben), öffentliche Links und
+  ZIP-Downloads von Aufträgen verlangen weiter Rollenrechte – Freigaben geben nie Schreibzugriff und
+  keine öffentlichen Ableitungen. Zurückgezogene/gelöschte Einreichungen sind nie freigegeben.
+- **`visible_files_query(db, user, module=…)`** liefert die per Freigabe sichtbaren Datei-IDs als eine
+  Abfrage (nur saubere Dateien des eigenen Mandanten); «nur eigene» wird je Auftrag in Python
+  aufgelöst (Verantwortliche kommen aus Terminfeldern und Listenspalten).
+- **«Fotos aus Abgaben»** ist eine eigene Seite `/photos/submissions`
+  (`GET /api/context-files/submission-photos`, `meetings.read`), nur Bilder; der Menüpunkt erscheint
+  unter Ablage, wenn der Verein Abgabe-Dateien freigibt (Session `shared_submission_photos`) und das
+  Konto kein `photos.read` hat. Dokumente aus Freigaben («alle Dateitypen») sind per Einzelabruf
+  lesbar, aber nicht in dieser Ansicht gelistet.
+- **«In Fotogalerie anzeigen» weggelassen.** Die Galerie (`/photos`, `GET /api/files`) ist eine
+  Mandanten-Gesamtsicht hinter `photos.read` mit Alben, Analyse, Duplikaten und Zeitstrahl;
+  Freigabe-Fotos dort für Konten ohne `photos.read` einzublenden, hätte jede dieser Abfragen um
+  einen zweiten Rechteweg erweitert. Abgabe-Fotos kommen ohnehin über die bestehende Album-Regel
+  (Abgabe → Album) in die Galerie; wer sie ohne Foto-Recht sehen soll, nutzt «Fotos aus Abgaben».
+- **UI:** Modul-Standards als Karte «Sichtbarkeit von Dateien» im bestehenden Reiter Organisation ›
+  Datenschutz (`settings.manage`), Override im Auftragsformular (`submissions.manage`, Feld
+  `file_visibility` in Anlegen/Ändern/Lesen; `mode = default|custom`). Die mobile Abgabe-Ansicht
+  zeigt das Feld nicht, lässt einen gesetzten Override beim Speichern aber unverändert.
+- **Audit:** `context_visibility.changed` mit `before`/`after` (Modul: `entity_type = tenant`;
+  Auftrag: `entity_type = submission_assignment`, «default» = Standard). Unveränderte Werte schreiben
+  keinen Eintrag. Kategorie im Verlauf: «Sichtbarkeit von Dateien».
+- **Security-Review Phase 4 (Befund «mittel») mit umgesetzt:** Wer `submissions.read` nur «zugewiesene»
+  hat, sieht Abgabe-Dateien anderer Aufträge auch über `files.read`/`photos.read` nicht mehr –
+  Einzelabruf (`ensure_can_read_stored_file`, 404 wie in den Abgabe-Routen), Galerie/Ablage
+  (`GET /api/files`), Zeitstrahl, Duplikate/Ähnliche, globale Suche und das Erstellen öffentlicher
+  Links (`readable_assignment_ids`/`abgabe_scope_clause`). Additiv: eine Datei, die zusätzlich in
+  einem Protokoll steckt, bleibt in Listen sichtbar (Einzelabruf prüft dann das Protokoll);
+  Kontext-Freigaben wirken auch für diese Konten. Konten mit `submissions.read` «alle», mit
+  `submissions.manage` oder ganz ohne `submissions.read` verlieren nichts. Album-Mitgliedschaft
+  zählt nicht als zusätzlicher Kontext (Abgabe-Fotos kommen automatisch in Alben) – sichere Richtung.
+  Mehrfachaktionen (Tags, Löschen, Fotos ins Album) lehnen Dateien nicht lesbarer Aufträge mit 404 ab.
+  **OFFEN:** `GET /api/files/tags`, `GET /api/files/stats` und die Album-Übersicht (Cover/Namen der
+  automatischen Abgabe-Alben) filtern nicht nach Reichweite (Tags enthalten die Herkunft «Abgabe:
+  <Titel>», Statistik nur Zahlen).
+- **Security-Review Phase 5 (18.11.2026), behoben:** (1) `gallery_image` enthält auch Ablage-Dokumente
+  und Direkt-Uploads zu Abgaben – die Album-Freigabe gilt nur für Zeilen ohne Abgabe-Bezug, deren
+  Hauptdatei ein Bild ist (plus Live-Clip); für Abgabe-Uploads gilt allein die Abgabe-Regel inkl.
+  «zurückgezogen». (2) Schreib- und Weitergabewege prüfen mit `allow_context_grant=False` nur
+  Rollenrechte: Tags, Aufnahmedatum, Bildbaustein im Document Studio. (3) Download `part=video|both`
+  (Live-Clip, ZIP) nur mit Rollenrechten. (4) `visible_files_query` berechnet «eigene» je
+  Dateityp-Gruppe getrennt.

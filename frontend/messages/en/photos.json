@@ -462,5 +462,13 @@
   "timeline": {
     "loading": "Loading photos",
     "scrubberLabel": "Timeline: jump to a date"
+  },
+  "fromSubmissions": {
+    "title": "Photos from submissions",
+    "description": "Images from submissions that your organisation has shared with you.",
+    "empty": "No photos from submissions are currently shared with you.",
+    "loadMore": "Load more",
+    "loadFailed": "Photos could not be loaded.",
+    "count": "{count, plural, one {# photo} other {# photos}}"
   }
 }

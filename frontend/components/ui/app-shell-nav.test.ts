@@ -83,6 +83,15 @@ describe("buildNav", () => {
     ]);
   });
 
+  it("zeigt «Fotos aus Abgaben» nur bei Freigabe und ohne «Fotos ansehen» (Phase 5)", () => {
+    const reader = sessionFor("reader");
+    expect(hrefsOf(buildNav(reader), "groups.storage")).not.toContain("/photos/submissions");
+    const shared = { ...reader, shared_submission_photos: true } as SessionInfo;
+    expect(hrefsOf(buildNav(shared), "groups.storage")).toContain("/photos/submissions");
+    // Wer die Galerie sieht, braucht den zweiten Eintrag nicht
+    expect(hrefsOf(buildNav({ ...adminSession(), shared_submission_photos: true } as SessionInfo), "groups.storage")).not.toContain("/photos/submissions");
+  });
+
   it("sammelt die Einstellungen der Bereiche - jede nur mit dem Recht, sie zu öffnen", () => {
     expect(hrefsOf(buildNav(adminSession()), SETTINGS_GROUP)).toEqual([
       "/templates", "/task-packages", "/users", "/fine-settings", "/tenant-settings/domains",

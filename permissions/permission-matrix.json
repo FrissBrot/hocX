@@ -100,6 +100,27 @@
         "reader"
       ]
     },
+    "GET /api/context-files/submission-photos": {
+      "handler": "context_visibility.list_shared_submission_photos",
+      "allowed": [
+        "admin",
+        "writer",
+        "kassier",
+        "reader"
+      ]
+    },
+    "GET /api/context-visibility": {
+      "handler": "context_visibility.get_context_visibility",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "PUT /api/context-visibility/{module}": {
+      "handler": "context_visibility.put_context_visibility",
+      "allowed": [
+        "admin"
+      ]
+    },
     "GET /api/cycle-configs": {
       "handler": "cycle_configs.list_cycle_configs",
       "allowed": [

@@ -19,7 +19,7 @@ export type AuditVerb =
   | "other";
 
 export const AUDIT_CATEGORIES = [
-  "admin", "backup", "calendar_feed", "document", "document_asset", "document_brand", "document_settings",
+  "admin", "backup", "calendar_feed", "context_visibility", "document", "document_asset", "document_brand", "document_settings",
   "document_template", "document_verification", "event", "finance_account", "finance_transaction", "fine",
   "fine_tariff", "identity_verification", "participant", "personal_data", "privacy_settings", "protocol", "public_link",
   "retention", "role", "submission_assignment", "submission_file", "submission_upload", "table_snapshot",

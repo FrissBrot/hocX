@@ -2585,6 +2585,35 @@ class ResourceAssignment(Base):
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
 
 
+class ContextVisibility(Base):
+    """Kontext-Freigabe (Migration 0196, Plan «Berechtigungen» Phase 5): Modul-Standard
+    (``context_id`` NULL) oder Override je Abgabe-Auftrag. Gibt nur zusätzlichen Lesezugriff;
+    geschrieben nur über services/context_visibility_service.py."""
+
+    __tablename__ = "context_visibility"
+    __table_args__ = (
+        CheckConstraint("module IN ('abgabe', 'protokoll', 'album')", name="ck_context_visibility_module"),
+        CheckConstraint("audience IN ('role_only', 'all_participants', 'own_submissions')", name="ck_context_visibility_audience"),
+        CheckConstraint("file_filter IN ('all', 'images')", name="ck_context_visibility_file_filter"),
+        CheckConstraint("module <> 'protokoll' OR audience = 'role_only'", name="ck_context_visibility_protocol"),
+        CheckConstraint("audience <> 'own_submissions' OR module = 'abgabe'", name="ck_context_visibility_own"),
+        CheckConstraint("context_id IS NULL OR module = 'abgabe'", name="ck_context_visibility_override"),
+        ForeignKeyConstraint(
+            ["tenant_id", "context_id"], ["submission_assignment.tenant_id", "submission_assignment.id"],
+            ondelete="CASCADE", name="fk_context_visibility_assignment",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    module: Mapped[str] = mapped_column(Text, nullable=False)
+    context_id: Mapped[int | None] = mapped_column(BigInteger)
+    audience: Mapped[str] = mapped_column(Text, nullable=False)
+    file_filter: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'all'"), default="all")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    updated_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+
+
 class AccountToken(Base):
     """Einmal-Link für «Passwort vergessen» und Einladungen (Migration 0171). Nur der SHA-256-Hash
     wird gespeichert; das Token entsteht erst beim Versand (notifications/account.py)."""

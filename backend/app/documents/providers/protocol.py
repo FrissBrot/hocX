@@ -899,7 +899,8 @@ def provide_image(ctx: BuildContext, spec: BlockSpec, params: ImageParams):
         from app.services.access_service import AccessService
 
         try:
-            AccessService().ensure_can_read_stored_file(ctx.db, ctx.user, stored_file.id)
+            # Einbetten in ein Dokument = Weitergabe: nur Rollenrechte, keine Kontext-Freigabe (Phase 5)
+            AccessService().ensure_can_read_stored_file(ctx.db, ctx.user, stored_file.id, allow_context_grant=False)
         except Exception as exc:  # HTTPException aus dem Access-Service → Rechtefehler
             from app.documents.context import DocumentPermissionError
 
