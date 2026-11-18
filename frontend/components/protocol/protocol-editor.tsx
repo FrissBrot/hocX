@@ -1557,7 +1557,7 @@ export function ProtocolEditor({
         tracked_baseline_content: result.tracked_baseline_content,
       });
     } catch (err: unknown) {
-      if (err instanceof Error) showToast(err.message);
+      if (err instanceof Error) showToast(err.message, "error");
     }
   }
 
@@ -1639,7 +1639,7 @@ export function ProtocolEditor({
           : (current[protocolElementBlockId] ?? []).filter((todo) => todo.id !== todoId),
       }));
     } catch (err: unknown) {
-      if (err instanceof Error) showToast(err.message);
+      if (err instanceof Error) showToast(err.message, "error");
     }
   }
 
@@ -1836,7 +1836,7 @@ export function ProtocolEditor({
       void refreshElementTitles();
       collab.sendFieldUpdate("element-titles", null);
     } catch (err: unknown) {
-      if (err instanceof Error) showToast(err.message);
+      if (err instanceof Error) showToast(err.message, "error");
     }
   }
 
@@ -1850,7 +1850,7 @@ export function ProtocolEditor({
       void refreshElementTitles();
       collab.sendFieldUpdate("element-titles", null);
     } catch (err: unknown) {
-      if (err instanceof Error) showToast(err.message);
+      if (err instanceof Error) showToast(err.message, "error");
     }
   }
 
@@ -1863,7 +1863,7 @@ export function ProtocolEditor({
       );
       updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version }));
     } catch (err: unknown) {
-      if (err instanceof Error) showToast(err.message);
+      if (err instanceof Error) showToast(err.message, "error");
     }
   }
 
@@ -1875,7 +1875,7 @@ export function ProtocolEditor({
       );
       updateBlockInState(blockId, (block) => ({ ...block, configuration_snapshot_json: updated.configuration_snapshot_json, config_version: updated.config_version }));
     } catch (err: unknown) {
-      if (err instanceof Error) showToast(err.message);
+      if (err instanceof Error) showToast(err.message, "error");
     }
   }
 
@@ -1911,7 +1911,7 @@ export function ProtocolEditor({
       collab.sendFieldUpdate("track-changes-toggle", { enabled });
     } catch (err: unknown) {
       setTrackChangesEnabledState(!enabled);
-      if (err instanceof Error) showToast(err.message);
+      if (err instanceof Error) showToast(err.message, "error");
     }
   }
 
