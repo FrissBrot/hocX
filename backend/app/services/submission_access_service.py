@@ -23,6 +23,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.features_generated import F
+from app.core.tenant_scope import bind_tenant_scope
 from app.models import (
     GalleryImage,
     Participant,
@@ -127,15 +128,27 @@ def token_active(token: str) -> bool:
 
 
 def resolve(db: Session, token: str, *, touch: bool = True) -> Access | None:
-    """Gültiger Zugang oder None - ohne zu verraten, woran es scheitert."""
-    from app.services.submission_service import SubmissionService, _element_ref
+    """Gültiger Zugang oder None - ohne zu verraten, woran es scheitert.
 
+    Ein gültiger Link bindet die Session an seinen Mandanten (Row-Level-Security, wie
+    get_optional_current_user): die öffentlichen Routen laufen sonst unbeschränkt, und die
+    Element-Auflösung liest Teilnehmer/Termine aus Listenwerten ohne eigenen Mandantenfilter."""
     if not token or len(token) > 200:
         return None
     row = db.scalar(select(SubmissionAccessToken).where(SubmissionAccessToken.token_hash == hash_token(token)))
     now = _now()
     if row is None or row.revoked_at is not None or row.expires_at <= now:
         return None
+    bind_tenant_scope(db, row.tenant_id)
+    access = _resolve_bound(db, row, now, touch=touch)
+    if access is None:
+        bind_tenant_scope(db, None)
+    return access
+
+
+def _resolve_bound(db: Session, row: SubmissionAccessToken, now: datetime, *, touch: bool) -> Access | None:
+    from app.services.submission_service import SubmissionService, _element_ref
+
     assignment = db.get(SubmissionAssignment, row.assignment_id)
     if assignment is None or assignment.tenant_id != row.tenant_id or assignment.owner_access == "off":
         return None
