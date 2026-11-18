@@ -51,6 +51,9 @@ export function CollaborationStatusPanel({
         ref={rootRef}
         className={`quick-flyout${open ? " quick-flyout-open" : ""}`}
         role="dialog"
+        // Geschlossen nur per CSS unsichtbar: inert nimmt Felder und Buttons (auch den
+        // Abschliessen-Button) aus der Tab-Reihenfolge und dem Accessibility-Baum.
+        inert={!open}
         aria-hidden={!open}
         aria-label={t("ariaLabel")}
         onMouseEnter={onMouseEnter}

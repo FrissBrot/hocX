@@ -444,6 +444,8 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
         <div
           ref={notesPanelRef}
           className={`quick-flyout${active === "notes" ? " quick-flyout-open" : ""}`}
+          // Geschlossen nur per CSS unsichtbar: ohne inert bleiben die Felder per Tab erreichbar.
+          inert={active !== "notes"}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
@@ -480,6 +482,8 @@ export const SessionPanel = memo(forwardRef<SessionPanelHandle, SessionPanelProp
         <div
           ref={todoPanelRef}
           className={`quick-flyout${active === "todo" ? " quick-flyout-open" : ""}`}
+          // Geschlossen nur per CSS unsichtbar: ohne inert bleiben die Felder per Tab erreichbar.
+          inert={active !== "todo"}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
