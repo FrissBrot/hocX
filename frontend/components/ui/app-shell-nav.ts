@@ -45,7 +45,8 @@ export function isNavLinkActive(link: NavLink, pathname: string): boolean {
  */
 // Nur Rechte und Module: dieselbe Funktion berechnet auch die Vorschau «Ansehen als …» (Phase 7,
 // components/users/access-preview-modal.tsx) - eine Quelle für die echte und die gezeigte Navigation.
-export type NavSession = Pick<SessionInfo, "permissions" | "current_tenant">;
+// shared_submission_photos (Phase 5) optional: die Vorschau «Ansehen als» (Phase 7) kennt es nicht
+export type NavSession = Pick<SessionInfo, "permissions" | "current_tenant"> & Partial<Pick<SessionInfo, "shared_submission_photos">>;
 
 export function buildNav(session: NavSession | null): NavGroup[] {
   const editsMeetings = can(session, "meetings.edit");
