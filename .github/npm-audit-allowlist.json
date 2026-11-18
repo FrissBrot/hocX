@@ -1,0 +1,11 @@
+{
+  "_hinweis": "Bewusste Ausnahmen für npm audit (SECURITY-RULES 5.3: ein Fund ohne Fix wird begründet ausgenommen). Jeder Eintrag läuft ab; danach scheitert die CI wieder, bis neu geprüft. Geprüft von scripts/ci/npm-audit-gate.py.",
+  "advisories": [
+    {
+      "id": "GHSA-fc5q-39xc-vjpf",
+      "package": "picomatch",
+      "until": "2026-12-18",
+      "reason": "ReDoS bei wiederholten Extglobs; alle Versionen bis 4.0.7 betroffen, kein Fix veröffentlicht (Stand 2026-11-18). Nur in Entwicklungswerkzeugen (vite/vitest, @parcel/watcher aus dem next-intl-Plugin), nicht im ausgelieferten Frontend; ausnutzbar nur mit angreiferkontrollierten Glob-Mustern, die es dort nicht gibt."
+    }
+  ]
+}

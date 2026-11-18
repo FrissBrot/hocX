@@ -567,15 +567,12 @@ jobs:
           done
           exit "$status"
 
+      # Ab «high» blockierend; begründete, ablaufende Ausnahmen für Funde ohne Fix stehen in
+      # .github/npm-audit-allowlist.json (SECURITY-RULES 5.3) - abgelaufene scheitern wieder.
       - name: Audit Node dependencies (npm audit)
         run: |
-          status=0
-          for app in frontend abgabebox-frontend; do
-            echo "## npm audit: ${app}" >> "$GITHUB_STEP_SUMMARY"
-            ( cd "$app" && npm audit --audit-level=high --package-lock-only ) | tee -a "$GITHUB_STEP_SUMMARY"
-            [ "${PIPESTATUS[0]}" -eq 0 ] || status=1
-          done
-          exit "$status"
+          set -o pipefail
+          python3 scripts/ci/npm-audit-gate.py frontend abgabebox-frontend | tee -a "$GITHUB_STEP_SUMMARY"
 
   # Diff-basiert (nur auf Pull-Requests): neue Verstösse gegen SECURITY-RULES.md blockieren, bis sie
   # behoben oder in derselben Zeile begründet markiert sind - ungescopte public_id-Lookups
