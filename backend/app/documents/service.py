@@ -713,7 +713,7 @@ async def render(db: Session, user: CurrentUser | None, tenant_id: int, request:
             lambda: verify_render_info(export_public_id, base=verify_domain_service.tenant_verify_base_url(db, tenant_id))
         )
         prepared = await _prepare_off_loop(db, user, tenant_id, request, render_info=render_info)
-        reused = await run_in_threadpool(_reuse_closed_export, db, request, prepared)
+        reused = await run_in_threadpool(_reuse_existing_export, db, request, prepared, render_info.verify_link)
         if reused is not None:
             return reused
         compiled = prepared.compiled
@@ -724,6 +724,51 @@ async def render(db: Session, user: CurrentUser | None, tenant_id: int, request:
         if result is not None:
             return result
     raise RuntimeError("Protokollversion änderte sich während des Exports wiederholt")
+
+
+def _reuse_existing_export(db: Session, request: DocumentRequest, prepared: PreparedDocument, verify_link: str | None) -> RenderResult | None:
+    """Ein Protokoll-PDF entsteht nur, wenn sich etwas geändert hat. Abgeschlossen: immer das finale
+    PDF (_reuse_closed_export). Sonst das letzte PDF, wenn Inhalt (content_hash), Gestaltung
+    (design_hash), Status, Sprache, Vorlage, Optionen und Prüf-Link gleich sind - gleiche
+    Dokument-ID, gleiche Version; jede Änderung ergibt wie bisher ein neues PDF (next_version
+    zählt die Version dann hoch). Auszüge und Exporte mit eigenem Titel werden nie wiederverwendet."""
+    protocol = prepared.protocol
+    if protocol is None or prepared.document_type != "protocol" or prepared.version is None or prepared.title_overridden:
+        return None
+    if protocol.status == "abgeschlossen":
+        return _reuse_closed_export(db, request, prepared)
+    latest = db.execute(
+        select(DocumentExport, DocumentRegistry.status_code)
+        .join(DocumentRegistry, DocumentRegistry.public_id == DocumentExport.public_id)
+        .where(
+            DocumentExport.tenant_id == protocol.tenant_id,
+            DocumentExport.protocol_id == protocol.id,
+            DocumentExport.document_type == "protocol",
+            DocumentExport.content_hash.is_not(None),
+        )
+        .order_by(DocumentExport.created_at.desc(), DocumentExport.id.desc())
+        .limit(1)
+    ).first()
+    if latest is None:
+        return None
+    export, status_code = latest
+    options = export.options_json or {}
+    unchanged = (
+        export.stored_file_id is not None
+        and status_code == protocol.status
+        and export.content_hash == prepared.content_hash
+        and export.design_hash == prepared.design_hash
+        and export.language == prepared.language
+        and export.template_id == (prepared.template.id if prepared.template is not None else None)
+        and options.get("options") == request.options.model_dump(mode="json")
+        and options.get("verify_url") == verify_link
+    )
+    if not unchanged:
+        return None
+    stored = db.get(StoredFile, export.stored_file_id)
+    if stored is None or stored.tenant_id != protocol.tenant_id:
+        return None
+    return RenderResult(export=export, stored_file=stored)
 
 
 def _reuse_closed_export(db: Session, request: DocumentRequest, prepared: PreparedDocument) -> RenderResult | None:
@@ -795,9 +840,9 @@ def _finalize_render(
         # Versionsvergabe serialisieren: Sperre bis zum Commit unten, dann mit dem aktuellen Stand
         # vergleichen.
         locked = lock_row(db, prepared.protocol)
-        # Gleichzeitig entstandenes finales PDF (Auto-PDF beim Abschliessen und «PDF öffnen»
+        # Gleichzeitig entstandenes PDF (z. B. Auto-PDF beim Abschliessen und «PDF öffnen»
         # parallel): unter der Sperre erneut prüfen, dann bleibt es bei einem einzigen.
-        reused = _reuse_closed_export(db, request, prepared)
+        reused = _reuse_existing_export(db, request, prepared, render_info.verify_link)
         if reused is not None:
             db.rollback()  # Sperre freigeben; gespeichert wird nichts
             db.refresh(reused.export)

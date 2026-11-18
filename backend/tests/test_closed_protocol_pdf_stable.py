@@ -1,5 +1,6 @@
-"""Abgeschlossene Protokolle: «PDF öffnen» liefert immer dasselbe finale PDF (gleiche Dokument-ID,
-gleicher Prüf-Hash), bis das Protokoll zurückgestuft und erneut abgeschlossen wird."""
+"""PDF nur bei Änderung: Abgeschlossene Protokolle liefern immer dasselbe finale PDF (gleiche
+Dokument-ID, gleicher Prüf-Hash), bis das Protokoll zurückgestuft und erneut abgeschlossen wird.
+Offene Protokolle liefern das letzte PDF, solange Inhalt und Gestaltung unverändert sind."""
 from __future__ import annotations
 
 import hashlib
@@ -10,7 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.core.storage import MAIN, get_object_store
-from app.documents.service import DocumentRequest, _reuse_closed_export
+from app.documents.service import DocumentRequest, _reuse_closed_export, _reuse_existing_export
 from app.models import DocumentExport, DocumentRegistry, StoredFile
 from app.schemas.protocol import ProtocolUpdate
 from app.services.protocol_service import ProtocolService
@@ -24,7 +25,7 @@ def _isolated_storage(monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "storage_root", str(tmp_path / "storage"))
 
 
-def _pdf(db, protocol, status: str, *, language: str = "de", options: dict | None = None) -> DocumentExport:
+def _pdf(db, protocol, status: str, *, language: str = "de", options: dict | None = None, content: str = "inhalt", design: str = "design") -> DocumentExport:
     data = secrets.token_bytes(32)
     key = f"exports/generated/{secrets.token_hex(6)}.pdf"
     get_object_store().put_bytes(db, MAIN, key, data, content_type="application/pdf")
@@ -33,7 +34,7 @@ def _pdf(db, protocol, status: str, *, language: str = "de", options: dict | Non
     db.flush()
     export = DocumentExport(
         tenant_id=protocol.tenant_id, protocol_id=protocol.id, document_type="protocol", title=protocol.title,
-        stored_file_id=stored.id, language=language,
+        stored_file_id=stored.id, language=language, content_hash=content, design_hash=design,
         options_json={"options": options or DocumentRequest().options.model_dump(mode="json")},
     )
     db.add(export)
@@ -44,8 +45,11 @@ def _pdf(db, protocol, status: str, *, language: str = "de", options: dict | Non
     return export
 
 
-def _prepared(protocol, *, language: str = "de", title_overridden: bool = False):
-    return SimpleNamespace(protocol=protocol, document_type="protocol", title_overridden=title_overridden, template=None, language=language)
+def _prepared(protocol, *, language: str = "de", title_overridden: bool = False, content: str = "inhalt", design: str = "design"):
+    return SimpleNamespace(
+        protocol=protocol, document_type="protocol", title_overridden=title_overridden, template=None, language=language,
+        content_hash=content, design_hash=design, version=(0, 0, 0),
+    )
 
 
 def _protocol(db, name: str):
@@ -92,3 +96,25 @@ def test_reclosing_after_a_downgrade_creates_a_new_final_pdf(db):
     service.update_protocol(db, protocol.id, ProtocolUpdate(status="abgeschlossen"))
     # Das PDF des früheren Abschlusses ist ersetzt: neues Rendern nötig
     assert _reuse_closed_export(db, request, _prepared(protocol)) is None
+
+
+def test_unchanged_draft_returns_the_latest_pdf_and_any_change_renders_new(db):
+    protocol = _protocol(db, "Entwurf")
+    request = DocumentRequest(protocol_id=protocol.public_id, document_type="protocol")
+    latest = _pdf(db, protocol, "durchgeführt")
+
+    reused = _reuse_existing_export(db, request, _prepared(protocol), None)
+    assert reused is not None and reused.export.public_id == latest.public_id
+    # Geänderter Inhalt, geänderte Gestaltung oder andere Sprache: neues PDF
+    assert _reuse_existing_export(db, request, _prepared(protocol, content="neu"), None) is None
+    assert _reuse_existing_export(db, request, _prepared(protocol, design="neu"), None) is None
+    assert _reuse_existing_export(db, request, _prepared(protocol, language="fr"), None) is None
+    # Anderer Prüf-Link (neue Prüf-Domain) ebenso
+    assert _reuse_existing_export(db, request, _prepared(protocol), "https://verify.example.org/d/x") is None
+
+
+def test_status_change_renders_new_even_with_the_same_content(db):
+    protocol = _protocol(db, "Statuswechsel")
+    request = DocumentRequest(protocol_id=protocol.public_id, document_type="protocol")
+    _pdf(db, protocol, "vorbereitet")
+    assert _reuse_existing_export(db, request, _prepared(protocol), None) is None
