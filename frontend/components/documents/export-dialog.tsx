@@ -323,14 +323,13 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
   const optionBits = [
     language ? t(`language.${language}`) : null,
     options.title ? t("export.summaryTitle") : null,
-    options.watermark === "on" ? t("export.summaryWatermarkOn") : options.watermark === "off" ? t("export.summaryWatermarkOff") : null,
+    options.watermark === "on" ? t("export.summaryWatermarkOn") : null,
     brandId ? brands.find((brand) => brand.id === brandId)?.name ?? null : null,
   ].filter(Boolean);
   const watermarkOptions = [
     { value: "auto", label: t("export.watermarkAutoShort") },
+    // «Ohne Wasserzeichen» gibt es nicht mehr: Entwürfe tragen es immer (serverseitig erzwungen)
     { value: "on", label: t("export.watermarkOn") },
-    // Entwürfe ohne Kennzeichnung nur mit Schreibrecht (STUDIO-007, serverseitig erzwungen)
-    ...(capabilities?.unmark_drafts ? [{ value: "off", label: t("export.watermarkOff") }] : []),
   ];
   const morePages = Math.max(pageCount - pages.length, 0);
   const sheetRows = (dataPreview?.tables ?? []).reduce((sum, table) => sum + table.total_rows, 0);
@@ -428,7 +427,17 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
       <div className="export-dialog">
         <div className="export-dialog-panel">
           {/* Vor dem Export sagen, dass Daten fehlen werden: nie unbemerkt unvollständig */}
-          {capabilities?.complete_exports === false && <StatusBanner tone="warning" message={t("export.restrictedWarning")} />}
+          {capabilities?.complete_exports === false && (
+            <div className="status-banner status-warning export-restricted-warning" role="alert">
+              <strong>{t("export.restrictedTitle")}</strong>
+              <ul>
+                {(capabilities.missing_export_permissions ?? []).map((key) => (
+                  <li key={key}>{t.has(`export.missingPermission.${key.replace(".", "_")}`) ? t(`export.missingPermission.${key.replace(".", "_")}`) : key}</li>
+                ))}
+              </ul>
+              <span>{t("export.restrictedWarning")}</span>
+            </div>
+          )}
           {selectableTypes.length > 1 && (
             <label className="field-stack export-step">
               <span className="field-label">{t("export.documentType")}</span>

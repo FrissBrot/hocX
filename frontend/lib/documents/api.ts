@@ -124,9 +124,10 @@ export type Capabilities = {
   manage_brand: boolean;
   finance_data: boolean;
   personal_data: boolean;
-  unmark_drafts?: boolean;
   /** false: Exporte dieser Person sind eingeschränkte Fassungen (Daten fehlen wegen Rechten). */
   complete_exports?: boolean;
+  /** Katalogschlüssel der Berechtigungen, die für vollständige Exporte fehlen (z. B. «reports.personal»). */
+  missing_export_permissions?: string[];
 };
 
 // ── Vorlagen ────────────────────────────────────────────────────────────────

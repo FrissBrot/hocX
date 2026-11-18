@@ -839,7 +839,6 @@
     "title": "Exporter le document",
     "watermark": "Filigrane « Brouillon »",
     "watermarkAuto": "Automatique (brouillons)",
-    "watermarkOff": "Jamais",
     "watermarkOn": "Toujours",
     "working": "Création …",
     "columns": "Colonnes",
@@ -888,7 +887,6 @@
     "optionsHint": "Titre, langue, filigrane",
     "summaryTitle": "titre personnalisé",
     "summaryWatermarkOn": "filigrane toujours",
-    "summaryWatermarkOff": "filigrane jamais",
     "watermarkAutoShort": "Automatique",
     "cancel": "Annuler",
     "formatLabel": "Format",
@@ -928,8 +926,13 @@
     "encryptionZip": "Fichier ZIP (AES-256) – le CSV reste CSV, nécessite 7-Zip, Keka ou WinRAR",
     "passwordHelpZip": "Le fichier est fourni dans un fichier ZIP protégé par mot de passe (AES-256). L’Explorateur Windows et macOS ne peuvent pas l’ouvrir ; il faut 7-Zip, Keka ou WinRAR. Au moins {min} caractères.",
     "encryptedSavedZip": "Fichier ZIP protégé par mot de passe enregistré. À ouvrir avec 7-Zip, Keka ou WinRAR.",
-    "restrictedWarning": "Version restreinte : il te manque l’autorisation pour une partie des données (p. ex. amendes d’autres personnes, classements ou procès-verbaux inaccessibles). Le PDF contient des espaces réservés à ces endroits et est créé comme brouillon sans numéro de version, pas comme document officiel.",
-    "createdRestricted": "Version restreinte créée : des données manquent faute d’autorisation. Les endroits sont signalés dans le PDF ; c’est un brouillon sans numéro de version."
+    "restrictedWarning": "Sans elles, le PDF devient une version restreinte : des espaces réservés signalent les données manquantes. C’est un brouillon avec filigrane, sans numéro de version et pas un document officiel. Une personne gérant les rôles accorde les autorisations sous Paramètres › Rôles.",
+    "createdRestricted": "Version restreinte créée : des données manquent faute d’autorisation. Les endroits sont signalés dans le PDF ; c’est un brouillon sans numéro de version.",
+    "restrictedTitle": "Pour un export complet, il te manque ces autorisations :",
+    "missingPermission": {
+      "reports_personal": "« Données personnelles de tous » (reports.personal) : amendes d’autres personnes et classements par personne",
+      "meetings_read_drafts": "« Voir les brouillons » (meetings.read_drafts) : procès-verbaux, tâches et chiffres de tous les modèles au lieu des tiens seulement"
+    }
   },
   "exports": {
     "allTypes": "Tous les types de document",

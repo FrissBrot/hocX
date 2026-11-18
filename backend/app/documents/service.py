@@ -384,12 +384,9 @@ def prepare(
     is_draft = protocol_draft
     if options.watermark == "on":
         is_draft = True
-    elif options.watermark == "off":
-        # Entwürfe ohne Kennzeichnung nur mit Schreibrecht (STUDIO-007); Leser behalten das
-        # Wasserzeichen. user None = Systemaufruf ohne Benutzer.
-        can_write = user is None or user.can(P.MEETINGS_EDIT)
-        if not protocol_draft or can_write:
-            is_draft = False
+    # Ein Entwurf trägt immer das Wasserzeichen «Entwurf» - auch mit Schreibrecht nicht abwählbar
+    # (früher STUDIO-007: nur Leser behielten es). «off» wirkt deshalb nur bei Nicht-Entwürfen,
+    # die ohnehin keines haben; der Wert bleibt für ältere Clients gültig.
 
     render = render_info or verify_render_info(None, preview=True, base=verify_domain_service.tenant_verify_base_url(db, tenant_id))
     document_env = {
@@ -753,7 +750,7 @@ from app.models.entities import DocumentRegistry as _Registry  # noqa: E402
 def document_view_key(db: Session, user: CurrentUser | None) -> str:
     """Wovon der Inhalt eines PDFs beim Exportierenden abhängt: Bussen nur die eigenen ohne
     finances.manage/reports.personal, Ranglisten nur die eigene Zeile ohne Personenauswertung,
-    eingeschränkte Leser nur ihre Vorlagen, Entwürfe ohne Wasserzeichen nur mit meetings.edit.
+    eingeschränkte Leser nur ihre Vorlagen.
     «full» = keine dieser Einschränkungen (auch das Auto-PDF ohne Person); sonst je Konto. Ein PDF
     wird nur an dieselbe Sicht wiederverwendet - nie das PDF einer uneingeschränkten Person an
     eine eingeschränkte."""
@@ -766,26 +763,34 @@ def document_view_key(db: Session, user: CurrentUser | None) -> str:
     unrestricted = (
         user.can(P.REPORTS_PERSONAL)
         and user.can(P.FINANCES_MANAGE)
-        and user.can(P.MEETINGS_EDIT)
         and own_person_key(db, user) is None
         and not AccessService()._is_restricted_reader(db, user)
     )
     return FULL_VIEW if unrestricted else f"user:{user.user_id}"
 
 
-def exports_are_complete(db: Session, user: CurrentUser) -> bool:
-    """Ob Exporte dieser Person alle Daten enthalten. Nein: Bussen anderer, Ranglisten, fremde
-    Vorlagen oder Pendenzen fehlen ihr - solche PDFs werden eingeschränkte Fassungen mit
-    Platzhaltern (Hinweis im Export-Dialog). Das Schreibrecht (Wasserzeichen) zählt hier nicht."""
+def missing_export_permissions(db: Session, user: CurrentUser) -> list[str]:
+    """Berechtigungen, die für vollständige Exporte fehlen (Katalogschlüssel, z. B.
+    «reports.personal»). Leer: Exporte enthalten alle Daten. Sonst werden PDFs eingeschränkte
+    Fassungen mit Platzhaltern; der Export-Dialog nennt genau diese Berechtigungen.
+
+    - reports.personal: Bussen anderer Personen und Ranglisten je Person
+    - meetings.read_drafts: alle Protokolle statt nur der zugeordneten Vorlagen (eingeschränkter
+      Leser) - betrifft Pendenzen, Sitzungen und Statistik"""
     from app.core.permissions import P
     from app.services.access_service import AccessService
-    from app.services.statistics_common import own_person_key
 
-    return (
-        user.can(P.REPORTS_PERSONAL)
-        and own_person_key(db, user) is None
-        and not AccessService()._is_restricted_reader(db, user)
-    )
+    missing: list[str] = []
+    if not user.can(P.REPORTS_PERSONAL):
+        missing.append(str(P.REPORTS_PERSONAL))
+    if AccessService()._is_restricted_reader(db, user):
+        missing.append(str(P.MEETINGS_READ_DRAFTS))
+    return missing
+
+
+def exports_are_complete(db: Session, user: CurrentUser) -> bool:
+    """Ob Exporte dieser Person alle Daten enthalten (siehe missing_export_permissions)."""
+    return not missing_export_permissions(db, user)
 
 
 def _view_of(export: DocumentExport) -> str | None:

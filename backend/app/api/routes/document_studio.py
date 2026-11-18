@@ -99,11 +99,12 @@ def _user_name(db: Session, user_id: int | None) -> str | None:
 
 
 @router.get("/document-studio/capabilities")
-def get_capabilities(user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)) -> dict[str, bool]:
+def get_capabilities(user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)) -> dict[str, Any]:
     permissions.require_view(user)
-    # complete_exports: Exporte enthalten alle Daten; sonst warnt das Frontend vor dem Export
-    # (eingeschränkte Fassung mit Platzhaltern, siehe documents/service.py prepare)
-    return {**permissions.capabilities(user), "complete_exports": document_service.exports_are_complete(db, user)}
+    # complete_exports: Exporte enthalten alle Daten; sonst warnt das Frontend vor dem Export und
+    # nennt die fehlenden Berechtigungen (eingeschränkte Fassung, siehe documents/service.py prepare)
+    missing = document_service.missing_export_permissions(db, user)
+    return {**permissions.capabilities(user), "complete_exports": not missing, "missing_export_permissions": missing}
 
 
 # Mitgelieferte Schriften der Dokument-Engine für die Arbeitsfläche des Designers (dieselben

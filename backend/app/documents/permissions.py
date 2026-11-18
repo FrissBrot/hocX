@@ -66,6 +66,4 @@ def capabilities(user: CurrentUser) -> dict[str, bool]:
         "manage_brand": user.can(P.SETTINGS_MANAGE),
         "finance_data": user.can(P.FINANCES_READ),
         "personal_data": sees_personal_data(user),
-        # Protokollentwürfe ohne Wasserzeichen exportieren (STUDIO-007)
-        "unmark_drafts": user.can(P.MEETINGS_EDIT),
     }

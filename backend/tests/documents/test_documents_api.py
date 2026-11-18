@@ -268,9 +268,9 @@ def test_sources_are_tenant_scoped(db, setup):
         routes.list_source_options("gibts_nicht", protocol_id=None, db=db, user=setup["admin"])
 
 
-def test_readers_cannot_export_protocol_drafts_without_watermark(db, setup):
-    """STUDIO-007: «Wasserzeichen aus» bei Protokollentwürfen nur mit Schreibrecht (meetings.edit);
-    wer Entwürfe nur lesen darf (meetings.read_drafts), behält das Wasserzeichen."""
+def test_protocol_drafts_always_carry_the_watermark(db, setup):
+    """Entwürfe tragen immer das Wasserzeichen «Entwurf», auch mit Schreibrecht und «off»
+    (früher STUDIO-007: nur Leser behielten es)."""
     from app.documents import service
     from app.documents.service import ExportOptions
 
@@ -278,7 +278,7 @@ def test_readers_cannot_export_protocol_drafts_without_watermark(db, setup):
     as_kassier = service.prepare(db, setup["kassier"], setup["tenant"].id, request)
     as_writer = service.prepare(db, setup["writer"], setup["tenant"].id, request)
     assert as_kassier.compiled.data["flags"]["draft"] is True
-    assert as_writer.compiled.data["flags"]["draft"] is False
+    assert as_writer.compiled.data["flags"]["draft"] is True
 
 
 def test_plain_readers_cannot_export_protocol_drafts_at_all(db, setup):

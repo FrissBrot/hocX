@@ -839,7 +839,6 @@
     "title": "Export document",
     "watermark": "“Draft” watermark",
     "watermarkAuto": "Automatic (for drafts)",
-    "watermarkOff": "Never",
     "watermarkOn": "Always",
     "working": "Creating …",
     "columns": "Columns",
@@ -888,7 +887,6 @@
     "optionsHint": "Title, language, watermark",
     "summaryTitle": "custom title",
     "summaryWatermarkOn": "watermark always",
-    "summaryWatermarkOff": "watermark never",
     "watermarkAutoShort": "Automatic",
     "cancel": "Cancel",
     "formatLabel": "Format",
@@ -928,8 +926,13 @@
     "encryptionZip": "ZIP file (AES-256) – CSV stays CSV, needs 7-Zip, Keka or WinRAR",
     "passwordHelpZip": "The file comes in a password-protected ZIP file (AES-256). Windows Explorer and macOS cannot open it; you need 7-Zip, Keka or WinRAR. At least {min} characters.",
     "encryptedSavedZip": "Password-protected ZIP file saved. Open it with 7-Zip, Keka or WinRAR.",
-    "restrictedWarning": "Restricted version: you lack permission for part of the data (e.g. other people’s fines, rankings or minutes you can’t access). The PDF shows placeholders in those places and is created as a draft without a version number, not as an official document.",
-    "createdRestricted": "Restricted version created: data is missing because of missing permissions. The places are marked in the PDF; it is a draft without a version number."
+    "restrictedWarning": "Without them the PDF becomes a restricted version: placeholders mark where data is missing. It is a draft with a watermark, without a version number and not an official document. Someone who manages roles grants permissions under Settings › Roles.",
+    "createdRestricted": "Restricted version created: data is missing because of missing permissions. The places are marked in the PDF; it is a draft without a version number.",
+    "restrictedTitle": "For a complete export you are missing these permissions:",
+    "missingPermission": {
+      "reports_personal": "“Personal data of everyone” (reports.personal): other people’s fines and per-person rankings",
+      "meetings_read_drafts": "“View drafts” (meetings.read_drafts): minutes, to-dos and figures of all templates instead of only yours"
+    }
   },
   "exports": {
     "allTypes": "All document types",

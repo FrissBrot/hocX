@@ -839,7 +839,6 @@
     "title": "Esporta documento",
     "watermark": "Filigrana «Bozza»",
     "watermarkAuto": "Automatico (per le bozze)",
-    "watermarkOff": "Mai",
     "watermarkOn": "Sempre",
     "working": "Creazione …",
     "columns": "Colonne",
@@ -888,7 +887,6 @@
     "optionsHint": "Titolo, lingua, filigrana",
     "summaryTitle": "titolo personalizzato",
     "summaryWatermarkOn": "filigrana sempre",
-    "summaryWatermarkOff": "filigrana mai",
     "watermarkAutoShort": "Automatico",
     "cancel": "Annulla",
     "formatLabel": "Formato",
@@ -928,8 +926,13 @@
     "encryptionZip": "File ZIP (AES-256) – il CSV resta CSV, serve 7-Zip, Keka o WinRAR",
     "passwordHelpZip": "Il file viene fornito in un file ZIP protetto da password (AES-256). Esplora risorse di Windows e macOS non possono aprirlo; serve 7-Zip, Keka o WinRAR. Almeno {min} caratteri.",
     "encryptedSavedZip": "File ZIP protetto da password salvato. Da aprire con 7-Zip, Keka o WinRAR.",
-    "restrictedWarning": "Versione limitata: ti manca l’autorizzazione per una parte dei dati (ad es. multe di altre persone, classifiche o verbali non accessibili). Il PDF contiene segnaposto in questi punti ed è creato come bozza senza numero di versione, non come documento ufficiale.",
-    "createdRestricted": "Versione limitata creata: mancano dati per autorizzazioni insufficienti. I punti sono segnalati nel PDF; è una bozza senza numero di versione."
+    "restrictedWarning": "Senza di esse il PDF diventa una versione limitata: dei segnaposto indicano i dati mancanti. È una bozza con filigrana, senza numero di versione e non un documento ufficiale. Le autorizzazioni le assegna chi gestisce i ruoli in Impostazioni › Ruoli.",
+    "createdRestricted": "Versione limitata creata: mancano dati per autorizzazioni insufficienti. I punti sono segnalati nel PDF; è una bozza senza numero di versione.",
+    "restrictedTitle": "Per un’esportazione completa ti mancano queste autorizzazioni:",
+    "missingPermission": {
+      "reports_personal": "«Dati personali di tutti» (reports.personal): multe di altre persone e classifiche per persona",
+      "meetings_read_drafts": "«Vedere le bozze» (meetings.read_drafts): verbali, attività e cifre di tutti i modelli invece che solo dei tuoi"
+    }
   },
   "exports": {
     "allTypes": "Tutti i tipi di documento",

@@ -108,3 +108,12 @@ def test_restricted_export_is_an_unversioned_marked_draft(db, monkeypatch):
     # Eine eingeschränkte Fassung wird nie wiederverwendet
     again = asyncio.run(service.render(db, None, tenant.id, request)).export
     assert again.public_id != export.public_id
+
+
+def test_missing_export_permissions_name_the_exact_permissions(db):
+    tenant = make_tenant(db, "Fehlende Rechte")
+    reader = make_current_user(tenant.id, role="reader")
+    admin = make_current_user(tenant.id, role="admin")
+    assert service.missing_export_permissions(db, reader) == ["reports.personal"]
+    assert service.missing_export_permissions(db, admin) == []
+    assert service.exports_are_complete(db, admin) and not service.exports_are_complete(db, reader)

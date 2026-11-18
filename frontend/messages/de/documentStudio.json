@@ -839,7 +839,6 @@
     "title": "Dokument exportieren",
     "watermark": "Wasserzeichen «Entwurf»",
     "watermarkAuto": "Automatisch (bei Entwürfen)",
-    "watermarkOff": "Nie",
     "watermarkOn": "Immer",
     "working": "Wird erstellt …",
     "columns": "Spalten",
@@ -888,7 +887,6 @@
     "optionsHint": "Titel, Sprache, Wasserzeichen",
     "summaryTitle": "eigener Titel",
     "summaryWatermarkOn": "Wasserzeichen immer",
-    "summaryWatermarkOff": "Wasserzeichen nie",
     "watermarkAutoShort": "Automatisch",
     "cancel": "Abbrechen",
     "formatLabel": "Format",
@@ -928,8 +926,13 @@
     "encryptionZip": "ZIP-Datei (AES-256) – CSV bleibt CSV, braucht 7-Zip, Keka oder WinRAR",
     "passwordHelpZip": "Die Datei kommt in einer ZIP-Datei mit Passwort (AES-256). Windows-Explorer und macOS können sie nicht öffnen, nötig ist 7-Zip, Keka oder WinRAR. Mindestens {min} Zeichen.",
     "encryptedSavedZip": "ZIP-Datei mit Passwort gespeichert. Öffnen mit 7-Zip, Keka oder WinRAR.",
-    "restrictedWarning": "Eingeschränkte Fassung: Dir fehlt für einen Teil der Daten die Berechtigung (z. B. Bussen anderer Personen, Ranglisten oder fremde Protokolle). Das PDF enthält an diesen Stellen Platzhalter und wird als Entwurf ohne Versionsnummer erstellt, nicht als offizielles Dokument.",
-    "createdRestricted": "Eingeschränkte Fassung erstellt: Wegen fehlender Berechtigung fehlen Daten. Die Stellen sind im PDF markiert, es ist ein Entwurf ohne Versionsnummer."
+    "restrictedWarning": "Ohne sie wird das PDF eine eingeschränkte Fassung: Wo Daten fehlen, steht ein Platzhalter. Es ist ein Entwurf mit Wasserzeichen, ohne Versionsnummer und kein offizielles Dokument. Die Berechtigungen vergibt eine Person mit Rollenverwaltung unter Einstellungen › Rollen.",
+    "createdRestricted": "Eingeschränkte Fassung erstellt: Wegen fehlender Berechtigung fehlen Daten. Die Stellen sind im PDF markiert, es ist ein Entwurf ohne Versionsnummer.",
+    "restrictedTitle": "Für einen vollständigen Export fehlen dir diese Berechtigungen:",
+    "missingPermission": {
+      "reports_personal": "«Personenbezogene Daten aller» (reports.personal): Bussen anderer Personen und Ranglisten je Person",
+      "meetings_read_drafts": "«Entwürfe ansehen» (meetings.read_drafts): Protokolle, Pendenzen und Zahlen aller Vorlagen statt nur deiner"
+    }
   },
   "exports": {
     "allTypes": "Alle Dokumenttypen",

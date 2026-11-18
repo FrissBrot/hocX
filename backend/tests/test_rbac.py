@@ -54,7 +54,6 @@ LEGACY = {
     "document_edit_templates": ({"writer", "admin"}, "document_designer"),
     "document_publish": ({"admin"}, None),
     "document_personal_data": ({"writer", "admin"}, None),
-    "document_unmark_drafts": ({"writer", "admin"}, None),
     "requires_mfa": ({"admin"}, None),
 }
 
@@ -73,7 +72,6 @@ NEW = {
     "document_edit_templates": lambda user: document_permissions.capabilities(user)["edit_templates"],
     "document_publish": lambda user: document_permissions.capabilities(user)["publish_templates"],
     "document_personal_data": lambda user: document_permissions.capabilities(user)["personal_data"],
-    "document_unmark_drafts": lambda user: document_permissions.capabilities(user)["unmark_drafts"],
     "requires_mfa": lambda user: any(CATALOG[P(key)].requires_mfa for key in user.permissions),
 }
 
