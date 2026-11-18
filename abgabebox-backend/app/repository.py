@@ -27,7 +27,6 @@ from app.models import (
     submission_upload_table,
     system_error_log_table,
     tenant_feature_table,
-    tenant_table,
 )
 
 
@@ -71,9 +70,13 @@ def get_tenant_storage_quota_bytes(db: Session, *, tenant_id: int) -> int | None
     siehe AdminTenantService.recompute_effective_storage_quota im Haupt-Backend) - None bedeutet
     dort wie hier "kein Limit". Fuer den Upload-Quota-Check in routes/public.py, damit der
     oeffentliche Kanal dasselbe Kontingent durchsetzt wie das Haupt-Backend, statt nur der
-    globalen ABGABEBOX_TENANT_STORAGE_QUOTA_MB-Konstante."""
-    row = db.execute(select(tenant_table.c.storage_quota_bytes).where(tenant_table.c.id == tenant_id)).first()
-    return row[0] if row is not None else None
+    globalen ABGABEBOX_TENANT_STORAGE_QUOTA_MB-Konstante.
+
+    Gelesen über abgabebox_storage_quota() (Migration 0183, SECURITY DEFINER): die Funktion liefert
+    nur das Kontingent des Mandanten hinter dem gebundenen Link, die Rolle hat kein Recht mehr auf
+    tenant. tenant_id ist der Mandant dieses Links (aus _get_tenant_or_404)."""
+    del tenant_id
+    return db.scalar(text("SELECT public.abgabebox_storage_quota()"))
 
 
 def _linked_to(link_id: int):

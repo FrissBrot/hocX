@@ -18,6 +18,8 @@ fixture (see test_tenant_upload_quota_lock.py's docstring):
 """
 from __future__ import annotations
 
+import pytest
+
 import asyncio
 import re
 import time
@@ -28,7 +30,20 @@ from app.db import SessionLocal
 from app.storage import NAMESPACE, get_store, tenant_storage_bytes
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-_TENANT_ID = 999002
+# Je Lauf neu: gelöschte Objekte früherer Läufe stehen bis zum Purge noch in der Objektliste.
+_TENANT_ID = 999_002_000_000 + uuid.uuid4().int % 1_000_000
+
+
+@pytest.fixture(autouse=True)
+def _usage_from_object_listing(monkeypatch):
+    """storage_usage_bytes() gibt der Rolle hocx_abgabebox seit Migration 0183 nur die Belegung des
+    Mandanten hinter dem gebundenen Upload-Link; der synthetische Testmandant hat keinen (die Rolle
+    kann keine Links anlegen). Hier geht es um Sperre/Event-Loop, nicht um die Funktion: die
+    Belegung kommt deshalb aus der Objektliste desselben Speichers."""
+    store = get_store()
+    monkeypatch.setattr(
+        type(store), "usage_bytes", lambda self, db, namespace, prefix: sum(info.size for info in self.list(namespace, prefix))
+    )
 
 
 def test_upload_route_wraps_tenant_storage_bytes_in_to_thread():
