@@ -84,6 +84,13 @@ export default function LoginPage() {
   // «Passwort vergessen?» nur, wenn der Plattform-Admin den E-Mail-Versand eingerichtet hat.
   const [passwordResetAvailable, setPasswordResetAvailable] = useState(false);
 
+  // Weitergeleitet, weil die Organisation MFA verlangt (lib/api/client.ts): kurz erklären.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("reason") === "mfa_setup_required") {
+      setStatusMsg(t("mfa.setupRequiredRedirect"));
+    }
+  }, [t]);
+
   useEffect(() => {
     let cancelled = false;
     browserApiFetch<{ enabled: boolean }>("/api/auth/password-reset/available")
@@ -495,7 +502,9 @@ export default function LoginPage() {
             <div className="eyebrow">{t("mfa.mandatorySetupEyebrow")}</div>
             <strong>{t("mfa.requiredTitle")}</strong>
             <div className="muted">
-              {pendingMfa.tenant_name
+              {pendingMfa.required_by_tenant && pendingMfa.tenant_name
+                ? t("mfa.requiredTenantDescription", { user: pendingMfa.user_display_name, tenant: pendingMfa.tenant_name })
+                : pendingMfa.tenant_name
                 ? t("mfa.requiredAdminDescription", { user: pendingMfa.user_display_name, tenant: pendingMfa.tenant_name })
                 : t("mfa.requiredGenericDescription", { user: pendingMfa.user_display_name })}
             </div>

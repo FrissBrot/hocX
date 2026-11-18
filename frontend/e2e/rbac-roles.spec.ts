@@ -85,3 +85,14 @@ test("Rollen-Seite zeigt Standardrollen und das Berechtigungsformular", async ({
   expect(await page.locator(".roles-permission-option").count()).toBeGreaterThanOrEqual(15);
   await context.close();
 });
+
+test("Deep-Link /users/roles?role=<id> öffnet die Rolle im Editor", async ({ browser }) => {
+  const context = await browser.newContext({ storageState: authFiles.admin });
+  const roles = await (await context.request.get("/api/roles")).json();
+  const reader = roles.find((role: { system_key: string | null }) => role.system_key === "reader"); // rbac-ok: Testdaten auswählen
+  const page = await context.newPage();
+  await page.goto(`/users/roles?role=${reader.id}`);
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.locator(".roles-permission-area").first()).toBeVisible();
+  await context.close();
+});

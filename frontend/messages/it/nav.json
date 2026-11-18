@@ -23,7 +23,7 @@
   "sharedLinks": "Condivisioni",
   "templates": "Modelli",
   "cycles": "Cicli",
-  "users": "Accessi e ruoli",
+  "users": "Accesso",
   "tenantSettings": "Organizzazione",
   "import": "Importa",
   "statistics": "Statistiche",
@@ -81,5 +81,7 @@
   "memberList": "Elenco membri",
   "domainsAndVerification": "Domini e autenticità",
   "organisationProfile": "Profilo",
-  "workYear": "Anno di lavoro"
+  "workYear": "Anno di lavoro",
+  "accessWho": "Chi ha accesso",
+  "accessSecurity": "Sicurezza"
 }

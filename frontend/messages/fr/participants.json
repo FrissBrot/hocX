@@ -146,5 +146,105 @@
     "confirm": "Supprimer définitivement",
     "bulkTitle": "{count, plural, one {Supprimer définitivement # personne ?} other {Supprimer définitivement # personnes ?}}",
     "bulkMessage": "Les personnes disparaissent avec accès, présences, amendes et attributions de tâches ; c'est irréversible. Pour les membres sortis, indiquez plutôt une date de sortie."
+  },
+  "list": {
+    "description": "Toutes les personnes de votre organisation, avec ou sans connexion. Un clic sur une personne ouvre tout ce qui la concerne : données, tarif, connexion et rôles.",
+    "filterLogin": "Connexion",
+    "filterRole": "Rôle",
+    "filterTariff": "Tarif",
+    "any": "Tous",
+    "columns": {
+      "login": "Connexion",
+      "roles": "Rôles",
+      "tariff": "Tarif"
+    },
+    "footerHint": "Cliquez sur une ligne pour ouvrir la page de la personne",
+    "tariffDefault": "Standard"
+  },
+  "person": {
+    "back": "← Membres",
+    "saved": "Enregistré",
+    "sections": {
+      "master": "Données de base",
+      "membership": "Adhésion",
+      "tariff": "Tarif des amendes",
+      "login": "Connexion et rôles",
+      "more": "Autres actions"
+    },
+    "emailHelp": "Pour l'invitation et les notifications.",
+    "emailLoginHelp": "C'est aussi l'adresse de connexion. Une modification s'applique dès la prochaine connexion.",
+    "membershipHelp": "Les dates d'entrée et de sortie déterminent dans quelles listes de présence la personne apparaît. Dès la sortie, la connexion est bloquée.",
+    "tariff": "Tarif",
+    "tariffStandard": "Standard ({name})",
+    "tariffReadOnly": "Tarif : {tariff}. Seules les personnes avec « Gérer les finances » peuvent le modifier.",
+    "manageTariffs": "Gérer les tarifs →",
+    "loginStatus": {
+      "active": "Connexion active",
+      "invited": "Invité",
+      "none": "Pas de connexion"
+    },
+    "noLogin": "Pas de connexion. La personne apparaît dans les présences, amendes et tâches, mais ne peut pas se connecter.",
+    "setPassword": "Définir un mot de passe",
+    "passwordDescription": "Communiquez le mot de passe à la personne de manière sûre ; elle pourra le modifier ensuite dans son profil. Une invitation par e-mail est plus simple.",
+    "roles": "Rôles",
+    "rolesExplained": "Que permettent les rôles ? →",
+    "mfa": "MFA",
+    "revokeHelp": "Bloque la connexion et termine les sessions en cours. La personne reste membre.",
+    "exportHelp": "Toutes les données de la personne dans un fichier ZIP protégé par mot de passe.",
+    "deleteHelp": "Supprimer définitivement, avec présences, amendes et tâches. Pour les anciens membres, mieux vaut définir une date de sortie.",
+    "delete": "Supprimer …",
+    "unsaved": "Modifications non enregistrées",
+    "discard": "Annuler les modifications",
+    "blockers": {
+      "displayName": "Enregistrement bloqué : le nom affiché manque.",
+      "dates": "Enregistrement bloqué : la sortie précède l'entrée."
+    }
+  },
+  "newMember": {
+    "description": "La personne apparaît ensuite dans la liste des membres. Sans invitation, elle reste membre sans connexion.",
+    "invite": "Inviter par e-mail après la création",
+    "inviteHelp": "La personne définit elle-même son mot de passe.",
+    "role": "Rôle",
+    "createAndInvite": "Créer et inviter",
+    "createdInvited": "{name} créé·e et invité·e"
+  },
+  "bulk": {
+    "label": "Actions groupées",
+    "selected": "{count} sélectionné(s)",
+    "setTariff": "Définir le tarif",
+    "invite": "Inviter",
+    "roles": "Rôles",
+    "delete": "Supprimer",
+    "clear": "Désélectionner",
+    "failed": "L'action a échoué.",
+    "partial": "{done} effectué(s), {skipped} ignoré(s) : {reasons}",
+    "invited": "{count, plural, one {# personne invitée} other {# personnes invitées}}",
+    "tariffSet": "Tarif défini pour {count, plural, one {# personne} other {# personnes}}",
+    "rolesAdded": "Rôle ajouté pour {count, plural, one {# personne} other {# personnes}}",
+    "rolesRemoved": "Rôle retiré pour {count, plural, one {# personne} other {# personnes}}",
+    "inviteTitle": "{count, plural, one {Inviter # personne} other {Inviter # personnes}}",
+    "inviteDescription": "Les personnes avec connexion, sans e-mail, inactives ou sorties sont ignorées.",
+    "inviteRole": "Rôle pour toutes les personnes invitées",
+    "inviteRoleHelp": "Vous attribuez d'autres rôles ensuite sur la page de la personne.",
+    "tariffTitle": "Définir le tarif pour {count, plural, one {# personne} other {# personnes}}",
+    "tariffDescription": "Le tarif détermine le montant de leurs amendes.",
+    "rolesTitle": "Rôles pour {count, plural, one {# personne} other {# personnes}}",
+    "rolesDescription": "Ce qui violerait une règle de protection (p. ex. dernier admin) ou ne laisserait aucun rôle est ignoré.",
+    "rolesMode": "Ajouter ou retirer",
+    "rolesAdd": "Ajouter le rôle",
+    "rolesRemove": "Retirer le rôle",
+    "role": "Rôle",
+    "reasons": {
+      "has_login": "a déjà une connexion",
+      "inactive": "inactif",
+      "former": "sorti",
+      "no_email": "pas d'e-mail",
+      "no_roles_left": "aucun rôle restant",
+      "not_allowed": "non autorisé",
+      "rate_limited": "trop d'invitations",
+      "not_found": "introuvable",
+      "failed": "échec",
+      "protected": "règle de protection, p. ex. dernier admin"
+    }
   }
 }

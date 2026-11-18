@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
-from typing import ClassVar
+from typing import ClassVar, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
 from app.models.entities import Tenant
 from app.schemas.base import PublicIdModel
+from app.schemas.role import RoleRef
 
 
 class ParticipantBase(BaseModel):
@@ -106,3 +107,36 @@ class ParticipantInviteRead(BaseModel):
     created_at: datetime
     sent_at: datetime | None = None
     expires_at: datetime | None = None
+
+
+class ParticipantOverviewRead(ParticipantRead):
+    """Mitgliederliste und Personenseite (Konzept «Personen an einem Ort»): zusätzlich Login-Status,
+    Rollen und Bussentarif. tariff_id nur mit finances.read (der Tarif sagt etwas über die Person
+    aus), sonst immer None."""
+
+    login_status: Literal["active", "invited", "none"] = "none"
+    roles: list[RoleRef] = Field(default_factory=list)
+    tariff_id: uuid.UUID | None = None
+
+
+class ParticipantBulkInvite(BaseModel):
+    participant_ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+    # Rolle für alle Eingeladenen (ersetzt deren Rollen); None = Rollen unverändert
+    role_id: uuid.UUID | None = None
+
+
+class ParticipantBulkRoles(BaseModel):
+    participant_ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+    role_ids: list[uuid.UUID] = Field(min_length=1, max_length=50)
+    mode: Literal["add", "remove"]
+
+
+class ParticipantBulkSkipped(BaseModel):
+    participant_id: uuid.UUID
+    # has_login, inactive, former, no_email, no_roles_left, not_allowed, protected, rate_limited, not_found, failed
+    reason: str
+
+
+class ParticipantBulkResult(BaseModel):
+    done: list[uuid.UUID] = Field(default_factory=list)
+    skipped: list[ParticipantBulkSkipped] = Field(default_factory=list)

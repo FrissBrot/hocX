@@ -1720,11 +1720,28 @@
       "handler": "participants.list_participants",
       "requires": [
         "participants.manage"
+      ],
+      "branches": [
+        "finances.read"
       ]
     },
     "POST /api/participants": {
       "handler": "participants.create_participant",
       "requires": [
+        "participants.manage"
+      ]
+    },
+    "POST /api/participants/bulk-invite": {
+      "handler": "participants.bulk_invite_participants",
+      "requires": [
+        "access.manage",
+        "participants.manage"
+      ]
+    },
+    "POST /api/participants/bulk-roles": {
+      "handler": "participants.bulk_participant_roles",
+      "requires": [
+        "access.manage",
         "participants.manage"
       ]
     },
@@ -1745,6 +1762,15 @@
       "requires": [
         "access.manage",
         "participants.manage"
+      ]
+    },
+    "GET /api/participants/{participant_id}": {
+      "handler": "participants.get_participant",
+      "requires": [
+        "participants.manage"
+      ],
+      "branches": [
+        "finances.read"
       ]
     },
     "PATCH /api/participants/{participant_id}": {
@@ -3228,6 +3254,18 @@
     "POST /api/users/me/personal-data": {
       "handler": "users.export_my_personal_data",
       "note": "eigene Datenauskunft (rate-limitiert)"
+    },
+    "GET /api/users/mfa-policy": {
+      "handler": "users.get_mfa_policy",
+      "requires": [
+        "access.manage"
+      ]
+    },
+    "PUT /api/users/mfa-policy": {
+      "handler": "users.put_mfa_policy",
+      "requires": [
+        "access.manage"
+      ]
     },
     "DELETE /api/users/{user_id}": {
       "handler": "users.delete_user",

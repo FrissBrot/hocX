@@ -92,6 +92,8 @@ class MfaPendingLoginRead(BaseModel):
     status: Literal["setup_required", "verification_required"]
     ticket: str
     required: bool
+    # Pflicht kommt aus der Mandanten-Einstellung «MFA für alle Logins» (tenant.require_mfa)
+    required_by_tenant: bool = False
     user_display_name: str
     user_email: str
     tenant_name: str | None = None
@@ -110,3 +112,16 @@ class MfaSkipRequest(BaseModel):
 
 class LoginResponse(SessionRead):
     mfa: MfaPendingLoginRead | None = None
+
+
+class TenantMfaPolicyRead(BaseModel):
+    """MFA-Pflicht der Organisation (tenant.require_mfa) mit dem Stand der Logins."""
+    require_mfa: bool
+    # Aktive Logins der Organisation (aktiv, Login erlaubt, nicht ausgetreten)
+    logins_total: int
+    # Davon ohne eingerichteten MFA-Faktor
+    logins_without_mfa: int
+
+
+class TenantMfaPolicyUpdate(BaseModel):
+    require_mfa: bool

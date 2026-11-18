@@ -50,8 +50,11 @@ export function designAreaTabs(t: TFunc): RouteTab[] {
 // Berechtigung selbst um.
 export function userAreaTabs(t: TFunc): RouteTab[] {
   return [
-    { href: "/users", label: t("users") },
+    // «Zugriff» (Konzept «Personen an einem Ort»): Logins und Rollen einer Person ändert man auf
+    // ihrer Personenseite; hier stehen Rollen, die Übersicht und die Sicherheitsregeln.
     { href: "/users/roles", label: t("roleManagement") },
+    { href: "/users", label: t("accessWho") },
+    { href: "/users/security", label: t("accessSecurity") },
   ];
 }
 

@@ -8,12 +8,15 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from app.core.config import settings
 from app.core.db import get_db
-from app.core.security import CurrentUser, get_current_user, issue_locale_cookie, issue_session_cookie
+from app.core.permissions import P
+from app.core.security import CurrentUser, get_current_user, issue_locale_cookie, issue_session_cookie, require_permission
 from app.models.entities import AppUser, UserMfaFactor
 from app.schemas.mfa import (
     PasskeyRegistrationComplete,
     PasskeyRegistrationStartRead,
     PreferredMfaMethodUpdate,
+    TenantMfaPolicyRead,
+    TenantMfaPolicyUpdate,
     TotpEnrollmentComplete,
     TotpEnrollmentStartRead,
     UserMfaRead,
@@ -86,6 +89,37 @@ def create_user(
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="User could not be created") from exc
+
+
+@router.get("/mfa-policy", response_model=TenantMfaPolicyRead)
+def get_mfa_policy(
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """MFA-Pflicht für alle Logins der eigenen Organisation und wie viele Logins noch keinen
+    Faktor haben (Seite «Logins & Rollen»)."""
+    require_permission(user, P.ACCESS_MANAGE)
+    return mfa_service.get_tenant_policy(db, user)
+
+
+@router.put("/mfa-policy", response_model=TenantMfaPolicyRead)
+def put_mfa_policy(
+    payload: TenantMfaPolicyUpdate,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    require_permission(user, P.ACCESS_MANAGE)
+    result, changed = mfa_service.set_tenant_policy(db, user, require_mfa=payload.require_mfa)
+    if changed:
+        audit.log(
+            db,
+            action="tenant.mfa_policy_updated",
+            actor=user,
+            entity_type="tenant",
+            entity_id=user.current_tenant_id,
+            details={"require_mfa": result.require_mfa, "logins_without_mfa": result.logins_without_mfa},
+        )
+    return result
 
 
 @router.get("/me", response_model=UserRead)

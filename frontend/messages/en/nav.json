@@ -23,7 +23,7 @@
   "sharedLinks": "Shares",
   "templates": "Templates",
   "cycles": "Cycles",
-  "users": "Logins & roles",
+  "users": "Access",
   "tenantSettings": "Organization settings",
   "import": "Import",
   "statistics": "Statistics",
@@ -81,5 +81,7 @@
   "memberList": "Member list",
   "domainsAndVerification": "Domains & authenticity",
   "organisationProfile": "Profile",
-  "workYear": "Working year"
+  "workYear": "Working year",
+  "accessWho": "Who has access",
+  "accessSecurity": "Security"
 }

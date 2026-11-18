@@ -134,6 +134,8 @@
     "rate_limited": "Troppi tentativi. Attendi un momento e riprova.",
     "login_locked": "Troppi accessi non riusciti. Attendi 15 minuti e riprova.",
     "mfa_skip_not_allowed": "Per questo account il secondo fattore è obbligatorio e non può essere saltato.",
-    "password_weak": "La password è troppo debole. Usa almeno 12 caratteri senza nome, e-mail o parole comuni."
+    "password_weak": "La password è troppo debole. Usa almeno 12 caratteri senza nome, e-mail o parole comuni.",
+    "mfa_policy_own_mfa_missing": "Configura prima l'MFA per il tuo account.",
+    "mfa_setup_required": "La tua organizzazione richiede l'MFA. Accedi di nuovo e configura un secondo fattore."
   }
 }

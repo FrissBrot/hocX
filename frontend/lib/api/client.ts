@@ -97,6 +97,12 @@ export async function browserApiFetch<T>(path: string, options?: BrowserApiFetch
         window.location.assign(overloadPath(`${window.location.pathname}${window.location.search}`));
       }
     }
+    // MFA-Pflicht der Organisation, aber noch kein Faktor: der Login führt direkt in die
+    // Einrichtung (backend core/security.py, mfa_service.prepare_login).
+    if (response.status === 403 && typeof window !== "undefined" && detailCode(body) === "mfa_setup_required"
+      && window.location.pathname !== "/login") {
+      window.location.assign("/login?reason=mfa_setup_required");
+    }
     throw errorFromResponse(response.status, body);
   }
 
@@ -109,6 +115,16 @@ export async function browserApiFetch<T>(path: string, options?: BrowserApiFetch
 function errorCode(text: string): string | null {
   try {
     const code = JSON.parse(text)?.code;
+    return typeof code === "string" ? code : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Code aus einer HTTPException mit detail={code, message}. */
+export function detailCode(text: string): string | null {
+  try {
+    const code = JSON.parse(text)?.detail?.code;
     return typeof code === "string" ? code : null;
   } catch {
     return null;

@@ -19,6 +19,7 @@ from app.core.locale_config_generated import LOCALE_COOKIE_NAME, normalize_local
 from app.core.mfa_policy import account_requires_mfa
 from app.core.permissions import CATALOG, P, effective_permissions
 from app.core.features_generated import FEATURES
+from app.core.tenant_mfa import tenant_requires_mfa
 from app.core.tenant_scope import bind_tenant_scope
 from app.models import AppUser, Tenant, TenantFeature, TenantRole, TenantRolePermission, UserMfaFactor, UserRole
 
@@ -49,6 +50,8 @@ class CurrentUser:
     # Rad-Effekt standardmässig aus (ruckelte bei grossen Protokollen), nur ausdrücklich eingeschaltet an
     protocol_wheel_enabled: bool = False
     mfa_verified: bool = False
+    # MFA-Pflicht des Mandanten für alle Logins (tenant.require_mfa, Migration 0188).
+    tenant_require_mfa: bool = False
     # Feature-Gating pro Mandant (orthogonal zu den Rollen): welche Features fuer
     # current_tenant_id gebucht sind. Leer per Default (deny-by-default) - build_current_user
     # laedt den echten Stand aus tenant_feature.
@@ -240,6 +243,7 @@ def build_current_user(db: Session, user: AppUser, *, mfa_verified: bool = False
         current_tenant_profile_image_path=tenant.profile_image_path,
         current_tenant_currency=tenant.finance_currency or "CHF",
         mfa_verified=mfa_verified,
+        tenant_require_mfa=tenant_requires_mfa(db, tenant.id),
         current_tenant_features=tenant_features,
         current_tenant_read_only_features=read_only_features,
         permissions=_effective(rows),
@@ -260,6 +264,12 @@ def _has_active_mfa_factor(db: Session, user_id: int) -> bool:
 
 def _requires_mfa(db: Session, user: CurrentUser) -> bool:
     return account_requires_mfa(db, user.user_id, permissions=user.permissions, tenant_id=user.current_tenant_id)
+
+
+# Fehlercode, wenn eine sonst gültige Session nur deshalb nicht auflöst, weil MFA Pflicht ist und
+# das Konto noch keinen Faktor hat. Das Frontend leitet dann zum Login, der direkt in die
+# Einrichtung führt (mfa_service.prepare_login, status «setup_required»).
+MFA_SETUP_REQUIRED = "mfa_setup_required"
 
 
 def get_optional_current_user(
@@ -283,14 +293,23 @@ def get_optional_current_user(
     if has_mfa_factor and not current_user.mfa_verified:
         return None
     if _requires_mfa(db, current_user) and (not has_mfa_factor or not current_user.mfa_verified):
+        if not has_mfa_factor and request is not None:
+            # Nur als Grund für get_current_user (klare Fehlermeldung); die Session bleibt
+            # ungültig, auch für Endpunkte mit optionalem Login.
+            request.state.auth_block_reason = MFA_SETUP_REQUIRED
         return None
     # Ab hier sieht die Session per Row-Level-Security nur noch Daten dieses Mandanten.
     bind_tenant_scope(db, current_user.current_tenant_id)
     return current_user
 
 
-def get_current_user(user: CurrentUser | None = Depends(get_optional_current_user)) -> CurrentUser:
+def get_current_user(request: Request, user: CurrentUser | None = Depends(get_optional_current_user)) -> CurrentUser:
     if user is None:
+        if getattr(request.state, "auth_block_reason", None) == MFA_SETUP_REQUIRED:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"code": MFA_SETUP_REQUIRED, "message": "MFA muss eingerichtet werden. Bitte neu anmelden."},
+            )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
     return user
 

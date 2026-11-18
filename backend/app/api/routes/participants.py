@@ -12,11 +12,16 @@ from app.core.permissions import P
 from app.core.security import CurrentUser, get_current_user, require_permission
 from sqlalchemy import func, or_, select
 
-from app.models.entities import AccountToken, Participant, PlatformNotificationSettings, Template
+from app.models.entities import AccountToken, FineTariffGroup, Participant, PlatformNotificationSettings, Template
 from app.notifications import account as account_links
 from app.schemas.participant import (
     ParticipantInviteRead,
     ParticipantBulkDelete,
+    ParticipantBulkInvite,
+    ParticipantBulkResult,
+    ParticipantBulkRoles,
+    ParticipantBulkSkipped,
+    ParticipantOverviewRead,
     ParticipantCreate,
     ParticipantImportResult,
     ParticipantRead,
@@ -95,7 +100,40 @@ def _normalized_template_participant_assignments(
     return sorted(assignments_by_participant_id.items())
 
 
-@router.get("/participants", response_model=list[ParticipantRead])
+def _pending_invite_user_ids(db: Session, tenant_id: int, user_ids: list[int]) -> set[int]:
+    if not user_ids:
+        return set()
+    return set(db.scalars(
+        select(AccountToken.user_id).where(
+            AccountToken.tenant_id == tenant_id, AccountToken.purpose == "invite", AccountToken.user_id.in_(user_ids),
+            AccountToken.used_at.is_(None), AccountToken.revoked_at.is_(None),
+            or_(AccountToken.expires_at.is_(None), AccountToken.expires_at > func.now()),
+        )
+    ))
+
+
+def _overview_reads(db: Session, user: CurrentUser, participants: list[Participant]) -> list[ParticipantOverviewRead]:
+    """Mitgliederliste/Personenseite: Login-Status, Rollen und - nur mit finances.read - Tarif."""
+    ids = [participant.id for participant in participants]
+    roles = role_service.roles_by_user(db, ids)
+    invited = _pending_invite_user_ids(db, user.current_tenant_id, ids)
+    tariffs: dict[int, uuid.UUID] = {}
+    if user.can(P.FINANCES_READ):
+        tariffs = dict(db.execute(
+            select(FineTariffGroup.id, FineTariffGroup.public_id).where(FineTariffGroup.tenant_id == user.current_tenant_id)
+        ).all())
+    ParticipantOverviewRead.prime_public_ids(db, participants)
+    result = []
+    for participant in participants:
+        read = ParticipantOverviewRead.model_validate(participant)
+        read.login_status = "active" if participant.login_enabled else "invited" if participant.id in invited else "none"
+        read.roles = [role_service.role_ref(role) for role in roles.get(participant.id, [])]
+        read.tariff_id = tariffs.get(participant.fine_tariff_group_id) if participant.fine_tariff_group_id else None
+        result.append(read)
+    return result
+
+
+@router.get("/participants", response_model=list[ParticipantOverviewRead])
 def list_participants(
     active_only: bool = Query(default=False),
     # Ausgetretene Personen (Austrittsdatum vor heute) sind überall ausgeblendet, wo jemand
@@ -114,9 +152,10 @@ def list_participants(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.PARTICIPANTS_MANAGE)
-    return participant_service.list_participants(
+    participants = participant_service.list_participants(
         db, tenant_id=user.current_tenant_id, active_only=active_only, include_former=include_former, skip=skip, limit=limit,
     )
+    return _overview_reads(db, user, list(participants))
 
 
 @router.post("/participants", response_model=ParticipantRead, status_code=status.HTTP_201_CREATED)
@@ -372,6 +411,12 @@ def invite_participant(participant_id: uuid.UUID, db: Session = Depends(get_db),
     require_permission(user, P.PARTICIPANTS_MANAGE)
     require_permission(user, P.ACCESS_MANAGE)
     participant = _get_participant_or_404(db, participant_id, user)
+    return _invite_read(db, _invite_one(db, user, participant))
+
+
+def _invite_one(db: Session, user: CurrentUser, participant: Participant):
+    """Prüfungen und Versand einer Einladung (einzeln und als Mehrfachaktion). Aufrufer prüft
+    participants.manage und access.manage."""
     _ensure_can_manage_login(db, user, participant)
     enforce_rate_limit(f"participant-invite:{user.user_id}", limit=60, period_seconds=60 * 60)
     if participant.login_enabled:
@@ -389,7 +434,115 @@ def invite_participant(participant_id: uuid.UUID, db: Session = Depends(get_db),
     user_limit_service.ensure_login_capacity(db, participant.tenant_id)
     token = account_links.invite(db, participant, actor_user_id=user.user_id)
     AuditService().log(db, action="user.invited", actor=user, entity_type="app_user", entity_id=participant.id)
-    return _invite_read(db, token)
+    return token
+
+
+# Gründe für übersprungene Personen in Mehrfachaktionen (Codes aus den Einzelprüfungen)
+_SKIP_REASONS = {"already_has_login": "has_login", "inactive_person": "inactive", "former_person": "former", "email_required": "no_email"}
+
+
+def _bulk_participants(db: Session, user: CurrentUser, public_ids: list[uuid.UUID]) -> tuple[list[Participant], list[ParticipantBulkSkipped]]:
+    """Personen des eigenen Mandanten in der Reihenfolge der Anfrage; fremde/unbekannte IDs
+    erscheinen wie nicht gefundene als «not_found» (kein Existenz-Orakel)."""
+    id_map = public_id_service.resolve_internal_ids(db, Participant, public_ids, tenant_id=user.current_tenant_id)
+    loaded = {p.id: p for p in participant_service.load_many(db, list(id_map.values()), tenant_id=user.current_tenant_id)}
+    found, skipped = [], []
+    for public_id in dict.fromkeys(public_ids):
+        participant = loaded.get(id_map.get(public_id))
+        if participant is None:
+            skipped.append(ParticipantBulkSkipped(participant_id=public_id, reason="not_found"))
+        else:
+            found.append(participant)
+    return found, skipped
+
+
+def _skip_reason(exc: HTTPException) -> str:
+    code = exc.detail.get("code") if isinstance(exc.detail, dict) else None
+    if code in _SKIP_REASONS:
+        return _SKIP_REASONS[code]
+    if exc.status_code == 403:
+        return "not_allowed"
+    if exc.status_code == 409:
+        return "protected"  # Schutzregel aus role_service (letzter Admin, kein Selbstentzug)
+    if exc.status_code == 429:
+        return "rate_limited"
+    return "failed"
+
+
+@router.post("/participants/bulk-invite", response_model=ParticipantBulkResult)
+def bulk_invite_participants(payload: ParticipantBulkInvite, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Mehrere Personen per E-Mail einladen (Mitgliederliste › Mehrfachauswahl). Personen mit
+    Login, ohne E-Mail, inaktive und ausgetretene werden übersprungen; optional erhalten alle
+    Eingeladenen eine Rolle (über role_service, mit dessen Schutzregeln)."""
+    require_permission(user, P.PARTICIPANTS_MANAGE)
+    require_permission(user, P.ACCESS_MANAGE)
+    if payload.role_id is not None:
+        role_service.resolve_roles(db, user.current_tenant_id, [payload.role_id])
+    participants, skipped = _bulk_participants(db, user, payload.participant_ids)
+    done: list[uuid.UUID] = []
+    for participant in participants:
+        public_id = participant.public_id  # vor einem möglichen rollback lesen (Objekt danach abgelaufen)
+        # Offensichtliche Fälle vor einer Rollenänderung überspringen (die Rolle soll nur ändern,
+        # wer tatsächlich eingeladen wird); _invite_one prüft danach vollständig.
+        reason = (
+            "has_login" if participant.login_enabled
+            else "inactive" if not participant.is_active
+            else "former" if participant.has_left
+            else "no_email" if not (participant.email or "").strip()
+            else None
+        )
+        if reason is not None:
+            skipped.append(ParticipantBulkSkipped(participant_id=public_id, reason=reason))
+            continue
+        try:
+            if payload.role_id is not None:
+                UserService().update_user(db, participant.id, UserUpdate(role_ids=[payload.role_id]), user)
+            _invite_one(db, user, participant)
+        except HTTPException as exc:
+            db.rollback()
+            if isinstance(exc.detail, dict) and exc.detail.get("code") == "email_not_configured":
+                raise
+            skipped.append(ParticipantBulkSkipped(participant_id=public_id, reason=_skip_reason(exc)))
+            continue
+        done.append(public_id)
+    return ParticipantBulkResult(done=done, skipped=skipped)
+
+
+@router.post("/participants/bulk-roles", response_model=ParticipantBulkResult)
+def bulk_participant_roles(payload: ParticipantBulkRoles, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Rollen für mehrere Personen hinzufügen oder entfernen. Jede Änderung läuft einzeln über
+    UserService/role_service (keine Rechteausweitung, letzter Admin, kein Selbstentzug); was eine
+    Schutzregel verletzt oder keine Rolle übrig liesse, wird übersprungen."""
+    require_permission(user, P.PARTICIPANTS_MANAGE)
+    require_permission(user, P.ACCESS_MANAGE)
+    requested = [role.public_id for role in role_service.resolve_roles(db, user.current_tenant_id, payload.role_ids)]
+    participants, skipped = _bulk_participants(db, user, payload.participant_ids)
+    current = role_service.roles_by_user(db, [participant.id for participant in participants])
+    done: list[uuid.UUID] = []
+    for participant in participants:
+        public_id = participant.public_id  # vor einem möglichen rollback lesen (Objekt danach abgelaufen)
+        before = [role.public_id for role in current.get(participant.id, [])]
+        after = list(dict.fromkeys(before + requested)) if payload.mode == "add" else [rid for rid in before if rid not in requested]
+        if set(after) == set(before):
+            done.append(public_id)
+            continue
+        if not after:
+            skipped.append(ParticipantBulkSkipped(participant_id=public_id, reason="no_roles_left"))
+            continue
+        try:
+            UserService().update_user(db, participant.id, UserUpdate(role_ids=after), user)
+        except (HTTPException, ValueError) as exc:
+            db.rollback()
+            reason = _skip_reason(exc) if isinstance(exc, HTTPException) else "failed"
+            skipped.append(ParticipantBulkSkipped(participant_id=public_id, reason=reason))
+            continue
+        done.append(public_id)
+    if done:
+        audit.log(
+            db, action="participant.bulk_roles_updated", actor=user, entity_type="participant",
+            details={"mode": payload.mode, "role_ids": [str(r) for r in requested], "count": len(done)},
+        )
+    return ParticipantBulkResult(done=done, skipped=skipped)
 
 
 @router.delete("/participants/{participant_id}/invite", response_model=dict[str, str])
@@ -400,3 +553,16 @@ def revoke_participant_invite(participant_id: uuid.UUID, db: Session = Depends(g
     _ensure_can_manage_login(db, user, participant)
     account_links.revoke_invite(db, participant.id)
     return {"status": "revoked"}
+
+
+# Nach /participants/invites: sonst fängt der UUID-Pfad diese Route ab (422).
+@router.get("/participants/{participant_id}", response_model=ParticipantOverviewRead)
+def get_participant(
+    participant_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Personenseite /participants/[id]."""
+    require_permission(user, P.PARTICIPANTS_MANAGE)
+    participant = _get_participant_or_404(db, participant_id, user)
+    return _overview_reads(db, user, [participant])[0]

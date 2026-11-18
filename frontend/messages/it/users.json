@@ -98,5 +98,51 @@
     "confirmMessage": "{name} non potrà più accedere; le sessioni in corso terminano subito. La persona resta membro con presenze, multe e compiti. Puoi eliminarla del tutto in «Membri».",
     "done": "Accesso di {name} revocato",
     "failed": "Impossibile revocare l'accesso"
+  },
+  "security": {
+    "title": "Sicurezza",
+    "description": "Quali regole di sicurezza valgono per gli accessi della tua organizzazione.",
+    "adminTitle": "MFA per i diritti di amministrazione",
+    "adminHelp": "Chi ha un ruolo con «Impostazioni», «Utenti e ruoli» o «Esportazioni dati» accede sempre con un secondo fattore.",
+    "alwaysRequired": "Sempre obbligatoria",
+    "allTitle": "Richiedi l'MFA per tutti gli accessi",
+    "allHelp": "Anche redattori, cassieri e lettori configurano un secondo fattore al prossimo accesso. Fino ad allora la loro sessione è bloccata.",
+    "missingRequired": "{count, plural, one {# accesso su {total} non ha} other {# accessi su {total} non hanno}} ancora l'MFA e {count, plural, one {verrà guidato} other {verranno guidati}} alla configurazione al prossimo accesso.",
+    "missingOptional": "{count, plural, one {# accesso su {total} non ha} other {# accessi su {total} non hanno}} ancora l'MFA.",
+    "allHaveMfa": "Tutti i {total} accessi hanno configurato l'MFA.",
+    "loadFailed": "Non è stato possibile caricare le impostazioni di sicurezza.",
+    "docs": "Maggiori informazioni sull'MFA",
+    "enableConfirmTitle": "Richiedere l'MFA per tutti gli accessi?",
+    "enableConfirmMessage": "{count, plural, =0 {Tutti gli accessi hanno già l'MFA.} one {# accesso senza MFA viene disconnesso subito e deve configurare un secondo fattore al prossimo accesso.} other {# accessi senza MFA vengono disconnessi subito e devono configurare un secondo fattore al prossimo accesso.}}",
+    "enableConfirm": "Richiedi l'MFA",
+    "enabledToast": "L'MFA è ora obbligatoria per tutti gli accessi",
+    "disabledToast": "L'MFA è ora obbligatoria solo per i diritti di amministrazione",
+    "saveFailed": "Non è stato possibile salvare l'impostazione."
+  },
+  "access": {
+    "title": "Chi ha accesso",
+    "description": "Panoramica di tutti gli accessi e inviti. L'accesso e i ruoli di una persona si modificano nella sua pagina sotto «Membri».",
+    "filterAll": "Tutti",
+    "filterMfaMissing": "MFA mancante",
+    "empty": "Nessuno in questa selezione.",
+    "columns": {
+      "person": "Persona",
+      "status": "Stato",
+      "roles": "Ruoli",
+      "mfa": "MFA"
+    },
+    "footerHint": "Solo panoramica · un clic apre la pagina della persona",
+    "noEmail": "Nessuna e-mail",
+    "status": {
+      "active": "Attivo",
+      "invited": "Invitato",
+      "inactive": "Inattivo"
+    },
+    "noRole": "Nessun ruolo",
+    "mfa": {
+      "active": "MFA attiva",
+      "missing": "MFA mancante",
+      "optional": "Senza MFA"
+    }
   }
 }

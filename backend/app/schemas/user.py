@@ -40,6 +40,8 @@ class TenantRead(BaseModel):
     # Nur in der Antwort auf eine Änderung: die Namensänderung hat die Bestätigung der
     # Organisation durch hocX aufgehoben (Hinweis im UI).
     identity_verification_revoked: bool = False
+    # MFA-Pflicht für alle Logins der Organisation (tenant.require_mfa, Migration 0188)
+    require_mfa: bool = False
     # Organisation ist durch hocX bestätigt - die Stammdaten fragen vor einer Namensänderung
     # nach, weil sie die Bestätigung aufhebt (Audit 08, 2026-11).
     identity_verified: bool = False
@@ -183,6 +185,8 @@ class UserRead(UserBase):
     tenant_name: str
     roles: list[RoleRef] = Field(default_factory=list)
     login_enabled: bool = True
+    # Mindestens ein MFA-Faktor eingerichtet (Status-Anzeige, keine Faktordetails)
+    mfa_enabled: bool = False
     created_at: datetime
     updated_at: datetime
 

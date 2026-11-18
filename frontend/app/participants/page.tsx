@@ -5,20 +5,27 @@ import { redirect } from "next/navigation";
 import { ParticipantManager } from "@/components/participants/participant-manager";
 import { AppShell } from "@/components/ui/app-shell";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
-import { ParticipantSummary, TemplateSummary } from "@/types/api";
-import { can } from "@/lib/permissions";
+import { FineTariffGroup, ParticipantSummary, RoleRead, TemplateSummary } from "@/types/api";
+import { can, featureAccess } from "@/lib/permissions";
 
-export default async function ParticipantsPage() {
+export default async function ParticipantsPage({ searchParams }: { searchParams: Promise<{ tariff?: string }> }) {
   const session = await requireSession();
   const canWrite = can(session, "participants.manage");
 
   if (!canWrite) {
     redirect("/");
   }
+  // Tarif-Filter vorbelegen (Links aus den Bussen-Regeln: /participants?tariff=<id>)
+  const { tariff } = await searchParams;
+  const access = can(session, "access.manage");
+  const financeRead = can(session, "finances.read") && featureAccess(session, "finance") !== "none";
+  const financeManage = can(session, "finances.manage") && featureAccess(session, "finance") === "full";
 
-  const [participants, templates] = await Promise.all([
+  const [participants, templates, roles, tariffs] = await Promise.all([
     backendFetchWithSession<ParticipantSummary[]>("/api/participants?include_former=true&limit=2000"),
     backendFetchWithSession<TemplateSummary[]>("/api/templates"),
+    access ? backendFetchWithSession<RoleRead[]>("/api/roles") : Promise.resolve(null),
+    financeRead ? backendFetchWithSession<FineTariffGroup[]>("/api/todo-fines/tariffs") : Promise.resolve(null),
   ]);
 
   return (
@@ -31,8 +38,11 @@ export default async function ParticipantsPage() {
             <ParticipantManager
               initialParticipants={participants ?? []}
               templates={templates ?? []}
-              canAdmin={can(session, "access.manage")}
               tenantId={session.current_tenant?.id ?? null}
+              roles={roles ?? []}
+              tariffs={tariffs ?? []}
+              permissions={{ access, financeRead, financeManage }}
+              initialTariffFilter={tariff ?? null}
             />
           </section>
           </>

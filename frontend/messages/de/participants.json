@@ -146,5 +146,105 @@
     "confirm": "Endgültig löschen",
     "bulkTitle": "{count, plural, one {# Person endgültig löschen?} other {# Personen endgültig löschen?}}",
     "bulkMessage": "Die Personen verschwinden mit Login, Anwesenheit, Bussen und Aufgaben-Zuordnungen; das lässt sich nicht rückgängig machen. Für ausgetretene Mitglieder besser ein Austrittsdatum setzen."
+  },
+  "list": {
+    "description": "Alle Personen deiner Organisation, mit oder ohne Login. Klick auf eine Person öffnet alles zu ihr: Stammdaten, Tarif, Login und Rollen.",
+    "filterLogin": "Login",
+    "filterRole": "Rolle",
+    "filterTariff": "Tarif",
+    "any": "Alle",
+    "columns": {
+      "login": "Login",
+      "roles": "Rollen",
+      "tariff": "Tarif"
+    },
+    "footerHint": "Zeile anklicken öffnet die Personenseite",
+    "tariffDefault": "Standard"
+  },
+  "person": {
+    "back": "← Mitglieder",
+    "saved": "Gespeichert",
+    "sections": {
+      "master": "Stammdaten",
+      "membership": "Mitgliedschaft",
+      "tariff": "Bussentarif",
+      "login": "Login & Rollen",
+      "more": "Weitere Aktionen"
+    },
+    "emailHelp": "Für Einladung und Benachrichtigungen.",
+    "emailLoginHelp": "Ist auch die Login-Adresse. Eine Änderung gilt ab dem nächsten Login.",
+    "membershipHelp": "Eintritt und Austritt steuern, in welchen Anwesenheitslisten die Person erscheint. Ab dem Austritt ist ein Login gesperrt.",
+    "tariff": "Tarif",
+    "tariffStandard": "Standard ({name})",
+    "tariffReadOnly": "Tarif: {tariff}. Ändern kann ihn nur, wer «Finanzen verwalten» hat.",
+    "manageTariffs": "Tarife verwalten →",
+    "loginStatus": {
+      "active": "Login aktiv",
+      "invited": "Eingeladen",
+      "none": "Kein Login"
+    },
+    "noLogin": "Kein Login. Die Person erscheint in Anwesenheit, Bussen und Aufgaben, kann sich aber nicht anmelden.",
+    "setPassword": "Passwort setzen",
+    "passwordDescription": "Teile das Passwort der Person sicher mit; sie kann es danach im Profil ändern. Einfacher ist eine Einladung per E-Mail.",
+    "roles": "Rollen",
+    "rolesExplained": "Was dürfen die Rollen? →",
+    "mfa": "MFA",
+    "revokeHelp": "Sperrt die Anmeldung und beendet laufende Sitzungen. Die Person bleibt Mitglied.",
+    "exportHelp": "Alle Daten der Person als passwortgeschützte ZIP-Datei.",
+    "deleteHelp": "Endgültig löschen, mit Anwesenheit, Bussen und Aufgaben. Für Ausgetretene besser ein Austrittsdatum setzen.",
+    "delete": "Löschen …",
+    "unsaved": "Ungespeicherte Änderungen",
+    "discard": "Verwerfen",
+    "blockers": {
+      "displayName": "Speichern ist gesperrt: der Anzeigename fehlt.",
+      "dates": "Speichern ist gesperrt: der Austritt liegt vor dem Eintritt."
+    }
+  },
+  "newMember": {
+    "description": "Die Person erscheint danach in der Mitgliederliste. Ohne Einladung bleibt sie Mitglied ohne Login.",
+    "invite": "Nach dem Erfassen per E-Mail einladen",
+    "inviteHelp": "Die Person legt ihr Passwort selbst fest.",
+    "role": "Rolle",
+    "createAndInvite": "Erfassen und einladen",
+    "createdInvited": "{name} erfasst und eingeladen"
+  },
+  "bulk": {
+    "label": "Mehrfachaktionen",
+    "selected": "{count} ausgewählt",
+    "setTariff": "Tarif setzen",
+    "invite": "Einladen",
+    "roles": "Rollen",
+    "delete": "Löschen",
+    "clear": "Aufheben",
+    "failed": "Die Aktion ist fehlgeschlagen.",
+    "partial": "{done} erledigt, {skipped} übersprungen: {reasons}",
+    "invited": "{count, plural, one {# Person eingeladen} other {# Personen eingeladen}}",
+    "tariffSet": "Tarif für {count, plural, one {# Person} other {# Personen}} gesetzt",
+    "rolesAdded": "Rolle bei {count, plural, one {# Person} other {# Personen}} hinzugefügt",
+    "rolesRemoved": "Rolle bei {count, plural, one {# Person} other {# Personen}} entfernt",
+    "inviteTitle": "{count, plural, one {# Person einladen} other {# Personen einladen}}",
+    "inviteDescription": "Personen mit Login, ohne E-Mail, inaktive und ausgetretene werden übersprungen.",
+    "inviteRole": "Rolle für alle Eingeladenen",
+    "inviteRoleHelp": "Weitere Rollen vergibst du danach auf der Personenseite.",
+    "tariffTitle": "Tarif für {count, plural, one {# Person} other {# Personen}} setzen",
+    "tariffDescription": "Der Tarif bestimmt die Höhe ihrer Bussen.",
+    "rolesTitle": "Rollen für {count, plural, one {# Person} other {# Personen}}",
+    "rolesDescription": "Was eine Schutzregel verletzt (z. B. letzter Admin) oder keine Rolle übrig liesse, wird übersprungen.",
+    "rolesMode": "Hinzufügen oder entfernen",
+    "rolesAdd": "Rolle hinzufügen",
+    "rolesRemove": "Rolle entfernen",
+    "role": "Rolle",
+    "reasons": {
+      "has_login": "hat schon Login",
+      "inactive": "inaktiv",
+      "former": "ausgetreten",
+      "no_email": "keine E-Mail",
+      "no_roles_left": "keine Rolle übrig",
+      "not_allowed": "nicht erlaubt",
+      "rate_limited": "zu viele Einladungen",
+      "not_found": "nicht gefunden",
+      "failed": "fehlgeschlagen",
+      "protected": "Schutzregel, z. B. letzter Admin"
+    }
   }
 }
