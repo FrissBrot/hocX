@@ -3,7 +3,12 @@ set -euo pipefail
 
 # Deploy/Update hocX in einer Zielumgebung.
 #
-# Usage: scripts/deploy.sh <test|prod>
+# Usage: scripts/deploy.sh <test|prod> [--restore-from-backup]
+#
+# --restore-from-backup: neuer, leerer Server aus dem Borg-Backup. Führt durch .env (aus der
+#       Notfallmappe), Zugang zur Storage Box (neuer SSH-Schlüssel, Host-Key prüfen), Wahl des
+#       Wiederherstellungspunkts und stellt Datenbank und Dateien ins lokale S3 her; danach
+#       läuft der normale Deploy weiter. Siehe scripts/lib/restore_from_backup.sh.
 #
 # test: laeuft direkt auf dem dedizierten Test-Host aus dessen Repo-Checkout. Der Stack
 #       ist derselbe wie auf Prod (Release-Images, ClamAV, eigener Traefik), aber mit
@@ -36,6 +41,12 @@ set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENVIRONMENT="${1:-}"
+RESTORE_MODE=0
+case "${2:-}" in
+  "") ;;
+  --restore-from-backup) RESTORE_MODE=1 ;;
+  *) echo "Usage: $0 <test|prod> [--restore-from-backup]" >&2; exit 1 ;;
+esac
 
 # shellcheck source=scripts/lib/env.sh
 source "$REPO_DIR/scripts/lib/env.sh"
@@ -51,6 +62,8 @@ source "$REPO_DIR/scripts/lib/dump_crypto.sh"
 source "$REPO_DIR/scripts/lib/pg_upgrade.sh"
 # shellcheck source=scripts/lib/storage_gate.sh
 source "$REPO_DIR/scripts/lib/storage_gate.sh"
+# shellcheck source=scripts/lib/restore_from_backup.sh
+source "$REPO_DIR/scripts/lib/restore_from_backup.sh"
 
 case "$ENVIRONMENT" in
   test)
@@ -77,7 +90,7 @@ case "$ENVIRONMENT" in
     )
     ;;
   *)
-    echo "Usage: $0 <test|prod>" >&2
+    echo "Usage: $0 <test|prod> [--restore-from-backup]" >&2
     exit 1
     ;;
 esac
@@ -108,7 +121,7 @@ case "${HOCX_SKIP_DEPLOY_CODE_UPDATE:-}" in
         echo "Bewusst mit dem vorhandenen Code deployen: HOCX_SKIP_DEPLOY_CODE_UPDATE=1 $0 $ENVIRONMENT" >&2
         exit 1
       fi
-      exec env HOCX_DEPLOY_CODE_UPDATED=1 "$REPO_DIR/scripts/deploy.sh" "$ENVIRONMENT"
+      exec env HOCX_DEPLOY_CODE_UPDATED=1 "$REPO_DIR/scripts/deploy.sh" "$@"
     fi
     ;;
 esac
@@ -124,6 +137,11 @@ if ! flock -n 9; then
   exit 1
 fi
 require_repo_owned_by_current_user "$REPO_DIR" || exit 1
+if [ "$RESTORE_MODE" = 1 ]; then
+  mkdir -p "$PROJECT_DIR/.releases"
+  restore_guard || exit 1
+  restore_prepare_env || exit 1
+fi
 
 generate_secret() {
   if ! command -v openssl > /dev/null 2>&1; then
@@ -313,6 +331,9 @@ create_env_file() {
 if [ ! -f "$ENV_FILE" ]; then
   create_env_file
 fi
+if [ "$RESTORE_MODE" = 1 ]; then
+  restore_import_keys || exit 1
+fi
 # Auch direkt nach dem Erzeugen: ergaenzt u. a. die Objektspeicher-Secrets (idempotent).
 if [ -f "$ENV_FILE" ]; then
   echo "==> [$ENVIRONMENT] Env-Datei pruefen"
@@ -320,6 +341,9 @@ if [ -f "$ENV_FILE" ]; then
 fi
 
 load_env_file "$ENV_FILE"
+if [ "$RESTORE_MODE" = 1 ]; then
+  restore_setup_backup || exit 1
+fi
 
 # Image-Referenzen kommen ausschliesslich aus einem lokal erzeugten, verifizierten
 # Release-Manifest. Werte aus der aufrufenden Shell duerfen den ersten Pull nicht lenken.
@@ -953,8 +977,10 @@ write_secret_files
 prepare_runtime_permissions
 capture_current_release
 
-echo "==> [$ENVIRONMENT] Backup der Datenbank vor dem Update auf $HOCX_VERSION"
 BACKUP_DIR="$PROJECT_DIR/backups"
+BACKUP_FILE=""
+if [ "$RESTORE_MODE" != 1 ]; then
+echo "==> [$ENVIRONMENT] Backup der Datenbank vor dem Update auf $HOCX_VERSION"
 mkdir -p "$BACKUP_DIR"
 chmod 700 "$BACKUP_DIR"
 # Verschlüsselt mit dem öffentlichen Schlüssel aus BACKUP_DUMP_PUBLIC_KEY_PATH, sonst gzip mit
@@ -984,6 +1010,7 @@ if ! storage_upgrade_gate; then
   [ ! -f "$BACKUP_FILE" ] || echo "Backup dieses Laufs: $BACKUP_FILE" >&2
   exit 1
 fi
+fi # RESTORE_MODE: kein Vorab-Backup und kein S3-Tor - es läuft noch kein Release
 
 echo "==> [$ENVIRONMENT] Pull Images ($HOCX_VERSION)"
 "${DC[@]}" pull
@@ -1007,6 +1034,11 @@ restart_containers_stopped_for_pg_upgrade() {
   echo "    Starte die fuer das Datenbank-Upgrade gestoppten Container wieder." >&2
   docker start "${PG_UPGRADE_STOPPED_CONTAINERS[@]}" > /dev/null || echo "    Neustart fehlgeschlagen; bitte pruefen: docker ps -a" >&2
 }
+
+# Neuer Server aus dem Backup: Datenbank und Dateien wiederherstellen, bevor Migrationen laufen.
+if [ "$RESTORE_MODE" = 1 ]; then
+  restore_run || exit 1
+fi
 
 echo "==> [$ENVIRONMENT] Infrastruktur starten"
 "${DC[@]}" up -d --pull never db redis
@@ -1076,3 +1108,6 @@ if [ "$ENVIRONMENT" = test ]; then
 fi
 
 echo "==> [$ENVIRONMENT] Fertig: laeuft jetzt auf $HOCX_VERSION"
+if [ "$RESTORE_MODE" = 1 ]; then
+  restore_finish
+fi

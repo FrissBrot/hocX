@@ -154,6 +154,10 @@ def cmd_list(args: argparse.Namespace) -> int:
         borg.close()
     if args.json:
         _print(rows, True)
+    elif args.tsv:
+        # Für scripts/lib/restore_from_backup.sh: Archiv, Zeitpunkt, Version, Objekte, ungültig
+        for row in rows:
+            print("\t".join(str(row.get(key) if row.get(key) is not None else "") for key in ("archive", "snapshot_at", "app_version", "objects", "invalid")))
     else:
         for row in rows:
             print("  ".join(f"{k}={v}" for k, v in row.items()))
@@ -169,6 +173,10 @@ def cmd_show(args: argparse.Namespace) -> int:
     finally:
         borg.close()
     metadata["schema_compatibility"] = schema_compatibility(metadata.get("alembic_revision"))
+    if args.schema_state:
+        # same | upgrade (älter, wird nach dem Restore migriert) | newer/unknown (passendes Image nötig)
+        print(metadata["schema_compatibility"]["state"])
+        return 0
     _print(metadata, True)
     return 0
 
@@ -194,14 +202,42 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 0 if report["ok"] else 2
 
 
+_S3_TARGET_OPTIONS = ("s3_endpoint", "s3_bucket", "s3_abgabebox_bucket", "s3_prefix", "s3_access_key_file", "s3_secret_key_file")
+
+
+def _apply_local_s3(args: argparse.Namespace) -> None:
+    """--local-s3: Ziel ist das lokale Garage dieser Installation, mit denselben Werten, die das
+    Backend für sein eingebautes Profil «Lokales S3» nutzt (LOCAL_S3_*, Compose-Defaults)."""
+    if args.s3_provider != "s3_compatible" or any(getattr(args, name) for name in _S3_TARGET_OPTIONS):
+        raise SystemExit("--local-s3 nicht zusammen mit --s3-provider/--s3-endpoint/--s3-bucket/... angeben")
+    args.s3_provider = "garage_local"
+    args.s3_endpoint = os.environ.get("LOCAL_S3_ENDPOINT", "").strip() or "http://local-s3:3900"
+    args.s3_region = os.environ.get("LOCAL_S3_REGION", "").strip() or "garage"
+    args.s3_bucket = os.environ.get("LOCAL_S3_BUCKET", "").strip() or "hocx-main"
+    args.s3_abgabebox_bucket = os.environ.get("LOCAL_S3_ABGABEBOX_BUCKET", "").strip() or "hocx-abgabebox"
+    args.s3_prefix = "hocx"  # wie storage_profile_service.ensure_local_profile
+    args.s3_addressing = "path"
+    args.s3_insecure = True  # internes Docker-Netz, Klartext-HTTP wie beim eingebauten Profil
+
+
 def _target_backend(args: argparse.Namespace, generation: int) -> tuple[Any, dict[str, Any]]:
     """Ziel-Objektspeicher aus den CLI-Angaben. Liefert Backend und die Profilwerte für die
     wiederhergestellte Datenbank (Zugangsdaten mit STORAGE_CREDENTIALS_KEY verschlüsselt)."""
     credentials_key = _secret(None, None, "STORAGE_CREDENTIALS_KEY")
     if not credentials_key:
         raise SystemExit("STORAGE_CREDENTIALS_KEY(_FILE) fehlt - damit werden die S3-Zugangsdaten in der Datenbank verschlüsselt")
-    access_key = _secret(None, args.s3_access_key_file, "RESTORE_S3_ACCESS_KEY")
-    secret_key = _secret(None, args.s3_secret_key_file, "RESTORE_S3_SECRET_KEY")
+    restricted: tuple[str | None, str | None] = (None, None)
+    if args.local_s3:
+        access_key = _secret(None, None, "LOCAL_S3_ACCESS_KEY")
+        secret_key = _secret(None, None, "LOCAL_S3_SECRET_KEY")
+        if not (access_key and secret_key):
+            raise SystemExit("--local-s3 braucht LOCAL_S3_ACCESS_KEY und LOCAL_S3_SECRET_KEY(_FILE)")
+        # Eingeschränkter Schlüssel der Abgabebox: ohne ihn ergänzt das Backend ihn beim Start.
+        restricted = (_secret(None, None, "LOCAL_S3_ABGABEBOX_ACCESS_KEY") or None,
+                      _secret(None, None, "LOCAL_S3_ABGABEBOX_SECRET_KEY") or None)
+    else:
+        access_key = _secret(None, args.s3_access_key_file, "RESTORE_S3_ACCESS_KEY")
+        secret_key = _secret(None, args.s3_secret_key_file, "RESTORE_S3_SECRET_KEY")
     if not (args.s3_bucket and access_key and secret_key):
         raise SystemExit("--s3-bucket sowie Zugangsdaten (--s3-access-key-file/--s3-secret-key-file) sind nötig")
     config = ProfileConfig(
@@ -213,8 +249,32 @@ def _target_backend(args: argparse.Namespace, generation: int) -> tuple[Any, dic
                "endpoint_url": config.endpoint_url, "region": config.region, "bucket": config.bucket, "abgabebox_bucket": config.abgabebox_bucket,
                "prefix": config.prefix, "addressing_style": config.addressing_style,
                "access_key_enc": encrypt_credential(access_key, credentials_key), "secret_key_enc": encrypt_credential(secret_key, credentials_key),
-               "restricted_access_key_enc": None, "restricted_secret_key_enc": None, "tls_verify": config.tls_verify, "ca_bundle_pem": None}
+               "restricted_access_key_enc": encrypt_credential(restricted[0], credentials_key) if restricted[0] else None,
+               "restricted_secret_key_enc": encrypt_credential(restricted[1], credentials_key) if restricted[1] else None,
+               "tls_verify": config.tls_verify, "ca_bundle_pem": None}
     return S3Backend(config), profile
+
+
+def _use_builtin_local_profile(database_url: str, profile: dict[str, Any]) -> bool:
+    """--local-s3: das eingebaute Profil «Lokales S3» der Sicherung weiterverwenden (gleiche
+    public_id -> configure_restored_database aktualisiert es), statt ein zweites Garage-Profil
+    anzulegen, das das Backend beim Start nicht als seines erkennt. True = eines gefunden."""
+    from sqlalchemy import create_engine, text
+    from sqlalchemy.pool import NullPool
+
+    engine = create_engine(database_url, poolclass=NullPool, hide_parameters=True)
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(text(
+                "SELECT public_id, name FROM storage_profile WHERE provider = 'garage_local' AND is_builtin ORDER BY id LIMIT 1"
+            )).first()
+    finally:
+        engine.dispose()
+    if row is None:
+        profile["name"] = "Lokales S3 (Garage)"  # = storage_profile_service.LOCAL_PROFILE_NAME
+        return False
+    profile["public_id"], profile["name"] = row.public_id, row.name
+    return True
 
 
 def _insert_maintenance(database_url: str) -> None:
@@ -242,6 +302,8 @@ def _database_comment(pg: PgTools, name: str) -> str:
 
 
 def cmd_restore_full(args: argparse.Namespace) -> int:
+    if args.local_s3:
+        _apply_local_s3(args)  # widersprüchliche Zielangaben vor jedem Zugriff ablehnen
     config = _config(args)
     target = PgTarget.from_url(_database_url(args))
     db_name = validate_db_name(args.target_db)
@@ -296,7 +358,12 @@ def cmd_restore_full(args: argparse.Namespace) -> int:
         if compat["state"] == "upgrade":
             run_alembic_upgrade(restored_url)
             report["alembic_upgraded"] = True
-        report["configured"] = configure_restored_database(restored_url, profile=profile, generation=generation, note="CLI-Restore")
+        builtin = False
+        if args.local_s3:
+            builtin = not _use_builtin_local_profile(restored_url, profile)
+            report["local_profile"] = "neu angelegt" if builtin else "aus der Sicherung weiterverwendet"
+        report["configured"] = configure_restored_database(restored_url, profile=profile, generation=generation, note="CLI-Restore",
+                                                           builtin=builtin)
         if not args.no_maintenance:
             _insert_maintenance(restored_url)
             report["maintenance"] = "aktiv - nach Prüfung im Admin-Portal freigeben"
@@ -491,9 +558,11 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("list")
     p.add_argument("--all", action="store_true", help="auch als ungültig markierte Punkte")
     p.add_argument("--details", action="store_true", help="Metadaten je Punkt lesen (langsamer)")
+    p.add_argument("--tsv", action="store_true", help="eine Zeile je Punkt, Tab-getrennt (für Skripte)")
     p.set_defaults(func=cmd_list)
     p = sub.add_parser("show")
     p.add_argument("archive")
+    p.add_argument("--schema-state", action="store_true", help="nur die Schema-Verträglichkeit ausgeben (same/upgrade/newer/unknown)")
     p.set_defaults(func=cmd_show)
     p = sub.add_parser("verify")
     p.add_argument("archive")
@@ -516,6 +585,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--s3-access-key-file")
     p.add_argument("--s3-secret-key-file")
     p.add_argument("--s3-insecure", action="store_true", help="TLS-Prüfung aus (nur lokales Test-S3)")
+    p.add_argument("--local-s3", action="store_true",
+                   help="Ziel: lokales S3 (Garage) dieser Installation - Werte aus LOCAL_S3_*, Profil «Lokales S3» wird weiterverwendet")
     p.add_argument("--profile-name")
     p.add_argument("--allow-schema-upgrade", action="store_true")
     p.add_argument("--no-owner", action="store_true", help="Besitzer/Rechte des Dumps nicht übernehmen (fremder Server ohne hocX-Rollen)")

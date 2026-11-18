@@ -766,7 +766,8 @@ ein geschütztes Backup an und bricht bei Fehlschlag ab (bewusst überspringen:
 |---|---|
 | Mandant versehentlich verändert/gelöscht | System → Backups → Wiederherstellung → «Mandant als Kopie» (neuer Mandant, Original bleibt) |
 | Gesamtzustand muss zurück | «Vollständige Wiederherstellung» (Rettungspunkt, isolierte DB, neue Storage-Generation, Tausch mit automatischem Rücktausch bei Fehler) |
-| Server verloren / Datenbank weg | neuer Server, `.env` aus der Notfallmappe, nur `db` starten, `run --rm --no-deps --entrypoint python backup-worker -m app.backup.cli restore-full …`, dann `swap-database`, Deploy, Wartung freigeben |
+| Server verloren | neuer Server (Abschnitt 8 bis `provision_deploy_user.sh`), dann `./scripts/deploy.sh prod --restore-from-backup` - führt durch `.env`, Storage-Box-Zugang, Punktwahl und Restore ins lokale S3; danach Wartung freigeben (`backup/restore.md`) |
+| Datenbank weg, Server läuft noch | nur `db` starten, `run --rm --no-deps --entrypoint python backup-worker -m app.backup.cli restore-full …`, dann `swap-database`, Deploy, Wartung freigeben |
 | Storage Box nicht erreichbar | Backups laufen nach Rückkehr automatisch weiter (Retry mit Backoff, Fortsetzung ohne Neuübertragung); Hetzner-Status prüfen |
 | `repository_id_mismatch`, `host_key_mismatch`, `repository_replay` | **nicht** übergehen – möglicher Angriff oder falsches Ziel; Box und Fingerprint manuell prüfen |
 | Worker hängt/abgestürzt | Container startet neu und setzt den Auftrag fort; verwaister Backup-Hold wird automatisch gelöst |
