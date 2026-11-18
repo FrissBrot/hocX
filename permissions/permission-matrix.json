@@ -1921,11 +1921,20 @@
       "handler": "submission_assignments.list_assignments",
       "allowed": [
         "admin",
-        "writer"
+        "writer",
+        "kassier",
+        "reader"
       ]
     },
     "POST /api/submission-assignments": {
       "handler": "submission_assignments.create_assignment",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
+    "GET /api/submission-assignments/reviewer-candidates": {
+      "handler": "submission_assignments.list_reviewer_candidates",
       "allowed": [
         "admin",
         "writer"

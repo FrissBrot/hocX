@@ -85,3 +85,43 @@ export function minimalPermissions(keys: Iterable<string>): Set<PermissionKey> {
 export function isSystemRoleKey(value: string | null | undefined): value is SystemRoleKey {
   return value === "admin" || value === "writer" || value === "kassier" || value === "reader";
 }
+
+export type PermissionScope = "all" | "assigned";
+
+/** Rechte mit Reichweite (permissions/catalog.json "scopes", Migration 0195). */
+export const SCOPED_PERMISSIONS: ReadonlySet<PermissionKey> = new Set(
+  PERMISSIONS.filter((permission) => permission.scopes.length > 0).map((permission) => permission.key),
+);
+
+/** Reichweite je Recht mit Reichweite innerhalb einer Rolle - dieselbe Regel wie
+ * core/permissions.py::resolve_scopes: ein Recht gilt für alle, wenn es selbst «alle» hat oder ein
+ * Recht der Rolle es impliziert, das für alle gilt (Rechte ohne Reichweite immer); ohne eigene
+ * Angabe erbt ein impliziertes Recht die Reichweite, sonst gilt «alle». */
+export function resolveScopes(keys: Iterable<string>, explicit: Partial<Record<string, PermissionScope>>): Map<PermissionKey, PermissionScope> {
+  const all = expandPermissions(keys);
+  const resolved = new Map<PermissionKey, PermissionScope>();
+  const scopeOf = (key: PermissionKey): PermissionScope => {
+    const known = resolved.get(key);
+    if (known) return known;
+    const values: PermissionScope[] = [];
+    const own = explicit[key];
+    if (own) values.push(own);
+    for (const source of all) {
+      if (source !== key && (IMPLIES.get(source) ?? []).includes(key)) {
+        values.push(SCOPED_PERMISSIONS.has(source) ? scopeOf(source) : "all");
+      }
+    }
+    const value: PermissionScope = values.length > 0 && !values.includes("all") ? "assigned" : "all";
+    resolved.set(key, value);
+    return value;
+  };
+  for (const key of all) {
+    if (SCOPED_PERMISSIONS.has(key)) scopeOf(key);
+  }
+  return resolved;
+}
+
+/** Reichweite «alle» für ein Recht mit Reichweite (nur Benutzerführung; das Backend filtert). */
+export function seesAll(session: Pick<SessionInfo, "assigned_only"> | null | undefined, permission: PermissionKey): boolean {
+  return !(session?.assigned_only ?? []).includes(permission);
+}

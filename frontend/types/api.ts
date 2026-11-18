@@ -20,6 +20,8 @@ export type SessionInfo = {
   // Effektive Berechtigungen (inkl. Implikationen) und Rollen des Kontos (RBAC) - Prüfung im
   // Frontend über lib/permissions.ts::can, nie über Rollen-Codes.
   permissions: string[];
+  /** Rechte mit Reichweite, die nur für zugewiesene Objekte gelten (Migration 0195) */
+  assigned_only?: string[];
   roles: RoleRef[];
   bridge_redirect_url: string | null;
 };
@@ -34,6 +36,8 @@ export type RoleRef = {
 export type RoleRead = RoleRef & {
   description: string | null;
   permissions: string[];
+  /** Reichweite je Recht mit Reichweite ("all" | "assigned", Migration 0195) */
+  scopes?: Record<string, "all" | "assigned">;
   user_count: number;
   // Standardrolle Administrator: fest, nicht änderbar, nicht löschbar.
   locked: boolean;
@@ -220,8 +224,16 @@ export type SubmissionAssignment = {
   /** Gesetzt, sobald alle Elemente abgegeben oder geschlossen sind (Reiter «Abgeschlossen», 0182) */
   completed_at?: string | null;
   link_ids: string[];
+  /** Prüfer des Auftrags (Konten mit Login, Migration 0195) */
+  reviewer_ids?: string[];
   created_at: string;
   updated_at: string;
+};
+
+/** Wählbarer Prüfer eines Abgabe-Auftrags (aktives Konto mit Login, Migration 0195). */
+export type SubmissionReviewerCandidate = {
+  id: string;
+  display_name: string;
 };
 
 export type SubmissionLink = {

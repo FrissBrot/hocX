@@ -305,5 +305,15 @@
   },
   "completedBadge": "Conclusa",
   "completedEmpty": "Ancora nessuna consegna conclusa. Una consegna è conclusa quando tutti gli elementi sono consegnati o chiusi.",
-  "openEmpty": "Nessuna consegna aperta."
+  "openEmpty": "Nessuna consegna aperta.",
+  "reviewers": {
+    "label": "Revisori",
+    "none": "Nessun revisore",
+    "noCandidates": "Nessuna persona con accesso",
+    "help": "Persone con accesso che possono vedere e verificare questa consegna, anche se il loro ruolo consente solo le consegne assegnate."
+  },
+  "readOnly": {
+    "emptyTitle": "Nessuna consegna",
+    "emptyDescription": "Non ti è ancora stata assegnata nessuna consegna."
+  }
 }

@@ -305,5 +305,15 @@
   },
   "completedBadge": "Terminée",
   "completedEmpty": "Aucune remise terminée pour l'instant. Une remise est terminée dès que tous les éléments sont remis ou fermés.",
-  "openEmpty": "Aucune remise ouverte."
+  "openEmpty": "Aucune remise ouverte.",
+  "reviewers": {
+    "label": "Vérificateurs",
+    "none": "Aucun vérificateur",
+    "noCandidates": "Aucune personne avec connexion",
+    "help": "Personnes avec connexion qui peuvent voir et vérifier ce dépôt, même si leur rôle n'autorise que les dépôts attribués."
+  },
+  "readOnly": {
+    "emptyTitle": "Aucun dépôt",
+    "emptyDescription": "Aucun dépôt ne t'a encore été attribué."
+  }
 }

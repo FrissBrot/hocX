@@ -312,6 +312,9 @@ class TenantRolePermission(Base):
 
     role_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant_role.id", ondelete="CASCADE"), primary_key=True)
     permission_key: Mapped[str] = mapped_column(Text, ForeignKey("permission.key", ondelete="CASCADE"), primary_key=True)
+    # Reichweite (Migration 0195): NULL = alle, 'assigned' = nur zugewiesene Objekte. Nur für Rechte
+    # mit "scopes" im Katalog; gesetzt ausschliesslich über services/role_service.py.
+    scope: Mapped[str | None] = mapped_column(Text)
 
 
 class UserRole(Base):
@@ -2105,6 +2108,8 @@ class SubmissionAssignment(Base, TimestampMixin, UpdatedAtMixin):
     __tablename__ = "submission_assignment"
     __table_args__ = (
         UniqueConstraint("tenant_id", "public_slug", name="uq_submission_assignment_tenant_slug"),
+        # Ziel mandantengleicher Fremdschlüssel (resource_assignment, Migration 0195)
+        UniqueConstraint("tenant_id", "id", name="uq_submission_assignment_tenant_id"),
         CheckConstraint("source_type IN ('events', 'list', 'manual')", name="ck_submission_assignment_source_type"),
         CheckConstraint("owner_access IN ('off', 'view', 'manage')", name="ck_submission_assignment_owner_access"),
         CheckConstraint("owner_access_days BETWEEN 1 AND 90", name="ck_submission_assignment_owner_access_days"),
@@ -2549,6 +2554,35 @@ class SubmissionAccessToken(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ResourceAssignment(Base):
+    """Zuweisung eines Kontos zu einem Objekt in einer Funktion (Migration 0195), vorerst nur Prüfer
+    eines Abgabe-Auftrags. Grundlage der Reichweite «nur zugewiesene» (Plan «Berechtigungen»,
+    Phase 4); geschrieben nur über services/submission_reviewer_service.py."""
+
+    __tablename__ = "resource_assignment"
+    __table_args__ = (
+        CheckConstraint("resource_type IN ('submission_assignment')", name="ck_resource_assignment_type"),
+        CheckConstraint("function IN ('reviewer')", name="ck_resource_assignment_function"),
+        UniqueConstraint("tenant_id", "resource_type", "resource_id", "user_id", "function", name="uq_resource_assignment"),
+        ForeignKeyConstraint(["tenant_id", "user_id"], ["app_user.tenant_id", "app_user.id"], ondelete="CASCADE", name="fk_resource_assignment_user"),
+        ForeignKeyConstraint(
+            ["tenant_id", "resource_id"], ["submission_assignment.tenant_id", "submission_assignment.id"],
+            ondelete="CASCADE", name="fk_resource_assignment_submission",
+        ),
+        Index("idx_resource_assignment_user", "user_id", "resource_type"),
+        Index("idx_resource_assignment_resource", "resource_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    resource_type: Mapped[str] = mapped_column(Text, nullable=False)
+    resource_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    function: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'reviewer'"), default="reviewer")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
 
 
 class AccountToken(Base):

@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.permissions import P
 from app.core.security import CurrentUser, require_permission
-from app.models import StoredFile, SubmissionUploadFile
+from app.models import StoredFile, SubmissionUpload, SubmissionUploadFile
 from app.models.document_entities import (
     DOCUMENT_SOURCE_PROTOCOL_EXPORT,
     FILE_ROLE_ORIGINAL,
@@ -35,6 +35,7 @@ from app.schemas.documents import (
     DocumentSummary,
     DocumentVersionRead,
 )
+from app.services import submission_reviewer_service
 from app.services.access_service import AccessService
 
 access_service = AccessService()
@@ -115,6 +116,16 @@ def get_document_for_user(db: Session, user: CurrentUser, document_id: uuid.UUID
     if db.scalar(select(SubmissionUploadFile.id).where(SubmissionUploadFile.stored_file_id == original.id).limit(1)) is not None:
         # Abgabebox-Dokumente zusätzlich nur mit gebuchter Abgabebox (wie die Abgabe-Dateiroute).
         require_permission(user, P.SUBMISSIONS_READ)
+        # Reichweite «zugewiesene» (Phase 4): nur Dokumente aus Aufträgen, denen das Konto als
+        # Prüfer zugewiesen ist - sonst 404 wie ein fremdes Dokument.
+        visible = submission_reviewer_service.visible_assignment_ids(db, user)
+        if visible is not None and db.scalar(
+            select(SubmissionUpload.assignment_id)
+            .join(SubmissionUploadFile, SubmissionUploadFile.upload_id == SubmissionUpload.id)
+            .where(SubmissionUploadFile.stored_file_id == original.id, SubmissionUpload.assignment_id.in_(visible))
+            .limit(1)
+        ) is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dokument nicht gefunden")
     access_service.ensure_can_read_stored_file(db, user, original.id)
     return document
 

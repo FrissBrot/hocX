@@ -2054,6 +2054,16 @@ input[type="color"]::-moz-color-swatch {
 .roles-checklist-option input {
   margin-top: 3px;
 }
+
+/* Recht mit Reichweite (Alle / Nur zugewiesene, Migration 0195): Auswahl unter der Checkbox */
+.roles-permission-entry {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.roles-scope-field {
+  margin-left: var(--space-6);
+}
 .roles-permission-option input {
   margin-top: 3px;
 }

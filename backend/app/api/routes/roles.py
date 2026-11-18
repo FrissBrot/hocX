@@ -42,6 +42,7 @@ def get_permission_catalog(user: CurrentUser = Depends(get_current_user)):
             feature=definition.feature,
             requires_mfa=definition.requires_mfa,
             implies=[implied.value for implied in definition.implies],
+            scopes=list(definition.scopes),
         )
         for key, definition in CATALOG.items()
     ]
@@ -59,7 +60,7 @@ def create_role(payload: RoleCreate, db: Session = Depends(get_db), user: Curren
         raise HTTPException(status_code=400, detail="Rolle konnte nicht angelegt werden") from exc
     result = role_service.read_role(db, role)
     audit.log(db, action="role.created", actor=user, entity_type="tenant_role", entity_id=role.id,
-              details={"name": role.name, "permissions": result.permissions, "require_mfa": role.require_mfa})
+              details={"name": role.name, "permissions": result.permissions, "scopes": result.scopes, "require_mfa": role.require_mfa})
     return result
 
 
@@ -69,6 +70,7 @@ def update_role(role_id: uuid.UUID, payload: RoleUpdate, db: Session = Depends(g
     require_feature(user, F.CUSTOM_ROLES, write=True)
     role = role_service.get_role(db, user.current_tenant_id, role_id)
     mfa_before = role.require_mfa
+    scopes_before = role_service.role_scopes(db, role)
     try:
         before, after = role_service.update_role(db, user, role, payload)
         db.commit()
@@ -79,6 +81,7 @@ def update_role(role_id: uuid.UUID, payload: RoleUpdate, db: Session = Depends(g
     audit.log(db, action="role.updated", actor=user, entity_type="tenant_role", entity_id=role.id,
               details={"name": role.name, "system_key": role.system_key,
                        "permissions_before": sorted(before), "permissions_after": sorted(after),
+                       "scopes_before": scopes_before, "scopes_after": result.scopes,
                        "require_mfa_before": mfa_before, "require_mfa_after": role.require_mfa})
     return result
 

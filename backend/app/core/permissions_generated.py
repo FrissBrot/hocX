@@ -42,6 +42,8 @@ class PermissionDef:
     feature: str | None
     requires_mfa: bool
     implies: tuple[P, ...]
+    # Mögliche Reichweiten ("all" zuerst = Standard); leer = Recht ohne Reichweite (immer alle).
+    scopes: tuple[str, ...] = ()
 
 
 AREAS: tuple[str, ...] = ("meetings", "templates", "participants", "finances", "reports", "files", "submissions", "administration",)
@@ -67,14 +69,17 @@ CATALOG: dict[P, PermissionDef] = {
     P.PHOTOS_READ: PermissionDef(area="files", feature=None, requires_mfa=False, implies=()),
     P.PHOTOS_MANAGE: PermissionDef(area="files", feature=None, requires_mfa=False, implies=(P.PHOTOS_READ,)),
     P.SHARING_PUBLIC: PermissionDef(area="files", feature=None, requires_mfa=False, implies=()),
-    P.SUBMISSIONS_READ: PermissionDef(area="submissions", feature="abgabebox", requires_mfa=False, implies=()),
-    P.SUBMISSIONS_REVIEW: PermissionDef(area="submissions", feature="abgabebox", requires_mfa=False, implies=(P.SUBMISSIONS_READ,)),
+    P.SUBMISSIONS_READ: PermissionDef(area="submissions", feature="abgabebox", requires_mfa=False, implies=(), scopes=("all", "assigned",)),
+    P.SUBMISSIONS_REVIEW: PermissionDef(area="submissions", feature="abgabebox", requires_mfa=False, implies=(P.SUBMISSIONS_READ,), scopes=("all", "assigned",)),
     P.SUBMISSIONS_MANAGE: PermissionDef(area="submissions", feature="abgabebox", requires_mfa=False, implies=(P.SUBMISSIONS_READ,)),
     P.SETTINGS_MANAGE: PermissionDef(area="administration", feature=None, requires_mfa=True, implies=()),
     P.ACTIVITY_READ: PermissionDef(area="administration", feature=None, requires_mfa=True, implies=()),
     P.ACCESS_MANAGE: PermissionDef(area="administration", feature=None, requires_mfa=True, implies=()),
     P.DATA_EXPORT: PermissionDef(area="administration", feature=None, requires_mfa=True, implies=()),
 }
+
+# Rechte mit Reichweite (alle | zugewiesene), siehe docs/permissions-plan.md, Phase 4.
+SCOPED_PERMISSIONS: frozenset[P] = frozenset(key for key, definition in CATALOG.items() if definition.scopes)
 
 # Standardrollen je Mandant (tenant_role.system_key). "admin" hat immer alle Permissions, auch
 # künftig neu hinzukommende - beim Laden ausgewertet, nicht über tenant_role_permission.

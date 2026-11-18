@@ -291,6 +291,7 @@ class AuthService:
             ),
             current_tenant=current_tenant,
             permissions=sorted(user.permissions),
+            assigned_only=sorted(user.assigned_only),
             roles=[RoleRef(id=role.public_id, name=role.name, system_key=role.system_key) for role in user.roles],
             mfa_grace_until=user.mfa_grace_until,
         )

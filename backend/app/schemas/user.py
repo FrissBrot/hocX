@@ -218,6 +218,9 @@ class SessionRead(BaseModel):
     # Effektive Berechtigungen (inkl. Implikationen, ohne Feature-Filter - das Frontend prüft
     # Feature und Permission gemeinsam, siehe frontend/lib/permissions.ts) und Rollen des Kontos.
     permissions: list[str] = Field(default_factory=list)
+    # Rechte mit Reichweite, die nur für zugewiesene Objekte gelten (Migration 0195) - nur zur
+    # Benutzerführung, durchgesetzt wird im Backend.
+    assigned_only: list[str] = Field(default_factory=list)
     roles: list[RoleRef] = Field(default_factory=list)
     bridge_redirect_url: str | None = None
     # MFA ist Pflicht, aber das bestehende Konto hat noch Frist bis hierhin (Migration 0192)

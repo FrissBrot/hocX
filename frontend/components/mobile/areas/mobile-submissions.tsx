@@ -43,6 +43,7 @@ import type {
   SubmissionAssignment,
   SubmissionElementStatusEntry,
   SubmissionLink,
+  SubmissionReviewerCandidate,
   SubmissionUploadLogEntry,
 } from "@/types/api";
 
@@ -76,6 +77,9 @@ export function MobileSubmissions({
   availableParticipants,
   availableCycleConfigs,
   tenantName,
+  availableReviewers = [],
+  canManage = true,
+  canReview = true,
 }: {
   initialAssignments: SubmissionAssignment[];
   initialLinks: SubmissionLink[];
@@ -84,6 +88,12 @@ export function MobileSubmissions({
   availableParticipants: ParticipantSummary[];
   availableCycleConfigs: CycleConfigSummary[];
   tenantName: string | null;
+  /** Wählbare Prüfer (nur mit submissions.manage geladen, Migration 0195) */
+  availableReviewers?: SubmissionReviewerCandidate[];
+  /** submissions.manage: Aufträge und Links verwalten; ohne nur lesen (Prüfer, Phase 4) */
+  canManage?: boolean;
+  /** submissions.review: Elemente schliessen und wieder öffnen */
+  canReview?: boolean;
 }) {
   const t = useTranslations("submissionAssignments");
   const tMobile = useTranslations("mobile");
@@ -245,6 +255,7 @@ export function MobileSubmissions({
         availableTags={availableTags}
         availableCycleConfigs={availableCycleConfigs}
         availableEvents={availableEvents}
+        availableReviewers={availableReviewers}
         onSubmit={save}
         onClose={() => setFormOpen(false)}
         onManageLinks={() => {
@@ -287,9 +298,11 @@ export function MobileSubmissions({
           backLabel={t("pageTitle")}
           onBack={() => setSelectedId(null)}
           actions={
-            <button type="button" className="mobile-icon-button" aria-label={t("colActions")} onClick={() => setActionsOpen(true)}>
-              <MobileIcon name="more" />
-            </button>
+            canManage ? (
+              <button type="button" className="mobile-icon-button" aria-label={t("colActions")} onClick={() => setActionsOpen(true)}>
+                <MobileIcon name="more" />
+              </button>
+            ) : undefined
           }
         />
         <MobileChipRow>
@@ -365,11 +378,13 @@ export function MobileSubmissions({
             onClose={() => setOpenElement(null)}
             className="mobile-sheet mobile-sheet-tall"
             footer={
-              <div className="modal-actions mobile-sheet-footer">
-                <button type="button" className="button-secondary" onClick={() => void setElementOpen(openElement, openElement.status === "closed")}>
-                  {openElement.status === "closed" ? t("reopenAction") : t("closeElementAction")}
-                </button>
-              </div>
+              canReview ? (
+                <div className="modal-actions mobile-sheet-footer">
+                  <button type="button" className="button-secondary" onClick={() => void setElementOpen(openElement, openElement.status === "closed")}>
+                    {openElement.status === "closed" ? t("reopenAction") : t("closeElementAction")}
+                  </button>
+                </div>
+              ) : undefined
             }
           >
             <div className="mobile-field-block">
@@ -437,14 +452,17 @@ export function MobileSubmissions({
         backLabel={tMobile("tabs.more")}
         onBack={openMore}
         actions={
-          <button type="button" className="mobile-icon-button" aria-label={t("submissionLinksTitle")} onClick={() => setLinksOpen(true)}>
-            <MobileIcon name="document" />
-          </button>
+          canManage ? (
+            <button type="button" className="mobile-icon-button" aria-label={t("submissionLinksTitle")} onClick={() => setLinksOpen(true)}>
+              <MobileIcon name="document" />
+            </button>
+          ) : undefined
         }
       />
       <div className="mobile-section">
         <p className={clamav === "offline" ? "mobile-clamav mobile-clamav-offline" : "mobile-clamav"}>
-          {clamav === "online" ? t("clamavActive") : clamav === "offline" ? t("clamavOfflineHint") : t("clamavChecking")} · {t("linksCount", { count: links.length })}
+          {clamav === "online" ? t("clamavActive") : clamav === "offline" ? t("clamavOfflineHint") : t("clamavChecking")}
+          {canManage ? ` · ${t("linksCount", { count: links.length })}` : null}
         </p>
         <FilterTabs
           options={[
@@ -486,16 +504,21 @@ export function MobileSubmissions({
           </div>
         </div>
       ) : (
-        <MobileEmpty title={!assignments.length ? t("noAssignmentsSetUp") : search.trim() ? t("noMatches") : completion === "completed" ? t("completedEmpty") : t("openEmpty")} hint={assignments.length ? undefined : t("noAssignmentsDescription")} />
+        <MobileEmpty
+          title={!assignments.length ? (canManage ? t("noAssignmentsSetUp") : t("readOnly.emptyTitle")) : search.trim() ? t("noMatches") : completion === "completed" ? t("completedEmpty") : t("openEmpty")}
+          hint={assignments.length ? undefined : canManage ? t("noAssignmentsDescription") : t("readOnly.emptyDescription")}
+        />
       )}
-      <MobileFab
-        label={tMobile("submissions.fab")}
-        onClick={() => {
-          setEditingId(null);
-          setForm({ ...initialForm, link_ids: links.filter((link) => link.is_default).map((link) => link.id) });
-          setFormOpen(true);
-        }}
-      />
+      {canManage ? (
+        <MobileFab
+          label={tMobile("submissions.fab")}
+          onClick={() => {
+            setEditingId(null);
+            setForm({ ...initialForm, link_ids: links.filter((link) => link.is_default).map((link) => link.id) });
+            setFormOpen(true);
+          }}
+        />
+      ) : null}
       {shared}
     </div>
   );

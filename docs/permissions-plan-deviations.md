@@ -113,3 +113,53 @@ abweicht und warum. «OFFEN» markiert fachliche Punkte, die noch eine Entscheid
   Mehrfachauswahl). Dafür kann `AuditService.log` ohne eigenen Commit schreiben.
 - Öffentliche Links: `public_link.created/regenerated/revoked` (Freigabelinks und Abgabe-Links).
 - Kontext-Freigaben (Phase 5) und Prüfer-Zuweisungen (Phase 4) protokollieren ihre eigenen Phasen.
+## Phase 4 – Reichweite «zugewiesene» und Prüfer
+
+- **Wo die Reichweite definiert ist:** im Katalog (`permissions/catalog.json`, Feld
+  `scopes: ["all", "assigned"]`), vorerst nur `submissions.read` und `submissions.review`. Das
+  Sync-Skript generiert `PermissionDef.scopes`/`SCOPED_PERMISSIONS` (Backend) und
+  `PermissionInfo.scopes` (Frontend) und lehnt ab, dass ein Recht mit Reichweite eines ohne
+  impliziert. Begründung: eine Quelle wie für alles andere am Recht; keine zweite Konstante je Seite.
+  Die Datenbank sichert zusätzlich per CHECK, dass nur diese Rechte eine Reichweite tragen (ein
+  neues Reichweiten-Recht braucht damit eine Migration – gewollt).
+- **Speicherung:** `tenant_role_permission.scope` NULL = alle (alle Bestandszeilen, keine
+  Datenmigration nötig), sonst `'assigned'`. Gespeichert wird wie bei den Rechten die aufgelöste
+  Menge inkl. Implikationen.
+- **Auflösung** (`core/permissions.py::resolve_scopes`, gespiegelt in `frontend/lib/permissions.ts`):
+  je Rolle gilt ein Recht für alle, wenn es selbst «alle» hat oder ein Recht der Rolle es
+  impliziert, das für alle gilt (Rechte ohne Reichweite wie `submissions.manage` immer). Ohne eigene
+  Angabe erbt ein impliziertes Recht (review(assigned) ⇒ read(assigned)), ein nicht impliziertes
+  gilt für alle. Je Konto: «nur zugewiesene», wenn keine Rolle das Recht für alle gibt
+  (`CurrentUser.assigned_only`, auch in der Session `assigned_only` zur Benutzerführung).
+- **Plan-Datenmodell** `resource_assignments(resource_type, resource_id, user_id, funktion)` →
+  Tabelle `resource_assignment` mit `tenant_id`, `function` (`'reviewer'`), `created_by`; der
+  mandantengleiche Fremdschlüssel (tenant_id, resource_id) → `submission_assignment` funktioniert,
+  solange `resource_type` nur `submission_assignment` kennt (neu: `uq_submission_assignment_tenant_id`).
+  Ein weiterer Typ braucht dann Trigger statt Fremdschlüssel.
+- **Prüfer verwalten:** über `reviewer_ids` in Create/Update/Read des Auftrags (kein eigener
+  Endpunkt), nur mit `submissions.manage`; Kandidaten über `GET /api/submission-assignments/reviewer-candidates`
+  (aktive Konten mit Login des Mandanten, nur `submissions.manage` – unabhängig von
+  `participants.read`). Bereits zugewiesene Prüfer dürfen nach Entzug des Logins stehen bleiben
+  (Speichern scheitert sonst), neu zuweisen lassen sich nur Konten mit Login. Audit
+  `submission_assignment.reviewers_changed`.
+- **Durchsetzung:** alle Lese-Routen der Abgaben (Liste, Fortschritt, Elemente, Upload-Protokoll,
+  ZIP, Datei-Inhalt/Vorschau/Metadaten) und Dokumente aus Abgaben (`document_read_service`) filtern
+  nach Reichweite; fremd = 404 wie fremder Mandant, bei Dateien vor der Scan-Status-Antwort.
+  Schliessen/Öffnen mit `submissions.review` nur zugewiesen: nicht lesbar 404, lesbar (Lesen für
+  alle) aber nicht zugewiesen 403.
+- **Schwächere Prüfung (route-map):** `GET /api/submission-assignments` verlangt `submissions.read`
+  statt `submissions.manage` (Lesezugang für Prüfer). Fortschritt, Elemente, Dateien und ZIP waren
+  schon mit `submissions.read` lesbar; die Liste ist jetzt nach Reichweite gefiltert.
+- **Sichtbare Änderung:** Die Standardrollen Leser und Kassier haben `submissions.read` (alle) seit
+  Phase 0 – sie sehen jetzt den Menüpunkt «Abgaben» (nur lesen). Vorher kamen sie nur über die API
+  an dieselben Daten. **OFFEN:** soll `submissions.read` bei Leser/Kassier bleiben oder auf «nur
+  zugewiesene» bzw. weg? (Entscheid des Produktverantwortlichen; heute unverändert «alle».)
+- **Nicht nach Abgabe-Reichweite gefiltert (Phase 5):** Dateien-Übersicht, Galerie und
+  `/api/stored-files/*` prüfen eingereichte Dateien weiterhin über `files.read`/`photos.read` (ohne
+  Reichweite); ein reiner Prüfer ohne diese Rechte sieht dort nichts. Mails «Abgabe zurückgezogen»
+  gehen weiter nur an `submissions.manage` (gilt für alle), Dashboard-Fristen ebenfalls nur mit
+  `submissions.manage`.
+- **Export/Import:** Rollen tragen im Gesamtexport `permission_scopes`; der Import übernimmt sie
+  (sonst würde «nur zugewiesene» still zu «alle»). Ältere Exporte ohne Feld: «alle» wie vorher.
+  **OFFEN:** Prüfer-Zuweisungen (`resource_assignment`) sind nicht im Export – nach einem Import
+  sieht ein «nur zugewiesene»-Prüfer nichts, bis man sie neu zuweist (sichere Richtung).

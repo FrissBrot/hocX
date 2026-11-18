@@ -28,11 +28,13 @@ from app.schemas.submission import (
     SubmissionLinkCreate,
     SubmissionLinkRead,
     SubmissionLinkUpdate,
+    SubmissionReviewerCandidate,
     SubmissionSummaryRead,
     SubmissionUploadLogEntry,
 )
 from app.schemas.deletion import DeletionPreview, DeletionRequest, DeletionResultRead
 from app.services import deletion_service, public_id_service
+from app.services import submission_reviewer_service as reviewers
 from app.services.audit_service import AuditService
 from app.core.storage import ABGABEBOX, MAIN, get_object_store, object_response, write_object_to_zip
 from app.services.file_service import FileService
@@ -52,6 +54,41 @@ def _get_assignment_or_404(db: Session, assignment_id: uuid.UUID, user: CurrentU
     if assignment is None:
         raise HTTPException(status_code=404, detail="Abgabe nicht gefunden")
     return assignment
+
+
+def _get_readable_assignment_or_404(db: Session, assignment_id: uuid.UUID, user: CurrentUser) -> SubmissionAssignment:
+    """Wie _get_assignment_or_404, zusätzlich mit der Reichweite von submissions.read: wer nur
+    zugewiesene Aufträge sieht, bekommt für alle anderen 404 (Plan «Berechtigungen», Phase 4)."""
+    assignment = _get_assignment_or_404(db, assignment_id, user)
+    reviewers.ensure_can_read(db, user, assignment)
+    return assignment
+
+
+def _reads_with_reviewers(db: Session, user: CurrentUser, assignments: list[SubmissionAssignment]) -> list[SubmissionAssignmentRead]:
+    reviewer_ids = reviewers.reviewer_ids(db, user.current_tenant_id, [assignment.id for assignment in assignments])
+    reads = []
+    for assignment in assignments:
+        read = service._assignment_read(assignment)
+        read.reviewer_ids = reviewer_ids.get(assignment.id, [])
+        reads.append(read)
+    return reads
+
+
+def _apply_reviewers(db: Session, user: CurrentUser, assignment: SubmissionAssignment, user_ids: set[int]) -> None:
+    """Prüfer setzen, committen und auditieren (nur mit submissions.manage, prüft der Aufrufer)."""
+    added, removed = reviewers.set_reviewers(db, user, assignment, user_ids)
+    if not added and not removed:
+        return
+    db.commit()
+    audit.log(
+        db, action="submission_assignment.reviewers_changed", actor=user, entity_type="submission_assignment", entity_id=assignment.id,
+        details={
+            "title": assignment.title,
+            "reviewer_ids": [str(value) for value in reviewers.reviewer_ids(db, user.current_tenant_id, [assignment.id])[assignment.id]],
+            "added": len(added),
+            "removed": len(removed),
+        },
+    )
 
 
 def _get_link_or_404(db: Session, link_id: uuid.UUID, user: CurrentUser):
@@ -157,8 +194,28 @@ def list_assignments(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
+    # Lesezugang für Prüfer (Phase 4): vorher nur mit submissions.manage. Mit Reichweite
+    # «zugewiesene» nur die Aufträge, denen das Konto als Prüfer zugewiesen ist.
+    require_permission(user, P.SUBMISSIONS_READ)
+    visible = reviewers.visible_assignment_ids(db, user)
+    assignments = [
+        assignment for assignment in service.repository.list_assignments(db, tenant_id=user.current_tenant_id)
+        if visible is None or assignment.id in visible
+    ]
+    return _reads_with_reviewers(db, user, assignments)
+
+
+@router.get("/submission-assignments/reviewer-candidates", response_model=list[SubmissionReviewerCandidate])
+def list_reviewer_candidates(
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Wählbare Prüfer für das Auftragsformular: aktive Konten mit Login des eigenen Mandanten."""
     require_permission(user, P.SUBMISSIONS_MANAGE)
-    return service.list_assignments(db, tenant_id=user.current_tenant_id)
+    return [
+        SubmissionReviewerCandidate(id=account.public_id, display_name=account.display_name)
+        for account in reviewers.candidates(db, user.current_tenant_id)
+    ]
 
 
 @router.post("/submission-assignments", response_model=SubmissionAssignmentRead, status_code=status.HTTP_201_CREATED)
@@ -169,11 +226,15 @@ def create_assignment(
 ):
     require_permission(user, P.SUBMISSIONS_MANAGE)
     try:
-        return service.create_assignment(db, payload, tenant_id=user.current_tenant_id)
+        reviewer_user_ids = reviewers.resolve_reviewers(db, None, user.current_tenant_id, payload.reviewer_ids or [])
+        created = service.create_assignment(db, payload, tenant_id=user.current_tenant_id)
+        assignment = _get_assignment_or_404(db, created.id, user)
+        _apply_reviewers(db, user, assignment, reviewer_user_ids)
     except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
         detail = str(exc) if isinstance(exc, ValueError) else "Abgabe konnte nicht erstellt werden"
         raise HTTPException(status_code=400, detail=detail) from exc
+    return _reads_with_reviewers(db, user, [assignment])[0]
 
 
 @router.patch("/submission-assignments/{assignment_id}", response_model=SubmissionAssignmentRead)
@@ -186,13 +247,21 @@ def patch_assignment(
     require_permission(user, P.SUBMISSIONS_MANAGE)
     current = _get_assignment_or_404(db, assignment_id, user)
     try:
+        reviewer_user_ids = (
+            reviewers.resolve_reviewers(db, current, user.current_tenant_id, payload.reviewer_ids)
+            if payload.reviewer_ids is not None
+            else None
+        )
         updated = service.update_assignment(db, current.id, payload)
+        if updated is not None and reviewer_user_ids is not None:
+            _apply_reviewers(db, user, current, reviewer_user_ids)
     except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
         detail = str(exc) if isinstance(exc, ValueError) else "Abgabe konnte nicht aktualisiert werden"
         raise HTTPException(status_code=400, detail=detail) from exc
     if updated is None:
         raise HTTPException(status_code=404, detail="Abgabe nicht gefunden")
+    updated.reviewer_ids = reviewers.reviewer_ids(db, user.current_tenant_id, [current.id])[current.id]
     return updated
 
 
@@ -312,7 +381,7 @@ def list_elements(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.SUBMISSIONS_READ)
-    assignment = _get_assignment_or_404(db, assignment_id, user)
+    assignment = _get_readable_assignment_or_404(db, assignment_id, user)
     return service.get_assignment_elements(db, assignment)
 
 
@@ -325,6 +394,7 @@ def reopen_element(
 ):
     require_permission(user, P.SUBMISSIONS_REVIEW)  # Abgaben prüfen
     assignment = _get_assignment_or_404(db, assignment_id, user)
+    reviewers.ensure_can_review(db, user, assignment)  # Reichweite von submissions.review (Phase 4)
     try:
         return service.reopen_element(db, assignment, element_ref)
     except (SQLAlchemyError, ValueError) as exc:
@@ -367,6 +437,7 @@ def close_element(
 ):
     require_permission(user, P.SUBMISSIONS_REVIEW)  # Abgaben prüfen
     assignment = _get_assignment_or_404(db, assignment_id, user)
+    reviewers.ensure_can_review(db, user, assignment)  # Reichweite von submissions.review (Phase 4)
     try:
         return service.close_element(db, assignment, element_ref)
     except (SQLAlchemyError, ValueError) as exc:
@@ -399,6 +470,7 @@ def get_submission_file_content(
     assignment = service.get_assignment(db, upload.assignment_id)
     if assignment is None or assignment.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Datei nicht gefunden")
+    reviewers.ensure_can_read(db, user, assignment, detail="Datei nicht gefunden")  # Reichweite (Phase 4), vor Scan-Status: kein Orakel
     if stored_file.scan_status == "error":
         raise HTTPException(422, "Virenprüfung fehlgeschlagen – Datei ist gesperrt")
     if stored_file.scan_status == "pending":
@@ -446,6 +518,7 @@ def get_submission_file_thumbnail(
     assignment = service.get_assignment(db, upload.assignment_id)
     if assignment is None or assignment.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Datei nicht gefunden")
+    reviewers.ensure_can_read(db, user, assignment, detail="Datei nicht gefunden")  # Reichweite (Phase 4), vor Scan-Status: kein Orakel
     if stored_file.scan_status == "infected":
         raise HTTPException(status_code=403, detail="Datei wurde als Schadware eingestuft und gesperrt")
     if stored_file.scan_status == "error":
@@ -508,6 +581,7 @@ def get_submission_file_metadata(
     assignment = service.get_assignment(db, upload.assignment_id)
     if assignment is None or assignment.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Datei nicht gefunden")
+    reviewers.ensure_can_read(db, user, assignment, detail="Datei nicht gefunden")  # Reichweite (Phase 4)
     metadata = file_service.get_stored_file_metadata(db, stored_file, settings.abgabebox_storage_root, assignment.tenant_id)
     if metadata is None:
         raise HTTPException(status_code=404, detail="Keine Metadaten verfügbar")
@@ -535,7 +609,11 @@ def get_assignment_summaries(
 ):
     """Fortschritt aller Abgaben des Mandanten auf einmal (Liste), Schlüssel = öffentliche ID."""
     require_permission(user, P.SUBMISSIONS_READ)
-    assignments = service.repository.list_assignments(db, tenant_id=user.current_tenant_id)
+    visible = reviewers.visible_assignment_ids(db, user)  # Reichweite «zugewiesene» (Phase 4)
+    assignments = [
+        assignment for assignment in service.repository.list_assignments(db, tenant_id=user.current_tenant_id)
+        if visible is None or assignment.id in visible
+    ]
     summaries = service.summaries(db, assignments)
     return {str(assignment.public_id): summaries[assignment.id] for assignment in assignments}
 
@@ -547,7 +625,7 @@ def get_assignment_summary(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.SUBMISSIONS_READ)
-    assignment = _get_assignment_or_404(db, assignment_id, user)
+    assignment = _get_readable_assignment_or_404(db, assignment_id, user)
     return service.summaries(db, [assignment])[assignment.id]
 
 
@@ -570,7 +648,7 @@ def get_upload_log(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.SUBMISSIONS_READ)
-    assignment = _get_assignment_or_404(db, assignment_id, user)
+    assignment = _get_readable_assignment_or_404(db, assignment_id, user)
     return service.get_upload_log(db, assignment_id=assignment.id, element_ref=element_ref)
 
 
@@ -597,7 +675,7 @@ def download_all_files_zip(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.SUBMISSIONS_READ)
-    assignment = _get_assignment_or_404(db, assignment_id, user)
+    assignment = _get_readable_assignment_or_404(db, assignment_id, user)
 
     elements = service.get_assignment_elements(db, assignment)
     # Alle Dateien aller Einreichungen eines Elements, auch nach dem Schliessen und auch die in der

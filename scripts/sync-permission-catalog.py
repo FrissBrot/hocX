@@ -28,6 +28,9 @@ KEY_PATTERN = re.compile(r"^[a-z_]+\.[a-z_]+$")
 # Buchbare Features: einzige Quelle permissions/features.json (sync-feature-catalog.py)
 FEATURES = tuple(entry["code"] for entry in json.loads((ROOT / "permissions/features.json").read_text(encoding="utf-8"))["features"])
 SYSTEM_ROLE_KEYS = ("admin", "writer", "kassier", "reader")
+# Reichweiten (Plan «Berechtigungen», Phase 4): "all" ist immer die erste und der Standard (in der
+# Datenbank NULL), "assigned" = nur zugewiesene Objekte (resource_assignment).
+SCOPES = ("all", "assigned")
 
 
 def load_source() -> dict:
@@ -44,11 +47,19 @@ def load_source() -> dict:
             raise SystemExit(f"permissions/catalog.json: unbekannter Bereich bei {key}")
         if entry["feature"] is not None and entry["feature"] not in FEATURES:
             raise SystemExit(f"permissions/catalog.json: unbekanntes Feature bei {key}")
+        scopes = entry.get("scopes", [])
+        if scopes and (scopes[0] != "all" or len(set(scopes)) != len(scopes) or any(scope not in SCOPES for scope in scopes) or len(scopes) < 2):
+            raise SystemExit(f"permissions/catalog.json: ungültige Reichweiten bei {key} (erlaubt: {SCOPES}, \"all\" zuerst)")
         keys.append(key)
+    scoped = {entry["key"] for entry in data["permissions"] if entry.get("scopes")}
     for entry in data["permissions"]:
         unknown = [implied for implied in entry["implies"] if implied not in keys]
         if unknown:
             raise SystemExit(f"permissions/catalog.json: {entry['key']} impliziert unbekannte {unknown}")
+        # Implikationen erben die Reichweite: ein Recht mit Reichweite darf nur Rechte mit
+        # Reichweite implizieren (sonst wäre z. B. review(assigned) => x(alle) eine Ausweitung).
+        if entry["key"] in scoped and any(implied not in scoped for implied in entry["implies"]):
+            raise SystemExit(f"permissions/catalog.json: {entry['key']} hat eine Reichweite und impliziert ein Recht ohne Reichweite")
     _check_acyclic(data["permissions"])
     role_keys = [role["key"] for role in data["system_roles"]]
     if tuple(role_keys) != SYSTEM_ROLE_KEYS:
@@ -89,8 +100,9 @@ def _enum_name(key: str) -> str:
 def render_py(data: dict) -> str:
     members = "\n".join(f'    {_enum_name(entry["key"])} = "{entry["key"]}"' for entry in data["permissions"])
     defs = "\n".join(
-        "    P.{name}: PermissionDef(area={area}, feature={feature}, requires_mfa={mfa}, implies=({implies})),".format(
+        "    P.{name}: PermissionDef(area={area}, feature={feature}, requires_mfa={mfa}, implies=({implies}){scopes}),".format(
             name=_enum_name(entry["key"]),
+            scopes=", scopes=({})".format("".join(f"{json.dumps(scope)}, " for scope in entry["scopes"]).rstrip(" ")) if entry.get("scopes") else "",
             area=json.dumps(entry["area"]),
             feature=json.dumps(entry["feature"]) if entry["feature"] else "None",
             mfa="True" if entry["requires_mfa"] else "False",
@@ -126,6 +138,8 @@ class PermissionDef:
     feature: str | None
     requires_mfa: bool
     implies: tuple[P, ...]
+    # Mögliche Reichweiten ("all" zuerst = Standard); leer = Recht ohne Reichweite (immer alle).
+    scopes: tuple[str, ...] = ()
 
 
 AREAS: tuple[str, ...] = ({areas},)
@@ -133,6 +147,9 @@ AREAS: tuple[str, ...] = ({areas},)
 CATALOG: dict[P, PermissionDef] = {{
 {defs}
 }}
+
+# Rechte mit Reichweite (alle | zugewiesene), siehe docs/permissions-plan.md, Phase 4.
+SCOPED_PERMISSIONS: frozenset[P] = frozenset(key for key, definition in CATALOG.items() if definition.scopes)
 
 # Standardrollen je Mandant (tenant_role.system_key). "admin" hat immer alle Permissions, auch
 # künftig neu hinzukommende - beim Laden ausgewertet, nicht über tenant_role_permission.
@@ -147,7 +164,8 @@ def render_ts(data: dict) -> str:
     keys = " | ".join(json.dumps(entry["key"]) for entry in data["permissions"])
     areas = " | ".join(json.dumps(area) for area in data["areas"])
     rows = "\n".join(
-        "  {{ key: {key}, area: {area}, feature: {feature}, requiresMfa: {mfa}, implies: [{implies}] }},".format(
+        "  {{ key: {key}, area: {area}, feature: {feature}, requiresMfa: {mfa}, implies: [{implies}], scopes: [{scopes}] }},".format(
+            scopes=", ".join(json.dumps(scope) for scope in entry.get("scopes", [])),
             key=json.dumps(entry["key"]),
             area=json.dumps(entry["area"]),
             feature=json.dumps(entry["feature"]),
@@ -170,6 +188,7 @@ export type PermissionKey = {keys};
 export type PermissionArea = {areas};
 export type PermissionFeature = {" | ".join(json.dumps(f) for f in FEATURES)};
 export type SystemRoleKey = {" | ".join(json.dumps(k) for k in SYSTEM_ROLE_KEYS)};
+export type PermissionScope = {" | ".join(json.dumps(scope) for scope in SCOPES)};
 
 export type PermissionInfo = {{
   key: PermissionKey;
@@ -177,6 +196,8 @@ export type PermissionInfo = {{
   feature: PermissionFeature | null;
   requiresMfa: boolean;
   implies: PermissionKey[];
+  /** Mögliche Reichweiten ("all" zuerst = Standard); leer = Recht ohne Reichweite. */
+  scopes: PermissionScope[];
 }};
 
 export const PERMISSION_AREAS: readonly PermissionArea[] = [{", ".join(json.dumps(area) for area in data["areas"])}];

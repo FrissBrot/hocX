@@ -9,6 +9,8 @@ Schutzregeln - für den Mandanten-Admin wie für den Plattform-Admin-Pfad (actor
 1. Keine Rechteausweitung: Ein Akteur vergibt, entzieht, erstellt, ändert oder löscht nur Rollen,
    deren Berechtigungen er selbst hat, und verwaltet nur Konten, deren Berechtigungen er selbst hat
    (kein Passwort-/Login-/MFA-Zugriff auf Höherberechtigte). Der Plattform-Admin ist ausgenommen.
+   Das gilt auch für die Reichweite (Migration 0195): wer ein Recht nur für zugewiesene Objekte
+   hat, vergibt es nicht für alle.
 2. Mindestens ein handlungsfähiger Administrator: ein aktives Konto mit Login und access.manage.
    Jede Änderung, die diese Menge verkleinern kann, wird danach geprüft (409).
 3. Kein Selbstentzug von access.manage (E-2) - das macht ein anderer Administrator.
@@ -27,8 +29,19 @@ from fastapi import HTTPException, status
 from sqlalchemy import delete, exists, func, or_, select
 from sqlalchemy.orm import Session
 
-from app.core.permissions import ADMIN_ROLE_KEY, CATALOG, DEFAULT_ROLE_KEY, P, effective_permissions, expand
-from app.core.security import CurrentUser, load_role_permissions, require_permission
+from app.core.permissions import (
+    ADMIN_ROLE_KEY,
+    CATALOG,
+    DEFAULT_ROLE_KEY,
+    SCOPE_ALL,
+    SCOPE_ASSIGNED,
+    SCOPED_PERMISSIONS,
+    P,
+    effective_permissions,
+    expand,
+    resolve_scopes,
+)
+from app.core.security import CurrentUser, load_role_permissions, load_role_scopes, require_permission
 from app.models import AppUser, Tenant, TenantRole, TenantRolePermission, UserRole
 from app.schemas.role import RoleCreate, RoleRead, RoleRef, RoleUpdate
 
@@ -62,6 +75,33 @@ def _role_permissions(db: Session, role_ids: Iterable[int]) -> dict[int, frozens
         role_id: frozenset(str(key) for key in effective_permissions(raw[role_id], [system_key]))
         for role_id, system_key in roles.items()
     }
+
+
+def _role_scopes(db: Session, role_ids: Iterable[int]) -> dict[int, dict[str, str]]:
+    """Reichweite je Recht mit Reichweite und Rolle (admin: alles für alle). Gespeichert ist die
+    aufgelöste Menge; NULL in tenant_role_permission.scope bedeutet «alle»."""
+    ids = list(set(role_ids))
+    if not ids:
+        return {}
+    roles = {row.id: row.system_key for row in db.execute(select(TenantRole.id, TenantRole.system_key).where(TenantRole.id.in_(ids)))}
+    rows: dict[int, dict[str, str | None]] = {role_id: {} for role_id in roles}
+    for role_id, key, scope in db.execute(
+        select(TenantRolePermission.role_id, TenantRolePermission.permission_key, TenantRolePermission.scope)
+        .where(TenantRolePermission.role_id.in_(ids))
+    ):
+        rows[role_id][key] = scope or SCOPE_ALL
+    result: dict[int, dict[str, str]] = {}
+    for role_id, system_key in roles.items():
+        if system_key == ADMIN_ROLE_KEY:
+            result[role_id] = {key.value: SCOPE_ALL for key in SCOPED_PERMISSIONS}
+        else:
+            result[role_id] = {key.value: scope for key, scope in resolve_scopes(rows[role_id], rows[role_id]).items()}
+    return result
+
+
+def role_scopes(db: Session, role: TenantRole) -> dict[str, str]:
+    """Reichweiten einer Rolle (auch für das Audit-Log vor/nach einer Änderung)."""
+    return _role_scopes(db, [role.id]).get(role.id, {})
 
 
 def role_ref(role: TenantRole) -> RoleRef:
@@ -130,21 +170,23 @@ def resolve_roles(db: Session, tenant_id: int, role_ids: Iterable[uuid.UUID]) ->
 def list_roles(db: Session, tenant_id: int) -> list[RoleRead]:
     roles = list(db.scalars(select(TenantRole).where(TenantRole.tenant_id == tenant_id).order_by(TenantRole.id)))
     permissions = _role_permissions(db, [role.id for role in roles])
+    scopes = _role_scopes(db, [role.id for role in roles])
     counts = dict(
         db.execute(
             select(UserRole.role_id, func.count()).where(UserRole.tenant_id == tenant_id).group_by(UserRole.role_id)
         ).all()
     )
-    return [_read(role, permissions.get(role.id, frozenset()), int(counts.get(role.id, 0))) for role in roles]
+    return [_read(role, permissions.get(role.id, frozenset()), int(counts.get(role.id, 0)), scopes.get(role.id, {})) for role in roles]
 
 
-def _read(role: TenantRole, permissions: frozenset[str], user_count: int) -> RoleRead:
+def _read(role: TenantRole, permissions: frozenset[str], user_count: int, scopes: dict[str, str] | None = None) -> RoleRead:
     return RoleRead(
         id=role.public_id,
         name=role.name,
         description=role.description,
         system_key=role.system_key,
         permissions=sorted(permissions, key=_catalog_order),
+        scopes=dict(sorted((scopes or {}).items(), key=lambda item: _catalog_order(item[0]))),
         user_count=user_count,
         locked=role.system_key == ADMIN_ROLE_KEY,
         require_mfa=role.require_mfa,
@@ -165,11 +207,16 @@ def lock_tenant(db: Session, tenant_id: int) -> int:
     return count_capable_admins(db, tenant_id)
 
 
-def _ensure_subset(actor: CurrentUser | None, permissions: Iterable[str]) -> None:
+def _ensure_subset(actor: CurrentUser | None, permissions: Iterable[str], scopes: dict[str, str] | None = None) -> None:
+    """Schutzregel 1: nur Rechte, die der Akteur selbst hat - und ein Recht mit Reichweite nur dann
+    «für alle», wenn der Akteur es selbst für alle hat (``scopes``: Reichweiten der betroffenen
+    Rolle bzw. des Kontos; fehlt ein Recht darin, gilt «alle»)."""
     if actor is None:
         return
-    missing = set(permissions) - set(actor.permissions)
-    if missing:
+    permissions = set(permissions)
+    missing = permissions - set(actor.permissions)
+    widened = {key for key in permissions if key in actor.assigned_only and (scopes or {}).get(key, SCOPE_ALL) == SCOPE_ALL}
+    if missing or widened:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"code": "permission_not_held", "message": "Nur Berechtigungen, die man selbst hat, können vergeben oder verwaltet werden"},
@@ -182,7 +229,7 @@ def ensure_can_manage_account(db: Session, actor: CurrentUser | None, user_id: i
     if actor is None:
         return
     target_permissions, _ = load_role_permissions(db, user_id)
-    _ensure_subset(actor, target_permissions)
+    _ensure_subset(actor, target_permissions, {key: SCOPE_ASSIGNED for key in load_role_scopes(db, user_id)})
 
 
 def count_capable_admins(db: Session, tenant_id: int, *, excluding: set[int] | None = None) -> int:
@@ -274,7 +321,10 @@ def set_user_roles(db: Session, actor: CurrentUser | None, user: AppUser, roles:
             ensure_can_manage_account(db, actor, user.id)
         changed = (current ^ wanted)
         permissions = _role_permissions(db, changed)
-        _ensure_subset(actor, set().union(*permissions.values()) if permissions else set())
+        # Je Rolle: eine Rolle mit «alle» vergeben/entziehen setzt «alle» beim Akteur voraus
+        scopes = _role_scopes(db, changed)
+        for role_id, role_permissions in permissions.items():
+            _ensure_subset(actor, role_permissions, scopes.get(role_id, {}))
     with admin_guard(db, user.tenant_id, actor, affects_actor=actor is not None and user.id == actor.user_id):
         if current - wanted:
             db.execute(delete(UserRole).where(UserRole.user_id == user.id, UserRole.role_id.in_(current - wanted)))
@@ -317,6 +367,19 @@ def _validated_permissions(keys: Iterable[str]) -> frozenset[str]:
     return frozenset(str(key) for key in expand(keys))
 
 
+def _validated_scopes(keys: Iterable[str], scopes: dict[str, str] | None) -> dict[str, str]:
+    """Reichweiten einer neuen Rollen-Konfiguration, aufgelöst für alle Rechte mit Reichweite der
+    Rolle (Implikationen erben, siehe permissions.resolve_scopes). Eine Reichweite für ein Recht
+    ohne Reichweite oder ein unbekannter Wert ist ein 400; Angaben zu Rechten, die die Rolle nicht
+    hat, fallen weg."""
+    scoped = {permission.value for permission in SCOPED_PERMISSIONS}
+    requested = dict(scopes or {})
+    for key, value in requested.items():
+        if key not in scoped or value not in CATALOG[P(key)].scopes:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unbekannte Reichweite")
+    return {key.value: scope for key, scope in resolve_scopes(list(keys), requested).items()}
+
+
 def _clean_name(name: str | None) -> str | None:
     if name is None:
         return None
@@ -334,10 +397,12 @@ def _ensure_unique_name(db: Session, tenant_id: int, name: str | None, *, exclud
         raise RoleConflict("Eine Rolle mit diesem Namen gibt es bereits", "role_name_taken")
 
 
-def _replace_permissions(db: Session, role: TenantRole, keys: frozenset[str]) -> None:
+def _replace_permissions(db: Session, role: TenantRole, keys: frozenset[str], scopes: dict[str, str] | None = None) -> None:
+    """Speichert die Menge inkl. Implikationen; als Reichweite nur «assigned» (NULL = alle)."""
     db.execute(delete(TenantRolePermission).where(TenantRolePermission.role_id == role.id))
     for key in sorted(keys):
-        db.add(TenantRolePermission(role_id=role.id, permission_key=key))
+        scope = SCOPE_ASSIGNED if (scopes or {}).get(key) == SCOPE_ASSIGNED else None
+        db.add(TenantRolePermission(role_id=role.id, permission_key=key, scope=scope))
 
 
 def get_role(db: Session, tenant_id: int, role_id: uuid.UUID) -> TenantRole:
@@ -350,7 +415,7 @@ def get_role(db: Session, tenant_id: int, role_id: uuid.UUID) -> TenantRole:
 def read_role(db: Session, role: TenantRole) -> RoleRead:
     permissions = _role_permissions(db, [role.id]).get(role.id, frozenset())
     count = int(db.scalar(select(func.count()).select_from(UserRole).where(UserRole.role_id == role.id)) or 0)
-    return _read(role, permissions, count)
+    return _read(role, permissions, count, role_scopes(db, role))
 
 
 def create_role(db: Session, actor: CurrentUser, payload: RoleCreate) -> TenantRole:
@@ -364,11 +429,12 @@ def create_role(db: Session, actor: CurrentUser, payload: RoleCreate) -> TenantR
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Name fehlt")
     _ensure_unique_name(db, tenant_id, name)
     permissions = _validated_permissions(payload.permissions)
-    _ensure_subset(actor, permissions)
+    scopes = _validated_scopes(payload.permissions, payload.scopes)
+    _ensure_subset(actor, permissions, scopes)
     role = TenantRole(tenant_id=tenant_id, name=name, description=_clean_description(payload.description), require_mfa=payload.require_mfa)
     db.add(role)
     db.flush()
-    _replace_permissions(db, role, permissions)
+    _replace_permissions(db, role, permissions, scopes)
     db.flush()
     return role
 
@@ -386,7 +452,8 @@ def update_role(db: Session, actor: CurrentUser, role: TenantRole, payload: Role
     if role.system_key == ADMIN_ROLE_KEY:
         raise RoleConflict("Die Rolle Administrator ist fest und kann nicht geändert werden", "admin_role_fixed")
     before = _role_permissions(db, [role.id]).get(role.id, frozenset())
-    _ensure_subset(actor, before)
+    before_scopes = role_scopes(db, role)
+    _ensure_subset(actor, before, before_scopes)
     fields = payload.model_fields_set
     name = role.name
     if "name" in fields:
@@ -395,17 +462,25 @@ def update_role(db: Session, actor: CurrentUser, role: TenantRole, payload: Role
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Name fehlt")
         _ensure_unique_name(db, role.tenant_id, name, excluding_id=role.id)
     after = before
-    if "permissions" in fields and payload.permissions is not None:
-        after = _validated_permissions(payload.permissions)
-        _ensure_subset(actor, after)
+    after_scopes = before_scopes
+    new_permissions = "permissions" in fields and payload.permissions is not None
+    new_scopes = "scopes" in fields and payload.scopes is not None
+    if new_permissions or new_scopes:
+        raw = list(payload.permissions or []) if new_permissions else sorted(before)
+        # Ohne neue Reichweiten bleiben die bisherigen - eine Änderung nur der Rechte darf «nur
+        # zugewiesene» nicht stillschweigend auf «alle» ausweiten.
+        requested = payload.scopes if new_scopes else {key: value for key, value in before_scopes.items() if value == SCOPE_ASSIGNED}
+        after = _validated_permissions(raw)
+        after_scopes = _validated_scopes(raw, requested)
+        _ensure_subset(actor, after, after_scopes)
     with admin_guard(db, role.tenant_id, actor, affects_actor=role.id in actor.role_ids):
         role.name = name
         if "description" in fields:
             role.description = _clean_description(payload.description)
         if "require_mfa" in fields and payload.require_mfa is not None:
             role.require_mfa = payload.require_mfa
-        if after != before:
-            _replace_permissions(db, role, after)
+        if after != before or after_scopes != before_scopes:
+            _replace_permissions(db, role, after, after_scopes)
         db.add(role)
     return before, after
 
@@ -415,7 +490,7 @@ def delete_role(db: Session, actor: CurrentUser, role: TenantRole) -> None:
     lock_tenant(db, role.tenant_id)
     if role.system_key is not None:
         raise RoleConflict("Standardrollen können nicht gelöscht werden", "system_role_not_deletable")
-    _ensure_subset(actor, _role_permissions(db, [role.id]).get(role.id, frozenset()))
+    _ensure_subset(actor, _role_permissions(db, [role.id]).get(role.id, frozenset()), role_scopes(db, role))
     if db.scalar(select(func.count()).select_from(UserRole).where(UserRole.role_id == role.id)):
         raise RoleConflict("Die Rolle ist noch Benutzern zugewiesen", "role_in_use")
     # Eine Rolle ohne Zuweisungen kann niemandem Rechte nehmen - Schutzregeln 2/3 greifen hier nicht.
@@ -428,7 +503,7 @@ def delete_role(db: Session, actor: CurrentUser, role: TenantRole) -> None:
 
 def import_role(
     db: Session, tenant_id: int, *, system_key: str | None, name: str | None, description: str | None, permissions: Iterable[str],
-    require_mfa: bool = False,
+    require_mfa: bool = False, scopes: dict[str, str] | None = None,
 ) -> TenantRole:
     """Übernimmt eine Rolle aus einem Mandantenexport in einen neu angelegten Mandanten. Die
     Standardrollen hat der Trigger schon angelegt (admin bleibt fest und unverändert), eigene
@@ -443,6 +518,11 @@ def import_role(
     db.add(role)
     db.flush()
     known = {permission.value for permission in P}
-    _replace_permissions(db, role, frozenset(str(key) for key in expand([key for key in permissions if key in known])))
+    kept = [key for key in permissions if key in known]
+    # Reichweiten (Export ab 0195) gehen beim Import nicht verloren - sonst würde «nur zugewiesene»
+    # nach dem Import still zu «alle». Unbekannte Angaben fallen weg wie unbekannte Rechte.
+    scoped = {permission.value for permission in SCOPED_PERMISSIONS}
+    valid_scopes = {key: value for key, value in (scopes or {}).items() if key in scoped and value in CATALOG[P(key)].scopes}
+    _replace_permissions(db, role, frozenset(str(key) for key in expand(kept)), _validated_scopes(kept, valid_scopes))
     db.flush()
     return role

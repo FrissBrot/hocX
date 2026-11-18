@@ -68,6 +68,10 @@ Keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
 - Migration `0193_drop_slug_and_member_rule`: der **Kurzname** der Organisation und die
   Aufbewahrungsregel «Ehemalige Mitglieder deaktivieren» entfallen samt Daten (Ausgetretene sind
   ohnehin ab dem Austritt gesperrt). Partner findet man beim Album-Teilen über den Namen.
+- Migration `0195_scope_and_reviewers`: Spalte `tenant_role_permission.scope` (leer = alle, wie
+  bisher) und Tabelle `resource_assignment` (Prüfer je Abgabe-Auftrag, RLS je Mandant). Keine
+  Verhaltensänderung für bestehende Rollen. Rücknahme mit `alembic downgrade` entfernt Prüfer und
+  Reichweiten; «nur zugewiesene» wirkt danach wieder auf alle Abgaben.
 
 ### Neu: Server aus dem Backup wiederherstellen
 
@@ -227,6 +231,12 @@ Keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
 - **Nachvollziehbar:** Rollen-Zuweisungen stehen mit vorher/nachher im Verlauf – egal ob über
   Zugriff, Konto anlegen oder Mehrfachauswahl; Erstellen, Erneuern und Widerrufen öffentlicher
   Links ebenso.
+- **Prüfer je Abgabe:** Im Abgabe-Auftrag lassen sich Prüfer (Personen mit Login) zuweisen. Im
+  Rollen-Editor gibt es für «Abgaben ansehen» und «Abgaben prüfen» die Reichweite «Alle» oder «Nur
+  zugewiesene»; mit «Nur zugewiesene» sieht und prüft man nur die Aufträge, denen man als Prüfer
+  zugewiesen ist (Liste, Dateien, ZIP). «Abgaben verwalten» gilt immer für alle.
+- **Abgaben für Leser:** Die Seite Abgaben ist mit «Abgaben ansehen» erreichbar (nur lesen);
+  Verwalten braucht weiterhin «Abgaben verwalten», Schliessen/Öffnen «Abgaben prüfen».
 - Für Entwickler: Rechte-Inventar `docs/permissions-inventory.md` und Berechtigungsmatrix
   (`permissions/permission-matrix.json`) werden generiert; ein Laufzeittest ruft jede GET-Route mit
   jeder Standardrolle auf. Abweichungen zum Plan: `docs/permissions-plan-deviations.md`.

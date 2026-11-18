@@ -305,5 +305,15 @@
   },
   "completedBadge": "Abgeschlossen",
   "completedEmpty": "Noch keine abgeschlossenen Abgaben. Eine Abgabe ist abgeschlossen, sobald alle Elemente abgegeben oder geschlossen sind.",
-  "openEmpty": "Keine offenen Abgaben."
+  "openEmpty": "Keine offenen Abgaben.",
+  "reviewers": {
+    "label": "Prüfer",
+    "none": "Keine Prüfer",
+    "noCandidates": "Keine Personen mit Login",
+    "help": "Personen mit Login, die diese Abgabe sehen und prüfen dürfen, auch wenn ihre Rolle nur zugewiesene Abgaben erlaubt."
+  },
+  "readOnly": {
+    "emptyTitle": "Keine Abgaben",
+    "emptyDescription": "Dir sind noch keine Abgaben zugewiesen."
+  }
 }

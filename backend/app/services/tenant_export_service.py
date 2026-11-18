@@ -201,16 +201,21 @@ class TenantExportService:
         # new tenant.
         roles = db.scalars(select(TenantRole).where(TenantRole.tenant_id == tenant_id).order_by(TenantRole.id)).all()
         role_permissions: dict[int, list[str]] = {}
-        for role_id, key in db.execute(
-            select(TenantRolePermission.role_id, TenantRolePermission.permission_key)
+        # Reichweite «nur zugewiesene» (Migration 0195); fehlt sie, gilt beim Import «alle».
+        role_scopes: dict[int, dict[str, str]] = {}
+        for role_id, key, scope in db.execute(
+            select(TenantRolePermission.role_id, TenantRolePermission.permission_key, TenantRolePermission.scope)
             .where(TenantRolePermission.role_id.in_([role.id for role in roles]))
             .order_by(TenantRolePermission.permission_key)
         ):
             role_permissions.setdefault(role_id, []).append(key)
+            if scope is not None:
+                role_scopes.setdefault(role_id, {})[key] = scope
         role_rows = self._rows(roles, "tenant_role")
         for row in role_rows:
             row.pop("tenant_id", None)
             row["permissions"] = role_permissions.get(row["id"], [])
+            row["permission_scopes"] = role_scopes.get(row["id"], {})
         tables["tenant_role"] = role_rows
         users = db.scalars(select(AppUser).where(AppUser.tenant_id == tenant_id).order_by(AppUser.id)).all()
         user_role_refs: dict[int, list[int]] = {}
