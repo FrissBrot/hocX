@@ -319,3 +319,34 @@ def test_cleanup_removes_old_links_and_withdrawn_files(db, box):
     assert result["tokens"] == 1 and result["files"] == 1
     assert db.scalar(select(SubmissionUploadFile.id)) is None
     assert db.scalar(select(SubmissionAccessToken.id)) is None
+
+
+def test_public_link_binds_the_tenant_for_row_level_security(db, box, monkeypatch):
+    """Wie get_optional_current_user und das Kalender-Abo: nach gültigem Link sieht die Session per
+    RLS nur noch den Mandanten des Links. Öffentliche Routen laufen sonst unbeschränkt, und die
+    Element-Auflösung (Teilnehmer-/Termin-Namen aus Listenwerten) hat keinen eigenen
+    Mandantenfilter - Defense in Depth."""
+    from app.core.tenant_scope import bind_tenant_scope, bound_tenant_id
+
+    _manage(box)
+    token = _issue(db, box)
+    bind_tenant_scope(db, None)
+    seen: list[int | None] = []
+    original = SubmissionService.get_assignment_elements
+
+    def _spy(self, session, assignment):
+        seen.append(bound_tenant_id(session))
+        return original(self, session, assignment)
+
+    monkeypatch.setattr(SubmissionService, "get_assignment_elements", _spy)
+    try:
+        assert access_service.resolve(db, token) is not None
+        assert seen and set(seen) == {box["tenant"].id}
+        assert bound_tenant_id(db) == box["tenant"].id
+
+        # Ungültiger Link: keine Bindung (und keine Daten).
+        bind_tenant_scope(db, None)
+        assert access_service.resolve(db, "x" * 43) is None
+        assert bound_tenant_id(db) is None
+    finally:
+        bind_tenant_scope(db, None)
