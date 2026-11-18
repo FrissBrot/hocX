@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { attendanceParticipants, protocolAttendanceParticipants, tallyAttendance, visibleAttendanceTally } from "./protocol-editor-shared";
+import { createTranslator } from "next-intl";
+
+import { attendanceParticipants, imageSimilarityNotice, protocolAttendanceParticipants, tallyAttendance, visibleAttendanceTally } from "./protocol-editor-shared";
 import { ParticipantSummary, ProtocolElement, ProtocolElementBlock } from "@/types/api";
 
 function participant(id: string, overrides: Partial<ParticipantSummary> = {}): ParticipantSummary {
@@ -157,4 +159,23 @@ it("behält eingefrorene Anwesenheit auch nach Austritt, Umbenennung und Entfern
   expect(protocolAttendanceParticipants([], entries, protocol).map((p) => p.display_name)).toEqual(["Damals Mitglied"]);
   expect(visibleAttendanceTally([element("el", [attendanceBlock({ configuration_snapshot_json: { attendance_entries: entries } })])], [], "2025-06-01", true))
     .toEqual({ present: 1, late: 0, excused: 0, absent: 0 });
+});
+
+describe("imageSimilarityNotice", () => {
+  // duplicate_warning des Backends ist fester deutscher Text; die Oberfläche muss ihn in
+  // der UI-Sprache anzeigen statt ihn roh durchzureichen.
+  const backendWarning = "Hinweis: Dieses Bild ähnelt einem bereits im Mandanten hochgeladenen Bild.";
+
+  it("shows the similarity hint in the UI language, not the German backend text", async () => {
+    const messages = (await import("@/messages/en/protocols.json")).default;
+    const t = createTranslator({ locale: "en", messages: { protocols: messages }, namespace: "protocols" });
+    const notice = imageSimilarityNotice({ duplicate_warning: backendWarning }, (key) => t(key as never));
+    expect(notice).toBe(messages.editor.imageSimilarExists);
+    expect(notice).not.toContain("Hinweis");
+  });
+
+  it("returns null without a warning", () => {
+    expect(imageSimilarityNotice({ duplicate_warning: null }, (key) => key)).toBeNull();
+    expect(imageSimilarityNotice({}, (key) => key)).toBeNull();
+  });
 });

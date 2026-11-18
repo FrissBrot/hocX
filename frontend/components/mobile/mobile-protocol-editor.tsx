@@ -14,6 +14,7 @@ import { attendanceFineConfig, runAttendanceChangeSerialized, syncAttendanceFine
 import { ChartBlockRenderer } from "@/components/protocol/chart-block-renderer";
 import {
   formatFinanceAmount,
+  imageSimilarityNotice,
   protocolAttendanceParticipants,
   tallyAttendance,
   TODO_STATUS,
@@ -246,7 +247,8 @@ export function MobileProtocolEditor({
       setImagesByBlock((current) => ({ ...current, [blockId]: next }));
       collab.sendFieldUpdate(`block-${blockId}-images`, next);
       markSaved();
-      showToast(created.duplicate_warning || t("editor.photoAdded"), created.duplicate_warning ? "info" : "success");
+      const similarNotice = imageSimilarityNotice(created, tProtocols);
+      showToast(similarNotice ?? t("editor.photoAdded"), similarNotice ? "info" : "success");
     } catch (error) {
       setSaveState("error");
       showToast(error instanceof Error ? error.message : tProtocols("editor.imageUploadFailed"), "error");

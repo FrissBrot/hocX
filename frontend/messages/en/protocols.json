@@ -249,6 +249,7 @@
     "workflowSessionMode": "Session mode",
     "templateSyncedByOther": "{name} reloaded the elements from the template. The view is being refreshed.",
     "imageAlreadyExists": "This image already exists and was not uploaded again.",
+    "imageSimilarExists": "Note: This image looks similar to one already uploaded in this organization.",
     "statusChangedByOtherToast": "{name} changed the status to “{status}”.",
     "draftsRestoredToast": "{count, plural, one {# local text draft was} other {# local text drafts were}} restored.",
     "conflictToast": "Conflict: someone else saved this section in the meantime. The current version has been loaded – your last change was not applied, but it is kept as a local draft.",
