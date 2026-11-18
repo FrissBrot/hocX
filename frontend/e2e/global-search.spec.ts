@@ -32,7 +32,8 @@ test("Ctrl+K findet Einstellungen und Personen und öffnet sie", async ({ page, 
     await input.fill("dsgvo");
     await expect(dialog.getByRole("option", { name: /Datenschutz/ })).toBeVisible();
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/\/tenant-settings\/privacy$/);
+    // Erster Aufruf der Seite: der Next-Server des E2E-Stacks kompiliert sie erst (dauert >5 s)
+    await expect(page).toHaveURL(/\/tenant-settings\/privacy$/, { timeout: 30_000 });
 
     // Person aus der Datenbank, öffnet die Bearbeitung auf /participants
     await page.keyboard.press("Control+k");
@@ -40,7 +41,7 @@ test("Ctrl+K findet Einstellungen und Personen und öffnet sie", async ({ page, 
     const option = dialog.getByRole("option", { name: new RegExp(name) });
     await expect(option).toBeVisible();
     await option.click();
-    await expect(page).toHaveURL(/\/participants$/);
+    await expect(page).toHaveURL(/\/participants$/, { timeout: 30_000 });
     await expect
       .poll(() => page.getByRole("dialog").locator("input").evaluateAll((inputs, wanted) => inputs.some((input) => (input as HTMLInputElement).value === wanted), name))
       .toBe(true);
