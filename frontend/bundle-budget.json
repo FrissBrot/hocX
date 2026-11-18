@@ -2,9 +2,9 @@
   "_hinweis": "Erzeugt mit scripts/check-bundle-budget.py --update (Messwert + 10 % Reserve, KB; rohes CSS höchstens 400). Anheben nur begründet im Commit.",
   "routes": {
     "/": {
-      "js_gzip_kb": 262,
-      "css_gzip_kb": 45,
-      "css_raw_kb": 286
+      "js_gzip_kb": 275,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 320
     },
     "/_global-error": {
       "js_gzip_kb": 188,
@@ -12,394 +12,409 @@
       "css_raw_kb": 0
     },
     "/_not-found": {
-      "js_gzip_kb": 205,
-      "css_gzip_kb": 43,
-      "css_raw_kb": 277
+      "js_gzip_kb": 206,
+      "css_gzip_kb": 47,
+      "css_raw_kb": 305
     },
     "/abgabe/verwalten": {
       "js_gzip_kb": 213,
       "css_gzip_kb": 47,
-      "css_raw_kb": 304
+      "css_raw_kb": 305
     },
     "/admin": {
       "js_gzip_kb": 232,
-      "css_gzip_kb": 50,
-      "css_raw_kb": 314
+      "css_gzip_kb": 55,
+      "css_raw_kb": 345
     },
     "/admin/admins": {
-      "js_gzip_kb": 235,
-      "css_gzip_kb": 50,
-      "css_raw_kb": 314
+      "js_gzip_kb": 236,
+      "css_gzip_kb": 55,
+      "css_raw_kb": 345
     },
     "/admin/audit": {
-      "js_gzip_kb": 237,
-      "css_gzip_kb": 50,
-      "css_raw_kb": 314
+      "js_gzip_kb": 238,
+      "css_gzip_kb": 55,
+      "css_raw_kb": 345
     },
     "/admin/backups": {
-      "js_gzip_kb": 246,
-      "css_gzip_kb": 50,
-      "css_raw_kb": 314
+      "js_gzip_kb": 247,
+      "css_gzip_kb": 55,
+      "css_raw_kb": 345
     },
     "/admin/cashflow": {
-      "js_gzip_kb": 246,
-      "css_gzip_kb": 50,
-      "css_raw_kb": 314
+      "js_gzip_kb": 247,
+      "css_gzip_kb": 55,
+      "css_raw_kb": 345
     },
     "/admin/document-templates": {
-      "js_gzip_kb": 235,
-      "css_gzip_kb": 50,
-      "css_raw_kb": 314
+      "js_gzip_kb": 236,
+      "css_gzip_kb": 55,
+      "css_raw_kb": 345
     },
     "/admin/domains": {
-      "js_gzip_kb": 233,
-      "css_gzip_kb": 50,
-      "css_raw_kb": 314
+      "js_gzip_kb": 235,
+      "css_gzip_kb": 55,
+      "css_raw_kb": 345
     },
     "/admin/error-logs": {
-      "js_gzip_kb": 235,
-      "css_gzip_kb": 50,
-      "css_raw_kb": 314
+      "js_gzip_kb": 236,
+      "css_gzip_kb": 55,
+      "css_raw_kb": 345
     },
     "/admin/jobs": {
-      "js_gzip_kb": 236,
-      "css_gzip_kb": 50,
-      "css_raw_kb": 314
+      "js_gzip_kb": 237,
+      "css_gzip_kb": 55,
+      "css_raw_kb": 345
     },
     "/admin/login": {
-      "js_gzip_kb": 220,
-      "css_gzip_kb": 50,
-      "css_raw_kb": 314
+      "js_gzip_kb": 221,
+      "css_gzip_kb": 55,
+      "css_raw_kb": 345
     },
     "/admin/maintenance": {
-      "js_gzip_kb": 241,
-      "css_gzip_kb": 50,
-      "css_raw_kb": 314
+      "js_gzip_kb": 243,
+      "css_gzip_kb": 55,
+      "css_raw_kb": 345
     },
     "/admin/notifications": {
-      "js_gzip_kb": 237,
-      "css_gzip_kb": 50,
-      "css_raw_kb": 314
+      "js_gzip_kb": 241,
+      "css_gzip_kb": 55,
+      "css_raw_kb": 345
     },
     "/admin/plans": {
-      "js_gzip_kb": 247,
-      "css_gzip_kb": 50,
-      "css_raw_kb": 314
+      "js_gzip_kb": 249,
+      "css_gzip_kb": 55,
+      "css_raw_kb": 345
     },
     "/admin/security": {
       "js_gzip_kb": 232,
-      "css_gzip_kb": 50,
-      "css_raw_kb": 314
+      "css_gzip_kb": 55,
+      "css_raw_kb": 345
     },
     "/admin/sso": {
-      "js_gzip_kb": 234,
-      "css_gzip_kb": 50,
-      "css_raw_kb": 314
+      "js_gzip_kb": 235,
+      "css_gzip_kb": 55,
+      "css_raw_kb": 345
     },
     "/admin/storage": {
-      "js_gzip_kb": 245,
-      "css_gzip_kb": 50,
-      "css_raw_kb": 314
+      "js_gzip_kb": 246,
+      "css_gzip_kb": 55,
+      "css_raw_kb": 345
     },
     "/admin/system": {
-      "js_gzip_kb": 237,
-      "css_gzip_kb": 50,
-      "css_raw_kb": 314
+      "js_gzip_kb": 239,
+      "css_gzip_kb": 55,
+      "css_raw_kb": 345
     },
     "/admin/tenants": {
-      "js_gzip_kb": 242,
-      "css_gzip_kb": 50,
-      "css_raw_kb": 314
+      "js_gzip_kb": 243,
+      "css_gzip_kb": 55,
+      "css_raw_kb": 345
     },
     "/admin/upload-pipeline": {
-      "js_gzip_kb": 241,
-      "css_gzip_kb": 50,
-      "css_raw_kb": 314
+      "js_gzip_kb": 242,
+      "css_gzip_kb": 55,
+      "css_raw_kb": 345
     },
     "/admin/users": {
-      "js_gzip_kb": 253,
-      "css_gzip_kb": 50,
-      "css_raw_kb": 314
+      "js_gzip_kb": 254,
+      "css_gzip_kb": 55,
+      "css_raw_kb": 345
     },
     "/admin/verifications": {
-      "js_gzip_kb": 235,
-      "css_gzip_kb": 50,
-      "css_raw_kb": 314
+      "js_gzip_kb": 237,
+      "css_gzip_kb": 55,
+      "css_raw_kb": 345
     },
     "/agenda": {
-      "js_gzip_kb": 237,
-      "css_gzip_kb": 43,
-      "css_raw_kb": 277
+      "js_gzip_kb": 242,
+      "css_gzip_kb": 47,
+      "css_raw_kb": 305
     },
     "/auth/bridge": {
-      "js_gzip_kb": 207,
-      "css_gzip_kb": 43,
-      "css_raw_kb": 277
+      "js_gzip_kb": 208,
+      "css_gzip_kb": 47,
+      "css_raw_kb": 305
     },
     "/auth/forgot-password": {
       "js_gzip_kb": 208,
-      "css_gzip_kb": 43,
-      "css_raw_kb": 277
+      "css_gzip_kb": 47,
+      "css_raw_kb": 305
     },
     "/auth/set-password": {
-      "js_gzip_kb": 208,
-      "css_gzip_kb": 43,
-      "css_raw_kb": 277
-    },
-    "/connections": {
-      "js_gzip_kb": 239,
-      "css_gzip_kb": 44,
-      "css_raw_kb": 279
-    },
-    "/cycles": {
-      "js_gzip_kb": 246,
-      "css_gzip_kb": 43,
-      "css_raw_kb": 277
-    },
-    "/documents": {
-      "js_gzip_kb": 287,
-      "css_gzip_kb": 59,
-      "css_raw_kb": 357
-    },
-    "/documents/assets": {
-      "js_gzip_kb": 281,
-      "css_gzip_kb": 59,
-      "css_raw_kb": 357
-    },
-    "/documents/brand": {
-      "js_gzip_kb": 289,
-      "css_gzip_kb": 59,
-      "css_raw_kb": 357
-    },
-    "/documents/components": {
-      "js_gzip_kb": 205,
-      "css_gzip_kb": 59,
-      "css_raw_kb": 357
-    },
-    "/documents/exports": {
-      "js_gzip_kb": 280,
-      "css_gzip_kb": 59,
-      "css_raw_kb": 357
-    },
-    "/documents/protocols": {
-      "js_gzip_kb": 205,
-      "css_gzip_kb": 59,
-      "css_raw_kb": 357
-    },
-    "/documents/templates/[id]": {
-      "js_gzip_kb": 336,
-      "css_gzip_kb": 59,
-      "css_raw_kb": 357
-    },
-    "/elements": {
-      "js_gzip_kb": 498,
-      "css_gzip_kb": 55,
-      "css_raw_kb": 335
-    },
-    "/events": {
-      "js_gzip_kb": 265,
-      "css_gzip_kb": 49,
-      "css_raw_kb": 304
-    },
-    "/files": {
-      "js_gzip_kb": 257,
-      "css_gzip_kb": 51,
-      "css_raw_kb": 314
-    },
-    "/finances": {
-      "js_gzip_kb": 249,
-      "css_gzip_kb": 45,
-      "css_raw_kb": 285
-    },
-    "/fine-settings": {
-      "js_gzip_kb": 249,
-      "css_gzip_kb": 44,
-      "css_raw_kb": 287
-    },
-    "/fines": {
-      "js_gzip_kb": 249,
-      "css_gzip_kb": 43,
-      "css_raw_kb": 277
-    },
-    "/lists": {
-      "js_gzip_kb": 265,
-      "css_gzip_kb": 46,
-      "css_raw_kb": 290
-    },
-    "/login": {
-      "js_gzip_kb": 226,
-      "css_gzip_kb": 44,
-      "css_raw_kb": 281
-    },
-    "/maintenance": {
-      "js_gzip_kb": 209,
-      "css_gzip_kb": 43,
-      "css_raw_kb": 277
-    },
-    "/my-tasks": {
-      "js_gzip_kb": 275,
-      "css_gzip_kb": 49,
-      "css_raw_kb": 314
-    },
-    "/overload": {
-      "js_gzip_kb": 208,
-      "css_gzip_kb": 43,
-      "css_raw_kb": 277
-    },
-    "/participants": {
-      "js_gzip_kb": 264,
-      "css_gzip_kb": 46,
-      "css_raw_kb": 289
-    },
-    "/pdf-loading": {
-      "js_gzip_kb": 205,
-      "css_gzip_kb": 45,
-      "css_raw_kb": 284
-    },
-    "/photos": {
-      "js_gzip_kb": 275,
+      "js_gzip_kb": 227,
       "css_gzip_kb": 50,
-      "css_raw_kb": 313
-    },
-    "/protocols": {
-      "js_gzip_kb": 251,
-      "css_gzip_kb": 62,
-      "css_raw_kb": 384
-    },
-    "/protocols/[id]": {
-      "js_gzip_kb": 673,
-      "css_gzip_kb": 62,
-      "css_raw_kb": 384
-    },
-    "/settings": {
-      "js_gzip_kb": 205,
-      "css_gzip_kb": 43,
-      "css_raw_kb": 277
-    },
-    "/settings/verification": {
-      "js_gzip_kb": 205,
-      "css_gzip_kb": 43,
-      "css_raw_kb": 277
-    },
-    "/share/[token]": {
-      "js_gzip_kb": 210,
-      "css_gzip_kb": 44,
-      "css_raw_kb": 280
-    },
-    "/shared-links": {
-      "js_gzip_kb": 245,
-      "css_gzip_kb": 43,
-      "css_raw_kb": 277
-    },
-    "/statistics": {
-      "js_gzip_kb": 254,
-      "css_gzip_kb": 44,
-      "css_raw_kb": 283
-    },
-    "/submission-assignments": {
-      "js_gzip_kb": 272,
-      "css_gzip_kb": 50,
-      "css_raw_kb": 310
-    },
-    "/task-packages": {
-      "js_gzip_kb": 284,
-      "css_gzip_kb": 51,
       "css_raw_kb": 316
     },
-    "/templates": {
-      "js_gzip_kb": 532,
+    "/connections": {
+      "js_gzip_kb": 245,
+      "css_gzip_kb": 48,
+      "css_raw_kb": 307
+    },
+    "/cycles": {
+      "js_gzip_kb": 252,
+      "css_gzip_kb": 47,
+      "css_raw_kb": 305
+    },
+    "/documents": {
+      "js_gzip_kb": 299,
+      "css_gzip_kb": 64,
+      "css_raw_kb": 392
+    },
+    "/documents/assets": {
+      "js_gzip_kb": 293,
+      "css_gzip_kb": 64,
+      "css_raw_kb": 392
+    },
+    "/documents/brand": {
+      "js_gzip_kb": 300,
+      "css_gzip_kb": 64,
+      "css_raw_kb": 392
+    },
+    "/documents/components": {
+      "js_gzip_kb": 206,
+      "css_gzip_kb": 64,
+      "css_raw_kb": 392
+    },
+    "/documents/exports": {
+      "js_gzip_kb": 292,
+      "css_gzip_kb": 64,
+      "css_raw_kb": 392
+    },
+    "/documents/protocols": {
+      "js_gzip_kb": 206,
+      "css_gzip_kb": 64,
+      "css_raw_kb": 392
+    },
+    "/documents/templates/[id]": {
+      "js_gzip_kb": 347,
+      "css_gzip_kb": 64,
+      "css_raw_kb": 392
+    },
+    "/elements": {
+      "js_gzip_kb": 522,
+      "css_gzip_kb": 62,
+      "css_raw_kb": 386
+    },
+    "/events": {
+      "js_gzip_kb": 275,
+      "css_gzip_kb": 53,
+      "css_raw_kb": 334
+    },
+    "/files": {
+      "js_gzip_kb": 267,
+      "css_gzip_kb": 57,
+      "css_raw_kb": 351
+    },
+    "/finances": {
+      "js_gzip_kb": 267,
+      "css_gzip_kb": 49,
+      "css_raw_kb": 314
+    },
+    "/fine-settings": {
+      "js_gzip_kb": 253,
+      "css_gzip_kb": 47,
+      "css_raw_kb": 305
+    },
+    "/fines": {
+      "js_gzip_kb": 261,
+      "css_gzip_kb": 47,
+      "css_raw_kb": 305
+    },
+    "/lists": {
+      "js_gzip_kb": 273,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 319
+    },
+    "/login": {
+      "js_gzip_kb": 229,
+      "css_gzip_kb": 48,
+      "css_raw_kb": 309
+    },
+    "/maintenance": {
+      "js_gzip_kb": 210,
+      "css_gzip_kb": 47,
+      "css_raw_kb": 305
+    },
+    "/my-tasks": {
+      "js_gzip_kb": 280,
+      "css_gzip_kb": 51,
+      "css_raw_kb": 327
+    },
+    "/overload": {
+      "js_gzip_kb": 209,
+      "css_gzip_kb": 47,
+      "css_raw_kb": 305
+    },
+    "/participants": {
+      "js_gzip_kb": 274,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 319
+    },
+    "/participants/[id]": {
+      "js_gzip_kb": 252,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 319
+    },
+    "/pdf-loading": {
+      "js_gzip_kb": 206,
+      "css_gzip_kb": 49,
+      "css_raw_kb": 312
+    },
+    "/photos": {
+      "js_gzip_kb": 287,
+      "css_gzip_kb": 55,
+      "css_raw_kb": 346
+    },
+    "/photos/submissions": {
+      "js_gzip_kb": 240,
+      "css_gzip_kb": 55,
+      "css_raw_kb": 346
+    },
+    "/protocols": {
+      "js_gzip_kb": 258,
+      "css_gzip_kb": 66,
+      "css_raw_kb": 400
+    },
+    "/protocols/[id]": {
+      "js_gzip_kb": 689,
+      "css_gzip_kb": 66,
+      "css_raw_kb": 400
+    },
+    "/settings": {
+      "js_gzip_kb": 206,
+      "css_gzip_kb": 47,
+      "css_raw_kb": 305
+    },
+    "/settings/verification": {
+      "js_gzip_kb": 206,
+      "css_gzip_kb": 47,
+      "css_raw_kb": 305
+    },
+    "/share/[token]": {
+      "js_gzip_kb": 213,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 318
+    },
+    "/shared-links": {
+      "js_gzip_kb": 251,
+      "css_gzip_kb": 47,
+      "css_raw_kb": 305
+    },
+    "/statistics": {
+      "js_gzip_kb": 265,
+      "css_gzip_kb": 49,
+      "css_raw_kb": 317
+    },
+    "/submission-assignments": {
+      "js_gzip_kb": 282,
+      "css_gzip_kb": 55,
+      "css_raw_kb": 341
+    },
+    "/task-packages": {
+      "js_gzip_kb": 296,
       "css_gzip_kb": 56,
-      "css_raw_kb": 345
+      "css_raw_kb": 349
+    },
+    "/templates": {
+      "js_gzip_kb": 550,
+      "css_gzip_kb": 63,
+      "css_raw_kb": 391
     },
     "/templates/[id]": {
-      "js_gzip_kb": 532,
-      "css_gzip_kb": 56,
-      "css_raw_kb": 345
+      "js_gzip_kb": 550,
+      "css_gzip_kb": 63,
+      "css_raw_kb": 391
     },
     "/tenant-settings": {
-      "js_gzip_kb": 257,
-      "css_gzip_kb": 46,
-      "css_raw_kb": 292
+      "js_gzip_kb": 264,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 322
     },
     "/tenant-settings/abo": {
-      "js_gzip_kb": 255,
-      "css_gzip_kb": 46,
-      "css_raw_kb": 292
+      "js_gzip_kb": 262,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 322
     },
     "/tenant-settings/activity": {
-      "js_gzip_kb": 246,
-      "css_gzip_kb": 46,
-      "css_raw_kb": 292
+      "js_gzip_kb": 255,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 322
     },
     "/tenant-settings/domains": {
-      "js_gzip_kb": 255,
-      "css_gzip_kb": 46,
-      "css_raw_kb": 292
+      "js_gzip_kb": 262,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 322
     },
     "/tenant-settings/links": {
-      "js_gzip_kb": 248,
+      "js_gzip_kb": 251,
       "css_gzip_kb": 50,
-      "css_raw_kb": 321
+      "css_raw_kb": 322
     },
     "/tenant-settings/privacy": {
-      "js_gzip_kb": 245,
-      "css_gzip_kb": 46,
-      "css_raw_kb": 292
+      "js_gzip_kb": 251,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 322
     },
     "/tenant-settings/retention": {
-      "js_gzip_kb": 245,
-      "css_gzip_kb": 46,
-      "css_raw_kb": 292
+      "js_gzip_kb": 251,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 322
     },
     "/tenant-settings/verification": {
-      "js_gzip_kb": 246,
-      "css_gzip_kb": 46,
-      "css_raw_kb": 292
+      "js_gzip_kb": 252,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 322
     },
     "/todo-fines": {
-      "js_gzip_kb": 248,
-      "css_gzip_kb": 43,
-      "css_raw_kb": 277
+      "js_gzip_kb": 206,
+      "css_gzip_kb": 47,
+      "css_raw_kb": 305
     },
     "/todos": {
-      "js_gzip_kb": 266,
-      "css_gzip_kb": 45,
-      "css_raw_kb": 285
+      "js_gzip_kb": 280,
+      "css_gzip_kb": 51,
+      "css_raw_kb": 327
     },
     "/tools": {
-      "js_gzip_kb": 205,
-      "css_gzip_kb": 52,
-      "css_raw_kb": 322
+      "js_gzip_kb": 206,
+      "css_gzip_kb": 57,
+      "css_raw_kb": 355
     },
     "/tools/import": {
-      "js_gzip_kb": 278,
-      "css_gzip_kb": 52,
-      "css_raw_kb": 322
+      "js_gzip_kb": 290,
+      "css_gzip_kb": 57,
+      "css_raw_kb": 355
     },
     "/tools/import/[id]": {
-      "js_gzip_kb": 299,
-      "css_gzip_kb": 52,
-      "css_raw_kb": 322
+      "js_gzip_kb": 312,
+      "css_gzip_kb": 57,
+      "css_raw_kb": 355
     },
     "/tools/word-import": {
-      "js_gzip_kb": 299,
-      "css_gzip_kb": 52,
-      "css_raw_kb": 322
+      "js_gzip_kb": 312,
+      "css_gzip_kb": 57,
+      "css_raw_kb": 355
     },
     "/users": {
-      "js_gzip_kb": 247,
-      "css_gzip_kb": 43,
-      "css_raw_kb": 277
+      "js_gzip_kb": 251,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 319
     },
     "/users/roles": {
-      "js_gzip_kb": 237,
-      "css_gzip_kb": 43,
-      "css_raw_kb": 277
+      "js_gzip_kb": 246,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 319
+    },
+    "/users/security": {
+      "js_gzip_kb": 241,
+      "css_gzip_kb": 50,
+      "css_raw_kb": 319
     },
     "/website": {
-      "js_gzip_kb": 211,
-      "css_gzip_kb": 49,
-      "css_raw_kb": 306
+      "js_gzip_kb": 212,
+      "css_gzip_kb": 53,
+      "css_raw_kb": 335
     }
   }
 }
