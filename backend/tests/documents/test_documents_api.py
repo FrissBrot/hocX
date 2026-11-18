@@ -78,6 +78,20 @@ def test_render_protocol_and_list_exports(db, setup):
     assert [item.id for item in listed] == [result.id]
 
 
+def test_export_list_hides_draft_protocol_exports_from_readers(db, setup):
+    """Nachtlauf 2026-11-18 (dokumente/rechte): ohne protocol_id lieferte die Exportliste jedem
+    Leser alle Exporte des Mandanten - auch Titel, Nummer und Prüf-ID von Exporten eines
+    Protokollentwurfs, den er weder in der Protokollliste noch per ID sehen darf."""
+    draft_export = render_now(DocumentRequest(protocol_id=setup["protocol"].public_id), db=db, user=setup["kassier"])
+
+    def listed_ids(user):
+        return [item.id for item in routes.list_document_exports(protocol_id=None, document_type=None, limit=20, offset=0, db=db, user=user)]
+
+    assert draft_export.id in listed_ids(setup["kassier"])
+    assert draft_export.id in listed_ids(setup["admin"])
+    assert draft_export.id not in listed_ids(setup["reader"])
+
+
 def test_foreign_protocol_and_template_are_not_found(db, setup):
     with pytest.raises(HTTPException) as excinfo:
         render_now(DocumentRequest(protocol_id=setup["protocol"].public_id), db=db, user=setup["other_admin"])
