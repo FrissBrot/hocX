@@ -8,16 +8,6 @@ Installationen aktualisieren können.
 
 ## [Unreleased]
 
-### Neu: Server aus dem Backup wiederherstellen
-
-- `./scripts/deploy.sh <test|prod> --restore-from-backup` richtet einen neuen, leeren Server direkt
-  aus dem Borg-Backup ein: `.env` aus der Notfallmappe, neuer SSH-Schlüssel für die Storage Box mit
-  fertiger `authorized_keys`-Zeile, Host-Key-Prüfung, Wahl des Wiederherstellungspunkts, Restore von
-  Datenbank und Dateien ins lokale S3, danach der normale Deploy und eine Checkliste. Abgebrochene
-  Läufe lassen sich mit demselben Befehl fortsetzen. Auf einem Server mit Daten verweigert er den Start.
-- Recovery-CLI: `restore-full --local-s3` (Ziel lokales Garage, das Profil «Lokales S3» der
-  Sicherung bleibt), `list --tsv` und `show --schema-state` für Skripte.
-
 ## [1.4.0] - 2026-11-18
 
 Eine neu eingeteilte Seitenleiste nach Tätigkeiten mit «Meine Aufgaben» und gesammelten
@@ -45,6 +35,16 @@ oder Umgebungsvariablen, keine Breaking Changes.
 - Ausgetretene Personen (Austrittsdatum vor heute) können sich ab dem Update nicht mehr anmelden,
   auch wenn ihr Login eingeschaltet ist; laufende Sitzungen enden. Wer das Austrittsdatum entfernt,
   gibt den Login wieder frei.
+
+### Neu: Server aus dem Backup wiederherstellen
+
+- `./scripts/deploy.sh <test|prod> --restore-from-backup` richtet einen neuen, leeren Server direkt
+  aus dem Borg-Backup ein: `.env` aus der Notfallmappe, neuer SSH-Schlüssel für die Storage Box mit
+  fertiger `authorized_keys`-Zeile, Host-Key-Prüfung, Wahl des Wiederherstellungspunkts, Restore von
+  Datenbank und Dateien ins lokale S3, danach der normale Deploy und eine Checkliste. Abgebrochene
+  Läufe lassen sich mit demselben Befehl fortsetzen. Auf einem Server mit Daten verweigert er den Start.
+- Recovery-CLI: `restore-full --local-s3` (Ziel lokales Garage, das Profil «Lokales S3» der
+  Sicherung bleibt), `list --tsv` und `show --schema-state` für Skripte.
 
 ### Behoben: PDFs entstehen nur noch bei Änderungen
 
