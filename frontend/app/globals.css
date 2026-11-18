@@ -2130,6 +2130,75 @@ input[type="color"]::-moz-color-swatch {
   gap: var(--space-2);
 }
 
+/* Implizierte Rechte (Phase 7): angehakt, aber ausgegraut - ergeben sich aus einem anderen Recht */
+.roles-permission-option.roles-permission-option-implied {
+  border-style: dashed;
+  border-color: var(--border-strong);
+  background: var(--bg);
+}
+
+.roles-permission-option-implied .roles-checklist-name {
+  color: var(--muted);
+}
+
+/* Rollen-Vorlagen (Phase 7): Karten als <button>, eigene Klasse ohne button-Präfix (DESIGN.md 7) */
+.roles-template-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.roles-template-option {
+  display: grid;
+  gap: var(--space-1);
+  min-height: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  --button-bg: var(--bg);
+  background: var(--bg);
+  color: var(--text);
+  font-weight: 400;
+  text-align: left;
+}
+
+.roles-template-option:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* «Ansehen als …» (Phase 7): Vorschau der Navigation und Rechte eines Kontos */
+.access-preview {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.access-preview-nav {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-3);
+}
+
+.access-preview-nav-group {
+  display: grid;
+  align-content: start;
+  gap: var(--space-1);
+}
+
+.access-preview-list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.access-preview-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
 .roles-table-name {
   display: flex;
   flex-wrap: wrap;

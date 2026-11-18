@@ -29,7 +29,7 @@
   "exceedsOwn": "Ce rôle contient des autorisations que vous n’avez pas vous-même. Vous ne pouvez donc pas le modifier.",
   "notOwned": "Contient des autorisations que vous n’avez pas vous-même.",
   "featureMissing": "Module non souscrit",
-  "impliedBy": "Inclus automatiquement dans : {permissions}",
+  "impliedBy": "Découle de : {permissions}",
   "deleteConfirm": "Supprimer le rôle « {name} » ? Ce n’est possible que s’il n’est plus attribué à aucun compte.",
   "fields": {
     "name": "Nom",
@@ -214,5 +214,60 @@
     "all": "Tous",
     "assigned": "Attribués uniquement",
     "fixedHelp": "S'applique à tous, car une autre autorisation de ce rôle l'inclut pour tous."
+  },
+  "fromTemplate": "À partir d'un modèle",
+  "templatePicker": {
+    "title": "Nouveau rôle à partir d'un modèle",
+    "description": "Le modèle pré-remplit le formulaire. Un rôle propre est enregistré, que tu peux ensuite adapter librement ; il ne reste pas lié au modèle.",
+    "omitted": "{count, plural, one {Tu ne détiens pas # autorisation toi-même, elle est omise.} other {Tu ne détiens pas # autorisations toi-même, elles sont omises.}}"
+  },
+  "templateApplied": "Modèle « {name} » appliqué. Vérifie les autorisations et enregistre le rôle.",
+  "templateOmitted": "Non repris, car tu ne les détiens pas toi-même : {permissions}",
+  "templates": {
+    "president": {
+      "name": "Président",
+      "description": "Dirige les séances et clôture les procès-verbaux, voit la caisse, les membres et les évaluations."
+    },
+    "secretary": {
+      "name": "Secrétaire",
+      "description": "Rédige les procès-verbaux, gère les modèles, les membres et le classement."
+    },
+    "treasurer": {
+      "name": "Caissier",
+      "description": "Tient la caisse et les amendes, voit les brouillons de procès-verbaux et la liste des membres."
+    },
+    "auditor": {
+      "name": "Vérificateur des comptes",
+      "description": "Lecture seule : procès-verbaux y c. brouillons, caisse, membres, évaluations et classement."
+    },
+    "reviewer": {
+      "name": "Vérificateur des remises",
+      "description": "Vérifie uniquement les remises qui lui sont attribuées."
+    },
+    "member": {
+      "name": "Membre",
+      "description": "Comme le rôle standard Lecteur : voir les séances, terminer ses propres tâches."
+    }
+  },
+  "preview": {
+    "title": "Voir en tant que {name}",
+    "description": "Voici comment ce compte voit hocX avec ses rôles enregistrés.",
+    "readOnlyHint": "Aperçu uniquement : aucune session du compte n'est ouverte et rien n'est modifié. La consultation figure dans l'historique.",
+    "noLogin": "Le compte ne peut pas se connecter actuellement. L'aperçu montre ce qu'il verrait après connexion.",
+    "loading": "Chargement de l'aperçu …",
+    "loadFailed": "L'aperçu n'a pas pu être chargé",
+    "noRoles": "Aucun rôle",
+    "mfa": "Second facteur",
+    "mfaRequired": "MFA obligatoire",
+    "mfaOptional": "MFA facultative",
+    "mfaActive": "Configurée",
+    "mfaInactive": "Non configurée",
+    "navigation": "Éléments de menu",
+    "navigationEmpty": "Aucun élément de menu hormis la page d'accueil.",
+    "startGroup": "Accueil",
+    "featureReadOnly": "Module en lecture seule",
+    "submissions": "Remises",
+    "submissionsAll": "{count, plural, =0 {Toutes les demandes de remise (aucune actuellement)} other {Toutes les demandes de remise (#)}}",
+    "submissionsAssigned": "{count, plural, =0 {Demandes de remise attribuées uniquement, aucune actuellement} other {Demandes de remise attribuées uniquement : #}}"
   }
 }

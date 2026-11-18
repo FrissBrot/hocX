@@ -198,7 +198,11 @@
     "blockers": {
       "displayName": "Saving is blocked: the display name is missing.",
       "dates": "Saving is blocked: the leaving date is before the joining date."
-    }
+    },
+    "previewAction": "View as …",
+    "previewHelp": "Shows which menu items, permissions and submissions this account sees (read only, recorded in the activity log).",
+    "previewSavedOnly": "The preview shows the saved state. Save the changed roles first.",
+    "previewNotAllowed": "Only for accounts that don't have more permissions than you."
   },
   "newMember": {
     "description": "The person then appears in the member list. Without an invitation they remain a member without a login.",

@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 
 import { MfaAdminModal } from "@/components/security/mfa-admin-modal";
 import { mfaState, rolesNeedMfa } from "@/components/users/access-helpers";
+import { AccessPreviewModal } from "@/components/users/access-preview-modal";
 import { EffectivePermissions, RoleChecklist } from "@/components/users/role-fields";
 import { Badge } from "@/components/ui/badge";
 import { DateInput } from "@/components/ui/date-input";
@@ -111,12 +112,17 @@ export function PersonPage({
   const [mfaOpen, setMfaOpen] = useState(false);
   const [mfa, setMfa] = useState(initialMfa);
   const [exportOpen, setExportOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const saved = useMemo(() => draftOf(person, savedTemplateIds), [person, savedTemplateIds]);
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
   const isSelf = ownUserId === person.id;
   const loginStatus = person.login_status ?? (person.login_enabled ? "active" : "none");
   const required = tenantRequiresMfa || rolesNeedMfa(roles, saved.role_ids);
+  // «Ansehen als …» nur für Konten ohne mehr Rechte als man selbst (Backend prüft genauso, 403)
+  const previewAllowed = roles
+    .filter((role) => saved.role_ids.includes(role.id))
+    .every((role) => role.permissions.every((key) => actorPermissions.includes(key)));
   const mfaStatus = mfaState(Boolean(mfa?.has_factors), Boolean(mfa?.required) || required);
 
   useEffect(() => {
@@ -465,6 +471,17 @@ export function PersonPage({
         )}
         {permissions.access ? <Link href="/users/roles" className="person-section-link">{t("person.rolesExplained")}</Link> : null}
 
+        {permissions.access ? (
+          <div className="person-login-row">
+            <span className="field-help">
+              {!previewAllowed ? t("person.previewNotAllowed") : draft.role_ids.join() !== saved.role_ids.join() ? t("person.previewSavedOnly") : t("person.previewHelp")}
+            </span>
+            <button type="button" className="button-secondary" disabled={!previewAllowed} onClick={() => setPreviewOpen(true)}>
+              {t("person.previewAction")}
+            </button>
+          </div>
+        ) : null}
+
         {loginStatus === "active" && permissions.access ? (
           <div className="person-login-row">
             <div className="field-stack">
@@ -534,6 +551,10 @@ export function PersonPage({
         loadPath={mfaOpen ? `/api/users/${person.id}/mfa` : null}
         deletePathBase={mfaOpen ? `/api/users/${person.id}/mfa/factors` : null}
       />
+
+      {previewOpen ? (
+        <AccessPreviewModal open onClose={() => setPreviewOpen(false)} userId={person.id} name={person.display_name} />
+      ) : null}
 
       {exportOpen ? (
         <ProtectedExportModal

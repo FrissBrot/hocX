@@ -198,7 +198,11 @@
     "blockers": {
       "displayName": "Salvataggio bloccato: manca il nome visualizzato.",
       "dates": "Salvataggio bloccato: l'uscita è prima dell'entrata."
-    }
+    },
+    "previewAction": "Visualizza come …",
+    "previewHelp": "Mostra quali voci di menu, autorizzazioni e consegne vede questo account (solo lettura, registrato nella cronologia).",
+    "previewSavedOnly": "L'anteprima mostra lo stato salvato. Salva prima i ruoli modificati.",
+    "previewNotAllowed": "Solo per account che non hanno più autorizzazioni di te."
   },
   "newMember": {
     "description": "La persona compare poi nella lista dei membri. Senza invito resta membro senza accesso.",

@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
-import { roleName } from "@/lib/permissions";
+import { SCOPED_PERMISSIONS, roleName } from "@/lib/permissions";
 import { PERMISSION_AREAS, PERMISSIONS, type PermissionKey } from "@/lib/permissions.generated";
 import type { RoleRead } from "@/types/api";
 
@@ -87,6 +87,17 @@ export function EffectivePermissions({
     return result;
   }, [roles, roleIds, tNav]);
 
+  // Reichweite je Konto (wie core/permissions.py::assigned_only_permissions): «nur zugewiesene»,
+  // wenn keine gewählte Rolle das Recht für alle gibt
+  const assignedOnly = useMemo(() => {
+    const result = new Set<string>();
+    for (const key of SCOPED_PERMISSIONS) {
+      const holders = roles.filter((role) => roleIds.includes(role.id) && role.permissions.includes(key));
+      if (holders.length > 0 && holders.every((role) => role.scopes?.[key] === "assigned")) result.add(key);
+    }
+    return result;
+  }, [roles, roleIds]);
+
   const areas = PERMISSION_AREAS.map((area) => ({
     area,
     permissions: PERMISSIONS.filter((permission) => permission.area === area && sources.has(permission.key)),
@@ -107,6 +118,7 @@ export function EffectivePermissions({
                   <li key={permission.key}>
                     <span>{t(`permissions.${permission.key}.label`)}</span>
                     <span className="field-help">{t("effective.via", { roles: (sources.get(permission.key) ?? []).join(", ") })}</span>
+                    {assignedOnly.has(permission.key) ? <Badge variant="info">{t("scopes.assigned")}</Badge> : null}
                     {permission.feature && !enabledFeatures.includes(permission.feature) ? (
                       <Badge variant="neutral">{t("featureMissing")}</Badge>
                     ) : null}

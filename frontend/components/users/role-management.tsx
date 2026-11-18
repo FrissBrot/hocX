@@ -17,6 +17,7 @@ import { roleNeedsMfa } from "@/components/users/access-helpers";
 import { Select } from "@/components/ui/select";
 import { SCOPED_PERMISSIONS, expandPermissions, minimalPermissions, resolveScopes, roleName, type PermissionScope } from "@/lib/permissions";
 import { PERMISSION_AREAS, PERMISSIONS, type PermissionKey } from "@/lib/permissions.generated";
+import { ROLE_TEMPLATES, templateSelection, type RoleTemplate, type RoleTemplateKey } from "@/lib/role-templates";
 import type { RoleRead } from "@/types/api";
 
 type Props = {
@@ -47,6 +48,8 @@ type RoleForm = {
   locked: boolean;
   // MFA für alle Konten mit dieser Rolle (Migration 0192)
   requireMfa: boolean;
+  // Aus einer Vorlage vorbelegt (nur Hinweis; die Rolle ist danach unabhängig, Phase 7)
+  template?: { key: RoleTemplateKey; omitted: PermissionKey[] };
 };
 
 const IMPLIED_BY = new Map<PermissionKey, PermissionKey[]>();
@@ -94,6 +97,7 @@ export function RoleManagement({ initialRoles, actorPermissions, actorAssignedOn
   const [roles, setRoles] = useState(initialRoles);
   const [form, setForm] = useState<RoleForm | null>(null);
   const [saving, setSaving] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
   const own = useMemo(() => new Set(actorPermissions), [actorPermissions]);
   const ownAssignedOnly = useMemo(() => new Set(actorAssignedOnly), [actorAssignedOnly]);
 
@@ -116,6 +120,20 @@ export function RoleManagement({ initialRoles, actorPermissions, actorAssignedOn
       systemKey: role.system_key,
       locked: role.locked || !canCustomize,
       requireMfa: Boolean(role.require_mfa),
+    });
+  }
+
+  // «Neue Rolle aus Vorlage»: füllt nur das Formular; nur Rechte, die man selbst vergeben darf
+  function openTemplate(template: RoleTemplate) {
+    const { selected, scopes: templateScopes, omitted } = templateSelection(template, own, ownAssignedOnly);
+    setTemplatesOpen(false);
+    setForm({
+      ...emptyForm(),
+      name: t(`templates.${template.key}.name`),
+      description: t(`templates.${template.key}.description`),
+      selected,
+      scopes: templateScopes,
+      template: { key: template.key, omitted },
     });
   }
 
@@ -193,9 +211,14 @@ export function RoleManagement({ initialRoles, actorPermissions, actorAssignedOn
           <p className="muted">{t("pageHint")}</p>
         </div>
         {canCustomize ? (
-          <button type="button" className="button-primary" onClick={() => setForm(emptyForm())}>
-            {t("newRole")}
-          </button>
+          <div className="table-actions">
+            <button type="button" className="button-secondary" onClick={() => setTemplatesOpen(true)}>
+              {t("fromTemplate")}
+            </button>
+            <button type="button" className="button-primary" onClick={() => setForm(emptyForm())}>
+              {t("newRole")}
+            </button>
+          </div>
         ) : null}
       </div>
 
@@ -228,6 +251,23 @@ export function RoleManagement({ initialRoles, actorPermissions, actorAssignedOn
         ))}
       </DataTable>
 
+      <Modal open={templatesOpen} onClose={() => setTemplatesOpen(false)} title={t("templatePicker.title")} description={t("templatePicker.description")}>
+        <div className="roles-template-list">
+          {ROLE_TEMPLATES.map((template) => {
+            const { selected, omitted } = templateSelection(template, own, ownAssignedOnly);
+            const count = expandPermissions(selected).size;
+            return (
+              <button key={template.key} type="button" className="roles-template-option" disabled={count === 0} onClick={() => openTemplate(template)}>
+                <span className="roles-checklist-name">{t(`templates.${template.key}.name`)}</span>
+                <span className="field-help">{t(`templates.${template.key}.description`)}</span>
+                <span className="field-help">{t("permissionCount", { count })}</span>
+                {omitted.length > 0 ? <span className="field-help">{t("templatePicker.omitted", { count: omitted.length })}</span> : null}
+              </button>
+            );
+          })}
+        </div>
+      </Modal>
+
       <Modal
         open={!!form}
         onClose={() => setForm(null)}
@@ -239,6 +279,13 @@ export function RoleManagement({ initialRoles, actorPermissions, actorAssignedOn
           <ModalSaveForm className="grid" onSubmit={save}>
             {form.locked ? <StatusBanner tone="neutral" message={t("lockedHint")} /> : null}
             {!form.locked && exceedsOwn ? <StatusBanner tone="error" message={t("exceedsOwn")} /> : null}
+            {form.template ? <StatusBanner tone="neutral" message={t("templateApplied", { name: t(`templates.${form.template.key}.name`) })} /> : null}
+            {form.template && form.template.omitted.length > 0 ? (
+              <StatusBanner
+                tone="warning"
+                message={t("templateOmitted", { permissions: form.template.omitted.map((key) => t(`permissions.${key}.label`)).join(", ") })}
+              />
+            ) : null}
             <div className="two-col">
               <label className="field-stack">
                 <span className="field-label">{t("fields.name")}</span>
@@ -286,7 +333,7 @@ export function RoleManagement({ initialRoles, actorPermissions, actorAssignedOn
                       );
                       return (
                         <div key={permission.key} className="roles-permission-entry">
-                        <label className="roles-permission-option">
+                        <label className={implied ? "roles-permission-option roles-permission-option-implied" : "roles-permission-option"}>
                           <input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => toggle(permission.key, event.target.checked)} />
                           <span className="roles-checklist-text">
                             <span className="roles-checklist-name">

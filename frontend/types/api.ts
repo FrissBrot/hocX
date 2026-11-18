@@ -33,6 +33,30 @@ export type RoleRef = {
   system_key: "admin" | "writer" | "kassier" | "reader" | null;
 };
 
+/** GET /api/users/{id}/access-preview - «Ansehen als …» (Plan «Berechtigungen», Phase 7), nur lesend */
+export type AccessPreview = {
+  user_id: string;
+  display_name: string;
+  is_active: boolean;
+  login_enabled: boolean;
+  roles: RoleRef[];
+  permissions: {
+    key: string;
+    scope: "all" | "assigned" | null;
+    feature_access: "full" | "read_only" | "none";
+    effective: boolean;
+  }[];
+  enabled_features: string[];
+  read_only_features: string[];
+  mfa_required: boolean;
+  mfa_active: boolean;
+  submissions: {
+    scope: "all" | "assigned";
+    visible_count: number;
+    assigned: { id: string; title: string }[];
+  } | null;
+};
+
 export type RoleRead = RoleRef & {
   description: string | null;
   permissions: string[];

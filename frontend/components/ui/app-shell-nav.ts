@@ -43,7 +43,11 @@ export function isNavLinkActive(link: NavLink, pathname: string): boolean {
  * gesammelt und «Organisation» für das, was den ganzen Mandanten betrifft. Die Adressen der Seiten
  * sind dieselben wie vorher; geändert hat sich nur die Einteilung. Rechte wie bisher.
  */
-export function buildNav(session: SessionInfo | null): NavGroup[] {
+// Nur Rechte und Module: dieselbe Funktion berechnet auch die Vorschau «Ansehen als …» (Phase 7,
+// components/users/access-preview-modal.tsx) - eine Quelle für die echte und die gezeigte Navigation.
+export type NavSession = Pick<SessionInfo, "permissions" | "current_tenant">;
+
+export function buildNav(session: NavSession | null): NavGroup[] {
   const editsMeetings = can(session, "meetings.edit");
   const editsTemplates = can(session, "templates.edit");
   const managesTemplates = can(session, "templates.manage");

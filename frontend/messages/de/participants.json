@@ -198,7 +198,11 @@
     "blockers": {
       "displayName": "Speichern ist gesperrt: der Anzeigename fehlt.",
       "dates": "Speichern ist gesperrt: der Austritt liegt vor dem Eintritt."
-    }
+    },
+    "previewAction": "Ansehen als …",
+    "previewHelp": "Zeigt, welche Menüpunkte, Rechte und Abgaben dieses Konto sieht (nur lesend, im Verlauf vermerkt).",
+    "previewSavedOnly": "Die Vorschau zeigt den gespeicherten Stand. Speichere zuerst die geänderten Rollen.",
+    "previewNotAllowed": "Nur für Konten, die nicht mehr Berechtigungen haben als du."
   },
   "newMember": {
     "description": "Die Person erscheint danach in der Mitgliederliste. Ohne Einladung bleibt sie Mitglied ohne Login.",

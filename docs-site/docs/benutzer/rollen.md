@@ -57,7 +57,42 @@ braucht, bekommt einfach beide Rollen.
 
 Im Rollen-Dialog bedeutet das Abzeichen **MFA**, dass sich mit dieser Berechtigung nur mit zweitem
 Faktor anmelden lässt; **Modul nicht gebucht** heisst, dass sie erst mit dem Abo-Modul wirkt.
-Ausgegraute Berechtigungen hast du selbst nicht oder sie ergeben sich aus einer anderen.
+Ausgegraute Berechtigungen hast du selbst nicht oder sie ergeben sich aus einer anderen: Wer z. B.
+«Sitzungen bearbeiten» ankreuzt, bekommt «Entwürfe ansehen» und «Sitzungen ansehen» automatisch
+(angehakt, gestrichelt umrandet, mit dem Hinweis «Ergibt sich aus …»). Bei «Abgaben ansehen» und
+«Abgaben prüfen» wählt man darunter die **Reichweite**: «Alle» oder «Nur zugewiesene».
+
+## Rollen-Vorlagen {#vorlagen}
+
+Unter **Zugriff → Rollen → Aus Vorlage** stehen fertige Vorschläge bereit. Eine Vorlage füllt nur
+das Formular vor (Name, Beschreibung, Berechtigungen, Reichweiten); gespeichert wird eine ganz
+normale eigene Rolle, die man danach frei anpassen kann. Sie bleibt **nicht** mit der Vorlage
+verknüpft.
+
+| Vorlage | Berechtigungen |
+|---|---|
+| Präsident | Sitzungen bearbeiten, Protokolle freigeben, Vorlagen gestalten, Kontaktdaten sehen, Kassenbuch, Personenbezogene Daten aller, Dateien und Fotos ansehen, Abgaben ansehen, eigene Pendenzen |
+| Aktuar | Sitzungen bearbeiten, Vorlagen verwalten, Teilnehmende verwalten, Dateien und Fotos verwalten, öffentlich teilen, eigene Pendenzen |
+| Kassier | Entwürfe ansehen, Personen ansehen, Finanzen und Bussen verwalten, Personenbezogene Daten aller, eigene Pendenzen |
+| Revisor | Nur lesend: Entwürfe, Personen, Kassenbuch, Personenbezogene Daten aller, Dateien und Fotos ansehen |
+| Abgabe-Prüfer | Sitzungen ansehen, Abgaben prüfen (Reichweite «Nur zugewiesene»), eigene Pendenzen |
+| Mitglied | Wie die Standardrolle Leser |
+
+Keine Vorlage enthält Administrationsrechte (die verlangen MFA); dafür gibt es die Rolle Admin.
+Berechtigungen, die du selbst nicht hast, übernimmt eine Vorlage nicht – die Auswahl zeigt, wie
+viele weggelassen werden, und das Formular nennt sie.
+
+## Ansehen als … {#ansehen-als}
+
+Auf der Personenseite (Abschnitt Login) zeigt **Ansehen als …**, was dieses Konto mit seinen
+gespeicherten Rollen sieht: Menüpunkte, Berechtigungen samt Reichweite, ob das Modul gebucht ist,
+MFA-Pflicht und – bei «Nur zugewiesene» – die zugewiesenen Abgabe-Aufträge.
+
+- Nur mit «Benutzer & Rollen verwalten» und nur für Konten, die nicht mehr Rechte haben als du.
+- Reine Vorschau: Es wird keine Sitzung des anderen Kontos geöffnet, man kann damit nichts ändern
+  und sieht keine Inhalte anderer Personen.
+- Jeder Aufruf steht im Verlauf (Vorgang «Konto · angesehen»), abgelehnte Versuche ebenfalls.
+- Ungespeicherte Rollen-Änderungen zeigt die Vorschau noch nicht – zuerst speichern.
 
 Berechtigungen eines nicht gebuchten Moduls (Finanzen, Abgabebox) wirken erst, wenn das Modul
 gebucht ist. Eigene Daten (Profil, Passwort, MFA, eigene Bussen und Aufgaben, eigene Kalender-Abos)

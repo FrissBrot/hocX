@@ -6,8 +6,8 @@ Rollen-Matrix: `permissions/permission-matrix.json` (geprüft von `tests/test_pe
 
 ## Übersicht
 
-- Routen gesamt: 570 (Plattform-Admin: 127)
-- Mandanten-Routen mit Rechteprüfung: 365
+- Routen gesamt: 571 (Plattform-Admin: 127)
+- Mandanten-Routen mit Rechteprüfung: 366
 - Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 78
 - Mandanten-Routen ohne Prüfung und ohne Begründung (Lücken): 0
 - Routen, die Dateiinhalt ausliefern: 21
@@ -579,6 +579,7 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `DELETE /api/users/{user_id}` | UserService (access.manage) |
 | `GET /api/users/{user_id}` | UserService (access.manage) |
 | `PATCH /api/users/{user_id}` | UserService (access.manage) |
+| `GET /api/users/{user_id}/access-preview` | access.manage |
 | `GET /api/users/{user_id}/mfa` | MfaService._managed_user (access.manage) |
 | `DELETE /api/users/{user_id}/mfa/factors/{factor_id}` | MfaService._managed_user (access.manage) |
 | `PUT /api/users/{user_id}/roles` | access.manage |

@@ -29,7 +29,7 @@
   "exceedsOwn": "This role contains permissions you do not have yourself. You therefore cannot change it.",
   "notOwned": "Contains permissions you do not have yourself.",
   "featureMissing": "Module not booked",
-  "impliedBy": "Included automatically in: {permissions}",
+  "impliedBy": "Follows from: {permissions}",
   "deleteConfirm": "Delete role “{name}”? This is only possible if no account still has it.",
   "fields": {
     "name": "Name",
@@ -214,5 +214,60 @@
     "all": "All",
     "assigned": "Assigned only",
     "fixedHelp": "Applies to all because another permission of this role includes it for all."
+  },
+  "fromTemplate": "From template",
+  "templatePicker": {
+    "title": "New role from template",
+    "description": "The template pre-fills the form. A role of your own is saved, which you can adjust freely afterwards; it is not linked to the template.",
+    "omitted": "{count, plural, one {You don't hold # permission yourself, it is left out.} other {You don't hold # permissions yourself, they are left out.}}"
+  },
+  "templateApplied": "Template “{name}” applied. Check the permissions and save the role.",
+  "templateOmitted": "Not applied because you don't hold them yourself: {permissions}",
+  "templates": {
+    "president": {
+      "name": "President",
+      "description": "Chairs meetings and finalises minutes, sees cash book, members and reports."
+    },
+    "secretary": {
+      "name": "Secretary",
+      "description": "Writes minutes, maintains templates, members and storage."
+    },
+    "treasurer": {
+      "name": "Treasurer",
+      "description": "Manages cash book and fines, sees draft minutes and the member list."
+    },
+    "auditor": {
+      "name": "Auditor",
+      "description": "Read only: minutes incl. drafts, cash book, members, reports and storage."
+    },
+    "reviewer": {
+      "name": "Submission reviewer",
+      "description": "Reviews only the submissions they are assigned to."
+    },
+    "member": {
+      "name": "Member",
+      "description": "Like the standard Reader role: view meetings, complete own tasks."
+    }
+  },
+  "preview": {
+    "title": "View as {name}",
+    "description": "This is how this account sees hocX with its saved roles.",
+    "readOnlyHint": "Preview only: no session of the account is opened and nothing is changed. The access is recorded in the activity log.",
+    "noLogin": "The account currently cannot sign in. Shown is what it would see after signing in.",
+    "loading": "Loading preview …",
+    "loadFailed": "Preview could not be loaded",
+    "noRoles": "No roles",
+    "mfa": "Second factor",
+    "mfaRequired": "MFA required",
+    "mfaOptional": "MFA optional",
+    "mfaActive": "Set up",
+    "mfaInactive": "Not set up",
+    "navigation": "Menu items",
+    "navigationEmpty": "No menu items besides the start page.",
+    "startGroup": "Start",
+    "featureReadOnly": "Module read only",
+    "submissions": "Submissions",
+    "submissionsAll": "{count, plural, =0 {All submission requests (currently none)} other {All submission requests (#)}}",
+    "submissionsAssigned": "{count, plural, =0 {Assigned submission requests only, currently none} other {Assigned submission requests only: #}}"
   }
 }

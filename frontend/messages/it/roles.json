@@ -29,7 +29,7 @@
   "exceedsOwn": "Questo ruolo contiene autorizzazioni che tu non hai. Per questo non puoi modificarlo.",
   "notOwned": "Contiene autorizzazioni che tu non hai.",
   "featureMissing": "Modulo non prenotato",
-  "impliedBy": "Incluso automaticamente in: {permissions}",
+  "impliedBy": "Deriva da: {permissions}",
   "deleteConfirm": "Eliminare il ruolo «{name}»? È possibile solo se non è più assegnato a nessun account.",
   "fields": {
     "name": "Nome",
@@ -214,5 +214,60 @@
     "all": "Tutti",
     "assigned": "Solo assegnati",
     "fixedHelp": "Vale per tutti perché un'altra autorizzazione di questo ruolo lo include per tutti."
+  },
+  "fromTemplate": "Da modello",
+  "templatePicker": {
+    "title": "Nuovo ruolo da modello",
+    "description": "Il modello precompila il modulo. Viene salvato un ruolo proprio, che puoi poi adattare liberamente; non resta collegato al modello.",
+    "omitted": "{count, plural, one {Non hai tu stesso # autorizzazione, viene omessa.} other {Non hai tu stesso # autorizzazioni, vengono omesse.}}"
+  },
+  "templateApplied": "Modello «{name}» applicato. Verifica le autorizzazioni e salva il ruolo.",
+  "templateOmitted": "Non applicate perché non le hai tu stesso: {permissions}",
+  "templates": {
+    "president": {
+      "name": "Presidente",
+      "description": "Dirige le sedute e chiude i verbali, vede cassa, membri e statistiche."
+    },
+    "secretary": {
+      "name": "Attuario",
+      "description": "Redige i verbali, cura modelli, membri e archivio."
+    },
+    "treasurer": {
+      "name": "Cassiere",
+      "description": "Gestisce cassa e multe, vede le bozze dei verbali e l'elenco dei membri."
+    },
+    "auditor": {
+      "name": "Revisore",
+      "description": "Solo lettura: verbali incl. bozze, cassa, membri, statistiche e archivio."
+    },
+    "reviewer": {
+      "name": "Revisore consegne",
+      "description": "Verifica solo le consegne a cui è assegnato."
+    },
+    "member": {
+      "name": "Membro",
+      "description": "Come il ruolo standard Lettore: vedere le sedute, completare i propri compiti."
+    }
+  },
+  "preview": {
+    "title": "Visualizza come {name}",
+    "description": "Così questo account vede hocX con i suoi ruoli salvati.",
+    "readOnlyHint": "Solo anteprima: non viene aperta alcuna sessione dell'account e nulla viene modificato. L'accesso è registrato nella cronologia.",
+    "noLogin": "L'account al momento non può accedere. Viene mostrato ciò che vedrebbe dopo l'accesso.",
+    "loading": "Caricamento anteprima …",
+    "loadFailed": "Impossibile caricare l'anteprima",
+    "noRoles": "Nessun ruolo",
+    "mfa": "Secondo fattore",
+    "mfaRequired": "MFA obbligatoria",
+    "mfaOptional": "MFA facoltativa",
+    "mfaActive": "Configurata",
+    "mfaInactive": "Non configurata",
+    "navigation": "Voci di menu",
+    "navigationEmpty": "Nessuna voce di menu oltre alla pagina iniziale.",
+    "startGroup": "Inizio",
+    "featureReadOnly": "Modulo in sola lettura",
+    "submissions": "Consegne",
+    "submissionsAll": "{count, plural, =0 {Tutte le richieste di consegna (al momento nessuna)} other {Tutte le richieste di consegna (#)}}",
+    "submissionsAssigned": "{count, plural, =0 {Solo richieste di consegna assegnate, al momento nessuna} other {Solo richieste di consegna assegnate: #}}"
   }
 }
