@@ -222,7 +222,10 @@
     "finesCount": "{count, plural, one {# multa} other {# multe}}",
     "attendancePerMember": "Presenza per membro",
     "cardTitle": "Statistiche · ultimi 6 mesi",
-    "todosOpen": "Attività aperte"
+    "todosOpen": "Attività aperte",
+    "cardTitleYear": "Statistiche · {year}",
+    "finesShort": "Multe",
+    "present": "Presenti"
   },
   "submissions": {
     "fab": "Consegna"

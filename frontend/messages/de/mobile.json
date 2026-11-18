@@ -222,7 +222,10 @@
     "finesCount": "{count, plural, one {# Busse} other {# Bussen}}",
     "attendancePerMember": "Anwesenheit pro Mitglied",
     "cardTitle": "Statistik · letzte 6 Monate",
-    "todosOpen": "Pendenzen offen"
+    "todosOpen": "Pendenzen offen",
+    "cardTitleYear": "Statistik · {year}",
+    "finesShort": "Bussen",
+    "present": "Anwesend"
   },
   "submissions": {
     "fab": "Abgabe"

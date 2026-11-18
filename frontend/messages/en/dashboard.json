@@ -41,5 +41,22 @@
   "tomorrow": "Tomorrow",
   "unexcuseTitle": "Mark as unexcused again",
   "upcomingEventsEyebrow": "Upcoming events",
-  "excuseNoPermission": "Only people who may edit protocols can excuse here."
+  "excuseNoPermission": "Only people who may edit protocols can excuse here.",
+  "statsFinesOpen": "Open fines",
+  "statisticsLink": "Statistics",
+  "agendaWithDeadlinesTitle": "Events & deadlines",
+  "allEventsLink": "All events",
+  "thisWeek": "This week",
+  "nextWeek": "Next week",
+  "kind": {
+    "session": "Meeting",
+    "event": "Event",
+    "deadline": "Deadline"
+  },
+  "deadlineSub": "Submission",
+  "attendanceEyebrow": "Attendance",
+  "expectedCount": "{count} expected",
+  "excusedCount": "{count} excused",
+  "excuseHint": "Click a person to excuse them or to withdraw the excuse.",
+  "withoutProtocol": "No minutes"
 }

@@ -41,5 +41,22 @@
   "tomorrow": "Demain",
   "unexcuseTitle": "Remettre en non excusé",
   "upcomingEventsEyebrow": "Rendez-vous à venir",
-  "excuseNoPermission": "Seules les personnes autorisées à modifier les procès-verbaux peuvent excuser ici."
+  "excuseNoPermission": "Seules les personnes autorisées à modifier les procès-verbaux peuvent excuser ici.",
+  "statsFinesOpen": "Amendes ouvertes",
+  "statisticsLink": "Statistiques",
+  "agendaWithDeadlinesTitle": "Rendez-vous & délais",
+  "allEventsLink": "Tous les rendez-vous",
+  "thisWeek": "Cette semaine",
+  "nextWeek": "Semaine prochaine",
+  "kind": {
+    "session": "Séance",
+    "event": "Rendez-vous",
+    "deadline": "Délai"
+  },
+  "deadlineSub": "Remise",
+  "attendanceEyebrow": "Présence",
+  "expectedCount": "{count} attendu(s)",
+  "excusedCount": "{count} excusé(s)",
+  "excuseHint": "Clique sur une personne pour l'excuser ou retirer l'excuse.",
+  "withoutProtocol": "Sans procès-verbal"
 }

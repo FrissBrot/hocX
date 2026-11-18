@@ -1,305 +1,127 @@
 "use client";
 
-import { DocumentExportButton } from "@/components/documents/export-dialog";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import dynamic from "next/dynamic";
+import { useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 
+import { DocumentExportButton } from "@/components/documents/export-dialog";
+import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
-import { StatusBanner } from "@/components/ui/status-banner";
+import { FilterTabs } from "@/components/ui/filter-tabs";
 import { DocsLink, HelpPopover } from "@/components/ui/help-popover";
-import { ActionIcon } from "@/components/ui/action-icons";
-import { StatisticsOverview } from "@/types/api";
-import { CHART_COLORS, CHART_PIE_PALETTE } from "@/lib/constants/chart-colors";
-import { FullscreenCtx, fmtAmount } from "@/components/statistics/statistics-chart-utils";
-import type { PieEntry } from "@/components/statistics/statistics-charts";
-import { fineCountsByParticipant, fineCountsByType, fineTotalsByCurrency, formatFineTotals } from "@/lib/utils/fine-stats";
+import { StatusBanner } from "@/components/ui/status-banner";
+import type { StatisticsOverview } from "@/types/api";
 
-import { usePopupEscape, usePopupScrollLock } from "@/lib/hooks/use-popup-escape";
+import {
+  AttendanceMonthChart,
+  ChartLegend,
+  DivergingMonthChart,
+  DonutRing,
+  OverlayBar,
+  ProgressBar,
+  StackedBar,
+  percentLabel,
+} from "./statistics-bars";
+import {
+  LOW_ATTENDANCE_RATE,
+  attendanceBars,
+  attendanceRate,
+  financeView,
+  fineSum,
+  fineTypeRows,
+  finesByPerson,
+  groupRows,
+  mainAmount,
+  memberRows,
+  sumAttendance,
+  trendOf,
+  yearMonths,
+} from "./statistics-model";
+import { useStatisticsOverview } from "./use-statistics-overview";
+import { useStatisticsFormat } from "./use-statistics-format";
 
-type Props = { data: StatisticsOverview | null };
+type Props = { data: StatisticsOverview | null; year: number; today: string };
 
-// recharts erst nachladen (nur im Browser): die Diagramme brauchen ohnehin die gemessene
-// Containerbreite, serverseitig gerendert wuerden sie nichts zeigen.
-const AttendanceTimeChart = dynamic(
-  () => import("@/components/statistics/statistics-charts").then((m) => m.AttendanceTimeChart),
-  { ssr: false }
-);
-const AttendanceParticipantChart = dynamic(
-  () => import("@/components/statistics/statistics-charts").then((m) => m.AttendanceParticipantChart),
-  { ssr: false }
-);
-const FinanceChart = dynamic(
-  () => import("@/components/statistics/statistics-charts").then((m) => m.FinanceChart),
-  { ssr: false }
-);
-const GroupSessionsChart = dynamic(
-  () => import("@/components/statistics/statistics-charts").then((m) => m.GroupSessionsChart),
-  { ssr: false }
-);
-const GroupAvgChart = dynamic(
-  () => import("@/components/statistics/statistics-charts").then((m) => m.GroupAvgChart),
-  { ssr: false }
-);
-const PieDonutChart = dynamic(
-  () => import("@/components/statistics/statistics-charts").then((m) => m.PieDonutChart),
-  { ssr: false }
-);
-const FinesParticipantChart = dynamic(
-  () => import("@/components/statistics/statistics-charts").then((m) => m.FinesParticipantChart),
-  { ssr: false }
-);
+const MEMBER_LIMIT = 8;
+const PERSON_LIMIT = 8;
 
-const COLORS = CHART_COLORS;
-const PIE_PALETTE = CHART_PIE_PALETTE;
-
-type Period = "all" | "12m" | "6m" | "3m";
-
-function filterByPeriod<T extends { month: string }>(items: T[], period: Period): T[] {
-  if (period === "all" || items.length === 0) return items;
-  const months = period === "12m" ? 12 : period === "6m" ? 6 : 3;
-  const cutoff = new Date();
-  cutoff.setMonth(cutoff.getMonth() - months);
-  return items.filter((i) => i.month >= cutoff.toISOString().slice(0, 7));
-}
-
-function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+function SectionHeader({ title, intro, children }: { title: ReactNode; intro?: string; children?: ReactNode }) {
   return (
-    <div className="stats-card">
-      <div className="stats-card-label">{label}</div>
-      <div className="stats-card-value">{value}</div>
-      {sub && <div className="stats-card-sub">{sub}</div>}
-    </div>
-  );
-}
-
-function ExpandIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-      <polyline points="10,2 14,2 14,6" />
-      <polyline points="6,14 2,14 2,10" />
-      <line x1="14" y1="2" x2="9" y2="7" />
-      <line x1="2" y1="14" x2="7" y2="9" />
-    </svg>
-  );
-}
-
-type CycleOption = { value: string; label: string };
-function CycleDropdown({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: CycleOption[] }) {
-  const [open, setOpen] = useState(false);
-  const current = options.find((o) => o.value === value) ?? options[0];
-
-  useEffect(() => {
-    if (!open) return;
-    function onDown(e: MouseEvent) {
-      if (!(e.target as Element).closest(".stats-cycle-dd")) setOpen(false);
-    }
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [open]);
-
-  return (
-    <div className="stats-cycle-dd">
-      <button
-        type="button"
-        className={`stats-cycle-btn${open ? " stats-cycle-btn-open" : ""}`}
-        onClick={() => setOpen((o) => !o)}
-      >
-        <span>{current?.label}</span>
-        <svg className={`stats-cycle-chevron${open ? " open" : ""}`} width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="2,4 6,8 10,4" />
-        </svg>
-      </button>
-      {open && (
-        <div className="stats-cycle-menu">
-          {options.map((o) => (
-            <button
-              key={o.value}
-              type="button"
-              className={`stats-cycle-item${o.value === value ? " active" : ""}`}
-              onClick={() => { onChange(o.value); setOpen(false); }}
-            >
-              {o.value !== "all" && <span className="stats-cycle-dot" />}
-              {o.label}
-              {o.value === value && (
-                <svg className="stats-cycle-check" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="2,6 5,9 10,3" />
-                </svg>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ChartCard({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
-  const t = useTranslations("statistics");
-  const tCommon = useTranslations("common");
-  const [fullscreen, setFullscreen] = useState(false);
-
-  const rootRef = useRef<HTMLDivElement>(null);
-  usePopupEscape(fullscreen, () => setFullscreen(false), rootRef);
-  usePopupScrollLock(fullscreen);
-
-  const overlay = fullscreen && typeof document !== "undefined" ? createPortal(
-    <div ref={rootRef} className="stats-fs-backdrop" onClick={() => setFullscreen(false)}>
-      <div className="stats-fs-card" onClick={(e) => e.stopPropagation()}>
-        <div className="stats-fs-header">
-          <span className="stats-chart-title">{title}</span>
-          <button type="button" className="stats-fs-close" onClick={() => setFullscreen(false)} aria-label={tCommon("close")}>
-            <ActionIcon name="close" />
-          </button>
-        </div>
-        <div className="stats-fs-content">
-          <FullscreenCtx.Provider value={true}>{children}</FullscreenCtx.Provider>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  ) : null;
-
-  return (
-    <div className={`stats-chart-card ${className}`}>
-      <div className="stats-chart-header">
-        <span className="stats-chart-title">{title}</span>
-        <button type="button" className="stats-expand-btn" onClick={() => setFullscreen(true)} title={t("fullscreen")}>
-          <ExpandIcon />
-        </button>
+    <div className="stats-section-header">
+      <div className="stats-section-heading">
+        <h2 className="stats-section-title">{title}</h2>
+        {intro ? <span className="stats-section-intro">{intro}</span> : null}
       </div>
       {children}
-      {overlay}
     </div>
   );
 }
 
-function PeriodPicker({ value, onChange }: { value: Period; onChange: (p: Period) => void }) {
-  const t = useTranslations("statistics");
-  const options: { label: string; value: Period }[] = [
-    { label: t("period3m"), value: "3m" },
-    { label: t("period6m"), value: "6m" },
-    { label: t("period12m"), value: "12m" },
-    { label: t("periodAll"), value: "all" },
-  ];
-  return (
-    <div className="stats-period-picker">
-      {options.map((o) => (
-        <button key={o.value} type="button" className={`stats-period-btn${value === o.value ? " stats-period-btn-active" : ""}`} onClick={() => onChange(o.value)}>
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// ── Main view ─────────────────────────────────────────────────────────────────
-
-export function StatisticsView({ data }: Props) {
+export function StatisticsView({ data: initialData, year: initialYear, today }: Props) {
   const t = useTranslations("statistics");
   const locale = useLocale();
   const router = useRouter();
-  const [period, setPeriod] = useState<Period>("all");
-  const [attendanceView, setAttendanceView] = useState<"participant" | "time">("time");
-  const [financeAccount, setFinanceAccount] = useState<string>("all");
-  const [selectedCycle, setSelectedCycle] = useState<string>("all");
+  const fmt = useStatisticsFormat();
+  const { year, setYear, compare, setCompare, canCompare, years, data, loading, failed } = useStatisticsOverview(initialData, initialYear);
+  const [memberSort, setMemberSort] = useState<"low" | "high">("low");
+  const [account, setAccount] = useState("all");
 
-  // Rules-of-Hooks fix (audit finding, 2026-08-25): the four useMemo calls below used to
-  // sit after an early `if (!data) return ...`, so they were skipped entirely whenever
-  // data was null - harmless today only because data is a static SSR prop that never
-  // actually changes within one mounted instance of this component, but the moment that
-  // stopped being true, React would see a different number of hooks between renders and
-  // crash. Hooks now always run (each body is null-safe on its own); the early return
-  // moves below them instead, gating everything that isn't a hook call.
-  const attendanceTime = useMemo(() => filterByPeriod(data?.attendance_over_time ?? [], period), [data, period]);
-  const financeMonths = useMemo(() => {
-    const byPeriod = filterByPeriod(data?.finance_by_month ?? [], period);
-    if (financeAccount === "all") {
-      const merged: Record<string, { month: string; income: number; expenses: number; net: number }> = {};
-      for (const r of byPeriod) {
-        if (!merged[r.month]) merged[r.month] = { month: r.month, income: 0, expenses: 0, net: 0 };
-        merged[r.month].income += r.income;
-        merged[r.month].expenses += r.expenses;
-        merged[r.month].net += r.net;
-      }
-      return Object.values(merged).sort((a, b) => a.month.localeCompare(b.month));
-    }
-    return byPeriod.filter((r) => r.account_name === financeAccount);
-  }, [data, period, financeAccount]);
-
-  const accounts = useMemo(() => [...new Set((data?.finance_by_month ?? []).map((r) => r.account_name))], [data]);
-  // Währung fürs Diagramm (C8): die des gewählten Kontos; bei «alle» nur, wenn alle Konten
-  // dieselbe haben - sonst ohne Währungsangabe statt falsch «CHF».
-  const financeCurrency = useMemo(() => {
-    const rows = (data?.finance_by_month ?? []).filter((r) => financeAccount === "all" || r.account_name === financeAccount);
-    const currencies = [...new Set(rows.map((r) => r.currency ?? ""))];
-    return currencies.length === 1 ? currencies[0] || null : null;
-  }, [data, financeAccount]);
-
-  const groupsFiltered = useMemo(() => {
-    const stats = data?.groups_stats ?? [];
-    if (selectedCycle === "all") {
-      // Weighted "Ø Teilnehmer" merge across cycles - this is a THIRD, hand-duplicated copy
-      // of the same logic that already lives twice in the backend (now de-duplicated into
-      // aggregate_group_rows in backend/app/services/statistics_common.py, used by both
-      // app/api/routes/statistics.py and app/services/chart_service.py). It can't be
-      // eliminated here without an API change (the /statistics/overview endpoint returns
-      // raw per-cycle rows, not a pre-merged view) - see that function's docstring.
-      // KEEP IN SYNC BY HAND: if the merge rule (weight by session_count_with_participants)
-      // changes there, change it here too (2026-08-13 audit, M11).
-      const merged: Record<string, { session_count: number; session_count_with_participants: number; weighted_participants: number; sessions_with_p: number }> = {};
-      for (const g of stats) {
-        if (!merged[g.group_name]) merged[g.group_name] = { session_count: 0, session_count_with_participants: 0, weighted_participants: 0, sessions_with_p: 0 };
-        merged[g.group_name].session_count += g.session_count;
-        merged[g.group_name].session_count_with_participants += g.session_count_with_participants;
-        merged[g.group_name].weighted_participants += g.avg_participants * g.session_count_with_participants;
-        merged[g.group_name].sessions_with_p += g.session_count_with_participants;
-      }
-      return Object.entries(merged).map(([name, v]) => ({
-        name,
-        allSessions: v.session_count,
-        withParticipants: v.session_count_with_participants,
-        avgParticipants: v.sessions_with_p > 0 ? Math.round((v.weighted_participants / v.sessions_with_p) * 10) / 10 : 0,
-      })).sort((a, b) => b.allSessions - a.allSessions);
-    }
-    const [configId, year] = selectedCycle.split(":");
-    return stats
-      .filter((g) => g.cycle_config_id === configId && g.cycle_year === Number(year))
-      .map((g) => ({
-        name: g.group_name,
-        allSessions: g.session_count,
-        withParticipants: g.session_count_with_participants,
-        avgParticipants: Math.round(g.avg_participants * 10) / 10,
-      }))
-      .sort((a, b) => b.allSessions - a.allSessions);
-  }, [data, selectedCycle]);
+  const months = useMemo(() => yearMonths(year, today), [year, today]);
+  const comparison = compare ? data?.comparison ?? null : null;
+  const bars = useMemo(() => attendanceBars(data?.attendance_over_time ?? [], comparison?.attendance_over_time ?? null, months), [data, comparison, months]);
+  const finance = useMemo(() => (data ? financeView({ finance_by_month: data.finance_by_month, comparison }, account, months) : null), [data, comparison, account, months]);
 
   if (!data) {
-    return <div className="stats-empty"><p className="muted">{t("noDataAvailable")}</p></div>;
+    return <StatusBanner tone="error" message={failed ? t("loadFailed") : t("noDataAvailable")} />;
   }
 
-  const hasNoStatistics =
-    data.protocols_total === 0 &&
-    data.todos.total === 0 &&
-    data.attendance_over_time.length === 0 &&
-    data.attendance_by_participant.length === 0 &&
-    data.fines_by_participant.length === 0 &&
-    data.finance_by_month.length === 0;
+  const ownScope = data.per_person_scope === "own";
+  const finesVisible = data.fines_visible !== false;
+  const previousPeriod = comparison ? fmt.period(comparison.period_start.slice(0, 7), comparison.period_end.slice(0, 7)) : "";
+  const introBase = year === Number(today.slice(0, 4))
+    ? t("yearIntroRunning", { year, from: fmt.month(months[0]), to: fmt.month(months[months.length - 1]) })
+    : t("yearIntro", { year, from: fmt.month(months[0]), to: fmt.month(months[months.length - 1]) });
+  const intro = comparison ? t("yearIntroCompared", { intro: introBase, period: previousPeriod }) : introBase;
+  const yearOptions = [...years].sort((a, b) => b - a).slice(0, 3).map((value) => ({ value: String(value), label: String(value) }));
 
-  if (hasNoStatistics) {
+  const header = (
+    <div className="page-header stats-header">
+      <div>
+        <h1 className="page-title">{t("pageTitle")}</h1>
+        <p className="muted">{intro}</p>
+      </div>
+      <div className="stats-header-actions" aria-busy={loading}>
+        <FilterTabs options={yearOptions} value={String(year)} onChange={(value) => setYear(Number(value))} />
+        <button
+          type="button"
+          className={`button-toggle stats-compare-toggle${compare ? " button-toggle-active" : ""}`}
+          aria-pressed={compare}
+          disabled={!canCompare}
+          title={canCompare ? undefined : t("compareUnavailable", { year: year - 1 })}
+          onClick={() => setCompare(!compare)}
+        >
+          <span className={`stats-switch${compare ? " stats-switch-on" : ""}`} aria-hidden="true" />
+          {t("compareToggle")}
+        </button>
+        <DocumentExportButton context={{ documentType: "statistics" }} />
+      </div>
+    </div>
+  );
+
+  const hasData =
+    data.protocols_total > 0 ||
+    data.todos.total > 0 ||
+    data.attendance_over_time.length > 0 ||
+    data.fines_by_type.length > 0 ||
+    data.finance_by_month.length > 0;
+
+  if (!hasData) {
     return (
       <div className="stats-page">
-        <div className="page-header">
-          <div>
-            <h1 className="page-title">{t("pageTitle")}</h1>
-            <p className="muted">{t("pageIntroEmpty")}</p>
-          </div>
-        </div>
+        {header}
         <EmptyState
           title={t("emptyTitle")}
-          description={t("emptyDescription")}
+          description={years.length > 1 ? t("noDataForYear", { year }) : t("emptyDescription")}
           actions={
             <button type="button" className="button-primary" onClick={() => router.push("/protocols")}>
               {t("goToFirstProtocol")}
@@ -311,171 +133,445 @@ export function StatisticsView({ data }: Props) {
     );
   }
 
-  const todoData: PieEntry[] = [
-    { name: t("todoDone"), value: data.todos.done, color: COLORS.done },
-    { name: t("todoOpen"), value: data.todos.open, color: COLORS.open },
+  // ── Kennzahlen ──
+  const totals = sumAttendance(data.attendance_over_time);
+  const rate = attendanceRate(totals);
+  const previousTotals = comparison ? sumAttendance(comparison.attendance_over_time) : null;
+  const previousRate = previousTotals ? attendanceRate(previousTotals) : null;
+  const avgPresent = data.protocols_total > 0 ? (totals.present + totals.late) / data.protocols_total : null;
+  const previousAvg = previousTotals && comparison && comparison.protocols_total > 0 ? (previousTotals.present + previousTotals.late) / comparison.protocols_total : null;
+  const todoRate = data.todos.total > 0 ? data.todos.done / data.todos.total : null;
+  const previousTodoRate = comparison && comparison.todos.total > 0 ? comparison.todos.done / comparison.todos.total : null;
+  const fineTotals = fineSum(data);
+  const previousFineTotals = comparison ? fineSum({ fines_by_type: comparison.fines_by_type, fines_by_participant: comparison.own_fines, per_person_scope: data.per_person_scope }) : null;
+  const fineCount = fineTotals.reduce((sum, row) => sum + row.count, 0);
+  const singleCurrency = fineTotals.length <= 1 && (previousFineTotals?.length ?? 0) <= 1 && (fineTotals[0]?.currency ?? "") === (previousFineTotals?.[0]?.currency ?? fineTotals[0]?.currency ?? "");
+
+  type Kpi = { label: string; value: string; sub: string; delta?: { text: string; good: boolean; flat: boolean }; previous?: string };
+  const kpis: Kpi[] = [
+    {
+      label: t("kpiAttendanceRate"),
+      value: percentLabel(rate, locale),
+      sub: t("kpiAttendanceRateSub"),
+      ...(comparison && rate !== null && previousRate !== null
+        ? { delta: fmt.delta(trendOf(rate, previousRate), t("deltaPoints", { delta: fmt.signed(Math.round((rate - previousRate) * 100), 0) })), previous: t("previousValue", { period: previousPeriod, value: percentLabel(previousRate, locale) }) }
+        : {}),
+    },
+    {
+      label: t("kpiAvgPresent"),
+      value: fmt.number(avgPresent, 1),
+      sub: t("kpiAvgPresentSub", { count: data.participants_active }),
+      ...(comparison && avgPresent !== null && previousAvg !== null
+        ? { delta: fmt.delta(trendOf(avgPresent, previousAvg), fmt.signed(avgPresent - previousAvg, 1)), previous: t("previousValue", { period: previousPeriod, value: fmt.number(previousAvg, 1) }) }
+        : {}),
+    },
+    {
+      label: t("kpiSessions"),
+      value: fmt.number(data.protocols_total, 0),
+      sub: t("kpiProtocolsSub"),
+      ...(comparison ? { previous: t("previousValue", { period: previousPeriod, value: fmt.number(comparison.protocols_total, 0) }) } : {}),
+    },
+    {
+      label: t("kpiTodosDone"),
+      value: percentLabel(todoRate, locale),
+      sub: t("kpiTodosDoneSub", { count: data.todos.open }),
+      ...(comparison ? { previous: t("previousValue", { period: previousPeriod, value: percentLabel(previousTodoRate, locale) }) } : {}),
+    },
   ];
+  if (finesVisible) {
+    const current = mainAmount(fineTotals);
+    const previous = previousFineTotals ? mainAmount(previousFineTotals) : null;
+    kpis.push({
+      label: ownScope ? t("kpiMyFines") : t("kpiFines"),
+      value: fmt.fineTotals(fineTotals),
+      sub: t("kpiFinesSub", { count: fineCount }),
+      ...(comparison && previousFineTotals
+        ? {
+            previous: t("previousValue", { period: previousPeriod, value: fmt.fineTotals(previousFineTotals) }),
+            ...(singleCurrency && previous !== null && !ownScope ? { delta: fmt.delta(trendOf(current, previous, false), fmt.signedMoney(current - previous, fineTotals[0]?.currency ?? previousFineTotals[0]?.currency ?? "")) } : {}),
+          }
+        : {}),
+    });
+  }
 
-  // Bussenart in der UI-Sprache (C8): das Backend liefert nur ein deutsches label.
-  const fineTypeLabel = (fineType: string, fallback: string) =>
-    fineType === "absent" || fineType === "late" ? t(`fineType.${fineType}`) : fallback;
-  const fineTypeData: PieEntry[] = fineCountsByType(data.fines_by_type).map((f, i) => ({
-    name: fineTypeLabel(f.fine_type, f.label),
-    value: f.count,
-    color: PIE_PALETTE[i % PIE_PALETTE.length],
-  }));
+  // ── Anwesenheit ──
+  const members = memberRows(data.attendance_by_participant, memberSort);
+  const lowMembers = members.filter((row) => row.rate < LOW_ATTENDANCE_RATE).length;
 
-  const top10Fines = fineCountsByParticipant(data.fines_by_participant).slice(0, 10);
-  // Summen aus den Typen: fines_by_participant enthält für Leser nur die eigene Zeile.
-  const fineTotals = fineTotalsByCurrency(data.fines_by_type);
-  const top15Attendance = data.attendance_by_participant.slice(0, 15);
+  // ── Pendenzen ──
+  const insights = data.todo_insights ?? { overdue: 0, overdue_long: 0, avg_days_to_done: null, open_by_person: [] };
+  const todoPeople = insights.open_by_person.slice(0, PERSON_LIMIT);
+  const todoMax = Math.max(1, ...todoPeople.map((row) => row.open));
+  const previousDays = comparison?.todo_avg_days_to_done ?? null;
 
-  const hasCycles = data.cycles.length > 0;
-  const hasGroups = data.groups_stats.length > 0;
+  // ── Bussen ──
+  const types = fineTypeRows(data);
+  const typeMax = Math.max(0, ...types.map((row) => mainAmount(row.totals)));
+  const status = data.fines_status ?? [];
+  const paidTotals = status.map((row) => ({ currency: row.currency ?? "", count: row.paid_count, amount: row.paid_amount }));
+  const openTotals = status.map((row) => ({ currency: row.currency ?? "", count: row.open_count, amount: row.open_amount }));
+  const people = finesByPerson(data.fines_by_participant).slice(0, PERSON_LIMIT);
+  const peopleMax = Math.max(0, ...people.map((row) => mainAmount(row.totals)));
+
+  // ── Gruppen ──
+  const groups = groupRows(data.groups_stats);
+  const groupMax = Math.max(1, ...groups.map((row) => row.sessions));
   const groupsHelp = (
     <HelpPopover topic={t("sectionGroups")} docs={{ page: "statistik", anchor: "gruppen" }}>
       {t("groupsHelp")}
     </HelpPopover>
   );
 
+  const showFinance = finance !== null && (data.finance_by_month.length > 0 || (comparison?.finance_by_account.length ?? 0) > 0);
+
   return (
     <div className="stats-page">
+      {header}
+      {ownScope ? <StatusBanner tone="neutral" message={t("perPersonOwnShort")} /> : null}
+      {failed ? <StatusBanner tone="error" message={t("loadFailed")} /> : null}
 
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">{t("pageTitle")}</h1>
-          <p className="muted">{t("pageIntro")}</p>
-        </div>
-        <DocumentExportButton context={{ documentType: "statistics" }} />
-      </div>
-      {data.per_person_scope === "own" ? <StatusBanner tone="neutral" message={t("perPersonOwnHint")} /> : null}
-
-      {/* ── KPI row ── */}
-      <div className="stats-kpi-row">
-        <StatCard label={t("kpiProtocols")} value={data.protocols_total} sub={t("kpiProtocolsSub")} />
-        <StatCard label={t("kpiMembers")} value={data.participants_active} sub={t("totalCountSub", { count: data.participants_total })} />
-        <StatCard label={t("kpiTodos")} value={data.todos.total} sub={t("openCountSub", { count: data.todos.open })} />
-        <StatCard label={t("kpiFinesTotal")} value={fineTotals.reduce((s, f) => s + f.count, 0)} />
-        <StatCard label={t("kpiFinesAmount")} value={formatFineTotals(fineTotals, (amount) => fmtAmount(amount, locale))} />
-      </div>
-
-      {/* ── Section: Gruppen ── */}
-      {!hasGroups && (
-        // Leerzustand mit Erklärung (U5): vorher fehlte der Abschnitt ohne Hinweis, warum.
-        <div className="stats-section">
-          <div className="stats-section-header">
-            <h2 className="stats-section-title">{t("sectionGroups")} {groupsHelp}</h2>
+      <div className="stats-kpi-grid">
+        {kpis.map((kpi) => (
+          <div key={kpi.label} className="card stats-kpi">
+            <span className="stats-kpi-label">{kpi.label}</span>
+            <div className="stats-kpi-value-row">
+              <span className="stats-kpi-value">{kpi.value}</span>
+              {kpi.delta ? (
+                <Badge variant={kpi.delta.flat ? "neutral" : kpi.delta.good ? "success" : "danger"}>{kpi.delta.text}</Badge>
+              ) : null}
+            </div>
+            <span className="stats-kpi-sub">{kpi.sub}</span>
+            {kpi.previous ? <span className="stats-kpi-previous">{kpi.previous}</span> : null}
           </div>
+        ))}
+      </div>
+
+      <section className="stats-section">
+        <SectionHeader title={t("sectionAttendance")} intro={t("sectionAttendanceIntro")} />
+        <div className="stats-grid stats-grid-wide">
+          <div className="card stats-panel">
+            <div className="stats-panel-header">
+              <h3 className="stats-panel-title">{t("chartRatePerMonth")}</h3>
+              <ChartLegend
+                items={[
+                  { series: "present", label: t("present") },
+                  { series: "late", label: t("late") },
+                  { series: "excused", label: t("excused") },
+                  { series: "absent", label: t("absent") },
+                ]}
+              />
+            </div>
+            {data.attendance_over_time.length === 0 ? (
+              <p className="stats-no-data">{t("noAttendanceDataPeriod")}</p>
+            ) : (
+              <AttendanceMonthChart
+                bars={bars}
+                locale={locale}
+                title={(bar) =>
+                  bar.previousRate !== null
+                    ? t("monthTooltipPrevious", { month: fmt.monthYear(bar.month), rate: percentLabel(bar.rate, locale), previous: percentLabel(bar.previousRate, locale) })
+                    : t("monthTooltip", { month: fmt.monthYear(bar.month), rate: percentLabel(bar.rate, locale) })
+                }
+              />
+            )}
+            {comparison ? (
+              <div className="stats-note">
+                <ChartLegend items={[{ series: "previous", label: t("previousYearMarker") }]} />
+              </div>
+            ) : null}
+          </div>
+
+          <div className="card stats-panel">
+            <div className="stats-panel-header">
+              <h3 className="stats-panel-title">{t("membersByRate")}</h3>
+              {ownScope ? null : (
+                <FilterTabs
+                  options={[
+                    { value: "low", label: t("sortLow") },
+                    { value: "high", label: t("sortHigh") },
+                  ]}
+                  value={memberSort}
+                  onChange={setMemberSort}
+                />
+              )}
+            </div>
+            {members.length === 0 ? (
+              <p className="stats-no-data">{t("noAttendanceData")}</p>
+            ) : (
+              <div className="stats-rows">
+                {members.slice(0, MEMBER_LIMIT).map((row) => (
+                  <div
+                    key={row.name}
+                    className="stats-row"
+                    title={t("memberTooltip", {
+                      name: row.name,
+                      present: percentLabel(row.present, locale),
+                      late: percentLabel(row.late, locale),
+                      excused: percentLabel(row.excused, locale),
+                      absent: percentLabel(row.absent, locale),
+                    })}
+                  >
+                    <span className="stats-row-name">{row.name}</span>
+                    <StackedBar
+                      segments={[
+                        { series: "present", value: row.present },
+                        { series: "late", value: row.late },
+                        { series: "excused", value: row.excused },
+                        { series: "absent", value: row.absent },
+                      ]}
+                    />
+                    <span className={`stats-row-value${row.rate < LOW_ATTENDANCE_RATE ? " stats-row-value-low" : ""}`}>{percentLabel(row.rate, locale)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="stats-note">
+              {ownScope ? t("membersOwnNote") : t("membersLowNote", { count: lowMembers, threshold: percentLabel(LOW_ATTENDANCE_RATE, locale) })}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="stats-section">
+        <SectionHeader title={t("sectionTodos")} intro={t("sectionTodosIntro")} />
+        <div className="stats-grid stats-grid-thirds">
+          <div className="card stats-panel">
+            <h3 className="stats-panel-title">{t("todoCompletionRate")}</h3>
+            <div className="stats-ring-row">
+              <DonutRing value={todoRate ?? 0}>
+                <span className="stats-ring-value">{percentLabel(todoRate, locale)}</span>
+                <span className="stats-ring-label">{t("todoDoneLower")}</span>
+              </DonutRing>
+              <div className="stats-ring-legend">
+                <span className="stats-legend-item">
+                  <span className="stats-legend-swatch stats-fill-done" aria-hidden="true" />
+                  {t("todoDone")} <strong>{data.todos.done}</strong>
+                </span>
+                <span className="stats-legend-item">
+                  <span className="stats-legend-swatch stats-fill-open" aria-hidden="true" />
+                  {t("todoOpen")} <strong>{data.todos.open}</strong>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="card stats-panel stats-panel-split">
+            <div className="stats-figure">
+              <h3 className="stats-panel-title">{t("todoOverdue")}</h3>
+              <span className={`stats-figure-value${insights.overdue > 0 ? " stats-figure-value-danger" : ""}`}>{insights.overdue}</span>
+              <span className="stats-kpi-sub">{t("todoOverdueLong", { count: insights.overdue_long })}</span>
+            </div>
+            <div className="stats-figure">
+              <h3 className="stats-panel-title">{t("todoAvgDays")}</h3>
+              <div className="stats-kpi-value-row">
+                <span className="stats-figure-value">{insights.avg_days_to_done !== null ? t("daysValue", { count: insights.avg_days_to_done }) : "–"}</span>
+                {comparison && insights.avg_days_to_done !== null && previousDays !== null ? (
+                  (() => {
+                    const diff = Math.round((insights.avg_days_to_done - previousDays) * 10) / 10;
+                    const delta = fmt.delta(trendOf(insights.avg_days_to_done, previousDays, false), t("deltaDays", { delta: fmt.signed(diff, 1), count: Math.abs(diff) }));
+                    return <Badge variant={delta.flat ? "neutral" : delta.good ? "success" : "danger"}>{delta.text}</Badge>;
+                  })()
+                ) : null}
+              </div>
+            </div>
+          </div>
+
+          <div className="card stats-panel">
+            <h3 className="stats-panel-title">{t("todoOpenPerPerson")}</h3>
+            {todoPeople.length === 0 ? (
+              <p className="stats-no-data">{t("noOpenTodos")}</p>
+            ) : (
+              <div className="stats-rows">
+                {todoPeople.map((row) => (
+                  <div key={row.participant_key} className="stats-row stats-row-narrow">
+                    <span className="stats-row-name">{row.name}</span>
+                    <StackedBar
+                      mode="weight"
+                      width={row.open / todoMax}
+                      segments={[
+                        { series: "absent", value: row.overdue },
+                        { series: "onTrack", value: row.open - row.overdue },
+                      ]}
+                    />
+                    <span className="stats-row-value">{row.open}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <ChartLegend
+              items={[
+                { series: "absent", label: t("todoOverdue") },
+                { series: "onTrack", label: t("todoOnTrack") },
+              ]}
+            />
+          </div>
+        </div>
+      </section>
+
+      {finesVisible ? (
+        <section className="stats-section">
+          <SectionHeader title={t("sectionFines")} intro={t("sectionFinesIntro")} />
+          <div className="stats-grid">
+            <div className="card stats-panel">
+              <h3 className="stats-panel-title">{t("finesByType")}</h3>
+              {types.length === 0 ? (
+                <p className="stats-no-data">{t("noFines")}</p>
+              ) : (
+                <div className="stats-type-list">
+                  {types.map((row) => (
+                    <div key={row.fineType} className="stats-type">
+                      <div className="stats-type-head">
+                        <span>{row.fineType === "absent" || row.fineType === "late" ? t(`fineType.${row.fineType}`) : row.fineType}</span>
+                        <span className="stats-type-figures">
+                          {t("fineTypeCount", { count: row.count })} · <strong>{fmt.fineTotals(row.totals)}</strong>
+                        </span>
+                      </div>
+                      <ProgressBar value={typeMax > 0 ? mainAmount(row.totals) / typeMax : 0} series={row.fineType === "late" ? "late" : "absent"} />
+                    </div>
+                  ))}
+                </div>
+              )}
+              {status.length > 0 ? (
+                <div className="stats-paid">
+                  <h3 className="stats-panel-title">{t("finesPaidOpen")}</h3>
+                  <StackedBar
+                    mode="weight"
+                    className="stats-stack-tall"
+                    segments={[
+                      { series: "paid", value: mainAmount(paidTotals) },
+                      { series: "finesOpen", value: mainAmount(openTotals) },
+                    ]}
+                  />
+                  <div className="stats-paid-labels">
+                    <span>{t("finesPaid", { amount: fmt.fineTotals(paidTotals) })}</span>
+                    <span>{t("finesOpen", { amount: fmt.fineTotals(openTotals) })}</span>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="card stats-panel">
+              <h3 className="stats-panel-title">{ownScope ? t("kpiMyFines") : t("finesPerPerson")}</h3>
+              {people.length === 0 ? (
+                <p className="stats-no-data">{t("noFines")}</p>
+              ) : (
+                <div className="stats-rows">
+                  {people.map((row) => (
+                    <div key={row.key} className="stats-row stats-row-amount">
+                      <span className="stats-row-name">{row.name}</span>
+                      <StackedBar
+                        mode="weight"
+                        width={peopleMax > 0 ? mainAmount(row.totals) / peopleMax : 0}
+                        segments={[
+                          { series: "absent", value: row.absent },
+                          { series: "late", value: row.late },
+                        ]}
+                      />
+                      <span className="stats-row-value">{fmt.fineTotals(row.totals)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <ChartLegend
+                items={[
+                  { series: "absent", label: t("fineType.absent") },
+                  { series: "late", label: t("fineType.late") },
+                ]}
+              />
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {showFinance && finance ? (
+        <section className="stats-section">
+          <SectionHeader title={t("sectionFinance")} intro={t("sectionFinanceIntro")}>
+            {finance.accounts.length > 1 ? (
+              <FilterTabs
+                options={[{ value: "all", label: t("allAccounts") }, ...finance.accounts.map((item) => ({ value: item.id, label: item.name }))]}
+                value={account}
+                onChange={setAccount}
+              />
+            ) : null}
+          </SectionHeader>
+          <div className="card stats-panel stats-finance">
+            <div className="stats-finance-totals">
+              {[
+                { key: "income", label: t("income"), value: finance.income, previous: finance.previous?.income, sign: false },
+                { key: "expenses", label: t("expenses"), value: finance.expenses, previous: finance.previous?.expenses, sign: false },
+                { key: "net", label: t("financeResult"), value: finance.net, previous: finance.previous?.net, sign: true },
+              ].map((item) => (
+                <div key={item.key} className="stats-finance-total">
+                  <span className="stats-kpi-label">{item.label}</span>
+                  <div className="stats-kpi-value-row">
+                    <span className={`stats-finance-value${item.sign ? (item.value >= 0 ? " stats-value-good" : " stats-value-bad") : ""}`}>
+                      {item.sign ? fmt.signedMoney(item.value, finance.currency ?? "") : fmt.money(item.value, finance.currency ?? "")}
+                    </span>
+                    {item.previous !== undefined ? (
+                      <span className="stats-kpi-sub">
+                        {t("previousShort", { value: item.sign ? fmt.signedMoney(item.previous, finance.currency ?? "") : fmt.money(item.previous, finance.currency ?? "") })}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="stats-finance-chart">
+              <div className="stats-panel-header">
+                <h3 className="stats-panel-title">{t("financeResultPerMonth")}</h3>
+                <ChartLegend
+                  items={[
+                    { series: "surplus", label: t("financeSurplus") },
+                    { series: "deficit", label: t("financeDeficit") },
+                  ]}
+                />
+              </div>
+              {data.finance_by_month.length === 0 ? (
+                <p className="stats-no-data">{t("noFinanceData")}</p>
+              ) : (
+                <DivergingMonthChart
+                  months={finance.months}
+                  scale={finance.scale}
+                  locale={locale}
+                  axis={{ top: fmt.signed(finance.scale, 0), bottom: fmt.signed(-finance.scale, 0) }}
+                  title={(month) => t("financeMonthTooltip", { month: fmt.monthYear(month.month), value: fmt.signedMoney(month.net, finance.currency ?? "") })}
+                />
+              )}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      <section className="stats-section">
+        <SectionHeader title={<>{t("sectionGroups")} {groupsHelp}</>} intro={t("sectionGroupsIntro")} />
+        {groups.length === 0 ? (
           <p className="muted">
             {data.groups_source_configured ? t("groupsEmptyNoEvents") : t("groupsEmptyNoSource")}{" "}
             <DocsLink page="statistik" anchor="gruppen">{t("groupsDocsLink")}</DocsLink>
           </p>
-        </div>
-      )}
-      {hasGroups && (
-        <div className="stats-section">
-          <div className="stats-section-header">
-            <h2 className="stats-section-title">{t("sectionGroups")} {groupsHelp}</h2>
-            {hasCycles && (
-              <CycleDropdown
-                value={selectedCycle}
-                onChange={setSelectedCycle}
-                options={[
-                  { value: "all", label: t("allCycles") },
-                  ...data.cycles.map((c) => ({ value: `${c.cycle_config_id}:${c.cycle_year}`, label: c.label })),
-                ]}
-              />
-            )}
-          </div>
-
-          <div className="stats-grid">
-            <ChartCard title={t("chartSessionsPerGroup")}>
-              {groupsFiltered.length === 0
-                ? <p className="stats-no-data">{t("noDataForCycle")}</p>
-                : <GroupSessionsChart data={groupsFiltered} />}
-            </ChartCard>
-
-            <ChartCard title={t("chartAvgParticipantsPerGroup")}>
-              {groupsFiltered.length === 0
-                ? <p className="stats-no-data">{t("noDataForCycle")}</p>
-                : <GroupAvgChart data={groupsFiltered} />}
-            </ChartCard>
-          </div>
-        </div>
-      )}
-
-      {/* ── Section: Zeitreihen ── */}
-      <div className="stats-section">
-        <div className="stats-section-header">
-          <h2 className="stats-section-title">{t("sectionTimeline")}</h2>
-          <div className="stats-toolbar">
-            <PeriodPicker value={period} onChange={setPeriod} />
-          </div>
-        </div>
-
-        <div className="stats-grid">
-          <ChartCard title={t("chartAttendance")} className="stats-chart-wide">
-            <div className="stats-chart-toolbar">
-              <div className="stats-segment">
-                <button type="button" className={`stats-seg-btn${attendanceView === "time" ? " stats-seg-btn-active" : ""}`} onClick={() => setAttendanceView("time")}>{t("viewByTime")}</button>
-                <button type="button" className={`stats-seg-btn${attendanceView === "participant" ? " stats-seg-btn-active" : ""}`} onClick={() => setAttendanceView("participant")}>{t("viewByMember")}</button>
+        ) : (
+          <div className="card stats-panel">
+            <div className="stats-groups" role="table">
+              <div className="stats-groups-row stats-groups-head" role="row">
+                <span role="columnheader">{t("groupColumn")}</span>
+                <span role="columnheader">{t("groupSessionsColumn")}</span>
+                <span role="columnheader" className="stats-groups-number">{t("groupAvgColumn")}</span>
               </div>
+              {groups.map((row) => (
+                <div key={row.name} className="stats-groups-row" role="row">
+                  <span role="cell">{row.name}</span>
+                  <span role="cell" className="stats-groups-bar">
+                    <OverlayBar outer={row.sessions / groupMax} inner={row.withParticipants / groupMax} />
+                    <span className="stats-groups-count">{t("groupSessionsValue", { with: row.withParticipants, all: row.sessions })}</span>
+                  </span>
+                  <span role="cell" className="stats-groups-number">{fmt.number(row.avgParticipants, 1)}</span>
+                </div>
+              ))}
             </div>
-            {attendanceView === "time" ? (
-              attendanceTime.length === 0
-                ? <p className="stats-no-data">{t("noAttendanceDataPeriod")}</p>
-                : <AttendanceTimeChart data={attendanceTime} />
-            ) : (
-              top15Attendance.length === 0
-                ? <p className="stats-no-data">{t("noAttendanceData")}</p>
-                : <AttendanceParticipantChart data={top15Attendance} />
-            )}
-          </ChartCard>
-
-          {data.finance_by_month.length > 0 && (
-            <ChartCard title={t("chartFinancePerMonth")} className="stats-chart-wide">
-              <div className="stats-chart-toolbar">
-                {accounts.length > 1 && (
-                  <div className="stats-segment">
-                    <button type="button" className={`stats-seg-btn${financeAccount === "all" ? " stats-seg-btn-active" : ""}`} onClick={() => setFinanceAccount("all")}>{t("allAccounts")}</button>
-                    {accounts.map((a) => (
-                      <button key={a} type="button" className={`stats-seg-btn${financeAccount === a ? " stats-seg-btn-active" : ""}`} onClick={() => setFinanceAccount(a)}>{a}</button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {financeMonths.length === 0
-                ? <p className="stats-no-data">{t("noFinanceDataPeriod")}</p>
-                : <FinanceChart data={financeMonths} currency={financeCurrency} />}
-            </ChartCard>
-          )}
-        </div>
-      </div>
-
-      {/* ── Section: Übersicht ── */}
-      <div className="stats-section">
-        <div className="stats-section-header">
-          <h2 className="stats-section-title">{t("sectionOverview")}</h2>
-        </div>
-        <div className="stats-grid">
-          <ChartCard title={t("chartTodosOverview")}>
-            <PieDonutChart data={todoData} />
-          </ChartCard>
-
-          {fineTypeData.length > 0 && (
-            <ChartCard title={t("chartFinesByType")}>
-              <PieDonutChart data={fineTypeData} />
-            </ChartCard>
-          )}
-
-          {top10Fines.length > 0 && (
-            <ChartCard title={t("chartFinesPerMemberTop10")} className="stats-chart-wide">
-              <FinesParticipantChart data={top10Fines} />
-            </ChartCard>
-          )}
-        </div>
-      </div>
-
+          </div>
+        )}
+      </section>
     </div>
   );
 }
+
