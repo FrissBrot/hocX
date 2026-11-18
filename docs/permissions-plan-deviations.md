@@ -214,3 +214,12 @@ abweicht und warum. «OFFEN» markiert fachliche Punkte, die noch eine Entscheid
   (nur Benutzerführung). Audit auf GET: per Top-Level-Navigation von fremder Seite liessen sich
   Verlaufseinträge erzeugen, aber keine Daten lesen – als Lese-Audit gewollt.
 - Keine Migration in Phase 7.
+
+## Entscheide 18.11.2026 (Abschluss Phasen 4–7)
+
+- Standardrollen Leser und Kassier behalten «Abgaben ansehen» für **alle** Aufträge (nur lesend,
+  Menüpunkt «Abgaben» sichtbar).
+- Rollen-Vorlagen wie vorgeschlagen freigegeben.
+- Word-Import bleibt vom Vier-Augen-Prinzip ausgenommen (historische, extern genehmigte Protokolle).
+- Benutzerlimit: offene Einladungen zählen schon beim Einladen mit
+  (`user_limit_service.pending_invite_count`); die eigene Einladung der Person nicht.

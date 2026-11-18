@@ -442,7 +442,7 @@ def _invite_one(db: Session, user: CurrentUser, participant: Participant):
     if not (settings_row and settings_row.email_enabled and settings_row.smtp_host and settings_row.email_from_address):
         raise HTTPException(status_code=409, detail={"code": "email_not_configured", "message": "Der E-Mail-Versand ist nicht eingerichtet."})
     UserService().ensure_login_email_available(db, participant.email, excluding_user_id=participant.id)
-    user_limit_service.ensure_login_capacity(db, participant.tenant_id)
+    user_limit_service.ensure_login_capacity(db, participant.tenant_id, for_user_id=participant.id)
     token = account_links.invite(db, participant, actor_user_id=user.user_id)
     AuditService().log(db, action="user.invited", actor=user, entity_type="app_user", entity_id=participant.id)
     return token

@@ -231,7 +231,7 @@ class UserService:
         # Plattform-Admin-Panel (actor None) darf darüber hinaus gehen.
         will_count = login_enabled and values.get("is_active", user.is_active)
         if actor is not None and will_count and not (user.login_enabled and user.is_active):
-            user_limit_service.ensure_login_capacity(db, user.tenant_id)
+            user_limit_service.ensure_login_capacity(db, user.tenant_id, for_user_id=user.id)
         if payload.password:
             values["password_hash"] = hash_password(payload.password)
             # Password change invalidates all existing sessions

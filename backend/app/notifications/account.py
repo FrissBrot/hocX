@@ -168,7 +168,7 @@ def complete_for_user(db: Session, token: str, password: str) -> tuple[str, AppU
     now = _now()
     if row.purpose == "invite":
         UserService().ensure_login_email_available(db, user.email, excluding_user_id=user.id)
-        user_limit_service.ensure_login_capacity(db, user.tenant_id)
+        user_limit_service.ensure_login_capacity(db, user.tenant_id, for_user_id=user.id)
         user.email = user.email.strip().lower()
         user.login_enabled = True
     user.password_hash = hash_password(password)

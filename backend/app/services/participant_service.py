@@ -114,7 +114,7 @@ class ParticipantService:
             raise ValueError("left_at must not be before joined_at")
         if participant.login_enabled and not participant.is_active and values.get("is_active") is True:
             # Reaktivieren eines Kontos mit Login zählt zum Benutzerlimit des Abos
-            user_limit_service.ensure_login_capacity(db, tenant_id)
+            user_limit_service.ensure_login_capacity(db, tenant_id, for_user_id=participant.id)
         if _account_relevant_change(participant, values):
             account_notifications.revoke_all_links(db, participant.id)
         old_email = participant.email if participant.login_enabled else None

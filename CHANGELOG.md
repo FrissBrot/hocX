@@ -264,6 +264,11 @@ Keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
 - Organisation › Verlauf: Bereich als durchsuchbare Auswahl; Zeitpunkt (von/bis), Vorgang, Person
   und Ergebnis lassen sich direkt im Spaltenkopf filtern, aktive Filter stehen als Chips darüber.
 
+### Geändert: Benutzerlimit zählt offene Einladungen
+
+- Offene Einladungen belegen schon beim Einladen einen Platz im Benutzerlimit des Abos. So scheitert
+  niemand erst beim Annehmen; eine zurückgezogene oder abgelaufene Einladung gibt den Platz frei.
+
 ### Geändert: Kurzname entfällt, Partnersuche verzeiht Tippfehler
 
 - Der Kurzname der Organisation ist weg (Profil, Plattform-Admin, Teilen-Dialog). Die Suche nach
