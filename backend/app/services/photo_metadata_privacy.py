@@ -16,7 +16,8 @@ zuverlaessig feldweise filtern. Orientation bleibt immer erhalten, sonst stuende
 JPEG/PNG/WebP werden verlustfrei auf Segment-/Chunk-Ebene umgeschrieben (kein Re-Encode). Bei
 JPEG fallen dabei auch angehaengte Zusatzbilder (MPF: Tiefenkarten, HDR-Gain-Maps) weg, weil die
 eigene Metadaten tragen koennen. TIFF wird ueber PIL neu geschrieben (verlustfrei, aber nur die
-erste Seite). GIF/BMP tragen praktisch keine Metadaten und gehen unveraendert raus. Schlaegt das
+erste Seite), HEIC/HEIF ueber pillow-heif neu kodiert (verlustbehaftet, ohne Tiefenkarten und
+Zusatzbilder). GIF/BMP tragen praktisch keine Metadaten und gehen unveraendert raus. Schlaegt das
 Umschreiben fehl, wird das Bild ohne jegliche Metadaten neu kodiert - im Zweifel lieber
 Qualitaet als Privatsphaere opfern."""
 
@@ -27,7 +28,10 @@ import struct
 import zlib
 from dataclasses import dataclass
 
+import pillow_heif
 from PIL import Image, ImageOps
+
+pillow_heif.register_heif_opener()
 
 
 @dataclass(frozen=True)
@@ -41,7 +45,10 @@ class MetadataPolicy:
         return self.location and self.capture_date and self.camera
 
 
-SANITIZABLE_MIME_TYPES = frozenset({"image/jpeg", "image/png", "image/webp", "image/tiff"})
+# HEIC/HEIF kommt unkonvertiert aus der Abgabebox (image/heic) - die Galerie wandelt HEIC beim
+# Upload nach JPEG, die Abgabebox nicht. Ohne Eintrag hier ging es mit allen Metadaten raus.
+HEIF_MIME_TYPES = frozenset({"image/heic", "image/heif"})
+SANITIZABLE_MIME_TYPES = frozenset({"image/jpeg", "image/png", "image/webp", "image/tiff"}) | HEIF_MIME_TYPES
 
 _EXIF_IFD = 0x8769
 _GPS_IFD = 0x8825
@@ -270,7 +277,13 @@ def _reencode_without_metadata(data: bytes, mime_type: str, policy: MetadataPoli
         image.load()
         clean = image.copy()
     buffer = io.BytesIO()
-    if mime_type == "image/tiff":
+    if mime_type in HEIF_MIME_TYPES:
+        # copy() uebernimmt image.info, und pillow-heif liest XMP/EXIF beim Speichern von dort.
+        clean.info = {}
+        if clean.mode not in ("RGB", "RGBA", "L"):
+            clean = clean.convert("RGB")
+        clean.save(buffer, format="HEIF", quality=95, exif=filtered, xmp=None)
+    elif mime_type == "image/tiff":
         clean.save(buffer, format="TIFF", exif=filtered or b"")  # ohne libtiff-Kompression: die verwirft sonst Tags wie DateTime
     elif mime_type == "image/png":
         clean.save(buffer, format="PNG", exif=filtered or b"")
@@ -304,9 +317,12 @@ def sanitize_image(data: bytes, mime_type: str | None, policy: MetadataPolicy) -
     # Pixel ohne jegliche Metadaten, Ausrichtung vorher angewendet.
     with Image.open(io.BytesIO(data)) as image:
         upright = ImageOps.exif_transpose(image)
-        target = {"image/jpeg": "JPEG", "image/png": "PNG", "image/webp": "WEBP", "image/tiff": "TIFF"}[mime_type]
+        upright.info = {}
+        target = {
+            "image/jpeg": "JPEG", "image/png": "PNG", "image/webp": "WEBP", "image/tiff": "TIFF", "image/heic": "HEIF", "image/heif": "HEIF",
+        }[mime_type]
         if target == "JPEG" and upright.mode not in ("RGB", "L"):
             upright = upright.convert("RGB")
         buffer = io.BytesIO()
-        upright.save(buffer, format=target, **({"quality": 95} if target in ("JPEG", "WEBP") else {}))
+        upright.save(buffer, format=target, **({"quality": 95} if target in ("JPEG", "WEBP", "HEIF") else {}))
         return buffer.getvalue()
