@@ -193,6 +193,11 @@ class BuildContext:
     # einer je Punkt und Block
     _protocol_contents: dict[int, Any] = field(default_factory=dict, repr=False)
     _memo: dict[Any, Any] = field(default_factory=dict, repr=False)
+    # Schlüssel der Platzhalter, die dieser Aufbau gesetzt hat (fehlende Berechtigung): ein PDF
+    # mit Platzhaltern ist eine eingeschränkte Fassung (Entwurf, ohne Version, siehe service.py)
+    restrictions: list[str] = field(default_factory=list)
+    # Platzhalter-Texte des gerade laufenden Bausteins (run_component hängt sie an dessen Block)
+    block_notes: list[str] = field(default_factory=list)
 
     def protocol_content(self, protocol: Any):
         """Alle Inhalte eines Protokolls (repository.ProtocolContent), einmal je Aufbau."""
@@ -236,6 +241,19 @@ class BuildContext:
                 raise DocumentPermissionError("finance")
             return
         raise DocumentPermissionError(access)
+
+    def restriction_note(self, key: str, **params: object) -> str:
+        """Platzhalter-Text für Daten, die der Exportierende nicht sehen darf (``restricted.<key>``
+        in documents/i18n). Merkt sich den Schlüssel: das PDF wird dadurch eine eingeschränkte
+        Fassung."""
+        from app.documents.strings import text
+
+        if key not in self.restrictions:
+            self.restrictions.append(key)
+        message = text(self.language, f"restricted.{key}", **params)
+        if message not in self.block_notes:
+            self.block_notes.append(message)
+        return message
 
     def own_fines_participant_id(self) -> int | None:
         """Bussen sind Personendaten: wie ``GET /api/fines`` sieht nur, wer ``reports.personal``

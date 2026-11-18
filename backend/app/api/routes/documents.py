@@ -118,6 +118,8 @@ class DocumentExportRead(BaseModel):
     generated_file_id: uuid.UUID | None
     content_url: str | None
     created_at: datetime
+    # Eingeschränkte Fassung: Daten fehlen wegen fehlender Berechtigung (Platzhalter im PDF)
+    restricted: bool = False
 
 
 def export_read(db: Session, export: DocumentExport) -> DocumentExportRead:
@@ -142,6 +144,7 @@ def export_read(db: Session, export: DocumentExport) -> DocumentExportRead:
         generated_file_id=stored.public_id if stored else None,
         content_url=f"/api/stored-files/{stored.public_id}/content" if stored else None,
         created_at=export.created_at,
+        restricted=bool((export.options_json or {}).get("restricted")),
     )
 
 

@@ -231,6 +231,10 @@ class BlockBase(_Strict):
     # Herkunft im Protokoll (public_id des Protokollblocks bzw. -elements): Grundlage der
     # PDF-Abdeckung (export_coverage.py). Kein Inhalt, nicht im Inhalts-Hash (hashing.py).
     origin: str | None = None
+    # Platzhalter für Daten, die wegen fehlender Berechtigung fehlen (übersetzter Text, siehe
+    # BuildContext.restriction_note): erscheint sichtbar im PDF, auch wenn der Block sonst leer
+    # wäre - nie fehlen Daten unbemerkt. Teil des Inhalts-Hashes.
+    restricted: str | None = None
 
     def is_empty(self) -> bool:  # pragma: no cover - jede Unterklasse überschreibt
         return False

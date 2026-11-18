@@ -4,6 +4,7 @@
 
 #import "theme.typ": make-ctx
 #import "layout.typ": render-marked, render-node, render-nodes, verify-block
+#import "lib/core.typ": restriction-note
 
 #let doc = json("/document.json")
 #let ctx = make-ctx(doc)
@@ -100,6 +101,8 @@
     let last = index == doc.segments.len() - 1
     page(..page-args(segment.master, first-id: first-id), {
       if index == 0 { [#metadata("start") <hocx-content-start>] }
+      // Eingeschränkte Fassung: vor allem Inhalt sagen, dass Teile wegen fehlender Rechte fehlen
+      if index == 0 and doc.flags.at("restricted", default: none) != none { restriction-note(ctx, doc.flags.restricted) }
       render-marked(ctx, segment.nodes)
       // Prüfvermerk am Ende, falls die Vorlage keinen eigenen enthält (unten auf der letzten Seite)
       if last and doc.verify.auto {

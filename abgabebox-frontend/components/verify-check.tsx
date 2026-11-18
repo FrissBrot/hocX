@@ -373,7 +373,10 @@ export function VerifyResultCard({
   const ownSite = isSiteDocument(result, site);
   const siteDomain = ownSite ? site?.domain ?? null : null;
   const foreign = Boolean(site?.tenant_public_id) && !ownSite;
-  const docType = result.document_type && t.has(`docType.${result.document_type}`) ? t(`docType.${result.document_type}`) : result.document_type;
+  // Eingeschränkte Fassung (Daten fehlten der exportierenden Person): Grundtyp plus Warnung
+  const restricted = Boolean(result.document_type?.endsWith("_restricted"));
+  const baseType = restricted ? result.document_type?.slice(0, -"_restricted".length) : result.document_type;
+  const docType = baseType && t.has(`docType.${baseType}`) ? t(`docType.${baseType}`) : baseType;
   const status = result.status_code && t.has(`statusLabel.${result.status_code}`) ? t(`statusLabel.${result.status_code}`) : null;
   return (
     <section className="verify-result verify-result-ok" role="status">
@@ -397,6 +400,7 @@ export function VerifyResultCard({
           </div>
         )}
 
+        {restricted && <p className="verify-notice verify-notice-warning">{t("restrictedVersion")}</p>}
         {foreign && <p className="verify-notice verify-notice-warning">{t("foreignDocument", { site: site?.tenant_name ?? "" })}</p>}
         {outcome.otherDocument && <p className="verify-notice verify-notice-warning">{t("otherDocument")}</p>}
         {outcome.importUnverified && <p className="verify-notice verify-notice-warning">{t("importUnverified")}</p>}

@@ -61,9 +61,11 @@ class TodoFines:
     laufende Busse der Personen ohne gespeicherte Busse. Beträge anderer Personen nur mit
     ``reports.personal`` oder ``finances.manage``, sonst nur die eigene Busse."""
 
-    def __init__(self, totals: dict[int, Decimal], currency: str) -> None:
+    def __init__(self, totals: dict[int, Decimal], currency: str, hidden: bool = False) -> None:
         self.totals = totals
         self.currency = currency
+        # Bussen anderer Personen weggelassen (fehlende Berechtigung): Platzhalter im Block
+        self.hidden = hidden
 
     def text(self, row: Any) -> str:
         total = self.totals.get(row.ProtocolTodo.id)
@@ -94,8 +96,14 @@ def load_todo_fines(ctx: BuildContext, rows: list[Any]) -> TodoFines | None:
     user = ctx.user
     only_participant = None if user is None or user.can(P.FINANCES_MANAGE) else ctx.own_fines_participant_id()
 
+    hidden = False
+
     def visible(participant_id: int | None) -> bool:
-        return only_participant is None or participant_id == only_participant
+        nonlocal hidden
+        if only_participant is None or participant_id == only_participant:
+            return True
+        hidden = True
+        return False
 
     totals: dict[int, Decimal] = {}
     stored: dict[int, set[int]] = {}
@@ -125,10 +133,10 @@ def load_todo_fines(ctx: BuildContext, rows: list[Any]) -> TodoFines | None:
                 continue
             totals[facts.id] = totals.get(facts.id, Decimal("0")) + line.amount
     totals = {todo_id: fines.money(total) for todo_id, total in totals.items() if total > 0}
-    if not totals:
+    if not totals and not hidden:
         return None
     currency = ctx.db.scalar(select(Tenant.finance_currency).where(Tenant.id == ctx.tenant_id)) or "CHF"
-    return TodoFines(totals, currency)
+    return TodoFines(totals, currency, hidden=hidden)
 
 
 def todo_columns(columns: Iterable[str], *, with_fine: bool = False) -> list[TableColumn]:
@@ -221,18 +229,40 @@ def todo_table(
     return TableData(columns=columns, groups=[groups[key] for _, key in sorted(order)])
 
 
+def _is_restricted_reader(ctx: BuildContext) -> bool:
+    from app.services.access_service import AccessService
+
+    return ctx.user is not None and AccessService()._is_restricted_reader(ctx.db, ctx.user)
+
+
 def list_tenant_todo_rows(ctx: BuildContext) -> list[Any]:
+    """Pendenzen, die der Exportierende sehen darf. Eingeschränkte Leser sehen nur die ihrer
+    Protokolle und die ihnen zugewiesenen - das gilt als eingeschränkte Fassung (Platzhalter bzw.
+    Hinweis, siehe hidden_todo_count und BuildContext.restriction_note)."""
     from app.repositories.protocol_todo_repository import ProtocolTodoRepository
     from app.services.access_service import AccessService
 
     repository = ProtocolTodoRepository()
     user = ctx.user
-    if user is not None:
+    if user is not None and _is_restricted_reader(ctx):
         access = AccessService()
-        if access._is_restricted_reader(ctx.db, user):
-            protocol_ids = access.repository.list_protocol_ids(ctx.db, user_id=user.user_id, tenant_id=ctx.tenant_id)
-            return list(repository.list_for_protocols_or_assigned(ctx.db, ctx.tenant_id, protocol_ids, user.user_id, skip=0, limit=_LIMIT))
+        protocol_ids = access.repository.list_protocol_ids(ctx.db, user_id=user.user_id, tenant_id=ctx.tenant_id)
+        rows = list(repository.list_for_protocols_or_assigned(ctx.db, ctx.tenant_id, protocol_ids, user.user_id, skip=0, limit=_LIMIT))
+        if len(rows) < len(repository.list_for_tenant(ctx.db, ctx.tenant_id, skip=0, limit=_LIMIT)):
+            # Auch ohne eigenen Block (z. B. Zahlen in Vorlagentexten): Kopfhinweis im PDF
+            ctx.restriction_note("todos")
+        return rows
     return list(repository.list_for_tenant(ctx.db, ctx.tenant_id, skip=0, limit=_LIMIT))
+
+
+def hidden_todo_count(ctx: BuildContext, params: TodoTableParams, shown: int) -> int:
+    """Wie viele Pendenzen derselben Auswahl der Exportierende nicht sehen darf."""
+    if not _is_restricted_reader(ctx):
+        return 0
+    from app.repositories.protocol_todo_repository import ProtocolTodoRepository
+
+    everything = filter_rows(ctx, list(ProtocolTodoRepository().list_for_tenant(ctx.db, ctx.tenant_id, skip=0, limit=_LIMIT)), params)
+    return max(0, len(everything) - shown)
 
 
 def filter_rows(ctx: BuildContext, rows: list[Any], params: TodoTableParams) -> list[Any]:
@@ -286,7 +316,17 @@ def provide(ctx: BuildContext, spec: BlockSpec, params: TodoTableParams):
     fines = load_todo_fines(ctx, rows) if params.show_fines else None
     columns = todo_columns(params.columns, with_fine=fines is not None)
     tag_config = _tag_config(ctx) if "tags" in params.columns else None
-    return [TodoTableBlock(**spec_fields(spec), table=todo_table(rows, columns, group_by=params.group_by, tag_config=tag_config, fines=fines))]
+    # Fehlende Berechtigung nie stillschweigend: Platzhalter am Block
+    notes: list[str] = []
+    hidden = hidden_todo_count(ctx, params, len(rows))
+    if hidden:
+        notes.append(ctx.restriction_note("todosHidden", count=hidden))
+    if fines is not None and fines.hidden:
+        notes.append(ctx.restriction_note("otherFines"))
+    return [TodoTableBlock(
+        **spec_fields(spec), table=todo_table(rows, columns, group_by=params.group_by, tag_config=tag_config, fines=fines),
+        restricted=" ".join(notes) or None,
+    )]
 
 
 def markdown(

@@ -671,6 +671,16 @@
     "planned": "Pianificato",
     "prepared": "Preparato"
   },
+  "restricted": {
+    "banner": "Versione limitata: questo documento è incompleto perché ti manca l’autorizzazione per una parte dei dati. I punti interessati sono segnalati. È una bozza, non un documento ufficiale.",
+    "todos": "Non incluse: attività da verbali che non puoi vedere (autorizzazione mancante).",
+    "todosHidden": "Non incluse: altre attività ({count}) da verbali che non puoi vedere (autorizzazione mancante).",
+    "otherFines": "Non incluse: multe di altre persone (autorizzazione mancante). Gli importi mostrano solo le tue multe.",
+    "finesHidden": "Non incluse: multe di altre persone ({count}) (autorizzazione mancante).",
+    "sessionsHidden": "Non incluse: sedute ({count}) che non puoi vedere (autorizzazione mancante).",
+    "peopleHidden": "Non inclusi: dati di altre persone ({count}) (autorizzazione mancante). È mostrata solo la tua riga.",
+    "statisticsScope": "Incompleto: i dati comprendono solo i modelli a cui hai accesso (autorizzazione mancante)."
+  },
   "role": {
     "admin": "Amministrazione",
     "kassier": "Cassa",

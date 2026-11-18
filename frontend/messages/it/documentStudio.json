@@ -927,7 +927,9 @@
     "encryptionExcel": "Excel con password – si apre senza software aggiuntivo",
     "encryptionZip": "File ZIP (AES-256) – il CSV resta CSV, serve 7-Zip, Keka o WinRAR",
     "passwordHelpZip": "Il file viene fornito in un file ZIP protetto da password (AES-256). Esplora risorse di Windows e macOS non possono aprirlo; serve 7-Zip, Keka o WinRAR. Almeno {min} caratteri.",
-    "encryptedSavedZip": "File ZIP protetto da password salvato. Da aprire con 7-Zip, Keka o WinRAR."
+    "encryptedSavedZip": "File ZIP protetto da password salvato. Da aprire con 7-Zip, Keka o WinRAR.",
+    "restrictedWarning": "Versione limitata: ti manca l’autorizzazione per una parte dei dati (ad es. multe di altre persone, classifiche o verbali non accessibili). Il PDF contiene segnaposto in questi punti ed è creato come bozza senza numero di versione, non come documento ufficiale.",
+    "createdRestricted": "Versione limitata creata: mancano dati per autorizzazioni insufficienti. I punti sono segnalati nel PDF; è una bozza senza numero di versione."
   },
   "exports": {
     "allTypes": "Tutti i tipi di documento",

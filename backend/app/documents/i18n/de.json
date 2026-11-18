@@ -671,6 +671,16 @@
     "planned": "Geplant",
     "prepared": "Vorbereitet"
   },
+  "restricted": {
+    "banner": "Eingeschränkte Fassung: Dieses Dokument ist unvollständig, weil dir für einen Teil der Daten die Berechtigung fehlt. Die betroffenen Stellen sind markiert. Es ist ein Entwurf und kein offizielles Dokument.",
+    "todos": "Nicht enthalten: Pendenzen aus Protokollen, die du nicht sehen darfst (fehlende Berechtigung).",
+    "todosHidden": "Nicht enthalten: weitere Pendenzen ({count}) aus Protokollen, die du nicht sehen darfst (fehlende Berechtigung).",
+    "otherFines": "Nicht enthalten: Bussen anderer Personen (fehlende Berechtigung). Beträge zeigen nur deine eigenen Bussen.",
+    "finesHidden": "Nicht enthalten: Bussen anderer Personen ({count}) (fehlende Berechtigung).",
+    "sessionsHidden": "Nicht enthalten: Sitzungen ({count}), die du nicht sehen darfst (fehlende Berechtigung).",
+    "peopleHidden": "Nicht enthalten: Angaben zu weiteren Personen ({count}) (fehlende Berechtigung). Gezeigt wird nur deine eigene Zeile.",
+    "statisticsScope": "Unvollständig: Die Zahlen umfassen nur die Vorlagen, auf die du Zugriff hast (fehlende Berechtigung)."
+  },
   "role": {
     "admin": "Administration",
     "kassier": "Kasse",

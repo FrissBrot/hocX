@@ -170,7 +170,8 @@ grep -q 'build-test-images\[.\]yml@refs/heads/main' scripts/update_deploy_code.s
 # shellcheck disable=SC2016  # literales Suchmuster
 grep -q 'HOCX_DEPLOY_CODE_UPDATE_FROM_DEPLOY=1 "$REPO_DIR/scripts/update_deploy_code.sh"' scripts/deploy.sh
 # shellcheck disable=SC2016  # literales Suchmuster
-grep -q 'exec env HOCX_DEPLOY_CODE_UPDATED=1 "$REPO_DIR/scripts/deploy.sh" "$ENVIRONMENT"' scripts/deploy.sh
+# "$@": Zusatzargumente wie --restore-from-backup überstehen den Neustart nach dem Code-Update
+grep -q 'exec env HOCX_DEPLOY_CODE_UPDATED=1 "$REPO_DIR/scripts/deploy.sh" "$@"' scripts/deploy.sh
 # shellcheck disable=SC2016  # literales Suchmuster
 grep -q 'exec env HOCX_DEPLOY_CODE_UPDATED=1 "$REPO_DIR/scripts/deploy.sh" "$HOST_ENVIRONMENT"' scripts/update_deploy_code.sh
 grep -q 'HOCX_SKIP_DEPLOY_CODE_UPDATE' scripts/deploy.sh

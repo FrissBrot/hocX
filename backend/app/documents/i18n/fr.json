@@ -671,6 +671,16 @@
     "planned": "Planifié",
     "prepared": "Préparé"
   },
+  "restricted": {
+    "banner": "Version restreinte : ce document est incomplet, car il te manque l’autorisation pour une partie des données. Les endroits concernés sont signalés. C’est un brouillon, pas un document officiel.",
+    "todos": "Non inclus : tâches issues de procès-verbaux que tu n’as pas le droit de voir (autorisation manquante).",
+    "todosHidden": "Non inclus : autres tâches ({count}) issues de procès-verbaux que tu n’as pas le droit de voir (autorisation manquante).",
+    "otherFines": "Non inclus : amendes d’autres personnes (autorisation manquante). Les montants ne montrent que tes propres amendes.",
+    "finesHidden": "Non inclus : amendes d’autres personnes ({count}) (autorisation manquante).",
+    "sessionsHidden": "Non inclus : séances ({count}) que tu n’as pas le droit de voir (autorisation manquante).",
+    "peopleHidden": "Non inclus : données d’autres personnes ({count}) (autorisation manquante). Seule ta propre ligne est affichée.",
+    "statisticsScope": "Incomplet : les chiffres ne couvrent que les modèles auxquels tu as accès (autorisation manquante)."
+  },
   "role": {
     "admin": "Administration",
     "kassier": "Caisse",

@@ -96,6 +96,8 @@ class CompileInput:
     params: dict[str, Any] = field(default_factory=dict)
     is_draft: bool = False
     document_env: dict[str, Any] = field(default_factory=dict)
+    # Eingeschränkte Fassung (Daten fehlen wegen fehlender Berechtigung): Hinweis am Dokumentanfang
+    restricted_note: str | None = None
 
 
 @dataclass
@@ -858,7 +860,10 @@ class LayoutCompiler:
             "meta": self.input.meta.model_dump(mode="json"),
             "strings": self.strings,
             "render": self.input.render.model_dump(mode="json"),
-            "flags": {"draft": self.input.is_draft, "preview": self.input.render.preview, "sample": self.input.mode == "sample", "diagnostics": not self.input.strict},
+            "flags": {
+                "draft": self.input.is_draft, "preview": self.input.render.preview, "sample": self.input.mode == "sample",
+                "diagnostics": not self.input.strict, "restricted": self.input.restricted_note,
+            },
             "brand": self.input.brand.typst,
             "page": {
                 "width": width,
@@ -932,7 +937,20 @@ def run_component(ctx: BuildContext, spec: BlockSpec, *, sample: bool = False, s
 
         return _mark_empty(sample_blocks(spec, validated, strings or {}))
     ctx.require(entry.access)
-    return _mark_empty(PROVIDERS[spec.type](ctx, spec, validated))
+    # Platzhalter für fehlende Berechtigung je Baustein sammeln (verschachtelte Aufrufe getrennt)
+    outer_notes, ctx.block_notes = ctx.block_notes, []
+    try:
+        blocks = PROVIDERS[spec.type](ctx, spec, validated)
+        notes = ctx.block_notes
+    finally:
+        ctx.block_notes = outer_notes
+    if notes:
+        # Kein Anbieter darf Daten stillschweigend weglassen: hat er den Platzhalter nicht selbst
+        # gesetzt, steht er am Block (Traktanden tragen ihn an ihren einzelnen Bausteinen)
+        for block in blocks:
+            if not isinstance(block, ProtocolElementBlock) and getattr(block, "restricted", None) is None:
+                block.restricted = " ".join(notes)
+    return _mark_empty(blocks)
 
 
 def build_blocks(ctx: BuildContext, specs: list[BlockSpec]) -> list[Any]:
@@ -949,7 +967,8 @@ def _mark_empty(blocks: list[Any]) -> list[Any]:
         if isinstance(block, ProtocolElementBlock):
             block.children = _mark_empty(block.children)
         block.empty = block.is_empty()
-        if block.empty and block.hide_if_empty:
+        # Ein Block mit Platzhalter für fehlende Berechtigung bleibt immer sichtbar
+        if block.empty and block.hide_if_empty and not getattr(block, "restricted", None):
             continue
         result.append(block)
     return result

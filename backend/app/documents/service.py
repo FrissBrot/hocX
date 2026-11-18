@@ -138,6 +138,8 @@ class PreparedDocument:
     diagnostics: list[Diagnostic] = field(default_factory=list)
     # Protokolltitel beim Export überschrieben (STUDIO-007): im Register vermerkt
     title_overridden: bool = False
+    # Schlüssel der Platzhalter (fehlende Berechtigung): eingeschränkte Fassung, siehe prepare()
+    restricted: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -403,22 +405,36 @@ def prepare(
         "short_id": render.short_id,
         "created_by": user.display_name if user is not None else "",
     }
-    compiled = compile_document(
-        db,
-        CompileInput(
-            content=content,
-            brand=brand,
-            ctx=ctx,
-            meta=meta,
-            strings=strings,
-            render=render,
-            mode=request.data_mode,
-            strict=not preview,
-            params=request.params,
-            is_draft=is_draft,
-            document_env=document_env,
-        ),
-    )
+    def compile_with(draft: bool, restricted_note: str | None):
+        return compile_document(
+            db,
+            CompileInput(
+                content=content,
+                brand=brand,
+                ctx=ctx,
+                meta=meta,
+                strings=strings,
+                render=render,
+                mode=request.data_mode,
+                strict=not preview,
+                params=request.params,
+                is_draft=draft,
+                document_env=document_env,
+                restricted_note=restricted_note,
+            ),
+        )
+
+    compiled = compile_with(is_draft, None)
+    restricted = list(ctx.restrictions)
+    if restricted:
+        # Eingeschränkte Fassung: Daten fehlen wegen fehlender Berechtigung (Platzhalter an den
+        # Blöcken). Nie ein offizielles Dokument: immer Entwurf (Wasserzeichen, nicht abwählbar),
+        # keine Versionsnummer, Hinweis am Anfang; im Register als eingeschränkt gekennzeichnet.
+        version = None
+        meta.version = None
+        is_draft = True
+        document_env.update(version=None, is_draft=True)
+        compiled = compile_with(True, strings.get("restricted.banner", ""))
     digest = protocol_hash or content_hash(meta, compiled.blocks, ctx.assets.files)
     design = design_hash(content_json(content), brand.tokens.model_dump(mode="json"), {**brand.asset_checksums, **compiled.template_asset_checksums})
     return PreparedDocument(
@@ -439,6 +455,7 @@ def prepare(
         params=dict(request.params),
         diagnostics=compiled.diagnostics,
         title_overridden=title_overridden,
+        restricted=restricted,
     )
 
 
@@ -729,6 +746,9 @@ async def render(db: Session, user: CurrentUser | None, tenant_id: int, request:
 
 FULL_VIEW = "full"
 
+# Register-Modell für Abfragen; DocumentRegistry (Modulname) erzeugt Einträge in _finalize_render
+from app.models.entities import DocumentRegistry as _Registry  # noqa: E402
+
 
 def document_view_key(db: Session, user: CurrentUser | None) -> str:
     """Wovon der Inhalt eines PDFs beim Exportierenden abhängt: Bussen nur die eigenen ohne
@@ -753,6 +773,21 @@ def document_view_key(db: Session, user: CurrentUser | None) -> str:
     return FULL_VIEW if unrestricted else f"user:{user.user_id}"
 
 
+def exports_are_complete(db: Session, user: CurrentUser) -> bool:
+    """Ob Exporte dieser Person alle Daten enthalten. Nein: Bussen anderer, Ranglisten, fremde
+    Vorlagen oder Pendenzen fehlen ihr - solche PDFs werden eingeschränkte Fassungen mit
+    Platzhaltern (Hinweis im Export-Dialog). Das Schreibrecht (Wasserzeichen) zählt hier nicht."""
+    from app.core.permissions import P
+    from app.services.access_service import AccessService
+    from app.services.statistics_common import own_person_key
+
+    return (
+        user.can(P.REPORTS_PERSONAL)
+        and own_person_key(db, user) is None
+        and not AccessService()._is_restricted_reader(db, user)
+    )
+
+
 def _view_of(export: DocumentExport) -> str | None:
     return (export.options_json or {}).get("view")
 
@@ -771,8 +806,8 @@ def _reuse_existing_export(
     if protocol.status == "abgeschlossen":
         return _reuse_closed_export(db, request, prepared, view)
     latest = db.execute(
-        select(DocumentExport, DocumentRegistry.status_code)
-        .join(DocumentRegistry, DocumentRegistry.public_id == DocumentExport.public_id)
+        select(DocumentExport, _Registry.status_code)
+        .join(_Registry, _Registry.public_id == DocumentExport.public_id)
         .where(
             DocumentExport.tenant_id == protocol.tenant_id,
             DocumentExport.protocol_id == protocol.id,
@@ -818,13 +853,13 @@ def _reuse_closed_export(db: Session, request: DocumentRequest, prepared: Prepar
     protocol = prepared.protocol
     if protocol is None or prepared.document_type != "protocol" or protocol.status != "abgeschlossen" or prepared.title_overridden:
         return None
-    closed = select(DocumentRegistry.public_id).where(
-        DocumentRegistry.tenant_id == protocol.tenant_id,
-        DocumentRegistry.source_public_id == protocol.public_id,
-        DocumentRegistry.document_type == "protocol",
-        DocumentRegistry.status_code == "abgeschlossen",
+    closed = select(_Registry.public_id).where(
+        _Registry.tenant_id == protocol.tenant_id,
+        _Registry.source_public_id == protocol.public_id,
+        _Registry.document_type == "protocol",
+        _Registry.status_code == "abgeschlossen",
         # Titel fehlt nur bei PDFs eines früheren, inzwischen ersetzten Abschlusses
-        DocumentRegistry.title.is_not(None),
+        _Registry.title.is_not(None),
     )
     candidates = db.scalars(
         select(DocumentExport)
@@ -941,6 +976,8 @@ def _finalize_render(
                 "verify_url": render_info.verify_link,
                 # Sicht des Exportierenden (document_view_key): Wiederverwendung nur innerhalb derselben
                 "view": document_view_key(db, user),
+                # Eingeschränkte Fassung: welche Platzhalter das PDF enthält (fehlende Berechtigung)
+                "restricted": prepared.restricted,
             },
             language=prepared.language,
             stored_file_id=stored.id,
@@ -952,9 +989,10 @@ def _finalize_render(
                 public_id=export_public_id,
                 tenant_id=tenant_id,
                 sha256=sha256,
-                document_type=prepared.document_type,
+                # Eingeschränkte Fassung auf der Prüfseite als solche erkennbar (nie «Protokoll»)
+                document_type=f"{prepared.document_type}_restricted" if prepared.restricted else prepared.document_type,
                 title=meta.title,
-                status_code=protocol.status if protocol is not None and prepared.document_type == "protocol" else None,
+                status_code=protocol.status if protocol is not None and prepared.document_type == "protocol" and not prepared.restricted else None,
                 version_major=major,
                 version_minor=minor,
                 version_label=meta.version,
@@ -966,7 +1004,8 @@ def _finalize_render(
             )
         )
         db.flush()
-        if protocol is not None:
+        if protocol is not None and not prepared.restricted:
+            # Eingeschränkte Fassungen sind keine Version des Protokoll-Dokuments.
             # Logisches Dokument im Dateien-Tab (feature/document-management): neuer Inhalt = neue
             # Version, gleicher Inhalt ersetzt nur die Darstellung. Vor dem Freigeben älterer
             # Dateien, damit der Backfill sie noch als Versionen übernehmen kann.

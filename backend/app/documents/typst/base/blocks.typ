@@ -3,7 +3,7 @@
 // Vorlage verwendbar. Eingebettet werden sie über data_block-Knoten (layout.typ).
 // Darstellungsvarianten (Grundstil, Brand- und Block-Übersteuerung) liefert look(ctx, art).
 
-#import "../lib/core.typ": colors, space, radius, tr, is-blank, border-w, tone-color, status-dot, tag-chip, empty-note
+#import "../lib/core.typ": colors, space, radius, tr, is-blank, border-w, tone-color, status-dot, tag-chip, empty-note, restriction-note
 #import "rich.typ": render-rich, render-inline
 #import "table.typ": data-table, render-cell, header-label
 #import "chart.typ": render-chart
@@ -617,12 +617,14 @@
     }))
     v(gap, weak: true)
   } else {
-    if b.empty and hide-empty { return }
+    // Platzhalter für Daten ohne Berechtigung: Block nie weglassen, Hinweis immer zeigen
+    let restricted = b.at("restricted", default: none)
+    if b.empty and hide-empty and restricted == none { return }
     // Die Pendenzen-Darstellung «checklist» setzt ihren Titel selbst in den Kasten
     let own-title = b.type == "todo_table" and look(ctx, "todo", default: "table").variant == "checklist" and not b.empty
     if not own-title { block-title(ctx, b) }
     if b.empty {
-      empty-note(ctx, b.type)
+      if restricted == none { empty-note(ctx, b.type) }
     } else {
       let component = ctx.theme.components.at(b.type, default: base-components.at(b.type))
       // Kein umschliessender block(): Seitenumbrüche und seitenübergreifende Tabellen müssen
@@ -631,6 +633,7 @@
       component(ctx, b)
       v(space.s4, weak: true)
     }
+    if restricted != none { restriction-note(ctx, restricted) }
   }
 }
 

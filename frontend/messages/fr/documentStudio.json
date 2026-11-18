@@ -927,7 +927,9 @@
     "encryptionExcel": "Excel avec mot de passe – s’ouvre sans logiciel supplémentaire",
     "encryptionZip": "Fichier ZIP (AES-256) – le CSV reste CSV, nécessite 7-Zip, Keka ou WinRAR",
     "passwordHelpZip": "Le fichier est fourni dans un fichier ZIP protégé par mot de passe (AES-256). L’Explorateur Windows et macOS ne peuvent pas l’ouvrir ; il faut 7-Zip, Keka ou WinRAR. Au moins {min} caractères.",
-    "encryptedSavedZip": "Fichier ZIP protégé par mot de passe enregistré. À ouvrir avec 7-Zip, Keka ou WinRAR."
+    "encryptedSavedZip": "Fichier ZIP protégé par mot de passe enregistré. À ouvrir avec 7-Zip, Keka ou WinRAR.",
+    "restrictedWarning": "Version restreinte : il te manque l’autorisation pour une partie des données (p. ex. amendes d’autres personnes, classements ou procès-verbaux inaccessibles). Le PDF contient des espaces réservés à ces endroits et est créé comme brouillon sans numéro de version, pas comme document officiel.",
+    "createdRestricted": "Version restreinte créée : des données manquent faute d’autorisation. Les endroits sont signalés dans le PDF ; c’est un brouillon sans numéro de version."
   },
   "exports": {
     "allTypes": "Tous les types de document",

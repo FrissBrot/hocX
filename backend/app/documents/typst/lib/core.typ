@@ -133,6 +133,17 @@
   )
 }
 
+// Platzhalter für Daten, die wegen fehlender Berechtigung im PDF fehlen (BlockBase.restricted)
+#let restriction-note(ctx, message) = block(
+  width: 100%,
+  above: space.s2,
+  below: space.s4,
+  inset: (x: space.s3, y: space.s2),
+  radius: radius.xs,
+  stroke: (paint: ctx.c.muted, thickness: 0.6pt, dash: "dashed"),
+  text(size: 0.85em, fill: ctx.c.muted, style: "italic")[#message],
+)
+
 #let empty-note(ctx, block-type) = {
   text(fill: ctx.c.muted, style: "italic")[#tr(ctx, "empty." + block-type)]
 }

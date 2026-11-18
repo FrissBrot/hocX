@@ -671,6 +671,16 @@
     "planned": "Planned",
     "prepared": "Prepared"
   },
+  "restricted": {
+    "banner": "Restricted version: this document is incomplete because you lack permission for part of the data. The affected places are marked. It is a draft, not an official document.",
+    "todos": "Not included: to-dos from minutes you are not allowed to see (missing permission).",
+    "todosHidden": "Not included: further to-dos ({count}) from minutes you are not allowed to see (missing permission).",
+    "otherFines": "Not included: fines of other people (missing permission). Amounts show only your own fines.",
+    "finesHidden": "Not included: fines of other people ({count}) (missing permission).",
+    "sessionsHidden": "Not included: meetings ({count}) you are not allowed to see (missing permission).",
+    "peopleHidden": "Not included: details of further people ({count}) (missing permission). Only your own row is shown.",
+    "statisticsScope": "Incomplete: the figures only cover the templates you have access to (missing permission)."
+  },
   "role": {
     "admin": "Administrator",
     "kassier": "Treasurer",

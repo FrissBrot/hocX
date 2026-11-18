@@ -32,12 +32,19 @@ def _month_label(value: str) -> str:
 
 
 def _template_ids(ctx: BuildContext) -> set[int] | None:
-    """Eingeschränkte Leser: nur Zahlen ihrer Vorlagen, wie /statistics/overview (Audit 07, C9)."""
+    """Eingeschränkte Leser: nur Zahlen ihrer Vorlagen, wie /statistics/overview (Audit 07, C9) -
+    mit Platzhalter, damit die Zahlen nicht als Gesamtzahlen gelesen werden."""
     if ctx.user is None:
         return None
+    from app.models import Template
     from app.services.access_service import AccessService
 
-    return AccessService().readable_template_ids(ctx.db, ctx.user)
+    readable = AccessService().readable_template_ids(ctx.db, ctx.user)
+    if readable is not None:
+        others = ctx.db.scalar(select(func.count(Template.id)).where(Template.tenant_id == ctx.tenant_id, Template.id.not_in(readable or {-1})))
+        if others:
+            ctx.restriction_note("statisticsScope")
+    return readable
 
 
 def _attendance(ctx: BuildContext, bounds):
@@ -47,12 +54,24 @@ def _attendance(ctx: BuildContext, bounds):
 def _visible_people(ctx: BuildContext, people):
     """Ranglisten je Person: Leser sehen nur sich selbst (PRIV-001), wie /statistics/overview."""
     own_key = stats.own_person_key(ctx.db, ctx.user)
-    return list(people) if own_key is None else [person for person in people if person.key == own_key]
+    if own_key is None:
+        return list(people)
+    people = list(people)
+    visible = [person for person in people if person.key == own_key]
+    if len(visible) < len(people):
+        ctx.restriction_note("peopleHidden", count=len(people) - len(visible))
+    return visible
 
 
 def _visible_fine_rows(ctx: BuildContext, rows):
     own_key = stats.own_person_key(ctx.db, ctx.user)
-    return list(rows) if own_key is None else [row for row in rows if row.participant_key == own_key]
+    if own_key is None:
+        return list(rows)
+    rows = list(rows)
+    visible = [row for row in rows if row.participant_key == own_key]
+    if len(visible) < len(rows):
+        ctx.restriction_note("peopleHidden", count=len(rows) - len(visible))
+    return visible
 
 
 def provide_chart(ctx: BuildContext, spec: BlockSpec, params: ChartParams):

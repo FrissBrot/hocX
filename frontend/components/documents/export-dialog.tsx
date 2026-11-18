@@ -271,7 +271,11 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
       const url = `${browserApiBaseUrl}${result.content_url}`;
       if (pdfWindow && !pdfWindow.closed) pdfWindow.location.replace(url);
       else window.open(url, "_blank", "noopener,noreferrer");
-      toast(result.version_label ? t("export.createdVersion", { version: result.version_label }) : t("export.created"), "success", {
+      // Eingeschränkte Fassung: deutlich sagen, dass Daten fehlen (Platzhalter im PDF)
+      const message = result.restricted
+        ? t("export.createdRestricted")
+        : result.version_label ? t("export.createdVersion", { version: result.version_label }) : t("export.created");
+      toast(message, result.restricted ? "info" : "success", {
         onMessageClick: () => window.open(url, "_blank", "noopener,noreferrer"),
       });
       onExported?.();
@@ -423,6 +427,8 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
     <Modal className="studio-modal export-modal" open={open} onClose={onClose} title={t("export.title")} description={t("export.description")} size="fullscreen" footer={footer}>
       <div className="export-dialog">
         <div className="export-dialog-panel">
+          {/* Vor dem Export sagen, dass Daten fehlen werden: nie unbemerkt unvollständig */}
+          {capabilities?.complete_exports === false && <StatusBanner tone="warning" message={t("export.restrictedWarning")} />}
           {selectableTypes.length > 1 && (
             <label className="field-stack export-step">
               <span className="field-label">{t("export.documentType")}</span>

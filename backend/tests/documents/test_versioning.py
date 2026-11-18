@@ -1,6 +1,7 @@
-"""Versionierung: gleicher Inhalt → gleiche Version, geänderter Inhalt erhöht sie, eine reine
-Designänderung (andere Vorlage, anderes Brand-Profil, andere Sprache) nicht; Entwurf und
-Abschluss zählen getrennt. Der Design-Hash ändert sich dagegen bei jeder Gestaltungsänderung."""
+"""Versionierung: gleicher Inhalt → gleiche Version und dasselbe PDF, geänderter Inhalt erhöht sie,
+eine reine Designänderung (andere Vorlage, anderes Brand-Profil, andere Sprache) nicht; Entwurf und
+Abschluss zählen getrennt. Der Design-Hash ändert sich dagegen bei jeder Gestaltungsänderung.
+Abgeschlossen bleibt das finale PDF, bis das Protokoll zurückgestuft und erneut abgeschlossen wird."""
 from __future__ import annotations
 
 import asyncio
@@ -35,7 +36,8 @@ def test_version_rules(db):
     assert first.content_hash
 
     same = _render(db, tenant, protocol)
-    assert same.content_hash == first.content_hash and same.version_label == first.version_label
+    # Ohne Änderung kein neues PDF: dieselbe Dokument-ID
+    assert same.public_id == first.public_id and same.version_label == first.version_label
 
     db.get(ProtocolText, text.id).content = "Geänderter Stand"
     db.flush()
@@ -60,10 +62,20 @@ def test_version_rules(db):
     assert final.version_label == "v1.0"
     db.get(ProtocolText, text.id).content = "Nach Abschluss geändert"
     db.flush()
+    # Abgeschlossen: immer das finale PDF, auch wenn sich Daten nachträglich ändern
+    final_again = _render(db, tenant, protocol)
+    assert final_again.public_id == final.public_id and final_again.version_label == "v1.0"
+
+    # Erst Zurückstufen und erneutes Abschliessen ergibt eine neue Endfassung
+    from app.schemas.protocol import ProtocolUpdate
+    from app.services.protocol_service import ProtocolService
+
+    ProtocolService().update_protocol(db, protocol.id, ProtocolUpdate(status="durchgeführt"))
+    ProtocolService().update_protocol(db, protocol.id, ProtocolUpdate(status="abgeschlossen"))
     final_changed = _render(db, tenant, protocol)
-    assert final_changed.version_label == "v1.1"
+    assert final_changed.public_id != final.public_id and final_changed.version_label == "v1.1"
     assert protocol.version_minor == 1 and protocol.version_final_minor == 1
-    assert db.query(DocumentExport).filter(DocumentExport.protocol_id == protocol.id).count() == 7
+    assert db.query(DocumentExport).filter(DocumentExport.protocol_id == protocol.id).count() == 6
 
 
 def test_preview_does_not_persist(db):

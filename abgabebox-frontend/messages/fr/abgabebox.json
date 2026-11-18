@@ -212,7 +212,8 @@
       "changed": "Le fichier a été modifié après son téléchargement.",
       "resaved": "Un nouvel enregistrement, « Imprimer en PDF » ou une compression modifient le fichier – même si le contenu semble identique.",
       "notHocx": "Le document n’a pas été créé avec hocX."
-    }
+    },
+    "restrictedVersion": "Version restreinte : le fichier est inchangé mais incomplet. La personne qui l’a créé n’avait pas l’autorisation pour une partie des données. Ce n’est pas un document officiel."
   },
   "maintenance": {
     "title": "La boîte de dépôt est en maintenance",

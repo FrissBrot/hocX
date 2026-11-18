@@ -52,7 +52,8 @@ export function usePdfExport() {
       onExported?.({ content_url: result.content_url, version_label: result.version_label, version_major: version.major, version_minor: version.minor });
       const pdfUrl = `${browserApiBaseUrl}${result.content_url}`;
       if (pdfWindow && !pdfWindow.closed) pdfWindow.location.replace(pdfUrl);
-      showToast(t("export.pdfReady"), "success", {
+      // Eingeschränkte Fassung: deutlich sagen, dass Daten fehlen (Platzhalter im PDF)
+      showToast(result.restricted ? t("export.createdRestricted") : t("export.pdfReady"), result.restricted ? "info" : "success", {
         onMessageClick: () => window.open(pdfUrl, "_blank", "noopener,noreferrer"),
       });
     } catch (error) {

@@ -927,7 +927,9 @@
     "encryptionExcel": "Excel mit Passwort – öffnet ohne Zusatzsoftware",
     "encryptionZip": "ZIP-Datei (AES-256) – CSV bleibt CSV, braucht 7-Zip, Keka oder WinRAR",
     "passwordHelpZip": "Die Datei kommt in einer ZIP-Datei mit Passwort (AES-256). Windows-Explorer und macOS können sie nicht öffnen, nötig ist 7-Zip, Keka oder WinRAR. Mindestens {min} Zeichen.",
-    "encryptedSavedZip": "ZIP-Datei mit Passwort gespeichert. Öffnen mit 7-Zip, Keka oder WinRAR."
+    "encryptedSavedZip": "ZIP-Datei mit Passwort gespeichert. Öffnen mit 7-Zip, Keka oder WinRAR.",
+    "restrictedWarning": "Eingeschränkte Fassung: Dir fehlt für einen Teil der Daten die Berechtigung (z. B. Bussen anderer Personen, Ranglisten oder fremde Protokolle). Das PDF enthält an diesen Stellen Platzhalter und wird als Entwurf ohne Versionsnummer erstellt, nicht als offizielles Dokument.",
+    "createdRestricted": "Eingeschränkte Fassung erstellt: Wegen fehlender Berechtigung fehlen Daten. Die Stellen sind im PDF markiert, es ist ein Entwurf ohne Versionsnummer."
   },
   "exports": {
     "allTypes": "Alle Dokumenttypen",

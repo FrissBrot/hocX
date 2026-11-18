@@ -212,7 +212,8 @@
       "changed": "The file was modified after it was downloaded.",
       "resaved": "Saving again, “Print to PDF” or compressing changes the file – even if the content looks the same.",
       "notHocx": "The document was not created with hocX."
-    }
+    },
+    "restrictedVersion": "Restricted version: the file is unchanged but incomplete. The person who created it lacked permission for part of the data. It is not an official document."
   },
   "maintenance": {
     "title": "The submission box is under maintenance",

@@ -134,11 +134,13 @@ def provide_attendance_matrix(ctx: BuildContext, spec: BlockSpec, params: Attend
     sessions: list[tuple[int, date]] = []
     statuses: dict[tuple[str, int], str] = {}
     names: dict[str, str] = {}
+    hidden_sessions: set[int] = set()
     for protocol_id, protocol_date, config in ctx.db.execute(statement).all():
         if ctx.user is not None:
             from app.services.access_service import AccessService
 
             if not AccessService().can_read_protocol(ctx.db, ctx.user, protocol_id):
+                hidden_sessions.add(protocol_id)
                 continue
         if (protocol_id, protocol_date) not in sessions:
             sessions.append((protocol_id, protocol_date))
@@ -154,9 +156,17 @@ def provide_attendance_matrix(ctx: BuildContext, spec: BlockSpec, params: Attend
     # Anwesenheit je Person über mehrere Sitzungen (mit Quote) ist eine Rangliste wie in der
     # Statistik: ohne reports.personal nur die eigene Zeile (Datenschutz-Audit PRIV-001).
     own_key = own_person_key(ctx.db, ctx.user)
+    hidden_people = 0
     if own_key is not None:
+        hidden_people = sum(1 for key in people if key != own_key)
         people = [key for key in people if key == own_key]
     cells = [[statuses.get((key, protocol_id)) for protocol_id, _ in sessions] for key in people]
+    # Fehlende Berechtigung nie stillschweigend: Platzhalter am Block
+    notes = []
+    if hidden_sessions:
+        notes.append(ctx.restriction_note("sessionsHidden", count=len(hidden_sessions)))
+    if hidden_people:
+        notes.append(ctx.restriction_note("peopleHidden", count=hidden_people))
     rates: list[str] = []
     if params.show_rates:
         for row in cells:
@@ -170,6 +180,7 @@ def provide_attendance_matrix(ctx: BuildContext, spec: BlockSpec, params: Attend
             people=[names[key] for key in people],
             cells=cells,
             rates=rates,
+            restricted=" ".join(notes) or None,
         )
     ]
 

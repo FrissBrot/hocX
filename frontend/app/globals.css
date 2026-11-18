@@ -752,6 +752,8 @@ pre {
   border: 1px solid var(--border);
 }
 
+.status-banner.status-warning { border-color: var(--warning); background: var(--warning-bg); color: var(--warning-fg); }
+
 .form-error-banner {
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-md);

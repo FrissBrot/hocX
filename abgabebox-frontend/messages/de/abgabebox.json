@@ -212,7 +212,8 @@
       "changed": "Die Datei wurde nach dem Herunterladen verändert.",
       "resaved": "Erneutes Speichern, «Drucken als PDF» oder Komprimieren verändert die Datei – auch wenn der Inhalt gleich aussieht.",
       "notHocx": "Das Dokument wurde nicht mit hocX erstellt."
-    }
+    },
+    "restrictedVersion": "Eingeschränkte Fassung: Die Datei ist unverändert, aber unvollständig. Der Person, die sie erstellt hat, fehlte für einen Teil der Daten die Berechtigung. Es ist kein offizielles Dokument."
   },
   "maintenance": {
     "title": "Die Abgabebox wird gerade gewartet",

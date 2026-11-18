@@ -125,6 +125,8 @@ export type Capabilities = {
   finance_data: boolean;
   personal_data: boolean;
   unmark_drafts?: boolean;
+  /** false: Exporte dieser Person sind eingeschränkte Fassungen (Daten fehlen wegen Rechten). */
+  complete_exports?: boolean;
 };
 
 // ── Vorlagen ────────────────────────────────────────────────────────────────
@@ -316,6 +318,8 @@ export type DocumentExport = {
   generated_file_id: string | null;
   content_url: string | null;
   created_at: string;
+  /** Eingeschränkte Fassung: Platzhalter für Daten ohne Berechtigung, Entwurf ohne Version. */
+  restricted?: boolean;
 };
 
 export type PreviewResult = {

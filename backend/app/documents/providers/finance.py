@@ -250,13 +250,14 @@ def provide_fines(ctx: BuildContext, spec: BlockSpec, params: FinesParams):
         raise DocumentNotFoundError("Protocol")
     if protocol is None and ctx.protocol is not None and params.date_from is None and params.date_to is None and not params.relative:
         protocol = ctx.protocol
+    own_participant_id = ctx.own_fines_participant_id()
     if protocol is not None:
         ctx.ensure_can_read_protocol(protocol.id)
-        table = protocol_fines(
-            ctx, protocol, {"fine_list_status": params.status, "fine_list_group_by": "participant" if params.group_by_person else ""},
-            only_participant_id=ctx.own_fines_participant_id(),
-        )
-        return [FinesBlock(**spec_fields(spec), table=table)]
+        config = {"fine_list_status": params.status, "fine_list_group_by": "participant" if params.group_by_person else ""}
+        table = protocol_fines(ctx, protocol, config, only_participant_id=own_participant_id)
+        hidden = protocol_fines(ctx, protocol, config).row_count() - table.row_count() if own_participant_id is not None else 0
+        # Bussen anderer Personen fehlen nie stillschweigend: Platzhalter am Block
+        return [FinesBlock(**spec_fields(spec), table=table, restricted=ctx.restriction_note("finesHidden", count=hidden) if hidden else None)]
     statement = (
         select(AttendanceFine)
         .join(Protocol, Protocol.id == AttendanceFine.protocol_id)
@@ -264,10 +265,6 @@ def provide_fines(ctx: BuildContext, spec: BlockSpec, params: FinesParams):
     )
     if params.status == "open":
         statement = statement.where(AttendanceFine.status == "pending")
-    own_participant_id = ctx.own_fines_participant_id()
-    if own_participant_id is not None:
-        # Ohne reports.personal nur die eigenen Bussen (wie GET /api/fines)
-        statement = statement.where(AttendanceFine.participant_id == own_participant_id)
     from app.documents.context import relative_range
 
     date_from, date_to = relative_range(ctx.today, params.relative) or (params.date_from, params.date_to)
@@ -275,6 +272,16 @@ def provide_fines(ctx: BuildContext, spec: BlockSpec, params: FinesParams):
         statement = statement.where(Protocol.protocol_date >= date_from)
     if date_to is not None:
         statement = statement.where(Protocol.protocol_date <= date_to)
+    hidden = 0
+    if own_participant_id is not None:
+        # Ohne reports.personal nur die eigenen Bussen (wie GET /api/fines) - mit Platzhalter
+        hidden = ctx.db.scalar(
+            select(func.count()).select_from(statement.where(AttendanceFine.participant_id != own_participant_id).subquery())
+        ) or 0
+        statement = statement.where(AttendanceFine.participant_id == own_participant_id)
     fines = list(ctx.db.scalars(statement.order_by(Protocol.protocol_date.asc(), AttendanceFine.created_at.asc())))
-    return [FinesBlock(**spec_fields(spec), table=fines_table(ctx, fines, [], group_by_person=params.group_by_person))]
+    return [FinesBlock(
+        **spec_fields(spec), table=fines_table(ctx, fines, [], group_by_person=params.group_by_person),
+        restricted=ctx.restriction_note("finesHidden", count=hidden) if hidden else None,
+    )]
 
