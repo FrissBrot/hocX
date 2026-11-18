@@ -401,3 +401,22 @@ def test_events_feed_stops_when_the_owner_loses_meetings_read(db):
     assert exc_info.value.status_code == 404
     downgraded = make_current_user(tenant.id, user_id=app_user.id, permissions=frozenset({"finances.read"}))
     assert routes.list_calendar_feeds(db, downgraded)[0].status == "invalid"
+
+
+def test_public_fetch_binds_the_feed_tenant_for_row_level_security(db, monkeypatch):
+    """Wie get_optional_current_user: nach erfolgreicher Prüfung sieht die Session per RLS nur noch
+    den Mandanten des Abos - der öffentliche Abruf lief bisher ganz ohne Mandantenbindung, jede
+    Pendenzen-/Termin-Abfrage hing allein an ihren eigenen Filtern (Defense in Depth)."""
+    from app.core.tenant_scope import bind_tenant_scope, bound_tenant_id
+
+    tenant = make_tenant(db, "Feed-RLS")
+    _, user = _user(db, tenant.id)
+    token = _token(_enable(db, user, "todos"))
+    bind_tenant_scope(db, None)
+    seen: list[int | None] = []
+    monkeypatch.setattr(calendar_feed_service, "_render_calendar", lambda name, entries: seen.append(bound_tenant_id(db)) or "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n")
+
+    _fetch(db, token)
+
+    assert seen == [tenant.id]
+    bind_tenant_scope(db, None)

@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from app.core.secret_crypto import decrypt_secret, encrypt_secret
 from app.core.permissions import P
 from app.core.security import CurrentUser, build_current_user
+from app.core.tenant_scope import bind_tenant_scope
 from app.models.entities import AppUser, CalendarFeed, Event, Protocol
 from app.schemas.protocol import TodoListItem
 from app.services.access_service import AccessService
@@ -183,6 +184,9 @@ def resolve(db: Session, token: str) -> tuple[CalendarFeed, CurrentUser] | None:
     user = build_current_user(db, app_user)
     if not can_subscribe(user, feed.kind):
         return None
+    # Wie get_optional_current_user: ab hier sieht der Abruf per Row-Level-Security nur noch
+    # Daten dieses Mandanten (öffentliche Routen laufen sonst unbeschränkt).
+    bind_tenant_scope(db, user.current_tenant_id)
     return feed, user
 
 
