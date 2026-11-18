@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.mfa import MfaPendingLoginRead
+
 NotificationCategory = Literal["todo_new", "todo_reminders", "todo_submissions", "fines", "submission_changes", "exports"]
 
 
@@ -53,3 +55,7 @@ class AccountLinkPreviewRead(BaseModel):
 
 class AccountLinkCompleteRead(BaseModel):
     purpose: Literal["password_reset", "invite"]
+    # Erstlogin über Einladung: Login-Ticket für den zweiten Faktor (None, wenn das Konto schon
+    # einen Faktor hat - dann normaler Login) und ob MFA Pflicht ist (account_requires_mfa).
+    mfa: MfaPendingLoginRead | None = None
+    mfa_required: bool | None = None

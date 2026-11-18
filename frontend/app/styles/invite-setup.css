@@ -1,0 +1,454 @@
+/* Erstlogin über Einladung / neues Passwort (app/auth/set-password, Design «hocX Erstlogin Einladung») */
+
+.invite-panel {
+  gap: var(--space-5);
+}
+
+.invite-panel-wide {
+  width: min(560px, 100%);
+}
+
+.invite-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.invite-brand-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  display: grid;
+  place-items: center;
+  background: var(--primary);
+  color: var(--primary-contrast);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.invite-brand-name {
+  font-size: var(--text-base);
+}
+
+/* Stepper Passwort · Zweiter Faktor · Fertig */
+.invite-stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.invite-stepper-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.invite-stepper-item:last-child {
+  flex: none;
+}
+
+.invite-stepper-item:not(:last-child)::after {
+  content: "";
+  flex: 1;
+  height: 2px;
+  min-width: var(--space-3);
+  border-radius: var(--radius-xs);
+  background: var(--border);
+}
+
+.invite-stepper-item.is-done:not(:last-child)::after {
+  background: var(--primary);
+}
+
+.invite-stepper-dot {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--border-strong);
+  background: var(--panel-solid);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.invite-stepper-item.is-active,
+.invite-stepper-item.is-done {
+  color: var(--text);
+}
+
+.invite-stepper-item.is-active .invite-stepper-dot {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.invite-stepper-item.is-done .invite-stepper-dot {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-contrast);
+}
+
+.invite-stepper-label {
+  white-space: nowrap;
+}
+
+/* Schritte */
+.invite-step {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.invite-step-heading {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+}
+
+.invite-step-heading h1 {
+  margin: 0;
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.invite-step-heading p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.invite-field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.invite-inline-toggle {
+  min-height: 28px;
+  padding: 0 var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--accent);
+  justify-self: start;
+}
+
+.invite-input-ok {
+  border-color: var(--success);
+}
+
+.invite-input-bad {
+  border-color: var(--danger);
+}
+
+.invite-field-error {
+  color: var(--danger-fg);
+}
+
+.invite-submit {
+  width: 100%;
+  min-height: 46px;
+  justify-content: center;
+}
+
+.invite-back {
+  justify-self: center;
+}
+
+.invite-footnote {
+  margin: 0;
+  text-align: center;
+  font-size: var(--text-sm);
+}
+
+.invite-actions {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.invite-optional {
+  font-weight: 400;
+  text-transform: none;
+  color: var(--muted);
+}
+
+/* Passwortstärke */
+.pw-strength {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.pw-strength-bar-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.pw-strength-bar {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-1);
+}
+
+.pw-strength-segment {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--border);
+  transition: background var(--dur-base) var(--ease-out);
+}
+
+.pw-strength-label {
+  min-width: 72px;
+  text-align: right;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.pw-strength-tooShort .pw-strength-segment.is-filled,
+.pw-strength-weak .pw-strength-segment.is-filled {
+  background: var(--danger);
+}
+
+.pw-strength-medium .pw-strength-segment.is-filled {
+  background: var(--warning);
+}
+
+.pw-strength-strong .pw-strength-segment.is-filled,
+.pw-strength-veryStrong .pw-strength-segment.is-filled {
+  background: var(--success);
+}
+
+.pw-strength-tooShort .pw-strength-label,
+.pw-strength-weak .pw-strength-label {
+  color: var(--danger-fg);
+}
+
+.pw-strength-medium .pw-strength-label {
+  color: var(--warning-fg);
+}
+
+.pw-strength-strong .pw-strength-label,
+.pw-strength-veryStrong .pw-strength-label {
+  color: var(--success-fg);
+}
+
+.pw-strength-checks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pw-strength-check {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.pw-strength-check.is-ok {
+  color: var(--text);
+}
+
+.pw-strength-check-mark {
+  width: 12px;
+  flex-shrink: 0;
+  text-align: center;
+  font-weight: 700;
+}
+
+.pw-strength-check.is-ok .pw-strength-check-mark {
+  color: var(--success);
+}
+
+.pw-strength-hint {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.pw-strength-hint.is-bad {
+  color: var(--danger-fg);
+}
+
+.pw-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Zweiter Faktor */
+.invite-required {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--warning-bg);
+  color: var(--warning-fg);
+  font-size: var(--text-sm);
+}
+
+.invite-methods {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.invite-methods .wizard-purpose-card:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.invite-block {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--panel-solid);
+}
+
+.invite-block-label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.invite-totp-connect {
+  display: flex;
+  gap: var(--space-4);
+  align-items: flex-start;
+}
+
+.invite-totp-text {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  flex: 1;
+}
+
+.invite-totp-text p {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+/* Desktop: QR-Code scannen; Handy: App direkt über den otpauth-Link öffnen */
+.invite-totp-app-hint,
+.invite-totp-open {
+  display: none;
+}
+
+/* Erledigt */
+.invite-done-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--success-bg);
+  color: var(--success-fg);
+  font-size: var(--text-xl);
+  font-weight: 700;
+}
+
+.invite-summary {
+  display: grid;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.invite-summary-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+
+.invite-summary-row + .invite-summary-row {
+  border-top: 1px solid var(--border);
+}
+
+.invite-summary dt {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.invite-summary dd {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 600;
+  text-align: right;
+}
+
+.invite-summary-dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+
+.invite-summary-dot.is-ok {
+  background: var(--success);
+}
+
+.invite-summary-dot.is-open {
+  background: var(--warning);
+}
+
+@media (max-width: 640px) {
+  .invite-panel,
+  .invite-panel-wide {
+    width: 100%;
+  }
+
+  .pw-strength-checks,
+  .invite-methods {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .invite-submit {
+    min-height: 54px;
+  }
+
+  .invite-totp-qr,
+  .invite-totp-qr-hint {
+    display: none;
+  }
+
+  .invite-totp-app-hint {
+    display: block;
+  }
+
+  .invite-totp-open {
+    display: inline-flex;
+    justify-content: center;
+  }
+
+  .invite-stepper-label {
+    font-size: var(--text-xs);
+  }
+}

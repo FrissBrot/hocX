@@ -16,7 +16,8 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.locale_config_generated import LOCALE_COOKIE_NAME, normalize_locale
-from app.core.permissions import CATALOG, P, effective_permissions, requires_mfa
+from app.core.mfa_policy import account_requires_mfa
+from app.core.permissions import CATALOG, P, effective_permissions
 from app.core.features_generated import FEATURES
 from app.core.tenant_scope import bind_tenant_scope
 from app.models import AppUser, Tenant, TenantFeature, TenantRole, TenantRolePermission, UserMfaFactor, UserRole
@@ -257,8 +258,8 @@ def _has_active_mfa_factor(db: Session, user_id: int) -> bool:
     )
 
 
-def _requires_mfa(user: CurrentUser) -> bool:
-    return requires_mfa(user.permissions)
+def _requires_mfa(db: Session, user: CurrentUser) -> bool:
+    return account_requires_mfa(db, user.user_id, permissions=user.permissions, tenant_id=user.current_tenant_id)
 
 
 def get_optional_current_user(
@@ -281,7 +282,7 @@ def get_optional_current_user(
     has_mfa_factor = _has_active_mfa_factor(db, user.id)
     if has_mfa_factor and not current_user.mfa_verified:
         return None
-    if _requires_mfa(current_user) and (not has_mfa_factor or not current_user.mfa_verified):
+    if _requires_mfa(db, current_user) and (not has_mfa_factor or not current_user.mfa_verified):
         return None
     # Ab hier sieht die Session per Row-Level-Security nur noch Daten dieses Mandanten.
     bind_tenant_scope(db, current_user.current_tenant_id)

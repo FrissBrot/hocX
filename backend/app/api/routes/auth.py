@@ -12,6 +12,7 @@ from app.core.rate_limit import enforce_rate_limit
 from app.core.security import CurrentUser, get_optional_current_user
 from app.schemas.mfa import (
     LoginResponse,
+    MfaSkipRequest,
     MfaTicketRequest,
     PasskeyAssertionStartRead,
     PasskeyAssertionVerifyRequest,
@@ -66,18 +67,35 @@ def verify_login_totp(payload: TotpLoginVerifyRequest, response: Response, db: S
     return service.verify_login_totp(db, response, payload)
 
 
+def _limit_mfa_setup(request: Request) -> None:
+    """Einrichtung des zweiten Faktors vor der Anmeldung (Login und Erstlogin über Einladung):
+    zusätzlich zu den Grenzen je Ticket/Vorgang je Quell-IP begrenzt (SECURITY-RULES 3.4). Grosszügig,
+    weil ein ganzer Verein hinter einer NAT-Adresse gleichzeitig einrichten kann."""
+    enforce_rate_limit(f"mfa-setup-ip:{client_ip(request)}", limit=200, period_seconds=15 * 60)
+
+
 @router.post("/mfa/totp/setup/start", response_model=TotpEnrollmentStartRead)
-def start_login_totp_setup(payload: MfaTicketRequest, db: Session = Depends(get_db)):
+def start_login_totp_setup(payload: MfaTicketRequest, request: Request, db: Session = Depends(get_db)):
+    _limit_mfa_setup(request)
     return service.start_login_totp_setup(db, payload)
 
 
 @router.post("/mfa/totp/setup/complete", response_model=LoginResponse)
-def complete_login_totp_setup(payload: TotpEnrollmentComplete, response: Response, db: Session = Depends(get_db)):
+def complete_login_totp_setup(payload: TotpEnrollmentComplete, request: Request, response: Response, db: Session = Depends(get_db)):
+    _limit_mfa_setup(request)
     return service.complete_login_totp_setup(db, response, payload)
+
+
+@router.post("/mfa/setup/skip", response_model=LoginResponse)
+def skip_login_mfa_setup(payload: MfaSkipRequest, request: Request, response: Response, db: Session = Depends(get_db)):
+    """Erstlogin über Einladung ohne MFA-Pflicht: «Später einrichten». Bei Pflicht 403."""
+    _limit_mfa_setup(request)
+    return service.skip_invite_mfa_setup(db, response, payload)
 
 
 @router.post("/mfa/passkeys/setup/start", response_model=PasskeyRegistrationStartRead)
 def start_login_passkey_setup(payload: MfaTicketRequest, request: Request, db: Session = Depends(get_db)):
+    _limit_mfa_setup(request)
     return service.start_login_passkey_setup(
         db,
         payload,
@@ -89,9 +107,11 @@ def start_login_passkey_setup(payload: MfaTicketRequest, request: Request, db: S
 @router.post("/mfa/passkeys/setup/complete", response_model=LoginResponse)
 def complete_login_passkey_setup(
     payload: PasskeyRegistrationComplete,
+    request: Request,
     response: Response,
     db: Session = Depends(get_db),
 ):
+    _limit_mfa_setup(request)
     return service.complete_login_passkey_setup(db, response, payload)
 
 
@@ -246,6 +266,13 @@ def account_link_preview(payload: AccountLinkToken, request: Request, db: Sessio
 
 @router.post("/account-link/complete", response_model=AccountLinkCompleteRead)
 def account_link_complete(payload: AccountLinkComplete, request: Request, db: Session = Depends(get_db)):
+    """Passwort über den Einmal-Link setzen. Einladung (Erstlogin): danach folgt ohne zweites
+    Login der zweite Faktor - die Antwort trägt das Login-Ticket (``mfa``, nur im Body) und
+    ``mfa_required`` aus ``account_requires_mfa``. Eine Session entsteht hier nie, erst nach
+    bestätigtem Faktor bzw. erlaubtem Überspringen über ``/auth/mfa/...``."""
     enforce_rate_limit(f"account-link-ip:{client_ip(request)}", limit=30, period_seconds=15 * 60)
-    purpose = account_links.complete(db, payload.token, payload.password)
-    return AccountLinkCompleteRead(purpose=purpose)
+    purpose, user = account_links.complete_for_user(db, payload.token, payload.password)
+    if purpose != "invite":
+        return AccountLinkCompleteRead(purpose=purpose)
+    pending = service.mfa_service.start_invite_setup(db, user=user, request_host=request.url.hostname)
+    return AccountLinkCompleteRead(purpose=purpose, mfa=pending, mfa_required=pending.required if pending else None)

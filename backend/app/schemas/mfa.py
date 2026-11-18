@@ -100,6 +100,12 @@ class MfaPendingLoginRead(BaseModel):
     default_factor_label: str | None = None
     can_add_totp: bool = True
     can_add_passkey: bool = True
+    # Nur Erstlogin über Einladung ohne MFA-Pflicht: «Später einrichten» (POST /auth/mfa/setup/skip)
+    can_skip: bool = False
+
+
+class MfaSkipRequest(BaseModel):
+    ticket: str
 
 
 class LoginResponse(SessionRead):

@@ -12,6 +12,7 @@ from app.core.security import CurrentUser, DUMMY_PASSWORD_HASH, build_current_us
 from app.models import AppUser, Tenant
 from app.schemas.mfa import (
     LoginResponse,
+    MfaSkipRequest,
     MfaTicketRequest,
     PasskeyAssertionStartRead,
     PasskeyAssertionVerifyRequest,
@@ -241,6 +242,17 @@ class AuthService:
             user=context.user,
             request_host=context.request_host,
             mfa_verified=True,
+        )
+
+    def skip_invite_mfa_setup(self, db: Session, response: Response, payload: MfaSkipRequest) -> LoginResponse:
+        """Erstlogin ohne Pflicht: bewusst ohne zweiten Faktor anmelden (MfaService.skip_invite_setup)."""
+        context = self.mfa_service.skip_invite_setup(db, payload.ticket)
+        return self._finish_login(
+            db,
+            response,
+            user=context.user,
+            request_host=context.request_host,
+            mfa_verified=False,
         )
 
     def session(self, user: CurrentUser | None, response: Response, bridge_redirect_url: str | None = None) -> SessionRead:
