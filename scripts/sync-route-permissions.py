@@ -38,6 +38,15 @@ GENERATED = ROOT / "backend/app/core/permissions_generated.py"
 DOCUMENT_PERMISSIONS = ROOT / "backend/app/documents/permissions.py"
 INVENTORY_TEST = ROOT / "backend/tests/test_route_permission_inventory.py"
 TARGET = ROOT / "permissions/route-map.json"
+CATALOG = ROOT / "permissions/catalog.json"
+# Berechtigungsmatrix (Plan «Berechtigungen», Phase 0): Standardrolle x Route -> erlaubt. Eine Kopie
+# liegt bei den Backend-Tests (der Testcontainer sieht nur backend/), dort prüft
+# tests/test_permission_matrix.py die Matrix gegen echte Aufrufe.
+MATRIX = ROOT / "permissions/permission-matrix.json"
+MATRIX_FIXTURE = ROOT / "backend/tests/fixtures/permission-matrix.json"
+INVENTORY_DOC = ROOT / "docs/permissions-inventory.md"
+# Antworten mit Dateiinhalt (Download, Vorschau, Thumbnail, ZIP, Export, Weiterleitung auf Speicher)
+FILE_MARKERS = ("FileResponse", "StreamingResponse", "release_for_stream", "presign", "send_file", "stream_object", "media_type=", "Content-Disposition", "X-Accel-Redirect")
 
 METHODS = {"get", "post", "put", "patch", "delete", "websocket"}
 ADMIN_DEPENDENCIES = ("get_current_admin", "require_admin_write", "require_admin_owner")
@@ -121,7 +130,10 @@ def _direct_checks(node: ast.AST, external: dict[str, dict[str, set]]) -> tuple[
         if name in external:
             for field, values in external[name].items():
                 checks[field] |= values
-        if name:
+        # Nur direkte Aufrufe zählen als Hilfsfunktion des Moduls: service.repository.list_x(...)
+        # ist nicht die gleichnamige Route list_x (sonst erbte die Route deren Prüfungen und die
+        # Übersicht zeigte mehr, als geprüft wird - aufgefallen im Matrix-Test, Phase 0).
+        if name and isinstance(call.func, ast.Name):
             called.add(name)
         for arg in call.args:  # run_in_threadpool(helper, ...)
             if isinstance(arg, ast.Name):
@@ -157,6 +169,26 @@ def _document_helpers() -> dict[str, dict[str, set]]:
     return {name: value for name, value in checks.items() if name.startswith("require_")}
 
 
+def _module_file_servers(tree: ast.Module) -> set[str]:
+    """Funktionen des Moduls, die Dateiinhalt ausliefern - direkt oder über eine Hilfsfunktion
+    desselben Moduls (transitiv, wie die Rechteprüfungen)."""
+    functions = {n.name: n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    direct = {name for name, node in functions.items() if any(marker in ast.unparse(node) for marker in FILE_MARKERS)}
+    calls = {
+        name: {sub.func.id for sub in ast.walk(node) if isinstance(sub, ast.Call) and isinstance(sub.func, ast.Name)}
+        for name, node in functions.items()
+    }
+    serving = set(direct)
+    changed = True
+    while changed:
+        changed = False
+        for name, called in calls.items():
+            if name not in serving and called & serving:
+                serving.add(name)
+                changed = True
+    return serving
+
+
 def _route_decorators(node: ast.FunctionDef | ast.AsyncFunctionDef):
     for decorator in node.decorator_list:
         if not isinstance(decorator, ast.Call):
@@ -179,6 +211,7 @@ def build() -> dict[str, dict]:
         source = path.read_text(encoding="utf-8")
         tree = ast.parse(source)
         checks = _module_checks(tree, external)
+        file_servers = _module_file_servers(tree)
         module_admin = "APIRouter(dependencies=[Depends(get_current_admin)])" in source
         for node in tree.body:
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -205,11 +238,121 @@ def build() -> dict[str, dict]:
                     note = "Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit)"
                 if note:
                     entry["note"] = note
+                if node.name in file_servers:
+                    entry["serves_files"] = True
                 key = f"{method} {prefixes[module]}{route_path}"
                 if key in routes:
                     key = f"{key} ({module}.{node.name})"
                 routes[key] = entry
     return dict(sorted(routes.items(), key=lambda item: (item[0].split(" ", 1)[1], item[0])))
+
+
+def _role_permissions() -> dict[str, set[str]]:
+    """Effektive Rechte der Standardrollen (inkl. implies), wie role_service sie vergibt."""
+    catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
+    implies = {item["key"]: set(item.get("implies") or []) for item in catalog["permissions"]}
+    every = set(implies)
+
+    def closure(keys: set[str]) -> set[str]:
+        result, todo = set(), list(keys)
+        while todo:
+            key = todo.pop()
+            if key not in result:
+                result.add(key)
+                todo.extend(implies.get(key, ()))
+        return result
+
+    return {
+        role["key"]: every if role.get("all_permissions") else closure(set(role.get("permissions") or []))
+        for role in catalog["system_roles"]
+    }
+
+
+def build_matrix(routes: dict[str, dict]) -> dict[str, dict]:
+    """Je Mandanten-Route mit Rechteprüfung: welche Standardrolle sie aufrufen darf (Features
+    vorausgesetzt). Routen mit eigenem Sicherheitsmodell («note») und Plattform-Routen fehlen."""
+    roles = _role_permissions()
+    matrix: dict[str, dict] = {}
+    for key, entry in routes.items():
+        if entry.get("platform") or not (entry.get("requires") or entry.get("requires_any")):
+            continue
+        allowed = [
+            role for role, perms in roles.items()
+            if set(entry.get("requires") or []) <= perms
+            and all(set(group) & perms for group in entry.get("requires_any") or [])
+        ]
+        matrix[key] = {"handler": entry["handler"], "allowed": allowed, **({"serves_files": True} if entry.get("serves_files") else {})}
+    return matrix
+
+
+def render_matrix(routes: dict[str, dict]) -> str:
+    data = {
+        "$comment": "GENERATED FILE - do not edit by hand. Regenerate with: python3 scripts/sync-route-permissions.py",
+        "roles": sorted(_role_permissions()),
+        "routes": build_matrix(routes),
+    }
+    return json.dumps(data, ensure_ascii=False, indent=2) + "\n"
+
+
+def render_inventory(routes: dict[str, dict]) -> str:
+    """docs/permissions-inventory.md: Inventar (Plan «Berechtigungen», Phase 0), generiert."""
+    tenant = {k: v for k, v in routes.items() if not v.get("platform")}
+    checked = [k for k, v in tenant.items() if v.get("requires") or v.get("requires_any")]
+    noted = {k: v for k, v in tenant.items() if "note" in v and not (v.get("requires") or v.get("requires_any"))}
+    unchecked = [k for k, v in tenant.items() if not (v.get("requires") or v.get("requires_any")) and "note" not in v]
+    files = {k: v for k, v in routes.items() if v.get("serves_files")}
+
+    def check_text(entry: dict) -> str:
+        parts = [", ".join(entry.get("requires") or [])]
+        parts += [" oder ".join(group) for group in entry.get("requires_any") or []]
+        text = " + ".join(p for p in parts if p)
+        if entry.get("platform"):
+            text = "Plattform-Admin"
+        if entry.get("note"):
+            text = (text + " · " if text else "") + entry["note"]
+        if entry.get("features"):
+            text += " · Feature " + ", ".join(entry["features"])
+        return text or "**keine**"
+
+    lines = [
+        "# Berechtigungs-Inventar",
+        "",
+        "GENERIERT von `python3 scripts/sync-route-permissions.py` (Plan «Berechtigungen, Datei-Kontexte",
+        "und Kontext-Freigaben», Phase 0). Nicht von Hand bearbeiten. Quelle: `permissions/route-map.json`;",
+        "Rollen-Matrix: `permissions/permission-matrix.json` (geprüft von `tests/test_permission_matrix.py`).",
+        "",
+        "## Übersicht",
+        "",
+        f"- Routen gesamt: {len(routes)} (Plattform-Admin: {len(routes) - len(tenant)})",
+        f"- Mandanten-Routen mit Rechteprüfung: {len(checked)}",
+        f"- Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): {len(noted)}",
+        f"- Mandanten-Routen ohne Prüfung und ohne Begründung (Lücken): {len(unchecked)}",
+        f"- Routen, die Dateiinhalt ausliefern: {len(files)}",
+        "",
+        "## Lücken (Routen ohne Prüfung und ohne Begründung)",
+        "",
+    ]
+    lines += [f"- `{k}` ({tenant[k]['handler']})" for k in unchecked] or ["Keine – `tests/test_route_permission_inventory.py` verhindert neue."]
+    lines += [
+        "",
+        "## Befunde Phase 0 (18.11.2026)",
+        "",
+        "- Die statische Analyse rechnete Methodenaufrufe (`service.repository.list_assignments(...)`)",
+        "  der gleichnamigen Route zu und zeigte dadurch mehr Prüfungen als tatsächlich laufen. Behoben;",
+        "  betroffen waren zehn Routen, inhaltlich nur `GET /api/submission-assignments/summaries`",
+        "  (angezeigt `submissions.manage`, geprüft `submissions.read` – Leser sehen den Fortschritt aller",
+        "  Abgaben; passt zu ihrem Leserecht, keine Lücke). Bei den übrigen fiel nur `meetings.read` weg,",
+        "  das `meetings.edit`/`templates.edit`/`files.manage` ohnehin enthalten bzw. voraussetzen.",
+        "- Laufzeit-Matrix (`tests/test_permission_matrix.py`): alle GET-Routen weisen genau die Rollen",
+        "  ausserhalb der Matrix mit 403 ab.",
+    ]
+    lines += ["", "## Dateiauslieferung (Download, Vorschau, Thumbnail, ZIP, Export)", "", "| Route | Handler | Prüfung |", "|---|---|---|"]
+    lines += [f"| `{k}` | {v['handler']} | {check_text(v)} |" for k, v in files.items()]
+    lines += ["", "## Eigenes Sicherheitsmodell (begründete Ausnahmen)", "", "| Route | Begründung |", "|---|---|"]
+    lines += [f"| `{k}` | {v['note']} |" for k, v in noted.items()]
+    lines += ["", "## Alle Mandanten-Routen", "", "| Route | Prüfung |", "|---|---|"]
+    lines += [f"| `{k}` | {check_text(v)} |" for k, v in tenant.items()]
+    return "\n".join(lines) + "\n"
 
 
 def render() -> str:
@@ -225,19 +368,27 @@ def main() -> int:
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     content = render()
+    routes = json.loads(content)["routes"]
+    outputs = {
+        TARGET: content,
+        MATRIX: render_matrix(routes),
+        MATRIX_FIXTURE: render_matrix(routes),
+        INVENTORY_DOC: render_inventory(routes),
+    }
     if args.check:
-        current = TARGET.read_text(encoding="utf-8") if TARGET.exists() else ""
-        if current != content:
+        stale = [path for path, text in outputs.items() if (path.read_text(encoding="utf-8") if path.exists() else "") != text]
+        if stale:
             print(
-                "permissions/route-map.json ist nicht aktuell - python3 scripts/sync-route-permissions.py ausführen "
-                "und den Diff (geänderte Rechteprüfungen) bewusst prüfen.",
+                "Nicht aktuell: " + ", ".join(str(path.relative_to(ROOT)) for path in stale)
+                + " - python3 scripts/sync-route-permissions.py ausführen und den Diff (geänderte Rechteprüfungen) bewusst prüfen.",
                 file=sys.stderr,
             )
             return 1
         print("Rechte-Übersicht: ok")
         return 0
-    TARGET.write_text(content, encoding="utf-8")
-    print(f"geschrieben: {TARGET.relative_to(ROOT)}")
+    for path, text in outputs.items():
+        path.write_text(text, encoding="utf-8")
+        print(f"geschrieben: {path.relative_to(ROOT)}")
     return 0
 
 

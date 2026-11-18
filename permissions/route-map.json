@@ -389,7 +389,8 @@
     },
     "GET /api/admin/storage/migrations/{migration_id}/report": {
       "handler": "admin_storage.download_report",
-      "platform": true
+      "platform": true,
+      "serves_files": true
     },
     "POST /api/admin/storage/migrations/{migration_id}/resume": {
       "handler": "admin_storage.resume_migration",
@@ -469,7 +470,8 @@
     },
     "POST /api/admin/tenants/{tenant_id}/export": {
       "handler": "admin.export_tenant",
-      "platform": true
+      "platform": true,
+      "serves_files": true
     },
     "PUT /api/admin/tenants/{tenant_id}/features": {
       "handler": "admin.update_tenant_features",
@@ -771,7 +773,8 @@
       "handler": "document_studio.get_document_asset_content",
       "requires": [
         "meetings.read"
-      ]
+      ],
+      "serves_files": true
     },
     "GET /api/document-assets/{asset_id}/references": {
       "handler": "document_studio.get_document_asset_references",
@@ -901,13 +904,15 @@
       "handler": "document_studio.get_design_example_thumbnail",
       "requires": [
         "meetings.read"
-      ]
+      ],
+      "serves_files": true
     },
     "GET /api/document-studio/fonts/{file_name}": {
       "handler": "document_studio.get_builtin_font",
       "requires": [
         "meetings.read"
-      ]
+      ],
+      "serves_files": true
     },
     "GET /api/document-studio/session-templates/{template_id}/designs": {
       "handler": "document_studio.list_session_designs",
@@ -1074,7 +1079,8 @@
       "handler": "document_studio.get_document_template_thumbnail",
       "requires": [
         "meetings.read"
-      ]
+      ],
+      "serves_files": true
     },
     "GET /api/document-verification": {
       "handler": "document_verification.get_document_verification",
@@ -1104,7 +1110,8 @@
       "handler": "documents.export_document_format",
       "requires": [
         "meetings.read"
-      ]
+      ],
+      "serves_files": true
     },
     "POST /api/documents/export/columns": {
       "handler": "documents.export_document_columns",
@@ -1189,7 +1196,8 @@
       "handler": "managed_documents.get_document_file",
       "requires": [
         "meetings.read"
-      ]
+      ],
+      "serves_files": true
     },
     "GET /api/documents/{document_id}/versions/{version_id}/text": {
       "handler": "managed_documents.get_document_text",
@@ -1905,8 +1913,7 @@
     "POST /api/protocol-element-blocks/{protocol_element_block_id}/todos": {
       "handler": "todos.create_todo",
       "requires": [
-        "meetings.edit",
-        "meetings.read"
+        "meetings.edit"
       ]
     },
     "PATCH /api/protocol-elements/{protocol_element_id}": {
@@ -1930,8 +1937,7 @@
     "DELETE /api/protocol-todos/{todo_id}": {
       "handler": "todos.delete_todo",
       "requires": [
-        "meetings.edit",
-        "meetings.read"
+        "meetings.edit"
       ],
       "branches": [
         "finances.manage"
@@ -1940,8 +1946,7 @@
     "PATCH /api/protocol-todos/{todo_id}": {
       "handler": "todos.patch_todo",
       "requires": [
-        "meetings.edit",
-        "meetings.read"
+        "meetings.edit"
       ],
       "branches": [
         "finances.manage"
@@ -1950,8 +1955,7 @@
     "POST /api/protocol-todos/{todo_id}/accept-tracked-change": {
       "handler": "todos.accept_todo_tracked_change",
       "requires": [
-        "meetings.edit",
-        "meetings.read"
+        "meetings.edit"
       ]
     },
     "GET /api/protocol-todos/{todo_id}/details": {
@@ -2197,7 +2201,8 @@
     },
     "GET /api/public/calendar/{token}.ics": {
       "handler": "calendar_feeds.get_calendar_feed",
-      "note": "öffentlicher .ics-Abruf: Token + can_subscribe in calendar_feed_service.resolve"
+      "note": "öffentlicher .ics-Abruf: Token + can_subscribe in calendar_feed_service.resolve",
+      "serves_files": true
     },
     "GET /api/public/customers": {
       "handler": "public_catalog.list_public_customers",
@@ -2221,23 +2226,28 @@
     },
     "GET /api/public/share/{token}/download": {
       "handler": "public_share.download_public_share_all",
-      "note": "öffentliche Freigabelinks: Token + Rate-Limit (share_link_service)"
+      "note": "öffentliche Freigabelinks: Token + Rate-Limit (share_link_service)",
+      "serves_files": true
     },
     "GET /api/public/share/{token}/files/{file_id}/download": {
       "handler": "public_share.download_public_share_file",
-      "note": "öffentliche Freigabelinks: Token + Rate-Limit (share_link_service)"
+      "note": "öffentliche Freigabelinks: Token + Rate-Limit (share_link_service)",
+      "serves_files": true
     },
     "GET /api/public/share/{token}/files/{file_id}/thumbnail": {
       "handler": "public_share.get_public_share_thumbnail",
-      "note": "öffentliche Freigabelinks: Token + Rate-Limit (share_link_service)"
+      "note": "öffentliche Freigabelinks: Token + Rate-Limit (share_link_service)",
+      "serves_files": true
     },
     "GET /api/public/share/{token}/files/{file_id}/view": {
       "handler": "public_share.view_public_share_file",
-      "note": "öffentliche Freigabelinks: Token + Rate-Limit (share_link_service)"
+      "note": "öffentliche Freigabelinks: Token + Rate-Limit (share_link_service)",
+      "serves_files": true
     },
     "POST /api/public/submission-access/download": {
       "handler": "public_submission_access.download_submission_file",
-      "note": "persönlicher Abgabe-Link: Token im Body + Rate-Limit (submission_access_service)"
+      "note": "persönlicher Abgabe-Link: Token im Body + Rate-Limit (submission_access_service)",
+      "serves_files": true
     },
     "POST /api/public/submission-access/upload": {
       "handler": "public_submission_access.upload_submission",
@@ -2371,11 +2381,7 @@
     "PATCH /api/stored-files/{stored_file_id}/capture-date": {
       "handler": "files.update_stored_file_capture_date",
       "requires": [
-        "files.manage",
-        "meetings.read"
-      ],
-      "branches": [
-        "meetings.edit"
+        "files.manage"
       ]
     },
     "GET /api/stored-files/{stored_file_id}/content": {
@@ -2386,7 +2392,8 @@
       "branches": [
         "files.manage",
         "meetings.edit"
-      ]
+      ],
+      "serves_files": true
     },
     "GET /api/stored-files/{stored_file_id}/download": {
       "handler": "files.download_stored_file",
@@ -2396,7 +2403,8 @@
       "branches": [
         "files.manage",
         "meetings.edit"
-      ]
+      ],
+      "serves_files": true
     },
     "GET /api/stored-files/{stored_file_id}/metadata": {
       "handler": "files.get_stored_file_metadata",
@@ -2418,7 +2426,8 @@
       "handler": "files.get_stored_file_thumbnail",
       "requires": [
         "meetings.read"
-      ]
+      ],
+      "serves_files": true
     },
     "GET /api/submission-assignments": {
       "handler": "submission_assignments.list_assignments",
@@ -2435,7 +2444,6 @@
     "GET /api/submission-assignments/summaries": {
       "handler": "submission_assignments.get_assignment_summaries",
       "requires": [
-        "submissions.manage",
         "submissions.read"
       ]
     },
@@ -2467,7 +2475,8 @@
       "handler": "submission_assignments.download_all_files_zip",
       "requires": [
         "submissions.read"
-      ]
+      ],
+      "serves_files": true
     },
     "GET /api/submission-assignments/{assignment_id}/elements": {
       "handler": "submission_assignments.list_elements",
@@ -2557,7 +2566,8 @@
       "handler": "submission_assignments.get_submission_file_content",
       "requires": [
         "submissions.read"
-      ]
+      ],
+      "serves_files": true
     },
     "GET /api/submission-uploads/{upload_id}/files/{file_id}/metadata": {
       "handler": "submission_assignments.get_submission_file_metadata",
@@ -2575,7 +2585,8 @@
       "handler": "submission_assignments.get_submission_file_thumbnail",
       "requires": [
         "submissions.read"
-      ]
+      ],
+      "serves_files": true
     },
     "GET /api/system-status/summary": {
       "handler": "system_status.system_status_summary",
@@ -2758,28 +2769,24 @@
     "DELETE /api/template-elements/{template_element_id}": {
       "handler": "templates.delete_template_element",
       "requires": [
-        "meetings.read",
         "templates.edit"
       ]
     },
     "PATCH /api/template-elements/{template_element_id}": {
       "handler": "templates.patch_template_element",
       "requires": [
-        "meetings.read",
         "templates.edit"
       ]
     },
     "PATCH /api/template-elements/{template_element_id}/behavior": {
       "handler": "templates.patch_template_element_behavior",
       "requires": [
-        "meetings.read",
         "templates.edit"
       ]
     },
     "POST /api/template-elements/{template_element_id}/detach": {
       "handler": "templates.detach_template_element",
       "requires": [
-        "meetings.read",
         "templates.edit"
       ]
     },
@@ -2880,7 +2887,8 @@
       "handler": "tenant_data_export.download_tenant_data_export",
       "requires": [
         "data.export"
-      ]
+      ],
+      "serves_files": true
     },
     "GET /api/tenants": {
       "handler": "tenants.list_tenants",
