@@ -646,6 +646,22 @@ def _decode_form_field(
     )
 
 
+def _require_people_rights_for_new_participants(user: CurrentUser, payload: PublicWordImportCommit) -> None:
+    """«Neu anlegen» bei Namen (Anwesenheit, Formularfelder) legt Personen an und ordnet sie der
+    Sitzungsvorlage zu - wie POST /participants und PUT /templates/{id}/participants nur mit
+    participants.manage. Import mit bestehenden Personen bleibt meetings.edit
+    (Nachtlauf 2026-11-18, dokumente/rechte)."""
+    creates = any(entry.create_new and entry.participant_id is None for entry in payload.attendance) or any(
+        name.create_new and name.participant_id is None
+        for text_commit in payload.texts
+        if not text_commit.dismissed and text_commit.is_form_block
+        for field in text_commit.form_fields
+        for name in field.names
+    )
+    if creates:
+        require_permission(user, P.PARTICIPANTS_MANAGE)
+
+
 def _decode_commit(db: Session, tenant_id: int, payload: PublicWordImportCommit) -> WordImportCommit:
     template_element_ids, event_ids, participant_ids, list_definition_ids, list_entry_ids = _collect_commit_ids(
         payload
@@ -875,6 +891,7 @@ def commit_word_import(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.MEETINGS_EDIT)
+    _require_people_rights_for_new_participants(user, payload)
     internal_payload = _decode_commit(db, user.current_tenant_id, payload)
     try:
         result = service.commit(db, tenant_id=user.current_tenant_id, user_id=user.user_id, payload=internal_payload)
@@ -1132,6 +1149,7 @@ def commit_word_import_document(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.MEETINGS_EDIT)
+    _require_people_rights_for_new_participants(user, payload)
     internal_document_id = _resolve_document_id(db, user.current_tenant_id, document_id)
     document = queue_service.get_document(db, tenant_id=user.current_tenant_id, document_id=internal_document_id)
     if document is None:
