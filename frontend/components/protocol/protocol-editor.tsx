@@ -60,6 +60,7 @@ import {
   protocolStatusLabel,
   resequenceProtocolElements,
   sectionIconKey,
+  imageSimilarityNotice,
   trimSectionName,
   visibleAttendanceTally,
 } from "@/components/protocol/protocol-editor-shared";
@@ -1667,7 +1668,8 @@ export function ProtocolEditor({
       collab.sendFieldUpdate(`block-${protocolElementBlockId}-images`, next);
       setSelectedFiles((current) => ({ ...current, [protocolElementBlockId]: null }));
       setStatus(protocolElementBlockId, "saved");
-      if (created.duplicate_warning) showToast(created.duplicate_warning, "info");
+      const similarNotice = imageSimilarityNotice(created, tRoot);
+      if (similarNotice) showToast(similarNotice, "info");
     } catch (err: unknown) {
       setStatus(protocolElementBlockId, "error");
       showToast(err instanceof Error ? err.message : t("imageUploadFailed"), "error");
