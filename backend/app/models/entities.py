@@ -1417,6 +1417,11 @@ class StoredFile(Base, TimestampMixin):
         PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
     )
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    # Kontext (Migration 0189, Plan «Berechtigungen» Phase 2): protokoll | abgabe | album | ablage,
+    # gesetzt von der Datenbank (hocx_file_context, Trigger auf den Verknüpfungen). Primärer
+    # Kontext = Herkunft; der Zugriff prüft jeden verknüpften Kontext (access_service).
+    context_type: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'ablage'"))
+    context_id: Mapped[int | None] = mapped_column(BigInteger)
     original_name: Mapped[str] = mapped_column(Text, nullable=False)
     mime_type: Mapped[str | None] = mapped_column(Text)
     storage_path: Mapped[str] = mapped_column(Text, nullable=False)
