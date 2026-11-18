@@ -1387,5 +1387,53 @@
       "success": "Riuscito",
       "failure": "Non riuscito"
     }
+  },
+  "emailLog": {
+    "title": "Registro degli invii",
+    "description": "Tutte le e-mail degli ultimi 90 giorni: a chi, di che tipo, quando e con quale esito. Il contenuto delle e-mail non viene salvato. Ogni consultazione è registrata nel registro di audit.",
+    "searchPlaceholder": "Organizzazione, nome o e-mail",
+    "colTime": "Ora",
+    "colTenant": "Organizzazione",
+    "colRecipient": "Destinatario",
+    "colKind": "Tipo",
+    "colStatus": "Esito",
+    "loading": "Caricamento …",
+    "empty": "Nessuna e-mail trovata.",
+    "plannedHint": "pianificata",
+    "attempts": "{count} tentativi",
+    "status": {
+      "all": "Tutte",
+      "sent": "Inviata",
+      "pending": "In attesa",
+      "failed": "Non riuscita",
+      "skipped": "Saltata"
+    },
+    "kinds": {
+      "todo_assigned": "Nuovi compiti",
+      "todo_due_soon": "Promemoria: in scadenza",
+      "todo_overdue": "Promemoria: scaduto",
+      "todo_submission_done": "Consegna ricevuta",
+      "account_password_reset": "Reimpostazione password",
+      "account_invite": "Invito",
+      "security_password_changed": "Sicurezza: password modificata",
+      "security_mfa_added": "Sicurezza: secondo fattore aggiunto",
+      "security_mfa_removed": "Sicurezza: secondo fattore rimosso",
+      "security_email_changed": "Sicurezza: e-mail di accesso modificata",
+      "fine_upcoming": "Multa in arrivo",
+      "fine_issued": "Multa ricevuta",
+      "submission_withdrawn": "Consegna ritirata",
+      "export_ready": "Esportazione dati pronta",
+      "export_failed": "Esportazione dati non riuscita"
+    },
+    "reasons": {
+      "recipient_missing": "destinatario eliminato",
+      "recipient_inactive": "persona inattiva",
+      "recipient_left": "persona uscita",
+      "no_email": "nessun indirizzo e-mail",
+      "no_login": "senza accesso, e-mail non consentite",
+      "preference_off": "disattivato dalla persona",
+      "obsolete": "superato (concluso, modificato o testo non più valido)",
+      "email_disabled": "l'invio era disattivato"
+    }
   }
 }

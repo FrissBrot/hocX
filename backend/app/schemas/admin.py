@@ -318,6 +318,28 @@ class SystemErrorLogRead(BaseModel):
     created_at: datetime
 
 
+class NotificationLogEntry(BaseModel):
+    """Eine Zeile des E-Mail-Versandprotokolls (Admin-Portal): ohne Mailinhalt."""
+
+    id: uuid.UUID
+    created_at: datetime
+    deliver_after: datetime
+    sent_at: datetime | None = None
+    tenant_name: str
+    recipient_name: str
+    recipient_email: str | None = None
+    kind: str
+    status: str
+    skip_reason: str | None = None
+    attempts: int = 0
+    last_error: str | None = None
+
+
+class NotificationLogPage(BaseModel):
+    items: list[NotificationLogEntry]
+    total: int
+
+
 class SystemErrorLogPage(BaseModel):
     items: list[SystemErrorLogRead]
     total: int

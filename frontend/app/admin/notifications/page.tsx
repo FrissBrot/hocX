@@ -1,3 +1,4 @@
+import { AdminEmailLog } from "@/components/admin/admin-email-log";
 import { AdminEmailSettings } from "@/components/admin/admin-email-settings";
 import { AdminNotificationSettings } from "@/components/admin/admin-notification-settings";
 import { AdminShell } from "@/components/ui/admin-shell";
@@ -33,6 +34,9 @@ export default async function AdminNotificationsPage() {
       </section>
       <section className="panel">
         {emailSettings ? <AdminEmailSettings initialSettings={emailSettings} /> : null}
+      </section>
+      <section className="panel">
+        <AdminEmailLog />
       </section>
     </AdminShell>
   );

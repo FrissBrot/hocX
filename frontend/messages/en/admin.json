@@ -1387,5 +1387,53 @@
       "success": "Successful",
       "failure": "Failed"
     }
+  },
+  "emailLog": {
+    "title": "Delivery log",
+    "description": "All emails of the last 90 days: to whom, which kind, when and with which result. Email content is not stored. Every view is recorded in the audit log.",
+    "searchPlaceholder": "Organization, name or email",
+    "colTime": "Time",
+    "colTenant": "Organization",
+    "colRecipient": "Recipient",
+    "colKind": "Kind",
+    "colStatus": "Result",
+    "loading": "Loading …",
+    "empty": "No emails found.",
+    "plannedHint": "scheduled",
+    "attempts": "{count} attempts",
+    "status": {
+      "all": "All",
+      "sent": "Sent",
+      "pending": "Waiting",
+      "failed": "Failed",
+      "skipped": "Skipped"
+    },
+    "kinds": {
+      "todo_assigned": "New tasks",
+      "todo_due_soon": "Reminder: due soon",
+      "todo_overdue": "Reminder: overdue",
+      "todo_submission_done": "Submission received",
+      "account_password_reset": "Password reset",
+      "account_invite": "Invitation",
+      "security_password_changed": "Security: password changed",
+      "security_mfa_added": "Security: second factor added",
+      "security_mfa_removed": "Security: second factor removed",
+      "security_email_changed": "Security: login email changed",
+      "fine_upcoming": "Fine pending",
+      "fine_issued": "Fine issued",
+      "submission_withdrawn": "Submission withdrawn",
+      "export_ready": "Data export ready",
+      "export_failed": "Data export failed"
+    },
+    "reasons": {
+      "recipient_missing": "recipient deleted",
+      "recipient_inactive": "person inactive",
+      "recipient_left": "person has left",
+      "no_email": "no email address",
+      "no_login": "no login, emails not allowed",
+      "preference_off": "turned off by the person",
+      "obsolete": "outdated (done, changed or text no longer valid)",
+      "email_disabled": "delivery was turned off"
+    }
   }
 }

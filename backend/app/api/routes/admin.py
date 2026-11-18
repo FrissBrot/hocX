@@ -20,6 +20,7 @@ from app.core.db import get_db, release_for_stream
 from app.models.entities import AppUser, PlatformAdmin, SystemHealthEvent, Tenant, TenantDomain, UserMfaFactor
 from app.services import export_crypto, public_id_service
 from app.schemas.admin import (
+    NotificationLogPage,
     AuditLogEntryRead,
     AuditLogPage,
     AdminDomainPage,
@@ -429,6 +430,23 @@ def send_test_email(
         return NotificationTestResult(ok=False, error=str(exc))
     audit.log(db, action="admin.email_test_sent", actor_email=current_admin.email, details={})
     return NotificationTestResult(ok=True)
+
+
+@router.get("/notifications/log", response_model=NotificationLogPage)
+def list_notification_log(
+    status: str | None = Query(default=None, pattern="^(pending|sent|skipped|failed)$"),
+    search: str | None = Query(default=None, max_length=100),
+    limit: int = Query(50, gt=0, le=200),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_admin: CurrentAdmin = Depends(require_admin_owner),
+):
+    """Versandprotokoll aller E-Mails (90 Tage): Mandant, Empfänger, Art, Zeitpunkt, Ergebnis -
+    ohne Mailinhalt. Lesen personenbezogener Daten aller Mandanten wird protokolliert (PRIV-013)."""
+    from app.notifications import log as notification_log
+
+    audit.log(db, action="admin.notification_log_viewed", actor_email=current_admin.email, details={"offset": offset, "status": status})
+    return notification_log.list_log(db, status=status, search=search, limit=limit, offset=offset)
 
 
 @router.post("/notifications/status-token", response_model=NotificationSettingsRead)

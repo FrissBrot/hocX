@@ -1387,5 +1387,53 @@
       "success": "Erfolgreich",
       "failure": "Fehlgeschlagen"
     }
+  },
+  "emailLog": {
+    "title": "Versandprotokoll",
+    "description": "Alle E-Mails der letzten 90 Tage: an wen, welche Art, wann und mit welchem Ergebnis. Der Inhalt der Mails wird nicht gespeichert. Jeder Abruf wird im Audit-Log festgehalten.",
+    "searchPlaceholder": "Organisation, Name oder E-Mail",
+    "colTime": "Zeit",
+    "colTenant": "Organisation",
+    "colRecipient": "Empfänger",
+    "colKind": "Art",
+    "colStatus": "Ergebnis",
+    "loading": "Wird geladen …",
+    "empty": "Keine E-Mails gefunden.",
+    "plannedHint": "geplant",
+    "attempts": "{count} Versuche",
+    "status": {
+      "all": "Alle",
+      "sent": "Gesendet",
+      "pending": "Wartend",
+      "failed": "Fehlgeschlagen",
+      "skipped": "Übersprungen"
+    },
+    "kinds": {
+      "todo_assigned": "Neue Aufgaben",
+      "todo_due_soon": "Erinnerung: bald fällig",
+      "todo_overdue": "Erinnerung: überfällig",
+      "todo_submission_done": "Abgabe eingegangen",
+      "account_password_reset": "Passwort zurücksetzen",
+      "account_invite": "Einladung",
+      "security_password_changed": "Sicherheit: Passwort geändert",
+      "security_mfa_added": "Sicherheit: zweiter Faktor hinzugefügt",
+      "security_mfa_removed": "Sicherheit: zweiter Faktor entfernt",
+      "security_email_changed": "Sicherheit: Login-E-Mail geändert",
+      "fine_upcoming": "Busse droht",
+      "fine_issued": "Busse erhalten",
+      "submission_withdrawn": "Abgabe zurückgezogen",
+      "export_ready": "Datenexport fertig",
+      "export_failed": "Datenexport fehlgeschlagen"
+    },
+    "reasons": {
+      "recipient_missing": "Empfänger gelöscht",
+      "recipient_inactive": "Person inaktiv",
+      "recipient_left": "Person ausgetreten",
+      "no_email": "keine E-Mail-Adresse",
+      "no_login": "ohne Login, Mails nicht erlaubt",
+      "preference_off": "von der Person abgeschaltet",
+      "obsolete": "überholt (erledigt, geändert oder Text nicht mehr gültig)",
+      "email_disabled": "Versand war ausgeschaltet"
+    }
   }
 }

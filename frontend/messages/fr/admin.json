@@ -1387,5 +1387,53 @@
       "success": "Réussi",
       "failure": "Échoué"
     }
+  },
+  "emailLog": {
+    "title": "Journal d'envoi",
+    "description": "Tous les e-mails des 90 derniers jours : à qui, quel type, quand et avec quel résultat. Le contenu des e-mails n'est pas enregistré. Chaque consultation est consignée dans le journal d'audit.",
+    "searchPlaceholder": "Organisation, nom ou e-mail",
+    "colTime": "Heure",
+    "colTenant": "Organisation",
+    "colRecipient": "Destinataire",
+    "colKind": "Type",
+    "colStatus": "Résultat",
+    "loading": "Chargement …",
+    "empty": "Aucun e-mail trouvé.",
+    "plannedHint": "prévu",
+    "attempts": "{count} tentatives",
+    "status": {
+      "all": "Tous",
+      "sent": "Envoyé",
+      "pending": "En attente",
+      "failed": "Échec",
+      "skipped": "Ignoré"
+    },
+    "kinds": {
+      "todo_assigned": "Nouvelles tâches",
+      "todo_due_soon": "Rappel : bientôt dû",
+      "todo_overdue": "Rappel : en retard",
+      "todo_submission_done": "Remise reçue",
+      "account_password_reset": "Réinitialisation du mot de passe",
+      "account_invite": "Invitation",
+      "security_password_changed": "Sécurité : mot de passe modifié",
+      "security_mfa_added": "Sécurité : deuxième facteur ajouté",
+      "security_mfa_removed": "Sécurité : deuxième facteur supprimé",
+      "security_email_changed": "Sécurité : e-mail de connexion modifié",
+      "fine_upcoming": "Amende imminente",
+      "fine_issued": "Amende reçue",
+      "submission_withdrawn": "Remise retirée",
+      "export_ready": "Export de données prêt",
+      "export_failed": "Échec de l'export de données"
+    },
+    "reasons": {
+      "recipient_missing": "destinataire supprimé",
+      "recipient_inactive": "personne inactive",
+      "recipient_left": "personne sortie",
+      "no_email": "pas d'adresse e-mail",
+      "no_login": "sans accès, e-mails non autorisés",
+      "preference_off": "désactivé par la personne",
+      "obsolete": "obsolète (terminé, modifié ou texte plus valable)",
+      "email_disabled": "l'envoi était désactivé"
+    }
   }
 }

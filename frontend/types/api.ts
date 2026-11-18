@@ -984,6 +984,26 @@ export type SystemErrorLogEntry = {
   created_at: string;
 };
 
+export type NotificationLogEntry = {
+  id: string;
+  created_at: string;
+  deliver_after: string;
+  sent_at: string | null;
+  tenant_name: string;
+  recipient_name: string;
+  recipient_email: string | null;
+  kind: string;
+  status: "pending" | "sent" | "skipped" | "failed";
+  skip_reason: string | null;
+  attempts: number;
+  last_error: string | null;
+};
+
+export type NotificationLogPage = {
+  items: NotificationLogEntry[];
+  total: number;
+};
+
 export type SystemErrorLogPage = {
   items: SystemErrorLogEntry[];
   total: number;

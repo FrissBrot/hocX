@@ -271,6 +271,10 @@
       "handler": "admin.send_test_email",
       "platform": true
     },
+    "GET /api/admin/notifications/log": {
+      "handler": "admin.list_notification_log",
+      "platform": true
+    },
     "POST /api/admin/notifications/status-token": {
       "handler": "admin.rotate_status_token",
       "platform": true
