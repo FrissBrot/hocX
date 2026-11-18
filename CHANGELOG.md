@@ -222,6 +222,11 @@ Keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
 - **Dateien und Fotos getrennt:** Wer nur Fotos sehen darf, sieht keine Dokumente und umgekehrt.
 - **Vier-Augen-Prinzip** (Zugriff › Sicherheit, je Organisation): Wer ein Protokoll verfasst hat,
   kann es nicht selbst abschliessen; abschliessen braucht «Protokolle freigeben».
+- **Zugangslinks:** Freigabelinks für Dateien und Alben lassen sich direkt in der Übersicht
+  (Organisation › Zugangslinks) widerrufen.
+- **Nachvollziehbar:** Rollen-Zuweisungen stehen mit vorher/nachher im Verlauf – egal ob über
+  Zugriff, Konto anlegen oder Mehrfachauswahl; Erstellen, Erneuern und Widerrufen öffentlicher
+  Links ebenso.
 - Für Entwickler: Rechte-Inventar `docs/permissions-inventory.md` und Berechtigungsmatrix
   (`permissions/permission-matrix.json`) werden generiert; ein Laufzeittest ruft jede GET-Route mit
   jeder Standardrolle auf. Abweichungen zum Plan: `docs/permissions-plan-deviations.md`.

@@ -15,11 +15,20 @@ from app.core.security import CurrentUser, get_current_user, require_any_permiss
 from app.models.entities import ShareLink
 from app.schemas.files import ShareLinkCreate, ShareLinkRead
 from app.services import photo_album_share_service, share_link_service
+from app.services.audit_service import AuditService
 from app.services.file_service import BLOCKED_SCAN_STATUSES, FileService
 from app.services.photo_metadata_privacy import MetadataPolicy
 
 router = APIRouter()
 service = FileService()
+audit = AuditService()
+
+
+def _audit(db: Session, user: CurrentUser, action: str, link: ShareLink, **details) -> None:
+    """Öffentliche Links nachvollziehbar (Plan «Berechtigungen», Phase 8). share_link.id ist eine
+    UUID - steht in den Details, entity_id bleibt leer."""
+    audit.log(db, action=action, actor=user, entity_type="share_link",
+              details={"kind": "share_album" if link.album_id is not None else "share_files", "link_id": str(link.id), "name": link.name, **details})
 
 
 def _read(link: ShareLink, *, album_name: str | None, file_count: int, created_by_name: str | None) -> ShareLinkRead:
@@ -71,6 +80,7 @@ def create_share_link(payload: ShareLinkCreate, db: Session = Depends(get_db), u
         link = share_link_service.create_for_album(
             db, tenant_id=user.current_tenant_id, name=name, album=album, expires_at=payload.expires_at, created_by=user.user_id, metadata=metadata
         )
+        _audit(db, user, "public_link.created", link, expires_at=link.expires_at.isoformat() if link.expires_at else None)
         return _read(link, album_name=album.name, file_count=len(share_link_service.file_ids_for_link(db, link)), created_by_name=user.display_name)
 
     ids = list(dict.fromkeys(payload.file_ids or []))
@@ -95,6 +105,7 @@ def create_share_link(payload: ShareLinkCreate, db: Session = Depends(get_db), u
         )
     except share_link_service.ShareLinkError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
+    _audit(db, user, "public_link.created", link, file_count=len(ids), expires_at=link.expires_at.isoformat() if link.expires_at else None)
     return _read(link, album_name=None, file_count=len(ids), created_by_name=user.display_name)
 
 
@@ -126,3 +137,4 @@ def revoke_share_link(share_link_id: uuid.UUID, db: Session = Depends(get_db), u
     ):
         raise HTTPException(status_code=404, detail="Link nicht gefunden")
     share_link_service.revoke(db, link)
+    _audit(db, user, "public_link.revoked", link)

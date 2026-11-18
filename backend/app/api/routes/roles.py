@@ -105,12 +105,10 @@ def set_user_roles(user_id: uuid.UUID, payload: UserRolesUpdate, db: Session = D
         raise HTTPException(status_code=404, detail="User not found")
     roles = role_service.resolve_roles(db, user.current_tenant_id, payload.role_ids)
     try:
-        changed = role_service.set_user_roles(db, user, target, roles)
+        role_service.set_user_roles(db, user, target, roles)
         db.commit()
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="Rollen konnten nicht gesetzt werden") from exc
-    if changed:
-        audit.log(db, action="user.roles_changed", actor=user, entity_type="user", entity_id=target.id,
-                  details={"role_ids": [str(role.public_id) for role in roles]})
+    # Audit «user.roles_changed» (vorher/nachher) schreibt role_service.set_user_roles selbst
     return [role_service.role_ref(role) for role in role_service.roles_by_user(db, [target.id]).get(target.id, [])]

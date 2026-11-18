@@ -158,7 +158,8 @@
       "tenant": "Organisation",
       "todo": "Task",
       "user": "Account",
-      "role": "Role"
+      "role": "Role",
+      "public_link": "Public link"
     },
     "verbs": {
       "loginFailed": "Sign-in failed",

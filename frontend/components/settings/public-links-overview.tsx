@@ -9,6 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { StatusBanner } from "@/components/ui/status-banner";
+import { useConfirm } from "@/contexts/confirm-context";
+import { useToast } from "@/contexts/toast-context";
+import { browserApiFetch } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/utils/format";
 import type { PublicLinkItem } from "@/types/api";
 
@@ -30,10 +33,42 @@ export function linkGroup(kind: string): Exclude<Group, "all"> {
  * Register app/public_links im Backend; neue Link-Arten erscheinen dort automatisch (unbekannte
  * Arten zeigt die Tabelle mit ihrem Schlüssel unter «Weitere»).
  */
-export function PublicLinksOverview({ links, mobile = false }: { links: PublicLinkItem[]; mobile?: boolean }) {
+// Direkt hier widerrufbar (Plan «Berechtigungen», Phase 6): eigene Freigabelinks für Dateien/Alben.
+// Andere Arten verwalten ihre Seiten (Abgabe-Links hängen an Aufträgen, Einladungen an Personen).
+const REVOCABLE = new Set(["share_files", "share_album"]);
+
+export function PublicLinksOverview({ links: initialLinks, mobile = false }: { links: PublicLinkItem[]; mobile?: boolean }) {
   const t = useTranslations("tenantSettings.publicLinks");
   const locale = useLocale();
+  const confirm = useConfirm();
+  const showToast = useToast();
+  const [links, setLinks] = useState(initialLinks);
   const [group, setGroup] = useState<Group>("all");
+  const [busy, setBusy] = useState<string | null>(null);
+
+  async function revoke(link: PublicLinkItem) {
+    const ok = await confirm({ message: t("revokeConfirm", { name: link.label || "—" }), tone: "danger", confirmLabel: t("revoke") });
+    if (!ok) return;
+    setBusy(link.id);
+    try {
+      await browserApiFetch(`/api/share-links/${link.id}`, { method: "DELETE" });
+      setLinks((current) => current.filter((item) => !(item.kind === link.kind && item.id === link.id)));
+      showToast(t("revoked"), "success");
+    } catch {
+      showToast(t("revokeFailed"), "error");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function revokeButton(link: PublicLinkItem, className: string) {
+    if (!REVOCABLE.has(link.kind)) return null;
+    return (
+      <button type="button" className={className} disabled={busy === link.id} onClick={() => void revoke(link)}>
+        {t("revoke")}
+      </button>
+    );
+  }
 
   const counts = useMemo(() => {
     const result: Record<string, number> = {};
@@ -81,6 +116,7 @@ export function PublicLinksOverview({ links, mobile = false }: { links: PublicLi
               <div className="muted public-links-reason">{reason(link)}</div>
               <div className="public-links-reason">{expiry(link)}{link.created_by ? ` · ${t("createdBy", { name: link.created_by })}` : ""}</div>
               {link.manage_href ? <Link className="button-secondary button-ghost public-links-card-action" href={link.manage_href as Route}>{t("manage")}</Link> : null}
+              {revokeButton(link, "button-danger public-links-card-action")}
             </div>
           ))}
         </div>
@@ -103,11 +139,14 @@ export function PublicLinksOverview({ links, mobile = false }: { links: PublicLi
             <td>{expiry(link)}</td>
             <td>{link.last_used_at ? formatDateTime(link.last_used_at, locale) : <span className="muted">{t("notTracked")}</span>}</td>
             <td>
-              {link.manage_href ? (
-                <Link className="button-secondary button-ghost" href={link.manage_href as Route}>{t("manage")}</Link>
-              ) : (
-                <span className="muted">{t(`manageElsewhere.${linkGroup(link.kind)}`)}</span>
-              )}
+              <div className="public-links-actions">
+                {link.manage_href ? (
+                  <Link className="button-secondary button-ghost" href={link.manage_href as Route}>{t("manage")}</Link>
+                ) : (
+                  <span className="muted">{t(`manageElsewhere.${linkGroup(link.kind)}`)}</span>
+                )}
+                {revokeButton(link, "button-danger")}
+              </div>
             </td>
           </tr>
         ))}

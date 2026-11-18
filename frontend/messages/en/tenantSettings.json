@@ -359,6 +359,10 @@
       "other": "—"
     },
     "empty": "There are currently no public links.",
-    "emptyFilter": "No links in this selection."
+    "emptyFilter": "No links in this selection.",
+    "revoke": "Revoke",
+    "revokeConfirm": "Revoke link “{name}”? Anyone who has it can no longer access the content.",
+    "revoked": "Link revoked",
+    "revokeFailed": "Link could not be revoked"
   }
 }

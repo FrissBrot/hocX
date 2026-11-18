@@ -359,6 +359,10 @@
       "other": "—"
     },
     "empty": "Il n'y a actuellement aucun lien public.",
-    "emptyFilter": "Aucun lien dans cette sélection."
+    "emptyFilter": "Aucun lien dans cette sélection.",
+    "revoke": "Révoquer",
+    "revokeConfirm": "Révoquer le lien « {name} » ? Les personnes qui l’ont n’auront plus accès au contenu.",
+    "revoked": "Lien révoqué",
+    "revokeFailed": "Le lien n’a pas pu être révoqué"
   }
 }

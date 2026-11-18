@@ -79,11 +79,15 @@ def create_link(
     require_permission(user, P.SUBMISSIONS_MANAGE)
     require_permission(user, P.SHARING_PUBLIC)  # öffentlicher Upload-Link (Plan «Berechtigungen», Phase 3)
     try:
-        return link_service.create_link(db, payload, tenant_id=user.current_tenant_id)
+        created = link_service.create_link(db, payload, tenant_id=user.current_tenant_id)
     except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
         detail = str(exc) if isinstance(exc, ValueError) else "Link konnte nicht erstellt werden"
         raise HTTPException(status_code=400, detail=detail) from exc
+    # Öffentliche Links nachvollziehbar (Plan «Berechtigungen», Phase 8)
+    audit.log(db, action="public_link.created", actor=user, entity_type="submission_link",
+              details={"kind": "submission_link", "name": payload.name})
+    return created
 
 
 @router.patch("/submission-links/{link_id}", response_model=SubmissionLinkRead)
@@ -120,6 +124,8 @@ def regenerate_link(
         raise HTTPException(status_code=400, detail="Link konnte nicht erneuert werden") from exc
     for assignment in link_service.assignments_for_link(db, link):
         service.refresh_todo_links(db, assignment)
+    audit.log(db, action="public_link.regenerated", actor=user, entity_type="submission_link", entity_id=link.id,
+              details={"kind": "submission_link", "name": link.name})
     return result
 
 
@@ -133,6 +139,7 @@ def delete_link(
     require_permission(user, P.SHARING_PUBLIC)  # öffentlicher Upload-Link (Plan «Berechtigungen», Phase 3)
     link = _get_link_or_404(db, link_id, user)
     affected = link_service.assignments_for_link(db, link)
+    link_internal_id, link_name = link.id, link.name
     try:
         link_service.delete_link(db, link)
     except SQLAlchemyError as exc:
@@ -140,6 +147,8 @@ def delete_link(
         raise HTTPException(status_code=400, detail="Link konnte nicht gelöscht werden") from exc
     for assignment in affected:
         service.refresh_todo_links(db, assignment)
+    audit.log(db, action="public_link.revoked", actor=user, entity_type="submission_link", entity_id=link_internal_id,
+              details={"kind": "submission_link", "name": link_name})
     return {"message": "Link gelöscht"}
 
 

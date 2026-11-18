@@ -280,6 +280,19 @@ def set_user_roles(db: Session, actor: CurrentUser | None, user: AppUser, roles:
             db.execute(delete(UserRole).where(UserRole.user_id == user.id, UserRole.role_id.in_(current - wanted)))
         for role_id in wanted - current:
             db.add(UserRole(tenant_id=user.tenant_id, user_id=user.id, role_id=role_id))
+    if actor is not None:
+        # Nachvollziehbarkeit (Plan «Berechtigungen», Phase 8): jede Zuweisung mit vorher/nachher,
+        # in derselben Transaktion - egal über welchen Weg (Zugriff, Konto anlegen/ändern, Mehrfachauswahl)
+        from app.services.audit_service import AuditService
+
+        names = dict(db.execute(select(TenantRole.id, func.coalesce(TenantRole.name, TenantRole.system_key)).where(TenantRole.id.in_(current | wanted))).all())
+        # Akteur ohne Konto (Hilfsaufrufe, Tests): ohne Personenbezug statt Fremdschlüsselfehler
+        known_actor = db.scalar(select(exists().where(AppUser.id == actor.user_id)))
+        AuditService().log(
+            db, action="user.roles_changed", actor=actor if known_actor else None, tenant_id=user.tenant_id,
+            entity_type="user", entity_id=user.id, commit=False,
+            details={"before": sorted(str(names.get(i) or i) for i in current), "after": sorted(str(names.get(i) or i) for i in wanted)},
+        )
     return True
 
 

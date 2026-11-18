@@ -359,6 +359,10 @@
       "other": "—"
     },
     "empty": "Zurzeit gibt es keine öffentlichen Links.",
-    "emptyFilter": "Keine Links in dieser Auswahl."
+    "emptyFilter": "Keine Links in dieser Auswahl.",
+    "revoke": "Widerrufen",
+    "revokeConfirm": "Link «{name}» widerrufen? Wer ihn hat, kommt danach nicht mehr an die Inhalte.",
+    "revoked": "Link widerrufen",
+    "revokeFailed": "Link konnte nicht widerrufen werden"
   }
 }

@@ -87,3 +87,29 @@ abweicht und warum. «OFFEN» markiert fachliche Punkte, die noch eine Entscheid
 - **MFA:** Ein Zurücksetzen des Faktors durch die Administration startet keine neue Frist.
   Das Rollen-Flag `require_mfa` steht im Audit (vorher/nachher) und überlebt Export/Import.
 - **`activity.read`** verlangt MFA (wie vorher `settings.manage`).
+
+## Phase 6 – Öffentliche Links
+
+- **Keine physische Tabelle `public_links`.** Die Vereinheitlichung leistet das bestehende Register
+  `backend/app/public_links` (jede Link-Art meldet sich dort, der Test `test_public_link_registry`
+  erzwingt das) mit der Übersicht Organisation › Zugangslinks. Grund: Ein Umzug der Tokens aus
+  `share_link`, `submission_link`, `calendar_feed`, `account_token`, `submission_access_token` in
+  eine Tabelle hätte die Abgabebox (liest `submission_link` direkt, eigene Rolle) und alle
+  öffentlichen Routen berührt, ohne für Vereine etwas zu ändern. Tokens bleiben unverändert.
+- Freigabelinks für Dateien und Alben lassen sich **direkt in der Übersicht widerrufen** (gleiche
+  Prüfung wie auf der Seite «Geteilte Links»: `sharing.public` plus Leserecht auf den Inhalt).
+  Abgabe-Links, Kalender-Abos und Einladungen verwaltet weiter ihre eigene Seite (sie hängen an
+  Aufträgen bzw. Personen).
+- `sharing.public` ohne MFA (Entscheid 18.11.2026).
+
+## Phase 8 – Nachvollziehbarkeit
+
+- Kein eigenes `permission_audit_log`: alles läuft in den bestehenden Verlauf (`audit_log`,
+  Organisation › Verlauf, mit Spaltenfiltern).
+- Rollen: `role.created/updated/deleted` mit Rechten und Reichweiten vorher/nachher, inkl.
+  `require_mfa`.
+- Zuweisungen: `user.roles_changed` mit Rollen vorher/nachher, zentral in
+  `role_service.set_user_roles` in derselben Transaktion (alle Wege: Zugriff, Konto anlegen/ändern,
+  Mehrfachauswahl). Dafür kann `AuditService.log` ohne eigenen Commit schreiben.
+- Öffentliche Links: `public_link.created/regenerated/revoked` (Freigabelinks und Abgabe-Links).
+- Kontext-Freigaben (Phase 5) und Prüfer-Zuweisungen (Phase 4) protokollieren ihre eigenen Phasen.

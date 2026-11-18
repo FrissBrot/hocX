@@ -158,7 +158,8 @@
       "tenant": "Organizzazione",
       "todo": "Attività",
       "user": "Account",
-      "role": "Ruolo"
+      "role": "Ruolo",
+      "public_link": "Link pubblico"
     },
     "verbs": {
       "loginFailed": "Accesso non riuscito",

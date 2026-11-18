@@ -158,7 +158,8 @@
       "tenant": "Organisation",
       "todo": "Aufgabe",
       "user": "Konto",
-      "role": "Rolle"
+      "role": "Rolle",
+      "public_link": "Öffentlicher Link"
     },
     "verbs": {
       "loginFailed": "Anmeldung fehlgeschlagen",

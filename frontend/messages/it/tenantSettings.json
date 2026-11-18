@@ -359,6 +359,10 @@
       "other": "—"
     },
     "empty": "Al momento non ci sono link pubblici.",
-    "emptyFilter": "Nessun link in questa selezione."
+    "emptyFilter": "Nessun link in questa selezione.",
+    "revoke": "Revoca",
+    "revokeConfirm": "Revocare il link «{name}»? Chi lo possiede non potrà più accedere ai contenuti.",
+    "revoked": "Link revocato",
+    "revokeFailed": "Impossibile revocare il link"
   }
 }

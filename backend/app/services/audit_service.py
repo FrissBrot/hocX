@@ -23,6 +23,7 @@ class AuditService:
         details: dict | None = None,
         outcome: str = "success",
         actor_user_id: int | None = None,
+        commit: bool = True,
     ) -> None:
         """actor is a customer-side CurrentUser (has current_tenant_id/user_id/email).
         Platform-admin actions have no such user - pass actor_email instead (there's no
@@ -47,7 +48,10 @@ class AuditService:
                 "outcome": outcome,
             },
         )
-        db.commit()
+        # commit=False: Eintrag in der laufenden Transaktion (z. B. role_service - er gilt nur,
+        # wenn die Änderung selbst gespeichert wird)
+        if commit:
+            db.commit()
 
     def cleanup_old_entries(self, db: Session, *, retention_days: int) -> dict:
         """Periodic retention sweep (see main.py's log_cleanup_loop). Die Laufzeitrolle darf
