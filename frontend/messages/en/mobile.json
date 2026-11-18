@@ -222,7 +222,10 @@
     "finesCount": "{count, plural, one {# fine} other {# fines}}",
     "attendancePerMember": "Attendance per member",
     "cardTitle": "Statistics · last 6 months",
-    "todosOpen": "Open todos"
+    "todosOpen": "Open todos",
+    "cardTitleYear": "Statistics · {year}",
+    "finesShort": "Fines",
+    "present": "Present"
   },
   "submissions": {
     "fab": "Submission"

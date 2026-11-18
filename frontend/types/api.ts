@@ -1819,13 +1819,57 @@ export type OpenFinesSummary = {
   own_only: boolean;
 };
 
+export type StatisticsAttendanceMonth = { month: string; present: number; late?: number; absent: number; excused: number; total: number };
+export type StatisticsFineByType = { fine_type: string; label: string; count: number; amount: number; currency?: string };
+export type StatisticsFineByPerson = {
+  name: string;
+  count: number;
+  amount: number;
+  currency?: string;
+  participant_key?: string;
+  absent_count?: number;
+  late_count?: number;
+  absent_amount?: number;
+  late_amount?: number;
+};
+
+/** Gleicher Zeitraum im Vorjahr (GET /statistics/overview?year=…&compare=1). */
+export type StatisticsComparison = {
+  period_start: string;
+  period_end: string;
+  protocols_total: number;
+  attendance_over_time: StatisticsAttendanceMonth[];
+  todos: { open: number; done: number; total: number };
+  todo_avg_days_to_done?: number | null;
+  fines_by_type: StatisticsFineByType[];
+  /** Nur die eigene Person, wenn per_person_scope == "own". */
+  own_fines: StatisticsFineByPerson[];
+  finance_by_account: { account_id: string; account_name: string; currency?: string; income: number; expenses: number }[];
+};
+
 export type StatisticsOverview = {
-  attendance_by_participant: { name: string; present: number; absent: number; excused: number; total: number }[];
-  attendance_over_time: { month: string; present: number; absent: number; excused: number; total: number }[];
+  attendance_by_participant: { name: string; present: number; late?: number; absent: number; excused: number; total: number }[];
+  attendance_over_time: StatisticsAttendanceMonth[];
   todos: { open: number; done: number; total: number };
   /** Pro Person und Währung eine Zeile (MAIN-BE-019); participant_key fasst eine Person zusammen. */
-  fines_by_participant: { name: string; count: number; amount: number; currency?: string; participant_key?: string }[];
-  fines_by_type: { fine_type: string; label: string; count: number; amount: number; currency?: string }[];
+  fines_by_participant: StatisticsFineByPerson[];
+  fines_by_type: StatisticsFineByType[];
+  /** Gewählter Zeitraum (year=…), sonst null. */
+  period_start?: string | null;
+  period_end?: string | null;
+  /** Jahre mit durchgeführten Protokollen plus das laufende Jahr. */
+  available_years?: number[];
+  /** Bussen nur mit gebuchtem Finanzmodul; false = alle Bussenfelder leer. */
+  fines_visible?: boolean;
+  fines_status?: { currency?: string; paid_count: number; paid_amount: number; open_count: number; open_amount: number }[];
+  todo_insights?: {
+    overdue: number;
+    /** davon seit über 30 Tagen überfällig */
+    overdue_long: number;
+    avg_days_to_done: number | null;
+    open_by_person: { name: string; participant_key: string; open: number; overdue: number }[];
+  };
+  comparison?: StatisticsComparison | null;
   finance_by_month: { month: string; account_id: string; account_name: string; currency?: string; income: number; expenses: number; net: number }[];
   participants_total: number;
   participants_active: number;

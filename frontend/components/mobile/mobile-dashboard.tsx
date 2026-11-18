@@ -8,7 +8,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useParticipants, useProtocolsByEvent } from "@/components/mobile/mobile-data";
 import { EventDetailSheet, EventFormSheet } from "@/components/mobile/mobile-event-sheets";
 import { MobileEventRow } from "@/components/mobile/mobile-events";
-import { MobileStatsCard } from "@/components/mobile/areas/mobile-statistics";
+import { MobileStatsCard } from "@/components/mobile/areas/mobile-stats-card";
 import { MobileIcon } from "@/components/mobile/mobile-icons";
 import { useMobileSession } from "@/components/mobile/mobile-shell";
 import { TodoDetailSheet } from "@/components/mobile/mobile-todo-sheets";
@@ -195,7 +195,7 @@ export function MobileDashboard({
 
       <MobileCard className="mobile-list-card">
         <MobileCardHeader
-          label={t("dashboard.upcomingEvents")}
+          label={permissions.showSubmissions ? tDashboard("agendaWithDeadlinesTitle") : t("dashboard.upcomingEvents")}
           action={
             canWrite ? (
               <button type="button" className="mobile-text-button" onClick={() => router.push("/events" as Route)}>
@@ -204,10 +204,21 @@ export function MobileDashboard({
             ) : undefined
           }
         />
-        {upcoming.length === 0 ? <p className="mobile-card-empty">{t("dashboard.noEvents")}</p> : null}
+        {upcoming.length === 0 && (!permissions.showSubmissions || data.upcomingDeadlines.length === 0) ? <p className="mobile-card-empty">{t("dashboard.noEvents")}</p> : null}
         {upcoming.map((event) => (
           <MobileEventRow key={event.id} event={event} tagConfig={tagConfig} tile="month" onOpen={() => setOpenEventId(event.id)} />
         ))}
+        {/* Dashboard v2: Abgabefristen in derselben Karte wie die Termine («Termine & Fristen»). */}
+        {permissions.showSubmissions
+          ? data.upcomingDeadlines.slice(0, DASHBOARD_DEADLINE_LIMIT).map((assignment) => (
+              <button key={assignment.id} type="button" className="mobile-fine-row mobile-deadline-row" onClick={() => router.push("/submission-assignments" as Route)}>
+                <span className="mobile-fine-row-name">{assignment.title}</span>
+                <span className="mobile-muted-sm">
+                  {tDashboard("kind.deadline")} · {assignment.deadline ? relativeDay(assignment.deadline, t) : ""}
+                </span>
+              </button>
+            ))
+          : null}
       </MobileCard>
 
       {permissions.hasFinance ? (
@@ -232,7 +243,7 @@ export function MobileDashboard({
             <div key={fine.id} className="mobile-fine-row">
               <span className="mobile-fine-row-name">{fine.participant_name_snapshot}</span>
               <span className="mobile-muted-sm">{fineTypeLabel[fine.fine_type] ?? fine.fine_type}</span>
-              <span className="mobile-fine-row-amount">{formatMoney(fine.amount, "", locale)}</span>
+              <span className="mobile-fine-row-amount">{formatMoney(fine.amount, fine.currency_label ?? "", locale, { currencyFirst: true })}</span>
             </div>
           ))}
         </MobileCard>
@@ -252,35 +263,15 @@ export function MobileDashboard({
           {data.accounts.map((account) => (
             <div key={account.id} className="mobile-fine-row">
               <span className="mobile-fine-row-name">{account.name}</span>
-              <span className="mobile-fine-row-amount">
-                {account.balance.toFixed(2)} {account.currency_label}
+              <span className={`mobile-fine-row-amount${account.balance < 0 ? " mobile-amount-negative" : ""}`}>
+                {formatMoney(account.balance, account.currency_label, locale, { currencyFirst: true })}
               </span>
             </div>
           ))}
         </MobileCard>
       ) : null}
 
-      {permissions.showSubmissions ? (
-        <MobileCard className="mobile-list-card">
-          <MobileCardHeader
-            label={tDashboard("deadlinesEyebrow")}
-            action={
-              <button type="button" className="mobile-text-button" onClick={() => router.push("/submission-assignments" as Route)}>
-                {tDashboard("allButton")}
-              </button>
-            }
-          />
-          {data.upcomingDeadlines.length === 0 ? <p className="mobile-card-empty">{tDashboard("noDeadlines")}</p> : null}
-          {data.upcomingDeadlines.slice(0, DASHBOARD_DEADLINE_LIMIT).map((assignment) => (
-            <div key={assignment.id} className="mobile-fine-row">
-              <span className="mobile-fine-row-name">{assignment.title}</span>
-              <span className="mobile-muted-sm">{assignment.deadline ? relativeDay(assignment.deadline, t) : ""}</span>
-            </div>
-          ))}
-        </MobileCard>
-      ) : null}
-
-      <MobileStatsCard />
+      <MobileStatsCard year={Number(today.slice(0, 4))} />
 
       {excuseSession?.protocol ? (
         <Modal

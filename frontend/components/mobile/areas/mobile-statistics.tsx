@@ -1,224 +1,283 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
-import { CSSProperties, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
-import { MobileCard, MobileCardHeader, MobileEmpty, MobileListRow, MobileSegmented, MobileStat, MobileSubHeader } from "@/components/mobile/mobile-ui";
-import { Modal } from "@/components/ui/modal";
-import { browserApiFetch } from "@/lib/api/client";
-import { toIntlLocale } from "@/lib/utils/format";
+import { MobileCard, MobileCardHeader, MobileEmpty, MobileSegmented, MobileSubHeader, MobileSwitch } from "@/components/mobile/mobile-ui";
+import { Badge } from "@/components/ui/badge";
 import { StatusBanner } from "@/components/ui/status-banner";
-import { fineTotalsByCurrency, formatFineTotals } from "@/lib/utils/fine-stats";
+import { AttendanceMonthChart, ChartLegend, DivergingMonthChart, ProgressBar, StackedBar, percentLabel } from "@/components/statistics/statistics-bars";
+import {
+  LOW_ATTENDANCE_RATE,
+  attendanceBars,
+  attendanceRate,
+  financeView,
+  fineSum,
+  fineTypeRows,
+  finesByPerson,
+  groupRows,
+  mainAmount,
+  memberRows,
+  sumAttendance,
+  trendOf,
+  yearMonths,
+} from "@/components/statistics/statistics-model";
+import { useStatisticsFormat } from "@/components/statistics/use-statistics-format";
+import { useStatisticsOverview } from "@/components/statistics/use-statistics-overview";
 import type { StatisticsOverview } from "@/types/api";
 
-type Period = "3m" | "6m" | "12m" | "all";
-type Detail = "members" | "finance" | "fines" | "groups" | null;
+const MEMBER_PREVIEW = 5;
+const FINE_PEOPLE_PREVIEW = 3;
 
-function filterByPeriod<T extends { month: string }>(items: T[], period: Period): T[] {
-  if (period === "all") return items;
-  const cutoff = new Date();
-  cutoff.setMonth(cutoff.getMonth() - (period === "12m" ? 12 : period === "6m" ? 6 : 3));
-  return items.filter((item) => item.month >= cutoff.toISOString().slice(0, 7));
-}
-
-function monthShort(month: string, locale: string) {
-  return new Intl.DateTimeFormat(toIntlLocale(locale), { month: "short" }).format(new Date(`${month}-01T12:00:00`)).replace(".", "");
-}
-
-function money(amount: number, locale: string) {
-  return amount.toLocaleString(toIntlLocale(locale), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-/** Saeulen pro Monat (Anwesenheitsquote) - die juengsten Monate rechts. */
-export function MobileMonthBars({ items, locale }: { items: { month: string; value: number }[]; locale: string }) {
-  const max = Math.max(1, ...items.map((item) => item.value));
-  return (
-    <div className="mobile-bars" style={{ "--mobile-bar-count": items.length } as CSSProperties}>
-      {items.map((item) => (
-        <div key={item.month} className="mobile-bar">
-          <span className="mobile-bar-fill" style={{ height: `${Math.max(4, Math.round((item.value / max) * 100))}%` }} />
-          <span className="mobile-bar-label">{monthShort(item.month, locale)}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function HBar({ label, value, max, display, tone = "primary" }: { label: string; value: number; max: number; display: string; tone?: "primary" | "success" | "danger" }) {
-  return (
-    <div className="mobile-hbar">
-      <div className="mobile-hbar-head">
-        <span className="mobile-hbar-label">{label}</span>
-        <span className="mobile-muted-sm">{display}</span>
-      </div>
-      <div className="mobile-progress-track">
-        <span className={`mobile-hbar-fill-${tone}`} style={{ width: `${max > 0 ? Math.round((value / max) * 100) : 0}%` }} />
-      </div>
-    </div>
-  );
-}
-
-function attendanceRate(row: { present: number; total: number }) {
-  return row.total > 0 ? Math.round((row.present / row.total) * 100) : 0;
-}
-
-export function MobileStatistics({ data }: { data: StatisticsOverview | null }) {
+/** Statistik auf dem Smartphone (Dashboard v2): gleiche Zahlen wie Desktop, untereinander. */
+export function MobileStatistics({ data: initialData, year: initialYear, today }: { data: StatisticsOverview | null; year: number; today: string }) {
   const t = useTranslations("statistics");
   const tMobile = useTranslations("mobile");
   const locale = useLocale();
   const router = useRouter();
-  const [period, setPeriod] = useState<Period>("6m");
-  const [detail, setDetail] = useState<Detail>(null);
+  const fmt = useStatisticsFormat();
+  const { year, setYear, compare, setCompare, canCompare, years, data, failed } = useStatisticsOverview(initialData, initialYear);
+  const [sort, setSort] = useState<"low" | "high">("low");
+  const [allMembers, setAllMembers] = useState(false);
 
-  const attendance = useMemo(() => filterByPeriod(data?.attendance_over_time ?? [], period), [data, period]);
-  const finance = useMemo(() => {
-    const byMonth = new Map<string, { income: number; expenses: number }>();
-    filterByPeriod(data?.finance_by_month ?? [], period).forEach((row) => {
-      const current = byMonth.get(row.month) ?? { income: 0, expenses: 0 };
-      byMonth.set(row.month, { income: current.income + row.income, expenses: current.expenses + Math.abs(row.expenses) });
-    });
-    return [...byMonth.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [data, period]);
+  const months = useMemo(() => yearMonths(year, today), [year, today]);
+  const comparison = compare ? data?.comparison ?? null : null;
+  const bars = useMemo(() => attendanceBars(data?.attendance_over_time ?? [], comparison?.attendance_over_time ?? null, months), [data, comparison, months]);
+  const finance = useMemo(() => (data ? financeView({ finance_by_month: data.finance_by_month, comparison }, "all", months) : null), [data, comparison, months]);
 
-  if (!data || data.protocols_total === 0) {
+  const back = <MobileSubHeader title={t("pageTitle")} backLabel={tMobile("tabs.overview")} onBack={() => router.push("/" as Route)} />;
+  if (!data) {
     return (
       <div className="mobile-page">
-        <MobileSubHeader title={t("pageTitle")} backLabel={tMobile("tabs.overview")} onBack={() => router.push("/" as Route)} />
-        <MobileEmpty title={t("emptyTitle")} hint={t("emptyDescription")} />
+        {back}
+        <MobileEmpty title={failed ? t("loadFailed") : t("emptyTitle")} hint={t("emptyDescription")} />
       </div>
     );
   }
 
-  const fineTotals = fineTotalsByCurrency(data.fines_by_type);
-  const finesCount = fineTotals.reduce((sum, row) => sum + row.count, 0);
-  const members = [...data.attendance_by_participant].sort((a, b) => attendanceRate(b) - attendanceRate(a));
-  const finesMax = Math.max(1, ...data.fines_by_type.map((row) => row.amount));
-  const groupsMax = Math.max(1, ...data.groups_stats.map((row) => row.session_count));
-  const financeMax = Math.max(1, ...finance.flatMap(([, row]) => [row.income, row.expenses]));
+  const ownScope = data.per_person_scope === "own";
+  const finesVisible = data.fines_visible !== false;
+  const isRunning = year === Number(today.slice(0, 4));
+  const intro = isRunning
+    ? t("yearIntroRunning", { year, from: fmt.month(months[0]), to: fmt.month(months[months.length - 1]) })
+    : t("yearIntro", { year, from: fmt.month(months[0]), to: fmt.month(months[months.length - 1]) });
+  const previousPeriod = data.comparison ? fmt.period(data.comparison.period_start.slice(0, 7), data.comparison.period_end.slice(0, 7)) : "";
+  const yearOptions = [...years].sort((a, b) => b - a).slice(0, 3).map((value) => ({ value: String(value), label: String(value) }));
+
+  const totals = sumAttendance(data.attendance_over_time);
+  const rate = attendanceRate(totals);
+  const previousTotals = comparison ? sumAttendance(comparison.attendance_over_time) : null;
+  const previousRate = previousTotals ? attendanceRate(previousTotals) : null;
+  const avgPresent = data.protocols_total > 0 ? (totals.present + totals.late) / data.protocols_total : null;
+  const previousAvg = previousTotals && comparison && comparison.protocols_total > 0 ? (previousTotals.present + previousTotals.late) / comparison.protocols_total : null;
+  const todoRate = data.todos.total > 0 ? data.todos.done / data.todos.total : null;
+
+  type Kpi = { label: string; value: string; sub: string; delta?: { text: string; good: boolean; flat: boolean } };
+  const kpis: Kpi[] = [
+    {
+      label: t("kpiAttendanceRate"),
+      value: percentLabel(rate, locale),
+      sub: t("kpiAttendanceRateSubShort"),
+      ...(rate !== null && previousRate !== null
+        ? { delta: fmt.delta(trendOf(rate, previousRate), t("deltaVsPrevious", { delta: t("deltaPoints", { delta: fmt.signed(Math.round((rate - previousRate) * 100), 0) }) })) }
+        : {}),
+    },
+    {
+      label: t("kpiAvgPresentShort"),
+      value: fmt.number(avgPresent, 1),
+      sub: t("kpiAvgPresentSubShort"),
+      ...(avgPresent !== null && previousAvg !== null ? { delta: fmt.delta(trendOf(avgPresent, previousAvg), t("deltaVsPrevious", { delta: fmt.signed(avgPresent - previousAvg, 1) })) } : {}),
+    },
+    { label: t("kpiSessionsShort"), value: fmt.number(data.protocols_total, 0), sub: t("kpiSessionsSubShort") },
+    { label: t("kpiTodosDone"), value: percentLabel(todoRate, locale), sub: t("kpiTodosDoneSub", { count: data.todos.open }) },
+  ];
+
+  const members = memberRows(data.attendance_by_participant, sort);
+  const shownMembers = allMembers ? members : members.slice(0, MEMBER_PREVIEW);
+
+  const fineTotals = fineSum(data);
+  const previousFineTotals = comparison ? fineSum({ fines_by_type: comparison.fines_by_type, fines_by_participant: comparison.own_fines, per_person_scope: data.per_person_scope }) : null;
+  const types = fineTypeRows(data);
+  const typeMax = Math.max(0, ...types.map((row) => mainAmount(row.totals)));
+  const finePeople = ownScope ? [] : finesByPerson(data.fines_by_participant).slice(0, FINE_PEOPLE_PREVIEW);
+  const groups = groupRows(data.groups_stats);
+  const showFinance = finance !== null && (data.finance_by_month.length > 0 || (comparison?.finance_by_account.length ?? 0) > 0);
 
   return (
     <div className="mobile-page mobile-page-list">
-      <MobileSubHeader title={t("pageTitle")} subtitle={t("pageIntro")} backLabel={tMobile("tabs.overview")} onBack={() => router.push("/" as Route)} />
-      <div className="mobile-section">
-        <MobileSegmented<Period>
-          ariaLabel={t("sectionTimeline")}
-          value={period}
-          onChange={setPeriod}
-          options={[
-            { value: "3m", label: t("period3m") },
-            { value: "6m", label: t("period6m") },
-            { value: "12m", label: t("period12m") },
-            { value: "all", label: t("periodAll") },
-          ]}
-        />
+      {back}
+      <div className="mobile-section stats-mobile">
+        <p className="mobile-muted-sm">{intro}</p>
+        <MobileSegmented ariaLabel={t("yearSelectLabel")} value={String(year)} onChange={(value) => setYear(Number(value))} options={yearOptions} />
+        <button type="button" className="mobile-card stats-mobile-compare" aria-pressed={compare} disabled={!canCompare} onClick={() => setCompare(!compare)}>
+          <span className="stats-mobile-compare-text">
+            <span className="stats-mobile-compare-title">{t("compareToggle")}</span>
+            <span className="mobile-muted-sm">{canCompare ? t("compareSub", { period: previousPeriod || fmt.period(`${year - 1}-01`, `${year - 1}-12`) }) : t("compareUnavailable", { year: year - 1 })}</span>
+          </span>
+          <MobileSwitch checked={compare} />
+        </button>
+        {ownScope ? <StatusBanner tone="neutral" message={t("perPersonOwnShort")} /> : null}
+        {failed ? <StatusBanner tone="error" message={t("loadFailed")} /> : null}
+
         <div className="mobile-stat-grid">
-          <MobileStat label={t("kpiProtocols")} value={data.protocols_total} />
-          <MobileStat label={t("kpiMembers")} value={data.participants_active} sub={t("totalCountSub", { count: data.participants_total })} />
-          <MobileStat label={t("kpiTodos")} value={data.todos.open} sub={tMobile("stats.todosDone", { count: data.todos.done })} />
-          <MobileStat label={t("kpiFinesAmount")} value={formatFineTotals(fineTotals, (amount) => money(amount, locale))} sub={tMobile("stats.finesCount", { count: finesCount })} />
+          {kpis.map((kpi) => (
+            <div key={kpi.label} className="mobile-card mobile-stat stats-mobile-kpi">
+              <div className="mobile-eyebrow">{kpi.label}</div>
+              <div className="mobile-stat-value">{kpi.value}</div>
+              {kpi.delta ? <Badge variant={kpi.delta.flat ? "neutral" : kpi.delta.good ? "success" : "danger"}>{kpi.delta.text}</Badge> : null}
+              <div className="mobile-muted-sm">{kpi.sub}</div>
+            </div>
+          ))}
         </div>
-        {data.per_person_scope === "own" ? <StatusBanner tone="neutral" message={t("perPersonOwnHint")} /> : null}
+
         <MobileCard className="mobile-chart-card">
-          <MobileCardHeader label={t("chartAttendance")} />
-          {attendance.length > 0 ? (
-            <MobileMonthBars items={attendance.map((row) => ({ month: row.month, value: attendanceRate(row) }))} locale={locale} />
-          ) : (
+          <MobileCardHeader label={t("chartAttendancePerMonth")} />
+          {data.attendance_over_time.length === 0 ? (
             <p className="mobile-card-empty">{t("noAttendanceDataPeriod")}</p>
+          ) : (
+            <AttendanceMonthChart
+              compact
+              bars={bars}
+              locale={locale}
+              title={(bar) => t("monthTooltip", { month: fmt.monthYear(bar.month), rate: percentLabel(bar.rate, locale) })}
+            />
           )}
+          <ChartLegend
+            items={[
+              { series: "present", label: t("present") },
+              { series: "late", label: t("late") },
+              { series: "excused", label: t("excused") },
+              { series: "absent", label: t("absent") },
+              ...(comparison ? [{ series: "previous" as const, label: t("previousYear") }] : []),
+            ]}
+          />
         </MobileCard>
-        <div className="mobile-card mobile-group-card">
-          <MobileListRow label={tMobile("stats.attendancePerMember")} onClick={() => setDetail("members")} />
-          <MobileListRow label={t("chartFinancePerMonth")} onClick={() => setDetail("finance")} />
-          <MobileListRow label={t("chartFinesByType")} onClick={() => setDetail("fines")} />
-          <MobileListRow label={t("chartSessionsPerGroup")} onClick={() => setDetail("groups")} />
-        </div>
-      </div>
 
-      {detail ? (
-        <Modal
-          open
-          size="sheet"
-          title={
-            detail === "members" ? tMobile("stats.attendancePerMember") : detail === "finance" ? t("chartFinancePerMonth") : detail === "fines" ? t("chartFinesByType") : t("chartSessionsPerGroup")
-          }
-          onClose={() => setDetail(null)}
-          className="mobile-sheet mobile-sheet-tall"
-        >
-          <div className="mobile-hbar-list">
-            {detail === "members"
-              ? members.map((row) => <HBar key={row.name} label={row.name} value={attendanceRate(row)} max={100} display={`${attendanceRate(row)}%`} tone="success" />)
-              : null}
-            {detail === "finance"
-              ? finance.map(([month, row]) => (
-                  <div key={month} className="mobile-hbar-group">
-                    <div className="mobile-eyebrow">{new Intl.DateTimeFormat(toIntlLocale(locale), { month: "long", year: "numeric" }).format(new Date(`${month}-01T12:00:00`))}</div>
-                    <HBar label={t("income")} value={row.income} max={financeMax} display={money(row.income, locale)} tone="success" />
-                    <HBar label={t("expenses")} value={row.expenses} max={financeMax} display={money(row.expenses, locale)} tone="danger" />
+        <MobileCard className="mobile-list-card">
+          <MobileCardHeader
+            label={t("membersShort")}
+            action={
+              ownScope ? undefined : (
+                <MobileSegmented
+                  compact
+                  ariaLabel={t("sortLabel")}
+                  value={sort}
+                  onChange={setSort}
+                  options={[
+                    { value: "low", label: t("sortLowShort") },
+                    { value: "high", label: t("sortHighShort") },
+                  ]}
+                />
+              )
+            }
+          />
+          {members.length === 0 ? <p className="mobile-card-empty">{t("noAttendanceData")}</p> : null}
+          {shownMembers.map((row) => (
+            <div key={row.name} className="stats-mobile-member">
+              <div className="stats-mobile-member-head">
+                <span>{row.name}</span>
+                <span className={`stats-row-value${row.rate < LOW_ATTENDANCE_RATE ? " stats-row-value-low" : ""}`}>{percentLabel(row.rate, locale)}</span>
+              </div>
+              <StackedBar
+                segments={[
+                  { series: "present", value: row.present },
+                  { series: "late", value: row.late },
+                  { series: "excused", value: row.excused },
+                  { series: "absent", value: row.absent },
+                ]}
+              />
+            </div>
+          ))}
+          {members.length > MEMBER_PREVIEW ? (
+            <button type="button" className="mobile-text-button stats-mobile-more" onClick={() => setAllMembers(!allMembers)}>
+              {allMembers ? t("showFewerMembers") : t("showAllMembers", { count: members.length })}
+            </button>
+          ) : null}
+        </MobileCard>
+
+        {finesVisible ? (
+          <MobileCard className="mobile-list-card">
+            <div className="stats-mobile-fines-head">
+              <div>
+                <div className="mobile-eyebrow">{ownScope ? t("kpiMyFines") : t("kpiFines")}</div>
+                <div className="stats-mobile-total">{fmt.fineTotals(fineTotals)}</div>
+              </div>
+              {previousFineTotals ? <span className="mobile-muted-sm">{t("previousShort", { value: fmt.fineTotals(previousFineTotals) })}</span> : null}
+            </div>
+            <div className="stats-type-list stats-mobile-pad">
+              {types.length === 0 ? <p className="mobile-card-empty">{t("noFines")}</p> : null}
+              {types.map((row) => (
+                <div key={row.fineType} className="stats-type">
+                  <div className="stats-type-head">
+                    <span>{row.fineType === "absent" || row.fineType === "late" ? t(`fineType.${row.fineType}`) : row.fineType}</span>
+                    <span className="stats-type-figures">
+                      {t("fineTypeCount", { count: row.count })} · <strong>{fmt.fineTotals(row.totals)}</strong>
+                    </span>
                   </div>
-                ))
-              : null}
-            {detail === "fines" ? data.fines_by_type.map((row) => <HBar key={`${row.fine_type}-${row.currency ?? ""}`} label={`${row.fine_type === "absent" || row.fine_type === "late" ? t(`fineType.${row.fine_type}`) : row.label} (${row.count})`} value={row.amount} max={finesMax} display={[money(row.amount, locale), row.currency].filter(Boolean).join(" ")} tone="danger" />) : null}
-            {detail === "groups" ? data.groups_stats.map((row, index) => <HBar key={`${row.group_name}-${index}`} label={row.group_name} value={row.session_count} max={groupsMax} display={String(row.session_count)} />) : null}
-            {(detail === "finance" && finance.length === 0) || (detail === "members" && members.length === 0) ? <p className="mobile-card-empty">{t("noDataAvailable")}</p> : null}
+                  <ProgressBar value={typeMax > 0 ? mainAmount(row.totals) / typeMax : 0} series={row.fineType === "late" ? "late" : "absent"} />
+                </div>
+              ))}
+            </div>
+            {finePeople.map((row) => (
+              <div key={row.key} className="stats-mobile-row">
+                <span className="stats-mobile-row-name">{row.name}</span>
+                <span className="mobile-muted-sm">{t("fineTypeCount", { count: row.count })}</span>
+                <span className="stats-mobile-row-amount">{fmt.fineTotals(row.totals)}</span>
+              </div>
+            ))}
+          </MobileCard>
+        ) : null}
+
+        {showFinance && finance ? (
+          <MobileCard className="mobile-chart-card">
+            <MobileCardHeader label={t("financeAllAccountsTitle")} />
+            <div className="stats-mobile-finance-totals">
+              {[
+                { key: "income", label: t("income"), value: fmt.money(finance.income, finance.currency ?? ""), previous: finance.previous ? fmt.money(finance.previous.income, finance.currency ?? "") : null, tone: "" },
+                { key: "expenses", label: t("expenses"), value: fmt.money(finance.expenses, finance.currency ?? ""), previous: finance.previous ? fmt.money(finance.previous.expenses, finance.currency ?? "") : null, tone: "" },
+                {
+                  key: "net",
+                  label: t("financeResult"),
+                  value: fmt.signedMoney(finance.net, finance.currency ?? ""),
+                  previous: finance.previous ? fmt.signedMoney(finance.previous.net, finance.currency ?? "") : null,
+                  tone: finance.net >= 0 ? " stats-value-good" : " stats-value-bad",
+                },
+              ].map((item) => (
+                <div key={item.key}>
+                  <div className="mobile-muted-sm">{item.label}</div>
+                  <div className={`stats-mobile-finance-value${item.tone}`}>{item.value}</div>
+                  {item.previous ? <div className="mobile-muted-sm">{t("previousAbbrev", { value: item.previous })}</div> : null}
+                </div>
+              ))}
+            </div>
+            <div className="stats-panel-title">{t("financeResultPerMonth")}</div>
+            <DivergingMonthChart
+              compact
+              months={finance.months}
+              scale={finance.scale}
+              locale={locale}
+              title={(month) => t("financeMonthTooltip", { month: fmt.monthYear(month.month), value: fmt.signedMoney(month.net, finance.currency ?? "") })}
+            />
+          </MobileCard>
+        ) : null}
+
+        <MobileCard className="mobile-list-card">
+          <div className="stats-mobile-groups-head">
+            <div className="mobile-eyebrow">{t("sectionGroups")}</div>
+            <div className="mobile-muted-sm">{t("groupsMobileIntro")}</div>
           </div>
-        </Modal>
-      ) : null}
-    </div>
-  );
-}
-
-/** Kompakte Statistik-Karte unten auf der Übersicht. */
-export function MobileStatsCard() {
-  const t = useTranslations("statistics");
-  const tMobile = useTranslations("mobile");
-  const locale = useLocale();
-  const router = useRouter();
-  const [data, setData] = useState<StatisticsOverview | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    browserApiFetch<StatisticsOverview>("/api/statistics/overview")
-      .then((overview) => {
-        if (!cancelled) setData(overview);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  if (!data || data.protocols_total === 0) return null;
-  const recent = data.attendance_over_time.slice(-6);
-  const totals = recent.reduce((sum, row) => ({ present: sum.present + row.present, total: sum.total + row.total }), { present: 0, total: 0 });
-  const finesTotal = formatFineTotals(fineTotalsByCurrency(data.fines_by_type), (amount) => money(amount, locale));
-
-  return (
-    <MobileCard className="mobile-chart-card">
-      <MobileCardHeader
-        label={tMobile("stats.cardTitle")}
-        action={
-          <button type="button" className="mobile-text-button" onClick={() => router.push("/statistics" as Route)}>
-            {tMobile("common.all")}
-          </button>
-        }
-      />
-      {recent.length > 0 ? <MobileMonthBars items={recent.map((row) => ({ month: row.month, value: attendanceRate(row) }))} locale={locale} /> : null}
-      <div className="mobile-stats-row">
-        <div>
-          <div className="mobile-stat-value">{totals.total > 0 ? `${Math.round((totals.present / totals.total) * 100)}%` : "—"}</div>
-          <div className="mobile-muted-sm">{t("present")}</div>
-        </div>
-        <div>
-          <div className="mobile-stat-value">{data.todos.open}</div>
-          <div className="mobile-muted-sm">{tMobile("stats.todosOpen")}</div>
-        </div>
-        <div>
-          <div className="mobile-stat-value">{finesTotal}</div>
-          <div className="mobile-muted-sm">{t("kpiFinesAmount")}</div>
-        </div>
+          {groups.length === 0 ? <p className="mobile-card-empty">{data.groups_source_configured ? t("groupsEmptyNoEvents") : t("groupsEmptyNoSource")}</p> : null}
+          {groups.map((row) => (
+            <div key={row.name} className="stats-mobile-row">
+              <span className="stats-mobile-row-name">{row.name}</span>
+              <span className="mobile-muted-sm">{t("groupSessionsCount", { count: row.sessions })}</span>
+              <span className="stats-mobile-row-amount">{t("groupAvgValue", { value: fmt.number(row.avgParticipants, 1) })}</span>
+            </div>
+          ))}
+        </MobileCard>
       </div>
-    </MobileCard>
+    </div>
   );
 }

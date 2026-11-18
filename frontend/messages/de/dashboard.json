@@ -41,5 +41,22 @@
   "tomorrow": "Morgen",
   "unexcuseTitle": "Wieder auf unentschuldigt setzen",
   "upcomingEventsEyebrow": "Kommende Termine",
-  "excuseNoPermission": "Nur wer Protokolle bearbeiten darf, kann hier entschuldigen."
+  "excuseNoPermission": "Nur wer Protokolle bearbeiten darf, kann hier entschuldigen.",
+  "statsFinesOpen": "Bussen offen",
+  "statisticsLink": "Statistik",
+  "agendaWithDeadlinesTitle": "Termine & Fristen",
+  "allEventsLink": "Alle Termine",
+  "thisWeek": "Diese Woche",
+  "nextWeek": "Nächste Woche",
+  "kind": {
+    "session": "Sitzung",
+    "event": "Termin",
+    "deadline": "Frist"
+  },
+  "deadlineSub": "Abgabe",
+  "attendanceEyebrow": "Anwesenheit",
+  "expectedCount": "{count} erwartet",
+  "excusedCount": "{count} entschuldigt",
+  "excuseHint": "Klick auf eine Person, um sie zu entschuldigen oder die Entschuldigung zurückzunehmen.",
+  "withoutProtocol": "Ohne Protokoll"
 }

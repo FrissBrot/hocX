@@ -41,5 +41,22 @@
   "tomorrow": "Domani",
   "unexcuseTitle": "Segna di nuovo come non giustificato",
   "upcomingEventsEyebrow": "Prossimi appuntamenti",
-  "excuseNoPermission": "Solo chi può modificare i verbali può giustificare qui."
+  "excuseNoPermission": "Solo chi può modificare i verbali può giustificare qui.",
+  "statsFinesOpen": "Multe aperte",
+  "statisticsLink": "Statistiche",
+  "agendaWithDeadlinesTitle": "Appuntamenti e scadenze",
+  "allEventsLink": "Tutti gli appuntamenti",
+  "thisWeek": "Questa settimana",
+  "nextWeek": "Settimana prossima",
+  "kind": {
+    "session": "Seduta",
+    "event": "Appuntamento",
+    "deadline": "Scadenza"
+  },
+  "deadlineSub": "Consegna",
+  "attendanceEyebrow": "Presenze",
+  "expectedCount": "{count} attesi",
+  "excusedCount": "{count} giustificati",
+  "excuseHint": "Fai clic su una persona per giustificarla o ritirare la giustificazione.",
+  "withoutProtocol": "Senza verbale"
 }

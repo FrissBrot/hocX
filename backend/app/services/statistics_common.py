@@ -230,7 +230,12 @@ def fetch_fines_by_participant(
                 COALESCE('id:' || af.participant_id::text, 'name:' || af.participant_name_snapshot) AS participant_key,
                 fa.currency_label AS currency,
                 COUNT(*) AS count,
-                SUM(af.amount) AS amount
+                SUM(af.amount) AS amount,
+                -- Aufteilung nach Art für das gestapelte Diagramm «Bussen pro Person» (Dashboard v2)
+                COUNT(*) FILTER (WHERE af.fine_type = 'absent') AS absent_count,
+                COUNT(*) FILTER (WHERE af.fine_type = 'late') AS late_count,
+                COALESCE(SUM(af.amount) FILTER (WHERE af.fine_type = 'absent'), 0) AS absent_amount,
+                COALESCE(SUM(af.amount) FILTER (WHERE af.fine_type = 'late'), 0) AS late_amount
             FROM attendance_fine af
             JOIN protocol p ON p.id = af.protocol_id
             JOIN finance_account fa ON fa.id = af.account_id
@@ -272,6 +277,168 @@ def fetch_fines_by_type(
         """),
         {"tenant_id": tenant_id, "date_start": bounds[0] if bounds else None, "date_end": bounds[1] if bounds else None, **template_params},
     ).all()
+
+
+def fetch_fines_status(
+    db: Session,
+    tenant_id: int,
+    bounds: tuple[date, date] | None = None,
+    template_ids: set[int] | None = None,
+    participant_id: int | None = None,
+) -> list[Row]:
+    """Bezahlte (eingezogene) und offene Bussen je Währung (Dashboard v2, «Bezahlt / offen").
+    ``participant_id`` schränkt auf die Bussen einer Person ein (Sicht ohne reports.personal,
+    PRIV-001). Gelöschte Bussen zählen nicht."""
+    template_filter, template_params = _template_sql(template_ids)
+    person_filter = "" if participant_id is None else " AND af.participant_id = :participant_id"
+    return db.execute(
+        text(  # sql-ok: nur feste Teilabfragen/Ausdrücke aus diesem Modul, Werte gebunden
+            f"""
+            SELECT
+                fa.currency_label AS currency,
+                COUNT(*) FILTER (WHERE af.status = 'collected') AS paid_count,
+                COALESCE(SUM(af.amount) FILTER (WHERE af.status = 'collected'), 0) AS paid_amount,
+                COUNT(*) FILTER (WHERE af.status = 'pending') AS open_count,
+                COALESCE(SUM(af.amount) FILTER (WHERE af.status = 'pending'), 0) AS open_amount
+            FROM attendance_fine af
+            JOIN protocol p ON p.id = af.protocol_id
+            JOIN finance_account fa ON fa.id = af.account_id
+            WHERE p.tenant_id = :tenant_id
+              AND af.status <> 'deleted'
+              AND (CAST(:date_start AS date) IS NULL OR p.protocol_date >= :date_start)
+              AND (CAST(:date_end AS date) IS NULL OR p.protocol_date <= :date_end)
+              {template_filter}{person_filter}
+            GROUP BY fa.currency_label
+            ORDER BY fa.currency_label
+        """),
+        {
+            "tenant_id": tenant_id, "date_start": bounds[0] if bounds else None, "date_end": bounds[1] if bounds else None,
+            **template_params, **({} if participant_id is None else {"participant_id": participant_id}),
+        },
+    ).all()
+
+
+# ── Todo-Kennzahlen (Dashboard v2) ──────────────────────────────────────────────
+
+# Ab wie vielen Tagen eine überfällige Pendenz als «lange überfällig» gilt.
+TODO_LONG_OVERDUE_DAYS = 30
+
+
+@dataclass
+class TodoPersonLoad:
+    key: str
+    name: str
+    open: int = 0
+    overdue: int = 0
+
+
+@dataclass
+class TodoInsights:
+    overdue: int = 0
+    overdue_long: int = 0
+    avg_days_to_done: float | None = None
+    done_with_duration: int = 0
+    open_by_person: list[TodoPersonLoad] = field(default_factory=list)
+
+
+def fetch_todo_insight_rows(
+    db: Session, tenant_id: int, bounds: tuple[date, date] | None = None, template_ids: set[int] | None = None,
+) -> list[Row]:
+    """Pendenzen des Zeitraums mit aufgelöster Fälligkeit und Verantwortlichen - dieselbe Basis
+    wie die Pendenzenliste (ProtocolTodoRepository._base_todo_query), damit «überfällig» hier und
+    dort dasselbe bedeutet. Zeitraum und Vorlagen-Filter wie fetch_todo_rows; zum Löschen
+    vorgemerkte Pendenzen zählen nicht."""
+    from app.repositories.protocol_todo_repository import ProtocolTodoRepository
+
+    query, *_ = ProtocolTodoRepository()._base_todo_query()
+    query = query.where(ProtocolTodo.tenant_id == tenant_id, ProtocolTodo.pending_delete.is_(False))
+    query = query.where(*_date_conditions(func.coalesce(Protocol.protocol_date, cast(ProtocolTodo.created_at, Date)), bounds))
+    if template_ids is not None:
+        query = query.where(Protocol.template_id.in_(template_ids))
+    return db.execute(query).all()
+
+
+def _todo_assignee_ids(row) -> list[int]:
+    todo = row[0]
+    ids = list(row.assignee_ids or [])
+    if not ids and todo.assigned_participant_id:
+        ids = [todo.assigned_participant_id]
+    return ids
+
+
+def aggregate_todo_insights(db: Session, tenant_id: int, rows: list[Row], today: date) -> TodoInsights:
+    """Überfällige (offen, Fälligkeit vor heute), davon lange überfällige, Ø Tage von der
+    Erfassung bis zur Erledigung (nur erledigte, nicht abgebrochene) und offene Pendenzen je
+    verantwortlicher Person (Schlüssel ``id:<app_user.id>`` wie bei Anwesenheit und Bussen)."""
+    from app.models.entities import Participant
+    from app.services.todo_fine_service import local_date
+
+    insights = TodoInsights()
+    durations: list[int] = []
+    loads: dict[int, TodoPersonLoad] = {}
+    for row in rows:
+        todo = row[0]
+        code = row.todo_status_code
+        is_done = code in ("done", "cancelled") or todo.completed_at is not None
+        if is_done:
+            if code != "cancelled" and todo.completed_at is not None and todo.created_at is not None:
+                durations.append(max(0, (local_date(todo.completed_at) - local_date(todo.created_at)).days))
+            continue
+        due = row.resolved_due_date
+        overdue = due is not None and due < today
+        if overdue:
+            insights.overdue += 1
+            if (today - due).days > TODO_LONG_OVERDUE_DAYS:
+                insights.overdue_long += 1
+        for participant_id in _todo_assignee_ids(row):
+            load = loads.setdefault(participant_id, TodoPersonLoad(key=f"id:{participant_id}", name=""))
+            load.open += 1
+            if overdue:
+                load.overdue += 1
+
+    if durations:
+        insights.avg_days_to_done = round(sum(durations) / len(durations), 1)
+        insights.done_with_duration = len(durations)
+    if loads:
+        names = dict(
+            db.execute(
+                select(Participant.id, Participant.display_name).where(
+                    Participant.tenant_id == tenant_id, Participant.id.in_(list(loads))
+                )
+            ).all()
+        )
+        # Nur Personen des eigenen Mandanten (Namen fremder IDs werden nie geladen).
+        insights.open_by_person = sorted(
+            (TodoPersonLoad(key=load.key, name=names[pid] or "", open=load.open, overdue=load.overdue)
+             for pid, load in loads.items() if pid in names),
+            key=lambda item: (-item.open, -item.overdue, item.name),
+        )
+    return insights
+
+
+# ── Zeiträume (Kalenderjahr, Vorjahresvergleich) ───────────────────────────────
+
+def calendar_year_bounds(year: int) -> tuple[date, date]:
+    return date(year, 1, 1), date(year, 12, 31)
+
+
+def previous_year_bounds(year: int, today: date) -> tuple[date, date]:
+    """Gleicher Zeitraum im Vorjahr: für das laufende Jahr 1.1. bis «heute vor einem Jahr»
+    (sonst vergliche ein halbes Jahr mit einem ganzen), für vergangene Jahre das ganze Vorjahr."""
+    start, end = calendar_year_bounds(year - 1)
+    if year == today.year:
+        day = 28 if today.month == 2 and today.day == 29 else today.day
+        end = date(year - 1, today.month, day)
+    return start, end
+
+
+def fetch_protocol_years(db: Session, tenant_id: int, template_ids: set[int] | None = None) -> list[int]:
+    """Jahre mit durchgeführten/abgeschlossenen Protokollen (Auswahl der Statistik)."""
+    conditions = [Protocol.tenant_id == tenant_id, Protocol.status.in_(["durchgeführt", "abgeschlossen"]), Protocol.protocol_date.is_not(None)]
+    if template_ids is not None:
+        conditions.append(Protocol.template_id.in_(template_ids))
+    year = func.extract("year", Protocol.protocol_date)
+    return sorted({int(value) for value in db.scalars(select(year).where(*conditions).distinct()).all() if value is not None})
 
 
 # ── Finance ───────────────────────────────────────────────────────────────────

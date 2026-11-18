@@ -12522,6 +12522,11 @@ a.mobile-list-row { color: var(--text); }
   background: var(--primary);
 }
 
+/* Ältere Monate gedämpft, der aktuelle Monat in voller Farbe (Statistik-Karte, Dashboard v2) */
+.mobile-bar-fill-soft {
+  background: color-mix(in srgb, var(--primary) 28%, transparent);
+}
+
 .mobile-bar-label {
   color: var(--muted);
   font-size: var(--text-xs);

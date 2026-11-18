@@ -14,6 +14,14 @@ export const CHART_COLORS = {
   fines: "var(--warning)",
   sessions: "var(--chart-1)",
   participants: "var(--chart-2)",
+  // Dashboard v2 (Statistik-Balken in app/styles/statistics.css, Klassen stats-fill-<reihe>):
+  late: "var(--chart-5)",
+  onTrack: "var(--chart-1)",
+  paid: "var(--success)",
+  finesOpen: "var(--warning)",
+  surplus: "var(--success)",
+  deficit: "var(--danger)",
+  previous: "var(--text)",
 } as const;
 
 export const CHART_PIE_PALETTE = [

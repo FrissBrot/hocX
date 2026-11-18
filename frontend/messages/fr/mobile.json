@@ -222,7 +222,10 @@
     "finesCount": "{count, plural, one {# amende} other {# amendes}}",
     "attendancePerMember": "Présence par membre",
     "cardTitle": "Statistiques · 6 derniers mois",
-    "todosOpen": "Tâches ouvertes"
+    "todosOpen": "Tâches ouvertes",
+    "cardTitleYear": "Statistiques · {year}",
+    "finesShort": "Amendes",
+    "present": "Présent"
   },
   "submissions": {
     "fab": "Dépôt"
