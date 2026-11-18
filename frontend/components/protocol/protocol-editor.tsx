@@ -88,6 +88,7 @@ import {
   WHEEL_HOLD_MAX_MS,
   wheelVars,
 } from "@/components/protocol/document-scroll";
+import { localIsoDate } from "@/lib/documents/todo-export-filter";
 
 type ProtocolEditorProps = {
   protocol: ProtocolSummary;
@@ -818,7 +819,7 @@ export function ProtocolEditor({
   const sessionDueEvents = useMemo(() => {
     const tpl = availableTemplates.find((template) => template.id === protocol.template_id);
     const tag = tpl?.todo_due_event_tag?.trim().toLowerCase();
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localIsoDate();
     const upcoming = events.filter((event) => event.event_date >= today);
     return tag ? upcoming.filter((event) => (event.tag ?? "").toLowerCase().includes(tag)) : upcoming;
   }, [availableTemplates, protocol.template_id, events]);

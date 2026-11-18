@@ -21,6 +21,7 @@ import {
   ProtocolSummary,
   ProtocolTodo,
 } from "@/types/api";
+import { localIsoDate } from "@/lib/documents/todo-export-filter";
 // Next-intl Translator-Funktion, durchgereicht an reine Hilfsfunktionen (keine eigenen
 // Komponenten, koennen daher nicht selbst useTranslations() aufrufen) - siehe
 // frontend/components/ui/app-shell-nav.ts::formatRoleLabel(role, t) fuer dasselbe Muster.
@@ -219,7 +220,7 @@ export type ProtocolEventDraft = {
 
 export function createProtocolEventDraft(protocolDate: string | undefined, defaultTag = ""): ProtocolEventDraft {
   return {
-    event_date: protocolDate || new Date().toISOString().slice(0, 10),
+    event_date: protocolDate || localIsoDate(),
     event_end_date: "",
     tag: defaultTag,
     title: "",

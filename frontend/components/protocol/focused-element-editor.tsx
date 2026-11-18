@@ -108,6 +108,7 @@ import { ChartBlockRenderer } from "@/components/protocol/chart-block-renderer";
 import { SessionTodosSection } from "@/components/protocol/session-todos-section";
 import { PdfOmittedHint } from "@/components/protocol/pdf-omitted-hint";
 import type { PdfCoverageEntry } from "@/components/protocol/use-pdf-coverage";
+import { localIsoDate } from "@/lib/documents/todo-export-filter";
 
 function FocusedElementEditorImpl({
   collab,
@@ -3488,7 +3489,7 @@ function FocusedElementEditorImpl({
                       value={String(blockConfig.selected_date ?? "")}
                       readOnly={!blockEditable}
                       onChange={(value) => { if (blockEditable) patchBlockConfigValue(block.id, "selected_date", value || null, blockConfig); }}
-                      onPickerClick={() => setSessionDatePicker({ blockId: block.id, todayIso: new Date().toISOString().slice(0, 10) })}
+                      onPickerClick={() => setSessionDatePicker({ blockId: block.id, todayIso: localIsoDate() })}
                     />
                   </div>
                   <label className="session-date-main session-date-time">
@@ -3598,7 +3599,7 @@ function FocusedElementEditorImpl({
                 const canAddTransactions = canManageFinances && blockEditable && !!addFinanceTransaction;
                 const addForm = canAddTransactions ? (
                   <FinanceTransactionForm
-                    defaultDate={protocol.protocol_date ?? new Date().toISOString().slice(0, 10)}
+                    defaultDate={protocol.protocol_date ?? localIsoDate()}
                     currency={account.currency_label}
                     onAdd={(values) => addFinanceTransaction!(account.id, values)}
                   />

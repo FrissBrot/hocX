@@ -26,6 +26,7 @@ import { formatDate, formatDateTime, toIntlLocale } from "@/lib/utils/format";
 import { ProtocolListCycle, ProtocolSummary, ProtocolTemplateSyncResult, TemplateSummary } from "@/types/api";
 import { protocolStatusLabel, protocolStatusVariant } from "@/components/protocol/protocol-status";
 import { ProtocolCycleGroup, groupProtocolsByCycle, visibleCycleGroupCount } from "@/components/protocol/protocol-cycle-groups";
+import { localIsoDate } from "@/lib/documents/todo-export-filter";
 
 const PAGE_SIZE = 100;
 const SERVER_SEARCH_DEBOUNCE_MS = 300;
@@ -121,7 +122,7 @@ export function ProtocolBuilder({ initialProtocols, templates, readOnly = false,
   const [form, setForm] = useState<ProtocolFormState>({
     template_id: templates.find((template) => template.id === preferredTemplateId)?.id ?? templates[0]?.id ?? "",
     protocol_number: "",
-    protocol_date: new Date().toISOString().slice(0, 10),
+    protocol_date: localIsoDate(),
     title: ""
   });
   const selectedTemplate = useMemo(
