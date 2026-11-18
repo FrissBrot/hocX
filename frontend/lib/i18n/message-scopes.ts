@@ -57,7 +57,7 @@ export const AREA_NAMESPACES = {
   files: ["files", "sharedLinks"],
   finances: ["documentStudio", "finances"],
   lists: ["documentStudio", "lists", "protocols"],
-  participants: ["files", "participants", "sharedLinks", "users"],
+  participants: ["files", "participants", "roles", "sharedLinks", "users"],
   // Benutzer-, Rollen-, Zyklen- und Freigabeverwaltung teilen sich dieselben Bausteine.
   people: ["cycles", "roles", "sharedLinks", "users"],
   photos: ["files", "photos", "protocols", "sharedLinks"],

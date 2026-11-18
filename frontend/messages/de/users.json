@@ -98,5 +98,51 @@
     "confirmMessage": "{name} kann sich danach nicht mehr anmelden; laufende Sitzungen enden sofort. Die Person bleibt als Mitglied mit Anwesenheit, Bussen und Aufgaben erhalten. Ganz löschen kannst du sie unter «Mitglieder».",
     "done": "Login von {name} entzogen",
     "failed": "Der Login konnte nicht entzogen werden"
+  },
+  "security": {
+    "title": "Sicherheit",
+    "description": "Welche Sicherheitsregeln für die Logins deiner Organisation gelten.",
+    "adminTitle": "MFA bei Administrationsrechten",
+    "adminHelp": "Wer eine Rolle mit «Einstellungen», «Benutzer & Rollen» oder «Datenexporte» hat, meldet sich immer mit zweitem Faktor an.",
+    "alwaysRequired": "Immer Pflicht",
+    "allTitle": "MFA für alle Logins verlangen",
+    "allHelp": "Auch Schreiber, Kassier und Leser richten beim nächsten Login einen zweiten Faktor ein. Bis dahin ist ihre Sitzung gesperrt.",
+    "missingRequired": "{count, plural, one {# von {total} Logins hat} other {# von {total} Logins haben}} noch kein MFA und {count, plural, one {wird} other {werden}} beim nächsten Login zur Einrichtung geführt.",
+    "missingOptional": "{count, plural, one {# von {total} Logins hat} other {# von {total} Logins haben}} noch kein MFA.",
+    "allHaveMfa": "Alle {total} Logins haben MFA eingerichtet.",
+    "loadFailed": "Die Sicherheitseinstellungen konnten nicht geladen werden.",
+    "docs": "Mehr zu MFA",
+    "enableConfirmTitle": "MFA für alle Logins verlangen?",
+    "enableConfirmMessage": "{count, plural, =0 {Alle Logins haben bereits MFA.} one {# Login ohne MFA wird sofort abgemeldet und muss beim nächsten Login einen zweiten Faktor einrichten.} other {# Logins ohne MFA werden sofort abgemeldet und müssen beim nächsten Login einen zweiten Faktor einrichten.}}",
+    "enableConfirm": "MFA verlangen",
+    "enabledToast": "MFA ist jetzt für alle Logins Pflicht",
+    "disabledToast": "MFA ist nur noch bei Administrationsrechten Pflicht",
+    "saveFailed": "Die Einstellung konnte nicht gespeichert werden."
+  },
+  "access": {
+    "title": "Wer hat Zugriff",
+    "description": "Übersicht aller Logins und Einladungen. Logins und Rollen einer Person änderst du auf ihrer Personenseite unter «Mitglieder».",
+    "filterAll": "Alle",
+    "filterMfaMissing": "MFA fehlt",
+    "empty": "Niemand in dieser Auswahl.",
+    "columns": {
+      "person": "Person",
+      "status": "Status",
+      "roles": "Rollen",
+      "mfa": "MFA"
+    },
+    "footerHint": "Nur Übersicht · Klick öffnet die Personenseite",
+    "noEmail": "Keine E-Mail",
+    "status": {
+      "active": "Aktiv",
+      "invited": "Eingeladen",
+      "inactive": "Inaktiv"
+    },
+    "noRole": "Keine Rolle",
+    "mfa": {
+      "active": "MFA aktiv",
+      "missing": "MFA fehlt",
+      "optional": "Ohne MFA"
+    }
   }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { ActionMenu } from "@/components/ui/action-menu";
@@ -13,6 +13,7 @@ import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { apiErrorMessage } from "@/lib/api/error-message";
 import { HelpPopover } from "@/components/ui/help-popover";
+import { roleNeedsMfa } from "@/components/users/access-helpers";
 import { expandPermissions, minimalPermissions, roleName } from "@/lib/permissions";
 import { PERMISSION_AREAS, PERMISSIONS, type PermissionKey } from "@/lib/permissions.generated";
 import type { RoleRead } from "@/types/api";
@@ -24,6 +25,8 @@ type Props = {
   enabledFeatures: string[];
   // Eigene Rollen anlegen/ändern (Abo-Feature custom_roles); sonst nur ansehen und zuweisen
   canCustomize: boolean;
+  // Deep-Link ?role=<id>: diese Rolle beim Laden im Editor öffnen (unbekannte IDs: nichts)
+  initialRoleId?: string | null;
 };
 
 type RoleForm = {
@@ -56,7 +59,7 @@ function emptyForm(): RoleForm {
 
 /** Rollen des Mandanten: anlegen, benennen, Berechtigungen zuordnen, löschen. Die Bereiche sind
  * nur Anzeige-Kategorien (permissions/catalog.json), keine eigenen Objekte. */
-export function RoleManagement({ initialRoles, actorPermissions, enabledFeatures, canCustomize }: Props) {
+export function RoleManagement({ initialRoles, actorPermissions, enabledFeatures, canCustomize, initialRoleId = null }: Props) {
   const t = useTranslations("roles");
   const tNav = useTranslations("nav");
   const tUsers = useTranslations("users");
@@ -82,6 +85,16 @@ export function RoleManagement({ initialRoles, actorPermissions, enabledFeatures
       locked: role.locked || !canCustomize,
     });
   }
+
+  const openedDeepLink = useRef<string | null>(null);
+  useEffect(() => {
+    if (!initialRoleId || openedDeepLink.current === initialRoleId) return;
+    openedDeepLink.current = initialRoleId;
+    const role = roles.find((item) => item.id === initialRoleId);
+    if (role) openRole(role);
+    // Nur beim Laden bzw. bei geändertem Parameter, nicht bei jeder Änderung der Rollenliste
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialRoleId]);
 
   function toggle(key: PermissionKey, checked: boolean) {
     setForm((current) => {
@@ -153,6 +166,7 @@ export function RoleManagement({ initialRoles, actorPermissions, enabledFeatures
               <span className="roles-table-name">
                 <strong>{roleName(role, tNav)}</strong>
                 <RoleBadge role={role} />
+                {roleNeedsMfa(role) ? <Badge variant="warning">{t("badges.mfa")}</Badge> : null}
               </span>
               <span className="field-help">{role.description ?? (role.system_key ? tUsers(`roleDescriptions.${role.system_key}`) : "")}</span>
             </td>

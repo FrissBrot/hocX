@@ -46,6 +46,8 @@ export type PendingMfaLogin = {
   status: "setup_required" | "verification_required";
   ticket: string;
   required: boolean;
+  /** Pflicht kommt aus der Einstellung «MFA für alle Logins» der Organisation */
+  required_by_tenant?: boolean;
   user_display_name: string;
   user_email: string;
   tenant_name: string | null;
@@ -112,6 +114,15 @@ export type TenantSummary = {
   identity_verification_revoked?: boolean;
   /** Organisation durch hocX bestätigt - eine Namensänderung hebt das auf. */
   identity_verified?: boolean;
+  /** MFA für alle Logins der Organisation verlangt (Zugriff › Sicherheit) */
+  require_mfa?: boolean;
+};
+
+/** GET/PUT /api/users/mfa-policy */
+export type TenantMfaPolicy = {
+  require_mfa: boolean;
+  logins_total: number;
+  logins_without_mfa: number;
 };
 
 export type TenantSubscriptionFeature = {
@@ -699,6 +710,8 @@ export type UserSummary = {
   tenant_name: string;
   roles: RoleRef[];
   login_enabled: boolean;
+  /** Mindestens ein MFA-Faktor eingerichtet */
+  mfa_enabled?: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -1313,6 +1326,16 @@ export type ParticipantSummary = {
   exclude_from_attendance?: boolean;
   created_at: string;
   updated_at: string;
+  /** Nur Mitgliederliste/Personenseite: Login aktiv, eingeladen oder keiner */
+  login_status?: "active" | "invited" | "none";
+  roles?: RoleRef[];
+  /** Bussentarif (null = Standard); nur mit finances.read gefüllt */
+  tariff_id?: string | null;
+};
+
+export type ParticipantBulkResult = {
+  done: string[];
+  skipped: { participant_id: string; reason: string }[];
 };
 
 export type EventSummary = {

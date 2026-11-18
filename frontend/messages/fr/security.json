@@ -132,6 +132,8 @@
     "passkey_unknown": "Cette passkey n'appartient pas à ce compte.",
     "passkey_already_registered": "Cette passkey est déjà enregistrée.",
     "rate_limited": "Trop de tentatives. Veuillez patienter un instant puis réessayer.",
-    "login_locked": "Trop de connexions échouées. Veuillez patienter 15 minutes puis réessayer."
+    "login_locked": "Trop de connexions échouées. Veuillez patienter 15 minutes puis réessayer.",
+    "mfa_policy_own_mfa_missing": "Configurez d'abord la MFA pour votre propre compte.",
+    "mfa_setup_required": "Votre organisation exige la MFA. Reconnectez-vous et configurez un second facteur."
   }
 }

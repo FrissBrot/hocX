@@ -11,7 +11,7 @@ from app.core.rate_limit import check_account_lockout, record_failed_attempt
 from app.core.permissions import P
 from app.core.security import CurrentUser, hash_password, require_permission, verify_password
 from app.core.tenant_scope import tenant_scope_suspended
-from app.models import AppUser, Tenant
+from app.models import AppUser, Tenant, UserMfaFactor
 from app.notifications import account as account_notifications
 from app.services import public_id_service, user_limit_service
 from app.services import role_service
@@ -56,6 +56,10 @@ class UserService:
             for tenant in db.scalars(select(Tenant).where(Tenant.id.in_({user.tenant_id for user in users})))
         }
         roles = role_service.roles_by_user(db, [user.id for user in users])
+        # Nur ob ein Faktor existiert (MFA-Status in «Logins & Rollen»), keine Faktordetails.
+        with_mfa = set(
+            db.scalars(select(UserMfaFactor.user_id).where(UserMfaFactor.user_id.in_([user.id for user in users])).distinct())
+        )
         result = []
         for user in users:
             external_identity = user.external_identity_json or {}
@@ -74,6 +78,7 @@ class UserService:
                     is_active=user.is_active,
                     external_identity_json=external_identity,
                     login_enabled=user.login_enabled,
+                    mfa_enabled=user.id in with_mfa,
                     joined_at=user.joined_at,
                     left_at=user.left_at,
                     created_at=user.created_at,

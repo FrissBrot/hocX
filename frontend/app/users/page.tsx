@@ -3,12 +3,12 @@ import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { UserManagement } from "@/components/users/user-management";
+import { AccessOverview } from "@/components/users/access-overview";
 import { AppShell } from "@/components/ui/app-shell";
 import { RouteTabs } from "@/components/ui/route-tabs";
 import { userAreaTabs } from "@/components/ui/section-tabs";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
-import { RoleRead, UserSummary } from "@/types/api";
+import { ParticipantInvite, RoleRead, UserSummary } from "@/types/api";
 import { can } from "@/lib/permissions";
 
 export default async function UsersPage() {
@@ -20,9 +20,10 @@ export default async function UsersPage() {
   }
 
   const t = await getTranslations("nav");
-  const [users, roles] = await Promise.all([
+  const [users, roles, invites] = await Promise.all([
     backendFetchWithSession<UserSummary[]>("/api/users"),
     backendFetchWithSession<RoleRead[]>("/api/roles"),
+    backendFetchWithSession<ParticipantInvite[]>("/api/participants/invites"),
   ]);
   const access = {
     roles: roles ?? [],
@@ -38,7 +39,12 @@ export default async function UsersPage() {
           <>
           <RouteTabs tabs={userAreaTabs(t)} activeHref="/users" />
           <section className="panel">
-            <UserManagement initialUsers={users ?? []} {...access} />
+            <AccessOverview
+              users={users ?? []}
+              invites={invites ?? []}
+              roles={roles ?? []}
+              tenantRequiresMfa={Boolean(session.current_tenant?.require_mfa)}
+            />
           </section>
           </>
         }

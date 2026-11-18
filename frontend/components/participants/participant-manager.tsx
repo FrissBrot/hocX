@@ -1,30 +1,32 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { ActionIcon } from "@/components/ui/action-icons";
-import { ActionMenu } from "@/components/ui/action-menu";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DataTable } from "@/components/ui/data-table";
 import { DateInput } from "@/components/ui/date-input";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
-import { ProtectedExportModal } from "@/components/ui/protected-export-modal";
 import { SearchInput } from "@/components/ui/search-input";
+import { Select } from "@/components/ui/select";
 import { useOpenRequest } from "@/lib/search/handoff";
 import { browserApiFetch, LONG_RUNNING_TIMEOUT_MS } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
-import { formatDate, formatDateTime } from "@/lib/utils/format";
-import { ParticipantInvite, ParticipantSummary, TemplateSummary } from "@/types/api";
+import { formatDate } from "@/lib/utils/format";
+import { roleName } from "@/lib/permissions";
+import type { FineTariffGroup, ParticipantBulkResult, ParticipantSummary, RoleRead, RoleRef, TemplateSummary } from "@/types/api";
 import { avatarTone, participantInitials } from "@/lib/utils/avatar";
 import { CSV_TEMPLATE, CsvPreview, parseParticipantCsv } from "@/lib/utils/participant-csv";
 import { apiErrorMessage } from "@/lib/api/error-message";
 import { HelpPopover } from "@/components/ui/help-popover";
 import { StatusBanner } from "@/components/ui/status-banner";
+import { defaultRoleIds } from "@/components/users/user-form-shared";
 
 // Alle Personen auf einmal laden (wie die Auswahllisten, Obergrenze der Route 2000): Suche, Tabs
 // und Zähler arbeiten sonst nur über die ersten Seiten (Bereichs-Audit 05). Darüber lädt
@@ -42,43 +44,44 @@ function downloadCsvTemplate() {
   URL.revokeObjectURL(url);
 }
 
+export type MemberListPermissions = {
+  // Login/Rollen ändern, einladen (access.manage)
+  access: boolean;
+  // Tarif sehen (finances.read) bzw. ändern (finances.manage)
+  financeRead: boolean;
+  financeManage: boolean;
+};
+
 type ParticipantManagerProps = {
   initialParticipants: ParticipantSummary[];
   templates: TemplateSummary[];
   tenantId: string | null;
-  canAdmin?: boolean;
+  // Rollen des Mandanten (nur mit access.manage geladen, sonst leer)
+  roles: RoleRead[];
+  tariffs: FineTariffGroup[];
+  permissions: MemberListPermissions;
+  // Vorbelegung des Tarif-Filters (/participants?tariff=<id>, Links aus den Bussen-Regeln)
+  initialTariffFilter?: string | null;
 };
 
-type ParticipantFormState = {
+type NewMemberForm = {
   first_name: string;
   last_name: string;
   display_name: string;
   email: string;
-  is_active: boolean;
   joined_at: string;
-  left_at: string;
-  login_enabled: boolean;
-  password: string;
-  notify_without_login: boolean;
-};
-
-const emptyForm: ParticipantFormState = {
-  first_name: "",
-  last_name: "",
-  display_name: "",
-  email: "",
-  is_active: true,
-  joined_at: "",
-  left_at: "",
-  login_enabled: false,
-  password: "",
-  notify_without_login: false,
+  template_ids: string[];
+  tariff_id: string;
+  invite: boolean;
+  role_id: string;
 };
 
 type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
 
 type StatusFilter = "all" | "active" | "inactive" | "left";
+type LoginFilter = "all" | "active" | "invited" | "none";
 type MembershipTone = "success" | "warning" | "info" | "neutral";
+type BulkModal = "invite" | "tariff" | "roles" | null;
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -113,31 +116,43 @@ function membershipInfo(participant: ParticipantSummary, today: string, t: TFunc
   return { label: t("membership.noJoinDate"), tone: "neutral" };
 }
 
-export function ParticipantManager({ initialParticipants, templates, tenantId, canAdmin = false }: ParticipantManagerProps) {
+const loginStatusOf = (participant: ParticipantSummary): Exclude<LoginFilter, "all"> =>
+  participant.login_status ?? (participant.login_enabled ? "active" : "none");
+
+function emptyNewMember(roles: RoleRead[]): NewMemberForm {
+  return {
+    first_name: "", last_name: "", display_name: "", email: "", joined_at: todayIso(), template_ids: [], tariff_id: "",
+    invite: false, role_id: defaultRoleIds(roles)[0] ?? roles[0]?.id ?? "",
+  };
+}
+
+/** Mitgliederliste (Konzept «Personen an einem Ort»): einziger Ort zum Anlegen, Spalten Login,
+ * Rollen und Tarif, Filter und Mehrfachaktionen. Ein Klick öffnet die Personenseite. */
+export function ParticipantManager({ initialParticipants, templates, tenantId, roles, tariffs, permissions, initialTariffFilter = null }: ParticipantManagerProps) {
   const t = useTranslations("participants");
-  const tUsers = useTranslations("users");
+  const tNav = useTranslations("nav");
   const tSecurity = useTranslations("security");
+  const router = useRouter();
   const showToast = useToast();
   const confirm = useConfirm();
   const [participants, setParticipants] = useState(initialParticipants);
-  const [selectedParticipant, setSelectedParticipant] = useState<ParticipantSummary | null>(null);
-  const [showModal, setShowModal] = useState(false);
-  const [exportTarget, setExportTarget] = useState<ParticipantSummary | null>(null);
   const [search, setSearch] = useState("");
-  const [loginTab, setLoginTab] = useState<"withoutLogin" | "withLogin">("withoutLogin");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("active");
-  // Einladung per E-Mail (Benachrichtigungen Phase 3): offene Einladungen je Person und ob der
-  // Versand eingerichtet ist. Nur für access.manage, wie die Login-Felder.
-  const [invites, setInvites] = useState<Record<string, ParticipantInvite>>({});
+  const [loginFilter, setLoginFilter] = useState<LoginFilter>("all");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [tariffFilter, setTariffFilter] = useState(() =>
+    initialTariffFilter && tariffs.some((tariff) => tariff.id === initialTariffFilter) ? initialTariffFilter : "all");
   const [inviteAvailable, setInviteAvailable] = useState(false);
-  const [inviteBusy, setInviteBusy] = useState(false);
   const csvInputRef = useRef<HTMLInputElement>(null);
-  const [form, setForm] = useState<ParticipantFormState>(emptyForm);
+  const [newMember, setNewMember] = useState<NewMemberForm | null>(null);
+  const [creating, setCreating] = useState(false);
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
-  const [assignedTemplateIds, setAssignedTemplateIds] = useState<string[]>([]);
+  const [bulkModal, setBulkModal] = useState<BulkModal>(null);
+  const [bulkTariff, setBulkTariff] = useState("");
+  const [bulkRoleId, setBulkRoleId] = useState("");
+  const [bulkRolesMode, setBulkRolesMode] = useState<"add" | "remove">("add");
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [csvPreview, setCsvPreview] = useState<(CsvPreview & { file: File }) | null>(null);
-  // Neue Person: nach dem Anlegen gleich per E-Mail einladen (Standardweg statt Passwort).
-  const [inviteAfterCreate, setInviteAfterCreate] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importing, setImporting] = useState(false);
 
@@ -158,39 +173,70 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
     }
   }
 
+  async function reloadAll() {
+    const next = await browserApiFetch<ParticipantSummary[]>(`/api/participants?include_former=true&limit=${PAGE_SIZE}`);
+    setParticipants(next ?? []);
+    setHasMore((next ?? []).length === PAGE_SIZE);
+  }
+
   const loadMoreSentinelRef = useInfiniteScroll({
     hasMore,
     isLoading: isLoadingMore,
     onLoadMore: () => void loadMore(),
   });
 
+  useEffect(() => {
+    if (!permissions.access) return;
+    let cancelled = false;
+    browserApiFetch<{ enabled: boolean }>("/api/auth/password-reset/available")
+      .then((result) => { if (!cancelled) setInviteAvailable(Boolean(result?.enabled)); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [permissions.access]);
+
+  // Treffer aus der globalen Suche (?open=<id>): Personenseite öffnen
+  useOpenRequest(participants, (participant) => router.push(`/participants/${participant.id}`));
+
   const today = todayIso();
+  const tariffName = useMemo(() => new Map(tariffs.map((tariff) => [tariff.id, tariff.name])), [tariffs]);
+  const defaultTariff = tariffs.find((tariff) => tariff.is_default);
+  const defaultTariffName = defaultTariff?.name ?? "";
+  // Rollen für Filter/Anzeige: mit access.manage die Rollen des Mandanten, sonst die an Personen gefundenen
+  const roleOptions = useMemo<RoleRef[]>(() => {
+    if (roles.length) return roles;
+    const seen = new Map<string, RoleRef>();
+    for (const participant of participants) for (const role of participant.roles ?? []) seen.set(role.id, role);
+    return [...seen.values()];
+  }, [roles, participants]);
+
+  const matchesSecondary = (participant: ParticipantSummary) =>
+    (loginFilter === "all" || loginStatusOf(participant) === loginFilter)
+    && (roleFilter === "all" || (participant.roles ?? []).some((role) => role.id === roleFilter))
+    // Standardtarif: alle mit diesem Tarif und alle ohne eigenen Tarif (wie die Tarifkarte zählt)
+    && (tariffFilter === "all" || (participant.tariff_id ?? "") === tariffFilter
+      || (!participant.tariff_id && (tariffFilter === "" || tariffFilter === defaultTariff?.id)));
 
   const statusCounts = useMemo(() => {
-    const group = participants.filter((participant) => Boolean(participant.login_enabled) === (loginTab === "withLogin"));
+    const group = participants.filter(matchesSecondary);
     const counts = { all: group.length, active: 0, inactive: 0, left: 0 };
     for (const participant of group) counts[participantCategory(participant, today)] += 1;
     return counts;
-  }, [participants, today, loginTab]);
-
-  const loginTabCounts = useMemo(() => {
-    let withLogin = 0;
-    for (const participant of participants) if (participant.login_enabled) withLogin += 1;
-    return { withLogin, withoutLogin: participants.length - withLogin };
-  }, [participants]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [participants, today, loginFilter, roleFilter, tariffFilter]);
 
   const filteredParticipants = useMemo(() => {
     const dir = sortDirection === "asc" ? 1 : -1;
     const query = search.trim().toLowerCase();
     return participants
-      .filter((participant) => Boolean(participant.login_enabled) === (loginTab === "withLogin"))
+      .filter(matchesSecondary)
       .filter((participant) => statusFilter === "all" || participantCategory(participant, today) === statusFilter)
       .filter((participant) => {
         const haystack = `${participant.display_name} ${participant.first_name ?? ""} ${participant.last_name ?? ""} ${participant.email ?? ""}`.toLowerCase();
         return !query || haystack.includes(query);
       })
       .sort((a, b) => a.display_name.toLowerCase().localeCompare(b.display_name.toLowerCase()) * dir);
-  }, [participants, search, statusFilter, sortDirection, today, loginTab]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [participants, search, statusFilter, sortDirection, today, loginFilter, roleFilter, tariffFilter]);
 
   const visibleIds = useMemo(() => filteredParticipants.map((participant) => participant.id), [filteredParticipants]);
   // Set statt Array.includes: bei grossen Listen sonst quadratisch pro Render.
@@ -205,183 +251,101 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
     );
   }
 
-  function openCreate() {
-    setSelectedParticipant(null);
-    setForm(emptyForm);
-    setAssignedTemplateIds([]);
-    setInviteAfterCreate(false);
-    setShowModal(true);
-  }
+  const errorText = (error: unknown, fallback: string) => apiErrorMessage(error, tSecurity, "apiErrors", fallback);
 
-  useEffect(() => {
-    if (!canAdmin) return;
-    let cancelled = false;
-    browserApiFetch<{ enabled: boolean }>("/api/auth/password-reset/available")
-      .then((result) => { if (!cancelled) setInviteAvailable(Boolean(result?.enabled)); })
-      .catch(() => undefined);
-    browserApiFetch<ParticipantInvite[]>("/api/participants/invites")
-      .then((rows) => { if (!cancelled) setInvites(Object.fromEntries(rows.map((row) => [row.participant_id, row]))); })
-      .catch(() => undefined);
-    return () => { cancelled = true; };
-  }, [canAdmin]);
-
-  async function sendInvite(participant: ParticipantSummary) {
-    setInviteBusy(true);
-    try {
-      const invite = await browserApiFetch<ParticipantInvite>(`/api/participants/${participant.id}/invite`, { method: "POST" });
-      setInvites((current) => ({ ...current, [participant.id]: invite }));
-      showToast(t("invite.sentToast", { email: participant.email ?? "" }), "success");
-    } catch (error) {
-      showToast(apiErrorMessage(error, tSecurity, "apiErrors", t("invite.failed")), "error");
-    } finally {
-      setInviteBusy(false);
-    }
-  }
-
-  async function revokeInvite(participant: ParticipantSummary) {
-    const ok = await confirm({ message: t("invite.revokeConfirm", { name: participant.display_name }), tone: "danger", confirmLabel: t("invite.revoke") });
-    if (!ok) return;
-    setInviteBusy(true);
-    try {
-      await browserApiFetch(`/api/participants/${participant.id}/invite`, { method: "DELETE" });
-      setInvites((current) => {
-        const next = { ...current };
-        delete next[participant.id];
-        return next;
-      });
-      showToast(t("invite.revokedToast"), "success");
-    } catch (error) {
-      showToast(apiErrorMessage(error, tSecurity, "apiErrors", t("invite.failed")), "error");
-    } finally {
-      setInviteBusy(false);
-    }
-  }
-
-  // Treffer aus der globalen Suche (?open=<id>): Person direkt bearbeiten
-  useOpenRequest(participants, (participant) => void openEdit(participant));
-
-  async function openEdit(participant: ParticipantSummary) {
-    setSelectedParticipant(participant);
-    setForm({
-      first_name: participant.first_name ?? "",
-      last_name: participant.last_name ?? "",
-      display_name: participant.display_name,
-      email: participant.email ?? "",
-      is_active: participant.is_active,
-      joined_at: participant.joined_at ?? "",
-      left_at: participant.left_at ?? "",
-      login_enabled: Boolean(participant.login_enabled),
-      password: "",
-      notify_without_login: Boolean(participant.notify_without_login),
-    });
-    try {
-      const assignedTemplates = await browserApiFetch<TemplateSummary[]>(`/api/participants/${participant.id}/templates`);
-      setAssignedTemplateIds(assignedTemplates.map((template) => template.id));
-    } catch (error) {
-      setAssignedTemplateIds([]);
-      showToast(
-        error instanceof Error ? error.message : t("toasts.templatesLoadFailed"),
-        "error"
-      );
-    }
-    setShowModal(true);
-  }
-
-  // Grund, warum «Speichern» gesperrt ist (wird neben dem Button angezeigt), oder null.
-  const saveBlocker: "displayName" | "email" | "password" | null = !form.display_name.trim()
-    ? "displayName"
-    : form.login_enabled && !form.email.trim()
-      ? "email"
-      : (form.password !== "" || (form.login_enabled && !selectedParticipant?.login_enabled)) && form.password.length < 12
-        ? "password"
-        : null;
-  const canSave = saveBlocker === null;
-
-  async function saveParticipant(event: FormEvent<HTMLFormElement>) {
+  async function createMember(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    if (form.joined_at && form.left_at && form.left_at < form.joined_at) {
-      showToast(t("toasts.leftBeforeJoined"), "error");
-      return;
-    }
-
+    if (!newMember || !newMember.display_name.trim() || creating) return;
+    setCreating(true);
     try {
-      const payload = {
-        first_name: form.first_name || null,
-        last_name: form.last_name || null,
-        display_name: form.display_name,
-        email: form.email || null,
-        is_active: form.is_active,
-        joined_at: form.joined_at || null,
-        left_at: form.left_at || null,
-        // E-Mails ohne Login nur auf ausdrücklichen Wunsch des Admins (Benachrichtigungen)
-        ...(selectedParticipant ? { notify_without_login: !form.login_enabled && form.notify_without_login } : {}),
-        ...(selectedParticipant && canAdmin ? {
-          login_enabled: form.login_enabled,
-          ...(form.password ? { password: form.password } : {}),
-        } : {}),
-      };
-
-      let participantId: string;
-      let updatedParticipant: ParticipantSummary;
-      let successMessage = "";
-
-      if (selectedParticipant) {
-        updatedParticipant = await browserApiFetch<ParticipantSummary>(`/api/participants/${selectedParticipant.id}`, {
-          method: "PATCH",
-          body: JSON.stringify(payload),
-        });
-        participantId = updatedParticipant.id;
-        setParticipants((current) => current.map((item) => (item.id === updatedParticipant.id ? updatedParticipant : item)));
-        successMessage = t("toasts.updated", { name: updatedParticipant.display_name });
-      } else {
-        updatedParticipant = await browserApiFetch<ParticipantSummary>("/api/participants", {
-          method: "POST",
-          body: JSON.stringify({ tenant_id: tenantId, ...payload }),
-        });
-        participantId = updatedParticipant.id;
-        setParticipants((current) => [updatedParticipant, ...current]);
-        successMessage = t("toasts.created", { name: updatedParticipant.display_name });
-        if (inviteAfterCreate && canAdmin && inviteAvailable && updatedParticipant.email) {
-          await sendInvite(updatedParticipant);
-        }
-      }
-
-      await browserApiFetch(`/api/participants/${participantId}/templates`, {
-        method: "PUT",
-        body: JSON.stringify({ template_ids: assignedTemplateIds }),
+      const created = await browserApiFetch<ParticipantSummary>("/api/participants", {
+        method: "POST",
+        body: JSON.stringify({
+          tenant_id: tenantId,
+          first_name: newMember.first_name.trim() || null,
+          last_name: newMember.last_name.trim() || null,
+          display_name: newMember.display_name.trim(),
+          email: newMember.email.trim() || null,
+          is_active: true,
+          joined_at: newMember.joined_at || null,
+          left_at: null,
+        }),
       });
-
-      showToast(successMessage, "success");
-      setShowModal(false);
-      setSelectedParticipant(null);
-      setForm(emptyForm);
-      setAssignedTemplateIds([]);
+      if (newMember.template_ids.length) {
+        await browserApiFetch(`/api/participants/${created.id}/templates`, { method: "PUT", body: JSON.stringify({ template_ids: newMember.template_ids }) });
+      }
+      if (permissions.financeManage && newMember.tariff_id) {
+        await browserApiFetch(`/api/todo-fines/tariff-members/${created.id}`, { method: "PUT", body: JSON.stringify({ tariff_group_id: newMember.tariff_id }) });
+      }
+      if (permissions.access && newMember.invite && created.email) {
+        if (newMember.role_id) {
+          await browserApiFetch(`/api/participants/${created.id}`, { method: "PATCH", body: JSON.stringify({ role_ids: [newMember.role_id] }) });
+        }
+        await browserApiFetch(`/api/participants/${created.id}/invite`, { method: "POST" });
+      }
+      const fresh = await browserApiFetch<ParticipantSummary>(`/api/participants/${created.id}`);
+      setParticipants((current) => [fresh, ...current]);
+      setNewMember(null);
+      showToast(newMember.invite ? t("newMember.createdInvited", { name: fresh.display_name }) : t("toasts.created", { name: fresh.display_name }), "success");
     } catch (error) {
-      showToast(apiErrorMessage(error, tSecurity, "apiErrors", t("toasts.saveFailed")), "error");
+      showToast(errorText(error, t("toasts.saveFailed")), "error");
+    } finally {
+      setCreating(false);
     }
   }
 
-  async function deleteParticipant(participantId: string) {
-    const target = participants.find((participant) => participant.id === participantId);
-    // Löschen entfernt die ganze Person mit Anwesenheit, Bussen und Aufgaben - deutlich sagen und
-    // auf die schonenden Wege (Inaktiv, Austritt, nur Login entziehen) hinweisen (Bereichs-Audit 05).
-    const ok = await confirm({
-      title: t("deleteDialog.title", { name: target?.display_name ?? t("toasts.deleteUnnamed") }),
-      message: target?.login_enabled ? t("deleteDialog.messageWithLogin") : t("deleteDialog.message"),
-      tone: "danger",
-      confirmLabel: t("deleteDialog.confirm")
-    });
-    if (!ok) return;
-    try {
-      const deletedName = participants.find((participant) => participant.id === participantId)?.display_name ?? t("toasts.deleteUnnamed");
-      await browserApiFetch(`/api/participants/${participantId}`, { method: "DELETE" });
-      setParticipants((current) => current.filter((participant) => participant.id !== participantId));
-      setSelectedParticipantIds((current) => current.filter((id) => id !== participantId));
-      showToast(t("toasts.deletedSingle", { name: deletedName }), "success");
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : t("toasts.deleteFailed"), "error");
+  function bulkSummary(result: ParticipantBulkResult, doneKey: string) {
+    const names = new Map(participants.map((participant) => [participant.id, participant.display_name]));
+    if (result.skipped.length) {
+      const reasons = result.skipped.map((item) => `${names.get(item.participant_id) ?? "?"} (${t(`bulk.reasons.${item.reason}`)})`).join(", ");
+      showToast(t("bulk.partial", { done: result.done.length, skipped: result.skipped.length, reasons }), result.done.length ? "info" : "error");
+    } else {
+      showToast(t(doneKey, { count: result.done.length }), "success");
     }
+  }
+
+  async function runBulk(action: () => Promise<void>) {
+    setBulkBusy(true);
+    try {
+      await action();
+      setBulkModal(null);
+      await reloadAll();
+    } catch (error) {
+      showToast(errorText(error, t("bulk.failed")), "error");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  const bulkInvite = () => runBulk(async () => {
+    const result = await browserApiFetch<ParticipantBulkResult>("/api/participants/bulk-invite", {
+      method: "POST",
+      body: JSON.stringify({ participant_ids: selectedParticipantIds, role_id: bulkRoleId || null }),
+    });
+    bulkSummary(result, "bulk.invited");
+  });
+
+  const bulkSetTariff = () => runBulk(async () => {
+    await browserApiFetch("/api/todo-fines/tariff-members", {
+      method: "PUT",
+      body: JSON.stringify({ participant_ids: selectedParticipantIds, tariff_group_id: bulkTariff || null }),
+    });
+    showToast(t("bulk.tariffSet", { count: selectedParticipantIds.length }), "success");
+  });
+
+  const bulkRoles = () => runBulk(async () => {
+    const result = await browserApiFetch<ParticipantBulkResult>("/api/participants/bulk-roles", {
+      method: "POST",
+      body: JSON.stringify({ participant_ids: selectedParticipantIds, role_ids: [bulkRoleId], mode: bulkRolesMode }),
+    });
+    bulkSummary(result, bulkRolesMode === "add" ? "bulk.rolesAdded" : "bulk.rolesRemoved");
+  });
+
+  function openBulk(kind: Exclude<BulkModal, null>) {
+    setBulkTariff("");
+    setBulkRolesMode("add");
+    setBulkRoleId(kind === "invite" ? (defaultRoleIds(roles)[0] ?? "") : (roles[0]?.id ?? ""));
+    setBulkModal(kind);
   }
 
   async function bulkDeleteParticipants() {
@@ -428,9 +392,9 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
         body,
         timeoutMs: LONG_RUNNING_TIMEOUT_MS,
       });
-      setParticipants((current) => [...result.imported, ...current]);
       setCsvPreview(null);
       setImportResult(result);
+      await reloadAll();
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("toasts.csvImportFailed"), "error");
       // Keeps the preview open on failure (audit F9, 2026-08-16) - a transient error
@@ -442,21 +406,18 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
   }
 
   const hasNoParticipants = participants.length === 0 && !hasMore;
+  const openCreate = () => setNewMember(emptyNewMember(roles));
+  const selectionCount = selectedParticipantIds.length;
 
   return (
     <div className="grid">
       <div className="page-header">
         <div>
           <h1 className="page-title">{t("pageTitle")}</h1>
-          <p className="muted">{hasNoParticipants ? t("pageDescriptionEmpty") : t("pageDescription")}</p>
+          <p className="muted">{hasNoParticipants ? t("pageDescriptionEmpty") : t("list.description")}</p>
         </div>
         {hasNoParticipants ? null : (
         <div className="table-toolbar-actions">
-          {selectedParticipantIds.length > 0 ? (
-            <button type="button" className="button-secondary button-danger" onClick={() => void bulkDeleteParticipants()}>
-              {t("deleteSelectionCount", { count: selectedParticipantIds.length })}
-            </button>
-          ) : null}
           <button type="button" className="button-secondary participant-header-button" onClick={() => csvInputRef.current?.click()}>
             <ActionIcon name="upload" />
             {t("csvImport")}
@@ -487,14 +448,6 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
         />
       ) : (
       <>
-      <FilterTabs
-        value={loginTab}
-        onChange={(value) => { setLoginTab(value); setSelectedParticipantIds([]); }}
-        options={[
-          { value: "withoutLogin", label: t("loginTabs.withoutLogin"), count: loginTabCounts.withoutLogin },
-          { value: "withLogin", label: t("loginTabs.withLogin"), count: loginTabCounts.withLogin },
-        ]}
-      />
       <div className="list-filter-row">
         <FilterTabs<StatusFilter>
           value={statusFilter}
@@ -510,6 +463,47 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
           <SearchInput value={search} onChange={setSearch} placeholder={t("searchPlaceholder")} />
         </div>
       </div>
+      <div className="participant-filter-selects">
+        <label className="field-stack">
+          <span className="field-label">{t("list.filterLogin")}</span>
+          <Select value={loginFilter} onChange={(event) => setLoginFilter(event.target.value as LoginFilter)}>
+            <option value="all">{t("list.any")}</option>
+            <option value="active">{t("person.loginStatus.active")}</option>
+            <option value="invited">{t("person.loginStatus.invited")}</option>
+            <option value="none">{t("person.loginStatus.none")}</option>
+          </Select>
+        </label>
+        <label className="field-stack">
+          <span className="field-label">{t("list.filterRole")}</span>
+          <Select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}>
+            <option value="all">{t("list.any")}</option>
+            {roleOptions.map((role) => <option key={role.id} value={role.id}>{roleName(role, tNav)}</option>)}
+          </Select>
+        </label>
+        {permissions.financeRead ? (
+          <label className="field-stack">
+            <span className="field-label">{t("list.filterTariff")}</span>
+            <Select value={tariffFilter} onChange={(event) => setTariffFilter(event.target.value)}>
+              <option value="all">{t("list.any")}</option>
+              {defaultTariff ? null : <option value="">{t("list.tariffDefault")}</option>}
+              {tariffs.map((tariff) => (
+                <option key={tariff.id} value={tariff.id}>{tariff.is_default ? t("person.tariffStandard", { name: tariff.name }) : tariff.name}</option>
+              ))}
+            </Select>
+          </label>
+        ) : null}
+      </div>
+
+      {selectionCount > 0 ? (
+        <div className="participant-bulk-bar" role="region" aria-label={t("bulk.label")}>
+          <strong>{t("bulk.selected", { count: selectionCount })}</strong>
+          {permissions.financeManage ? <button type="button" className="button-secondary" onClick={() => openBulk("tariff")}>{t("bulk.setTariff")}</button> : null}
+          {permissions.access ? <button type="button" className="button-secondary" onClick={() => openBulk("invite")} disabled={!inviteAvailable}>{t("bulk.invite")}</button> : null}
+          {permissions.access ? <button type="button" className="button-secondary" onClick={() => openBulk("roles")}>{t("bulk.roles")}</button> : null}
+          <button type="button" className="button-secondary button-danger" onClick={() => void bulkDeleteParticipants()}>{t("bulk.delete")}</button>
+          <button type="button" className="button-ghost" onClick={() => setSelectedParticipantIds([])}>{t("bulk.clear")}</button>
+        </div>
+      ) : null}
 
       <DataTable
         className="data-table-lg participant-table"
@@ -530,28 +524,28 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
             ),
           },
           { key: "display_name", label: t("columns.name"), sortable: true, sortDirection, onSort: () => setSortDirection((d) => (d === "asc" ? "desc" : "asc")) },
-          { key: "email", label: t("columns.email") },
           { key: "membership", label: t("columns.membership") },
-          { key: "is_active", label: t("columns.status") },
-          { key: "actions", label: t("columns.actions"), header: <span className="participant-sr-only">{t("columns.actions")}</span> },
+          { key: "login", label: t("list.columns.login") },
+          { key: "roles", label: t("list.columns.roles") },
+          ...(permissions.financeRead ? [{ key: "tariff", label: t("list.columns.tariff") }] : []),
         ]}
         emptyMessage={t("emptyFiltered")}
         footer={
           <>
             <span>{t("footerCount", { count: filteredParticipants.length })}</span>
-            <span>{t("footerHint")}</span>
+            <span>{t("list.footerHint")}</span>
           </>
         }
       >
         {filteredParticipants.map((participant) => {
           const isSelected = selectedIdSet.has(participant.id);
-          const fullName = [participant.first_name, participant.last_name].filter(Boolean).join(" ");
           const membership = membershipInfo(participant, today, t);
+          const login = loginStatusOf(participant);
           return (
             <tr
               key={participant.id}
               className={`table-row-clickable${participant.is_active ? "" : " participant-row-inactive"}`}
-              onClick={() => void openEdit(participant)}>
+              onClick={() => router.push(`/participants/${participant.id}`)}>
               <td onClick={(event) => event.stopPropagation()}>
                 <input
                   type="checkbox"
@@ -571,37 +565,32 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
                   </span>
                   <div className="participant-name-text">
                     <strong>{participant.display_name}</strong>
-                    {fullName && fullName !== participant.display_name ? <span className="participant-name-sub">{fullName}</span> : null}
+                    <span className="participant-name-sub">{participant.email ?? t("noEmail")}</span>
                   </div>
                 </div>
               </td>
-              <td>{participant.email ?? <span className="muted">{t("noEmail")}</span>}</td>
               <td>
                 <span className={`participant-membership participant-membership-${membership.tone}`}>
                   <span className="participant-membership-dot" aria-hidden="true" />
                   {membership.label}
                 </span>
+                {participant.is_active ? null : <> <Badge variant="neutral">{t("statusInactive")}</Badge></>}
               </td>
               <td>
-                <Badge variant={participant.is_active ? "success" : "neutral"}>
-                  {participant.is_active ? t("statusActive") : t("statusInactive")}
-                </Badge>
-                {invites[participant.id] && !participant.login_enabled ? <Badge variant="info">{t("invite.badge")}</Badge> : null}
-                {/* Ausgetretene können sich nicht mehr anmelden (Backend: AppUser.has_left), auch wenn der Login noch eingeschaltet ist */}
-                {participant.login_enabled && participantCategory(participant, today) === "left" ? <Badge variant="warning">{t("membership.loginBlocked")}</Badge> : null}
+                {login === "none" ? <span className="muted">–</span> : (
+                  <Badge variant={login === "active" ? "success" : "info"}>{t(`person.loginStatus.${login}`)}</Badge>
+                )}
+                {/* Ausgetretene können sich nicht mehr anmelden (Backend: AppUser.has_left) */}
+                {login === "active" && participantCategory(participant, today) === "left" ? <Badge variant="warning">{t("membership.loginBlocked")}</Badge> : null}
               </td>
               <td>
-                <div className="table-actions table-actions-end">
-                  <ActionMenu
-                    ariaLabel={t("rowActions", { name: participant.display_name })}
-                    items={[
-                      { label: t("edit"), onClick: () => void openEdit(participant) },
-                      ...(canAdmin ? [{ label: t("personalData.action"), onClick: () => setExportTarget(participant) }] : []),
-                      { label: t("delete"), onClick: () => void deleteParticipant(participant.id), danger: true },
-                    ]}
-                  />
-                </div>
+                <span className="access-role-chips">
+                  {login === "none" ? <span className="muted">–</span> : (participant.roles ?? []).map((role) => <Badge key={role.id} variant="neutral">{roleName(role, tNav)}</Badge>)}
+                </span>
               </td>
+              {permissions.financeRead ? (
+                <td>{participant.tariff_id ? tariffName.get(participant.tariff_id) ?? "–" : <span className="muted">{t("list.tariffDefault")}</span>}</td>
+              ) : null}
             </tr>
           );
         })}
@@ -694,172 +683,149 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
         )}
       </Modal>
 
-      {/* Edit/Create modal */}
-      <Modal
-        open={showModal}
-        onClose={() => setShowModal(false)}
-        title={selectedParticipant ? t("editModal.editTitle") : t("editModal.createTitle")}
-        description={t("editModal.description")}
-      >
-        <ModalSaveForm className="grid" onSubmit={saveParticipant}>
-          <div className="two-col">
+      {/* Neues Mitglied: einziger Ort zum Anlegen, optional gleich einladen (mit Rolle) und Tarif */}
+      <Modal open={newMember !== null} onClose={() => setNewMember(null)} title={t("editModal.createTitle")} description={t("newMember.description")}>
+        {newMember ? (
+          <ModalSaveForm className="grid" onSubmit={createMember}>
+            <div className="two-col">
+              <label className="field-stack">
+                <span className="field-label">{t("editModal.firstName")}</span>
+                <input value={newMember.first_name} onChange={(event) => setNewMember({ ...newMember, first_name: event.target.value })} />
+              </label>
+              <label className="field-stack">
+                <span className="field-label">{t("editModal.lastName")}</span>
+                <input value={newMember.last_name} onChange={(event) => setNewMember({ ...newMember, last_name: event.target.value })} />
+              </label>
+            </div>
             <label className="field-stack">
               <span className="field-label">{t("editModal.displayName")}</span>
-              <input value={form.display_name} onChange={(event) => setForm((current) => ({ ...current, display_name: event.target.value }))} required />
+              <input value={newMember.display_name} onChange={(event) => setNewMember({ ...newMember, display_name: event.target.value })} required />
             </label>
-            <label className="checkbox-line">
-              <input
-                type="checkbox"
-                checked={form.is_active}
-                onChange={(event) => setForm((current) => ({ ...current, is_active: event.target.checked }))}
-              />
-              {t("editModal.active")}
-            </label>
+            <div className="two-col">
+              <label className="field-stack">
+                <span className="field-label">{t("editModal.email")}</span>
+                <input type="email" value={newMember.email} onChange={(event) => setNewMember({ ...newMember, email: event.target.value, invite: event.target.value.trim() ? newMember.invite : false })} />
+              </label>
+              <label className="field-stack">
+                <span className="field-label">{t("editModal.joinedAt")}</span>
+                <DateInput value={newMember.joined_at} onChange={(value) => setNewMember({ ...newMember, joined_at: value })} />
+              </label>
+            </div>
+            {templates.length ? (
+              <div className="field-stack">
+                <span className="field-label">{t("editModal.templates")}</span>
+                <div className="participant-check-grid">
+                  {templates.map((template) => {
+                    const checked = newMember.template_ids.includes(template.id);
+                    return (
+                      <label key={template.id} className={`participant-check-card${checked ? " participant-check-card-active" : ""}`}>
+                        <input type="checkbox" checked={checked} onChange={(event) => setNewMember({
+                          ...newMember,
+                          template_ids: event.target.checked ? [...newMember.template_ids, template.id] : newMember.template_ids.filter((id) => id !== template.id),
+                        })} />
+                        <div><strong>{template.name}</strong></div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+            {permissions.financeManage ? (
+              <label className="field-stack">
+                <span className="field-label">{t("person.tariff")}</span>
+                <Select value={newMember.tariff_id} onChange={(event) => setNewMember({ ...newMember, tariff_id: event.target.value })}>
+                  <option value="">{t("person.tariffStandard", { name: defaultTariffName })}</option>
+                  {tariffs.filter((tariff) => !tariff.is_default).map((tariff) => <option key={tariff.id} value={tariff.id}>{tariff.name}</option>)}
+                </Select>
+              </label>
+            ) : null}
+            {permissions.access && inviteAvailable ? (
+              <label className="checkbox-line">
+                <input type="checkbox" checked={newMember.invite} disabled={!newMember.email.trim()} onChange={(event) => setNewMember({ ...newMember, invite: event.target.checked })} />
+                <span>
+                  {t("newMember.invite")}
+                  <span className="field-help"> {newMember.email.trim() ? t("newMember.inviteHelp") : t("invite.needsEmail")}</span>
+                </span>
+              </label>
+            ) : null}
+            {permissions.access && !inviteAvailable ? <span className="field-help">{t("invite.mailOff")}</span> : null}
+            {permissions.access && newMember.invite ? (
+              <label className="field-stack">
+                <span className="field-label">{t("newMember.role")}</span>
+                <Select value={newMember.role_id} onChange={(event) => setNewMember({ ...newMember, role_id: event.target.value })}>
+                  {roles.map((role) => <option key={role.id} value={role.id}>{roleName(role, tNav)}</option>)}
+                </Select>
+              </label>
+            ) : null}
+            <div className="modal-actions">
+              {!newMember.display_name.trim() ? <span className="field-help">{t("person.blockers.displayName")}</span> : null}
+              <button type="button" className="button-ghost" onClick={() => setNewMember(null)}>{t("csvPreview.cancel")}</button>
+              <button data-modal-save type="submit" className="button-primary" disabled={creating || !newMember.display_name.trim()}>
+                {newMember.invite ? t("newMember.createAndInvite") : t("editModal.create")}
+              </button>
+            </div>
+          </ModalSaveForm>
+        ) : null}
+      </Modal>
+
+      <Modal open={bulkModal === "invite"} onClose={() => setBulkModal(null)} title={t("bulk.inviteTitle", { count: selectionCount })} description={t("bulk.inviteDescription")}>
+        <div className="grid">
+          <label className="field-stack">
+            <span className="field-label">{t("bulk.inviteRole")}</span>
+            <Select value={bulkRoleId} onChange={(event) => setBulkRoleId(event.target.value)}>
+              {roles.map((role) => <option key={role.id} value={role.id}>{roleName(role, tNav)}</option>)}
+            </Select>
+            <span className="field-help">{t("bulk.inviteRoleHelp")}</span>
+          </label>
+          <div className="modal-actions">
+            <button type="button" className="button-ghost" onClick={() => setBulkModal(null)}>{t("csvPreview.cancel")}</button>
+            <button type="button" className="button-primary" disabled={bulkBusy} onClick={() => void bulkInvite()}>{t("bulk.invite")}</button>
           </div>
-          <div className="two-col">
-            <label className="field-stack">
-              <span className="field-label">{t("editModal.firstName")}</span>
-              <input value={form.first_name} onChange={(event) => setForm((current) => ({ ...current, first_name: event.target.value }))} />
+        </div>
+      </Modal>
+
+      <Modal open={bulkModal === "tariff"} onClose={() => setBulkModal(null)} title={t("bulk.tariffTitle", { count: selectionCount })} description={t("bulk.tariffDescription")}>
+        <div className="grid">
+          <label className="field-stack">
+            <span className="field-label">{t("person.tariff")}</span>
+            <Select value={bulkTariff} onChange={(event) => setBulkTariff(event.target.value)}>
+              <option value="">{t("person.tariffStandard", { name: defaultTariffName })}</option>
+              {tariffs.filter((tariff) => !tariff.is_default).map((tariff) => <option key={tariff.id} value={tariff.id}>{tariff.name}</option>)}
+            </Select>
+          </label>
+          <div className="modal-actions">
+            <button type="button" className="button-ghost" onClick={() => setBulkModal(null)}>{t("csvPreview.cancel")}</button>
+            <button type="button" className="button-primary" disabled={bulkBusy} onClick={() => void bulkSetTariff()}>{t("bulk.setTariff")}</button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={bulkModal === "roles"} onClose={() => setBulkModal(null)} title={t("bulk.rolesTitle", { count: selectionCount })} description={t("bulk.rolesDescription")}>
+        <div className="grid">
+          <div className="field-stack" role="radiogroup" aria-label={t("bulk.rolesMode")}>
+            <label className="field-radio-option">
+              <input type="radio" name="bulk-roles-mode" checked={bulkRolesMode === "add"} onChange={() => setBulkRolesMode("add")} />
+              {t("bulk.rolesAdd")}
             </label>
-            <label className="field-stack">
-              <span className="field-label">{t("editModal.lastName")}</span>
-              <input value={form.last_name} onChange={(event) => setForm((current) => ({ ...current, last_name: event.target.value }))} />
+            <label className="field-radio-option">
+              <input type="radio" name="bulk-roles-mode" checked={bulkRolesMode === "remove"} onChange={() => setBulkRolesMode("remove")} />
+              {t("bulk.rolesRemove")}
             </label>
           </div>
           <label className="field-stack">
-            <span className="field-label">{t("editModal.email")}</span>
-            <input value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} />
+            <span className="field-label">{t("bulk.role")}</span>
+            <Select value={bulkRoleId} onChange={(event) => setBulkRoleId(event.target.value)}>
+              {roles.map((role) => <option key={role.id} value={role.id}>{roleName(role, tNav)}</option>)}
+            </Select>
           </label>
-          {selectedParticipant && canAdmin ? (
-            <>
-              <label className="checkbox-line">
-                <input type="checkbox" checked={form.login_enabled} onChange={(event) => setForm((current) => ({ ...current, login_enabled: event.target.checked }))} />
-                {selectedParticipant.login_enabled ? tUsers("loginActive") : tUsers("loginSetPassword")}
-                <HelpPopover topic={tUsers("enableLogin")} docs={{ page: "mitglieder", anchor: "login" }}>{tUsers("loginHelp")}</HelpPopover>
-              </label>
-              {form.login_enabled ? (
-                <label className="field-stack">
-                  <span className="field-label">{tUsers("newPassword")}</span>
-                  <input type="password" autoComplete="new-password" value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} />
-                  <span className="field-help">{tUsers("passwordHelpEdit")}</span>
-                </label>
-              ) : null}
-            </>
-          ) : null}
-          {canAdmin && !inviteAvailable && !selectedParticipant?.login_enabled && !form.login_enabled ? (
-            <span className="field-help">{t("invite.mailOff")}</span>
-          ) : null}
-          {!selectedParticipant && canAdmin && inviteAvailable ? (
-            <label className="checkbox-line">
-              <input type="checkbox" checked={inviteAfterCreate} disabled={!form.email.trim()} onChange={(event) => setInviteAfterCreate(event.target.checked)} />
-              <span>
-                {t("invite.afterCreate")}
-                <span className="field-help"> {form.email.trim() ? t("invite.hint") : t("invite.needsEmail")}</span>
-              </span>
-            </label>
-          ) : null}
-          {selectedParticipant && canAdmin && inviteAvailable && !selectedParticipant.login_enabled && !form.login_enabled ? (
-            <div className="field-stack">
-              <span className="field-label">
-                {t("invite.title")}{" "}
-                <HelpPopover topic={t("invite.title")} docs={{ page: "mitglieder", anchor: "einladung" }}>{t("invite.hint")}</HelpPopover>
-              </span>
-              {invites[selectedParticipant.id] ? (
-                <span className="field-help">
-                  {invites[selectedParticipant.id].sent_at
-                    ? t("invite.pendingSent", {
-                      sent: formatDateTime(invites[selectedParticipant.id].sent_at ?? ""),
-                      expires: formatDateTime(invites[selectedParticipant.id].expires_at ?? ""),
-                    })
-                    : t("invite.pendingQueued")}
-                </span>
-              ) : (
-                <span className="field-help">{selectedParticipant.email ? t("invite.hint") : t("invite.needsEmail")}</span>
-              )}
-              <div className="table-actions table-actions-start">
-                <button type="button" className="button-secondary" disabled={inviteBusy || !selectedParticipant.email || form.email.trim() !== (selectedParticipant.email ?? "")}
-                  onClick={() => void sendInvite(selectedParticipant)}>
-                  {invites[selectedParticipant.id] ? t("invite.resend") : t("invite.send")}
-                </button>
-                {invites[selectedParticipant.id] ? (
-                  <button type="button" className="button-ghost" disabled={inviteBusy} onClick={() => void revokeInvite(selectedParticipant)}>
-                    {t("invite.revoke")}
-                  </button>
-                ) : null}
-              </div>
-              {form.email.trim() !== (selectedParticipant.email ?? "") ? <span className="field-help">{t("invite.saveEmailFirst")}</span> : null}
-            </div>
-          ) : null}
-          {selectedParticipant && !form.login_enabled ? (
-            <label className="checkbox-line">
-              <input type="checkbox" checked={form.notify_without_login} disabled={!form.email.trim()}
-                onChange={(event) => setForm((current) => ({ ...current, notify_without_login: event.target.checked }))} />
-              <span>
-                {t("editModal.notifyWithoutLogin")}{" "}
-                <HelpPopover topic={t("editModal.notifyWithoutLogin")} docs={{ page: "benachrichtigungen", anchor: "ohne-login" }}>{t("editModal.notifyWithoutLoginHelp")}</HelpPopover>
-                <span className="field-help"> {form.email.trim() ? t("editModal.notifyWithoutLoginHint") : t("editModal.notifyWithoutLoginNeedsEmail")}</span>
-              </span>
-            </label>
-          ) : null}
-          <div className="two-col">
-            <label className="field-stack">
-              <span className="field-label">
-                {t("editModal.joinedAt")}{" "}
-                <HelpPopover topic={t("editModal.joinedAt")} docs={{ page: "mitglieder", anchor: "mitgliedschaft" }}>{t("editModal.membershipHelp")}</HelpPopover>
-              </span>
-              <DateInput value={form.joined_at} onChange={(value) => setForm((current) => ({ ...current, joined_at: value }))} />
-              <span className="field-help">{t("editModal.joinedAtHint")}</span>
-            </label>
-            <label className="field-stack">
-              <span className="field-label">{t("editModal.leftAt")}</span>
-              <DateInput value={form.left_at} onChange={(value) => setForm((current) => ({ ...current, left_at: value }))} />
-              <span className="field-help">{t("editModal.leftAtHint")}</span>
-            </label>
-          </div>
-          <div className="field-stack">
-            <span className="field-label">{t("editModal.templates")}</span>
-            <div className="participant-check-grid">
-              {templates.map((template) => {
-                const checked = assignedTemplateIds.includes(template.id);
-                return (
-                  <label key={template.id} className={`participant-check-card${checked ? " participant-check-card-active" : ""}`}>
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(event) =>
-                        setAssignedTemplateIds((current) =>
-                          event.target.checked ? [...new Set([...current, template.id])] : current.filter((id) => id !== template.id)
-                        )
-                      }
-                    />
-                    <div>
-                      <strong>{template.name}</strong>
-                      <div className="muted">{template.description ?? t("editModal.noDescription")}</div>
-                    </div>
-                  </label>
-                );
-              })}
-            </div>
-          </div>
           <div className="modal-actions">
-            {saveBlocker ? <span className="field-help">{tUsers(`blockers.${saveBlocker}`)}</span> : null}
-            <button type="button" className="button-ghost" onClick={() => setShowModal(false)}>{t("csvPreview.cancel")}</button>
-            <button data-modal-save type="submit" className="button-primary" disabled={!canSave}>
-              {selectedParticipant ? t("editModal.save") : t("editModal.create")}
+            <button type="button" className="button-ghost" onClick={() => setBulkModal(null)}>{t("csvPreview.cancel")}</button>
+            <button type="button" className="button-primary" disabled={bulkBusy || !bulkRoleId} onClick={() => void bulkRoles()}>
+              {bulkRolesMode === "add" ? t("bulk.rolesAdd") : t("bulk.rolesRemove")}
             </button>
           </div>
-        </ModalSaveForm>
+        </div>
       </Modal>
-      {exportTarget ? (
-        <ProtectedExportModal
-          open
-          title={t("personalData.title", { name: exportTarget.display_name })}
-          description={t("personalData.description")}
-          path={`/api/participants/${exportTarget.id}/personal-data`}
-          fallbackFilename="hocx-data.zip"
-          onClose={() => setExportTarget(null)}
-        />
-      ) : null}
     </div>
   );
 }

@@ -98,5 +98,51 @@
     "confirmMessage": "{name} can no longer sign in afterwards; running sessions end immediately. The person remains a member with attendance, fines and tasks. You can delete them completely under «Members».",
     "done": "Login of {name} revoked",
     "failed": "The login could not be revoked"
+  },
+  "security": {
+    "title": "Security",
+    "description": "Which security rules apply to your organisation's logins.",
+    "adminTitle": "MFA for administrative permissions",
+    "adminHelp": "Anyone with a role that includes “Settings”, “Users & roles” or “Data exports” always signs in with a second factor.",
+    "alwaysRequired": "Always required",
+    "allTitle": "Require MFA for all logins",
+    "allHelp": "Writers, treasurers and readers also set up a second factor at their next login. Until then their session is blocked.",
+    "missingRequired": "{count, plural, one {# of {total} logins has} other {# of {total} logins have}} no MFA yet and will be taken to the setup at the next login.",
+    "missingOptional": "{count, plural, one {# of {total} logins has} other {# of {total} logins have}} no MFA yet.",
+    "allHaveMfa": "All {total} logins have MFA set up.",
+    "loadFailed": "The security settings could not be loaded.",
+    "docs": "More about MFA",
+    "enableConfirmTitle": "Require MFA for all logins?",
+    "enableConfirmMessage": "{count, plural, =0 {All logins already have MFA.} one {# login without MFA is signed out immediately and must set up a second factor at the next login.} other {# logins without MFA are signed out immediately and must set up a second factor at the next login.}}",
+    "enableConfirm": "Require MFA",
+    "enabledToast": "MFA is now required for all logins",
+    "disabledToast": "MFA is now only required for administrative permissions",
+    "saveFailed": "The setting could not be saved."
+  },
+  "access": {
+    "title": "Who has access",
+    "description": "Overview of all logins and invitations. You change a person's login and roles on their person page under “Members”.",
+    "filterAll": "All",
+    "filterMfaMissing": "MFA missing",
+    "empty": "No one in this selection.",
+    "columns": {
+      "person": "Person",
+      "status": "Status",
+      "roles": "Roles",
+      "mfa": "MFA"
+    },
+    "footerHint": "Overview only · click opens the person page",
+    "noEmail": "No email",
+    "status": {
+      "active": "Active",
+      "invited": "Invited",
+      "inactive": "Inactive"
+    },
+    "noRole": "No role",
+    "mfa": {
+      "active": "MFA active",
+      "missing": "MFA missing",
+      "optional": "No MFA"
+    }
   }
 }

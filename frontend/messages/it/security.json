@@ -132,6 +132,8 @@
     "passkey_unknown": "Questa passkey non appartiene a questo account.",
     "passkey_already_registered": "Questa passkey è già registrata.",
     "rate_limited": "Troppi tentativi. Attendi un momento e riprova.",
-    "login_locked": "Troppi accessi non riusciti. Attendi 15 minuti e riprova."
+    "login_locked": "Troppi accessi non riusciti. Attendi 15 minuti e riprova.",
+    "mfa_policy_own_mfa_missing": "Configura prima l'MFA per il tuo account.",
+    "mfa_setup_required": "La tua organizzazione richiede l'MFA. Accedi di nuovo e configura un secondo fattore."
   }
 }

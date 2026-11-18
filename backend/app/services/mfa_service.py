@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.core.rate_limit import check_account_lockout, enforce_rate_limit, record_failed_attempt
 from app.core.secret_crypto import decrypt_secret, encrypt_secret
 from app.core.permissions import P, requires_mfa
+from app.core.tenant_mfa import tenant_requires_mfa
 from app.core.security import CurrentUser, build_current_user, load_role_permissions, require_permission
 from app.core.totp import build_totp_uri, generate_totp_secret, verify_totp_code
 from app.core.webauthn import (
@@ -27,7 +28,7 @@ from app.core.webauthn import (
 )
 from app.core.config import settings
 from app.core.redis_client import get_redis_sync
-from app.models import AppUser, UserMfaFactor
+from app.models import AppUser, Tenant, UserMfaFactor
 from app.services.role_service import ensure_can_manage_account
 from app.notifications import account as account_notifications
 from app.schemas.mfa import (
@@ -36,6 +37,7 @@ from app.schemas.mfa import (
     MfaPendingLoginRead,
     PasskeyAssertionStartRead,
     PasskeyRegistrationStartRead,
+    TenantMfaPolicyRead,
     TotpEnrollmentStartRead,
     UserMfaRead,
 )
@@ -98,9 +100,17 @@ class MfaService:
 
     def user_requires_mfa(self, db: Session, user_id: int) -> bool:
         """MFA ist Pflicht, sobald das Konto eine Administrations-Permission hat (requires_mfa im
-        Katalog) - mit den Standardrollen genau die bisherige Regel "nur admin"."""
+        Katalog) - mit den Standardrollen genau die bisherige Regel "nur admin" - oder wenn sein
+        Mandant MFA für alle Logins verlangt (tenant.require_mfa, Migration 0188). Gleiche Regel
+        wie security._requires_mfa für laufende Sessions."""
+        if self.tenant_requires_mfa(db, user_id):
+            return True
         permissions, _ = load_role_permissions(db, user_id)
         return requires_mfa(permissions)
+
+    def tenant_requires_mfa(self, db: Session, user_id: int) -> bool:
+        user = db.get(AppUser, user_id)
+        return tenant_requires_mfa(db, user.tenant_id if user is not None else None)
 
     def can_add_passkey_here(self, request_host: str | None) -> bool:
         if not request_host:
@@ -176,6 +186,45 @@ class MfaService:
             preferred_factor_label=method_labels.get(preferred_factor_type) if preferred_factor_type else None,
             factors=[self._factor_read(factor) for factor in factors],
         )
+
+    def get_tenant_policy(self, db: Session, actor: CurrentUser) -> TenantMfaPolicyRead:
+        """MFA-Pflicht des eigenen Mandanten; Aufrufer prüft access.manage."""
+        tenant = db.get(Tenant, actor.current_tenant_id)
+        users = [
+            user
+            for user in db.scalars(select(AppUser).where(AppUser.tenant_id == actor.current_tenant_id))
+            if user.is_active and user.login_enabled and not user.has_left
+        ]
+        user_ids = [user.id for user in users]
+        with_mfa = set(
+            db.scalars(select(UserMfaFactor.user_id).where(UserMfaFactor.user_id.in_(user_ids)).distinct())
+        ) if user_ids else set()
+        return TenantMfaPolicyRead(
+            require_mfa=bool(tenant.require_mfa) if tenant is not None else False,
+            logins_total=len(users),
+            logins_without_mfa=sum(1 for user_id in user_ids if user_id not in with_mfa),
+        )
+
+    def set_tenant_policy(self, db: Session, actor: CurrentUser, *, require_mfa: bool) -> tuple[TenantMfaPolicyRead, bool]:
+        """Schaltet die MFA-Pflicht des eigenen Mandanten (Aufrufer prüft access.manage). Liefert
+        den neuen Stand und ob sich etwas geändert hat (fürs Audit).
+
+        Einschalten nur, wenn der Admin selbst einen Faktor hat: so kann die Pflicht den
+        Einschaltenden nie aussperren. Mit den Standardrechten ist das ohnehin der Fall
+        (access.manage verlangt MFA), die Prüfung sichert auch abweichende Kataloge ab."""
+        tenant = db.get(Tenant, actor.current_tenant_id)
+        if tenant is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        if require_mfa and not tenant.require_mfa and not self._list_factors(db, actor.user_id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"code": "mfa_policy_own_mfa_missing", "message": "Richte zuerst für dein eigenes Konto MFA ein"},
+            )
+        changed = bool(tenant.require_mfa) != require_mfa
+        if changed:
+            tenant.require_mfa = require_mfa
+            db.commit()
+        return self.get_tenant_policy(db, actor), changed
 
     def get_self_overview(self, db: Session, actor: CurrentUser, request_host: str | None) -> UserMfaRead:
         user = db.get(AppUser, actor.user_id)
@@ -624,6 +673,7 @@ class MfaService:
             current_user=current_user,
             status_value="setup_required",
             required=True,
+            required_by_tenant=current_user.tenant_require_mfa,
             factors=[],
             default_factor_type=None,
             can_add_passkey=self.can_add_passkey_here(request_host),
@@ -638,6 +688,7 @@ class MfaService:
         status_value: str,
         required: bool,
         factors: list[UserMfaFactor],
+        required_by_tenant: bool = False,
         default_factor_type: str | None,
         can_add_passkey: bool,
     ) -> MfaPendingLoginRead:
@@ -650,6 +701,7 @@ class MfaService:
             status=status_value,  # type: ignore[arg-type]
             ticket=ticket,
             required=required,
+            required_by_tenant=required_by_tenant,
             user_display_name=user.display_name,
             user_email=user.email,
             tenant_name=current_user.current_tenant_name,

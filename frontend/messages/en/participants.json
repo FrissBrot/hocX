@@ -146,5 +146,105 @@
     "confirm": "Delete permanently",
     "bulkTitle": "{count, plural, one {Permanently delete # person?} other {Permanently delete # people?}}",
     "bulkMessage": "The people disappear together with logins, attendance, fines and task assignments; this cannot be undone. For members who have left, better set a leave date."
+  },
+  "list": {
+    "description": "Everyone in your organisation, with or without a login. Click a person to open everything about them: details, rate, login and roles.",
+    "filterLogin": "Login",
+    "filterRole": "Role",
+    "filterTariff": "Rate",
+    "any": "All",
+    "columns": {
+      "login": "Login",
+      "roles": "Roles",
+      "tariff": "Rate"
+    },
+    "footerHint": "Click a row to open the person page",
+    "tariffDefault": "Default"
+  },
+  "person": {
+    "back": "← Members",
+    "saved": "Saved",
+    "sections": {
+      "master": "Details",
+      "membership": "Membership",
+      "tariff": "Fine rate",
+      "login": "Login & roles",
+      "more": "More actions"
+    },
+    "emailHelp": "Used for invitations and notifications.",
+    "emailLoginHelp": "This is also the login address. A change applies from the next login.",
+    "membershipHelp": "Joining and leaving dates control which attendance lists the person appears in. A login is blocked from the leaving date.",
+    "tariff": "Rate",
+    "tariffStandard": "Default ({name})",
+    "tariffReadOnly": "Rate: {tariff}. Only people with “Manage finances” can change it.",
+    "manageTariffs": "Manage rates →",
+    "loginStatus": {
+      "active": "Login active",
+      "invited": "Invited",
+      "none": "No login"
+    },
+    "noLogin": "No login. The person appears in attendance, fines and tasks but cannot sign in.",
+    "setPassword": "Set password",
+    "passwordDescription": "Share the password with the person securely; they can change it in their profile afterwards. An email invitation is easier.",
+    "roles": "Roles",
+    "rolesExplained": "What can the roles do? →",
+    "mfa": "MFA",
+    "revokeHelp": "Blocks sign-in and ends active sessions. The person remains a member.",
+    "exportHelp": "All of the person's data as a password-protected ZIP file.",
+    "deleteHelp": "Delete permanently, including attendance, fines and tasks. For former members, setting a leaving date is better.",
+    "delete": "Delete …",
+    "unsaved": "Unsaved changes",
+    "discard": "Discard",
+    "blockers": {
+      "displayName": "Saving is blocked: the display name is missing.",
+      "dates": "Saving is blocked: the leaving date is before the joining date."
+    }
+  },
+  "newMember": {
+    "description": "The person then appears in the member list. Without an invitation they remain a member without a login.",
+    "invite": "Invite by email after creating",
+    "inviteHelp": "The person sets their own password.",
+    "role": "Role",
+    "createAndInvite": "Create and invite",
+    "createdInvited": "{name} created and invited"
+  },
+  "bulk": {
+    "label": "Bulk actions",
+    "selected": "{count} selected",
+    "setTariff": "Set rate",
+    "invite": "Invite",
+    "roles": "Roles",
+    "delete": "Delete",
+    "clear": "Clear",
+    "failed": "The action failed.",
+    "partial": "{done} done, {skipped} skipped: {reasons}",
+    "invited": "{count, plural, one {# person invited} other {# people invited}}",
+    "tariffSet": "Rate set for {count, plural, one {# person} other {# people}}",
+    "rolesAdded": "Role added for {count, plural, one {# person} other {# people}}",
+    "rolesRemoved": "Role removed for {count, plural, one {# person} other {# people}}",
+    "inviteTitle": "{count, plural, one {Invite # person} other {Invite # people}}",
+    "inviteDescription": "People with a login, without an email, inactive and former members are skipped.",
+    "inviteRole": "Role for everyone invited",
+    "inviteRoleHelp": "You can assign further roles on the person page afterwards.",
+    "tariffTitle": "Set rate for {count, plural, one {# person} other {# people}}",
+    "tariffDescription": "The rate determines the amount of their fines.",
+    "rolesTitle": "Roles for {count, plural, one {# person} other {# people}}",
+    "rolesDescription": "Anything that would break a protection rule (e.g. last admin) or leave no role is skipped.",
+    "rolesMode": "Add or remove",
+    "rolesAdd": "Add role",
+    "rolesRemove": "Remove role",
+    "role": "Role",
+    "reasons": {
+      "has_login": "already has a login",
+      "inactive": "inactive",
+      "former": "former member",
+      "no_email": "no email",
+      "no_roles_left": "no role left",
+      "not_allowed": "not allowed",
+      "rate_limited": "too many invitations",
+      "not_found": "not found",
+      "failed": "failed",
+      "protected": "protection rule, e.g. last admin"
+    }
   }
 }

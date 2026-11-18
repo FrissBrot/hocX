@@ -10,7 +10,9 @@ import { FeatureNotice } from "@/components/ui/feature-notice";
 import { can, featureAccess } from "@/lib/permissions";
 import { RoleRead } from "@/types/api";
 
-export default async function RolesPage() {
+export default async function RolesPage({ searchParams }: { searchParams: Promise<{ role?: string }> }) {
+  // Deep-Link /users/roles?role=<public_id> (z. B. aus der Ctrl+K-Suche): Rolle direkt öffnen
+  const { role } = await searchParams;
   const session = await requireSession();
   if (!can(session, "access.manage")) {
     redirect("/");
@@ -29,6 +31,7 @@ export default async function RolesPage() {
           actorPermissions={session.permissions ?? []}
           enabledFeatures={session.current_tenant?.enabled_features ?? []}
           canCustomize={customRoles === "full"}
+          initialRoleId={role ?? null}
         />
       </section>
     </AppShell>

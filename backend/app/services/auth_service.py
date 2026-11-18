@@ -261,6 +261,7 @@ class AuthService:
             enabled_features=sorted(user.current_tenant_features),
             read_only_features=sorted(user.current_tenant_read_only_features),
             finance_currency=user.current_tenant_currency,
+            require_mfa=user.tenant_require_mfa,
         )
 
         return SessionRead(

@@ -97,6 +97,9 @@ class Tenant(Base, TimestampMixin):
     statistics_per_person_public: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"), default=False)
     # Eine Währung für alle Konten und Bussen des Vereins (Migration 0180, routes/finance_settings.py)
     finance_currency: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'CHF'"), default="CHF")
+    # MFA-Pflicht für alle Logins der Organisation (Migration 0188, durchgesetzt in
+    # app/core/security.py::get_optional_current_user und mfa_service.user_requires_mfa)
+    require_mfa: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"), default=False)
     # Identität der Organisation durch einen Plattform-Admin bestätigt (Abzeichen auf der
     # Prüfseite). Eine Namensänderung hebt die Bestätigung auf (revoked_*).
     identity_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -65,8 +65,9 @@ def test_former_members_are_hidden_from_pickers_but_not_from_the_member_list(db)
 
     picker = {p.id for p in list_participants(active_only=False, include_former=False, skip=0, limit=100, db=db, user=actor)}
     everyone = {p.id for p in list_participants(active_only=False, include_former=True, skip=0, limit=100, db=db, user=actor)}
-    assert {current.id, leaving_today.id} <= picker and former.id not in picker
-    assert former.id in everyone
+    # Die Route liefert die Mitgliederliste als ParticipantOverviewRead (public_id wie in der HTTP-Antwort)
+    assert {current.public_id, leaving_today.public_id} <= picker and former.public_id not in picker
+    assert former.public_id in everyone
 
 
 def test_former_logins_are_hidden_and_not_counted(db):

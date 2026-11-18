@@ -98,5 +98,51 @@
     "confirmMessage": "{name} ne pourra plus se connecter ; les sessions en cours se terminent immédiatement. La personne reste membre avec présences, amendes et tâches. Vous pouvez la supprimer complètement sous « Membres ».",
     "done": "Accès de {name} retiré",
     "failed": "L'accès n'a pas pu être retiré"
+  },
+  "security": {
+    "title": "Sécurité",
+    "description": "Les règles de sécurité qui s'appliquent aux connexions de votre organisation.",
+    "adminTitle": "MFA pour les droits d'administration",
+    "adminHelp": "Toute personne ayant un rôle avec « Paramètres », « Utilisateurs et rôles » ou « Exports de données » se connecte toujours avec un second facteur.",
+    "alwaysRequired": "Toujours obligatoire",
+    "allTitle": "Exiger la MFA pour toutes les connexions",
+    "allHelp": "Les rédacteurs, trésoriers et lecteurs configurent aussi un second facteur à leur prochaine connexion. D'ici là, leur session est bloquée.",
+    "missingRequired": "{count, plural, one {# connexion sur {total} n'a} other {# connexions sur {total} n'ont}} pas encore de MFA et {count, plural, one {sera conduite} other {seront conduites}} à la configuration lors de la prochaine connexion.",
+    "missingOptional": "{count, plural, one {# connexion sur {total} n'a} other {# connexions sur {total} n'ont}} pas encore de MFA.",
+    "allHaveMfa": "Les {total} connexions ont toutes configuré la MFA.",
+    "loadFailed": "Les paramètres de sécurité n'ont pas pu être chargés.",
+    "docs": "En savoir plus sur la MFA",
+    "enableConfirmTitle": "Exiger la MFA pour toutes les connexions ?",
+    "enableConfirmMessage": "{count, plural, =0 {Toutes les connexions ont déjà la MFA.} one {# connexion sans MFA est déconnectée immédiatement et doit configurer un second facteur à la prochaine connexion.} other {# connexions sans MFA sont déconnectées immédiatement et doivent configurer un second facteur à la prochaine connexion.}}",
+    "enableConfirm": "Exiger la MFA",
+    "enabledToast": "La MFA est désormais obligatoire pour toutes les connexions",
+    "disabledToast": "La MFA n'est plus obligatoire que pour les droits d'administration",
+    "saveFailed": "Le paramètre n'a pas pu être enregistré."
+  },
+  "access": {
+    "title": "Qui a accès",
+    "description": "Vue d'ensemble des connexions et invitations. Vous modifiez la connexion et les rôles d'une personne sur sa page sous « Membres ».",
+    "filterAll": "Tous",
+    "filterMfaMissing": "MFA manquante",
+    "empty": "Personne dans cette sélection.",
+    "columns": {
+      "person": "Personne",
+      "status": "Statut",
+      "roles": "Rôles",
+      "mfa": "MFA"
+    },
+    "footerHint": "Vue d'ensemble uniquement · un clic ouvre la page de la personne",
+    "noEmail": "Pas d'e-mail",
+    "status": {
+      "active": "Actif",
+      "invited": "Invité",
+      "inactive": "Inactif"
+    },
+    "noRole": "Aucun rôle",
+    "mfa": {
+      "active": "MFA active",
+      "missing": "MFA manquante",
+      "optional": "Sans MFA"
+    }
   }
 }

@@ -23,7 +23,7 @@
   "sharedLinks": "Freigaben",
   "templates": "Vorlagen",
   "cycles": "Zyklen",
-  "users": "Logins & Rollen",
+  "users": "Zugriff",
   "tenantSettings": "Mandant-Einstellungen",
   "import": "Import",
   "statistics": "Statistiken",
@@ -81,5 +81,7 @@
   "memberList": "Mitgliederliste",
   "domainsAndVerification": "Domains & Echtheit",
   "organisationProfile": "Profil",
-  "workYear": "Arbeitsjahr"
+  "workYear": "Arbeitsjahr",
+  "accessWho": "Wer hat Zugriff",
+  "accessSecurity": "Sicherheit"
 }

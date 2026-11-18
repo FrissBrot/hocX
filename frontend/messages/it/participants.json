@@ -146,5 +146,105 @@
     "confirm": "Elimina definitivamente",
     "bulkTitle": "{count, plural, one {Eliminare definitivamente # persona?} other {Eliminare definitivamente # persone?}}",
     "bulkMessage": "Le persone scompaiono con accessi, presenze, multe e assegnazioni di compiti; non è reversibile. Per i membri usciti meglio impostare una data di uscita."
+  },
+  "list": {
+    "description": "Tutte le persone della tua organizzazione, con o senza accesso. Un clic su una persona apre tutto ciò che la riguarda: dati, tariffa, accesso e ruoli.",
+    "filterLogin": "Accesso",
+    "filterRole": "Ruolo",
+    "filterTariff": "Tariffa",
+    "any": "Tutti",
+    "columns": {
+      "login": "Accesso",
+      "roles": "Ruoli",
+      "tariff": "Tariffa"
+    },
+    "footerHint": "Fai clic su una riga per aprire la pagina della persona",
+    "tariffDefault": "Standard"
+  },
+  "person": {
+    "back": "← Membri",
+    "saved": "Salvato",
+    "sections": {
+      "master": "Dati anagrafici",
+      "membership": "Appartenenza",
+      "tariff": "Tariffa delle multe",
+      "login": "Accesso e ruoli",
+      "more": "Altre azioni"
+    },
+    "emailHelp": "Per l'invito e le notifiche.",
+    "emailLoginHelp": "È anche l'indirizzo di accesso. Una modifica vale dal prossimo accesso.",
+    "membershipHelp": "Le date di entrata e uscita determinano in quali liste di presenza compare la persona. Dall'uscita l'accesso è bloccato.",
+    "tariff": "Tariffa",
+    "tariffStandard": "Standard ({name})",
+    "tariffReadOnly": "Tariffa: {tariff}. Può modificarla solo chi ha «Gestire le finanze».",
+    "manageTariffs": "Gestisci tariffe →",
+    "loginStatus": {
+      "active": "Accesso attivo",
+      "invited": "Invitato",
+      "none": "Nessun accesso"
+    },
+    "noLogin": "Nessun accesso. La persona compare in presenze, multe e compiti, ma non può accedere.",
+    "setPassword": "Imposta password",
+    "passwordDescription": "Comunica la password alla persona in modo sicuro; potrà poi cambiarla nel profilo. Più semplice è un invito per e-mail.",
+    "roles": "Ruoli",
+    "rolesExplained": "Cosa possono fare i ruoli? →",
+    "mfa": "MFA",
+    "revokeHelp": "Blocca l'accesso e termina le sessioni in corso. La persona resta membro.",
+    "exportHelp": "Tutti i dati della persona come file ZIP protetto da password.",
+    "deleteHelp": "Eliminare definitivamente, con presenze, multe e compiti. Per gli ex membri è meglio impostare una data di uscita.",
+    "delete": "Elimina …",
+    "unsaved": "Modifiche non salvate",
+    "discard": "Scarta",
+    "blockers": {
+      "displayName": "Salvataggio bloccato: manca il nome visualizzato.",
+      "dates": "Salvataggio bloccato: l'uscita è prima dell'entrata."
+    }
+  },
+  "newMember": {
+    "description": "La persona compare poi nella lista dei membri. Senza invito resta membro senza accesso.",
+    "invite": "Invita per e-mail dopo la creazione",
+    "inviteHelp": "La persona imposta da sé la password.",
+    "role": "Ruolo",
+    "createAndInvite": "Crea e invita",
+    "createdInvited": "{name} creato e invitato"
+  },
+  "bulk": {
+    "label": "Azioni multiple",
+    "selected": "{count} selezionati",
+    "setTariff": "Imposta tariffa",
+    "invite": "Invita",
+    "roles": "Ruoli",
+    "delete": "Elimina",
+    "clear": "Deseleziona",
+    "failed": "L'azione non è riuscita.",
+    "partial": "{done} completati, {skipped} saltati: {reasons}",
+    "invited": "{count, plural, one {# persona invitata} other {# persone invitate}}",
+    "tariffSet": "Tariffa impostata per {count, plural, one {# persona} other {# persone}}",
+    "rolesAdded": "Ruolo aggiunto per {count, plural, one {# persona} other {# persone}}",
+    "rolesRemoved": "Ruolo rimosso per {count, plural, one {# persona} other {# persone}}",
+    "inviteTitle": "{count, plural, one {Invita # persona} other {Invita # persone}}",
+    "inviteDescription": "Le persone con accesso, senza e-mail, inattive o uscite vengono saltate.",
+    "inviteRole": "Ruolo per tutti gli invitati",
+    "inviteRoleHelp": "Altri ruoli si assegnano poi nella pagina della persona.",
+    "tariffTitle": "Imposta la tariffa per {count, plural, one {# persona} other {# persone}}",
+    "tariffDescription": "La tariffa determina l'importo delle loro multe.",
+    "rolesTitle": "Ruoli per {count, plural, one {# persona} other {# persone}}",
+    "rolesDescription": "Ciò che violerebbe una regola di protezione (ad es. ultimo admin) o non lascerebbe alcun ruolo viene saltato.",
+    "rolesMode": "Aggiungere o rimuovere",
+    "rolesAdd": "Aggiungi ruolo",
+    "rolesRemove": "Rimuovi ruolo",
+    "role": "Ruolo",
+    "reasons": {
+      "has_login": "ha già un accesso",
+      "inactive": "inattivo",
+      "former": "uscito",
+      "no_email": "nessuna e-mail",
+      "no_roles_left": "nessun ruolo rimasto",
+      "not_allowed": "non consentito",
+      "rate_limited": "troppi inviti",
+      "not_found": "non trovato",
+      "failed": "non riuscito",
+      "protected": "regola di protezione, ad es. ultimo admin"
+    }
   }
 }

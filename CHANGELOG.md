@@ -8,6 +8,21 @@ Installationen aktualisieren können.
 
 ## [Unreleased]
 
+### Neu
+
+- **Personen an einem Ort:** Personenseite `/participants/<id>` mit Stammdaten, Mitgliedschaft,
+  Bussentarif, Login & Rollen (Einladen, Passwort setzen, Rollen, MFA, Login entziehen),
+  Datenauskunft und Löschen; Änderungen sammelt eine gemeinsame Leiste «Ungespeicherte
+  Änderungen». Die Mitgliederliste ist der einzige Ort zum Anlegen («Neues Mitglied» mit Einladung,
+  Rolle und Tarif), zeigt Login, Rollen und Tarif, filtert danach (`?tariff=<id>` vorbelegt) und
+  kann mehrere Personen einladen, Rollen hinzufügen/entfernen, Tarif setzen und löschen.
+- **Zugriff** (vormals «Logins & Rollen»): Reiter Rollen (Deep-Link `/users/roles?role=<id>`),
+  «Wer hat Zugriff» (Übersicht mit Filter «MFA fehlt») und Sicherheit.
+- **MFA für alle Logins:** Admins mit «Benutzer & Rollen verwalten» können MFA für alle Logins der
+  Organisation verlangen (Migration `0188_tenant_require_mfa`, auditiert). Konten ohne Faktor
+  werden abgemeldet (API: 403 `mfa_setup_required`) und beim nächsten Login direkt in die
+  Einrichtung geführt.
+
 ## [1.4.0] - 2026-11-18
 
 Eine neu eingeteilte Seitenleiste nach Tätigkeiten mit «Meine Aufgaben» und gesammelten

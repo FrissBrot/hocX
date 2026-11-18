@@ -68,6 +68,97 @@
   white-space: nowrap;
 }
 
+/* Mitgliederliste: Zusatzfilter (Login, Rolle, Tarif) und Leiste für Mehrfachaktionen */
+.participant-filter-selects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.participant-filter-selects .field-stack {
+  min-width: 180px;
+}
+
+.participant-bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+}
+
+.participant-bulk-bar strong {
+  margin-right: auto;
+}
+
+/* Rollen als Chips (Mitgliederliste, Zugriff › Wer hat Zugriff, Personenseite) */
+.access-role-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+/* Personenseite /participants/[id] */
+.person-back-link {
+  font-size: var(--text-sm);
+}
+
+.person-section {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.person-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.person-section-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.person-section-link {
+  font-size: var(--text-sm);
+}
+
+.person-login-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.person-unsaved-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: var(--z-sticky);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--panel-solid);
+  box-shadow: var(--shadow-popover);
+}
+
+.person-unsaved-text {
+  margin-right: auto;
+  font-weight: 600;
+}
+
 .file-card-ref {
   overflow: hidden;
   padding: 0;

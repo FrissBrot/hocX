@@ -132,6 +132,8 @@
     "passkey_unknown": "Dieser Passkey gehört nicht zu diesem Konto.",
     "passkey_already_registered": "Dieser Passkey ist bereits hinterlegt.",
     "rate_limited": "Zu viele Versuche. Bitte warte einen Moment und versuche es dann erneut.",
-    "login_locked": "Zu viele fehlgeschlagene Anmeldungen. Bitte warte 15 Minuten und versuche es dann erneut."
+    "login_locked": "Zu viele fehlgeschlagene Anmeldungen. Bitte warte 15 Minuten und versuche es dann erneut.",
+    "mfa_policy_own_mfa_missing": "Richte zuerst für dein eigenes Konto MFA ein.",
+    "mfa_setup_required": "Deine Organisation verlangt MFA. Bitte melde dich neu an und richte einen zweiten Faktor ein."
   }
 }
