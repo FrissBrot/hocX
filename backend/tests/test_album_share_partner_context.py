@@ -11,7 +11,7 @@ def _list(db, user, album, *, search=None, tags=None):
     return files_routes.list_files(
         skip=0, limit=60, source=None, only_images=False, exclude_images=False, search=search, tags=tags,
         sort_by="created_at", sort_dir="desc", db=db, user=user, album_id=album.id,
-        exclude_album_id=None, share_pending=None,
+        exclude_album_id=None, share_pending=None, date_from=None, date_to=None,
     )
 
 
