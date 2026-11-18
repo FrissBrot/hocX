@@ -1153,6 +1153,10 @@
       ],
       "requires_any": [
         [
+          "files.manage",
+          "meetings.read_drafts"
+        ],
+        [
           "meetings.edit",
           "participants.manage"
         ]

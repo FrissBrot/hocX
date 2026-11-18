@@ -490,6 +490,26 @@ def test_participant_names_in_document_sources_need_participant_or_meeting_right
     assert document_routes.list_source_options("participants", protocol_id=None, db=db, user=make_current_user(tenant.id, role="writer"))
 
 
+def test_image_names_in_document_sources_need_file_or_draft_rights(db):
+    """Nachtlauf 2026-11-18 (dokumente/rechte): die Quelle 'images' lieferte jedem Leser die
+    Namen der (bis zu 300) neusten Bilder des Mandanten - Dateibibliothek, Abgaben, Bilder aus
+    Protokollentwürfen -, obwohl GET /files files.manage verlangt und der Bild-Baustein solche
+    Dateien für Leser ohnehin ablehnt (ensure_can_read_stored_file)."""
+    from app.api.routes import documents as document_routes
+    from app.models import StoredFile
+
+    tenant = make_tenant(db, "RBAC Bildquelle")
+    db.add(StoredFile(tenant_id=tenant.id, original_name="Ausweis-Max-Muster.jpg", mime_type="image/jpeg", storage_path="uploads/ausweis.jpg", scan_status="clean"))
+    db.flush()
+
+    with pytest.raises(HTTPException) as exc_info:
+        document_routes.list_source_options("images", protocol_id=None, db=db, user=make_current_user(tenant.id, role="reader"))
+    assert exc_info.value.status_code == 403
+    for role in ("writer", "kassier", "admin"):
+        options = document_routes.list_source_options("images", protocol_id=None, db=db, user=make_current_user(tenant.id, role=role))
+        assert [option.label for option in options] == ["Ausweis-Max-Muster.jpg"]
+
+
 def test_role_routes_need_access_manage_and_audit_changes(db):
     from app.api.routes import roles as role_routes
     from app.schemas.role import UserRolesUpdate
