@@ -1661,6 +1661,12 @@ export type TodoListItem = ProtocolTodo & {
   block_title: string | null;
   submission_assignment_id: string | null;
   element_ref: string | null;
+  /** Namen zu assigned_participant_ids (gleiche Reihenfolge), für Avatare und Board-Spalten. */
+  assigned_participant_names?: string[];
+  /** Titel der nächsten Sitzung bei Fälligkeit «nächste Sitzung». */
+  due_session_title?: string | null;
+  /** Titel der Abgabe, die die Pendenz automatisch schliesst. */
+  submission_title?: string | null;
 };
 
 export type TodoBlock = {

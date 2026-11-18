@@ -1,7 +1,11 @@
+import type { ReactNode } from "react";
+
 export type FilterTabOption<T extends string = string> = {
   value: T;
   label: string;
   count?: number;
+  /** Optionales Icon vor dem Text (z. B. Ansicht Liste/Board). */
+  icon?: ReactNode;
 };
 
 type Props<T extends string> = {
@@ -26,6 +30,7 @@ export function FilterTabs<T extends string>({ options, value, onChange, variant
             className={`filter-tabs-option${isActive ? " filter-tabs-option-active" : ""}`}
             onClick={() => onChange(option.value)}
           >
+            {option.icon}
             {option.label}
             {option.count !== undefined ? <span className="filter-tabs-count">{option.count}</span> : null}
           </button>

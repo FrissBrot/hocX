@@ -27,6 +27,7 @@ export default async function MyTasksPage() {
               personal
               allTodos={null}
               myTodos={myTodos ?? []}
+              session={session}
               canEdit={canEdit}
               todoBlocks={todoBlocks ?? []}
               participants={participants ?? []}

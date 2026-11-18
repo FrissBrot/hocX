@@ -28,6 +28,7 @@ export default async function TodosPage() {
             <TodoListView
               allTodos={allTodos ?? null}
               myTodos={myTodos ?? []}
+              session={session}
               canEdit={canEdit}
               todoBlocks={todoBlocks ?? []}
               participants={participants ?? []}
