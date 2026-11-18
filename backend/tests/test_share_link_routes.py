@@ -15,6 +15,7 @@ from app.api.routes import public_share as public_share_routes
 from app.api.routes import share_links as share_links_routes
 from app.core.config import settings
 from app.core.storage import MAIN, get_object_store
+from app.models.document_entities import Document, DocumentExtraction, DocumentFile, DocumentVersion
 from app.models.entities import GalleryImage, PhotoAlbum, PhotoAlbumItem, StoredFile
 from app.schemas.files import ShareLinkCreate
 from tests.factories import make_current_user, make_tenant
@@ -416,6 +417,76 @@ def test_public_share_file_endpoints_reject_files_of_other_links_and_tenants(db,
 
     with pytest.raises(HTTPException) as exc_info:
         public_share_routes.download_public_share_all(token, _FakeRequest(), db, ids=f"{sibling.public_id},{foreign.public_id}")
+    assert exc_info.value.status_code == 404
+
+
+def _attach_document_preview(db, original: StoredFile, *, preview_tenant_id: int | None = None, pages: int | None = 3) -> StoredFile:
+    """Wie nach der Dokument-Pipeline: Version mit Original, erzeugtem PNG der ersten Seite und
+    gelesener Seitenzahl."""
+    document = Document(tenant_id=original.tenant_id, source_kind="upload", display_name=original.original_name)
+    db.add(document)
+    db.flush()
+    version = DocumentVersion(document_id=document.id, version_number=1)
+    db.add(version)
+    db.flush()
+    document.current_version_id = version.id
+    tenant_id = preview_tenant_id or original.tenant_id
+    key = f"documents/tenant-{tenant_id}/{uuid.uuid4().hex}-vorschau.png"
+    get_object_store().put_bytes(db, MAIN, key, _png_bytes())
+    preview = StoredFile(tenant_id=tenant_id, original_name="vorschau.png", mime_type="image/png", storage_path=key)
+    db.add(preview)
+    db.flush()
+    db.add(DocumentFile(document_version_id=version.id, stored_file_id=original.id, role="original"))
+    db.add(DocumentFile(document_version_id=version.id, stored_file_id=preview.id, role="preview", is_generated=True))
+    if pages is not None:
+        db.add(DocumentExtraction(document_version_id=version.id, status="ready", page_count=pages))
+    db.flush()
+    return preview
+
+
+def test_public_share_shows_the_first_page_of_processed_documents(db):
+    """Dokumente bekommen auf der öffentlichen Seite die Vorschau der ersten Seite und ihre
+    Seitenzahl; eine Datei ohne Pipeline-Ergebnis bleibt ohne Vorschau (Typ-Kachel)."""
+    tenant = make_tenant(db)
+    user = make_current_user(tenant.id, role="writer")
+    pdf = _make_file(db, tenant.id, "bericht.pdf", content=b"%PDF-1.4 test", mime_type="application/pdf")
+    plain = _make_file(db, tenant.id, "liste.csv", content=b"a;b\n", mime_type="text/csv")
+    _attach_document_preview(db, pdf, pages=3)
+    created = share_links_routes.create_share_link(ShareLinkCreate(name="Dokumente", file_ids=[pdf.public_id, plain.public_id]), db, user)
+    token = created.url.removeprefix("/share/")
+
+    result = public_share_routes.get_public_share(token, _FakeRequest(), db)
+    by_name = {f.original_name: f for f in result.files}
+    assert by_name["bericht.pdf"].thumbnail_url == f"/api/public/share/{token}/files/{pdf.public_id}/thumbnail"
+    assert by_name["bericht.pdf"].page_count == 3
+    # Keine Lightbox-Grossansicht für Nicht-Bilder - die Vorschau ist kein "view".
+    assert by_name["bericht.pdf"].view_url is None
+    assert by_name["liste.csv"].thumbnail_url is None and by_name["liste.csv"].page_count is None
+
+    response = public_share_routes.get_public_share_thumbnail(token, pdf.public_id, _FakeRequest(), db)
+    assert response.media_type == "image/png"
+    assert response_bytes(response) == _png_bytes()
+
+    with pytest.raises(HTTPException) as exc_info:
+        public_share_routes.get_public_share_thumbnail(token, plain.public_id, _FakeRequest(), db)
+    assert exc_info.value.status_code == 404
+
+
+def test_public_share_ignores_a_document_preview_of_another_tenant(db):
+    """Zeigt eine (fehlerhafte) Vorschau-Zuordnung auf eine Datei eines fremden Mandanten,
+    liefert der öffentliche Link sie nicht aus."""
+    tenant = make_tenant(db)
+    other_tenant = make_tenant(db)
+    user = make_current_user(tenant.id, role="writer")
+    pdf = _make_file(db, tenant.id, "bericht.pdf", content=b"%PDF-1.4 test", mime_type="application/pdf")
+    _attach_document_preview(db, pdf, preview_tenant_id=other_tenant.id)
+    created = share_links_routes.create_share_link(ShareLinkCreate(name="X", file_ids=[pdf.public_id]), db, user)
+    token = created.url.removeprefix("/share/")
+
+    result = public_share_routes.get_public_share(token, _FakeRequest(), db)
+    assert result.files[0].thumbnail_url is None
+    with pytest.raises(HTTPException) as exc_info:
+        public_share_routes.get_public_share_thumbnail(token, pdf.public_id, _FakeRequest(), db)
     assert exc_info.value.status_code == 404
 
 

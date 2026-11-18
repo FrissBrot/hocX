@@ -26,12 +26,14 @@ from app.core.config import settings
 from app.core.client_ip import client_ip
 from app.core.db import get_db, release_for_stream
 from app.core.rate_limit import enforce_rate_limit
+from app.models.document_entities import FILE_ROLE_ORIGINAL, FILE_ROLE_PREVIEW, Document, DocumentExtraction, DocumentFile, DocumentVersion
 from app.models.entities import PhotoAlbum, ShareLink, StoredFile, Tenant
 from app.schemas.files import PublicShareFile, PublicShareRead
 from app.services import photo_album_share_service, share_link_service
 from app.services.upload_pipeline import safe_entry_name
 from app.core.storage import MAIN, get_object_store, object_response, read_bytes_or_404, safe_suffix, write_object_to_zip
 from app.services.file_service import FileService
+from app.services.stored_file_location import namespace_for_stored_file
 from app.services import image_export_service
 from app.services.photo_metadata_privacy import SANITIZABLE_MIME_TYPES, MetadataPolicy, sanitize_image
 
@@ -89,6 +91,58 @@ def _resolve_file_or_404(db: Session, link: ShareLink, file_id: uuid.UUID) -> St
     if stored_file is None:
         raise HTTPException(status_code=404, detail="Datei nicht gefunden")
     return stored_file
+
+
+def _document_previews(db: Session, stored_files: list[StoredFile]) -> dict[int, tuple[StoredFile | None, int | None]]:
+    """stored_file.id -> (Vorschaubild der ersten Seite, Seitenzahl) für Dokumente des Links
+    (PDF, Word, …), die die Dokument-Pipeline bereits verarbeitet hat. Nur die Fassung genau
+    dieser Datei (ihre eigene Dokumentversion), nur das selbst erzeugte, saubere PNG desselben
+    Mandanten - öffentliche Sessions haben keinen RLS-Kontext, die Bindung hier ist das Netz.
+    Bilder haben ihre eigene Vorschau (ensure_thumbnail) und tauchen hier nicht auf."""
+    candidates = {f.id: f for f in stored_files if not (f.mime_type or "").startswith("image/")}
+    if not candidates:
+        return {}
+    originals = db.execute(
+        select(DocumentFile.stored_file_id, DocumentFile.document_version_id, Document.tenant_id)
+        .join(DocumentVersion, DocumentVersion.id == DocumentFile.document_version_id)
+        .join(Document, Document.id == DocumentVersion.document_id)
+        .where(DocumentFile.stored_file_id.in_(candidates), DocumentFile.role == FILE_ROLE_ORIGINAL)
+    ).all()
+    version_by_file = {
+        stored_file_id: version_id
+        for stored_file_id, version_id, tenant_id in originals
+        if tenant_id == candidates[stored_file_id].tenant_id
+    }
+    if not version_by_file:
+        return {}
+    version_ids = list(version_by_file.values())
+    previews = {
+        version_id: preview
+        for version_id, preview in db.execute(
+            select(DocumentFile.document_version_id, StoredFile)
+            .join(StoredFile, StoredFile.id == DocumentFile.stored_file_id)
+            .where(
+                DocumentFile.document_version_id.in_(version_ids),
+                DocumentFile.role == FILE_ROLE_PREVIEW,
+                StoredFile.scan_status == "clean",
+                StoredFile.mime_type == "image/png",
+            )
+        ).all()
+    }
+    page_counts = dict(
+        db.execute(
+            select(DocumentExtraction.document_version_id, DocumentExtraction.page_count).where(
+                DocumentExtraction.document_version_id.in_(version_ids)
+            )
+        ).all()
+    )
+    result: dict[int, tuple[StoredFile | None, int | None]] = {}
+    for stored_file_id, version_id in version_by_file.items():
+        preview = previews.get(version_id)
+        if preview is not None and preview.tenant_id != candidates[stored_file_id].tenant_id:
+            preview = None
+        result[stored_file_id] = (preview, page_counts.get(version_id))
+    return result
 
 
 def _policy_for(db: Session, link: ShareLink, stored_file: StoredFile) -> MetadataPolicy:
@@ -152,11 +206,14 @@ def get_public_share(token: str, request: Request, db: Session = Depends(get_db)
     link = _resolve_link_or_404(db, token)
     stored_files = _clean_stored_files_for_link(db, link)
     base = f"/api/public/share/{token}"
+    documents = _document_previews(db, stored_files)
     files = []
     for stored_file in stored_files:
         mime_type = stored_file.mime_type or ""
         is_image = mime_type.startswith("image/")
-        thumbnail_url = f"{base}/files/{stored_file.public_id}/thumbnail" if is_image else None
+        document_preview, page_count = documents.get(stored_file.id, (None, None))
+        has_thumbnail = is_image or document_preview is not None
+        thumbnail_url = f"{base}/files/{stored_file.public_id}/thumbnail" if has_thumbnail else None
         files.append(
             PublicShareFile(
                 id=stored_file.public_id,
@@ -168,7 +225,8 @@ def get_public_share(token: str, request: Request, db: Session = Depends(get_db)
                 height=stored_file.height,
                 taken_at=stored_file.exif_taken_at if link.share_capture_date else None,
                 thumbnail_url=thumbnail_url,
-                view_url=f"{base}/files/{stored_file.public_id}/view" if mime_type in _INLINE_IMAGE_TYPES else thumbnail_url,
+                view_url=f"{base}/files/{stored_file.public_id}/view" if mime_type in _INLINE_IMAGE_TYPES else (thumbnail_url if is_image else None),
+                page_count=page_count,
                 download_url=f"{base}/files/{stored_file.public_id}/download",
             )
         )
@@ -197,6 +255,16 @@ def get_public_share_thumbnail(token: str, file_id: uuid.UUID, request: Request,
     _enforce_rate_limit(request, "thumbnail", limit=3000)
     link = _resolve_link_or_404(db, token)
     stored_file = _resolve_file_or_404(db, link, file_id)
+    if not (stored_file.mime_type or "").startswith("image/"):
+        # Dokumente: erste Seite aus der Dokument-Pipeline (selbst erzeugtes PNG), sonst 404.
+        preview, _page_count = _document_previews(db, [stored_file]).get(stored_file.id, (None, None))
+        if preview is None:
+            raise HTTPException(status_code=404, detail="Keine Vorschau verfügbar")
+        return release_for_stream(db, object_response(
+            request, namespace_for_stored_file(db, preview), preview.storage_path, media_type="image/png",
+            headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=3600"},
+            not_found_detail="Keine Vorschau verfügbar",
+        ))
     thumbnail_path = service.ensure_thumbnail(db, stored_file, settings.storage_root)
     if thumbnail_path is None:
         raise HTTPException(status_code=404, detail="Keine Vorschau verfügbar")

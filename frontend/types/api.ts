@@ -498,6 +498,8 @@ export type PublicShareFile = {
   thumbnail_url: string | null;
   view_url: string | null;
   download_url: string;
+  /** Seitenzahl eines Dokuments, sobald die Dokument-Pipeline es gelesen hat. */
+  page_count?: number | null;
 };
 
 export type PublicShare = {

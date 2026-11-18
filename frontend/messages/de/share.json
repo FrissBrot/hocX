@@ -22,8 +22,7 @@
     "validUntil": "Link gültig bis {date}",
     "select": "Auswählen",
     "cancelSelect": "Abbrechen",
-    "downloadSelected": "{count, plural, =0 {Nichts ausgewählt} one {# herunterladen} other {# herunterladen}}",
-    "downloadAll": "Alle herunterladen",
+    "downloadAll": "Alle herunterladen (ZIP)",
     "download": "Herunterladen",
     "noFiles": "Keine Dateien verfügbar.",
     "open": "{name} öffnen",
@@ -33,6 +32,20 @@
     "close": "Schliessen",
     "position": "{index} von {total}",
     "footerNotice": "Bitte teile diese Fotos nicht öffentlich ohne Einverständnis der abgebildeten Personen.",
-    "sharedWith": "Geteilt mit <brand>hocX</brand>"
+    "sharedWith": "Geteilt mit <brand>hocX</brand>",
+    "selectedCount": "{count} ausgewählt",
+    "selectAll": "Alle",
+    "selectNone": "Keine",
+    "downloadSelection": "Auswahl herunterladen",
+    "eyebrowAlbum": "Fotoalbum",
+    "eyebrowFiles": "Geteilte Dateien",
+    "viewLabel": "Ansicht",
+    "viewGrid": "Kacheln",
+    "viewList": "Liste",
+    "pageCount": "{count, plural, one {# Seite} other {# Seiten}}",
+    "downloadFile": "{name} herunterladen",
+    "noPreview": "Für diese Datei gibt es keine Vorschau.",
+    "filmstrip": "Alle Dateien",
+    "footerNoticeFiles": "Dieser Link ist persönlich. Leite ihn nur an Personen weiter, für die die Dateien bestimmt sind."
   }
 }
