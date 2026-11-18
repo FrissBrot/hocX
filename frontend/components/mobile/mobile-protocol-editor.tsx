@@ -493,7 +493,7 @@ export function MobileProtocolEditor({
         <NotesSheet
           protocolId={protocol.id}
           value={sessionNotes}
-          editable={!forceReadOnly}
+          editable={!isReadOnly}
           onSaved={setSessionNotes}
           onPendingSave={(save) => {
             pendingNotesSaveRef.current = save;
