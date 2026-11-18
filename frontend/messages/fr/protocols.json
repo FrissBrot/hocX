@@ -401,13 +401,6 @@
   "refreshDataAction": "⟳ Actualiser les données",
   "removeColumn": "Supprimer la colonne",
   "reopenTodo": "Rouvrir la tâche",
-  "richTextEditor": {
-    "bold": "Gras (Ctrl+B)",
-    "bulletList": "Liste à puces",
-    "italic": "Italique (Ctrl+I)",
-    "openLink": "Ctrl/Cmd+clic ouvre le lien",
-    "orderedList": "Liste numérotée"
-  },
   "sameAsThisProtocol": "Comme ce procès-verbal",
   "search": {
     "ariaLabel": "Rechercher un chapitre ou un mot",

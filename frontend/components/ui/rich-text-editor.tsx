@@ -21,7 +21,7 @@ type RichTextEditorProps = {
 };
 
 export function RichTextEditor({ value, onChange, readOnly = false, placeholder, trackedBaseline }: RichTextEditorProps) {
-  const t = useTranslations("protocols.richTextEditor");
+  const t = useTranslations("common.richTextEditor");
   // Keep a stable ref so the handleKeyDown closure always sees the current editor
   const editorRef = useRef<ReturnType<typeof useEditor>>(null);
   // Read via ref inside the tracked-changes plugin's decorations() callback so

@@ -238,5 +238,12 @@
     "confirmMerge": "«{newTag}» is already used on {count, plural, one {# event} other {# events}}: both tags will be merged into one permanently.",
     "colorSaveFailed": "Colour could not be saved",
     "importantSaveFailed": "Marking could not be saved"
+  },
+  "richTextEditor": {
+    "bold": "Bold (Ctrl+B)",
+    "bulletList": "Bullet list",
+    "italic": "Italic (Ctrl+I)",
+    "openLink": "Ctrl/Cmd+click opens the link",
+    "orderedList": "Numbered list"
   }
 }

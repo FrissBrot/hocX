@@ -238,5 +238,12 @@
     "confirmMerge": "«{newTag}» è già usato in {count, plural, one {# appuntamento} other {# appuntamenti}}: i due tag verranno uniti definitivamente.",
     "colorSaveFailed": "Impossibile salvare il colore",
     "importantSaveFailed": "Impossibile salvare la marcatura"
+  },
+  "richTextEditor": {
+    "bold": "Grassetto (Ctrl+B)",
+    "bulletList": "Elenco puntato",
+    "italic": "Corsivo (Ctrl+I)",
+    "openLink": "Ctrl/Cmd+clic apre il link",
+    "orderedList": "Elenco numerato"
   }
 }

@@ -238,5 +238,12 @@
     "confirmMerge": "«{newTag}» est déjà utilisé sur {count, plural, one {# rendez-vous} other {# rendez-vous}} : les deux tags seront fusionnés définitivement.",
     "colorSaveFailed": "La couleur n'a pas pu être enregistrée",
     "importantSaveFailed": "Le marquage n'a pas pu être enregistré"
+  },
+  "richTextEditor": {
+    "bold": "Gras (Ctrl+B)",
+    "bulletList": "Liste à puces",
+    "italic": "Italique (Ctrl+I)",
+    "openLink": "Ctrl/Cmd+clic ouvre le lien",
+    "orderedList": "Liste numérotée"
   }
 }

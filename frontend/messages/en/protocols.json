@@ -401,13 +401,6 @@
   "refreshDataAction": "⟳ Refresh data",
   "removeColumn": "Remove column",
   "reopenTodo": "Reopen todo",
-  "richTextEditor": {
-    "bold": "Bold (Ctrl+B)",
-    "bulletList": "Bullet list",
-    "italic": "Italic (Ctrl+I)",
-    "openLink": "Ctrl/Cmd+click opens the link",
-    "orderedList": "Numbered list"
-  },
   "sameAsThisProtocol": "Same as this protocol",
   "search": {
     "ariaLabel": "Search chapter or word",
