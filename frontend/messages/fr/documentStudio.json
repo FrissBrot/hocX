@@ -1430,7 +1430,7 @@
       "normal": "Normal",
       "very_compact": "Très compact"
     },
-    "duplicate": "Dupliquer (Ctrl+D)",
+    "duplicate": "Dupliquer ({shortcut})",
     "emptyText": "Texte si vide",
     "enabled": "Afficher",
     "enabledHelp": "Les éléments désactivés restent dans le modèle mais n’apparaissent pas dans le PDF.",
@@ -1825,7 +1825,7 @@
     "publish": "Publier",
     "publishBlocked": "Corrigez {count, plural, one {# erreur} other {# erreurs}}, puis publiez.",
     "redo": "Rétablir",
-    "redoShortcut": "Rétablir (Ctrl+Y)",
+    "redoShortcut": "Rétablir ({shortcut})",
     "save": "Enregistrer",
     "saveState": {
       "conflict": "Conflit",
@@ -1841,7 +1841,7 @@
     "toLandscape": "Paysage",
     "toPortrait": "Portrait",
     "undo": "Annuler",
-    "undoShortcut": "Annuler (Ctrl+Z)",
+    "undoShortcut": "Annuler ({shortcut})",
     "view": "Vue",
     "viewValue": {
       "design": "Concevoir",

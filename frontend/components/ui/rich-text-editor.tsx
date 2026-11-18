@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl";
 import { TrackedChanges } from "@/components/ui/tracked-changes-extension";
 import { Autolink } from "@/components/ui/autolink-extension";
 import { richTextMarkdownExtensions, type MarkdownStorage } from "@/components/ui/rich-text-markdown";
+import { isApplePlatform, useShortcutLabel } from "@/lib/search/shortcuts";
 
 type RichTextEditorProps = {
   value: string;
@@ -22,6 +23,8 @@ type RichTextEditorProps = {
 
 export function RichTextEditor({ value, onChange, readOnly = false, placeholder, trackedBaseline }: RichTextEditorProps) {
   const t = useTranslations("common.richTextEditor");
+  const shortcut = useShortcutLabel();
+  const tKeys = useTranslations("common.keys");
   // Keep a stable ref so the handleKeyDown closure always sees the current editor
   const editorRef = useRef<ReturnType<typeof useEditor>>(null);
   // Read via ref inside the tracked-changes plugin's decorations() callback so
@@ -42,7 +45,7 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
     extensions: [
       ...richTextMarkdownExtensions(),
       TrackedChanges.configure({ getBaseline: () => baselineRef.current }),
-      Autolink.configure({ openHint: t("openLink") }),
+      Autolink.configure({ openHint: t("openLink", { modifier: isApplePlatform() ? "⌘" : tKeys("ctrl") }) }),
     ],
     content: value,
     editable: !readOnly,
@@ -135,7 +138,7 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
             type="button"
             className={`rich-text-btn${editor?.isActive("bold") ? " active" : ""}`}
             onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleBold().run(); }}
-            title={t("bold")}
+            title={t("bold", { shortcut: shortcut("B") })}
           >
             <strong>B</strong>
           </button>
@@ -143,7 +146,7 @@ export function RichTextEditor({ value, onChange, readOnly = false, placeholder,
             type="button"
             className={`rich-text-btn${editor?.isActive("italic") ? " active" : ""}`}
             onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleItalic().run(); }}
-            title={t("italic")}
+            title={t("italic", { shortcut: shortcut("I") })}
           >
             <em>I</em>
           </button>

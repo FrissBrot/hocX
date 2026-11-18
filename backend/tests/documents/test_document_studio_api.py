@@ -219,9 +219,9 @@ def test_roles(db, world):
     with pytest.raises(HTTPException) as excinfo:
         _create(db, {**world, "writer": world["reader"]})
     assert excinfo.value.status_code == 403
-    reader = studio.get_capabilities(user=world["reader"])
+    reader = studio.get_capabilities(user=world["reader"], db=db)
     assert reader["export"] and not reader["edit_templates"] and not reader["publish_templates"] and not reader["manage_brand"]
-    assert studio.get_capabilities(user=world["admin"])["publish_templates"] is True
+    assert studio.get_capabilities(user=world["admin"], db=db)["publish_templates"] is True
     with pytest.raises(HTTPException) as excinfo:
         studio.create_document_brand(studio.BrandCreate(name="X"), db=db, user=world["writer"])
     assert excinfo.value.status_code == 403

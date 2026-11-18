@@ -216,6 +216,7 @@ Der Schliessen-Button oben rechts ist immer der Icon-Button (`✕`, `button-icon
 - Icon-Buttons haben `aria-label`, Modals einen Titel, Tabellen echte `<th>`.
 - Kontrast: Text auf `--x-bg` immer `--x-fg`, Text auf Vollfarbe immer `--on-solid`.
 - Interaktive Flächen mindestens 28 px hoch (`button-icon-soft`), Standard 36–48 px.
+- **Tastenkürzel** nie fest als «Ctrl+K» oder «Strg+Z» beschriften: auf Mac, iPhone und iPad heisst die Taste ⌘. Texte bekommen einen Platzhalter (`"Rückgängig ({shortcut})"`), die Komponente füllt ihn mit `useShortcutLabel()("Z")` aus `@/lib/search/shortcuts` (Apple `⌘Z`, sonst `Strg+Z`/`Ctrl+Z` je Sprache); nur der Tastenname allein: `useModifierLabel()`. Tastendrücke immer mit `event.ctrlKey || event.metaKey` prüfen. Der Checker meldet feste Kürzel in Übersetzungen (`kuerzel`).
 
 ## 10. Arbeitsablauf bei UI-Änderungen
 

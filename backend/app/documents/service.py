@@ -793,6 +793,10 @@ def exports_are_complete(db: Session, user: CurrentUser) -> bool:
     return not missing_export_permissions(db, user)
 
 
+def _verify_base(url: str | None) -> str:
+    return (url or "").split("?", 1)[0].rstrip("/")
+
+
 def _view_of(export: DocumentExport) -> str | None:
     return (export.options_json or {}).get("view")
 
@@ -835,7 +839,11 @@ def _reuse_existing_export(
         and export.language == prepared.language
         and export.template_id == (prepared.template.id if prepared.template is not None else None)
         and options.get("options") == request.options.model_dump(mode="json")
-        and options.get("verify_url") == verify_link
+        # Prüf-Adresse ohne Dokument-ID («…?id=<id>» ist bei jedem PDF anders): gewechselte
+        # Prüf-Domain ergibt ein neues PDF, sonst bleibt es dasselbe
+        and _verify_base(options.get("verify_url")) == _verify_base(verify_link)
+        # Anzeige der Organisation auf der Prüfseite (Mandanten-ID im XMP) unverändert
+        and bool(options.get("identity")) == bool(db.scalar(select(Tenant.verify_show_identity).where(Tenant.id == protocol.tenant_id)))
     )
     if not unchanged:
         return None
@@ -981,6 +989,8 @@ def _finalize_render(
                 "verify_url": render_info.verify_link,
                 # Sicht des Exportierenden (document_view_key): Wiederverwendung nur innerhalb derselben
                 "view": document_view_key(db, user),
+                # Mandanten-ID im XMP nur mit freigegebener Anzeige (TYPST-011): Wechsel ergibt ein neues PDF
+                "identity": bool(tenant is not None and tenant.verify_show_identity),
                 # Eingeschränkte Fassung: welche Platzhalter das PDF enthält (fehlende Berechtigung)
                 "restricted": prepared.restricted,
             },

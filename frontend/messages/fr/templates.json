@@ -1023,6 +1023,139 @@
       "in_progress": "En cours",
       "done": "Terminée",
       "cancelled": "Annulée"
+    },
+    "tabs": {
+      "navLabel": "Pages du bloc",
+      "blockType": "Type de bloc",
+      "change": "Modifier",
+      "content": {
+        "label": "Contenu",
+        "description": "Ce qui figure au procès-verbal – pour un tableau, ses lignes."
+      },
+      "repeat": {
+        "label": "Répétition",
+        "description": "Une fois, ou une fois par événement ou tâche correspondant."
+      },
+      "basics": {
+        "label": "Bases",
+        "description": "Nom dans la liste des blocs, titre dans le procès-verbal et indication."
+      },
+      "behavior": {
+        "label": "Comportement",
+        "description": "Où le bloc apparaît et s’il peut être modifié."
+      },
+      "summary": {
+        "list": "Liste « {name} »",
+        "rows": "{count, plural, one {# ligne} other {# lignes}}",
+        "matches": "{count, plural, =0 {aucun résultat} one {# résultat} other {# résultats}}",
+        "blocks": "actuellement {count, plural, =0 {aucun résultat} one {# résultat → # bloc} other {# résultats → # blocs}}",
+        "unnamed": "Sans nom",
+        "behaviorDefault": "Modifiable, dans le PDF, visible",
+        "off": {
+          "is_editable": "figé",
+          "export_visible": "pas dans le PDF",
+          "is_visible": "masqué dans l’éditeur"
+        }
+      }
+    },
+    "wizard": {
+      "restart": "Relancer l’assistant",
+      "step": {
+        "repeat": "À quelle fréquence ?",
+        "filter_event": "Quels événements ?",
+        "filter_todo": "Quelles tâches ?",
+        "source": "D’où viennent les lignes ?",
+        "preset": "Modèle de départ"
+      },
+      "title": {
+        "repeat": "Combien de fois le bloc apparaît-il ?",
+        "filter_event": "Pour quels événements ?",
+        "filter_todo": "Pour quelles tâches ?",
+        "source": "D’où viennent les lignes ?",
+        "preset": "Par quoi commencer ?"
+      },
+      "description": {
+        "repeat": "Une fois dans l’élément – ou automatiquement une fois par événement ou tâche.",
+        "filter_event": "Chaque événement correspondant obtient son propre bloc dans le procès-verbal. Compté à partir de la date du procès-verbal.",
+        "filter_todo": "Chaque tâche correspondante obtient son propre bloc dans le procès-verbal.",
+        "source": "Tu définis ici tes propres lignes. Une liste globale affiche son contenu depuis Données › Listes.",
+        "preset": "Un modèle pré-remplit les lignes. Tout reste modifiable ensuite."
+      },
+      "example": {
+        "none": "p. ex. rapport de caisse, planification annuelle",
+        "event": "p. ex. un bloc par activité avec lieu de rendez-vous et programme",
+        "todo": "p. ex. état de chaque tâche ouverte"
+      },
+      "whichTag": "Quel tag ?",
+      "tagHelp": "Un événement correspond si son tag contient l’une des valeurs. Aucun choisi = tous.",
+      "whichRange": "Quelle période ?",
+      "range": {
+        "window": "Autour de la séance",
+        "future": "Tous les futurs",
+        "past": "Passés",
+        "all": "Tous"
+      },
+      "rangeHelp": {
+        "window": "{start} jours avant à {end} jours après",
+        "future": "À partir de la date du procès-verbal",
+        "past": "Avant la date du procès-verbal",
+        "all": "Sans limite de temps"
+      },
+      "refineLater": "Détails comme filtres de titre ou de cycle plus tard sous « Répétition ».",
+      "todoOpen": "Seulement les tâches ouvertes",
+      "todoOpenHelp": "Les tâches terminées n’apparaissent plus.",
+      "todoAll": "Toutes les tâches",
+      "todoAllHelp": "Les tâches terminées ont aussi un bloc.",
+      "sourceManualHelp": "Lignes avec libellé et valeur – texte, personne, événement ou entrée de liste.",
+      "sourceManualHelpWith": {
+        "event": "Lignes avec libellé et valeur, plus des champs de l’événement.",
+        "todo": "Lignes avec libellé et valeur, plus des champs de la tâche."
+      },
+      "sourceListHelp": "Affiche une liste de Données › Listes, p. ex. charges ou responsables du matériel.",
+      "whichList": "Quelle liste ?",
+      "preset": {
+        "event_overview": {
+          "title": "Aperçu de l’activité",
+          "help": "Quand, où, qui organise – plus qui participe et le programme."
+        },
+        "event_costs": {
+          "title": "Activité avec frais",
+          "help": "Pour les activités avec inscription : date et textes spéciaux de l’événement, délai d’inscription et responsable."
+        },
+        "todo_status": {
+          "title": "État des tâches",
+          "help": "Qui, pour quand, quel statut – plus l’état et la prochaine étape."
+        },
+        "responsibilities": {
+          "title": "Responsabilités",
+          "help": "Qui est responsable, qui remplace, remarque."
+        },
+        "empty": {
+          "title": "Commencer vide",
+          "help": "Une ligne vide – tout construire soi-même."
+        }
+      },
+      "presetRow": {
+        "whoGoes": "Qui participe",
+        "meetingPoint": "Lieu de rendez-vous",
+        "program": "Programme",
+        "registrationUntil": "Inscription jusqu’au",
+        "responsible": "Responsable",
+        "status": "État",
+        "nextStep": "Prochaine étape",
+        "deputy": "Remplaçant·e",
+        "remark": "Remarque"
+      },
+      "presetField": {
+        "when": "Quand",
+        "where": "Où",
+        "date": "Date"
+      },
+      "skip": "Passer – tout régler soi-même",
+      "stepOf": "Étape {step} sur {count}",
+      "back": "Retour",
+      "next": "Suivant",
+      "finish": "Terminé – régler les détails"
     }
   },
   "studio": {

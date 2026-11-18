@@ -1023,6 +1023,139 @@
       "in_progress": "In corso",
       "done": "Completato",
       "cancelled": "Annullato"
+    },
+    "tabs": {
+      "navLabel": "Pagine del blocco",
+      "blockType": "Tipo di blocco",
+      "change": "Modifica",
+      "content": {
+        "label": "Contenuto",
+        "description": "Cosa appare nel verbale – per una tabella, le righe."
+      },
+      "repeat": {
+        "label": "Ripetizione",
+        "description": "Una volta, o una volta per ogni evento o attività corrispondente."
+      },
+      "basics": {
+        "label": "Base",
+        "description": "Nome nell’elenco dei blocchi, titolo nel verbale e nota."
+      },
+      "behavior": {
+        "label": "Comportamento",
+        "description": "Dove appare il blocco e se può essere modificato."
+      },
+      "summary": {
+        "list": "Lista «{name}»",
+        "rows": "{count, plural, one {# riga} other {# righe}}",
+        "matches": "{count, plural, =0 {nessun risultato} one {# risultato} other {# risultati}}",
+        "blocks": "attualmente {count, plural, =0 {nessun risultato} one {# risultato → # blocco} other {# risultati → # blocchi}}",
+        "unnamed": "Senza nome",
+        "behaviorDefault": "Modificabile, nel PDF, visibile",
+        "off": {
+          "is_editable": "fisso",
+          "export_visible": "non nel PDF",
+          "is_visible": "nascosto nell’editor"
+        }
+      }
+    },
+    "wizard": {
+      "restart": "Riavvia l’assistente",
+      "step": {
+        "repeat": "Quante volte?",
+        "filter_event": "Quali eventi?",
+        "filter_todo": "Quali attività?",
+        "source": "Da dove vengono le righe?",
+        "preset": "Modello iniziale"
+      },
+      "title": {
+        "repeat": "Quante volte appare il blocco?",
+        "filter_event": "Per quali eventi?",
+        "filter_todo": "Per quali attività?",
+        "source": "Da dove vengono le righe?",
+        "preset": "Da cosa partire?"
+      },
+      "description": {
+        "repeat": "Una volta nell’elemento – o automaticamente una volta per evento o attività.",
+        "filter_event": "Ogni evento corrispondente ottiene un proprio blocco nel verbale. Contato dalla data del verbale.",
+        "filter_todo": "Ogni attività corrispondente ottiene un proprio blocco nel verbale.",
+        "source": "Le righe proprie le definisci qui. Una lista globale mostra il suo contenuto da Dati › Liste.",
+        "preset": "Un modello precompila le righe. Tutto resta modificabile dopo."
+      },
+      "example": {
+        "none": "ad es. rapporto di cassa, pianificazione annuale",
+        "event": "ad es. un blocco per attività con punto d’incontro e programma",
+        "todo": "ad es. stato di ogni attività aperta"
+      },
+      "whichTag": "Quale tag?",
+      "tagHelp": "Un evento corrisponde se il suo tag contiene uno dei valori. Nessuno scelto = tutti.",
+      "whichRange": "Quale periodo?",
+      "range": {
+        "window": "Intorno alla seduta",
+        "future": "Tutti i futuri",
+        "past": "Passati",
+        "all": "Tutti"
+      },
+      "rangeHelp": {
+        "window": "da {start} giorni prima a {end} giorni dopo",
+        "future": "Dalla data del verbale",
+        "past": "Prima della data del verbale",
+        "all": "Senza limite di tempo"
+      },
+      "refineLater": "Dettagli come filtri per titolo o ciclo più tardi in «Ripetizione».",
+      "todoOpen": "Solo attività aperte",
+      "todoOpenHelp": "Quelle completate non appaiono più.",
+      "todoAll": "Tutte le attività",
+      "todoAllHelp": "Anche quelle completate ricevono un blocco.",
+      "sourceManualHelp": "Righe con etichetta e valore – testo, persona, evento o voce di lista.",
+      "sourceManualHelpWith": {
+        "event": "Righe con etichetta e valore, più campi dall’evento.",
+        "todo": "Righe con etichetta e valore, più campi dall’attività."
+      },
+      "sourceListHelp": "Mostra una lista da Dati › Liste, ad es. incarichi o responsabili del materiale.",
+      "whichList": "Quale lista?",
+      "preset": {
+        "event_overview": {
+          "title": "Panoramica attività",
+          "help": "Quando, dove, chi organizza – più chi partecipa e il programma."
+        },
+        "event_costs": {
+          "title": "Attività con costi",
+          "help": "Per attività con iscrizione: data e testi speciali dall’evento, termine d’iscrizione e responsabile."
+        },
+        "todo_status": {
+          "title": "Stato delle attività",
+          "help": "Chi, entro quando, quale stato – più avanzamento e passo successivo."
+        },
+        "responsibilities": {
+          "title": "Responsabilità",
+          "help": "Chi è responsabile, chi sostituisce, osservazione."
+        },
+        "empty": {
+          "title": "Iniziare vuoto",
+          "help": "Una riga vuota – costruisci tutto da te."
+        }
+      },
+      "presetRow": {
+        "whoGoes": "Chi partecipa",
+        "meetingPoint": "Punto d’incontro",
+        "program": "Programma",
+        "registrationUntil": "Iscrizione entro",
+        "responsible": "Responsabile",
+        "status": "Avanzamento",
+        "nextStep": "Passo successivo",
+        "deputy": "Sostituto",
+        "remark": "Osservazione"
+      },
+      "presetField": {
+        "when": "Quando",
+        "where": "Dove",
+        "date": "Data"
+      },
+      "skip": "Salta – imposta tutto da te",
+      "stepOf": "Passo {step} di {count}",
+      "back": "Indietro",
+      "next": "Avanti",
+      "finish": "Fatto – imposta i dettagli"
     }
   },
   "studio": {

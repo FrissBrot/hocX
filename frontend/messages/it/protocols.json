@@ -198,7 +198,7 @@
     "backToProtocols": "← Torna ai verbali",
     "changeSaveFailed": "La modifica non può essere salvata",
     "configConflictReloaded": "Nel frattempo qualcun altro ha modificato questo blocco – è stata caricata la versione attuale. Ripeti la modifica.",
-    "ctrlFHint": "Ctrl+F",
+    "ctrlFHint": "{shortcut}",
     "entryCreateFailed": "La voce non può essere creata",
     "entryDeleteConfirm": "Eliminare definitivamente questa voce? Questa azione non può essere annullata.",
     "entryDeleteFailed": "La voce non può essere eliminata",

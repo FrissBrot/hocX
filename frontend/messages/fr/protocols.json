@@ -198,7 +198,7 @@
     "backToProtocols": "← Retour aux procès-verbaux",
     "changeSaveFailed": "La modification n'a pas pu être enregistrée",
     "configConflictReloaded": "Quelqu’un d’autre a modifié ce bloc entre-temps – la version actuelle a été chargée. Veuillez refaire votre modification.",
-    "ctrlFHint": "Ctrl+F",
+    "ctrlFHint": "{shortcut}",
     "entryCreateFailed": "L'entrée n'a pas pu être créée",
     "entryDeleteConfirm": "Supprimer définitivement cette entrée ? Cette action est irréversible.",
     "entryDeleteFailed": "L'entrée n'a pas pu être supprimée",

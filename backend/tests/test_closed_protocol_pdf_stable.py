@@ -111,8 +111,11 @@ def test_unchanged_draft_returns_the_latest_pdf_and_any_change_renders_new(db):
     assert _reuse_existing_export(db, request, _prepared(protocol, content="neu"), None, FULL_VIEW) is None
     assert _reuse_existing_export(db, request, _prepared(protocol, design="neu"), None, FULL_VIEW) is None
     assert _reuse_existing_export(db, request, _prepared(protocol, language="fr"), None, FULL_VIEW) is None
-    # Anderer Prüf-Link (neue Prüf-Domain) ebenso
-    assert _reuse_existing_export(db, request, _prepared(protocol), "https://verify.example.org/d/x", FULL_VIEW) is None
+    # Andere Prüf-Domain ebenso; dieselbe Prüfseite mit anderer Dokument-ID nicht
+    assert _reuse_existing_export(db, request, _prepared(protocol), "https://verify.example.org?id=x", FULL_VIEW) is None
+    latest.options_json = {**latest.options_json, "verify_url": "https://verify.example.org?id=alt"}
+    db.flush()
+    assert _reuse_existing_export(db, request, _prepared(protocol), "https://verify.example.org?id=neu", FULL_VIEW).export.public_id == latest.public_id
 
 
 def test_status_change_renders_new_even_with_the_same_content(db):

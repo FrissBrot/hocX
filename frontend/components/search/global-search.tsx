@@ -13,7 +13,7 @@ import { can } from "@/lib/permissions";
 import { storeSearchHandoff } from "@/lib/search/handoff";
 import { focusListSearch } from "@/lib/search/list-search";
 import { rankEntries } from "@/lib/search/match";
-import { useModifierLabel } from "@/lib/search/shortcuts";
+import { useShortcutLabel } from "@/lib/search/shortcuts";
 import { buildStaticEntries, type SearchEntry, type SearchGroup } from "@/lib/search/static-entries";
 import type { GlobalSearchResult, SessionInfo } from "@/types/api";
 
@@ -85,7 +85,7 @@ export function GlobalSearch({
   const userId = session?.user?.id != null ? String(session.user.id) : null;
   const searchesPeople = can(session, "participants.manage");
   const searchesFiles = can(session, "files.manage");
-  const modifier = useModifierLabel();
+  const shortcut = useShortcutLabel();
 
   const staticEntries = useMemo(() => buildStaticEntries(session, tNav, t), [session, tNav, t]);
 
@@ -263,7 +263,7 @@ export function GlobalSearch({
         <div className="global-search-footer">
           <span className="global-search-footer-hint"><kbd className="global-search-kbd">↑↓</kbd> {t("hintSelect")}</span>
           <span className="global-search-footer-hint"><kbd className="global-search-kbd">↵</kbd> {t("hintOpen")}</span>
-          {listInput ? <span className="global-search-footer-hint"><kbd className="global-search-kbd">{modifier} F</kbd> {t("hintList")}</span> : null}
+          {listInput ? <span className="global-search-footer-hint"><kbd className="global-search-kbd">{shortcut("F")}</kbd> {t("hintList")}</span> : null}
         </div>
       </div>
     </Modal>

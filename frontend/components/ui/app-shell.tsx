@@ -26,7 +26,7 @@ import { MobileShell } from "@/components/mobile/mobile-shell";
 import { useIsMobile } from "@/lib/hooks/use-is-mobile";
 import { InstallAppPrompt } from "@/components/ui/install-app-prompt";
 import { findListSearchInput } from "@/lib/search/list-search";
-import { useGlobalSearchShortcuts, useModifierLabel } from "@/lib/search/shortcuts";
+import { useGlobalSearchShortcuts, useShortcutLabel } from "@/lib/search/shortcuts";
 import type { GlobalSearchAction } from "@/components/search/global-search";
 
 // Globale Suche (Ctrl+K): erst beim ersten Öffnen laden.
@@ -114,7 +114,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
   const [sessionStatus, setSessionStatus] = useState(initialSession?.authenticated ? t("sessionReady") : t("sessionLoading"));
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchListInput, setSearchListInput] = useState<HTMLInputElement | null>(null);
-  const modifierLabel = useModifierLabel();
+  const shortcut = useShortcutLabel();
 
   // Ctrl+K öffnet (und schliesst) die globale Suche; das Suchfeld einer Liste auf der Seite wird
   // beim Öffnen gemerkt, bevor das Suchfenster selbst der oberste Dialog ist.
@@ -510,7 +510,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
                 <path d="M11 11L14.5 14.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
               <span className="global-search-trigger-label">{tCommon("globalSearch")}</span>
-              <kbd className="global-search-kbd">{modifierLabel} K</kbd>
+              <kbd className="global-search-kbd">{shortcut("K")}</kbd>
             </button>
             <Popover open={avatarMenuOpen} onOpenChange={setAvatarMenuOpen} anchorRef={avatarTriggerRef} align="start">
               <Menu>

@@ -1,17 +1,39 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 
 import { findListSearchInput, focusListSearch, isEditableTarget } from "@/lib/search/list-search";
 
 /** ⌘ auf Apple-Geräten, sonst Ctrl - nur für die Anzeige der Tastenkürzel. */
+/** Apple-Gerät (Mac, iPhone, iPad): Kürzel mit ⌘ statt Ctrl/Strg. Nur im Browser aufrufen. */
+export function isApplePlatform(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const platform = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ?? navigator.platform ?? "";
+  return /mac|iphone|ipad/i.test(platform);
+}
+
+/** true auf Apple-Geräten; erst nach dem Mounten bestimmt (Server-Render ohne Gerät). */
+export function useIsApple(): boolean {
+  const [apple, setApple] = useState(false);
+  useEffect(() => setApple(isApplePlatform()), []);
+  return apple;
+}
+
+/** Name der Steuerungstaste: «⌘» auf Apple-Geräten, sonst «Strg»/«Ctrl» je nach Sprache. */
 export function useModifierLabel(): string {
-  const [label, setLabel] = useState("Ctrl"); // i18n-ok: Tastenname
-  useEffect(() => {
-    const platform = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ?? navigator.platform ?? "";
-    if (/mac|iphone|ipad/i.test(platform)) setLabel("⌘");
-  }, []);
-  return label;
+  const t = useTranslations("common.keys");
+  return useIsApple() ? "⌘" : t("ctrl");
+}
+
+/**
+ * Beschriftung eines Tastenkürzels mit Steuerungstaste - überall statt festem «Ctrl+…»/«Strg+…»
+ * (DESIGN.md Abschnitt 9): Apple «⌘K», sonst «Strg+K» bzw. «Ctrl+K».
+ */
+export function useShortcutLabel(): (key: string) => string {
+  const t = useTranslations("common.keys");
+  const apple = useIsApple();
+  return (key: string) => (apple ? `⌘${key}` : `${t("ctrl")}+${key}`);
 }
 
 /**

@@ -4,6 +4,7 @@
 // (Gestalten/Vorschau/Geteilt), Seitenformat, Zoom, Status und Veröffentlichen.
 
 import { useTranslations } from "next-intl";
+import { useShortcutLabel } from "@/lib/search/shortcuts";
 
 import { Badge } from "@/components/ui/badge";
 import type { EditorMode, PageSetup } from "@/components/documents/designer/toolbar-types";
@@ -46,6 +47,7 @@ type Props = {
 
 export function Toolbar(props: Props) {
   const t = useTranslations("documentStudio");
+  const shortcut = useShortcutLabel();
   const { editable } = props;
   const simple = props.onOpenAdvanced !== undefined;
   return (
@@ -65,10 +67,10 @@ export function Toolbar(props: Props) {
         {props.status === "unpublished" && <Badge variant="neutral">{t("toolbar.statusUnpublished")}</Badge>}
       </div>
       <div className="studio-toolbar-group">
-        <button type="button" className="button-ghost button-icon" aria-label={t("toolbar.undo")} title={t("toolbar.undoShortcut")} disabled={!props.canUndo || !editable} onClick={props.onUndo}>
+        <button type="button" className="button-ghost button-icon" aria-label={t("toolbar.undo")} title={t("toolbar.undoShortcut", { shortcut: shortcut("Z") })} disabled={!props.canUndo || !editable} onClick={props.onUndo}>
           ↶
         </button>
-        <button type="button" className="button-ghost button-icon" aria-label={t("toolbar.redo")} title={t("toolbar.redoShortcut")} disabled={!props.canRedo || !editable} onClick={props.onRedo}>
+        <button type="button" className="button-ghost button-icon" aria-label={t("toolbar.redo")} title={t("toolbar.redoShortcut", { shortcut: shortcut("Y") })} disabled={!props.canRedo || !editable} onClick={props.onRedo}>
           ↷
         </button>
         {simple ? (

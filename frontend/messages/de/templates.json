@@ -1023,6 +1023,139 @@
       "in_progress": "In Arbeit",
       "done": "Erledigt",
       "cancelled": "Abgebrochen"
+    },
+    "tabs": {
+      "navLabel": "Seiten des Blocks",
+      "blockType": "Blocktyp",
+      "change": "Ändern",
+      "content": {
+        "label": "Inhalt",
+        "description": "Was im Protokoll steht – bei einer Tabelle die Zeilen."
+      },
+      "repeat": {
+        "label": "Wiederholung",
+        "description": "Einmal oder einmal pro passendem Termin bzw. passender Pendenz."
+      },
+      "basics": {
+        "label": "Grundlagen",
+        "description": "Name in der Blockliste, Überschrift im Protokoll und Hinweis."
+      },
+      "behavior": {
+        "label": "Verhalten",
+        "description": "Wo der Block erscheint und ob er bearbeitet werden kann."
+      },
+      "summary": {
+        "list": "Liste «{name}»",
+        "rows": "{count, plural, one {# Zeile} other {# Zeilen}}",
+        "matches": "{count, plural, =0 {kein Treffer} one {# Treffer} other {# Treffer}}",
+        "blocks": "aktuell {count, plural, =0 {kein Treffer} one {# Treffer → # Block} other {# Treffer → # Blöcke}}",
+        "unnamed": "Ohne Namen",
+        "behaviorDefault": "Bearbeitbar, im PDF, sichtbar",
+        "off": {
+          "is_editable": "fixiert",
+          "export_visible": "nicht im PDF",
+          "is_visible": "im Editor versteckt"
+        }
+      }
+    },
+    "wizard": {
+      "restart": "Assistent erneut starten",
+      "step": {
+        "repeat": "Wie oft?",
+        "filter_event": "Welche Termine?",
+        "filter_todo": "Welche Pendenzen?",
+        "source": "Woher die Zeilen?",
+        "preset": "Startvorlage"
+      },
+      "title": {
+        "repeat": "Wie oft erscheint der Block?",
+        "filter_event": "Für welche Termine?",
+        "filter_todo": "Für welche Pendenzen?",
+        "source": "Woher kommen die Zeilen?",
+        "preset": "Womit starten?"
+      },
+      "description": {
+        "repeat": "Einmal im Element – oder automatisch einmal pro Termin oder Pendenz.",
+        "filter_event": "Für jeden passenden Termin entsteht im Protokoll ein eigener Block. Gezählt ab dem Protokolldatum.",
+        "filter_todo": "Für jede passende Pendenz entsteht im Protokoll ein eigener Block.",
+        "source": "Eigene Zeilen legst du hier fest. Eine globale Liste zeigt ihren Inhalt aus Datensätze › Listen.",
+        "preset": "Eine Vorlage füllt die Zeilen vor. Alles bleibt danach änderbar."
+      },
+      "example": {
+        "none": "z. B. Kassenbericht, Jahresplanung",
+        "event": "z. B. ein Block je Anlass mit Treffpunkt und Programm",
+        "todo": "z. B. Stand jeder offenen Aufgabe"
+      },
+      "whichTag": "Welcher Tag?",
+      "tagHelp": "Termin passt, wenn sein Tag einen der Werte enthält. Keiner gewählt = alle.",
+      "whichRange": "Welcher Zeitraum?",
+      "range": {
+        "window": "Rund um die Sitzung",
+        "future": "Alle künftigen",
+        "past": "Vergangene",
+        "all": "Alle"
+      },
+      "rangeHelp": {
+        "window": "{start} Tage vorher bis {end} Tage nachher",
+        "future": "Ab dem Protokolldatum",
+        "past": "Vor dem Protokolldatum",
+        "all": "Ohne Zeitgrenze"
+      },
+      "refineLater": "Feinheiten wie Titel- oder Zyklusfilter später unter «Wiederholung».",
+      "todoOpen": "Nur offene Pendenzen",
+      "todoOpenHelp": "Erledigte erscheinen nicht mehr.",
+      "todoAll": "Alle Pendenzen",
+      "todoAllHelp": "Auch erledigte bekommen einen Block.",
+      "sourceManualHelp": "Zeilen mit Bezeichnung und Wert – Text, Person, Termin oder Listeneintrag.",
+      "sourceManualHelpWith": {
+        "event": "Zeilen mit Bezeichnung und Wert, dazu Felder aus dem Termin.",
+        "todo": "Zeilen mit Bezeichnung und Wert, dazu Felder aus der Pendenz."
+      },
+      "sourceListHelp": "Zeigt eine Liste aus Datensätze › Listen, z. B. Ämtli oder Materialverantwortliche.",
+      "whichList": "Welche Liste?",
+      "preset": {
+        "event_overview": {
+          "title": "Anlass-Übersicht",
+          "help": "Wann, wo, wer organisiert – plus wer geht und das Programm."
+        },
+        "event_costs": {
+          "title": "Anlass mit Kosten",
+          "help": "Für Anlässe mit Anmeldung: Datum und Spezial-Texte aus dem Termin, Anmeldeschluss und Verantwortliche."
+        },
+        "todo_status": {
+          "title": "Pendenzen-Stand",
+          "help": "Wer, bis wann, welcher Status – plus Stand und nächster Schritt."
+        },
+        "responsibilities": {
+          "title": "Verantwortlichkeiten",
+          "help": "Wer ist zuständig, wer vertritt, Bemerkung."
+        },
+        "empty": {
+          "title": "Leer starten",
+          "help": "Eine leere Zeile – alles selbst aufbauen."
+        }
+      },
+      "presetRow": {
+        "whoGoes": "Wer geht",
+        "meetingPoint": "Treffpunkt",
+        "program": "Programm",
+        "registrationUntil": "Anmeldung bis",
+        "responsible": "Verantwortlich",
+        "status": "Stand",
+        "nextStep": "Nächster Schritt",
+        "deputy": "Stellvertretung",
+        "remark": "Bemerkung"
+      },
+      "presetField": {
+        "when": "Wann",
+        "where": "Wo",
+        "date": "Datum"
+      },
+      "skip": "Überspringen – alles selbst einstellen",
+      "stepOf": "Schritt {step} von {count}",
+      "back": "Zurück",
+      "next": "Weiter",
+      "finish": "Fertig – Details einstellen"
     }
   },
   "studio": {

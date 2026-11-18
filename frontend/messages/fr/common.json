@@ -240,10 +240,13 @@
     "importantSaveFailed": "Le marquage n'a pas pu être enregistré"
   },
   "richTextEditor": {
-    "bold": "Gras (Ctrl+B)",
+    "bold": "Gras ({shortcut})",
     "bulletList": "Liste à puces",
-    "italic": "Italique (Ctrl+I)",
-    "openLink": "Ctrl/Cmd+clic ouvre le lien",
+    "italic": "Italique ({shortcut})",
+    "openLink": "{modifier} + clic ouvre le lien",
     "orderedList": "Liste numérotée"
+  },
+  "keys": {
+    "ctrl": "Ctrl"
   }
 }

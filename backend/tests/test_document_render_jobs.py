@@ -19,6 +19,16 @@ from app.services import document_render_jobs
 from tests.factories import make_app_user, make_current_user, make_protocol, make_template, make_tenant
 
 
+@pytest.fixture(autouse=True)
+def _system_templates(db):
+    """Systemvorlagen wie beim App-Start (wie tests/documents/conftest.py) - sonst hing der Test
+    davon ab, dass ein früherer Test sie dauerhaft gespeichert hatte."""
+    from app.documents.system_templates import sync_system_templates
+
+    sync_system_templates(db)
+    db.flush()
+
+
 def _world(db):
     tenant = make_tenant(db)
     template = make_template(db, tenant.id)

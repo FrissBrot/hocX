@@ -240,10 +240,13 @@
     "importantSaveFailed": "Markierung konnte nicht gespeichert werden"
   },
   "richTextEditor": {
-    "bold": "Fett (Ctrl+B)",
+    "bold": "Fett ({shortcut})",
     "bulletList": "Aufzählung",
-    "italic": "Kursiv (Ctrl+I)",
-    "openLink": "Strg/Cmd+Klick öffnet den Link",
+    "italic": "Kursiv ({shortcut})",
+    "openLink": "{modifier} + Klick öffnet den Link",
     "orderedList": "Nummerierte Liste"
+  },
+  "keys": {
+    "ctrl": "Strg"
   }
 }

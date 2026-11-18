@@ -1430,7 +1430,7 @@
       "normal": "Normal",
       "very_compact": "Very compact"
     },
-    "duplicate": "Duplicate (Ctrl+D)",
+    "duplicate": "Duplicate ({shortcut})",
     "emptyText": "Text if empty",
     "enabled": "Show",
     "enabledHelp": "Switched-off elements stay in the template but do not appear in the PDF.",
@@ -1825,7 +1825,7 @@
     "publish": "Publish",
     "publishBlocked": "Fix {count, plural, one {# error} other {# errors}}, then publish.",
     "redo": "Redo",
-    "redoShortcut": "Redo (Ctrl+Y)",
+    "redoShortcut": "Redo ({shortcut})",
     "save": "Save",
     "saveState": {
       "conflict": "Conflict",
@@ -1841,7 +1841,7 @@
     "toLandscape": "Landscape",
     "toPortrait": "Portrait",
     "undo": "Undo",
-    "undoShortcut": "Undo (Ctrl+Z)",
+    "undoShortcut": "Undo ({shortcut})",
     "view": "View",
     "viewValue": {
       "design": "Design",

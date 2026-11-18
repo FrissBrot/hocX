@@ -54,8 +54,9 @@ def test_repeated_exports_form_versions_of_one_document(db):
     assert document is not None and document.tenant_id == tenant.id and document.source_kind == "protocol_export"
     assert [version.version_number for version in _versions(db, document)] == [1]
 
-    # Gleicher Inhalt: keine neue Version, nur die Darstellung wird ersetzt.
+    # Gleicher Inhalt: kein neues PDF und keine neue Version
     second = _render(db, tenant, protocol)
+    assert second.export.public_id == first.export.public_id
     db.refresh(document)
     versions = _versions(db, document)
     assert len(versions) == 1
@@ -76,8 +77,6 @@ def test_repeated_exports_form_versions_of_one_document(db):
     get_object_store().purge_deleted(db)
     assert get_object_store().exists(MAIN, _pdf_of(db, versions[0]).storage_path)
     assert db.get(DocumentExport, second.export.id).stored_file_id == second.stored_file.id
-    # Die erste Datei gehört zu keiner Version mehr (ersetzt) und ist freigegeben.
-    assert db.get(StoredFile, first.stored_file.id) is None
     # Ein Dokument je Protokoll und Dokumenttyp - nicht je Datei.
     assert db.scalar(select(Document.id).where(Document.protocol_id == protocol.id).limit(2).offset(1)) is None
 

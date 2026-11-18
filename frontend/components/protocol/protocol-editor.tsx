@@ -152,6 +152,7 @@ export function ProtocolEditor({
   useEffect(() => setReducedMotion(prefersReducedMotion()), []);
   const wheelActive = wheelEnabled && accordionEnabled && !reducedMotion;
   const t = useTranslations("protocols.editor");
+  const shortcut = useShortcutLabel();
   const tRoot = useTranslations("protocols");
   const tAgenda = useTranslations("agenda");
   const tCommon = useTranslations("common");
@@ -2243,7 +2244,7 @@ export function ProtocolEditor({
         <h1 className="protocol-document-title">{protocol.title || protocol.protocol_number}</h1>
         <div className="protocol-document-actions">
           <button type="button" className="button-ghost protocol-document-search-trigger" onClick={() => setSearchOpen(true)}>
-            {t("searchButton")} <span className="dropdown-hint">{t("ctrlFHint")}</span>
+            {t("searchButton")} <span className="dropdown-hint">{t("ctrlFHint", { shortcut: shortcut("F") })}</span>
           </button>
           <button
             type="button"

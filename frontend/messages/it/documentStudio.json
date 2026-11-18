@@ -1430,7 +1430,7 @@
       "normal": "Normale",
       "very_compact": "Molto compatto"
     },
-    "duplicate": "Duplica (Ctrl+D)",
+    "duplicate": "Duplica ({shortcut})",
     "emptyText": "Testo se vuoto",
     "enabled": "Mostra",
     "enabledHelp": "Gli elementi disattivati restano nel modello ma non compaiono nel PDF.",
@@ -1825,7 +1825,7 @@
     "publish": "Pubblica",
     "publishBlocked": "Correggi {count, plural, one {# errore} other {# errori}}, poi pubblica.",
     "redo": "Ripeti",
-    "redoShortcut": "Ripeti (Ctrl+Y)",
+    "redoShortcut": "Ripeti ({shortcut})",
     "save": "Salva",
     "saveState": {
       "conflict": "Conflitto",
@@ -1841,7 +1841,7 @@
     "toLandscape": "Orizzontale",
     "toPortrait": "Verticale",
     "undo": "Annulla",
-    "undoShortcut": "Annulla (Ctrl+Z)",
+    "undoShortcut": "Annulla ({shortcut})",
     "view": "Vista",
     "viewValue": {
       "design": "Progetta",

@@ -1430,7 +1430,7 @@
       "normal": "Normal",
       "very_compact": "Sehr kompakt"
     },
-    "duplicate": "Duplizieren (Strg+D)",
+    "duplicate": "Duplizieren ({shortcut})",
     "emptyText": "Text, wenn leer",
     "enabled": "Anzeigen",
     "enabledHelp": "Ausgeschaltete Elemente bleiben in der Vorlage, erscheinen aber nicht im PDF.",
@@ -1825,7 +1825,7 @@
     "publish": "Veröffentlichen",
     "publishBlocked": "{count, plural, one {# Fehler} other {# Fehler}} beheben, dann veröffentlichen.",
     "redo": "Wiederholen",
-    "redoShortcut": "Wiederholen (Strg+Y)",
+    "redoShortcut": "Wiederholen ({shortcut})",
     "save": "Speichern",
     "saveState": {
       "conflict": "Konflikt",
@@ -1841,7 +1841,7 @@
     "toLandscape": "Querformat",
     "toPortrait": "Hochformat",
     "undo": "Rückgängig",
-    "undoShortcut": "Rückgängig (Strg+Z)",
+    "undoShortcut": "Rückgängig ({shortcut})",
     "view": "Ansicht",
     "viewValue": {
       "design": "Gestalten",

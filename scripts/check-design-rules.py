@@ -198,6 +198,27 @@ def check_shared_copies() -> None:
             report(ROOT / copy, 1, "kopie", f"weicht von {source} ab - Aenderungen in beiden Apps gleich machen")
 
 
+SHORTCUT_TEXT = re.compile(r"\b(?:Ctrl|Strg|Cmd|Control)\s*(?:[+/]|-?Klick|-?click|-?clic)", re.IGNORECASE)
+
+
+def check_shortcut_texts() -> None:
+    """Tastenkürzel nie fest als «Ctrl+K»/«Strg+Z» in Texten: auf Apple-Geräten heisst die Taste ⌘.
+    Texte nehmen {shortcut}/{modifier} entgegen, die Komponenten füllen sie mit useShortcutLabel
+    bzw. useModifierLabel (lib/search/shortcuts.ts, DESIGN.md Abschnitt 9)."""
+    import json
+
+    def walk(node: object, path: str, file: Path) -> None:
+        if isinstance(node, dict):
+            for key, value in node.items():
+                walk(value, f"{path}.{key}" if path else key, file)
+        elif isinstance(node, str) and SHORTCUT_TEXT.search(node):
+            violations.append(f"{rel(file)}: [kuerzel] «{path}» schreibt die Steuerungstaste fest - {{shortcut}} mit useShortcutLabel nutzen")
+
+    for app in ("frontend", "abgabebox-frontend"):
+        for file in sorted((ROOT / app / "messages").glob("*/*.json")):
+            walk(json.loads(file.read_text()), "", file)
+
+
 def main() -> int:
     defined = defined_vars()
     targets = [Path(a).resolve() for a in sys.argv[1:]]
@@ -213,6 +234,7 @@ def main() -> int:
 
     check_shared_copies()
     if not targets:
+        check_shortcut_texts()
         # Bereichs-CSS: nur im Gesamtlauf, die Prüfung braucht den ganzen Importgraphen.
         scopes = subprocess.run([sys.executable, str(ROOT / "scripts/check-css-scopes.py")], capture_output=True, text=True)
         if scopes.returncode != 0:

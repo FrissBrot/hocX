@@ -22,7 +22,8 @@ import type { CycleConfigSummary } from "@/types/api";
 import { type BehaviorField, type BlockForm, repeatEventFilter, repeatSourcesFor, setRepeatSource, showsRepeat, type TableRow } from "./block-form";
 import { EventFilterEditor } from "./event-filter-editor";
 import { EVENT_LIST_DISPLAY_CHIPS, EventDisplayChips, rowTypeLabel, type RowInspectorData } from "./row-inspector";
-import { EVENT_TOKENS, TableBlockPreview, TableBlockSection, useMatchingSources } from "./table-block-editor";
+import { EVENT_TOKENS, eventFieldsOf, TableBlockPreview, TableBlockSection, todoFieldsOf, useMatchingSources } from "./table-block-editor";
+import { TableBlockWizard } from "./table-block-wizard";
 import { BlockTypePreview } from "./type-picker";
 import { Select } from "@/components/ui/select";
 
@@ -49,6 +50,29 @@ export function SettingsSection({ title, description, actions, children }: { tit
         {actions ? <div className="settings-section-actions">{actions}</div> : null}
       </div>
       <div className="settings-section-body">{children}</div>
+    </section>
+  );
+}
+
+type EditorTab = "content" | "repeat" | "basics" | "behavior";
+
+/** Typen mit eigener Seite «Inhalt» (die übrigen haben nur Grundlagen, Wiederholung, Verhalten). */
+const CONTENT_TAB_CODES = new Set([
+  "todo", "attendance", "session_date", "event_list", "finance_balance", "finance_transactions", "fine_list", "image", "form", "matrix", "chart",
+  "entry_exit", "session_notes",
+]);
+
+function CycleTokens() {
+  const t = useTranslations("templates.elementEditor");
+  return (
+    <section className="element-create-cycle-hints">
+      <h4>{t("cycleTokens.title")}</h4>
+      <div className="element-create-cycle-tokens">
+        <code>{"{cycle_name}"}</code>
+        <code>{"{cycle_year_start}"}</code>
+        <code>{"{cycle_year_end}"}</code>
+      </div>
+      <p className="muted">{t("cycleTokens.help")}</p>
     </section>
   );
 }
@@ -96,6 +120,10 @@ export function BlockEditor({
   // Tabellenblock: aufgeklappte Zeile (links) und Termin der Vorschau (rechts) teilen sich den Zustand.
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [previewIndex, setPreviewIndex] = useState(0);
+  const [tab, setTab] = useState<EditorTab>("content");
+  // Neuer Tabellenblock: erst der Assistent, danach die Detailseiten (jederzeit überspringbar)
+  const [wizardDone, setWizardDone] = useState(false);
+  const showWizard = mode === "create" && code === "form" && !wizardDone;
   const matchingSources = useMatchingSources(form, data.events);
   const matchingEvents = matchingSources.filter((item) => item.kind === "event");
   const previewItem = matchingSources[Math.min(previewIndex, Math.max(0, matchingSources.length - 1))] ?? null;
@@ -108,424 +136,28 @@ export function BlockEditor({
     { field: "title_as_subtitle", shown: true },
   ];
 
-  return (
-    <div className="element-create-layout">
-      <div className="element-create-fields">
-        {showHelp ? (
-          <div className="compact-info-pop">
-            <strong>{t("help.title")}</strong>
-            <span className="muted">{t("help.text")}</span>
-          </div>
-        ) : null}
+  // Seiten des Dialogs (Design «Tabellenblock bearbeiten v2»): links die Navigation mit kurzer
+  // Zusammenfassung je Seite, in der Mitte die gewählte Seite, rechts die Vorschau.
+  const hasContentTab = Boolean(info.content) || CONTENT_TAB_CODES.has(code);
+  const tabs: EditorTab[] = [
+    ...(hasContentTab ? (["content"] as EditorTab[]) : []),
+    ...(showsRepeat(form) ? (["repeat"] as EditorTab[]) : []),
+    "basics",
+    ...(hideBehavior ? [] : (["behavior"] as EditorTab[])),
+  ];
+  const activeTab = tabs.includes(tab) ? tab : tabs[0];
+  const sourceCount = repeatSource === "event" ? matchingEvents.length : matchingSources.length;
+  const tableRows = code === "form" ? rows.length + (repeatSource !== "none" ? (repeatSource === "event" ? eventFieldsOf(form) : todoFieldsOf(form)).filter((field) => field.enabled).length : 0) : 0;
+  const behaviorOff = behaviorFields.filter((entry) => entry.shown && entry.field !== "copy_from_last_protocol" && entry.field !== "title_as_subtitle" && !form[entry.field]);
+  const tabSummary: Record<EditorTab, string> = {
+    content: code === "form" ? (linkedList ? t("tabs.summary.list", { name: linkedList.name }) : t("tabs.summary.rows", { count: tableRows })) : typeOption?.label ?? code,
+    repeat: repeatSource === "none" ? t("repeat.option.none") : `${t(`repeat.option.${repeatSource}`)} · ${t("tabs.summary.matches", { count: sourceCount })}`,
+    basics: form.block_title.trim() || form.title.trim() || t("tabs.summary.unnamed"),
+    behavior: behaviorOff.length ? behaviorOff.map(({ field }) => t(`tabs.summary.off.${field}`)).join(", ") : t("tabs.summary.behaviorDefault"),
+  };
 
-        <section className="block-editor-hero">
-          <div className="block-editor-hero-copy">
-            <div className="eyebrow">{mode === "create" ? t("hero.create") : t("hero.edit")}</div>
-            <div className="block-editor-hero-top">
-              <div className="block-editor-hero-text">
-                <h3>{typeOption?.label ?? code}</h3>
-                <p className="muted">{typeOption?.description}</p>
-              </div>
-              <button type="button" className="button-secondary button-ghost block-editor-hero-action" onClick={onChooseType}>
-                {t("hero.changeType")}
-              </button>
-            </div>
-            <div className="status-row block-editor-hero-pills">
-              {showsRepeat(form) ? <span className="pill">{t(`repeat.option.${repeatSource}`)}</span> : null}
-              <span className="pill">{form.is_editable ? t("behavior.is_editable.on") : t("behavior.is_editable.off")}</span>
-              {form.copy_from_last_protocol && info.carryOver ? <span className="pill">{t("behavior.copy_from_last_protocol.label")}</span> : null}
-              {code === "form" && linkedList ? <span className="pill">{t("table.linkedPill")}</span> : null}
-            </div>
-          </div>
-        </section>
-
-        {onElementTitleChange ? (
-          <SettingsSection title={t("element.title")} description={t("element.description")}>
-            <label className="field-stack">
-              <span className="field-label">{t("element.titleLabel")}</span>
-              <input value={elementTitle} onChange={(event) => onElementTitleChange(event.target.value)} placeholder={t("element.titlePlaceholder")} required />
-            </label>
-          </SettingsSection>
-        ) : null}
-
-        <SettingsSection title={t("basics.title")} description={t("basics.description")}>
-          <div className="two-col">
-            <label className="field-stack">
-              <span className="field-label">{t("basics.name")}</span>
-              <input value={form.title} onChange={(event) => patch({ title: event.target.value })} placeholder={t("basics.namePlaceholder")} />
-              <span className="field-help">{t("basics.nameHelp")}</span>
-            </label>
-            <label className="field-stack">
-              <span className="field-label">{t("basics.heading")}</span>
-              <input value={form.block_title} onChange={(event) => patch({ block_title: event.target.value })} placeholder={t("basics.headingPlaceholder")} />
-              <span className="field-help">{t("basics.headingHelp")}</span>
-            </label>
-          </div>
-          <label className="field-stack">
-            <span className="field-label">{t("basics.hint")}</span>
-            <input value={form.description} onChange={(event) => patch({ description: event.target.value })} placeholder={t("basics.hintPlaceholder")} />
-            <span className="field-help">{t("basics.hintHelp")}</span>
-          </label>
-          {info.content ? (
-            // Plain div, kein <label>: der RichTextEditor rendert Toolbar-Buttons vor dem
-            // Eingabefeld, ein <label> würde jeden Klick auf den ersten Button umleiten.
-            <div className="field-stack">
-              <span className="field-label">{code === "static_text" ? t("basics.contentFixed") : t("basics.content")}</span>
-              <RichTextEditor value={form.default_content} onChange={(markdown) => patch({ default_content: markdown })} placeholder={t("basics.contentPlaceholder")} />
-              <span className="field-help">{t("basics.contentHelp")}</span>
-            </div>
-          ) : null}
-        </SettingsSection>
-
-        {showsRepeat(form) ? (
-          <SettingsSection title={t("repeat.title")} description={t("repeat.description")}>
-            <div className="rule-option-grid">
-              {(["none", ...allowedRepeat] as Array<"none" | "event" | "todo">).concat(
-                repeatSource !== "none" && !allowedRepeat.includes(repeatSource as "event" | "todo") ? [repeatSource] : []
-              ).map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  className={`rule-option-card${repeatSource === option ? " rule-option-card-active" : ""}`}
-                  onClick={() => onChange(setRepeatSource(form, option))}
-                >
-                  <strong>{t(`repeat.option.${option}`)}</strong>
-                  <span className="muted">{t(`repeat.optionHelp.${option}`)}</span>
-                </button>
-              ))}
-            </div>
-            {repeatSource !== "none" && !allowedRepeat.includes(repeatSource as "event" | "todo") ? (
-              <p className="info-note">{t("repeat.unsupported")}</p>
-            ) : null}
-            {repeatSource === "event" ? (
-              <div className="repeat-event-card">
-                <div className="repeat-event-card-head">
-                  <strong>{t("repeat.whichEvents")}</strong>
-                  <span className={matchingEvents.length ? "repeat-event-match" : "repeat-event-match repeat-event-match-none"}>
-                    {matchingEvents.length ? t("repeat.matchSummary", { count: matchingEvents.length }) : t("repeat.matchNone")}
-                  </span>
-                </div>
-                <div className="repeat-event-card-body">
-                <EventFilterEditor
-                  value={repeatFilter}
-                  onChange={(next) => setConfig({ repeat_event_filter: next })}
-                  knownEventTags={data.knownEventTags}
-                  tagConfig={data.tagConfig}
-                  rangeModes={["window", "future", "past", "all"]}
-                  showSortLimit
-                />
-                <label className="checkbox-row">
-                  <input type="checkbox" checked={form.config.event_include_unlisted_past === true} onChange={(event) => setConfig({ event_include_unlisted_past: event.target.checked })} />
-                  {t("repeat.includeUnlistedPast")}
-                </label>
-                <div className="repeat-event-tokens">
-                  <span>{t("repeat.eventTokensLabel")}</span>
-                  {EVENT_TOKENS.map((token) => <code key={token}>{token}</code>)}
-                </div>
-                </div>
-              </div>
-            ) : null}
-            {repeatSource === "todo" ? (
-              <>
-                <div className="three-col">
-                  <label className="field-stack">
-                    <span className="field-label">{t("repeat.todoBlockTitle")}</span>
-                    <input value={String(form.config.todo_block_title_filter ?? "")} onChange={(event) => setConfig({ todo_block_title_filter: event.target.value })} placeholder={t("filter.containsPlaceholder")} />
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">{t("repeat.todoText")}</span>
-                    <input value={String(form.config.todo_task_filter ?? "")} onChange={(event) => setConfig({ todo_task_filter: event.target.value })} placeholder={t("filter.containsPlaceholder")} />
-                  </label>
-                  <label className="checkbox-row">
-                    <input type="checkbox" checked={form.config.todo_open_only !== false} onChange={(event) => setConfig({ todo_open_only: event.target.checked })} />
-                    {t("repeat.todoOpenOnly")}
-                  </label>
-                </div>
-                <div className="info-note">{t("repeat.todoTokens", { tokens: "{title}, {task}, {description}, {due_date}, {participant}, {id}" })}</div>
-              </>
-            ) : null}
-            {code === "text" && repeatSource !== "none" ? (
-              <label className="field-stack">
-                <span className="field-label">{t(`repeat.syncLabel.${repeatSource}`)}</span>
-                <Select value={String(form.config.sync_target_field ?? "")} onChange={(event) => setConfig({ sync_target_field: event.target.value || null })}>
-                  <option value="">{t("repeat.syncNone")}</option>
-                  {(repeatSource === "event" ? EVENT_SYNC_FIELD_KEYS : TODO_SYNC_FIELD_KEYS)
-                    .filter((field) => !eventFieldConfig.hidden(field) || field === form.config.sync_target_field)
-                    .map((field) => (
-                      <option key={field} value={field}>{eventFieldConfig.label(field, t(`syncField.${field}`))}</option>
-                    ))}
-                </Select>
-                <span className="field-help">{t(`repeat.syncHelp.${repeatSource}`)}</span>
-              </label>
-            ) : null}
-          </SettingsSection>
-        ) : null}
-
-        {code === "todo" ? (
-          <SettingsSection title={t("todo.title")} description={t("todo.description")}>
-            <label className="field-stack">
-              <span className="field-label">{t("todo.dueTagFilter")}</span>
-              <TagInput
-                value={String(form.config.todo_due_tag_filter ?? "")}
-                onChange={(value) => setConfig({ todo_due_tag_filter: value })}
-                suggestions={data.knownEventTags}
-                tagConfig={data.tagConfig}
-                placeholder={t("todo.dueTagFilterPlaceholder")}
-              />
-              <span className="field-help">{t("todo.dueTagFilterHelp")}</span>
-            </label>
-            <label className="field-stack">
-              <span className="field-label">{t("todo.assignee")}</span>
-              <SearchableSelect
-                options={data.participants}
-                getId={(participant) => participant.id}
-                getLabel={(participant) => participant.display_name}
-                value={(form.config.todo_assignee_participant_id as string | null) ?? null}
-                onChange={(participant) => setConfig({ todo_assignee_participant_id: participant?.id ?? null })}
-                nullLabel={t("todo.assigneeAll")}
-              />
-              <span className="field-help">{t("todo.assigneeHelp")}</span>
-            </label>
-          </SettingsSection>
-        ) : null}
-
-        {code === "attendance" ? (
-          <SettingsSection title={t("attendance.title")} description={t("attendance.description")}>
-            <label className="checkbox-row">
-              <input type="checkbox" checked={form.config.fines_enabled === true} onChange={(event) => setConfig({ fines_enabled: event.target.checked })} />
-              {t("attendance.finesEnabled")}
-            </label>
-            <span className="field-help">{t("attendance.finesHelp")}</span>
-            <label className="field-stack">
-              <span className="field-label">{t("attendance.excluded")}</span>
-              <SearchableMultiSelect
-                options={data.participants}
-                getId={(participant) => participant.id}
-                getLabel={(participant) => participant.display_name}
-                values={(form.config.attendance_excluded_participant_ids as string[] | undefined) ?? []}
-                onChange={(ids) => setConfig({ attendance_excluded_participant_ids: ids })}
-                emptySelectionLabel={t("attendance.excludedNone")}
-              />
-              <span className="field-help">{t("attendance.excludedHelp")}</span>
-            </label>
-          </SettingsSection>
-        ) : null}
-
-        {code === "session_date" ? (
-          <SettingsSection title={t("sessionDate.title")} description={t("sessionDate.description")}>
-            <EventFilterEditor
-              value={normalizeEventFilter(form.config.event_filter)}
-              onChange={(next) => setConfig({ event_filter: next })}
-              knownEventTags={data.knownEventTags}
-              tagConfig={data.tagConfig}
-              rangeModes={[]}
-              showTitle={false}
-              showDescription={false}
-              showCycle={false}
-              tagLabel={t("sessionDate.tagLabel")}
-            />
-          </SettingsSection>
-        ) : null}
-
-        {code === "event_list" ? (
-          <SettingsSection title={t("eventList.title")} description={t("eventList.description")}>
-            <EventFilterEditor
-              value={normalizeEventFilter(form.config.event_filter, "future")}
-              onChange={(next) => setConfig({ event_filter: next })}
-              knownEventTags={data.knownEventTags}
-              tagConfig={data.tagConfig}
-              rangeModes={["future", "past", "all", "window"]}
-              showSortLimit
-            />
-            <div className="element-create-options">
-              <label className="element-create-option">
-                <input type="checkbox" checked={form.config.event_gray_past !== false} onChange={(event) => setConfig({ event_gray_past: event.target.checked })} />
-                <span><strong>{t("eventList.grayPast")}</strong></span>
-              </label>
-              <label className="element-create-option">
-                <input type="checkbox" checked={form.config.event_allow_end_date === true} onChange={(event) => setConfig({ event_allow_end_date: event.target.checked })} />
-                <span><strong>{t("eventList.allowEndDate")}</strong></span>
-              </label>
-            </div>
-            <div className="field-stack">
-              <span className="field-label">{t("eventList.columns")}</span>
-              <EventDisplayChips config={form.config} onChange={setConfig} keys={EVENT_LIST_DISPLAY_CHIPS} />
-              <span className="field-help">{t("eventList.columnsHelp")}</span>
-            </div>
-          </SettingsSection>
-        ) : null}
-
-        {code === "finance_balance" || code === "finance_transactions" ? (
-          <SettingsSection title={t(`finance.${code}`)} description={t("finance.description")}>
-            <div className="three-col">
-              <label className="field-stack">
-                <span className="field-label">{t("finance.account")}</span>
-                <SearchableSelect
-                  options={data.accounts}
-                  getId={(account) => account.id}
-                  getLabel={(account) => `${account.name} (${account.currency_label})`}
-                  value={(form.config.finance_account_id as string | null) ?? null}
-                  onChange={(account) => setConfig({ finance_account_id: account?.id ?? null })}
-                  nullLabel={t("finance.chooseAccount")}
-                />
-              </label>
-              {code === "finance_balance" ? (
-                <label className="field-stack">
-                  <span className="field-label">{t("finance.balanceDate")}</span>
-                  <Select value={String(form.config.finance_balance_date ?? "today")} onChange={(event) => setConfig({ finance_balance_date: event.target.value })}>
-                    <option value="today">{t("finance.balanceToday")}</option>
-                    <option value="protocol_date">{t("finance.balanceProtocolDate")}</option>
-                  </Select>
-                  <span className="field-help">{t("finance.balanceDateHelp")}</span>
-                </label>
-              ) : null}
-              {code === "finance_transactions" ? (
-                <>
-                  <label className="field-stack">
-                    <span className="field-label">{t("finance.show")}</span>
-                    <Select value={String(form.config.finance_filter_type ?? "all")} onChange={(event) => setConfig({ finance_filter_type: event.target.value })}>
-                      {["all", "since_last_session", "since_date", "this_year", "this_cycle", "last_n"].map((value) => (
-                        <option key={value} value={value}>{t(`finance.filter.${value}`)}</option>
-                      ))}
-                    </Select>
-                  </label>
-                  {form.config.finance_filter_type === "last_n" ? (
-                    <label className="field-stack">
-                      <span className="field-label">{t("finance.lastN")}</span>
-                      <input type="number" min={1} value={String(form.config.finance_last_n ?? 10)} onChange={(event) => setConfig({ finance_last_n: Math.max(1, Number(event.target.value) || 1) })} />
-                    </label>
-                  ) : null}
-                  {form.config.finance_filter_type === "since_date" ? (
-                    <label className="field-stack">
-                      <span className="field-label">{t("finance.sinceDate")}</span>
-                      <DateInput value={String(form.config.finance_since_date ?? "")} onChange={(value) => setConfig({ finance_since_date: value || null })} />
-                    </label>
-                  ) : null}
-                </>
-              ) : null}
-            </div>
-          </SettingsSection>
-        ) : null}
-
-        {code === "fine_list" ? (
-          <SettingsSection title={t("fineList.title")} description={t("fineList.description")}>
-            {data.canConfigureFines === false ? <StatusBanner tone="neutral" message={t("fineList.financeRequired")} /> : null}
-            <fieldset className="fieldset-plain grid" disabled={data.canConfigureFines === false}>
-            <div className="two-col">
-              <label className="field-stack">
-                <span className="field-label">{t("fineList.account")}</span>
-                <SearchableSelect
-                  options={data.accounts}
-                  getId={(account) => account.id}
-                  getLabel={(account) => `${account.name} (${account.currency_label})`}
-                  value={(form.config.fine_list_account_id as string | null) ?? null}
-                  onChange={(account) => setConfig({ fine_list_account_id: account?.id ?? null })}
-                  nullLabel={t("fineList.allAccounts")}
-                />
-              </label>
-              <label className="field-stack">
-                <span className="field-label">{t("fineList.range")}</span>
-                <Select value={String(form.config.fine_list_range ?? "all")} onChange={(event) => setConfig({ fine_list_range: event.target.value })}>
-                  {["all", "this_cycle", "this_protocol"].map((value) => <option key={value} value={value}>{t(`fineList.rangeOption.${value}`)}</option>)}
-                </Select>
-                <span className="field-help">{t("fineList.rangeHelp")}</span>
-              </label>
-            </div>
-            <div className="element-create-options">
-              <label className="element-create-option">
-                <input type="checkbox" checked={form.config.fine_list_status === "open"} onChange={(event) => setConfig({ fine_list_status: event.target.checked ? "open" : "all" })} />
-                <span><strong>{t("fineList.openOnly")}</strong></span>
-              </label>
-              <label className="element-create-option">
-                <input type="checkbox" checked={form.config.fine_list_group_by === "participant"} onChange={(event) => setConfig({ fine_list_group_by: event.target.checked ? "participant" : "none" })} />
-                <span><strong>{t("fineList.byParticipant")}</strong></span>
-              </label>
-            </div>
-            </fieldset>
-          </SettingsSection>
-        ) : null}
-
-        {code === "image" ? (
-          <SettingsSection title={t("image.title")} description={t("image.description")}>
-            <p className="info-note">{t("image.note")}</p>
-          </SettingsSection>
-        ) : null}
-
-        {code === "form" ? (
-          <TableBlockSection
-            form={form}
-            onChange={onChange}
-            data={data}
-            openKey={openKey}
-            onOpenKey={setOpenKey}
-            previewItem={previewItem}
-          />
-        ) : null}
-
-        {code === "matrix" ? (
-          <SettingsSection
-            title={t("matrix.sectionTitle")}
-            description={t("matrix.sectionDescription")}
-            actions={<button type="button" className="button-secondary" onClick={() => onOpenDesigner("matrix")}>{t("matrix.configure")}</button>}
-          >
-            <div className="status-row">
-              {form.config.mode === "auto"
-                ? <span className="pill">{t("matrix.summaryAuto", { source: t(`matrix.sourceType.${form.config.auto_source?.type ?? "participants"}`) })}</span>
-                : <span className="pill">{t("matrix.summaryColumns", { count: (form.config.columns ?? []).length })}</span>}
-              <span className="pill">{t("matrix.summaryRows", { count: rows.length })}</span>
-            </div>
-            {rows.length ? (
-              <div className="table-pill-wrap">
-                {rows.map((row) => (
-                  <span key={row.id} className="pill">{row.label || t("row.unnamed")} · {rowTypeLabel(row.row_type, t, tTypes)}</span>
-                ))}
-              </div>
-            ) : (
-              <p className="muted">{t("matrix.empty")}</p>
-            )}
-          </SettingsSection>
-        ) : null}
-
-        {code === "chart" ? (
-          <SettingsSection title={t("chart.title")} description={t("chart.description")}>
-            <label className="field-stack">
-              <span className="field-label">{t("chart.type")}</span>
-              <Select value={String(form.config.chart_type ?? "")} onChange={(event) => setConfig({ chart_type: event.target.value || null })}>
-                <option value="">{t("chart.choose")}</option>
-                {CHART_TYPES.map((type) => <option key={type} value={type}>{t(`chart.types.${type}`)}</option>)}
-              </Select>
-            </label>
-            <ChartCycleSelection
-              config={{ cycle_config_id: (form.config.cycle_config_id as string | null) ?? null, cycle_offset: Number(form.config.cycle_offset ?? 0) }}
-              onChange={(next) => setConfig({ cycle_config_id: next.cycle_config_id ?? null, cycle_offset: next.cycle_offset ?? 0 })}
-            />
-          </SettingsSection>
-        ) : null}
-
-        {code === "entry_exit" ? (
-          <SettingsSection title={t("entryExit.title")} description={t("entryExit.description")}>
-            <div className="two-col">
-              <label className="field-stack">
-                <span className="field-label">{t("entryExit.firstUse")}</span>
-                <Select value={String(form.config.entry_exit_first_use_mode ?? "all")} onChange={(event) => setConfig({ entry_exit_first_use_mode: event.target.value })}>
-                  <option value="all">{t("entryExit.all")}</option>
-                  <option value="since_date">{t("entryExit.sinceDate")}</option>
-                </Select>
-              </label>
-              {form.config.entry_exit_first_use_mode === "since_date" ? (
-                <label className="field-stack">
-                  <span className="field-label">{t("entryExit.startDate")}</span>
-                  <DateInput value={String(form.config.entry_exit_first_use_date ?? "")} onChange={(value) => setConfig({ entry_exit_first_use_date: value || null })} />
-                </label>
-              ) : null}
-            </div>
-          </SettingsSection>
-        ) : null}
-
-        {code === "session_notes" ? <p className="info-note">{t("sessionNotes.note")}</p> : null}
-      </div>
-
-      <aside className="element-create-sidebar">
+  const previewPanel = (
+    <>
         {code === "form" ? (
           <TableBlockPreview
             form={form}
@@ -552,32 +184,490 @@ export function BlockEditor({
           </div>
         </section>
         )}
-        {hideBehavior ? null : (
-        <section className="element-create-behavior">
-          <h3>{t("behavior.title")}</h3>
-          <div className="element-create-options">
-            {behaviorFields.filter((entry) => entry.shown).map(({ field }) => (
-              <label key={field} className="element-create-option">
-                <input type="checkbox" checked={form[field]} onChange={(event) => patch({ [field]: event.target.checked } as Partial<BlockForm>)} />
-                <span>
-                  <strong>{t(`behavior.${field}.label`)}</strong>
-                  <span className="field-help">{t(`behavior.${field}.help`)}</span>
-                </span>
+    </>
+  );
+
+  if (showWizard) {
+    return (
+      <TableBlockWizard
+        form={form}
+        onChange={onChange}
+        data={data}
+        allowedRepeat={allowedRepeat.filter((option): option is "event" | "todo" => option === "event" || option === "todo")}
+        matchingCount={sourceCount}
+        onDone={() => { setWizardDone(true); setTab("content"); }}
+        preview={previewPanel}
+      />
+    );
+  }
+
+  return (
+    <div className="element-create-layout element-create-tabbed">
+      <nav className="element-create-nav" aria-label={t("tabs.navLabel")}>
+        <div className="element-create-nav-type">
+          <span className="eyebrow">{t("tabs.blockType")}</span>
+          <strong>{typeOption?.label ?? code}</strong>
+          <button type="button" className="button-ghost element-create-nav-change" onClick={onChooseType}>{t("hero.changeType")}</button>
+        </div>
+        {tabs.map((key) => (
+          <button
+            key={key}
+            type="button"
+            aria-current={activeTab === key ? "page" : undefined}
+            className={`element-create-nav-tab${activeTab === key ? " element-create-nav-tab-active" : ""}`}
+            onClick={() => setTab(key)}
+          >
+            <span className="element-create-nav-label">{t(`tabs.${key}.label`)}</span>
+            <span className="element-create-nav-summary">{tabSummary[key]}</span>
+          </button>
+        ))}
+        {mode === "create" && code === "form" ? (
+          <button type="button" className="button-ghost element-create-nav-restart" onClick={() => setWizardDone(false)}>↺ {t("wizard.restart")}</button>
+        ) : null}
+      </nav>
+
+      <div className="element-create-fields">
+        {showHelp ? (
+          <div className="compact-info-pop">
+            <strong>{t("help.title")}</strong>
+            <span className="muted">{t("help.text")}</span>
+          </div>
+        ) : null}
+
+        <div className="element-create-tab-head">
+          <h3>{t(`tabs.${activeTab}.label`)}</h3>
+          <p className="muted">{t(`tabs.${activeTab}.description`)}</p>
+        </div>
+
+        {activeTab === "content" ? (
+          <>
+            {code === "form" && repeatSource !== "none" ? (
+              <div className="element-create-repeat-bar">
+                <span><strong>{t(`repeat.option.${repeatSource}`)}</strong> · {t("tabs.summary.blocks", { count: sourceCount })}</span>
+                <button type="button" className="button-ghost" onClick={() => setTab("repeat")}>{t("tabs.change")}</button>
+              </div>
+            ) : null}
+            {info.content ? (
+              // Plain div, kein <label>: der RichTextEditor rendert Toolbar-Buttons vor dem
+              // Eingabefeld, ein <label> würde jeden Klick auf den ersten Button umleiten.
+              <div className="field-stack">
+                <span className="field-label">{code === "static_text" ? t("basics.contentFixed") : t("basics.content")}</span>
+                <RichTextEditor value={form.default_content} onChange={(markdown) => patch({ default_content: markdown })} placeholder={t("basics.contentPlaceholder")} />
+                <span className="field-help">{t("basics.contentHelp")}</span>
+              </div>
+            ) : null}
+          {code === "todo" ? (
+            <SettingsSection title={t("todo.title")} description={t("todo.description")}>
+              <label className="field-stack">
+                <span className="field-label">{t("todo.dueTagFilter")}</span>
+                <TagInput
+                  value={String(form.config.todo_due_tag_filter ?? "")}
+                  onChange={(value) => setConfig({ todo_due_tag_filter: value })}
+                  suggestions={data.knownEventTags}
+                  tagConfig={data.tagConfig}
+                  placeholder={t("todo.dueTagFilterPlaceholder")}
+                />
+                <span className="field-help">{t("todo.dueTagFilterHelp")}</span>
               </label>
-            ))}
-          </div>
-          <p className="muted">{t("behavior.templateHint")}</p>
-        </section>
-        )}
-        <section className="element-create-cycle-hints">
-          <h3>{t("cycleTokens.title")}</h3>
-          <div className="element-create-cycle-tokens">
-            <code>{"{cycle_name}"}</code>
-            <code>{"{cycle_year_start}"}</code>
-            <code>{"{cycle_year_end}"}</code>
-          </div>
-          <p className="muted">{t("cycleTokens.help")}</p>
-        </section>
+              <label className="field-stack">
+                <span className="field-label">{t("todo.assignee")}</span>
+                <SearchableSelect
+                  options={data.participants}
+                  getId={(participant) => participant.id}
+                  getLabel={(participant) => participant.display_name}
+                  value={(form.config.todo_assignee_participant_id as string | null) ?? null}
+                  onChange={(participant) => setConfig({ todo_assignee_participant_id: participant?.id ?? null })}
+                  nullLabel={t("todo.assigneeAll")}
+                />
+                <span className="field-help">{t("todo.assigneeHelp")}</span>
+              </label>
+            </SettingsSection>
+          ) : null}
+
+          {code === "attendance" ? (
+            <SettingsSection title={t("attendance.title")} description={t("attendance.description")}>
+              <label className="checkbox-row">
+                <input type="checkbox" checked={form.config.fines_enabled === true} onChange={(event) => setConfig({ fines_enabled: event.target.checked })} />
+                {t("attendance.finesEnabled")}
+              </label>
+              <span className="field-help">{t("attendance.finesHelp")}</span>
+              <label className="field-stack">
+                <span className="field-label">{t("attendance.excluded")}</span>
+                <SearchableMultiSelect
+                  options={data.participants}
+                  getId={(participant) => participant.id}
+                  getLabel={(participant) => participant.display_name}
+                  values={(form.config.attendance_excluded_participant_ids as string[] | undefined) ?? []}
+                  onChange={(ids) => setConfig({ attendance_excluded_participant_ids: ids })}
+                  emptySelectionLabel={t("attendance.excludedNone")}
+                />
+                <span className="field-help">{t("attendance.excludedHelp")}</span>
+              </label>
+            </SettingsSection>
+          ) : null}
+
+          {code === "session_date" ? (
+            <SettingsSection title={t("sessionDate.title")} description={t("sessionDate.description")}>
+              <EventFilterEditor
+                value={normalizeEventFilter(form.config.event_filter)}
+                onChange={(next) => setConfig({ event_filter: next })}
+                knownEventTags={data.knownEventTags}
+                tagConfig={data.tagConfig}
+                rangeModes={[]}
+                showTitle={false}
+                showDescription={false}
+                showCycle={false}
+                tagLabel={t("sessionDate.tagLabel")}
+              />
+            </SettingsSection>
+          ) : null}
+
+          {code === "event_list" ? (
+            <SettingsSection title={t("eventList.title")} description={t("eventList.description")}>
+              <EventFilterEditor
+                value={normalizeEventFilter(form.config.event_filter, "future")}
+                onChange={(next) => setConfig({ event_filter: next })}
+                knownEventTags={data.knownEventTags}
+                tagConfig={data.tagConfig}
+                rangeModes={["future", "past", "all", "window"]}
+                showSortLimit
+              />
+              <div className="element-create-options">
+                <label className="element-create-option">
+                  <input type="checkbox" checked={form.config.event_gray_past !== false} onChange={(event) => setConfig({ event_gray_past: event.target.checked })} />
+                  <span><strong>{t("eventList.grayPast")}</strong></span>
+                </label>
+                <label className="element-create-option">
+                  <input type="checkbox" checked={form.config.event_allow_end_date === true} onChange={(event) => setConfig({ event_allow_end_date: event.target.checked })} />
+                  <span><strong>{t("eventList.allowEndDate")}</strong></span>
+                </label>
+              </div>
+              <div className="field-stack">
+                <span className="field-label">{t("eventList.columns")}</span>
+                <EventDisplayChips config={form.config} onChange={setConfig} keys={EVENT_LIST_DISPLAY_CHIPS} />
+                <span className="field-help">{t("eventList.columnsHelp")}</span>
+              </div>
+            </SettingsSection>
+          ) : null}
+
+          {code === "finance_balance" || code === "finance_transactions" ? (
+            <SettingsSection title={t(`finance.${code}`)} description={t("finance.description")}>
+              <div className="three-col">
+                <label className="field-stack">
+                  <span className="field-label">{t("finance.account")}</span>
+                  <SearchableSelect
+                    options={data.accounts}
+                    getId={(account) => account.id}
+                    getLabel={(account) => `${account.name} (${account.currency_label})`}
+                    value={(form.config.finance_account_id as string | null) ?? null}
+                    onChange={(account) => setConfig({ finance_account_id: account?.id ?? null })}
+                    nullLabel={t("finance.chooseAccount")}
+                  />
+                </label>
+                {code === "finance_balance" ? (
+                  <label className="field-stack">
+                    <span className="field-label">{t("finance.balanceDate")}</span>
+                    <Select value={String(form.config.finance_balance_date ?? "today")} onChange={(event) => setConfig({ finance_balance_date: event.target.value })}>
+                      <option value="today">{t("finance.balanceToday")}</option>
+                      <option value="protocol_date">{t("finance.balanceProtocolDate")}</option>
+                    </Select>
+                    <span className="field-help">{t("finance.balanceDateHelp")}</span>
+                  </label>
+                ) : null}
+                {code === "finance_transactions" ? (
+                  <>
+                    <label className="field-stack">
+                      <span className="field-label">{t("finance.show")}</span>
+                      <Select value={String(form.config.finance_filter_type ?? "all")} onChange={(event) => setConfig({ finance_filter_type: event.target.value })}>
+                        {["all", "since_last_session", "since_date", "this_year", "this_cycle", "last_n"].map((value) => (
+                          <option key={value} value={value}>{t(`finance.filter.${value}`)}</option>
+                        ))}
+                      </Select>
+                    </label>
+                    {form.config.finance_filter_type === "last_n" ? (
+                      <label className="field-stack">
+                        <span className="field-label">{t("finance.lastN")}</span>
+                        <input type="number" min={1} value={String(form.config.finance_last_n ?? 10)} onChange={(event) => setConfig({ finance_last_n: Math.max(1, Number(event.target.value) || 1) })} />
+                      </label>
+                    ) : null}
+                    {form.config.finance_filter_type === "since_date" ? (
+                      <label className="field-stack">
+                        <span className="field-label">{t("finance.sinceDate")}</span>
+                        <DateInput value={String(form.config.finance_since_date ?? "")} onChange={(value) => setConfig({ finance_since_date: value || null })} />
+                      </label>
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
+            </SettingsSection>
+          ) : null}
+
+          {code === "fine_list" ? (
+            <SettingsSection title={t("fineList.title")} description={t("fineList.description")}>
+              {data.canConfigureFines === false ? <StatusBanner tone="neutral" message={t("fineList.financeRequired")} /> : null}
+              <fieldset className="fieldset-plain grid" disabled={data.canConfigureFines === false}>
+              <div className="two-col">
+                <label className="field-stack">
+                  <span className="field-label">{t("fineList.account")}</span>
+                  <SearchableSelect
+                    options={data.accounts}
+                    getId={(account) => account.id}
+                    getLabel={(account) => `${account.name} (${account.currency_label})`}
+                    value={(form.config.fine_list_account_id as string | null) ?? null}
+                    onChange={(account) => setConfig({ fine_list_account_id: account?.id ?? null })}
+                    nullLabel={t("fineList.allAccounts")}
+                  />
+                </label>
+                <label className="field-stack">
+                  <span className="field-label">{t("fineList.range")}</span>
+                  <Select value={String(form.config.fine_list_range ?? "all")} onChange={(event) => setConfig({ fine_list_range: event.target.value })}>
+                    {["all", "this_cycle", "this_protocol"].map((value) => <option key={value} value={value}>{t(`fineList.rangeOption.${value}`)}</option>)}
+                  </Select>
+                  <span className="field-help">{t("fineList.rangeHelp")}</span>
+                </label>
+              </div>
+              <div className="element-create-options">
+                <label className="element-create-option">
+                  <input type="checkbox" checked={form.config.fine_list_status === "open"} onChange={(event) => setConfig({ fine_list_status: event.target.checked ? "open" : "all" })} />
+                  <span><strong>{t("fineList.openOnly")}</strong></span>
+                </label>
+                <label className="element-create-option">
+                  <input type="checkbox" checked={form.config.fine_list_group_by === "participant"} onChange={(event) => setConfig({ fine_list_group_by: event.target.checked ? "participant" : "none" })} />
+                  <span><strong>{t("fineList.byParticipant")}</strong></span>
+                </label>
+              </div>
+              </fieldset>
+            </SettingsSection>
+          ) : null}
+
+          {code === "image" ? (
+            <SettingsSection title={t("image.title")} description={t("image.description")}>
+              <p className="info-note">{t("image.note")}</p>
+            </SettingsSection>
+          ) : null}
+
+          {code === "form" ? (
+            <TableBlockSection
+              form={form}
+              onChange={onChange}
+              data={data}
+              openKey={openKey}
+              onOpenKey={setOpenKey}
+              previewItem={previewItem}
+            />
+          ) : null}
+
+          {code === "matrix" ? (
+            <SettingsSection
+              title={t("matrix.sectionTitle")}
+              description={t("matrix.sectionDescription")}
+              actions={<button type="button" className="button-secondary" onClick={() => onOpenDesigner("matrix")}>{t("matrix.configure")}</button>}
+            >
+              <div className="status-row">
+                {form.config.mode === "auto"
+                  ? <span className="pill">{t("matrix.summaryAuto", { source: t(`matrix.sourceType.${form.config.auto_source?.type ?? "participants"}`) })}</span>
+                  : <span className="pill">{t("matrix.summaryColumns", { count: (form.config.columns ?? []).length })}</span>}
+                <span className="pill">{t("matrix.summaryRows", { count: rows.length })}</span>
+              </div>
+              {rows.length ? (
+                <div className="table-pill-wrap">
+                  {rows.map((row) => (
+                    <span key={row.id} className="pill">{row.label || t("row.unnamed")} · {rowTypeLabel(row.row_type, t, tTypes)}</span>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted">{t("matrix.empty")}</p>
+              )}
+            </SettingsSection>
+          ) : null}
+
+          {code === "chart" ? (
+            <SettingsSection title={t("chart.title")} description={t("chart.description")}>
+              <label className="field-stack">
+                <span className="field-label">{t("chart.type")}</span>
+                <Select value={String(form.config.chart_type ?? "")} onChange={(event) => setConfig({ chart_type: event.target.value || null })}>
+                  <option value="">{t("chart.choose")}</option>
+                  {CHART_TYPES.map((type) => <option key={type} value={type}>{t(`chart.types.${type}`)}</option>)}
+                </Select>
+              </label>
+              <ChartCycleSelection
+                config={{ cycle_config_id: (form.config.cycle_config_id as string | null) ?? null, cycle_offset: Number(form.config.cycle_offset ?? 0) }}
+                onChange={(next) => setConfig({ cycle_config_id: next.cycle_config_id ?? null, cycle_offset: next.cycle_offset ?? 0 })}
+              />
+            </SettingsSection>
+          ) : null}
+
+          {code === "entry_exit" ? (
+            <SettingsSection title={t("entryExit.title")} description={t("entryExit.description")}>
+              <div className="two-col">
+                <label className="field-stack">
+                  <span className="field-label">{t("entryExit.firstUse")}</span>
+                  <Select value={String(form.config.entry_exit_first_use_mode ?? "all")} onChange={(event) => setConfig({ entry_exit_first_use_mode: event.target.value })}>
+                    <option value="all">{t("entryExit.all")}</option>
+                    <option value="since_date">{t("entryExit.sinceDate")}</option>
+                  </Select>
+                </label>
+                {form.config.entry_exit_first_use_mode === "since_date" ? (
+                  <label className="field-stack">
+                    <span className="field-label">{t("entryExit.startDate")}</span>
+                    <DateInput value={String(form.config.entry_exit_first_use_date ?? "")} onChange={(value) => setConfig({ entry_exit_first_use_date: value || null })} />
+                  </label>
+                ) : null}
+              </div>
+            </SettingsSection>
+          ) : null}
+
+          {code === "session_notes" ? <p className="info-note">{t("sessionNotes.note")}</p> : null}
+          </>
+        ) : null}
+
+        {activeTab === "repeat" ? (
+          <>
+          {showsRepeat(form) ? (
+            <SettingsSection title={t("repeat.title")} description={t("repeat.description")}>
+              <div className="rule-option-grid">
+                {(["none", ...allowedRepeat] as Array<"none" | "event" | "todo">).concat(
+                  repeatSource !== "none" && !allowedRepeat.includes(repeatSource as "event" | "todo") ? [repeatSource] : []
+                ).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className={`rule-option-card${repeatSource === option ? " rule-option-card-active" : ""}`}
+                    onClick={() => onChange(setRepeatSource(form, option))}
+                  >
+                    <strong>{t(`repeat.option.${option}`)}</strong>
+                    <span className="muted">{t(`repeat.optionHelp.${option}`)}</span>
+                  </button>
+                ))}
+              </div>
+              {repeatSource !== "none" && !allowedRepeat.includes(repeatSource as "event" | "todo") ? (
+                <p className="info-note">{t("repeat.unsupported")}</p>
+              ) : null}
+              {repeatSource === "event" ? (
+                <div className="repeat-event-card">
+                  <div className="repeat-event-card-head">
+                    <strong>{t("repeat.whichEvents")}</strong>
+                    <span className={matchingEvents.length ? "repeat-event-match" : "repeat-event-match repeat-event-match-none"}>
+                      {matchingEvents.length ? t("repeat.matchSummary", { count: matchingEvents.length }) : t("repeat.matchNone")}
+                    </span>
+                  </div>
+                  <div className="repeat-event-card-body">
+                  <EventFilterEditor
+                    value={repeatFilter}
+                    onChange={(next) => setConfig({ repeat_event_filter: next })}
+                    knownEventTags={data.knownEventTags}
+                    tagConfig={data.tagConfig}
+                    rangeModes={["window", "future", "past", "all"]}
+                    showSortLimit
+                  />
+                  <label className="checkbox-row">
+                    <input type="checkbox" checked={form.config.event_include_unlisted_past === true} onChange={(event) => setConfig({ event_include_unlisted_past: event.target.checked })} />
+                    {t("repeat.includeUnlistedPast")}
+                  </label>
+                  <div className="repeat-event-tokens">
+                    <span>{t("repeat.eventTokensLabel")}</span>
+                    {EVENT_TOKENS.map((token) => <code key={token}>{token}</code>)}
+                  </div>
+                  </div>
+                </div>
+              ) : null}
+              {repeatSource === "todo" ? (
+                <>
+                  <div className="three-col">
+                    <label className="field-stack">
+                      <span className="field-label">{t("repeat.todoBlockTitle")}</span>
+                      <input value={String(form.config.todo_block_title_filter ?? "")} onChange={(event) => setConfig({ todo_block_title_filter: event.target.value })} placeholder={t("filter.containsPlaceholder")} />
+                    </label>
+                    <label className="field-stack">
+                      <span className="field-label">{t("repeat.todoText")}</span>
+                      <input value={String(form.config.todo_task_filter ?? "")} onChange={(event) => setConfig({ todo_task_filter: event.target.value })} placeholder={t("filter.containsPlaceholder")} />
+                    </label>
+                    <label className="checkbox-row">
+                      <input type="checkbox" checked={form.config.todo_open_only !== false} onChange={(event) => setConfig({ todo_open_only: event.target.checked })} />
+                      {t("repeat.todoOpenOnly")}
+                    </label>
+                  </div>
+                  <div className="info-note">{t("repeat.todoTokens", { tokens: "{title}, {task}, {description}, {due_date}, {participant}, {id}" })}</div>
+                </>
+              ) : null}
+              {code === "text" && repeatSource !== "none" ? (
+                <label className="field-stack">
+                  <span className="field-label">{t(`repeat.syncLabel.${repeatSource}`)}</span>
+                  <Select value={String(form.config.sync_target_field ?? "")} onChange={(event) => setConfig({ sync_target_field: event.target.value || null })}>
+                    <option value="">{t("repeat.syncNone")}</option>
+                    {(repeatSource === "event" ? EVENT_SYNC_FIELD_KEYS : TODO_SYNC_FIELD_KEYS)
+                      .filter((field) => !eventFieldConfig.hidden(field) || field === form.config.sync_target_field)
+                      .map((field) => (
+                        <option key={field} value={field}>{eventFieldConfig.label(field, t(`syncField.${field}`))}</option>
+                      ))}
+                  </Select>
+                  <span className="field-help">{t(`repeat.syncHelp.${repeatSource}`)}</span>
+                </label>
+              ) : null}
+            </SettingsSection>
+          ) : null}
+
+          </>
+        ) : null}
+
+        {activeTab === "basics" ? (
+          <>
+          {onElementTitleChange ? (
+            <SettingsSection title={t("element.title")} description={t("element.description")}>
+              <label className="field-stack">
+                <span className="field-label">{t("element.titleLabel")}</span>
+                <input value={elementTitle} onChange={(event) => onElementTitleChange(event.target.value)} placeholder={t("element.titlePlaceholder")} required />
+              </label>
+            </SettingsSection>
+          ) : null}
+
+          <SettingsSection title={t("basics.title")} description={t("basics.description")}>
+            <div className="two-col">
+              <label className="field-stack">
+                <span className="field-label">{t("basics.name")}</span>
+                <input value={form.title} onChange={(event) => patch({ title: event.target.value })} placeholder={t("basics.namePlaceholder")} />
+                <span className="field-help">{t("basics.nameHelp")}</span>
+              </label>
+              <label className="field-stack">
+                <span className="field-label">{t("basics.heading")}</span>
+                <input value={form.block_title} onChange={(event) => patch({ block_title: event.target.value })} placeholder={t("basics.headingPlaceholder")} />
+                <span className="field-help">{t("basics.headingHelp")}</span>
+              </label>
+            </div>
+            <label className="field-stack">
+              <span className="field-label">{t("basics.hint")}</span>
+              <input value={form.description} onChange={(event) => patch({ description: event.target.value })} placeholder={t("basics.hintPlaceholder")} />
+              <span className="field-help">{t("basics.hintHelp")}</span>
+            </label>
+          </SettingsSection>
+
+            {hideBehavior ? <CycleTokens /> : null}
+          </>
+        ) : null}
+
+        {activeTab === "behavior" ? (
+          <>
+            <section className="element-create-behavior">
+              <div className="element-create-options">
+                {behaviorFields.filter((entry) => entry.shown).map(({ field }) => (
+                  <label key={field} className="element-create-option">
+                    <input type="checkbox" checked={form[field]} onChange={(event) => patch({ [field]: event.target.checked } as Partial<BlockForm>)} />
+                    <span>
+                      <strong>{t(`behavior.${field}.label`)}</strong>
+                      <span className="field-help">{t(`behavior.${field}.help`)}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <p className="muted">{t("behavior.templateHint")}</p>
+            </section>
+            <CycleTokens />
+          </>
+        ) : null}
+      </div>
+
+      <aside className="element-create-sidebar">
+        {previewPanel}
       </aside>
     </div>
   );

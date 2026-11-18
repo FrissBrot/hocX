@@ -1023,6 +1023,139 @@
       "in_progress": "In progress",
       "done": "Done",
       "cancelled": "Cancelled"
+    },
+    "tabs": {
+      "navLabel": "Block pages",
+      "blockType": "Block type",
+      "change": "Change",
+      "content": {
+        "label": "Content",
+        "description": "What appears in the minutes – for a table, its rows."
+      },
+      "repeat": {
+        "label": "Repetition",
+        "description": "Once, or once per matching event or to-do."
+      },
+      "basics": {
+        "label": "Basics",
+        "description": "Name in the block list, heading in the minutes and hint."
+      },
+      "behavior": {
+        "label": "Behaviour",
+        "description": "Where the block appears and whether it can be edited."
+      },
+      "summary": {
+        "list": "List “{name}”",
+        "rows": "{count, plural, one {# row} other {# rows}}",
+        "matches": "{count, plural, =0 {no match} one {# match} other {# matches}}",
+        "blocks": "currently {count, plural, =0 {no match} one {# match → # block} other {# matches → # blocks}}",
+        "unnamed": "Unnamed",
+        "behaviorDefault": "Editable, in PDF, visible",
+        "off": {
+          "is_editable": "fixed",
+          "export_visible": "not in PDF",
+          "is_visible": "hidden in editor"
+        }
+      }
+    },
+    "wizard": {
+      "restart": "Restart assistant",
+      "step": {
+        "repeat": "How often?",
+        "filter_event": "Which events?",
+        "filter_todo": "Which to-dos?",
+        "source": "Where do rows come from?",
+        "preset": "Starting point"
+      },
+      "title": {
+        "repeat": "How often does the block appear?",
+        "filter_event": "For which events?",
+        "filter_todo": "For which to-dos?",
+        "source": "Where do the rows come from?",
+        "preset": "How do you want to start?"
+      },
+      "description": {
+        "repeat": "Once in the element – or automatically once per event or to-do.",
+        "filter_event": "Each matching event gets its own block in the minutes. Counted from the minutes date.",
+        "filter_todo": "Each matching to-do gets its own block in the minutes.",
+        "source": "You define your own rows here. A global list shows its content from Records › Lists.",
+        "preset": "A starting point pre-fills the rows. Everything stays editable afterwards."
+      },
+      "example": {
+        "none": "e.g. treasurer’s report, annual plan",
+        "event": "e.g. one block per activity with meeting point and programme",
+        "todo": "e.g. status of every open task"
+      },
+      "whichTag": "Which tag?",
+      "tagHelp": "An event matches if its tag contains one of the values. None selected = all.",
+      "whichRange": "Which period?",
+      "range": {
+        "window": "Around the meeting",
+        "future": "All upcoming",
+        "past": "Past",
+        "all": "All"
+      },
+      "rangeHelp": {
+        "window": "{start} days before to {end} days after",
+        "future": "From the minutes date",
+        "past": "Before the minutes date",
+        "all": "No time limit"
+      },
+      "refineLater": "Details like title or cycle filters later under “Repetition”.",
+      "todoOpen": "Open to-dos only",
+      "todoOpenHelp": "Completed ones no longer appear.",
+      "todoAll": "All to-dos",
+      "todoAllHelp": "Completed ones get a block too.",
+      "sourceManualHelp": "Rows with a label and value – text, person, event or list entry.",
+      "sourceManualHelpWith": {
+        "event": "Rows with a label and value, plus fields from the event.",
+        "todo": "Rows with a label and value, plus fields from the to-do."
+      },
+      "sourceListHelp": "Shows a list from Records › Lists, e.g. duties or equipment managers.",
+      "whichList": "Which list?",
+      "preset": {
+        "event_overview": {
+          "title": "Activity overview",
+          "help": "When, where, who organises – plus who goes and the programme."
+        },
+        "event_costs": {
+          "title": "Activity with costs",
+          "help": "For activities with registration: date and special texts from the event, registration deadline and person in charge."
+        },
+        "todo_status": {
+          "title": "To-do status",
+          "help": "Who, by when, which status – plus progress and next step."
+        },
+        "responsibilities": {
+          "title": "Responsibilities",
+          "help": "Who is in charge, who deputises, remark."
+        },
+        "empty": {
+          "title": "Start empty",
+          "help": "One empty row – build everything yourself."
+        }
+      },
+      "presetRow": {
+        "whoGoes": "Who goes",
+        "meetingPoint": "Meeting point",
+        "program": "Programme",
+        "registrationUntil": "Register by",
+        "responsible": "Responsible",
+        "status": "Progress",
+        "nextStep": "Next step",
+        "deputy": "Deputy",
+        "remark": "Remark"
+      },
+      "presetField": {
+        "when": "When",
+        "where": "Where",
+        "date": "Date"
+      },
+      "skip": "Skip – set everything up yourself",
+      "stepOf": "Step {step} of {count}",
+      "back": "Back",
+      "next": "Next",
+      "finish": "Done – set the details"
     }
   },
   "studio": {

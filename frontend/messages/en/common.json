@@ -240,10 +240,13 @@
     "importantSaveFailed": "Marking could not be saved"
   },
   "richTextEditor": {
-    "bold": "Bold (Ctrl+B)",
+    "bold": "Bold ({shortcut})",
     "bulletList": "Bullet list",
-    "italic": "Italic (Ctrl+I)",
-    "openLink": "Ctrl/Cmd+click opens the link",
+    "italic": "Italic ({shortcut})",
+    "openLink": "{modifier} + click opens the link",
     "orderedList": "Numbered list"
+  },
+  "keys": {
+    "ctrl": "Ctrl"
   }
 }

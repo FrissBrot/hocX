@@ -68,13 +68,14 @@ def test_each_export_registers_the_delivered_bytes(db):
     assert f"<hocx:tenantId>{tenant.public_id}</hocx:tenantId>" in shown_xmp
 
 
-def test_rerender_with_same_content_is_a_separate_entry(db):
+def test_rerender_with_same_content_reuses_the_registered_pdf(db):
+    """Ohne Änderung kein neues PDF: dieselbe Dokument-ID, derselbe Register-Eintrag."""
     tenant, protocol = _setup(db)
     first = _render(db, tenant, protocol)
     second = _render(db, tenant, protocol)
-    assert first.export.version_label == second.export.version_label
+    assert first.export.public_id == second.export.public_id
     hashes = db.scalars(select(DocumentRegistry.sha256).where(DocumentRegistry.tenant_id == tenant.id)).all()
-    assert len(hashes) == 2 and len(set(hashes)) == 2
+    assert len(hashes) == 1
 
 
 def test_preview_creates_no_entry(db):

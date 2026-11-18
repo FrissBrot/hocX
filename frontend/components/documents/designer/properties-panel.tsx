@@ -20,6 +20,7 @@ import { apiErrorMessage, EditorMode, studioApi } from "@/lib/documents/api";
 import { brandVariant } from "@/lib/documents/appearance";
 import { AppearanceOverrides, BoxStyle, duplicateNode, locate, newNodeId, removeNode, repeatScope, TemplateContent, TemplateNode, TextContent } from "@/lib/documents/layout";
 import { Select } from "@/components/ui/select";
+import { useShortcutLabel } from "@/lib/search/shortcuts";
 
 // Mindestmodus je Eigenschaftsgruppe (Gruppen aus components.py)
 const GROUP_MODE: Record<string, EditorMode> = {
@@ -66,6 +67,7 @@ function Group({ title, children, open = false }: { title: string; children: Rea
 
 export function PropertiesPanel() {
   const t = useTranslations("documentStudio");
+  const shortcut = useShortcutLabel();
   const toast = useToast();
   const confirm = useConfirm();
   const designer = useDesigner();
@@ -511,7 +513,7 @@ export function PropertiesPanel() {
         </div>
         {editable && (
           <div className="studio-prop-actions">
-            <button type="button" className="button-icon-soft" aria-label={t("props.duplicate")} title={t("props.duplicate")} onClick={() => { const result = duplicateNode(content, node.id); setContent(result.content); if (result.newId) select(result.newId); }}>
+            <button type="button" className="button-icon-soft" aria-label={t("props.duplicate", { shortcut: shortcut("D") })} title={t("props.duplicate", { shortcut: shortcut("D") })} onClick={() => { const result = duplicateNode(content, node.id); setContent(result.content); if (result.newId) select(result.newId); }}>
               ⧉
             </button>
             {modeAllows(mode, "advanced") && node.type !== "component_ref" && (

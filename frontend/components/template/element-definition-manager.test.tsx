@@ -78,6 +78,8 @@ describe("Block bearbeiten", () => {
     setup();
     fireEvent.click(screen.getByText(original.title, { selector: "strong" }));
     fireEvent.click(screen.getAllByRole("button", { name: "Bearbeiten" })[0]);
+    // Die Schalter liegen auf der Seite «Verhalten» des Block-Dialogs
+    fireEvent.click(await screen.findByRole("button", { name: /^Verhalten/ }));
     const exportSwitch = await screen.findByRole("checkbox", { name: /Im PDF ausgeben/ });
     expect(screen.getByRole("checkbox", { name: /Im Protokoll bearbeitbar/ })).not.toBeChecked();
     fireEvent.click(exportSwitch);
