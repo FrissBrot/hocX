@@ -274,6 +274,8 @@ def test_list_files_route_exclude_album_id_hides_album_members(db):
     db.commit()
 
     items = files_routes.list_files(
+        date_from=None,
+        date_to=None,
         skip=0, limit=60, source=None, only_images=False, exclude_images=False, search=None, tags=None,
         sort_by="created_at", sort_dir="desc", db=db, user=writer, exclude_album_id=album.id,
     )
@@ -305,6 +307,8 @@ def test_list_files_route_requires_writer_role(db):
 
     with pytest.raises(HTTPException) as exc_info:
         files_routes.list_files(
+        date_from=None,
+        date_to=None,
             skip=0, limit=60, source=None, only_images=False, exclude_images=False, search=None, tags=None,
             sort_by="created_at", sort_dir="desc", db=db, user=reader,
         )
@@ -334,6 +338,8 @@ def test_list_files_route_scopes_to_an_album_via_join_and_sorts_best_of_first(db
     db.commit()
 
     items = files_routes.list_files(
+        date_from=None,
+        date_to=None,
         skip=0, limit=60, source=None, only_images=False, exclude_images=False, search=None, tags=None,
         sort_by="created_at", sort_dir="desc", db=db, user=writer, album_id=album.id,
     )
@@ -353,6 +359,8 @@ def test_list_files_route_returns_items_for_writer_role(db, album_filter):
     writer = make_current_user(tenant.id, role="writer")
 
     result = files_routes.list_files(
+        date_from=None,
+        date_to=None,
         skip=0, limit=60, source=None, only_images=False, exclude_images=False, search=None, tags=None,
         sort_by="created_at", sort_dir="desc", db=db, user=writer, **album_filter,
     )

@@ -180,7 +180,7 @@ def test_login_email_change_notifies_the_old_address_without_links(db, club, sen
     _deliver(db)
     assert [mail.to for mail in sent] == ["berta@example.com"]
     mail = sent[0]
-    assert "Login-E-Mail" in mail.subject and "Vereinsverwaltung" in mail.text
+    assert "Login-E-Mail" in mail.subject and "Verwaltung deiner Organisation" in mail.text
     # Reiner Hinweis: weder die neue Adresse noch ein Link oder Token
     assert "berta.neu@example.com" not in mail.text and "http" not in mail.text and "token" not in mail.text.lower()
     assert "http" not in mail.html.replace("<!doctype html>", "")

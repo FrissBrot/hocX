@@ -46,7 +46,7 @@ def test_repeated_header_and_footer_on_every_page(renderer):
 def test_first_page_master_differs(renderer):
     pages = [page for page in pdf_pages(_render(renderer, compile_scenario(scenarios()["custom_header"])).pdf) if page.strip()]
     assert len(pages) >= 2
-    organization = "MustervereinSeeland"
+    organization = "MusterorganisationSeeland"
     assert organization not in normalize(pages[0].split("Fixture-Dokument")[0])  # kein Kopf auf Seite 1
     assert organization in normalize(pages[1])
 

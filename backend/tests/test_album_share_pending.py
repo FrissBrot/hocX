@@ -48,6 +48,8 @@ def _pending(db, album, stored_file) -> bool:
 
 def _album_file_ids(db, user, album) -> list:
     items = files_routes.list_files(
+        date_from=None,
+        date_to=None,
         skip=0, limit=60, source=None, only_images=False, exclude_images=False, search=None, tags=None,
         sort_by="created_at", sort_dir="desc", db=db, user=user, album_id=album.id,
     )
@@ -115,6 +117,8 @@ def test_release_makes_pending_photos_visible_to_the_partner(db):
     [row] = files_routes.list_album_pending_releases(db, owner_user)
     assert (row.album_name, row.pending_count) == ("Sommerlager", 2)
     pending_items = files_routes.list_files(
+        date_from=None,
+        date_to=None,
         skip=0, limit=60, source=None, only_images=False, exclude_images=False, search=None, tags=None,
         sort_by="created_at", sort_dir="desc", db=db, user=owner_user, album_id=album.id, share_pending=True,
     )

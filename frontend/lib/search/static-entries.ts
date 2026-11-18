@@ -72,7 +72,13 @@ export function buildStaticEntries(session: SessionInfo | null, tNav: TFunc, tSe
           group: kind,
           label,
           sublabel: groupLabel,
-          keywords: [keywordsFor(tSearch, link.labelKey), ...tabs.filter((tab) => tab.href === link.href).map((tab) => tab.label)].filter(Boolean).join(" "),
+          // Stichwörter über den Schlüssel des Eintrags und über seinen Pfad (früher ein Tab, z. B.
+          // tenant-settings-privacy: «DSGVO» findet «Datenschutz» weiterhin)
+          keywords: [
+            keywordsFor(tSearch, link.labelKey),
+            keywordsFor(tSearch, link.href.split("/").filter(Boolean).join("-") || "home"),
+            ...tabs.filter((tab) => tab.href === link.href).map((tab) => tab.label),
+          ].filter(Boolean).join(" "),
           icon: link.icon,
           href: link.href,
         });
