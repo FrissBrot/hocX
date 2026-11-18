@@ -36,6 +36,14 @@ oder Umgebungsvariablen, keine Breaking Changes.
   auch wenn ihr Login eingeschaltet ist; laufende Sitzungen enden. Wer das Austrittsdatum entfernt,
   gibt den Login wieder frei.
 
+### Behoben: PDF abgeschlossener Protokolle bleibt dasselbe
+
+- Bisher erzeugte jedes «PDF öffnen» eines abgeschlossenen Protokolls ein neues PDF mit neuer
+  Dokument-ID. Jetzt liefert hocX immer das finale PDF (gleiche Dokument-ID, gleicher Prüf-Hash),
+  auch bei anderer Oberflächensprache. Ein neues finales PDF entsteht erst nach Zurückstufen und
+  erneutem Abschliessen, oder wenn im Export-Dialog ausdrücklich eine andere Sprache, Vorlage,
+  andere Optionen oder ein anderer Titel gewählt werden.
+
 ### Neu: Termine mit Uhrzeiten, Programm und Markdown
 
 - Termine haben **Beginn** und **Ende** (Uhrzeit), zwei frei benennbare **Spezial-Uhrzeiten**

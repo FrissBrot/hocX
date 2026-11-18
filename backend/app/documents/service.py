@@ -713,6 +713,9 @@ async def render(db: Session, user: CurrentUser | None, tenant_id: int, request:
             lambda: verify_render_info(export_public_id, base=verify_domain_service.tenant_verify_base_url(db, tenant_id))
         )
         prepared = await _prepare_off_loop(db, user, tenant_id, request, render_info=render_info)
+        reused = await run_in_threadpool(_reuse_closed_export, db, request, prepared)
+        if reused is not None:
+            return reused
         compiled = prepared.compiled
         output = await get_renderer().render_pdf(compiled.data, RenderAssets(files=compiled.files, fonts=compiled.fonts), tenant_id=tenant_id)
         result = await run_in_threadpool(
@@ -721,6 +724,56 @@ async def render(db: Session, user: CurrentUser | None, tenant_id: int, request:
         if result is not None:
             return result
     raise RuntimeError("Protokollversion änderte sich während des Exports wiederholt")
+
+
+def _reuse_closed_export(db: Session, request: DocumentRequest, prepared: PreparedDocument) -> RenderResult | None:
+    """Abgeschlossenes Protokoll: das finale PDF bleibt dasselbe (gleiche Dokument-ID, gleiche
+    Bytes, gleicher Prüf-Hash), egal wie oft es geöffnet wird - erst nach Zurückstufen und
+    erneutem Abschluss entsteht eine neue Version (supersede_closed_exports gibt dann die alten
+    Dateien frei und nimmt ihren Titel aus dem Register). Neu gerendert wird nur, wenn jemand
+    ausdrücklich etwas anderes verlangt: andere Sprache, andere Vorlage, andere Optionen oder ein
+    abweichender Titel - oder wenn es noch kein finales PDF gibt.
+
+    Die Rechte prüft prepare() vorher wie bei jedem Export."""
+    protocol = prepared.protocol
+    if protocol is None or prepared.document_type != "protocol" or protocol.status != "abgeschlossen" or prepared.title_overridden:
+        return None
+    closed = select(DocumentRegistry.public_id).where(
+        DocumentRegistry.tenant_id == protocol.tenant_id,
+        DocumentRegistry.source_public_id == protocol.public_id,
+        DocumentRegistry.document_type == "protocol",
+        DocumentRegistry.status_code == "abgeschlossen",
+        # Titel fehlt nur bei PDFs eines früheren, inzwischen ersetzten Abschlusses
+        DocumentRegistry.title.is_not(None),
+    )
+    candidates = db.scalars(
+        select(DocumentExport)
+        .where(
+            DocumentExport.tenant_id == protocol.tenant_id,
+            DocumentExport.protocol_id == protocol.id,
+            DocumentExport.document_type == "protocol",
+            DocumentExport.stored_file_id.is_not(None),
+            DocumentExport.public_id.in_(closed),
+        )
+        .order_by(DocumentExport.created_at.desc(), DocumentExport.id.desc())
+    ).all()
+    # Nur ausdrücklich Verlangtes zählt: das Auto-PDF beim Abschliessen entsteht ohne Person (Sprache
+    # des Mandanten, Standardoptionen); «PDF öffnen» in einer anderen UI-Sprache ist dasselbe Dokument.
+    wanted_template = prepared.template.id if prepared.template is not None else None
+    wanted_options = request.options.model_dump(mode="json")
+    explicit_options = "options" in request.model_fields_set
+    for export in candidates:
+        if request.language and export.language != prepared.language:
+            continue
+        if request.template_id is not None and export.template_id != wanted_template:
+            continue
+        if explicit_options and (export.options_json or {}).get("options") != wanted_options:
+            continue
+        stored = db.get(StoredFile, export.stored_file_id)
+        if stored is None or stored.tenant_id != protocol.tenant_id:
+            continue
+        return RenderResult(export=export, stored_file=stored)
+    return None
 
 
 def _finalize_render(
@@ -742,6 +795,14 @@ def _finalize_render(
         # Versionsvergabe serialisieren: Sperre bis zum Commit unten, dann mit dem aktuellen Stand
         # vergleichen.
         locked = lock_row(db, prepared.protocol)
+        # Gleichzeitig entstandenes finales PDF (Auto-PDF beim Abschliessen und «PDF öffnen»
+        # parallel): unter der Sperre erneut prüfen, dann bleibt es bei einem einzigen.
+        reused = _reuse_closed_export(db, request, prepared)
+        if reused is not None:
+            db.rollback()  # Sperre freigeben; gespeichert wird nichts
+            db.refresh(reused.export)
+            db.refresh(reused.stored_file)
+            return reused
         if next_version(db, locked, prepared.content_hash) != prepared.version and retry_allowed:
             db.rollback()
             return None
