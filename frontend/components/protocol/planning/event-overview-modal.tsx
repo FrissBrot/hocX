@@ -191,7 +191,20 @@ export function EventOverviewModal({
                   <tr key={eventRow.id} className="table-row-clickable" onClick={() => setDetailEvent(eventRow)}>
                     <td>{formatDateRange(eventRow.event_date, eventRow.event_end_date)}</td>
                     <td>{eventRow.tag || <span className="muted">—</span>}</td>
-                    <td>{eventRow.title}</td>
+                    <td>
+                      {/* Echter Button: Details auch per Tastatur/Screenreader erreichbar; die ganze
+                          Zeile bleibt für die Maus klickbar. */}
+                      <button
+                        type="button"
+                        className="table-row-link"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setDetailEvent(eventRow);
+                        }}
+                      >
+                        {eventRow.title || t("detailModal.fallbackTitle")}
+                      </button>
+                    </td>
                     <td>{eventRow.description || <span className="muted">—</span>}</td>
                     <td>
                       <button
