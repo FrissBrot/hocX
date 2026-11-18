@@ -63,6 +63,9 @@ oder Umgebungsvariablen, keine Breaking Changes.
 - Umschalter «Eigene Zeilen» / «Globale Liste», Vorschau als Editor- oder PDF-Ansicht, bei «Pro
   Termin» für einen der aktuell passenden Termine; «Welche Termine?» zeigt, wie viele Blöcke
   entstehen.
+- Bei «Pro Pendenz» übernimmt der Block Felder der Pendenz («+ Feld aus Pendenz»: Aufgabe,
+  Beschreibung, Zugewiesen an, Fällig, Status, Herkunft). Sie stehen zuoberst, im Protokoll nur
+  lesend und live aus der Pendenz, im PDF ohne leere Zeilen.
 
 ### Neu: Seitenleiste nach Tätigkeiten
 

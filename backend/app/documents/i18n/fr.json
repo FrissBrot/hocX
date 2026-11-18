@@ -738,6 +738,14 @@
   "toc": {
     "title": "Table des matières"
   },
+  "todoField": {
+    "task": "Tâche",
+    "description": "Description",
+    "participant": "Attribuée à",
+    "due_date": "Échéance",
+    "status": "Statut",
+    "origin": "Origine"
+  },
   "todoStatus": {
     "cancelled": "Annulé",
     "done": "Terminé",

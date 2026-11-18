@@ -944,14 +944,13 @@
       "fieldGroup": {
         "event": "Evento",
         "people": "Persone",
-        "texts": "Testi"
+        "texts": "Testi",
+        "todo": "Attività"
       },
       "aliasOf": "Alias · {name}",
       "aliasNote": "I nomi con «Alias» provengono da Organizzazione › Campi evento.",
       "eventRows": "Righe dall’evento",
       "eventRowsCount": "{count, plural, one {# campo} other {# campi}} · sempre in alto",
-      "eventRowsOnlyPerEvent": "Solo con ripetizione «Per evento»: ogni evento compila allora le proprie righe.",
-      "choosePerEvent": "Scegli per evento",
       "eventRowsEmpty": "Ancora nessun campo. «+ Campo dall’evento» riprende ad es. data o luogo automaticamente nella tabella.",
       "fromEvent": "dall’evento · {field}",
       "emptyAtEvent": "vuoto per «{title}»",
@@ -996,8 +995,34 @@
           "list_entry": "—"
         },
         "noValue": "Senza valore",
-        "missing": "mancante"
-      }
+        "missing": "mancante",
+        "linkNoteTodo": "🔗 = valore dall’attività",
+        "perTodo": "Un blocco per attività – anteprima per:",
+        "todoChip": "{due} · {status}",
+        "todoDue": "scadenza {date}",
+        "todoNoDue": "senza scadenza",
+        "emptyAtTodo": "vuoto per l’attività"
+      },
+      "addTodoField": "+ Campo dall’attività",
+      "todoMenuNote": "Campi dell’attività per cui viene creato il blocco.",
+      "todoRows": "Righe dall’attività",
+      "todoRowsEmpty": "Ancora nessun campo. «+ Campo dall’attività» riprende ad es. Assegnato a o Scadenza automaticamente nella tabella.",
+      "fromTodo": "dall’attività · {field}",
+      "todoFieldNote": "Ogni blocco prende il valore dalla propria attività. Se il campo è vuoto, la riga viene omessa nel PDF. I campi dell’attività stanno sempre in alto, in ordine fisso."
+    },
+    "todoField": {
+      "task": "Compito",
+      "description": "Descrizione",
+      "participant": "Assegnato a",
+      "due_date": "Scadenza",
+      "status": "Stato",
+      "origin": "Origine"
+    },
+    "todoStatus": {
+      "open": "Aperto",
+      "in_progress": "In corso",
+      "done": "Completato",
+      "cancelled": "Annullato"
     }
   },
   "studio": {

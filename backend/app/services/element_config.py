@@ -501,6 +501,8 @@ class FormConfig(BlockConfigBase):
     linked_list_filter_column: Literal["column_one", "column_two"] | None = None
     linked_list_filter_text: str | None = None
     event_fields: list[EventFieldConfig] | None = None
+    # «Pro Pendenz»: Felder der Pendenz, für die der Block entsteht (gleiches Format wie event_fields)
+    todo_fields: list[EventFieldConfig] | None = None
 
 
 class EventDisplayMixin(_Strict):

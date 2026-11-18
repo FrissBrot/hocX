@@ -69,6 +69,7 @@ from app.documents.strings import text as pdf_text
 from app.models import Event, FinanceAccount, FinanceTransaction, ListDefinition, Participant, Protocol, ProtocolElementBlock, StoredFile, Tenant
 from app.schemas.event_field_config import EventFieldConfig
 from app.services.element_config import parse_session_time
+from app.services.linked_todo import TODO_FIELDS, linked_todo_id, load_linked_todo
 from app.services.event_filter import filter_events, normalize_event_filter
 from app.core.storage import MAIN, InvalidObjectKey, ObjectNotFound, get_object_store
 
@@ -164,6 +165,8 @@ def _event_field_rows(ctx: BuildContext, config: dict) -> list[FormRow]:
     """Mit dem Termin verknüpfte Felder («aus Termin» im Editor) - wie im Editor zuerst, mit
     eigenem Label des Blocks, sonst dem Alias der Spezialfelder (Mandant) oder dem Standardnamen.
     Ausgeblendete Spezialfelder fehlen, leere Werte ebenso (wie bei den übrigen Formularzeilen)."""
+    if linked_todo_id(config) is not None:
+        return _todo_field_rows(ctx, config)
     event = _linked_event(ctx, config)
     event_fields = [item for item in config.get("event_fields") or [] if isinstance(item, dict) and item.get("field")]
     if event is None or not event_fields:
@@ -200,6 +203,30 @@ def _event_field_rows(ctx: BuildContext, config: dict) -> list[FormRow]:
         label = str(item.get("label") or "").strip() or (setting.label.strip() if setting is not None and setting.label else "") or pdf_text(ctx.language, f"eventField.{field}")
         # Textfelder eines Termins sind Markdown (Editor im Terminformular), die übrigen Klartext.
         rows.append(FormRow(label=label, value=markdown_to_rich(value) if field in EVENT_MARKDOWN_FIELDS else plain_to_rich(value)))
+    return rows
+
+
+def _todo_field_rows(ctx: BuildContext, config: dict) -> list[FormRow]:
+    """«Pro Pendenz»: Felder der Pendenz («aus Pendenz» im Editor) zuoberst, leere fallen weg."""
+    todo_fields = [item for item in config.get("todo_fields") or [] if isinstance(item, dict) and item.get("field") in TODO_FIELDS]
+    todo = load_linked_todo(ctx.db, config, ctx.tenant_id) if todo_fields else None
+    if todo is None:
+        return []
+    rows: list[FormRow] = []
+    for item in todo_fields:
+        field = str(item["field"])
+        if field == "due_date":
+            value = format_date(todo.due_date) if todo.due_date else (todo.due_marker or "")
+        elif field == "status":
+            value = pdf_text(ctx.language, f"todoStatus.{todo.status_code}") if todo.status_code else ""
+        elif field == "origin":
+            value = todo.origin
+        else:
+            value = str(getattr(todo, field) or "")
+        if not value.strip():
+            continue
+        label = str(item.get("label") or "").strip() or pdf_text(ctx.language, f"todoField.{field}")
+        rows.append(FormRow(label=label, value=plain_to_rich(value)))
     return rows
 
 

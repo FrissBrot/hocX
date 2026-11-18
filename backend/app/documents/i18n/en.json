@@ -738,6 +738,14 @@
   "toc": {
     "title": "Contents"
   },
+  "todoField": {
+    "task": "Task",
+    "description": "Description",
+    "participant": "Assigned to",
+    "due_date": "Due",
+    "status": "Status",
+    "origin": "Origin"
+  },
   "todoStatus": {
     "cancelled": "Cancelled",
     "done": "Done",

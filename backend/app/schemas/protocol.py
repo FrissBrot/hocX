@@ -142,6 +142,18 @@ class AttendanceStatusUpdate(BaseModel):
     status: Literal["present", "late", "excused", "absent"]
 
 
+class LinkedTodoRead(BaseModel):
+    """Felder einer Pendenz für den Tabellenblock (siehe services/linked_todo.py)."""
+
+    task: str
+    description: str | None = None
+    participant: str | None = None
+    due_date: date | None = None
+    due_marker: str | None = None
+    status_code: str | None = None
+    origin: str = ""
+
+
 class ProtocolElementBlockRead(BaseModel):
     # Built via explicit keyword construction (protocol_elements.py's _block_to_read) - not
     # from_attributes, so id/protocol_element_id/template_element_block_id/
@@ -171,6 +183,8 @@ class ProtocolElementBlockRead(BaseModel):
     # Optimistische Sperre der Konfiguration (Migration 0149): beim PATCH als expected_config_version mitsenden.
     config_version: int = 0
     public_reference_ids: dict[str, dict[str, uuid.UUID]] = Field(default_factory=dict)
+    # «Pro Pendenz»: die Pendenz des Blocks für die Zeilen «aus der Pendenz» (nur lesend, live)
+    linked_todo: LinkedTodoRead | None = None
     # Gespeicherter Personenwert (UUID/Zahl) -> Name, siehe snapshot_reference_ids.participant_display_names
     participant_names: dict[str, str] = Field(default_factory=dict)
     text_content: str | None = None

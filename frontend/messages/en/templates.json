@@ -944,14 +944,13 @@
       "fieldGroup": {
         "event": "Event",
         "people": "People",
-        "texts": "Texts"
+        "texts": "Texts",
+        "todo": "To-do"
       },
       "aliasOf": "Alias · {name}",
       "aliasNote": "Names marked «Alias» come from Organization settings › Event fields.",
       "eventRows": "Rows from the event",
       "eventRowsCount": "{count, plural, one {# field} other {# fields}} · always on top",
-      "eventRowsOnlyPerEvent": "Only with repetition «Per event»: each event then fills its own rows.",
-      "choosePerEvent": "Choose per event",
       "eventRowsEmpty": "No fields yet. «+ Field from event» adds e.g. the date or location to the table automatically.",
       "fromEvent": "from event · {field}",
       "emptyAtEvent": "empty for «{title}»",
@@ -996,8 +995,34 @@
           "list_entry": "—"
         },
         "noValue": "No value",
-        "missing": "missing"
-      }
+        "missing": "missing",
+        "linkNoteTodo": "🔗 = value from the to-do",
+        "perTodo": "One block per to-do – preview for:",
+        "todoChip": "{due} · {status}",
+        "todoDue": "due {date}",
+        "todoNoDue": "no due date",
+        "emptyAtTodo": "empty for the to-do"
+      },
+      "addTodoField": "+ Field from to-do",
+      "todoMenuNote": "Fields of the to-do the block is created for.",
+      "todoRows": "Rows from the to-do",
+      "todoRowsEmpty": "No fields yet. «+ Field from to-do» adds e.g. Assigned to or Due to the table automatically.",
+      "fromTodo": "from to-do · {field}",
+      "todoFieldNote": "Each block takes the value from its to-do. If the field is empty, the row is left out of the PDF. To-do fields always come first, in a fixed order."
+    },
+    "todoField": {
+      "task": "Task",
+      "description": "Description",
+      "participant": "Assigned to",
+      "due_date": "Due",
+      "status": "Status",
+      "origin": "Origin"
+    },
+    "todoStatus": {
+      "open": "Open",
+      "in_progress": "In progress",
+      "done": "Done",
+      "cancelled": "Cancelled"
     }
   },
   "studio": {

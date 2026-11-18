@@ -944,14 +944,13 @@
       "fieldGroup": {
         "event": "Termin",
         "people": "Personen",
-        "texts": "Texte"
+        "texts": "Texte",
+        "todo": "Pendenz"
       },
       "aliasOf": "Alias · {name}",
       "aliasNote": "Namen mit «Alias» kommen aus Mandant-Einstellungen › Terminfelder.",
       "eventRows": "Zeilen aus dem Termin",
       "eventRowsCount": "{count, plural, one {# Feld} other {# Felder}} · immer zuoberst",
-      "eventRowsOnlyPerEvent": "Nur bei Wiederholung «Pro Termin»: dann füllt jeder Termin seine eigenen Zeilen.",
-      "choosePerEvent": "Pro Termin wählen",
       "eventRowsEmpty": "Noch keine Felder. «+ Feld aus Termin» übernimmt z. B. Datum oder Standort automatisch in die Tabelle.",
       "fromEvent": "aus Termin · {field}",
       "emptyAtEvent": "leer bei «{title}»",
@@ -996,8 +995,34 @@
           "list_entry": "—"
         },
         "noValue": "Ohne Wert",
-        "missing": "fehlt"
-      }
+        "missing": "fehlt",
+        "linkNoteTodo": "🔗 = Wert aus der Pendenz",
+        "perTodo": "Ein Block pro Pendenz – Vorschau für:",
+        "todoChip": "{due} · {status}",
+        "todoDue": "fällig {date}",
+        "todoNoDue": "ohne Fälligkeit",
+        "emptyAtTodo": "leer bei der Pendenz"
+      },
+      "addTodoField": "+ Feld aus Pendenz",
+      "todoMenuNote": "Felder der Pendenz, für die der Block entsteht.",
+      "todoRows": "Zeilen aus der Pendenz",
+      "todoRowsEmpty": "Noch keine Felder. «+ Feld aus Pendenz» übernimmt z. B. Zugewiesen an oder Fällig automatisch in die Tabelle.",
+      "fromTodo": "aus Pendenz · {field}",
+      "todoFieldNote": "Der Wert kommt bei jedem Block aus seiner Pendenz. Ist das Feld leer, fällt die Zeile im PDF weg. Pendenzfelder stehen immer zuoberst, in fester Reihenfolge."
+    },
+    "todoField": {
+      "task": "Aufgabe",
+      "description": "Beschreibung",
+      "participant": "Zugewiesen an",
+      "due_date": "Fällig",
+      "status": "Status",
+      "origin": "Herkunft"
+    },
+    "todoStatus": {
+      "open": "Offen",
+      "in_progress": "In Arbeit",
+      "done": "Erledigt",
+      "cancelled": "Abgebrochen"
     }
   },
   "studio": {

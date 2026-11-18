@@ -944,14 +944,13 @@
       "fieldGroup": {
         "event": "Événement",
         "people": "Personnes",
-        "texts": "Textes"
+        "texts": "Textes",
+        "todo": "Tâche"
       },
       "aliasOf": "Alias · {name}",
       "aliasNote": "Les noms marqués «Alias» viennent de Organisation › Champs d’événement.",
       "eventRows": "Lignes issues de l’événement",
       "eventRowsCount": "{count, plural, one {# champ} other {# champs}} · toujours en haut",
-      "eventRowsOnlyPerEvent": "Uniquement avec la répétition «Par événement» : chaque événement remplit alors ses propres lignes.",
-      "choosePerEvent": "Choisir par événement",
       "eventRowsEmpty": "Aucun champ pour l’instant. «+ Champ de l’événement» reprend par ex. la date ou le lieu automatiquement dans le tableau.",
       "fromEvent": "de l’événement · {field}",
       "emptyAtEvent": "vide pour «{title}»",
@@ -996,8 +995,34 @@
           "list_entry": "—"
         },
         "noValue": "Sans valeur",
-        "missing": "manquant"
-      }
+        "missing": "manquant",
+        "linkNoteTodo": "🔗 = valeur de la tâche",
+        "perTodo": "Un bloc par tâche – aperçu pour :",
+        "todoChip": "{due} · {status}",
+        "todoDue": "échéance {date}",
+        "todoNoDue": "sans échéance",
+        "emptyAtTodo": "vide pour la tâche"
+      },
+      "addTodoField": "+ Champ de la tâche",
+      "todoMenuNote": "Champs de la tâche pour laquelle le bloc est créé.",
+      "todoRows": "Lignes issues de la tâche",
+      "todoRowsEmpty": "Aucun champ pour l’instant. «+ Champ de la tâche» reprend par ex. Attribuée à ou Échéance automatiquement dans le tableau.",
+      "fromTodo": "de la tâche · {field}",
+      "todoFieldNote": "Chaque bloc reprend la valeur de sa tâche. Si le champ est vide, la ligne est omise du PDF. Les champs de tâche figurent toujours en haut, dans un ordre fixe."
+    },
+    "todoField": {
+      "task": "Tâche",
+      "description": "Description",
+      "participant": "Attribuée à",
+      "due_date": "Échéance",
+      "status": "Statut",
+      "origin": "Origine"
+    },
+    "todoStatus": {
+      "open": "Ouverte",
+      "in_progress": "En cours",
+      "done": "Terminée",
+      "cancelled": "Annulée"
     }
   },
   "studio": {

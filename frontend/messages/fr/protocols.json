@@ -621,5 +621,10 @@
       "image_unavailable": "{count, plural, one {Une image n’a pas encore été vérifiée ou n’est pas disponible et apparaît comme espace réservé dans le PDF.} other {# images n’ont pas encore été vérifiées ou ne sont pas disponibles et apparaissent comme espaces réservés dans le PDF.}}"
     },
     "help": "{reason} Le contenu reste visible et enregistré dans l’éditeur, mais n’apparaît pas dans le PDF."
+  },
+  "todoSource": {
+    "linked": "de la tâche",
+    "linkedTitle": "Valeur de la tâche pour laquelle ce bloc a été créé. Elle se modifie dans la tâche.",
+    "empty": "vide"
   }
 }

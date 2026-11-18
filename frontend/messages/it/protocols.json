@@ -621,5 +621,10 @@
       "image_unavailable": "{count, plural, one {Un’immagine non è ancora stata verificata o non è disponibile e appare come segnaposto nel PDF.} other {# immagini non sono ancora state verificate o non sono disponibili e appaiono come segnaposto nel PDF.}}"
     },
     "help": "{reason} Il contenuto resta visibile e salvato nell’editor, ma non compare nel PDF."
+  },
+  "todoSource": {
+    "linked": "dall’attività",
+    "linkedTitle": "Valore dell’attività per cui è stato creato questo blocco. Si modifica nell’attività.",
+    "empty": "vuoto"
   }
 }

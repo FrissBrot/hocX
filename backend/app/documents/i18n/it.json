@@ -738,6 +738,14 @@
   "toc": {
     "title": "Indice"
   },
+  "todoField": {
+    "task": "Compito",
+    "description": "Descrizione",
+    "participant": "Assegnato a",
+    "due_date": "Scadenza",
+    "status": "Stato",
+    "origin": "Origine"
+  },
   "todoStatus": {
     "cancelled": "Annullato",
     "done": "Completato",

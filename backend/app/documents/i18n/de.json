@@ -738,6 +738,14 @@
   "toc": {
     "title": "Inhaltsverzeichnis"
   },
+  "todoField": {
+    "task": "Aufgabe",
+    "description": "Beschreibung",
+    "participant": "Zugewiesen an",
+    "due_date": "Fällig",
+    "status": "Status",
+    "origin": "Herkunft"
+  },
   "todoStatus": {
     "cancelled": "Abgebrochen",
     "done": "Erledigt",

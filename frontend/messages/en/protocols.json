@@ -621,5 +621,10 @@
       "image_unavailable": "{count, plural, one {One image has not been checked yet or is unavailable and appears as a placeholder in the PDF.} other {# images have not been checked yet or are unavailable and appear as placeholders in the PDF.}}"
     },
     "help": "{reason} The content stays visible and saved in the editor but does not appear in the PDF."
+  },
+  "todoSource": {
+    "linked": "from to-do",
+    "linkedTitle": "Value from the to-do this block was created for. Change it in the to-do.",
+    "empty": "empty"
   }
 }

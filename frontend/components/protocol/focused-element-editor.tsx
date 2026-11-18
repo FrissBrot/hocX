@@ -54,6 +54,7 @@ import {
   EventSummary,
   FinanceAccount,
   FinanceTransaction,
+  LinkedTodo,
   ParticipantSummary,
   ProtocolElement,
   ProtocolImage,
@@ -2307,6 +2308,20 @@ function FocusedElementEditorImpl({
                         .filter((ef) => !eventFieldConfig.hidden(ef.field))
                         .map((ef) => ({ ...ef, label: ef.label?.trim() || eventFieldConfig.label(ef.field, tTemplates(`eventField.${ef.field}`)) }))
                     : [];
+                  // «Pro Pendenz»: Felder der Pendenz zuoberst, nur lesend (bearbeitet wird die Pendenz)
+                  const linkedTodo = blockConfig.repeat_source_type === "todo" ? block.linked_todo ?? null : null;
+                  const configuredTodoFields = linkedTodo && Array.isArray(blockConfig.todo_fields)
+                    ? (blockConfig.todo_fields as Array<{ field: string; label: string; enabled?: boolean }>)
+                        .filter((tf) => tf.enabled !== false)
+                        .map((tf) => ({ ...tf, label: tf.label?.trim() || tTemplates(`todoField.${tf.field}`) }))
+                    : [];
+                  const linkedTodoValue = (todo: LinkedTodo, field: string): string => {
+                    if (field === "due_date") return todo.due_date ? formatDate(todo.due_date) : todo.due_marker ?? "";
+                    if (field === "status") return todo.status_code ? tTemplates(`todoStatus.${todo.status_code}`) : "";
+                    if (field === "origin") return todo.origin;
+                    if (field === "task" || field === "description" || field === "participant") return todo[field] ?? "";
+                    return "";
+                  };
                   return (
                     <div className="grid">
                       {String(blockConfig.left_column_heading ?? "").trim() || String(blockConfig.value_column_heading ?? "").trim() ? (
@@ -2316,6 +2331,25 @@ function FocusedElementEditorImpl({
                           <div />
                         </div>
                       ) : null}
+                      {linkedTodo && configuredTodoFields.length > 0 && (
+                        <div className="form-block-list">
+                          {configuredTodoFields.map((tf) => {
+                            const value = linkedTodoValue(linkedTodo, tf.field);
+                            return (
+                              <div className="form-block-row form-block-row-source" key={`${block.id}-tf-${tf.field}`}>
+                                <div className="field-label-inline">
+                                  {tf.label}
+                                  <span className="event-series-linked" title={t("todoSource.linkedTitle")}>
+                                    <ActionIcon name="link" /> {t("todoSource.linked")}
+                                  </span>
+                                </div>
+                                <div className={value ? "form-block-source-value" : "form-block-source-value muted"}>{value || t("todoSource.empty")}</div>
+                                <div />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                       {linkedEvent && configuredEventFields.length > 0 && (
                         <div className="form-block-list">
                           {configuredEventFields.map((ef) => {

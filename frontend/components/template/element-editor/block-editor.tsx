@@ -22,7 +22,7 @@ import type { CycleConfigSummary } from "@/types/api";
 import { type BehaviorField, type BlockForm, repeatEventFilter, repeatSourcesFor, setRepeatSource, showsRepeat, type TableRow } from "./block-form";
 import { EventFilterEditor } from "./event-filter-editor";
 import { EVENT_LIST_DISPLAY_CHIPS, EventDisplayChips, rowTypeLabel, type RowInspectorData } from "./row-inspector";
-import { EVENT_TOKENS, TableBlockPreview, TableBlockSection, useMatchingEvents } from "./table-block-editor";
+import { EVENT_TOKENS, TableBlockPreview, TableBlockSection, useMatchingSources } from "./table-block-editor";
 import { BlockTypePreview } from "./type-picker";
 import { Select } from "@/components/ui/select";
 
@@ -96,8 +96,9 @@ export function BlockEditor({
   // Tabellenblock: aufgeklappte Zeile (links) und Termin der Vorschau (rechts) teilen sich den Zustand.
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [previewIndex, setPreviewIndex] = useState(0);
-  const matchingEvents = useMatchingEvents(form, data.events);
-  const previewEvent = repeatSource === "event" ? matchingEvents[Math.min(previewIndex, Math.max(0, matchingEvents.length - 1))] ?? null : null;
+  const matchingSources = useMatchingSources(form, data.events);
+  const matchingEvents = matchingSources.filter((item) => item.kind === "event");
+  const previewItem = matchingSources[Math.min(previewIndex, Math.max(0, matchingSources.length - 1))] ?? null;
 
   const behaviorFields: Array<{ field: BehaviorField; shown: boolean }> = [
     { field: "is_editable", shown: true },
@@ -457,8 +458,7 @@ export function BlockEditor({
             data={data}
             openKey={openKey}
             onOpenKey={setOpenKey}
-            previewEvent={previewEvent}
-            onChooseEventRepeat={allowedRepeat.includes("event") ? () => onChange(setRepeatSource(form, "event")) : undefined}
+            previewItem={previewItem}
           />
         ) : null}
 
@@ -531,7 +531,7 @@ export function BlockEditor({
             form={form}
             data={data}
             elementTitle={elementTitle}
-            matching={matchingEvents}
+            matching={matchingSources}
             previewIndex={previewIndex}
             onPreviewIndex={setPreviewIndex}
             openKey={openKey}

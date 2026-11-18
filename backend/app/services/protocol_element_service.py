@@ -11,6 +11,7 @@ from app.repositories.protocol_element_repository import (
     ProtocolElementRepository,
 )
 from app.schemas.protocol import (
+    LinkedTodoRead,
     ProtocolElementBlockRead,
     ProtocolElementBlockUpdate,
     ProtocolElementRead,
@@ -26,6 +27,7 @@ from app.services.snapshot_reference_ids import (
 )
 from app.services import public_id_service
 from app.services.element_config import parse_session_time
+from app.services.linked_todo import linked_todo_id, load_linked_todo
 from app.services.fine_tariff_service import attendance_fine_values
 from app.services.responsible_label_service import resolve_display_section_titles_batch
 
@@ -125,6 +127,7 @@ class ProtocolElementService:
                     export_visible_snapshot=block.export_visible_snapshot,
                     configuration_snapshot_json=config,
                     public_reference_ids=snapshot_reference_ids(db, config, protocol_tenant_id, refs=refs),
+                    linked_todo=_linked_todo_read(db, config, protocol_tenant_id),
                     participant_names=participant_display_names(db, config, protocol_tenant_id, refs=refs)
                     if protocol_tenant_id is not None
                     else {},
@@ -304,3 +307,21 @@ class ProtocolElementService:
         from app.services.submission_service import SubmissionService
 
         SubmissionService().sync_todos_for_tenant(db, tenant_id=protocol.tenant_id)
+
+
+def _linked_todo_read(db, config: dict, tenant_id: int | None) -> LinkedTodoRead | None:
+    """Nur für Tabellenblöcke «Pro Pendenz» mit Pendenzfeldern - sonst keine Abfrage."""
+    if linked_todo_id(config) is None or not any(isinstance(item, dict) and item.get("enabled") for item in config.get("todo_fields") or []):
+        return None
+    todo = load_linked_todo(db, config, tenant_id)
+    if todo is None:
+        return None
+    return LinkedTodoRead(
+        task=todo.task,
+        description=todo.description,
+        participant=todo.participant,
+        due_date=todo.due_date,
+        due_marker=todo.due_marker,
+        status_code=todo.status_code,
+        origin=todo.origin,
+    )

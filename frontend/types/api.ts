@@ -1671,6 +1671,16 @@ export type ProtocolImage = {
   duplicate_warning?: string | null;
 };
 
+export type LinkedTodo = {
+  task: string;
+  description: string | null;
+  participant: string | null;
+  due_date: string | null;
+  due_marker: string | null;
+  status_code: string | null;
+  origin: string;
+};
+
 export type ProtocolElementBlock = {
   id: string;
   protocol_element_id: string;
@@ -1694,6 +1704,8 @@ export type ProtocolElementBlock = {
   is_visible_snapshot: boolean;
   export_visible_snapshot: boolean;
   public_reference_ids?: { lists?: Record<string, string>; finance_accounts?: Record<string, string>; events?: Record<string, string>; list_entries?: Record<string, string> };
+  /** «Pro Pendenz»: Pendenz des Blocks für die Zeilen «aus der Pendenz» im Tabellenblock (nur lesend). */
+  linked_todo?: LinkedTodo | null;
   /** Gespeicherter Personenwert (UUID oder interne Zahl) -> Name, auch für Personen ausserhalb von Vorlage und Verzeichnis. */
   participant_names?: Record<string, string>;
   configuration_snapshot_json: Record<string, unknown>;

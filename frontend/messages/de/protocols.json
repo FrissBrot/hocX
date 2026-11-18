@@ -621,5 +621,10 @@
       "image_unavailable": "{count, plural, one {Ein Bild ist noch nicht geprüft oder nicht verfügbar und erscheint im PDF als Platzhalter.} other {# Bilder sind noch nicht geprüft oder nicht verfügbar und erscheinen im PDF als Platzhalter.}}"
     },
     "help": "{reason} Der Inhalt bleibt im Editor sichtbar und gespeichert, erscheint aber nicht im PDF."
+  },
+  "todoSource": {
+    "linked": "aus Pendenz",
+    "linkedTitle": "Wert aus der Pendenz, für die dieser Block entstanden ist. Geändert wird er in der Pendenz.",
+    "empty": "leer"
   }
 }

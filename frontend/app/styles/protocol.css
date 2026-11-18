@@ -4095,3 +4095,8 @@
   outline: none;
   box-shadow: none;
 }
+
+/* Tabellenblock «Pro Pendenz»: Werte aus der Pendenz, nur lesend */
+.form-block-row-source { border-left: 2px solid var(--accent-soft); }
+
+.form-block-source-value { min-height: 36px; display: flex; align-items: center; padding: var(--space-2) var(--space-3); font-size: var(--text-base); overflow-wrap: anywhere; }

@@ -1,10 +1,11 @@
 "use client";
 
 // Tabellenblock (Typ 6) im Block-Editor: Zeilen werden direkt im Dialog aufgeklappt und bearbeitet
-// (früher in einem eigenen Designer), Terminfelder stehen als eigene Gruppe zuoberst, und die
-// Vorschau rechts zeigt die Tabelle wie im Protokoll-Editor oder im PDF, bei «Pro Termin» für
-// einen der aktuell passenden Termine. Gespeichert wird unverändert in form.config (rows,
-// event_fields, linked_list_*), siehe block-form.ts.
+// (früher in einem eigenen Designer). Bei «Pro Termin» bzw. «Pro Pendenz» stehen die Felder der
+// Quelle als eigene Gruppe zuoberst (event_fields bzw. todo_fields), und die Vorschau rechts zeigt
+// die Tabelle wie im Protokoll-Editor oder im PDF für einen der aktuell passenden Termine bzw.
+// eine Beispiel-Pendenz. Gespeichert wird in form.config (rows, event_fields, todo_fields,
+// linked_list_*), siehe block-form.ts.
 import { type DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
@@ -12,12 +13,13 @@ import { useTranslations } from "next-intl";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { usePopoverDismiss, usePopoverPosition } from "@/components/ui/popover";
 import { Select } from "@/components/ui/select";
+import { browserApiFetch } from "@/lib/api/client";
 import { applyEventFilter } from "@/lib/element-types/event-filter";
 import { useEventFieldConfig } from "@/lib/hooks/use-event-field-config";
 import { formatDate, formatDateRange } from "@/lib/utils/format";
 import { markdownToPlainText } from "@/lib/utils/markdown-text";
 import { formatTimeValue } from "@/lib/utils/time";
-import type { EventSummary, StructuredListDefinition, StructuredListEntry } from "@/types/api";
+import type { EventSummary, StructuredListDefinition, StructuredListEntry, TodoListItem } from "@/types/api";
 
 import { type BlockForm, defaultRow, defaultRowConfig, moveItem, nextRowId, repeatEventFilter, type TableRow } from "./block-form";
 import { RowValueFields, type RowInspectorData, useListValueDescriber } from "./row-inspector";
@@ -34,11 +36,21 @@ const MARKDOWN_FIELDS = new Set(["description", "program", "spezial_text1", "spe
 type EventField = (typeof EVENT_FIELDS)[number];
 type EventFieldConfig = { field: string; label: string; enabled: boolean };
 
-const FIELD_GROUPS: Array<{ key: "event" | "people" | "texts"; fields: EventField[] }> = [
+const FIELD_GROUPS: Array<{ key: string; fields: readonly EventField[] }> = [
   { key: "event", fields: ["title", "description", "program", "event_date", "event_end_date", "start_time", "end_time", "tag", "participant_count", "location"] },
   { key: "people", fields: ["organizer_ids", "leadership_ids", "participant_ids", "spezial1_ids", "spezial2_ids", "spezial3_ids"] },
   { key: "texts", fields: ["spezial_text1", "spezial_text2", "spezial_text3", "spezial_time1", "spezial_time2"] },
 ];
+
+/** «Pro Pendenz»: Felder der Pendenz, gleiche Reihenfolge wie im Backend (services/linked_todo.py). */
+export const TODO_FIELDS = ["task", "description", "participant", "due_date", "status", "origin"] as const;
+
+/** Termin bzw. Pendenz, für die ein Block entsteht (Vorschau). */
+export type SourceItem = { kind: "event"; event: EventSummary } | { kind: "todo"; todo: TodoListItem };
+
+export function sourceTitle(item: SourceItem | null): string {
+  return !item ? "" : item.kind === "event" ? item.event.title : item.todo.task;
+}
 
 /** Zeilentypen einer Tabelle (Matrix hat zusätzlich «Mehrere Termine» und eingebettete Blöcke). */
 const TABLE_ROW_TYPES = ["text", "participant", "participants", "event", "list_entry"] as const;
@@ -47,9 +59,21 @@ export const EVENT_TOKENS = ["{title}", "{description}", "{event_date}", "{event
 
 type TFunc = (key: string, values?: Record<string, string | number>) => string;
 
+function fieldsOf(form: BlockForm, key: "event_fields" | "todo_fields", all: readonly string[]): EventFieldConfig[] {
+  const saved = Array.isArray(form.config[key]) ? (form.config[key] as EventFieldConfig[]) : [];
+  return all.map((field) => saved.find((entry) => entry.field === field) ?? { field, label: "", enabled: false });
+}
+
 export function eventFieldsOf(form: BlockForm): EventFieldConfig[] {
-  const saved = Array.isArray(form.config.event_fields) ? (form.config.event_fields as EventFieldConfig[]) : [];
-  return EVENT_FIELDS.map((field) => saved.find((entry) => entry.field === field) ?? { field, label: "", enabled: false });
+  return fieldsOf(form, "event_fields", EVENT_FIELDS);
+}
+
+export function todoFieldsOf(form: BlockForm): EventFieldConfig[] {
+  return fieldsOf(form, "todo_fields", TODO_FIELDS);
+}
+
+function todoOrigin(todo: TodoListItem): string {
+  return [todo.protocol_number, todo.block_title].filter(Boolean).join(" · ");
 }
 
 /** Platzhalter eines Termins ersetzen wie beim Erstellen des Protokolls. */
@@ -64,25 +88,77 @@ export function resolveEventTokens(text: string, event: EventSummary | null): st
     .replace(/\{id\}/g, event.id);
 }
 
+/** Platzhalter einer Termin- oder Pendenzquelle ersetzen (wie protocol_service beim Erstellen). */
+export function resolveSourceTokens(text: string, item: SourceItem | null): string {
+  if (!item) return text;
+  if (item.kind === "event") return resolveEventTokens(text, item.event);
+  const todo = item.todo;
+  return text
+    .replace(/\{(?:title|task)\}/g, todo.task)
+    .replace(/\{description\}/g, todo.reference_link ?? "")
+    .replace(/\{due_date\}/g, todo.due_date ? formatDate(todo.due_date) : "")
+    .replace(/\{participant\}/g, todo.assigned_participant_name ?? "")
+    .replace(/\{id\}/g, todo.id);
+}
+
 function todayIso() {
   const now = new Date();
   const pad = (value: number) => String(value).padStart(2, "0");
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
-/** Termine, für die bei «Pro Termin» heute ein Block entstünde (Zyklus wird in der Vorlage nicht ausgewertet). */
-export function useMatchingEvents(form: BlockForm, events: EventSummary[]): EventSummary[] {
+let todoCache: Promise<TodoListItem[]> | null = null;
+
+/** Pendenzen des Mandanten als Beispiele für die Vorschau «Pro Pendenz» (einmal je Seite geladen). */
+function useTenantTodos(enabled: boolean): TodoListItem[] {
+  const [todos, setTodos] = useState<TodoListItem[]>([]);
+  useEffect(() => {
+    if (!enabled) return;
+    let active = true;
+    todoCache ??= browserApiFetch<TodoListItem[]>("/api/todos?limit=500").catch(() => {
+      todoCache = null;
+      return [];
+    });
+    void todoCache.then((loaded) => {
+      if (active) setTodos(loaded);
+    });
+    return () => {
+      active = false;
+    };
+  }, [enabled]);
+  return todos;
+}
+
+/**
+ * Quellen, für die heute ein Block entstünde: passende Termine bei «Pro Termin» (Zyklus wird in der
+ * Vorlage nicht ausgewertet), bei «Pro Pendenz» Pendenzen nach denselben Filtern. Welche Pendenzen
+ * es im Protokoll sind, hängt vom vorherigen Protokoll ab - hier sind es Beispiele des Mandanten.
+ */
+export function useMatchingSources(form: BlockForm, events: EventSummary[]): SourceItem[] {
   const repeat = String(form.config.repeat_source ?? "none");
   const filter = repeatEventFilter(form);
   const key = JSON.stringify(filter);
-  return useMemo(
-    () => (repeat === "event" ? applyEventFilter(events.filter((event) => !event.is_cancelled), filter, { protocolDate: todayIso() }) : []),
+  const todos = useTenantTodos(repeat === "todo");
+  const openOnly = form.config.todo_open_only !== false;
+  const taskFilter = String(form.config.todo_task_filter ?? "").trim().toLowerCase();
+  const blockFilter = String(form.config.todo_block_title_filter ?? "").trim().toLowerCase();
+  return useMemo(() => {
+    if (repeat === "event") {
+      return applyEventFilter(events.filter((event) => !event.is_cancelled), filter, { protocolDate: todayIso() }).map((event) => ({ kind: "event" as const, event }));
+    }
+    if (repeat !== "todo") return [];
+    return todos
+      .filter((todo) => !openOnly || !["done", "cancelled"].includes(String(todo.todo_status_code)))
+      .filter((todo) => !taskFilter || todo.task.toLowerCase().includes(taskFilter))
+      .filter((todo) => !blockFilter || String(todo.block_title ?? "").toLowerCase().includes(blockFilter))
+      .slice(0, 12)
+      .map((todo) => ({ kind: "todo" as const, todo }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [repeat, key, events]
-  );
+  }, [repeat, key, events, todos, openOnly, taskFilter, blockFilter]);
 }
 
 function useValueTexts(data: RowInspectorData) {
+  const t = useTranslations("templates.elementEditor");
   const describe = useListValueDescriber(data.participants, data.events);
   const names = (ids: string[] | null | undefined) =>
     data.participants.filter((participant) => (ids ?? []).includes(participant.id)).map((participant) => participant.display_name).join(", ");
@@ -98,6 +174,22 @@ function useValueTexts(data: RowInspectorData) {
     return raw === null || raw === undefined ? "" : String(raw);
   }
 
+  function todoFieldValue(todo: TodoListItem, field: string): string {
+    if (field === "task") return todo.task;
+    if (field === "description") return todo.reference_link ?? "";
+    if (field === "participant") return todo.assigned_participant_name ?? "";
+    if (field === "due_date") return todo.due_date ? formatDate(todo.due_date) : todo.resolved_due_label ?? todo.due_marker ?? "";
+    if (field === "status") return todo.todo_status_code ? t(`todoStatus.${todo.todo_status_code}`) : "";
+    if (field === "origin") return todoOrigin(todo);
+    return "";
+  }
+
+  /** Wert eines Quellfelds (Termin oder Pendenz) für Beispiel und Vorschau. */
+  function sourceFieldValue(item: SourceItem | null, field: string): string {
+    if (!item) return "";
+    return item.kind === "event" ? eventFieldValue(item.event, field) : todoFieldValue(item.todo, field);
+  }
+
   function listParts(row: TableRow): { list: StructuredListDefinition | null; fixed: string; other: string } {
     const listId = typeof row.row_config.linked_list_id === "string" ? row.row_config.linked_list_id : null;
     const list = data.lists.find((entry) => entry.id === listId) ?? null;
@@ -110,13 +202,13 @@ function useValueTexts(data: RowInspectorData) {
   }
 
   /** Bezeichnung und Vorbelegung einer eigenen Zeile, wie sie im Protokoll erscheint. */
-  function rowPreview(row: TableRow, event: EventSummary | null): { label: string; value: string } {
+  function rowPreview(row: TableRow, item: SourceItem | null): { label: string; value: string } {
     if (row.row_type === "list_entry") {
       const parts = listParts(row);
       return { label: row.label || parts.fixed, value: parts.other };
     }
     let value = "";
-    if (row.row_type === "text") value = resolveEventTokens(row.template_value, event);
+    if (row.row_type === "text") value = resolveSourceTokens(row.template_value, item);
     if (row.row_type === "participant") value = data.participants.find((participant) => participant.id === row.template_participant_id)?.display_name ?? "";
     if (row.row_type === "participants") value = names(row.template_participant_ids);
     if (row.row_type === "event") {
@@ -126,7 +218,7 @@ function useValueTexts(data: RowInspectorData) {
     return { label: row.label, value };
   }
 
-  return { eventFieldValue, rowPreview, describe };
+  return { sourceFieldValue, rowPreview, describe };
 }
 
 function LinkIcon({ size = 13 }: { size?: number }) {
@@ -164,13 +256,15 @@ function Chevron() {
 }
 
 /** Menü «+ Feld aus Termin»: Felder gruppiert an- und abwählen, jeder Klick gilt sofort. */
-function EventFieldMenu({
+function SourceFieldMenu({
+  kind,
   fields,
   labelOf,
   isAlias,
   hidden,
   onToggle,
 }: {
+  kind: "event" | "todo";
   fields: EventFieldConfig[];
   labelOf: (field: string) => string;
   isAlias: (field: string) => boolean;
@@ -188,12 +282,12 @@ function EventFieldMenu({
   return (
     <>
       <button ref={triggerRef} type="button" className="button-secondary table-block-add-field" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
-        {t("tableBlock.addEventField")}
+        {kind === "todo" ? t("tableBlock.addTodoField") : t("tableBlock.addEventField")}
       </button>
       {open && typeof document !== "undefined"
         ? createPortal(
             <div ref={panelRef} className="mini-menu-popover-portal table-block-field-menu" style={style} role="menu">
-              {FIELD_GROUPS.map((group) => (
+              {(kind === "todo" ? [{ key: "todo", fields: TODO_FIELDS as readonly string[] }] : (FIELD_GROUPS as Array<{ key: string; fields: readonly string[] }>)).map((group) => (
                 <div key={group.key} className="mini-menu-section">
                   <div className="mini-menu-section-title">{t(`tableBlock.fieldGroup.${group.key}`)}</div>
                   {group.fields
@@ -219,7 +313,7 @@ function EventFieldMenu({
                     })}
                 </div>
               ))}
-              <p className="field-help table-block-field-menu-note">{t("tableBlock.aliasNote")}</p>
+              <p className="field-help table-block-field-menu-note">{kind === "todo" ? t("tableBlock.todoMenuNote") : t("tableBlock.aliasNote")}</p>
             </div>,
             document.body
           )
@@ -234,8 +328,7 @@ export function TableBlockSection({
   data,
   openKey,
   onOpenKey,
-  previewEvent,
-  onChooseEventRepeat,
+  previewItem,
 }: {
   form: BlockForm;
   onChange: (next: BlockForm) => void;
@@ -243,14 +336,12 @@ export function TableBlockSection({
   /** Aufgeklappte Zeile: "e:<feld>" (Terminfeld) oder "r:<id>" (eigene Zeile). */
   openKey: string | null;
   onOpenKey: (key: string | null) => void;
-  /** Termin der Vorschau, für Beispielwerte und aufgelöste Platzhalter. */
-  previewEvent: EventSummary | null;
-  /** Nur gesetzt, wenn der Typ «Pro Termin» erlaubt. */
-  onChooseEventRepeat?: () => void;
+  /** Termin bzw. Pendenz der Vorschau, für Beispielwerte und aufgelöste Platzhalter. */
+  previewItem: SourceItem | null;
 }) {
   const t = useTranslations("templates.elementEditor");
   const eventFieldConfig = useEventFieldConfig();
-  const { eventFieldValue, rowPreview } = useValueTexts(data);
+  const { sourceFieldValue, rowPreview } = useValueTexts(data);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const setConfig = (next: Record<string, unknown>) => onChange({ ...form, config: { ...form.config, ...next } });
   const rows = (form.config.rows ?? []) as TableRow[];
@@ -262,11 +353,14 @@ export function TableBlockSection({
   useEffect(() => {
     if (linkedListId) lastList.current = linkedListId;
   }, [linkedListId]);
-  const isEvent = form.config.repeat_source === "event";
-  const fields = eventFieldsOf(form);
+  // Quelle der Zeilen zuoberst: nur bei «Pro Termin» bzw. «Pro Pendenz»
+  const sourceKind = form.config.repeat_source === "event" ? "event" : form.config.repeat_source === "todo" ? "todo" : null;
+  const isTodo = sourceKind === "todo";
+  const fieldsKey = isTodo ? "todo_fields" : "event_fields";
+  const fields = isTodo ? todoFieldsOf(form) : eventFieldsOf(form);
   const enabledFields = fields.filter((field) => field.enabled);
-  const fieldName = (field: string) => eventFieldConfig.label(field, t(`eventField.${field}`));
-  const isAlias = (field: string) => fieldName(field) !== t(`eventField.${field}`);
+  const fieldName = (field: string) => (isTodo ? t(`todoField.${field}`) : eventFieldConfig.label(field, t(`eventField.${field}`)));
+  const isAlias = (field: string) => !isTodo && fieldName(field) !== t(`eventField.${field}`);
 
   // Listeneinträge für Zeilen «Zeile aus Liste» laden, damit Kopf und Vorschau Werte zeigen.
   useEffect(() => {
@@ -279,7 +373,7 @@ export function TableBlockSection({
 
   const toggleOpen = (key: string) => onOpenKey(openKey === key ? null : key);
   const setField = (field: string, next: Partial<EventFieldConfig>) =>
-    setConfig({ event_fields: fields.map((entry) => (entry.field === field ? { ...entry, ...next } : entry)) });
+    setConfig({ [fieldsKey]: fields.map((entry) => (entry.field === field ? { ...entry, ...next } : entry)) });
   const updateRow = (next: TableRow) => setRows(rows.map((row) => (row.id === next.id ? next : row)));
   const moveRow = (index: number, offset: number) => setRows(moveItem(rows, index, index + offset));
   const addRow = () => {
@@ -332,41 +426,34 @@ export function TableBlockSection({
             </label>
           </div>
 
+          {sourceKind ? (
           <div className="table-block-group">
             <div className="table-block-group-head">
               <div className="table-block-group-title">
                 <span className="table-block-group-icon table-block-group-icon-event"><LinkIcon /></span>
-                <strong>{t("tableBlock.eventRows")}</strong>
-                {isEvent ? <span className="muted">{t("tableBlock.eventRowsCount", { count: enabledFields.length })}</span> : null}
+                <strong>{isTodo ? t("tableBlock.todoRows") : t("tableBlock.eventRows")}</strong>
+                <span className="muted">{t("tableBlock.eventRowsCount", { count: enabledFields.length })}</span>
               </div>
-              {isEvent ? (
-                <EventFieldMenu
-                  fields={fields}
-                  labelOf={fieldName}
-                  isAlias={isAlias}
-                  hidden={eventFieldConfig.hidden}
-                  onToggle={(field, enabled) => {
-                    setField(field, { enabled });
-                    if (enabled) onOpenKey(`e:${field}`);
-                  }}
-                />
-              ) : null}
+              <SourceFieldMenu
+                kind={sourceKind}
+                fields={fields}
+                labelOf={fieldName}
+                isAlias={isAlias}
+                hidden={isTodo ? () => false : eventFieldConfig.hidden}
+                onToggle={(field, enabled) => {
+                  setField(field, { enabled });
+                  if (enabled) onOpenKey(`e:${field}`);
+                }}
+              />
             </div>
 
-            {!isEvent ? (
-              <div className="table-block-note">
-                <span>{t("tableBlock.eventRowsOnlyPerEvent")}</span>
-                {onChooseEventRepeat ? (
-                  <button type="button" className="button-ghost" onClick={onChooseEventRepeat}>{t("tableBlock.choosePerEvent")}</button>
-                ) : null}
-              </div>
-            ) : enabledFields.length === 0 ? (
-              <div className="table-block-note table-block-note-event">{t("tableBlock.eventRowsEmpty")}</div>
+            {enabledFields.length === 0 ? (
+              <div className="table-block-note table-block-note-event">{isTodo ? t("tableBlock.todoRowsEmpty") : t("tableBlock.eventRowsEmpty")}</div>
             ) : (
               enabledFields.map((field) => {
                 const key = `e:${field.field}`;
                 const open = openKey === key;
-                const value = eventFieldValue(previewEvent, field.field);
+                const value = sourceFieldValue(previewItem, field.field);
                 const name = fieldName(field.field);
                 return (
                   <div key={key} className={`table-block-row table-block-row-event${open ? " table-block-row-open" : ""}`}>
@@ -374,10 +461,10 @@ export function TableBlockSection({
                       <span className="table-block-row-lead table-block-row-lead-event"><LinkIcon size={15} /></span>
                       <span className="table-block-row-text">
                         <span className="table-block-row-label">{field.label || name}</span>
-                        <span className="table-block-row-sub">{t("tableBlock.fromEvent", { field: name })}</span>
+                        <span className="table-block-row-sub">{isTodo ? t("tableBlock.fromTodo", { field: name }) : t("tableBlock.fromEvent", { field: name })}</span>
                       </span>
                       <span className={`table-block-row-sample${value ? "" : " table-block-row-sample-empty"}`}>
-                        {previewEvent ? value || t("tableBlock.emptyAtEvent", { title: previewEvent.title }) : "—"}
+                        {previewItem ? value || t("tableBlock.emptyAtEvent", { title: sourceTitle(previewItem) }) : "—"}
                       </span>
                       <Chevron />
                     </button>
@@ -390,7 +477,7 @@ export function TableBlockSection({
                         </label>
                         <p className="field-help">
                           {field.field.endsWith("_ids") ? `${t("tableBlock.eventFieldPeopleNote")} ` : ""}
-                          {t("tableBlock.eventFieldNote")}
+                          {isTodo ? t("tableBlock.todoFieldNote") : t("tableBlock.eventFieldNote")}
                         </p>
                         <div className="table-block-row-actions table-block-row-actions-end">
                           <button type="button" className="button-ghost button-danger" onClick={() => { setField(field.field, { enabled: false }); onOpenKey(null); }}>
@@ -404,6 +491,7 @@ export function TableBlockSection({
               })
             )}
           </div>
+          ) : null}
 
           <div className="table-block-group">
             <div className="table-block-group-head">
@@ -418,7 +506,7 @@ export function TableBlockSection({
             {rows.map((row, index) => {
               const key = `r:${row.id}`;
               const open = openKey === key;
-              const preview = rowPreview(row, previewEvent);
+              const preview = rowPreview(row, previewItem);
               const isList = row.row_type === "list_entry";
               const label = isList ? (row.label || (preview.label ? t("tableBlock.fromList", { label: preview.label }) : t("rowType.list_entry"))) : row.label || t("row.unnamed");
               const typeName = t(`rowType.${row.row_type}`);
@@ -473,8 +561,8 @@ export function TableBlockSection({
                       </div>
                       <div className="table-block-row-values">
                         <RowValueFields row={row} data={data} onChange={updateRow} />
-                        {row.row_type === "text" && previewEvent && row.template_value.includes("{") ? (
-                          <span className="field-help">{t("tableBlock.resolvedAt", { title: previewEvent.title, value: resolveEventTokens(row.template_value, previewEvent) })}</span>
+                        {row.row_type === "text" && previewItem && row.template_value.includes("{") ? (
+                          <span className="field-help">{t("tableBlock.resolvedAt", { title: sourceTitle(previewItem), value: resolveSourceTokens(row.template_value, previewItem) })}</span>
                         ) : null}
                       </div>
                       <div className="table-block-row-actions">
@@ -591,7 +679,7 @@ function LinkedListOptions({ form, list, setConfig }: { form: BlockForm; list: S
 
 type PreviewRow = { key: string; label: string; value: string; fromEvent: boolean; locked: boolean; rowType: string };
 
-/** Vorschau rechts: Tabelle wie im Protokoll-Editor oder im PDF, bei «Pro Termin» für einen Termin. */
+/** Vorschau rechts: Tabelle wie im Protokoll-Editor oder im PDF, bei «Pro Termin»/«Pro Pendenz» für eine Quelle. */
 export function TableBlockPreview({
   form,
   data,
@@ -605,7 +693,7 @@ export function TableBlockPreview({
   form: BlockForm;
   data: RowInspectorData;
   elementTitle: string;
-  matching: EventSummary[];
+  matching: SourceItem[];
   previewIndex: number;
   onPreviewIndex: (index: number) => void;
   openKey: string | null;
@@ -613,17 +701,19 @@ export function TableBlockPreview({
 }) {
   const t = useTranslations("templates.elementEditor");
   const eventFieldConfig = useEventFieldConfig();
-  const { eventFieldValue, rowPreview, describe } = useValueTexts(data);
+  const { sourceFieldValue, rowPreview, describe } = useValueTexts(data);
   const [mode, setMode] = useState<"editor" | "pdf">("editor");
   const pdf = mode === "pdf";
-  const isEvent = form.config.repeat_source === "event";
-  const event = isEvent ? matching[Math.min(previewIndex, Math.max(0, matching.length - 1))] ?? null : null;
-  const noMatch = isEvent && matching.length === 0;
+  const sourceKind = form.config.repeat_source === "event" ? "event" : form.config.repeat_source === "todo" ? "todo" : null;
+  const isTodo = sourceKind === "todo";
+  const item = sourceKind ? matching[Math.min(previewIndex, Math.max(0, matching.length - 1))] ?? null : null;
+  // Bei «Pro Pendenz» sind die Pendenzen nur Beispiele - ohne Beispiel bleibt die Tabelle sichtbar
+  const noMatch = sourceKind === "event" && matching.length === 0;
   const linkedList = data.lists.find((list) => list.id === form.config.linked_list_id) ?? null;
   const rows = (form.config.rows ?? []) as TableRow[];
   const leftHeading = String(form.config.left_column_heading ?? "");
   const rightHeading = String(form.config.value_column_heading ?? "");
-  const heading = resolveEventTokens(form.block_title || form.title, event);
+  const heading = resolveSourceTokens(form.block_title || form.title, item);
 
   useEffect(() => {
     if (linkedList && !data.listEntries[linkedList.id]) data.ensureListEntries(linkedList.id);
@@ -631,12 +721,12 @@ export function TableBlockPreview({
   }, [linkedList?.id, data.listEntries]);
 
   let previewRows: PreviewRow[] = [];
-  if (isEvent) {
-    for (const field of eventFieldsOf(form).filter((entry) => entry.enabled)) {
+  if (sourceKind) {
+    for (const field of (isTodo ? todoFieldsOf(form) : eventFieldsOf(form)).filter((entry) => entry.enabled)) {
       previewRows.push({
         key: `e:${field.field}`,
-        label: field.label || eventFieldConfig.label(field.field, t(`eventField.${field.field}`)),
-        value: eventFieldValue(event, field.field),
+        label: field.label || (isTodo ? t(`todoField.${field.field}`) : eventFieldConfig.label(field.field, t(`eventField.${field.field}`))),
+        value: sourceFieldValue(item, field.field),
         fromEvent: true,
         locked: false,
         rowType: "event_field",
@@ -644,7 +734,7 @@ export function TableBlockPreview({
     }
   }
   rows.forEach((row, index) => {
-    const preview = rowPreview(row, event);
+    const preview = rowPreview(row, item);
     previewRows.push({
       key: `r:${row.id}`,
       label: preview.label || t("row.numbered", { number: index + 1 }),
@@ -662,7 +752,7 @@ export function TableBlockPreview({
   if (linkedList) notes.push(t("tableBlock.preview.listNote", { name: linkedList.name }));
   else if (pdf) notes.push(hiddenCount ? t("tableBlock.preview.hiddenRows", { count: hiddenCount }) : t("tableBlock.preview.allFilled"));
   else {
-    if (previewRows.some((row) => row.fromEvent)) notes.push(t("tableBlock.preview.linkNote"));
+    if (previewRows.some((row) => row.fromEvent)) notes.push(isTodo ? t("tableBlock.preview.linkNoteTodo") : t("tableBlock.preview.linkNote"));
     notes.push(t("tableBlock.preview.clickNote"));
   }
 
@@ -680,20 +770,29 @@ export function TableBlockPreview({
         />
       </div>
 
-      {isEvent && matching.length ? (
+      {sourceKind && matching.length ? (
         <div className="table-block-preview-events">
-          <span className="field-help">{matching.length > 1 ? t("tableBlock.preview.perEvent") : t("tableBlock.preview.oneEvent")}</span>
+          <span className="field-help">
+            {matching.length > 1 ? (isTodo ? t("tableBlock.preview.perTodo") : t("tableBlock.preview.perEvent")) : t("tableBlock.preview.oneEvent")}
+          </span>
           <div className="table-block-event-chips">
             {matching.map((entry, index) => (
               <button
-                key={entry.id}
+                key={entry.kind === "event" ? entry.event.id : entry.todo.id}
                 type="button"
-                aria-pressed={entry === event}
-                className={`table-block-event-chip${entry === event ? " table-block-event-chip-active" : ""}`}
+                aria-pressed={entry === item}
+                className={`table-block-event-chip${entry === item ? " table-block-event-chip-active" : ""}`}
                 onClick={() => onPreviewIndex(index)}
               >
-                <span className="table-block-event-chip-date">{formatDateRange(entry.event_date, entry.event_end_date)}</span>
-                <span className="table-block-event-chip-title">{entry.title}</span>
+                <span className="table-block-event-chip-date">
+                  {entry.kind === "event"
+                    ? formatDateRange(entry.event.event_date, entry.event.event_end_date)
+                    : t("tableBlock.preview.todoChip", {
+                        due: entry.todo.due_date ? t("tableBlock.preview.todoDue", { date: formatDate(entry.todo.due_date) }) : t("tableBlock.preview.todoNoDue"),
+                        status: entry.todo.todo_status_code ? t(`todoStatus.${entry.todo.todo_status_code}`) : "",
+                      })}
+                </span>
+                <span className="table-block-event-chip-title">{sourceTitle(entry)}</span>
               </button>
             ))}
           </div>
@@ -736,7 +835,7 @@ export function TableBlockPreview({
                   <span
                     className={`table-block-table-value${pdf ? "" : row.fromEvent ? " table-block-cell-event" : row.locked ? "" : " table-block-cell-field"}${row.value ? "" : " table-block-table-value-empty"}${!pdf && row.locked ? " table-block-cell-locked" : ""}`}
                   >
-                    <span>{row.value || (pdf ? "" : row.fromEvent ? t("tableBlock.preview.emptyAtEvent") : t(`tableBlock.preview.placeholder.${row.rowType}`))}</span>
+                    <span>{row.value || (pdf ? "" : row.fromEvent ? (isTodo ? t("tableBlock.preview.emptyAtTodo") : t("tableBlock.preview.emptyAtEvent")) : t(`tableBlock.preview.placeholder.${row.rowType}`))}</span>
                     {!pdf && row.locked ? <span className="table-block-lock"><LockIcon /></span> : null}
                   </span>
                 </span>
