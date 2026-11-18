@@ -32,7 +32,8 @@ test("Ctrl+K findet Einstellungen und Personen und öffnet sie", async ({ page, 
     await expect(input).toHaveValue("dsgvo");
 
     // Einstellung über einen Suchbegriff (nicht im Titel)
-    await expect(dialog.getByRole("option", { name: /Datenschutz/ })).toBeVisible();
+    // Seite und einzelne Einstellungen (Datenschutz-Statistik, -hinweis) erscheinen; Enter öffnet den ersten Treffer
+    await expect(dialog.getByRole("option", { name: /Datenschutz/ }).first()).toBeVisible();
     await page.keyboard.press("Enter");
     // Erster Aufruf der Seite: der Next-Server des E2E-Stacks kompiliert sie erst (dauert >5 s)
     await expect(page).toHaveURL(/\/tenant-settings\/privacy(#[a-z-]+)?$/, { timeout: 30_000 });
