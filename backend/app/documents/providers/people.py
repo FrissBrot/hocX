@@ -21,6 +21,7 @@ from app.documents.catalog import (
     ProtocolRefParams,
 )
 from app.documents.context import BuildContext, DocumentNotFoundError, format_date
+from app.services.statistics_common import own_person_key
 from app.documents.model import (
     AttendanceBlock,
     AttendanceEntry,
@@ -150,6 +151,11 @@ def provide_attendance_matrix(ctx: BuildContext, spec: BlockSpec, params: Attend
             if status in ATTENDANCE_STATUSES:
                 statuses[(key, protocol_id)] = status
     people = sorted(names, key=lambda key: sort_key(names[key]))
+    # Anwesenheit je Person über mehrere Sitzungen (mit Quote) ist eine Rangliste wie in der
+    # Statistik: ohne reports.personal nur die eigene Zeile (Datenschutz-Audit PRIV-001).
+    own_key = own_person_key(ctx.db, ctx.user)
+    if own_key is not None:
+        people = [key for key in people if key == own_key]
     cells = [[statuses.get((key, protocol_id)) for protocol_id, _ in sessions] for key in people]
     rates: list[str] = []
     if params.show_rates:

@@ -8,12 +8,15 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import select
 from fastapi import HTTPException
 
 from app.api.routes.privacy_settings import PrivacySettingsWrite, get_privacy_settings, update_privacy_settings
 from app.api.routes.statistics import get_statistics_overview
-from app.documents.catalog import BlockSpec, ChartParams, StatTableParams
+from app.documents.catalog import AttendanceMatrixParams, BlockSpec, ChartParams, StatTableParams
 from app.documents.context import BuildContext
+from app.models import Protocol
+from app.documents.providers.people import provide_attendance_matrix
 from app.documents.providers.statistics import provide_chart, provide_table
 from tests.factories import (
     make_app_user,
@@ -115,6 +118,31 @@ def test_document_charts_and_tables_follow_the_same_rule(db):
 
     full = provide_chart(writer_ctx, BlockSpec(type="chart"), ChartParams(chart_type="attendance_by_participant"))[0]
     assert sorted(full.categories) == ["Lea Leser", "Otto Andere"]
+
+
+def test_document_attendance_matrix_follows_the_same_rule(db):
+    """Die Anwesenheitsmatrix (Personen × Sitzungen mit Quote) ist dieselbe Information wie die
+    Anwesenheit je Person: ohne reports.personal nur die eigene Zeile, wie Diagramm und Tabelle."""
+    tenant, reader, _ = _setup(db)
+    # Leser ohne read_drafts sehen nur abgeschlossene Protokolle.
+    for protocol in db.scalars(select(Protocol).where(Protocol.tenant_id == tenant.id)):
+        protocol.status = "abgeschlossen"
+    db.flush()
+    reader_ctx = BuildContext(db=db, tenant_id=tenant.id, language="de", user=make_current_user(tenant.id, role="reader", user_id=reader.id))
+    writer_ctx = BuildContext(db=db, tenant_id=tenant.id, language="de", user=make_current_user(tenant.id, role="writer", user_id=reader.id))
+    params = AttendanceMatrixParams()
+
+    matrix = provide_attendance_matrix(reader_ctx, BlockSpec(type="attendance_matrix"), params)[0]
+    assert matrix.people == ["Lea Leser"]
+    assert len(matrix.cells) == len(matrix.rates) == 1
+
+    tenant.statistics_per_person_public = True
+    db.flush()
+    shared = provide_attendance_matrix(reader_ctx, BlockSpec(type="attendance_matrix"), params)[0]
+    assert sorted(shared.people) == ["Lea Leser", "Otto Andere"]
+
+    full = provide_attendance_matrix(writer_ctx, BlockSpec(type="attendance_matrix"), params)[0]
+    assert sorted(full.people) == ["Lea Leser", "Otto Andere"]
 
 
 def test_only_admins_change_the_switch(db):
