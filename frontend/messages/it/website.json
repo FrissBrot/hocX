@@ -1,7 +1,7 @@
 {
   "meta": {
-    "title": "hocX – Riunioni e verbali per associazioni e PMI",
-    "description": "hocX organizza le riunioni di associazioni e PMI: verbali, appuntamenti, attività, presenze e finanze in un unico posto."
+    "title": "hocX – Riunioni e verbali per organizzazioni e PMI",
+    "description": "hocX organizza le riunioni di organizzazioni e PMI: verbali, appuntamenti, attività, presenze e finanze in un unico posto."
   },
   "nav": {
     "label": "Navigazione principale",
@@ -18,7 +18,7 @@
     "badgeText": "Importare i verbali Word esistenti in pochi minuti",
     "titleLead": "Dalla riunione al verbale finito.",
     "titleEmphasis": "Senza ritocchi.",
-    "lead": "hocX organizza le riunioni di associazioni e PMI: verbali, appuntamenti, attività, presenze e finanze in un unico posto – e alla fine un PDF pulito con la vostra immagine.",
+    "lead": "hocX organizza le riunioni di organizzazioni e PMI: verbali, appuntamenti, attività, presenze e finanze in un unico posto – e alla fine un PDF pulito con la vostra immagine.",
     "ctaPrimary": "Prova gratis per 30 giorni",
     "ctaSecondary": "Come funziona →",
     "note": "Nessuna carta di credito"
@@ -118,7 +118,7 @@
     "coverTitle": "Verbale",
     "coverSubtitle": "Riunione di comitato",
     "coverMeta": "12 agosto 2026 · P-2026-014",
-    "organisation": "Turnverein Seetal",
+    "organisation": "Team Seetal",
     "pageNumber": "Pagina {page}",
     "sectionAnniversary": "Giubileo"
   },

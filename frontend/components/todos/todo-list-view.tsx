@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
@@ -40,9 +41,11 @@ type Props = {
   participants?: ParticipantSummary[];
   /** Feature todo_fines gebucht: Busse im Todo-Popup */
   finesEnabled?: boolean;
+  /** «Meine Aufgaben» (/my-tasks): nur eigene Pendenzen, nach Fälligkeit, mit Link auf die ganze Liste. */
+  personal?: boolean;
 };
 
-export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [], participants = [], finesEnabled = false }: Props) {
+export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [], participants = [], finesEnabled = false, personal = false }: Props) {
   const t = useTranslations("todos");
   const router = useRouter();
   const showToast = useToast();
@@ -50,7 +53,7 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
   const [statusFilter, setStatusFilter] = useState<"open" | "done" | "all">("open");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("task");
+  const [sortKey, setSortKey] = useState<SortKey>(personal ? "resolved_due_date" : "task");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const runningFines = useRunningTodoFines(finesEnabled);
@@ -254,11 +257,16 @@ export function TodoListView({ allTodos, myTodos, canEdit = true, todoBlocks = [
     <div className="grid todos-overview">
       <div className="page-header">
         <div>
-          <h1 className="page-title">{t("pageTitle")}</h1>
-          <p className="muted">{t("pageIntro")}</p>
+          <h1 className="page-title">{personal ? t("personal.pageTitle") : t("pageTitle")}</h1>
+          <p className="muted">{personal ? t("personal.pageIntro") : t("pageIntro")}</p>
           <CalendarLinkHint kind="todos" />
         </div>
         <div className="table-toolbar-actions">
+          {personal && (
+            <Link href="/todos" className="button-secondary button-ghost">
+              {t("personal.allTodosLink")}
+            </Link>
+          )}
           <DocumentExportButton
             className="button-secondary button-ghost"
             label={t("exportButton")}

@@ -599,7 +599,7 @@
         "since_date": "Da una data",
         "this_year": "Quest’anno",
         "last_n": "Ultime N",
-        "this_cycle": "Questo ciclo (p. es. anno sociale)"
+        "this_cycle": "Questo ciclo (p. es. anno di lavoro)"
       },
       "lastN": "Numero",
       "sinceDate": "Da",
@@ -1058,7 +1058,7 @@
         "protocol": "Il PDF del verbale usa l’impaginazione",
         "invitation": "L’invito usa l’impaginazione"
       },
-      "defaultBadge": "Standard della società",
+      "defaultBadge": "Vostro standard",
       "usage": {
         "only": "Usata solo in questo modello.",
         "alsoIn": "Usata anche in",
@@ -1081,7 +1081,7 @@
       "choose": {
         "title": "Scegli impaginazione",
         "description": "Quale impaginazione deve usare «{name}»? La scelta vale subito.",
-        "default": "Standard della società",
+        "default": "Vostro standard",
         "defaultHint": "attualmente «{name}»",
         "defaultHintNone": "Standard hocX",
         "usedIn": "usata in {names}",

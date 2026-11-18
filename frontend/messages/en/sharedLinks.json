@@ -27,7 +27,7 @@
   "filterAll": "All",
   "page": {
     "description": "Public download links for files and photos of your organization.",
-    "title": "Shared links"
+    "title": "Shares"
   },
   "revokeConfirm": "Revoke link \"{name}\"? It will stop working afterwards.",
   "revokeConfirmLabel": "Revoke",

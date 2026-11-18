@@ -405,9 +405,9 @@
     "schema": "Struttura non valida"
   },
   "sample": {
-    "organization": "Società esempio del Seeland",
+    "organization": "Organizzazione esempio del Seeland",
     "address": "Via del Lago 12\n3000 Città Esempio",
-    "contact": "info@societa-esempio.ch · 031 123 45 67",
+    "contact": "info@organizzazione-esempio.ch · 031 123 45 67",
     "place": "Città Esempio",
     "documentTitle": "Seduta di comitato di marzo",
     "documentSubtitle": "Seduta 3",
@@ -430,7 +430,7 @@
     "paragraph2": "Si discute il programma annuale. Si fissano le date della festa estiva e della gita.",
     "paragraph3": "Il cassiere informa sul saldo attuale. I conti vengono approvati all’unanimità.",
     "bullet1": "Festa estiva il 20 giugno",
-    "bullet2": "Gita sociale a settembre",
+    "bullet2": "Gita a settembre",
     "bullet3": "Assemblea generale a novembre",
     "task1": "Inviare gli inviti alla festa estiva",
     "task2": "Raccogliere offerte per la gita",
@@ -438,8 +438,8 @@
     "task4": "Aggiornare il sito web",
     "event1": "Festa estiva",
     "event2": "Seduta di comitato",
-    "event3": "Gita sociale",
-    "account1": "Conto della società",
+    "event3": "Gita",
+    "account1": "Conto principale",
     "account2": "Cassa",
     "booking1": "Quote sociali",
     "booking2": "Materiale",
@@ -542,7 +542,7 @@
     },
     "personalReadme": "Rapporto di accesso ai dati per {name} ({tenant}), creato il {date}.\\n\\nRapporto dati.xlsx contiene un foglio per ambito: dati anagrafici, presenze (solo le tue righe), multe, attività, responsabilità, appuntamenti, liste, file caricati (elenco), fattori di accesso e abbonamenti calendario (senza segreti), attività recenti e menzioni nei verbali.\\ndaten.json contiene gli stessi dati in formato leggibile dalle macchine.\\n\\nLe menzioni sono trovate cercando il nome e possono essere incomplete. Verbali e dati di cassa sono conservati dall'organizzazione; rivolgi le domande all'organizzazione.",
     "tenant": {
-      "prefix": "Export-associazione",
+      "prefix": "Export-organizzazione",
       "yes": "sì",
       "no": "no",
       "file": {
@@ -590,7 +590,7 @@
       "protocolsWithoutPdf": "Verbali chiusi senza PDF salvato (aprirli in hocX ed esportarli in PDF):",
       "missingFiles": "Non inclusi perché non trovati nell’archivio: {count} file."
     },
-    "tenantReadme": "Export dell’associazione {tenant}, creato il {date}.\\n\\nTabelle (Excel): membri, appuntamenti, presenze (persona × seduta), multe, finanze (un foglio per conto), compiti e nella cartella Liste un file per lista. Nomi invece di numeri interni, date nel formato GG.MM.AAAA, importi come numeri.\\nVerbali: l’ultimo PDF generato di ogni verbale chiuso.\\n{files}\\n\\nLe credenziali (password, chiavi a due fattori, link) non sono incluse. Conservare in modo sicuro: il file contiene dati personali."
+    "tenantReadme": "Export dell’organizzazione {tenant}, creato il {date}.\n\nTabelle (Excel): membri, appuntamenti, presenze (persona × seduta), multe, finanze (un foglio per conto), compiti e nella cartella Liste un file per lista. Nomi invece di numeri interni, date nel formato GG.MM.AAAA, importi come numeri.\nVerbali: l’ultimo PDF generato di ogni verbale chiuso.\n{files}\n\nLe credenziali (password, chiavi a due fattori, link) non sono incluse. Conservare in modo sicuro: il file contiene dati personali."
   },
   "email": {
     "greeting": "Ciao {name}",
@@ -637,33 +637,33 @@
       "subject": "{tenant}: avviso di sicurezza sul tuo account",
       "intro": "Sul tuo account presso {tenant} è stato modificato quanto segue:",
       "passwordChanged": "Password modificata ({at})",
-      "passwordChangedByAdmin": "Password reimpostata dall’amministrazione dell’associazione ({at})",
+      "passwordChangedByAdmin": "Password reimpostata dall’amministrazione della tua organizzazione ({at})",
       "mfaAdded": "Secondo fattore aggiunto ({at})",
       "mfaRemoved": "Secondo fattore rimosso ({at})",
-      "mfaRemovedByAdmin": "Secondo fattore rimosso dall’amministrazione dell’associazione ({at})",
+      "mfaRemovedByAdmin": "Secondo fattore rimosso dall’amministrazione della tua organizzazione ({at})",
       "hint": "Non sei stato tu? Contatta subito {tenant}.",
       "mandatory": "Gli avvisi di sicurezza vengono sempre inviati e non si possono disattivare.",
       "emailChanged": "E-mail di accesso modificata ({at})",
-      "emailChangedByAdmin": "E-mail di accesso modificata dall’amministrazione dell’associazione ({at})",
+      "emailChangedByAdmin": "E-mail di accesso modificata dall’amministrazione della tua organizzazione ({at})",
       "emailChangedSubject": "{tenant}: la tua e-mail di accesso è stata modificata",
       "emailChangedIntro": "L’e-mail di accesso del tuo account presso {tenant} è stata modificata. Questo indirizzo non viene più usato per l’accesso, perciò questo è l’ultimo messaggio inviato qui:",
       "label": {
         "passwordChanged": "Password modificata",
-        "passwordChangedByAdmin": "Password reimpostata dall'amministrazione dell'associazione",
+        "passwordChangedByAdmin": "Password reimpostata dall'amministrazione della tua organizzazione",
         "mfaAdded": "Secondo fattore aggiunto",
         "mfaRemoved": "Secondo fattore rimosso",
-        "mfaRemovedByAdmin": "Secondo fattore rimosso dall'amministrazione dell'associazione",
+        "mfaRemovedByAdmin": "Secondo fattore rimosso dall'amministrazione della tua organizzazione",
         "emailChanged": "E-mail di accesso modificata",
-        "emailChangedByAdmin": "E-mail di accesso modificata dall'amministrazione dell'associazione"
+        "emailChangedByAdmin": "E-mail di accesso modificata dall'amministrazione della tua organizzazione"
       }
     },
     "export": {
       "subjectReady": "{tenant}: esportazione dati pronta",
       "subjectFailed": "{tenant}: esportazione dati non riuscita",
-      "ready": "L’esportazione dati «{filename}» è pronta. Puoi scaricarla in hocX in Impostazioni associazione > Protezione dei dati.",
-      "failed": "Non è stato possibile creare l’esportazione dati. Richiedila di nuovo in hocX in Impostazioni associazione > Protezione dei dati.",
+      "ready": "L’esportazione dati «{filename}» è pronta. Puoi scaricarla in hocX in Organizzazione › Protezione dei dati.",
+      "failed": "Non è stato possibile creare l’esportazione dati. Richiedila di nuovo in hocX in Organizzazione › Protezione dei dati.",
       "openButton": "Apri esportazione",
-      "readyBody": "L'esportazione dei dati è pronta. Puoi scaricarla in hocX sotto Impostazioni dell'associazione › Protezione dei dati."
+      "readyBody": "L'esportazione dei dati è pronta. Puoi scaricarla in hocX sotto Organizzazione › Protezione dei dati."
     },
     "via": "tramite hocX",
     "system": "Sistema",
@@ -722,7 +722,7 @@
       "countOther": "{count} multe",
       "issuedOn": "del {date}",
       "openTotal": "Totale multe aperte presso {tenant}",
-      "payment": "Le multe si pagano alla cassa dell'associazione. Una multa è sbagliata? Rivolgiti a {tenant}.",
+      "payment": "Le multe si pagano alla cassa. Una multa è sbagliata? Rivolgiti a {tenant}.",
       "openFines": "Vedi le mie multe",
       "issuedSubjectOne": "{tenant}: nuova multa di {amount}",
       "issuedSubjectOther": "{tenant}: nuove multe per {amount}",

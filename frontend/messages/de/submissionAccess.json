@@ -19,8 +19,8 @@
     "pending": "wird geprüft",
     "blocked": "gesperrt"
   },
-  "closedHint": "Diese Abgabe ist geschlossen. Für Änderungen melde dich bei der Verwaltung deines Vereins.",
-  "viewOnlyHint": "Über diesen Link kannst du deine Abgabe ansehen. Ändern kann sie die Verwaltung deines Vereins.",
+  "closedHint": "Diese Abgabe ist geschlossen. Für Änderungen melde dich bei der Verwaltung deiner Organisation.",
+  "viewOnlyHint": "Über diesen Link kannst du deine Abgabe ansehen. Ändern kann sie die Verwaltung deiner Organisation.",
   "withdraw": "Abgabe zurückziehen",
   "withdrawConfirm": "Abgabe zurückziehen? Deine Dateien zählen danach nicht mehr, die Aufgabe ist wieder offen. Die Verwaltung kann sie wiederherstellen.",
   "withdrawn": "Abgabe zurückgezogen.",

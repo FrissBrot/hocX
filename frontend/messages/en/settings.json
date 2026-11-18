@@ -22,7 +22,7 @@
       "download": "Download my data"
     },
     "notifications": {
-      "description": "Which emails you receive from your club. We deliberately send few: new tasks bundled and one reminder per task before and after the due date.",
+      "description": "Which emails you receive from your organization. We deliberately send few: new tasks bundled and one reminder per task before and after the due date.",
       "loading": "Loading …",
       "loadFailed": "Settings could not be loaded.",
       "saveFailed": "Setting could not be saved.",
@@ -51,7 +51,7 @@
         },
         "exports": {
           "label": "Data export ready",
-          "hint": "Only if you request a club data export: an email once it is ready or has failed."
+          "hint": "Only if you request an organization data export: an email once it is ready or has failed."
         }
       },
       "securityNote": "Security notices (password or second factor changed) and password reset links are always sent."

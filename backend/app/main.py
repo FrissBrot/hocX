@@ -402,7 +402,7 @@ async def upload_lock_busy_handler(request: Request, exc: UploadLockBusy) -> JSO
     erwartet, kein Eintrag im Fehlerprotokoll. Das Frontend wiederholt nach Retry-After."""
     return JSONResponse(
         status_code=503,
-        content={"detail": "Gerade werden andere Dateien dieses Vereins verarbeitet. Bitte gleich erneut versuchen.", "code": "upload_busy"},
+        content={"detail": "Gerade werden andere Dateien dieser Organisation verarbeitet. Bitte gleich erneut versuchen.", "code": "upload_busy"},
         headers={"Retry-After": str(exc.retry_after_seconds), "Cache-Control": "no-store"},
     )
 

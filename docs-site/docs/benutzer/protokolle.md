@@ -2,7 +2,7 @@
 
 Ein Protokoll entsteht aus einer [Vorlage](vorlagen.md) und begleitet einen Hock von der
 Vorbereitung bis zum unterschriebenen PDF. Die Protokollliste zeigt alle Protokolle nach
-Zyklus (Vereinsjahr) gruppiert, das aktuelle zuoberst.
+Zyklus (Arbeitsjahr) gruppiert, das aktuelle zuoberst.
 
 ## Protokoll erstellen {#erstellen}
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildNav, formatRoleLabel, isNavLinkActive } from "./app-shell-nav";
+import { buildNav, formatRoleLabel, isNavLinkActive, relatedNavLink, SETTINGS_GROUP } from "./app-shell-nav";
 import { locales } from "@/i18n/locale-config.generated";
 import deNav from "@/messages/de/nav.json";
 import enNav from "@/messages/en/nav.json";
@@ -66,23 +66,47 @@ describe("formatRoleLabel", () => {
 });
 
 describe("buildNav", () => {
-  it("teilt Konfiguration in Protokollvorlagen, Abläufe (nur mit templates.manage), Gestaltung und Bussen", () => {
-    const hrefsOf = (groups: ReturnType<typeof buildNav>, titleKey: string) =>
-      groups.find((group) => group.titleKey === titleKey)?.links.map((link) => link.href) ?? [];
+  const hrefsOf = (groups: ReturnType<typeof buildNav>, titleKey: string | null) =>
+    groups.find((group) => group.titleKey === titleKey)?.links.map((link) => link.href) ?? [];
+
+  it("ordnet nach Tätigkeiten: Bereiche oben, Einstellungen und Organisation unten", () => {
     const admin = buildNav(adminSession());
-    expect(hrefsOf(admin, "groups.configuration")).toEqual(["/templates", "/cycles", "/documents", "/fine-settings"]);
-    expect(hrefsOf(admin, "groups.work")).not.toContain("/documents");
-    const writer = buildNav(sessionFor("writer"));
-    expect(hrefsOf(writer, "groups.configuration")).toEqual(["/templates", "/documents", "/fine-settings"]);
-    // Bussen-Konfiguration nur mit Feature finance; die Kasse sieht sie auch ohne Vorlagenrechte
-    const kassier = buildNav(sessionFor("kassier"));
-    expect(hrefsOf(kassier, "groups.configuration")).toContain("/fine-settings");
+    expect(admin.map((group) => group.titleKey)).toEqual([
+      null, "groups.sessions", "groups.tasks", "groups.members", "groups.cash", "groups.storage", "groups.appearance",
+      SETTINGS_GROUP, "groups.organisation",
+    ]);
+    expect(hrefsOf(admin, null)).toEqual(["/", "/my-tasks"]);
+    expect(hrefsOf(admin, "groups.sessions")).toEqual(["/events", "/agenda", "/protocols"]);
+    expect(hrefsOf(admin, "groups.storage")).toEqual(["/lists", "/files", "/photos", "/shared-links"]);
+    expect(hrefsOf(admin, "groups.organisation")).toEqual([
+      "/tenant-settings", "/tenant-settings/abo", "/tenant-settings/privacy", "/tenant-settings/links", "/tenant-settings/activity", "/tools/import",
+    ]);
+  });
+
+  it("sammelt die Einstellungen der Bereiche - jede nur mit dem Recht, sie zu öffnen", () => {
+    expect(hrefsOf(buildNav(adminSession()), SETTINGS_GROUP)).toEqual([
+      "/templates", "/task-packages", "/users", "/fine-settings", "/tenant-settings/domains",
+    ]);
+    // Aufgabenpakete und Arbeitsjahr brauchen templates.manage, Bussen-Regeln Feature finance
+    expect(hrefsOf(buildNav(sessionFor("writer")), SETTINGS_GROUP)).toEqual(["/templates", "/fine-settings"]);
+    expect(hrefsOf(buildNav(sessionFor("kassier")), SETTINGS_GROUP)).toEqual(["/fine-settings"]);
     const noFinance = { ...sessionFor("writer"), current_tenant: { ...sessionFor("writer").current_tenant!, enabled_features: ["abgabebox"] } } as SessionInfo;
-    expect(hrefsOf(buildNav(noFinance), "groups.configuration")).not.toContain("/fine-settings");
-    const links = admin.find((group) => group.titleKey === "groups.configuration")?.links ?? [];
-    expect(links[0]?.match).toEqual(["/elements"]);
-    expect(links[1]?.match).toEqual(["/task-packages"]);
-    expect(links[2]?.match).toEqual(["/documents"]);
+    expect(hrefsOf(buildNav(noFinance), SETTINGS_GROUP)).not.toContain("/fine-settings");
+    // Leser haben finances.read und sahen die Bussen-Einstellungen schon bisher - sonst nichts
+    expect(hrefsOf(buildNav(sessionFor("reader")), SETTINGS_GROUP)).toEqual(["/fine-settings"]);
+  });
+
+  it("verweist von einem Bereich auf seine Einstellung und zurück", () => {
+    const admin = buildNav(adminSession());
+    expect(relatedNavLink(admin, "/fines")).toMatchObject({ kind: "settings", link: { href: "/fine-settings" } });
+    expect(relatedNavLink(admin, "/protocols/abc")).toMatchObject({ kind: "settings", link: { href: "/templates" } });
+    expect(relatedNavLink(admin, "/fine-settings")).toMatchObject({ kind: "area", groupTitleKey: "groups.cash", link: { href: "/finances" } });
+    expect(relatedNavLink(admin, "/cycles")).toMatchObject({ kind: "area", groupTitleKey: "groups.sessions" });
+    expect(relatedNavLink(admin, "/tenant-settings/verification")).toMatchObject({ kind: "area", groupTitleKey: "groups.appearance" });
+    expect(relatedNavLink(admin, "/lists")).toBeNull();
+    expect(relatedNavLink(admin, "/tenant-settings/abo")).toBeNull();
+    // Ohne Recht auf die Einstellung kein Zahnrad
+    expect(relatedNavLink(buildNav(sessionFor("reader")), "/todos")).toBeNull();
   });
 
   it("liefert fuer eine Admin-Session alle Gruppen mit uebersetzbaren labelKey/titleKey (keine fertigen Texte)", () => {
@@ -116,6 +140,14 @@ describe("buildNav", () => {
     expect(isNavLinkActive(dashboardLink, "/")).toBe(true);
     expect(isNavLinkActive(dashboardLink, "/statistics")).toBe(true);
     expect(isNavLinkActive(dashboardLink, "/participants")).toBe(false);
+    const linkTo = (href: string) => groups.flatMap((group) => group.links).find((link) => link.href === href)!;
+    // Unterseiten mit eigenem Eintrag markieren nur diesen
+    expect(isNavLinkActive(linkTo("/tenant-settings"), "/tenant-settings")).toBe(true);
+    expect(isNavLinkActive(linkTo("/tenant-settings"), "/tenant-settings/abo")).toBe(false);
+    expect(isNavLinkActive(linkTo("/tenant-settings/privacy"), "/tenant-settings/retention")).toBe(true);
+    expect(isNavLinkActive(linkTo("/documents"), "/documents/templates/1")).toBe(true);
+    expect(isNavLinkActive(linkTo("/documents"), "/documents/brand")).toBe(false);
+    expect(isNavLinkActive(linkTo("/documents/brand"), "/documents/assets")).toBe(true);
   });
 
   it("zeigt Bereiche nur mit der passenden Berechtigung", () => {

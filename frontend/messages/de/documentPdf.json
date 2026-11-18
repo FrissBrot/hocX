@@ -405,9 +405,9 @@
     "schema": "Ungültige Struktur"
   },
   "sample": {
-    "organization": "Musterverein Seeland",
+    "organization": "Musterorganisation Seeland",
     "address": "Seestrasse 12\n3000 Musterstadt",
-    "contact": "info@musterverein.ch · 031 123 45 67",
+    "contact": "info@muster-organisation.ch · 031 123 45 67",
     "place": "Musterstadt",
     "documentTitle": "Vorstandssitzung März",
     "documentSubtitle": "Sitzung 3",
@@ -430,7 +430,7 @@
     "paragraph2": "Das Jahresprogramm wird besprochen. Die Termine für das Sommerfest und den Ausflug werden festgelegt.",
     "paragraph3": "Der Kassier informiert über den aktuellen Kontostand. Die Rechnung wird einstimmig genehmigt.",
     "bullet1": "Sommerfest am 20. Juni",
-    "bullet2": "Vereinsausflug im September",
+    "bullet2": "Ausflug im September",
     "bullet3": "Generalversammlung im November",
     "task1": "Einladungen zum Sommerfest versenden",
     "task2": "Offerten für den Ausflug einholen",
@@ -438,8 +438,8 @@
     "task4": "Website aktualisieren",
     "event1": "Sommerfest",
     "event2": "Vorstandssitzung",
-    "event3": "Vereinsausflug",
-    "account1": "Vereinskonto",
+    "event3": "Ausflug",
+    "account1": "Hauptkonto",
     "account2": "Kasse",
     "booking1": "Mitgliederbeiträge",
     "booking2": "Material",
@@ -540,9 +540,9 @@
       "readme": "LIESMICH",
       "personalPrefix": "Datenauskunft"
     },
-    "personalReadme": "Datenauskunft für {name} ({tenant}), erstellt am {date}.\\n\\nAuskunft.xlsx enthält je Bereich ein Blatt: Stammdaten, Anwesenheit (nur eigene Zeilen), Bussen, Aufgaben, Verantwortlichkeiten, Termine, Listen, selbst hochgeladene Dateien (Liste), Anmeldefaktoren und Kalender-Abos (ohne Geheimnisse), Aktivität und Erwähnungen in Protokolltexten.\\ndaten.json enthält dieselben Daten maschinenlesbar.\\n\\nErwähnungen werden per Namenssuche gefunden und können unvollständig sein. Protokolle und Kassendaten werden vom Verein aufbewahrt; Fragen dazu richtest du an den Verein.",
+    "personalReadme": "Datenauskunft für {name} ({tenant}), erstellt am {date}.\n\nAuskunft.xlsx enthält je Bereich ein Blatt: Stammdaten, Anwesenheit (nur eigene Zeilen), Bussen, Aufgaben, Verantwortlichkeiten, Termine, Listen, selbst hochgeladene Dateien (Liste), Anmeldefaktoren und Kalender-Abos (ohne Geheimnisse), Aktivität und Erwähnungen in Protokolltexten.\ndaten.json enthält dieselben Daten maschinenlesbar.\n\nErwähnungen werden per Namenssuche gefunden und können unvollständig sein. Protokolle und Kassendaten werden von der Organisation aufbewahrt; Fragen dazu richtest du an die Organisation.",
     "tenant": {
-      "prefix": "Vereinsexport",
+      "prefix": "Gesamtexport",
       "yes": "ja",
       "no": "nein",
       "file": {
@@ -590,7 +590,7 @@
       "protocolsWithoutPdf": "Abgeschlossene Protokolle ohne gespeichertes PDF (in hocX öffnen und als PDF exportieren):",
       "missingFiles": "Nicht enthalten, weil im Speicher nicht gefunden: {count} Datei(en)."
     },
-    "tenantReadme": "Vereinsexport von {tenant}, erstellt am {date}.\\n\\nTabellen (Excel): Mitglieder, Termine, Anwesenheit (Person × Sitzung), Bussen, Finanzen (ein Blatt je Konto), Aufgaben und im Ordner Listen je Liste eine Datei. Namen statt interner Nummern, Datum im Format TT.MM.JJJJ, Beträge als Zahl.\\nProtokolle: das zuletzt erzeugte PDF jedes abgeschlossenen Protokolls.\\n{files}\\n\\nZugangsdaten (Passwörter, Zwei-Faktor-Schlüssel, Links) sind nicht enthalten. Bitte sicher aufbewahren: die Datei enthält Personendaten."
+    "tenantReadme": "Gesamtexport von {tenant}, erstellt am {date}.\n\nTabellen (Excel): Mitglieder, Termine, Anwesenheit (Person × Sitzung), Bussen, Finanzen (ein Blatt je Konto), Aufgaben und im Ordner Listen je Liste eine Datei. Namen statt interner Nummern, Datum im Format TT.MM.JJJJ, Beträge als Zahl.\nProtokolle: das zuletzt erzeugte PDF jedes abgeschlossenen Protokolls.\n{files}\n\nZugangsdaten (Passwörter, Zwei-Faktor-Schlüssel, Links) sind nicht enthalten. Bitte sicher aufbewahren: die Datei enthält Personendaten."
   },
   "email": {
     "greeting": "Hallo {name}",
@@ -637,33 +637,33 @@
       "subject": "{tenant}: Sicherheitshinweis zu deinem Konto",
       "intro": "An deinem Konto bei {tenant} wurde Folgendes geändert:",
       "passwordChanged": "Passwort geändert ({at})",
-      "passwordChangedByAdmin": "Passwort durch die Vereinsverwaltung neu gesetzt ({at})",
+      "passwordChangedByAdmin": "Passwort durch die Verwaltung deiner Organisation neu gesetzt ({at})",
       "mfaAdded": "Zweiter Faktor hinzugefügt ({at})",
       "mfaRemoved": "Zweiter Faktor entfernt ({at})",
-      "mfaRemovedByAdmin": "Zweiter Faktor durch die Vereinsverwaltung entfernt ({at})",
+      "mfaRemovedByAdmin": "Zweiter Faktor durch die Verwaltung deiner Organisation entfernt ({at})",
       "hint": "Warst du das nicht? Melde dich sofort bei {tenant}.",
       "mandatory": "Sicherheitshinweise bekommst du immer, sie lassen sich nicht abbestellen.",
       "emailChanged": "Login-E-Mail geändert ({at})",
-      "emailChangedByAdmin": "Login-E-Mail durch die Vereinsverwaltung geändert ({at})",
+      "emailChangedByAdmin": "Login-E-Mail durch die Verwaltung deiner Organisation geändert ({at})",
       "emailChangedSubject": "{tenant}: Deine Login-E-Mail wurde geändert",
       "emailChangedIntro": "Die Login-E-Mail deines Kontos bei {tenant} wurde geändert. Diese Adresse gilt ab jetzt nicht mehr für die Anmeldung, du bekommst diese Nachricht deshalb ein letztes Mal hierhin:",
       "label": {
         "passwordChanged": "Passwort geändert",
-        "passwordChangedByAdmin": "Passwort durch die Vereinsverwaltung neu gesetzt",
+        "passwordChangedByAdmin": "Passwort durch die Verwaltung deiner Organisation neu gesetzt",
         "mfaAdded": "Zweiter Faktor hinzugefügt",
         "mfaRemoved": "Zweiter Faktor entfernt",
-        "mfaRemovedByAdmin": "Zweiter Faktor durch die Vereinsverwaltung entfernt",
+        "mfaRemovedByAdmin": "Zweiter Faktor durch die Verwaltung deiner Organisation entfernt",
         "emailChanged": "Login-E-Mail geändert",
-        "emailChangedByAdmin": "Login-E-Mail durch die Vereinsverwaltung geändert"
+        "emailChangedByAdmin": "Login-E-Mail durch die Verwaltung deiner Organisation geändert"
       }
     },
     "export": {
       "subjectReady": "{tenant}: Datenexport bereit",
       "subjectFailed": "{tenant}: Datenexport fehlgeschlagen",
-      "ready": "Der Datenexport «{filename}» ist fertig. Du kannst ihn in hocX unter Vereinseinstellungen > Datenschutz herunterladen.",
-      "failed": "Der Datenexport konnte nicht erstellt werden. Bitte bestelle ihn in hocX unter Vereinseinstellungen > Datenschutz erneut.",
+      "ready": "Der Datenexport «{filename}» ist fertig. Du kannst ihn in hocX unter Organisation › Datenschutz herunterladen.",
+      "failed": "Der Datenexport konnte nicht erstellt werden. Bitte bestelle ihn in hocX unter Organisation › Datenschutz erneut.",
       "openButton": "Export öffnen",
-      "readyBody": "Der Datenexport ist fertig. Du kannst ihn in hocX unter Vereinseinstellungen › Datenschutz herunterladen."
+      "readyBody": "Der Datenexport ist fertig. Du kannst ihn in hocX unter Organisation › Datenschutz herunterladen."
     },
     "via": "über hocX",
     "system": "System",
@@ -722,7 +722,7 @@
       "countOther": "{count} Bussen",
       "issuedOn": "vom {date}",
       "openTotal": "Total offene Bussen bei {tenant}",
-      "payment": "Bezahlt wird bei der Kasse des Vereins. Ist eine Busse falsch? Melde dich bei {tenant}.",
+      "payment": "Bezahlt wird bei der Kasse. Ist eine Busse falsch? Melde dich bei {tenant}.",
       "openFines": "Meine Bussen ansehen",
       "issuedSubjectOne": "{tenant}: Neue Busse über {amount}",
       "issuedSubjectOther": "{tenant}: Neue Bussen über {amount}",

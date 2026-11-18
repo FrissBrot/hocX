@@ -21,7 +21,7 @@
     "files": "Files"
   },
   "keywords": {
-    "dashboard": "start overview home",
+    "dashboard": "start overview home Dashboard",
     "statistics": "reports numbers attendance charts",
     "protocols": "meetings minutes agenda items",
     "events": "calendar events dates",
@@ -31,10 +31,10 @@
     "finances": "cash accounts transactions money",
     "fines": "fines penalties",
     "participants": "members people addresses",
-    "lists": "lists tables",
+    "lists": "lists tables Master lists",
     "photos": "pictures photos gallery albums",
     "files": "documents files uploads",
-    "sharedLinks": "shares links sharing",
+    "sharedLinks": "shares links sharing Shared links",
     "protocolTemplates": "templates",
     "elements": "building blocks elements",
     "workflows": "workflows cycles",
@@ -42,10 +42,10 @@
     "design": "layout pdf document templates design",
     "documents-brand": "colours fonts logo brand",
     "documents-assets": "images logos media",
-    "fineSettings": "fines tariffs rules configuration",
+    "fineSettings": "fines tariffs rules configuration Fine settings",
     "users": "accounts login users access",
     "users-roles": "roles permissions rights",
-    "tenantSettings": "club general name logo",
+    "tenantSettings": "organization profile general name logo",
     "tenant-settings-domains": "domain address",
     "tenant-settings-abo": "subscription invoice storage plan cost",
     "tenant-settings-verification": "authenticity verification qr",
@@ -56,6 +56,16 @@
     "profile": "profile account password language mfa security",
     "connections": "calendar subscription connections ics",
     "theme": "appearance theme dark light mode",
-    "tenant-settings-links": "links shares public access sharing drop box calendar"
+    "tenant-settings-links": "links shares public access sharing drop box calendar",
+    "calendar": "calendar events dates Events",
+    "memberList": "members people addresses",
+    "sessionTemplates": "templates Protocol templates Configuration",
+    "taskPackages": "task packages duties Workflows",
+    "documentTemplates": "layout pdf document templates design",
+    "documentBrand": "colours fonts logo brand",
+    "domainsAndVerification": "domain address authenticity verification qr",
+    "organisationProfile": "organization profile general name logo settings",
+    "cycles": "workflows cycles Cycles",
+    "myTasks": "My to-dos tasks submissions"
   }
 }

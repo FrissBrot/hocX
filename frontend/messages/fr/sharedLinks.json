@@ -27,7 +27,7 @@
   "filterAll": "Tous",
   "page": {
     "description": "Liens de téléchargement publics pour les fichiers et photos de votre organisation.",
-    "title": "Liens partagés"
+    "title": "Partages"
   },
   "revokeConfirm": "Révoquer le lien « {name} » ? Il ne fonctionnera plus ensuite.",
   "revokeConfirmLabel": "Révoquer",

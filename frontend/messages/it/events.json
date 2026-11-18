@@ -92,7 +92,7 @@
   "emptyState": {
     "add": "+ Evento",
     "description": "Registra le occasioni affinché compaiano nei verbali, nelle consegne e nella dashboard.",
-    "hint": "Gli eventi possono essere assegnati a un ciclo – mantenendo separati gli anni associativi.",
+    "hint": "Gli eventi possono essere assegnati a un ciclo – mantenendo separati gli anni di lavoro.",
     "title": "Nessun evento pianificato"
   },
   "export": "Esporta",
@@ -240,7 +240,7 @@
   "help": {
     "tag": "Un tag classifica l'appuntamento (p. es. «Seduta», «Campo»). I blocchi del verbale e le consegne filtrano in base ad esso; un filtro trova ogni tag che contiene il testo cercato. Rinominare cambia il tag in tutti gli appuntamenti e nelle consegne.",
     "cycles": "Di norma un appuntamento appartiene al ciclo in cui cade la sua data. Un'assegnazione manuale resta anche se la data cambia e determina in quali filtri di ciclo (verbali, consegne, album fotografici) compare l'appuntamento.",
-    "currentCycle": "Di norma l'elenco mostra solo gli appuntamenti del ciclo attuale (p. es. l'anno sociale in corso). Con questo interruttore compaiono anche gli appuntamenti dei cicli precedenti e successivi.",
+    "currentCycle": "Di norma l'elenco mostra solo gli appuntamenti del ciclo attuale (p. es. l'anno di lavoro in corso). Con questo interruttore compaiono anche gli appuntamenti dei cicli precedenti e successivi.",
     "csvImport": "Data d'inizio e titolo sono obbligatori. hocX non controlla i doppioni: importare due volte un file crea gli appuntamenti due volte. Gli appuntamenti importati vengono assegnati al loro ciclo in base alla data.",
     "docsLink": "Guida agli appuntamenti",
     "calendarDocsLink": "Abbonarsi agli appuntamenti nel proprio calendario",

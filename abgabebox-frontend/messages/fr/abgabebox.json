@@ -28,7 +28,7 @@
   },
   "home": {
     "title": "Abgabebox",
-    "hint": "Merci d'utiliser le lien de dépôt complet que vous avez reçu de l'association."
+    "hint": "Merci d'utiliser le lien de dépôt complet que vous avez reçu de l'organisation."
   },
   "notFound": {
     "title": "Introuvable",
@@ -41,7 +41,7 @@
   },
   "assignments": {
     "disabledTitle": "Dépôt non disponible",
-    "disabledHint": "Le dépôt n'est actuellement pas disponible pour cette association.",
+    "disabledHint": "Le dépôt n'est actuellement pas disponible pour cette organisation.",
     "title": "Dépôts ouverts",
     "hint": "Pour quoi souhaites-tu déposer quelque chose ?",
     "empty": "Il n'y a actuellement aucun dépôt ouvert.",

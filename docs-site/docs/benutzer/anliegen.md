@@ -1,6 +1,6 @@
 # Anliegen
 
-Unter *Arbeiten → Anliegen* sammelt der Verein Punkte, die an einer kommenden Sitzung besprochen
+Unter *Arbeiten → Anliegen* sammelt die Organisation Punkte, die an einer kommenden Sitzung besprochen
 werden sollen. Ein Anliegen erscheint automatisch im passenden Protokoll unter dem gewählten
 Traktandum. Die Vorlage braucht dafür keinen eigenen Block.
 

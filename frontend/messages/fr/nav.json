@@ -1,10 +1,14 @@
 {
-  "dashboard": "Tableau de bord",
+  "dashboard": "Vue d'ensemble",
   "groups": {
-    "work": "Travail",
-    "masterData": "Données de base",
-    "configuration": "Configuration",
-    "administration": "Administration"
+    "sessions": "Séances",
+    "tasks": "Tâches",
+    "members": "Membres",
+    "cash": "Caisse",
+    "storage": "Classement",
+    "appearance": "Image",
+    "settings": "Paramètres",
+    "organisation": "Organisation"
   },
   "protocols": "Procès-verbaux",
   "events": "Événements",
@@ -13,10 +17,10 @@
   "submissions": "Dépôts",
   "finances": "Finances",
   "participants": "Membres",
-  "lists": "Listes de base",
+  "lists": "Listes",
   "photos": "Photos",
   "files": "Fichiers",
-  "sharedLinks": "Liens partagés",
+  "sharedLinks": "Partages",
   "templates": "Modèles",
   "cycles": "Cycles",
   "users": "Accès et rôles",
@@ -65,6 +69,17 @@
   "roleManagement": "Rôles",
   "workflows": "Déroulements",
   "design": "Mise en page",
-  "fineSettings": "Réglages des amendes",
-  "publicLinks": "Liens d'accès"
+  "fineSettings": "Règles des amendes",
+  "publicLinks": "Liens d'accès",
+  "related": {
+    "openSettings": "Ouvrir le paramètre : {name}",
+    "backToArea": "Retour à {area}"
+  },
+  "myTasks": "Mes tâches",
+  "calendar": "Calendrier",
+  "sessionTemplates": "Modèles de séance",
+  "memberList": "Liste des membres",
+  "domainsAndVerification": "Domaines et authenticité",
+  "organisationProfile": "Profil",
+  "workYear": "Année de travail"
 }

@@ -599,7 +599,7 @@
         "since_date": "Depuis une date",
         "this_year": "Cette année",
         "last_n": "N dernières",
-        "this_cycle": "Ce cycle (p. ex. année associative)"
+        "this_cycle": "Ce cycle (p. ex. année de travail)"
       },
       "lastN": "Nombre",
       "sinceDate": "Depuis",
@@ -1058,7 +1058,7 @@
         "protocol": "Le PDF du procès-verbal utilise la mise en page",
         "invitation": "L’invitation utilise la mise en page"
       },
-      "defaultBadge": "Standard de la société",
+      "defaultBadge": "Votre standard",
       "usage": {
         "only": "Utilisée uniquement dans ce modèle.",
         "alsoIn": "Aussi utilisée dans",
@@ -1081,7 +1081,7 @@
       "choose": {
         "title": "Choisir la mise en page",
         "description": "Quelle mise en page « {name} » doit-il utiliser ? Le choix s’applique immédiatement.",
-        "default": "Standard de la société",
+        "default": "Votre standard",
         "defaultHint": "actuellement « {name} »",
         "defaultHintNone": "Standard hocX",
         "usedIn": "utilisée dans {names}",

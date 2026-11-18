@@ -2,7 +2,7 @@
 
 ## Zyklen
 
-Ein **Zyklus** (`Cycles`) bündelt eine Vereinsperiode (z. B. ein Vereinsjahr) und liefert
+Ein **Zyklus** (`Cycles`) bündelt eine Periode (z. B. ein Arbeitsjahr) und liefert
 Platzhalter, die in Vorlagen verwendet werden können:
 
 - `{cycle_name}`
@@ -24,7 +24,7 @@ Eine **Vorlage** (`Templates`) definiert den Aufbau eines Protokolltyps:
 - Elemente/Blöcke können sich **pro Termin** oder **pro Todo** wiederholen
   (`repeat_source`).
 - Tabellenzeilen können optional fest mit einer Zeile aus einer zentralen [Stammliste](listen.md)
-  verknüpft werden ("Zeile aus Liste", siehe [Stammlisten](listen.md#verknuepfen)) – Änderungen an der Liste spiegeln sich dann live
+  verknüpft werden ("Zeile aus Liste", siehe [Listen](listen.md#verknuepfen)) – Änderungen an der Liste spiegeln sich dann live
   im Protokoll, solange es nicht abgeschlossen ist.
 
 Änderungen an einer Vorlage wirken sich **nur auf künftig daraus erstellte Protokolle**
@@ -48,7 +48,7 @@ Titel und Darstellung ändern und den Baustein entfernen geht auch ohne.
 ## Bussentarif {#bussentarif}
 
 Über *Bussentarif* in der Vorlage legt man fest, welche Bussen die Anwesenheitsblöcke dieser
-Vorlage verwenden: den Tarif des Vereins (*Finanzen › Bussen*) oder einen eigenen Tarif nur für
+Vorlage verwenden: den Tarif der Organisation (*Finanzen › Bussen*) oder einen eigenen Tarif nur für
 diese Vorlage. Änderungen gelten sofort für alle offenen Protokolle der Vorlage; bereits erfasste
 Bussen behalten ihren Betrag. Mehr dazu unter [Finanzen & Bussen](finanzen.md).
 

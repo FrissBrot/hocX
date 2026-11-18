@@ -529,16 +529,16 @@
         "description": "Génère les aperçus PDF et extrait le texte des documents téléversés (signal de vie de la boucle d’interrogation)."
       },
       "tenant_data_export": {
-        "title": "Export de l’association",
-        "description": "Crée les exports d’association demandés (ZIP AES avec tableaux, PDF des procès-verbaux et fichiers) et les supprime après 7 jours."
+        "title": "Export de l’organisation",
+        "description": "Crée les exports de l’organisation demandés (ZIP AES avec tableaux, PDF des procès-verbaux et fichiers) et les supprime après 7 jours."
       },
       "retention_proposals": {
         "title": "Délais de conservation",
-        "description": "Crée des propositions selon les délais de chaque association (dépôts, anciens membres, anciennes images de la galerie) et les applique en mode automatique."
+        "description": "Crée des propositions selon les délais de chaque organisation (dépôts, anciens membres, anciennes images de la galerie) et les applique en mode automatique."
       },
       "job_worker": {
         "title": "Worker de tâches",
-        "description": "Exécute les tâches lourdes en arrière-plan (import de galerie, exports PDF, exports de l’association, nouvelles analyses antivirus, nettoyage) - signe de vie chaque minute."
+        "description": "Exécute les tâches lourdes en arrière-plan (import de galerie, exports PDF, exports de l’organisation, nouvelles analyses antivirus, nettoyage) - signe de vie chaque minute."
       },
       "submission_todo_sync": {
         "title": "Synchroniser les tâches de dépôt",
@@ -595,7 +595,7 @@
     "noStatusToken": "Aucun jeton créé pour l'instant.",
     "email": {
       "title": "E-mail (SMTP)",
-      "description": "Envoi des notifications aux membres (nouvelles tâches, rappels). L'expéditeur est une adresse hocX, le nom du club figure dans l'objet.",
+      "description": "Envoi des notifications aux membres (nouvelles tâches, rappels). L'expéditeur est une adresse hocX, le nom de l'organisation figure dans l'objet.",
       "enabledLabel": "Envoi d'e-mails actif",
       "yes": "Oui",
       "no": "Non",
@@ -739,7 +739,7 @@
     "fields": {
       "tenantName": "Nom de l'organisation",
       "publicSlug": "Identifiant public (URL Abgabebox)",
-      "publicSlugPlaceholder": "p. ex. club-exemple",
+      "publicSlugPlaceholder": "p. ex. organisation-exemple",
       "profileImage": "Photo de profil",
       "profileImageSelected": "{filename} · ",
       "dragHint": "Glisser une image ici ou ",
@@ -752,7 +752,7 @@
       "discountPriceHelp": "Sans remise {price} par {unit}. Saisissez un pourcentage ou un prix, hocX calcule l’autre.",
       "discountPriceUnavailable": "Choisissez d’abord un plan avec un prix.",
       "internalNote": "Note interne",
-      "internalNotePlaceholder": "p. ex. remise association jusqu'en 2027",
+      "internalNotePlaceholder": "p. ex. remise jusqu'en 2027",
       "billingStart": "Début de l’abonnement",
       "billingStartHelp": "Dès cette date, des créances par période de facturation apparaissent dans le flux de trésorerie. Vide = date de création ({date}). Une modification recrée les créances ouvertes.",
       "userLimitOverride": "Remplacer la limite d'utilisateurs",
@@ -761,7 +761,7 @@
       "userLimitHelp": "Vide = la limite du plan s'applique. Actuellement {count} utilisateur(s){suffix}",
       "userLimitExceeded": " – limite atteinte ou dépassée.",
       "showOnWebsite": "Afficher comme client sur le site web",
-      "showOnWebsiteHelp": "Apparaît sur le site web public sous « Ils nous font confiance » (nom uniquement). À activer uniquement avec l’accord de l’association.",
+      "showOnWebsiteHelp": "Apparaît sur le site web public sous « Ils nous font confiance » (nom uniquement). À activer uniquement avec l’accord de l’organisation.",
       "contractEnd": "Fin du contrat",
       "contractEndHelp": "Vide = sans fin. Après la fin du contrat plus le délai d’export, /admin/system signale que les données du mandant doivent être supprimées."
     },
@@ -1020,7 +1020,7 @@
     "delete": "Supprimer",
     "newTenantDescription": "Crée une nouvelle organisation avec le modèle de document par défaut.",
     "tenantName": "Nom de l'organisation",
-    "tenantNamePlaceholder": "p. ex. Club sportif exemple",
+    "tenantNamePlaceholder": "p. ex. Organisation exemple",
     "publicSlug": "Slug public",
     "plan": "Plan",
     "nonBookablePlansHint": "Les plans non réservables (p. ex. pour les organisations existantes) peuvent être attribués ensuite dans les paramètres de l'organisation.",

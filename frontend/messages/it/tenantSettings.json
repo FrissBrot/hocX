@@ -5,7 +5,7 @@
   "changeProfileImage": "Cambia immagine del profilo",
   "tenantNameLabel": "Nome organizzazione",
   "publicSlugLabel": "Nome breve",
-  "publicSlugPlaceholder": "ad es. associazione-esempio",
+  "publicSlugPlaceholder": "ad es. organizzazione-esempio",
   "tenantIdLabel": "ID organizzazione",
   "tenantIdHelp": "Necessario ad esempio per condividere un album fotografico con questa organizzazione.",
   "saveSuccess": "Organizzazione salvata",
@@ -21,7 +21,7 @@
   "setup": "Configura",
   "domainActionsAriaLabel": "Azioni per {domain}",
   "emptyDomainTitle": "Nessun dominio personalizzato",
-  "emptyDomainDescription": "Collega un dominio come app.tua-associazione.ch per permettere ai membri di raggiungere hocX con il tuo indirizzo. La verifica avviene tramite un record DNS.",
+  "emptyDomainDescription": "Collega un dominio come app.tua-organizzazione.ch per permettere ai membri di raggiungere hocX con il tuo indirizzo. La verifica avviene tramite un record DNS.",
   "addDomain": "+ Aggiungi dominio",
   "emptyDomainHintWithFeature": "Fino ad allora l'organizzazione resta raggiungibile all'indirizzo predefinito.",
   "emptyDomainHintWithoutFeature": "I domini personalizzati devono essere aggiunti all'abbonamento (scheda «Abbonamento e utilizzo»). Fino ad allora l'organizzazione resta raggiungibile all'indirizzo predefinito.",
@@ -35,7 +35,7 @@
   "wizardPurposeAppDescription": "Apri la normale interfaccia hocX con il tuo dominio.",
   "wizardPurposeAbgabeboxDescription": "Rendi raggiungibile la consegna file pubblica con il tuo dominio.",
   "domainLabel": "Dominio",
-  "domainPlaceholder": "ad es. associazione.example.ch",
+  "domainPlaceholder": "ad es. app.example.ch",
   "addDomainFailed": "Impossibile aggiungere il dominio",
   "verifyFailed": "Verifica non riuscita",
   "removeDomainConfirm": "Eliminare definitivamente il dominio \"{domain}\"? La configurazione DNS dovrà essere riavviata in seguito.",
@@ -84,8 +84,8 @@
   "moduleActive": "Attivo",
   "saveSuccessVerificationRevoked": "Salvato. Poiché il nome è cambiato, la verifica da parte di hocX è stata revocata (Impostazioni organizzazione → Verifica di autenticità).",
   "purposeVerify": "Pagina di verifica",
-  "wizardPurposeVerifyDescription": "Fai verificare i tuoi documenti con il tuo indirizzo, ad es. verify.associazione.ch.",
-  "domainPlaceholderVerify": "ad es. verify.associazione.ch",
+  "wizardPurposeVerifyDescription": "Fai verificare i tuoi documenti con il tuo indirizzo, ad es. verify.example.ch.",
+  "domainPlaceholderVerify": "ad es. verify.example.ch",
   "successVerifyDescription": "I nuovi PDF rimandano ora a questa pagina di verifica, purché nome e logo siano mostrati sulla pagina di verifica (verifica di autenticità).",
   "charges": {
     "eyebrow": "Fatturazione",
@@ -145,8 +145,8 @@
     "saved": "Salvato",
     "saveFailed": "Salvataggio non riuscito",
     "export": {
-      "title": "Export dell’associazione",
-      "description": "Tutti i dati dell’associazione per il lavoro successivo: tabelle Excel (membri, appuntamenti, presenze, multe, finanze, compiti, liste), i PDF dei verbali chiusi e, su richiesta, foto, consegne e documenti come file originali. Senza credenziali. L’export viene creato in background ed è poi disponibile per 7 giorni. Richiede un accesso confermato con autenticazione a due fattori.",
+      "title": "Export dell’organizzazione",
+      "description": "Tutti i dati dell’organizzazione per il lavoro successivo: tabelle Excel (membri, appuntamenti, presenze, multe, finanze, compiti, liste), i PDF dei verbali chiusi e, su richiesta, foto, consegne e documenti come file originali. Senza credenziali. L’export viene creato in background ed è poi disponibile per 7 giorni. Richiede un accesso confermato con autenticazione a due fattori.",
       "includeFiles": "Includi foto, consegne e documenti",
       "password": "Password per il file ZIP",
       "passwordHelp": "Almeno {min} caratteri. Salvata cifrata solo fino alla creazione – senza password il file non si può aprire.",
@@ -169,7 +169,7 @@
     },
     "noticeTitle": "Informativa sulla privacy",
     "noticeUrl": "Link alla vostra informativa sulla privacy",
-    "noticeUrlHint": "Prima del caricamento la casella di consegna indica che la vostra associazione è responsabile e rimanda a questa pagina. Vuoto = informativa predefinita della piattaforma.",
+    "noticeUrlHint": "Prima del caricamento la casella di consegna indica che la vostra organizzazione è responsabile e rimanda a questa pagina. Vuoto = informativa predefinita della piattaforma.",
     "noticeSave": "Salva link"
   },
   "activity": {
@@ -195,7 +195,7 @@
     }
   },
   "retention": {
-    "intro": "Stabilisci per quanto tempo l’associazione conserva determinati dati. Tutte le regole sono disattivate finché non le attivi. hocX propone ogni giorno gli elementi interessati; tu li confermi o li scarti. Gli ex membri vengono solo disattivati, mai eliminati.",
+    "intro": "Stabilisci per quanto tempo l’organizzazione conserva determinati dati. Tutte le regole sono disattivate finché non le attivi. hocX propone ogni giorno gli elementi interessati; tu li confermi o li scarti. Gli ex membri vengono solo disattivati, mai eliminati.",
     "rulesTitle": "Termini",
     "rules": {
       "submissions_months": {
@@ -266,21 +266,21 @@
   "dnsWaitHint": "I nuovi record DNS richiedono spesso alcuni minuti, a volte fino ad alcune ore. Verifica solo quando entrambi i record sono impostati: sono possibili 20 verifiche all'ora. Con «Completa più tardi» puoi tornare in qualsiasi momento.",
   "docsLink": "Maggiori informazioni nella guida",
   "help": {
-    "domains": "Un dominio proprio (ad es. app.club.ch) rende hocX, la casella di consegna o la pagina di verifica raggiungibili al vostro indirizzo. Per ogni scopo c'è un dominio attivo; uno nuovo lo sostituisce solo dopo una verifica riuscita.",
-    "dns": "Il record TXT dimostra che il dominio vi appartiene. Il record CNAME inoltra l'indirizzo a hocX. Presso molti provider un dominio principale senza prefisso (club.ch) non può avere un CNAME – usa allora un sottodominio come app.club.ch o un record A verso lo stesso indirizzo IP della destinazione.",
-    "publicSlug": "Nome breve e univoco del vostro club, composto da lettere minuscole, cifre e trattini. Altre organizzazioni vi trovano tramite questo nome, ad es. quando condividono un album fotografico. I link della casella di consegna non ne dipendono e restano validi in caso di modifica.",
+    "domains": "Un dominio proprio (ad es. app.example.ch) rende hocX, la casella di consegna o la pagina di verifica raggiungibili al vostro indirizzo. Per ogni scopo c'è un dominio attivo; uno nuovo lo sostituisce solo dopo una verifica riuscita.",
+    "dns": "Il record TXT dimostra che il dominio vi appartiene. Il record CNAME inoltra l'indirizzo a hocX. Presso molti provider un dominio principale senza prefisso (example.ch) non può avere un CNAME – usa allora un sottodominio come app.example.ch o un record A verso lo stesso indirizzo IP della destinazione.",
+    "publicSlug": "Nome breve e univoco della vostra organizzazione, composto da lettere minuscole, cifre e trattini. Altre organizzazioni vi trovano tramite questo nome, ad es. quando condividono un album fotografico. I link della casella di consegna non ne dipendono e restano validi in caso di modifica.",
     "modules": "«Attivo» significa pienamente utilizzabile. «Sola lettura» significa che il modulo non fa più parte dell'abbonamento, ma i vostri dati restano conservati e leggibili; le modifiche sono bloccate finché il modulo non viene prenotato di nuovo."
   },
   "errors": {
     "rateLimited": "Troppi tentativi in poco tempo. Attendi circa un'ora e riprova.",
-    "domain_invalid_format": "Questo non è un dominio valido. Esempio: app.club.ch (senza https:// e senza percorso).",
+    "domain_invalid_format": "Questo non è un dominio valido. Esempio: app.example.ch (senza https:// e senza percorso).",
     "domain_reserved": "Questo dominio appartiene a hocX stesso e non può essere aggiunto.",
     "domain_domain_taken": "Questo dominio è già attivo per un'altra organizzazione.",
     "domain_already_active": "Questo dominio è già attivo per questo scopo.",
     "domain_txt_missing": "Il record TXT {record} con il valore di verifica non è ancora stato trovato. Controlla nome e valore presso il provider o attendi che la modifica si propaghi.",
     "domain_not_routed": "{domain} non punta ancora a {target}. Controlla il record CNAME o A o attendi che la modifica si propaghi."
   },
-  "renameRevokesVerificationConfirm": "Il vostro club è verificato da hocX. Se modifichi il nome, questa verifica viene revocata e i nuovi PDF non risulteranno più verificati. Potrai richiederla di nuovo in Impostazioni organizzazione → Verifica di autenticità. Salvare comunque?",
+  "renameRevokesVerificationConfirm": "La vostra organizzazione è verificata da hocX. Se modifichi il nome, questa verifica viene revocata e i nuovi PDF non risulteranno più verificati. Potrai richiederla di nuovo in Impostazioni › Domini e autenticità. Salvare comunque?",
   "renameConfirmLabel": "Modifica nome",
   "moduleReadOnly": "Sola lettura",
   "moduleReadOnlyHint": "Non più nell'abbonamento: i dati restano leggibili, le modifiche sono bloccate.",
@@ -288,13 +288,13 @@
   "finance": {
     "eyebrow": "Finanze",
     "currencyLabel": "Valuta",
-    "currencyHelp": "Vale per tutti i conti e le multe dell’associazione, p. es. CHF, EUR o Fr.",
+    "currencyHelp": "Vale per tutti i conti e le multe, p. es. CHF, EUR o Fr.",
     "currencyHelpPopover": "hocX non converte: una modifica cambia solo la denominazione su tutti i conti, multe ed esportazioni. Gli importi restano invariati.",
     "saved": "Valuta salvata: {currency}",
     "saveFailed": "Non è stato possibile salvare la valuta."
   },
   "publicLinks": {
-    "intro": "Tutti i link tramite i quali qualcuno accede ai dati della tua associazione senza login – con motivo, scadenza e il luogo in cui li gestisci. I link scaduti, revocati o usati non vengono mostrati.",
+    "intro": "Tutti i link tramite i quali qualcuno accede ai dati della tua organizzazione senza login – con motivo, scadenza e il luogo in cui li gestisci. I link scaduti, revocati o usati non vengono mostrati.",
     "neverExpiringHint": "{count, plural, one {# link non scade} other {# link non scadono}} da {count, plural, one {solo} other {soli}}. Verifica se {count, plural, one {serve} other {servono}} ancora.",
     "group": {
       "all": "Tutti",
@@ -302,7 +302,7 @@
       "submissions": "Casella di consegna",
       "calendar": "Calendario",
       "accounts": "Account",
-      "partners": "Associazioni partner",
+      "partners": "Organizzazioni partner",
       "other": "Altri"
     },
     "col": {
@@ -322,7 +322,7 @@
       "calendar_todos": "Calendario",
       "account_invite": "Invito",
       "account_password_reset": "Password",
-      "album_partner": "Associazione partner",
+      "album_partner": "Organizzazione partner",
       "submission_access": "Consegna personale"
     },
     "reason": {
@@ -349,7 +349,7 @@
     "notTracked": "—",
     "manage": "Gestisci",
     "manageElsewhere": {
-      "files": "presso l'associazione partner",
+      "files": "presso l'organizzazione partner",
       "submissions": "—",
       "calendar": "solo la persona",
       "accounts": "—",

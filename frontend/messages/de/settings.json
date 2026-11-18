@@ -22,7 +22,7 @@
       "download": "Meine Daten herunterladen"
     },
     "notifications": {
-      "description": "Welche E-Mails du von deinem Verein bekommst. Wir schicken bewusst wenig: neue Aufgaben gesammelt und je Aufgabe eine Erinnerung vor und nach der Fälligkeit.",
+      "description": "Welche E-Mails du von deiner Organisation bekommst. Wir schicken bewusst wenig: neue Aufgaben gesammelt und je Aufgabe eine Erinnerung vor und nach der Fälligkeit.",
       "loading": "Wird geladen …",
       "loadFailed": "Einstellungen konnten nicht geladen werden.",
       "saveFailed": "Einstellung konnte nicht gespeichert werden.",
@@ -51,7 +51,7 @@
         },
         "exports": {
           "label": "Datenexport fertig",
-          "hint": "Nur wenn du einen Vereins-Datenexport bestellst: Mail, sobald er bereitliegt oder fehlgeschlagen ist."
+          "hint": "Nur wenn du einen Gesamtexport bestellst: Mail, sobald er bereitliegt oder fehlgeschlagen ist."
         }
       },
       "securityNote": "Sicherheitshinweise (Passwort oder zweiter Faktor geändert) und Links zum Zurücksetzen des Passworts bekommst du immer."

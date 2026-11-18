@@ -1,6 +1,6 @@
-# Stammlisten
+# Listen
 
-Unter *Stammdaten → Stammlisten* pflegt der Verein frei aufgebaute Tabellen mit zwei Spalten,
+Unter *Ablage → Listen* pflegt die Organisation frei aufgebaute Tabellen mit zwei Spalten,
 z. B. eine Vorstandsliste (Funktion, Person), eine Ämtliliste oder ein Inventar. Die Seite steht
 allen offen, die Protokolle bearbeiten dürfen.
 

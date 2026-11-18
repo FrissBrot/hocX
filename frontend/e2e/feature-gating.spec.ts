@@ -45,6 +45,9 @@ test("disabling finance/abgabebox hides the nav links and blocks the routes", as
     // auch (via RouteTabs) einen "Konten"-Tab mit demselben href - nur der Sidebar-Link ist
     // hier relevant.
     await expect(page.locator('.nav-link[href="/finances"]')).toBeVisible();
+    // Die Seitenleiste klappt nur die Gruppe der aktiven Seite auf: Abgaben (Aufgaben) liegen
+    // seit der neuen Einteilung nicht mehr in derselben Gruppe wie die Konten (Kasse).
+    await page.goto("/submission-assignments");
     await expect(page.locator('.nav-link[href="/submission-assignments"]')).toBeVisible();
 
     const disable = await adminApi.put(`/api/admin/tenants/${tenantId}/features`, { data: { enabled_codes: [] } });

@@ -92,7 +92,7 @@
   "emptyState": {
     "add": "+ Termin",
     "description": "Trage Anlässe ein, damit sie in Protokollen, Abgaben und im Dashboard erscheinen.",
-    "hint": "Termine lassen sich einem Zyklus zuordnen – so bleiben Vereinsjahre sauber getrennt.",
+    "hint": "Termine lassen sich einem Zyklus zuordnen – so bleiben Arbeitsjahre sauber getrennt.",
     "title": "Keine Termine geplant"
   },
   "export": "Export",
@@ -240,7 +240,7 @@
   "help": {
     "tag": "Ein Tag ordnet den Termin einer Art zu (z. B. «Sitzung», «Lager»). Protokoll-Blöcke und Abgaben filtern danach; ein Filter trifft jeden Tag, der den Suchtext enthält. Umbenennen ändert den Tag bei allen Terminen und in den Abgaben.",
     "cycles": "Standardmässig gehört ein Termin zum Zyklus, in den sein Datum fällt. Eine manuelle Zuordnung bleibt auch bei Datumsänderungen bestehen und steuert, in welchen Zyklusfiltern (Protokolle, Abgaben, Fotoalben) der Termin erscheint.",
-    "currentCycle": "Standardmässig zeigt die Liste nur Termine des aktuellen Zyklus (z. B. des laufenden Vereinsjahres). Mit dem Schalter erscheinen auch Termine früherer und späterer Zyklen.",
+    "currentCycle": "Standardmässig zeigt die Liste nur Termine des aktuellen Zyklus (z. B. des laufenden Arbeitsjahres). Mit dem Schalter erscheinen auch Termine früherer und späterer Zyklen.",
     "csvImport": "Pflichtspalten sind Startdatum und Titel. hocX prüft keine Duplikate: eine Datei zweimal importieren legt die Termine doppelt an. Importierte Termine werden ihrem Zyklus nach Datum zugeordnet.",
     "docsLink": "Anleitung zu Terminen",
     "calendarDocsLink": "Termine im eigenen Kalender abonnieren",

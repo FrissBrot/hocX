@@ -1,6 +1,6 @@
 {
   "pageTitle": "Logins & roles",
-  "ownAccessOnlyHint": "Logins and roles of your club.",
+  "ownAccessOnlyHint": "Logins and roles of your organization.",
   "pageHint": "Who may sign in and with which roles. You maintain the people themselves under «Members».",
   "newUser": "New person",
   "emptyState": {
@@ -49,7 +49,7 @@
   "mfaTitle": "MFA for {name}",
   "mfaTitleFallback": "MFA",
   "roleDescriptions": {
-    "admin": "Full access within the club, including structure (templates, cycles, settings), members, logins and roles.",
+    "admin": "Full access within the organization, including structure (templates, cycles, settings), members, logins and roles.",
     "writer": "Works in the protocol area and maintains operational data, but changes neither structure nor finances.",
     "kassier": "Like reader, plus full write access to finances and fines.",
     "reader": "Read-only access, can trigger PDF exports and only sees their own fines."

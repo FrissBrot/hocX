@@ -21,7 +21,7 @@ Welche E-Mails du bekommst, stellst du selbst ein: **Profil** (oben rechts) → 
 | **Abgabe eingegangen** | Wenn eine Einreichung in der [Abgabebox](abgabebox.md) deine Abgabe-Aufgabe erledigt. |
 | **Bussen** | 3 Tage bevor eine Aufgabe fällig wird, für die bei Verspätung eine [Busse](bussen.md) anfällt: «Busse droht», mit den Beträgen, die je nach Verspätung fällig würden. Diese Mail ersetzt für die Aufgabe die normale Erinnerung. Ausserdem eine Mail, wenn dir Bussen verrechnet werden: Anwesenheitsbussen mit dem Abschluss des Protokolls, Bussen für zu spät erledigte Aufgaben nach dem Erledigen – mit dem Total deiner offenen Bussen. |
 | **Änderungen an Abgaben** | Nur für Personen, die Abgaben verwalten: wenn eine verantwortliche Person ihre Abgabe über den [persönlichen Link](abgabebox.md#persoenlicher-link) zurückzieht. Mehrere innert weniger Minuten kommen in einer Mail. Ist die Abgabe bis zum Versand schon wiederhergestellt, kommt keine Mail. |
-| **Datenexport fertig** | Nur wenn du einen Vereins-Datenexport bestellst: sobald er bereitliegt oder fehlgeschlagen ist. |
+| **Datenexport fertig** | Nur wenn du einen Gesamtexport bestellst: sobald er bereitliegt oder fehlgeschlagen ist. |
 
 Alle Einstellungen sind zu Beginn eingeschaltet. Bevor eine E-Mail hinausgeht, prüft hocX noch
 einmal, ob sie noch stimmt: Ist die Aufgabe inzwischen erledigt oder bist du nicht mehr
@@ -37,7 +37,7 @@ Einige E-Mails kannst du nicht abschalten, weil sie dein Konto schützen:
   hinzugefügt oder entfernt.
 
 Bekommst du einen Sicherheitshinweis, ohne selbst etwas geändert zu haben, melde dich bei der
-Verwaltung deines Vereins. Mehr dazu unter [Konto & Anmeldung](konto.md).
+Verwaltung deiner Organisation. Mehr dazu unter [Konto & Anmeldung](konto.md).
 
 ## Personen ohne Login {#ohne-login}
 
@@ -54,6 +54,6 @@ Schalter wieder aus.
 ## Abmelden {#abmelden}
 
 - **Mit Login:** im Profil unter **Benachrichtigungen** die gewünschte Einstellung ausschalten.
-- **Ohne Login:** die Verwaltung des Vereins bitten, den Schalter bei der Person auszuschalten.
+- **Ohne Login:** die Verwaltung der Organisation bitten, den Schalter bei der Person auszuschalten.
 
 Pflichtmitteilungen (siehe [oben](#pflicht)) lassen sich nicht abbestellen.

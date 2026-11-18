@@ -1,10 +1,14 @@
 {
-  "dashboard": "Dashboard",
+  "dashboard": "Overview",
   "groups": {
-    "work": "Work",
-    "masterData": "Master data",
-    "configuration": "Configuration",
-    "administration": "Administration"
+    "sessions": "Meetings",
+    "tasks": "Tasks",
+    "members": "Members",
+    "cash": "Cash",
+    "storage": "Storage",
+    "appearance": "Public image",
+    "settings": "Settings",
+    "organisation": "Organization"
   },
   "protocols": "Protocols",
   "events": "Events",
@@ -13,10 +17,10 @@
   "submissions": "Submissions",
   "finances": "Finances",
   "participants": "Members",
-  "lists": "Master lists",
+  "lists": "Lists",
   "photos": "Photos",
   "files": "Files",
-  "sharedLinks": "Shared links",
+  "sharedLinks": "Shares",
   "templates": "Templates",
   "cycles": "Cycles",
   "users": "Logins & roles",
@@ -65,6 +69,17 @@
   "roleManagement": "Roles",
   "workflows": "Workflows",
   "design": "Design",
-  "fineSettings": "Fine settings",
-  "publicLinks": "Access links"
+  "fineSettings": "Fine rules",
+  "publicLinks": "Access links",
+  "related": {
+    "openSettings": "Open setting: {name}",
+    "backToArea": "Back to {area}"
+  },
+  "myTasks": "My tasks",
+  "calendar": "Calendar",
+  "sessionTemplates": "Meeting templates",
+  "memberList": "Member list",
+  "domainsAndVerification": "Domains & authenticity",
+  "organisationProfile": "Profile",
+  "workYear": "Working year"
 }

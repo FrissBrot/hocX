@@ -19,7 +19,7 @@ test("protected pages redirect anonymous visitors", async ({ browser }) => {
 });
 
 test("main navigation pages can be opened", async ({ page }) => {
-  for (const path of ["/", "/todos", "/events", "/participants", "/lists", "/users", "/templates", "/submission-assignments"]) {
+  for (const path of ["/", "/my-tasks", "/todos", "/events", "/participants", "/lists", "/users", "/templates", "/submission-assignments"]) {
     await page.goto(path);
     await expect(page).not.toHaveURL(/\/login/);
     await expect(page.locator("body")).not.toBeEmpty();
@@ -38,4 +38,23 @@ test("mobile navigation closes when clicking outside the sidebar", async ({ page
 
   await page.locator(".sidebar-overlay").click({ position: { x: 500, y: 400 } });
   await expect(sidebar).not.toHaveClass(/sidebar-open/);
+});
+
+test("Zahnrad in der Kopfzeile führt vom Bereich zur Einstellung und zurück", async ({ page }) => {
+  await page.goto("/todos");
+  const related = page.locator(".topbar-related");
+  await expect(related).toHaveAttribute("href", "/task-packages");
+  await related.click();
+  await expect(page).toHaveURL(/\/task-packages$/);
+  // Auf der Einstellung: zurück zum Bereich (erste Seite der Gruppe «Aufgaben»)
+  await expect(page.locator(".topbar-related")).toHaveAttribute("href", "/todos");
+  // Die Einstellung steht gesammelt unter «Einstellungen», die Gruppe ist aufgeklappt
+  await expect(page.locator('.nav-group-expanded .nav-link[href="/task-packages"]')).toBeVisible();
+});
+
+test("Meine Aufgaben verlinkt auf alle Pendenzen", async ({ page }) => {
+  await page.goto("/my-tasks");
+  await expect(page.getByRole("heading", { name: "Meine Aufgaben", level: 1 })).toBeVisible();
+  await page.getByRole("link", { name: "Alle Pendenzen →" }).click();
+  await expect(page).toHaveURL(/\/todos$/);
 });

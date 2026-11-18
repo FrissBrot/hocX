@@ -28,17 +28,13 @@ export function financeTabs(t: TFunc): RouteTab[] {
 // (app-shell-nav.ts): was in einer Sitzung vorkommt, wie Sitzungen ablaufen (nur mit
 // templates.manage, die Routen leiten alle anderen selbst um) und wie die PDFs aussehen. Der
 // Export-Verlauf ist kein Tab, sondern über die Dokumentvorlagen erreichbar.
-export function protocolTemplateTabs(t: TFunc): RouteTab[] {
+/** Sitzungsvorlagen: Protokollvorlagen, Bausteine und das Arbeitsjahr (Zyklen, nur mit
+ * templates.manage - die Seite prüft es selbst, der Tab erscheint nur, wenn er sich öffnen lässt). */
+export function protocolTemplateTabs(t: TFunc, includeWorkYear = false): RouteTab[] {
   return [
     { href: "/templates", label: t("templates") },
     { href: "/elements", label: t("elements") },
-  ];
-}
-
-export function workflowTabs(t: TFunc): RouteTab[] {
-  return [
-    { href: "/cycles", label: t("cycles") },
-    { href: "/task-packages", label: t("taskPackages") },
+    ...(includeWorkYear ? [{ href: "/cycles", label: t("workYear") }] : []),
   ];
 }
 
@@ -60,15 +56,22 @@ export function userAreaTabs(t: TFunc): RouteTab[] {
 }
 
 // Admin-only section: every route below redirects non-admins on its own.
+/** Organisation: alles, was den ganzen Mandanten betrifft. Domains und Echtheitsprüfung gehören
+ * zum Auftritt und haben eine eigene Leiste (domainTabs). */
 export function tenantSettingsTabs(t: TFunc): RouteTab[] {
   return [
-    { href: "/tenant-settings", label: t("general") },
-    { href: "/tenant-settings/domains", label: t("domains") },
+    { href: "/tenant-settings", label: t("organisationProfile") },
     { href: "/tenant-settings/abo", label: t("subscriptionAndUsage") },
-    { href: "/tenant-settings/verification", label: t("documentVerification") },
     { href: "/tenant-settings/privacy", label: t("privacy") },
     { href: "/tenant-settings/links", label: t("publicLinks") },
     { href: "/tenant-settings/retention", label: t("retention") },
     { href: "/tenant-settings/activity", label: t("activity") },
+  ];
+}
+
+export function domainTabs(t: TFunc): RouteTab[] {
+  return [
+    { href: "/tenant-settings/domains", label: t("domains") },
+    { href: "/tenant-settings/verification", label: t("documentVerification") },
   ];
 }

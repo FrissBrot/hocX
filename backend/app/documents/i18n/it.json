@@ -277,7 +277,7 @@
       },
       "missingFiles": "Non inclusi perché non trovati nell’archivio: {count} file.",
       "no": "no",
-      "prefix": "Export-associazione",
+      "prefix": "Export-organizzazione",
       "protocolsWithoutPdf": "Verbali chiusi senza PDF salvato (aprirli in hocX ed esportarli in PDF):",
       "sheet": {
         "attendance": "Presenze",
@@ -292,7 +292,7 @@
       "withoutFiles": "Questo export non contiene foto, consegne o documenti (solo tabelle e PDF dei verbali).",
       "yes": "sì"
     },
-    "tenantReadme": "Export dell’associazione {tenant}, creato il {date}.\\n\\nTabelle (Excel): membri, appuntamenti, presenze (persona × seduta), multe, finanze (un foglio per conto), compiti e nella cartella Liste un file per lista. Nomi invece di numeri interni, date nel formato GG.MM.AAAA, importi come numeri.\\nVerbali: l’ultimo PDF generato di ogni verbale chiuso.\\n{files}\\n\\nLe credenziali (password, chiavi a due fattori, link) non sono incluse. Conservare in modo sicuro: il file contiene dati personali."
+    "tenantReadme": "Export dell’organizzazione {tenant}, creato il {date}.\n\nTabelle (Excel): membri, appuntamenti, presenze (persona × seduta), multe, finanze (un foglio per conto), compiti e nella cartella Liste un file per lista. Nomi invece di numeri interni, date nel formato GG.MM.AAAA, importi come numeri.\nVerbali: l’ultimo PDF generato di ogni verbale chiuso.\n{files}\n\nLe credenziali (password, chiavi a due fattori, link) non sono incluse. Conservare in modo sicuro: il file contiene dati personali."
   },
   "diagnostic": {
     "assetNotFound": "Immagine non trovata",
@@ -358,10 +358,10 @@
       "resetValidity": "Il link è valido per {minutes} minuti e funziona una sola volta."
     },
     "export": {
-      "failed": "Non è stato possibile creare l’esportazione dati. Richiedila di nuovo in hocX in Impostazioni associazione > Protezione dei dati.",
+      "failed": "Non è stato possibile creare l’esportazione dati. Richiedila di nuovo in hocX in Organizzazione › Protezione dei dati.",
       "openButton": "Apri esportazione",
-      "ready": "L’esportazione dati «{filename}» è pronta. Puoi scaricarla in hocX in Impostazioni associazione > Protezione dei dati.",
-      "readyBody": "L'esportazione dei dati è pronta. Puoi scaricarla in hocX sotto Impostazioni dell'associazione › Protezione dei dati.",
+      "ready": "L’esportazione dati «{filename}» è pronta. Puoi scaricarla in hocX in Organizzazione › Protezione dei dati.",
+      "readyBody": "L'esportazione dei dati è pronta. Puoi scaricarla in hocX sotto Organizzazione › Protezione dei dati.",
       "subjectFailed": "{tenant}: esportazione dati non riuscita",
       "subjectReady": "{tenant}: esportazione dati pronta"
     },
@@ -380,7 +380,7 @@
       "openFines": "Vedi le mie multe",
       "openTodo": "Apri l'attività",
       "openTotal": "Totale multe aperte presso {tenant}",
-      "payment": "Le multe si pagano alla cassa dell'associazione. Una multa è sbagliata? Rivolgiti a {tenant}.",
+      "payment": "Le multe si pagano alla cassa. Una multa è sbagliata? Rivolgiti a {tenant}.",
       "rule": "Regola «{name}»",
       "tariff": "Tariffa {name}",
       "todoLate": "Attività in ritardo: {task}",
@@ -408,26 +408,26 @@
     "noLoginHint": "Domande su questo messaggio? Rivolgiti a {tenant}.",
     "security": {
       "emailChanged": "E-mail di accesso modificata ({at})",
-      "emailChangedByAdmin": "E-mail di accesso modificata dall’amministrazione dell’associazione ({at})",
+      "emailChangedByAdmin": "E-mail di accesso modificata dall’amministrazione della tua organizzazione ({at})",
       "emailChangedIntro": "L’e-mail di accesso del tuo account presso {tenant} è stata modificata. Questo indirizzo non viene più usato per l’accesso, perciò questo è l’ultimo messaggio inviato qui:",
       "emailChangedSubject": "{tenant}: la tua e-mail di accesso è stata modificata",
       "hint": "Non sei stato tu? Contatta subito {tenant}.",
       "intro": "Sul tuo account presso {tenant} è stato modificato quanto segue:",
       "label": {
         "emailChanged": "E-mail di accesso modificata",
-        "emailChangedByAdmin": "E-mail di accesso modificata dall'amministrazione dell'associazione",
+        "emailChangedByAdmin": "E-mail di accesso modificata dall'amministrazione della tua organizzazione",
         "mfaAdded": "Secondo fattore aggiunto",
         "mfaRemoved": "Secondo fattore rimosso",
-        "mfaRemovedByAdmin": "Secondo fattore rimosso dall'amministrazione dell'associazione",
+        "mfaRemovedByAdmin": "Secondo fattore rimosso dall'amministrazione della tua organizzazione",
         "passwordChanged": "Password modificata",
-        "passwordChangedByAdmin": "Password reimpostata dall'amministrazione dell'associazione"
+        "passwordChangedByAdmin": "Password reimpostata dall'amministrazione della tua organizzazione"
       },
       "mandatory": "Gli avvisi di sicurezza vengono sempre inviati e non si possono disattivare.",
       "mfaAdded": "Secondo fattore aggiunto ({at})",
       "mfaRemoved": "Secondo fattore rimosso ({at})",
-      "mfaRemovedByAdmin": "Secondo fattore rimosso dall’amministrazione dell’associazione ({at})",
+      "mfaRemovedByAdmin": "Secondo fattore rimosso dall’amministrazione della tua organizzazione ({at})",
       "passwordChanged": "Password modificata ({at})",
-      "passwordChangedByAdmin": "Password reimpostata dall’amministrazione dell’associazione ({at})",
+      "passwordChangedByAdmin": "Password reimpostata dall’amministrazione della tua organizzazione ({at})",
       "subject": "{tenant}: avviso di sicurezza sul tuo account"
     },
     "settingsHint": "Scegli quali e-mail ricevere nelle tue impostazioni: {url}",
@@ -673,22 +673,22 @@
     "writer": "Modifica"
   },
   "sample": {
-    "account1": "Conto della società",
+    "account1": "Conto principale",
     "account2": "Cassa",
     "address": "Via del Lago 12\n3000 Città Esempio",
     "booking1": "Quote sociali",
     "booking2": "Materiale",
     "booking3": "Sponsorizzazione",
     "bullet1": "Festa estiva il 20 giugno",
-    "bullet2": "Gita sociale a settembre",
+    "bullet2": "Gita a settembre",
     "bullet3": "Assemblea generale a novembre",
-    "contact": "info@societa-esempio.ch · 031 123 45 67",
+    "contact": "info@organizzazione-esempio.ch · 031 123 45 67",
     "documentSubtitle": "Seduta 3",
     "documentTitle": "Seduta di comitato di marzo",
     "documentType": "Verbale",
     "event1": "Festa estiva",
     "event2": "Seduta di comitato",
-    "event3": "Gita sociale",
+    "event3": "Gita",
     "eventTitle": "Seduta di comitato",
     "formLabel1": "Nome",
     "formLabel2": "Funzione",
@@ -699,7 +699,7 @@
     "imageCaption": "Immagine di esempio",
     "listColumn1": "Voce",
     "listColumn2": "Responsabile",
-    "organization": "Società esempio del Seeland",
+    "organization": "Organizzazione esempio del Seeland",
     "paragraph1": "La presidente saluta i presenti e constata il quorum.",
     "paragraph2": "Si discute il programma annuale. Si fissano le date della festa estiva e della gita.",
     "paragraph3": "Il cassiere informa sul saldo attuale. I conti vengono approvati all’unanimità.",

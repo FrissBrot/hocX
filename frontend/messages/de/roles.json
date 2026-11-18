@@ -130,7 +130,7 @@
     "settings": {
       "manage": {
         "label": "Einstellungen verwalten",
-        "description": "Vereinsprofil, Datenschutz, Aufbewahrung, Prüfdomain, Erscheinungsbild, Dokumentvorlagen veröffentlichen, Aktivitätsprotokoll."
+        "description": "Profil der Organisation, Datenschutz, Aufbewahrung, Prüfdomain, Erscheinungsbild, Dokumentvorlagen veröffentlichen, Aktivitätsprotokoll."
       }
     },
     "access": {
@@ -142,7 +142,7 @@
     "data": {
       "export": {
         "label": "Datenexporte",
-        "description": "Gesamtexport des Vereins und Datenauskunft für andere Personen."
+        "description": "Gesamtexport der Organisation und Datenauskunft für andere Personen."
       }
     }
   },

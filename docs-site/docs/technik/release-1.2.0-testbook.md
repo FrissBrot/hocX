@@ -29,12 +29,12 @@ Foto-Worker 26 ✓, Frontend 560 ✓ + `tsc` ✓, Abgabebox-Frontend 49 ✓ + `t
 shellcheck ✓, Design/i18n/Katalog ✓. E2E-Suiten nicht ausgeführt.
 
 Nachweis Update-Pfad (2026-10-28, Stand `main` mit Migration `0160`): Datenbank mit dem Code von
-`v1.1.13` aufgebaut (`alembic -x seed_demo=true upgrade head`, Revision `0112`), dazu zwei Vereine
+`v1.1.13` aufgebaut (`alembic -x seed_demo=true upgrade head`, Revision `0112`), dazu zwei Organisationen
 mit TeX-Vorlage (Logo, Fussbild, eigene Schrift, Slot-Code), Protokollen samt Anwesenheit,
 Texten, Todos und Bussen, Terminen, Listen und Alt-PDF-Exporten. Danach mit dem aktuellen Code
 `upgrade head`: ohne Fehler; Zeilenzahlen der Fachtabellen unverändert; Logo, Fussbild, Schrift
 und Farben je Mandant als Brand-Profil und Assets, Alt-Exporte in `document_export`; Warnung
-zum entfallenen Vorlagen-Code für beide Vereine. `pg_dump --schema-only` des aktualisierten
+zum entfallenen Vorlagen-Code für beide Organisationen. `pg_dump --schema-only` des aktualisierten
 Stands ist identisch mit einer Neuinstallation auf `head`, ebenso alle GRANTs.
 `ensure_document_studio` (App-Start) läuft darauf zweimal fehlerfrei: 26 Systemvorlagen, je
 Mandant genau ein Standard-Brand-Profil. Nicht abgedeckt: Dateien auf der Platte bzw. im

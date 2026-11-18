@@ -1,12 +1,12 @@
 # Konto & Anmeldung
 
-Jede Person mit **Login** hat ein Konto bei genau einem Verein. Wer in mehreren Vereinen
-mitarbeitet, braucht pro Verein ein eigenes Konto mit eigener E-Mail-Adresse (siehe
+Jede Person mit **Login** hat ein Konto bei genau einer Organisation. Wer in mehreren Organisationen
+mitarbeitet, braucht pro Organisation ein eigenes Konto mit eigener E-Mail-Adresse (siehe
 [Rollen & Berechtigungen](rollen.md)).
 
 ## Anmelden {#anmelden}
 
-1. Öffne die Adresse deines Vereins und gib **E-Mail** und **Passwort** ein.
+1. Öffne die Adresse deiner Organisation und gib **E-Mail** und **Passwort** ein.
 2. Hat dein Konto einen zweiten Faktor (oder verlangt deine Rolle einen), bestätigst du danach
    mit einem Code aus der Authenticator-App oder mit einem Passkey. Siehe [Zweiter Faktor](#mfa).
 
@@ -17,7 +17,7 @@ Klappt die Anmeldung nicht:
 - Nach mehreren Fehlversuchen sperrt hocX die Anmeldung für dieses Konto kurz. Warte ein paar
   Minuten und versuche es dann erneut.
 - Ist dein Konto inaktiv oder wurde dir der Login entzogen, kannst du dich nicht anmelden. Wende
-  dich an die Verwaltung deines Vereins.
+  dich an die Verwaltung deiner Organisation.
 
 ## Konto einrichten (Einladung) {#einladung}
 
@@ -25,7 +25,7 @@ Meist richtet die Verwaltung deinen Login per **Einladung** ein. Du bekommst ein
 einem Link, öffnest ihn und legst dein Passwort selbst fest (mindestens 12 Zeichen). Danach
 kannst du dich anmelden.
 
-Der Link gilt 7 Tage und nur einmal. Ist er abgelaufen, bitte deinen Verein um eine neue
+Der Link gilt 7 Tage und nur einmal. Ist er abgelaufen, bitte deine Organisation um eine neue
 Einladung – «Passwort vergessen» hilft hier nicht, weil dein Konto noch keinen Login hat.
 
 ## Passwort vergessen {#passwort-vergessen}

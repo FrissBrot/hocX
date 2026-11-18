@@ -6,7 +6,7 @@ import { getTranslations } from "next-intl/server";
 import { CycleConfigManager } from "@/components/cycles/cycle-config-manager";
 import { AppShell } from "@/components/ui/app-shell";
 import { RouteTabs } from "@/components/ui/route-tabs";
-import { workflowTabs } from "@/components/ui/section-tabs";
+import { protocolTemplateTabs } from "@/components/ui/section-tabs";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { CycleConfigSummary } from "@/types/api";
 import { can } from "@/lib/permissions";
@@ -25,7 +25,7 @@ export default async function CyclesPage() {
         mobile={<MobileCycles initialConfigs={configs} />}
         desktop={
           <>
-          <RouteTabs tabs={workflowTabs(t)} activeHref="/cycles" />
+          <RouteTabs tabs={protocolTemplateTabs(t, true)} activeHref="/cycles" />
           <section className="panel">
             <CycleConfigManager initialConfigs={configs} />
           </section>

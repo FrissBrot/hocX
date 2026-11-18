@@ -1,6 +1,6 @@
 {
   "pageTitle": "Logins & Rollen",
-  "ownAccessOnlyHint": "Logins und Rollen deines Vereins.",
+  "ownAccessOnlyHint": "Logins und Rollen deiner Organisation.",
   "pageHint": "Wer sich anmelden darf und mit welchen Rollen. Die Personen selbst pflegst du unter «Mitglieder».",
   "newUser": "Neue Person",
   "emptyState": {
@@ -49,7 +49,7 @@
   "mfaTitle": "MFA von {name}",
   "mfaTitleFallback": "MFA",
   "roleDescriptions": {
-    "admin": "Voller Zugriff im Verein, inklusive Struktur (Vorlagen, Zyklen, Einstellungen), Mitglieder, Logins und Rollen.",
+    "admin": "Voller Zugriff in der Organisation, inklusive Struktur (Vorlagen, Zyklen, Einstellungen), Mitglieder, Logins und Rollen.",
     "writer": "Arbeitet im Protokoll-Bereich mit und pflegt operative Daten, ändert aber weder Struktur noch Finanzen.",
     "kassier": "Wie Leser, zusätzlich voller Schreibzugriff auf Finanzen und Bussen.",
     "reader": "Nur Lesezugriff, kann PDF-Exporte auslösen und sieht nur die eigenen Bussen."

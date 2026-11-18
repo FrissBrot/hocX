@@ -1,7 +1,7 @@
 <div class="hocx-hero" markdown>
 # hocX Dokumentation
 
-hocX ist eine Web-Anwendung zur Verwaltung von Vereinsprotokollen: Vorlagen definieren
+hocX ist eine Web-Anwendung zur Verwaltung von Sitzungsprotokollen: Vorlagen definieren
 den Aufbau eines Protokolls, aus einer Vorlage entsteht pro Sitzung ein eigenständiges
 Protokoll, das unabhängig von späteren Vorlagenänderungen bestehen bleibt. Dazu kommen
 Termine, Mitglieder/Teilnehmer, Finanzen, Bussen, Todos, freie Listen und ein PDF-Export.
@@ -11,7 +11,7 @@ Diese Doku ist in zwei Bereiche geteilt:
 
 <div class="grid cards" markdown>
 
-- :material-account-group: **Für Vereine**
+- :material-account-group: **Für Organisationen**
 
     Wie man hocX als Vorstand/Mitglied benutzt: Protokolle erstellen, Vorlagen pflegen,
     Termine planen, Finanzen und Bussen führen.

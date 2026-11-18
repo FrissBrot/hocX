@@ -6,7 +6,7 @@ import { getTranslations } from "next-intl/server";
 import { TenantDomainsManager } from "@/components/settings/tenant-domains-manager";
 import { AppShell } from "@/components/ui/app-shell";
 import { RouteTabs } from "@/components/ui/route-tabs";
-import { tenantSettingsTabs } from "@/components/ui/section-tabs";
+import { domainTabs } from "@/components/ui/section-tabs";
 import { requireSession, resolveManageableTenant } from "@/lib/api/server";
 
 export default async function TenantDomainsPage({ searchParams }: { searchParams: Promise<{ tenantId?: string }> }) {
@@ -18,18 +18,18 @@ export default async function TenantDomainsPage({ searchParams }: { searchParams
   return (
     <AppShell initialSession={session}>
       <ResponsiveView
-        mobile={<MobileTenantSettings title={tTenant("pageTitle")}><MobileTenantDomains initialTenant={tenant} /></MobileTenantSettings>}
+        mobile={<MobileTenantSettings title={t("domainsAndVerification")}><MobileTenantDomains initialTenant={tenant} /></MobileTenantSettings>}
         desktop={
           <>
           <section className="panel">
             <div className="section-stack">
               <div className="page-header">
                 <div>
-                  <h1 className="page-title">{tTenant("pageTitle")}</h1>
+                  <h1 className="page-title">{t("domainsAndVerification")}</h1>
                   <p className="muted">{tTenant("pageDescription", { tenant: tenant.name })}</p>
                 </div>
               </div>
-              <RouteTabs tabs={tenantSettingsTabs(t)} activeHref="/tenant-settings/domains" variant="pill" />
+              <RouteTabs tabs={domainTabs(t)} activeHref="/tenant-settings/domains" variant="pill" />
               <TenantDomainsManager initialTenant={tenant} />
             </div>
           </section>

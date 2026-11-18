@@ -28,7 +28,7 @@
   },
   "home": {
     "title": "Abgabebox",
-    "hint": "Bitte den vollständigen Abgabe-Link verwenden, den du vom Verein erhalten hast."
+    "hint": "Bitte den vollständigen Abgabe-Link verwenden, den du von der Organisation erhalten hast."
   },
   "notFound": {
     "title": "Nicht gefunden",
@@ -41,7 +41,7 @@
   },
   "assignments": {
     "disabledTitle": "Abgabebox nicht verfügbar",
-    "disabledHint": "Die Abgabebox ist für diesen Verein aktuell nicht verfügbar.",
+    "disabledHint": "Die Abgabebox ist für diese Organisation aktuell nicht verfügbar.",
     "title": "Offene Abgaben",
     "hint": "Wofür möchtest du etwas einreichen?",
     "empty": "Aktuell sind keine Abgaben offen.",

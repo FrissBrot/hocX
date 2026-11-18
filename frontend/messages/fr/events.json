@@ -92,7 +92,7 @@
   "emptyState": {
     "add": "+ Événement",
     "description": "Ajoutez des activités pour qu'elles apparaissent dans les procès-verbaux, les dépôts et le tableau de bord.",
-    "hint": "Les événements peuvent être associés à un cycle – gardant ainsi les années de club bien séparées.",
+    "hint": "Les événements peuvent être associés à un cycle – gardant ainsi les années de travail bien séparées.",
     "title": "Aucun événement planifié"
   },
   "export": "Exporter",
@@ -240,7 +240,7 @@
   "help": {
     "tag": "Un tag classe le rendez-vous (p. ex. «Séance», «Camp»). Les blocs de procès-verbal et les dépôts filtrent selon lui ; un filtre trouve chaque tag qui contient le texte recherché. Renommer modifie le tag sur tous les rendez-vous et dans les dépôts.",
     "cycles": "Par défaut, un rendez-vous appartient au cycle dans lequel tombe sa date. Une attribution manuelle est conservée même si la date change et détermine dans quels filtres de cycle (procès-verbaux, dépôts, albums photo) le rendez-vous apparaît.",
-    "currentCycle": "Par défaut, la liste n'affiche que les rendez-vous du cycle en cours (p. ex. l'année associative). Avec cet interrupteur, les rendez-vous des cycles précédents et suivants apparaissent aussi.",
+    "currentCycle": "Par défaut, la liste n'affiche que les rendez-vous du cycle en cours (p. ex. l'année de travail en cours). Avec cet interrupteur, les rendez-vous des cycles précédents et suivants apparaissent aussi.",
     "csvImport": "La date de début et le titre sont obligatoires. hocX ne vérifie pas les doublons : importer un fichier deux fois crée les rendez-vous en double. Les rendez-vous importés sont attribués à leur cycle selon la date.",
     "docsLink": "Guide des rendez-vous",
     "calendarDocsLink": "S'abonner aux rendez-vous dans son propre calendrier",

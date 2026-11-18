@@ -75,7 +75,7 @@ def collect_all(db: Session, tenant_id: int) -> list[PublicLink]:
 
 # Spalten mit Token- oder Slug-Charakter, die bewusst KEINEN Zugang zu Vereinsdaten geben.
 EXEMPT_COLUMNS: dict[str, str] = {
-    "tenant.public_slug": "Kurzname des Vereins für Login und Domain-Auswahl, gibt keinen Zugriff auf Daten",
+    "tenant.public_slug": "Kurzname der Organisation für Login und Domain-Auswahl, gibt keinen Zugriff auf Daten",
     "tenant_domain.verification_token": "DNS-Nachweis für eigene Domains, gibt keinen Zugriff auf Daten",
     "submission_assignment.public_slug": "Adresse einer Abgabe innerhalb eines Abgabebox-Links; ohne gültigen Link wertlos",
     "platform_notification_settings.status_token_hash": "Plattform-Statusseite (hocX-Betrieb), kein Mandant",
@@ -97,9 +97,9 @@ EXEMPT_PUBLIC_ROUTES: dict[str, str] = {
     "/api/admin/auth/": "Anmeldung Plattform-Admin",
     "/api/health": "Betriebsprüfung ohne Daten",
     "/api/public/maintenance-status": "öffentlicher Wartungsstatus",
-    "/api/public/plans": "Preise der Website, keine Vereinsdaten",
-    "/api/public/plan-comparison": "Funktionsvergleich der Website, keine Vereinsdaten",
-    "/api/public/customers": "Namen der Vereine, die auf der Website erscheinen wollen (show_on_website), sonst nichts",
+    "/api/public/plans": "Preise der Website, keine Daten einer Organisation",
+    "/api/public/plan-comparison": "Funktionsvergleich der Website, keine Daten einer Organisation",
+    "/api/public/customers": "Namen der Organisationen, die auf der Website erscheinen wollen (show_on_website), sonst nichts",
     "/api/system-status/summary": "Plattform-Statusseite mit eigenem Token, kein Mandant",
-    "/api/tenants/{tenant_id}/profile-image": "Vereinslogo (Login-Seite), öffentlich ohne Token",
+    "/api/tenants/{tenant_id}/profile-image": "Logo der Organisation (Login-Seite), öffentlich ohne Token",
 }

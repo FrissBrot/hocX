@@ -1,10 +1,14 @@
 {
-  "dashboard": "Dashboard",
+  "dashboard": "Übersicht",
   "groups": {
-    "work": "Arbeiten",
-    "masterData": "Stammdaten",
-    "configuration": "Konfiguration",
-    "administration": "Administration"
+    "sessions": "Sitzungen",
+    "tasks": "Aufgaben",
+    "members": "Mitglieder",
+    "cash": "Kasse",
+    "storage": "Ablage",
+    "appearance": "Auftritt",
+    "settings": "Einstellungen",
+    "organisation": "Organisation"
   },
   "protocols": "Protokolle",
   "events": "Termine",
@@ -13,10 +17,10 @@
   "submissions": "Abgaben",
   "finances": "Finanzen",
   "participants": "Mitglieder",
-  "lists": "Stammlisten",
+  "lists": "Listen",
   "photos": "Fotos",
   "files": "Dateien",
-  "sharedLinks": "Geteilte Links",
+  "sharedLinks": "Freigaben",
   "templates": "Vorlagen",
   "cycles": "Zyklen",
   "users": "Logins & Rollen",
@@ -65,6 +69,17 @@
   "roleManagement": "Rollen",
   "workflows": "Abläufe",
   "design": "Gestaltung",
-  "fineSettings": "Bussen-Konfiguration",
-  "publicLinks": "Zugangslinks"
+  "fineSettings": "Bussen-Regeln",
+  "publicLinks": "Zugangslinks",
+  "related": {
+    "openSettings": "Einstellung öffnen: {name}",
+    "backToArea": "Zurück zu {area}"
+  },
+  "myTasks": "Meine Aufgaben",
+  "calendar": "Kalender",
+  "sessionTemplates": "Sitzungsvorlagen",
+  "memberList": "Mitgliederliste",
+  "domainsAndVerification": "Domains & Echtheit",
+  "organisationProfile": "Profil",
+  "workYear": "Arbeitsjahr"
 }

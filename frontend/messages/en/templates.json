@@ -599,7 +599,7 @@
         "since_date": "Since date",
         "this_year": "This year",
         "last_n": "Last N",
-        "this_cycle": "This cycle (e.g. club year)"
+        "this_cycle": "This cycle (e.g. working year)"
       },
       "lastN": "Number",
       "sinceDate": "Since",
@@ -1058,7 +1058,7 @@
         "protocol": "The protocol PDF uses the design",
         "invitation": "The invitation uses the design"
       },
-      "defaultBadge": "Club default",
+      "defaultBadge": "Your default",
       "usage": {
         "only": "Used only in this template.",
         "alsoIn": "Also used in",
@@ -1081,7 +1081,7 @@
       "choose": {
         "title": "Choose design",
         "description": "Which design should “{name}” use? The choice applies immediately.",
-        "default": "Club default",
+        "default": "Your default",
         "defaultHint": "currently “{name}”",
         "defaultHintNone": "hocX default",
         "usedIn": "used in {names}",

@@ -1,20 +1,20 @@
 # Fotos und Alben
 
-Im Bereich **Fotos** liegen alle Bilder deines Vereins: direkt hochgeladene Fotos, Bilder aus
+Im Bereich **Fotos** liegen alle Bilder deiner Organisation: direkt hochgeladene Fotos, Bilder aus
 Protokollen und Fotos, die über die [Abgabebox](abgabebox.md) eingereicht wurden. Hier ordnest
-du sie in **Alben**, wählst die besten Aufnahmen aus, teilst Alben mit anderen Vereinen und
+du sie in **Alben**, wählst die besten Aufnahmen aus, teilst Alben mit anderen Organisationen und
 erstellst öffentliche **Freigabe-Links**. Dokumente (PDF, Word …) stehen unter
 [Dateien & Dokumente](dateien.md).
 
 Die Seite hat vier Reiter:
 
 - **Alle Fotos** – alles, nach Datum gruppiert, mit Suche und Tag-Filter.
-- **Alben** – deine Alben und die Alben, die andere Vereine mit dir teilen.
+- **Alben** – deine Alben und die Alben, die andere Organisationen mit dir teilen.
 - **Duplikate** und **Ähnliche** – siehe [Duplikate und Serien](#aehnliche).
 
 !!! info "Berechtigungen"
     Fotos hochladen, Alben verwalten, teilen und Links erstellen braucht die Berechtigung
-    «Dateien & Fotos verwalten» (Standardrollen: Admin, Schreiber). Alben mit anderen Vereinen
+    «Dateien & Fotos verwalten» (Standardrollen: Admin, Schreiber). Alben mit anderen Organisationen
     teilen und öffentliche Links setzen zusätzlich das Abo-Modul «Teilen von Fotos» voraus.
     Siehe [Rollen & Berechtigungen](rollen.md).
 
@@ -75,7 +75,7 @@ Albumeintrag verschwindet.
 
 - **Umbenennen** geht bei allen eigenen Alben, auch bei automatischen.
 - **Album löschen** gibt es nur für manuelle Alben. Gelöscht wird nur das Album: die Fotos
-  bleiben erhalten. Freigaben an andere Vereine und öffentliche Links auf dieses Album enden
+  bleiben erhalten. Freigaben an andere Organisationen und öffentliche Links auf dieses Album enden
   damit. Automatische Alben lassen sich nicht löschen, weil hocX sie beim nächsten passenden
   Upload sofort wieder anlegen würde.
 
@@ -99,29 +99,29 @@ Die Gruppen berechnet hocX im Hintergrund; neue Fotos erscheinen nach wenigen Mi
 **Nur beste behalten** löschst du die übrigen Fotos einer Gruppe endgültig. Auch hier gilt:
 nur direkt hochgeladene Fotos werden gelöscht.
 
-## Alben mit anderen Vereinen teilen {#geteilte-alben}
+## Alben mit anderen Organisationen teilen {#geteilte-alben}
 
-Ein Album kann mit einem anderen hocX-Verein geteilt werden, z. B. für ein gemeinsames Lager.
+Ein Album kann mit einer anderen Organisation auf hocX geteilt werden, z. B. für ein gemeinsames Lager.
 
-1. Der andere Verein öffnet seine Vereinseinstellungen unter **Allgemein**, kopiert dort die
-   **Vereins-ID** und schickt sie dir.
-2. Du öffnest das Album, klickst auf **Mit anderem Verein teilen**, fügst die ID ein und klickst
-   auf **Einladen**. Vereine, mit denen ihr schon einmal geteilt habt, findest du auch über den
+1. Die andere Organisation öffnet **Organisation › Profil**, kopiert dort die
+   **Organisations-ID** und schickt sie dir.
+2. Du öffnest das Album, klickst auf **Mit anderer Organisation teilen**, fügst die ID ein und klickst
+   auf **Einladen**. Organisationen, mit denen ihr schon einmal geteilt habt, findest du auch über den
    Namen.
-3. Der andere Verein sieht die Einladung unter **Alben** und nimmt sie an oder lehnt sie ab.
+3. Die andere Organisation sieht die Einladung unter **Alben** und nimmt sie an oder lehnt sie ab.
 
-Danach sehen beide Vereine das Album. Jeder Verein kann **eigene** Fotos hinzufügen und wieder
-herausnehmen und Fotos als «Best-of» markieren. Umbenennen, löschen, weitere Vereine einladen
-und Freigaben beenden kann nur der Verein, dem das Album gehört. Ein Partner kann eine
+Danach sehen beide Organisationen das Album. Jede Organisation kann **eigene** Fotos hinzufügen und wieder
+herausnehmen und Fotos als «Best-of» markieren. Umbenennen, löschen, weitere Organisationen einladen
+und Freigaben beenden kann nur die Organisation, dem das Album gehört. Ein Partner kann eine
 Freigabe jederzeit selbst verlassen.
 
 **Zur Freigabe vorgemerkte Fotos:** Fotos, die automatisch in ein geteiltes Album einsortiert
-werden (z. B. aus einer Abgabe), sieht zuerst nur dein eigener Verein. Ein Hinweis auf der
+werden (z. B. aus einer Abgabe), sieht zuerst nur deine eigene Organisation. Ein Hinweis auf der
 Fotos-Seite und im Album zeigt, wie viele Fotos warten. Prüfe sie und klicke auf
 **Alle freigeben** oder wähle einzelne Fotos und **Freigeben**. Fotos, die du von Hand
 hinzufügst, sind sofort geteilt – hocX fragt vorher nach.
 
-**Pro Partner einstellbar** (nur der Besitzer, im Dialog «Mit anderem Verein teilen»):
+**Pro Partner einstellbar** (nur der Besitzer, im Dialog «Mit anderer Organisation teilen»):
 
 - **Standort** – ob der Partner die GPS-Angaben deiner Fotos sieht. Standardmässig aus.
 - **Öffentliche Links** – ob der Partner selbst öffentliche Links auf dieses Album erstellen
@@ -143,7 +143,7 @@ erstellst ihn über **Link teilen** in einem Album oder über die Auswahl in «A
 - **Foto-Metadaten:** Du wählst, ob Aufnahmedatum, Standort (GPS) und Kamera-Angaben in den
   heruntergeladenen Dateien bleiben. Standard: Datum ja, Standort und Kamera nein.
   Ausgeschaltete Angaben entfernt hocX beim Herunterladen.
-- **Widerrufen:** unter **Geteilte Links** in der Navigation. Der Link funktioniert danach
+- **Widerrufen:** unter **Ablage › Freigaben** in der Navigation. Der Link funktioniert danach
   sofort nicht mehr.
 
 Gesperrte oder noch nicht geprüfte Fotos erscheinen nie in einem Link und werden in der

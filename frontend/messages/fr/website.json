@@ -1,7 +1,7 @@
 {
   "meta": {
-    "title": "hocX – Séances et procès-verbaux pour associations et PME",
-    "description": "hocX organise les séances des associations et PME : procès-verbaux, rendez-vous, tâches, présences et finances au même endroit."
+    "title": "hocX – Séances et procès-verbaux pour organisations et PME",
+    "description": "hocX organise les séances des organisations et PME : procès-verbaux, rendez-vous, tâches, présences et finances au même endroit."
   },
   "nav": {
     "label": "Navigation principale",
@@ -18,7 +18,7 @@
     "badgeText": "Importer vos procès-verbaux Word en quelques minutes",
     "titleLead": "De la séance au procès-verbal terminé.",
     "titleEmphasis": "Sans retouches.",
-    "lead": "hocX organise les séances des associations et PME : procès-verbaux, rendez-vous, tâches, présences et finances au même endroit – et à la fin, un PDF soigné à votre image.",
+    "lead": "hocX organise les séances des organisations et PME : procès-verbaux, rendez-vous, tâches, présences et finances au même endroit – et à la fin, un PDF soigné à votre image.",
     "ctaPrimary": "Essai gratuit de 30 jours",
     "ctaSecondary": "Comment ça marche →",
     "note": "Sans carte de crédit"
@@ -118,7 +118,7 @@
     "coverTitle": "Procès-verbal",
     "coverSubtitle": "Séance du comité",
     "coverMeta": "12 août 2026 · P-2026-014",
-    "organisation": "Turnverein Seetal",
+    "organisation": "Team Seetal",
     "pageNumber": "Page {page}",
     "sectionAnniversary": "Jubilé"
   },

@@ -19,8 +19,8 @@
     "pending": "en vérification",
     "blocked": "bloqué"
   },
-  "closedHint": "Ce dépôt est fermé. Pour toute modification, adresse-toi à l'administration de ton association.",
-  "viewOnlyHint": "Avec ce lien, tu peux consulter ton dépôt. L'administration de ton association peut le modifier.",
+  "closedHint": "Ce dépôt est fermé. Pour toute modification, adresse-toi à l'administration de ton organisation.",
+  "viewOnlyHint": "Avec ce lien, tu peux consulter ton dépôt. L'administration de ton organisation peut le modifier.",
   "withdraw": "Retirer le dépôt",
   "withdrawConfirm": "Retirer le dépôt ? Tes fichiers ne comptent plus et la tâche est de nouveau ouverte. L'administration peut les restaurer.",
   "withdrawn": "Dépôt retiré.",

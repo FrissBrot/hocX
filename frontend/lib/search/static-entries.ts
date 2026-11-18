@@ -3,12 +3,14 @@ import type { NavIconKey } from "@/components/ui/nav-icons";
 import {
   dashboardTabs,
   designAreaTabs,
+  domainTabs,
   financeTabs,
   protocolTemplateTabs,
   tenantSettingsTabs,
   userAreaTabs,
-  workflowTabs,
 } from "@/components/ui/section-tabs";
+import { SETTINGS_GROUP } from "@/components/ui/app-shell-nav";
+import { can } from "@/lib/permissions";
 import type { RouteTab } from "@/components/ui/route-tabs";
 import { CONNECTIONS_HREF } from "@/lib/calendar-feeds";
 import type { SessionInfo } from "@/types/api";
@@ -32,17 +34,18 @@ type HasT = TFunc & { has?: (key: string) => boolean };
 
 // Bereiche mit Unterseiten (section-tabs.ts): Tabs erscheinen als eigene Treffer unter ihrem
 // Navigationseintrag - nur wenn der Eintrag selbst sichtbar ist (Rechte prüft buildNav).
-const TABS_BY_HREF: Record<string, (t: TFunc) => RouteTab[]> = {
+const TABS_BY_HREF: Record<string, (t: TFunc, session: SessionInfo | null) => RouteTab[]> = {
   "/": dashboardTabs,
   "/finances": financeTabs,
-  "/templates": protocolTemplateTabs,
-  "/cycles": workflowTabs,
-  "/documents": designAreaTabs,
+  // Arbeitsjahr (Zyklen) nur mit templates.manage - wie der Tab auf der Seite selbst.
+  "/templates": (t, session) => protocolTemplateTabs(t, can(session, "templates.manage")),
+  "/documents/brand": designAreaTabs,
   "/users": userAreaTabs,
   "/tenant-settings": tenantSettingsTabs,
+  "/tenant-settings/domains": domainTabs,
 };
 
-const SETTINGS_GROUPS = new Set(["groups.configuration", "groups.administration"]);
+const SETTINGS_GROUPS = new Set([SETTINGS_GROUP, "groups.organisation"]);
 
 function keywordsFor(tSearch: HasT, key: string): string | undefined {
   const full = `keywords.${key}`;
@@ -61,7 +64,7 @@ export function buildStaticEntries(session: SessionInfo | null, tNav: TFunc, tSe
     const kind: SearchGroup = group.titleKey && SETTINGS_GROUPS.has(group.titleKey) ? "settings" : "pages";
     for (const link of group.links) {
       const label = tNav(link.labelKey);
-      const tabs = TABS_BY_HREF[link.href]?.(tNav) ?? [];
+      const tabs = TABS_BY_HREF[link.href]?.(tNav, session) ?? [];
       if (!seen.has(link.href)) {
         seen.add(link.href);
         entries.push({

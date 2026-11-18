@@ -1,6 +1,6 @@
 # Abgabebox
 
-Mit der Abgabebox sammelt dein Verein Dateien von Personen, die kein hocX-Konto haben: Fotos
+Mit der Abgabebox sammelt deine Organisation Dateien von Personen, die kein hocX-Konto haben: Fotos
 vom Badetag, Lagerberichte, unterschriebene Formulare oder Belege. Die Einreichenden öffnen
 einen Link, wählen aus, wofür sie etwas abgeben, und laden ihre Dateien hoch – ohne Anmeldung.
 
@@ -172,7 +172,7 @@ Bei Termin- und Listen-Abgaben kannst du unter **Verantwortliche Person** festle
 die Abgabe zuständig ist:
 
 - **Termine**: ein Personenfeld des Termins (*Spezial 1* bis *Spezial 3*, bzw. die Namen, die
-  dein Verein diesen Feldern in den Mandant-Einstellungen gegeben hat).
+  deine Organisation diesen Feldern unter Organisation › Profil gegeben hat).
 - **Liste**: eine Listenspalte, die Personen enthält.
 
 Steht dort mehr als eine Person, sind sie gemeinsam verantwortlich. Einzelabgaben haben keine
@@ -239,7 +239,7 @@ ab, erfährt sie es per Mail und kann die Abgabe selbst korrigieren.
   (1–90, Standard **30**), und nur für diese Person und dieses Abgabefeld. Ist die Person nicht
   mehr verantwortlich, schaltest du die Option aus oder ist die Abgabe gelöscht, funktioniert er
   nicht mehr. Alle gültigen Links siehst du unter
-  [Mandant-Einstellungen › Zugangslinks](einstellungen.md#zugangslinks).
+  [Organisation › Zugangslinks](einstellungen.md#zugangslinks).
 
 ## Upload-Links {#links}
 
@@ -255,7 +255,7 @@ Dort kannst du:
   «Leiterteam». So kannst du verschiedenen Gruppen verschiedene Abgaben zeigen;
 - einen Link **umbenennen** und die Adresse kopieren;
 - einen Link **als Standard festlegen**. Der Standard-Link ist bei neuen Abgaben vorausgewählt.
-  Jeder Verein startet mit einem Standard-Link;
+  Jede Organisation startet mit einem Standard-Link;
 - mit **Neuen Schlüssel erzeugen** eine neue Adresse erzeugen. Die **alte Adresse wird sofort
   ungültig**. Das ist der Weg, wenn ein Link in falsche Hände geraten ist. Danach den neuen
   Link wieder verteilen;
@@ -371,8 +371,8 @@ Eingereichte Dateien bleiben nicht nur in der Abgabe:
 ## Grenzen und häufige Fragen {#grenzen}
 
 **Wie viel Platz haben wir?**
-Die Einreichungen zählen zum Speicherkontingent deines Vereins. Ist es erreicht, lehnt die
-Abgabebox weitere Uploads mit einem Hinweis ab. Den Stand siehst du in den Mandant-Einstellungen im Tab [*Abo & Nutzung*](einstellungen.md#abo).
+Die Einreichungen zählen zum Speicherkontingent deiner Organisation. Ist es erreicht, lehnt die
+Abgabebox weitere Uploads mit einem Hinweis ab. Den Stand siehst du unter Organisation › [*Abo & Nutzung*](einstellungen.md#abo).
 
 **Wie viele Dateien gehen auf einmal?**
 In einem Upload-Vorgang sind höchstens 50 Dateien möglich. Wer mehr hat, lädt in mehreren
@@ -396,7 +396,7 @@ Nur wenn die einreichende Person «GPS-Daten des Bildes mitsenden» angehakt lä
 werden die Standortdaten vor dem Speichern entfernt.
 
 **Werden Einreichungen irgendwann gelöscht?**
-Nur wenn ihr das wollt: In den Mandant-Einstellungen gibt es unter den [Aufbewahrungsfristen](einstellungen.md#aufbewahrung) die
+Nur wenn ihr das wollt: Unter Organisation › Datenschutz gibt es bei den [Aufbewahrungsfristen](einstellungen.md#aufbewahrung) die
 Regel «Einreichungen der Abgabebox nach Abgabeschluss löschen». Sie ist ausgeschaltet, bis ihr
 sie einschaltet. Löschst du eine ganze Abgabe, werden alle ihre eingereichten Dateien
 mitgelöscht.

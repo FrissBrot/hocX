@@ -19,8 +19,8 @@
     "pending": "being checked",
     "blocked": "blocked"
   },
-  "closedHint": "This submission is closed. For changes, contact your club's administration.",
-  "viewOnlyHint": "With this link you can view your submission. Your club's administration can change it.",
+  "closedHint": "This submission is closed. For changes, contact your organization's administration.",
+  "viewOnlyHint": "With this link you can view your submission. Your organization's administration can change it.",
   "withdraw": "Withdraw submission",
   "withdrawConfirm": "Withdraw the submission? Your files no longer count and the to-do is open again. The administration can restore them.",
   "withdrawn": "Submission withdrawn.",

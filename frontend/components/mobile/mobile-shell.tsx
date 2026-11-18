@@ -9,14 +9,14 @@ import { useTranslations } from "next-intl";
 import { MobileIcon, MobileIconName } from "@/components/mobile/mobile-icons";
 import { isTodoOverdue } from "@/components/mobile/mobile-utils";
 import { MobileAvatar, MobileListRow } from "@/components/mobile/mobile-ui";
-import { buildNav, formatRoleLabel, isNavLinkActive, NavLink } from "@/components/ui/app-shell-nav";
+import { buildNav, formatRoleLabel, isNavLinkActive } from "@/components/ui/app-shell-nav";
 import { NavIcon } from "@/components/ui/nav-icons";
 import { ConnectivityStatus } from "@/components/ui/connectivity-status";
 import { browserApiFetch } from "@/lib/api/client";
 import { useVisibleInterval } from "@/lib/hooks/use-visible-interval";
 import { CONNECTIONS_HREF } from "@/lib/calendar-feeds";
 import type { SessionInfo, TodoListItem } from "@/types/api";
-import { can, featureAccess } from "@/lib/permissions";
+import { can } from "@/lib/permissions";
 import { InstallAppPrompt } from "@/components/ui/install-app-prompt";
 
 type ThemePreference = "light" | "dark" | "auto";
@@ -42,23 +42,16 @@ export function useOpenMore(): () => void {
 }
 
 // Bereiche unter "Mehr": dieselbe rollenabhaengige Navigation wie die Desktop-Sidebar
-// (buildNav), ohne Übersicht/Termine/Todos (eigene Tabs) und ohne Import (nur Computer).
-// Bussen bekommen einen eigenen Eintrag - am Desktop sind sie ein Tab der Finanzen.
-const TAB_ROUTES = new Set(["/", "/events", "/todos", "/tools/import"]);
+// (buildNav), ohne Übersicht/Termine/Todos (eigene Tabs; «Meine Aufgaben» zeigt der Pendenzen-Tab)
+// und ohne Import (nur Computer). Bussen stehen seit der neuen Einteilung selbst in der Kasse.
+const TAB_ROUTES = new Set(["/", "/my-tasks", "/events", "/todos", "/tools/import"]);
 
 export function mobileMoreGroups(session: SessionInfo | null) {
-  const hasFinance = featureAccess(session, "finance") !== "none";
   return buildNav(session)
     .filter((group) => group.titleKey !== null)
     .map((group) => ({
       titleKey: group.titleKey as string,
-      links: group.links
-        .filter((link) => !TAB_ROUTES.has(link.href))
-        .flatMap((link): NavLink[] =>
-          link.href === "/finances" && hasFinance
-            ? [{ ...link, match: [] }, { href: "/fines", labelKey: "fines", icon: "fines" }]
-            : [link]
-        ),
+      links: group.links.filter((link) => !TAB_ROUTES.has(link.href)),
     }))
     .filter((group) => group.links.length > 0);
 }

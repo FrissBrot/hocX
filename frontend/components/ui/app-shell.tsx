@@ -13,7 +13,7 @@ import { CONNECTIONS_HREF } from "@/lib/calendar-feeds";
 import { getRuntimeConfig } from "@/lib/runtime-config";
 import { SessionInfo } from "@/types/api";
 
-import { buildNav, formatRoleLabel, isNavLinkActive, NavLink } from "@/components/ui/app-shell-nav";
+import { buildNav, formatRoleLabel, isNavLinkActive, NavLink, relatedNavLink } from "@/components/ui/app-shell-nav";
 import { NavIcon } from "@/components/ui/nav-icons";
 import { ToastProvider, useToast } from "@/contexts/toast-context";
 import { ConfirmProvider, useConfirm } from "@/contexts/confirm-context";
@@ -267,6 +267,8 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
     return { group: null, label: t("dashboard") };
   }, [navGroups, pathname, t]);
 
+  const related = useMemo(() => relatedNavLink(navGroups, pathname), [navGroups, pathname]);
+
   const tenantName = session?.current_tenant?.name ?? t("defaultTenantName");
   const userInitial = session?.user?.display_name?.slice(0, 1) ?? "U";
   const roleLabel = formatRoleLabel(session, t) || sessionStatus;
@@ -479,6 +481,29 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
               ) : null}
               <span className="topbar-breadcrumb-page">{activeCrumb.label}</span>
             </nav>
+            {related?.kind === "settings" && (
+              <Link
+                href={related.link.href as Route}
+                className="topbar-related"
+                aria-label={t("related.openSettings", { name: t(related.link.labelKey) })}
+              >
+                <svg className="topbar-related-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+                <span className="topbar-related-label">{t(related.link.labelKey)}</span>
+              </Link>
+            )}
+            {related?.kind === "area" && (
+              <Link
+                href={related.link.href as Route}
+                className="topbar-related"
+                aria-label={t("related.backToArea", { area: t(related.groupTitleKey) })}
+              >
+                <span aria-hidden="true">←</span>
+                <span className="topbar-related-label">{t("related.backToArea", { area: t(related.groupTitleKey) })}</span>
+              </Link>
+            )}
             <button type="button" className="global-search-trigger" onClick={openSearch} aria-keyshortcuts="Control+K Meta+K">
               <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <circle cx="7" cy="7" r="5.25" stroke="currentColor" strokeWidth="1.5" />

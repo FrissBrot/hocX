@@ -160,7 +160,7 @@ def _build(db: Session, job: TenantDataExport) -> None:
     now = datetime.now(UTC)
     job.status, job.finished_at, job.expires_at = "done", now, now + EXPORT_TTL
     job.object_key, job.size_bytes, job.password_encrypted = key, info.size, None
-    job.filename = f"{_t(lang, 'tenant.prefix')}-{safe_name(tenant_name, 'Verein')}-{date.today():%Y%m%d}.zip"
+    job.filename = f"{_t(lang, 'tenant.prefix')}-{safe_name(tenant_name, 'Organisation')}-{date.today():%Y%m%d}.zip"
     job.error = f"missing:{missing}" if missing else None
     notify_export_finished(db, job)
     db.commit()

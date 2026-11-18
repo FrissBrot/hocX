@@ -21,7 +21,7 @@
     "files": "File"
   },
   "keywords": {
-    "dashboard": "inizio panoramica home",
+    "dashboard": "inizio panoramica home Dashboard",
     "statistics": "statistiche numeri presenze grafici",
     "protocols": "sedute verbale trattande",
     "events": "calendario eventi date",
@@ -31,10 +31,10 @@
     "finances": "cassa conti registrazioni denaro",
     "fines": "multe penalità",
     "participants": "membri persone indirizzi",
-    "lists": "elenchi tabelle",
+    "lists": "elenchi tabelle Liste anagrafiche",
     "photos": "immagini foto galleria album",
     "files": "documenti file",
-    "sharedLinks": "condivisioni link",
+    "sharedLinks": "condivisioni link Link condivisi",
     "protocolTemplates": "modelli",
     "elements": "elementi blocchi",
     "workflows": "flussi cicli",
@@ -42,10 +42,10 @@
     "design": "impaginazione pdf modelli di documento",
     "documents-brand": "colori carattere logo marchio",
     "documents-assets": "immagini loghi media",
-    "fineSettings": "multe tariffe regole configurazione",
+    "fineSettings": "multe tariffe regole configurazione Impostazioni multe",
     "users": "account accesso utenti",
     "users-roles": "ruoli diritti autorizzazioni",
-    "tenantSettings": "associazione generale nome logo",
+    "tenantSettings": "organizzazione profilo generale nome logo",
     "tenant-settings-domains": "dominio indirizzo",
     "tenant-settings-abo": "abbonamento fattura spazio piano costi",
     "tenant-settings-verification": "autenticità verifica qr",
@@ -56,6 +56,16 @@
     "profile": "profilo account password lingua mfa sicurezza",
     "connections": "calendario abbonamento collegamenti ics",
     "theme": "aspetto tema scuro chiaro modalità",
-    "tenant-settings-links": "link condivisioni pubblico accesso casella calendario"
+    "tenant-settings-links": "link condivisioni pubblico accesso casella calendario",
+    "calendar": "calendario eventi date Eventi",
+    "memberList": "membri persone indirizzi",
+    "sessionTemplates": "modelli Modelli di verbale Configurazione",
+    "taskPackages": "pacchetti di compiti Flussi di lavoro",
+    "documentTemplates": "impaginazione pdf modelli di documento",
+    "documentBrand": "colori carattere logo marchio",
+    "domainsAndVerification": "dominio indirizzo autenticità verifica qr",
+    "organisationProfile": "organizzazione profilo generale nome logo impostazioni",
+    "cycles": "flussi cicli Cicli",
+    "myTasks": "I miei compiti cose da fare consegne"
   }
 }

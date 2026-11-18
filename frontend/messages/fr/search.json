@@ -21,7 +21,7 @@
     "files": "Fichiers"
   },
   "keywords": {
-    "dashboard": "accueil aperçu",
+    "dashboard": "accueil aperçu Tableau de bord",
     "statistics": "statistiques chiffres présences graphiques",
     "protocols": "séances procès-verbal ordre du jour",
     "events": "calendrier événements dates",
@@ -31,10 +31,10 @@
     "finances": "caisse comptes écritures argent",
     "fines": "amendes pénalités",
     "participants": "membres personnes adresses",
-    "lists": "listes tableaux",
+    "lists": "listes tableaux Listes de base",
     "photos": "images photos galerie albums",
     "files": "documents fichiers",
-    "sharedLinks": "partages liens",
+    "sharedLinks": "partages liens Liens partagés",
     "protocolTemplates": "modèles",
     "elements": "éléments blocs",
     "workflows": "déroulements cycles",
@@ -42,10 +42,10 @@
     "design": "mise en page pdf modèles de documents",
     "documents-brand": "couleurs police logo marque",
     "documents-assets": "images logos médias",
-    "fineSettings": "amendes tarifs règles configuration",
+    "fineSettings": "amendes tarifs règles configuration Réglages des amendes",
     "users": "comptes connexion utilisateurs accès",
     "users-roles": "rôles droits autorisations",
-    "tenantSettings": "association général nom logo",
+    "tenantSettings": "organisation profil général nom logo",
     "tenant-settings-domains": "domaine adresse",
     "tenant-settings-abo": "abonnement facture stockage plan coûts",
     "tenant-settings-verification": "authenticité vérification qr",
@@ -56,6 +56,16 @@
     "profile": "profil compte mot de passe langue mfa sécurité",
     "connections": "calendrier abonnement liaisons ics",
     "theme": "apparence thème sombre clair mode",
-    "tenant-settings-links": "liens partages public accès boîte de dépôt calendrier"
+    "tenant-settings-links": "liens partages public accès boîte de dépôt calendrier",
+    "calendar": "calendrier événements dates Événements",
+    "memberList": "membres personnes adresses",
+    "sessionTemplates": "modèles Modèles de procès-verbal Configuration",
+    "taskPackages": "paquets de tâches Déroulements",
+    "documentTemplates": "mise en page pdf modèles de documents",
+    "documentBrand": "couleurs police logo marque",
+    "domainsAndVerification": "domaine adresse authenticité vérification qr",
+    "organisationProfile": "organisation profil général nom logo paramètres",
+    "cycles": "déroulements cycles Cycles",
+    "myTasks": "Mes tâches à faire remises"
   }
 }

@@ -237,10 +237,10 @@
     "serverSideEncryptionHelp": "Jedes Objekt wird beim Anbieter verschlüsselt gespeichert; der Verbindungstest prüft das.",
     "dataLocation": "Datenstandort",
     "dataLocationChoose": "Bitte wählen",
-    "dataLocationHelp": "Bei AWS und Hetzner aus der Region abgeleitet. Bestimmt, ob Daten der Vereine die Schweiz bzw. die EU verlassen.",
+    "dataLocationHelp": "Bei AWS und Hetzner aus der Region abgeleitet. Bestimmt, ob Daten der Organisationen die Schweiz bzw. die EU verlassen.",
     "transferBasis": "Grundlage der Übermittlung",
     "transferBasisHelp": "z. B. Standardvertragsklauseln und Auftragsverarbeitungsvertrag vom …",
-    "locationConfirm": "Auslandübermittlung geprüft, Vereine informiert"
+    "locationConfirm": "Auslandübermittlung geprüft, Organisationen informiert"
   },
   "addressing": {
     "auto": "Automatisch",
@@ -278,7 +278,7 @@
       }
     },
     "from": "Von",
-    "confirmThirdCountry": "Das Ziel liegt in einem Drittland – Übermittlung geprüft, Vereine informiert"
+    "confirmThirdCountry": "Das Ziel liegt in einem Drittland – Übermittlung geprüft, Organisationen informiert"
   },
   "verifyMode": {
     "full": "Vollständig (Inhalt neu lesen und SHA-256 prüfen)",

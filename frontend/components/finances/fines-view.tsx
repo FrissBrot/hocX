@@ -1,7 +1,6 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -38,8 +37,6 @@ type Props = {
   todoFinesWritable?: boolean;
   accounts: FinanceAccount[];
   canWrite: boolean;
-  /** Link auf die Bussen-Konfiguration (finances.read). */
-  canConfigure?: boolean;
   ownOnly: boolean;
   /** Feature «finance» nach Downgrade nur noch lesend: Hinweisbanner. */
   readOnly?: boolean;
@@ -64,7 +61,7 @@ function bucket(row: Row): "pending" | "collected" | "deleted" {
   return row.fine.status === "collected" ? "collected" : row.fine.status === "deleted" ? "deleted" : "pending";
 }
 
-export function FinesView({ initialFines, initialTodoFines = null, todoFinesWritable = true, accounts, canWrite, canConfigure = false, ownOnly, readOnly = false }: Props) {
+export function FinesView({ initialFines, initialTodoFines = null, todoFinesWritable = true, accounts, canWrite, ownOnly, readOnly = false }: Props) {
   const t = useTranslations("finances");
   const tCommon = useTranslations("common");
   const fineTypeLabel = useMemo(() => fineTypeLabels(t), [t]);
@@ -361,9 +358,7 @@ export function FinesView({ initialFines, initialTodoFines = null, todoFinesWrit
           </h1>
           <p className="muted">{ownOnly ? t("ownOnlyDescription") : t("allDescription")}</p>
         </div>
-        {canConfigure && !ownOnly ? (
-          <Link className="button-secondary" href="/fine-settings">{t("fineSettings.openSettings")}</Link>
-        ) : null}
+        {/* Bussen-Regeln: Zahnrad in der Kopfzeile (app-shell-nav.ts::relatedNavLink) */}
       </div>
       {readOnly ? <StatusBanner tone="neutral" message={t("readOnlyBanner")} /> : null}
       {initialTodoFines !== null && !todoFinesWritable ? <StatusBanner tone="neutral" message={t("todoFines.readOnlyNotice")} /> : null}

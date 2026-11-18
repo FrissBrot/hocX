@@ -529,16 +529,16 @@
         "description": "Genera le anteprime PDF ed estrae il testo dei documenti caricati (segnale di vita dal ciclo di polling)."
       },
       "tenant_data_export": {
-        "title": "Export dell’associazione",
-        "description": "Crea gli export dell’associazione richiesti (ZIP AES con tabelle, PDF dei verbali e file) e li elimina dopo 7 giorni."
+        "title": "Export dell’organizzazione",
+        "description": "Crea gli export dell’organizzazione richiesti (ZIP AES con tabelle, PDF dei verbali e file) e li elimina dopo 7 giorni."
       },
       "retention_proposals": {
         "title": "Termini di conservazione",
-        "description": "Crea proposte secondo i termini di ogni associazione (consegne, ex membri, vecchie immagini della galleria) e le applica in modalità automatica."
+        "description": "Crea proposte secondo i termini di ogni organizzazione (consegne, ex membri, vecchie immagini della galleria) e le applica in modalità automatica."
       },
       "job_worker": {
         "title": "Worker dei job",
-        "description": "Esegue i lavori pesanti in background (importazione galleria, esportazioni PDF, esportazioni dell’associazione, nuove scansioni antivirus, pulizia) - segnale di vita ogni minuto."
+        "description": "Esegue i lavori pesanti in background (importazione galleria, esportazioni PDF, esportazioni dell’organizzazione, nuove scansioni antivirus, pulizia) - segnale di vita ogni minuto."
       },
       "submission_todo_sync": {
         "title": "Sincronizza le attività di consegna",
@@ -595,7 +595,7 @@
     "noStatusToken": "Nessun token creato finora.",
     "email": {
       "title": "E-mail (SMTP)",
-      "description": "Invio delle notifiche ai membri (nuovi compiti, promemoria). Il mittente è un indirizzo hocX, il nome della società appare nell'oggetto.",
+      "description": "Invio delle notifiche ai membri (nuovi compiti, promemoria). Il mittente è un indirizzo hocX, il nome dell'organizzazione appare nell'oggetto.",
       "enabledLabel": "Invio e-mail attivo",
       "yes": "Sì",
       "no": "No",
@@ -739,7 +739,7 @@
     "fields": {
       "tenantName": "Nome organizzazione",
       "publicSlug": "Slug pubblico (URL Abgabebox)",
-      "publicSlugPlaceholder": "ad es. associazione-esempio",
+      "publicSlugPlaceholder": "ad es. organizzazione-esempio",
       "profileImage": "Immagine del profilo",
       "profileImageSelected": "{filename} · ",
       "dragHint": "Trascina un'immagine qui oppure ",
@@ -752,7 +752,7 @@
       "discountPriceHelp": "Senza sconto {price} per {unit}. Inserisci una percentuale o un prezzo, hocX calcola l’altro.",
       "discountPriceUnavailable": "Scegli prima un piano con un prezzo.",
       "internalNote": "Nota interna",
-      "internalNotePlaceholder": "ad es. sconto associazione fino al 2027",
+      "internalNotePlaceholder": "ad es. sconto fino al 2027",
       "billingStart": "Inizio abbonamento",
       "billingStartHelp": "Da questa data nascono nel flusso di cassa crediti per periodo di fatturazione. Vuoto = data di creazione ({date}). Una modifica ricrea i crediti aperti.",
       "userLimitOverride": "Sovrascrivi limite utenti",
@@ -761,7 +761,7 @@
       "userLimitHelp": "Vuoto = vale il limite del piano. Attualmente {count} utenti{suffix}",
       "userLimitExceeded": " – limite raggiunto o superato.",
       "showOnWebsite": "Mostra come cliente sul sito web",
-      "showOnWebsiteHelp": "Compare sul sito web pubblico sotto «Lo usano» (solo il nome). Attivare solo con il consenso dell’associazione.",
+      "showOnWebsiteHelp": "Compare sul sito web pubblico sotto «Lo usano» (solo il nome). Attivare solo con il consenso dell’organizzazione.",
       "contractEnd": "Fine del contratto",
       "contractEndHelp": "Vuoto = senza scadenza. Dopo la fine del contratto più il periodo di export, /admin/system segnala che i dati del mandante vanno eliminati."
     },
@@ -1020,7 +1020,7 @@
     "delete": "Elimina",
     "newTenantDescription": "Crea una nuova organizzazione con il modello di documento predefinito.",
     "tenantName": "Nome organizzazione",
-    "tenantNamePlaceholder": "ad es. Società sportiva esempio",
+    "tenantNamePlaceholder": "ad es. Organizzazione esempio",
     "publicSlug": "Slug pubblico",
     "plan": "Piano",
     "nonBookablePlansHint": "I piani non prenotabili (ad es. per organizzazioni esistenti) possono essere assegnati successivamente nelle impostazioni dell'organizzazione.",

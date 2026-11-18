@@ -1,7 +1,7 @@
 {
   "meta": {
-    "title": "hocX – Meetings and minutes for associations and SMEs",
-    "description": "hocX organises meetings for associations and SMEs: minutes, events, action items, attendance and finances in one place."
+    "title": "hocX – Meetings and minutes for organizations and SMEs",
+    "description": "hocX organises meetings for organizations and SMEs: minutes, events, action items, attendance and finances in one place."
   },
   "nav": {
     "label": "Main navigation",
@@ -18,7 +18,7 @@
     "badgeText": "Import existing Word minutes in minutes",
     "titleLead": "From the meeting to finished minutes.",
     "titleEmphasis": "No rework.",
-    "lead": "hocX organises meetings for associations and SMEs: minutes, events, action items, attendance and finances in one place – ending with a clean PDF in your own corporate design.",
+    "lead": "hocX organises meetings for organizations and SMEs: minutes, events, action items, attendance and finances in one place – ending with a clean PDF in your own corporate design.",
     "ctaPrimary": "Try free for 30 days",
     "ctaSecondary": "How it works →",
     "note": "No credit card"
@@ -118,7 +118,7 @@
     "coverTitle": "Minutes",
     "coverSubtitle": "Board meeting",
     "coverMeta": "12 August 2026 · P-2026-014",
-    "organisation": "Turnverein Seetal",
+    "organisation": "Team Seetal",
     "pageNumber": "Page {page}",
     "sectionAnniversary": "Anniversary"
   },

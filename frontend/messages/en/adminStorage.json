@@ -237,10 +237,10 @@
     "serverSideEncryptionHelp": "Every object is stored encrypted at the provider; the connection test checks this.",
     "dataLocation": "Data location",
     "dataLocationChoose": "Please choose",
-    "dataLocationHelp": "Derived from the region for AWS and Hetzner. Determines whether club data leaves Switzerland or the EU.",
+    "dataLocationHelp": "Derived from the region for AWS and Hetzner. Determines whether organization data leaves Switzerland or the EU.",
     "transferBasis": "Legal basis for the transfer",
     "transferBasisHelp": "e.g. standard contractual clauses and data processing agreement of …",
-    "locationConfirm": "Transfer abroad reviewed, clubs informed"
+    "locationConfirm": "Transfer abroad reviewed, organizations informed"
   },
   "addressing": {
     "auto": "Automatic",
@@ -278,7 +278,7 @@
       }
     },
     "from": "From",
-    "confirmThirdCountry": "The target is in a third country – transfer reviewed, clubs informed"
+    "confirmThirdCountry": "The target is in a third country – transfer reviewed, organizations informed"
   },
   "verifyMode": {
     "full": "Full (re-read content and check SHA-256)",

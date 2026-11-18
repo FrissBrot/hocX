@@ -1,6 +1,6 @@
 # Zyklen
 
-Ein **Zyklus** ist eine wiederkehrende Vereinsperiode, meist das Vereins- oder Scharjahr.
+Ein **Zyklus** ist eine wiederkehrende Periode, meist das Arbeitsjahr.
 hocX nutzt Zyklen, um Termine, Protokolle und Abgaben sauber nach Jahren zu trennen:
 Protokolle werden pro Zyklus nummeriert, Terminlisten zeigen den aktuellen Zyklus, und
 Abgaben können auf Termine bestimmter Zyklen beschränkt werden.

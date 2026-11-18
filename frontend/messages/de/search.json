@@ -21,7 +21,7 @@
     "files": "Dateien"
   },
   "keywords": {
-    "dashboard": "Start Übersicht Home Cockpit",
+    "dashboard": "Start Übersicht Home Cockpit Dashboard",
     "statistics": "Auswertung Zahlen Anwesenheit Diagramme",
     "protocols": "Sitzungen Protokoll Traktanden",
     "events": "Kalender Anlässe Termine Agenda",
@@ -31,10 +31,10 @@
     "finances": "Kasse Konten Buchungen Geld",
     "fines": "Bussen Strafen",
     "participants": "Mitglieder Personen Leute Adressen",
-    "lists": "Listen Tabellen",
+    "lists": "Listen Tabellen Stammlisten",
     "photos": "Bilder Fotos Galerie Alben",
     "files": "Dokumente Dateien Uploads",
-    "sharedLinks": "Freigaben Links teilen",
+    "sharedLinks": "Freigaben Links teilen Geteilte Links",
     "protocolTemplates": "Vorlagen Protokollvorlagen",
     "elements": "Bausteine Elemente",
     "workflows": "Abläufe Zyklen",
@@ -42,10 +42,10 @@
     "design": "Layout PDF Dokumentvorlagen Gestaltung",
     "documents-brand": "Farben Schrift Logo Marke",
     "documents-assets": "Bilder Logos Medien",
-    "fineSettings": "Bussen Tarife Regeln Konfiguration",
+    "fineSettings": "Bussen Tarife Regeln Konfiguration Bussen-Konfiguration",
     "users": "Konten Login Benutzer Zugang",
     "users-roles": "Rollen Rechte Berechtigungen",
-    "tenantSettings": "Verein Allgemein Name Logo",
+    "tenantSettings": "Organisation Profil Allgemein Name Logo",
     "tenant-settings-domains": "Domain Adresse Webadresse",
     "tenant-settings-abo": "Abo Rechnung Speicher Plan Kosten",
     "tenant-settings-verification": "Echtheit Prüfung QR",
@@ -56,6 +56,16 @@
     "profile": "Profil Konto Passwort Sprache MFA Sicherheit",
     "connections": "Kalender Abo Verknüpfungen ICS",
     "theme": "Darstellung Design Dunkel Hell Modus",
-    "tenant-settings-links": "Links Freigaben öffentlich Zugriff teilen Abgabebox Kalender"
+    "tenant-settings-links": "Links Freigaben öffentlich Zugriff teilen Abgabebox Kalender",
+    "calendar": "Kalender Anlässe Termine Agenda Termine",
+    "memberList": "Mitglieder Personen Leute Adressen",
+    "sessionTemplates": "Vorlagen Protokollvorlagen Protokollvorlagen Konfiguration",
+    "taskPackages": "Aufgabenpakete Ämtli Abläufe",
+    "documentTemplates": "Layout PDF Dokumentvorlagen Gestaltung",
+    "documentBrand": "Farben Schrift Logo Marke",
+    "domainsAndVerification": "Domain Adresse Webadresse Echtheit Prüfung QR",
+    "organisationProfile": "Organisation Profil Allgemein Name Logo Einstellungen",
+    "cycles": "Abläufe Zyklen Zyklen",
+    "myTasks": "Meine Pendenzen Aufgaben To-do Abgaben"
   }
 }

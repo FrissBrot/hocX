@@ -1,6 +1,6 @@
 # Finanzen & Bussen
 
-Unter **Finanzen** führt dein Verein seine Kasse: ein oder mehrere **Konten** (z. B. «Kasse»,
+Unter **Finanzen** führt deine Organisation seine Kasse: ein oder mehrere **Konten** (z. B. «Kasse»,
 «Bank»), darauf die **Buchungen** (Einnahmen und Ausgaben) mit laufendem Saldo. Unter
 **Bussen** stehen die Präsenz-Bussen (zu spät, unentschuldigt abwesend) und – falls gebucht –
 die Pendenzen-Bussen (Pendenz zu spät erledigt). Einkassierte Bussen landen automatisch als
@@ -21,8 +21,8 @@ Buchung auf dem Konto, das im Bussentarif hinterlegt ist.
 
 - **Konto anlegen**: In *Finanzen* auf **Konto anlegen** (bzw. **+** neben «Konten»). Der Name
   ist Pflicht, die Beschreibung ist optional und lässt sich jederzeit wieder leeren.
-- **Währung**: gilt für den ganzen Verein, also für alle Konten und Bussen. Ändern lässt sie sich
-  unter *Mandant-Einstellungen → Allgemein → Finanzen* ([Einstellungen](einstellungen.md#finanzen)).
+- **Währung**: gilt für die ganze Organisation, also für alle Konten und Bussen. Ändern lässt sie sich
+  unter *Organisation → Profil → Finanzen* ([Einstellungen](einstellungen.md#finanzen)).
   Sie ist nur eine Beschriftung (z. B. «CHF», «EUR» oder «Fr.»): hocX rechnet nicht um.
 - **Konto löschen** geht nur, solange es keine Buchungen und keine Bussen hat. So geht keine
   Finanzhistorie verloren. Ein Konto mit Buchungen benennst du stattdessen um.

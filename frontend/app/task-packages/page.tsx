@@ -1,12 +1,9 @@
 import { MobileDesktopOnly } from "@/components/mobile/areas/mobile-misc";
 import { ResponsiveView } from "@/components/mobile/responsive-view";
 import { redirect } from "next/navigation";
-import { getTranslations } from "next-intl/server";
 
 import { TaskPackageManager } from "@/components/task-packages/task-package-manager";
 import { AppShell } from "@/components/ui/app-shell";
-import { RouteTabs } from "@/components/ui/route-tabs";
-import { workflowTabs } from "@/components/ui/section-tabs";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { eligibleResponsibleList } from "@/lib/utils/responsible-lists";
 import {
@@ -25,12 +22,10 @@ export default async function TaskPackagesPage() {
   if (!can(session, "templates.manage")) {
     redirect("/");
   }
-  const t = await getTranslations("nav");
   const access = featureAccess(session, "task_packages");
   if (access === "none") {
     return (
       <AppShell initialSession={session}>
-        <RouteTabs tabs={workflowTabs(t)} activeHref="/task-packages" />
         <FeatureNotice feature="task_packages" access={access} />
       </AppShell>
     );
@@ -57,11 +52,10 @@ export default async function TaskPackagesPage() {
   return (
     <AppShell initialSession={session}>
       <ResponsiveView
-        mobile={<MobileDesktopOnly navKey="taskPackages" backHref="/cycles" backNavKey="workflows" />}
+        mobile={<MobileDesktopOnly navKey="taskPackages" backHref="/todos" backNavKey="todos" />}
         desktop={
           <>
-            <RouteTabs tabs={workflowTabs(t)} activeHref="/task-packages" />
-            <FeatureNotice feature="task_packages" access={access} />
+                <FeatureNotice feature="task_packages" access={access} />
             <section className="panel">
               <TaskPackageManager
                 initialPackages={taskPackages ?? []}

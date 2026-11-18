@@ -1,7 +1,7 @@
 # Dokumente & Document Studio
 
 Alle PDFs in hocX entstehen über denselben Weg: Daten aus hocX + eine **Vorlage** + das
-**Corporate Design** des Vereins. Gestaltet wird im **Document Studio** (Navigation
+**Corporate Design** der Organisation. Gestaltet wird im **Document Studio** (Navigation
 **Dokumente**), exportiert wird überall mit demselben Dialog.
 
 ```mermaid
@@ -16,7 +16,7 @@ Das Document Studio hat fünf Bereiche:
 | Bereich | Wofür | Wer |
 |---|---|---|
 | **Vorlagen** | Vorlagen ansehen, anpassen, neu anlegen, veröffentlichen | alle sehen; bearbeiten ab Rolle «Schreiben»; veröffentlichen Admins |
-| **Corporate Design** (Brand Studio) | Farben, Schriften, Logos, Seitenaufbau, Angaben zum Verein | Admins |
+| **Corporate Design** (Brand Studio) | Farben, Schriften, Logos, Seitenaufbau, Angaben zur Organisation | Admins |
 | **Bilder und Schriften** | Logos, Grafiken und Schriftdateien hochladen | Admins |
 | **Komponenten** | Wiederverwendbare Bausteine verwalten | ab Rolle «Schreiben» |
 | **Export-Verlauf** | Alle erzeugten PDFs mit Vorlage und Prüf-ID | alle |
@@ -58,7 +58,7 @@ Welche Vorlage vorgewählt ist, entscheidet hocX in dieser Reihenfolge:
 1. die im Dialog gewählte Vorlage
 2. die Vorlage, die einer **Protokollvorlage** zugewiesen ist (z. B. eine eigene Vorlage nur für
    Generalversammlungen)
-3. die **Standardvorlage** des Vereins für diesen Dokumenttyp
+3. die **Standardvorlage** der Organisation für diesen Dokumenttyp
 4. die mitgelieferte Standardvorlage von hocX
 
 Siehst du ein Datenfeld nicht (z. B. Finanzen), fehlt dir das Recht dazu. Der Export bricht dann
@@ -232,8 +232,8 @@ sich nicht löschen.
 
 ## Corporate Design (Brand Studio)
 
-Unter **Dokumente → Corporate Design** legen Admins fest, wie die Dokumente des Vereins aussehen.
-Es kann mehrere **Profile** geben (z. B. «Verein» und «Jubiläum»), eines ist der **Standard**.
+Unter **Dokumente → Corporate Design** legen Admins fest, wie die Dokumente der Organisation aussehen.
+Es kann mehrere **Profile** geben (z. B. «Standard» und «Jubiläum»), eines ist der **Standard**.
 
 Pro Profil: Farben (Haupt-, Zweit- und Akzentfarbe, Text, Überschriften, Linien, Tabellen,
 Statusfarben und eigene Farben), Schriften (mitgelieferte oder hochgeladene Schriftdateien, Grössen,
@@ -253,7 +253,7 @@ Rechts zeigt eine Vorschau sofort, wie eine Vorlage mit den ungespeicherten Wert
 **Versionen** wiederherstellen. Neue Profile starten von einem Ausgangspunkt (Klassisch Blau,
 Graphit, Wald, Bordeaux, Kompakt).
 
-Ebenfalls hier: die **Dokumentsprache des Vereins**, der Standard für alle Exporte (im
+Ebenfalls hier: die **Dokumentsprache der Organisation**, der Standard für alle Exporte (im
 Export-Dialog pro Dokument änderbar). Datumsangaben erscheinen immer als `TT.MM.JJJJ`, Beträge mit
 `'` als Tausendertrennzeichen.
 

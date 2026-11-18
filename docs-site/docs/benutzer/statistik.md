@@ -31,7 +31,7 @@ Abo ab:
 | **Übersicht** | Todos erledigt/offen, Bussen nach Art, Bussen je Person (Top 10) |
 
 Die Zeitreihen lassen sich auf die letzten 3, 6 oder 12 Monate einschränken. Beträge erscheinen
-in der Währung des Vereins ([Einstellungen](einstellungen.md#finanzen)).
+in der Währung der Organisation ([Einstellungen](einstellungen.md#finanzen)).
 
 ### Woher die Zahlen kommen {#herkunft}
 
@@ -60,11 +60,11 @@ passenden Tag. Der Hinweis auf der Seite sagt, was davon zutrifft.
 ## Wer was sieht {#sichtbarkeit}
 
 - **Je Person** (Anwesenheit und Bussen je Person): Schreibende, Kassier und Admins sehen alle
-  Personen. Mitglieder mit Leserecht sehen nur ihre eigenen Werte, ausser der Verein gibt die
+  Personen. Mitglieder mit Leserecht sehen nur ihre eigenen Werte, ausser die Organisation gibt die
   Ranglisten unter *Einstellungen › Datenschutz* für alle frei. Ein Hinweis oben auf der Seite
   zeigt, wenn nur die eigenen Werte erscheinen.
 - **Nur bestimmte Vorlagen**: Wer nur einzelnen Protokollvorlagen zugeordnet ist, sieht auch in
   der Statistik nur Zahlen aus diesen Vorlagen (Protokolle, Anwesenheit, Todos, Bussen). Gruppen
-  und Mitgliederzahlen beruhen auf Terminen bzw. Mitgliedern und gelten für den ganzen Verein.
+  und Mitgliederzahlen beruhen auf Terminen bzw. Mitgliedern und gelten für die ganze Organisation.
 - Dieselben Regeln gelten für Diagramme und Tabellen in [Dokumenten](dokumente.md), die mit dem
   Document Studio erzeugt werden.

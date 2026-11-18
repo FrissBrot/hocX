@@ -1,6 +1,6 @@
-# Übersicht für Vereine
+# Übersicht für Organisationen
 
-hocX begleitet einen Verein durch den kompletten Zyklus einer Sitzung/Vereinsperiode:
+hocX begleitet eine Organisation durch den kompletten Zyklus einer Sitzung und eines Arbeitsjahres:
 
 ```mermaid
 flowchart LR
@@ -17,11 +17,11 @@ flowchart LR
 | [Zyklen & Vorlagen](vorlagen.md) | Wiederkehrende Struktur einer Sitzungsart definieren (Traktanden, Blöcke, Tabellen) |
 | [Protokolle](protokolle.md) | Konkrete Sitzung planen, durchführen, abschliessen, exportieren |
 | [Termine](termine.md) | Sitzungstermine und weitere Events verwalten |
-| [Mitglieder & Logins](mitglieder.md) | Wer ist im Verein, wer nimmt an welcher Sitzung teil, wer kann sich anmelden |
+| [Mitglieder & Logins](mitglieder.md) | Wer gehört dazu, wer nimmt an welcher Sitzung teil, wer kann sich anmelden |
 | [Konto & Anmeldung](konto.md) | Anmelden, Passwort, zweiter Faktor |
 | [Benachrichtigungen](benachrichtigungen.md) | Welche E-Mails hocX schickt und wie man sie abbestellt |
-| [Finanzen & Bussen](finanzen.md) | Vereinskonto, Buchungen, Bussenverwaltung |
-| [Stammlisten](listen.md) | Frei konfigurierbare Listen (z. B. Vorstand, Inventar) |
+| [Finanzen & Bussen](finanzen.md) | Konten, Buchungen, Bussenverwaltung |
+| [Listen](listen.md) | Frei konfigurierbare Listen (z. B. Vorstand, Inventar) |
 | [Todos](todos.md) | Aufgaben aus Protokollen nachverfolgen |
 | [Anliegen](anliegen.md) | Punkte für kommende Sitzungen sammeln |
 | [Statistik und Dashboard](statistik.md) | Startseite, Kennzahlen, Gruppen und wer welche Zahlen sieht |
@@ -32,5 +32,5 @@ flowchart LR
 
 ## Rollen
 
-Der Zugriff innerhalb eines Vereins (Mandant) ist rollenbasiert. Details siehe
+Der Zugriff innerhalb einer Organisation (Mandant) ist rollenbasiert. Details siehe
 [Rollen & Berechtigungen](rollen.md).

@@ -41,7 +41,6 @@ export default async function FinesPage() {
               todoFinesWritable={todoFinesAccess === "full"}
               accounts={accounts}
               canWrite={canWrite}
-              canConfigure={can(session, "finances.read")}
               ownOnly={!can(session, "reports.personal")}
               readOnly={featureAccess(session, "finance") === "read_only"}
             />

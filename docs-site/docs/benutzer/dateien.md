@@ -1,6 +1,6 @@
 # Dateien und Dokumente
 
-Im Bereich **Dateien** stehen alle Dokumente deines Vereins: direkt hochgeladene Dateien,
+Im Bereich **Dateien** stehen alle Dokumente deiner Organisation: direkt hochgeladene Dateien,
 Einreichungen aus der Abgabebox, Word-/PDF-Importe und die exportierten Protokolle.
 
 ## Ein Eintrag pro Dokument

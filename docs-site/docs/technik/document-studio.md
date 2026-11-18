@@ -188,7 +188,7 @@ Gewählt wird ein Design im Dialog **Neue Vorlage** (nur mit Brand-Recht;
   Standardprofil),
 - eine eigene Vorlage mit Entwurf, verknüpft mit diesem Profil (`document_template.brand_id`).
 
-Der Verein sieht die Vorlage so zuerst wie im Mockup. Stellt er sie im Designer unter
+Die Organisation sieht die Vorlage so zuerst wie im Mockup. Stellt er sie im Designer unter
 **Dokument** auf sein eigenes Brand-Profil um, erscheint sie mit seinen Farben, seinem Logo
 und seinen Angaben. Die Designs verwenden nur Bausteine und Brand-Referenzen, keine festen
 Farben ausser Weiss. Die Vorschaubilder der Galerie liegen fertig unter

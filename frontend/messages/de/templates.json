@@ -599,7 +599,7 @@
         "since_date": "Seit Datum",
         "this_year": "Dieses Jahr",
         "last_n": "Letzte N",
-        "this_cycle": "Dieser Zyklus (z. B. Vereinsjahr)"
+        "this_cycle": "Dieser Zyklus (z. B. Arbeitsjahr)"
       },
       "lastN": "Anzahl",
       "sinceDate": "Seit",
@@ -1058,7 +1058,7 @@
         "protocol": "Das Protokoll-PDF verwendet die Gestaltung",
         "invitation": "Die Einladung verwendet die Gestaltung"
       },
-      "defaultBadge": "Vereins-Standard",
+      "defaultBadge": "Eigener Standard",
       "usage": {
         "only": "Nur in dieser Vorlage verwendet.",
         "alsoIn": "Auch verwendet in",
@@ -1081,7 +1081,7 @@
       "choose": {
         "title": "Gestaltung wählen",
         "description": "Welche Gestaltung soll «{name}» verwenden? Die Auswahl gilt sofort.",
-        "default": "Standard des Vereins",
+        "default": "Eigener Standard",
         "defaultHint": "zurzeit «{name}»",
         "defaultHintNone": "hocX-Standard",
         "usedIn": "verwendet in {names}",

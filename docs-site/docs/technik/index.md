@@ -11,6 +11,6 @@ technische Quelle ist; hier stehen nur noch kurze Verweise.
 | [Architektur](architektur.md) | Stack, Services, Datenmodell-Prinzipien |
 | [Deployment](deployment.md) | Dev/Test/Prod-Umgebungen, Release-Prozess, Rollback |
 | [Platform-Admin-Panel](admin-panel.md) | Mandantenübergreifende Betreiberoberfläche |
-| [Mandanten Export/Import](export-import.md) | Vereine portabel exportieren/importieren |
+| [Mandanten Export/Import](export-import.md) | Organisationen portabel exportieren/importieren |
 | [Sicherheit](sicherheit.md) | Sicherheitsmodell, Audit-Historie |
 | [Bekannte offene Punkte](offene-punkte.md) | Technische Schulden, noch nicht Umgesetztes |

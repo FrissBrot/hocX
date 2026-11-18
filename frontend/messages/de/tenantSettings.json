@@ -5,8 +5,8 @@
   "changeProfileImage": "Profilbild ändern",
   "tenantNameLabel": "Mandantenname",
   "publicSlugLabel": "Kurzname",
-  "publicSlugPlaceholder": "z.B. musterverein",
-  "tenantIdLabel": "Vereins-ID",
+  "publicSlugPlaceholder": "z.B. muster-organisation",
+  "tenantIdLabel": "Organisations-ID",
   "tenantIdHelp": "Wird benötigt, um dieser Organisation z.B. ein Fotoalbum freizugeben.",
   "saveSuccess": "Mandant gespeichert",
   "saveFailed": "Mandant konnte nicht gespeichert werden",
@@ -21,7 +21,7 @@
   "setup": "Einrichten",
   "domainActionsAriaLabel": "Aktionen für {domain}",
   "emptyDomainTitle": "Noch keine eigene Domain",
-  "emptyDomainDescription": "Verbinde eine Domain wie app.dein-verein.ch, damit Mitglieder hocX unter eurer Adresse erreichen. Die Verifizierung erfolgt über einen DNS-Eintrag.",
+  "emptyDomainDescription": "Verbinde eine Domain wie app.deine-organisation.ch, damit Mitglieder hocX unter eurer Adresse erreichen. Die Verifizierung erfolgt über einen DNS-Eintrag.",
   "addDomain": "+ Domain hinzufügen",
   "emptyDomainHintWithFeature": "Bis dahin bleibt der Mandant unter der Standard-Adresse erreichbar.",
   "emptyDomainHintWithoutFeature": "Eigene Domains müssen zum Abo dazugebucht werden (Tab «Abo & Nutzung»). Bis dahin bleibt der Mandant unter der Standard-Adresse erreichbar.",
@@ -35,7 +35,7 @@
   "wizardPurposeAppDescription": "Die normale hocX-Oberfläche unter der eigenen Domain aufrufen.",
   "wizardPurposeAbgabeboxDescription": "Die öffentliche Abgabebox unter der eigenen Domain erreichbar machen.",
   "domainLabel": "Domain",
-  "domainPlaceholder": "z.B. verein.example.ch",
+  "domainPlaceholder": "z.B. app.example.ch",
   "addDomainFailed": "Domain konnte nicht hinzugefügt werden",
   "verifyFailed": "Verifizierung fehlgeschlagen",
   "removeDomainConfirm": "Domain \"{domain}\" endgültig löschen? Die DNS-Einrichtung muss danach neu gestartet werden.",
@@ -84,8 +84,8 @@
   "moduleActive": "Aktiv",
   "saveSuccessVerificationRevoked": "Gespeichert. Weil sich der Name geändert hat, wurde die Verifizierung durch hocX aufgehoben (Mandant-Einstellungen → Echtheitsprüfung).",
   "purposeVerify": "Prüfseite",
-  "wizardPurposeVerifyDescription": "Eure Dokumente unter eigener Adresse prüfen lassen, z. B. verify.verein.ch.",
-  "domainPlaceholderVerify": "z.B. verify.verein.ch",
+  "wizardPurposeVerifyDescription": "Eure Dokumente unter eigener Adresse prüfen lassen, z. B. verify.example.ch.",
+  "domainPlaceholderVerify": "z.B. verify.example.ch",
   "successVerifyDescription": "Neue PDFs verweisen ab sofort auf diese Prüfseite, sofern Name und Logo auf der Prüfseite angezeigt werden (Echtheitsprüfung).",
   "charges": {
     "eyebrow": "Abrechnung",
@@ -138,15 +138,15 @@
   "seatsFree": "{count, plural, one {# Platz frei} other {# Plätze frei}}",
   "noFilesYet": "noch keine Dateien gespeichert",
   "privacy": {
-    "intro": "Legt fest, wer welche Personendaten sieht. Gilt für alle Mitglieder dieses Vereins.",
+    "intro": "Legt fest, wer welche Personendaten sieht. Gilt für alle Mitglieder dieser Organisation.",
     "statisticsTitle": "Statistik",
     "statisticsPerPersonPublic": "Bussen und Anwesenheit je Person für alle sichtbar",
     "statisticsPerPersonPublicHint": "Aus: Mitglieder mit Leserecht sehen in der Statistik nur ihre eigenen Werte. Schreibende, Kassier und Admins sehen immer alle.",
     "saved": "Gespeichert",
     "saveFailed": "Speichern fehlgeschlagen",
     "export": {
-      "title": "Vereinsexport",
-      "description": "Alle Daten des Vereins für die Weiterarbeit: Excel-Tabellen (Mitglieder, Termine, Anwesenheit, Bussen, Finanzen, Aufgaben, Listen), die PDFs abgeschlossener Protokolle und auf Wunsch Fotos, Abgaben und Dokumente als Originaldateien. Ohne Zugangsdaten. Der Export wird im Hintergrund erstellt und ist danach 7 Tage abrufbar. Erfordert eine Anmeldung mit Zwei-Faktor-Bestätigung.",
+      "title": "Gesamtexport",
+      "description": "Alle Daten der Organisation für die Weiterarbeit: Excel-Tabellen (Mitglieder, Termine, Anwesenheit, Bussen, Finanzen, Aufgaben, Listen), die PDFs abgeschlossener Protokolle und auf Wunsch Fotos, Abgaben und Dokumente als Originaldateien. Ohne Zugangsdaten. Der Export wird im Hintergrund erstellt und ist danach 7 Tage abrufbar. Erfordert eine Anmeldung mit Zwei-Faktor-Bestätigung.",
       "includeFiles": "Fotos, Abgaben und Dokumente mitexportieren",
       "password": "Passwort für die ZIP-Datei",
       "passwordHelp": "Mindestens {min} Zeichen. Wird nur bis zur Erstellung verschlüsselt gespeichert – ohne Passwort lässt sich die Datei nicht öffnen.",
@@ -169,11 +169,11 @@
     },
     "noticeTitle": "Datenschutzhinweise",
     "noticeUrl": "Link zu euren Datenschutzhinweisen",
-    "noticeUrlHint": "Die Abgabebox zeigt vor dem Hochladen, dass euer Verein verantwortlich ist, und verlinkt diese Seite. Leer = Standardhinweis der Plattform.",
+    "noticeUrlHint": "Die Abgabebox zeigt vor dem Hochladen, dass eure Organisation verantwortlich ist, und verlinkt diese Seite. Leer = Standardhinweis der Plattform.",
     "noticeSave": "Link speichern"
   },
   "activity": {
-    "intro": "Änderungen, Anmeldungen und Zugriffe der hocX-Plattform auf Daten dieses Vereins. Ohne IP- und E-Mail-Adressen.",
+    "intro": "Änderungen, Anmeldungen und Zugriffe der hocX-Plattform auf Daten dieser Organisation. Ohne IP- und E-Mail-Adressen.",
     "filterAll": "Alle",
     "filterFailures": "Fehlgeschlagen",
     "category": "Bereich",
@@ -195,7 +195,7 @@
     }
   },
   "retention": {
-    "intro": "Lege fest, wie lange der Verein bestimmte Daten aufbewahrt. Alle Regeln sind aus, bis du sie einschaltest. hocX schlägt passende Einträge täglich vor; du bestätigst oder verwirfst sie. Ehemalige Mitglieder werden nur deaktiviert, nie gelöscht.",
+    "intro": "Lege fest, wie lange die Organisation bestimmte Daten aufbewahrt. Alle Regeln sind aus, bis du sie einschaltest. hocX schlägt passende Einträge täglich vor; du bestätigst oder verwirfst sie. Ehemalige Mitglieder werden nur deaktiviert, nie gelöscht.",
     "rulesTitle": "Fristen",
     "rules": {
       "submissions_months": {
@@ -266,21 +266,21 @@
   "dnsWaitHint": "Neue DNS-Einträge brauchen oft einige Minuten, manchmal bis zu einigen Stunden. Prüfe erst, wenn beide Einträge gesetzt sind: pro Stunde sind 20 Prüfungen möglich. Mit «Später fertigstellen» kannst du jederzeit zurückkehren.",
   "docsLink": "Mehr dazu in der Hilfe",
   "help": {
-    "domains": "Eine eigene Domain (z. B. app.verein.ch) macht hocX, die Abgabebox oder die Prüfseite unter eurer Adresse erreichbar. Pro Zweck gibt es eine aktive Domain; eine neue ersetzt sie erst nach erfolgreicher Prüfung.",
-    "dns": "Der TXT-Eintrag beweist, dass euch die Domain gehört. Der CNAME-Eintrag leitet die Adresse auf hocX weiter. Eine Hauptdomain ohne Vorsatz (verein.ch) kann bei vielen Anbietern keinen CNAME haben – nimm dann eine Subdomain wie app.verein.ch oder einen A-Eintrag auf die gleiche IP-Adresse wie das Ziel.",
-    "publicSlug": "Kurzer, eindeutiger Name eures Vereins aus Kleinbuchstaben, Ziffern und Bindestrichen. Andere Organisationen finden euch darüber, z. B. beim Freigeben eines Fotoalbums. Links zur Abgabebox hängen nicht davon ab und bleiben bei einer Änderung gültig.",
+    "domains": "Eine eigene Domain (z. B. app.example.ch) macht hocX, die Abgabebox oder die Prüfseite unter eurer Adresse erreichbar. Pro Zweck gibt es eine aktive Domain; eine neue ersetzt sie erst nach erfolgreicher Prüfung.",
+    "dns": "Der TXT-Eintrag beweist, dass euch die Domain gehört. Der CNAME-Eintrag leitet die Adresse auf hocX weiter. Eine Hauptdomain ohne Vorsatz (example.ch) kann bei vielen Anbietern keinen CNAME haben – nimm dann eine Subdomain wie app.example.ch oder einen A-Eintrag auf die gleiche IP-Adresse wie das Ziel.",
+    "publicSlug": "Kurzer, eindeutiger Name eurer Organisation aus Kleinbuchstaben, Ziffern und Bindestrichen. Andere Organisationen finden euch darüber, z. B. beim Freigeben eines Fotoalbums. Links zur Abgabebox hängen nicht davon ab und bleiben bei einer Änderung gültig.",
     "modules": "«Aktiv» heisst voll nutzbar. «Nur lesen» bedeutet: Das Modul ist nicht mehr im Abo, eure Daten bleiben aber erhalten und lesbar; ändern ist gesperrt, bis das Modul wieder gebucht ist."
   },
   "errors": {
     "rateLimited": "Zu viele Versuche in kurzer Zeit. Bitte warte etwa eine Stunde und versuche es dann erneut.",
-    "domain_invalid_format": "Das ist keine gültige Domain. Beispiel: app.verein.ch (ohne https:// und ohne Pfad).",
+    "domain_invalid_format": "Das ist keine gültige Domain. Beispiel: app.example.ch (ohne https:// und ohne Pfad).",
     "domain_reserved": "Diese Domain gehört zu hocX selbst und kann nicht eingetragen werden.",
     "domain_domain_taken": "Diese Domain ist bereits bei einer anderen Organisation aktiv.",
     "domain_already_active": "Diese Domain ist für diesen Zweck bereits aktiv.",
     "domain_txt_missing": "Der TXT-Eintrag {record} mit dem Prüfwert wurde noch nicht gefunden. Prüfe Name und Wert beim Domain-Anbieter oder warte, bis die Änderung verbreitet ist.",
     "domain_not_routed": "{domain} zeigt noch nicht auf {target}. Prüfe den CNAME- bzw. A-Eintrag oder warte, bis die Änderung verbreitet ist."
   },
-  "renameRevokesVerificationConfirm": "Euer Verein ist durch hocX verifiziert. Wenn du den Namen änderst, wird diese Verifizierung aufgehoben und neue PDFs werden nicht mehr als verifiziert ausgewiesen. Du kannst sie danach unter Mandant-Einstellungen → Echtheitsprüfung neu beantragen. Trotzdem speichern?",
+  "renameRevokesVerificationConfirm": "Eure Organisation ist durch hocX verifiziert. Wenn du den Namen änderst, wird diese Verifizierung aufgehoben und neue PDFs werden nicht mehr als verifiziert ausgewiesen. Du kannst sie danach unter Einstellungen › Domains & Echtheit neu beantragen. Trotzdem speichern?",
   "renameConfirmLabel": "Name ändern",
   "moduleReadOnly": "Nur lesen",
   "moduleReadOnlyHint": "Nicht mehr im Abo: Daten bleiben lesbar, Ändern ist gesperrt.",
@@ -288,13 +288,13 @@
   "finance": {
     "eyebrow": "Finanzen",
     "currencyLabel": "Währung",
-    "currencyHelp": "Gilt für alle Konten und Bussen des Vereins, z. B. CHF, EUR oder Fr.",
+    "currencyHelp": "Gilt für alle Konten und Bussen, z. B. CHF, EUR oder Fr.",
     "currencyHelpPopover": "hocX rechnet nicht um: eine Änderung ändert nur die Bezeichnung bei allen Konten, Bussen und Exporten. Die Beträge bleiben gleich.",
     "saved": "Währung gespeichert: {currency}",
     "saveFailed": "Die Währung konnte nicht gespeichert werden."
   },
   "publicLinks": {
-    "intro": "Alle Links, über die jemand ohne Anmeldung an Daten deines Vereins kommt – mit Grund, Ablauf und dem Ort, an dem du sie verwaltest. Abgelaufene, widerrufene und benutzte Links erscheinen nicht.",
+    "intro": "Alle Links, über die jemand ohne Anmeldung an Daten deiner Organisation kommt – mit Grund, Ablauf und dem Ort, an dem du sie verwaltest. Abgelaufene, widerrufene und benutzte Links erscheinen nicht.",
     "neverExpiringHint": "{count, plural, one {# Link läuft} other {# Links laufen}} nicht von selbst ab. Prüfe, ob {count, plural, one {er} other {sie}} noch gebraucht {count, plural, one {wird} other {werden}}.",
     "group": {
       "all": "Alle",
@@ -302,7 +302,7 @@
       "submissions": "Abgabebox",
       "calendar": "Kalender",
       "accounts": "Konten",
-      "partners": "Partnervereine",
+      "partners": "Partner-Organisationen",
       "other": "Weitere"
     },
     "col": {
@@ -322,7 +322,7 @@
       "calendar_todos": "Kalender",
       "account_invite": "Einladung",
       "account_password_reset": "Passwort",
-      "album_partner": "Partnerverein",
+      "album_partner": "Partner-Organisation",
       "submission_access": "Persönliche Abgabe"
     },
     "reason": {
@@ -349,7 +349,7 @@
     "notTracked": "—",
     "manage": "Verwalten",
     "manageElsewhere": {
-      "files": "beim Partnerverein",
+      "files": "bei der Partner-Organisation",
       "submissions": "—",
       "calendar": "nur die Person selbst",
       "accounts": "—",

@@ -405,9 +405,9 @@
     "schema": "Structure non valable"
   },
   "sample": {
-    "organization": "Société exemple du Seeland",
+    "organization": "Organisation exemple du Seeland",
     "address": "Rue du Lac 12\n3000 Ville-Exemple",
-    "contact": "info@societe-exemple.ch · 031 123 45 67",
+    "contact": "info@organisation-exemple.ch · 031 123 45 67",
     "place": "Ville-Exemple",
     "documentTitle": "Séance du comité de mars",
     "documentSubtitle": "Séance 3",
@@ -439,7 +439,7 @@
     "event1": "Fête d’été",
     "event2": "Séance du comité",
     "event3": "Excursion",
-    "account1": "Compte de la société",
+    "account1": "Compte principal",
     "account2": "Caisse",
     "booking1": "Cotisations",
     "booking2": "Matériel",
@@ -542,7 +542,7 @@
     },
     "personalReadme": "Rapport d’accès aux données pour {name} ({tenant}), créé le {date}.\\n\\nRapport de données.xlsx contient une feuille par domaine : données de base, présences (seulement tes lignes), amendes, tâches, responsabilités, rendez-vous, listes, fichiers téléversés (liste), facteurs de connexion et abonnements calendrier (sans secrets), activité et mentions dans les procès-verbaux.\\ndaten.json contient les mêmes données lisibles par machine.\\n\\nLes mentions sont trouvées par recherche du nom et peuvent être incomplètes. Les procès-verbaux et la caisse sont conservés par l’organisation ; adresse tes questions à l’organisation.",
     "tenant": {
-      "prefix": "Export-association",
+      "prefix": "Export-organisation",
       "yes": "oui",
       "no": "non",
       "file": {
@@ -590,7 +590,7 @@
       "protocolsWithoutPdf": "Procès-verbaux clôturés sans PDF enregistré (à ouvrir dans hocX et exporter en PDF) :",
       "missingFiles": "Non inclus car introuvables dans le stockage : {count} fichier(s)."
     },
-    "tenantReadme": "Export de l’association {tenant}, créé le {date}.\\n\\nTableaux (Excel) : membres, rendez-vous, présences (personne × séance), amendes, finances (une feuille par compte), tâches et, dans le dossier Listes, un fichier par liste. Noms au lieu de numéros internes, dates au format JJ.MM.AAAA, montants en nombres.\\nProcès-verbaux : le dernier PDF généré de chaque procès-verbal clôturé.\\n{files}\\n\\nLes identifiants (mots de passe, clés à deux facteurs, liens) ne sont pas inclus. À conserver en lieu sûr : le fichier contient des données personnelles."
+    "tenantReadme": "Export de l’organisation {tenant}, créé le {date}.\n\nTableaux (Excel) : membres, rendez-vous, présences (personne × séance), amendes, finances (une feuille par compte), tâches et, dans le dossier Listes, un fichier par liste. Noms au lieu de numéros internes, dates au format JJ.MM.AAAA, montants en nombres.\nProcès-verbaux : le dernier PDF généré de chaque procès-verbal clôturé.\n{files}\n\nLes identifiants (mots de passe, clés à deux facteurs, liens) ne sont pas inclus. À conserver en lieu sûr : le fichier contient des données personnelles."
   },
   "email": {
     "greeting": "Bonjour {name}",
@@ -637,33 +637,33 @@
       "subject": "{tenant} : avis de sécurité concernant ton compte",
       "intro": "Les éléments suivants ont été modifiés sur ton compte chez {tenant} :",
       "passwordChanged": "Mot de passe modifié ({at})",
-      "passwordChangedByAdmin": "Mot de passe redéfini par l’administration de l’association ({at})",
+      "passwordChangedByAdmin": "Mot de passe redéfini par l’administration de ton organisation ({at})",
       "mfaAdded": "Deuxième facteur ajouté ({at})",
       "mfaRemoved": "Deuxième facteur supprimé ({at})",
-      "mfaRemovedByAdmin": "Deuxième facteur supprimé par l’administration de l’association ({at})",
+      "mfaRemovedByAdmin": "Deuxième facteur supprimé par l’administration de ton organisation ({at})",
       "hint": "Ce n’était pas toi ? Contacte immédiatement {tenant}.",
       "mandatory": "Les avis de sécurité sont toujours envoyés et ne peuvent pas être désactivés.",
       "emailChanged": "E-mail de connexion modifié ({at})",
-      "emailChangedByAdmin": "E-mail de connexion modifié par l’administration de l’association ({at})",
+      "emailChangedByAdmin": "E-mail de connexion modifié par l’administration de ton organisation ({at})",
       "emailChangedSubject": "{tenant} : ton e-mail de connexion a été modifié",
       "emailChangedIntro": "L’e-mail de connexion de ton compte chez {tenant} a été modifié. Cette adresse n’est plus utilisée pour la connexion, ce message est donc le dernier envoyé ici :",
       "label": {
         "passwordChanged": "Mot de passe modifié",
-        "passwordChangedByAdmin": "Mot de passe redéfini par l'administration de l'association",
+        "passwordChangedByAdmin": "Mot de passe redéfini par l'administration de ton organisation",
         "mfaAdded": "Deuxième facteur ajouté",
         "mfaRemoved": "Deuxième facteur supprimé",
-        "mfaRemovedByAdmin": "Deuxième facteur supprimé par l'administration de l'association",
+        "mfaRemovedByAdmin": "Deuxième facteur supprimé par l'administration de ton organisation",
         "emailChanged": "E-mail de connexion modifié",
-        "emailChangedByAdmin": "E-mail de connexion modifié par l'administration de l'association"
+        "emailChangedByAdmin": "E-mail de connexion modifié par l'administration de ton organisation"
       }
     },
     "export": {
       "subjectReady": "{tenant} : export de données prêt",
       "subjectFailed": "{tenant} : échec de l’export de données",
-      "ready": "L’export de données « {filename} » est prêt. Tu peux le télécharger dans hocX sous Paramètres de l’association > Protection des données.",
-      "failed": "L’export de données n’a pas pu être créé. Merci de le redemander dans hocX sous Paramètres de l’association > Protection des données.",
+      "ready": "L’export de données « {filename} » est prêt. Tu peux le télécharger dans hocX sous Organisation › Protection des données.",
+      "failed": "L’export de données n’a pas pu être créé. Merci de le redemander dans hocX sous Organisation › Protection des données.",
       "openButton": "Ouvrir l’export",
-      "readyBody": "L'export de données est prêt. Tu peux le télécharger dans hocX sous Réglages de l'association › Protection des données."
+      "readyBody": "L'export de données est prêt. Tu peux le télécharger dans hocX sous Organisation › Protection des données."
     },
     "via": "via hocX",
     "system": "Système",
@@ -722,7 +722,7 @@
       "countOther": "{count} amendes",
       "issuedOn": "du {date}",
       "openTotal": "Total des amendes ouvertes chez {tenant}",
-      "payment": "Les amendes se paient à la caisse de l'association. Une amende est fausse ? Adresse-toi à {tenant}.",
+      "payment": "Les amendes se paient à la caisse. Une amende est fausse ? Adresse-toi à {tenant}.",
       "openFines": "Voir mes amendes",
       "issuedSubjectOne": "{tenant} : nouvelle amende de {amount}",
       "issuedSubjectOther": "{tenant} : nouvelles amendes pour {amount}",

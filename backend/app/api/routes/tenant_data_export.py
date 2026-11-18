@@ -57,7 +57,7 @@ def _read(job: TenantDataExport) -> TenantDataExportRead:
 def _require_export_admin(user: CurrentUser) -> None:
     require_permission(user, P.DATA_EXPORT)
     if not user.mfa_verified:
-        raise HTTPException(status_code=403, detail="Für den Vereinsexport ist eine Anmeldung mit Zwei-Faktor-Bestätigung nötig")
+        raise HTTPException(status_code=403, detail="Für den Gesamtexport ist eine Anmeldung mit Zwei-Faktor-Bestätigung nötig")
 
 
 @router.get("/tenant-data-exports", response_model=list[TenantDataExportRead])
@@ -78,7 +78,7 @@ def create_tenant_data_export(payload: TenantDataExportRequest, db: Session = De
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except tenant_export.ExportInProgress as exc:
-        raise HTTPException(status_code=409, detail="Es läuft bereits ein Vereinsexport") from exc
+        raise HTTPException(status_code=409, detail="Es läuft bereits ein Gesamtexport") from exc
     AuditService().log(
         db, action="tenant.data_export_requested", actor=user, entity_type="tenant", entity_id=user.current_tenant_id,
         details={"include_files": payload.include_files},

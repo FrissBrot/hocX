@@ -170,7 +170,7 @@ describe("BrandStudio", () => {
   it("saves the document language of the organisation", async () => {
     api.studioApi.updateDocumentSettings.mockResolvedValue({ language: "fr" });
     render(<BrandStudio capabilities={capabilities} />);
-    const select = await screen.findByLabelText(/^Dokumentsprache des Vereins/);
+    const select = await screen.findByLabelText(/^Dokumentsprache der Organisation/);
     await waitFor(() => expect(select).toHaveValue("de"));
     fireEvent.change(select, { target: { value: "fr" } });
     await waitFor(() => expect(api.studioApi.updateDocumentSettings).toHaveBeenCalledWith("fr"));

@@ -139,7 +139,7 @@ def _apply_location(profile: StorageProfile, values: dict[str, Any], *, actor_em
             raise StorageProfileError("Für ein Drittland die Grundlage der Übermittlung angeben (z. B. Standardvertragsklauseln)")
         if location != profile.data_location or values.get("location_confirmed"):
             if not values.get("location_confirmed"):
-                raise StorageProfileError("Auslandübermittlung bestätigen: geprüft und Vereine informiert")
+                raise StorageProfileError("Auslandübermittlung bestätigen: geprüft und Organisationen informiert")
             profile.location_confirmed_by = actor_email
             profile.location_confirmed_at = datetime.now(UTC)
     elif location != profile.data_location:

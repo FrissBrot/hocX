@@ -36,7 +36,7 @@ def _client_ip(request: Request) -> str | None:
 router = APIRouter()
 
 NOT_FOUND = HTTPException(status_code=404, detail="Nicht gefunden")
-FEATURE_DISABLED = HTTPException(status_code=403, detail="Die Abgabebox ist für diesen Verein aktuell nicht verfügbar.")
+FEATURE_DISABLED = HTTPException(status_code=403, detail="Die Abgabebox ist für diese Organisation aktuell nicht verfügbar.")
 
 # SECURITY: the client-sent Content-Type header (upload_file.content_type) is fully attacker
 # controlled and must never be trusted or stored - a file named "x.pdf" with real HTML/JS
@@ -540,10 +540,10 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
             # the safe, contained fix for this pass.
             total_usage = repository.get_tenant_storage_usage_bytes(db, tenant_id=tenant["id"])
             if tenant_quota_bytes is not None and total_usage + incoming_bytes > tenant_quota_bytes:
-                raise HTTPException(400, "Speicherkontingent des Vereins erreicht")
+                raise HTTPException(400, "Speicherkontingent der Organisation erreicht")
             if await asyncio.to_thread(tenant_storage_bytes, db, tenant["id"]) + incoming_bytes > quota_bytes:
                 _log("validation_failed", f"Speicherlimit des Mandanten erreicht (max. {quota_bytes // 1024 // 1024} MB)")
-                raise HTTPException(status_code=400, detail="Speicherlimit erreicht - bitte den Verein kontaktieren")
+                raise HTTPException(status_code=400, detail="Speicherlimit erreicht - bitte die Organisation kontaktieren")
 
             # Authoritative re-check of max_files_per_element, now inside the same per-tenant
             # lock the quota check above uses (audit finding, 2026-08-25) - this is what

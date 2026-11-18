@@ -27,7 +27,7 @@
   "filterAll": "Tutti",
   "page": {
     "description": "Link di download pubblici per file e foto della tua organizzazione.",
-    "title": "Link condivisi"
+    "title": "Condivisioni"
   },
   "revokeConfirm": "Revocare il link \"{name}\"? Dopo non funzionerà più.",
   "revokeConfirmLabel": "Revoca",

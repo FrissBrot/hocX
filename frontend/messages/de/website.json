@@ -1,7 +1,7 @@
 {
   "meta": {
-    "title": "hocX – Sitzungen und Protokolle für Vereine und KMU",
-    "description": "hocX organisiert Sitzungen für Vereine und KMU: Protokolle, Termine, Pendenzen, Anwesenheit und Finanzen an einem Ort."
+    "title": "hocX – Sitzungen und Protokolle für Organisationen und KMU",
+    "description": "hocX organisiert Sitzungen für Organisationen und KMU: Protokolle, Termine, Pendenzen, Anwesenheit und Finanzen an einem Ort."
   },
   "nav": {
     "label": "Hauptnavigation",
@@ -18,7 +18,7 @@
     "badgeText": "Bestehende Word-Protokolle in Minuten importieren",
     "titleLead": "Von der Sitzung zum fertigen Protokoll.",
     "titleEmphasis": "Ohne Nacharbeit.",
-    "lead": "hocX organisiert Sitzungen für Vereine und KMU: Protokolle, Termine, Pendenzen, Anwesenheit und Finanzen an einem Ort – und am Ende ein sauberes PDF in Ihrem eigenen Erscheinungsbild.",
+    "lead": "hocX organisiert Sitzungen für Organisationen und KMU: Protokolle, Termine, Pendenzen, Anwesenheit und Finanzen an einem Ort – und am Ende ein sauberes PDF in Ihrem eigenen Erscheinungsbild.",
     "ctaPrimary": "30 Tage kostenlos testen",
     "ctaSecondary": "So funktioniert's →",
     "note": "Keine Kreditkarte"
@@ -118,7 +118,7 @@
     "coverTitle": "Protokoll",
     "coverSubtitle": "Vorstandssitzung",
     "coverMeta": "12. August 2026 · P-2026-014",
-    "organisation": "Turnverein Seetal",
+    "organisation": "Team Seetal",
     "pageNumber": "Seite {page}",
     "sectionAnniversary": "Jubiläum"
   },

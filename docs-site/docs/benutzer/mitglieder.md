@@ -5,7 +5,7 @@ nicht. Daraus ergeben sich drei Begriffe:
 
 | Begriff | Bedeutung | Wo gepflegt |
 |---|---|---|
-| **Mitglied** | Jede Person deines Vereins (auch Gäste). Erscheint in Anwesenheit, Bussen und als Verantwortliche bei Aufgaben. | **Mitglieder** |
+| **Mitglied** | Jede Person deiner Organisation (auch Gäste). Erscheint in Anwesenheit, Bussen und als Verantwortliche bei Aufgaben. | **Mitglieder** |
 | **Login** | Die Möglichkeit eines Mitglieds, sich mit E-Mail und Passwort anzumelden. Ein Mitglied hat einen Login oder nicht. | **Logins & Rollen** oder beim Mitglied |
 | **Rolle** | Was jemand mit Login darf (siehe [Rollen & Berechtigungen](rollen.md)). | **Logins & Rollen** |
 

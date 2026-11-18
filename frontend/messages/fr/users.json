@@ -1,6 +1,6 @@
 {
   "pageTitle": "Accès et rôles",
-  "ownAccessOnlyHint": "Accès et rôles de votre association.",
+  "ownAccessOnlyHint": "Accès et rôles de votre organisation.",
   "pageHint": "Qui peut se connecter et avec quels rôles. Les personnes elles-mêmes se gèrent sous « Membres ».",
   "newUser": "Nouvelle personne",
   "emptyState": {
@@ -49,7 +49,7 @@
   "mfaTitle": "MFA de {name}",
   "mfaTitleFallback": "MFA",
   "roleDescriptions": {
-    "admin": "Accès complet dans l'association, y compris la structure (modèles, cycles, paramètres), les membres, les accès et les rôles.",
+    "admin": "Accès complet dans l'organisation, y compris la structure (modèles, cycles, paramètres), les membres, les accès et les rôles.",
     "writer": "Travaille dans la section procès-verbaux et gère les données opérationnelles, sans modifier la structure ni les finances.",
     "kassier": "Comme lecteur, avec en plus un accès en écriture complet aux finances et amendes.",
     "reader": "Accès en lecture seule, peut déclencher des exports PDF et ne voit que ses propres amendes."

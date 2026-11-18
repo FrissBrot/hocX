@@ -1,10 +1,14 @@
 {
-  "dashboard": "Dashboard",
+  "dashboard": "Panoramica",
   "groups": {
-    "work": "Attività",
-    "masterData": "Anagrafiche",
-    "configuration": "Configurazione",
-    "administration": "Amministrazione"
+    "sessions": "Riunioni",
+    "tasks": "Compiti",
+    "members": "Membri",
+    "cash": "Cassa",
+    "storage": "Archivio",
+    "appearance": "Immagine",
+    "settings": "Impostazioni",
+    "organisation": "Organizzazione"
   },
   "protocols": "Verbali",
   "events": "Eventi",
@@ -13,10 +17,10 @@
   "submissions": "Consegne",
   "finances": "Finanze",
   "participants": "Membri",
-  "lists": "Liste anagrafiche",
+  "lists": "Liste",
   "photos": "Foto",
   "files": "File",
-  "sharedLinks": "Link condivisi",
+  "sharedLinks": "Condivisioni",
   "templates": "Modelli",
   "cycles": "Cicli",
   "users": "Accessi e ruoli",
@@ -65,6 +69,17 @@
   "roleManagement": "Ruoli",
   "workflows": "Flussi di lavoro",
   "design": "Impaginazione",
-  "fineSettings": "Impostazioni multe",
-  "publicLinks": "Link di accesso"
+  "fineSettings": "Regole delle multe",
+  "publicLinks": "Link di accesso",
+  "related": {
+    "openSettings": "Apri impostazione: {name}",
+    "backToArea": "Torna a {area}"
+  },
+  "myTasks": "I miei compiti",
+  "calendar": "Calendario",
+  "sessionTemplates": "Modelli di riunione",
+  "memberList": "Elenco membri",
+  "domainsAndVerification": "Domini e autenticità",
+  "organisationProfile": "Profilo",
+  "workYear": "Anno di lavoro"
 }

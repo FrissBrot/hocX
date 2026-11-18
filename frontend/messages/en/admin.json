@@ -529,16 +529,16 @@
         "description": "Generates PDF views and extracts the text of uploaded documents (heartbeat from the polling loop)."
       },
       "tenant_data_export": {
-        "title": "Club export",
-        "description": "Builds requested club exports (AES ZIP with tables, minutes PDFs and files) and deletes them after 7 days."
+        "title": "Organization export",
+        "description": "Builds requested organization exports (AES ZIP with tables, minutes PDFs and files) and deletes them after 7 days."
       },
       "retention_proposals": {
         "title": "Retention periods",
-        "description": "Creates suggestions according to each club’s retention periods (submissions, former members, old gallery images) and applies them when set to automatic."
+        "description": "Creates suggestions according to each organization’s retention periods (submissions, former members, old gallery images) and applies them when set to automatic."
       },
       "job_worker": {
         "title": "Job worker",
-        "description": "Runs heavy background work (gallery import, PDF exports, organisation exports, virus re-scans, clean-up) - heartbeat every minute."
+        "description": "Runs heavy background work (gallery import, PDF exports, organization exports, virus re-scans, clean-up) - heartbeat every minute."
       },
       "submission_todo_sync": {
         "title": "Sync submission tasks",
@@ -595,7 +595,7 @@
     "noStatusToken": "No token created yet.",
     "email": {
       "title": "Email (SMTP)",
-      "description": "Delivery of notifications to members (new tasks, reminders). The sender is a hocX address; the club name appears in the subject.",
+      "description": "Delivery of notifications to members (new tasks, reminders). The sender is a hocX address; the organization name appears in the subject.",
       "enabledLabel": "Email delivery active",
       "yes": "Yes",
       "no": "No",
@@ -739,7 +739,7 @@
     "fields": {
       "tenantName": "Organization name",
       "publicSlug": "Public slug (Abgabebox URL)",
-      "publicSlugPlaceholder": "e.g. sample-club",
+      "publicSlugPlaceholder": "e.g. sample-organization",
       "profileImage": "Profile picture",
       "profileImageSelected": "{filename} · ",
       "dragHint": "Drag an image here or ",
@@ -752,7 +752,7 @@
       "discountPriceHelp": "Without discount {price} per {unit}. Enter a percentage or a price, hocX calculates the other.",
       "discountPriceUnavailable": "Choose a plan with a price first.",
       "internalNote": "Internal note",
-      "internalNotePlaceholder": "e.g. club discount until 2027",
+      "internalNotePlaceholder": "e.g. discount until 2027",
       "billingStart": "Subscription start",
       "billingStartHelp": "From this date, receivables per billing period appear in the cash flow. Empty = creation date ({date}). Changing it recreates the open receivables.",
       "userLimitOverride": "Override user limit",
@@ -761,7 +761,7 @@
       "userLimitHelp": "Empty = plan limit applies. Currently {count} user(s){suffix}",
       "userLimitExceeded": " – limit reached or exceeded.",
       "showOnWebsite": "Show as customer on the website",
-      "showOnWebsiteHelp": "Appears on the public website under “Used by” (name only). Only enable with the organisation’s consent.",
+      "showOnWebsiteHelp": "Appears on the public website under “Used by” (name only). Only enable with the organization’s consent.",
       "contractEnd": "Contract end",
       "contractEndHelp": "Empty = no end date. After the contract end plus the export period, /admin/system reports that the tenant’s data must be deleted."
     },
@@ -1020,7 +1020,7 @@
     "delete": "Delete",
     "newTenantDescription": "Creates a new organization with the default document template.",
     "tenantName": "Organization name",
-    "tenantNamePlaceholder": "e.g. Sample Sports Club",
+    "tenantNamePlaceholder": "e.g. Sample Organization",
     "publicSlug": "Public slug",
     "plan": "Plan",
     "nonBookablePlansHint": "Non-bookable plans (e.g. for existing organizations) can be assigned afterwards in the organization settings.",

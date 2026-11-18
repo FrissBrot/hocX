@@ -134,5 +134,10 @@
     "todo_assignee_unavailable": "La persona responsabile non è più disponibile per questo verbale (p. es. rimossa dal modello o inattiva). Scegliere un’altra persona.",
     "todo_due_event_unavailable": "La scadenza scelta non è più disponibile.",
     "todo_invalid": "Il compito non è stato salvato: dato non valido."
+  },
+  "personal": {
+    "pageTitle": "I miei compiti",
+    "pageIntro": "I tuoi compiti e consegne aperti, ordinati per scadenza.",
+    "allTodosLink": "Tutti i compiti →"
   }
 }

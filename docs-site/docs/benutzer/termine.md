@@ -1,6 +1,6 @@
 # Termine
 
-Termine sind die Anlässe deines Vereins: Sitzungen, Trainings, Lager, Elternabende. Sie
+Termine sind die Anlässe deiner Organisation: Sitzungen, Trainings, Lager, Elternabende. Sie
 erscheinen an mehreren Stellen:
 
 - **Eigenständige Terminverwaltung** unter *Termine*, für den Gesamtüberblick.
@@ -54,7 +54,7 @@ hat höchstens einen Tag.
   Filter trifft jeden Tag, der den Suchtext **enthält** («Training» trifft auch
   «Training U12»).
 - **Umbenennen** (im Tag-Feld über das Stift-Symbol): ändert den Tag bei **allen** Terminen
-  des Vereins und zieht die Filter der Abgaben mit. hocX fragt vorher nach und nennt die
+  der Organisation und zieht die Filter der Abgaben mit. hocX fragt vorher nach und nennt die
   Anzahl der betroffenen Termine und Abgaben. Gibt es den neuen Namen schon, werden beide
   Tags **dauerhaft zusammengeführt** – auch darauf weist die Rückfrage hin.
 
@@ -65,7 +65,7 @@ mehreren Zyklus-Definitionen zu je einem pro Definition). Das gilt für neu ange
 CSV importierte und – beim Anlegen eines neuen Zyklus – auch für bereits bestehende Termine.
 
 Im Feld **Zyklen** des Termins kannst du die Zuordnung von Hand ändern, z. B. wenn ein
-Anlass im August noch zum alten Vereinsjahr zählen soll. Eine manuelle Zuordnung bleibt auch
+Anlass im August noch zum alten Arbeitsjahr zählen soll. Eine manuelle Zuordnung bleibt auch
 bei einer Datumsänderung bestehen; eine unveränderte Standard-Zuordnung wandert mit dem
 Datum mit. Die Zuordnung bestimmt, in welchen Zyklusfiltern (Protokolle, Abgaben,
 Fotoalben) der Termin erscheint.
@@ -104,7 +104,7 @@ Fotoalben) der Termin erscheint.
 Im Reiter **Teilnehmer & Status** ordnest du Personen den Rollen Organisatoren, Leitungsteam
 und Teilnehmer zu, dazu drei frei verwendbare Personenfelder («Spezial 1–3»). Im Reiter
 **Weitere Felder** gibt es den Standort und drei freie Textfelder («Spezial Text 1–3»).
-Wofür die Spezialfelder stehen, legt ihr selbst fest: Unter **Mandant-Einstellungen**
+Wofür die Spezialfelder stehen, legt ihr selbst fest: Unter **Organisation › Profil**
 lassen sie sich umbenennen (z. B. «Küche», «Material») oder ausblenden.
 
 ## Mobil {#mobil}

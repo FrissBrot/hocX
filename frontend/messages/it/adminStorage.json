@@ -237,10 +237,10 @@
     "serverSideEncryptionHelp": "Ogni oggetto viene salvato cifrato presso il fornitore; il test di connessione lo verifica.",
     "dataLocation": "Ubicazione dei dati",
     "dataLocationChoose": "Scegliere",
-    "dataLocationHelp": "Per AWS e Hetzner derivata dalla regione. Stabilisce se i dati delle associazioni lasciano la Svizzera o l’UE.",
+    "dataLocationHelp": "Per AWS e Hetzner derivata dalla regione. Stabilisce se i dati delle organizzazioni lasciano la Svizzera o l’UE.",
     "transferBasis": "Base del trasferimento",
     "transferBasisHelp": "ad es. clausole contrattuali tipo e contratto di trattamento dei dati del …",
-    "locationConfirm": "Trasferimento all’estero verificato, associazioni informate"
+    "locationConfirm": "Trasferimento all’estero verificato, organizzazioni informate"
   },
   "addressing": {
     "auto": "Automatico",
@@ -278,7 +278,7 @@
       }
     },
     "from": "Da",
-    "confirmThirdCountry": "La destinazione si trova in un paese terzo – trasferimento verificato, associazioni informate"
+    "confirmThirdCountry": "La destinazione si trova in un paese terzo – trasferimento verificato, organizzazioni informate"
   },
   "verifyMode": {
     "full": "Completa (rilettura del contenuto e verifica SHA-256)",

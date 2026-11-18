@@ -1,7 +1,7 @@
 # Rollen & Berechtigungen
 
-Jedes Benutzerkonto gehört genau einem Mandanten (Verein). Wer in mehreren Vereinen arbeitet,
-braucht pro Verein ein eigenes Konto (mit eigener E-Mail-Adresse).
+Jedes Benutzerkonto gehört genau einem Mandanten (Organisation). Wer in mehreren Organisationen arbeitet,
+braucht pro Organisation ein eigenes Konto (mit eigener E-Mail-Adresse).
 
 Was ein Konto darf, bestimmen seine **Rollen**. Eine Rolle bündelt **Berechtigungen**; ein Konto
 kann mehrere Rollen haben und erhält dann alle Berechtigungen dieser Rollen zusammen. Rollen
@@ -11,7 +11,7 @@ verwaltet, wer die Berechtigung «Benutzer & Rollen verwalten» hat, unter
 
 ## Standardrollen {#standardrollen}
 
-Jeder Verein startet mit vier Standardrollen. Sie entsprechen den früheren festen Rollen; ohne
+Jede Organisation startet mit vier Standardrollen. Sie entsprechen den früheren festen Rollen; ohne
 Zutun ändert sich für bestehende Konten nichts.
 
 | Rolle | Zugriff |
@@ -40,9 +40,9 @@ braucht, bekommt einfach beide Rollen.
 | Auswertungen | Personenbezogene Daten aller | Bussen und Anwesenheit aller Personen (sonst nur die eigenen) |
 | Dateien & Fotos | Dateien & Fotos verwalten | Dateien, Fotos, Alben, öffentliche Freigabelinks |
 | Abgabebox | Abgaben ansehen / verwalten | Abgaben lesen bzw. Aufträge und Upload-Links verwalten |
-| Administration | Einstellungen verwalten | Vereinsprofil, Datenschutz, Aufbewahrung, Erscheinungsbild, Aktivitätsprotokoll |
+| Administration | Einstellungen verwalten | Profil der Organisation, Datenschutz, Aufbewahrung, Erscheinungsbild, Aktivitätsprotokoll |
 | | Benutzer & Rollen verwalten | Logins, Rollen, Rollenzuweisungen, MFA anderer zurücksetzen |
-| | Datenexporte | Gesamtexport des Vereins, Datenauskunft für andere Personen |
+| | Datenexporte | Gesamtexport der Organisation, Datenauskunft für andere Personen |
 
 Im Rollen-Dialog bedeutet das Abzeichen **MFA**, dass sich mit dieser Berechtigung nur mit zweitem
 Faktor anmelden lässt; **Modul nicht gebucht** heisst, dass sie erst mit dem Abo-Modul wirkt.
@@ -56,7 +56,7 @@ sind immer zugänglich.
 
 - Man kann nur Rollen vergeben, ändern oder anlegen, deren Berechtigungen man selbst hat, und nur
   Konten verwalten, die nicht mehr Rechte haben als man selbst.
-- Ein Verein behält immer mindestens ein aktives Konto mit «Benutzer & Rollen verwalten».
+- Eine Organisation behält immer mindestens ein aktives Konto mit «Benutzer & Rollen verwalten».
 - Die eigene Benutzerverwaltung kann man sich nicht selbst entziehen; das macht ein anderer
   Administrator.
 - Wer eine Administrationsberechtigung hat, muss sich mit MFA anmelden.
@@ -64,8 +64,8 @@ sind immer zugänglich.
 
 ## Mandantenübergreifender Zugriff {#mandantenuebergreifend}
 
-Kein normaler Vereins-Account kann auf einen anderen Verein zugreifen. Eine
+Kein normales Konto kann auf eine andere Organisation zugreifen. Eine
 mandantenübergreifende Sicht existiert ausschliesslich im getrennten
 [Platform-Admin-Panel](../technik/admin-panel.md), das ausschliesslich der Betreiberseite
 vorbehalten ist. Dort lässt sich einem Konto im Notfall eine Standardrolle zuweisen (z. B. «Admin»);
-eigene Rollen verwaltet der Verein selbst.
+eigene Rollen verwaltet die Organisation selbst.

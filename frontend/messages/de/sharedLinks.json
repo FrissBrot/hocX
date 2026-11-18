@@ -26,8 +26,8 @@
   "filterActive": "Aktiv",
   "filterAll": "Alle",
   "page": {
-    "description": "Öffentliche Download-Links für Dateien und Fotos deines Vereins.",
-    "title": "Geteilte Links"
+    "description": "Öffentliche Download-Links für Dateien und Fotos deiner Organisation.",
+    "title": "Freigaben"
   },
   "revokeConfirm": "Link „{name}“ widerrufen? Er funktioniert danach nicht mehr.",
   "revokeConfirmLabel": "Widerrufen",

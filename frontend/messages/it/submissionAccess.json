@@ -19,8 +19,8 @@
     "pending": "in verifica",
     "blocked": "bloccato"
   },
-  "closedHint": "Questa consegna è chiusa. Per modifiche rivolgiti all'amministrazione della tua associazione.",
-  "viewOnlyHint": "Con questo link puoi vedere la tua consegna. L'amministrazione della tua associazione può modificarla.",
+  "closedHint": "Questa consegna è chiusa. Per modifiche rivolgiti all'amministrazione della tua organizzazione.",
+  "viewOnlyHint": "Con questo link puoi vedere la tua consegna. L'amministrazione della tua organizzazione può modificarla.",
   "withdraw": "Ritira la consegna",
   "withdrawConfirm": "Ritirare la consegna? I tuoi file non contano più e l'attività è di nuovo aperta. L'amministrazione può ripristinarli.",
   "withdrawn": "Consegna ritirata.",

@@ -478,7 +478,7 @@ def _typography(font: str, *, heading_font: str | None = None, base_size: float 
     return {"body": {"builtin": font}, "heading": {"builtin": heading_font or font}, "base_size": base_size, "heading_transform": heading_transform}
 
 
-_CLUB_ORGANIZATION = {"name": "Jugendverein Musterdorf", "address": "Dorfstrasse 1 · 6000 Musterdorf", "website": "jv-musterdorf.ch", "place": "Musterdorf"}
+_CLUB_ORGANIZATION = {"name": "Jugendgruppe Musterdorf", "address": "Dorfstrasse 1 · 6000 Musterdorf", "website": "jv-musterdorf.ch", "place": "Musterdorf"}
 
 
 @dataclass(frozen=True)

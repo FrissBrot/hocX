@@ -134,5 +134,10 @@
     "todo_assignee_unavailable": "La personne responsable n’est plus disponible pour ce procès-verbal (p. ex. retirée du modèle ou inactive). Veuillez choisir une autre personne.",
     "todo_due_event_unavailable": "L’échéance choisie n’est plus disponible.",
     "todo_invalid": "La tâche n’a pas pu être enregistrée : saisie invalide."
+  },
+  "personal": {
+    "pageTitle": "Mes tâches",
+    "pageIntro": "Tes tâches et remises ouvertes, triées par échéance.",
+    "allTodosLink": "Toutes les tâches →"
   }
 }

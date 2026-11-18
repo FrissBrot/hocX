@@ -206,7 +206,7 @@ flowchart LR
 Ein Re-Render mit gleichem Inhalt hat eine andere Dokument-ID und einen anderen Zeitstempel, also
 einen eigenen Eintrag: jede je ausgelieferte Datei bleibt prüfbar. Der Retention-Job löscht nur
 Dateien, nie Register-Einträge. Wird ein Mandant gelöscht, verschwinden seine Einträge (Cascade);
-seine PDFs gelten danach als «nicht gefunden» - ein gelöschter Verein wird nicht mehr als Urheber
+seine PDFs gelten danach als «nicht gefunden» - eine gelöschte Organisation wird nicht mehr als Urheber
 bestätigt.
 
 **Prüfvermerk im PDF** (Brand-Profil, Abschnitt «Echtheitsprüfung»: `verify.show_url`,
@@ -262,7 +262,7 @@ Fehlerlog gelangen nur Pfad und Fehlertext, nie der Body. Grundlage: berechtigte
 Fälschungserkennung bei minimalen Daten.
 
 **Warum keine Signatur:** Ein zentrales hocX-Zertifikat hätte nur bestätigt, dass ein PDF aus
-hocX stammt - nicht, welcher Verein es erstellt hat - und PDF-Reader hätten es meist trotzdem als
+hocX stammt - nicht, welche Organisation es erstellt hat - und PDF-Reader hätten es meist trotzdem als
 «unbekannte Identität» angezeigt. Die Hash-Prüfung zeigt dasselbe (unverändert aus hocX), ohne
 Schlüsselverwaltung, und kann die Organisation zeigen, wenn sie es freigibt und hocX sie
 verifiziert hat. *Später (nur Notiz):* PAdES pro Mandant über einen Cloud-Signaturdienst könnte die

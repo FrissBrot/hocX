@@ -28,7 +28,7 @@
   },
   "home": {
     "title": "Abgabebox",
-    "hint": "Utilizza il link di consegna completo ricevuto dall'associazione."
+    "hint": "Utilizza il link di consegna completo ricevuto dall'organizzazione."
   },
   "notFound": {
     "title": "Non trovato",
@@ -41,7 +41,7 @@
   },
   "assignments": {
     "disabledTitle": "Consegna non disponibile",
-    "disabledHint": "La consegna non è attualmente disponibile per questa associazione.",
+    "disabledHint": "La consegna non è attualmente disponibile per questa organizzazione.",
     "title": "Consegne aperte",
     "hint": "Per cosa vuoi consegnare qualcosa?",
     "empty": "Al momento non ci sono consegne aperte.",

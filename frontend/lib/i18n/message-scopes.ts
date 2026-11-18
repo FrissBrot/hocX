@@ -80,6 +80,8 @@ export const AREA_NAMESPACES = {
   templates: ["documentPdf", "documentStudio", "finances", "protocols", "submissionAssignments", "templates"],
   tenantSettings: ["cycles", "documents", "protocols", "roles", "sharedLinks", "storage", "tenantSettings", "users"],
   todos: ["connections", "documentStudio", "finances", "protocols", "todos"],
+  // «Meine Aufgaben» zeigt dieselbe Pendenzen-Ansicht (TodoListView personal)
+  myTasks: ["connections", "documentStudio", "finances", "protocols", "todos"],
   tools: ["files", "photos", "protocols", "sharedLinks", "templates", "todos", "tools"],
   website: ["website"],
 } as const satisfies Record<string, readonly string[]>;

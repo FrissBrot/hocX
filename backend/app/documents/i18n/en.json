@@ -277,7 +277,7 @@
       },
       "missingFiles": "Not included because they were not found in storage: {count} file(s).",
       "no": "no",
-      "prefix": "Club-export",
+      "prefix": "Organization-export",
       "protocolsWithoutPdf": "Closed minutes without a stored PDF (open them in hocX and export as PDF):",
       "sheet": {
         "attendance": "Attendance",
@@ -292,7 +292,7 @@
       "withoutFiles": "This export contains no photos, submissions or documents (tables and minutes PDFs only).",
       "yes": "yes"
     },
-    "tenantReadme": "Club export of {tenant}, created on {date}.\\n\\nTables (Excel): members, events, attendance (person × session), fines, finances (one sheet per account), tasks and one file per list in the Lists folder. Names instead of internal numbers, dates as DD.MM.YYYY, amounts as numbers.\\nMinutes: the most recently generated PDF of every closed set of minutes.\\n{files}\\n\\nCredentials (passwords, two-factor keys, links) are not included. Please store securely: the file contains personal data."
+    "tenantReadme": "Organization export of {tenant}, created on {date}.\n\nTables (Excel): members, events, attendance (person × session), fines, finances (one sheet per account), tasks and one file per list in the Lists folder. Names instead of internal numbers, dates as DD.MM.YYYY, amounts as numbers.\nMinutes: the most recently generated PDF of every closed set of minutes.\n{files}\n\nCredentials (passwords, two-factor keys, links) are not included. Please store securely: the file contains personal data."
   },
   "diagnostic": {
     "assetNotFound": "Image not found",
@@ -358,10 +358,10 @@
       "resetValidity": "The link is valid for {minutes} minutes and works only once."
     },
     "export": {
-      "failed": "The data export could not be created. Please request it again in hocX under Club settings > Privacy.",
+      "failed": "The data export could not be created. Please request it again in hocX under Organization › Privacy.",
       "openButton": "Open export",
-      "ready": "The data export “{filename}” is ready. You can download it in hocX under Club settings > Privacy.",
-      "readyBody": "The data export is ready. You can download it in hocX under Club settings › Privacy.",
+      "ready": "The data export “{filename}” is ready. You can download it in hocX under Organization › Privacy.",
+      "readyBody": "The data export is ready. You can download it in hocX under Organization › Privacy.",
       "subjectFailed": "{tenant}: Data export failed",
       "subjectReady": "{tenant}: Data export ready"
     },
@@ -380,7 +380,7 @@
       "openFines": "View my fines",
       "openTodo": "Open to-do",
       "openTotal": "Total open fines at {tenant}",
-      "payment": "Fines are paid to the club treasurer. Is a fine wrong? Contact {tenant}.",
+      "payment": "Fines are paid to the treasurer. Is a fine wrong? Contact {tenant}.",
       "rule": "Rule “{name}”",
       "tariff": "Tariff {name}",
       "todoLate": "To-do late: {task}",
@@ -408,26 +408,26 @@
     "noLoginHint": "Questions about this message? Please contact {tenant}.",
     "security": {
       "emailChanged": "Login email changed ({at})",
-      "emailChangedByAdmin": "Login email changed by the club administration ({at})",
+      "emailChangedByAdmin": "Login email changed by your organization's administration ({at})",
       "emailChangedIntro": "The login email of your account at {tenant} was changed. This address is no longer used for signing in, so this is the last message sent here:",
       "emailChangedSubject": "{tenant}: Your login email was changed",
       "hint": "Wasn't you? Contact {tenant} immediately.",
       "intro": "The following was changed on your account at {tenant}:",
       "label": {
         "emailChanged": "Login email changed",
-        "emailChangedByAdmin": "Login email changed by the club administration",
+        "emailChangedByAdmin": "Login email changed by your organization's administration",
         "mfaAdded": "Second factor added",
         "mfaRemoved": "Second factor removed",
-        "mfaRemovedByAdmin": "Second factor removed by the club administration",
+        "mfaRemovedByAdmin": "Second factor removed by your organization's administration",
         "passwordChanged": "Password changed",
-        "passwordChangedByAdmin": "Password reset by the club administration"
+        "passwordChangedByAdmin": "Password reset by your organization's administration"
       },
       "mandatory": "Security notices are always sent and can't be turned off.",
       "mfaAdded": "Second factor added ({at})",
       "mfaRemoved": "Second factor removed ({at})",
-      "mfaRemovedByAdmin": "Second factor removed by the club administration ({at})",
+      "mfaRemovedByAdmin": "Second factor removed by your organization's administration ({at})",
       "passwordChanged": "Password changed ({at})",
-      "passwordChangedByAdmin": "Password reset by the club administration ({at})",
+      "passwordChangedByAdmin": "Password reset by your organization's administration ({at})",
       "subject": "{tenant}: Security notice for your account"
     },
     "settingsHint": "Choose which emails you receive in your settings: {url}",
@@ -673,22 +673,22 @@
     "writer": "Editor"
   },
   "sample": {
-    "account1": "Club account",
+    "account1": "Main account",
     "account2": "Cash",
     "address": "12 Lake Street\n3000 Sampletown",
     "booking1": "Membership fees",
     "booking2": "Supplies",
     "booking3": "Sponsoring",
     "bullet1": "Summer party on 20 June",
-    "bullet2": "Club excursion in September",
+    "bullet2": "Excursion in September",
     "bullet3": "General assembly in November",
-    "contact": "info@sampleclub.org · +41 31 123 45 67",
+    "contact": "info@sample-organization.org · +41 31 123 45 67",
     "documentSubtitle": "Meeting 3",
     "documentTitle": "Board meeting March",
     "documentType": "Protocol",
     "event1": "Summer party",
     "event2": "Board meeting",
-    "event3": "Club excursion",
+    "event3": "Excursion",
     "eventTitle": "Board meeting",
     "formLabel1": "Name",
     "formLabel2": "Role",
@@ -699,7 +699,7 @@
     "imageCaption": "Sample image",
     "listColumn1": "Entry",
     "listColumn2": "Responsible",
-    "organization": "Lakeside Sample Club",
+    "organization": "Lakeside Sample Organization",
     "paragraph1": "The president welcomes those present and confirms the quorum.",
     "paragraph2": "The annual programme is discussed. The dates for the summer party and the excursion are set.",
     "paragraph3": "The treasurer reports on the current balance. The accounts are approved unanimously.",

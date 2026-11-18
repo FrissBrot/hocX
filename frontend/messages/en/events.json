@@ -92,7 +92,7 @@
   "emptyState": {
     "add": "+ Event",
     "description": "Add occasions so they appear in protocols, submissions and the dashboard.",
-    "hint": "Events can be assigned to a cycle – keeping club years cleanly separated.",
+    "hint": "Events can be assigned to a cycle – keeping working years cleanly separated.",
     "title": "No events planned"
   },
   "export": "Export",
@@ -240,7 +240,7 @@
   "help": {
     "tag": "A tag classifies the event (e.g. «Meeting», «Camp»). Protocol blocks and submissions filter by it; a filter matches every tag that contains the search text. Renaming changes the tag on all events and in submissions.",
     "cycles": "By default an event belongs to the cycle its date falls into. A manual assignment is kept even if the date changes and controls in which cycle filters (protocols, submissions, photo albums) the event appears.",
-    "currentCycle": "By default the list only shows events of the current cycle (e.g. the running club year). With this switch, events of earlier and later cycles appear too.",
+    "currentCycle": "By default the list only shows events of the current cycle (e.g. the running working year). With this switch, events of earlier and later cycles appear too.",
     "csvImport": "Start date and title are required. hocX does not check for duplicates: importing a file twice creates the events twice. Imported events are assigned to their cycle by date.",
     "docsLink": "Guide to events",
     "calendarDocsLink": "Subscribe to events in your own calendar",

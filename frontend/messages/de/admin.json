@@ -529,16 +529,16 @@
         "description": "Erzeugt PDF-Ansichten und extrahiert den Text hochgeladener Dokumente (Lebenszeichen aus der Poll-Schleife)."
       },
       "tenant_data_export": {
-        "title": "Vereinsexport",
-        "description": "Erstellt bestellte Vereinsexporte (AES-ZIP mit Tabellen, Protokoll-PDFs und Dateien) und löscht sie nach 7 Tagen."
+        "title": "Gesamtexport",
+        "description": "Erstellt bestellte Gesamtexporte (AES-ZIP mit Tabellen, Protokoll-PDFs und Dateien) und löscht sie nach 7 Tagen."
       },
       "retention_proposals": {
         "title": "Aufbewahrungsfristen",
-        "description": "Legt nach den Fristen der Vereine Vorschläge an (Einreichungen, ehemalige Mitglieder, alte Galeriebilder) und setzt sie bei «automatisch» um."
+        "description": "Legt nach den Fristen der Organisationen Vorschläge an (Einreichungen, ehemalige Mitglieder, alte Galeriebilder) und setzt sie bei «automatisch» um."
       },
       "job_worker": {
         "title": "Job-Worker",
-        "description": "Führt schwere Hintergrundarbeit aus (Galerie-Import, PDF-Exporte, Vereinsexporte, Virenscan-Nachprüfung, Aufräumen) - Lebenszeichen jede Minute."
+        "description": "Führt schwere Hintergrundarbeit aus (Galerie-Import, PDF-Exporte, Gesamtexporte, Virenscan-Nachprüfung, Aufräumen) - Lebenszeichen jede Minute."
       },
       "submission_todo_sync": {
         "title": "Abgabe-Pendenzen abgleichen",
@@ -595,7 +595,7 @@
     "noStatusToken": "Noch kein Token erzeugt.",
     "email": {
       "title": "E-Mail (SMTP)",
-      "description": "Versand der Benachrichtigungen an Mitglieder (neue Aufgaben, Erinnerungen). Absender ist eine hocX-Adresse, der Vereinsname steht im Betreff.",
+      "description": "Versand der Benachrichtigungen an Mitglieder (neue Aufgaben, Erinnerungen). Absender ist eine hocX-Adresse, der Name der Organisation steht im Betreff.",
       "enabledLabel": "E-Mail-Versand aktiv",
       "yes": "Ja",
       "no": "Nein",
@@ -739,7 +739,7 @@
     "fields": {
       "tenantName": "Mandantenname",
       "publicSlug": "Öffentlicher Slug (Abgabebox-URL)",
-      "publicSlugPlaceholder": "z.B. musterverein",
+      "publicSlugPlaceholder": "z.B. muster-organisation",
       "profileImage": "Profilbild",
       "profileImageSelected": "{filename} · ",
       "dragHint": "Bild hierher ziehen oder ",
@@ -752,7 +752,7 @@
       "discountPriceHelp": "Ohne Rabatt {price} pro {unit}. Prozent oder Preis eingeben, hocX rechnet das andere aus.",
       "discountPriceUnavailable": "Erst einen Plan mit Preis wählen.",
       "internalNote": "Interne Notiz",
-      "internalNotePlaceholder": "z.B. Vereinsrabatt bis 2027",
+      "internalNotePlaceholder": "z.B. Rabatt bis 2027",
       "billingStart": "Abo-Start",
       "billingStartHelp": "Ab diesem Datum entstehen im Cashflow Forderungen je Abrechnungsperiode. Leer = Erstellungsdatum ({date}). Eine Änderung erzeugt die offenen Forderungen neu.",
       "userLimitOverride": "Benutzerlimit überschreiben",
@@ -761,7 +761,7 @@
       "userLimitHelp": "Leer = Plan-Limit gilt. Aktuell {count} Benutzer{suffix}",
       "userLimitExceeded": " – Limit erreicht oder überschritten.",
       "showOnWebsite": "Auf der Website als Kunde anzeigen",
-      "showOnWebsiteHelp": "Erscheint auf der öffentlichen Website unter «Im Einsatz bei» (nur der Name). Nur mit Einverständnis des Vereins aktivieren.",
+      "showOnWebsiteHelp": "Erscheint auf der öffentlichen Website unter «Im Einsatz bei» (nur der Name). Nur mit Einverständnis der Organisation aktivieren.",
       "contractEnd": "Vertragsende",
       "contractEndHelp": "Leer = unbefristet. Nach Vertragsende plus Exportfrist meldet /admin/system, dass die Daten des Mandanten zu löschen sind."
     },
@@ -1020,7 +1020,7 @@
     "delete": "Löschen",
     "newTenantDescription": "Legt einen neuen Mandanten mit Standard-Dokumentvorlage an.",
     "tenantName": "Mandantenname",
-    "tenantNamePlaceholder": "z.B. Turnverein Muster",
+    "tenantNamePlaceholder": "z.B. Musterorganisation",
     "publicSlug": "Öffentlicher Slug",
     "plan": "Plan",
     "nonBookablePlansHint": "Nicht buchbare Pläne (z.B. Bestandsmandanten) lassen sich danach in den Mandant-Einstellungen zuweisen.",

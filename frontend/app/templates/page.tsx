@@ -28,7 +28,7 @@ export default async function TemplatesPage() {
         mobile={<MobileTemplates initialTemplates={data ?? []} cycleConfigs={cycleConfigs ?? []} />}
         desktop={
           <>
-          <RouteTabs tabs={protocolTemplateTabs(t)} activeHref="/templates" />
+          <RouteTabs tabs={protocolTemplateTabs(t, can(session, "templates.manage"))} activeHref="/templates" />
           <section className="panel">
             <TemplateBuilder initialTemplates={data ?? []} availableCycleConfigs={cycleConfigs ?? []} canManage={can(session, "templates.manage")} />
           </section>
