@@ -14,6 +14,7 @@ from app.models import (
     ProtocolElementBlock,
     ProtocolTodo,
     ProtocolTodoAssignee,
+    SubmissionAssignment,
     TaskPackage,
     TaskPackageItem,
     Template,
@@ -58,12 +59,23 @@ class ProtocolTodoRepository:
             .correlate(ProtocolTodo)
             .scalar_subquery()
         )
+        # Namen als Array in derselben Reihenfolge wie assignee_ids (Pendenzen-Board: eine Spalte
+        # je Person, auch für Leser ohne Personenliste).
+        assignee_name_list = (
+            select(func.array_agg(aggregate_order_by(assignee.display_name, ProtocolTodoAssignee.sort_index)))
+            .select_from(ProtocolTodoAssignee)
+            .join(assignee, assignee.id == ProtocolTodoAssignee.participant_id)
+            .where(ProtocolTodoAssignee.protocol_todo_id == ProtocolTodo.id)
+            .correlate(ProtocolTodo)
+            .scalar_subquery()
+        )
         return (
             select(
                 ProtocolTodo,
                 TodoStatus.code.label("todo_status_code"),
                 func.coalesce(assignee_names, Participant.display_name).label("assigned_participant_name"),
                 assignee_ids.label("assignee_ids"),
+                assignee_name_list.label("assignee_names"),
                 TaskPackage.public_id.label("task_package_public_id"),
                 TaskPackage.name.label("task_package_name"),
                 due_event.c.title.label("due_event_title"),
@@ -81,6 +93,8 @@ class ProtocolTodoRepository:
                     (ProtocolTodo.due_marker == "last_session", "letzte Sitzung"),
                     else_=None,
                 ).label("resolved_due_label"),
+                case((ProtocolTodo.due_marker == "next_session", next_event.c.title), else_=None).label("due_session_title"),
+                SubmissionAssignment.title.label("submission_title"),
                 Protocol.id.label("protocol_id"),
                 Protocol.protocol_number.label("protocol_number"),
                 Protocol.protocol_date.label("protocol_date"),
@@ -99,6 +113,12 @@ class ProtocolTodoRepository:
             .outerjoin(due_event, due_event.c.id == ProtocolTodo.due_event_id)
             .outerjoin(next_event, next_event.c.id == Template.next_event_id)
             .outerjoin(last_event, last_event.c.id == Template.last_event_id)
+            # Abgabe, die die Pendenz automatisch schliesst (Quelle «Abgabebox …»), nur im Mandanten der Pendenz
+            .outerjoin(
+                SubmissionAssignment,
+                (SubmissionAssignment.id == ProtocolTodo.submission_assignment_id)
+                & (SubmissionAssignment.tenant_id == ProtocolTodo.tenant_id),
+            )
         ), due_event, next_event, last_event
 
     def list_for_tenant(self, db: Session, tenant_id: int, skip: int = 0, limit: int = 100):

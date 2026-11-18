@@ -25,6 +25,7 @@ import { TODO_STATUS } from "@/components/protocol/protocol-editor-shared";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { featureAccess } from "@/lib/permissions";
+import { canToggleTodo } from "@/lib/todo-permissions";
 import { useRunningTodoFines } from "@/components/todos/use-running-todo-fines";
 import { TagConfig, useTagConfig } from "@/lib/hooks/use-tag-config";
 import type { ParticipantSummary, TodoListItem } from "@/types/api";
@@ -91,10 +92,13 @@ export function MobileTodoRow({
   const overdue = isTodoOverdue(todo);
   const due = todoDueLabel(todo, locale);
   const firstTag = todo.tags?.[0];
+  // Abhaken: Entscheidung zentral in lib/todo-permissions.ts (ohne Session wie bisher canEdit)
+  const session = useMobileSession();
+  const canToggle = session ? canToggleTodo(session, todo) : canEdit;
 
   return (
     <div className="mobile-todo-row">
-      <MobileCheck checked={done} overdue={overdue} disabled={!canEdit} label={t("todos.toggleDone")} onToggle={onToggle} />
+      <MobileCheck checked={done} overdue={overdue} disabled={!canToggle} label={t("todos.toggleDone")} onToggle={onToggle} />
       <button type="button" className="mobile-todo-row-main" onClick={onOpen}>
         <span className={`mobile-todo-row-title${done ? " mobile-todo-row-title-done" : ""}`}>{todo.task}</span>
         <span className="mobile-todo-row-meta">

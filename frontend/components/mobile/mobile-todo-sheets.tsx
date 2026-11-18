@@ -19,6 +19,7 @@ import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { ApiError, browserApiFetch } from "@/lib/api/client";
 import { featureAccess } from "@/lib/permissions";
+import { canToggleTodo } from "@/lib/todo-permissions";
 import { TodoFineSection } from "@/components/finances/todo-fine-section";
 import type { TagConfig } from "@/lib/hooks/use-tag-config";
 import type { ParticipantSummary, TodoListItem } from "@/types/api";
@@ -73,12 +74,13 @@ export function TodoDetailSheet({
 
   useEffect(() => setTitle(todo.task), [todo.task]);
 
-  const statusLocked = !canEdit || !!todo.submission_assignment_id;
+  const session = useMobileSession();
+  // Abhaken/Status: Entscheidung zentral in lib/todo-permissions.ts (ohne Session wie bisher canEdit)
+  const statusLocked = !(session ? canToggleTodo(session, todo) : canEdit) || !!todo.submission_assignment_id;
   const statusValue: StatusCode = isTodoDone(todo) ? "done" : todo.todo_status_code === "in_progress" ? "in_progress" : "open";
   const overdue = isTodoOverdue(todo);
   const dueLabel = todoDueLabel(todo, locale);
 
-  const session = useMobileSession();
   const finesEnabled = featureAccess(session, "todo_fines") !== "none";
 
   /** Eigene laufende Busse (409 todo_fine_running) verständlich melden. */

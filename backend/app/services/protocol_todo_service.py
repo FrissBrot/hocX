@@ -121,7 +121,21 @@ class ProtocolTodoService:
             protocol_title=row.protocol_title,
             protocol_status=row.protocol_status,
             block_title=row.block_title,
+            assigned_participant_names=self._assignee_names(row),
+            due_session_title=getattr(row, "due_session_title", None),
+            submission_title=getattr(row, "submission_title", None),
         )
+
+    @staticmethod
+    def _assignee_names(row) -> list[str]:
+        """Namen aller Verantwortlichen in der Reihenfolge von assigned_participant_ids; bei nur
+        einer Hauptverantwortlichen (ohne protocol_todo_assignee) deren Name."""
+        names = getattr(row, "assignee_names", None)
+        if names:
+            return list(names)
+        if row.ProtocolTodo.assigned_participant_id is not None and row.assigned_participant_name:
+            return [row.assigned_participant_name]
+        return []
 
     def list_todo_blocks(self, db: Session, tenant_id: int, *, visible: Callable[[Any], bool] | None = None) -> list[dict]:
         """``visible`` filtert nach Protokoll (Objekt mit ``id``/``status``), siehe

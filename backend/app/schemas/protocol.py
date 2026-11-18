@@ -342,6 +342,11 @@ class TodoListItem(ProtocolTodoRead):
     block_title: str | None = None
     submission_assignment_id: uuid.UUID | None = None
     element_ref: str | None = None
+    # Pendenzen-Übersicht v2: Namen zu assigned_participant_ids (gleiche Reihenfolge), Titel der
+    # nächsten Sitzung bei Fälligkeit «nächste Sitzung» und Titel der Abgabe, die die Pendenz schliesst
+    assigned_participant_names: list[str] = []
+    due_session_title: str | None = None
+    submission_title: str | None = None
 
 
 class TodoDetailFile(BaseModel):
