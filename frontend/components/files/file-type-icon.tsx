@@ -12,9 +12,10 @@ const EXTENSION_KINDS: Record<string, FileKind> = {
   json: "code", xml: "code", html: "code", css: "code", js: "code", ts: "code", py: "code",
 };
 
-export function FileTypeIcon({ name }: { name: string }) {
+/** ``extension`` übersteuert die Endung des Namens, z. B. «pdf» für die PDF-Ansicht einer Word-Datei. */
+export function FileTypeIcon({ name, extension: override }: { name: string; extension?: string }) {
   const dot = name.lastIndexOf(".");
-  const extension = dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
+  const extension = override ?? (dot > 0 ? name.slice(dot + 1).toLowerCase() : "");
   const kind = EXTENSION_KINDS[extension] ?? "generic";
 
   return (

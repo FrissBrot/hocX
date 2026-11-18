@@ -1,5 +1,6 @@
 "use client";
 
+import { fileDisplay } from "@/lib/files/display";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { useEffect, useRef, useState } from "react";
@@ -156,10 +157,11 @@ export function MobileFiles({ initialItems }: { initialItems: FileOverviewItem[]
               <MobileListRow
                 key={item.id}
                 onClick={() => setDetail(item)}
-                leading={<FileTypeTile name={item.original_name} />}
+                // PDF-Ansicht einer Word-Datei steht vorne (wie im Dateien-Tab)
+                leading={<FileTypeTile name={fileDisplay(item).name} />}
                 label={
                   <span className="mobile-row-stack">
-                    <span className="mobile-row-title">{item.original_name}</span>
+                    <span className="mobile-row-title">{fileDisplay(item).name}</span>
                     <span className="mobile-row-meta">
                       {[item.ref_label || null, formatFileSize(item.file_size_bytes) || null, dateParts.dayMonth(item.created_at.slice(0, 10), locale)].filter(Boolean).join(" · ")}
                     </span>

@@ -6,6 +6,8 @@ import { FileTypeIcon } from "./file-type-icon";
 import { DOCUMENT_STATUS_VARIANT } from "./document-panel";
 import { SOURCE_BADGE_VARIANT, SOURCE_KEY } from "./file-detail-modal";
 import { ActionIcon } from "@/components/ui/action-icons";
+import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
+import { fileDisplay } from "@/lib/files/display";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { browserApiBaseUrl } from "@/lib/api/client";
@@ -17,11 +19,13 @@ export function FilesTable({
   onOpenDetail,
   onNavigate,
   onShare,
+  actionsFor,
 }: {
   items: FileOverviewItem[];
   onOpenDetail: (item: FileOverviewItem) => void;
   onNavigate: (href: string) => void;
   onShare: (item: FileOverviewItem) => void;
+  actionsFor: (item: FileOverviewItem) => ActionMenuItem[];
 }) {
   const t = useTranslations("files");
   return (
@@ -31,14 +35,16 @@ export function FilesTable({
       emptyMessage={t("table.empty")}
     >
       {items.map((item) => {
+        // PDF-Ansicht vor dem Word-Original: Name, Symbol und Öffnen zeigen das PDF
+        const display = fileDisplay(item);
         return (
           <tr key={item.id} className="table-row-clickable" onClick={() => onOpenDetail(item)}>
             <td>
               <span className="files-table-name">
-                <FileTypeIcon name={item.original_name} />
+                <FileTypeIcon name={item.original_name} extension={display.extension} />
                 <span className="files-table-name-text">
                   <span className="files-table-name-line">
-                    <span className="files-table-filename" title={item.original_name}>{item.original_name}</span>
+                    <span className="files-table-filename" title={display.showsGeneratedPdf ? t("grid.originalHint", { name: item.original_name }) : display.name}>{display.name}</span>
                     {item.document && item.document.status !== "ready" && item.document.status !== "processing" ? (
                       <Badge variant={DOCUMENT_STATUS_VARIANT[item.document.status]}>{t(`document.statusLabel.${item.document.status}`)}</Badge>
                     ) : null}
@@ -78,7 +84,7 @@ export function FilesTable({
               <div className="files-table-actions-inner">
                 {/* Bevorzugt die PDF-Darstellung; Originale gibt es in den Dokumentdetails. */}
                 <a
-                  href={`${browserApiBaseUrl}${item.document?.pdf_url ?? item.content_url}`}
+                  href={`${browserApiBaseUrl}${display.openUrl}`}
                   target="_blank"
                   rel="noreferrer"
                   className="button-secondary button-icon"
@@ -96,6 +102,7 @@ export function FilesTable({
                 >
                   <ActionIcon name="link" />
                 </button>
+                <ActionMenu items={actionsFor(item)} ariaLabel={t("menu.more")} />
               </div>
             </td>
           </tr>

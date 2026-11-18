@@ -81,9 +81,12 @@ describe("FilesView (Dateien)", () => {
     FakeIntersectionObserver.instances = [];
     vi.stubGlobal("IntersectionObserver", FakeIntersectionObserver);
     browserApiFetchMock.mockResolvedValue([]);
+    // Die Tabellen-Tests prüfen die Listenansicht (Standard ist «Kacheln»)
+    window.localStorage.setItem("hocx.files.view", "list");
   });
 
   afterEach(() => {
+    window.localStorage.removeItem("hocx.files.view");
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -115,6 +118,31 @@ describe("FilesView (Dateien)", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Wird verarbeitet · Virenprüfung");
     expect(screen.queryByText("In Verarbeitung", { selector: ".badge" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Teilen" })).toBeInTheDocument();
+  });
+
+  it("shows tiles by default and remembers the chosen view", () => {
+    window.localStorage.removeItem("hocx.files.view");
+    render(<FilesView initialItems={[makeItem({ id: "a1", original_name: "Statuten.pdf" })]} />);
+
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Dateien als Kacheln" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Liste" }));
+    expect(screen.getByRole("table")).toBeInTheDocument();
+    expect(window.localStorage.getItem("hocx.files.view")).toBe("list");
+  });
+
+  it("shows the generated PDF of a Word file instead of the original", () => {
+    const document = {
+      id: "d1", status: "ready" as const, processing_stage: null, pdf_status: "done" as const, extraction_status: "done",
+      pdf_url: "/api/documents/d1/pdf", pdf_download_url: "/api/documents/d1/pdf?download=1", version_count: 1, current_version_number: 1,
+      current_version_label: null, detail_url: "/api/documents/d1",
+    };
+    render(<FilesView initialItems={[makeItem({ id: "a1", original_name: "Vereinsreglement.docx", document })]} />);
+
+    expect(screen.getByText("Vereinsreglement.pdf")).toBeInTheDocument();
+    expect(screen.queryByText("Vereinsreglement.docx")).not.toBeInTheDocument();
+    expect(document.pdf_url && screen.getByRole("link", { name: "PDF öffnen" }).getAttribute("href")).toContain("/api/documents/d1/pdf");
+    expect(screen.getByText("PDF", { selector: ".files-type-icon-extension" })).toBeInTheDocument();
   });
 
   it("shows an empty state when there are no files", () => {

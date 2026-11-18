@@ -10,7 +10,10 @@ import { DocumentUploadModal } from "./document-upload-modal";
 import { UploadResultsModal, uploadResultsSummary } from "./upload-results-modal";
 import { countUploadResults } from "@/lib/utils/upload-results";
 import { FileDetailModal } from "./file-detail-modal";
+import { useFileActions } from "./file-actions";
+import { FilesGrid } from "./files-grid";
 import { FilesTable } from "./files-table";
+import { ActionIcon } from "@/components/ui/action-icons";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FileDropOverlay } from "@/components/ui/file-drop-overlay";
 import { FilterTabs } from "@/components/ui/filter-tabs";
@@ -56,6 +59,9 @@ function sortOptions(t: TFunc): SortOption[] {
   ];
 }
 
+type FilesViewMode = "list" | "grid";
+const VIEW_STORAGE_KEY = "hocx.files.view";
+
 type Props = {
   initialItems: FileOverviewItem[];
 };
@@ -80,6 +86,24 @@ export function FilesView({ initialItems }: Props) {
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   // Files dropped onto the page - they open the upload dialog with these already queued.
   const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
+  // Ansicht Liste/Kacheln (Design «Dateien v2»), je Gerät gemerkt
+  const [view, setView] = useState<FilesViewMode>("grid");
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(VIEW_STORAGE_KEY);
+      if (stored === "list" || stored === "grid") setView(stored);
+    } catch {
+      // Speicher gesperrt (privater Modus): Standard bleibt
+    }
+  }, []);
+  function chooseView(next: FilesViewMode) {
+    setView(next);
+    try {
+      window.localStorage.setItem(VIEW_STORAGE_KEY, next);
+    } catch {
+      // nur Komfort
+    }
+  }
   const didMountRef = useRef(false);
   const requestIdRef = useRef(0);
 
@@ -191,6 +215,8 @@ export function FilesView({ initialItems }: Props) {
     onLoadMore: () => void loadMore(),
   });
 
+  const actionsFor = useFileActions({ onOpenDetail: setDetailItem, onShare: setShareItem, onChanged: () => void reloadFromStart() });
+
   function handleTagsSaved(itemId: string, tags: string[]) {
     setItems((current) => current.map((item) => (item.id === itemId ? { ...item, tags } : item)));
     setDetailItem((current) => (current && current.id === itemId ? { ...current, tags } : current));
@@ -263,9 +289,21 @@ export function FilesView({ initialItems }: Props) {
           />
         </div>
         <span className="muted list-filter-count">{t("view.countFiles", { count: items.length })}</span>
+        <div className="files-view-toggle" role="group" aria-label={t("view.viewToggle")}>
+          <button type="button" className={`button-icon${view === "list" ? " files-view-toggle-active" : ""}`} aria-pressed={view === "list"} aria-label={t("view.viewList")} title={t("view.viewList")} onClick={() => chooseView("list")}>
+            <ActionIcon name="list" />
+          </button>
+          <button type="button" className={`button-icon${view === "grid" ? " files-view-toggle-active" : ""}`} aria-pressed={view === "grid"} aria-label={t("view.viewGrid")} title={t("view.viewGrid")} onClick={() => chooseView("grid")}>
+            <ActionIcon name="grid" />
+          </button>
+        </div>
       </div>
 
-      <FilesTable items={items} onOpenDetail={setDetailItem} onNavigate={(href) => router.push(href as Route)} onShare={setShareItem} />
+      {view === "grid" ? (
+        <FilesGrid items={items} onOpenDetail={setDetailItem} actionsFor={actionsFor} />
+      ) : (
+        <FilesTable items={items} onOpenDetail={setDetailItem} onNavigate={(href) => router.push(href as Route)} onShare={setShareItem} actionsFor={actionsFor} />
+      )}
       </div>
       )}
 

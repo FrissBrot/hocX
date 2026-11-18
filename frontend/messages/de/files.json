@@ -99,7 +99,10 @@
     "dropOverlayHint": "Danach stellst du den Upload ein.",
     "loadError": "Dateien konnten nicht geladen werden.",
     "uploadedToast": "{count, plural, one {# Datei hochgeladen.} other {# Dateien hochgeladen.}}",
-    "descriptionLinked": "Alle Nicht-Bild-Dateien – aus Protokollen, Word-Importen, Abgaben und direkten Uploads. Bilder liegen unter <photos>Fotos</photos>."
+    "descriptionLinked": "Alle Nicht-Bild-Dateien – aus Protokollen, Word-Importen, Abgaben und direkten Uploads. Bilder liegen unter <photos>Fotos</photos>.",
+    "viewToggle": "Ansicht",
+    "viewList": "Liste",
+    "viewGrid": "Kacheln mit Vorschau"
   },
   "sourceOptions": {
     "all": "Alle Quellen",
@@ -220,5 +223,18 @@
       "quota_exceeded": "Speicherkontingent erreicht, nicht gespeichert.",
       "heic_unreadable": "HEIC-Datei konnte nicht gelesen werden."
     }
+  },
+  "menu": {
+    "downloadOriginal": "Originaldatei herunterladen ({ext})",
+    "details": "Details & Tags",
+    "versions": "Versionen ({count})",
+    "more": "Weitere Aktionen"
+  },
+  "grid": {
+    "label": "Dateien als Kacheln",
+    "openDetails": "{name} – Details öffnen",
+    "noPdf": "Keine PDF-Ansicht",
+    "noPdfFailed": "Keine PDF-Ansicht – Verarbeitung fehlgeschlagen",
+    "originalHint": "PDF-Ansicht von «{name}»"
   }
 }

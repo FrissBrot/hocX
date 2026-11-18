@@ -99,7 +99,10 @@
     "dropOverlayHint": "Imposterai il caricamento in seguito.",
     "loadError": "Impossibile caricare i file.",
     "uploadedToast": "{count, plural, one {# file caricato.} other {# file caricati.}}",
-    "descriptionLinked": "Tutti i file non immagine – da verbali, importazioni Word, consegne e caricamenti diretti. Le immagini si trovano in <photos>Foto</photos>."
+    "descriptionLinked": "Tutti i file non immagine – da verbali, importazioni Word, consegne e caricamenti diretti. Le immagini si trovano in <photos>Foto</photos>.",
+    "viewToggle": "Vista",
+    "viewList": "Elenco",
+    "viewGrid": "Riquadri con anteprima"
   },
   "sourceOptions": {
     "all": "Tutte le origini",
@@ -220,5 +223,18 @@
       "quota_exceeded": "Quota di archiviazione raggiunta, non salvato.",
       "heic_unreadable": "Impossibile leggere il file HEIC."
     }
+  },
+  "menu": {
+    "downloadOriginal": "Scarica il file originale ({ext})",
+    "details": "Dettagli e tag",
+    "versions": "Versioni ({count})",
+    "more": "Altre azioni"
+  },
+  "grid": {
+    "label": "File come riquadri",
+    "openDetails": "{name} – apri i dettagli",
+    "noPdf": "Nessuna vista PDF",
+    "noPdfFailed": "Nessuna vista PDF – elaborazione non riuscita",
+    "originalHint": "Vista PDF di «{name}»"
   }
 }

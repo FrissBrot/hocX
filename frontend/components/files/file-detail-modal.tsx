@@ -8,6 +8,7 @@ import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { TagInput } from "@/components/ui/tag-input";
 import { useDeferredPopupSave } from "@/lib/hooks/use-deferred-popup-save";
+import { fileDisplay } from "@/lib/files/display";
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
 import { formatDate, formatDateTime, formatFileSize } from "@/lib/utils/format";
 import { FileOverviewItem, FileOverviewSource, StoredFileMetadata } from "@/types/api";
@@ -89,16 +90,18 @@ export function FileDetailModal({
   }
 
   const dimensions = metadata?.width && metadata?.height ? `${metadata.width} × ${metadata.height} px` : null;
-  const extension = fileExtension(item.original_name);
+  // PDF-Ansicht einer Word-Datei steht vorne (Titel mit .pdf), das Original bleibt in den Details
+  const display = fileDisplay(item);
+  const extension = fileExtension(display.name);
   const isImage = Boolean(item.mime_type?.startsWith("image/")) && !previewFailed;
 
   return (
-    <Modal open title={item.original_name} onEscape={saveAndClose} onClose={() => void saveAndClose()} size="wide" className="file-detail-modal">
+    <Modal open title={display.name} onEscape={saveAndClose} onClose={() => void saveAndClose()} size="wide" className="file-detail-modal">
       {saveError && <p role="alert">{saveError}</p>}
       <div className="file-detail">
         <div className="file-detail-preview">
           {item.document ? (
-            <DocumentPreview detail={documentState.detail} name={item.original_name} />
+            <DocumentPreview detail={documentState.detail} name={display.name} />
           ) : (
           <a href={fileUrl} target="_blank" rel="noreferrer" className={isImage ? "file-detail-preview-link" : "file-detail-preview-icon"}>
             {isImage ? (

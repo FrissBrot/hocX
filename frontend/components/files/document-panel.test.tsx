@@ -112,7 +112,7 @@ describe("Dokumente im Dateien-Tab", () => {
   });
 
   it("zeigt einen Eintrag mit PDF-Link, Versionskennung und ohne Status bei fertigen Dokumenten", () => {
-    render(<FilesTable items={[makeItem()]} onOpenDetail={() => {}} onNavigate={() => {}} onShare={() => {}} />);
+    render(<FilesTable items={[makeItem()]} onOpenDetail={() => {}} onNavigate={() => {}} onShare={() => {}} actionsFor={() => []} />);
     const link = screen.getByRole("link", { name: "PDF öffnen" }) as HTMLAnchorElement;
     expect(link.getAttribute("href")).toBe(`/api/documents/${DOC_ID}/versions/v2/files/pdf`);
     expect(screen.getByText("v0.1")).toBeInTheDocument();
@@ -124,7 +124,7 @@ describe("Dokumente im Dateien-Tab", () => {
     const item = makeItem({
       document: { ...makeItem().document!, status: "processing", pdf_status: "queued", pdf_url: null, pdf_download_url: null, version_count: 1 },
     });
-    render(<FilesTable items={[item]} onOpenDetail={() => {}} onNavigate={() => {}} onShare={() => {}} />);
+    render(<FilesTable items={[item]} onOpenDetail={() => {}} onNavigate={() => {}} onShare={() => {}} actionsFor={() => []} />);
     expect(screen.getByText("In Verarbeitung")).toBeInTheDocument();
     expect((screen.getByRole("link", { name: "Download" }) as HTMLAnchorElement).getAttribute("href")).toBe("/api/stored-files/file-1/content");
   });
@@ -139,7 +139,7 @@ describe("Dokumente im Dateien-Tab", () => {
       <FileDetailModal item={makeItem()} tagSuggestions={[]} onClose={() => {}} onNavigate={() => {}} onTagsSaved={() => {}} />
     );
 
-    const preview = (await screen.findByAltText("PDF-Vorschau von bericht.docx")) as HTMLImageElement;
+    const preview = (await screen.findByAltText("PDF-Vorschau von bericht.pdf")) as HTMLImageElement;
     expect(preview.getAttribute("src")).toBe(`/api/documents/${DOC_ID}/versions/v2/files/preview`);
     // Ein Klick auf die Vorschau öffnet das vollständige PDF im eigenen Tab.
     expect(preview.closest("a")?.getAttribute("href")).toBe(`/api/documents/${DOC_ID}/versions/v2/files/pdf`);

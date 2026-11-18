@@ -1,5 +1,6 @@
 "use client";
 
+import { useShortcutLabel } from "@/lib/search/shortcuts";
 import { eventFilterTagText, normalizeEventFilter } from "@/lib/element-types/event-filter";
 import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { runSerializedByKey } from "@/lib/utils/serialize-by-key";

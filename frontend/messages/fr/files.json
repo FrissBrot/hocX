@@ -99,7 +99,10 @@
     "dropOverlayHint": "Vous configurerez le téléversement ensuite.",
     "loadError": "Les fichiers n'ont pas pu être chargés.",
     "uploadedToast": "{count, plural, one {# fichier téléversé.} other {# fichiers téléversés.}}",
-    "descriptionLinked": "Tous les fichiers hors images – issus des procès-verbaux, des imports Word, des remises et des téléversements directs. Les images se trouvent sous <photos>Photos</photos>."
+    "descriptionLinked": "Tous les fichiers hors images – issus des procès-verbaux, des imports Word, des remises et des téléversements directs. Les images se trouvent sous <photos>Photos</photos>.",
+    "viewToggle": "Affichage",
+    "viewList": "Liste",
+    "viewGrid": "Vignettes avec aperçu"
   },
   "sourceOptions": {
     "all": "Toutes les sources",
@@ -220,5 +223,18 @@
       "quota_exceeded": "Quota de stockage atteint, non enregistré.",
       "heic_unreadable": "Le fichier HEIC n'a pas pu être lu."
     }
+  },
+  "menu": {
+    "downloadOriginal": "Télécharger le fichier original ({ext})",
+    "details": "Détails et tags",
+    "versions": "Versions ({count})",
+    "more": "Autres actions"
+  },
+  "grid": {
+    "label": "Fichiers en vignettes",
+    "openDetails": "{name} – ouvrir les détails",
+    "noPdf": "Pas de vue PDF",
+    "noPdfFailed": "Pas de vue PDF – le traitement a échoué",
+    "originalHint": "Vue PDF de « {name} »"
   }
 }

@@ -99,7 +99,10 @@
     "dropOverlayHint": "You'll set up the upload next.",
     "loadError": "Files could not be loaded.",
     "uploadedToast": "{count, plural, one {# file uploaded.} other {# files uploaded.}}",
-    "descriptionLinked": "All non-image files – from protocols, Word imports, submissions and direct uploads. Images are under <photos>Photos</photos>."
+    "descriptionLinked": "All non-image files – from protocols, Word imports, submissions and direct uploads. Images are under <photos>Photos</photos>.",
+    "viewToggle": "View",
+    "viewList": "List",
+    "viewGrid": "Tiles with preview"
   },
   "sourceOptions": {
     "all": "All sources",
@@ -220,5 +223,18 @@
       "quota_exceeded": "Storage quota reached, not saved.",
       "heic_unreadable": "HEIC file could not be read."
     }
+  },
+  "menu": {
+    "downloadOriginal": "Download original file ({ext})",
+    "details": "Details & tags",
+    "versions": "Versions ({count})",
+    "more": "More actions"
+  },
+  "grid": {
+    "label": "Files as tiles",
+    "openDetails": "{name} – open details",
+    "noPdf": "No PDF view",
+    "noPdfFailed": "No PDF view – processing failed",
+    "originalHint": "PDF view of “{name}”"
   }
 }
