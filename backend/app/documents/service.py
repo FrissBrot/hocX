@@ -54,6 +54,7 @@ from app.documents.providers.common import PROTOCOL_STATUS_CODES
 from app.documents.locking import lock_row
 from app.documents.renderer import DocumentRenderError, RenderAssets, RenderOutput, get_renderer
 from app.documents.strings import normalize_language, strings_for
+from app.documents import page_fingerprints
 from app.documents.xmp import DocumentXmp, add_document_xmp
 from app.services import verify_domain_service
 from app.models import (
@@ -1015,6 +1016,8 @@ def _finalize_render(
                 design_hash=prepared.design_hash,
                 source_public_id=protocol.public_id if protocol is not None else None,
                 title_overridden=prepared.title_overridden,
+                # Seitenvergleich der Prüfseite, falls die Datei später verändert wird
+                page_fingerprints=page_fingerprints.compute(str(export_public_id), pdf),
                 created_by=user.user_id if user else None,
             )
         )

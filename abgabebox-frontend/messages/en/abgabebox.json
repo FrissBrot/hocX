@@ -134,7 +134,7 @@
     "dropLabelTouch": "Choose PDF file",
     "dropRelease": "Release to verify",
     "dropOverlay": "Release the file to verify it",
-    "privacy": "The file is not uploaded. Your browser computes its digital fingerprint (SHA-256) and sends only that for verification.",
+    "privacy": "The file is not uploaded. Your browser computes its digital fingerprint (SHA-256) and only sends that for checking – for a modified file also the document ID and fingerprints of its pages, never the content.",
     "checking": "Checking …",
     "checkAnother": "Check another file",
     "originalTitle": "Original",
@@ -213,7 +213,20 @@
       "resaved": "Saving again, “Print to PDF” or compressing changes the file – even if the content looks the same.",
       "notHocx": "The document was not created with hocX."
     },
-    "restrictedVersion": "Restricted version: the file is unchanged but incomplete. The person who created it lacked permission for part of the data. It is not an official document."
+    "restrictedVersion": "Restricted version: the file is unchanged but incomplete. The person who created it lacked permission for part of the data. It is not an official document.",
+    "checkingPages": "Comparing pages with the original …",
+    "modified": {
+      "title": "Modified",
+      "unchangedTitle": "Re-saved – text unchanged",
+      "lead": "This file is not the original, but belongs to hocX document {id}.",
+      "unchangedText": "The text of all {count, plural, one {# page} other {# pages}} matches the original. The file was probably just re-saved, e.g. on a phone or with “Print to PDF”.",
+      "changedText": "{count, plural, one {Page {pages} differs} other {Pages {pages} differ}} from the original.",
+      "pageCountText": "The number of pages differs from the original.",
+      "unknownText": "The file was changed after it was created. A page comparison is not possible for this document because it was created before page comparison was introduced.",
+      "pageCount": "The original has {original} pages, this file {uploaded}.",
+      "notOriginal": "Identical text does not confirm authenticity – the appearance may still have been changed. Only the unchanged file counts as the original. If in doubt, ask for the original file.",
+      "created": "Created"
+    }
   },
   "maintenance": {
     "title": "The submission box is under maintenance",

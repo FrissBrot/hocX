@@ -147,3 +147,73 @@ def test_restricted_role_can_call_verify_site():
         assert repository.verify_site(db, domain="unknown.example.ch") is None
     finally:
         db.close()
+
+
+# ── Veränderte Datei: Zuordnung über die Dokument-ID (Migration 0185) ──────────────────────
+
+CHANGED_SHA = hashlib.sha256(b"%PDF-1.7 neu gespeichert").hexdigest()
+
+
+@pytest.fixture
+def pages(monkeypatch, registry):
+    calls: list[tuple[str, list[str]]] = []
+
+    def lookup(db, *, document_id, fingerprints):
+        calls.append((document_id, fingerprints))
+        if document_id != str(DOC_ID):
+            return None
+        stored = ["a" * 16, "b" * 16, "c" * 16]
+        matches = [index < len(fingerprints) and fingerprints[index] == value for index, value in enumerate(stored)]
+        return {**_row(), "page_count": 3, "page_matches": matches}
+
+    monkeypatch.setattr(repository, "verify_document_pages", lookup)
+    return calls
+
+
+def test_changed_file_is_matched_by_id_with_page_comparison(pages):
+    body = client.post(
+        "/api/public/verify", json={"sha256": CHANGED_SHA, "document_id": str(DOC_ID), "page_fingerprints": ["a" * 16, "f" * 16, "c" * 16]}
+    ).json()
+    # Nie «Original»: found bleibt false, die Angaben ordnen nur zu
+    assert body["found"] is False and body["modified"] is True and body["document_id"] == str(DOC_ID)
+    assert body["page_count"] == 3 and body["changed_pages"] == [2]
+    # Keine gespeicherten Fingerabdrücke in der Antwort
+    assert "page_matches" not in body and "a" * 16 not in str(body)
+
+
+def test_resaved_file_with_unchanged_text_has_no_changed_pages(pages):
+    body = client.post(
+        "/api/public/verify", json={"sha256": CHANGED_SHA, "document_id": str(DOC_ID), "page_fingerprints": ["a" * 16, "b" * 16, "c" * 16]}
+    ).json()
+    assert body["modified"] is True and body["changed_pages"] == []
+
+
+def test_unknown_id_looks_like_an_unknown_hash(pages):
+    body = client.post("/api/public/verify", json={"sha256": CHANGED_SHA, "document_id": str(uuid.uuid4()), "page_fingerprints": []}).json()
+    assert body == {"found": False}
+
+
+def test_original_hash_never_takes_the_id_path(pages):
+    body = client.post("/api/public/verify", json={"sha256": SHA, "document_id": str(DOC_ID), "page_fingerprints": ["a" * 16]}).json()
+    assert body["found"] is True and "modified" not in body and pages == []
+
+
+def test_pdf_without_stored_fingerprints_is_only_assigned(monkeypatch, registry):
+    monkeypatch.setattr(repository, "verify_document_pages", lambda db, **kwargs: {**_row(), "page_count": None, "page_matches": None})
+    body = client.post("/api/public/verify", json={"sha256": CHANGED_SHA, "document_id": str(DOC_ID), "page_fingerprints": ["a" * 16]}).json()
+    assert body["modified"] is True and "changed_pages" not in body and "page_count" not in body
+
+
+@pytest.mark.parametrize("fingerprints", [["A" * 16], ["a" * 15], ["a" * 64], ["a" * 16] * 151])
+def test_invalid_fingerprints_are_rejected(monkeypatch, fingerprints):
+    monkeypatch.setattr(repository, "verify_document", lambda *a, **k: pytest.fail("darf nicht abgefragt werden"))
+    payload = {"sha256": CHANGED_SHA, "document_id": str(DOC_ID), "page_fingerprints": fingerprints}
+    assert client.post("/api/public/verify", json=payload).status_code == 422
+
+
+def test_restricted_role_can_call_verify_document_pages():
+    db = SessionLocal()
+    try:
+        assert repository.verify_document_pages(db, document_id=str(uuid.uuid4()), fingerprints=["a" * 16]) is None
+    finally:
+        db.close()

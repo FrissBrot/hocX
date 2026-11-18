@@ -134,7 +134,7 @@
     "dropLabelTouch": "Seleziona il file PDF",
     "dropRelease": "Rilascia per verificare",
     "dropOverlay": "Rilascia il file per verificarlo",
-    "privacy": "Il file non viene caricato. Il tuo browser calcola la sua impronta digitale (SHA-256) e invia solo quella per la verifica.",
+    "privacy": "Il file non viene caricato. Il tuo browser ne calcola l’impronta digitale (SHA-256) e invia solo quella per la verifica – per un file modificato anche l’ID del documento e le impronte delle pagine, mai il contenuto.",
     "checking": "Verifica in corso …",
     "checkAnother": "Verifica un altro file",
     "originalTitle": "Originale",
@@ -213,7 +213,20 @@
       "resaved": "Un nuovo salvataggio, «Stampa in PDF» o la compressione modificano il file – anche se il contenuto sembra uguale.",
       "notHocx": "Il documento non è stato creato con hocX."
     },
-    "restrictedVersion": "Versione limitata: il file è invariato ma incompleto. Alla persona che l’ha creato mancava l’autorizzazione per una parte dei dati. Non è un documento ufficiale."
+    "restrictedVersion": "Versione limitata: il file è invariato ma incompleto. Alla persona che l’ha creato mancava l’autorizzazione per una parte dei dati. Non è un documento ufficiale.",
+    "checkingPages": "Confronto delle pagine con l’originale …",
+    "modified": {
+      "title": "Modificato",
+      "unchangedTitle": "Salvato di nuovo – testo invariato",
+      "lead": "Questo file non è l’originale, ma appartiene al documento hocX {id}.",
+      "unchangedText": "Il testo {count, plural, one {della pagina} other {di tutte le # pagine}} corrisponde all’originale. Probabilmente il file è stato solo salvato di nuovo, p. es. sul telefono o con «Stampa come PDF».",
+      "changedText": "{count, plural, one {La pagina {pages} differisce} other {Le pagine {pages} differiscono}} dall’originale.",
+      "pageCountText": "Il numero di pagine differisce dall’originale.",
+      "unknownText": "Il file è stato modificato dopo la creazione. Per questo documento non è possibile un confronto delle pagine, perché è stato creato prima della sua introduzione.",
+      "pageCount": "L’originale ha {original} pagine, questo file {uploaded}.",
+      "notOriginal": "Un testo identico non conferma l’autenticità – l’aspetto può comunque essere stato modificato. Vale come originale solo il file invariato. In caso di dubbio chiedi il file originale.",
+      "created": "Creato"
+    }
   },
   "maintenance": {
     "title": "La casella di consegna è in manutenzione",

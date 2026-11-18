@@ -679,7 +679,10 @@
     "finesHidden": "Non incluse: multe di altre persone ({count}) (autorizzazione mancante).",
     "sessionsHidden": "Non incluse: sedute ({count}) che non puoi vedere (autorizzazione mancante).",
     "peopleHidden": "Non inclusi: dati di altre persone ({count}) (autorizzazione mancante). È mostrata solo la tua riga.",
-    "statisticsScope": "Incompleto: i dati comprendono solo i modelli a cui hai accesso (autorizzazione mancante)."
+    "statisticsScope": "Incompleto: i dati comprendono solo i modelli a cui hai accesso (autorizzazione mancante).",
+    "tableBanner": "Versione limitata: questi dati sono incompleti perché ti manca l’autorizzazione per una parte. Mancano:",
+    "sheetTitle": "Avviso",
+    "fileSuffix": "limitato"
   },
   "role": {
     "admin": "Amministrazione",

@@ -932,7 +932,11 @@
     "missingPermission": {
       "reports_personal": "“Personal data of everyone” (reports.personal): other people’s fines and per-person rankings",
       "meetings_read_drafts": "“View drafts” (meetings.read_drafts): minutes, to-dos and figures of all templates instead of only yours"
-    }
+    },
+    "restrictedWarningXlsx": "Without them the table only contains entries you have access to. The Excel file gets a “Notice” sheet at the front listing the missing data, and the suffix “-restricted” in its file name. Someone with role management grants them under Settings › Roles.",
+    "restrictedWarningCsv": "Without them the table only contains entries you have access to. CSV cannot carry a notice: only the file name gets the suffix “-restricted”. Choose Excel if the notice should be inside the file. Someone with role management grants them under Settings › Roles.",
+    "restrictedWarningMarkdown": "Without them the text only contains entries you have access to. A notice at the top lists the missing data. Someone with role management grants them under Settings › Roles.",
+    "restrictedWarningIcs": "Without them the calendar file only contains events you have access to. The file name gets the suffix “-restricted”. Someone with role management grants them under Settings › Roles."
   },
   "exports": {
     "allTypes": "All document types",

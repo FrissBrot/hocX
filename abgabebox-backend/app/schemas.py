@@ -1,7 +1,9 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Annotated
+
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 
 class AssignmentPublic(BaseModel):
@@ -50,6 +52,10 @@ class VerifyRequest(BaseModel):
 
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     document_id: uuid.UUID | None = None
+    # Nur zweiter Schritt, wenn der Hash unbekannt war: je Seite der im Browser berechnete
+    # Fingerabdruck des Seitentexts (backend/app/documents/page_fingerprints.py), dazu die aus der
+    # Datei gelesene Dokument-ID. Höchstens 150 Seiten (Body-Limit der Prüfseite).
+    page_fingerprints: list[Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{16}$")]] | None = Field(None, max_length=150)
 
 
 class VerifyResult(BaseModel):
@@ -77,6 +83,13 @@ class VerifyResult(BaseModel):
     # Prüf-Domain des ausstellenden Mandanten (z. B. verify.verein.ch): die Prüfseite leitet
     # dorthin weiter. Nur gesetzt, wenn der Mandant Name und Logo freigegeben hat (View 0126).
     verify_domain: str | None = None
+    # Veränderte Datei (found=false), über die Dokument-ID zugeordnet (Migration 0185). Dann sind
+    # die Angaben oben gesetzt (Titel nur mit freigegebener Anzeige), dazu der Seitenvergleich:
+    # page_count = Seiten des Originals, changed_pages = abweichende Seiten (ab 1). Beide fehlen
+    # bei PDFs ohne gespeicherte Fingerabdrücke (vor dem Update erzeugt).
+    modified: bool | None = None
+    page_count: int | None = None
+    changed_pages: list[int] | None = None
 
 
 class VerifySiteRead(BaseModel):

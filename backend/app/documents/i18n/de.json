@@ -679,7 +679,10 @@
     "finesHidden": "Nicht enthalten: Bussen anderer Personen ({count}) (fehlende Berechtigung).",
     "sessionsHidden": "Nicht enthalten: Sitzungen ({count}), die du nicht sehen darfst (fehlende Berechtigung).",
     "peopleHidden": "Nicht enthalten: Angaben zu weiteren Personen ({count}) (fehlende Berechtigung). Gezeigt wird nur deine eigene Zeile.",
-    "statisticsScope": "Unvollständig: Die Zahlen umfassen nur die Vorlagen, auf die du Zugriff hast (fehlende Berechtigung)."
+    "statisticsScope": "Unvollständig: Die Zahlen umfassen nur die Vorlagen, auf die du Zugriff hast (fehlende Berechtigung).",
+    "tableBanner": "Eingeschränkte Fassung: Diese Daten sind unvollständig, weil dir für einen Teil die Berechtigung fehlt. Es fehlen:",
+    "sheetTitle": "Hinweis",
+    "fileSuffix": "eingeschraenkt"
   },
   "role": {
     "admin": "Administration",

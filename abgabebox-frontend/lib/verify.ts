@@ -21,6 +21,11 @@ export type VerifyResponse = {
   title_overridden?: boolean;
   // Prüf-Domain des ausstellenden Mandanten (z. B. verify.verein.ch)
   verify_domain?: string;
+  // Veränderte Datei, über die Dokument-ID zugeordnet (found=false): Seitenzahl des Originals und
+  // abweichende Seiten (ab 1). Beide fehlen bei PDFs ohne gespeicherte Fingerabdrücke.
+  modified?: boolean;
+  page_count?: number;
+  changed_pages?: number[];
 };
 
 // Kopf der Prüfseite unter einer Mandanten-Prüf-Domain (GET /api/public/verify/site). tenant_*
@@ -42,6 +47,19 @@ export type VerifyRedirect =
 
 export type VerifyOutcome =
   | { kind: "not_found" }
+  | {
+      // Nicht das Original, aber über die Dokument-ID einem hocX-Dokument zugeordnet
+      kind: "modified";
+      result: VerifyResponse;
+      // «unchanged»: Text aller Seiten gleich (nur neu gespeichert); «changed»: Seiten weichen ab;
+      // «unknown»: PDF von vor dem Seitenvergleich, nur die Zuordnung ist möglich
+      pages: "unchanged" | "changed" | "unknown";
+      changedPages: number[];
+      originalPageCount: number | null;
+      uploadedPageCount: number | null;
+      newerVersion: string | null;
+      identity: "verified" | "named" | "anonymous";
+    }
   | {
       kind: "original";
       result: VerifyResponse;
@@ -73,11 +91,27 @@ export async function sha256Hex(data: ArrayBuffer): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export function classifyResult(result: VerifyResponse): VerifyOutcome {
+export function classifyResult(result: VerifyResponse, uploadedPageCount: number | null = null): VerifyOutcome {
+  const identity = result.tenant_name ? (result.organization_verified ? "verified" : "named") : "anonymous";
+  if (!result.found && result.modified && result.document_id) {
+    const originalPageCount = result.page_count ?? null;
+    const changedPages = result.changed_pages ?? [];
+    const sameCount = originalPageCount === null || uploadedPageCount === null || originalPageCount === uploadedPageCount;
+    const pages = result.changed_pages === undefined ? "unknown" : changedPages.length === 0 && sameCount ? "unchanged" : "changed";
+    return {
+      kind: "modified",
+      result,
+      pages,
+      changedPages,
+      originalPageCount,
+      uploadedPageCount,
+      newerVersion: result.is_superseded ? result.latest_version_label ?? null : null,
+      identity,
+    };
+  }
   if (!result.found) {
     return { kind: "not_found" };
   }
-  const identity = result.tenant_name ? (result.organization_verified ? "verified" : "named") : "anonymous";
   return {
     kind: "original",
     result,
@@ -132,13 +166,17 @@ export function redirectTarget(
 }
 
 // Same-origin: funktioniert auf der Plattform-Domain und auf Mandanten-Abgabebox-Domains.
-export async function verifyHash(sha256: string, documentId: string | null): Promise<VerifyResponse> {
+export async function verifyHash(sha256: string, documentId: string | null, pageFingerprints?: string[]): Promise<VerifyResponse> {
+  const body: Record<string, unknown> = { sha256 };
+  if (documentId) body.document_id = documentId;
+  // Zweiter Schritt (Hash unbekannt): nur Fingerabdrücke, nie Text oder Datei
+  if (documentId && pageFingerprints) body.page_fingerprints = pageFingerprints;
   const response = await fetch("/api/public/verify", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "omit",
     cache: "no-store",
-    body: JSON.stringify(documentId ? { sha256, document_id: documentId } : { sha256 }),
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     throw new Error(`verify ${response.status}`); // i18n-ok: technischer Fehler, verify-check.tsx zeigt eine übersetzte Meldung

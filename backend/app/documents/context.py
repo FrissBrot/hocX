@@ -198,6 +198,9 @@ class BuildContext:
     restrictions: list[str] = field(default_factory=list)
     # Platzhalter-Texte des gerade laufenden Bausteins (run_component hängt sie an dessen Block)
     block_notes: list[str] = field(default_factory=list)
+    # Alle Platzhalter-Texte des Dokuments (block_notes wird je Block geleert): für den Hinweis in
+    # Tabellen- und Markdown-Exporten, wo es keine Platzhalter an Blöcken gibt.
+    restriction_messages: list[str] = field(default_factory=list)
 
     def protocol_content(self, protocol: Any):
         """Alle Inhalte eines Protokolls (repository.ProtocolContent), einmal je Aufbau."""
@@ -253,6 +256,8 @@ class BuildContext:
         message = text(self.language, f"restricted.{key}", **params)
         if message not in self.block_notes:
             self.block_notes.append(message)
+        if message not in self.restriction_messages:
+            self.restriction_messages.append(message)
         return message
 
     def own_fines_participant_id(self) -> int | None:

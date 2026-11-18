@@ -679,7 +679,10 @@
     "finesHidden": "Non inclus : amendes d’autres personnes ({count}) (autorisation manquante).",
     "sessionsHidden": "Non inclus : séances ({count}) que tu n’as pas le droit de voir (autorisation manquante).",
     "peopleHidden": "Non inclus : données d’autres personnes ({count}) (autorisation manquante). Seule ta propre ligne est affichée.",
-    "statisticsScope": "Incomplet : les chiffres ne couvrent que les modèles auxquels tu as accès (autorisation manquante)."
+    "statisticsScope": "Incomplet : les chiffres ne couvrent que les modèles auxquels tu as accès (autorisation manquante).",
+    "tableBanner": "Version restreinte : ces données sont incomplètes, car il te manque l’autorisation pour une partie d’entre elles. Manquent :",
+    "sheetTitle": "Remarque",
+    "fileSuffix": "restreint"
   },
   "role": {
     "admin": "Administration",

@@ -932,7 +932,11 @@
     "missingPermission": {
       "reports_personal": "« Données personnelles de tous » (reports.personal) : amendes d’autres personnes et classements par personne",
       "meetings_read_drafts": "« Voir les brouillons » (meetings.read_drafts) : procès-verbaux, tâches et chiffres de tous les modèles au lieu des tiens seulement"
-    }
+    },
+    "restrictedWarningXlsx": "Sans elles, le tableau ne contient que les entrées auxquelles tu as accès. Le fichier Excel reçoit en tête une feuille « Remarque » qui indique les données manquantes, et le suffixe « -restreint » dans son nom. Une personne gérant les rôles les attribue sous Paramètres › Rôles.",
+    "restrictedWarningCsv": "Sans elles, le tableau ne contient que les entrées auxquelles tu as accès. Un CSV ne peut pas contenir de remarque : seul le nom du fichier reçoit le suffixe « -restreint ». Choisis Excel si la remarque doit figurer dans le fichier. Une personne gérant les rôles les attribue sous Paramètres › Rôles.",
+    "restrictedWarningMarkdown": "Sans elles, le texte ne contient que les entrées auxquelles tu as accès. Une remarque en tête indique les données manquantes. Une personne gérant les rôles les attribue sous Paramètres › Rôles.",
+    "restrictedWarningIcs": "Sans elles, le fichier de calendrier ne contient que les événements auxquels tu as accès. Le nom du fichier reçoit le suffixe « -restreint ». Une personne gérant les rôles les attribue sous Paramètres › Rôles."
   },
   "exports": {
     "allTypes": "Tous les types de document",

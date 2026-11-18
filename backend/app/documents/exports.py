@@ -168,6 +168,34 @@ def _csv_cell(value: Any) -> Any:
     return value
 
 
+def restriction_notice(prepared: Any) -> list[str]:
+    """Hinweis für eingeschränkte Tabellen- und Markdown-Exporte (fehlende Berechtigungen):
+    Einleitung plus die Platzhalter-Texte der betroffenen Stellen. Leer bei vollständigen Daten.
+    Die Daten selbst bleiben unverändert (keine Platzhalter in Zellen: Sortieren und Rechnen)."""
+    if not getattr(prepared, "restricted", None):
+        return []
+    strings = prepared.compiled.data["strings"]
+    return [strings.get("restricted.tableBanner", ""), *prepared.ctx.restriction_messages]
+
+
+def restriction_sheet(prepared: Any) -> list[tuple[str, list[list[str]]]]:
+    """Zusätzliches erstes Blatt «Hinweis» für eingeschränkte Excel-Exporte (sonst leer)."""
+    notice = restriction_notice(prepared)
+    if not notice:
+        return []
+    strings = prepared.compiled.data["strings"]
+    return [(strings.get("restricted.sheetTitle", "Hinweis"), [[line] for line in notice])]
+
+
+def restricted_filename(prepared: Any, filename: str) -> str:
+    """Dateiname mit Zusatz «-eingeschraenkt» (je Sprache) vor der Endung, falls Daten fehlen."""
+    if not getattr(prepared, "restricted", None):
+        return filename
+    suffix = prepared.compiled.data["strings"].get("restricted.fileSuffix", "restricted")
+    stem, dot, extension = filename.rpartition(".")
+    return f"{stem}-{suffix}.{extension}" if dot else f"{filename}-{suffix}"
+
+
 def to_csv(tables: list[tuple[str, list[list[str]]]]) -> bytes:
     if not tables:
         raise ValueError("noTable")
@@ -294,7 +322,12 @@ def markdown_content(prepared: Any, *, exclude_columns: Iterable[str] = ()) -> b
         show_status = show_status or params.status != "open"
     strings = prepared.compiled.data["strings"]
     show_fines = any(validate_spec(spec).show_fines for spec in specs)
-    return todos.markdown(
+    text = todos.markdown(
         rows, strings=strings, title=prepared.meta.title, group_by_person=group_by_person, show_status=show_status,
         today=ctx.today, exclude_columns=set(exclude_columns), fines=todos.load_todo_fines(ctx, rows) if show_fines else None,
-    ).encode("utf-8")
+    )
+    # Eingeschränkte Fassung: Hinweis als Zitat zuoberst (Markdown wird gelesen, nicht verrechnet)
+    notice = restriction_notice(prepared)
+    if notice:
+        text = "\n".join(f"> ⚠️ {line}" if index == 0 else f"> - {line}" for index, line in enumerate(notice)) + "\n\n" + text
+    return text.encode("utf-8")

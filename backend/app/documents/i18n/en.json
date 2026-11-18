@@ -679,7 +679,10 @@
     "finesHidden": "Not included: fines of other people ({count}) (missing permission).",
     "sessionsHidden": "Not included: meetings ({count}) you are not allowed to see (missing permission).",
     "peopleHidden": "Not included: details of further people ({count}) (missing permission). Only your own row is shown.",
-    "statisticsScope": "Incomplete: the figures only cover the templates you have access to (missing permission)."
+    "statisticsScope": "Incomplete: the figures only cover the templates you have access to (missing permission).",
+    "tableBanner": "Restricted version: this data is incomplete because you lack permission for part of it. Missing:",
+    "sheetTitle": "Notice",
+    "fileSuffix": "restricted"
   },
   "role": {
     "admin": "Administrator",

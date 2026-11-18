@@ -28,7 +28,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -1038,6 +1038,8 @@ class DocumentRegistry(Base):
     import_unverified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     # STUDIO-007: Titel beim Export abweichend vom Protokoll gesetzt (Migration 0120)
     title_overridden: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    # Je Seite ein gesalzener Fingerabdruck des Texts (documents/page_fingerprints.py, Prüfseite)
+    page_fingerprints: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
 
 
 class IdentityVerificationRequest(Base):

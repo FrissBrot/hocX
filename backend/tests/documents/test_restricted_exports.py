@@ -117,3 +117,39 @@ def test_missing_export_permissions_name_the_exact_permissions(db):
     assert service.missing_export_permissions(db, reader) == ["reports.personal"]
     assert service.missing_export_permissions(db, admin) == []
     assert service.exports_are_complete(db, admin) and not service.exports_are_complete(db, reader)
+
+
+def _prepared(restricted: list[str], messages: list[str]):
+    from types import SimpleNamespace
+
+    from app.documents.strings import strings_for
+
+    strings = strings_for("de")
+    return SimpleNamespace(
+        restricted=restricted,
+        ctx=SimpleNamespace(restriction_messages=messages),
+        compiled=SimpleNamespace(data={"strings": strings}),
+    )
+
+
+def test_table_exports_carry_a_notice_sheet_and_filename_suffix_when_restricted():
+    from io import BytesIO
+
+    from openpyxl import load_workbook
+
+    from app.documents import exports
+
+    restricted = _prepared(["finesHidden"], ["Nicht enthalten: Bussen anderer Personen (3) (fehlende Berechtigung)."])
+    tables = [("Bussen", [["Person", "Betrag"], ["Eigene Person", "10"]])]
+
+    workbook = load_workbook(BytesIO(exports.to_xlsx(exports.restriction_sheet(restricted) + tables)))
+    assert workbook.sheetnames == ["Hinweis", "Bussen"]
+    notice = [row[0] for row in workbook["Hinweis"].iter_rows(values_only=True)]
+    assert notice[0].startswith("Eingeschränkte Fassung") and "Bussen anderer Personen (3)" in notice[1]
+    # Die Datentabelle bleibt sauber: keine Platzhalter in Zellen
+    assert list(workbook["Bussen"].iter_rows(values_only=True)) == [("Person", "Betrag"), ("Eigene Person", "10")]
+    assert exports.restricted_filename(restricted, "Bussen.xlsx") == "Bussen-eingeschraenkt.xlsx"
+
+    complete = _prepared([], [])
+    assert exports.restriction_sheet(complete) == [] and exports.restriction_notice(complete) == []
+    assert exports.restricted_filename(complete, "Bussen.csv") == "Bussen.csv"

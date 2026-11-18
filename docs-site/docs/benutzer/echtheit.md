@@ -12,19 +12,38 @@ hocX stammt.
 3. Das Ergebnis erscheint sofort.
 
 **Die Datei wird nicht hochgeladen.** Der Browser berechnet den Fingerabdruck selbst und schickt
-nur diesen zur Prüfung. hocX speichert weder Fingerabdruck noch IP-Adresse der Prüfung.
+nur diesen zur Prüfung. Ist die Datei kein Original, schickt er zusätzlich die Dokument-ID und je
+Seite einen Fingerabdruck des Texts (siehe unten), nie den Text selbst. hocX speichert weder
+Fingerabdrücke noch IP-Adresse der Prüfung.
 
 | Ergebnis | Bedeutung |
 |---|---|
 | **Original** | Die Datei ist eine unveränderte Kopie eines Dokuments aus hocX. Angezeigt werden Dokumenttyp, Titel, Status (z. B. Entwurf, Abgeschlossen), Version, Dokument-ID und Erstellungsdatum. |
 | **Neuere Version vorhanden** | Nur bei Protokollen: Es gibt eine neuere Version (z. B. v1.3). Der Inhalt wird nicht gezeigt. |
 | **Gehört zu einem anderen Dokument** | Die Datei ist echt, passt aber nicht zum gescannten QR-Code. |
-| **Nicht gefunden** | Die Datei wurde verändert oder stammt nicht aus hocX. |
+| **Neu gespeichert – Text unverändert** | Kein Original, aber die Datei gehört zu einem hocX-Dokument, und der Text aller Seiten stimmt überein. Typisch nach «Drucken als PDF» oder Speichern auf dem Handy. |
+| **Verändert** | Die Datei gehört zu einem hocX-Dokument, aber die genannten Seiten (oder die Seitenzahl) weichen vom Original ab. |
+| **Nicht gefunden** | Die Datei stammt nicht aus hocX oder enthält keine lesbare Dokument-ID. |
 
-!!! warning "Schon kleine Änderungen zählen"
+!!! warning "Nur die Originaldatei ist «Original»"
     Erneutes Speichern, «Drucken als PDF», Komprimieren oder das Ausfüllen von Formularfeldern
-    verändert die Datei, auch wenn der Inhalt gleich aussieht. Geprüft werden kann nur die
-    ursprünglich erhaltene Datei.
+    verändert die Datei, auch wenn der Inhalt gleich aussieht. Die Prüfseite ordnet solche Dateien
+    über die Dokument-ID zu und vergleicht Seite für Seite den Text. Gleicher Text bestätigt die
+    Echtheit aber nicht: Das Aussehen kann trotzdem verändert sein. Als Original gilt nur die
+    unveränderte Datei.
+
+## Seitenvergleich bei veränderten Dateien {#seitenvergleich}
+
+- Beim Erstellen eines PDFs speichert hocX je Seite einen Fingerabdruck des Texts: einen kurzen,
+  mit der Dokument-ID gesalzenen Hash. Text und PDF werden dafür nicht gespeichert.
+- Auf der Prüfseite liest der Browser die Dokument-ID (aus den Metadaten oder dem Link des
+  QR-Codes) und berechnet dieselben Fingerabdrücke. Der Server antwortet nur mit «stimmt» oder
+  «stimmt nicht» je Seite.
+- Verglichen werden Buchstaben und Ziffern in ihrer Reihenfolge. Leerzeichen, Zeilenumbrüche und
+  Satzzeichen zählen nicht, weil Programme sie beim Neuspeichern unterschiedlich setzen.
+- Ohne Freigabe von Name und Logo zeigt die Prüfseite bei veränderten Dateien keinen Titel.
+- PDFs, die vor Version 1.4.0 erstellt wurden, haben keine Seiten-Fingerabdrücke. Für sie zeigt die
+  Prüfseite nur, zu welchem Dokument die Datei gehört und dass sie verändert wurde.
 
 Die Prüfseite funktioniert auch auf der eigenen Abgabebox-Adresse einer Organisation und auf seiner
 eigenen Prüf-Domain (siehe unten).

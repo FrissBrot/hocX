@@ -435,7 +435,17 @@ export function DocumentExportDialog({ open, onClose, context, onExported }: Pro
                   <li key={key}>{t.has(`export.missingPermission.${key.replace(".", "_")}`) ? t(`export.missingPermission.${key.replace(".", "_")}`) : key}</li>
                 ))}
               </ul>
-              <span>{t("export.restrictedWarning")}</span>
+              <span>
+                {format === "xlsx"
+                  ? t("export.restrictedWarningXlsx")
+                  : format === "csv"
+                    ? t("export.restrictedWarningCsv")
+                    : format === "markdown"
+                      ? t("export.restrictedWarningMarkdown")
+                      : format === "ics"
+                        ? t("export.restrictedWarningIcs")
+                        : t("export.restrictedWarning")}
+              </span>
             </div>
           )}
           {selectableTypes.length > 1 && (

@@ -152,3 +152,41 @@ describe("shortHash", () => {
     expect(shortHash("abc")).toBe("abc");
   });
 });
+
+
+describe("classifyResult für veränderte Dateien", () => {
+  const base = { found: false, modified: true, document_id: "01a1ee3b-f683-7fc5-8505-2be4a3e42baf", created_at: "2026-03-14T10:00:00Z" };
+
+  it("Text aller Seiten gleich: neu gespeichert", () => {
+    const outcome = classifyResult({ ...base, page_count: 3, changed_pages: [] }, 3);
+    expect(outcome).toMatchObject({ kind: "modified", pages: "unchanged", changedPages: [] });
+  });
+
+  it("abweichende Seiten oder Seitenzahl: verändert", () => {
+    expect(classifyResult({ ...base, page_count: 3, changed_pages: [2] }, 3)).toMatchObject({ pages: "changed", changedPages: [2] });
+    expect(classifyResult({ ...base, page_count: 3, changed_pages: [] }, 4)).toMatchObject({ pages: "changed", uploadedPageCount: 4 });
+  });
+
+  it("ohne gespeicherte Fingerabdrücke nur zugeordnet", () => {
+    expect(classifyResult({ ...base }, 3)).toMatchObject({ kind: "modified", pages: "unknown" });
+  });
+
+  it("ohne Zuordnung bleibt es «nicht gefunden»", () => {
+    expect(classifyResult({ found: false }, 3)).toEqual({ kind: "not_found" });
+  });
+});
+
+describe("verifyHash mit Seiten-Fingerabdrücken", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("schickt Fingerabdrücke nur zusammen mit der Dokument-ID", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ found: false }) });
+    vi.stubGlobal("fetch", fetchMock);
+    await verifyHash("a".repeat(64), "01a1ee3b-f683-7fc5-8505-2be4a3e42baf", ["0123456789abcdef"]);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      sha256: "a".repeat(64), document_id: "01a1ee3b-f683-7fc5-8505-2be4a3e42baf", page_fingerprints: ["0123456789abcdef"],
+    });
+    await verifyHash("a".repeat(64), null, ["0123456789abcdef"]);
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ sha256: "a".repeat(64) });
+  });
+});

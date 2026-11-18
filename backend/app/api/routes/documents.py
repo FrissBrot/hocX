@@ -383,7 +383,9 @@ def export_document_format(body: FormatExportRequest, db: Session = Depends(get_
             )
             # «Excel mit Passwort» macht aus CSV eine Excel-Datei (Text kann kein Passwort tragen)
             as_excel = body.format == "xlsx" or (body.encrypt and body.encryption == "excel")
-            content = extra_formats.to_xlsx(tables) if as_excel else extra_formats.to_csv(tables)
+            # Fehlen Daten (Berechtigungen): Excel bekommt ein Blatt «Hinweis», jeder Dateiname
+            # den Zusatz «-eingeschraenkt» - CSV kann keinen Hinweis tragen, ohne das Format zu brechen
+            content = extra_formats.to_xlsx(extra_formats.restriction_sheet(prepared) + tables) if as_excel else extra_formats.to_csv(tables)
         elif body.format == "ics":
             content = extra_formats.ics_content(prepared)
         else:
@@ -394,7 +396,7 @@ def export_document_format(body: FormatExportRequest, db: Session = Depends(get_
         if savepoint.is_active:
             savepoint.rollback()
     media_type, extension = _FORMAT_TYPES[body.format]
-    filename = f"{document_service._filename(prepared.meta.title, None)[:-4]}.{extension}"
+    filename = extra_formats.restricted_filename(prepared, f"{document_service._filename(prepared.meta.title, None)[:-4]}.{extension}")
     encrypted = body.format in ENCRYPTED_FORMATS and body.encrypt
     if encrypted and body.encryption == "zip":
         try:
@@ -411,7 +413,10 @@ def export_document_format(body: FormatExportRequest, db: Session = Depends(get_
         filename = f"{filename.rsplit('.', 1)[0]}.{extension}"
     audit.log(
         db, action=f"document.export_{body.format}", actor=user,
-        details={"document_type": prepared.document_type, "encrypted": encrypted, "encryption": body.encryption if encrypted else None},
+        details={
+            "document_type": prepared.document_type, "encrypted": encrypted, "encryption": body.encryption if encrypted else None,
+            "restricted": prepared.restricted,
+        },
     )
     return Response(content=content, media_type=media_type, headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
@@ -449,6 +454,9 @@ def export_document_preview(body: FormatExportRequest, db: Session = Depends(get
             tables = extra_formats.all_tables(
                 prepared.compiled.blocks, prepared.compiled.data, prepared.compiled.data["strings"], exclude_columns=body.exclude_columns
             )
+            # Wie der Export: Excel zeigt das Blatt «Hinweis» vorne, wenn Daten fehlen
+            if body.format == "xlsx" or (body.encrypt and body.encryption == "excel"):
+                tables = extra_formats.restriction_sheet(prepared) + tables
             result = ExportPreviewRead(
                 tables=[ExportPreviewTable(title=title, rows=rows[: _PREVIEW_ROWS + 1], total_rows=max(len(rows) - 1, 0)) for title, rows in tables]
             )

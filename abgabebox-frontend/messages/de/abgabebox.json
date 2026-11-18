@@ -134,7 +134,7 @@
     "dropLabelTouch": "PDF-Datei auswählen",
     "dropRelease": "Loslassen zum Prüfen",
     "dropOverlay": "Datei loslassen, um sie zu prüfen",
-    "privacy": "Die Datei wird nicht hochgeladen. Dein Browser berechnet ihren digitalen Fingerabdruck (SHA-256) und schickt nur diesen zur Prüfung.",
+    "privacy": "Die Datei wird nicht hochgeladen. Dein Browser berechnet ihren digitalen Fingerabdruck (SHA-256) und schickt nur diesen zur Prüfung – bei einer veränderten Datei zusätzlich die Dokument-ID und Fingerabdrücke der Seiten, nie den Inhalt.",
     "checking": "Wird geprüft …",
     "checkAnother": "Andere Datei prüfen",
     "originalTitle": "Original",
@@ -213,7 +213,20 @@
       "resaved": "Erneutes Speichern, «Drucken als PDF» oder Komprimieren verändert die Datei – auch wenn der Inhalt gleich aussieht.",
       "notHocx": "Das Dokument wurde nicht mit hocX erstellt."
     },
-    "restrictedVersion": "Eingeschränkte Fassung: Die Datei ist unverändert, aber unvollständig. Der Person, die sie erstellt hat, fehlte für einen Teil der Daten die Berechtigung. Es ist kein offizielles Dokument."
+    "restrictedVersion": "Eingeschränkte Fassung: Die Datei ist unverändert, aber unvollständig. Der Person, die sie erstellt hat, fehlte für einen Teil der Daten die Berechtigung. Es ist kein offizielles Dokument.",
+    "checkingPages": "Seiten werden mit dem Original verglichen …",
+    "modified": {
+      "title": "Verändert",
+      "unchangedTitle": "Neu gespeichert – Text unverändert",
+      "lead": "Diese Datei ist nicht das Original, gehört aber zum hocX-Dokument {id}.",
+      "unchangedText": "Der Text aller {count, plural, one {# Seite} other {# Seiten}} stimmt mit dem Original überein. Die Datei wurde vermutlich nur neu gespeichert, z. B. auf dem Handy oder mit «Drucken als PDF».",
+      "changedText": "{count, plural, one {Seite {pages} weicht} other {Die Seiten {pages} weichen}} vom Original ab.",
+      "pageCountText": "Die Seitenzahl weicht vom Original ab.",
+      "unknownText": "Die Datei wurde nach der Erstellung verändert. Für dieses Dokument ist kein Seitenvergleich möglich, weil es vor der Einführung des Seitenvergleichs erstellt wurde.",
+      "pageCount": "Das Original hat {original} Seiten, diese Datei {uploaded}.",
+      "notOriginal": "Ein gleicher Text bestätigt die Echtheit nicht – das Aussehen kann trotzdem verändert sein. Als Original gilt nur die unveränderte Datei. Frage im Zweifel nach der Originaldatei.",
+      "created": "Erstellt"
+    }
   },
   "maintenance": {
     "title": "Die Abgabebox wird gerade gewartet",

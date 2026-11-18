@@ -16,8 +16,9 @@ ausgetretene Personen, ein Versandprotokoll aller E-Mails im Admin-Portal, neutr
 («Organisation» statt «Verein») in allen Sprachen sowie 15 Sicherheits- und Datenschutz-Fixes aus
 den Nachtläufen. Dazu Termine mit Uhrzeiten, Programm und Markdown-Texten, ein neu gestalteter
 Tabellenblock mit Assistent, ein einheitliches, tolerantes Uhrzeitfeld, Dateien als Kacheln mit
-PDF-Vorschau und gekennzeichnete Entwürfe, wenn einem Export Berechtigungen fehlen. Zwei Migrationen, keine neuen Secrets
-oder Umgebungsvariablen, keine Breaking Changes.
+PDF-Vorschau, gekennzeichnete Entwürfe, wenn einem Export Berechtigungen fehlen, und eine
+Prüfseite, die veränderte Dateien über die Dokument-ID zuordnet und Seite für Seite vergleicht.
+Drei Migrationen, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
 
 ### Update
 
@@ -31,6 +32,9 @@ oder Umgebungsvariablen, keine Breaking Changes.
 - Migration `0184_event_times_program`: vier neue, leere Spalten an `event` (`end_time`,
   `spezial_time1`, `spezial_time2`, `program`). Bestehende Termintexte sind gültiges Markdown und
   bleiben unverändert.
+- Migration `0185_document_page_fingerprints`: neue, leere Spalte `page_fingerprints` im
+  Dokumentenregister und die Funktion `verify_document_pages` (nur `EXECUTE` für die
+  Abgabebox-Rolle). Seiten-Fingerabdrücke entstehen nur für PDFs ab dem Update.
 - Alle Adressen bleiben gleich, Lesezeichen und Links in Mails funktionieren weiter. Neu ist nur
   `/my-tasks` («Meine Aufgaben»).
 - Ausgetretene Personen (Austrittsdatum vor heute) können sich ab dem Update nicht mehr anmelden,
@@ -98,6 +102,22 @@ oder Umgebungsvariablen, keine Breaking Changes.
 - Solche PDFs sind immer Entwürfe ohne Versionsnummer, mit Banner und Platzhaltern dort, wo Daten
   fehlen - es fällt nichts unbemerkt weg. Die Prüfseite weist sie als eingeschränkte Fassung aus.
 - Entwürfe tragen jetzt immer das Wasserzeichen «Entwurf»; das Abschalten entfällt.
+- Tabellen- und Textexporte bleiben sauber (keine Platzhalter in Zellen), sind aber gekennzeichnet:
+  Excel bekommt vorne ein Blatt «Hinweis» mit den fehlenden Daten, Markdown einen Hinweis zuoberst,
+  jeder Dateiname den Zusatz `-eingeschraenkt`. Der Export-Dialog erklärt das je Format.
+
+### Neu: Prüfseite erkennt veränderte Dateien
+
+- Ist eine Datei nicht mehr byte-genau das Original (z. B. auf dem Handy neu gespeichert oder mit
+  «Drucken als PDF» erzeugt), ordnet die Prüfseite sie über die Dokument-ID zu, statt nur «Nicht
+  gefunden» zu melden: «Neu gespeichert – Text unverändert» oder «Verändert: Seite 2, 5 weichen
+  ab», dazu eine abweichende Seitenzahl.
+- Dafür speichert hocX je Seite einen gesalzenen Fingerabdruck des Texts, nie Text oder PDF. Der
+  Browser liest Dokument-ID und Seitentext selbst (pdf.js, nur bei unbekanntem Hash geladen) und
+  schickt nur Fingerabdrücke; der Server antwortet je Seite nur mit «stimmt / stimmt nicht».
+- «Original» bleibt dem exakten Vergleich vorbehalten. Ohne freigegebene Anzeige der Organisation
+  zeigt die Prüfseite bei veränderten Dateien keinen Titel. PDFs von vor dem Update werden nur
+  zugeordnet, ohne Seitenvergleich.
 
 ### Neu: Dateien als Kacheln mit PDF-Vorschau
 

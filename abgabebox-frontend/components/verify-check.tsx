@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { formatDate } from "@/lib/format";
+import { readPdfFingerprints } from "@/lib/pdf-fingerprints";
 import {
   classifyResult,
   isSiteDocument,
@@ -26,7 +27,7 @@ const REDIRECT_SECONDS = 4;
 // fileName null: Prüfung über den Hash aus der Weiterleitung, ohne Datei auf dieser Seite
 type State =
   | { phase: "idle" }
-  | { phase: "checking"; fileName: string | null; size: number | null }
+  | { phase: "checking"; fileName: string | null; size: number | null; pages?: boolean }
   | { phase: "done"; fileName: string | null; hash: string; outcome: VerifyOutcome; redirect: VerifyRedirect | null }
   | { phase: "error"; message: string };
 
@@ -56,25 +57,50 @@ export function VerifyCheck({ documentId, site }: { documentId: string | null; s
       }
       setState({ phase: "checking", fileName: file.name, size: file.size });
       let hash: string;
+      let data: ArrayBuffer;
       try {
-        hash = await sha256Hex(await file.arrayBuffer());
+        data = await file.arrayBuffer();
+        hash = await sha256Hex(data);
       } catch {
         setState({ phase: "error", message: t("readError") });
         return;
       }
-      await checkHash(hash, file.name);
+      await checkHash(hash, file.name, data, file.size);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [documentId, t]
   );
 
-  async function checkHash(hash: string, fileName: string | null) {
+  async function checkHash(hash: string, fileName: string | null, data?: ArrayBuffer, size?: number) {
     try {
       const result = await verifyHash(hash, documentId);
+      if (!result.found && data) {
+        // Kein Original: Dokument-ID und Seiten-Fingerabdrücke aus der Datei lesen und die Datei
+        // darüber zuordnen («verändert», mit Seitenvergleich). Text und Datei bleiben im Browser.
+        setState({ phase: "checking", fileName, size: size ?? null, pages: true });
+        const modified = await compareByDocumentId(hash, data);
+        if (modified) {
+          setState({ phase: "done", fileName, hash, outcome: modified, redirect: null });
+          return;
+        }
+      }
       const redirect = redirectTarget(result, { currentHost: window.location.hostname, site, documentId, sha256: hash });
       setState({ phase: "done", fileName, hash, outcome: classifyResult(result), redirect });
     } catch {
       setState({ phase: "error", message: t("error") });
+    }
+  }
+
+  async function compareByDocumentId(hash: string, data: ArrayBuffer): Promise<VerifyOutcome | null> {
+    try {
+      const read = await readPdfFingerprints(data, documentId);
+      if (!read.documentId) return null;
+      const result = await verifyHash(hash, read.documentId, read.fingerprints);
+      const outcome = classifyResult(result, read.pageCount);
+      return outcome.kind === "modified" ? outcome : null;
+    } catch {
+      // Kein lesbares PDF oder Prüfung nicht möglich: bleibt «Nicht gefunden»
+      return null;
     }
   }
 
@@ -137,7 +163,7 @@ export function VerifyCheck({ documentId, site }: { documentId: string | null; s
         <div className="verify-checking" role="status" aria-live="polite">
           <span className="verify-spinner" aria-hidden="true" />
           <div className="verify-checking-text">
-            <span className="verify-checking-title">{state.fileName === null ? t("checking") : t("checkingHash")}</span>
+            <span className="verify-checking-title">{state.fileName === null ? t("checking") : state.pages ? t("checkingPages") : t("checkingHash")}</span>
             {state.fileName !== null && (
               <span className="verify-checking-file">
                 {state.size !== null ? t("fileWithSize", { name: state.fileName, size: formatSize(state.size) }) : state.fileName}
@@ -270,7 +296,7 @@ function VerifyRedirectNotice({ redirect, outcome, site }: { redirect: VerifyRed
   const t = useTranslations("abgabebox.verify");
   const [seconds, setSeconds] = useState(REDIRECT_SECONDS);
   const [stayed, setStayed] = useState(false);
-  const name = outcome.kind === "original" ? outcome.result.tenant_name ?? "" : "";
+  const name = outcome.kind === "not_found" ? "" : outcome.result.tenant_name ?? "";
 
   useEffect(() => {
     if (stayed) return;
@@ -320,12 +346,12 @@ function VerifyFileChip({ fileName, hash }: { fileName: string | null; hash: str
   );
 }
 
-function ResultHead({ kind, title, lead }: { kind: "ok" | "fail"; title: string; lead: string }) {
+function ResultHead({ kind, title, lead }: { kind: "ok" | "fail" | "warn"; title: string; lead: string }) {
   return (
     <div className="verify-result-head">
       <span className="verify-result-icon" aria-hidden="true">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-          <path d={kind === "ok" ? "M5 12.5l4.5 4.5L19 7.5" : "M7 7l10 10M17 7L7 17"} />
+          <path d={kind === "ok" ? "M5 12.5l4.5 4.5L19 7.5" : kind === "warn" ? "M12 6.5v7M12 17.5v.01" : "M7 7l10 10M17 7L7 17"} />
         </svg>
       </span>
       <div className="verify-result-headline">
@@ -366,6 +392,9 @@ export function VerifyResultCard({
         <VerifyFileChip fileName={fileName} hash={hash} />
       </section>
     );
+  }
+  if (outcome.kind === "modified") {
+    return <ModifiedResultCard outcome={outcome} fileName={fileName} hash={hash} />;
   }
   const { result, identity } = outcome;
   const name = result.tenant_name ?? "";
@@ -412,6 +441,56 @@ export function VerifyResultCard({
           {result.title && <div><dt>{t("fields.title")}</dt><dd>{result.title}</dd></div>}
           {status && <div><dt>{t("fields.status")}</dt><dd>{status}</dd></div>}
           {result.version_label && <div><dt>{t("fields.version")}</dt><dd>{result.version_label}</dd></div>}
+          {result.document_id && <div><dt>{t("fields.documentId")}</dt><dd className="verify-id">{shortDocumentId(result.document_id)}</dd></div>}
+        </dl>
+      </div>
+      <VerifyFileChip fileName={fileName} hash={hash} />
+    </section>
+  );
+}
+
+// Veränderte Datei, über die Dokument-ID einem hocX-Dokument zugeordnet. Nie «Original»: gleicher
+// Text heisst nicht echt (das Aussehen kann geändert sein). Der Seitenvergleich zeigt nur, was sich
+// geändert hat.
+function ModifiedResultCard({ outcome, fileName, hash }: { outcome: Extract<VerifyOutcome, { kind: "modified" }>; fileName: string | null; hash: string }) {
+  const t = useTranslations("abgabebox.verify");
+  const { result, identity } = outcome;
+  const name = result.tenant_name ?? "";
+  const restricted = Boolean(result.document_type?.endsWith("_restricted"));
+  const baseType = restricted ? result.document_type?.slice(0, -"_restricted".length) : result.document_type;
+  const docType = baseType && t.has(`docType.${baseType}`) ? t(`docType.${baseType}`) : baseType;
+  const countDiffers =
+    outcome.originalPageCount !== null && outcome.uploadedPageCount !== null && outcome.originalPageCount !== outcome.uploadedPageCount;
+  const lead =
+    outcome.pages === "unchanged"
+      ? t("modified.unchangedText", { count: outcome.originalPageCount ?? 0 })
+      : outcome.pages === "changed"
+        ? outcome.changedPages.length > 0
+          ? t("modified.changedText", { count: outcome.changedPages.length, pages: outcome.changedPages.join(", ") })
+          : t("modified.pageCountText")
+        : t("modified.unknownText");
+  return (
+    <section className="verify-result verify-result-warn" role="status">
+      <ResultHead
+        kind="warn"
+        title={outcome.pages === "unchanged" ? t("modified.unchangedTitle") : t("modified.title")}
+        lead={t("modified.lead", { id: shortDocumentId(result.document_id ?? "") })}
+      />
+      <div className="verify-result-body">
+        <p className="verify-modified-pages">{lead}</p>
+        {countDiffers && (
+          <p className="verify-notice verify-notice-warning">
+            {t("modified.pageCount", { original: outcome.originalPageCount ?? 0, uploaded: outcome.uploadedPageCount ?? 0 })}
+          </p>
+        )}
+        <p className="verify-notice verify-notice-info">{t("modified.notOriginal")}</p>
+        {outcome.newerVersion && <p className="verify-notice verify-notice-info">{t("newerVersion", { version: outcome.newerVersion })}</p>}
+        <dl className="verify-facts">
+          {identity !== "anonymous" && <div><dt>{t("issuedBy")}</dt><dd>{name}</dd></div>}
+          {docType && <div><dt>{t("fields.documentType")}</dt><dd>{docType}</dd></div>}
+          {result.title && <div><dt>{t("fields.title")}</dt><dd>{result.title}</dd></div>}
+          {result.version_label && <div><dt>{t("fields.version")}</dt><dd>{result.version_label}</dd></div>}
+          {result.created_at && <div><dt>{t("modified.created")}</dt><dd>{formatDate(result.created_at)}</dd></div>}
           {result.document_id && <div><dt>{t("fields.documentId")}</dt><dd className="verify-id">{shortDocumentId(result.document_id)}</dd></div>}
         </dl>
       </div>

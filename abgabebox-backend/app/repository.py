@@ -456,6 +456,17 @@ def verify_document(db: Session, *, sha256: str) -> dict | None:
     return dict(row) if row else None
 
 
+def verify_document_pages(db: Session, *, document_id: str, fingerprints: list[str]) -> dict | None:
+    """Veränderte Datei über die Dokument-ID zuordnen und Seiten vergleichen (SECURITY-DEFINER-
+    Funktion verify_document_pages, Migration 0185). Liefert nur «stimmt / stimmt nicht» je Seite,
+    nie gespeicherte Fingerabdrücke oder den Hash."""
+    row = db.execute(
+        text("SELECT * FROM verify_document_pages(CAST(:document_id AS uuid), CAST(:fingerprints AS text[]))"),
+        {"document_id": document_id, "fingerprints": fingerprints},
+    ).mappings().first()
+    return dict(row) if row else None
+
+
 def verify_site(db: Session, *, domain: str) -> dict | None:
     """Mandant hinter einer Prüf-Domain (SECURITY-DEFINER-Funktion verify_site, Migration 0126).
     Liefert nur etwas für eine aktive Prüf-Domain mit gebuchtem Feature und freigegebener Anzeige."""

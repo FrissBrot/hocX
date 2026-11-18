@@ -33,10 +33,35 @@ def verify(body: VerifyRequest, response: Response, db: Session = Depends(get_db
         # Landet über den HTTPException-Handler (main.py) mit Ursache im system_error_log.
         raise HTTPException(status_code=503, detail="Die Prüfung ist gerade nicht verfügbar.") from exc
     if row is None:
+        if body.document_id is not None and body.page_fingerprints is not None:
+            return _verify_by_id(db, body)
         return VerifyResult(found=False)
     return VerifyResult(
         found=True,
         document_id_matches=(row["document_id"] == body.document_id) if body.document_id is not None else None,
+        **row,
+    )
+
+
+def _verify_by_id(db: Session, body: VerifyRequest) -> VerifyResult:
+    """Zweiter Schritt der Prüfseite: Hash unbekannt, aber die Datei trägt eine Dokument-ID. Dann
+    heisst es nie «Original», sondern «gehört zu Dokument X, wurde verändert», mit Seitenvergleich,
+    falls das Register Fingerabdrücke hat. Unbekannte IDs ergeben dasselbe wie ein unbekannter Hash
+    (UUIDv7, nicht erratbar; Rate-Limit wie die Hash-Prüfung)."""
+    try:
+        row = repository.verify_document_pages(db, document_id=str(body.document_id), fingerprints=list(body.page_fingerprints or []))
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=503, detail="Die Prüfung ist gerade nicht verfügbar.") from exc
+    if row is None:
+        return VerifyResult(found=False)
+    matches = row.pop("page_matches")
+    page_count = row.pop("page_count")
+    return VerifyResult(
+        found=False,
+        modified=True,
+        page_count=page_count if matches is not None else None,
+        changed_pages=[index + 1 for index, same in enumerate(matches) if not same] if matches is not None else None,
         **row,
     )
 

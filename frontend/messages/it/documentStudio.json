@@ -932,7 +932,11 @@
     "missingPermission": {
       "reports_personal": "«Dati personali di tutti» (reports.personal): multe di altre persone e classifiche per persona",
       "meetings_read_drafts": "«Vedere le bozze» (meetings.read_drafts): verbali, attività e cifre di tutti i modelli invece che solo dei tuoi"
-    }
+    },
+    "restrictedWarningXlsx": "Senza di esse la tabella contiene solo le voci a cui hai accesso. Il file Excel riceve in testa un foglio «Avviso» che indica i dati mancanti e il suffisso «-limitato» nel nome. Una persona che gestisce i ruoli le assegna in Impostazioni › Ruoli.",
+    "restrictedWarningCsv": "Senza di esse la tabella contiene solo le voci a cui hai accesso. Un CSV non può contenere un avviso: solo il nome del file riceve il suffisso «-limitato». Scegli Excel se l’avviso deve stare nel file. Una persona che gestisce i ruoli le assegna in Impostazioni › Ruoli.",
+    "restrictedWarningMarkdown": "Senza di esse il testo contiene solo le voci a cui hai accesso. In cima un avviso indica i dati mancanti. Una persona che gestisce i ruoli le assegna in Impostazioni › Ruoli.",
+    "restrictedWarningIcs": "Senza di esse il file di calendario contiene solo gli eventi a cui hai accesso. Il nome del file riceve il suffisso «-limitato». Una persona che gestisce i ruoli le assegna in Impostazioni › Ruoli."
   },
   "exports": {
     "allTypes": "Tutti i tipi di documento",

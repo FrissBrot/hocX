@@ -134,7 +134,7 @@
     "dropLabelTouch": "Sélectionner le fichier PDF",
     "dropRelease": "Relâchez pour vérifier",
     "dropOverlay": "Relâchez le fichier pour le vérifier",
-    "privacy": "Le fichier n’est pas téléversé. Votre navigateur calcule son empreinte numérique (SHA-256) et n’envoie que celle-ci pour la vérification.",
+    "privacy": "Le fichier n’est pas téléversé. Ton navigateur calcule son empreinte numérique (SHA-256) et n’envoie que celle-ci pour la vérification – pour un fichier modifié, en plus l’ID du document et les empreintes de ses pages, jamais le contenu.",
     "checking": "Vérification …",
     "checkAnother": "Vérifier un autre fichier",
     "originalTitle": "Original",
@@ -213,7 +213,20 @@
       "resaved": "Un nouvel enregistrement, « Imprimer en PDF » ou une compression modifient le fichier – même si le contenu semble identique.",
       "notHocx": "Le document n’a pas été créé avec hocX."
     },
-    "restrictedVersion": "Version restreinte : le fichier est inchangé mais incomplet. La personne qui l’a créé n’avait pas l’autorisation pour une partie des données. Ce n’est pas un document officiel."
+    "restrictedVersion": "Version restreinte : le fichier est inchangé mais incomplet. La personne qui l’a créé n’avait pas l’autorisation pour une partie des données. Ce n’est pas un document officiel.",
+    "checkingPages": "Comparaison des pages avec l’original …",
+    "modified": {
+      "title": "Modifié",
+      "unchangedTitle": "Réenregistré – texte inchangé",
+      "lead": "Ce fichier n’est pas l’original, mais il appartient au document hocX {id}.",
+      "unchangedText": "Le texte {count, plural, one {de la page} other {des # pages}} correspond à l’original. Le fichier a probablement seulement été réenregistré, p. ex. sur un téléphone ou avec « Imprimer en PDF ».",
+      "changedText": "{count, plural, one {La page {pages} diffère} other {Les pages {pages} diffèrent}} de l’original.",
+      "pageCountText": "Le nombre de pages diffère de l’original.",
+      "unknownText": "Le fichier a été modifié après sa création. Aucune comparaison des pages n’est possible pour ce document, car il a été créé avant l’introduction de cette comparaison.",
+      "pageCount": "L’original compte {original} pages, ce fichier {uploaded}.",
+      "notOriginal": "Un texte identique ne confirme pas l’authenticité – l’apparence peut tout de même avoir été modifiée. Seul le fichier inchangé est l’original. En cas de doute, demande le fichier original.",
+      "created": "Créé"
+    }
   },
   "maintenance": {
     "title": "La boîte de dépôt est en maintenance",

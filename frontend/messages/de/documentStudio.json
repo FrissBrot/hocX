@@ -932,7 +932,11 @@
     "missingPermission": {
       "reports_personal": "«Personenbezogene Daten aller» (reports.personal): Bussen anderer Personen und Ranglisten je Person",
       "meetings_read_drafts": "«Entwürfe ansehen» (meetings.read_drafts): Protokolle, Pendenzen und Zahlen aller Vorlagen statt nur deiner"
-    }
+    },
+    "restrictedWarningXlsx": "Ohne sie enthält die Tabelle nur Einträge, auf die du Zugriff hast. Die Excel-Datei bekommt vorne ein Blatt «Hinweis», das die fehlenden Daten nennt, und im Dateinamen den Zusatz «-eingeschraenkt». Die Berechtigungen vergibt eine Person mit Rollenverwaltung unter Einstellungen › Rollen.",
+    "restrictedWarningCsv": "Ohne sie enthält die Tabelle nur Einträge, auf die du Zugriff hast. CSV kann keinen Hinweis tragen: Nur der Dateiname bekommt den Zusatz «-eingeschraenkt». Wähle Excel, wenn der Hinweis in der Datei stehen soll. Die Berechtigungen vergibt eine Person mit Rollenverwaltung unter Einstellungen › Rollen.",
+    "restrictedWarningMarkdown": "Ohne sie enthält der Text nur Einträge, auf die du Zugriff hast. Zuoberst steht ein Hinweis, welche Daten fehlen. Die Berechtigungen vergibt eine Person mit Rollenverwaltung unter Einstellungen › Rollen.",
+    "restrictedWarningIcs": "Ohne sie enthält die Kalenderdatei nur Termine, auf die du Zugriff hast. Der Dateiname bekommt den Zusatz «-eingeschraenkt». Die Berechtigungen vergibt eine Person mit Rollenverwaltung unter Einstellungen › Rollen."
   },
   "exports": {
     "allTypes": "Alle Dokumenttypen",
