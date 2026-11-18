@@ -168,7 +168,32 @@
     "noticeTitle": "Protection des données",
     "noticeUrl": "Lien vers votre déclaration de protection des données",
     "noticeUrlHint": "Avant le dépôt, la boîte de dépôt indique que votre organisation est responsable et renvoie vers cette page. Vide = déclaration par défaut de la plateforme.",
-    "noticeSave": "Enregistrer le lien"
+    "noticeSave": "Enregistrer le lien",
+    "fileVisibility": {
+      "title": "Visibilité des fichiers",
+      "intro": "En plus des droits des rôles, des fichiers peuvent être partagés avec tous les participants disposant d’un accès – uniquement en lecture, jamais en modification. Les personnes sans accès ne voient jamais rien.",
+      "module": {
+        "abgabe": "Dépôts",
+        "protokoll": "Procès-verbaux",
+        "album": "Galerie photos"
+      },
+      "moduleHint": {
+        "abgabe": "Fichiers déposés. Chaque dépôt peut remplacer le réglage par défaut.",
+        "protokoll": "Les fichiers des procès-verbaux suivent toujours le procès-verbal (brouillons, attribution des participants).",
+        "album": "Photos de la galerie."
+      },
+      "audienceLabel": "Visible en plus pour",
+      "filterLabel": "Types de fichiers",
+      "audience": {
+        "role_only": "Personne (droits des rôles uniquement)",
+        "all_participants": "Tous les participants avec accès",
+        "own_submissions": "Uniquement son propre dépôt"
+      },
+      "filter": {
+        "images": "Images uniquement",
+        "all": "Tous les types de fichiers"
+      }
+    }
   },
   "activity": {
     "intro": "Modifications, connexions et accès de la plateforme hocX aux données de cette organisation. Sans adresses IP ni e-mail.",

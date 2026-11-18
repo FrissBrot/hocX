@@ -25,6 +25,7 @@ from app.schemas.submission import (
     SubmissionAssignmentRead,
     SubmissionAssignmentUpdate,
     SubmissionElementRead,
+    SubmissionFileVisibility,
     SubmissionLinkCreate,
     SubmissionLinkRead,
     SubmissionLinkUpdate,
@@ -34,6 +35,7 @@ from app.schemas.submission import (
 )
 from app.schemas.deletion import DeletionPreview, DeletionRequest, DeletionResultRead
 from app.services import deletion_service, public_id_service
+from app.services import context_visibility_service as visibility
 from app.services import submission_reviewer_service as reviewers
 from app.services.audit_service import AuditService
 from app.core.storage import ABGABEBOX, MAIN, get_object_store, object_response, write_object_to_zip
@@ -64,14 +66,41 @@ def _get_readable_assignment_or_404(db: Session, assignment_id: uuid.UUID, user:
     return assignment
 
 
+def _file_visibility(rule: visibility.Rule | None) -> SubmissionFileVisibility:
+    if rule is None:
+        return SubmissionFileVisibility()
+    return SubmissionFileVisibility(mode="custom", audience=rule.audience, file_filter=rule.file_filter)
+
+
 def _reads_with_reviewers(db: Session, user: CurrentUser, assignments: list[SubmissionAssignment]) -> list[SubmissionAssignmentRead]:
-    reviewer_ids = reviewers.reviewer_ids(db, user.current_tenant_id, [assignment.id for assignment in assignments])
+    ids = [assignment.id for assignment in assignments]
+    reviewer_ids = reviewers.reviewer_ids(db, user.current_tenant_id, ids)
+    overrides = visibility.assignment_overrides(db, user.current_tenant_id, ids)
     reads = []
     for assignment in assignments:
         read = service._assignment_read(assignment)
         read.reviewer_ids = reviewer_ids.get(assignment.id, [])
+        read.file_visibility = _file_visibility(overrides.get(assignment.id))
         reads.append(read)
     return reads
+
+
+def _apply_file_visibility(db: Session, user: CurrentUser, assignment: SubmissionAssignment, value: SubmissionFileVisibility) -> None:
+    """Kontext-Freigabe des Auftrags setzen, committen und mit vorher/nachher auditieren (nur mit
+    submissions.manage, prüft der Aufrufer). Ungültige Kombinationen: ValueError (→ 400)."""
+    rule = None if value.mode == "default" else visibility.Rule(value.audience, value.file_filter)
+    before, after = visibility.set_assignment_override(db, user, assignment, rule)
+    if before == after:
+        return
+    audit.log(
+        db, action="context_visibility.changed", actor=user, entity_type="submission_assignment", entity_id=assignment.id,
+        details={
+            "module": "abgabe", "title": assignment.title,
+            "before": before.as_dict() if before else "default", "after": after.as_dict() if after else "default",
+        },
+        commit=False,
+    )
+    db.commit()
 
 
 def _apply_reviewers(db: Session, user: CurrentUser, assignment: SubmissionAssignment, user_ids: set[int]) -> None:
@@ -230,6 +259,8 @@ def create_assignment(
         created = service.create_assignment(db, payload, tenant_id=user.current_tenant_id)
         assignment = _get_assignment_or_404(db, created.id, user)
         _apply_reviewers(db, user, assignment, reviewer_user_ids)
+        if payload.file_visibility is not None:
+            _apply_file_visibility(db, user, assignment, payload.file_visibility)
     except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
         detail = str(exc) if isinstance(exc, ValueError) else "Abgabe konnte nicht erstellt werden"
@@ -255,6 +286,8 @@ def patch_assignment(
         updated = service.update_assignment(db, current.id, payload)
         if updated is not None and reviewer_user_ids is not None:
             _apply_reviewers(db, user, current, reviewer_user_ids)
+        if updated is not None and payload.file_visibility is not None:
+            _apply_file_visibility(db, user, current, payload.file_visibility)
     except (SQLAlchemyError, ValueError) as exc:
         db.rollback()
         detail = str(exc) if isinstance(exc, ValueError) else "Abgabe konnte nicht aktualisiert werden"
@@ -262,6 +295,7 @@ def patch_assignment(
     if updated is None:
         raise HTTPException(status_code=404, detail="Abgabe nicht gefunden")
     updated.reviewer_ids = reviewers.reviewer_ids(db, user.current_tenant_id, [current.id])[current.id]
+    updated.file_visibility = _file_visibility(visibility.assignment_overrides(db, user.current_tenant_id, [current.id]).get(current.id))
     return updated
 
 

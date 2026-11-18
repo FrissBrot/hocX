@@ -22,6 +22,8 @@ export type SessionInfo = {
   permissions: string[];
   /** Rechte mit Reichweite, die nur für zugewiesene Objekte gelten (Migration 0195) */
   assigned_only?: string[];
+  /** Der Verein gibt Abgabe-Dateien frei (Kontext-Freigaben, Migration 0196) - Menüpunkt «Fotos aus Abgaben» */
+  shared_submission_photos?: boolean;
   roles: RoleRef[];
   bridge_redirect_url: string | null;
 };
@@ -250,8 +252,37 @@ export type SubmissionAssignment = {
   link_ids: string[];
   /** Prüfer des Auftrags (Konten mit Login, Migration 0195) */
   reviewer_ids?: string[];
+  /** Wer darf eingereichte Dateien sehen? (Kontext-Freigabe, Migration 0196) */
+  file_visibility?: SubmissionFileVisibility;
   created_at: string;
   updated_at: string;
+};
+
+/** Kontext-Freigabe eines Abgabe-Auftrags (Migration 0196): «default» = Standard der Organisation. */
+export type SubmissionFileVisibility = {
+  mode: "default" | "custom";
+  audience: "role_only" | "all_participants" | "own_submissions";
+  file_filter: "all" | "images";
+};
+
+/** Kontext-Freigabe eines Moduls (Organisation › Datenschutz, Migration 0196). */
+export type ContextVisibilityModule = {
+  module: "abgabe" | "protokoll" | "album";
+  audience: SubmissionFileVisibility["audience"];
+  file_filter: SubmissionFileVisibility["file_filter"];
+  fixed: boolean;
+  audiences: SubmissionFileVisibility["audience"][];
+};
+
+/** Bild aus einer Abgabe, das eine Kontext-Freigabe zeigt («Fotos aus Abgaben»). */
+export type ContextPhoto = {
+  id: string;
+  original_name: string;
+  mime_type: string | null;
+  created_at: string;
+  assignment_title: string | null;
+  content_url: string;
+  thumbnail_url: string;
 };
 
 /** Wählbarer Prüfer eines Abgabe-Auftrags (aktives Konto mit Login, Migration 0195). */

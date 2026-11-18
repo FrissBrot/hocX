@@ -671,6 +671,9 @@
     },
     "GET /api/auth/session": {
       "handler": "auth.session",
+      "branches": [
+        "meetings.read"
+      ],
       "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
     },
     "GET /api/auth/tenant-by-domain": {
@@ -701,6 +704,24 @@
       "handler": "submission_assignments.get_clamav_status",
       "requires": [
         "submissions.read"
+      ]
+    },
+    "GET /api/context-files/submission-photos": {
+      "handler": "context_visibility.list_shared_submission_photos",
+      "requires": [
+        "meetings.read"
+      ]
+    },
+    "GET /api/context-visibility": {
+      "handler": "context_visibility.get_context_visibility",
+      "requires": [
+        "settings.manage"
+      ]
+    },
+    "PUT /api/context-visibility/{module}": {
+      "handler": "context_visibility.put_context_visibility",
+      "requires": [
+        "settings.manage"
       ]
     },
     "GET /api/cycle-configs": {

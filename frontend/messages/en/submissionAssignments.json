@@ -315,5 +315,25 @@
   "readOnly": {
     "emptyTitle": "No submissions",
     "emptyDescription": "No submissions have been assigned to you yet."
+  },
+  "fileVisibility": {
+    "label": "Who may see submitted files?",
+    "default": "Use the organisation's default",
+    "audience": {
+      "role_only": "Only via role permissions",
+      "all_participants": "All participants with a login",
+      "own_submissions": "Only their own submission"
+    },
+    "help": {
+      "default": "The setting under Organisation › Privacy › File visibility applies.",
+      "role_only": "Only people whose role lets them see submissions or photos.",
+      "all_participants": "In addition, everyone with a login sees the files under “Photos from submissions” – read only.",
+      "own_submissions": "In addition, everyone with a login sees the files they are responsible for – read only."
+    },
+    "filterLabel": "Which files?",
+    "filter": {
+      "images": "Images only",
+      "all": "All file types"
+    }
   }
 }

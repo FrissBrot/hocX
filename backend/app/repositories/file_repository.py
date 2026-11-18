@@ -412,6 +412,7 @@ class StoredFileRepository:
         date_from: date | None = None,
         date_to: date | None = None,
         viewer_tenant_id: int | None = None,
+        readable_assignment_ids: set[int] | None = None,
     ):
         """Gefilterte Files-Overview (ohne Sortierung/Paging) - gemeinsam für die Liste und die
         Tageszählung der Zeitleiste, damit beide genau dieselben Fotos sehen.
@@ -489,6 +490,11 @@ class StoredFileRepository:
             query = query.where(union_query.c.group_date >= date_from)
         if date_to is not None:
             query = query.where(union_query.c.group_date <= date_to)
+        if readable_assignment_ids is not None:
+            # Reichweite «nur zugewiesene» (Phase 4/5): Abgabe-Dateien nicht lesbarer Aufträge fehlen
+            from app.services.context_visibility_service import abgabe_scope_clause
+
+            query = query.where(abgabe_scope_clause(union_query.c.id, readable_assignment_ids))
         return query, union_query
 
     def tenant_files_timeline(
@@ -533,6 +539,7 @@ class StoredFileRepository:
         date_from: date | None = None,
         date_to: date | None = None,
         viewer_tenant_id: int | None = None,
+        readable_assignment_ids: set[int] | None = None,
     ) -> list[Row]:
         """Every "Dateien"/"Fotos" the tenant has produced by uploading something - protocol
         images, the raw .docx/.pdf a word-import was read from, abgabebox submission uploads,
@@ -566,6 +573,7 @@ class StoredFileRepository:
             tenant_id, source=source, only_images=only_images, exclude_images=exclude_images, search=search, tags=tags,
             file_ids=file_ids, album_id=album_id, exclude_album_id=exclude_album_id, album_share_pending=album_share_pending,
             date_from=date_from, date_to=date_to, viewer_tenant_id=viewer_tenant_id,
+            readable_assignment_ids=readable_assignment_ids,
         )
 
         sort_column = {

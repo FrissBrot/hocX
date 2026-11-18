@@ -159,7 +159,8 @@
       "todo": "Tâche",
       "user": "Compte",
       "role": "Rôle",
-      "public_link": "Lien public"
+      "public_link": "Lien public",
+      "context_visibility": "Visibilité des fichiers"
     },
     "verbs": {
       "loginFailed": "Échec de connexion",

@@ -24,6 +24,7 @@ from app.core.security import CurrentUser, get_current_user, require_any_permiss
 from app.models.entities import ElementDefinition, Participant
 from app.schemas.search import GlobalSearchQuery, GlobalSearchRead, SearchBlock, SearchElement, SearchFile, SearchPerson
 from app.services.file_service import FileService
+from app.services import context_visibility_service
 
 router = APIRouter()
 
@@ -77,12 +78,15 @@ def search_people(db: Session, tenant_id: int, query: str, limit: int = GROUP_LI
 
 
 def search_files(
-    db: Session, tenant_id: int, query: str, limit: int = GROUP_LIMIT, *, documents: bool = True, images: bool = True
+    db: Session, tenant_id: int, query: str, limit: int = GROUP_LIMIT, *, documents: bool = True, images: bool = True,
+    readable_assignment_ids: set[int] | None = None,
 ) -> list[SearchFile]:
-    """Dokumente nur mit files.read, Fotos nur mit photos.read (getrennte Rechte, Phase 3)."""
+    """Dokumente nur mit files.read, Fotos nur mit photos.read (getrennte Rechte, Phase 3);
+    Abgabe-Dateien nur aus lesbaren Aufträgen (Reichweite «nur zugewiesene», Phase 4/5)."""
     service = FileService()
-    document_items = service.list_tenant_files(db, tenant_id, limit=limit, exclude_images=True, search=query) if documents else []
-    image_items = service.list_tenant_files(db, tenant_id, limit=limit, only_images=True, search=query) if images else []
+    scope = {"readable_assignment_ids": readable_assignment_ids}
+    document_items = service.list_tenant_files(db, tenant_id, limit=limit, exclude_images=True, search=query, **scope) if documents else []
+    image_items = service.list_tenant_files(db, tenant_id, limit=limit, only_images=True, search=query, **scope) if images else []
     return [
         SearchFile(id=item.id, name=item.original_name, is_image=item.is_image, context=item.origin_tag or item.ref_label or "")
         for item in [*document_items, *image_items]
@@ -167,7 +171,10 @@ def global_search(
     return GlobalSearchRead(
         people=_without_contacts(search_people(db, tenant_id, query, by_email=user.can(P.PARTICIPANTS_CONTACTS)), user) if user.can(P.PARTICIPANTS_READ) else [],
         files=(
-            search_files(db, tenant_id, query, documents=user.can(P.FILES_READ), images=user.can(P.PHOTOS_READ))
+            search_files(
+                db, tenant_id, query, documents=user.can(P.FILES_READ), images=user.can(P.PHOTOS_READ),
+                readable_assignment_ids=context_visibility_service.readable_assignment_ids(db, user),
+            )
             if user.can(P.FILES_READ) or user.can(P.PHOTOS_READ) else []
         ),
         elements=search_elements(db, tenant_id, query) if templates else [],

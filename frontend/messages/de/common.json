@@ -159,7 +159,8 @@
       "todo": "Aufgabe",
       "user": "Konto",
       "role": "Rolle",
-      "public_link": "Öffentlicher Link"
+      "public_link": "Öffentlicher Link",
+      "context_visibility": "Sichtbarkeit von Dateien"
     },
     "verbs": {
       "loginFailed": "Anmeldung fehlgeschlagen",

@@ -110,7 +110,11 @@ export function buildNav(session: NavSession | null): NavGroup[] {
         ...(editsMeetings ? [{ href: "/lists", labelKey: "lists", icon: "lists" as const }] : []),
         // Getrennte Rechte (Plan «Berechtigungen», Phase 3): Ablage, Fotos, öffentlich teilen
         ...(can(session, "files.read") ? [{ href: "/files", labelKey: "files", icon: "files" as const }] : []),
-        ...(can(session, "photos.read") ? [{ href: "/photos", labelKey: "photos", icon: "photos" as const }] : []),
+        ...(can(session, "photos.read") ? [{ href: "/photos", labelKey: "photos", icon: "photos" as const, exclude: ["/photos/submissions"] }] : []),
+        // Kontext-Freigaben (Phase 5): Fotos aus Abgaben für Konten ohne «Fotos ansehen»
+        ...(session?.shared_submission_photos && !can(session, "photos.read") && can(session, "meetings.read")
+          ? [{ href: "/photos/submissions", labelKey: "submissionPhotos", icon: "photos" as const }]
+          : []),
         ...(can(session, "sharing.public") ? [{ href: "/shared-links", labelKey: "sharedLinks", icon: "share" as const }] : []),
       ],
     },

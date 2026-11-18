@@ -4,7 +4,7 @@ import uuid
 from datetime import date, datetime
 from typing import Annotated, ClassVar, Literal
 
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from app.models.entities import CycleConfig, ListDefinition, Tenant
 from app.schemas.base import PublicIdModel
@@ -48,6 +48,17 @@ class SubmissionAssignmentBase(BaseModel):
     owner_resubmit_only_personal: bool = False
 
 
+class SubmissionFileVisibility(BaseModel):
+    """Wer darf eingereichte Dateien sehen? (Kontext-Freigabe je Auftrag, Migration 0196)
+    ``mode = "default"`` übernimmt den Standard des Moduls (Organisation › Datenschutz)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Literal["default", "custom"] = "default"
+    audience: Literal["role_only", "all_participants", "own_submissions"] = "role_only"
+    file_filter: Literal["all", "images"] = "images"
+
+
 class SubmissionAssignmentCreate(SubmissionAssignmentBase):
     public_slug: str = Field(pattern=SLUG_PATTERN)
     # Ueber welche Links die Abgabe erreichbar ist. None = die Standard-Links des Mandanten
@@ -55,6 +66,8 @@ class SubmissionAssignmentCreate(SubmissionAssignmentBase):
     link_ids: list[uuid.UUID] | None = None
     # Prüfer (Konten mit Login, Migration 0195); None/[] = keine
     reviewer_ids: list[uuid.UUID] | None = Field(default=None, max_length=100)
+    # Kontext-Freigabe (Migration 0196); None = Standard des Moduls
+    file_visibility: SubmissionFileVisibility | None = None
 
 
 class SubmissionAssignmentUpdate(BaseModel):
@@ -83,6 +96,8 @@ class SubmissionAssignmentUpdate(BaseModel):
     link_ids: list[uuid.UUID] | None = None
     # None = Prüfer unverändert lassen; [] = alle entfernen (Migration 0195)
     reviewer_ids: list[uuid.UUID] | None = Field(default=None, max_length=100)
+    # None = Kontext-Freigabe unverändert lassen (Migration 0196)
+    file_visibility: SubmissionFileVisibility | None = None
 
 
 class SubmissionAssignmentRead(PublicIdModel, SubmissionAssignmentBase):
@@ -94,6 +109,8 @@ class SubmissionAssignmentRead(PublicIdModel, SubmissionAssignmentBase):
     link_ids: list[uuid.UUID] = Field(default_factory=list)
     # Prüfer des Auftrags (öffentliche Konto-IDs, Migration 0195)
     reviewer_ids: list[uuid.UUID] = Field(default_factory=list)
+    # Kontext-Freigabe des Auftrags (Migration 0196); «default» = Standard des Moduls
+    file_visibility: SubmissionFileVisibility = Field(default_factory=SubmissionFileVisibility)
     # Alle Elemente abgegeben oder geschlossen (Reiter «Abgeschlossen», Migration 0182)
     completed_at: datetime | None = None
     created_at: datetime

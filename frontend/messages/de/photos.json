@@ -462,5 +462,13 @@
   "timeline": {
     "loading": "Fotos werden geladen",
     "scrubberLabel": "Zeitstrahl: zu einem Datum springen"
+  },
+  "fromSubmissions": {
+    "title": "Fotos aus Abgaben",
+    "description": "Bilder aus Abgaben, die deine Organisation für dich freigegeben hat.",
+    "empty": "Zurzeit sind keine Fotos aus Abgaben für dich freigegeben.",
+    "loadMore": "Mehr laden",
+    "loadFailed": "Fotos konnten nicht geladen werden.",
+    "count": "{count, plural, one {# Foto} other {# Fotos}}"
   }
 }

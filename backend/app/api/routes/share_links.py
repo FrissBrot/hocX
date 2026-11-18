@@ -14,7 +14,7 @@ from app.core.features_generated import F
 from app.core.security import CurrentUser, get_current_user, require_any_permission, require_feature, require_permission
 from app.models.entities import ShareLink
 from app.schemas.files import ShareLinkCreate, ShareLinkRead
-from app.services import photo_album_share_service, share_link_service
+from app.services import context_visibility_service, photo_album_share_service, share_link_service
 from app.services.audit_service import AuditService
 from app.services.file_service import BLOCKED_SCAN_STATUSES, FileService
 from app.services.photo_metadata_privacy import MetadataPolicy
@@ -88,7 +88,10 @@ def create_share_link(payload: ShareLinkCreate, db: Session = Depends(get_db), u
     # fälschlich «nicht gefunden» (Audit Dateien/Fotos).
     if len(ids) > MAX_LINK_FILES:
         raise HTTPException(status_code=422, detail=f"Ein Link kann höchstens {MAX_LINK_FILES} Dateien enthalten.")
-    found = service.list_tenant_files(db, user.current_tenant_id, file_ids=ids, limit=MAX_LINK_FILES)
+    found = service.list_tenant_files(
+        db, user.current_tenant_id, file_ids=ids, limit=MAX_LINK_FILES,
+        readable_assignment_ids=context_visibility_service.readable_assignment_ids(db, user),
+    )
     if {item.id for item in found} != set(ids):
         raise HTTPException(status_code=404, detail="Mindestens eine Datei wurde nicht gefunden")
     # Je Datei nur, was man selbst sehen darf: Bilder mit photos.read, Dokumente mit files.read

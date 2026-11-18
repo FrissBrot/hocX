@@ -6,8 +6,8 @@ Rollen-Matrix: `permissions/permission-matrix.json` (geprüft von `tests/test_pe
 
 ## Übersicht
 
-- Routen gesamt: 571 (Plattform-Admin: 127)
-- Mandanten-Routen mit Rechteprüfung: 366
+- Routen gesamt: 574 (Plattform-Admin: 127)
+- Mandanten-Routen mit Rechteprüfung: 369
 - Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 78
 - Mandanten-Routen ohne Prüfung und ohne Begründung (Lücken): 0
 - Routen, die Dateiinhalt ausliefern: 21
@@ -182,6 +182,9 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `PUT /api/calendar-feeds/{kind}` | meetings.read |
 | `POST /api/calendar-feeds/{kind}/regenerate` | meetings.read |
 | `GET /api/clamav/status` | submissions.read |
+| `GET /api/context-files/submission-photos` | meetings.read |
+| `GET /api/context-visibility` | settings.manage |
+| `PUT /api/context-visibility/{module}` | settings.manage |
 | `GET /api/cycle-configs` | meetings.read |
 | `POST /api/cycle-configs` | templates.manage |
 | `DELETE /api/cycle-configs/{cycle_config_id}` | templates.manage |

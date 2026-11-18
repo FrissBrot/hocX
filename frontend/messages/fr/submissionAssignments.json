@@ -315,5 +315,25 @@
   "readOnly": {
     "emptyTitle": "Aucun dépôt",
     "emptyDescription": "Aucun dépôt ne t'a encore été attribué."
+  },
+  "fileVisibility": {
+    "label": "Qui peut voir les fichiers déposés ?",
+    "default": "Reprendre le réglage de l’organisation",
+    "audience": {
+      "role_only": "Uniquement via les droits du rôle",
+      "all_participants": "Tous les participants avec accès",
+      "own_submissions": "Uniquement son propre dépôt"
+    },
+    "help": {
+      "default": "Le réglage sous Organisation › Protection des données › Visibilité des fichiers s’applique.",
+      "role_only": "Uniquement les personnes dont le rôle permet de voir les dépôts ou les photos.",
+      "all_participants": "En plus, toute personne avec accès voit les fichiers sous « Photos des dépôts » – en lecture seule.",
+      "own_submissions": "En plus, toute personne avec accès voit les fichiers dont elle est responsable – en lecture seule."
+    },
+    "filterLabel": "Quels fichiers ?",
+    "filter": {
+      "images": "Images uniquement",
+      "all": "Tous les types de fichiers"
+    }
   }
 }

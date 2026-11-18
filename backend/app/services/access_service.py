@@ -11,6 +11,7 @@ from app.core.permissions import P
 from app.core.security import CurrentUser
 from app.models.entities import PhotoAlbum, PhotoAlbumItem, PhotoAlbumTenantShare, ProtocolTodo, ProtocolTodoAssignee, StoredFile
 from app.repositories.access_repository import AccessRepository
+from app.services import context_visibility_service
 
 
 # Status eines abgeschlossenen (eingefrorenen) Protokolls (ck_protocol_status).
@@ -144,7 +145,22 @@ class AccessService:
         ids.discard(None)
         return ids
 
-    def ensure_can_read_stored_file(self, db: Session, user: CurrentUser, stored_file_id: int) -> None:
+    def ensure_can_read_stored_file(self, db: Session, user: CurrentUser, stored_file_id: int, *, allow_context_grant: bool = True) -> None:
+        """Lesen einer Datei (Inhalt, Vorschau, Download, Metadaten): Rollenrechte je Kontext,
+        zusätzlich Kontext-Freigaben (Plan «Berechtigungen», Phase 5) - nur lesend, nur
+        additiv: die Freigabe wird erst gefragt, wenn die Rollenprüfung ablehnt.
+        ``allow_context_grant=False`` für Schreib- und Weitergabewege (Tags, Aufnahmedatum,
+        Einbetten in Dokumente, Live-Clip/ZIP): dort zählen nur Rollenrechte."""
+        try:
+            self._ensure_role_can_read_stored_file(db, user, stored_file_id)
+        except HTTPException as exc:
+            if allow_context_grant and exc.status_code in (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND) and context_visibility_service.context_grant_allows(
+                db, user, stored_file_id
+            ):
+                return
+            raise
+
+    def _ensure_role_can_read_stored_file(self, db: Session, user: CurrentUser, stored_file_id: int) -> None:
         protocol_id = self.repository.protocol_id_for_stored_file(db, stored_file_id=stored_file_id)
         if protocol_id is not None:
             # Protokollbild, das der Besitzer bewusst in ein geteiltes Album gelegt hat: der Partner
@@ -187,6 +203,11 @@ class AccessService:
                 return
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Stored file not accessible")
         if user.current_tenant_id == tenant_id:
+            # Reichweite «nur zugewiesene» (Phase 4): Dateien aus Abgabe-Aufträgen, die das Konto
+            # nicht lesen darf, sind auch über files.read/photos.read nicht erreichbar - 404 wie
+            # in den Abgabe-Routen (kein Existenz-Orakel).
+            if not context_visibility_service.abgabe_scope_allows(db, user, stored_file_id):
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stored file not found")
             return
         # Cross-tenant read: allowed if this file is an item of a "manual" album the current
         # tenant can see via an accepted photo_album_tenant_share (see

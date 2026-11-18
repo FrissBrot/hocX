@@ -525,6 +525,7 @@ class FileService:
         date_from: date | None = None,
         date_to: date | None = None,
         viewer_tenant_id: int | None = None,
+        readable_assignment_ids: set[int] | None = None,
     ) -> list[FileOverviewItem]:
         """tenant_id=None drops the tenant filter entirely (see
         StoredFileRepository._files_overview_branches) - used when album_id or file_ids
@@ -555,6 +556,7 @@ class FileService:
             date_from=date_from,
             date_to=date_to,
             viewer_tenant_id=viewer_tenant_id,
+            readable_assignment_ids=readable_assignment_ids,
         )
         items = [self._build_overview_item(row) for row in rows]
         self._attach_documents(db, rows, items)
@@ -715,6 +717,7 @@ class FileService:
         search: str | None = None,
         tags: list[str] | None = None,
         file_ids: list[uuid.UUID] | None = None,
+        readable_assignment_ids: set[int] | None = None,
     ) -> SimilarityGroupList:
         """Tabs "Duplikate"/"Ähnliche": liest die vom job-worker vorberechneten Gruppen
         (refresh_similarity_results) und filtert sie gegen die aktuellen Bilder - dieselben
@@ -741,6 +744,7 @@ class FileService:
                 search=search,
                 tags=tags,
                 file_ids=list(wanted),
+                readable_assignment_ids=readable_assignment_ids,
             )
         rows_by_public_id = {row.public_id: row for row in rows}
         groups: list[SimilarityGroup] = []

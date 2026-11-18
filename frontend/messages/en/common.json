@@ -159,7 +159,8 @@
       "todo": "Task",
       "user": "Account",
       "role": "Role",
-      "public_link": "Public link"
+      "public_link": "Public link",
+      "context_visibility": "File visibility"
     },
     "verbs": {
       "loginFailed": "Sign-in failed",

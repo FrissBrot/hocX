@@ -15,6 +15,7 @@ import {
   StructuredListDefinition,
   SubmissionAssignment,
   SubmissionAutoClose,
+  SubmissionFileVisibility,
   SubmissionLink,
   SubmissionReviewerCandidate,
   SubmissionSortOrder,
@@ -48,6 +49,9 @@ export type FormState = {
   link_ids: string[];
   /** Prüfer (Konten mit Login, Migration 0195) */
   reviewer_ids: string[];
+  /** Wer darf eingereichte Dateien sehen? «default» = Standard der Organisation (Migration 0196) */
+  file_visibility: "default" | SubmissionFileVisibility["audience"];
+  file_visibility_filter: SubmissionFileVisibility["file_filter"];
 };
 
 export const initialForm: FormState = {
@@ -75,6 +79,8 @@ export const initialForm: FormState = {
   owner_resubmit_only_personal: false,
   link_ids: [],
   reviewer_ids: [],
+  file_visibility: "default",
+  file_visibility_filter: "images",
 };
 
 type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
@@ -161,6 +167,8 @@ export function formFromAssignment(assignment: SubmissionAssignment): FormState 
     owner_resubmit_only_personal: assignment.owner_resubmit_only_personal ?? false,
     link_ids: assignment.link_ids,
     reviewer_ids: assignment.reviewer_ids ?? [],
+    file_visibility: assignment.file_visibility?.mode === "custom" ? assignment.file_visibility.audience : "default",
+    file_visibility_filter: assignment.file_visibility?.mode === "custom" ? assignment.file_visibility.file_filter : "images",
   };
 }
 
@@ -193,6 +201,9 @@ export function assignmentPayload(form: FormState) {
     owner_resubmit_only_personal: form.owner_access === "manage" && form.owner_resubmit_only_personal,
     link_ids: form.link_ids,
     reviewer_ids: form.reviewer_ids,
+    file_visibility: form.file_visibility === "default"
+      ? { mode: "default" as const }
+      : { mode: "custom" as const, audience: form.file_visibility, file_filter: form.file_visibility_filter },
   };
 }
 
@@ -892,6 +903,32 @@ export function SubmissionAssignmentFormModal({
               />
               <span className="field-help">{t("reviewers.help")}</span>
             </label>
+
+            <label className="field-stack">
+              <span className="field-label">{t("fileVisibility.label")}</span>
+              <Select
+                value={form.file_visibility}
+                onChange={(event) => setForm((c) => ({ ...c, file_visibility: event.target.value as FormState["file_visibility"] }))}
+              >
+                <option value="default">{t("fileVisibility.default")}</option>
+                <option value="role_only">{t("fileVisibility.audience.role_only")}</option>
+                <option value="all_participants">{t("fileVisibility.audience.all_participants")}</option>
+                <option value="own_submissions">{t("fileVisibility.audience.own_submissions")}</option>
+              </Select>
+              <span className="field-help">{t(`fileVisibility.help.${form.file_visibility}`)}</span>
+            </label>
+            {form.file_visibility === "all_participants" || form.file_visibility === "own_submissions" ? (
+              <label className="field-stack">
+                <span className="field-label">{t("fileVisibility.filterLabel")}</span>
+                <Select
+                  value={form.file_visibility_filter}
+                  onChange={(event) => setForm((c) => ({ ...c, file_visibility_filter: event.target.value as FormState["file_visibility_filter"] }))}
+                >
+                  <option value="images">{t("fileVisibility.filter.images")}</option>
+                  <option value="all">{t("fileVisibility.filter.all")}</option>
+                </Select>
+              </label>
+            ) : null}
           </aside>
         </div>
 

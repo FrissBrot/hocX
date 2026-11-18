@@ -462,5 +462,13 @@
   "timeline": {
     "loading": "Caricamento delle foto",
     "scrubberLabel": "Linea del tempo: vai a una data"
+  },
+  "fromSubmissions": {
+    "title": "Foto dalle consegne",
+    "description": "Immagini dalle consegne che la tua organizzazione ha condiviso con te.",
+    "empty": "Al momento nessuna foto dalle consegne è condivisa con te.",
+    "loadMore": "Carica altro",
+    "loadFailed": "Impossibile caricare le foto.",
+    "count": "{count, plural, one {# foto} other {# foto}}"
   }
 }

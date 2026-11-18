@@ -462,5 +462,13 @@
   "timeline": {
     "loading": "Chargement des photos",
     "scrubberLabel": "Frise chronologique : aller à une date"
+  },
+  "fromSubmissions": {
+    "title": "Photos des dépôts",
+    "description": "Images de dépôts que votre organisation a partagées avec vous.",
+    "empty": "Aucune photo de dépôt n’est actuellement partagée avec vous.",
+    "loadMore": "Charger plus",
+    "loadFailed": "Impossible de charger les photos.",
+    "count": "{count, plural, one {# photo} other {# photos}}"
   }
 }
