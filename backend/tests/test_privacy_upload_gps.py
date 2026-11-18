@@ -64,6 +64,41 @@ def test_strip_gps_removes_only_the_location(fmt):
         assert image.size == (40, 30)
 
 
+def _heif_without_exif_marker() -> bytes:
+    """HEIF, dessen Exif-Item kein "Exif\\0\\0" vor dem TIFF-Kopf hat (HEIF-Spezifikation: nur ein
+    4-Byte-Offset bis zum TIFF-Kopf, Füllbytes beliebig - so schreiben es libheif & Co.)."""
+    data = _image("HEIF")
+    marker = data.find(b"\x00\x00\x00\x06Exif\x00\x00")
+    assert marker > 0
+    variant = data[:marker] + b"\x00\x00\x00\x06" + b"\x00" * 6 + data[marker + 10:]
+    assert b"\x00\x00\x00\x06Exif" not in variant and _gps_of(variant)
+    return variant
+
+
+def test_strip_gps_finds_heif_exif_without_exif_marker():
+    original = _heif_without_exif_marker()
+
+    stripped = strip_gps(original)
+
+    assert len(stripped) == len(original)
+    assert _gps_of(stripped) == {}
+    with Image.open(io.BytesIO(stripped)) as image:
+        image.load()
+        assert image.getexif().get(0x010F) == "Testkamera"
+
+
+def test_gallery_upload_without_gps_strips_heif_without_exif_marker(db):
+    tenant = make_tenant(db)
+    items, _ = asyncio.run(FileService().save_gallery_uploads(
+        db, tenant_id=tenant.id, files=[("ohne.heic", _heif_without_exif_marker())], tags=[], created_by=None, include_gps=False,
+    ))
+    from app.core.storage import MAIN, read_bytes_or_404
+
+    stored = public_id_service.get_by_public_id(db, StoredFile, items[0].id)
+    assert stored.gps_latitude is None
+    assert _gps_of(read_bytes_or_404(MAIN, stored.storage_path)) == {}
+
+
 def test_strip_gps_keeps_png_chunks_valid_and_scrubs_xmp_and_video_locations():
     png = strip_gps(_image("PNG"))
     position = 8

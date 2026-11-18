@@ -4,7 +4,9 @@
 Entfernt nur Standortangaben und lässt alles andere unverändert (Aufnahmedatum, Kamera, Bilddaten):
 
 - EXIF (JPEG, HEIC/HEIF, WebP, PNG, TIFF): das GPS-IFD wird mit Nullen überschrieben und auf
-  0 Einträge gesetzt - samt der Werte, auf die es zeigt.
+  0 Einträge gesetzt - samt der Werte, auf die es zeigt. HEIF-Exif-Items beginnen mit einem
+  4-Byte-Offset bis zum TIFF-Kopf; davor steht nur oft (Apple), aber nicht immer (libheif,
+  ImageMagick, andere Geräte) ein "Exif\0\0" - beide Formen werden erkannt.
 - XMP: Attribute und Elemente ``exif:GPS…`` bekommen Leerzeichen statt Werten.
 - Videos (MOV/MP4, Live-Photo-Clips): ISO-6709-Ortsangaben (``©xyz``, QuickTime-Location) werden
   mit Leerzeichen überschrieben.
@@ -30,6 +32,11 @@ _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 # schreiben wenige Dutzend IFD-Einträge und eine Handvoll EXIF-Blöcke (Hauptbild, MPF-Vorschauen).
 _MAX_IFD_ENTRIES = 512
 _MAX_EXIF_BLOCKS = 16
+# HEIF: höchstens so viele TIFF-Kopf-Kandidaten prüfen und so viel Abstand zwischen Offset-Feld
+# und TIFF-Kopf zulassen (Apple: 6 Byte "Exif\0\0", libheif: 0).
+_MAX_HEIF_TIFF_CANDIDATES = 4096
+_MAX_HEIF_EXIF_OFFSET = 64
+_HEIF_BRANDS = frozenset({b"heic", b"heix", b"heim", b"heis", b"hevc", b"hevx", b"mif1", b"msf1", b"avif"})
 
 _XMP_ATTRIBUTE = re.compile(rb'(exif:GPS[A-Za-z]*\s*=\s*")([^"]*)(")')
 _XMP_ELEMENT = re.compile(rb"(<exif:GPS[A-Za-z]*>)([^<]*)(</exif:GPS[A-Za-z]*>)")
@@ -95,6 +102,37 @@ def _blank_exif_blocks(buffer: bytearray, start: int = 0, end: int | None = None
             changed = True
             blocks += 1
         position = buffer.find(_EXIF_MARK, position + 1, end)
+    return changed
+
+
+def _is_heif(buffer: bytearray) -> bool:
+    return bytes(buffer[4:8]) == b"ftyp" and bytes(buffer[8:12]) in _HEIF_BRANDS
+
+
+def _heif_offset_points_to(buffer: bytearray, tiff_at: int) -> bool:
+    """Steht vor ``tiff_at`` das Offset-Feld eines HEIF-Exif-Items (uint32 BE = Abstand bis hier)?"""
+    for offset in range(0, _MAX_HEIF_EXIF_OFFSET + 1):
+        field = tiff_at - 4 - offset
+        if field < 0:
+            break
+        if struct.unpack_from(">I", buffer, field)[0] == offset:
+            return True
+    return False
+
+
+def _blank_heif_exif_items(buffer: bytearray) -> bool:
+    """HEIF-Exif-Items ohne "Exif\0\0": TIFF-Köpfe, vor denen ein passendes Offset-Feld steht."""
+    changed = False
+    candidates = 0
+    blocks = 0
+    for header in _TIFF_HEADERS:
+        position = buffer.find(header)
+        while position != -1 and candidates < _MAX_HEIF_TIFF_CANDIDATES and blocks < _MAX_EXIF_BLOCKS:
+            candidates += 1
+            if _heif_offset_points_to(buffer, position) and _blank_tiff(buffer, position, len(buffer)):
+                changed = True
+                blocks += 1
+            position = buffer.find(header, position + 1)
     return changed
 
 
@@ -165,5 +203,7 @@ def strip_gps(data: bytes, mime_type: str | None = None) -> bytes:
         _blank_tiff(buffer, 0, len(buffer))
     # JPEG (APP1, auch MPF-Zusatzbilder) und HEIC/HEIF (Exif-Item mit "Exif\0\0"-Kopf)
     _blank_exif_blocks(buffer)
+    if _is_heif(buffer):
+        _blank_heif_exif_items(buffer)
     _scrub_text(buffer, video=(mime_type or "") in VIDEO_MIME_TYPES)
     return bytes(buffer)
