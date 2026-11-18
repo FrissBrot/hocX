@@ -12,7 +12,7 @@ export default async function WordImportPage() {
   const session = await requireSession();
   const [templates, participants] = await Promise.all([
     backendFetchWithSession<TemplateSummary[]>("/api/templates"),
-    backendFetchWithSession<ParticipantSummary[]>("/api/participants"),
+    backendFetchWithSession<ParticipantSummary[]>("/api/participants?include_former=true"),
   ]);
   const activeTemplates = (templates ?? []).filter((template) => template.status === "active");
   const activeParticipants = (participants ?? []).filter((participant) => participant.is_active);

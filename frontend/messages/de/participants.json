@@ -1,7 +1,7 @@
 {
   "pageTitle": "Mitglieder",
-  "pageDescriptionEmpty": "Mitglieder und Gäste deines Vereins.",
-  "pageDescription": "Alle Personen deines Vereins – mit oder ohne Login. Sie erscheinen in Anwesenheit, Bussen und Aufgaben.",
+  "pageDescriptionEmpty": "Mitglieder und Gäste deiner Organisation.",
+  "pageDescription": "Alle Personen deiner Organisation – mit oder ohne Login. Sie erscheinen in Anwesenheit, Bussen und Aufgaben.",
   "csvImport": "CSV-Import",
   "newParticipant": "Neues Mitglied",
   "emptyState": {
@@ -62,7 +62,7 @@
     "joinedAt": "Eintrittsdatum",
     "joinedAtHint": "Erscheint erst ab diesem Datum in Anwesenheitslisten. Leer = kein Beginn hinterlegt.",
     "leftAt": "Austrittsdatum",
-    "leftAtHint": "Erscheint ab dem Folgetag nicht mehr in Anwesenheitslisten. Leer = kein Austritt hinterlegt.",
+    "leftAtHint": "Erscheint ab dem Folgetag nicht mehr in Anwesenheitslisten und Auswahllisten; ein Login ist ab dann gesperrt. Leer = kein Austritt hinterlegt.",
     "templates": "Vorlagen",
     "noDescription": "Kein Beschreibungstext",
     "save": "Speichern",
@@ -95,7 +95,8 @@
     "joinsFrom": "Eintritt ab {date}",
     "leavesOn": "Austritt per {date}",
     "memberSince": "Mitglied seit {year}",
-    "noJoinDate": "Kein Eintrittsdatum"
+    "noJoinDate": "Kein Eintrittsdatum",
+    "loginBlocked": "Login gesperrt"
   },
   "deleteSelectionCount": "{count} löschen",
   "selectAll": "Alle sichtbaren auswählen",

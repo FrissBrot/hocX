@@ -20,7 +20,7 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
     backendFetchWithSession<TemplateSummary>(`/api/templates/${id}`),
     backendFetchWithSession<TemplateElement[]>(`/api/templates/${id}/elements`),
     backendFetchWithSession<EventSummary[]>("/api/events"),
-    backendFetchWithSession<ParticipantSummary[]>("/api/participants?limit=2000"),
+    backendFetchWithSession<ParticipantSummary[]>("/api/participants?include_former=true&limit=2000"),
     backendFetchWithSession<ParticipantSummary[]>(`/api/templates/${id}/participants`),
     backendFetchWithSession<StructuredListDefinition[]>("/api/lists"),
     backendFetchWithSession<CycleConfigSummary[]>("/api/cycle-configs"),

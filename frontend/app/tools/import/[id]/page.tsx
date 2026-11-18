@@ -18,7 +18,7 @@ export default async function WordImportDocumentPage({ params }: { params: Promi
   const [document, templates, participants] = await Promise.all([
     backendFetchWithSession<WordImportDocumentDetail>(`/api/tools/word-import/documents/${documentId}`),
     backendFetchWithSession<TemplateSummary[]>("/api/templates"),
-    backendFetchWithSession<ParticipantSummary[]>("/api/participants"),
+    backendFetchWithSession<ParticipantSummary[]>("/api/participants?include_former=true"),
   ]);
 
   if (!document) {

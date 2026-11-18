@@ -148,7 +148,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
   async function loadMore() {
     setIsLoadingMore(true);
     try {
-      const next = await browserApiFetch<ParticipantSummary[]>(`/api/participants?skip=${participants.length}&limit=${PAGE_SIZE}`);
+      const next = await browserApiFetch<ParticipantSummary[]>(`/api/participants?include_former=true&skip=${participants.length}&limit=${PAGE_SIZE}`);
       setParticipants((current) => [...current, ...(next ?? [])]);
       setHasMore((next ?? []).length === PAGE_SIZE);
     } catch (error) {
@@ -587,6 +587,8 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, c
                   {participant.is_active ? t("statusActive") : t("statusInactive")}
                 </Badge>
                 {invites[participant.id] && !participant.login_enabled ? <Badge variant="info">{t("invite.badge")}</Badge> : null}
+                {/* Ausgetretene können sich nicht mehr anmelden (Backend: AppUser.has_left), auch wenn der Login noch eingeschaltet ist */}
+                {participant.login_enabled && participantCategory(participant, today) === "left" ? <Badge variant="warning">{t("membership.loginBlocked")}</Badge> : null}
               </td>
               <td>
                 <div className="table-actions table-actions-end">

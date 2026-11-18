@@ -98,6 +98,10 @@ def _normalized_template_participant_assignments(
 @router.get("/participants", response_model=list[ParticipantRead])
 def list_participants(
     active_only: bool = Query(default=False),
+    # Ausgetretene Personen (Austrittsdatum vor heute) sind überall ausgeblendet, wo jemand
+    # ausgewählt wird. Nur die Mitgliederverwaltung und Seiten mit Geschichte (Protokolle,
+    # Importe, Listen mit Personenspalten) fragen sie ausdrücklich mit ab.
+    include_former: bool = Query(default=False),
     skip: int = Query(default=0, ge=0),
     # Ceiling raised from 500 to 2000 (audit finding, 2026-08-25) - the templates/{id} and
     # elements admin pages fetch the full participant list for their picker UI with a
@@ -110,7 +114,9 @@ def list_participants(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.PARTICIPANTS_MANAGE)
-    return participant_service.list_participants(db, tenant_id=user.current_tenant_id, active_only=active_only, skip=skip, limit=limit)
+    return participant_service.list_participants(
+        db, tenant_id=user.current_tenant_id, active_only=active_only, include_former=include_former, skip=skip, limit=limit,
+    )
 
 
 @router.post("/participants", response_model=ParticipantRead, status_code=status.HTTP_201_CREATED)
@@ -372,6 +378,8 @@ def invite_participant(participant_id: uuid.UUID, db: Session = Depends(get_db),
         raise HTTPException(status_code=409, detail={"code": "already_has_login", "message": "Diese Person hat bereits einen Login."})
     if not participant.is_active:
         raise HTTPException(status_code=409, detail={"code": "inactive_person", "message": "Inaktive Personen können nicht eingeladen werden."})
+    if participant.has_left:
+        raise HTTPException(status_code=409, detail={"code": "former_person", "message": "Ausgetretene Personen können nicht eingeladen werden."})
     if not (participant.email or "").strip():
         raise HTTPException(status_code=400, detail={"code": "email_required", "message": "Für eine Einladung braucht die Person eine E-Mail-Adresse."})
     settings_row = db.get(PlatformNotificationSettings, 1)

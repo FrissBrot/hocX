@@ -1,7 +1,7 @@
 {
   "pageTitle": "Membri",
-  "pageDescriptionEmpty": "Membri e ospiti della tua associazione.",
-  "pageDescription": "Tutte le persone della tua associazione – con o senza accesso. Compaiono in presenze, multe e compiti.",
+  "pageDescriptionEmpty": "Membri e ospiti della tua organizzazione.",
+  "pageDescription": "Tutte le persone della tua organizzazione – con o senza accesso. Compaiono in presenze, multe e compiti.",
   "csvImport": "Importa CSV",
   "newParticipant": "Nuovo membro",
   "emptyState": {
@@ -62,7 +62,7 @@
     "joinedAt": "Data di ingresso",
     "joinedAtHint": "Appare negli elenchi presenze solo da questa data. Vuoto = nessun inizio impostato.",
     "leftAt": "Data di uscita",
-    "leftAtHint": "Non appare più negli elenchi presenze dal giorno successivo. Vuoto = nessuna uscita impostata.",
+    "leftAtHint": "Dal giorno successivo la persona non compare più negli elenchi delle presenze né negli elenchi di selezione e un eventuale accesso è bloccato. Vuoto = nessuna uscita registrata.",
     "templates": "Modelli",
     "noDescription": "Nessun testo descrittivo",
     "save": "Salva",
@@ -95,7 +95,8 @@
     "joinsFrom": "Ingresso dal {date}",
     "leavesOn": "Uscita il {date}",
     "memberSince": "Membro dal {year}",
-    "noJoinDate": "Nessuna data di ingresso"
+    "noJoinDate": "Nessuna data di ingresso",
+    "loginBlocked": "Accesso bloccato"
   },
   "deleteSelectionCount": "Elimina {count}",
   "selectAll": "Seleziona tutti i visibili",

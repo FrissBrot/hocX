@@ -99,7 +99,10 @@ class UserService:
 
     def list_users(self, db: Session, actor: CurrentUser):
         require_permission(actor, P.ACCESS_MANAGE)
-        return self._read_models(db, self.repository.list_by_tenant(db, actor.current_tenant_id))
+        # Logins ausgetretener Personen sind gesperrt (AppUser.has_left) und erscheinen hier nicht mehr;
+        # die Person bleibt in der Mitgliederliste unter «Ausgetreten».
+        users = [user for user in self.repository.list_by_tenant(db, actor.current_tenant_id) if not user.has_left]
+        return self._read_models(db, users)
 
     def get_user(self, db: Session, user_id: int, actor: CurrentUser):
         require_permission(actor, P.ACCESS_MANAGE)

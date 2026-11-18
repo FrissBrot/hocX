@@ -76,6 +76,8 @@ def recipient_block_reason(person: Participant | None, tenant_id: int, group: st
         return "recipient_missing"
     if not person.is_active:
         return "recipient_inactive"
+    if person.has_left:
+        return "recipient_left"
     if not (person.email or "").strip():
         return "no_email"
     if not person.login_enabled and not person.notify_without_login and group not in GROUPS_WITHOUT_LOGIN:
@@ -159,7 +161,10 @@ def _deliver_group(db: Session, config: email_transport.EmailConfig, tenant_id: 
         row.last_error = None
     settings_row = db.get(PlatformNotificationSettings, 1)
     if settings_row is not None:
+        # Wie bei der Test-Mail: ein erfolgreicher Versand löst den letzten Fehler ab.
         settings_row.email_last_sent_at = now
+        settings_row.email_last_error = None
+        settings_row.email_last_error_at = None
     return "sent"
 
 

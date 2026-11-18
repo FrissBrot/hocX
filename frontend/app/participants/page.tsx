@@ -17,7 +17,7 @@ export default async function ParticipantsPage() {
   }
 
   const [participants, templates] = await Promise.all([
-    backendFetchWithSession<ParticipantSummary[]>("/api/participants?limit=2000"),
+    backendFetchWithSession<ParticipantSummary[]>("/api/participants?include_former=true&limit=2000"),
     backendFetchWithSession<TemplateSummary[]>("/api/templates"),
   ]);
 

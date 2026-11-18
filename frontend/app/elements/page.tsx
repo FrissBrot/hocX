@@ -25,7 +25,7 @@ export default async function ElementsPage({ searchParams }: { searchParams: Pro
   const definitions = await backendFetchWithSession<ElementDefinition[]>("/api/element-definitions?library=true");
   const events = (await backendFetchWithSession<EventSummary[]>("/api/events")) ?? [];
   const lists = (await backendFetchWithSession<StructuredListDefinition[]>("/api/lists")) ?? [];
-  const participants = (await backendFetchWithSession<ParticipantSummary[]>("/api/participants?limit=2000")) ?? [];
+  const participants = (await backendFetchWithSession<ParticipantSummary[]>("/api/participants?include_former=true&limit=2000")) ?? [];
   const accounts = (await backendFetchWithSession<FinanceAccount[]>("/api/finance/accounts")) ?? [];
   const capabilities = await backendFetchWithSession<Capabilities>("/api/document-studio/capabilities");
   const knownEventTags = Array.from(
@@ -38,7 +38,7 @@ export default async function ElementsPage({ searchParams }: { searchParams: Pro
         mobile={<MobileDesktopOnly navKey="elements" backHref="/templates" backNavKey="protocolTemplates" />}
         desktop={
           <>
-          <RouteTabs tabs={protocolTemplateTabs(t)} activeHref="/elements" />
+          <RouteTabs tabs={protocolTemplateTabs(t, canAdmin)} activeHref="/elements" />
           <section className="panel">
             <ElementDefinitionManager
               initialDefinitions={definitions ?? []}

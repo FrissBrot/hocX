@@ -150,6 +150,7 @@ def _load(db: Session, job_id: uuid.UUID):
             account is None
             or not account.is_active
             or not account.login_enabled
+            or account.has_left
             or (account.session_revoke_at is not None and account.session_revoke_at > job.created_at)
         ):
             return job, False

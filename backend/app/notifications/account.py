@@ -71,7 +71,7 @@ def request_password_reset(db: Session, email: str) -> None:
     if not normalized:
         return
     user = db.scalar(select(AppUser).where(AppUser.email == normalized, AppUser.login_enabled.is_(True)))
-    if user is None or not user.is_active:
+    if user is None or not user.is_active or user.has_left:
         return
     _issue(db, user, "password_reset", created_by_user_id=None)
     db.commit()
@@ -119,7 +119,7 @@ def _valid_token(db: Session, token: str) -> tuple[AccountToken, AppUser] | None
     if row is None or row.used_at is not None or row.revoked_at is not None or row.expires_at is None or row.expires_at <= _now():
         return None
     user = db.get(AppUser, row.user_id)
-    if user is None or user.tenant_id != row.tenant_id or not user.is_active or not (user.email or "").strip():
+    if user is None or user.tenant_id != row.tenant_id or not user.is_active or user.has_left or not (user.email or "").strip():
         return None
     # Passwort zurücksetzen nur mit Login, Einladung nur ohne (danach hat das Konto einen Login)
     if (row.purpose == "password_reset") != bool(user.login_enabled):

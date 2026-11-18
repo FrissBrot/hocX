@@ -32,7 +32,13 @@ import { can } from "@/lib/permissions";
 import { parseParticipantCsv } from "@/lib/utils/participant-csv";
 
 type ImportResult = { imported: ParticipantSummary[]; duplicates: string[]; errors: string[] };
-type StatusFilter = "active" | "inactive" | "all";
+type StatusFilter = "active" | "inactive" | "left" | "all";
+
+/** Wie am Desktop (participant-manager.tsx): «Ausgetreten» (Austrittsdatum vorbei) hat Vorrang vor is_active. */
+function statusOf(participant: ParticipantSummary, today: string): Exclude<StatusFilter, "all"> {
+  if (participant.left_at && participant.left_at < today) return "left";
+  return participant.is_active ? "active" : "inactive";
+}
 
 function membershipNote(participant: ParticipantSummary, t: (key: string, values?: Record<string, string>) => string, locale: string): string | null {
   const today = todayIso();
@@ -48,7 +54,7 @@ export function MobileParticipants({ initialParticipants, templates, tenantId }:
   const openMore = useOpenMore();
   const confirm = useConfirm();
   const showToast = useToast();
-  const [participants, setParticipants] = useAllPages<ParticipantSummary>("/api/participants", initialParticipants);
+  const [participants, setParticipants] = useAllPages<ParticipantSummary>("/api/participants?include_former=true", initialParticipants);
   const [search, setSearch] = useState("");
   const [loginTab, setLoginTab] = useState<"withoutLogin" | "withLogin">("withoutLogin");
   const [status, setStatus] = useState<StatusFilter>("active");
@@ -61,9 +67,10 @@ export function MobileParticipants({ initialParticipants, templates, tenantId }:
 
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
+    const today = todayIso();
     return participants
       .filter((participant) => Boolean(participant.login_enabled) === (loginTab === "withLogin"))
-      .filter((participant) => (status === "all" ? true : status === "active" ? participant.is_active : !participant.is_active))
+      .filter((participant) => status === "all" || statusOf(participant, today) === status)
       .filter((participant) => !needle || `${participant.display_name} ${participant.email ?? ""}`.toLowerCase().includes(needle))
       .sort((a, b) => a.display_name.localeCompare(b.display_name));
   }, [participants, search, status, loginTab]);
@@ -130,9 +137,9 @@ export function MobileParticipants({ initialParticipants, templates, tenantId }:
         <SearchInput value={search} onChange={setSearch} placeholder={t("searchPlaceholder")} />
       </div>
       <MobileChipRow>
-        {(["active", "inactive", "all"] as StatusFilter[]).map((value) => (
+        {(["active", "inactive", "left", "all"] as StatusFilter[]).map((value) => (
           <MobileChip key={value} active={status === value} onClick={() => setStatus(value)}>
-            {value === "active" ? t("statusActive") : value === "inactive" ? t("statusInactive") : tMobile("common.all")}
+            {value === "active" ? t("statusActive") : value === "inactive" ? t("statusInactive") : value === "left" ? t("filters.left") : tMobile("common.all")}
           </MobileChip>
         ))}
       </MobileChipRow>

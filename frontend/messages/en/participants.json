@@ -1,7 +1,7 @@
 {
   "pageTitle": "Members",
-  "pageDescriptionEmpty": "Members and guests of your club.",
-  "pageDescription": "Everyone in your club – with or without a login. They appear in attendance, fines and tasks.",
+  "pageDescriptionEmpty": "Members and guests of your organization.",
+  "pageDescription": "Everyone in your organization – with or without a login. They appear in attendance, fines and tasks.",
   "csvImport": "CSV import",
   "newParticipant": "New member",
   "emptyState": {
@@ -62,7 +62,7 @@
     "joinedAt": "Join date",
     "joinedAtHint": "Only appears in attendance lists from this date on. Empty = no start date set.",
     "leftAt": "Leave date",
-    "leftAtHint": "No longer appears in attendance lists from the next day on. Empty = no leave date set.",
+    "leftAtHint": "From the following day, the person no longer appears in attendance lists or selection lists, and any login is blocked. Empty = no exit recorded.",
     "templates": "Templates",
     "noDescription": "No description text",
     "save": "Save",
@@ -95,7 +95,8 @@
     "joinsFrom": "Joining from {date}",
     "leavesOn": "Leaving on {date}",
     "memberSince": "Member since {year}",
-    "noJoinDate": "No join date"
+    "noJoinDate": "No join date",
+    "loginBlocked": "Login blocked"
   },
   "deleteSelectionCount": "Delete {count}",
   "selectAll": "Select all visible",

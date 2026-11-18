@@ -1,7 +1,7 @@
 {
   "pageTitle": "Membres",
-  "pageDescriptionEmpty": "Membres et invités de votre association.",
-  "pageDescription": "Toutes les personnes de votre association – avec ou sans accès. Elles apparaissent dans les présences, amendes et tâches.",
+  "pageDescriptionEmpty": "Membres et invités de votre organisation.",
+  "pageDescription": "Toutes les personnes de votre organisation – avec ou sans accès. Elles apparaissent dans les présences, amendes et tâches.",
   "csvImport": "Import CSV",
   "newParticipant": "Nouveau membre",
   "emptyState": {
@@ -62,7 +62,7 @@
     "joinedAt": "Date d'entrée",
     "joinedAtHint": "N'apparaît dans les listes de présence qu'à partir de cette date. Vide = aucun début défini.",
     "leftAt": "Date de sortie",
-    "leftAtHint": "N'apparaît plus dans les listes de présence à partir du lendemain. Vide = aucune sortie définie.",
+    "leftAtHint": "Dès le lendemain, la personne n'apparaît plus dans les listes de présence ni dans les listes de sélection, et une éventuelle connexion est bloquée. Vide = aucune sortie enregistrée.",
     "templates": "Modèles",
     "noDescription": "Aucun texte de description",
     "save": "Enregistrer",
@@ -95,7 +95,8 @@
     "joinsFrom": "Entrée à partir du {date}",
     "leavesOn": "Sortie le {date}",
     "memberSince": "Membre depuis {year}",
-    "noJoinDate": "Pas de date d'entrée"
+    "noJoinDate": "Pas de date d'entrée",
+    "loginBlocked": "Connexion bloquée"
   },
   "deleteSelectionCount": "Supprimer {count}",
   "selectAll": "Sélectionner tout ce qui est visible",
@@ -140,7 +141,7 @@
   },
   "deleteDialog": {
     "title": "Supprimer définitivement « {name} » ?",
-    "message": "La personne disparaît avec ses présences, amendes et attributions de tâches ; c'est irréversible. Si elle a seulement quitté l'association, indiquez plutôt une date de sortie ou « Inactif ».",
+    "message": "La personne disparaît avec ses présences, amendes et attributions de tâches ; c'est irréversible. Si elle a seulement quitté l'organisation, indiquez plutôt une date de sortie ou « Inactif ».",
     "messageWithLogin": "La personne disparaît avec son accès, ses présences, amendes et attributions de tâches ; c'est irréversible. Si elle ne doit simplement plus se connecter, retirez plutôt l'accès (sous « Accès et rôles »).",
     "confirm": "Supprimer définitivement",
     "bulkTitle": "{count, plural, one {Supprimer définitivement # personne ?} other {Supprimer définitivement # personnes ?}}",

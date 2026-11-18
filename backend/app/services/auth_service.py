@@ -62,7 +62,8 @@ class AuthService:
                 details={"reason": "unknown_account" if user is None else ("inactive" if not user.is_active else "password")},
             )
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "invalid_credentials", "message": "E-Mail oder Passwort ist ungültig."})
-        if not user.login_enabled:
+        # Ausgetreten (left_at vor heute): Login gesperrt wie bei deaktiviertem Login.
+        if not user.login_enabled or user.has_left:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "login_disabled", "message": "Login ist für dieses Konto deaktiviert."})
 
         current_user = build_current_user(db, user)

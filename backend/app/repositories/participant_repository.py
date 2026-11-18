@@ -22,10 +22,16 @@ def participant_eligible_on(as_of: date) -> ColumnElement[bool]:
 
 
 class ParticipantRepository:
-    def list(self, db: Session, *, tenant_id: int, active_only: bool = False, skip: int = 0, limit: int = 100) -> list[Participant]:
+    def list(
+        self, db: Session, *, tenant_id: int, active_only: bool = False, include_former: bool = True, today: date | None = None,
+        skip: int = 0, limit: int = 100,
+    ) -> list[Participant]:
         statement = select(Participant).where(Participant.tenant_id == tenant_id)
         if active_only:
             statement = statement.where(Participant.is_active.is_(True))
+        if not include_former:
+            # Ausgetreten = Austrittsdatum vor heute (Participant.has_left); am Austrittstag selbst noch dabei.
+            statement = statement.where(or_(Participant.left_at.is_(None), Participant.left_at >= today))
         statement = statement.order_by(Participant.display_name.asc(), Participant.id.asc()).offset(skip).limit(limit)
         return list(db.scalars(statement))
 

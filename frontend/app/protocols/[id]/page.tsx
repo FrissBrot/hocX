@@ -34,7 +34,7 @@ export default async function ProtocolDetailPage({ params }: { params: Promise<{
   const eventsPromise = backendFetchAllPagesWithSession<EventSummary>("/api/events");
   const listsPromise = backendFetchWithSession<StructuredListDefinition[]>("/api/lists").then((v) => v ?? []);
   // Alle Teilnehmer, damit gespeicherte Auswahlen ausserhalb der Vorlage mit Namen statt "X ausgewaehlt" erscheinen.
-  const participantDirectoryPromise = backendFetchWithSession<ParticipantSummary[]>("/api/participants?limit=2000").then((v) => v ?? []);
+  const participantDirectoryPromise = backendFetchWithSession<ParticipantSummary[]>("/api/participants?include_former=true&limit=2000").then((v) => v ?? []);
   const todosPromise = backendFetchWithSession<Record<string, ProtocolTodo[]>>(`/api/protocols/${id}/block-todos`).then((v) => v ?? {});
   const imagesPromise = backendFetchWithSession<Record<string, ProtocolImage[]>>(`/api/protocols/${id}/block-images`).then((v) => v ?? {});
   const pendingTodosPromise = backendFetchWithSession<TodoListItem[]>(`/api/protocols/${id}/pending-todos`).then((v) => v ?? []);

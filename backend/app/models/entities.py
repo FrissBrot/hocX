@@ -366,6 +366,18 @@ class Participant(Base, TimestampMixin, UpdatedAtMixin):
     # Personen ohne Login bekommen E-Mails nur, wenn ein Admin das einschaltet (Migration 0170).
     notify_without_login: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
 
+    @property
+    def has_left(self) -> bool:
+        """Ausgetreten: das Austrittsdatum liegt vor heute (Schweizer Zeit; am Austrittstag selbst ist
+        die Person noch Mitglied, wie in den Anwesenheitslisten). Ein ausgetretenes Konto kann sich
+        nie anmelden und bekommt keine Mails, unabhängig von login_enabled/is_active - wird das
+        Austrittsdatum entfernt oder verschoben, gilt der Login ohne weiteres Zutun wieder."""
+        if self.left_at is None:
+            return False
+        from app.services.todo_fine_service import today
+
+        return self.left_at < today()
+
 
 # Authentifizierung und Teilnahme verwenden denselben Datensatz.
 AppUser = Participant

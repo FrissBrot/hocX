@@ -667,7 +667,7 @@ class MfaService:
         user = db.get(AppUser, int(flow["user_id"]))
         if user is None or not user.is_active:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "account_inactive", "message": "Benutzerkonto ist nicht mehr aktiv"})
-        if not user.login_enabled:
+        if not user.login_enabled or user.has_left:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "login_disabled", "message": "Login ist für dieses Konto deaktiviert"})
         current_user = build_current_user(db, user, mfa_verified=False)
         return PendingLoginContext(user=user, current_user=current_user, request_host=flow.get("request_host"))

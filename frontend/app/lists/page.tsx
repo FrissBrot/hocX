@@ -25,7 +25,7 @@ export default async function ListsPage() {
   const [lists, entriesByList, participants, events] = await Promise.all([
     backendFetchWithSession<StructuredListDefinition[]>("/api/lists"),
     backendFetchWithSession<Record<string, StructuredListEntry[]>>("/api/list-entries"),
-    backendFetchWithSession<ParticipantSummary[]>("/api/participants?limit=2000"),
+    backendFetchWithSession<ParticipantSummary[]>("/api/participants?include_former=true&limit=2000"),
     // Alle Seiten: GET /api/events liefert pro Aufruf nur die neusten Termine, ältere fehlten sonst
     // in der Terminauswahl der Listen.
     backendFetchAllPagesWithSession<EventSummary>("/api/events"),

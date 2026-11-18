@@ -47,8 +47,14 @@ class ParticipantService:
         self.repository = repository or ParticipantRepository()
         self.access_service = AccessService()
 
-    def list_participants(self, db: Session, *, tenant_id: int, active_only: bool = False, skip: int = 0, limit: int = 100) -> list[Participant]:
-        return self.repository.list(db, tenant_id=tenant_id, active_only=active_only, skip=skip, limit=limit)
+    def list_participants(
+        self, db: Session, *, tenant_id: int, active_only: bool = False, include_former: bool = True, skip: int = 0, limit: int = 100,
+    ) -> list[Participant]:
+        from app.services.todo_fine_service import today
+
+        return self.repository.list(
+            db, tenant_id=tenant_id, active_only=active_only, include_former=include_former, today=today(), skip=skip, limit=limit,
+        )
 
     def get_participant(self, db: Session, participant_id: int, *, tenant_id: int) -> Participant | None:
         # Tenant-scoped directly here now (audit D7, 2026-08-16) - defense in depth. Every

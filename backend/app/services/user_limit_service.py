@@ -9,15 +9,21 @@ keine neuen dazu (docs/FEATURE_ENTITLEMENT_ARCHITECTURE.md, Abschnitt Nutzungsli
 from __future__ import annotations
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import AppUser, Plan, Tenant
 
 
 def login_account_count(db: Session, tenant_id: int) -> int:
+    """Konten, die sich anmelden können - ohne ausgetretene Personen (AppUser.has_left)."""
+    from app.services.todo_fine_service import today
+
     return int(db.scalar(
-        select(func.count(AppUser.id)).where(AppUser.tenant_id == tenant_id, AppUser.login_enabled.is_(True), AppUser.is_active.is_(True))
+        select(func.count(AppUser.id)).where(
+            AppUser.tenant_id == tenant_id, AppUser.login_enabled.is_(True), AppUser.is_active.is_(True),
+            or_(AppUser.left_at.is_(None), AppUser.left_at >= today()),
+        )
     ) or 0)
 
 

@@ -271,7 +271,7 @@ def get_optional_current_user(
     if session_data is None:
         return None
     user = db.get(AppUser, int(session_data["user_id"]))
-    if user is None or not user.is_active or not user.login_enabled:
+    if user is None or not user.is_active or not user.login_enabled or user.has_left:
         return None
     if user.session_revoke_at is not None:
         token_iat = int(session_data.get("iat", 0))
