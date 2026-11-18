@@ -54,6 +54,8 @@ export type PendingMfaLogin = {
   default_factor_label: string | null;
   can_add_totp: boolean;
   can_add_passkey: boolean;
+  /** Nur Erstlogin über Einladung ohne MFA-Pflicht: «Später einrichten» erlaubt. */
+  can_skip?: boolean;
 };
 
 export type LoginResponse = SessionInfo & {
@@ -2642,6 +2644,13 @@ export type AccountLinkPreview = {
   display_name: string;
   email: string;
   tenant_name: string;
+};
+
+/** POST /api/auth/account-link/complete: Einladung liefert das Login-Ticket für den zweiten Faktor. */
+export type AccountLinkComplete = {
+  purpose: "password_reset" | "invite";
+  mfa: PendingMfaLogin | null;
+  mfa_required: boolean | null;
 };
 
 export type ParticipantInvite = {

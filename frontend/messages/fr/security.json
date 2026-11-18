@@ -132,6 +132,8 @@
     "passkey_unknown": "Cette passkey n'appartient pas à ce compte.",
     "passkey_already_registered": "Cette passkey est déjà enregistrée.",
     "rate_limited": "Trop de tentatives. Veuillez patienter un instant puis réessayer.",
-    "login_locked": "Trop de connexions échouées. Veuillez patienter 15 minutes puis réessayer."
+    "login_locked": "Trop de connexions échouées. Veuillez patienter 15 minutes puis réessayer.",
+    "mfa_skip_not_allowed": "Le deuxième facteur est obligatoire pour ce compte et ne peut pas être ignoré.",
+    "password_weak": "Le mot de passe est trop faible. Utilise au moins 12 caractères sans nom, e-mail ni mots courants."
   }
 }

@@ -24,6 +24,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from app.core.password_policy import ensure_password_acceptable
 from app.core.security import hash_password
 from app.models import AccountToken, AppUser, Tenant
 from app.notifications import publish
@@ -138,6 +139,14 @@ def preview(db: Session, token: str) -> dict | None:
 
 def complete(db: Session, token: str, password: str) -> str:
     """Setzt das Passwort (Einladung: dazu den Login) und verbraucht den Link. Liefert den Zweck."""
+    return complete_for_user(db, token, password)[0]
+
+
+def complete_for_user(db: Session, token: str, password: str) -> tuple[str, AppUser]:
+    """Wie ``complete``, liefert zusätzlich das Konto (Erstlogin: danach folgt der zweite Faktor,
+    siehe ``MfaService.start_invite_setup``). Das Passwort muss die Passwortregel erfüllen
+    (app/core/password_policy.py, gleiche Regel wie die Anzeige auf /auth/set-password); ein zu
+    schwaches Passwort verbraucht den Link nicht."""
     from app.services import user_limit_service
     from app.services.user_service import UserService
 
@@ -145,6 +154,8 @@ def complete(db: Session, token: str, password: str) -> str:
     if found is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "link_invalid", "message": "Der Link ist ungültig oder abgelaufen."})
     row, user = found
+    tenant_name = db.scalar(select(Tenant.name).where(Tenant.id == user.tenant_id))
+    ensure_password_acceptable(password, personal=(user.first_name, user.last_name, user.display_name, user.email, tenant_name))
     # Gegen gleichzeitiges zweites Einlösen: Zeile sperren und erneut prüfen
     # populate_existing: row liegt schon in der Identity-Map; ohne die Option lieferte die Sperrabfrage
     # das veraltete Objekt (used_at=None) und zwei gleichzeitige Requests lösten denselben Link ein.
@@ -172,7 +183,7 @@ def complete(db: Session, token: str, password: str) -> str:
         db, action="user.password_reset" if row.purpose == "password_reset" else "user.invite_accepted",
         tenant_id=user.tenant_id, actor_user_id=user.id, entity_type="app_user", entity_id=user.id,
     )
-    return row.purpose
+    return row.purpose, user
 
 
 # ── Sicherheitshinweise ─────────────────────────────────────────────────

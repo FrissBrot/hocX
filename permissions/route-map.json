@@ -643,6 +643,10 @@
       "handler": "auth.start_login_passkey_setup",
       "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
     },
+    "POST /api/auth/mfa/setup/skip": {
+      "handler": "auth.skip_login_mfa_setup",
+      "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"
+    },
     "POST /api/auth/mfa/totp/setup/complete": {
       "handler": "auth.complete_login_totp_setup",
       "note": "Anmeldung, MFA beim Login, Session, Domain-Bridge, Passwort vergessen, Einladung"

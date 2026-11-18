@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import secrets
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -22,7 +23,8 @@ from app.services.notification_settings_service import NotificationSettingsServi
 from app.services.user_service import UserService
 from tests.factories import make_app_user, make_current_user, make_participant, make_tenant
 
-PASSWORD = "ein-sehr-langes-passwort"
+# Zur Laufzeit erzeugt (SECURITY-RULES 5.1); stark genug für app/core/password_policy.py
+PASSWORD = f"Kiesel-Tanne-Wolke-{secrets.randbelow(90) + 10}"
 
 
 @pytest.fixture

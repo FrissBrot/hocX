@@ -132,6 +132,8 @@
     "passkey_unknown": "This passkey does not belong to this account.",
     "passkey_already_registered": "This passkey is already registered.",
     "rate_limited": "Too many attempts. Please wait a moment and try again.",
-    "login_locked": "Too many failed sign-ins. Please wait 15 minutes and try again."
+    "login_locked": "Too many failed sign-ins. Please wait 15 minutes and try again.",
+    "mfa_skip_not_allowed": "A second factor is required for this account and cannot be skipped.",
+    "password_weak": "The password is too weak. Use at least 12 characters without your name, email or common words."
   }
 }

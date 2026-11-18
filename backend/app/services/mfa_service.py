@@ -12,8 +12,9 @@ from sqlalchemy.orm import Session
 
 from app.core.rate_limit import check_account_lockout, enforce_rate_limit, record_failed_attempt
 from app.core.secret_crypto import decrypt_secret, encrypt_secret
-from app.core.permissions import P, requires_mfa
-from app.core.security import CurrentUser, build_current_user, load_role_permissions, require_permission
+from app.core.mfa_policy import account_requires_mfa
+from app.core.permissions import P
+from app.core.security import CurrentUser, build_current_user, require_permission
 from app.core.totp import build_totp_uri, generate_totp_secret, verify_totp_code
 from app.core.webauthn import (
     RegisteredCredential,
@@ -43,6 +44,9 @@ from app.schemas.mfa import (
 
 _FLOW_PREFIX = "mfa:flow:"
 _FLOW_TTL_SECONDS = 10 * 60
+# Erstlogin über Einladung: Zeit für Passkey bzw. Authenticator-App (App installieren, scannen).
+# Läuft das Ticket ab, ist das Passwort trotzdem gesetzt - dann führt der normale Login weiter.
+_INVITE_TICKET_TTL_SECONDS = 30 * 60
 _ISSUER = "hocX"
 
 # Account-scoped lockout for TOTP login verification, independent of which login ticket the
@@ -99,8 +103,7 @@ class MfaService:
     def user_requires_mfa(self, db: Session, user_id: int) -> bool:
         """MFA ist Pflicht, sobald das Konto eine Administrations-Permission hat (requires_mfa im
         Katalog) - mit den Standardrollen genau die bisherige Regel "nur admin"."""
-        permissions, _ = load_role_permissions(db, user_id)
-        return requires_mfa(permissions)
+        return account_requires_mfa(db, user_id)
 
     def can_add_passkey_here(self, request_host: str | None) -> bool:
         if not request_host:
@@ -604,6 +607,7 @@ class MfaService:
             {
                 "user_id": user.id,
                 "request_host": request_host,
+                "issued_at": int(datetime.now(UTC).timestamp()),
             },
         )
         if factors:
@@ -628,6 +632,59 @@ class MfaService:
             default_factor_type=None,
             can_add_passkey=self.can_add_passkey_here(request_host),
         )
+
+    def start_invite_setup(self, db: Session, *, user: AppUser, request_host: str | None) -> MfaPendingLoginRead | None:
+        """Erstlogin über eine Einladung: nach dem verbrauchten Einladungslink (Passwort gesetzt,
+        account.complete_for_user) folgt der zweite Faktor - ohne zweites Login.
+
+        Zwischenzustand ist ein normales Login-Ticket (Redis, an das Konto gebunden, 30 Minuten,
+        nur im Antwort-Body, nie in der URL) mit Markierung ``invite``. Damit laufen Passkey- und
+        TOTP-Einrichtung über die bestehenden ``/auth/mfa/*/setup/*``-Endpunkte, die erst nach
+        bestätigtem Faktor eine Session ausstellen (``AuthService._finish_login``). Ohne Pflicht
+        (``account_requires_mfa``) darf die Person bewusst überspringen (``skip_invite_setup``).
+
+        None, wenn das Konto schon einen Faktor hat (z. B. früher schon einmal einen Login hatte):
+        dann gilt der normale Login mit diesem Faktor."""
+        if self._list_factors(db, user.id):
+            return None
+        required = self.user_requires_mfa(db, user.id)
+        ticket = self._create_flow(
+            "login_ticket",
+            {"user_id": user.id, "request_host": request_host, "invite": True, "issued_at": int(datetime.now(UTC).timestamp())},
+            ttl_seconds=_INVITE_TICKET_TTL_SECONDS,
+        )
+        current_user = build_current_user(db, user, mfa_verified=False)
+        pending = self._build_pending_login(
+            ticket=ticket,
+            user=user,
+            current_user=current_user,
+            status_value="setup_required",
+            required=required,
+            factors=[],
+            default_factor_type=None,
+            can_add_passkey=self.can_add_passkey_here(request_host),
+        )
+        pending.can_skip = not required
+        return pending
+
+    def skip_invite_setup(self, db: Session, ticket: str) -> PendingLoginContext:
+        """Bewusst ohne zweiten Faktor weiter (nur Erstlogin über Einladung, nur ohne Pflicht).
+
+        Serverseitig geprüft, nicht nur in der Oberfläche: ein Ticket aus dem normalen Login (das
+        es ohne Faktor nur bei Pflicht gibt) oder ein Konto mit Pflicht wird abgelehnt."""
+        flow = self._load_flow(ticket, expected_kind="login_ticket")
+        if not flow.get("invite"):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "mfa_skip_not_allowed", "message": "Der zweite Faktor kann hier nicht übersprungen werden"})
+        context = self._load_login_ticket(db, ticket)
+        if self._list_factors(db, context.user.id) or self.user_requires_mfa(db, context.user.id):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "mfa_skip_not_allowed", "message": "Der zweite Faktor kann hier nicht übersprungen werden"})
+        from app.services.audit_service import AuditService
+
+        AuditService().log(
+            db, action="user.mfa_setup_skipped", tenant_id=context.user.tenant_id,
+            actor_user_id=context.user.id, entity_type="app_user", entity_id=context.user.id,
+        )
+        return self._consume_login_ticket(db, ticket)
 
     def _build_pending_login(
         self,
@@ -669,12 +726,21 @@ class MfaService:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "account_inactive", "message": "Benutzerkonto ist nicht mehr aktiv"})
         if not user.login_enabled or user.has_left:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "login_disabled", "message": "Login ist für dieses Konto deaktiviert"})
+        # Wer nach Ausstellung des Tickets alle Sessions beendet hat (Passwort-/MFA-Reset durch
+        # Admin, Logout überall), beendet auch das Ticket (SECURITY-RULES 3.3). ">" wie bei der
+        # Session: complete_for_user setzt session_revoke_at in derselben Sekunde wie das Ticket.
+        issued_at = flow.get("issued_at")
+        if issued_at is not None and user.session_revoke_at is not None and int(user.session_revoke_at.timestamp()) > int(issued_at):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "mfa_flow_expired", "message": "MFA-Vorgang ist abgelaufen"})
         current_user = build_current_user(db, user, mfa_verified=False)
         return PendingLoginContext(user=user, current_user=current_user, request_host=flow.get("request_host"))
 
     def _consume_login_ticket(self, db: Session, ticket: str) -> PendingLoginContext:
         context = self._load_login_ticket(db, ticket)
-        self._delete_flow(ticket)
+        # Atomar verbrauchen (GETDEL): zwei gleichzeitige Abschlüsse mit demselben Ticket ergeben
+        # nicht zwei Sessions.
+        if self._redis().getdel(f"{_FLOW_PREFIX}{ticket}") is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "mfa_flow_expired", "message": "MFA-Vorgang ist abgelaufen"})
         return context
 
     def verify_login_totp(self, db: Session, *, ticket: str, code: str) -> PendingLoginContext:

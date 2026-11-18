@@ -98,7 +98,7 @@ def _authenticate_in(db: Session, token: str | None) -> CurrentUser | None:
     has_mfa_factor = _has_active_mfa_factor(db, user.id)
     if has_mfa_factor and not current_user.mfa_verified:
         return None
-    if _requires_mfa(current_user) and (not has_mfa_factor or not current_user.mfa_verified):
+    if _requires_mfa(db, current_user) and (not has_mfa_factor or not current_user.mfa_verified):
         return None
     return current_user
 
