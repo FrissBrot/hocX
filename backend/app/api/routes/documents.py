@@ -16,7 +16,7 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
@@ -497,6 +497,12 @@ def list_document_exports(
         statement = statement.where(DocumentExport.protocol_id == internal)
     elif access_service.is_restricted_reader(db, user):
         statement = statement.where(DocumentExport.created_by == user.user_id)
+    elif not access_service.sees_all_protocols(user):
+        # Exporte eines Protokolls nur, wenn das Protokoll lesbar ist (wie protocol_visibility:
+        # ohne meetings.read_drafts nur abgeschlossene) - sonst zeigte die Liste Titel und
+        # Prüf-ID von Entwurfsexporten (Nachtlauf 2026-11-18, dokumente/rechte).
+        final_protocols = select(Protocol.id).where(Protocol.tenant_id == user.current_tenant_id, Protocol.status == FINAL_PROTOCOL_STATUS)
+        statement = statement.where(or_(DocumentExport.protocol_id.is_(None), DocumentExport.protocol_id.in_(final_protocols)))
     if document_type:
         statement = statement.where(DocumentExport.document_type == document_type)
     exports = db.scalars(statement.order_by(DocumentExport.created_at.desc(), DocumentExport.id.desc()).offset(offset).limit(limit))
