@@ -20,6 +20,7 @@ import { TODO_DUE_PRESETS, todoDuePresetDate } from "@/lib/utils/todo-due";
 import { DateInput } from "@/components/ui/date-input";
 import { TimeInput } from "@/components/ui/time-input";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { formatTimeValue } from "@/lib/utils/time";
 import { TrackedChangeHideButton } from "@/components/ui/tracked-change-hide-button";
 import { Modal } from "@/components/ui/modal";
 import { LightboxImage } from "@/components/ui/lightbox-image";
@@ -109,6 +110,10 @@ import { SessionTodosSection } from "@/components/protocol/session-todos-section
 import { PdfOmittedHint } from "@/components/protocol/pdf-omitted-hint";
 import type { PdfCoverageEntry } from "@/components/protocol/use-pdf-coverage";
 import { localIsoDate } from "@/lib/documents/todo-export-filter";
+
+/** Terminfelder im Tabellenblock: Uhrzeiten über TimeInput, Texte als Markdown (wie im Terminformular). */
+const EVENT_TIME_FIELDS = new Set(["start_time", "end_time", "spezial_time1", "spezial_time2"]);
+const EVENT_MARKDOWN_FIELDS = new Set(["description", "program", "spezial_text1", "spezial_text2", "spezial_text3"]);
 
 function FocusedElementEditorImpl({
   collab,
@@ -2359,6 +2364,30 @@ function FocusedElementEditorImpl({
                                   >
                                     {participantSummary}
                                   </button>
+                                ) : EVENT_TIME_FIELDS.has(ef.field) ? (
+                                  <TimeInput
+                                    data-form-input
+                                    disabled={!blockEditable}
+                                    value={formatTimeValue((linkedEvent as unknown as Record<string, unknown>)[ef.field] as string | null)}
+                                    onChange={(value) => void updateEventFromBlock(block.id, linkedEvent.id, { [ef.field]: value || null } as Partial<EventSummary>)}
+                                  />
+                                ) : EVENT_MARKDOWN_FIELDS.has(ef.field) ? (
+                                  // Termintexte sind Markdown: formatiert bearbeiten, beim Verlassen speichern
+                                  <div
+                                    data-form-input
+                                    onBlur={() => {
+                                      const val = eventFieldDrafts[draftKey];
+                                      if (val === undefined) return;
+                                      setEventFieldDrafts((d) => { const next = { ...d }; delete next[draftKey]; return next; });
+                                      void updateEventFromBlock(block.id, linkedEvent.id, { [ef.field]: val || null } as Partial<EventSummary>);
+                                    }}
+                                  >
+                                    <RichTextEditor
+                                      readOnly={!blockEditable}
+                                      value={eventFieldDrafts[draftKey] ?? String((linkedEvent as unknown as Record<string, unknown>)[ef.field] ?? "")}
+                                      onChange={(markdown) => setEventFieldDrafts((d) => ({ ...d, [draftKey]: markdown }))}
+                                    />
+                                  </div>
                                 ) : (
                                   <input
                                     data-form-input

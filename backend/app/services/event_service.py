@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import csv
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, time
 from io import StringIO
 
 from sqlalchemy import func, select
@@ -169,6 +169,11 @@ class EventService:
             spezial_text1=payload.spezial_text1,
             spezial_text2=payload.spezial_text2,
             spezial_text3=payload.spezial_text3,
+            start_time=payload.start_time,
+            end_time=payload.end_time,
+            spezial_time1=payload.spezial_time1,
+            spezial_time2=payload.spezial_time2,
+            program=payload.program,
         )
         try:
             created = self.repository.create(db, event, commit=False)
@@ -525,6 +530,11 @@ class EventService:
         spezial_text1: str | None = None,
         spezial_text2: str | None = None,
         spezial_text3: str | None = None,
+        start_time: time | None = None,
+        end_time: time | None = None,
+        spezial_time1: time | None = None,
+        spezial_time2: time | None = None,
+        program: str | None = None,
     ) -> Event:
         self._validate_end_after_start(event_date, event_end_date, error_message="Event end date must be on or after the start date")
         return Event(
@@ -548,6 +558,11 @@ class EventService:
             spezial_text1=spezial_text1,
             spezial_text2=spezial_text2,
             spezial_text3=spezial_text3,
+            start_time=start_time,
+            end_time=end_time,
+            spezial_time1=spezial_time1,
+            spezial_time2=spezial_time2,
+            program=program,
         )
 
     def _normalize_header(self, value: str) -> str:

@@ -12,6 +12,7 @@ import { fetchCycleEvents } from "@/lib/api/cycle-events";
 import { EventSummary, ParticipantSummary } from "@/types/api";
 import type { TagConfig } from "@/lib/hooks/use-tag-config";
 import { formatDateRange } from "@/lib/utils/format";
+import { markdownToPlainText } from "@/lib/utils/markdown-text";
 
 // Mirrors the editor's own ProtocolEventDraft shape so onCreateEvent can be wired
 // directly to the existing createEventFromBlock(blockId, blockConfig, draft) — same
@@ -205,7 +206,7 @@ export function EventOverviewModal({
                         {eventRow.title || t("detailModal.fallbackTitle")}
                       </button>
                     </td>
-                    <td>{eventRow.description || <span className="muted">—</span>}</td>
+                    <td>{markdownToPlainText(eventRow.description) || <span className="muted">—</span>}</td>
                     <td>
                       <button
                         type="button"

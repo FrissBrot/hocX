@@ -507,6 +507,7 @@ class Event(Base, TimestampMixin, UpdatedAtMixin):
     event_end_date: Mapped[date | None] = mapped_column(Date)
     # Optionale Uhrzeit (z. B. Beginn der nächsten Sitzung), NULL = ganztägig
     start_time: Mapped[time | None] = mapped_column(Time)
+    end_time: Mapped[time | None] = mapped_column(Time)
     event_category_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("event_category.id", ondelete="RESTRICT"), nullable=False)
     tag: Mapped[str | None] = mapped_column(Text)
     title: Mapped[str] = mapped_column(Text, nullable=False)
@@ -525,6 +526,10 @@ class Event(Base, TimestampMixin, UpdatedAtMixin):
     spezial_text1: Mapped[str | None] = mapped_column(Text)
     spezial_text2: Mapped[str | None] = mapped_column(Text)
     spezial_text3: Mapped[str | None] = mapped_column(Text)
+    # Frei benennbare Uhrzeiten (Alias wie die übrigen Spezialfelder) und das Programm (Markdown)
+    spezial_time1: Mapped[time | None] = mapped_column(Time)
+    spezial_time2: Mapped[time | None] = mapped_column(Time)
+    program: Mapped[str | None] = mapped_column(Text)
     cycle_assignments: Mapped[list[EventCycle]] = relationship(
         "EventCycle",
         primaryjoin="Event.id == EventCycle.event_id",

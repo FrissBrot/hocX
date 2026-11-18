@@ -3,7 +3,7 @@
 //
 // Nur die Feldnamen (Keys); die Bezeichnungen liegen in den Übersetzungen
 // (templates.elementEditor.syncField.<key>), siehe syncFieldLabel.
-export const EVENT_SYNC_FIELD_KEYS = ["description", "location", "spezial_text1", "spezial_text2", "spezial_text3"] as const;
+export const EVENT_SYNC_FIELD_KEYS = ["description", "program", "location", "spezial_text1", "spezial_text2", "spezial_text3"] as const;
 export const TODO_SYNC_FIELD_KEYS = ["task", "reference_link", "due_marker"] as const;
 
 type TFunc = (key: string) => string;

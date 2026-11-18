@@ -6,6 +6,8 @@ import { useEventFieldConfig } from "@/lib/hooks/use-event-field-config";
 
 import { daySpan } from "@/components/events/event-utils";
 import { DateInput } from "@/components/ui/date-input";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { TimeInput } from "@/components/ui/time-input";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
@@ -21,6 +23,8 @@ type FormState = {
   tag: string;
   title: string;
   description: string;
+  start_time: string;
+  end_time: string;
   location: string;
   participant_count: string;
   is_cancelled: boolean;
@@ -36,6 +40,8 @@ function emptyForm(date: string): FormState {
     tag: "",
     title: "",
     description: "",
+    start_time: "",
+    end_time: "",
     location: "",
     participant_count: "0",
     is_cancelled: false,
@@ -202,6 +208,8 @@ export function EventCreateModal({ open, onClose, initialDate, knownTags, availa
           tag: form.tag || null,
           title: form.title.trim(),
           description: form.description || null,
+          start_time: form.start_time || null,
+          end_time: form.end_time || null,
           participant_count: Math.max(0, Number(form.participant_count || "0")),
           is_cancelled: form.is_cancelled,
           cycle_assignments: form.cycle_assignments_touched ? form.cycle_assignments : undefined,
@@ -290,15 +298,26 @@ export function EventCreateModal({ open, onClose, initialDate, knownTags, availa
               <span className="field-help">{t("createModal.periodHint")}</span>
             </div>
 
-            <label className="field-stack">
+            <div className="two-col">
+              <label className="field-stack">
+                <span className="field-label">{t("detailForm.startTimeLabel")}</span>
+                <TimeInput value={form.start_time} onChange={(value) => setForm((current) => ({ ...current, start_time: value }))} />
+              </label>
+              <label className="field-stack">
+                <span className="field-label">{t("detailForm.endTimeLabel")}</span>
+                <TimeInput value={form.end_time} onChange={(value) => setForm((current) => ({ ...current, end_time: value }))} />
+              </label>
+            </div>
+
+            {/* Markdown: div statt label, sonst leitet ein Klick auf die Toolbar um */}
+            <div className="field-stack">
               <span className="field-label">{t("columns.description")}</span>
-              <textarea
-                rows={5}
+              <RichTextEditor
                 value={form.description}
                 placeholder={t("createModal.descriptionPlaceholder")}
-                onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+                onChange={(markdown) => setForm((current) => ({ ...current, description: markdown }))}
               />
-            </label>
+            </div>
 
             <label className="field-stack">
               <span className="field-label">{t("form.location")}</span>

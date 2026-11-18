@@ -253,7 +253,9 @@
       "spezial3_ids": "Speciale 3",
       "spezial_text1": "Testo speciale 1",
       "spezial_text2": "Testo speciale 2",
-      "spezial_text3": "Testo speciale 3"
+      "spezial_text3": "Testo speciale 3",
+      "spezial_time1": "Orario speciale 1",
+      "spezial_time2": "Orario speciale 2"
     }
   },
   "replacesDomainHint": "Sostituisce {domain} dopo una verifica riuscita. Fino ad allora {domain} resta attivo senza modifiche.",

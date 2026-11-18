@@ -84,7 +84,15 @@
       "error": "Not saved – please try again."
     },
     "fieldSettingsHint": "The «Special» fields can be renamed or hidden.",
-    "fieldSettingsLink": "Go to settings"
+    "fieldSettingsLink": "Go to settings",
+    "startTimeLabel": "Start",
+    "endTimeLabel": "End",
+    "programLabel": "Programme",
+    "programPlaceholder": "Schedule, times, meeting points …",
+    "specialTime1Label": "Special time 1",
+    "specialTime2Label": "Special time 2",
+    "specialFieldTag": "Special field",
+    "specialFieldTitle": "Special field: its name and visibility can be changed in the settings."
   },
   "detailModal": {
     "fallbackTitle": "Event"

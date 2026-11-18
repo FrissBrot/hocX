@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
@@ -60,6 +60,11 @@ class EventBase(BaseModel):
     spezial_text1: str | None = None
     spezial_text2: str | None = None
     spezial_text3: str | None = None
+    start_time: time | None = None
+    end_time: time | None = None
+    spezial_time1: time | None = None
+    spezial_time2: time | None = None
+    program: str | None = None
 
 
 class EventCreate(EventBase):
@@ -84,6 +89,11 @@ class EventUpdate(BaseModel):
     spezial_text1: str | None = None
     spezial_text2: str | None = None
     spezial_text3: str | None = None
+    start_time: time | None = None
+    end_time: time | None = None
+    spezial_time1: time | None = None
+    spezial_time2: time | None = None
+    program: str | None = None
     cycle_assignments: list[CycleAssignment] | None = None
 
     @field_validator("event_date", "title", "is_cancelled")

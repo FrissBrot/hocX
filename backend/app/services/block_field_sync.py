@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.models import Event, ProtocolTodo
 
 SYNC_TARGET_FIELDS: dict[str, tuple[str, ...]] = {
-    "event": ("description", "location", "spezial_text1", "spezial_text2", "spezial_text3"),
+    "event": ("description", "program", "location", "spezial_text1", "spezial_text2", "spezial_text3"),
     "todo": ("task", "reference_link", "due_marker"),
 }
 

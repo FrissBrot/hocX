@@ -15,23 +15,29 @@ import { Select } from "@/components/ui/select";
 import { applyEventFilter } from "@/lib/element-types/event-filter";
 import { useEventFieldConfig } from "@/lib/hooks/use-event-field-config";
 import { formatDate, formatDateRange } from "@/lib/utils/format";
+import { markdownToPlainText } from "@/lib/utils/markdown-text";
+import { formatTimeValue } from "@/lib/utils/time";
 import type { EventSummary, StructuredListDefinition, StructuredListEntry } from "@/types/api";
 
 import { type BlockForm, defaultRow, defaultRowConfig, moveItem, nextRowId, repeatEventFilter, type TableRow } from "./block-form";
 import { RowValueFields, type RowInspectorData, useListValueDescriber } from "./row-inspector";
 
 export const EVENT_FIELDS = [
-  "title", "description", "event_date", "event_end_date", "tag", "participant_count", "organizer_ids", "leadership_ids",
-  "participant_ids", "spezial1_ids", "spezial2_ids", "spezial3_ids", "location", "spezial_text1", "spezial_text2", "spezial_text3",
+  "title", "description", "program", "event_date", "event_end_date", "start_time", "end_time", "tag", "participant_count", "organizer_ids",
+  "leadership_ids", "participant_ids", "spezial1_ids", "spezial2_ids", "spezial3_ids", "location", "spezial_text1", "spezial_text2",
+  "spezial_text3", "spezial_time1", "spezial_time2",
 ] as const;
+
+const TIME_FIELDS = new Set(["start_time", "end_time", "spezial_time1", "spezial_time2"]);
+const MARKDOWN_FIELDS = new Set(["description", "program", "spezial_text1", "spezial_text2", "spezial_text3"]);
 
 type EventField = (typeof EVENT_FIELDS)[number];
 type EventFieldConfig = { field: string; label: string; enabled: boolean };
 
 const FIELD_GROUPS: Array<{ key: "event" | "people" | "texts"; fields: EventField[] }> = [
-  { key: "event", fields: ["title", "description", "event_date", "event_end_date", "tag", "participant_count", "location"] },
+  { key: "event", fields: ["title", "description", "program", "event_date", "event_end_date", "start_time", "end_time", "tag", "participant_count", "location"] },
   { key: "people", fields: ["organizer_ids", "leadership_ids", "participant_ids", "spezial1_ids", "spezial2_ids", "spezial3_ids"] },
-  { key: "texts", fields: ["spezial_text1", "spezial_text2", "spezial_text3"] },
+  { key: "texts", fields: ["spezial_text1", "spezial_text2", "spezial_text3", "spezial_time1", "spezial_time2"] },
 ];
 
 /** Zeilentypen einer Tabelle (Matrix hat zusätzlich «Mehrere Termine» und eingebettete Blöcke). */
@@ -51,7 +57,7 @@ export function resolveEventTokens(text: string, event: EventSummary | null): st
   if (!event) return text;
   return text
     .replace(/\{title\}/g, event.title)
-    .replace(/\{description\}/g, event.description ?? "")
+    .replace(/\{description\}/g, markdownToPlainText(event.description))
     .replace(/\{event_date\}/g, formatDate(event.event_date))
     .replace(/\{event_end_date\}/g, event.event_end_date ? formatDate(event.event_end_date) : "")
     .replace(/\{tag\}/g, event.tag ?? "")
@@ -86,6 +92,9 @@ function useValueTexts(data: RowInspectorData) {
     const raw = (event as unknown as Record<string, unknown>)[field];
     if (field.endsWith("_ids")) return names(raw as string[] | null);
     if (field === "event_date" || field === "event_end_date") return raw ? formatDate(String(raw)) : "";
+    if (TIME_FIELDS.has(field)) return formatTimeValue(raw as string | null);
+    // Markdown der Termintexte als Klartext; formatiert erscheint er im Protokoll und im PDF
+    if (MARKDOWN_FIELDS.has(field)) return markdownToPlainText(raw as string | null);
     return raw === null || raw === undefined ? "" : String(raw);
   }
 
@@ -250,7 +259,9 @@ export function TableBlockSection({
   const linkedList = data.lists.find((list) => list.id === linkedListId) ?? null;
   // Zuletzt gewählte Liste merken, damit «Eigene Zeilen» ↔ «Globale Liste» nichts verliert.
   const lastList = useRef<string | null>(linkedListId);
-  if (linkedListId) lastList.current = linkedListId;
+  useEffect(() => {
+    if (linkedListId) lastList.current = linkedListId;
+  }, [linkedListId]);
   const isEvent = form.config.repeat_source === "event";
   const fields = eventFieldsOf(form);
   const enabledFields = fields.filter((field) => field.enabled);

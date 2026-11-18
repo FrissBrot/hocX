@@ -28,6 +28,7 @@ import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { sortTagsByImportance, useTagConfig } from "@/lib/hooks/use-tag-config";
 import { formatCycleName, getCycleYear } from "@/lib/utils/cycle";
 import { formatDate, formatDateRange, toIntlLocale } from "@/lib/utils/format";
+import { markdownToPlainText } from "@/lib/utils/markdown-text";
 import {
   CycleConfigSummary,
   EventImportPreview,
@@ -546,7 +547,7 @@ export function EventManager({
                 <span className="event-list-meta-item">{formatDateRange(item.event_date, item.event_end_date)}</span>
               ) : null}
               {rowFields.has("description") && item.description ? (
-                <span className="event-list-meta-item event-list-meta-description">{item.description}</span>
+                <span className="event-list-meta-item event-list-meta-description">{markdownToPlainText(item.description)}</span>
               ) : null}
               {rowFields.has("location") && item.location ? (
                 <span className="event-list-meta-item">

@@ -11,6 +11,7 @@ import { dateParts, relativeDay, tagColor, todayIso } from "@/components/mobile/
 import { ActionMenu } from "@/components/ui/action-menu";
 import { DateInput } from "@/components/ui/date-input";
 import { Modal } from "@/components/ui/modal";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { useConfirmEventDelete } from "@/components/events/use-confirm-event-delete";
 import { useToast } from "@/contexts/toast-context";
@@ -169,7 +170,14 @@ export function EventDetailSheet({
         {event.description ? (
           <div className="mobile-field-block">
             <div className="mobile-eyebrow">{t("events.description")}</div>
-            <p className="mobile-body-text">{event.description}</p>
+            {/* Markdown, gerendert wie im Terminformular */}
+            <div className="mobile-body-text"><RichTextEditor value={event.description} readOnly onChange={() => undefined} /></div>
+          </div>
+        ) : null}
+        {event.program ? (
+          <div className="mobile-field-block">
+            <div className="mobile-eyebrow">{t("events.program")}</div>
+            <div className="mobile-body-text"><RichTextEditor value={event.program} readOnly onChange={() => undefined} /></div>
           </div>
         ) : null}
         {people.map((group) => (
@@ -332,10 +340,10 @@ export function EventFormSheet({
           <span className="field-label">{t("events.location")}</span>
           <input value={draft.location} onChange={(e) => update({ location: e.target.value })} placeholder={t("events.locationPlaceholder")} />
         </label>
-        <label className="field-stack">
+        <div className="field-stack">
           <span className="field-label">{t("events.description")}</span>
-          <textarea rows={3} value={draft.description} onChange={(e) => update({ description: e.target.value })} placeholder={t("events.descriptionPlaceholder")} />
-        </label>
+          <RichTextEditor value={draft.description} onChange={(markdown) => update({ description: markdown })} placeholder={t("events.descriptionPlaceholder")} />
+        </div>
         <div className="mobile-card mobile-group-card">
           <button type="button" className="mobile-list-row" aria-pressed={draft.is_cancelled} onClick={() => update({ is_cancelled: !draft.is_cancelled })}>
             <span className="mobile-list-row-label">{t("events.cancelledToggle")}</span>

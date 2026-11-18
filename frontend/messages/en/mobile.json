@@ -83,7 +83,8 @@
     "locationPlaceholder": "Place or address",
     "descriptionPlaceholder": "What is it about?",
     "cancelledToggle": "Event cancelled",
-    "formDesktopHint": "People, cycles and special fields are edited on a computer."
+    "formDesktopHint": "People, cycles and special fields are edited on a computer.",
+    "program": "Programme"
   },
   "todos": {
     "searchPlaceholder": "Search todos",

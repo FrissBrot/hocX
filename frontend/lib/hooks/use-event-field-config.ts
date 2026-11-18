@@ -1,13 +1,15 @@
 "use client";
 
-// Spezialfelder der Termine (Spezial 1–3, Spezial Text 1–3): eigener Name (Alias) und
+// Spezialfelder der Termine (Spezial 1–3, Spezial Text 1–3, Spezial Zeit 1–2): eigener Name (Alias) und
 // Ausblenden je Mandant, eingestellt unter Mandant-Einstellungen. Einmal pro Seite geladen und
 // geteilt; nach dem Speichern in den Einstellungen sofort überall aktualisiert.
 import { useCallback, useEffect, useState } from "react";
 
 import { browserApiFetch } from "@/lib/api/client";
 
-export const EVENT_SPECIAL_FIELDS = ["spezial1_ids", "spezial2_ids", "spezial3_ids", "spezial_text1", "spezial_text2", "spezial_text3"] as const;
+export const EVENT_SPECIAL_FIELDS = [
+  "spezial1_ids", "spezial2_ids", "spezial3_ids", "spezial_text1", "spezial_text2", "spezial_text3", "spezial_time1", "spezial_time2",
+] as const;
 export type EventSpecialField = (typeof EVENT_SPECIAL_FIELDS)[number];
 export type EventFieldSetting = { label: string; hidden: boolean };
 export type EventFieldConfig = Record<EventSpecialField, EventFieldSetting>;

@@ -83,7 +83,8 @@
     "locationPlaceholder": "Ort oder Adresse",
     "descriptionPlaceholder": "Worum geht es?",
     "cancelledToggle": "Termin abgesagt",
-    "formDesktopHint": "Personen, Zyklen und Spezialfelder bearbeitest du am Computer."
+    "formDesktopHint": "Personen, Zyklen und Spezialfelder bearbeitest du am Computer.",
+    "program": "Programm"
   },
   "todos": {
     "searchPlaceholder": "Pendenzen durchsuchen",

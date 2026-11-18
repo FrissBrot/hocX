@@ -1337,6 +1337,13 @@ export type EventSummary = {
   spezial_text1: string | null;
   spezial_text2: string | null;
   spezial_text3: string | null;
+  /** Uhrzeiten als «HH:MM:SS» (API) bzw. «HH:MM» beim Speichern; null = keine Angabe. */
+  start_time?: string | null;
+  end_time?: string | null;
+  spezial_time1?: string | null;
+  spezial_time2?: string | null;
+  /** Programm (Markdown), wie Beschreibung und Spezial-Texte. */
+  program?: string | null;
   cycle_assignments: CycleAssignment[];
   created_at: string;
   updated_at: string;

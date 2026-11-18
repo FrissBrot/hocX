@@ -6,7 +6,9 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
 # Nur diese Felder sind konfigurierbar; feste Felder (Titel, Datum, Leitung …) bleiben, wie sie sind.
-EVENT_SPECIAL_FIELDS = ("spezial1_ids", "spezial2_ids", "spezial3_ids", "spezial_text1", "spezial_text2", "spezial_text3")
+EVENT_SPECIAL_FIELDS = (
+    "spezial1_ids", "spezial2_ids", "spezial3_ids", "spezial_text1", "spezial_text2", "spezial_text3", "spezial_time1", "spezial_time2",
+)
 
 
 class EventFieldSetting(BaseModel):
@@ -26,6 +28,8 @@ class EventFieldConfig(BaseModel):
     spezial_text1: EventFieldSetting = EventFieldSetting()
     spezial_text2: EventFieldSetting = EventFieldSetting()
     spezial_text3: EventFieldSetting = EventFieldSetting()
+    spezial_time1: EventFieldSetting = EventFieldSetting()
+    spezial_time2: EventFieldSetting = EventFieldSetting()
 
     @classmethod
     def from_stored(cls, value: dict | None) -> "EventFieldConfig":

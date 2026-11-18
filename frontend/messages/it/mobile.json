@@ -83,7 +83,8 @@
     "locationPlaceholder": "Luogo o indirizzo",
     "descriptionPlaceholder": "Di cosa si tratta?",
     "cancelledToggle": "Appuntamento annullato",
-    "formDesktopHint": "Persone, cicli e campi speciali si modificano sul computer."
+    "formDesktopHint": "Persone, cicli e campi speciali si modificano sul computer.",
+    "program": "Programma"
   },
   "todos": {
     "searchPlaceholder": "Cerca attività",

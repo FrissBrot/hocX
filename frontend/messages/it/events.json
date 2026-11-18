@@ -84,7 +84,15 @@
       "error": "Non salvato – riprova, per favore."
     },
     "fieldSettingsHint": "I campi «Speciale» si possono rinominare o nascondere.",
-    "fieldSettingsLink": "Alle impostazioni"
+    "fieldSettingsLink": "Alle impostazioni",
+    "startTimeLabel": "Inizio",
+    "endTimeLabel": "Fine",
+    "programLabel": "Programma",
+    "programPlaceholder": "Svolgimento, orari, punti d’incontro …",
+    "specialTime1Label": "Orario speciale 1",
+    "specialTime2Label": "Orario speciale 2",
+    "specialFieldTag": "Campo speciale",
+    "specialFieldTitle": "Campo speciale: nome e visibilità si possono modificare nelle impostazioni."
   },
   "detailModal": {
     "fallbackTitle": "Evento"

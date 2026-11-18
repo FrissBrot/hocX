@@ -506,7 +506,8 @@
       "spezial_text3": "Texte spécial 3",
       "task": "Texte de la tâche",
       "reference_link": "Lien de référence",
-      "due_marker": "Marqueur d’échéance"
+      "due_marker": "Marqueur d’échéance",
+      "program": "Programme"
     },
     "filter": {
       "tags": "Tag",
@@ -679,7 +680,12 @@
       "location": "Lieu",
       "spezial_text1": "Texte spécial 1",
       "spezial_text2": "Texte spécial 2",
-      "spezial_text3": "Texte spécial 3"
+      "spezial_text3": "Texte spécial 3",
+      "start_time": "Début",
+      "end_time": "Fin",
+      "spezial_time1": "Heure spéciale 1",
+      "spezial_time2": "Heure spéciale 2",
+      "program": "Programme"
     },
     "matrix": {
       "sectionTitle": "Matrice",

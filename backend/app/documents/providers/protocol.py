@@ -156,6 +156,10 @@ def _linked_event(ctx: BuildContext, config: dict) -> Event | None:
     return event if event is not None and event.tenant_id == ctx.tenant_id else None
 
 
+EVENT_TIME_FIELDS = ("start_time", "end_time", "spezial_time1", "spezial_time2")
+EVENT_MARKDOWN_FIELDS = ("description", "program", "spezial_text1", "spezial_text2", "spezial_text3")
+
+
 def _event_field_rows(ctx: BuildContext, config: dict) -> list[FormRow]:
     """Mit dem Termin verknüpfte Felder («aus Termin» im Editor) - wie im Editor zuerst, mit
     eigenem Label des Blocks, sonst dem Alias der Spezialfelder (Mandant) oder dem Standardnamen.
@@ -187,12 +191,15 @@ def _event_field_rows(ctx: BuildContext, config: dict) -> list[FormRow]:
             value = ", ".join(names[int(pid)] for pid in (raw or []) if str(pid).isdigit() and int(pid) in names)
         elif field in ("event_date", "event_end_date"):
             value = format_date(raw)
+        elif field in EVENT_TIME_FIELDS:
+            value = raw.strftime("%H:%M") if raw is not None else ""
         else:
             value = "" if raw is None else str(raw)
         if not value.strip():
             continue
         label = str(item.get("label") or "").strip() or (setting.label.strip() if setting is not None and setting.label else "") or pdf_text(ctx.language, f"eventField.{field}")
-        rows.append(FormRow(label=label, value=plain_to_rich(value)))
+        # Textfelder eines Termins sind Markdown (Editor im Terminformular), die übrigen Klartext.
+        rows.append(FormRow(label=label, value=markdown_to_rich(value) if field in EVENT_MARKDOWN_FIELDS else plain_to_rich(value)))
     return rows
 
 

@@ -9,11 +9,14 @@ import Link from "next/link";
 
 import { Tabs } from "@/components/ui/tabs";
 import { DateInput } from "@/components/ui/date-input";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { TimeInput } from "@/components/ui/time-input";
 import { TagInput } from "@/components/ui/tag-input";
 import { HelpPopover } from "@/components/ui/help-popover";
 import { CycleAssignment, EventSummary, ParticipantSummary } from "@/types/api";
 import { useCycleOptions } from "@/lib/hooks/use-cycle-options";
 import { useEventFieldConfig } from "@/lib/hooks/use-event-field-config";
+import { formatTimeValue } from "@/lib/utils/time";
 import type { TagConfig } from "@/lib/hooks/use-tag-config";
 
 type RoleField = "organizer_ids" | "leadership_ids" | "participant_ids" | "spezial1_ids" | "spezial2_ids" | "spezial3_ids";
@@ -21,7 +24,11 @@ type RoleField = "organizer_ids" | "leadership_ids" | "participant_ids" | "spezi
 /** Text- und Zahlenfelder speichern entprellt: erst nach dieser Tipp-Pause (oder beim Verlassen). */
 export const EVENT_TEXT_SAVE_DELAY_MS = 600;
 
-type DebouncedField = "title" | "description" | "location" | "spezial_text1" | "spezial_text2" | "spezial_text3" | "participant_count";
+type DebouncedField = "title" | "description" | "program" | "location" | "spezial_text1" | "spezial_text2" | "spezial_text3" | "participant_count";
+
+type TimeField = "start_time" | "end_time" | "spezial_time1" | "spezial_time2";
+
+const SPECIAL_ROLE_FIELDS: readonly RoleField[] = ["spezial1_ids", "spezial2_ids", "spezial3_ids"];
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
@@ -36,6 +43,18 @@ function roleFields(t: TFunc): { field: RoleField; label: string }[] {
     { field: "spezial2_ids", label: t("detailForm.special2Label") },
     { field: "spezial3_ids", label: t("detailForm.special3Label") },
   ];
+}
+
+/** Kleiner Hinweis an Spezialfeldern: frei benennbar, mit Link zu den Einstellungen (wer sie ändern darf). */
+function SpecialFieldTag({ href, t }: { href: string | null; t: TFunc }) {
+  const title = t("detailForm.specialFieldTitle");
+  return href ? (
+    <Link href={`${href}#event-fields` as Route} className="event-special-field-tag" title={title}>
+      {t("detailForm.specialFieldTag")}
+    </Link>
+  ) : (
+    <span className="event-special-field-tag" title={title}>{t("detailForm.specialFieldTag")}</span>
+  );
 }
 
 type EventDetailFormProps = {
@@ -201,6 +220,9 @@ export function EventDetailForm({
   const specialTexts = (["spezial_text1", "spezial_text2", "spezial_text3"] as const)
     .map((field, index) => ({ field, label: eventFields.label(field, t(`detailForm.specialText${index + 1}Label`)) }))
     .filter(({ field }) => !eventFields.hidden(field));
+  const specialTimes = (["spezial_time1", "spezial_time2"] as const)
+    .map((field, index) => ({ field, label: eventFields.label(field, t(`detailForm.specialTime${index + 1}Label`)) }))
+    .filter(({ field }) => !eventFields.hidden(field));
   const { options: cycleOptions, loading: cyclesLoading } = useCycleOptions();
   const { draft, saveState, queue, commit, flush } = useEventAutosave(event.id, onUpdate);
   const cycleAssignments: CycleAssignment[] = event.cycle_assignments ?? [];
@@ -208,6 +230,10 @@ export function EventDetailForm({
   function textValue(field: DebouncedField): string {
     const value = field in draft ? draft[field] : event[field];
     return value === null || value === undefined ? "" : String(value);
+  }
+
+  function timeValue(field: TimeField): string {
+    return formatTimeValue(event[field] ?? null);
   }
 
   function toggleCycle(cycleConfigId: string, cycleYear: number) {
@@ -271,6 +297,14 @@ export function EventDetailForm({
                   </label>
                 ) : null}
               </div>
+              <div className="two-col">
+                {(["start_time", "end_time"] as const).map((field) => (
+                  <label key={field} className="field-stack">
+                    <span className="field-label">{t(field === "start_time" ? "detailForm.startTimeLabel" : "detailForm.endTimeLabel")}</span>
+                    <TimeInput value={timeValue(field)} onChange={(value) => commit({ [field]: value || null } as Partial<EventSummary>)} />
+                  </label>
+                ))}
+              </div>
               <div className="field-stack">
                 <span className="field-label">
                   {t("form.tag")}
@@ -292,15 +326,20 @@ export function EventDetailForm({
                 <span className="field-label">{t("form.title")}</span>
                 <input value={textValue("title")} onChange={(e) => queue({ title: e.target.value })} onBlur={flush} />
               </label>
-              <label className="field-stack">
+              {/* Markdown-Felder: div statt label, sonst leitet ein Klick auf die Toolbar um */}
+              <div className="field-stack" onBlur={flush}>
                 <span className="field-label">{t("detailForm.descriptionLabel")}</span>
-                <textarea
-                  rows={4}
-                  value={textValue("description")}
-                  onChange={(e) => queue({ description: e.target.value || null })}
-                  onBlur={flush}
+                <RichTextEditor value={textValue("description")} readOnly={readOnly} onChange={(markdown) => queue({ description: markdown || null })} />
+              </div>
+              <div className="field-stack" onBlur={flush}>
+                <span className="field-label">{t("detailForm.programLabel")}</span>
+                <RichTextEditor
+                  value={textValue("program")}
+                  readOnly={readOnly}
+                  placeholder={t("detailForm.programPlaceholder")}
+                  onChange={(markdown) => queue({ program: markdown || null })}
                 />
-              </label>
+              </div>
               <div className="field-stack">
                 <span className="field-label">
                   {t("form.cycles")}
@@ -378,8 +417,9 @@ export function EventDetailForm({
                 <div className="two-col" style={{ rowGap: "var(--space-2)" }}>
                   {ROLE_FIELDS.map(({ field, label }) => (
                     <div key={field} className="field-stack" style={{ gap: "var(--space-1)" }}>
-                      <span className="muted" style={{ fontSize: "var(--text-xs)" }}>
+                      <span className="muted event-special-field-label">
                         {label}
+                        {SPECIAL_ROLE_FIELDS.includes(field) ? <SpecialFieldTag href={readOnly ? null : fieldSettingsHref} t={t} /> : null}
                       </span>
                       <button
                         type="button"
@@ -444,18 +484,32 @@ export function EventDetailForm({
                 <span className="field-label">{t("form.location")}</span>
                 <input value={textValue("location")} onChange={(e) => queue({ location: e.target.value || null })} onBlur={flush} />
               </label>
-              <div className="two-col">
-                {specialTexts.map(({ field, label }) => (
-                  <label key={field} className="field-stack">
-                    <span className="field-label">{label}</span>
-                    <input value={textValue(field)} onChange={(e) => queue({ [field]: e.target.value || null })} onBlur={flush} />
-                  </label>
-                ))}
-              </div>
+              {specialTimes.length ? (
+                <div className="two-col">
+                  {specialTimes.map(({ field, label }) => (
+                    <label key={field} className="field-stack">
+                      <span className="field-label event-special-field-label">
+                        {label}
+                        <SpecialFieldTag href={readOnly ? null : fieldSettingsHref} t={t} />
+                      </span>
+                      <TimeInput value={timeValue(field)} onChange={(value) => commit({ [field]: value || null } as Partial<EventSummary>)} />
+                    </label>
+                  ))}
+                </div>
+              ) : null}
+              {specialTexts.map(({ field, label }) => (
+                <div key={field} className="field-stack" onBlur={flush}>
+                  <span className="field-label event-special-field-label">
+                    {label}
+                    <SpecialFieldTag href={readOnly ? null : fieldSettingsHref} t={t} />
+                  </span>
+                  <RichTextEditor value={textValue(field)} readOnly={readOnly} onChange={(markdown) => queue({ [field]: markdown || null })} />
+                </div>
+              ))}
               {fieldSettingsHref && !readOnly ? (
                 <p className="field-help">
                   {t("detailForm.fieldSettingsHint")}{" "}
-                  <Link href={fieldSettingsHref as Route}>{t("detailForm.fieldSettingsLink")}</Link>
+                  <Link href={`${fieldSettingsHref}#event-fields` as Route}>{t("detailForm.fieldSettingsLink")}</Link>
                 </p>
               ) : null}
             </div>

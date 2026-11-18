@@ -84,7 +84,15 @@
       "error": "Non enregistré – réessaie, s'il te plaît."
     },
     "fieldSettingsHint": "Les champs «Spécial» peuvent être renommés ou masqués.",
-    "fieldSettingsLink": "Vers les paramètres"
+    "fieldSettingsLink": "Vers les paramètres",
+    "startTimeLabel": "Début",
+    "endTimeLabel": "Fin",
+    "programLabel": "Programme",
+    "programPlaceholder": "Déroulement, horaires, lieux de rendez-vous …",
+    "specialTime1Label": "Heure spéciale 1",
+    "specialTime2Label": "Heure spéciale 2",
+    "specialFieldTag": "Champ spécial",
+    "specialFieldTitle": "Champ spécial : son nom et sa visibilité se modifient dans les paramètres."
   },
   "detailModal": {
     "fallbackTitle": "Événement"

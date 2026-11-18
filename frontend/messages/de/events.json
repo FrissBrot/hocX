@@ -84,7 +84,15 @@
       "error": "Nicht gespeichert – bitte erneut versuchen."
     },
     "fieldSettingsHint": "Die Felder «Spezial» lassen sich umbenennen oder ausblenden.",
-    "fieldSettingsLink": "Zu den Einstellungen"
+    "fieldSettingsLink": "Zu den Einstellungen",
+    "startTimeLabel": "Beginn",
+    "endTimeLabel": "Ende",
+    "programLabel": "Programm",
+    "programPlaceholder": "Ablauf, Zeiten, Treffpunkte …",
+    "specialTime1Label": "Spezial Zeit 1",
+    "specialTime2Label": "Spezial Zeit 2",
+    "specialFieldTag": "Spezialfeld",
+    "specialFieldTitle": "Spezialfeld: Name und Sichtbarkeit lassen sich in den Einstellungen anpassen."
   },
   "detailModal": {
     "fallbackTitle": "Termin"

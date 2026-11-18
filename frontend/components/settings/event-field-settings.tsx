@@ -39,7 +39,7 @@ export function EventFieldSettings() {
   }
 
   return (
-    <section className="card">
+    <section className="card" id="event-fields">
       <div className="eyebrow">{t("eyebrow")}</div>
       <form className="grid" onSubmit={save}>
         <p className="muted">{t("description")}</p>

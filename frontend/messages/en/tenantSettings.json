@@ -253,7 +253,9 @@
       "spezial3_ids": "Special 3",
       "spezial_text1": "Special text 1",
       "spezial_text2": "Special text 2",
-      "spezial_text3": "Special text 3"
+      "spezial_text3": "Special text 3",
+      "spezial_time1": "Special time 1",
+      "spezial_time2": "Special time 2"
     }
   },
   "replacesDomainHint": "Replaces {domain} once verification succeeds. Until then, {domain} stays active unchanged.",

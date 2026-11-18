@@ -14,7 +14,9 @@ Eine neu eingeteilte Seitenleiste nach Tätigkeiten mit «Meine Aufgaben» und g
 Einstellungen, eine Fotogalerie mit Zeitstrahl und ruhigem Scrollen, gesperrte und ausgeblendete
 ausgetretene Personen, ein Versandprotokoll aller E-Mails im Admin-Portal, neutrale Begriffe
 («Organisation» statt «Verein») in allen Sprachen sowie 15 Sicherheits- und Datenschutz-Fixes aus
-den Nachtläufen. Eine Migration, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
+den Nachtläufen. Dazu Termine mit Uhrzeiten, Programm und Markdown-Texten, ein neu gestalteter
+Tabellenblock und ein einheitliches, tolerantes Uhrzeitfeld. Zwei Migrationen, keine neuen Secrets
+oder Umgebungsvariablen, keine Breaking Changes.
 
 ### Update
 
@@ -25,11 +27,42 @@ den Nachtläufen. Eine Migration, keine neuen Secrets oder Umgebungsvariablen, k
   `tenant` entfällt. Zwischen Migration und Neustart (wenige Sekunden in `deploy.sh`) kann die noch
   laufende alte Abgabebox Uploads mit einem Kontingentfehler ablehnen - wie beim Update auf 1.2.x
   (`0147`). Rücknahme mit `alembic downgrade` stellt die alten Rechte wieder her.
+- Migration `0184_event_times_program`: vier neue, leere Spalten an `event` (`end_time`,
+  `spezial_time1`, `spezial_time2`, `program`). Bestehende Termintexte sind gültiges Markdown und
+  bleiben unverändert.
 - Alle Adressen bleiben gleich, Lesezeichen und Links in Mails funktionieren weiter. Neu ist nur
   `/my-tasks` («Meine Aufgaben»).
 - Ausgetretene Personen (Austrittsdatum vor heute) können sich ab dem Update nicht mehr anmelden,
   auch wenn ihr Login eingeschaltet ist; laufende Sitzungen enden. Wer das Austrittsdatum entfernt,
   gibt den Login wieder frei.
+
+### Neu: Termine mit Uhrzeiten, Programm und Markdown
+
+- Termine haben **Beginn** und **Ende** (Uhrzeit), zwei frei benennbare **Spezial-Uhrzeiten**
+  (Name und Sichtbarkeit unter Mandant-Einstellungen › Spezialfelder) und ein Textfeld **Programm**.
+- **Beschreibung, Programm und Spezial-Texte** sind Markdown: im Terminformular, beim Anlegen, auf
+  dem Handy und in Tabellenblöcken formatiert bearbeitet und angezeigt, im PDF formatiert
+  ausgegeben, in Listen als Kurztext.
+- Spezialfelder tragen im Terminformular den Hinweis **Spezialfeld** mit Link direkt zu den
+  Einstellungen, wo sie umbenannt oder ausgeblendet werden.
+- Der Tabellenblock kann die neuen Felder aus dem Termin übernehmen («+ Feld aus Termin»), ein
+  Textblock kann ins Programm zurückschreiben, und das Kalender-Abo übernimmt die Endzeit.
+
+### Neu: Uhrzeitfeld als Standard
+
+- Jede Uhrzeit-Eingabe versteht freie Schreibweisen und korrigiert sie beim Verlassen oder mit
+  Enter: `1130` und `11:30` → 11:30, `230` → 02:30, `9h30`, `9.30`, `14 Uhr`, `7pm` usw. Auch die
+  Wartungsfenster im Admin-Portal nutzen jetzt dieses Feld.
+- Für Entwicklung und Agents verbindlich (`design/DESIGN.md` Abschnitt 6, `CLAUDE.md`); der
+  Design-Checker meldet Zeitfelder ohne den Standard.
+
+### Neu: Tabellenblock bearbeiten
+
+- Zeilen werden direkt im Block-Dialog aufgeklappt und bearbeitet: Terminfelder als eigene Gruppe
+  zuoberst, eigene Zeilen mit Zeilentyp, Vorbelegung, Sperre und Sortieren per Ziehen.
+- Umschalter «Eigene Zeilen» / «Globale Liste», Vorschau als Editor- oder PDF-Ansicht, bei «Pro
+  Termin» für einen der aktuell passenden Termine; «Welche Termine?» zeigt, wie viele Blöcke
+  entstehen.
 
 ### Neu: Seitenleiste nach Tätigkeiten
 

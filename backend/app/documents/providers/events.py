@@ -26,6 +26,7 @@ from app.documents.model import (
     Tag,
 )
 from app.documents.providers.common import col, safe_color, spec_fields, split_tag_text, tags_cell, text_cell
+from app.documents.richtext import markdown_to_rich
 from app.models import Event, Participant, Protocol, Tenant
 from app.services.event_filter import default_event_filter, filter_events, normalize_event_filter, split_tags
 
@@ -130,7 +131,8 @@ def event_table(
             elif key == "title":
                 cells.append(text_cell(event.title, strike=bool(event.is_cancelled)))
             elif key == "description":
-                cells.append(text_cell(event.description or "–"))
+                # Beschreibung ist Markdown (Terminformular), daher als Rich-Text-Zelle
+                cells.append(Cell(k="rich", rich=markdown_to_rich(event.description)) if (event.description or "").strip() else text_cell("–"))
             elif key == "participant_count":
                 cells.append(text_cell(max(0, int(event.participant_count or 0))))
             elif key == "location":

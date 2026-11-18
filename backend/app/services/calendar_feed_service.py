@@ -252,6 +252,8 @@ class _Entry:
     transparent: bool = False
     # Uhrzeit in Schweizer Zeit (nur eintägige Termine); None = ganztägig.
     start_time: time | None = None
+    # Endzeit am selben Tag; fehlt sie (oder liegt sie nicht nach dem Beginn), gilt TIMED_EVENT_DURATION.
+    end_time: time | None = None
 
 
 def _render_calendar(name: str, entries: list[_Entry]) -> str:
@@ -279,9 +281,13 @@ def _render_calendar(name: str, entries: list[_Entry]) -> str:
         if entry.start_time is not None and entry.end_inclusive == entry.start:
             # Mit Uhrzeit: in UTC ausgeben (Suffix Z), dann braucht es keinen VTIMEZONE-Block.
             start_utc = datetime.combine(entry.start, entry.start_time, tzinfo=_LOCAL_TZ).astimezone(UTC)
+            if entry.end_time is not None and entry.end_time > entry.start_time:
+                end_utc = datetime.combine(entry.start, entry.end_time, tzinfo=_LOCAL_TZ).astimezone(UTC)
+            else:
+                end_utc = start_utc + TIMED_EVENT_DURATION
             lines += [
                 f"DTSTART:{start_utc.strftime('%Y%m%dT%H%M%SZ')}",
-                f"DTEND:{(start_utc + TIMED_EVENT_DURATION).strftime('%Y%m%dT%H%M%SZ')}",
+                f"DTEND:{end_utc.strftime('%Y%m%dT%H%M%SZ')}",
             ]
         else:
             lines += [
@@ -331,6 +337,7 @@ def _event_entries(db: Session, feed: CalendarFeed, user: CurrentUser, *, today:
                 location=None if feed.hide_details else (event.location or None),
                 cancelled=event.is_cancelled,
                 start_time=event.start_time,
+                end_time=event.end_time,
             )
         )
     return entries

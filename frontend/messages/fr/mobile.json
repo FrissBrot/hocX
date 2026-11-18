@@ -83,7 +83,8 @@
     "locationPlaceholder": "Lieu ou adresse",
     "descriptionPlaceholder": "De quoi s’agit-il ?",
     "cancelledToggle": "Rendez-vous annulé",
-    "formDesktopHint": "Les personnes, cycles et champs spéciaux se modifient sur ordinateur."
+    "formDesktopHint": "Les personnes, cycles et champs spéciaux se modifient sur ordinateur.",
+    "program": "Programme"
   },
   "todos": {
     "searchPlaceholder": "Rechercher des tâches",
