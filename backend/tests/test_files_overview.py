@@ -639,3 +639,34 @@ def test_attach_album_context_fills_albums_and_unscoped_is_best(db):
     not_in_album = by_id[other_stored_file.public_id]
     assert not_in_album.albums == []
     assert not_in_album.is_best is None
+
+
+def test_timeline_counts_per_day_match_the_list_and_date_filters_load_single_days(db):
+    """Zeitleiste der Fotos: Anzahl je Tag (group_date) mit denselben Filtern wie die Liste, und
+    date_from/date_to liefern genau die Fotos dieser Tage - Grundlage für feste Höhen."""
+    tenant = make_tenant(db)
+    days = [date(2024, 5, 1), date(2024, 5, 1), date(2025, 12, 24), date(2026, 6, 3), date(2026, 6, 3), date(2026, 6, 3)]
+    for index, day in enumerate(days):
+        stored = _make_gallery_image(db, tenant.id, tags=["Lager"] if index % 2 else [])
+        stored.estimated_taken_on = day
+    _make_gallery_image(db, tenant.id, mime_type="application/pdf")  # kein Foto
+    db.flush()
+
+    timeline = service.tenant_files_timeline(db, tenant.id, only_images=True)
+    assert [(entry.date, entry.count) for entry in timeline] == [(date(2026, 6, 3), 3), (date(2025, 12, 24), 1), (date(2024, 5, 1), 2)]
+    ascending = service.tenant_files_timeline(db, tenant.id, sort_dir="asc", only_images=True)
+    assert [entry.date for entry in ascending] == [date(2024, 5, 1), date(2025, 12, 24), date(2026, 6, 3)]
+    assert sum(entry.count for entry in service.tenant_files_timeline(db, tenant.id, only_images=True, tags=["Lager"])) == 3
+
+    one_day = service.list_tenant_files(db, tenant.id, only_images=True, sort_by="group_date", date_from=date(2026, 6, 3), date_to=date(2026, 6, 3))
+    assert len(one_day) == 3 and {item.group_date for item in one_day} == {date(2026, 6, 3)}
+    older = service.list_tenant_files(db, tenant.id, only_images=True, sort_by="group_date", date_to=date(2025, 12, 31))
+    assert {item.group_date for item in older} == {date(2025, 12, 24), date(2024, 5, 1)}
+
+
+def test_timeline_route_requires_files_manage(db):
+    tenant = make_tenant(db)
+    reader = make_current_user(tenant.id, role="reader")
+    with pytest.raises(HTTPException) as exc_info:
+        files_routes.files_timeline(only_images=True, search=None, tags=None, sort_dir="desc", db=db, user=reader)
+    assert exc_info.value.status_code == 403

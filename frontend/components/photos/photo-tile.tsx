@@ -16,12 +16,16 @@ export function PhotoTile({
   selectionMode,
   onOpen,
   onToggleSelect,
+  square = false,
 }: {
   item: FileOverviewItem;
   selected: boolean;
   selectionMode: boolean;
   onOpen: () => void;
   onToggleSelect: () => void;
+  /** Zeitleiste (photo-timeline.tsx): feste quadratische Kachel, Höhe nie gemessen - sonst
+   * verschiebt das Nachmessen nach dem Laden die ganze Galerie. */
+  square?: boolean;
 }) {
   const t = useTranslations("photos.tile");
   const previewRef = useRef<HTMLButtonElement>(null);
@@ -47,7 +51,7 @@ export function PhotoTile({
   useEffect(() => {
     const preview = previewRef.current;
     const grid = preview?.parentElement?.parentElement;
-    if (!preview || !grid || typeof ResizeObserver === "undefined") return;
+    if (square || !preview || !grid || typeof ResizeObserver === "undefined") return;
     // Die Höhe folgt dem Bildformat; der Abstand kommt aus dem jeweiligen Theme/Layout.
     const measure = () => {
       if (getComputedStyle(grid).display !== "grid") return;
@@ -58,7 +62,7 @@ export function PhotoTile({
     observer.observe(preview);
     measure();
     return () => observer.disconnect();
-  }, [item.width, item.height]);
+  }, [item.width, item.height, square]);
 
   useEffect(() => {
     const preview = previewRef.current;
@@ -88,12 +92,12 @@ export function PhotoTile({
     return () => window.clearTimeout(timer);
   }, [failed, scanStatus, retry]);
   // Reserve space even for older photos whose dimensions are not yet known.
-  const aspectRatio = item.width && item.height ? item.width / item.height : 4 / 3;
+  const aspectRatio = square ? 1 : item.width && item.height ? item.width / item.height : 4 / 3;
 
   return (
     <div
-      className={`photo-tile photo-tile-tone-${placeholderTone}${selected ? " photo-tile-selected" : ""}`}
-      style={rowSpan ? { gridRowEnd: `span ${rowSpan}` } : undefined}
+      className={`photo-tile photo-tile-tone-${placeholderTone}${square ? " photo-tile-square" : ""}${selected ? " photo-tile-selected" : ""}`}
+      style={rowSpan && !square ? { gridRowEnd: `span ${rowSpan}` } : undefined}
       onMouseEnter={item.live_video_url ? () => setLiveActive(true) : undefined}
       onMouseLeave={item.live_video_url ? () => setLiveActive(false) : undefined}
       onFocus={item.live_video_url ? () => setLiveActive(true) : undefined}

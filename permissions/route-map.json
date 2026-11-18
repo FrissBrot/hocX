@@ -1448,6 +1448,12 @@
         "files.manage"
       ]
     },
+    "GET /api/files/timeline": {
+      "handler": "files.files_timeline",
+      "requires": [
+        "files.manage"
+      ]
+    },
     "POST /api/files/upload-precheck": {
       "handler": "files.precheck_uploads",
       "requires": [

@@ -40,6 +40,7 @@ from app.repositories.file_repository import ProtocolImageRepository, StoredFile
 from app.schemas.files import (
     FileAlbumRef,
     FileOverviewItem,
+    PhotoTimelineDay,
     FileStats,
     GpsMetadataRead,
     PhotoAnalysisProgress,
@@ -504,6 +505,8 @@ class FileService:
         album_id: uuid.UUID | None = None,
         exclude_album_id: uuid.UUID | None = None,
         album_share_pending: bool | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
     ) -> list[FileOverviewItem]:
         """tenant_id=None drops the tenant filter entirely (see
         StoredFileRepository._files_overview_branches) - used when album_id or file_ids
@@ -527,10 +530,18 @@ class FileService:
             album_id=album_id,
             exclude_album_id=exclude_album_id,
             album_share_pending=album_share_pending,
+            date_from=date_from,
+            date_to=date_to,
         )
         items = [self._build_overview_item(row) for row in rows]
         self._attach_documents(db, rows, items)
         return items
+
+    def tenant_files_timeline(self, db: Session, tenant_id: int, *, sort_dir: str = "desc", **filters) -> list[PhotoTimelineDay]:
+        """Fotos je Tag (group_date) für Zeitstrahl und feste Höhen der Galerie - dieselben Filter
+        wie list_tenant_files (only_images, search, tags)."""
+        rows = self.stored_file_repository.tenant_files_timeline(db, tenant_id, sort_dir=sort_dir, **filters)
+        return [PhotoTimelineDay(date=row.day, count=int(row.count)) for row in rows]
 
     def _attach_documents(self, db: Session, rows, items: list[FileOverviewItem]) -> None:
         """Kurzstatus des logischen Dokuments je Eintrag (eine Abfragerunde je Seite). Nur für

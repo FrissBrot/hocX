@@ -1089,3 +1089,200 @@
   font-size: var(--text-sm);
   color: var(--muted);
 }
+
+/* Foto-Zeitleiste (photo-timeline.tsx): Tage absolut an ihrer vorab berechneten Position,
+   quadratische Kacheln - Höhen ändern sich beim Laden nie, daher keine Sprünge beim Scrollen.
+   Rechts der Zeitstrahl (Jahre, Monatspunkte, aktuelle Position). */
+.photo-timeline {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px;
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.photo-timeline-content {
+  position: relative;
+  min-width: 0;
+}
+
+.photo-timeline-loading {
+  height: 360px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--border) 60%, transparent 40%);
+}
+
+.photo-timeline-day {
+  position: absolute;
+  left: 0;
+  right: 0;
+}
+
+.photo-timeline-heading {
+  height: 52px; /* = HEADING_HEIGHT in timeline-layout.ts */
+  box-sizing: border-box;
+  align-items: center;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.photo-timeline-heading .photo-date-heading-labels {
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.photo-timeline-heading .photo-date-context {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.photo-timeline-grid {
+  display: grid;
+  gap: var(--space-2); /* = GAP in timeline-layout.ts */
+}
+
+.photos-overview .photo-timeline-grid .photo-tile {
+  margin: 0;
+}
+
+.photo-tile-square .photo-tile-preview {
+  height: 100%;
+}
+
+.photo-timeline-placeholder {
+  border-radius: var(--radius-md);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--border) 60%, transparent 40%) 0%,
+    color-mix(in srgb, var(--border) 100%, transparent 0%) 40px,
+    color-mix(in srgb, var(--border) 60%, transparent 40%) 80px
+  );
+  background-size: 200px 100%;
+  animation: subm-shimmer 1.3s ease-in-out infinite;
+}
+
+.photo-timeline-scrubber {
+  position: sticky;
+  top: var(--space-4);
+  height: calc(100vh - 2 * var(--space-4));
+}
+
+.photo-timeline-rail {
+  position: relative;
+  height: 100%;
+  cursor: ns-resize;
+  touch-action: none;
+  user-select: none;
+  border-radius: var(--radius-sm);
+}
+
+.photo-timeline-rail:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
+.photo-timeline-year {
+  position: absolute;
+  right: var(--space-3);
+  transform: translateY(-50%);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.photo-timeline-dot {
+  position: absolute;
+  right: var(--space-1);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.photo-timeline-cursor {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.photo-timeline-cursor-label {
+  position: absolute;
+  right: 0;
+  bottom: var(--space-1);
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-xs);
+  background: var(--panel-solid);
+  color: var(--accent-strong);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.photo-timeline-hover {
+  position: absolute;
+  right: 100%;
+  margin-right: var(--space-2);
+  padding: 2px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-solid);
+  box-shadow: var(--shadow-popover);
+  color: var(--text);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.photo-timeline-heading .photo-date-weekday {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.photo-timeline-heading .photo-date-select-all {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .photo-timeline {
+    grid-template-columns: minmax(0, 1fr) 44px;
+    gap: var(--space-2);
+  }
+
+  .photo-timeline-year {
+    right: var(--space-2);
+  }
+
+  /* Eine Zeile bei fester Höhe: kleinere Überschrift, Zusatzangaben nur am Computer */
+  .photo-timeline-heading .photo-date-weekday {
+    font-size: var(--text-md);
+  }
+
+  .photo-timeline-heading .photo-date-context,
+  .photo-timeline-heading .photo-date-marker {
+    display: none;
+  }
+
+  .photo-timeline-heading .photo-date-select-all {
+    font-size: var(--text-xs);
+    padding-inline: var(--space-1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .photo-timeline-placeholder {
+    animation: none;
+  }
+}

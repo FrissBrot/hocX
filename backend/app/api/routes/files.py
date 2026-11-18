@@ -42,6 +42,7 @@ from app.schemas.files import (
     FileBulkDeleteResult,
     FileBulkTagsUpdate,
     FileOverviewItem,
+    PhotoTimelineDay,
     FileOverviewSource,
     FileStats,
     GalleryUploadJobDetail,
@@ -113,6 +114,9 @@ def list_files(
         "created_at", "original_name", "file_size_bytes", "sharpness_score", "exposure_score", "face_quality_score", "group_date"
     ] = Query(default="created_at"),
     sort_dir: Literal["asc", "desc"] = Query(default="desc"),
+    # Nur Einträge dieser Tage (group_date, inklusive) - die Zeitleiste der Fotos lädt die sichtbaren Tage.
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -151,6 +155,8 @@ def list_files(
         album_id=album_id,
         exclude_album_id=exclude_album_id,
         album_share_pending=album_share_pending,
+        date_from=date_from,
+        date_to=date_to,
     )
     if album_id is not None:
         # is_best fetched only for this page's items (at most `limit`), not the whole
@@ -181,6 +187,26 @@ def list_files(
         # FileService.attach_album_context).
         service.attach_album_context(db, user.current_tenant_id, items)
     return items
+
+
+@router.get("/files/timeline", response_model=list[PhotoTimelineDay])
+def files_timeline(
+    only_images: bool = Query(default=False),
+    search: str | None = Query(default=None),
+    tags: list[str] | None = Query(default=None),
+    sort_dir: Literal["asc", "desc"] = Query(default="desc"),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Einträge je Tag (group_date) der Mandantenübersicht, mit denselben Filtern wie GET /files.
+    Die Fotogalerie berechnet daraus Höhen und Zeitstrahl, bevor sie Bilder lädt (Alben haben
+    ihre eigene Reihenfolge und nutzen das nicht)."""
+    require_permission(user, P.FILES_MANAGE)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+    return service.tenant_files_timeline(
+        db, user.current_tenant_id, sort_dir=sort_dir, only_images=only_images, search=search, tags=tags,
+    )
 
 
 @router.get("/files/tags", response_model=list[str])

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
@@ -8,6 +8,8 @@ import { AlbumReleaseNotice } from "./album-share-release";
 import { GalleryUploadModal, GalleryUploadSession } from "./gallery-upload-modal";
 import { GalleryUploadProgress } from "./gallery-upload-progress";
 import { mergeNewItems } from "./merge-new-items";
+import { mergeTimelineDays } from "./timeline-merge";
+import { PhotoTimeline } from "./photo-timeline";
 import { PhotoAlbums } from "./photo-albums";
 import { PhotoAnalysisProgress } from "./photo-analysis-progress";
 import { PhotoBulkBar } from "./photo-bulk-bar";
@@ -97,6 +99,24 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
   const [sortKey, setSortKey] = useState<SortKey>("group_date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [items, setItems] = useState<FileOverviewItem[]>([]);
+  // Nach Datum sortierte Hauptgalerie: Zeitleiste mit festen Höhen und Zeitstrahl (photo-timeline.tsx)
+  // statt seitenweisem Nachladen. Alben (eigene Reihenfolge, Beste zuerst) und die anderen
+  // Sortierungen behalten die bisherige Liste.
+  const timelineMode = tab === "all" && sortKey === "group_date" && !albumId;
+  const [timelineKey, setTimelineKey] = useState(0);
+  const [timelineRefresh, setTimelineRefresh] = useState(0);
+  const [timelineTotal, setTimelineTotal] = useState<number | null>(null);
+  // Filter der Zeitleiste (ohne Sortierung/Paging): Zählung und geladene Tage sehen dieselben Fotos.
+  const timelineFilterQuery = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set("only_images", "true");
+    if (search.trim()) params.set("search", search.trim());
+    tagFilter.forEach((tag) => params.append("tags", tag));
+    return params.toString();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, tagFilter.join(",")]);
+  const timelineModeRef = useRef(timelineMode);
+  timelineModeRef.current = timelineMode;
   const [hasMore, setHasMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadMoreFailed, setLoadMoreFailed] = useState(false);
@@ -149,8 +169,18 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
     const firstLoad = !didMountRef.current;
     didMountRef.current = true;
     const requestId = ++requestIdRef.current;
-    setIsReloading(true);
     setLoadMoreFailed(false);
+    if (timelineModeRef.current) {
+      // Die Zeitleiste lädt selbst (Zählung, dann die sichtbaren Tage)
+      setItems([]);
+      setHasMore(false);
+      setSelectedIds(new Set());
+      setIsReloading(false);
+      setTimelineTotal(null);
+      setTimelineKey((key) => key + 1);
+      return;
+    }
+    setIsReloading(true);
     const timer = setTimeout(async () => {
       try {
         const next = await browserApiFetch<FileOverviewItem[]>(buildUrl(0));
@@ -255,6 +285,11 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
   });
 
   function reload() {
+    if (timelineModeRef.current) {
+      setSelectedIds(new Set());
+      setTimelineRefresh((value) => value + 1);
+      return;
+    }
     // Invalidates any in-flight filter-change response before re-fetching directly, so a
     // slow earlier request can't overwrite this refresh's result.
     const requestId = ++requestIdRef.current;
@@ -278,6 +313,11 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
   // touching the list; the viewer works on an index into `items`, so nothing may be inserted
   // in front of it while it's open. The next tick picks up whatever was missed.
   async function syncNewItems() {
+    if (timelineModeRef.current) {
+      // Die Zeitleiste aktualisiert ihre Zählung selbst; nach einem Upload sofort.
+      if (!viewerOpenRef.current) setTimelineRefresh((value) => value + 1);
+      return;
+    }
     if (isReloadingRef.current || loadingMoreRef.current || viewerOpenRef.current) return;
     const requestId = requestIdRef.current;
     try {
@@ -308,8 +348,14 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
   function handleDeletedElsewhere(deletedIds: string[]) {
     const gone = new Set(deletedIds);
     setItems((current) => (current.some((item) => gone.has(item.id)) ? current.filter((item) => !gone.has(item.id)) : current));
+    if (timelineModeRef.current) setTimelineRefresh((value) => value + 1);
     setSelectedIds((current) => (Array.from(current).some((id) => gone.has(id)) ? new Set(Array.from(current).filter((id) => !gone.has(id))) : current));
   }
+
+  const handleTimelineItems = useCallback(
+    (days: string[], loaded: FileOverviewItem[]) => setItems((current) => mergeTimelineDays(current, days, loaded, sortDir)),
+    [sortDir],
+  );
 
   function toggleSelect(id: string) {
     setSelectedIds((current) => {
@@ -665,7 +711,22 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
             />
           )}
 
-          {items.length === 0 && isReloading ? (
+          {/* Leere Zeitleiste: unten der bisherige Leerzustand (items ist dann leer) */}
+          {timelineMode && timelineTotal !== 0 ? (
+              <PhotoTimeline
+                filterQuery={timelineFilterQuery}
+                sortDir={sortDir}
+                reloadKey={timelineKey}
+                refreshKey={timelineRefresh}
+                items={items}
+                selectedIds={selectedIds}
+                onItemsLoaded={handleTimelineItems}
+                onTotalChange={setTimelineTotal}
+                onOpen={(item) => setViewerIndex(items.findIndex((current) => current.id === item.id))}
+                onToggleSelect={toggleSelect}
+                onToggleGroup={toggleGroup}
+              />
+          ) : items.length === 0 && isReloading ? (
             <div className="photo-loading-grid" role="status" aria-label={t("loadingAriaLabel")}>
               {Array.from({ length: 18 }, (_, index) => (
                 <div key={index} className="photo-tile" aria-hidden="true">
@@ -725,7 +786,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
             />
           )}
 
-          {hasMore && (
+          {hasMore && !timelineMode && (
             <div className="load-more-row" ref={loadMoreSentinelRef}>
               {isLoadingMore ? (
                 <span className="photo-loading-glow" role="status" aria-label={t("loadingMoreAriaLabel")}>

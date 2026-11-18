@@ -30,6 +30,13 @@ class FileAlbumRef(BaseModel):
     is_best: bool
 
 
+class PhotoTimelineDay(BaseModel):
+    """Anzahl Fotos eines Tages (group_date) - Grundlage für Zeitstrahl und Höhen der Galerie."""
+
+    date: date
+    count: int
+
+
 class FileOverviewItem(BaseModel):
     id: uuid.UUID
     original_name: str

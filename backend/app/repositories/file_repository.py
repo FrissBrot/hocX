@@ -1,5 +1,6 @@
 import json
 import uuid
+from datetime import date
 
 from sqlalchemy import BigInteger, Date, String, and_, case, cast, func, literal, null, or_, select, union_all
 from sqlalchemy.dialects.postgresql import JSONB
@@ -395,51 +396,24 @@ class StoredFileRepository:
             .where(*tenant_filter)
         )
 
-    def list_tenant_files(
+    def _overview_query(
         self,
-        db: Session,
         tenant_id: int | None,
         *,
-        skip: int = 0,
-        limit: int = 50,
         source: str | None = None,
         only_images: bool = False,
         exclude_images: bool = False,
         search: str | None = None,
         tags: list[str] | None = None,
-        sort_by: str = "created_at",
-        sort_dir: str = "desc",
         file_ids: list[uuid.UUID] | None = None,
         album_id: uuid.UUID | None = None,
         exclude_album_id: uuid.UUID | None = None,
         album_share_pending: bool | None = None,
-    ) -> list[Row]:
-        """Every "Dateien"/"Fotos" the tenant has produced by uploading something - protocol
-        images, the raw .docx/.pdf a word-import was read from, abgabebox submission uploads,
-        and direct gallery uploads - merged into one shape via UNION ALL (one differently-
-        joined branch per origin table) so a single paginated/sorted/filtered query can page
-        across all of them. only_images/exclude_images back the "Fotos" vs. "Dateien" pages
-        (mutually exclusive in practice - the UI never sets both). Deliberately excludes
-        the tenant logo. Generated protocol exports appear once per logical document (its
-        current version, source "protocol_export", see _protocol_export_branch) - older
-        export files and every other version stay out of the list.
-
-        album_id scopes to one album via a JOIN against photo_album_item, rather than the
-        caller pre-fetching every one of that album's file ids into Python and passing them
-        through file_ids' IN-list (audit fix, 2026-09-17: browsing an album via infinite
-        scroll used to resend that album's *entire* member-id list as a bind-parameter list
-        on every single page request - a 10k-photo album sent a 10k-UUID list per 60-item
-        page). file_ids stays available for every other caller of this method (an
-        already-known, typically small/bounded id set - recompute_best_of, cover-photo
-        lookups, bulk-action targets), which genuinely needs an explicit id list rather
-        than an album join.
-
-        exclude_album_id is the opposite filter for the "Fotos hinzufuegen" picker's
-        "Bereits enthaltene ausblenden": done in SQL rather than client-side so paging stays
-        dense (a client-side filter would leave pages that are mostly or entirely empty).
-
-        album_share_pending (nur zusammen mit album_id) filtert auf photo_album_item.share_pending:
-        False blendet noch nicht freigegebene Fotos aus (Partner-Sicht), True zeigt nur diese."""
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ):
+        """Gefilterte Files-Overview (ohne Sortierung/Paging) - gemeinsam für die Liste und die
+        Tageszählung der Zeitleiste, damit beide genau dieselben Fotos sehen."""
         branches = self._files_overview_branches(tenant_id)
         selected = [branch for key, branch in branches.items() if source is None or source == key]
         union_query = union_all(*selected).subquery("files_overview")
@@ -502,6 +476,88 @@ class StoredFileRepository:
                     ]
                 )
             )
+
+        if date_from is not None:
+            query = query.where(union_query.c.group_date >= date_from)
+        if date_to is not None:
+            query = query.where(union_query.c.group_date <= date_to)
+        return query, union_query
+
+    def tenant_files_timeline(
+        self,
+        db: Session,
+        tenant_id: int | None,
+        *,
+        sort_dir: str = "desc",
+        **filters,
+    ) -> list[Row]:
+        """Anzahl Einträge je group_date (Tag) mit denselben Filtern wie list_tenant_files. Damit
+        kennt die Fotogalerie Höhe und Zeitstrahl des ganzen Bestands, bevor ein Bild geladen ist."""
+        query, _union = self._overview_query(tenant_id, **filters)
+        filtered = query.subquery("timeline_source")
+        day = filtered.c.group_date
+        statement = (
+            select(day.label("day"), func.count().label("count"))
+            .where(day.is_not(None))
+            .group_by(day)
+            .order_by(day.asc() if sort_dir == "asc" else day.desc())
+        )
+        return list(db.execute(statement).all())
+
+    def list_tenant_files(
+        self,
+        db: Session,
+        tenant_id: int | None,
+        *,
+        skip: int = 0,
+        limit: int = 50,
+        source: str | None = None,
+        only_images: bool = False,
+        exclude_images: bool = False,
+        search: str | None = None,
+        tags: list[str] | None = None,
+        sort_by: str = "created_at",
+        sort_dir: str = "desc",
+        file_ids: list[uuid.UUID] | None = None,
+        album_id: uuid.UUID | None = None,
+        exclude_album_id: uuid.UUID | None = None,
+        album_share_pending: bool | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> list[Row]:
+        """Every "Dateien"/"Fotos" the tenant has produced by uploading something - protocol
+        images, the raw .docx/.pdf a word-import was read from, abgabebox submission uploads,
+        and direct gallery uploads - merged into one shape via UNION ALL (one differently-
+        joined branch per origin table) so a single paginated/sorted/filtered query can page
+        across all of them. only_images/exclude_images back the "Fotos" vs. "Dateien" pages
+        (mutually exclusive in practice - the UI never sets both). Deliberately excludes
+        the tenant logo. Generated protocol exports appear once per logical document (its
+        current version, source "protocol_export", see _protocol_export_branch) - older
+        export files and every other version stay out of the list.
+
+        album_id scopes to one album via a JOIN against photo_album_item, rather than the
+        caller pre-fetching every one of that album's file ids into Python and passing them
+        through file_ids' IN-list (audit fix, 2026-09-17: browsing an album via infinite
+        scroll used to resend that album's *entire* member-id list as a bind-parameter list
+        on every single page request - a 10k-photo album sent a 10k-UUID list per 60-item
+        page). file_ids stays available for every other caller of this method (an
+        already-known, typically small/bounded id set - recompute_best_of, cover-photo
+        lookups, bulk-action targets), which genuinely needs an explicit id list rather
+        than an album join.
+
+        exclude_album_id is the opposite filter for the "Fotos hinzufuegen" picker's
+        "Bereits enthaltene ausblenden": done in SQL rather than client-side so paging stays
+        dense (a client-side filter would leave pages that are mostly or entirely empty).
+
+        album_share_pending (nur zusammen mit album_id) filtert auf photo_album_item.share_pending:
+        False blendet noch nicht freigegebene Fotos aus (Partner-Sicht), True zeigt nur diese.
+        date_from/date_to (inklusive) begrenzen auf group_date - die Zeitleiste der Fotos lädt
+        damit gezielt die sichtbaren Tage statt seitenweise von oben."""
+        query, union_query = self._overview_query(
+            tenant_id, source=source, only_images=only_images, exclude_images=exclude_images, search=search, tags=tags,
+            file_ids=file_ids, album_id=album_id, exclude_album_id=exclude_album_id, album_share_pending=album_share_pending,
+            date_from=date_from, date_to=date_to,
+        )
 
         sort_column = {
             "created_at": union_query.c.created_at,

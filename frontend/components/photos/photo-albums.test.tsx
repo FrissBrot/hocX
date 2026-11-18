@@ -116,16 +116,16 @@ describe("PhotoAlbums", () => {
     fireEvent.click(await screen.findByText("Sommerlager"));
 
     expect(await screen.findByText(/Geteilt von Nachbarverein/)).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Mit anderem Verein teilen" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Mit anderer Organisation teilen" })).toBeNull();
   });
 
-  it("offers 'Mit anderem Verein teilen' for the tenant's own albums", async () => {
+  it("offers 'Mit anderer Organisation teilen' for the tenant's own albums", async () => {
     mockListEndpoints([makeAlbum()], []);
 
     render(<PhotoAlbums />);
     fireEvent.click(await screen.findByText("Sommerlager"));
 
-    expect(await screen.findByRole("button", { name: "Mit anderem Verein teilen" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Mit anderer Organisation teilen" })).toBeTruthy();
   });
 
   it("also offers sharing for an own automatically-managed album (e.g. a Zyklus-Album)", async () => {
@@ -134,7 +134,7 @@ describe("PhotoAlbums", () => {
     render(<PhotoAlbums />);
     fireEvent.click(await screen.findByText("Biber 2026"));
 
-    expect(await screen.findByRole("button", { name: "Mit anderem Verein teilen" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Mit anderer Organisation teilen" })).toBeTruthy();
   });
 
   it("renames an own album via the ⋮ menu", async () => {

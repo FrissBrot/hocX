@@ -202,7 +202,7 @@
     "description": "L’organizzazione riceve un invito. Dopo l’accettazione, «{albumName}» compare per lei in Album.",
     "endedToast": "Condivisione terminata.",
     "eyebrow": "Condividi album",
-    "fieldHint": "L’altra organizzazione trova il proprio ID nelle impostazioni sotto «Generale» (con pulsante Copia).",
+    "fieldHint": "L’altra organizzazione trova il proprio ID in Organizzazione › Profilo (con pulsante Copia).",
     "fieldLabel": "ID dell’organizzazione o nome",
     "foundGeneric": "Organizzazione trovata",
     "foundGenericHint": "Nome e immagine del profilo diventano visibili non appena accetta un invito.",
@@ -246,7 +246,7 @@
     "publicLinksError": "Impossibile salvare l’impostazione dei link pubblici.",
     "partnerPhotosHidden": "Le foto di questo partner non compaiono nei link pubblici.",
     "helpTopic": "Condividi album",
-    "help": "1. L’altra organizzazione copia il proprio ID (impostazioni → Generale) e te lo invia. 2. Lo incolli qui e inviti. 3. Dopo l’accettazione entrambe le organizzazioni vedono l’album e possono aggiungere le proprie foto. Posizione e link pubblici si gestiscono per partner."
+    "help": "1. L’altra organizzazione copia il proprio ID (Organizzazione › Profilo) e te lo invia. 2. Lo incolli qui e inviti. 3. Dopo l’accettazione entrambe le organizzazioni vedono l’album e possono aggiungere le proprie foto. Posizione e link pubblici si gestiscono per partner."
   },
   "shareRelease": {
     "confirmLabel": "Aggiungi e condividi",
@@ -458,5 +458,9 @@
     "uploadShort": "Data di caricamento",
     "estimatedHint": "Nessuna data di scatto nel file – stimata durante il caricamento.",
     "partialShort": "{label} · {count}/{total}"
+  },
+  "timeline": {
+    "loading": "Caricamento delle foto",
+    "scrubberLabel": "Linea del tempo: vai a una data"
   }
 }

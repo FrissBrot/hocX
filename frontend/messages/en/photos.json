@@ -202,7 +202,7 @@
     "description": "The organization receives an invitation. Once accepted, «{albumName}» appears for them under Albums.",
     "endedToast": "Sharing ended.",
     "eyebrow": "Share album",
-    "fieldHint": "The other organization finds its organization ID in its settings under «General» (with a copy button).",
+    "fieldHint": "The other organization finds its organization ID under Organization › Profile (with a copy button).",
     "fieldLabel": "Organization ID or name",
     "foundGeneric": "Organization found",
     "foundGenericHint": "Name and profile picture become visible once they accept an invitation.",
@@ -246,7 +246,7 @@
     "publicLinksError": "The public link setting could not be saved.",
     "partnerPhotosHidden": "This partner’s photos are not shown in public links.",
     "helpTopic": "Share album",
-    "help": "1. The other organization copies its organization ID (settings → General) and sends it to you. 2. You paste it here and invite. 3. Once accepted, both organizations see the album and can contribute their own photos. You control location and public links per partner."
+    "help": "1. The other organization copies its organization ID (Organization › Profile) and sends it to you. 2. You paste it here and invite. 3. Once accepted, both organizations see the album and can contribute their own photos. You control location and public links per partner."
   },
   "shareRelease": {
     "confirmLabel": "Add and share",
@@ -458,5 +458,9 @@
     "uploadShort": "Upload date",
     "estimatedHint": "No capture date in the file – estimated during upload.",
     "partialShort": "{label} · {count}/{total}"
+  },
+  "timeline": {
+    "loading": "Loading photos",
+    "scrubberLabel": "Timeline: jump to a date"
   }
 }

@@ -77,12 +77,27 @@ function makeItem(overrides: Partial<FileOverviewItem> = {}): FileOverviewItem {
   };
 }
 
+// Zeitleiste (Datumsansicht): Anzahl je Tag wie GET /api/files/timeline, Tage per date_from/date_to.
+function timelineFor(items: FileOverviewItem[]) {
+  const counts = new Map<string, number>();
+  for (const item of items) counts.set(item.group_date!, (counts.get(item.group_date!) ?? 0) + 1);
+  return Array.from(counts, ([date, count]) => ({ date, count })).sort((a, b) => b.date.localeCompare(a.date));
+}
+
+function filesFor(items: FileOverviewItem[], url: string) {
+  const params = new URLSearchParams(url.split("?")[1]);
+  const from = params.get("date_from");
+  const to = params.get("date_to");
+  return items.filter((item) => (!from || item.group_date! >= from) && (!to || item.group_date! <= to));
+}
+
 function mockFilesAndProgress(items: FileOverviewItem[], progress: { total_images: number; analyzed_images: number; pending_images: number; active_jobs: number; active_job_image_count: number }) {
   browserApiFetchMock.mockImplementation((url: string) => {
     if (url === "/api/files/analysis-progress") return Promise.resolve(progress);
     if (url === "/api/files/tags") return Promise.resolve([]);
     if (url === "/api/files/albums") return Promise.resolve([]);
-    if (url.startsWith("/api/files?")) return Promise.resolve(items);
+    if (url.startsWith("/api/files/timeline?")) return Promise.resolve(timelineFor(items));
+    if (url.startsWith("/api/files?")) return Promise.resolve(filesFor(items, url));
     return Promise.resolve([]);
   });
 }
@@ -96,6 +111,9 @@ describe("PhotosView", () => {
     confirmMock.mockReset();
     FakeIntersectionObserver.instances = [];
     vi.stubGlobal("IntersectionObserver", FakeIntersectionObserver);
+    // jsdom kennt kein Layout: die Zeitleiste rechnet mit der Breite ihres Inhaltsbereichs.
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(1000);
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(600);
   });
 
   afterEach(() => {
@@ -124,7 +142,8 @@ describe("PhotosView", () => {
       if (url.startsWith("/api/files?")) return url.includes("skip=0") ? Promise.resolve(items) : Promise.reject(new Error("Backend nicht erreichbar"));
       return Promise.resolve([]);
     });
-    render(<PhotosView />);
+    // Seitenweises Nachladen gibt es nur noch ausserhalb der Datumsansicht (hier: Album)
+    render(<PhotosView albumId="album-1" />);
     await screen.findByRole("button", { name: "Mehr laden (60 geladen)" });
 
     fireEvent.click(screen.getByRole("button", { name: "Mehr laden (60 geladen)" }));
@@ -157,10 +176,9 @@ describe("PhotosView", () => {
       if (url === "/api/files/analysis-progress") return Promise.resolve(NO_PROGRESS);
       return Promise.resolve([]);
     });
-    render(<PhotosView />);
+    // Masonry-Kacheln mit echtem Seitenverhältnis: Album- und Sortieransichten ausserhalb der Zeitleiste
+    render(<PhotosView albumId="album-1" />);
 
-    expect(screen.getByRole("heading", { name: "Fotos" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "+ Bilder hochladen" })).toBeEnabled();
     expect(screen.getByRole("status", { name: "Fotos werden geladen" })).toBeInTheDocument();
     expect(screen.queryByText("Keine Fotos gefunden.")).not.toBeInTheDocument();
     await waitFor(() => expect(browserApiFetchMock).toHaveBeenCalledWith(expect.stringContaining("/api/files?")));
@@ -185,6 +203,27 @@ describe("PhotosView", () => {
 
     expect(await screen.findByText(/Freitag, 10\. Juli 2026/)).toBeInTheDocument();
     expect(screen.getByText(/2 Fotos/)).toBeInTheDocument();
+  });
+
+  it("lädt in der Datumsansicht zuerst die Zeitleiste und dann nur die sichtbaren Tage", async () => {
+    const items = [
+      makeItem({ id: "a", group_date: "2026-07-10" }),
+      makeItem({ id: "b", group_date: "2024-03-02" }),
+    ];
+    mockFilesAndProgress(items, NO_PROGRESS);
+    render(<PhotosView />);
+
+    expect(await screen.findAllByRole("checkbox")).toHaveLength(2);
+    const urls = browserApiFetchMock.mock.calls.map(([url]) => String(url));
+    expect(urls.some((url) => url.startsWith("/api/files/timeline?") && url.includes("only_images=true"))).toBe(true);
+    const dayRequests = urls.filter((url) => url.startsWith("/api/files?"));
+    expect(dayRequests.length).toBeGreaterThan(0);
+    expect(dayRequests.every((url) => url.includes("date_from=") && url.includes("date_to="))).toBe(true);
+    // Zeitstrahl mit Jahren und quadratische Kacheln (keine nachträgliche Höhenmessung)
+    const scrubber = screen.getByRole("slider", { name: "Zeitstrahl: zu einem Datum springen" });
+    expect(scrubber).toHaveTextContent("2026");
+    expect(scrubber).toHaveTextContent("2024");
+    expect(screen.getAllByRole("img", { name: "urlaubsfoto.jpg" })[0].parentElement).toHaveStyle({ aspectRatio: "1" });
   });
 
   it("shows the bulk-action bar with a count once photos are selected", async () => {

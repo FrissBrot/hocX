@@ -202,7 +202,7 @@
     "description": "L’organisation reçoit une invitation. Une fois acceptée, « {albumName} » apparaît chez elle sous Albums.",
     "endedToast": "Partage terminé.",
     "eyebrow": "Partager l’album",
-    "fieldHint": "L’autre organisation trouve son ID dans ses paramètres sous « Général » (avec un bouton Copier).",
+    "fieldHint": "L’autre organisation trouve son ID sous Organisation › Profil (avec un bouton Copier).",
     "fieldLabel": "ID de l’organisation ou nom",
     "foundGeneric": "Organisation trouvée",
     "foundGenericHint": "Le nom et la photo de profil deviennent visibles dès qu’il accepte une invitation.",
@@ -246,7 +246,7 @@
     "publicLinksError": "Le réglage des liens publics n’a pas pu être enregistré.",
     "partnerPhotosHidden": "Les photos de ce partenaire n’apparaissent pas dans les liens publics.",
     "helpTopic": "Partager l’album",
-    "help": "1. L’autre organisation copie son ID (paramètres → Général) et vous l’envoie. 2. Vous le collez ici et invitez. 3. Après acceptation, les deux organisations voient l’album et peuvent y ajouter leurs photos. Vous gérez la localisation et les liens publics par partenaire."
+    "help": "1. L’autre organisation copie son ID (Organisation › Profil) et vous l’envoie. 2. Vous le collez ici et invitez. 3. Après acceptation, les deux organisations voient l’album et peuvent y ajouter leurs photos. Vous gérez la localisation et les liens publics par partenaire."
   },
   "shareRelease": {
     "confirmLabel": "Ajouter et partager",
@@ -458,5 +458,9 @@
     "uploadShort": "Date d'envoi",
     "estimatedHint": "Aucune date de prise de vue dans le fichier – estimée lors de l'envoi.",
     "partialShort": "{label} · {count}/{total}"
+  },
+  "timeline": {
+    "loading": "Chargement des photos",
+    "scrubberLabel": "Frise chronologique : aller à une date"
   }
 }
