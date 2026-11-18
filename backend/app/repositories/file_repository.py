@@ -411,9 +411,15 @@ class StoredFileRepository:
         album_share_pending: bool | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
+        viewer_tenant_id: int | None = None,
     ):
         """Gefilterte Files-Overview (ohne Sortierung/Paging) - gemeinsam für die Liste und die
-        Tageszählung der Zeitleiste, damit beide genau dieselben Fotos sehen."""
+        Tageszählung der Zeitleiste, damit beide genau dieselben Fotos sehen.
+
+        viewer_tenant_id (geteilte Alben): Fotos anderer Mandanten findet die Suche nur über den
+        Dateinamen und der Tag-Filter gar nicht - Tags, Termin-/Abgabe-Titel und Herkunft des
+        Besitzers sieht der Partner nicht (FileService.list_tenant_files), also darf er sie auch
+        nicht über Suchtreffer abfragen."""
         branches = self._files_overview_branches(tenant_id)
         selected = [branch for key, branch in branches.items() if source is None or source == key]
         union_query = union_all(*selected).subquery("files_overview")
@@ -445,15 +451,15 @@ class StoredFileRepository:
             # Termin (ref_label/context_label), the computed origin_tag and the user tags
             # (jsonb array matched as its text form - good enough for a substring search).
             pattern = f"%{search}%"
-            query = query.where(
-                or_(
-                    union_query.c.original_name.ilike(pattern),
-                    cast(union_query.c.ref_label, String).ilike(pattern),
-                    cast(union_query.c.context_label, String).ilike(pattern),
-                    cast(union_query.c.origin_tag, String).ilike(pattern),
-                    cast(union_query.c.tags, String).ilike(pattern),
-                )
+            context_match = or_(
+                cast(union_query.c.ref_label, String).ilike(pattern),
+                cast(union_query.c.context_label, String).ilike(pattern),
+                cast(union_query.c.origin_tag, String).ilike(pattern),
+                cast(union_query.c.tags, String).ilike(pattern),
             )
+            if viewer_tenant_id is not None:
+                context_match = and_(union_query.c.tenant_id == viewer_tenant_id, context_match)
+            query = query.where(or_(union_query.c.original_name.ilike(pattern), context_match))
         if tags:
             # AND across selected tags (each further tag narrows the result), OR within a
             # single tag between a user-assigned tag (jsonb containment) and the computed
@@ -476,6 +482,8 @@ class StoredFileRepository:
                     ]
                 )
             )
+            if viewer_tenant_id is not None:
+                query = query.where(union_query.c.tenant_id == viewer_tenant_id)
 
         if date_from is not None:
             query = query.where(union_query.c.group_date >= date_from)
@@ -524,6 +532,7 @@ class StoredFileRepository:
         album_share_pending: bool | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
+        viewer_tenant_id: int | None = None,
     ) -> list[Row]:
         """Every "Dateien"/"Fotos" the tenant has produced by uploading something - protocol
         images, the raw .docx/.pdf a word-import was read from, abgabebox submission uploads,
@@ -556,7 +565,7 @@ class StoredFileRepository:
         query, union_query = self._overview_query(
             tenant_id, source=source, only_images=only_images, exclude_images=exclude_images, search=search, tags=tags,
             file_ids=file_ids, album_id=album_id, exclude_album_id=exclude_album_id, album_share_pending=album_share_pending,
-            date_from=date_from, date_to=date_to,
+            date_from=date_from, date_to=date_to, viewer_tenant_id=viewer_tenant_id,
         )
 
         sort_column = {

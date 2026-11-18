@@ -157,6 +157,8 @@ def list_files(
         album_share_pending=album_share_pending,
         date_from=date_from,
         date_to=date_to,
+        # Geteiltes Album: Fotos des anderen Mandanten ohne dessen Kontext (Tags, Titel).
+        viewer_tenant_id=user.current_tenant_id if album_id is not None else None,
     )
     if album_id is not None:
         # is_best fetched only for this page's items (at most `limit`), not the whole
