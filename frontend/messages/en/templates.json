@@ -662,7 +662,9 @@
       "valueWord": "Value",
       "filterColumn": "Only show rows whose column …",
       "noFilter": "All rows",
-      "filterText": "… contains this text"
+      "filterText": "… contains this text",
+      "visibleColumns": "Visible columns",
+      "allColumns": "All columns"
     },
     "eventField": {
       "title": "Title",
@@ -794,7 +796,8 @@
         "list": "Value from list"
       },
       "noAutoValue": "No value",
-      "autoValueHelp": "Pre-filled in every automatically created column."
+      "autoValueHelp": "Pre-filled in every automatically created column.",
+      "valueColumn": "Value from column"
     },
     "rowType": {
       "text": "Free text",

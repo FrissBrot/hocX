@@ -64,6 +64,7 @@ from app.models import (
     GalleryImage,
     GroupEntity,
     Leader,
+    ListColumn,
     ListDefinition,
     ListEntry,
     Feature,
@@ -110,7 +111,7 @@ from app.models.entities import (
     ShareLinkFile,
     submission_assignment_link_table,
 )
-from app.services import todo_fine_transfer
+from app.services import list_columns, list_legacy_adapter, todo_fine_transfer
 from app.services import (
     calendar_feed_service,
     domain_verification_service,
@@ -144,7 +145,7 @@ from app.services.tenant_transfer_common import (
     replace_public_ids,
 )
 
-SUPPORTED_FORMAT_VERSIONS = {2, 3, 4, 5, 6, 7, 8, 9}  # 9: Rollen je Mandant (RBAC); 8: Baustein-Bibliothek (ältere Archive: is_library = TRUE); 7: Document Studio; 6: Dokumentenregister; 5: Dokument-Engine (Hausstile statt Dokumentvorlagen)  # 2: separate user_tenant_role table; 3: role on app_user
+SUPPORTED_FORMAT_VERSIONS = {2, 3, 4, 5, 6, 7, 8, 9, 10}  # 10: Listen-Spalten (list_column, values_json; ältere über den v1-Adapter); 9: Rollen je Mandant (RBAC); 8: Baustein-Bibliothek (ältere Archive: is_library = TRUE); 7: Document Studio; 6: Dokumentenregister; 5: Dokument-Engine (Hausstile statt Dokumentvorlagen)  # 2: separate user_tenant_role table; 3: role on app_user
 
 # Zip-bomb guard, same idea as file_service.py's MAX_ZIP_ENTRIES/MAX_ZIP_TOTAL_BYTES for the
 # word-import ZIP upload, just scaled up: a full-tenant export can legitimately contain many
@@ -158,6 +159,31 @@ MAX_IMPORT_ZIP_TOTAL_BYTES = 2 * 1024 * 1024 * 1024  # 2 GB combined uncompresse
 
 # Seit 0158 buchbar, vorher für alle Mandanten verfügbar
 FEATURES_GRANDFATHERED_0158 = ("task_packages", "custom_roles", "photo_sharing", "document_designer")
+
+
+# Spalten-Keys sind in hocX UUIDs (Tests: kurze Keys wie «k1»); erlaubt sind nur Buchstaben,
+# Ziffern und Bindestrich - keine LIKE-Platzhalter, keine Steuerzeichen, höchstens 64 Zeichen.
+_COLUMN_KEY = re.compile(r"[A-Za-z0-9-]{1,64}")
+
+
+def validated_column_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Spalte aus einer Importdatei (Eingabe, nicht vertrauenswürdig): Werte, Konfigurationen und
+    Snapshots verweisen auf den Key, ein freier Text würde z. B. in der Verwendungs-Suche (LIKE)
+    als Muster wirken. Legacy-Keys nur die zwei festen Spalten, Titel
+    höchstens 200 Zeichen wie in der API."""
+    key = str(row.get("key") or "")
+    if not _COLUMN_KEY.fullmatch(key):
+        raise ValueError("Invalid list column key in import")
+    legacy_key = row.get("legacy_key")
+    if legacy_key not in (None, "column_one", "column_two"):
+        raise ValueError("Invalid list column in import")
+    return {
+        "key": key,
+        "title": str(row.get("title") or "")[:200],
+        "value_type": row.get("value_type") if row.get("value_type") in list_columns.VALUE_TYPES else "text",
+        "sort_index": int(row.get("sort_index") or 0),
+        "legacy_key": legacy_key,
+    }
 
 
 class TenantImportService:
@@ -410,7 +436,7 @@ class TenantImportService:
         self._participant_public_ids = {str(row["public_id"]).lower(): row["id"] for row in self._t("app_user" if self.format_version >= 4 else "participant") if row.get("public_id")}
         self._event_public_ids = {str(row["public_id"]).lower(): row["id"] for row in self._t("event") if row.get("public_id")}
         self._import_event_cycles(event_map, cycle_config_map)
-        list_definition_map = self._import_simple(ListDefinition, self._t("list_definition"), "list_definition", {"tenant_id": new_tenant.id})
+        list_definition_map = self._import_list_definitions(new_tenant.id)
         list_entry_map = self._import_list_entries(list_definition_map, participant_map, event_map)
         finance_account_map = self._import_simple(FinanceAccount, self._t("finance_account"), "finance_account", {"tenant_id": new_tenant.id})
         self._align_finance_currency(new_tenant)
@@ -1197,20 +1223,71 @@ class TenantImportService:
             self.db.add(EventCycle(event_id=new_event_id, cycle_config_id=new_cycle_config_id, cycle_year=row["cycle_year"]))
         self.db.commit()
 
+    def _import_list_definitions(self, new_tenant_id: int) -> dict[int, int]:
+        """Listen samt Spalten (Migration 0186). Spalten-Keys werden unverändert übernommen, damit
+        Konfigurationen, Werte und Snapshots gültig bleiben. Exporte vor Format 10 haben keine
+        list_column-Zeilen: die Spalten entstehen über den v1-Adapter aus den alten Feldern
+        (mit ``legacy_key``, damit alte Keys in Konfigurationen weiter aufgelöst werden)."""
+        definition_rows = self._t("list_definition")
+        id_map = self._import_simple(
+            ListDefinition, definition_rows, "list_definition", {"tenant_id": new_tenant_id, "label_column_id": None, "responsible_column_id": None}
+        )
+        column_rows = self._t("list_column")
+        if not column_rows:
+            generated = list_legacy_adapter.table_snapshot_list_columns(definition_rows)
+            column_rows = [
+                {**column, "id": None, "key": str(new_uuid7())}
+                for columns in generated.values() for column in columns
+            ]
+        self._list_columns_by_old_definition: dict[int, list[dict[str, Any]]] = {}
+        column_id_map: dict[int, int] = {}
+        per_definition: dict[int, int] = {}
+        for row in column_rows:
+            new_definition_id = id_map.get(row.get("list_definition_id"))
+            if new_definition_id is None:
+                continue
+            per_definition[new_definition_id] = per_definition.get(new_definition_id, 0) + 1
+            if per_definition[new_definition_id] > list_columns.MAX_COLUMNS:
+                raise ValueError("Too many list columns in import")
+            column = ListColumn(list_definition_id=new_definition_id, **validated_column_row(row))
+            self.db.add(column)
+            self.db.flush()
+            if row.get("id") is not None:
+                column_id_map[row["id"]] = column.id
+            self._list_columns_by_old_definition.setdefault(row.get("list_definition_id"), []).append(
+                {"key": column.key, "value_type": column.value_type, "legacy_key": column.legacy_key, "id": column.id}
+            )
+        for row in definition_rows:
+            new_id = id_map.get(row["id"])
+            definition = self.db.get(ListDefinition, new_id) if new_id else None
+            if definition is None:
+                continue
+            columns = self._list_columns_by_old_definition.get(row["id"], [])
+            definition.label_column_id = column_id_map.get(row.get("label_column_id")) or next(
+                (c["id"] for c in columns if c["value_type"] in list_columns.LABEL_TYPES), columns[0]["id"] if columns else None
+            )
+            definition.responsible_column_id = column_id_map.get(row.get("responsible_column_id")) or next(
+                (c["id"] for c in columns if c["value_type"] in list_columns.PARTICIPANT_TYPES), None
+            )
+        self.db.commit()
+        return id_map
+
     def _import_list_entries(self, list_definition_map: dict[int, int], participant_map: dict[int, int], event_map: dict[int, int]) -> dict[int, int]:
-        value_types_by_old_definition_id = {
-            row["id"]: (row.get("column_one_value_type"), row.get("column_two_value_type")) for row in self._t("list_definition")
-        }
+        columns_by_definition = getattr(self, "_list_columns_by_old_definition", {})
         id_map: dict[int, int] = {}
-        for row in self._t("list_entry"):
+        entry_rows = list_legacy_adapter.upgrade_table_snapshot_rows("list_entry", self._t("list_entry"), columns_by_definition=columns_by_definition)
+        for row in entry_rows:
             new_definition_id = list_definition_map.get(row["list_definition_id"])
             if new_definition_id is None:
                 continue
-            col1_type, col2_type = value_types_by_old_definition_id.get(row["list_definition_id"], (None, None))
+            types = {column["key"]: column["value_type"] for column in columns_by_definition.get(row["list_definition_id"], [])}
+            values = {
+                key: remap_list_value(types.get(key), value, participant_map, event_map)
+                for key, value in (row.get("values_json") or {}).items() if key in types and isinstance(value, dict)
+            }
             new_row = self._build(ListEntry, row, {
                 "list_definition_id": new_definition_id,
-                "column_one_value_json": remap_list_value(col1_type, row.get("column_one_value_json"), participant_map, event_map),
-                "column_two_value_json": remap_list_value(col2_type, row.get("column_two_value_json"), participant_map, event_map),
+                "values_json": {key: value for key, value in values.items() if value},
             })
             self.db.add(new_row)
             self.db.flush()

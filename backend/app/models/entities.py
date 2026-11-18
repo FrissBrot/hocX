@@ -688,14 +688,6 @@ class ListDefinition(Base, TimestampMixin, UpdatedAtMixin):
     __tablename__ = "list_definition"
     __table_args__ = (
         UniqueConstraint("tenant_id", "name", name="uq_list_definition_tenant_name"),
-        CheckConstraint(
-            "column_one_value_type IN ('text', 'participant', 'participants', 'event')",
-            name="ck_list_definition_column_one_type",
-        ),
-        CheckConstraint(
-            "column_two_value_type IN ('text', 'participant', 'participants', 'event')",
-            name="ck_list_definition_column_two_type",
-        ),
         Index("idx_list_definition_tenant_active", "tenant_id", "is_active"),
     )
 
@@ -706,18 +698,61 @@ class ListDefinition(Base, TimestampMixin, UpdatedAtMixin):
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
-    column_one_title: Mapped[str] = mapped_column(Text, nullable=False)
-    column_one_value_type: Mapped[str] = mapped_column(Text, nullable=False)
-    column_two_title: Mapped[str] = mapped_column(Text, nullable=False)
-    column_two_value_type: Mapped[str] = mapped_column(Text, nullable=False)
+    # Spalten stehen in list_column (Migration 0186). Die alten festen Spaltenfelder der Tabelle
+    # werden nicht mehr gemappt und nicht mehr geschrieben; nur der Downgrade baut sie wieder auf.
+    # Rollen statt Heuristik: welche Spalte einen Eintrag benennt (Abgabe-Label, Matrix-Titel,
+    # Gruppenname) und welche die verantwortlichen Personen enthält.
+    label_column_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("list_column.id", ondelete="SET NULL", use_alter=True, name="list_definition_label_column_id_fkey")
+    )
+    responsible_column_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("list_column.id", ondelete="SET NULL", use_alter=True, name="list_definition_responsible_column_id_fkey")
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
     # Einträge dieser Liste gelten in der Statistik als Gruppen (Termin-Tags), Migration 0176.
     is_group_source: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
-    # Bumped on any entry create/update/delete, or a column title/type change - lets protocol
-    # blocks that snapshot this list's data cheaply detect "has anything relevant changed"
-    # without reconciling independent per-row updated_at timestamps (entries don't cascade
-    # to bump this table's updated_at, and deletes don't touch it at all).
+    # Bumped on any entry create/update/delete, or any column change (anlegen, umbenennen,
+    # Typ, Reihenfolge, löschen) - lets protocol blocks that snapshot this list's data cheaply
+    # detect "has anything relevant changed".
     content_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+
+    columns: Mapped[list["ListColumn"]] = relationship(
+        "ListColumn",
+        primaryjoin="ListDefinition.id == ListColumn.list_definition_id",
+        order_by="(ListColumn.sort_index, ListColumn.id)",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        lazy="selectin",
+    )
+
+
+class ListColumn(Base, TimestampMixin, UpdatedAtMixin):
+    """Eine Spalte einer Liste (Migration 0186). ``key`` ist der Spalten-Key in
+    ``list_entry.values_json`` und in Konfigurationen - ein undurchsichtiger Bezeichner, aus dem
+    kein Code Position oder Bedeutung ableitet, eindeutig je Liste (Klonen/Import kopieren ihn
+    unverändert). ``legacy_key`` nur für den v1-Adapter."""
+
+    __tablename__ = "list_column"
+    __table_args__ = (
+        CheckConstraint("value_type IN ('text', 'participant', 'participants', 'event')", name="ck_list_column_value_type"),
+        CheckConstraint("legacy_key IN ('column_one', 'column_two')", name="ck_list_column_legacy_key"),  # nosemgrep: no-legacy-list-columns -- Wertebereich der Altspalte, nur für den v1-Adapter
+        UniqueConstraint("list_definition_id", "key", name="uq_list_column_key"),
+        Index("idx_list_column_definition_sort", "list_definition_id", "sort_index"),
+        Index("uq_list_column_legacy_key", "list_definition_id", "legacy_key", unique=True, postgresql_where=text("legacy_key IS NOT NULL")),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=False, unique=True, server_default=text("uuidv7()")
+    )
+    list_definition_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("list_definition.id", ondelete="CASCADE"), nullable=False
+    )
+    key: Mapped[str] = mapped_column(Text, nullable=False, default=lambda: str(uuid.uuid4()), server_default=text("(uuidv7())::text"))
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    value_type: Mapped[str] = mapped_column(Text, nullable=False)
+    sort_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    legacy_key: Mapped[str | None] = mapped_column(Text)
 
 
 class ListEntry(Base, TimestampMixin, UpdatedAtMixin):
@@ -734,10 +769,9 @@ class ListEntry(Base, TimestampMixin, UpdatedAtMixin):
         BigInteger, ForeignKey("list_definition.id", ondelete="CASCADE"), nullable=False
     )
     sort_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
-    column_one_value_json: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict
-    )
-    column_two_value_json: Mapped[dict[str, Any]] = mapped_column(
+    # {"<list_column.public_id>": {"text_value"|"participant_id"|"participant_ids"|"event_id": ...}}
+    # mit internen IDs; leere Werte fehlen als Schlüssel.
+    values_json: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict
     )
 

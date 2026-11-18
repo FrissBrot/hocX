@@ -21,21 +21,22 @@ def _snapshot(db):
     person = make_participant(db, tenant.id, "Damals verantwortlich")
     person.left_at = date(2026, 8, 15)
     person.is_active = False
-    entry = make_list_entry(db, definition.id, column_two_value={"participant_id": person.id})
+    entry = make_list_entry(db, definition.id, second_value={"participant_id": person.id})
     TableSnapshotService().create_snapshot(db, tenant_id=tenant.id, cycle_config=cycle, cycle_year=2025)
     return tenant, cycle, person, entry
 
 
 def _read(db, tenant, cycle):
     return get_snapshot_table(cycle.public_id, 2025, "list_entry", db=db,
-                              user=make_current_user(tenant.id, role="writer")).rows[0]["column_two_value_json"]
+                              user=make_current_user(tenant.id, role="writer")).rows[0]["values_json"]["k2"]
 
 
 def test_old_snapshot_internal_id_resolves_departed_participant(db):
     tenant, cycle, person, entry = _snapshot(db)
     snapshot = db.scalar(select(TableSnapshot).where(
         TableSnapshot.cycle_config_id == cycle.id, TableSnapshot.table_name == "list_entry"))
-    snapshot.snapshot_json = [{**row, "column_two_value_json": {"participant_id": person.id}}
+    # Backup im alten Format (vor Migration 0186): alte Wertfelder statt values_json
+    snapshot.snapshot_json = [{**{k: v for k, v in row.items() if k != "values_json"}, "column_two_value_json": {"participant_id": person.id}}
                               for row in snapshot.snapshot_json]
     db.flush()
     value = _read(db, tenant, cycle)
@@ -62,8 +63,8 @@ def test_multiple_participants_support_internal_and_public_ids(db):
     tenant = make_tenant(db)
     first = make_participant(db, tenant.id, "Erster")
     second = make_participant(db, tenant.id, "Zweiter")
-    raw = [{"column_one_value_json": {"participant_ids": [first.id, str(second.public_id)]}}]
-    result = snapshot_list_rows(db, raw, tenant.id, public=True)[0]["column_one_value_json"]
+    raw = [{"values_json": {"k1": {"participant_ids": [first.id, str(second.public_id)]}}}]
+    result = snapshot_list_rows(db, raw, tenant.id, public=True)[0]["values_json"]["k1"]
     assert result["participant_ids"] == [str(first.public_id), str(second.public_id)]
     assert result["participant_names"] == ["Erster", "Zweiter"]
 
@@ -72,8 +73,8 @@ def test_reference_resolution_cannot_read_other_tenant_names(db):
     tenant = make_tenant(db)
     other = make_tenant(db)
     person = make_participant(db, other.id, "Privater Name")
-    raw = [{"column_one_value_json": {"participant_id": person.id}}]
-    value = snapshot_list_rows(db, raw, tenant.id, public=True)[0]["column_one_value_json"]
+    raw = [{"values_json": {"k1": {"participant_id": person.id}}}]
+    value = snapshot_list_rows(db, raw, tenant.id, public=True)[0]["values_json"]["k1"]
     assert "participant_name" not in value
     assert str(person.public_id) not in str(value)
 
@@ -82,9 +83,9 @@ def test_historical_edit_round_trips_public_id_without_losing_name(db):
     tenant, cycle, old_person, entry = _snapshot(db)
     new_person = make_participant(db, tenant.id, "Neue Verknüpfung")
     payload = TableSnapshotRowUpdate(confirm_historical_edit=True, values={
-        "column_two_value_json": {"participant_id": str(new_person.public_id)},
+        "values_json": {"k2": {"participant_id": str(new_person.public_id)}},
     })
     result = update_snapshot_row(cycle.public_id, 2025, "list_entry", entry.public_id,
                                  payload, db=db, user=make_current_user(tenant.id, role="admin"))
-    assert result["column_two_value_json"]["participant_id"] == str(new_person.public_id)
+    assert result["values_json"]["k2"]["participant_id"] == str(new_person.public_id)
     assert _read(db, tenant, cycle)["participant_name"] == "Neue Verknüpfung"

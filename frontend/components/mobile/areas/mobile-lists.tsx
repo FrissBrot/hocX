@@ -24,9 +24,20 @@ import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import type { EventSummary, ParticipantSummary, StructuredListDefinition, StructuredListEntry, StructuredListValueType } from "@/types/api";
 import { Select } from "@/components/ui/select";
+import { ColumnFormState, columnsForForm, createListDefinition, isPersonType, ListSaveRequest, MAX_COLUMNS, newLocalId, updateListDefinition } from "@/lib/lists/save-list";
 
 type Value = Record<string, unknown>;
 const VALUE_TYPES: StructuredListValueType[] = ["text", "participant", "participants", "event"];
+
+function orderedColumns(list: StructuredListDefinition) {
+  return [...list.columns].sort((left, right) => left.sort_index - right.sort_index);
+}
+
+/** Spalte, die einen Eintrag benennt (Rolle «Bezeichnung», sonst die erste Spalte). */
+function labelColumnOf(list: StructuredListDefinition) {
+  const columns = orderedColumns(list);
+  return columns.find((column) => column.id === list.label_column_id) ?? columns[0];
+}
 
 function emptyValue(type: StructuredListValueType): Value {
   if (type === "participant") return { participant_id: null };
@@ -88,7 +99,7 @@ export function MobileLists({
       .filter(
         (entry) =>
           !needle ||
-          `${valueLabel(openList.column_one_value_type, entry.column_one_value)} ${valueLabel(openList.column_two_value_type, entry.column_two_value)}`.toLowerCase().includes(needle)
+          orderedColumns(openList).map((column) => valueLabel(column.value_type, entry.values?.[column.id] ?? {})).join(" ").toLowerCase().includes(needle)
       );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openList, entries, entrySearch]);
@@ -110,7 +121,7 @@ export function MobileLists({
       <div className="mobile-page mobile-page-list">
         <MobileSubHeader
           title={openList.name}
-          subtitle={t("columnsLabel", { one: openList.column_one_title, two: openList.column_two_title })}
+          subtitle={orderedColumns(openList).map((column) => column.title).join(" · ")}
           backLabel={t("pageTitle")}
           onBack={() => setOpenListId(null)}
           actions={
@@ -126,17 +137,23 @@ export function MobileLists({
           <div className="mobile-section">
             <div className="mobile-card mobile-list-card">
               {listEntries.map((entry) => {
-                const first = valueLabel(openList.column_one_value_type, entry.column_one_value);
-                const second = valueLabel(openList.column_two_value_type, entry.column_two_value);
+                // Karte: Bezeichnungs-Spalte als Titel, die übrigen Spalten darunter (Plan 6.2)
+                const titleColumn = labelColumnOf(openList);
+                const first = titleColumn ? valueLabel(titleColumn.value_type, entry.values?.[titleColumn.id] ?? {}) : "";
+                const rest = orderedColumns(openList)
+                  .filter((column) => column.id !== titleColumn?.id)
+                  .map((column) => valueLabel(column.value_type, entry.values?.[column.id] ?? {}))
+                  .filter(Boolean)
+                  .join(" · ");
                 return (
                   <MobileListRow
                     key={entry.id}
                     onClick={() => setEntryForm(entry)}
-                    leading={openList.column_one_value_type === "participant" && first ? <MobileAvatar name={first} size="sm" /> : undefined}
+                    leading={titleColumn?.value_type === "participant" && first ? <MobileAvatar name={first} size="sm" /> : undefined}
                     label={
                       <span className="mobile-row-stack">
                         <span className="mobile-row-title">{first || t("table.noValue")}</span>
-                        <span className="mobile-row-meta">{second || t("table.noValue")}</span>
+                        <span className="mobile-row-meta">{rest || t("table.noValue")}</span>
                       </span>
                     }
                   />
@@ -211,7 +228,7 @@ export function MobileLists({
                   <span className="mobile-row-stack">
                     <span className="mobile-row-title">{list.name}</span>
                     <span className="mobile-row-meta">
-                      {t(`valueTypes.${list.column_one_value_type}`)} · {t(`valueTypes.${list.column_two_value_type}`)} · {t("sidebar.entryCount", { count: (entries[list.id] ?? []).length })}
+                      {t("columns.count", { count: list.columns.length })} · {t("sidebar.entryCount", { count: (entries[list.id] ?? []).length })}
                     </span>
                   </span>
                 }
@@ -243,27 +260,54 @@ export function MobileLists({
 function ListFormSheet({ list, onClose, onSaved }: { list: StructuredListDefinition | null; onClose: () => void; onSaved: (list: StructuredListDefinition, created: boolean) => void }) {
   const t = useTranslations("lists");
   const showToast = useToast();
-  const [form, setForm] = useState({
+  const confirm = useConfirm();
+  const [form, setForm] = useState(() => ({
     name: list?.name ?? "",
     description: list?.description ?? "",
-    column_one_title: list?.column_one_title ?? t("defaultColumnOne"),
-    column_one_value_type: list?.column_one_value_type ?? ("participant" as StructuredListValueType),
-    column_two_title: list?.column_two_title ?? t("defaultColumnTwo"),
-    column_two_value_type: list?.column_two_value_type ?? ("text" as StructuredListValueType),
     is_active: list?.is_active ?? true,
-  });
+    columns: list
+      ? columnsForForm(list)
+      : [
+          { localId: newLocalId(), title: t("defaultColumnOne"), value_type: "participant" as StructuredListValueType },
+          { localId: newLocalId(), title: t("defaultColumnTwo"), value_type: "text" as StructuredListValueType },
+        ],
+  }));
   const [saving, setSaving] = useState(false);
   const update = (patch: Partial<typeof form>) => setForm((current) => ({ ...current, ...patch }));
-  const valid = form.name.trim() && form.column_one_title.trim() && form.column_two_title.trim();
+  const updateColumn = (localId: string, patch: Partial<ColumnFormState>) =>
+    setForm((current) => ({ ...current, columns: current.columns.map((column) => (column.localId === localId ? { ...column, ...patch } : column)) }));
+  const valid = form.name.trim() && form.columns.length > 0 && form.columns.every((column) => column.title.trim());
 
   async function save() {
     if (!valid || saving) return;
     setSaving(true);
-    const body = JSON.stringify({ ...form, name: form.name.trim(), description: form.description || null });
+    // Rollen: bestehende behalten (auf dem Handy ohne eigene Auswahl), neue Listen wie am Desktop
+    const keep = (key: string | null | undefined, personRole: boolean) =>
+      form.columns.find((column) => column.id === key && isPersonType(column.value_type) === personRole)?.localId
+      ?? form.columns.find((column) => isPersonType(column.value_type) === personRole)?.localId ?? "";
+    const request: ListSaveRequest = {
+      name: form.name,
+      description: form.description,
+      is_active: form.is_active,
+      is_group_source: list?.is_group_source ?? false,
+      columns: form.columns,
+      labelColumn: keep(list?.label_column_id, false),
+      responsibleColumn: keep(list?.responsible_column_id, true),
+    };
     try {
       const saved = list
-        ? await browserApiFetch<StructuredListDefinition>(`/api/lists/${list.id}`, { method: "PATCH", body })
-        : await browserApiFetch<StructuredListDefinition>("/api/lists", { method: "POST", body });
+        ? await updateListDefinition(list, request, {
+            confirmRemove: (column, usages) => confirm({
+              message: usages.length
+                ? t("columns.deleteConfirmUsed", { title: column.title, places: usages.map((usage) => usage.label).join(", ") })
+                : t("columns.deleteConfirm", { title: column.title }),
+              tone: "danger",
+              confirmLabel: t("columns.deleteLabel"),
+            }),
+            confirmRetype: (titles) => confirm({ message: t("columns.typeChangeConfirm", { titles: titles.join(", ") }), tone: "danger", confirmLabel: t("columns.typeChangeLabel") }),
+          })
+        : await createListDefinition(request);
+      if (!saved) return;
       showToast(list ? t("toasts.listSaved") : t("toasts.listCreated"), "success");
       onSaved(saved, !list);
     } catch (error) {
@@ -272,16 +316,6 @@ function ListFormSheet({ list, onClose, onSaved }: { list: StructuredListDefinit
       setSaving(false);
     }
   }
-
-  const typeSelect = (value: StructuredListValueType, onChange: (type: StructuredListValueType) => void) => (
-    <Select value={value} onChange={(event) => onChange(event.target.value as StructuredListValueType)}>
-      {VALUE_TYPES.map((type) => (
-        <option key={type} value={type}>
-          {t(`valueTypes.${type}`)}
-        </option>
-      ))}
-    </Select>
-  );
 
   return (
     <Modal
@@ -314,25 +348,33 @@ function ListFormSheet({ list, onClose, onSaved }: { list: StructuredListDefinit
           <span className="field-label">{t("formModal.description2")}</span>
           <input value={form.description} placeholder={t("formModal.descriptionPlaceholder")} onChange={(event) => update({ description: event.target.value })} />
         </label>
-        {([1, 2] as const).map((column) => (
-          <div key={column} className="two-col">
-            <label className="field-stack">
-              <span className="field-label">
-                {t(`formModal.column${column}`)} · {t("formModal.title")}
-              </span>
-              <input
-                value={column === 1 ? form.column_one_title : form.column_two_title}
-                onChange={(event) => update(column === 1 ? { column_one_title: event.target.value } : { column_two_title: event.target.value })}
-              />
-            </label>
-            <label className="field-stack">
-              <span className="field-label">{t("formModal.dataType")}</span>
-              {typeSelect(column === 1 ? form.column_one_value_type : form.column_two_value_type, (type) =>
-                update(column === 1 ? { column_one_value_type: type } : { column_two_value_type: type })
-              )}
-            </label>
+        <span className="field-label">{t("formModal.columns")}</span>
+        {form.columns.map((column, index) => (
+          <div key={column.localId} className="mobile-list-column-row">
+            <input aria-label={t("columns.titleLabel", { number: index + 1 })} value={column.title} onChange={(event) => updateColumn(column.localId, { title: event.target.value })} />
+            <Select aria-label={t("columns.typeLabel", { number: index + 1 })} value={column.value_type} onChange={(event) => updateColumn(column.localId, { value_type: event.target.value as StructuredListValueType })}>
+              {VALUE_TYPES.map((type) => <option key={type} value={type}>{t(`valueTypes.${type}`)}</option>)}
+            </Select>
+            <button
+              type="button"
+              className="mobile-icon-button"
+              aria-label={t("columns.remove", { title: column.title })}
+              disabled={form.columns.length <= 1}
+              onClick={() => update({ columns: form.columns.filter((entry) => entry.localId !== column.localId) })}
+            >
+              <MobileIcon name="trash" />
+            </button>
           </div>
         ))}
+        {form.columns.length < MAX_COLUMNS ? (
+          <button
+            type="button"
+            className="button-secondary"
+            onClick={() => update({ columns: [...form.columns, { localId: newLocalId(), title: t("columns.newTitle", { number: form.columns.length + 1 }), value_type: "text" }] })}
+          >
+            {t("columns.add")}
+          </button>
+        ) : null}
       </div>
     </Modal>
   );
@@ -427,8 +469,9 @@ function EntrySheet({
   const tMobile = useTranslations("mobile");
   const confirm = useConfirm();
   const showToast = useToast();
-  const [first, setFirst] = useState<Value>(entry?.column_one_value ?? emptyValue(list.column_one_value_type));
-  const [second, setSecond] = useState<Value>(entry?.column_two_value ?? emptyValue(list.column_two_value_type));
+  const [values, setValues] = useState<Record<string, Value>>(() =>
+    Object.fromEntries(orderedColumns(list).map((column) => [column.id, entry?.values?.[column.id] ?? emptyValue(column.value_type)]))
+  );
   const [saving, setSaving] = useState(false);
 
   async function save() {
@@ -436,10 +479,10 @@ function EntrySheet({
     setSaving(true);
     try {
       const saved = entry
-        ? await browserApiFetch<StructuredListEntry>(`/api/list-entries/${entry.id}`, { method: "PATCH", body: JSON.stringify({ column_one_value: first, column_two_value: second }) })
+        ? await browserApiFetch<StructuredListEntry>(`/api/list-entries/${entry.id}`, { method: "PATCH", body: JSON.stringify({ values }) })
         : await browserApiFetch<StructuredListEntry>(`/api/lists/${list.id}/entries`, {
             method: "POST",
-            body: JSON.stringify({ sort_index: nextSortIndex, column_one_value: first, column_two_value: second }),
+            body: JSON.stringify({ sort_index: nextSortIndex, values }),
           });
       showToast(entry ? t("toasts.entrySaved") : t("toasts.entryCreated"), "success");
       onSaved(saved, !entry);
@@ -487,14 +530,18 @@ function EntrySheet({
       }
     >
       <div className="grid mobile-sheet-body">
-        <div className="field-stack">
-          <span className="field-label">{list.column_one_title}</span>
-          <ValueField type={list.column_one_value_type} value={first} onChange={setFirst} participants={participants} events={events} />
-        </div>
-        <div className="field-stack">
-          <span className="field-label">{list.column_two_title}</span>
-          <ValueField type={list.column_two_value_type} value={second} onChange={setSecond} participants={participants} events={events} />
-        </div>
+        {orderedColumns(list).map((column) => (
+          <div className="field-stack" key={column.id}>
+            <span className="field-label">{column.title}</span>
+            <ValueField
+              type={column.value_type}
+              value={values[column.id] ?? emptyValue(column.value_type)}
+              onChange={(next) => setValues((current) => ({ ...current, [column.id]: next }))}
+              participants={participants}
+              events={events}
+            />
+          </div>
+        ))}
       </div>
     </Modal>
   );

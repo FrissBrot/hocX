@@ -230,9 +230,9 @@ def _collect_analysis_ids(
     for list_mapping in analysis.list_mappings:
         if list_mapping.matched_entry_id is not None:
             list_entry_ids.add(list_mapping.matched_entry_id)
-        for name in list_mapping.column_one_names:
+        for name in list_mapping.first_names:
             collect_name(name)
-        for name in list_mapping.column_two_names:
+        for name in list_mapping.second_names:
             collect_name(name)
         for candidate in list_mapping.candidates:
             list_entry_ids.add(candidate.entry_id)
@@ -421,19 +421,19 @@ def _encode_analysis(db: Session, analysis: WordImportAnalysis) -> PublicWordImp
         PublicWordImportListRowMapping(
             table_index=lm.table_index,
             row_index=lm.row_index,
-            column_one_raw=lm.column_one_raw,
-            column_two_raw=lm.column_two_raw,
-            column_one_type=lm.column_one_type,
-            column_two_type=lm.column_two_type,
+            first_raw=lm.first_raw,
+            second_raw=lm.second_raw,
+            first_type=lm.first_type,
+            second_type=lm.second_type,
             status=lm.status,
             matched_entry_id=_pub(list_entries, lm.matched_entry_id, "list_entry"),
-            column_one_names=[_encode_name_resolution(n, participants) for n in lm.column_one_names],
-            column_two_names=[_encode_name_resolution(n, participants) for n in lm.column_two_names],
+            first_names=[_encode_name_resolution(n, participants) for n in lm.first_names],
+            second_names=[_encode_name_resolution(n, participants) for n in lm.second_names],
             candidates=[
                 PublicWordImportListEntryCandidate(
                     entry_id=_pub(list_entries, c.entry_id, "list_entry"),
-                    column_one_display=c.column_one_display,
-                    column_two_display=c.column_two_display,
+                    first_display=c.first_display,
+                    second_display=c.second_display,
                     score=c.score,
                     reason=c.reason,
                 )
@@ -595,9 +595,9 @@ def _collect_commit_ids(
             list_entry_ids.add(row.linked_entry_id)
         if row.originally_suggested_entry_id is not None:
             list_entry_ids.add(row.originally_suggested_entry_id)
-        for name in row.column_one_names:
+        for name in row.first_names:
             collect_name(name)
-        for name in row.column_two_names:
+        for name in row.second_names:
             collect_name(name)
 
     for cell in payload.matrices:
@@ -734,10 +734,10 @@ def _decode_commit(db: Session, tenant_id: int, payload: PublicWordImportCommit)
         WordImportListRowCommit(
             table_index=row.table_index,
             list_definition_id=_req(list_definitions, row.list_definition_id, "lists[].list_definition_id"),
-            column_one_raw=row.column_one_raw,
-            column_two_raw=row.column_two_raw,
-            column_one_names=[_decode_name_resolution(n, participants) for n in row.column_one_names],
-            column_two_names=[_decode_name_resolution(n, participants) for n in row.column_two_names],
+            first_raw=row.first_raw,
+            second_raw=row.second_raw,
+            first_names=[_decode_name_resolution(n, participants) for n in row.first_names],
+            second_names=[_decode_name_resolution(n, participants) for n in row.second_names],
             approved=row.approved,
             linked_entry_id=_req(list_entries, row.linked_entry_id, "lists[].linked_entry_id"),
             originally_suggested_entry_id=_req(

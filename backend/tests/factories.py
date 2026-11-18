@@ -17,6 +17,7 @@ from app.models.entities import (
     ElementType,
     Event,
     FinanceAccount,
+    ListColumn,
     ListDefinition,
     ListEntry,
     Participant,
@@ -98,39 +99,58 @@ def make_list_definition(
     db,
     tenant_id: int,
     name: str = "Test List",
-    column_one_title: str = "Name",
-    column_one_value_type: str = "text",
-    column_two_title: str = "Wert",
-    column_two_value_type: str = "text",
+    first_title: str = "Name",
+    first_type: str = "text",
+    second_title: str | None = "Wert",
+    second_type: str = "text",
     is_group_source: bool = False,
+    extra_columns: list[tuple[str, str]] | None = None,
 ) -> ListDefinition:
-    definition = ListDefinition(
-        tenant_id=tenant_id,
-        name=name,
-        column_one_title=column_one_title,
-        column_one_value_type=column_one_value_type,
-        column_two_title=column_two_title,
-        column_two_value_type=column_two_value_type,
-        is_group_source=is_group_source,
-    )
+    """Liste wie nach Migration 0186: Spalten als list_column-Zeilen (die ersten zwei mit
+    legacy_key wie migrierte Bestandslisten), Rollen nach der Migrationsregel."""
+    specs = [(first_title, first_type, "column_one")]
+    if second_title is not None:
+        specs.append((second_title, second_type, "column_two"))
+    specs += [(title, value_type, None) for title, value_type in (extra_columns or [])]
+    definition = ListDefinition(tenant_id=tenant_id, name=name, is_group_source=is_group_source)
+    # Feste Keys k1, k2, ... (Keys sind nur je Liste eindeutig) - Tests können Werte direkt lesen
+    definition.columns = [
+        ListColumn(key=f"k{index + 1}", title=title, value_type=value_type, sort_index=(index + 1) * 10, legacy_key=legacy)
+        for index, (title, value_type, legacy) in enumerate(specs)
+    ]
     db.add(definition)
     db.flush()
+    label = next((c for c in definition.columns if c.value_type in ("text", "event")), definition.columns[0])
+    responsible = next((c for c in definition.columns if c.value_type in ("participant", "participants")), None)
+    definition.label_column_id = label.id
+    definition.responsible_column_id = responsible.id if responsible else None
+    db.flush()
     return definition
+
+
+def list_column_key(definition: ListDefinition, position: int) -> str:
+    """Key der n-ten Spalte (0 = erste) - für Tests, die Werte direkt prüfen."""
+    return sorted(definition.columns, key=lambda c: (c.sort_index, c.id))[position].key
+
+
+def entry_value(entry: ListEntry, definition: ListDefinition, position: int) -> dict:
+    return dict((entry.values_json or {}).get(list_column_key(definition, position)) or {})
 
 
 def make_list_entry(
     db,
     list_definition_id: int,
     sort_index: int = 0,
-    column_one_value: dict | None = None,
-    column_two_value: dict | None = None,
+    first_value: dict | None = None,
+    second_value: dict | None = None,
+    values: dict | None = None,
 ) -> ListEntry:
-    entry = ListEntry(
-        list_definition_id=list_definition_id,
-        sort_index=sort_index,
-        column_one_value_json=column_one_value or {},
-        column_two_value_json=column_two_value or {},
-    )
+    definition = db.get(ListDefinition, list_definition_id)
+    stored = dict(values or {})
+    for position, value in ((0, first_value), (1, second_value)):
+        if value:
+            stored[list_column_key(definition, position)] = value
+    entry = ListEntry(list_definition_id=list_definition_id, sort_index=sort_index, values_json=stored)
     db.add(entry)
     db.flush()
     return entry

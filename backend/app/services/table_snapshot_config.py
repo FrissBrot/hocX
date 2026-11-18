@@ -10,10 +10,13 @@ protocols, templates etc. are not in scope here.
 
 from __future__ import annotations
 
-from app.models.entities import ListDefinition, ListEntry
+from app.models.entities import ListColumn, ListDefinition, ListEntry
 
 SNAPSHOT_TABLES: dict[str, type] = {
     "list_definition": ListDefinition,
+    # Spalten der Listen (Migration 0186); ältere Backups haben keine - die Spalten liefert dann
+    # der v1-Adapter aus den alten Feldern der list_definition-Zeilen.
+    "list_column": ListColumn,
     "list_entry": ListEntry,
 }
 
@@ -28,5 +31,6 @@ SNAPSHOT_TABLES: dict[str, type] = {
 # don't follow the `f"{parent_table}_id"` pattern (e.g. SubmissionUpload.assignment_id).
 # Getting this wrong would leak another tenant's rows into a snapshot.
 TRANSITIVE_SNAPSHOT_SCOPE: dict[str, tuple[type, str]] = {
+    "list_column": (ListDefinition, "list_definition_id"),
     "list_entry": (ListDefinition, "list_definition_id"),
 }

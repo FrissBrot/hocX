@@ -40,7 +40,8 @@ test.describe("Historical list import testbook", () => {
     await importFile(request, seed, "leap-day.docx");
     const rows = await expectHistoricalRows(request, seed, 2023, cases.find((entry) => entry.file === "leap-day.docx")!.rows);
     const url = `/api/table-snapshots/${seed.cycle.id}/2023/list_entry/rows/${rows[0].public_id}`;
-    const data = { values: { column_two_value_json: { text_value: "MANUELL GEPRÜFT" } } };
+    const valueKey = [...seed.list.columns].sort((a: any, b: any) => a.sort_index - b.sort_index)[1].id;
+    const data = { values: { values_json: { ...rows[0].values_json, [valueKey]: { text_value: "MANUELL GEPRÜFT" } } } };
     expect((await request.put(url, { data })).status()).toBe(400);
     await api(request, "put", url, { ...data, confirm_historical_edit: true });
     await importFile(request, seed, "cycle-end.docx");
@@ -53,7 +54,7 @@ test.describe("Historical list import testbook", () => {
     const draft = await api(request, "get", `${base}/reconstruct-draft`);
     const response = await request.post(`${base}/reconstruct`, { data: {
       definition_values: draft.definition_values,
-      entries: draft.entries.map((row: any) => ({ ...row, column_two_value_json: { text_value: "BESTEHENDE HISTORIE" } })),
+      entries: draft.entries.map((row: any) => ({ ...row, values_json: { ...row.values_json, [draft.definition_values.columns[1].key]: { text_value: "BESTEHENDE HISTORIE" } } })),
     } });
     expect(response.ok(), await response.text()).toBeTruthy();
     await importFile(request, seed, "cycle-end.docx");

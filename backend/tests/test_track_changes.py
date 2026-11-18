@@ -198,18 +198,18 @@ def test_whole_list_sync_marks_added_changed_removed_and_is_stable_across_repeat
     tenant = make_tenant(db)
     protocol = _geplant_protocol(db, tenant)
     definition = make_list_definition(db, tenant.id)
-    kept = make_list_entry(db, definition.id, sort_index=0, column_one_value={"text_value": "kept"})
-    to_change = make_list_entry(db, definition.id, sort_index=1, column_one_value={"text_value": "before"})
-    to_remove = make_list_entry(db, definition.id, sort_index=2, column_one_value={"text_value": "gone-soon"})
+    kept = make_list_entry(db, definition.id, sort_index=0, first_value={"text_value": "kept"})
+    to_change = make_list_entry(db, definition.id, sort_index=1, first_value={"text_value": "before"})
+    to_remove = make_list_entry(db, definition.id, sort_index=2, first_value={"text_value": "gone-soon"})
     block = _whole_list_block(db, protocol, definition.id)
     user = make_current_user(tenant.id)
 
     # Baseline sync (nothing changed yet relative to itself).
     protocol_elements.sync_block_list_snapshot(block.public_id, db=db, user=user)
 
-    to_change.column_one_value_json = {"text_value": "after"}
+    to_change.values_json = {**(to_change.values_json or {}), "k1": {"text_value": "after"}}
     db.add(to_change)
-    new_entry = make_list_entry(db, definition.id, sort_index=3, column_one_value={"text_value": "brand-new"})
+    new_entry = make_list_entry(db, definition.id, sort_index=3, first_value={"text_value": "brand-new"})
     db.delete(to_remove)
     db.commit()
 
@@ -218,17 +218,17 @@ def test_whole_list_sync_marks_added_changed_removed_and_is_stable_across_repeat
 
     assert entries[kept.id].get("_tracked") is None
     assert entries[to_change.id]["_tracked"] == "changed"
-    assert entries[to_change.id]["_tracked_before"]["column_one_value"]["text_value"] == "before"
+    assert entries[to_change.id]["_tracked_before"]["values"]["k1"]["text_value"] == "before"
     assert entries[new_entry.id]["_tracked"] == "added"
     removed = [e for e in entries.values() if e.get("_tracked") == "removed"]
     assert len(removed) == 1
-    assert removed[0]["column_one_value"]["text_value"] == "gone-soon"
+    assert removed[0]["values"]["k1"]["text_value"] == "gone-soon"
 
     # A second, no-op sync must not lose the markers or duplicate the removed phantom.
     again = protocol_elements.sync_block_list_snapshot(block.public_id, db=db, user=user)
     entries_again = {e["id"]: e for e in again.configuration_snapshot_json["list_snapshot"]["entries"]}
     assert entries_again[to_change.id]["_tracked"] == "changed"
-    assert entries_again[to_change.id]["_tracked_before"]["column_one_value"]["text_value"] == "before"
+    assert entries_again[to_change.id]["_tracked_before"]["values"]["k1"]["text_value"] == "before"
     removed_again = [e for e in entries_again.values() if e.get("_tracked") == "removed"]
     assert len(removed_again) == 1
 
@@ -237,19 +237,19 @@ def test_row_link_sync_marks_changed_and_removed(db):
     tenant = make_tenant(db)
     protocol = _geplant_protocol(db, tenant)
     definition = make_list_definition(db, tenant.id)
-    entry = make_list_entry(db, definition.id, column_one_value={"text_value": "before"})
+    entry = make_list_entry(db, definition.id, first_value={"text_value": "before"})
     block = _row_link_block(db, protocol, definition.id, entry.id)
     user = make_current_user(tenant.id)
 
     protocol_elements.sync_block_list_snapshot(block.public_id, db=db, user=user)
 
-    entry.column_one_value_json = {"text_value": "after"}
+    entry.values_json = {**(entry.values_json or {}), "k1": {"text_value": "after"}}
     db.add(entry)
     db.commit()
     result = protocol_elements.sync_block_list_snapshot(block.public_id, db=db, user=user)
     row_snapshot = result.configuration_snapshot_json["rows"][0]["list_snapshot"]
     assert row_snapshot["_tracked"] == "changed"
-    assert row_snapshot["_tracked_before"]["column_one_value"]["text_value"] == "before"
+    assert row_snapshot["_tracked_before"]["values"]["k1"]["text_value"] == "before"
 
     db.delete(entry)
     db.commit()
@@ -262,26 +262,26 @@ def test_list_toggle_off_mid_geplant_stops_new_marking_without_erasing(db):
     tenant = make_tenant(db)
     protocol = _geplant_protocol(db, tenant)
     definition = make_list_definition(db, tenant.id)
-    entry = make_list_entry(db, definition.id, column_one_value={"text_value": "before"})
+    entry = make_list_entry(db, definition.id, first_value={"text_value": "before"})
     block = _whole_list_block(db, protocol, definition.id)
     user = make_current_user(tenant.id)
 
     protocol_elements.sync_block_list_snapshot(block.public_id, db=db, user=user)
-    entry.column_one_value_json = {"text_value": "changed-while-active"}
+    entry.values_json = {**(entry.values_json or {}), "k1": {"text_value": "changed-while-active"}}
     db.add(entry)
     db.commit()
     protocol_elements.sync_block_list_snapshot(block.public_id, db=db, user=user)
 
     protocol_service.update_protocol(db, protocol.id, ProtocolUpdate(track_changes_enabled=False))
-    entry.column_one_value_json = {"text_value": "changed-while-inactive"}
+    entry.values_json = {**(entry.values_json or {}), "k1": {"text_value": "changed-while-inactive"}}
     db.add(entry)
     db.commit()
     result = protocol_elements.sync_block_list_snapshot(block.public_id, db=db, user=user)
     entries = {e["id"]: e for e in result.configuration_snapshot_json["list_snapshot"]["entries"]}
     assert entries[entry.id]["_tracked"] == "changed"
     # The pinned before-value is the ORIGINAL, from before tracking was toggled off.
-    assert entries[entry.id]["_tracked_before"]["column_one_value"]["text_value"] == "before"
-    assert entries[entry.id]["column_one_value"]["text_value"] == "changed-while-inactive"
+    assert entries[entry.id]["_tracked_before"]["values"]["k1"]["text_value"] == "before"
+    assert entries[entry.id]["values"]["k1"]["text_value"] == "changed-while-inactive"
 
 
 # ---- Clearing on vorbereitet -> durchgeführt ----
@@ -292,7 +292,7 @@ def test_clear_on_vorbereitet_to_durchgefuehrt(db):
     text_block = _block(db, protocol)
     todo_block = _block(db, protocol, element_type_code="todo")
     definition = make_list_definition(db, tenant.id)
-    kept_entry = make_list_entry(db, definition.id, column_one_value={"text_value": "v1"})
+    kept_entry = make_list_entry(db, definition.id, first_value={"text_value": "v1"})
     list_block = _whole_list_block(db, protocol, definition.id)
     user = make_current_user(tenant.id)
 
@@ -302,7 +302,7 @@ def test_clear_on_vorbereitet_to_durchgefuehrt(db):
     pre_existing_todo = make_protocol_todo(db, todo_block.id, task="pre-existing", sort_index=1)
     todos.delete_todo(pre_existing_todo.public_id, db=db, user=user)
     protocol_elements.sync_block_list_snapshot(list_block.public_id, db=db, user=user)
-    kept_entry.column_one_value_json = {"text_value": "v2"}
+    kept_entry.values_json = {**(kept_entry.values_json or {}), "k1": {"text_value": "v2"}}
     db.add(kept_entry)
     db.commit()
     protocol_elements.sync_block_list_snapshot(list_block.public_id, db=db, user=user)

@@ -28,6 +28,7 @@ from app.services.tenant_export_service import TenantExportService
 from app.services.tenant_import_service import TenantImportService
 
 from tests.factories import (
+    list_column_key,
     make_current_user,
     make_cycle_config,
     make_event,
@@ -52,10 +53,10 @@ def setup(db):
     ben = make_participant(db, tenant.id, "Ben")
     cleo = make_participant(db, tenant.id, "Cleo")
     aemtli = make_list_definition(
-        db, tenant.id, name="Ämtliliste", column_one_title="Ämtli", column_two_title="Personen", column_two_value_type="participants"
+        db, tenant.id, name="Ämtliliste", first_title="Ämtli", second_title="Personen", second_type="participants"
     )
     lagerleitung = make_list_entry(
-        db, aemtli.id, column_one_value={"text_value": "Lagerleitung"}, column_two_value={"participant_ids": [anna.id, ben.id]}
+        db, aemtli.id, first_value={"text_value": "Lagerleitung"}, second_value={"participant_ids": [anna.id, ben.id]}
     )
     return {"tenant": tenant, "cycle": cycle, "anna": anna, "ben": ben, "cleo": cleo, "list": aemtli, "entry": lagerleitung}
 
@@ -193,7 +194,7 @@ def test_list_change_updates_current_cycle_but_not_past_cycle(db, setup):
     assert (past.cycle_year, current.cycle_year) == (2025, 2026)
 
     # Neues Scharjahr: Cleo übernimmt das Ämtli.
-    setup["entry"].column_two_value_json = {"participant_ids": [setup["cleo"].id]}
+    setup["entry"].values_json = {**setup["entry"].values_json, list_column_key(setup["list"], 1): {"participant_ids": [setup["cleo"].id]}}
     db.flush()
     packages.sync_packages_for_list(db, tenant_id=setup["tenant"].id, list_definition_id=setup["list"].id, today=TODAY)
 

@@ -394,20 +394,15 @@ def _lists(db: Session, tenant_id: int, lang: str, names: dict[int, str]) -> lis
         return str(raw.get("text_value") or "")
 
     result = []
-    for definition in _rows(db, """
-        SELECT id, name, column_one_title, column_one_value_type, column_two_title, column_two_value_type
-        FROM list_definition WHERE tenant_id = :t ORDER BY name, id
-    """, {"t": tenant_id}):
-        entries = _rows(db, "SELECT column_one_value_json, column_two_value_json FROM list_entry WHERE list_definition_id = :d ORDER BY sort_index, id", {"d": definition["id"]})
-        headers = [definition["column_one_title"] or "1"]
-        if definition["column_two_value_type"]:
-            headers.append(definition["column_two_title"] or "2")
-        rows = []
-        for entry in entries:
-            row = [value(definition["column_one_value_type"], entry["column_one_value_json"])]
-            if definition["column_two_value_type"]:
-                row.append(value(definition["column_two_value_type"], entry["column_two_value_json"]))
-            rows.append(row)
+    for definition in _rows(db, "SELECT id, name FROM list_definition WHERE tenant_id = :t ORDER BY name, id", {"t": tenant_id}):
+        # Alle Spalten der Liste in ihrer Reihenfolge (Migration 0186)
+        columns = _rows(db, "SELECT key, title, value_type FROM list_column WHERE list_definition_id = :d ORDER BY sort_index, id", {"d": definition["id"]})
+        entries = _rows(db, "SELECT values_json FROM list_entry WHERE list_definition_id = :d ORDER BY sort_index, id", {"d": definition["id"]})
+        headers = [column["title"] or str(index + 1) for index, column in enumerate(columns)]
+        rows = [
+            [value(column["value_type"], (entry["values_json"] or {}).get(column["key"]) or {}) for column in columns]
+            for entry in entries
+        ]
         result.append((definition["name"], workbook.Sheet(title=safe_name(definition["name"], "Liste", max_length=31), headers=headers, rows=rows)))
     return result
 

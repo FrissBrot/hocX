@@ -264,8 +264,8 @@ class WordImportListDefinitionOption(BaseModel):
 
 class WordImportListEntryCandidate(BaseModel):
     entry_id: int
-    column_one_display: str
-    column_two_display: str
+    first_display: str
+    second_display: str
     score: float = 0.0
     reason: str = ""
 
@@ -279,17 +279,17 @@ class WordImportListRowMapping(BaseModel):
 
     table_index: int
     row_index: int
-    column_one_raw: str
-    column_two_raw: str
-    column_one_type: str
-    column_two_type: str
+    first_raw: str
+    second_raw: str
+    first_type: str
+    second_type: str
     status: ListRowStatus
     matched_entry_id: int | None = None
-    column_one_names: list[WordImportNameResolution] = Field(default_factory=list)
-    column_two_names: list[WordImportNameResolution] = Field(default_factory=list)
+    first_names: list[WordImportNameResolution] = Field(default_factory=list)
+    second_names: list[WordImportNameResolution] = Field(default_factory=list)
     candidates: list[WordImportListEntryCandidate] = Field(default_factory=list)
     has_snapshot_target: bool = True
-    # True when this row's column_one_raw/column_two_raw grouping value was inferred
+    # True when this row's first_raw/second_raw grouping value was inferred
     # (fill-down from a previous row, or repeated across an exploded multi-value cell)
     # rather than literally present in this row's own document cell - see
     # ListRowCandidate.group_filled. Lets the wizard flag these rows for review.
@@ -455,10 +455,10 @@ class WordImportListRowCommit(BaseModel):
 
     table_index: int
     list_definition_id: int
-    column_one_raw: str
-    column_two_raw: str
-    column_one_names: list[WordImportNameResolution] = Field(default_factory=list)
-    column_two_names: list[WordImportNameResolution] = Field(default_factory=list)
+    first_raw: str
+    second_raw: str
+    first_names: list[WordImportNameResolution] = Field(default_factory=list)
+    second_names: list[WordImportNameResolution] = Field(default_factory=list)
     approved: bool
     linked_entry_id: int | None = None
     # See WordImportNameResolution.originally_suggested_participant_id - same purpose,
@@ -740,8 +740,8 @@ class PublicWordImportListDefinitionOption(BaseModel):
 
 class PublicWordImportListEntryCandidate(BaseModel):
     entry_id: uuid.UUID
-    column_one_display: str
-    column_two_display: str
+    first_display: str
+    second_display: str
     score: float = 0.0
     reason: str = ""
 
@@ -749,14 +749,14 @@ class PublicWordImportListEntryCandidate(BaseModel):
 class PublicWordImportListRowMapping(BaseModel):
     table_index: int
     row_index: int
-    column_one_raw: str
-    column_two_raw: str
-    column_one_type: str
-    column_two_type: str
+    first_raw: str
+    second_raw: str
+    first_type: str
+    second_type: str
     status: ListRowStatus
     matched_entry_id: uuid.UUID | None = None
-    column_one_names: list[PublicWordImportNameResolution] = Field(default_factory=list)
-    column_two_names: list[PublicWordImportNameResolution] = Field(default_factory=list)
+    first_names: list[PublicWordImportNameResolution] = Field(default_factory=list)
+    second_names: list[PublicWordImportNameResolution] = Field(default_factory=list)
     candidates: list[PublicWordImportListEntryCandidate] = Field(default_factory=list)
     has_snapshot_target: bool = True
     group_filled: bool = False
@@ -842,10 +842,10 @@ class PublicWordImportEventCommit(BaseModel):
 class PublicWordImportListRowCommit(BaseModel):
     table_index: int
     list_definition_id: uuid.UUID
-    column_one_raw: str
-    column_two_raw: str
-    column_one_names: list[PublicWordImportNameResolution] = Field(default_factory=list)
-    column_two_names: list[PublicWordImportNameResolution] = Field(default_factory=list)
+    first_raw: str
+    second_raw: str
+    first_names: list[PublicWordImportNameResolution] = Field(default_factory=list)
+    second_names: list[PublicWordImportNameResolution] = Field(default_factory=list)
     approved: bool
     linked_entry_id: uuid.UUID | None = None
     originally_suggested_entry_id: uuid.UUID | None = None

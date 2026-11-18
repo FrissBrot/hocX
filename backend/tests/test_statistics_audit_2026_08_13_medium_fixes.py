@@ -3,7 +3,7 @@
 
 M4  - attendance was aggregated by participant_name instead of participant_id, so
       renaming a participant split their history into two rows.
-M10 - the "Gruppen" list lookup only ever read column_one_value_json, silently returning
+M10 - the "Gruppen" list lookup only ever read the first column, silently returning
       nothing for tenants who put the group name text in column two.
 M11 - the attendance/todo/fines/groups aggregation logic was implemented independently in
       app/api/routes/statistics.py and the PDF-chart path (heute die Dokument-Engine,
@@ -105,16 +105,18 @@ def test_m4_attendance_survives_participant_rename(db):
     assert sum(series.values[0] for series in chart.series) == 2
 
 
-# --- M10: "Gruppen" list works regardless of which column holds the text -------------------
+# --- M10: "Gruppen" list reads the group name from the label column ----------------------
+# Seit Migration 0186 entscheidet die Rolle «Bezeichnung» der Liste (label_column_id), welche
+# Spalte den Gruppennamen trägt - auch wenn das die zweite Spalte ist.
 
-def test_m10_groups_list_reads_column_two(db):
+def test_m10_groups_list_reads_the_label_column(db):
     tenant = make_tenant(db)
-    list_def = make_list_definition(db, tenant.id, name="Gruppen", is_group_source=True)
-    # Tenant put the group-name text in column TWO, not column one.
-    make_list_entry(db, list_def.id, column_one_value={}, column_two_value={"text_value": "Adler"})
-    # Control: a second group with the text in the "normal" column one, to make sure that
-    # path still works too.
-    make_list_entry(db, list_def.id, sort_index=1, column_one_value={"text_value": "Falken"}, column_two_value={})
+    list_def = make_list_definition(db, tenant.id, name="Gruppen", first_title="Nr.", second_title="Name", is_group_source=True)
+    second = sorted(list_def.columns, key=lambda column: column.sort_index)[1]
+    list_def.label_column_id = second.id
+    db.flush()
+    make_list_entry(db, list_def.id, first_value={"text_value": "1"}, second_value={"text_value": "Adler"})
+    make_list_entry(db, list_def.id, sort_index=1, first_value={"text_value": "2"}, second_value={"text_value": "Falken"})
 
     event_col2 = make_event(db, tenant.id, title="Adler-Treffen", event_date=date(2026, 3, 1))
     event_col2.tag = "Adler"
@@ -126,8 +128,8 @@ def test_m10_groups_list_reads_column_two(db):
 
     rows = fetch_group_session_rows(db, tenant.id)
     names = {r.group_name for r in rows}
-    assert "Adler" in names, "group whose name lives in column_two_value_json must be found (M10)"
-    assert "Falken" in names, "column_one_value_json path must still work"
+    assert {"Adler", "Falken"} <= names, "group names come from the label column (M10)"
+    assert "1" not in names and "2" not in names
 
     # Dokument-Engine (M11): same result via the shared fetch + merge.
     merged_names = set(_chart(db, tenant.id, "groups_sessions").categories)

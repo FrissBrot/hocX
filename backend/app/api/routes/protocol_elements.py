@@ -24,7 +24,7 @@ from app.schemas.protocol import (
     ProtocolTextRead,
     ProtocolTextUpdate,
 )
-from app.services import list_snapshot_service, public_id_service
+from app.services import list_columns, list_snapshot_service, public_id_service
 from app.services.snapshot_reference_ids import (
     normalize_attendance_entries,
     normalize_list_snapshot_refs,
@@ -234,6 +234,9 @@ def patch_protocol_element_block(
     if payload.configuration_snapshot_json is not None:
         payload.configuration_snapshot_json = normalize_attendance_entries(db, payload.configuration_snapshot_json, protocol.tenant_id)
         payload.configuration_snapshot_json = normalize_list_snapshot_refs(db, payload.configuration_snapshot_json, protocol.tenant_id)
+        payload.configuration_snapshot_json = list_columns.normalize_config_column_keys(
+            db, payload.configuration_snapshot_json, tenant_id=protocol.tenant_id
+        )
     try:
         protocol_element_block = service.update_protocol_element_block(db, existing.id, payload)
     except BlockConfigConflict as exc:

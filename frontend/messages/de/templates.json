@@ -662,7 +662,9 @@
       "valueWord": "Wert",
       "filterColumn": "Nur Zeilen zeigen, deren Spalte …",
       "noFilter": "Alle Zeilen",
-      "filterText": "… diesen Text enthält"
+      "filterText": "… diesen Text enthält",
+      "visibleColumns": "Sichtbare Spalten",
+      "allColumns": "Alle Spalten"
     },
     "eventField": {
       "title": "Titel",
@@ -794,7 +796,8 @@
         "list": "Wert aus Liste"
       },
       "noAutoValue": "Kein Wert",
-      "autoValueHelp": "Wird in jeder automatisch erzeugten Spalte vorbelegt."
+      "autoValueHelp": "Wird in jeder automatisch erzeugten Spalte vorbelegt.",
+      "valueColumn": "Wert aus Spalte"
     },
     "rowType": {
       "text": "Freier Text",

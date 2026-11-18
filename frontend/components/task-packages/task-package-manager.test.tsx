@@ -43,12 +43,12 @@ function mount() {
       cycleConfigs={[{ id: "cy-1", tenant_id: "t", name: "Scharjahr", reset_month: 7, reset_day: 31 }]}
       responsibleLists={[
         {
-          id: "list-1", tenant_id: "t", name: "Ämtliliste", description: null, column_one_title: "Ämtli", column_one_value_type: "text",
-          column_two_title: "Personen", column_two_value_type: "participants", is_active: true, content_version: 1, created_at: "", updated_at: "",
+          id: "list-1", tenant_id: "t", name: "Ämtliliste", description: null, columns: [{ id: "c-amt", title: "Ämtli", value_type: "text", sort_index: 10 }, { id: "c-pers", title: "Personen", value_type: "participants", sort_index: 20 }],
+          label_column_id: "c-amt", responsible_column_id: "c-pers", is_active: true, content_version: 1, created_at: "", updated_at: "",
         },
       ]}
       entriesByList={{
-        "list-1": [{ id: "entry-1", list_definition_id: "list-1", sort_index: 0, column_one_value: { text_value: "Lagerleitung" }, column_two_value: { participant_ids: ["p-1", "p-2"] }, created_at: "", updated_at: "" }],
+        "list-1": [{ id: "entry-1", list_definition_id: "list-1", sort_index: 0, values: { "c-amt": { text_value: "Lagerleitung" }, "c-pers": { participant_ids: ["p-1", "p-2"] } }, created_at: "", updated_at: "" }],
       }}
       participants={[
         { id: "p-1", display_name: "Anna" },

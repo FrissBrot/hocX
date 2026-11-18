@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.models import ElementDefinition, Template, TemplateElement
 from app.repositories.template_element_repository import TemplateElementRepository
 from app.schemas.template import TemplateElementBehaviorUpdate, TemplateElementCreate, TemplateElementRead, TemplateElementUpdate
-from app.services import public_id_service
+from app.services import list_columns, public_id_service
 from app.services.block_behavior import block_defaults, BEHAVIOR_FIELDS, resolve_block_behavior, resolve_element_wide_behavior
 from app.services.block_config_ids import decode_block_config, encode_block_config
 from app.services.element_definition_service import ElementDefinitionService, ensure_fine_lists_allowed
@@ -125,6 +125,7 @@ class TemplateElementService:
         ensure_fine_lists_allowed([], (definition.configuration_json or {}).get("blocks"), can_configure_fines=can_configure_fines)
         decoded_config = decode_block_config(db, payload.configuration_json, tenant_id=template.tenant_id)
         self._validate_linked_lists(db, decoded_config, tenant_id=template.tenant_id)
+        decoded_config = list_columns.normalize_config_column_keys(db, decoded_config, tenant_id=template.tenant_id)
         entity = TemplateElement(
             template_id=template_id,
             element_definition_id=element_definition_id,
@@ -162,6 +163,9 @@ class TemplateElementService:
                 db, values["configuration_json"], tenant_id=template.tenant_id if template else 0
             )
             self._validate_linked_lists(db, values["configuration_json"], tenant_id=template.tenant_id if template else None)
+            values["configuration_json"] = list_columns.normalize_config_column_keys(
+                db, values["configuration_json"], tenant_id=template.tenant_id if template else None
+            )
             # Darstellung einzelner Bausteine gehört seit dem Designer zur Gestaltung
             # (DataBlockNode.block_appearance), nicht mehr zur Sitzungsvorlage
             values["configuration_json"].pop("block_appearance", None)

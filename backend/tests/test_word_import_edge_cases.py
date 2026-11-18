@@ -214,13 +214,13 @@ def test_list_explode_grouping_round_trips_through_real_commit(db):
 
     sponsoring = make_list_definition(
         db, tenant.id, name="Sponsoring",
-        column_one_title="Sponsor", column_one_value_type="text",
-        column_two_title="Verantwortlich", column_two_value_type="participant",
+        first_title="Sponsor", first_type="text",
+        second_title="Verantwortlich", second_type="participant",
     )
-    make_list_entry(db, sponsoring.id, sort_index=0, column_one_value={"text_value": "Omlin & Partner Gmbh"}, column_two_value={"participant_id": enea.id})
-    make_list_entry(db, sponsoring.id, sort_index=1, column_one_value={"text_value": "Felsenheim"}, column_two_value={"participant_id": enea.id})
-    make_list_entry(db, sponsoring.id, sort_index=2, column_one_value={"text_value": "Dolomiten Sport"}, column_two_value={"participant_id": enea.id})
-    make_list_entry(db, sponsoring.id, sort_index=3, column_one_value={"text_value": "Raiffeisen"}, column_two_value={"participant_id": lauri.id})
+    make_list_entry(db, sponsoring.id, sort_index=0, first_value={"text_value": "Omlin & Partner Gmbh"}, second_value={"participant_id": enea.id})
+    make_list_entry(db, sponsoring.id, sort_index=1, first_value={"text_value": "Felsenheim"}, second_value={"participant_id": enea.id})
+    make_list_entry(db, sponsoring.id, sort_index=2, first_value={"text_value": "Dolomiten Sport"}, second_value={"participant_id": enea.id})
+    make_list_entry(db, sponsoring.id, sort_index=3, first_value={"text_value": "Raiffeisen"}, second_value={"participant_id": lauri.id})
 
     form_type = db.scalar(select(ElementType.id).where(ElementType.code == "form"))
     render_type = db.scalar(select(RenderType.id).where(RenderType.code == "key_value"))
@@ -262,10 +262,10 @@ def test_list_explode_grouping_round_trips_through_real_commit(db):
         WordImportListRowCommit(
             table_index=mapping.table_index,
             list_definition_id=sponsoring.id,
-            column_one_raw=mapping.column_one_raw,
-            column_two_raw=mapping.column_two_raw,
-            column_one_names=mapping.column_one_names,
-            column_two_names=mapping.column_two_names,
+            first_raw=mapping.first_raw,
+            second_raw=mapping.second_raw,
+            first_names=mapping.first_names,
+            second_names=mapping.second_names,
             approved=True,
             linked_entry_id=mapping.matched_entry_id,
         )
@@ -282,7 +282,7 @@ def test_list_explode_grouping_round_trips_through_real_commit(db):
         .where(ProtocolElement.protocol_id == protocol_id, ProtocolElement.section_name_snapshot == "Sponsoring")
     ).scalars().one()
     entries = block.configuration_snapshot_json["list_snapshot"]["entries"]
-    by_sponsor = {e["column_one_value"].get("text_value"): e["column_two_value"].get("participant_id") for e in entries}
+    by_sponsor = {e["values"]["k1"].get("text_value"): e["values"]["k2"].get("participant_id") for e in entries}
     assert by_sponsor["Omlin & Partner Gmbh"] == enea.id
     assert by_sponsor["Felsenheim"] == enea.id
     assert by_sponsor["Dolomiten Sport"] == enea.id

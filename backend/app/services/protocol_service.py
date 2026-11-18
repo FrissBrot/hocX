@@ -48,7 +48,7 @@ def lock_protocol_numbering(db: Session, template_id: int) -> None:
 from app.services.block_behavior import resolve_block_behavior
 from app.services.event_filter import event_matches_filter, normalize_event_filter, resolve_cycle_event_ids, sort_and_limit
 from app.repositories.participant_repository import participant_eligible_on
-from app.services import list_snapshot_service
+from app.services import list_columns, list_snapshot_service
 from app.services.protocol_todo_service import ProtocolTodoService
 from app.services.responsible_label_service import (
     resolve_display_section_title,
@@ -1516,6 +1516,7 @@ class ProtocolService:
             "linked_list_id": self._coerce_optional_int(row_config.get("linked_list_id")) if row_value_type == "list_entry" else None,
             "linked_list_entry_id": self._coerce_optional_int(row_config.get("linked_list_entry_id")) if row_value_type == "list_entry" else None,
             "list_fixed_column": row_config.get("list_fixed_column") if row_value_type == "list_entry" else None,
+            "list_value_column": row_config.get("list_value_column") if row_value_type == "list_entry" else None,
             "value_source": row_config.get("value_source") if row_value_type == "list_entry" else None,
         }
 
@@ -2334,18 +2335,22 @@ class ProtocolService:
                         else []
                     )
                     matrix_columns = []
+                    # Spaltentitel aus der Spalte mit der Rolle «Bezeichnung» (Text), Zellwerte
+                    # aus der Spalte, die die Matrix-Zeile als Quelle nennt (Spalten-Key, 0186)
+                    _label_column = list_columns.label_column(_auto_list_def)
+                    _row_sources = {
+                        str(_row.get("id") or ""): list_columns.resolve_column(_auto_list_def, _row.get("auto_source_field"))
+                        for _row in matrix_rows
+                    }
                     for _idx, _entry in enumerate(_list_entries):
-                        _col1 = dict(_entry.column_one_value_json or {})
-                        _col2 = dict(_entry.column_two_value_json or {})
-                        _title = str(_col1.get("text_value") or _col2.get("text_value") or "").strip() or f"Eintrag {_entry.id}"
+                        _label_value = list_columns.get_value(_entry, _label_column)
+                        _title = str(_label_value.get("text_value") or "").strip() or f"Eintrag {_entry.id}"
                         _row_values: dict = {}
                         for _row in matrix_rows:
                             _row_id = str(_row.get("id") or "")
-                            _src_field = _row.get("auto_source_field") or ""
-                            if _src_field == "column_one":
-                                _row_values[_row_id] = _matrix_auto_cell_value(_row, _col1)
-                            elif _src_field == "column_two":
-                                _row_values[_row_id] = _matrix_auto_cell_value(_row, _col2)
+                            _source_column = _row_sources.get(_row_id)
+                            if _source_column is not None:
+                                _row_values[_row_id] = _matrix_auto_cell_value(_row, list_columns.get_value(_entry, _source_column))
                         matrix_columns.append({
                             "id": f"gen-l-{_entry.id}",
                             "title": _title,

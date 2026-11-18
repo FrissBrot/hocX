@@ -67,8 +67,8 @@ def _make_submitted_upload(db, *, assignment_id: int, list_entry_id: int, tenant
 
 def _setup(db, **assignment_kwargs):
     tenant = make_tenant(db)
-    list_definition = make_list_definition(db, tenant.id, column_one_value_type="text")
-    entry = make_list_entry(db, list_definition.id, column_one_value={"text_value": "Gruppenfoto"})
+    list_definition = make_list_definition(db, tenant.id, first_type="text")
+    entry = make_list_entry(db, list_definition.id, first_value={"text_value": "Gruppenfoto"})
     assignment = _make_list_assignment(db, tenant.id, list_definition.id, **assignment_kwargs)
     return tenant, assignment, entry
 

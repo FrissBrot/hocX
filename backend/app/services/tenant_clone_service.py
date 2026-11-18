@@ -561,12 +561,23 @@ class TenantCloneService:
         db.commit()
 
     def _clone_list_definitions(self, db: Session, source_tenant_id: int, new_tenant_id: int) -> dict[int, int]:
+        """Listen samt Spalten. Spalten-Keys bleiben gleich (je Liste eindeutig, Migration 0186):
+        Konfigurationen, Werte und Snapshots der Kopie zeigen damit ohne Umschreiben auf die
+        richtigen Spalten. Die Rollen zeigen auf die neuen Spalten."""
         rows = db.scalars(select(ListDefinition).where(ListDefinition.tenant_id == source_tenant_id)).all()
         id_map: dict[int, int] = {}
         for row in rows:
-            new_row = _copy_row(row, {"tenant_id": new_tenant_id})
+            new_row = _copy_row(row, {"tenant_id": new_tenant_id, "label_column_id": None, "responsible_column_id": None, "columns": []})
             db.add(new_row)
             db.flush()
+            column_map: dict[int, int] = {}
+            for column in row.columns:
+                new_column = _copy_row(column, {"list_definition_id": new_row.id})
+                db.add(new_column)
+                db.flush()
+                column_map[column.id] = new_column.id
+            new_row.label_column_id = column_map.get(row.label_column_id)
+            new_row.responsible_column_id = column_map.get(row.responsible_column_id)
             id_map[row.id] = new_row.id
         db.commit()
         return id_map
@@ -768,14 +779,14 @@ class TenantCloneService:
             if new_definition_id is None:
                 continue
             definition = new_definitions.get(new_definition_id)
+            types = {column.key: column.value_type for column in (definition.columns if definition else [])}
+            values = {
+                key: remap_list_value(types.get(key), value, participant_map, event_map)
+                for key, value in (row.values_json or {}).items() if key in types and isinstance(value, dict)
+            }
             new_row = _copy_row(row, {
                 "list_definition_id": new_definition_id,
-                "column_one_value_json": remap_list_value(
-                    definition.column_one_value_type if definition else None, row.column_one_value_json, participant_map, event_map
-                ),
-                "column_two_value_json": remap_list_value(
-                    definition.column_two_value_type if definition else None, row.column_two_value_json, participant_map, event_map
-                ),
+                "values_json": {key: value for key, value in values.items() if value},
             })
             db.add(new_row)
             db.flush()

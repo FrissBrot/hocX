@@ -55,6 +55,7 @@ import {
   FinanceAccount,
   FinanceTransaction,
   LinkedTodo,
+  ListValues,
   ParticipantSummary,
   ProtocolElement,
   ProtocolImage,
@@ -257,8 +258,8 @@ function FocusedElementEditorImpl({
   deleteImage: (protocolElementBlockId: string, imageId: string) => Promise<void>;
   listDefinitionsById: Map<string, StructuredListDefinition>;
   listEntriesByDefinition: Record<string, StructuredListEntry[]>;
-  createListEntryFromBlock: (protocolElementBlockId: string, listDefinitionId: string, payload: { sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }) => Promise<boolean>;  // i18n-ok: TS-Generic-Signatur, kein UI-Text
-  updateListEntryFromBlock: (protocolElementBlockId: string, listDefinitionId: string, entryId: string, payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>) => Promise<boolean>;  // i18n-ok: TS-Generic-Signatur, kein UI-Text
+  createListEntryFromBlock: (protocolElementBlockId: string, listDefinitionId: string, payload: { sort_index: number; values: ListValues }) => Promise<boolean>;
+  updateListEntryFromBlock: (protocolElementBlockId: string, listDefinitionId: string, entryId: string, payload: Partial<{ sort_index: number; values: ListValues }>) => Promise<boolean>;
   deleteListEntryFromBlock: (protocolElementBlockId: string, listDefinitionId: string, entryId: string) => Promise<void>;
   refreshBlockListSnapshot: (blockId: string) => Promise<void>;
   undoBlockListSnapshot: (blockId: string) => Promise<void>;
@@ -387,7 +388,8 @@ function FocusedElementEditorImpl({
     eventFieldName?: string;
     listDefinitionId?: string;
     listEntryId?: string;
-    listColumnKey?: "column_one_value" | "column_two_value";
+    /** Spalten-Key der Liste (undurchsichtig) */
+    listColumnKey?: string;
   } | null>(null);
   const [eventFieldDrafts, setEventFieldDrafts] = useState<Record<string, string>>({});
   const [listEntryDrafts, setListEntryDrafts] = useState<Record<string, string>>({});
@@ -592,7 +594,7 @@ function FocusedElementEditorImpl({
     if (!multiParticipantPicker?.singleSelect) return;
     const { blockId, kind, rowId, columnId, listDefinitionId, listEntryId, listColumnKey } = multiParticipantPicker;
     if (kind === "list_entry" && listDefinitionId && listEntryId && listColumnKey) {
-      void updateListEntryFromBlock(blockId, listDefinitionId, listEntryId, { [listColumnKey]: { participant_id: participantId } });
+      void updateListEntryFromBlock(blockId, listDefinitionId, listEntryId, { values: { [listColumnKey]: { participant_id: participantId } } });
       closeParticipantPicker();
       return;
     }
@@ -656,7 +658,7 @@ function FocusedElementEditorImpl({
     }
     if (picker.kind === "list_entry" && picker.listDefinitionId && picker.listEntryId && picker.listColumnKey) {
       void updateListEntryFromBlock(currentBlockId, picker.listDefinitionId, picker.listEntryId, {
-        [picker.listColumnKey]: { participant_ids: [...picker.selectedIds] },
+        values: { [picker.listColumnKey]: { participant_ids: [...picker.selectedIds] } },
       });
       if (closeAfter) closeParticipantPicker();
       return;
@@ -1108,17 +1110,17 @@ function FocusedElementEditorImpl({
       const cells = asObject(column.row_values ?? column.values);
       const payload: Record<string, Record<string, unknown>> = {};
       rows.forEach((row, index) => {
-        const field = matrixSourceFieldForRow("list", row);
-        if (field !== "column_one" && field !== "column_two") return;
+        // Quelle der Matrix-Zeile ist ein Spalten-Key der Liste (Migration 0186)
+        const key = matrixSourceFieldForRow("list", row);
+        if (!key || !listColumnExists(entry, key)) return;
         const rowId = String(row.id ?? row.sort_index ?? index);
         const cell = asObject(cells[rowId]);
         if (same(cell, fromList[rowId])) return;
-        const key = `${field}_value` as "column_one_value" | "column_two_value";
-        const current = asObject(entry[key]);
+        const current = asObject(entry.values?.[key]);
         const next = listValueFromMatrixCell(current, cell);
         if (!same(next, current)) payload[key] = next;
       });
-      if (Object.keys(payload).length) void updateListEntryFromBlock(blockId, entriesKey, entry.id, payload);
+      if (Object.keys(payload).length) void updateListEntryFromBlock(blockId, entriesKey, entry.id, { values: payload });
     }
   }
 
@@ -1296,19 +1298,33 @@ function FocusedElementEditorImpl({
     return { id: `gen-e-${event.id}`, title: event.title, row_values };
   }
 
+  /** Liste eines Eintrags (für Rollen und Spalten). */
+  function definitionOfEntry(entry: StructuredListEntry): StructuredListDefinition | undefined {
+    return listDefinitionsById.get(entry.list_definition_id) ?? [...listDefinitionsById.values()].find((definition) => definition.id === entry.list_definition_id);
+  }
+
+  function listColumnExists(entry: StructuredListEntry, key: string) {
+    const definition = definitionOfEntry(entry);
+    return definition ? definition.columns.some((column) => column.id === key) : key in (entry.values ?? {});
+  }
+
+  /** Bezeichnung eines Eintrags: Spalte mit der Rolle «Bezeichnung», sonst erste Text-Spalte. */
+  function listEntryLabel(entry: StructuredListEntry) {
+    const definition = definitionOfEntry(entry);
+    const columns = definition ? [...definition.columns].sort((left, right) => left.sort_index - right.sort_index) : [];
+    const labelKey = definition?.label_column_id ?? columns.find((column) => column.value_type === "text")?.id;
+    const text = labelKey ? String(asObject(entry.values?.[labelKey]).text_value ?? "").trim() : "";
+    return text || `Eintrag ${entry.id}`;
+  }
+
   function buildMatrixColumnForListEntry(rows: Array<Record<string, any>>, entry: StructuredListEntry) {
-    const titleText =
-      String(asObject(entry.column_one_value).text_value ?? "").trim() ||
-      String(asObject(entry.column_two_value).text_value ?? "").trim() ||
-      `Eintrag ${entry.id}`;
+    const titleText = listEntryLabel(entry);
     const row_values: Record<string, Record<string, unknown>> = {};
     rows.forEach((row) => {
       const rowId = String(row.id ?? row.sort_index ?? rows.indexOf(row));
       const sourceField = matrixSourceFieldForRow("list", row);
       if (!sourceField) return;
-      const colVal: Record<string, unknown> =
-        sourceField === "column_one" ? (entry.column_one_value as Record<string, unknown>) ?? {} :
-        sourceField === "column_two" ? (entry.column_two_value as Record<string, unknown>) ?? {} : {};
+      const colVal: Record<string, unknown> = asObject(entry.values?.[sourceField]);
       const rowType = matrixRowType(row);
       // Participant(s) values from list entry
       if (Array.isArray(colVal.participant_ids)) {
@@ -1366,11 +1382,7 @@ function FocusedElementEditorImpl({
   }
 
   function matrixListEntryTitle(entry: StructuredListEntry) {
-    return (
-      String((entry.column_one_value as any)?.text_value ?? "").trim() ||
-      String((entry.column_two_value as any)?.text_value ?? "").trim() ||
-      `Eintrag ${entry.id}`
-    );
+    return listEntryLabel(entry);
   }
 
   function matrixListPool(blockConfig: Record<string, any>) {
@@ -2168,13 +2180,14 @@ function FocusedElementEditorImpl({
                     // keeps reading/writing the live list, since it's a "manage the list
                     // itself" tool, not part of the protocol's frozen record.
                     const wholeListSnapshot = blockConfig.list_snapshot as WholeListSnapshot | undefined;
-                    const snapshotDefinition: StructuredListDefinition | null = wholeListSnapshot
+                    // Spalten und Rollen aus dem Snapshot (eingefroren), damit eine noch nicht
+                    // übernommene Spaltenänderung die Anzeige nicht vorzeitig umdeutet
+                    const snapshotDefinition: StructuredListDefinition | null = wholeListSnapshot?.columns
                       ? {
                           ...linkedListDefinition,
-                          column_one_title: wholeListSnapshot.column_one_title,
-                          column_one_value_type: wholeListSnapshot.column_one_value_type,
-                          column_two_title: wholeListSnapshot.column_two_title,
-                          column_two_value_type: wholeListSnapshot.column_two_value_type,
+                          columns: wholeListSnapshot.columns,
+                          label_column_id: wholeListSnapshot.label_column_id,
+                          responsible_column_id: wholeListSnapshot.responsible_column_id,
                         }
                       : null;
                     const snapshotEntries: StructuredListEntry[] | null = wholeListSnapshot
@@ -2182,8 +2195,7 @@ function FocusedElementEditorImpl({
                           id: entry.id,
                           list_definition_id: linkedListId,
                           sort_index: entry.sort_index,
-                          column_one_value: entry.column_one_value,
-                          column_two_value: entry.column_two_value,
+                          values: entry.values ?? {},
                           created_at: "",
                           updated_at: "",
                         }))
@@ -2216,14 +2228,10 @@ function FocusedElementEditorImpl({
                         )}
                       </div>
                     );
-                    const linkedListGroupBy =
-                      blockConfig.linked_list_group_by === "column_one" || blockConfig.linked_list_group_by === "column_two"
-                        ? blockConfig.linked_list_group_by
-                        : "";
-                    const linkedListSortBy =
-                      blockConfig.linked_list_sort_by === "column_one" || blockConfig.linked_list_sort_by === "column_two"
-                        ? blockConfig.linked_list_sort_by
-                        : "";
+                    // Spalten-Keys aus der Block-Konfiguration; unbekannte ignoriert die Tabelle selbst
+                    const linkedListGroupBy = typeof blockConfig.linked_list_group_by === "string" ? blockConfig.linked_list_group_by : "";
+                    const linkedListSortBy = typeof blockConfig.linked_list_sort_by === "string" ? blockConfig.linked_list_sort_by : "";
+                    const linkedListVisibleColumns = Array.isArray(blockConfig.linked_list_visible_columns) ? (blockConfig.linked_list_visible_columns as string[]) : null;
                     const linkedListSortDirection = blockConfig.linked_list_sort_direction === "desc" ? "desc" : "asc";
                     // Leere Zeilen hervorheben wird pro Block im Template konfiguriert.
                     const linkedListProtocolView = { highlightEmpty: Boolean(blockConfig.linked_list_highlight_empty) };
@@ -2242,11 +2250,12 @@ function FocusedElementEditorImpl({
                             editable={false}
                             emptyMessage={t("noListEntriesYet")}
                             groupByColumn={linkedListGroupBy}
+                            visibleColumns={linkedListVisibleColumns}
                             sortByColumn={linkedListSortBy}
                             sortDirection={linkedListSortDirection}
                             protocolView={linkedListProtocolView}
                             rowFilter={
-                              (blockConfig.linked_list_filter_column === "column_one" || blockConfig.linked_list_filter_column === "column_two") && blockConfig.linked_list_filter_text
+                              typeof blockConfig.linked_list_filter_column === "string" && blockConfig.linked_list_filter_column && blockConfig.linked_list_filter_text
                                 ? { column: blockConfig.linked_list_filter_column, text: String(blockConfig.linked_list_filter_text) }
                                 : null
                             }
@@ -2264,6 +2273,7 @@ function FocusedElementEditorImpl({
                             availableParticipants={availableParticipants}
                             availableEvents={availableEvents}
                             groupByColumn={linkedListGroupBy}
+                            visibleColumns={linkedListVisibleColumns}
                             sortByColumn={linkedListSortBy}
                             sortDirection={linkedListSortDirection}
                             onChangeGroupBy={(value) => void saveBlockConfiguration(block.id, { ...blockConfig, linked_list_group_by: value || null })}
@@ -2287,6 +2297,7 @@ function FocusedElementEditorImpl({
                           editable={blockEditable}
                           emptyMessage={t("noListEntriesYet")}
                           groupByColumn={linkedListGroupBy}
+                          visibleColumns={linkedListVisibleColumns}
                           sortByColumn={linkedListSortBy}
                           sortDirection={linkedListSortDirection}
                           protocolView={linkedListProtocolView}
@@ -2505,21 +2516,17 @@ function FocusedElementEditorImpl({
                             // e.g. a column retyped from text to participant must keep being
                             // read as text here until "Daten aktualisieren" is clicked.
                             const listDefinition: StructuredListDefinition | undefined =
-                              rowSnapshot && "column_one_title" in rowSnapshot
+                              rowSnapshot && "columns" in rowSnapshot && rowSnapshot.columns
                                 ? {
                                     ...(liveListDefinition as StructuredListDefinition),
-                                    column_one_title: rowSnapshot.column_one_title,
-                                    column_one_value_type: rowSnapshot.column_one_value_type,
-                                    column_two_title: rowSnapshot.column_two_title,
-                                    column_two_value_type: rowSnapshot.column_two_value_type,
+                                    columns: rowSnapshot.columns,
+                                    label_column_id: rowSnapshot.label_column_id,
+                                    responsible_column_id: rowSnapshot.responsible_column_id,
                                   }
                                 : liveListDefinition;
-                            const listEntry =
+                            const listEntry: { values: ListValues } | undefined =
                               rowSnapshot && rowSnapshot.entry_exists
-                                ? {
-                                    column_one_value: rowSnapshot.column_one_value,
-                                    column_two_value: rowSnapshot.column_two_value,
-                                  }
+                                ? { values: rowSnapshot.values ?? {} }
                                 : liveListEntry;
                             if (!listDefinition || !listEntry) {
                               return (
@@ -2529,13 +2536,18 @@ function FocusedElementEditorImpl({
                                 </div>
                               );
                             }
-                            const fixedColumn: "column_one" | "column_two" = row.list_fixed_column === "column_two" ? "column_two" : "column_one";
-                            const variableColumn: "column_one" | "column_two" = fixedColumn === "column_one" ? "column_two" : "column_one";
-                            const fixedValueType = fixedColumn === "column_two" ? listDefinition.column_two_value_type : listDefinition.column_one_value_type;
-                            const variableValueType = variableColumn === "column_two" ? listDefinition.column_two_value_type : listDefinition.column_one_value_type;
-                            const fixedRawValue = (fixedColumn === "column_two" ? listEntry.column_two_value : listEntry.column_one_value) as Record<string, any>;
-                            const variableRawValue = (variableColumn === "column_two" ? listEntry.column_two_value : listEntry.column_one_value) as Record<string, any>;
-                            const variableColumnKey: "column_one_value" | "column_two_value" = variableColumn === "column_two" ? "column_two_value" : "column_one_value";
+                            // Feste Spalte (Beschriftung) und Wert-Spalte der Zeile: Spalten-Keys aus der
+                            // Zeilen-Konfiguration, sonst Rolle «Bezeichnung» bzw. die erste andere Spalte
+                            const rowColumns = [...listDefinition.columns].sort((left, right) => left.sort_index - right.sort_index);
+                            const findColumn = (key: unknown) => rowColumns.find((column) => column.id === key);
+                            const fixedColumn = findColumn(row.list_fixed_column) ?? findColumn(listDefinition.label_column_id) ?? rowColumns[0];
+                            const variableColumn = (findColumn(row.list_value_column) && row.list_value_column !== fixedColumn?.id ? findColumn(row.list_value_column) : undefined)
+                              ?? rowColumns.find((column) => column.id !== fixedColumn?.id) ?? fixedColumn;
+                            const fixedValueType = fixedColumn?.value_type ?? "text";
+                            const variableValueType = variableColumn?.value_type ?? "text";
+                            const fixedRawValue = (fixedColumn ? listEntry.values?.[fixedColumn.id] ?? {} : {}) as Record<string, any>;
+                            const variableRawValue = (variableColumn ? listEntry.values?.[variableColumn.id] ?? {} : {}) as Record<string, any>;
+                            const variableColumnKey = variableColumn?.id ?? "";
                             const aliasOrFixedValue = String(row.label ?? "").trim() || formatListEntryColumnValue(fixedRawValue, fixedValueType);
                             const draftKey = `${block.id}-listentry-${row.id ?? index}`;
                             // A removed row is a phantom reconstructed from its last-known
@@ -2557,7 +2569,7 @@ function FocusedElementEditorImpl({
                               );
                             }
                             const trackedBeforeVariableValue =
-                              trackChangesActive && rowSnapshot?._tracked === "changed" ? rowSnapshot._tracked_before?.[variableColumnKey] : undefined;
+                              trackChangesActive && rowSnapshot?._tracked === "changed" ? rowSnapshot._tracked_before?.values?.[variableColumnKey] : undefined;
                             const variableTrackedChanged =
                               !!trackedBeforeVariableValue && JSON.stringify(variableRawValue ?? {}) !== JSON.stringify(trackedBeforeVariableValue ?? {});
                             return (
@@ -2634,7 +2646,7 @@ function FocusedElementEditorImpl({
                                     onChange={(eventRow) => {
                                       if (!linkedListId || !linkedListEntryId) return;
                                       void updateListEntryFromBlock(block.id, linkedListId, linkedListEntryId, {
-                                        [variableColumnKey]: { event_id: eventRow ? eventRow.id : null },
+                                        values: { [variableColumnKey]: { event_id: eventRow ? eventRow.id : null } },
                                       });
                                     }}
                                     nullLabel={t("chooseEvent")}
@@ -2658,7 +2670,7 @@ function FocusedElementEditorImpl({
                                       });
                                       if (!linkedListId || !linkedListEntryId) return;
                                       void updateListEntryFromBlock(block.id, linkedListId, linkedListEntryId, {
-                                        [variableColumnKey]: { text_value: event.target.value },
+                                        values: { [variableColumnKey]: { text_value: event.target.value } },
                                       });
                                     }}
                                   />

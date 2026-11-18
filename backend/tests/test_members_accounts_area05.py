@@ -17,7 +17,7 @@ from app.schemas.participant import ParticipantCreate, ParticipantUpdate
 from app.schemas.user import UserPasswordChange, UserUpdate
 from app.services import role_service
 from app.services.participant_service import ParticipantService
-from tests.factories import assign_roles, make_app_user, make_current_user, make_participant, make_tenant
+from tests.factories import assign_roles, entry_value, make_app_user, make_current_user, make_list_definition, make_list_entry, make_participant, make_tenant
 
 PASSWORD = "ein-sehr-langes-passwort"
 
@@ -122,16 +122,12 @@ def test_bulk_delete_clears_list_references_for_all(db):
     tenant = make_tenant(db)
     people = [make_participant(db, tenant.id, f"Weg {index}") for index in range(3)]
     keep = make_participant(db, tenant.id, "Bleibt")
-    definition = ListDefinition(tenant_id=tenant.id, name="Liste", column_one_title="A", column_one_value_type="participants", column_two_title="B", column_two_value_type="text")
-    db.add(definition)
-    db.flush()
-    entry = ListEntry(list_definition_id=definition.id, column_one_value_json={"participant_ids": [people[0].id, keep.id, people[2].id]}, column_two_value_json={})
-    db.add(entry)
-    db.flush()
+    definition = make_list_definition(db, tenant.id, name="Liste", first_title="A", first_type="participants", second_title="B", second_type="text")
+    entry = make_list_entry(db, definition.id, first_value={"participant_ids": [people[0].id, keep.id, people[2].id]})
     deleted = ParticipantService().delete_participants(db, [person.id for person in people] + [987654321], tenant_id=tenant.id)
     assert deleted == 3
     db.refresh(entry)
-    assert entry.column_one_value_json["participant_ids"] == [keep.id]
+    assert entry_value(entry, definition, 0)["participant_ids"] == [keep.id]
 
 
 # ── Einladung an Höherberechtigte ──

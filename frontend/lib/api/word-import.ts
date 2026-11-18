@@ -184,8 +184,8 @@ export type WordImportListDefinitionOption = {
 
 export type WordImportListEntryCandidate = {
   entry_id: string;
-  column_one_display: string;
-  column_two_display: string;
+  first_display: string;
+  second_display: string;
   score: number;
   reason: string;
 };
@@ -193,17 +193,17 @@ export type WordImportListEntryCandidate = {
 export type WordImportListRowMapping = {
   table_index: number;
   row_index: number;
-  column_one_raw: string;
-  column_two_raw: string;
-  column_one_type: string;
-  column_two_type: string;
+  first_raw: string;
+  second_raw: string;
+  first_type: string;
+  second_type: string;
   status: ListRowStatus;
   matched_entry_id: string | null;
-  column_one_names: WordImportNameResolution[];
-  column_two_names: WordImportNameResolution[];
+  first_names: WordImportNameResolution[];
+  second_names: WordImportNameResolution[];
   candidates: WordImportListEntryCandidate[];
   has_snapshot_target: boolean;
-  // True when column_one_raw/column_two_raw's grouping value was inferred
+  // True when first_raw/second_raw's grouping value was inferred
   // (fill-down or repeated across an exploded multi-value cell) rather than
   // literally present in this row's own document cell - worth a second look.
   group_filled: boolean;
@@ -324,10 +324,10 @@ export type WordImportCommitPayload = {
   lists: {
     table_index: number;
     list_definition_id: string;
-    column_one_raw: string;
-    column_two_raw: string;
-    column_one_names: WordImportNameResolution[];
-    column_two_names: WordImportNameResolution[];
+    first_raw: string;
+    second_raw: string;
+    first_names: WordImportNameResolution[];
+    second_names: WordImportNameResolution[];
     approved: boolean;
     linked_entry_id: string | null;
     originally_suggested_entry_id: string | null;

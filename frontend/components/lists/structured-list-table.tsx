@@ -17,6 +17,8 @@ import { TrackedChangeHideButton } from "@/components/ui/tracked-change-hide-but
 import { formatDate, formatDateRange } from "@/lib/utils/format";
 import {
   EventSummary,
+  ListColumn,
+  ListValues,
   ParticipantSummary,
   StructuredListDefinition,
   StructuredListEntry,
@@ -24,12 +26,12 @@ import {
 } from "@/types/api";
 
 type StructuredListValue = Record<string, unknown>;
-type StructuredListColumnKey = "column_one_value" | "column_two_value";
-type StructuredListDisplayColumn = "column_one" | "column_two";
+/** Spalten-Key (ListColumn.id) - undurchsichtig, nie auf einen bestimmten Wert prüfen. */
+type StructuredListColumnKey = string;
 
 export type TrackedEntryInfo = {
   status: "added" | "changed" | "removed";
-  before?: { column_one_value: StructuredListValue; column_two_value: StructuredListValue };
+  before?: ListValues;
 };
 
 type StructuredListTableProps = {
@@ -54,29 +56,21 @@ type StructuredListTableProps = {
    * `highlightEmpty` kommt aus der Block-Konfiguration im Template. Gilt nur ohne Gruppierung. */
   protocolView?: { highlightEmpty?: boolean };
   /** Nur Zeilen zeigen, deren Wert in `column` den Text enthält (Block-Option der Vorlage). */
-  rowFilter?: { column: StructuredListDisplayColumn; text: string } | null;
+  rowFilter?: { column: StructuredListColumnKey; text: string } | null;
   heading?: ReactNode;
   headingActions?: ReactNode;
   emptyMessage?: string;
-  groupByColumn?: "" | StructuredListDisplayColumn;
-  sortByColumn?: "" | StructuredListDisplayColumn;
+  /** Spalten-Keys; leer = keine Gruppierung/Sortierung. Unbekannte Keys werden ignoriert. */
+  groupByColumn?: StructuredListColumnKey;
+  sortByColumn?: StructuredListColumnKey;
   sortDirection?: "asc" | "desc";
-  onHeaderSort?: (column: "column_one" | "column_two") => void;
+  /** Sichtbare Spalten in dieser Reihenfolge (Block-Option); fehlt sie, alle Spalten der Liste. */
+  visibleColumns?: StructuredListColumnKey[] | null;
+  onHeaderSort?: (column: StructuredListColumnKey) => void;
   entryTrackedStatusById?: Record<string, TrackedEntryInfo>;
   onAcceptTrackedEntry?: (entryId: string) => void;
-  onCreateEntry: (payload: {
-    sort_index: number;
-    column_one_value: StructuredListValue;
-    column_two_value: StructuredListValue;
-  }) => Promise<boolean>;
-  onUpdateEntry: (
-    entryId: string,
-    payload: Partial<{
-      sort_index: number;
-      column_one_value: StructuredListValue;
-      column_two_value: StructuredListValue;
-    }>
-  ) => Promise<boolean>;
+  onCreateEntry: (payload: { sort_index: number; values: ListValues }) => Promise<boolean>;
+  onUpdateEntry: (entryId: string, payload: Partial<{ sort_index: number; values: ListValues }>) => Promise<boolean>;
   onDeleteEntry: (entryId: string) => Promise<void>;
 };
 
@@ -178,11 +172,8 @@ function valueSummary(
   return String(value.text_value ?? "").trim() || "—";
 }
 
-function createNewRowDraft(definition: StructuredListDefinition) {
-  return {
-    column_one_value: emptyValueForType(definition.column_one_value_type),
-    column_two_value: emptyValueForType(definition.column_two_value_type),
-  };
+function createNewRowDraft(definition: StructuredListDefinition): ListValues {
+  return Object.fromEntries(definition.columns.map((column) => [column.id, emptyValueForType(column.value_type)]));
 }
 
 function valueSortText(
@@ -235,6 +226,7 @@ export function StructuredListTable({
   groupByColumn = "",
   sortByColumn = "",
   sortDirection = "asc",
+  visibleColumns = null,
   onHeaderSort,
   entryTrackedStatusById,
   onAcceptTrackedEntry,
@@ -255,9 +247,21 @@ export function StructuredListTable({
     () => [...availableEvents].sort((left, right) => compareIsoDate(left.event_date, right.event_date)),
     [availableEvents]
   );
-  const [entryDrafts, setEntryDrafts] = useState<
-    Record<string, Partial<{ column_one_value: StructuredListValue; column_two_value: StructuredListValue }>>
-  >({});
+  const columnTypes = useMemo(
+    () => Object.fromEntries(definition.columns.map((column) => [column.id, column.value_type])) as Record<string, StructuredListValueType>,
+    [definition.columns]
+  );
+  // Angezeigte Spalten: Auswahl des Blocks (unbekannte Keys fallen weg), sonst alle der Liste
+  const columns: ListColumn[] = useMemo(() => {
+    const ordered = [...definition.columns].sort((left, right) => left.sort_index - right.sort_index);
+    if (!visibleColumns?.length) return ordered;
+    const chosen = visibleColumns.map((key) => ordered.find((column) => column.id === key)).filter((column): column is ListColumn => Boolean(column));
+    return chosen.length ? chosen : ordered;
+  }, [definition.columns, visibleColumns]);
+  const knownColumn = (key: string | null | undefined): key is string => Boolean(key && columnTypes[key]);
+  const activeGroupBy = knownColumn(groupByColumn) ? groupByColumn : "";
+  const activeSortBy = knownColumn(sortByColumn) ? sortByColumn : "";
+  const [entryDrafts, setEntryDrafts] = useState<Record<string, ListValues>>({});
   const [showNewRow, setShowNewRow] = useState(false);
   const [newRowDraft, setNewRowDraft] = useState(() => createNewRowDraft(definition));
   const [creatingNewRow, setCreatingNewRow] = useState(false);
@@ -294,17 +298,11 @@ export function StructuredListTable({
     return (entries.reduce((highest, entry) => Math.max(highest, Number(entry.sort_index) || 0), 0) || 0) + 10;
   }
 
-  function hasNewRowContent(nextDraft: { column_one_value: StructuredListValue; column_two_value: StructuredListValue }) {
-    return (
-      hasValueContent(definition.column_one_value_type, nextDraft.column_one_value) ||
-      hasValueContent(definition.column_two_value_type, nextDraft.column_two_value)
-    );
+  function hasNewRowContent(nextDraft: ListValues) {
+    return definition.columns.some((column) => hasValueContent(column.value_type, nextDraft[column.id] ?? {}));
   }
 
-  function queueRowSave(
-    entryId: string,
-    payload: Partial<{ column_one_value: StructuredListValue; column_two_value: StructuredListValue }>
-  ) {
+  function queueRowSave(entryId: string, payload: ListValues) {
     const nextDraft = {
       ...(entryDrafts[entryId] ?? {}),
       ...payload,
@@ -317,7 +315,9 @@ export function StructuredListTable({
       window.clearTimeout(rowTimers.current[entryId]);
     }
     rowTimers.current[entryId] = window.setTimeout(async () => {
-      const saved = await onUpdateEntry(entryId, nextDraft);
+      const saved = await onUpdateEntry(entryId, {
+        values: Object.fromEntries(Object.entries(nextDraft).map(([key, value]) => [key, normalizeValueForType(columnTypes[key] ?? "text", value)])),
+      });
       if (saved) {
         setEntryDrafts((current) => {
           if (!current[entryId]) {
@@ -341,7 +341,7 @@ export function StructuredListTable({
     setNewRowDraft(createNewRowDraft(definition));
   }
 
-  function scheduleNewRowCreate(nextDraft: { column_one_value: StructuredListValue; column_two_value: StructuredListValue }) {
+  function scheduleNewRowCreate(nextDraft: ListValues) {
     if (newRowTimer.current) {
       window.clearTimeout(newRowTimer.current);
       newRowTimer.current = null;
@@ -353,8 +353,11 @@ export function StructuredListTable({
       setCreatingNewRow(true);
       const saved = await onCreateEntry({
         sort_index: nextSortIndex(),
-        column_one_value: normalizeValueForType(definition.column_one_value_type, nextDraft.column_one_value),
-        column_two_value: normalizeValueForType(definition.column_two_value_type, nextDraft.column_two_value),
+        values: Object.fromEntries(
+          definition.columns
+            .map((column) => [column.id, normalizeValueForType(column.value_type, nextDraft[column.id] ?? {})] as const)
+            .filter(([key, value]) => hasValueContent(columnTypes[key], value))
+        ),
       });
       setCreatingNewRow(false);
       if (saved) {
@@ -363,9 +366,7 @@ export function StructuredListTable({
     }, 500);
   }
 
-  function patchNewRow(
-    payload: Partial<{ column_one_value: StructuredListValue; column_two_value: StructuredListValue }>
-  ) {
+  function patchNewRow(payload: ListValues) {
     setNewRowDraft((current) => {
       const nextDraft = { ...current, ...payload };
       scheduleNewRowCreate(nextDraft);
@@ -374,34 +375,21 @@ export function StructuredListTable({
   }
 
   function rowValue(entry: StructuredListEntry, columnKey: StructuredListColumnKey) {
-    const rawValue = ((entryDrafts[entry.id] ?? {})[columnKey] as StructuredListValue | undefined)
-      ?? (entry[columnKey] as StructuredListValue);
+    const rawValue = (entryDrafts[entry.id] ?? {})[columnKey] ?? (entry.values ?? {})[columnKey] ?? {};
     // Eingefrorene Namen für Anzeige/Sortierung erhalten; Schreibwerte werden separat normalisiert.
-    return {
-      ...rawValue,
-      ...normalizeValueForType(
-        columnKey === "column_one_value" ? definition.column_one_value_type : definition.column_two_value_type,
-        rawValue,
-      ),
-    };
+    return { ...rawValue, ...normalizeValueForType(columnTypes[columnKey] ?? "text", rawValue) };
   }
 
-  function displayColumnKey(column: StructuredListDisplayColumn): StructuredListColumnKey {
-    return column === "column_two" ? "column_two_value" : "column_one_value";
+  function displayColumnType(columnKey: StructuredListColumnKey): StructuredListValueType {
+    return columnTypes[columnKey] ?? "text";
   }
 
-  function displayColumnType(column: StructuredListDisplayColumn): StructuredListValueType {
-    return column === "column_two" ? definition.column_two_value_type : definition.column_one_value_type;
+  function entryDisplayText(entry: StructuredListEntry, columnKey: StructuredListColumnKey) {
+    return valueSummary(displayColumnType(columnKey), rowValue(entry, columnKey), participantNames, sortedEvents, t);
   }
 
-  function entryDisplayText(entry: StructuredListEntry, column: StructuredListDisplayColumn) {
-    const columnKey = displayColumnKey(column);
-    return valueSummary(displayColumnType(column), rowValue(entry, columnKey), participantNames, sortedEvents, t);
-  }
-
-  function entrySortText(entry: StructuredListEntry, column: StructuredListDisplayColumn) {
-    const columnKey = displayColumnKey(column);
-    return valueSortText(displayColumnType(column), rowValue(entry, columnKey), participantNames, sortedEvents);
+  function entrySortText(entry: StructuredListEntry, columnKey: StructuredListColumnKey) {
+    return valueSortText(displayColumnType(columnKey), rowValue(entry, columnKey), participantNames, sortedEvents);
   }
 
   function openParticipantPicker(
@@ -626,13 +614,14 @@ export function StructuredListTable({
       (left.sort_index - right.sort_index) || compareIsoDate(left.created_at, right.created_at);
 
     const filterText = rowFilter?.text.trim().toLowerCase() ?? "";
+    const filterColumn = rowFilter && knownColumn(rowFilter.column) ? rowFilter.column : "";
     return entries
       .filter((entry) => !visibleEntryIds || visibleEntryIds.includes(entry.id))
-      .filter((entry) => !filterText || !rowFilter || entrySortText(entry, rowFilter.column).toLowerCase().includes(filterText))
+      .filter((entry) => !filterText || !filterColumn || entrySortText(entry, filterColumn).toLowerCase().includes(filterText))
       .sort((left, right) => {
-      if (sortByColumn) {
-        const leftText = entrySortText(left, sortByColumn).trim();
-        const rightText = entrySortText(right, sortByColumn).trim();
+      if (activeSortBy) {
+        const leftText = entrySortText(left, activeSortBy).trim();
+        const rightText = entrySortText(right, activeSortBy).trim();
         if (leftText && rightText) {
           const compared = textCollator.compare(leftText, rightText);
           if (compared !== 0) {
@@ -646,23 +635,23 @@ export function StructuredListTable({
       }
       return manualCompare(left, right);
     });
-  }, [entries, visibleEntryIds, rowFilter, entryDrafts, sortByColumn, sortDirection, textCollator, participantNames, sortedEvents, definition.column_one_value_type, definition.column_two_value_type]);
+  }, [entries, visibleEntryIds, rowFilter, entryDrafts, activeSortBy, sortDirection, textCollator, participantNames, sortedEvents, columnTypes]);
 
   const groupedEntries = useMemo(() => {
-    if (!groupByColumn) {
+    if (!activeGroupBy) {
       return [];
     }
     const groups: Array<{ key: string; label: string; entries: StructuredListEntry[] }> = [];
     const groupIndex = new Map<string, number>();
 
     sortedEntries.forEach((entry) => {
-      const rawLabel = entryDisplayText(entry, groupByColumn);
+      const rawLabel = entryDisplayText(entry, activeGroupBy);
       const label = rawLabel !== "—" ? rawLabel : t("noValue");
       // Ohne auflösbaren Namen nach dem Rohwert gruppieren, damit verschiedene (z. B. nicht
       // geladene) Personen nicht alle in einer gemeinsamen leeren Gruppe landen.
-      const rawGroupValue = rowValue(entry, displayColumnKey(groupByColumn));
-      const key = entrySortText(entry, groupByColumn).trim()
-        || (hasValueContent(displayColumnType(groupByColumn), rawGroupValue) ? `__raw__${JSON.stringify(rawGroupValue)}` : "__empty__");
+      const rawGroupValue = rowValue(entry, activeGroupBy);
+      const key = entrySortText(entry, activeGroupBy).trim()
+        || (hasValueContent(displayColumnType(activeGroupBy), rawGroupValue) ? `__raw__${JSON.stringify(rawGroupValue)}` : "__empty__");
       const existingIndex = groupIndex.get(key);
       if (existingIndex == null) {
         groupIndex.set(key, groups.length);
@@ -673,44 +662,24 @@ export function StructuredListTable({
     });
 
     return groups;
-  }, [groupByColumn, sortedEntries, entryDrafts, participantNames, sortedEvents, definition.column_one_value_type, definition.column_two_value_type]);
+  }, [activeGroupBy, sortedEntries, entryDrafts, participantNames, sortedEvents, columnTypes]);
 
+  // Gruppiert und nur lesend: eine Zeile je Gruppenwert, die anderen Spalten zusammengefasst
   const groupedDisplayRows = useMemo(() => {
-    if (!groupByColumn || editable) {
+    if (!activeGroupBy || editable) {
       return [];
     }
-
-    const valueColumn: StructuredListDisplayColumn = groupByColumn === "column_one" ? "column_two" : "column_one";
-
-    return groupedEntries.map((group) => {
-      const groupedValues = group.entries
-        .map((entry) => entryDisplayText(entry, valueColumn))
-        .map((value) => String(value ?? "").replace(/\s+/g, " ").trim())
-        .filter((value) => value && value !== "—");
-      const mergedValue = groupedValues.join(", ") || "—";
-
-      return groupByColumn === "column_one"
-        ? {
-            key: group.key,
-            leftValue: group.label,
-            rightValue: mergedValue,
-          }
-        : {
-            key: group.key,
-            leftValue: mergedValue,
-            rightValue: group.label,
-          };
-    });
-  }, [
-    editable,
-    groupByColumn,
-    groupedEntries,
-    entryDrafts,
-    participantNames,
-    sortedEvents,
-    definition.column_one_value_type,
-    definition.column_two_value_type,
-  ]);
+    return groupedEntries.map((group) => ({
+      key: group.key,
+      cells: columns.map((column) => {
+        if (column.id === activeGroupBy) return group.label;
+        const merged = group.entries
+          .map((entry) => String(entryDisplayText(entry, column.id) ?? "").replace(/\s+/g, " ").trim())
+          .filter((value) => value && value !== "—");
+        return merged.join(", ") || "—";
+      }),
+    }));
+  }, [editable, activeGroupBy, groupedEntries, columns, entryDrafts, participantNames, sortedEvents, columnTypes]);
 
   function personRefs(valueType: StructuredListValueType, value: StructuredListValue | undefined) {
     if (!value) return [];
@@ -735,14 +704,19 @@ export function StructuredListTable({
 
   function renderProtocolView() {
     const isPersonType = (valueType: StructuredListValueType) => valueType === "participant" || valueType === "participants";
-    // Die Personen-Spalte bestimmt "besetzt"; die andere Spalte ist die fixe Zeilenbeschriftung.
-    const assignmentColumn: StructuredListDisplayColumn =
-      isPersonType(definition.column_two_value_type) || !isPersonType(definition.column_one_value_type) ? "column_two" : "column_one";
-    const labelColumn: StructuredListDisplayColumn = assignmentColumn === "column_two" ? "column_one" : "column_two";
-    const assignmentKey = displayColumnKey(assignmentColumn);
-    const assignmentType = displayColumnType(assignmentColumn);
-    const labelKey = displayColumnKey(labelColumn);
-    const labelType = displayColumnType(labelColumn);
+    // Rollen der Liste: die Spalte «Verantwortliche» bestimmt "besetzt", die Spalte «Bezeichnung»
+    // ist die fixe Zeilenbeschriftung. Ohne Rollen: erste Personen-Spalte bzw. erste andere Spalte.
+    const assignmentKey =
+      (knownColumn(definition.responsible_column_id) ? definition.responsible_column_id : null)
+      ?? columns.find((column) => isPersonType(column.value_type))?.id
+      ?? columns[columns.length - 1]?.id ?? "";
+    const labelKey =
+      (knownColumn(definition.label_column_id) && definition.label_column_id !== assignmentKey ? definition.label_column_id : null)
+      ?? columns.find((column) => column.id !== assignmentKey)?.id ?? assignmentKey;
+    const assignmentType = displayColumnType(assignmentKey);
+    const labelType = displayColumnType(labelKey);
+    const extraColumns = columns.filter((column) => column.id !== assignmentKey && column.id !== labelKey);
+    const titleOf = (key: string) => definition.columns.find((column) => column.id === key)?.title ?? "";
     const highlightEmpty = !!protocolView?.highlightEmpty;
 
     const rows = sortedEntries.map((entry) => {
@@ -773,7 +747,7 @@ export function StructuredListTable({
       const value = rowValue(row.entry, assignmentKey);
       const current = personRefs(assignmentType, value);
       const before = row.tracked?.status === "changed" && row.tracked.before
-        ? personRefs(assignmentType, row.tracked.before[assignmentKey])
+        ? personRefs(assignmentType, row.tracked.before?.[assignmentKey])
         : null;
       const addedIds = new Set(
         row.tracked?.status === "added" ? current.map((person) => person.id)
@@ -876,8 +850,9 @@ export function StructuredListTable({
           <table className="data-table linked-list-table">
             <thead>
               <tr>
-                <th>{labelColumn === "column_one" ? definition.column_one_title : definition.column_two_title}</th>
-                <th>{assignmentColumn === "column_one" ? definition.column_one_title : definition.column_two_title}</th>
+                <th>{titleOf(labelKey)}</th>
+                {extraColumns.map((column) => <th key={column.id}>{column.title}</th>)}
+                <th>{titleOf(assignmentKey)}</th>
                 {showActions ? <th className="linked-list-actions" aria-label={t("actionsLabel")} /> : null}
               </tr>
             </thead>
@@ -906,6 +881,13 @@ export function StructuredListTable({
                         {renderValueSummary(labelType, labelValue)}
                       </span>
                     </td>
+                    {extraColumns.map((column) => (
+                      <td key={column.id}>
+                        {editable && !row.removed
+                          ? renderEditableCell(row.entry.id, column.id, column.value_type, rowValue(row.entry, column.id), { isNewRow: false })
+                          : <span className={row.removed ? "tracked-strike" : undefined}>{renderValueSummary(column.value_type, rowValue(row.entry, column.id))}</span>}
+                      </td>
+                    ))}
                     <td>{isPersonType(assignmentType) ? renderPeople(row) : renderOtherValue(row)}</td>
                     {showActions ? (
                       <td className="linked-list-actions">
@@ -939,7 +921,7 @@ export function StructuredListTable({
                 );
               }) : (
                 <tr>
-                  <td colSpan={showActions ? 3 : 2}>
+                  <td colSpan={extraColumns.length + (showActions ? 3 : 2)}>
                     <span className="muted">{rows.length ? t("protocol.filterEmpty") : resolvedEmptyMessage}</span>
                   </td>
                 </tr>
@@ -960,7 +942,7 @@ export function StructuredListTable({
     );
   }
 
-  if (protocolView && !groupByColumn) {
+  if (protocolView && !activeGroupBy) {
     return renderProtocolView();
   }
 
@@ -988,33 +970,24 @@ export function StructuredListTable({
         </div>
       )}
       <div className={`${heading ? "table-shell" : "event-table-wrap"}${fullWidth ? " structured-list-table-flat" : ""}${masterList ? " list-manager-table-shell" : ""}`} style={fullWidth ? { width: "100%" } : undefined}>
-        <table className={`data-table structured-list-table${heading ? " data-table-lg" : " event-table event-table-compact"}`} style={fullWidth ? { width: "100%" } : undefined}>
+        <table className={`data-table structured-list-table${heading ? " data-table-lg" : " event-table event-table-compact"}${columns.length > 3 ? " structured-list-wide" : ""}`} style={fullWidth ? { width: "100%" } : undefined}>
           <thead>
             <tr>
-              <th
-                onClick={onHeaderSort ? () => onHeaderSort("column_one") : undefined}
-                style={onHeaderSort ? { cursor: "pointer", userSelect: "none" } : undefined}
-              >
-                {definition.column_one_title}
-                {masterList && <span className="list-manager-column-type"><ListValueTypeIcon type={definition.column_one_value_type} />{listT(`valueTypes.${definition.column_one_value_type}`)}</span>}
-                {onHeaderSort && (
-                  <span style={{ marginLeft: "var(--space-1)", opacity: sortByColumn === "column_one" ? 1 : 0.25, fontSize: "0.8em" }}>
-                    {sortByColumn === "column_one" ? (sortDirection === "asc" ? "↑" : "↓") : "↕"}
-                  </span>
-                )}
-              </th>
-              <th
-                onClick={onHeaderSort ? () => onHeaderSort("column_two") : undefined}
-                style={onHeaderSort ? { cursor: "pointer", userSelect: "none" } : undefined}
-              >
-                {definition.column_two_title}
-                {masterList && <span className="list-manager-column-type"><ListValueTypeIcon type={definition.column_two_value_type} />{listT(`valueTypes.${definition.column_two_value_type}`)}</span>}
-                {onHeaderSort && (
-                  <span style={{ marginLeft: "var(--space-1)", opacity: sortByColumn === "column_two" ? 1 : 0.25, fontSize: "0.8em" }}>
-                    {sortByColumn === "column_two" ? (sortDirection === "asc" ? "↑" : "↓") : "↕"}
-                  </span>
-                )}
-              </th>
+              {columns.map((column) => (
+                <th
+                  key={column.id}
+                  onClick={onHeaderSort ? () => onHeaderSort(column.id) : undefined}
+                  className={onHeaderSort ? "structured-list-sortable" : undefined}
+                >
+                  {column.title}
+                  {masterList && <span className="list-manager-column-type"><ListValueTypeIcon type={column.value_type} />{listT(`valueTypes.${column.value_type}`)}</span>}
+                  {onHeaderSort && (
+                    <span className={`structured-list-sort-mark${activeSortBy === column.id ? " structured-list-sort-mark-active" : ""}`} aria-hidden="true">
+                      {activeSortBy === column.id ? (sortDirection === "asc" ? "↑" : "↓") : "↕"}
+                    </span>
+                  )}
+                </th>
+              ))}
               {editable ? (
                 <th className="event-column-actions" aria-label={t("actionsLabel")}>
                   {heading && !masterList ? t("actionsLabel") : null}
@@ -1040,18 +1013,14 @@ export function StructuredListTable({
           <tbody>
             {showNewRow ? (
               <tr className="event-row-new">
-                <td>
-                  {renderEditableCell(null, "column_one_value", definition.column_one_value_type, newRowDraft.column_one_value, {
-                    isNewRow: true,
-                    disabled: creatingNewRow,
-                  })}
-                </td>
-                <td>
-                  {renderEditableCell(null, "column_two_value", definition.column_two_value_type, newRowDraft.column_two_value, {
-                    isNewRow: true,
-                    disabled: creatingNewRow,
-                  })}
-                </td>
+                {columns.map((column) => (
+                  <td key={column.id}>
+                    {renderEditableCell(null, column.id, column.value_type, newRowDraft[column.id] ?? emptyValueForType(column.value_type), {
+                      isNewRow: true,
+                      disabled: creatingNewRow,
+                    })}
+                  </td>
+                ))}
                 {editable ? (
                   <td>
                     <div className="event-row-actions">
@@ -1071,27 +1040,24 @@ export function StructuredListTable({
               </tr>
             ) : null}
             {sortedEntries.length ? (
-              groupByColumn && !editable ? (
+              activeGroupBy && !editable ? (
                 groupedDisplayRows.map((row) => (
                   <tr key={`structured-list-grouped-${row.key}`} className="structured-list-grouped-row">
-                    <td>{row.leftValue}</td>
-                    <td>{row.rightValue}</td>
+                    {row.cells.map((cell, index) => <td key={columns[index].id}>{cell}</td>)}
                   </tr>
                 ))
               ) : (
-                (groupByColumn
+                (activeGroupBy
                   ? groupedEntries
                   : [{ key: "__all__", label: "", entries: sortedEntries }]
                 ).map((group) => (
                   <Fragment key={`structured-list-group-${group.key}`}>
-                    {groupByColumn ? (
+                    {activeGroupBy ? (
                       <tr className="structured-list-group-row">
-                        <td colSpan={editable ? 3 : 2}>{group.label}</td>
+                        <td colSpan={columns.length + (editable ? 1 : 0)}>{group.label}</td>
                       </tr>
                     ) : null}
                     {group.entries.map((entry) => {
-                      const firstValue = rowValue(entry, "column_one_value");
-                      const secondValue = rowValue(entry, "column_two_value");
                       const trackedInfo = entryTrackedStatusById?.[entry.id];
                       // A removed row is a phantom reconstructed from its last-known
                       // values (see list_snapshot_service._merge_tracked_list_entries) -
@@ -1100,60 +1066,45 @@ export function StructuredListTable({
                       if (trackedInfo?.status === "removed") {
                         return (
                           <tr key={entry.id} className="tracked-removed-row">
-                            <td><span className="tracked-strike">{renderValueSummary(definition.column_one_value_type, firstValue)}</span></td>
-                            <td>
-                              <span className="tracked-strike">{renderValueSummary(definition.column_two_value_type, secondValue)}</span>
-                              {onAcceptTrackedEntry && (
-                                <TrackedChangeHideButton
-                                  title={t("hideRemovedEntryTitle")}
-                                  onAccept={() => onAcceptTrackedEntry(entry.id)}
-                                />
-                              )}
-                            </td>
+                            {columns.map((column, index) => (
+                              <td key={column.id}>
+                                <span className="tracked-strike">{renderValueSummary(column.value_type, rowValue(entry, column.id))}</span>
+                                {index === columns.length - 1 && onAcceptTrackedEntry && (
+                                  <TrackedChangeHideButton
+                                    title={t("hideRemovedEntryTitle")}
+                                    onAccept={() => onAcceptTrackedEntry(entry.id)}
+                                  />
+                                )}
+                              </td>
+                            ))}
                             {editable ? <td /> : null}
                           </tr>
                         );
                       }
-                      const col1Changed = trackedInfo?.status === "changed" && !valuesEqual(firstValue, trackedInfo.before?.column_one_value);
-                      const col2Changed = trackedInfo?.status === "changed" && !valuesEqual(secondValue, trackedInfo.before?.column_two_value);
-                      const col1Added = trackedInfo?.status === "added";
-                      const col2Added = trackedInfo?.status === "added";
                       return (
                         <tr key={entry.id}>
-                          <td className={col1Changed || col1Added ? "tracked-cell" : undefined}>
-                            {col1Changed && (
-                              <div className="tracked-before-caption tracked-strike">
-                                {valueSummary(definition.column_one_value_type, trackedInfo?.before?.column_one_value ?? {}, participantNames, sortedEvents, t)}
-                              </div>
-                            )}
-                            {editable
-                              ? renderEditableCell(entry.id, "column_one_value", definition.column_one_value_type, firstValue, {
-                                  isNewRow: false,
-                                })
-                              : (col1Changed || col1Added
-                                  ? <span className="tracked-underline">{renderValueSummary(definition.column_one_value_type, firstValue)}</span>
-                                  : renderValueSummary(definition.column_one_value_type, firstValue))}
-                            {(col1Changed || col1Added) && onAcceptTrackedEntry && (
-                              <TrackedChangeHideButton onAccept={() => onAcceptTrackedEntry(entry.id)} />
-                            )}
-                          </td>
-                          <td className={col2Changed || col2Added ? "tracked-cell" : undefined}>
-                            {col2Changed && (
-                              <div className="tracked-before-caption tracked-strike">
-                                {valueSummary(definition.column_two_value_type, trackedInfo?.before?.column_two_value ?? {}, participantNames, sortedEvents, t)}
-                              </div>
-                            )}
-                            {editable
-                              ? renderEditableCell(entry.id, "column_two_value", definition.column_two_value_type, secondValue, {
-                                  isNewRow: false,
-                                })
-                              : (col2Changed || col2Added
-                                  ? <span className="tracked-underline">{renderValueSummary(definition.column_two_value_type, secondValue)}</span>
-                                  : renderValueSummary(definition.column_two_value_type, secondValue))}
-                            {(col2Changed || col2Added) && onAcceptTrackedEntry && (
-                              <TrackedChangeHideButton onAccept={() => onAcceptTrackedEntry(entry.id)} />
-                            )}
-                          </td>
+                          {columns.map((column) => {
+                            const value = rowValue(entry, column.id);
+                            const changed = trackedInfo?.status === "changed" && !valuesEqual(value, trackedInfo.before?.[column.id]);
+                            const added = trackedInfo?.status === "added";
+                            return (
+                              <td key={column.id} className={changed || added ? "tracked-cell" : undefined}>
+                                {changed && (
+                                  <div className="tracked-before-caption tracked-strike">
+                                    {valueSummary(column.value_type, trackedInfo?.before?.[column.id] ?? {}, participantNames, sortedEvents, t)}
+                                  </div>
+                                )}
+                                {editable
+                                  ? renderEditableCell(entry.id, column.id, column.value_type, value, { isNewRow: false })
+                                  : (changed || added
+                                      ? <span className="tracked-underline">{renderValueSummary(column.value_type, value)}</span>
+                                      : renderValueSummary(column.value_type, value))}
+                                {(changed || added) && onAcceptTrackedEntry && (
+                                  <TrackedChangeHideButton onAccept={() => onAcceptTrackedEntry(entry.id)} />
+                                )}
+                              </td>
+                            );
+                          })}
                           {editable ? (
                             <td>
                               <div className="event-row-actions">
@@ -1177,13 +1128,13 @@ export function StructuredListTable({
               )
             ) : !showNewRow ? (
               <tr>
-                <td colSpan={editable ? 3 : 2}>
+                <td colSpan={columns.length + (editable ? 1 : 0)}>
                   <span className="muted">{resolvedEmptyMessage}</span>
                 </td>
               </tr>
             ) : null}
           </tbody>
-          {masterList && editable && allowCreate && <tfoot><tr><td colSpan={3}><button type="button" className="button-ghost list-manager-add-row" disabled={showNewRow || creatingNewRow} onClick={() => { setShowNewRow(true); setNewRowDraft(createNewRowDraft(definition)); }}>{listT("addEntry")}</button></td></tr></tfoot>}
+          {masterList && editable && allowCreate && <tfoot><tr><td colSpan={columns.length + 1}><button type="button" className="button-ghost list-manager-add-row" disabled={showNewRow || creatingNewRow} onClick={() => { setShowNewRow(true); setNewRowDraft(createNewRowDraft(definition)); }}>{listT("addEntry")}</button></td></tr></tfoot>}
         </table>
       </div>
 

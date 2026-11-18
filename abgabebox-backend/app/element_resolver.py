@@ -215,11 +215,17 @@ def _resolve_open_elements(db: Session, assignment: dict) -> list[dict]:
     if definition is None:
         return []
     entries = repository.list_list_entries(db, list_definition_id=definition["id"])
+    label_column = repository.get_label_column(db, definition=definition)
+    value_type = label_column["value_type"] if label_column else "text"
+
+    def label_value(entry: dict) -> dict:
+        values = entry.get("values_json") or {}
+        return (values.get(label_column["key"]) if label_column else None) or {}
+
     participant_ids: set[int] = set()
     event_ids: set[int] = set()
     for entry in entries:
-        value_type = definition["column_one_value_type"]
-        value_json = entry["column_one_value_json"] or {}
+        value_json = label_value(entry)
         if value_type == "participant" and value_json.get("participant_id"):
             participant_ids.add(int(value_json["participant_id"]))
         elif value_type == "participants":
@@ -243,8 +249,8 @@ def _resolve_open_elements(db: Session, assignment: dict) -> list[dict]:
                 "event_id": None,
                 "list_entry_id": entry["id"],
                 "label": _value_label(
-                    definition["column_one_value_type"],
-                    entry["column_one_value_json"] or {},
+                    value_type,
+                    label_value(entry),
                     participants_by_id=participants_by_id,
                     events_by_id=events_by_id,
                 ),

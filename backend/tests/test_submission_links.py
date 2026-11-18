@@ -279,8 +279,8 @@ def test_list_assignment_creates_and_follows_todos_per_list_entry(db):
     tenant = make_tenant(db)
     anna = make_participant(db, tenant.id, display_name="Anna Muster")
     ben = make_participant(db, tenant.id, display_name="Ben Beispiel")
-    definition = make_list_definition(db, tenant.id, column_two_title="Verantwortlich", column_two_value_type="participant")
-    make_list_entry(db, definition.id, column_one_value={"text": "Zelt"}, column_two_value={"participant_id": anna.id})
+    definition = make_list_definition(db, tenant.id, second_title="Verantwortlich", second_type="participant")
+    make_list_entry(db, definition.id, first_value={"text": "Zelt"}, second_value={"participant_id": anna.id})
     link = links.create_link(db, SubmissionLinkCreate(name="Leiter"), tenant_id=tenant.id)
 
     created = SubmissionService().create_assignment(
@@ -296,7 +296,7 @@ def test_list_assignment_creates_and_follows_todos_per_list_entry(db):
     # Neuer Listeneintrag über die Route: das Todo folgt automatisch.
     list_routes.create_entry(
         definition.public_id,
-        ListEntryCreate(sort_index=1, column_one_value={"text": "Kocher"}, column_two_value={"participant_id": str(ben.public_id)}),
+        ListEntryCreate(sort_index=1, values={"k1": {"text_value": "Kocher"}, "k2": {"participant_id": str(ben.public_id)}}),
         db=db,
         user=make_current_user(tenant.id, role="writer"),
     )

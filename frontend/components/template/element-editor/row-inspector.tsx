@@ -20,10 +20,11 @@ import { Select } from "@/components/ui/select";
 
 type TFunc = (key: string, values?: Record<string, string | number>) => string;
 
-export const AUTO_SOURCE_FIELDS: Record<"participants" | "events" | "list", string[]> = {
+// Felder der automatischen Matrix-Quellen; bei «Liste» sind es die Spalten der gewählten Liste
+// (Spalten-Keys, Migration 0186) und kommen aus der Liste selbst.
+export const AUTO_SOURCE_FIELDS: Record<"participants" | "events", string[]> = {
   participants: ["display_name", "first_name", "last_name", "email"],
   events: ["title", "event_date", "event_end_date", "tag", "location", "description", "organizers", "participant_count"],
-  list: ["column_one", "column_two"],
 };
 
 export function rowTypeLabel(rowType: string, t: TFunc, tTypes: TFunc): string {
@@ -33,9 +34,11 @@ export function rowTypeLabel(rowType: string, t: TFunc, tTypes: TFunc): string {
 
 export function listEntryText(entry: StructuredListEntry, definition: StructuredListDefinition | null, describe: (value: Record<string, unknown> | null | undefined, valueType: string) => string, fallback: string) {
   if (!definition) return fallback;
-  const one = describe(entry.column_one_value as Record<string, unknown>, definition.column_one_value_type);
-  const two = describe(entry.column_two_value as Record<string, unknown>, definition.column_two_value_type);
-  return [one, two].filter(Boolean).join(" – ") || fallback;
+  return [...definition.columns]
+    .sort((left, right) => left.sort_index - right.sort_index)
+    .map((column) => describe(entry.values?.[column.id], column.value_type))
+    .filter(Boolean)
+    .join(" – ") || fallback;
 }
 
 export type RowInspectorData = {
@@ -70,6 +73,7 @@ export function RowInspector({
   row,
   kind,
   autoSource,
+  autoSourceListId = null,
   data,
   onChange,
   onRemove,
@@ -79,6 +83,8 @@ export function RowInspector({
   kind: "form" | "matrix";
   /** Quelle der automatischen Matrixspalten (für den Platzhalter der Zeile). */
   autoSource: "participants" | "events" | "list" | null;
+  /** Liste der automatischen Matrix-Quelle (für ihre Spalten) */
+  autoSourceListId?: string | null;
   data: RowInspectorData;
   onChange: (next: TableRow) => void;
   onRemove: () => void;
@@ -202,9 +208,13 @@ export function RowInspector({
             <span className="field-label">{t(`row.autoValueFrom.${autoSource}`)}</span>
             <Select value={row.auto_source_field ?? ""} onChange={(event) => patch({ auto_source_field: event.target.value || null })}>
               <option value="">{t("row.noAutoValue")}</option>
-              {AUTO_SOURCE_FIELDS[autoSource].map((field) => (
-                <option key={field} value={field}>{t(`autoField.${field}`)}</option>
-              ))}
+              {autoSource === "list"
+                ? [...(data.lists.find((list) => list.id === autoSourceListId)?.columns ?? [])]
+                    .sort((left, right) => left.sort_index - right.sort_index)
+                    .map((column) => <option key={column.id} value={column.id}>{column.title}</option>)
+                : AUTO_SOURCE_FIELDS[autoSource].map((field) => (
+                    <option key={field} value={field}>{t(`autoField.${field}`)}</option>
+                  ))}
             </Select>
             <span className="field-help">{t("row.autoValueHelp")}</span>
           </label>
@@ -286,7 +296,11 @@ export function RowValueFields({ row, data, onChange }: { row: TableRow; data: R
         const listId = typeof row.row_config.linked_list_id === "string" ? row.row_config.linked_list_id : null;
         const definition = data.lists.find((list) => list.id === listId) ?? null;
         const entries = listId ? data.listEntries[listId] ?? [] : [];
-        const fixed = row.row_config.list_fixed_column === "column_two" ? "column_two" : "column_one";
+        const columns = definition ? [...definition.columns].sort((left, right) => left.sort_index - right.sort_index) : [];
+        const fixed = columns.find((column) => column.id === row.row_config.list_fixed_column)?.id
+          ?? columns.find((column) => column.id === definition?.label_column_id)?.id ?? columns[0]?.id ?? "";
+        const valueColumn = columns.find((column) => column.id === row.row_config.list_value_column && column.id !== fixed)?.id
+          ?? columns.find((column) => column.id !== fixed)?.id ?? "";
         return (
           <div className="field-stack">
             <label className="field-stack">
@@ -319,10 +333,17 @@ export function RowValueFields({ row, data, onChange }: { row: TableRow; data: R
                 <label className="field-stack">
                   <span className="field-label">{t("row.fixedColumn")}</span>
                   <Select value={fixed} onChange={(event) => patchConfig({ list_fixed_column: event.target.value })}>
-                    <option value="column_one">{t("row.fixedColumnOption", { column: definition?.column_one_title || t("row.columnOne") })}</option>
-                    <option value="column_two">{t("row.fixedColumnOption", { column: definition?.column_two_title || t("row.columnTwo") })}</option>
+                    {columns.map((column) => <option key={column.id} value={column.id}>{t("row.fixedColumnOption", { column: column.title })}</option>)}
                   </Select>
                 </label>
+                {columns.length > 2 ? (
+                  <label className="field-stack">
+                    <span className="field-label">{t("row.valueColumn")}</span>
+                    <Select value={valueColumn} onChange={(event) => patchConfig({ list_value_column: event.target.value })}>
+                      {columns.filter((column) => column.id !== fixed).map((column) => <option key={column.id} value={column.id}>{column.title}</option>)}
+                    </Select>
+                  </label>
+                ) : null}
                 <label className="checkbox-row">
                   <input
                     type="checkbox"

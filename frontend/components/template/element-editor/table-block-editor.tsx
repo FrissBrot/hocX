@@ -12,6 +12,7 @@ import { useTranslations } from "next-intl";
 
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { usePopoverDismiss, usePopoverPosition } from "@/components/ui/popover";
+import { SearchableMultiSelect } from "@/components/ui/searchable-select";
 import { Select } from "@/components/ui/select";
 import { browserApiFetch } from "@/lib/api/client";
 import { applyEventFilter } from "@/lib/element-types/event-filter";
@@ -19,7 +20,7 @@ import { useEventFieldConfig } from "@/lib/hooks/use-event-field-config";
 import { formatDate, formatDateRange } from "@/lib/utils/format";
 import { markdownToPlainText } from "@/lib/utils/markdown-text";
 import { formatTimeValue } from "@/lib/utils/time";
-import type { EventSummary, StructuredListDefinition, StructuredListEntry, TodoListItem } from "@/types/api";
+import type { EventSummary, ListColumn, StructuredListDefinition, StructuredListEntry, TodoListItem } from "@/types/api";
 
 import { type BlockForm, defaultRow, defaultRowConfig, moveItem, nextRowId, repeatEventFilter, type TableRow } from "./block-form";
 import { RowValueFields, type RowInspectorData, useListValueDescriber } from "./row-inspector";
@@ -196,9 +197,14 @@ function useValueTexts(data: RowInspectorData) {
     const entryId = row.row_config.linked_list_entry_id;
     const entry = listId ? (data.listEntries[listId] ?? []).find((item) => item.id === entryId) : undefined;
     if (!list || !entry) return { list, fixed: "", other: "" };
-    const one = describe(entry.column_one_value, list.column_one_value_type);
-    const two = describe(entry.column_two_value, list.column_two_value_type);
-    return row.row_config.list_fixed_column === "column_two" ? { list, fixed: two, other: one } : { list, fixed: one, other: two };
+    // Feste Spalte (Beschriftung) und Wert-Spalte: Spalten-Keys der Zeile, sonst Rolle «Bezeichnung»
+    const columns = orderedListColumns(list);
+    const fixedColumn = columns.find((column) => column.id === row.row_config.list_fixed_column)
+      ?? columns.find((column) => column.id === list.label_column_id) ?? columns[0];
+    const otherColumn = columns.find((column) => column.id === row.row_config.list_value_column && column.id !== fixedColumn?.id)
+      ?? columns.find((column) => column.id !== fixedColumn?.id);
+    const valueOf = (column: ListColumn | undefined) => (column ? describe(entry.values?.[column.id], column.value_type) : "");
+    return { list, fixed: valueOf(fixedColumn), other: valueOf(otherColumn) };
   }
 
   /** Bezeichnung und Vorbelegung einer eigenen Zeile, wie sie im Protokoll erscheint. */
@@ -606,7 +612,7 @@ export function TableBlockSection({
                   onClick={() => setConfig({ linked_list_id: list.id })}
                 >
                   <strong>{list.name}</strong>
-                  <span className="muted">{`${list.column_one_title} · ${list.column_two_title}`}</span>
+                  <span className="muted">{orderedListColumns(list).map((column) => column.title).join(" · ")}</span>
                 </button>
               ))}
             </div>
@@ -620,17 +626,36 @@ export function TableBlockSection({
   );
 }
 
+function orderedListColumns(list: StructuredListDefinition): ListColumn[] {
+  return [...list.columns].sort((left, right) => left.sort_index - right.sort_index);
+}
+
 function LinkedListOptions({ form, list, setConfig }: { form: BlockForm; list: StructuredListDefinition; setConfig: (next: Record<string, unknown>) => void }) {
   const t = useTranslations("templates.elementEditor");
+  const columns = orderedListColumns(list);
+  const columnOptions = columns.map((column) => <option key={column.id} value={column.id}>{column.title}</option>);
+  const visible = Array.isArray(form.config.linked_list_visible_columns) ? (form.config.linked_list_visible_columns as string[]) : [];
   return (
     <div className="card grid">
+      {columns.length > 2 ? (
+        <label className="field-stack">
+          <span className="field-label">{t("table.visibleColumns")}</span>
+          <SearchableMultiSelect
+            options={columns}
+            getId={(column) => column.id}
+            getLabel={(column) => column.title}
+            values={visible.filter((key) => columns.some((column) => column.id === key))}
+            onChange={(ids) => setConfig({ linked_list_visible_columns: ids.length ? ids : null })}
+            emptySelectionLabel={t("table.allColumns")}
+          />
+        </label>
+      ) : null}
       <div className="three-col">
         <label className="field-stack">
           <span className="field-label">{t("table.groupBy")}</span>
           <Select value={String(form.config.linked_list_group_by ?? "")} onChange={(event) => setConfig({ linked_list_group_by: event.target.value || null })}>
             <option value="">{t("table.noGrouping")}</option>
-            <option value="column_one">{list.column_one_title}</option>
-            <option value="column_two">{list.column_two_title}</option>
+            {columnOptions}
           </Select>
         </label>
         <label className="field-stack">
@@ -640,8 +665,7 @@ function LinkedListOptions({ form, list, setConfig }: { form: BlockForm; list: S
             onChange={(event) => setConfig({ linked_list_sort_by: event.target.value || null, linked_list_sort_direction: event.target.value ? form.config.linked_list_sort_direction ?? "asc" : null })}
           >
             <option value="">{t("table.manualOrder")}</option>
-            <option value="column_one">{list.column_one_title}</option>
-            <option value="column_two">{list.column_two_title}</option>
+            {columnOptions}
           </Select>
         </label>
         <label className="field-stack">
@@ -657,8 +681,7 @@ function LinkedListOptions({ form, list, setConfig }: { form: BlockForm; list: S
           <span className="field-label">{t("table.filterColumn")}</span>
           <Select value={String(form.config.linked_list_filter_column ?? "")} onChange={(event) => setConfig({ linked_list_filter_column: event.target.value || null })}>
             <option value="">{t("table.noFilter")}</option>
-            <option value="column_one">{list.column_one_title}</option>
-            <option value="column_two">{list.column_two_title}</option>
+            {columnOptions}
           </Select>
         </label>
         {form.config.linked_list_filter_column ? (
@@ -867,8 +890,14 @@ function LinkedListPreview({
 }) {
   const t = useTranslations("templates.elementEditor");
   const highlight = form.config.linked_list_highlight_empty === true;
-  const columnIndex = (value: unknown) => (value === "column_one" ? 0 : value === "column_two" ? 1 : -1);
-  let values = entries.map((entry) => [describe(entry.column_one_value, list.column_one_value_type), describe(entry.column_two_value, list.column_two_value_type)]);
+  // Sichtbare Spalten des Blocks (sonst alle); Gruppieren/Sortieren/Filtern über Spalten-Keys
+  const allColumns = orderedListColumns(list);
+  const chosen = Array.isArray(form.config.linked_list_visible_columns)
+    ? (form.config.linked_list_visible_columns as string[]).map((key) => allColumns.find((column) => column.id === key)).filter((column): column is ListColumn => Boolean(column))
+    : [];
+  const shown = chosen.length ? chosen : allColumns;
+  const columnIndex = (value: unknown) => shown.findIndex((column) => column.id === value);
+  let values = entries.map((entry) => shown.map((column) => describe(entry.values?.[column.id], column.value_type)));
   const filterColumn = columnIndex(form.config.linked_list_filter_column);
   const filterText = String(form.config.linked_list_filter_text ?? "").trim().toLowerCase();
   if (filterColumn >= 0 && filterText) values = values.filter((entry) => entry[filterColumn].toLowerCase().includes(filterText));
@@ -892,17 +921,19 @@ function LinkedListPreview({
 
   return (
     <div className="table-block-table table-block-table-list" role="table">
-      <div className="table-block-table-row table-block-table-head" role="row">
-        <span role="columnheader">{list.column_one_title}</span>
-        <span role="columnheader">{list.column_two_title}</span>
+      <div className="table-block-table-row table-block-table-head" role="row" style={{ gridTemplateColumns: `repeat(${shown.length}, minmax(0, 1fr))` }}>
+        {shown.map((column) => <span key={column.id} role="columnheader">{column.title}</span>)}
       </div>
       {groups.map((group, groupIndex) => (
         <div key={group.name ?? groupIndex} role="rowgroup">
           {group.name !== null ? <div className="table-block-table-group">{group.name}</div> : null}
           {group.rows.map((entry, index) => (
-            <div key={index} className="table-block-table-row" role="row">
-              <span role="cell" className={!entry[0] && highlight ? "table-block-table-missing" : undefined}>{entry[0] || (highlight ? t("tableBlock.preview.missing") : "—")}</span>
-              <span role="cell" className={!entry[1] && highlight ? "table-block-table-missing" : undefined}>{entry[1] || (highlight ? t("tableBlock.preview.missing") : "")}</span>
+            <div key={index} className="table-block-table-row" role="row" style={{ gridTemplateColumns: `repeat(${shown.length}, minmax(0, 1fr))` }}>
+              {entry.map((cell, cellIndex) => (
+                <span key={shown[cellIndex].id} role="cell" className={!cell && highlight ? "table-block-table-missing" : undefined}>
+                  {cell || (highlight ? t("tableBlock.preview.missing") : cellIndex === 0 ? "—" : "")}
+                </span>
+              ))}
             </div>
           ))}
         </div>

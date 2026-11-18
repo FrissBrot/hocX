@@ -17,16 +17,20 @@ import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils/format";
 import { SearchInput } from "@/components/ui/search-input";
 import { ApiError, browserApiFetch } from "@/lib/api/client";
+import { Select } from "@/components/ui/select";
+import { ActionIcon } from "@/components/ui/action-icons";
 import { HelpPopover } from "@/components/ui/help-popover";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { useHistoricalList } from "@/lib/hooks/use-historical-list";
+import { ColumnFormState, createListDefinition, isPersonType, ListSaveRequest, MAX_COLUMNS, newLocalId, updateListDefinition } from "@/lib/lists/save-list";
 import {
   EventSummary,
   ParticipantSummary,
   StructuredListDefinition,
   StructuredListEntry,
   StructuredListValueType,
+  ListValues,
 } from "@/types/api";
 
 type ListManagerProps = {
@@ -39,13 +43,15 @@ type ListManagerProps = {
 type ListDefinitionFormState = {
   name: string;
   description: string;
-  column_one_title: string;
-  column_one_value_type: StructuredListValueType;
-  column_two_title: string;
-  column_two_value_type: StructuredListValueType;
+  columns: ColumnFormState[];
+  /** localId der Spalten mit Rolle «Bezeichnung» bzw. «Verantwortliche» */
+  labelColumn: string;
+  responsibleColumn: string;
   is_active: boolean;
   is_group_source: boolean;
 };
+
+
 
 type ListUsage = { kind: "element" | "protocol"; name: string; number?: string };
 
@@ -72,26 +78,31 @@ function valueTypeOptions(t: TFunc): Array<{ value: StructuredListValueType; lab
 }
 
 function initialFormState(t: TFunc): ListDefinitionFormState {
+  const first = newLocalId();
   return {
     name: "",
     description: "",
-    column_one_title: t("defaultColumnOne"),
-    column_one_value_type: "text",
-    column_two_title: t("defaultColumnTwo"),
-    column_two_value_type: "text",
+    columns: [
+      { localId: first, title: t("defaultColumnOne"), value_type: "text" },
+      { localId: newLocalId(), title: t("defaultColumnTwo"), value_type: "text" },
+    ],
+    labelColumn: first,
+    responsibleColumn: "",
     is_active: true,
     is_group_source: false,
   };
 }
 
 function formFromDefinition(definition: StructuredListDefinition): ListDefinitionFormState {
+  const columns = [...definition.columns]
+    .sort((left, right) => left.sort_index - right.sort_index)
+    .map((column) => ({ localId: column.id, id: column.id, title: column.title, value_type: column.value_type, savedType: column.value_type }));
   return {
     name: definition.name,
     description: definition.description ?? "",
-    column_one_title: definition.column_one_title,
-    column_one_value_type: definition.column_one_value_type,
-    column_two_title: definition.column_two_title,
-    column_two_value_type: definition.column_two_value_type,
+    columns,
+    labelColumn: definition.label_column_id ?? "",
+    responsibleColumn: definition.responsible_column_id ?? "",
     is_active: definition.is_active,
     is_group_source: definition.is_group_source ?? false,
   };
@@ -134,12 +145,11 @@ export function ListManager({
 
   function isUnassigned(entry: StructuredListEntry) {
     if (!displayedDefinition) return false;
-    return (["one", "two"] as const).some((column) => {
-      const type = displayedDefinition[`column_${column}_value_type`];
-      const value = entry[`column_${column}_value`];
-      return type === "participant" ? !value.participant_id
-        : type === "participants" ? !Array.isArray(value.participant_ids) || !value.participant_ids.length
-        : type === "event" ? !value.event_id : false;
+    return displayedDefinition.columns.some((column) => {
+      const value = entry.values?.[column.id] ?? {};
+      return column.value_type === "participant" ? !value.participant_id
+        : column.value_type === "participants" ? !Array.isArray(value.participant_ids) || !value.participant_ids.length
+        : column.value_type === "event" ? !value.event_id : false;
     });
   }
   const unassignedCount = displayedEntries.filter(isUnassigned).length;
@@ -148,7 +158,7 @@ export function ListManager({
     if (onlyUnassigned && !isUnassigned(entry)) return false;
     const query = search.trim().toLocaleLowerCase();
     if (!query) return true;
-    const searchable = [entry.column_one_value, entry.column_two_value].map((value) => {
+    const searchable = Object.values(entry.values ?? {}).map((value) => {
       const ids = Array.isArray(value.participant_ids) ? value.participant_ids : [value.participant_id];
       return [value.text_value, value.participant_name, ...(Array.isArray(value.participant_names) ? value.participant_names : []),
         ...availableParticipants.filter((p) => ids.includes(p.id)).map((p) => p.display_name),
@@ -173,36 +183,96 @@ export function ListManager({
   async function saveDefinition(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try {
-      const payload = {
-        name: form.name,
-        description: form.description || null,
-        column_one_title: form.column_one_title,
-        column_one_value_type: form.column_one_value_type,
-        column_two_title: form.column_two_title,
-        column_two_value_type: form.column_two_value_type,
-        is_active: form.is_active,
-        is_group_source: form.is_group_source,
-      };
-      const saved = editingListId
-        ? await browserApiFetch<StructuredListDefinition>(`/api/lists/${editingListId}`, {
-            method: "PATCH",
-            body: JSON.stringify(payload),
-          })
-        : await browserApiFetch<StructuredListDefinition>("/api/lists", {
-            method: "POST",
-            body: JSON.stringify(payload),
-          });
-
+      const saved = editingListId ? await saveExistingDefinition(editingListId) : await createDefinition();
+      if (!saved) return;
       setLists((current) =>
         editingListId ? current.map((item) => (item.id === saved.id ? saved : item)) : [saved, ...current]
       );
       setEntriesByList((current) => ({ ...current, [saved.id]: current[saved.id] ?? [] }));
+      if (editingListId) await reloadEntries(saved.id);
       setSelectedListId(saved.id);
       setModalOpen(false);
       showToast(editingListId ? t("toasts.listSaved") : t("toasts.listCreated"), "success");
     } catch (error) {
       showToast(error instanceof Error ? error.message : t("toasts.listSaveFailed"), "error");
     }
+  }
+
+  async function reloadEntries(listId: string) {
+    const entries = await browserApiFetch<StructuredListEntry[]>(`/api/lists/${listId}/entries`);
+    setEntriesByList((current) => ({ ...current, [listId]: entries }));
+  }
+
+  function saveRequest(): ListSaveRequest {
+    return {
+      name: form.name,
+      description: form.description,
+      is_active: form.is_active,
+      is_group_source: form.is_group_source,
+      columns: form.columns,
+      labelColumn: form.labelColumn,
+      responsibleColumn: form.responsibleColumn,
+    };
+  }
+
+  function createDefinition() {
+    return createListDefinition(saveRequest());
+  }
+
+  function saveExistingDefinition(listId: string) {
+    const original = lists.find((item) => item.id === listId);
+    if (!original) return Promise.resolve(null);
+    return updateListDefinition(original, saveRequest(), {
+      confirmRemove: (column, usages) => confirm({
+        message: usages.length
+          ? t("columns.deleteConfirmUsed", { title: column.title, places: usages.map((usage) => usage.label).join(", ") })
+          : t("columns.deleteConfirm", { title: column.title }),
+        tone: "danger",
+        confirmLabel: t("columns.deleteLabel"),
+      }),
+      confirmRetype: (titles) => confirm({
+        message: t("columns.typeChangeConfirm", { titles: titles.join(", ") }),
+        tone: "danger",
+        confirmLabel: t("columns.typeChangeLabel"),
+      }),
+    });
+  }
+
+  function updateColumn(localId: string, patch: Partial<ColumnFormState>) {
+    setForm((current) => {
+      const columns = current.columns.map((column) => (column.localId === localId ? { ...column, ...patch } : column));
+      const typeOf = (id: string) => columns.find((column) => column.localId === id)?.value_type;
+      const label = current.labelColumn && typeOf(current.labelColumn) && !isPersonType(typeOf(current.labelColumn)!) ? current.labelColumn : "";
+      const responsible = current.responsibleColumn && typeOf(current.responsibleColumn) && isPersonType(typeOf(current.responsibleColumn)!) ? current.responsibleColumn : "";
+      return { ...current, columns, labelColumn: label, responsibleColumn: responsible };
+    });
+  }
+
+  function moveColumn(localId: string, direction: -1 | 1) {
+    setForm((current) => {
+      const index = current.columns.findIndex((column) => column.localId === localId);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= current.columns.length) return current;
+      const columns = [...current.columns];
+      [columns[index], columns[target]] = [columns[target], columns[index]];
+      return { ...current, columns };
+    });
+  }
+
+  function removeColumn(localId: string) {
+    setForm((current) => ({
+      ...current,
+      columns: current.columns.filter((column) => column.localId !== localId),
+      labelColumn: current.labelColumn === localId ? "" : current.labelColumn,
+      responsibleColumn: current.responsibleColumn === localId ? "" : current.responsibleColumn,
+    }));
+  }
+
+  function addColumn() {
+    setForm((current) => ({
+      ...current,
+      columns: [...current.columns, { localId: newLocalId(), title: t("columns.newTitle", { number: current.columns.length + 1 }), value_type: "text" }],
+    }));
   }
 
   async function deleteDefinition(listId: string) {
@@ -228,7 +298,7 @@ export function ListManager({
     }
   }
 
-  async function createEntry(listId: string, payload: { sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }) {  // i18n-ok: TS-Typannotation, kein JSX
+  async function createEntry(listId: string, payload: { sort_index: number; values: ListValues }) {
     try {
       const created = await browserApiFetch<StructuredListEntry>(`/api/lists/${listId}/entries`, {
         method: "POST",
@@ -249,7 +319,7 @@ export function ListManager({
   async function updateEntry(
     listId: string,
     entryId: string,
-    payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>  // i18n-ok: TS-Typannotation, kein JSX
+    payload: Partial<{ sort_index: number; values: ListValues }>
   ) {
     try {
       const updated = await browserApiFetch<StructuredListEntry>(`/api/list-entries/${entryId}`, {
@@ -289,7 +359,7 @@ export function ListManager({
 
   async function updateHistoricalEntry(
     entryId: string,
-    payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>  // i18n-ok: TS-Typannotation, kein JSX
+    payload: Partial<{ sort_index: number; values: ListValues }>
   ) {
     if (!historical.editUnlocked) {
       setShowUnlockConfirm(true);
@@ -328,7 +398,7 @@ export function ListManager({
   // see useHistoricalList.confirmReconstruction.
   async function updateDraftEntry(
     entryId: string,
-    payload: Partial<{ sort_index: number; column_one_value: Record<string, unknown>; column_two_value: Record<string, unknown> }>  // i18n-ok: TS-Typannotation, kein JSX
+    payload: Partial<{ sort_index: number; values: ListValues }>
   ) {
     historical.updateDraftEntry(entryId, payload);
     return true;
@@ -526,7 +596,7 @@ export function ListManager({
         footer={<div className="list-definition-footer">
           <label className="list-definition-active"><input type="checkbox" role="switch" checked={form.is_active} onChange={(event) => setForm((current) => ({ ...current, is_active: event.target.checked }))} />{t("formModal.active")}</label>
           <div className="modal-actions"><button type="button" className="button-secondary" onClick={() => setModalOpen(false)}>{t("formModal.cancel")}</button>
-            <button data-modal-save form="list-definition-form" type="submit" className="button-primary" disabled={!form.name.trim() || !form.column_one_title.trim() || !form.column_two_title.trim()}>{editingListId ? t("formModal.save") : t("formModal.create")}</button></div>
+            <button data-modal-save form="list-definition-form" type="submit" className="button-primary" disabled={!form.name.trim() || !form.columns.length || form.columns.some((column) => !column.title.trim())}>{editingListId ? t("formModal.save") : t("formModal.create")}</button></div>
         </div>}
       >
         <ModalSaveForm id="list-definition-form" className="grid list-definition-form" onSubmit={saveDefinition}>
@@ -538,31 +608,62 @@ export function ListManager({
               <input value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder={t("formModal.descriptionPlaceholder")} />
             </label>
           </div>
-          <div className="list-definition-section"><strong>{t("formModal.columns")}</strong><span className="muted">{t("formModal.columnsHint")}</span></div>
-          <div className="two-col">
-            {(["one", "two"] as const).map((column, index) => (
-              <fieldset className="list-definition-column" key={column} aria-label={t(index === 0 ? "formModal.column1" : "formModal.column2")}>
-                <label className="list-definition-title"><span className="list-definition-number">{index + 1}</span>
-                  <input aria-label={t(index === 0 ? "formModal.column1" : "formModal.column2")} value={form[`column_${column}_title`]} onChange={(event) => setForm((current) => ({ ...current, [`column_${column}_title`]: event.target.value }))} required />
-                </label>
-                <span className="field-label list-definition-type-label">
-                  {t("formModal.dataType")}{" "}
-                  <HelpPopover topic={t("formModal.dataType")} docs={{ page: "listen", anchor: "datentypen" }}>
-                    {t("help.dataType")}
-                  </HelpPopover>
-                </span>
-                <div className="list-definition-types" role="group" aria-label={t("formModal.dataType")}>
-                  {valueTypeOptions(t).map((option) => (
-                    <button type="button" key={option.value} aria-pressed={form[`column_${column}_value_type`] === option.value}
-                      className={`list-definition-type${form[`column_${column}_value_type`] === option.value ? " list-definition-type-selected" : ""}`}
-                      onClick={() => setForm((current) => ({ ...current, [`column_${column}_value_type`]: option.value }))}>
-                      <span className="list-definition-type-icon" aria-hidden="true"><ListValueTypeIcon type={option.value} /></span>
-                      <span><strong>{option.label}</strong><span className="muted">{t(`typeHints.${option.value}`)}</span></span>
-                    </button>
-                  ))}
+          <div className="list-definition-section">
+            <strong>{t("formModal.columns")}</strong>
+            <span className="muted">{t("formModal.columnsHint")}</span>
+            <HelpPopover topic={t("formModal.dataType")} docs={{ page: "listen", anchor: "datentypen" }}>
+              {t("help.dataType")}
+            </HelpPopover>
+          </div>
+          <ol className="list-definition-columns">
+            {form.columns.map((column, index) => (
+              <li className="list-definition-column-row" key={column.localId}>
+                <span className="list-definition-number" aria-hidden="true">{index + 1}</span>
+                <input
+                  aria-label={t("columns.titleLabel", { number: index + 1 })}
+                  value={column.title}
+                  onChange={(event) => updateColumn(column.localId, { title: event.target.value })}
+                  required
+                />
+                <Select
+                  aria-label={t("columns.typeLabel", { number: index + 1 })}
+                  value={column.value_type}
+                  onChange={(event) => updateColumn(column.localId, { value_type: event.target.value as StructuredListValueType })}
+                >
+                  {valueTypeOptions(t).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </Select>
+                <div className="list-definition-column-actions">
+                  <button type="button" className="button-icon-soft" aria-label={t("columns.moveUp", { title: column.title })} title={t("columns.moveUp", { title: column.title })} disabled={index === 0} onClick={() => moveColumn(column.localId, -1)}>↑</button>
+                  <button type="button" className="button-icon-soft" aria-label={t("columns.moveDown", { title: column.title })} title={t("columns.moveDown", { title: column.title })} disabled={index === form.columns.length - 1} onClick={() => moveColumn(column.localId, 1)}>↓</button>
+                  <button type="button" className="button-icon-soft button-icon-soft-danger" aria-label={t("columns.remove", { title: column.title })} title={t("columns.remove", { title: column.title })} disabled={form.columns.length <= 1} onClick={() => removeColumn(column.localId)}><ActionIcon name="delete" /></button>
                 </div>
-              </fieldset>
+                {column.savedType && column.savedType !== column.value_type ? (
+                  <span className="field-help list-definition-column-warning">{t("columns.typeChangeHint")}</span>
+                ) : null}
+              </li>
             ))}
+          </ol>
+          <div>
+            <button type="button" className="button-secondary" disabled={form.columns.length >= MAX_COLUMNS} onClick={addColumn}>{t("columns.add")}</button>
+            {form.columns.length >= MAX_COLUMNS ? <span className="field-help">{t("columns.limit", { max: MAX_COLUMNS })}</span> : null}{/* i18n-ok: Vergleich, kein Text */}
+          </div>
+          <div className="two-col">
+            <label className="field-stack">
+              <span className="field-label">{t("columns.roleLabel")}</span>
+              <Select value={form.labelColumn} onChange={(event) => setForm((current) => ({ ...current, labelColumn: event.target.value }))}>
+                <option value="">{t("columns.roleNone")}</option>
+                {form.columns.filter((column) => !isPersonType(column.value_type)).map((column) => <option key={column.localId} value={column.localId}>{column.title}</option>)}
+              </Select>
+              <span className="field-help">{t("columns.roleLabelHelp")}</span>
+            </label>
+            <label className="field-stack">
+              <span className="field-label">{t("columns.roleResponsible")}</span>
+              <Select value={form.responsibleColumn} onChange={(event) => setForm((current) => ({ ...current, responsibleColumn: event.target.value }))}>
+                <option value="">{t("columns.roleNone")}</option>
+                {form.columns.filter((column) => isPersonType(column.value_type)).map((column) => <option key={column.localId} value={column.localId}>{column.title}</option>)}
+              </Select>
+              <span className="field-help">{t("columns.roleResponsibleHelp")}</span>
+            </label>
           </div>
           <div className="list-definition-group-source">
             <label className="list-definition-active">
@@ -574,8 +675,8 @@ export function ListManager({
             </HelpPopover>
           </div>
           <div className="field-stack"><span className="field-label">{t("formModal.preview")}</span>
-            <div className="list-definition-preview"><table className="data-table"><thead><tr>{(["one", "two"] as const).map((column) => <th key={column}>{form[`column_${column}_title`]} <span className="muted">· {t(`valueTypes.${form[`column_${column}_value_type`]}`)}</span></th>)}</tr></thead>
-              <tbody>{[0, 1].map((row) => <tr key={row}>{(["one", "two"] as const).map((column) => <td key={column}><span className={form[`column_${column}_value_type`] === "text" ? "" : "list-definition-example"}>{t(`previewValues.${form[`column_${column}_value_type`]}.${row}`)}</span></td>)}</tr>)}</tbody>
+            <div className="list-definition-preview"><table className="data-table"><thead><tr>{form.columns.map((column) => <th key={column.localId}>{column.title} <span className="muted">· {t(`valueTypes.${column.value_type}`)}</span></th>)}</tr></thead>
+              <tbody>{[0, 1].map((row) => <tr key={row}>{form.columns.map((column) => <td key={column.localId}><span className={column.value_type === "text" ? "" : "list-definition-example"}>{t(`previewValues.${column.value_type}.${row}`)}</span></td>)}</tr>)}</tbody>
             </table></div>
           </div>
         </ModalSaveForm>

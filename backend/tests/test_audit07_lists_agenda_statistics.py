@@ -24,6 +24,7 @@ from app.services import agenda_item_service as agenda_service_module
 from app.services import document_render_jobs
 from app.services.statistics_common import fetch_group_session_rows
 from tests.factories import (
+    list_column_key,
     make_app_user,
     make_current_user,
     make_element_definition,
@@ -54,7 +55,7 @@ def _restricted_reader(db, tenant_id: int, template_id: int, protocol_ids: list[
 def test_delete_entry_syncs_submission_todos(db, monkeypatch):
     tenant = make_tenant(db, "Liste C2")
     definition = make_list_definition(db, tenant.id)
-    entry = make_list_entry(db, definition.id, column_one_value={"text_value": "A"})
+    entry = make_list_entry(db, definition.id, first_value={"text_value": "A"})
     calls = []
     monkeypatch.setattr(
         lists_route.submission_service, "sync_todos_for_list",
@@ -84,14 +85,15 @@ def test_entries_of_all_lists_in_one_call_and_tenant_scoped(db):
     first = make_list_definition(db, tenant.id, name="Eins")
     second = make_list_definition(db, tenant.id, name="Zwei")
     foreign = make_list_definition(db, other.id, name="Fremd")
-    make_list_entry(db, first.id, sort_index=1, column_one_value={"text_value": "b"})
-    make_list_entry(db, first.id, sort_index=0, column_one_value={"text_value": "a"})
-    make_list_entry(db, foreign.id, column_one_value={"text_value": "x"})
+    make_list_entry(db, first.id, sort_index=1, first_value={"text_value": "b"})
+    make_list_entry(db, first.id, sort_index=0, first_value={"text_value": "a"})
+    make_list_entry(db, foreign.id, first_value={"text_value": "x"})
 
     result = lists_route.list_all_entries(db=db, user=make_current_user(tenant.id))
 
     assert set(result) == {str(first.public_id), str(second.public_id)}
-    assert [entry.column_one_value["text_value"] for entry in result[str(first.public_id)]] == ["a", "b"]
+    key = list_column_key(first, 0)
+    assert [entry.values[key]["text_value"] for entry in result[str(first.public_id)]] == ["a", "b"]
     assert result[str(second.public_id)] == []
 
 
@@ -126,9 +128,9 @@ def test_row_link_as_string_id_also_counts(db):
 def test_group_statistics_follow_the_flag_not_the_name(db):
     tenant = make_tenant(db, "Gruppen C3")
     renamed = make_list_definition(db, tenant.id, name="Gruppen 2026", is_group_source=True)
-    make_list_entry(db, renamed.id, column_one_value={"text_value": "Adler"})
+    make_list_entry(db, renamed.id, first_value={"text_value": "Adler"})
     unflagged = make_list_definition(db, tenant.id, name="Gruppen")
-    make_list_entry(db, unflagged.id, column_one_value={"text_value": "Falken"})
+    make_list_entry(db, unflagged.id, first_value={"text_value": "Falken"})
     for tag in ("Adler", "Falken"):
         event = make_event(db, tenant.id, title=tag, event_date=date(2026, 3, 1))
         event.tag = tag

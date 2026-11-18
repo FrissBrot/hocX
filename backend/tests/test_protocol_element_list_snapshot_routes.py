@@ -10,6 +10,7 @@ from app.schemas.protocol import ProtocolUpdate
 from app.services.protocol_service import ProtocolService
 
 from tests.factories import (
+    list_column_key,
     make_current_user,
     make_list_definition,
     make_list_entry,
@@ -33,7 +34,7 @@ def _row_block(db, tenant, definition, entry):
             "rows": [{
                 "id": "row-1", "value_type": "list_entry",
                 "linked_list_id": definition.id, "linked_list_entry_id": entry.id,
-                "list_fixed_column": "column_one", "label": "",
+                "list_fixed_column": list_column_key(definition, 0), "label": "",
             }],
         },
     )
@@ -44,7 +45,7 @@ def test_refresh_is_scoped_to_owning_tenant(db):
     tenant_a = make_tenant(db, "Tenant A")
     tenant_b = make_tenant(db, "Tenant B")
     definition = make_list_definition(db, tenant_a.id)
-    entry = make_list_entry(db, definition.id, column_one_value={"text_value": "v1"})
+    entry = make_list_entry(db, definition.id, first_value={"text_value": "v1"})
     _protocol, block = _row_block(db, tenant_a, definition, entry)
 
     # ensure_can_read_protocol_block (the existing, reused access-control guard) rejects
@@ -58,7 +59,8 @@ def test_refresh_is_scoped_to_owning_tenant(db):
 
     same_tenant_user = make_current_user(tenant_a.id)
     result = protocol_elements.refresh_block_list_snapshot(block.public_id, db=db, user=same_tenant_user)
-    assert result.configuration_snapshot_json["rows"][0]["list_snapshot"]["column_one_value"]["text_value"] == "v1"
+    key = list_column_key(definition, 0)
+    assert result.configuration_snapshot_json["rows"][0]["list_snapshot"]["values"][key]["text_value"] == "v1"
 
 
 def test_refresh_returns_409_when_protocol_is_abgeschlossen(db):
@@ -80,19 +82,20 @@ def test_refresh_returns_409_when_protocol_is_abgeschlossen(db):
 def test_sync_then_undo_round_trip(db):
     tenant = make_tenant(db)
     definition = make_list_definition(db, tenant.id)
-    entry = make_list_entry(db, definition.id, column_one_value={"text_value": "v1"})
+    entry = make_list_entry(db, definition.id, first_value={"text_value": "v1"})
     _protocol, block = _row_block(db, tenant, definition, entry)
     user = make_current_user(tenant.id)
 
     protocol_elements.refresh_block_list_snapshot(block.public_id, db=db, user=user)
-    entry.column_one_value_json = {"text_value": "v2"}
+    key = list_column_key(definition, 0)
+    entry.values_json = {key: {"text_value": "v2"}}
     db.add(entry)
     db.commit()
     refreshed = protocol_elements.refresh_block_list_snapshot(block.public_id, db=db, user=user)
-    assert refreshed.configuration_snapshot_json["rows"][0]["list_snapshot"]["column_one_value"]["text_value"] == "v2"
+    assert refreshed.configuration_snapshot_json["rows"][0]["list_snapshot"]["values"][key]["text_value"] == "v2"
 
     undone = protocol_elements.undo_block_list_snapshot(block.public_id, db=db, user=user)
-    assert undone.configuration_snapshot_json["rows"][0]["list_snapshot"]["column_one_value"]["text_value"] == "v1"
+    assert undone.configuration_snapshot_json["rows"][0]["list_snapshot"]["values"][key]["text_value"] == "v1"
 
     with pytest.raises(HTTPException) as exc_info:
         protocol_elements.undo_block_list_snapshot(block.public_id, db=db, user=user)

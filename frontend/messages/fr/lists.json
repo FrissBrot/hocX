@@ -57,7 +57,7 @@
   "formModal": {
     "createTitle": "Créer une liste",
     "editTitle": "Modifier la liste",
-    "description": "Chaque liste comporte exactement deux colonnes. Le type de données détermine quelle saisie sera visible plus tard dans le bloc tableau et dans le procès-verbal.",
+    "description": "Une liste a une ou plusieurs colonnes. Le type de données détermine la saisie visible ensuite dans le bloc tableau et dans le procès-verbal.",
     "name": "Nom de la liste",
     "active": "Actif",
     "description2": "Description",
@@ -71,7 +71,7 @@
     "namePlaceholder": "p. ex. Fonctions",
     "optional": "facultatif",
     "columns": "Colonnes",
-    "columnsHint": "Toujours deux – titre et type de données au choix.",
+    "columnsHint": "Jusqu’à 20 colonnes – titre, type de données et ordre au choix.",
     "preview": "Aperçu de la liste dans le bloc de tableau",
     "cancel": "Annuler",
     "groupSource": "Source des statistiques de groupes"
@@ -178,5 +178,27 @@
   "usage": {
     "element": "bloc «{name}»",
     "protocol": "procès-verbal {number}"
+  },
+  "columns": {
+    "add": "Ajouter une colonne",
+    "newTitle": "Colonne {number}",
+    "titleLabel": "Titre de la colonne {number}",
+    "typeLabel": "Type de données de la colonne {number}",
+    "moveUp": "Monter « {title} »",
+    "moveDown": "Descendre « {title} »",
+    "remove": "Retirer « {title} »",
+    "limit": "Au maximum {max} colonnes.",
+    "typeChangeHint": "Nouveau type de données : les valeurs actuelles de cette colonne seront effacées à l’enregistrement.",
+    "typeChangeConfirm": "Changer le type de données de : {titles}. Les valeurs actuelles de ces colonnes seront effacées dans toutes les entrées.",
+    "typeChangeLabel": "Changer le type",
+    "deleteConfirm": "Supprimer la colonne « {title} » avec toutes ses valeurs ?",
+    "deleteConfirmUsed": "La colonne « {title} » est encore utilisée : {places}. Le regroupement, le tri ou les filtres y disparaissent. La supprimer quand même avec toutes ses valeurs ?",
+    "deleteLabel": "Supprimer la colonne",
+    "roleLabel": "Désignation",
+    "roleLabelHelp": "Nomme une entrée : titre dans les remises, la matrice et les statistiques de groupes.",
+    "roleResponsible": "Responsables",
+    "roleResponsibleHelp": "Colonne de personnes pour les tâches, les remises et l’affichage des responsables.",
+    "roleNone": "Aucune",
+    "count": "{count, plural, one {# colonne} other {# colonnes}}"
   }
 }

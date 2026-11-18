@@ -10,7 +10,7 @@ def test_transform_field_row_flattens_value_source_for_list_entry_rows():
     row = {
         "id": "row-1",
         "row_type": "list_entry",
-        "row_config": {"linked_list_id": 42, "linked_list_entry_id": 7, "list_fixed_column": "column_one", "value_source": "historical"},
+        "row_config": {"linked_list_id": 42, "linked_list_entry_id": 7, "list_fixed_column": "spalten-key-a", "value_source": "historical"},
     }
 
     transformed = ProtocolService()._transform_field_row(row, repeat_context=None)
@@ -25,7 +25,7 @@ def test_transform_field_row_defaults_value_source_to_none_when_unset():
     row = {
         "id": "row-2",
         "row_type": "list_entry",
-        "row_config": {"linked_list_id": 42, "linked_list_entry_id": 7, "list_fixed_column": "column_one"},
+        "row_config": {"linked_list_id": 42, "linked_list_entry_id": 7, "list_fixed_column": "spalten-key-a"},
     }
 
     transformed = ProtocolService()._transform_field_row(row, repeat_context=None)

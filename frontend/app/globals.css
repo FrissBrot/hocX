@@ -4142,6 +4142,14 @@ button.table-row-link:hover {
 }
 
 /* Gruppierte Zeilen fassen viele Werte kommagetrennt zusammen - umbrechen statt die Tabelle zu sprengen. */
+/* Stammliste mit vielen Spalten: waagrecht scrollen (Listen-Tab und Protokoll) */
+.list-manager-table-shell { overflow-x: auto; }
+
+/* Sortierbare Spaltenköpfe (Spalten-Key, beliebig viele Spalten) */
+.structured-list-table th.structured-list-sortable { cursor: pointer; user-select: none; }
+.structured-list-sort-mark { margin-left: var(--space-1); font-size: var(--text-xs); opacity: 0.25; }
+.structured-list-sort-mark-active { opacity: 1; }
+
 .structured-list-table .structured-list-grouped-row td {
   white-space: normal;
 }
@@ -11312,6 +11320,9 @@ body:has(.mobile-shell) .app-toast-stack {
   flex: 1;
   min-width: 0;
 }
+
+/* Spalten einer Liste im Handy-Formular (Titel, Datentyp, entfernen) */
+.mobile-list-column-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 130px) auto; align-items: center; gap: var(--space-2); }
 
 .mobile-list-row-value {
   display: inline-flex;

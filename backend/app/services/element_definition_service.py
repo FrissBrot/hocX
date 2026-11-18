@@ -8,7 +8,7 @@ from app.schemas.template import (
     ElementDefinitionRead,
     ElementDefinitionUpdate,
 )
-from app.services import public_id_service
+from app.services import list_columns, public_id_service
 from app.core.element_types import allows_multiple_values, element_type_code, is_known_element_type, render_type_id
 from app.services.block_config_ids import decode_block_config, encode_block_config
 from app.services.element_config import upgrade_definition_block, validate_block_config
@@ -145,6 +145,8 @@ class ElementDefinitionService:
             # template_participant_id(s), template_event_id, ...) - decode back to
             # internal ints before _validate_linked_lists/storage, see block_config_ids.py.
             config = decode_block_config(db, next_block["configuration_json"], tenant_id=tenant_id)
+            # Spalten-Keys der verknüpften Listen prüfen (fremde/gelöschte -> keine, alte -> neue)
+            config = list_columns.normalize_config_column_keys(db, config, tenant_id=tenant_id)
             validate_block_config(element_type_id, config)
             next_block["configuration_json"] = config
             normalized.append(next_block)

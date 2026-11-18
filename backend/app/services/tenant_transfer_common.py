@@ -41,6 +41,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 
 from app.services.element_config import upgrade_definition_block
+from app.services.list_legacy_adapter import legacy_value_fields
 from app.models import AppUser, ElementType, EventCategory, RenderType, TodoStatus
 
 LOOKUP_COLUMNS: dict[str, dict[str, type]] = {
@@ -863,8 +864,8 @@ def remap_word_import_analysis(analysis: dict | None, maps: WordImportIdMaps) ->
     for mapping in analysis.get("list_mappings") or []:
         if mapping.get("matched_entry_id") is not None:
             mapping["matched_entry_id"] = get(maps.list_entry, mapping["matched_entry_id"])
-        remap_names(mapping.get("column_one_names"))
-        remap_names(mapping.get("column_two_names"))
+        remap_names(mapping.get("first_names"))
+        remap_names(mapping.get("second_names"))
         mapping["candidates"] = _filter_candidates(mapping.get("candidates"), "entry_id", maps.list_entry)
 
     if "matrix_options" in analysis:
@@ -955,8 +956,13 @@ def remap_table_snapshot_rows(
             row["tenant_id"] = new_tenant_id
         if "list_definition_id" in row:
             row["list_definition_id"] = remap_id(row["list_definition_id"], list_definition_map)
-        for column in ("column_one_value_json", "column_two_value_json"):
-            value = row.get(column)
+        # Werte je Spalte (values_json, Migration 0186) oder die alten Wertfelder älterer Backups
+        holders = (
+            [(row["values_json"], key) for key in row["values_json"]] if isinstance(row.get("values_json"), dict)
+            else [(row, field) for field in legacy_value_fields(row, "_value_json")]
+        )
+        for container, column in holders:
+            value = container.get(column)
             if not isinstance(value, dict):
                 continue
             for key, mapping in (("participant", participant_map), ("event", event_map)):

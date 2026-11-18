@@ -4,17 +4,18 @@ test("Stammlisten: Vorschau, Zuordnung, Suche und Unbesetzt-Filter", async ({ pa
   test.setTimeout(90_000);
   const name = `Gruppen ${Date.now()}`;
   const response = await page.request.post("/api/lists", { data: {
-    name, description: "Leitende pro Gruppe", column_one_title: "Gruppe", column_one_value_type: "text",
-    column_two_title: "Leitende", column_two_value_type: "participants", is_active: true,
+    name, description: "Leitende pro Gruppe", is_active: true,
+    columns: [{ title: "Gruppe", value_type: "text" }, { title: "Leitende", value_type: "participants" }],
   } });
   expect(response.ok()).toBeTruthy();
   const definition = await response.json();
+  const [groupKey, leaderKey] = [...definition.columns].sort((a: { sort_index: number }, b: { sort_index: number }) => a.sort_index - b.sort_index).map((column: { id: string }) => column.id);
   const participantResponse = await page.request.post("/api/participants", { data: { display_name: `Noah Durrer ${Date.now()}` } });
   expect(participantResponse.ok()).toBeTruthy();
   const person = await participantResponse.json();
   for (const [index, label] of ["Wölfe", "Füchse"].entries()) {
     const entry = await page.request.post(`/api/lists/${definition.id}/entries`, { data: {
-      sort_index: index, column_one_value: { text_value: label }, column_two_value: { participant_ids: index ? [] : [person.id] },
+      sort_index: index, values: { [groupKey]: { text_value: label }, [leaderKey]: { participant_ids: index ? [] : [person.id] } },
     } });
     expect(entry.ok()).toBeTruthy();
   }
@@ -50,7 +51,9 @@ test("Stammlisten: Vorschau, Zuordnung, Suche und Unbesetzt-Filter", async ({ pa
           await expect(async () => {
             if (!(await dialog.isVisible())) await page.getByRole("button", { name: "+ Neue Liste", exact: true }).click();
             await expect(dialog).toBeVisible({ timeout: 5_000 });
-            await dialog.getByRole("group", { name: "Spalte 2", exact: true }).getByRole("button", { name: /Ein Termin/ }).click({ timeout: 5_000 });
+            // Spalten: Zeile je Spalte mit Titel und Datentyp; dritte Spalte hinzufügen und als Termin wählen
+            if ((await dialog.getByLabel(/^Datentyp von Spalte/).count()) < 3) await dialog.getByRole("button", { name: "Spalte hinzufügen" }).click({ timeout: 5_000 });
+            await dialog.getByLabel("Datentyp von Spalte 3").selectOption("event", { timeout: 5_000 });
             await expect(dialog.locator(".list-definition-preview")).toContainText("Herbstlager", { timeout: 5_000 });
             await page.screenshot({ path: `test-results/lists-dialog-${theme}-${width}.png`, fullPage: true });
           }).toPass({ timeout: 30_000 });

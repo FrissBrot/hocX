@@ -134,9 +134,13 @@ export function RowDesigner({
       } else if (autoSource === "list") {
         const listId = draft.config.auto_source?.list_id;
         const entries = listId ? await browserApiFetch<StructuredListEntry[]>(`/api/lists/${listId}/entries`) : [];
+        // Titel aus der Spalte mit der Rolle «Bezeichnung» (sonst erste Text-Spalte), wie im Protokoll
+        const list = data.lists.find((item) => item.id === listId);
+        const labelKey = list?.label_column_id ?? list?.columns.find((column) => column.value_type === "text")?.id;
+        const listLabel = (entry: StructuredListEntry) => (labelKey ? String(entry.values?.[labelKey]?.text_value ?? "").trim() : "");
         setPreview((entries ?? []).map((entry) => ({
           id: entry.id,
-          title: String((entry.column_one_value as Record<string, unknown>)?.text_value ?? "").trim() || t("matrix.entryFallback", { id: entry.id }),
+          title: listLabel(entry) || t("matrix.entryFallback", { id: entry.id }),
         })));
       }
     } catch (error) {
@@ -425,6 +429,7 @@ export function RowDesigner({
                 row={selectedRow}
                 kind={kind}
                 autoSource={autoSource}
+                autoSourceListId={typeof draft.config.auto_source?.list_id === "string" ? draft.config.auto_source.list_id : null}
                 data={data}
                 heading={t("row.number", { number: rows.findIndex((row) => row.id === selectedRow.id) + 1 })}
                 onChange={(next) => setRows(rows.map((row) => (row.id === next.id ? next : row)))}

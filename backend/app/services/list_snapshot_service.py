@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import ListDefinition, ListEntry, Protocol, ProtocolElement, ProtocolElementBlock, TableSnapshot
+from app.services import list_columns, list_legacy_adapter
 from app.services.event_cycle_service import resolve_protocol_cycle
 
 
@@ -74,6 +75,39 @@ class ListSnapshotCache:
         return self.entries[list_definition_id]
 
 
+def _structure(definition: ListDefinition) -> dict[str, Any]:
+    """Spalten und Rollen einer Liste im Snapshot-Format v2 (list_legacy_adapter)."""
+    columns = list_columns.columns_of(definition)
+    label = list_columns.label_column(definition)
+    responsible = list_columns.responsible_column(definition)
+    return {
+        "snapshot_version": 2,
+        "synced_version": definition.content_version,
+        "columns": [
+            {"id": column.key, "title": column.title, "value_type": column.value_type, "sort_index": column.sort_index}
+            for column in columns
+        ],
+        "label_column_id": label.key if label else None,
+        "responsible_column_id": responsible.key if responsible else None,
+    }
+
+
+def _first_key(columns: list[dict], types: tuple[str, ...]) -> str | None:
+    return next((str(column["key"]) for column in columns if column.get("value_type") in types), None)
+
+
+def _live_definition(db: Session, list_definition_id: int, tenant_id: int, cache: "ListSnapshotCache | None") -> ListDefinition | None:
+    if cache is not None:
+        return cache.get_definition(db, list_definition_id, tenant_id)
+    definition = db.get(ListDefinition, list_definition_id)
+    return definition if definition is not None and definition.tenant_id == tenant_id else None
+
+
+def upgrade_snapshot(snapshot: Any, definition: ListDefinition | None) -> Any:
+    """Alter (v1) Snapshot -> v2, bevor er mit einem neuen verglichen oder ausgeliefert wird."""
+    return list_legacy_adapter.upgrade_list_snapshot(snapshot, definition=definition)
+
+
 def compute_whole_list_snapshot(
     db: Session, list_definition_id: int, tenant_id: int, *, cache: ListSnapshotCache | None = None
 ) -> dict[str, Any] | None:
@@ -100,18 +134,9 @@ def compute_whole_list_snapshot(
         )
     )
     return {
-        "synced_version": definition.content_version,
-        "column_one_title": definition.column_one_title,
-        "column_one_value_type": definition.column_one_value_type,
-        "column_two_title": definition.column_two_title,
-        "column_two_value_type": definition.column_two_value_type,
+        **_structure(definition),
         "entries": [
-            {
-                "id": entry.id,
-                "sort_index": entry.sort_index,
-                "column_one_value": dict(entry.column_one_value_json or {}),
-                "column_two_value": dict(entry.column_two_value_json or {}),
-            }
+            {"id": entry.id, "sort_index": entry.sort_index, "values": dict(entry.values_json or {})}
             for entry in entries
         ],
         "previous": None,
@@ -139,22 +164,10 @@ def compute_row_list_snapshot(
         entry = next((e for e in cache.entries[list_definition_id] if e.id == list_entry_id), None)
     else:
         entry = db.get(ListEntry, list_entry_id)
-    base = {
-        "synced_version": definition.content_version,
-        "column_one_title": definition.column_one_title,
-        "column_one_value_type": definition.column_one_value_type,
-        "column_two_title": definition.column_two_title,
-        "column_two_value_type": definition.column_two_value_type,
-    }
+    base = _structure(definition)
     if entry is None:
         return {**base, "entry_exists": False}
-    return {
-        **base,
-        "entry_exists": True,
-        "column_one_value": dict(entry.column_one_value_json or {}),
-        "column_two_value": dict(entry.column_two_value_json or {}),
-        "previous": None,
-    }
+    return {**base, "entry_exists": True, "values": dict(entry.values_json or {}), "previous": None}
 
 
 def _compute_row_list_snapshot_from_table_snapshot(
@@ -195,27 +208,30 @@ def _compute_row_list_snapshot_from_table_snapshot(
     def_row = next((r for r in definition_snapshot.snapshot_json if r.get("id") == list_definition_id), None)
     if def_row is None:
         return None
-    base = {
-        "synced_version": def_row.get("content_version", 0),
-        "column_one_title": def_row.get("column_one_title"),
-        "column_one_value_type": def_row.get("column_one_value_type"),
-        "column_two_title": def_row.get("column_two_title"),
-        "column_two_value_type": def_row.get("column_two_value_type"),
-    }
-    entry_snapshot = _lookup("list_entry")
-    entry_row = next(
-        (r for r in (entry_snapshot.snapshot_json if entry_snapshot else []) if r.get("id") == list_entry_id),
-        None,
+    # Zyklus-Backups vor 0186 haben keine list_column-Zeilen: Spalten und Werte über den Adapter
+    from app.services import table_snapshot_service
+
+    columns, entry_rows = table_snapshot_service.list_rows_for_definition(
+        db, tenant_id=tenant_id, definition_row=def_row, column_snapshot=_lookup("list_column"), entry_snapshot=_lookup("list_entry"),
     )
+    # Spalten alter Backups (Adapter) haben keine id - und alte Listen hatten keine Rollen
+    by_id = {column["id"]: column for column in columns if column.get("id") is not None}
+    label = by_id.get(def_row.get("label_column_id"), {}).get("key") if def_row.get("label_column_id") else None
+    responsible = by_id.get(def_row.get("responsible_column_id"), {}).get("key") if def_row.get("responsible_column_id") else None
+    base = {
+        "snapshot_version": 2,
+        "synced_version": def_row.get("content_version", 0),
+        "columns": [
+            {"id": str(column["key"]), "title": column.get("title") or "", "value_type": column.get("value_type") or "text", "sort_index": column.get("sort_index") or 0}
+            for column in columns
+        ],
+        "label_column_id": str(label) if label else _first_key(columns, ("text", "event")),
+        "responsible_column_id": str(responsible) if responsible else _first_key(columns, ("participant", "participants")),
+    }
+    entry_row = next((r for r in entry_rows if r.get("id") == list_entry_id), None)
     if entry_row is None:
         return {**base, "entry_exists": False}
-    return {
-        **base,
-        "entry_exists": True,
-        "column_one_value": dict(entry_row.get("column_one_value_json") or {}),
-        "column_two_value": dict(entry_row.get("column_two_value_json") or {}),
-        "previous": None,
-    }
+    return {**base, "entry_exists": True, "values": dict(entry_row.get("values_json") or {}), "previous": None}
 
 
 def compute_row_list_snapshot_for_protocol(
@@ -330,12 +346,9 @@ def _merge_tracked_list_entries(
         elif track_changes_active:
             if old is None:
                 entry["_tracked"] = "added"
-            elif entry.get("column_one_value") != old.get("column_one_value") or entry.get("column_two_value") != old.get("column_two_value"):
+            elif (entry.get("values") or {}) != (old.get("values") or {}):
                 entry["_tracked"] = "changed"
-                entry["_tracked_before"] = {
-                    "column_one_value": old.get("column_one_value"),
-                    "column_two_value": old.get("column_two_value"),
-                }
+                entry["_tracked_before"] = {"values": old.get("values") or {}}
         merged.append(entry)
     for old_id, old in old_by_id.items():
         if old_id in new_ids:
@@ -380,16 +393,10 @@ def _merge_tracked_row_snapshot(new_snapshot: dict[str, Any], old_snapshot: Any,
             phantom["_tracked"] = "removed"
             return phantom
         return new_snapshot
-    if track_changes_active and (
-        new_snapshot.get("column_one_value") != old_snapshot.get("column_one_value")
-        or new_snapshot.get("column_two_value") != old_snapshot.get("column_two_value")
-    ):
+    if track_changes_active and (new_snapshot.get("values") or {}) != (old_snapshot.get("values") or {}):
         merged = dict(new_snapshot)
         merged["_tracked"] = "changed"
-        merged["_tracked_before"] = {
-            "column_one_value": old_snapshot.get("column_one_value"),
-            "column_two_value": old_snapshot.get("column_two_value"),
-        }
+        merged["_tracked_before"] = {"values": old_snapshot.get("values") or {}}
         return merged
     return new_snapshot
 
@@ -448,7 +455,8 @@ def refresh_block_list_snapshot(
     if linked_list_id:
         new_snapshot = compute_whole_list_snapshot(db, int(linked_list_id), tenant_id, cache=cache)
         if new_snapshot is not None:
-            old_list_snapshot = config.get("list_snapshot")
+            # Alter v1-Snapshot (vor 0186) erst hochstufen, sonst gälte jede Zeile als geändert
+            old_list_snapshot = upgrade_snapshot(config.get("list_snapshot"), _live_definition(db, int(linked_list_id), tenant_id, cache))
             new_snapshot["entries"] = _merge_tracked_list_entries(
                 new_snapshot["entries"],
                 old_list_snapshot.get("entries") if isinstance(old_list_snapshot, dict) else None,
@@ -483,10 +491,11 @@ def refresh_block_list_snapshot(
                 protocol=protocol,
                 cache=cache
             )
+            old_row_snapshot = upgrade_snapshot(row.get("list_snapshot"), _live_definition(db, int(row["linked_list_id"]), tenant_id, cache))
             new_snapshot = _merge_tracked_row_snapshot(
-                new_snapshot, row.get("list_snapshot"), track_changes_active=track_changes_active
+                new_snapshot, old_row_snapshot, track_changes_active=track_changes_active
             )
-            _carry_or_stash_previous(new_snapshot, row.get("list_snapshot"), keep_undo=keep_undo)
+            _carry_or_stash_previous(new_snapshot, old_row_snapshot, keep_undo=keep_undo)
             row["list_snapshot"] = new_snapshot
             new_rows.append(row)
             changed = True

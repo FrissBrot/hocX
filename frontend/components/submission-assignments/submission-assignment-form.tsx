@@ -387,14 +387,11 @@ export function SubmissionAssignmentFormModal({
           .filter((option) => !eventFields.hidden(option.value) || option.value === form.responsible_participant_source)
           .map((option) => ({ ...option, label: eventFields.label(option.value, option.label) }))
       : form.source_type === "list" && selectedList
-        ? ([
-            selectedList.column_one_value_type === "participant" || selectedList.column_one_value_type === "participants"
-              ? { value: "column_one", label: selectedList.column_one_title || t("column1") }
-              : null,
-            selectedList.column_two_value_type === "participant" || selectedList.column_two_value_type === "participants"
-              ? { value: "column_two", label: selectedList.column_two_title || t("column2") }
-              : null,
-          ].filter((option): option is { value: string; label: string } => option !== null))
+        ? [...selectedList.columns]
+            // Jede Personen-Spalte der Liste kann die Verantwortlichen liefern (Wert = Spalten-Key)
+            .sort((left, right) => left.sort_index - right.sort_index)
+            .filter((column) => column.value_type === "participant" || column.value_type === "participants")
+            .map((column) => ({ value: column.id, label: column.title }))
         : [];
 
   function toggleLink(linkId: string) {

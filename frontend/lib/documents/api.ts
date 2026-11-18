@@ -25,6 +25,8 @@ export type JsonSchema = {
   maximum?: number;
   maxLength?: number;
   "x-source"?: string;
+  /** Parameter, dessen Wert die Quelle braucht (z. B. ``list_id`` für die Spalten einer Liste) */
+  "x-source-param"?: string;
   "x-widget"?: string;
 };
 
@@ -611,9 +613,12 @@ export function saveBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export function fetchSourceOptions(source: string, protocolId?: string | null) {
-  const query = protocolId ? `?protocol_id=${encodeURIComponent(protocolId)}` : "";
-  return browserApiFetch<SourceOption[]>(`/api/documents/sources/${source}${query}`);
+export function fetchSourceOptions(source: string, protocolId?: string | null, extra?: Record<string, string>) {
+  const query = new URLSearchParams();
+  if (protocolId) query.set("protocol_id", protocolId);
+  for (const [key, value] of Object.entries(extra ?? {})) query.set(key, value);
+  const suffix = query.size ? `?${query.toString()}` : "";
+  return browserApiFetch<SourceOption[]>(`/api/documents/sources/${source}${suffix}`);
 }
 
 export function apiErrorMessage(error: unknown, fallback: string): string {
@@ -634,7 +639,7 @@ export function unwrapNullable(schema: JsonSchema, root: JsonSchema): JsonSchema
   const resolved = resolveSchema(schema, root);
   if (resolved.anyOf) {
     const inner = resolved.anyOf.find((option) => option.type !== "null");
-    if (inner) return { ...resolveSchema(inner, root), "x-source": resolved["x-source"] ?? inner["x-source"], "x-widget": resolved["x-widget"] ?? inner["x-widget"] };
+    if (inner) return { ...resolveSchema(inner, root), "x-source": resolved["x-source"] ?? inner["x-source"], "x-source-param": resolved["x-source-param"] ?? inner["x-source-param"], "x-widget": resolved["x-widget"] ?? inner["x-widget"] };
   }
   return resolved;
 }
