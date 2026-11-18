@@ -492,7 +492,11 @@
       "syncHelp": {
         "event": "Il contenuto viene scritto anche in questo campo dell’evento (sempre sovrascritto). Nell’import Word un valore diverso si decide in revisione.",
         "todo": "Il contenuto viene scritto anche in questo campo dell’attività (sempre sovrascritto)."
-      }
+      },
+      "whichEvents": "Quali eventi?",
+      "matchSummary": "Attualmente {count, plural, one {# evento → # blocco} other {# eventi → # blocchi}}",
+      "matchNone": "Attualmente nessun evento corrisponde",
+      "eventTokensLabel": "Segnaposto per nome, titolo e precompilazione:"
     },
     "syncField": {
       "description": "Descrizione",
@@ -923,6 +927,71 @@
     },
     "errors": {
       "fine_list_requires_finance": "Solo chi ha accesso alle finanze può aggiungere o configurare un elenco delle multe."
+    },
+    "tableBlock": {
+      "description": "Righe con etichetta e valore. Clicca su una riga per aprirne le impostazioni.",
+      "source": {
+        "manual": "Righe proprie",
+        "list": "Lista globale"
+      },
+      "addEventField": "+ Campo dall’evento",
+      "fieldGroup": {
+        "event": "Evento",
+        "people": "Persone",
+        "texts": "Testi"
+      },
+      "aliasOf": "Alias · {name}",
+      "aliasNote": "I nomi con «Alias» provengono da Organizzazione › Campi evento.",
+      "eventRows": "Righe dall’evento",
+      "eventRowsCount": "{count, plural, one {# campo} other {# campi}} · sempre in alto",
+      "eventRowsOnlyPerEvent": "Solo con ripetizione «Per evento»: ogni evento compila allora le proprie righe.",
+      "choosePerEvent": "Scegli per evento",
+      "eventRowsEmpty": "Ancora nessun campo. «+ Campo dall’evento» riprende ad es. data o luogo automaticamente nella tabella.",
+      "fromEvent": "dall’evento · {field}",
+      "emptyAtEvent": "vuoto per «{title}»",
+      "eventFieldLabel": "Etichetta nella tabella",
+      "emptyUses": "Vuoto: «{name}».",
+      "eventFieldPeopleNote": "Nomi delle persone, separati da virgola.",
+      "eventFieldNote": "Ogni blocco prende il valore dal proprio evento; nel verbale resta collegato all’evento. Se il campo è vuoto per l’evento, la riga viene omessa nel PDF. I campi evento stanno sempre in alto, in ordine fisso.",
+      "removeField": "Rimuovi campo",
+      "ownRows": "Righe proprie",
+      "dragHint": "Trascina per ordinare",
+      "fromList": "{label} (dalla lista)",
+      "fillInProtocol": "vuoto – da compilare nel verbale",
+      "rowTypeHelp": {
+        "text": "Un campo di testo libero, eventualmente precompilato.",
+        "participant": "Esattamente una persona tra i partecipanti.",
+        "participants": "Un numero qualsiasi di persone.",
+        "event": "Un evento dal calendario.",
+        "list_entry": "Una voce fissa di una lista: una colonna diventa l’etichetta, l’altra il valore."
+      },
+      "resolvedAt": "Per «{title}»: {value}",
+      "moveUp": "Sposta su",
+      "moveDown": "Sposta giù",
+      "noLists": "Ancora nessuna lista. Le liste si creano in Dati › Liste.",
+      "linkedOptionsHelp": "Queste opzioni di visualizzazione valgono solo per questo blocco. Righe proprie e campi evento vengono ignorati finché una lista è collegata.",
+      "preview": {
+        "editor": "Editor",
+        "pdf": "PDF",
+        "perEvent": "Un blocco per evento – anteprima per:",
+        "oneEvent": "Un blocco per:",
+        "noMatch": "Nessun evento corrisponde al filtro – nel verbale non viene creato alcun blocco.",
+        "listNote": "Mostra la lista «{name}» da Dati › Liste.",
+        "hiddenRows": "{count, plural, one {# riga vuota viene omessa} other {# righe vuote vengono omesse}} nel PDF.",
+        "allFilled": "Tutte le righe hanno un valore.",
+        "linkNote": "🔗 = valore dall’evento",
+        "clickNote": "Clicca su una riga per modificarla a sinistra.",
+        "emptyAtEvent": "vuoto per l’evento",
+        "placeholder": {
+          "text": "Inserisci testo …",
+          "participant": "Scegli persona",
+          "participants": "Scegli persone",
+          "event": "Scegli evento",
+          "list_entry": "—"
+        },
+        "noValue": "Senza valore",
+        "missing": "mancante"
+      }
     }
   },
   "studio": {

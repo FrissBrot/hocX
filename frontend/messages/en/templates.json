@@ -492,7 +492,11 @@
       "syncHelp": {
         "event": "The block content is also written to this event field (always overwritten). In the Word import, a differing value is decided during review.",
         "todo": "The block content is also written to this todo field (always overwritten)."
-      }
+      },
+      "whichEvents": "Which events?",
+      "matchSummary": "Currently {count, plural, one {# event → # block} other {# events → # blocks}}",
+      "matchNone": "Currently no event matches",
+      "eventTokensLabel": "Placeholders for name, heading and prefill:"
     },
     "syncField": {
       "description": "Description",
@@ -923,6 +927,71 @@
     },
     "errors": {
       "fine_list_requires_finance": "Only people with access to finances may add or configure a fine list."
+    },
+    "tableBlock": {
+      "description": "Rows with a label and a value. Click a row to open its settings.",
+      "source": {
+        "manual": "Own rows",
+        "list": "Global list"
+      },
+      "addEventField": "+ Field from event",
+      "fieldGroup": {
+        "event": "Event",
+        "people": "People",
+        "texts": "Texts"
+      },
+      "aliasOf": "Alias · {name}",
+      "aliasNote": "Names marked «Alias» come from Organization settings › Event fields.",
+      "eventRows": "Rows from the event",
+      "eventRowsCount": "{count, plural, one {# field} other {# fields}} · always on top",
+      "eventRowsOnlyPerEvent": "Only with repetition «Per event»: each event then fills its own rows.",
+      "choosePerEvent": "Choose per event",
+      "eventRowsEmpty": "No fields yet. «+ Field from event» adds e.g. the date or location to the table automatically.",
+      "fromEvent": "from event · {field}",
+      "emptyAtEvent": "empty for «{title}»",
+      "eventFieldLabel": "Label in the table",
+      "emptyUses": "Empty: «{name}».",
+      "eventFieldPeopleNote": "Names of the people, separated by commas.",
+      "eventFieldNote": "Each block takes the value from its event, and in the minutes it stays linked to the event. If the field is empty for the event, the row is left out of the PDF. Event fields always come first, in a fixed order.",
+      "removeField": "Remove field",
+      "ownRows": "Own rows",
+      "dragHint": "Drag to reorder",
+      "fromList": "{label} (from list)",
+      "fillInProtocol": "empty – filled in in the minutes",
+      "rowTypeHelp": {
+        "text": "A free text field, optionally prefilled.",
+        "participant": "Exactly one person from the participants.",
+        "participants": "Any number of people.",
+        "event": "One event from the calendar.",
+        "list_entry": "A fixed entry from a list: one column becomes the label, the other the value."
+      },
+      "resolvedAt": "For «{title}»: {value}",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "noLists": "No lists yet. Lists are created under Records › Lists.",
+      "linkedOptionsHelp": "These display options apply to this block only. Own rows and event fields are ignored while a list is linked.",
+      "preview": {
+        "editor": "Editor",
+        "pdf": "PDF",
+        "perEvent": "One block per event – preview for:",
+        "oneEvent": "One block for:",
+        "noMatch": "No event matches the filter – no block is created in the minutes.",
+        "listNote": "Shows the list «{name}» from Records › Lists.",
+        "hiddenRows": "{count, plural, one {# empty row is} other {# empty rows are}} left out of the PDF.",
+        "allFilled": "All rows have a value.",
+        "linkNote": "🔗 = value from the event",
+        "clickNote": "Click a row to edit it on the left.",
+        "emptyAtEvent": "empty for the event",
+        "placeholder": {
+          "text": "Enter text …",
+          "participant": "Choose person",
+          "participants": "Choose people",
+          "event": "Choose event",
+          "list_entry": "—"
+        },
+        "noValue": "No value",
+        "missing": "missing"
+      }
     }
   },
   "studio": {

@@ -3,12 +3,11 @@
 // Ein Formular für Anlegen UND Bearbeiten eines Blocks. Vorher waren das zwei getrennt
 // gepflegte JSX-Blöcke, die auseinanderliefen (Verhalten nur beim Anlegen, andere Hilfetexte,
 // andere Steuerelemente). Welche Abschnitte erscheinen, bestimmt die Elementtyp-Registry.
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useEventFieldConfig } from "@/lib/hooks/use-event-field-config";
 
 import { ChartCycleSelection } from "@/components/protocol/chart-cycle-selection";
-import { DataTable } from "@/components/ui/data-table";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { DateInput } from "@/components/ui/date-input";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
@@ -23,6 +22,7 @@ import type { CycleConfigSummary } from "@/types/api";
 import { type BehaviorField, type BlockForm, repeatEventFilter, repeatSourcesFor, setRepeatSource, showsRepeat, type TableRow } from "./block-form";
 import { EventFilterEditor } from "./event-filter-editor";
 import { EVENT_LIST_DISPLAY_CHIPS, EventDisplayChips, rowTypeLabel, type RowInspectorData } from "./row-inspector";
+import { EVENT_TOKENS, TableBlockPreview, TableBlockSection, useMatchingEvents } from "./table-block-editor";
 import { BlockTypePreview } from "./type-picker";
 import { Select } from "@/components/ui/select";
 
@@ -33,10 +33,6 @@ export type BlockEditorData = RowInspectorData & {
   canConfigureFines?: boolean;
 };
 
-const EVENT_FIELDS = [
-  "title", "description", "event_date", "event_end_date", "tag", "participant_count", "organizer_ids", "leadership_ids",
-  "participant_ids", "spezial1_ids", "spezial2_ids", "spezial3_ids", "location", "spezial_text1", "spezial_text2", "spezial_text3",
-] as const;
 
 const CHART_TYPES = [
   "attendance_over_time", "attendance_by_participant", "finance_by_month", "fines_by_participant", "fines_by_type", "groups_sessions", "groups_avg", "todos",
@@ -55,13 +51,6 @@ export function SettingsSection({ title, description, actions, children }: { tit
       <div className="settings-section-body">{children}</div>
     </section>
   );
-}
-
-type EventFieldConfig = { field: string; label: string; enabled: boolean };
-
-function eventFieldsOf(form: BlockForm): EventFieldConfig[] {
-  const saved = Array.isArray(form.config.event_fields) ? (form.config.event_fields as EventFieldConfig[]) : [];
-  return EVENT_FIELDS.map((field) => saved.find((entry) => entry.field === field) ?? { field, label: "", enabled: false });
 }
 
 export function BlockEditor({
@@ -102,9 +91,13 @@ export function BlockEditor({
   const rows = (form.config.rows ?? []) as TableRow[];
   const linkedList = data.lists.find((list) => list.id === form.config.linked_list_id) ?? null;
   const repeatFilter = repeatEventFilter(form);
-  const eventFields = eventFieldsOf(form);
   // Eigene Namen/Ausblenden der Spezialfelder (Mandant-Einstellungen)
   const eventFieldConfig = useEventFieldConfig();
+  // Tabellenblock: aufgeklappte Zeile (links) und Termin der Vorschau (rechts) teilen sich den Zustand.
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const [previewIndex, setPreviewIndex] = useState(0);
+  const matchingEvents = useMatchingEvents(form, data.events);
+  const previewEvent = repeatSource === "event" ? matchingEvents[Math.min(previewIndex, Math.max(0, matchingEvents.length - 1))] ?? null : null;
 
   const behaviorFields: Array<{ field: BehaviorField; shown: boolean }> = [
     { field: "is_editable", shown: true },
@@ -204,7 +197,14 @@ export function BlockEditor({
               <p className="info-note">{t("repeat.unsupported")}</p>
             ) : null}
             {repeatSource === "event" ? (
-              <>
+              <div className="repeat-event-card">
+                <div className="repeat-event-card-head">
+                  <strong>{t("repeat.whichEvents")}</strong>
+                  <span className={matchingEvents.length ? "repeat-event-match" : "repeat-event-match repeat-event-match-none"}>
+                    {matchingEvents.length ? t("repeat.matchSummary", { count: matchingEvents.length }) : t("repeat.matchNone")}
+                  </span>
+                </div>
+                <div className="repeat-event-card-body">
                 <EventFilterEditor
                   value={repeatFilter}
                   onChange={(next) => setConfig({ repeat_event_filter: next })}
@@ -217,8 +217,12 @@ export function BlockEditor({
                   <input type="checkbox" checked={form.config.event_include_unlisted_past === true} onChange={(event) => setConfig({ event_include_unlisted_past: event.target.checked })} />
                   {t("repeat.includeUnlistedPast")}
                 </label>
-                <div className="info-note">{t("repeat.eventTokens", { tokens: "{title}, {description}, {event_date}, {event_end_date}, {tag}, {id}" })}</div>
-              </>
+                <div className="repeat-event-tokens">
+                  <span>{t("repeat.eventTokensLabel")}</span>
+                  {EVENT_TOKENS.map((token) => <code key={token}>{token}</code>)}
+                </div>
+                </div>
+              </div>
             ) : null}
             {repeatSource === "todo" ? (
               <>
@@ -447,136 +451,15 @@ export function BlockEditor({
         ) : null}
 
         {code === "form" ? (
-          <SettingsSection
-            title={t("table.title")}
-            description={linkedList ? t("table.linkedDescription") : t("table.description")}
-            actions={linkedList ? null : (
-              <button type="button" className="button-secondary" onClick={() => onOpenDesigner("form")}>{t("table.configure")}</button>
-            )}
-          >
-            <label className="field-stack">
-              <span className="field-label">{t("table.linkedList")}</span>
-              <SearchableSelect
-                options={data.lists}
-                getId={(list) => list.id}
-                getLabel={(list) => list.name}
-                value={(form.config.linked_list_id as string | null) ?? null}
-                onChange={(list) => setConfig({ linked_list_id: list?.id ?? null })}
-                nullLabel={t("table.noLinkedList")}
-              />
-              <span className="field-help">{t("table.linkedListHelp")}</span>
-            </label>
-            {linkedList ? (
-              <div className="card grid">
-                <div className="three-col">
-                  <label className="field-stack">
-                    <span className="field-label">{t("table.groupBy")}</span>
-                    <Select value={String(form.config.linked_list_group_by ?? "")} onChange={(event) => setConfig({ linked_list_group_by: event.target.value || null })}>
-                      <option value="">{t("table.noGrouping")}</option>
-                      <option value="column_one">{linkedList.column_one_title}</option>
-                      <option value="column_two">{linkedList.column_two_title}</option>
-                    </Select>
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">{t("table.sortBy")}</span>
-                    <Select
-                      value={String(form.config.linked_list_sort_by ?? "")}
-                      onChange={(event) => setConfig({ linked_list_sort_by: event.target.value || null, linked_list_sort_direction: event.target.value ? form.config.linked_list_sort_direction ?? "asc" : null })}
-                    >
-                      <option value="">{t("table.manualOrder")}</option>
-                      <option value="column_one">{linkedList.column_one_title}</option>
-                      <option value="column_two">{linkedList.column_two_title}</option>
-                    </Select>
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">{t("table.sortDirection")}</span>
-                    <Select value={String(form.config.linked_list_sort_direction ?? "asc")} disabled={!form.config.linked_list_sort_by} onChange={(event) => setConfig({ linked_list_sort_direction: event.target.value })}>
-                      <option value="asc">{t("table.sortAsc")}</option>
-                      <option value="desc">{t("table.sortDesc")}</option>
-                    </Select>
-                  </label>
-                </div>
-                <div className="two-col">
-                  <label className="field-stack">
-                    <span className="field-label">{t("table.filterColumn")}</span>
-                    <Select value={String(form.config.linked_list_filter_column ?? "")} onChange={(event) => setConfig({ linked_list_filter_column: event.target.value || null })}>
-                      <option value="">{t("table.noFilter")}</option>
-                      <option value="column_one">{linkedList.column_one_title}</option>
-                      <option value="column_two">{linkedList.column_two_title}</option>
-                    </Select>
-                  </label>
-                  {form.config.linked_list_filter_column ? (
-                    <label className="field-stack">
-                      <span className="field-label">{t("table.filterText")}</span>
-                      <input value={String(form.config.linked_list_filter_text ?? "")} onChange={(event) => setConfig({ linked_list_filter_text: event.target.value })} placeholder={t("filter.containsPlaceholder")} />
-                    </label>
-                  ) : null}
-                </div>
-                <label className="checkbox-row">
-                  <input type="checkbox" checked={form.config.linked_list_highlight_empty === true} onChange={(event) => setConfig({ linked_list_highlight_empty: event.target.checked })} />
-                  {t("table.highlightEmpty")}
-                </label>
-                <p className="muted">{t("table.linkedOptionsHelp")}</p>
-              </div>
-            ) : (
-              <>
-                {repeatSource === "event" ? (
-                  <div className="element-event-fields">
-                    <span className="field-label">{t("table.eventFields")}</span>
-                    <SearchableMultiSelect
-                      options={EVENT_FIELDS.filter((field) => !eventFieldConfig.hidden(field) || eventFields.some((entry) => entry.field === field && entry.enabled))}
-                      getId={(field) => field}
-                      getLabel={(field) => eventFieldConfig.label(field, t(`eventField.${field}`))}
-                      values={eventFields.filter((field) => field.enabled).map((field) => field.field)}
-                      onChange={(selected) => setConfig({ event_fields: eventFields.map((field) => ({ ...field, enabled: selected.includes(field.field) })) })}
-                      placeholder={t("table.eventFieldsPlaceholder")}
-                      triggerProps={{ "aria-label": t("table.eventFieldsPlaceholder") }}
-                    />
-                    <div className="element-event-field-labels">
-                      {eventFields.filter((field) => field.enabled).map((field) => (
-                        <label key={field.field} className="field-stack">
-                          <span className="field-label">{eventFieldConfig.label(field.field, t(`eventField.${field.field}`))}</span>
-                          <input
-                            value={field.label}
-                            placeholder={eventFieldConfig.label(field.field, t(`eventField.${field.field}`))}
-                            onChange={(event) => setConfig({ event_fields: eventFields.map((entry) => entry.field === field.field ? { ...entry, label: event.target.value } : entry) })}
-                          />
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-                <div className="two-col">
-                  <label className="field-stack">
-                    <span className="field-label">{t("table.leftHeading")}</span>
-                    <input value={String(form.config.left_column_heading ?? "")} onChange={(event) => setConfig({ left_column_heading: event.target.value })} placeholder={t("table.noHeading")} />
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">{t("table.rightHeading")}</span>
-                    <input value={String(form.config.value_column_heading ?? "")} onChange={(event) => setConfig({ value_column_heading: event.target.value })} placeholder={t("table.noHeading")} />
-                  </label>
-                </div>
-                {rows.length ? (
-                  <DataTable columns={[String(form.config.left_column_heading || t("table.rowWord")), String(form.config.value_column_heading || t("table.valueWord"))]}>
-                    {rows.map((row, index) => (
-                      <tr key={row.id} className="table-row-clickable" onClick={() => onOpenDesigner("form", row.id)}>
-                        <td>
-                          <strong>{row.label || t("row.numbered", { number: index + 1 })}</strong>
-                          <div className="muted">{rowTypeLabel(row.row_type, t, tTypes)}</div>
-                        </td>
-                        <td>
-                          {row.template_value || "—"}
-                          {row.locked_in_protocol ? <span className="pill">{t("row.lockedPill")}</span> : null}
-                        </td>
-                      </tr>
-                    ))}
-                  </DataTable>
-                ) : (
-                  <p className="muted">{t("table.noRows")}</p>
-                )}
-              </>
-            )}
-          </SettingsSection>
+          <TableBlockSection
+            form={form}
+            onChange={onChange}
+            data={data}
+            openKey={openKey}
+            onOpenKey={setOpenKey}
+            previewEvent={previewEvent}
+            onChooseEventRepeat={allowedRepeat.includes("event") ? () => onChange(setRepeatSource(form, "event")) : undefined}
+          />
         ) : null}
 
         {code === "matrix" ? (
@@ -643,21 +526,24 @@ export function BlockEditor({
       </div>
 
       <aside className="element-create-sidebar">
+        {code === "form" ? (
+          <TableBlockPreview
+            form={form}
+            data={data}
+            elementTitle={elementTitle}
+            matching={matchingEvents}
+            previewIndex={previewIndex}
+            onPreviewIndex={setPreviewIndex}
+            openKey={openKey}
+            onOpenKey={setOpenKey}
+          />
+        ) : (
         <section className="element-create-preview">
           <h3>{t("preview.title")}</h3>
           <div className="element-create-paper">
             <h4>{elementTitle.trim() || t("preview.newElement")}</h4>
             {form.block_title || form.title ? <strong>{form.block_title || form.title}</strong> : null}
-            {code === "form" && !linkedList ? (
-              <DataTable columns={[String(form.config.left_column_heading || t("table.rowWord")), String(form.config.value_column_heading || t("table.valueWord"))]} emptyMessage={t("table.noRows")}>
-                {rows.map((row, index) => (
-                  <tr key={row.id}>
-                    <td>{row.label || t("row.numbered", { number: index + 1 })}</td>
-                    <td>{row.template_value || "—"}</td>
-                  </tr>
-                ))}
-              </DataTable>
-            ) : info.content && form.default_content ? (
+            {info.content && form.default_content ? (
               <p className="element-create-content-preview">{form.default_content}</p>
             ) : (
               <BlockTypePreview elementTypeId={form.element_type_id} />
@@ -665,6 +551,7 @@ export function BlockEditor({
             {form.description.trim() ? <p className="field-help">{form.description}</p> : null}
           </div>
         </section>
+        )}
         {hideBehavior ? null : (
         <section className="element-create-behavior">
           <h3>{t("behavior.title")}</h3>

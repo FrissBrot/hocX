@@ -492,7 +492,11 @@
       "syncHelp": {
         "event": "Le contenu est aussi écrit dans ce champ de l’événement (toujours écrasé). À l’import Word, une valeur différente est tranchée lors de la vérification.",
         "todo": "Le contenu est aussi écrit dans ce champ de la tâche (toujours écrasé)."
-      }
+      },
+      "whichEvents": "Quels événements ?",
+      "matchSummary": "Actuellement {count, plural, one {# événement → # bloc} other {# événements → # blocs}}",
+      "matchNone": "Aucun événement ne correspond actuellement",
+      "eventTokensLabel": "Variables pour le nom, le titre et le préremplissage :"
     },
     "syncField": {
       "description": "Description",
@@ -923,6 +927,71 @@
     },
     "errors": {
       "fine_list_requires_finance": "Seules les personnes ayant accès aux finances peuvent ajouter ou configurer une liste des amendes."
+    },
+    "tableBlock": {
+      "description": "Lignes avec un libellé et une valeur. Cliquez sur une ligne pour ouvrir ses réglages.",
+      "source": {
+        "manual": "Lignes propres",
+        "list": "Liste globale"
+      },
+      "addEventField": "+ Champ de l’événement",
+      "fieldGroup": {
+        "event": "Événement",
+        "people": "Personnes",
+        "texts": "Textes"
+      },
+      "aliasOf": "Alias · {name}",
+      "aliasNote": "Les noms marqués «Alias» viennent de Organisation › Champs d’événement.",
+      "eventRows": "Lignes issues de l’événement",
+      "eventRowsCount": "{count, plural, one {# champ} other {# champs}} · toujours en haut",
+      "eventRowsOnlyPerEvent": "Uniquement avec la répétition «Par événement» : chaque événement remplit alors ses propres lignes.",
+      "choosePerEvent": "Choisir par événement",
+      "eventRowsEmpty": "Aucun champ pour l’instant. «+ Champ de l’événement» reprend par ex. la date ou le lieu automatiquement dans le tableau.",
+      "fromEvent": "de l’événement · {field}",
+      "emptyAtEvent": "vide pour «{title}»",
+      "eventFieldLabel": "Libellé dans le tableau",
+      "emptyUses": "Vide : «{name}».",
+      "eventFieldPeopleNote": "Noms des personnes, séparés par des virgules.",
+      "eventFieldNote": "Chaque bloc reprend la valeur de son événement ; dans le procès-verbal, elle reste liée à l’événement. Si le champ est vide pour l’événement, la ligne est omise du PDF. Les champs d’événement figurent toujours en haut, dans un ordre fixe.",
+      "removeField": "Retirer le champ",
+      "ownRows": "Lignes propres",
+      "dragHint": "Glisser pour trier",
+      "fromList": "{label} (de la liste)",
+      "fillInProtocol": "vide – à remplir dans le procès-verbal",
+      "rowTypeHelp": {
+        "text": "Un champ de texte libre, éventuellement prérempli.",
+        "participant": "Exactement une personne parmi les participants.",
+        "participants": "Un nombre quelconque de personnes.",
+        "event": "Un événement du calendrier.",
+        "list_entry": "Une entrée fixe d’une liste : une colonne devient le libellé, l’autre la valeur."
+      },
+      "resolvedAt": "Pour «{title}» : {value}",
+      "moveUp": "Monter",
+      "moveDown": "Descendre",
+      "noLists": "Aucune liste pour l’instant. Les listes se créent sous Données › Listes.",
+      "linkedOptionsHelp": "Ces options d’affichage ne valent que pour ce bloc. Les lignes propres et les champs d’événement sont ignorés tant qu’une liste est liée.",
+      "preview": {
+        "editor": "Éditeur",
+        "pdf": "PDF",
+        "perEvent": "Un bloc par événement – aperçu pour :",
+        "oneEvent": "Un bloc pour :",
+        "noMatch": "Aucun événement ne correspond au filtre – aucun bloc n’est créé dans le procès-verbal.",
+        "listNote": "Affiche la liste «{name}» de Données › Listes.",
+        "hiddenRows": "{count, plural, one {# ligne vide est omise} other {# lignes vides sont omises}} du PDF.",
+        "allFilled": "Toutes les lignes ont une valeur.",
+        "linkNote": "🔗 = valeur de l’événement",
+        "clickNote": "Cliquez sur une ligne pour la modifier à gauche.",
+        "emptyAtEvent": "vide pour l’événement",
+        "placeholder": {
+          "text": "Saisir du texte …",
+          "participant": "Choisir une personne",
+          "participants": "Choisir des personnes",
+          "event": "Choisir un événement",
+          "list_entry": "—"
+        },
+        "noValue": "Sans valeur",
+        "missing": "manquant"
+      }
     }
   },
   "studio": {

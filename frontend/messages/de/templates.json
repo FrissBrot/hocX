@@ -492,7 +492,11 @@
       "syncHelp": {
         "event": "Der Blockinhalt wird zusätzlich in dieses Feld des Termins geschrieben (immer überschrieben). Beim Word-Import entscheidet bei abweichendem Wert die Prüfung.",
         "todo": "Der Blockinhalt wird zusätzlich in dieses Feld der Pendenz geschrieben (immer überschrieben)."
-      }
+      },
+      "whichEvents": "Welche Termine?",
+      "matchSummary": "Aktuell {count, plural, one {# Termin → # Block} other {# Termine → # Blöcke}}",
+      "matchNone": "Aktuell passt kein Termin",
+      "eventTokensLabel": "Platzhalter für Name, Überschrift und Vorbelegung:"
     },
     "syncField": {
       "description": "Beschreibung",
@@ -923,6 +927,71 @@
     },
     "errors": {
       "fine_list_requires_finance": "Eine Bussenliste anlegen oder einstellen darf nur, wer Zugriff auf die Finanzen hat."
+    },
+    "tableBlock": {
+      "description": "Zeilen mit Bezeichnung und Wert. Klick auf eine Zeile öffnet ihre Einstellungen.",
+      "source": {
+        "manual": "Eigene Zeilen",
+        "list": "Globale Liste"
+      },
+      "addEventField": "+ Feld aus Termin",
+      "fieldGroup": {
+        "event": "Termin",
+        "people": "Personen",
+        "texts": "Texte"
+      },
+      "aliasOf": "Alias · {name}",
+      "aliasNote": "Namen mit «Alias» kommen aus Mandant-Einstellungen › Terminfelder.",
+      "eventRows": "Zeilen aus dem Termin",
+      "eventRowsCount": "{count, plural, one {# Feld} other {# Felder}} · immer zuoberst",
+      "eventRowsOnlyPerEvent": "Nur bei Wiederholung «Pro Termin»: dann füllt jeder Termin seine eigenen Zeilen.",
+      "choosePerEvent": "Pro Termin wählen",
+      "eventRowsEmpty": "Noch keine Felder. «+ Feld aus Termin» übernimmt z. B. Datum oder Standort automatisch in die Tabelle.",
+      "fromEvent": "aus Termin · {field}",
+      "emptyAtEvent": "leer bei «{title}»",
+      "eventFieldLabel": "Bezeichnung in der Tabelle",
+      "emptyUses": "Leer: «{name}».",
+      "eventFieldPeopleNote": "Namen der Personen, mit Komma getrennt.",
+      "eventFieldNote": "Der Wert kommt bei jedem Block aus seinem Termin und ist im Protokoll mit dem Termin verknüpft. Ist das Feld beim Termin leer, fällt die Zeile im PDF weg. Terminfelder stehen immer zuoberst, in fester Reihenfolge.",
+      "removeField": "Feld entfernen",
+      "ownRows": "Eigene Zeilen",
+      "dragHint": "Ziehen zum Sortieren",
+      "fromList": "{label} (aus Liste)",
+      "fillInProtocol": "leer – im Protokoll ausfüllen",
+      "rowTypeHelp": {
+        "text": "Ein freies Textfeld, optional vorbelegt.",
+        "participant": "Genau eine Person aus den Teilnehmenden.",
+        "participants": "Beliebig viele Personen.",
+        "event": "Ein Termin aus dem Kalender.",
+        "list_entry": "Ein fester Eintrag aus einer Liste: eine Spalte wird zur Bezeichnung, die andere zum Wert."
+      },
+      "resolvedAt": "Bei «{title}»: {value}",
+      "moveUp": "Nach oben",
+      "moveDown": "Nach unten",
+      "noLists": "Noch keine Listen. Listen entstehen unter Datensätze › Listen.",
+      "linkedOptionsHelp": "Diese Anzeigeoptionen gelten nur für diesen Block. Eigene Zeilen und Terminfelder werden ignoriert, solange eine Liste gekoppelt ist.",
+      "preview": {
+        "editor": "Editor",
+        "pdf": "PDF",
+        "perEvent": "Ein Block pro Termin – Vorschau für:",
+        "oneEvent": "Ein Block für:",
+        "noMatch": "Kein Termin passt zum Filter – im Protokoll entsteht kein Block.",
+        "listNote": "Zeigt die Liste «{name}» aus Datensätze › Listen.",
+        "hiddenRows": "{count, plural, one {# leere Zeile fällt} other {# leere Zeilen fallen}} im PDF weg.",
+        "allFilled": "Alle Zeilen haben einen Wert.",
+        "linkNote": "🔗 = Wert aus dem Termin",
+        "clickNote": "Zeile anklicken, um sie links zu bearbeiten.",
+        "emptyAtEvent": "leer beim Termin",
+        "placeholder": {
+          "text": "Text eingeben …",
+          "participant": "Person wählen",
+          "participants": "Personen wählen",
+          "event": "Termin wählen",
+          "list_entry": "—"
+        },
+        "noValue": "Ohne Wert",
+        "missing": "fehlt"
+      }
     }
   },
   "studio": {

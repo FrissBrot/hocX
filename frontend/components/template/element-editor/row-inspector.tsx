@@ -86,15 +86,11 @@ export function RowInspector({
 }) {
   const t = useTranslations("templates.elementEditor");
   const tTypes = useTranslations("templates");
-  const isParticipantSelectable = useParticipantSelectable();
-  const describeValue = useListValueDescriber(data.participants, data.events);
   const patch = (next: Partial<TableRow>) => onChange({ ...row, ...next });
   const patchConfig = (next: Record<string, unknown>) => patch({ row_config: { ...row.row_config, ...next } });
   const simpleTypes = SIMPLE_ROW_TYPES.filter((type) => rowTypeAllowed(kind, type));
   const embeddedTypes = embeddableElementTypes().filter((type) => rowTypeAllowed(kind, String(type.id)));
   const typeLabels = elementTypeLabels(tTypes);
-  const sortedEvents = [...data.events].sort((left, right) => left.event_date.localeCompare(right.event_date));
-  const eventLabel = (event: EventSummary) => `${formatDateRange(event.event_date, event.event_end_date)} · ${event.title}`;
 
   function changeRowType(nextType: string) {
     // Typwechsel setzt die Zeilen-Konfiguration zurück - bei Tabelle und Matrix gleich.
@@ -157,6 +153,80 @@ export function RowInspector({
         <span>{t("row.locked")}</span>
       </label>
 
+      <RowValueFields row={row} data={data} onChange={onChange} />
+
+      {row.row_type === "events" || row.row_type === "7" ? (
+        <div className="matrix-designer-inspector-section">
+          <div className="eyebrow">{t("row.filterEvents")}</div>
+          <EventFilterEditor
+            value={eventFilter}
+            onChange={setEventFilter}
+            knownEventTags={data.knownEventTags}
+            tagConfig={data.tagConfig}
+            rangeModes={["future", "past", "all", "window"]}
+            showColumnFilter={kind === "matrix"}
+            showSortLimit
+          />
+        </div>
+      ) : null}
+
+      {row.row_type === "7" || row.row_type === "events" ? (
+        <div className="field-stack">
+          <span className="field-label">{t("row.displayedFields")}</span>
+          {row.row_type === "7" ? (
+            <EventDisplayChips config={row.row_config} onChange={patchConfig} />
+          ) : (
+            <EventDisplayChips
+              config={row.row_config}
+              onChange={patchConfig}
+              keys={Object.keys(EVENTS_ROW_DISPLAY_DEFAULTS) as EventDisplayKey[]}
+              defaults={EVENTS_ROW_DISPLAY_DEFAULTS}
+            />
+          )}
+          {/* Wie im Baustein «Terminliste»: Standard an (Editor und PDF lesen event_gray_past !== false) */}
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={row.row_config.event_gray_past !== false}
+              onChange={(event) => patchConfig({ event_gray_past: event.target.checked })}
+            />
+            {t("eventList.grayPast")}
+          </label>
+        </div>
+      ) : null}
+
+      {kind === "matrix" && autoSource ? (
+        <div className="matrix-designer-inspector-section">
+          <div className="eyebrow">{t("row.autoValueHeading")}</div>
+          <label className="field-stack">
+            <span className="field-label">{t(`row.autoValueFrom.${autoSource}`)}</span>
+            <Select value={row.auto_source_field ?? ""} onChange={(event) => patch({ auto_source_field: event.target.value || null })}>
+              <option value="">{t("row.noAutoValue")}</option>
+              {AUTO_SOURCE_FIELDS[autoSource].map((field) => (
+                <option key={field} value={field}>{t(`autoField.${field}`)}</option>
+              ))}
+            </Select>
+            <span className="field-help">{t("row.autoValueHelp")}</span>
+          </label>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Typabhängige Vorbelegung einer Zeile (Text, Person(en), Termin, Listeneintrag). Gemeinsam für den
+ * Zeilen-Inspektor (Matrix) und die aufklappbaren Zeilen im Tabellenblock. */
+export function RowValueFields({ row, data, onChange }: { row: TableRow; data: RowInspectorData; onChange: (next: TableRow) => void }) {
+  const t = useTranslations("templates.elementEditor");
+  const isParticipantSelectable = useParticipantSelectable();
+  const describeValue = useListValueDescriber(data.participants, data.events);
+  const patch = (next: Partial<TableRow>) => onChange({ ...row, ...next });
+  const patchConfig = (next: Record<string, unknown>) => patch({ row_config: { ...row.row_config, ...next } });
+  const sortedEvents = [...data.events].sort((left, right) => left.event_date.localeCompare(right.event_date));
+  const eventLabel = (event: EventSummary) => `${formatDateRange(event.event_date, event.event_end_date)} · ${event.title}`;
+
+  return (
+    <>
       {row.row_type === "text" ? (
         <label className="field-stack">
           <span className="field-label">{t("row.initialText")}</span>
@@ -268,62 +338,7 @@ export function RowInspector({
         );
       })() : null}
 
-      {row.row_type === "events" || row.row_type === "7" ? (
-        <div className="matrix-designer-inspector-section">
-          <div className="eyebrow">{t("row.filterEvents")}</div>
-          <EventFilterEditor
-            value={eventFilter}
-            onChange={setEventFilter}
-            knownEventTags={data.knownEventTags}
-            tagConfig={data.tagConfig}
-            rangeModes={["future", "past", "all", "window"]}
-            showColumnFilter={kind === "matrix"}
-            showSortLimit
-          />
-        </div>
-      ) : null}
-
-      {row.row_type === "7" || row.row_type === "events" ? (
-        <div className="field-stack">
-          <span className="field-label">{t("row.displayedFields")}</span>
-          {row.row_type === "7" ? (
-            <EventDisplayChips config={row.row_config} onChange={patchConfig} />
-          ) : (
-            <EventDisplayChips
-              config={row.row_config}
-              onChange={patchConfig}
-              keys={Object.keys(EVENTS_ROW_DISPLAY_DEFAULTS) as EventDisplayKey[]}
-              defaults={EVENTS_ROW_DISPLAY_DEFAULTS}
-            />
-          )}
-          {/* Wie im Baustein «Terminliste»: Standard an (Editor und PDF lesen event_gray_past !== false) */}
-          <label className="checkbox-row">
-            <input
-              type="checkbox"
-              checked={row.row_config.event_gray_past !== false}
-              onChange={(event) => patchConfig({ event_gray_past: event.target.checked })}
-            />
-            {t("eventList.grayPast")}
-          </label>
-        </div>
-      ) : null}
-
-      {kind === "matrix" && autoSource ? (
-        <div className="matrix-designer-inspector-section">
-          <div className="eyebrow">{t("row.autoValueHeading")}</div>
-          <label className="field-stack">
-            <span className="field-label">{t(`row.autoValueFrom.${autoSource}`)}</span>
-            <Select value={row.auto_source_field ?? ""} onChange={(event) => patch({ auto_source_field: event.target.value || null })}>
-              <option value="">{t("row.noAutoValue")}</option>
-              {AUTO_SOURCE_FIELDS[autoSource].map((field) => (
-                <option key={field} value={field}>{t(`autoField.${field}`)}</option>
-              ))}
-            </Select>
-            <span className="field-help">{t("row.autoValueHelp")}</span>
-          </label>
-        </div>
-      ) : null}
-    </div>
+    </>
   );
 }
 
