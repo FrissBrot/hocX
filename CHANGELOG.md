@@ -12,13 +12,19 @@ Installationen aktualisieren können.
 
 Eine neu eingeteilte Seitenleiste nach Tätigkeiten mit «Meine Aufgaben» und gesammelten
 Einstellungen, eine Fotogalerie mit Zeitstrahl und ruhigem Scrollen, gesperrte und ausgeblendete
-ausgetretene Personen sowie neutrale Begriffe («Organisation» statt «Verein») in allen Sprachen.
-Keine Migrationen, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
+ausgetretene Personen, ein Versandprotokoll aller E-Mails im Admin-Portal, neutrale Begriffe
+(«Organisation» statt «Verein») in allen Sprachen sowie 15 Sicherheits- und Datenschutz-Fixes aus
+den Nachtläufen. Eine Migration, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
 
 ### Update
 
 - Von **1.3.0**: `./scripts/deploy.sh <test|prod>`. Von älteren Ständen gelten zusätzlich die
   Hinweise von 1.3.0.
+- Migration `0183_abgabebox_link_scope`: Die Datenbankrolle der Abgabebox liest Speicherbelegung,
+  Objektregister und Kontingent nur noch für den Mandanten ihres Links; das Spaltenrecht auf
+  `tenant` entfällt. Zwischen Migration und Neustart (wenige Sekunden in `deploy.sh`) kann die noch
+  laufende alte Abgabebox Uploads mit einem Kontingentfehler ablehnen - wie beim Update auf 1.2.x
+  (`0147`). Rücknahme mit `alembic downgrade` stellt die alten Rechte wieder her.
 - Alle Adressen bleiben gleich, Lesezeichen und Links in Mails funktionieren weiter. Neu ist nur
   `/my-tasks` («Meine Aufgaben»).
 - Ausgetretene Personen (Austrittsdatum vor heute) können sich ab dem Update nicht mehr anmelden,
@@ -48,6 +54,13 @@ Keine Migrationen, keine neuen Secrets oder Umgebungsvariablen, keine Breaking C
   quadratisch; die Bildansicht zeigt weiterhin das ganze Foto. Alben und die Sortierungen nach
   Bewertung behalten das bisherige Raster.
 
+### Neu: Versandprotokoll der E-Mails
+
+- Unter `/admin/notifications` stehen alle E-Mails der letzten 90 Tage: Zeitpunkt, Organisation,
+  Empfänger, Art, Ergebnis mit Grund fürs Überspringen, letzter Fehler und Anzahl Versuche -
+  filterbar nach Status, durchsuchbar nach Organisation, Name oder E-Mail. Ohne Mailinhalt; jeder
+  Abruf wird im Audit-Log festgehalten. Nur für Admin-Owner.
+
 ### Geändert
 
 - **Ausgetretene Personen** sind überall ausgeblendet, wo jemand ausgewählt wird (Verantwortliche,
@@ -74,6 +87,23 @@ Keine Migrationen, keine neuen Secrets oder Umgebungsvariablen, keine Breaking C
   Terminübersicht sind per Tastatur erreichbar (#50), Sitzungsnotizen sind mobil im
   abgeschlossenen Protokoll schreibgeschützt (#51), «heute» ist das lokale Datum statt UTC (#52)
   und Fehler erscheinen als Fehler-Toast statt als Info (#53).
+
+### Sicherheit und Datenschutz (Nachtläufe 16.–18.11.)
+
+- **Mandantentrennung:** Kalender-Abo und persönlicher Abgabe-Link binden die Sitzung nach der
+  Token-Prüfung an ihren Mandanten (Row-Level-Security). Die Abgabebox-Rolle sieht über
+  Speicherfunktionen keine fremden Mandanten mehr (`0183`). Fremde Bussen- und Pendenzenblock-IDs
+  antworten wie unbekannte (kein Existenz-Orakel).
+- **Rechte:** Die Anwesenheitsmatrix im Document Studio zeigt ohne «Persönliche Auswertungen» nur
+  die eigene Zeile; das Dashboard zeigt Mitgliedern ohne Entwurfsrecht keine Sitzungsnotizen
+  geplanter Sitzungen; die Bildquelle im Document Studio braucht Datei- oder Entwurfsrecht; die
+  Exportliste zeigt Lesern keine Exporte von Protokollentwürfen; der Word-Import legt neue
+  Personen nur mit «Mitglieder verwalten» an.
+- **Fotos:** GPS und Metadaten werden auch aus HEIC/HEIF entfernt (auch ohne «Exif»-Kennung und
+  aus der Abgabebox); Partner sehen in geteilten Alben keine Titel, Tags und Herkunft des
+  Besitzers; Fotos eines Partners verlassen Album und öffentliche Links mit dem Ende der Freigabe.
+- **Exporte:** CSV- und Excel-Exporte speichern Zellinhalte nie als Formel (Formel-Injection).
+- **Fehlerprotokoll:** Zugangstoken in Pfaden (Kalender-Abo, Freigabe-Link) werden maskiert.
 
 ### Sicherheit und Abhängigkeiten
 
