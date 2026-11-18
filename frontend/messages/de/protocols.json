@@ -249,7 +249,7 @@
     "workflowSessionMode": "Sitzungsmodus",
     "templateSyncedByOther": "{name} hat die Elemente aus der Vorlage neu geladen. Die Ansicht wird aktualisiert.",
     "imageAlreadyExists": "Dieses Bild ist bereits vorhanden und wurde nicht erneut hochgeladen.",
-    "imageSimilarExists": "Hinweis: Dieses Bild ähnelt einem Bild, das im Verein bereits hochgeladen wurde.",
+    "imageSimilarExists": "Hinweis: Dieses Bild ähnelt einem Bild, das in dieser Organisation bereits hochgeladen wurde.",
     "statusChangedByOtherToast": "Status wurde von {name} zu „{status}“ geändert.",
     "draftsRestoredToast": "{count, plural, one {# lokaler Textentwurf wurde} other {# lokale Textentwürfe wurden}} wiederhergestellt.",
     "conflictToast": "Konflikt: Diese Stelle wurde inzwischen von jemand anderem gespeichert. Die aktuelle Version wurde geladen – deine letzte Änderung wurde nicht übernommen, ist aber als lokaler Entwurf gesichert.",

@@ -8,6 +8,78 @@ Installationen aktualisieren können.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-18
+
+Eine neu eingeteilte Seitenleiste nach Tätigkeiten mit «Meine Aufgaben» und gesammelten
+Einstellungen, eine Fotogalerie mit Zeitstrahl und ruhigem Scrollen, gesperrte und ausgeblendete
+ausgetretene Personen sowie neutrale Begriffe («Organisation» statt «Verein») in allen Sprachen.
+Keine Migrationen, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
+
+### Update
+
+- Von **1.3.0**: `./scripts/deploy.sh <test|prod>`. Von älteren Ständen gelten zusätzlich die
+  Hinweise von 1.3.0.
+- Alle Adressen bleiben gleich, Lesezeichen und Links in Mails funktionieren weiter. Neu ist nur
+  `/my-tasks` («Meine Aufgaben»).
+- Ausgetretene Personen (Austrittsdatum vor heute) können sich ab dem Update nicht mehr anmelden,
+  auch wenn ihr Login eingeschaltet ist; laufende Sitzungen enden. Wer das Austrittsdatum entfernt,
+  gibt den Login wieder frei.
+
+### Neu: Seitenleiste nach Tätigkeiten
+
+- Gruppen **Sitzungen** (Kalender, Anliegen, Protokolle), **Aufgaben** (Pendenzen, Abgaben),
+  **Mitglieder**, **Kasse** (Konten, Bussen), **Ablage** (Listen, Dateien, Fotos, Freigaben) und
+  **Auftritt** (Dokumentvorlagen, Erscheinungsbild).
+- **Meine Aufgaben** unter Start: die eigenen offenen Pendenzen und Abgaben nach Fälligkeit, mit
+  Link auf alle Pendenzen.
+- **Einstellungen** gesammelt: Sitzungsvorlagen (mit Bausteinen und Arbeitsjahr, vorher «Zyklen»),
+  Aufgabenpakete, Logins & Rollen, Bussen-Regeln, Domains & Echtheit. Auf den Seiten eines
+  Bereichs führt ein Zahnrad oben rechts direkt zur passenden Einstellung, von dort ein Link zurück.
+- **Organisation** für alles, was den ganzen Mandanten betrifft: Profil, Abo & Nutzung, Datenschutz
+  (mit Aufbewahrung), Zugangslinks, Verlauf, Import.
+- Die Suche (Ctrl+K) findet Seiten auch unter ihren bisherigen Namen.
+
+### Neu: Fotogalerie mit Zeitstrahl
+
+- Rechts neben den Fotos ein Zeitstrahl mit Jahren, Monaten und der aktuellen Position: Klicken
+  oder Ziehen springt direkt zu einem Jahr oder Monat, auch per Tastatur.
+- Kein Springen mehr beim Scrollen: Die Galerie kennt die Anzahl Fotos je Tag, bevor sie Bilder
+  lädt, und lädt nur die sichtbaren Tage. Die Kacheln in der Datumsansicht sind dafür
+  quadratisch; die Bildansicht zeigt weiterhin das ganze Foto. Alben und die Sortierungen nach
+  Bewertung behalten das bisherige Raster.
+
+### Geändert
+
+- **Ausgetretene Personen** sind überall ausgeblendet, wo jemand ausgewählt wird (Verantwortliche,
+  Bussen, Abgaben, Termine), und unter «Logins & Rollen». In alten Protokollen, Importen und in der
+  Mitgliederliste (Filter «Ausgetreten», jetzt auch mobil) bleiben sie sichtbar. Sie zählen nicht
+  mehr zum Benutzerlimit, bekommen keine Mails und lassen sich nicht einladen.
+- **Begriffe:** «Verein» und Ableitungen (Vereinsexport, Vereinstarif, Vereinsjahr …) heissen jetzt
+  Organisation, Gesamtexport, Standardtarif, Arbeitsjahr usw. - in allen Sprachen, Mails, PDF-
+  Beispielen und der Dokumentation. Umbenannt sind auch Stammlisten → Listen, Geteilte Links →
+  Freigaben und Bussen-Konfiguration → Bussen-Regeln.
+
+### Behoben
+
+- Erinnerungs-Mails: Lagen Erinnerungen in der Warteschlange (Versand noch aus, SMTP-Störung),
+  stand dieselbe Aufgabe beim Einschalten als «in 3 Tagen fällig» und «seit gestern überfällig» in
+  einer Mail. Erinnerungen mit festem Text gehen nur noch an dem Tag raus, für den der Text stimmt.
+- E-Mail-Einstellungen: Ein einmaliger Versandfehler (z. B. `535` direkt nach dem Einrichten) blieb
+  als «Letzter Fehler» stehen, obwohl die Wiederholung zugestellt war.
+- E-Mails in Apple Mail: «In 3 Tagen», Daten und Adressen erscheinen nicht mehr als blau
+  unterstrichene Kalender- bzw. Karten-Links.
+- Excel-Exporte scheitern nicht mehr an Steuerzeichen in Eingaben (#46).
+- Protokolleditor: geschlossene Schnellmenü-Flyouts sind nicht mehr per Tab erreichbar (#48), der
+  Hinweis auf ein ähnliches Bild erscheint in der UI-Sprache (#49), Termindetails in der
+  Terminübersicht sind per Tastatur erreichbar (#50), Sitzungsnotizen sind mobil im
+  abgeschlossenen Protokoll schreibgeschützt (#51), «heute» ist das lokale Datum statt UTC (#52)
+  und Fehler erscheinen als Fehler-Toast statt als Info (#53).
+
+### Sicherheit und Abhängigkeiten
+
+- next 16.4.3 → 16.4.5 (GHSA-mfr8-8qww-v76h, GHSA-vc7v-qv4w-wrv8) (#44), vitest 5.1.0 (#45),
+  SQLAlchemy 2.1.8 (#47).
+
 ## [1.3.0] - 2026-11-16
 
 Konto und Sicherheit per E-Mail («Passwort vergessen», Einladung, Sicherheitshinweise), globale

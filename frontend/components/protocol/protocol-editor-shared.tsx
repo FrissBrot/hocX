@@ -46,7 +46,7 @@ export function resequenceProtocolElements(items: ProtocolElement[]) {
 
 /** Strip trailing "(…)" from section names, e.g. "Gliähwurm (Enea, Archie)" → "Gliähwurm" */
 /**
- * Hinweis nach einem Bild-Upload, wenn ein ähnliches Bild im Verein schon existiert.
+ * Hinweis nach einem Bild-Upload, wenn ein ähnliches Bild in der Organisation schon existiert.
  * `duplicate_warning` des Backends ist fester deutscher Text und dient nur als Signal.
  */
 export function imageSimilarityNotice(created: { duplicate_warning?: string | null }, tProtocols: (key: string) => string): string | null {
