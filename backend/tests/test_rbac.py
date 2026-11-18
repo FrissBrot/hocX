@@ -222,7 +222,7 @@ def _user_manager(db, tenant: Tenant, *extra: str) -> AppUser:
 def test_no_privilege_escalation_via_role_assignment_or_role_editing(db):
     tenant, _admin = _tenant_with_admin(db, "RBAC Eskalation")
     # Hat die Rechte der Standardrolle reader (die das neue Mitglied schon hat), aber nicht mehr.
-    manager = _actor(db, _user_manager(db, tenant, "meetings.read", "finances.read", "submissions.read"))
+    manager = _actor(db, _user_manager(db, tenant, "meetings.read", "finances.read", "submissions.read", "todos.complete_own"))
     member = make_app_user(db, email="rbac-esc-member@example.com", tenant_id=tenant.id)
 
     for attempt in (

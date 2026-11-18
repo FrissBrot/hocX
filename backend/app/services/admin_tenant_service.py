@@ -51,6 +51,7 @@ from app.schemas.admin import (
 from app.schemas.public_catalog import PublicCustomerRead, PublicFeatureRead, PublicPlanComparisonRead, PublicPlanFeature, PublicPlanRead
 from app.schemas.user import TenantUpdate
 from app.services.file_service import _safe_storage_path
+from app.services import plan_pricing
 from app.services import cashflow_service, identity_verification_service, photo_album_service, submission_link_service, traefik_config_service, user_limit_service
 from app.services.storage_service import StorageService
 from app.services.tenant_service import apply_tenant_profile_image
@@ -117,7 +118,6 @@ class AdminTenantService:
             name=tenant.name,
             profile_image_path=tenant.profile_image_path,
             profile_image_url=build_admin_tenant_profile_image_url(tenant.public_id, tenant.profile_image_path),
-            public_slug=tenant.public_slug,
             participant_count=participant_count,
             user_count=user_count,
             created_at=tenant.created_at,
@@ -170,7 +170,7 @@ class AdminTenantService:
         # invisible while browsing an earlier one.
         if q and q.strip():
             pattern = f"%{q.strip()}%"
-            query = query.filter(or_(Tenant.name.ilike(pattern), Tenant.public_slug.ilike(pattern)))
+            query = query.filter(Tenant.name.ilike(pattern))
         # Plan-Filter der Mandantenliste (Chips "Alle / <Plan>") - ebenfalls vor der Paginierung.
         if plan_code:
             query = query.filter(Tenant.plan_code == plan_code)
@@ -283,11 +283,11 @@ class AdminTenantService:
         )
 
     def list_plans(self, db: Session) -> list[AdminPlanRead]:
-        # Guenstigster Plan zuoberst; Plaene ohne Preis (z.B. 'legacy') vorneweg.
+        # Guenstigster Plan zuerst (im Admin links), Plaene ohne Preis (individuell) zuletzt.
         plans = (
             db.query(Plan)
             .order_by(
-                Plan.price_yearly_rp.asc().nulls_first(), Plan.price_monthly_rp.asc().nulls_first(), Plan.code.asc()
+                Plan.price_monthly_rp.asc().nulls_last(), Plan.price_yearly_rp.asc().nulls_last(), Plan.code.asc()
             )
             .all()
         )
@@ -411,8 +411,7 @@ class AdminTenantService:
         if plan is None:
             plan = Plan(code=code)
         plan.name = payload.name
-        plan.price_monthly_rp = payload.price_monthly_rp
-        plan.price_yearly_rp = payload.price_yearly_rp
+        plan.price_monthly_rp, plan.price_yearly_rp = plan_pricing.complete(payload.price_monthly_rp, payload.price_yearly_rp)
         plan.included_user_limit = payload.included_user_limit
         plan.included_storage_bytes = payload.included_storage_bytes
         plan.sort_order = payload.sort_order
@@ -592,8 +591,7 @@ class AdminTenantService:
             package = StoragePackage(code=code)
         package.name = payload.name
         package.bytes = payload.bytes
-        package.price_monthly_rp = payload.price_monthly_rp
-        package.price_yearly_rp = payload.price_yearly_rp
+        package.price_monthly_rp, package.price_yearly_rp = plan_pricing.complete(payload.price_monthly_rp, payload.price_yearly_rp)
         package.sort_order = payload.sort_order
         package.is_bookable = payload.is_bookable
         db.add(package)
@@ -673,14 +671,11 @@ class AdminTenantService:
         return self._read_model(db, tenant)
 
     def create_tenant(self, db: Session, payload: AdminTenantCreate, *, admin_id: int | None = None) -> AdminTenantRead:
-        """Legt einen Mandanten an. Ungueltiger Plan oder vergebener Slug -> ValueError (die
-        Route macht daraus eine lesbare 4xx-Meldung statt des generischen DB-Fehlers)."""
-        public_slug = (payload.public_slug or "").strip() or None
-        if public_slug is not None and db.scalar(select(Tenant.id).where(Tenant.public_slug == public_slug)) is not None:
-            raise ValueError(f"Der Slug '{public_slug}' ist bereits vergeben")
+        """Legt einen Mandanten an. Ungueltiger Plan -> ValueError (die Route macht daraus eine
+        lesbare 4xx-Meldung statt des generischen DB-Fehlers)."""
         if payload.plan_code is not None and db.get(Plan, payload.plan_code) is None:
             raise ValueError(f"Plan '{payload.plan_code}' existiert nicht")
-        tenant = Tenant(name=payload.name, profile_image_path=None, public_slug=public_slug)
+        tenant = Tenant(name=payload.name, profile_image_path=None)
         db.add(tenant)
         db.commit()
         db.refresh(tenant)
@@ -720,8 +715,6 @@ class AdminTenantService:
         if payload.name is not None:
             tenant.name = payload.name
         identity_verification_service.handle_rename(db, tenant, old_name, actor_email=admin_email)
-        if payload.public_slug is not None:
-            tenant.public_slug = payload.public_slug
         if profile_image is not None:
             await apply_tenant_profile_image(db, tenant, profile_image)
         db.add(tenant)

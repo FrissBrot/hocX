@@ -123,11 +123,22 @@ def _overview_reads(db: Session, user: CurrentUser, participants: list[Participa
             select(FineTariffGroup.id, FineTariffGroup.public_id).where(FineTariffGroup.tenant_id == user.current_tenant_id)
         ).all())
     ParticipantOverviewRead.prime_public_ids(db, participants)
+    # Plan «Berechtigungen», Phase 3: Personen ansehen ohne Kontaktdaten (participants.read);
+    # E-Mail nur mit participants.contacts, Login/Rollen nur für Verwaltende.
+    show_contacts = user.can(P.PARTICIPANTS_CONTACTS)
+    show_access = user.can(P.PARTICIPANTS_MANAGE) or user.can(P.ACCESS_MANAGE)
     result = []
     for participant in participants:
         read = ParticipantOverviewRead.model_validate(participant)
-        read.login_status = "active" if participant.login_enabled else "invited" if participant.id in invited else "none"
-        read.roles = [role_service.role_ref(role) for role in roles.get(participant.id, [])]
+        if not show_contacts:
+            read.email = None
+        if show_access:
+            read.login_status = "active" if participant.login_enabled else "invited" if participant.id in invited else "none"
+            read.roles = [role_service.role_ref(role) for role in roles.get(participant.id, [])]
+        else:
+            # Ohne Verwaltungsrecht nichts über den Zugang verraten (Security-Review Phase 3)
+            read.login_enabled = False
+            read.notify_without_login = False
         read.tariff_id = tariffs.get(participant.fine_tariff_group_id) if participant.fine_tariff_group_id else None
         result.append(read)
     return result
@@ -151,7 +162,7 @@ def list_participants(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_permission(user, P.PARTICIPANTS_MANAGE)
+    require_permission(user, P.PARTICIPANTS_READ)
     participants = participant_service.list_participants(
         db, tenant_id=user.current_tenant_id, active_only=active_only, include_former=include_former, skip=skip, limit=limit,
     )
@@ -238,7 +249,7 @@ def export_participant_personal_data(
 ):
     """Datenauskunft für eine Person als passwortgeschütztes ZIP (DSG Art. 25, DSGVO Art. 15; PRIV-006).
     Nur mit data.export: die Auskunft enthält alle Daten der Person."""
-    require_permission(user, P.DATA_EXPORT)
+    require_permission(user, P.PARTICIPANTS_EXPORT)
     enforce_rate_limit(f"personal-data-export-admin:{user.user_id}", limit=30, period_seconds=3600)
     participant = _get_participant_or_404(db, participant_id, user)
     return personal_data.respond(db, participant, password=payload.password, actor=user, self_export=False)
@@ -563,6 +574,6 @@ def get_participant(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Personenseite /participants/[id]."""
-    require_permission(user, P.PARTICIPANTS_MANAGE)
+    require_permission(user, P.PARTICIPANTS_READ)
     participant = _get_participant_or_404(db, participant_id, user)
     return _overview_reads(db, user, [participant])[0]

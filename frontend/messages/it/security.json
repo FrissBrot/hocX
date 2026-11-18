@@ -137,5 +137,11 @@
     "password_weak": "La password è troppo debole. Usa almeno 12 caratteri senza nome, e-mail o parole comuni.",
     "mfa_policy_own_mfa_missing": "Configura prima l'MFA per il tuo account.",
     "mfa_setup_required": "La tua organizzazione richiede l'MFA. Accedi di nuovo e configura un secondo fattore."
+  },
+  "grace": {
+    "title": "Il secondo fattore diventa obbligatorio",
+    "message": "La tua organizzazione richiede un secondo fattore per il tuo account. Configuralo entro il {until} – poi l’accesso sarà possibile solo con esso.",
+    "later": "Più tardi",
+    "setup": "Configura ora"
   }
 }

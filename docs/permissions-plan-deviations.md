@@ -46,3 +46,44 @@ abweicht und warum. «OFFEN» markiert fachliche Punkte, die noch eine Entscheid
   für sie dieselben Regeln wie für die freie Ablage.
 - Keine Verhaltensänderung: `access_service.ensure_can_read_stored_file` prüft unverändert; die
   Rechte je Kontext kommen in Phase 3 (Mapping ohne Rechteverlust) und 5 (Freigaben).
+
+## Phase 3 – Neue Rechte und Rollen-Migration
+
+- Zwölf neue Rechte (`meetings.approve`, `todos.complete_own`, `participants.read|contacts|export`,
+  `fines.manage`, `files.read`, `photos.read|manage`, `sharing.public`, `submissions.review`,
+  `activity.read`); Migration 0190 ordnet sie ohne Rechteverlust zu
+  (`app.services.permission_mapping`, Probelauf `report(db, tenant_id=…)`).
+- Mapping-Korrekturen gegenüber dem Plan: `participants.export` (Datenauskunft für andere) kommt
+  aus `data.export`, nicht aus `participants.manage` – sonst bekämen Schreiber neu Personenexporte.
+  `meetings.edit` bekommt kein `participants.read` (war vorher auch nicht nötig).
+- `todos.complete_own` erhalten **alle** Rollen inkl. Leser; ohne das Recht ist ein Konto rein
+  lesend (Entscheid 18.11.2026). Erlaubt nur Status/Erledigt-Datum, nur eigene Pendenzen.
+- `sharing.public` verlangt **kein** MFA (Entscheid 18.11.2026); `participants.export` verlangt MFA.
+- Vier-Augen-Prinzip pro Organisation wählbar (`tenant.four_eyes_protocols`, Migration 0191,
+  Standard aus). Der Abschliessen-Knopf bleibt sichtbar; das Backend lehnt mit
+  `four_eyes_required` ab und die Oberfläche zeigt die Meldung.
+- «Gruppen» des Plans sind Rollen; keine Freigaben auf Ordnerebene.
+
+## Ergänzung (nicht im Plan) – MFA je Rolle, Frist
+
+- `tenant_role.require_mfa` (Migration 0192): Schalter im Rollen-Editor.
+- Bestehende Konten (`app_user.first_login_at` gesetzt) haben 3 Tage Frist, wenn MFA für sie neu
+  Pflicht wird; die Einrichtung erscheint bei jedem Login und lässt sich überspringen, in der App
+  erinnert ein Hinweis. Keine Frist bei Pflicht wegen Administrationsrechten und für neue Konten.
+
+## Security-Review Phase 3 (18.11.2026) – Entscheide
+
+- **Word-Import** legt Protokolle abgeschlossen an und verlangt dafür `meetings.approve`. Das
+  Vier-Augen-Prinzip gilt dort bewusst nicht: importiert werden ausserhalb von hocX genehmigte,
+  historische Protokolle. Protokolle ohne Verfasser (Altbestand, gelöschtes Konto) kann jede Person
+  mit `meetings.approve` abschliessen.
+- **Öffentliche Links:** Bilder brauchen `photos.read`, Dokumente `files.read` – beim Erstellen je
+  Datei, beim Auflisten und Widerrufen je Link (sonst öffnete die Token-URL Inhalte, die man im
+  Verein nicht lesen darf). Album-Links brauchen `photos.read`.
+- **Einzelabruf von Dateien** symmetrisch: `files.read` nur Dokumente, `photos.read` nur Bilder
+  (Entwürfe-Leser wie bisher alles).
+- **Personensuche** sucht ohne `participants.contacts` nicht in E-Mail-Adressen; ohne
+  Verwaltungsrecht sind `login_enabled`/`notify_without_login` ausgeblendet.
+- **MFA:** Ein Zurücksetzen des Faktors durch die Administration startet keine neue Frist.
+  Das Rollen-Flag `require_mfa` steht im Audit (vorher/nachher) und überlebt Export/Import.
+- **`activity.read`** verlangt MFA (wie vorher `settings.manage`).

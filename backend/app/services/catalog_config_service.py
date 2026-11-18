@@ -31,6 +31,7 @@ from pydantic import BaseModel, ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.services import plan_pricing
 from app.models import Feature, Plan, PlanFeature, StoragePackage, Tenant, TenantStoragePackage
 from app.schemas.catalog_config import (
     CATALOG_SCHEMA_VERSION,
@@ -484,6 +485,7 @@ class CatalogConfigService:
         for spec in PLAN_FIELDS:
             if spec.attr != "feature_codes":
                 setattr(plan, spec.attr, op.target[spec.attr])
+        plan.price_monthly_rp, plan.price_yearly_rp = plan_pricing.complete(plan.price_monthly_rp, plan.price_yearly_rp)
         db.add(plan)
         db.flush()
         wanted = set(op.target["feature_codes"])
@@ -508,6 +510,7 @@ class CatalogConfigService:
         package = db.get(StoragePackage, op.code) or StoragePackage(code=op.code)
         for spec in STORAGE_PACKAGE_FIELDS:
             setattr(package, spec.attr, op.target[spec.attr])
+        package.price_monthly_rp, package.price_yearly_rp = plan_pricing.complete(package.price_monthly_rp, package.price_yearly_rp)
         db.add(package)
         return old is not None and old["bytes"] != op.target["bytes"]
 

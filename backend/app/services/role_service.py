@@ -147,6 +147,7 @@ def _read(role: TenantRole, permissions: frozenset[str], user_count: int) -> Rol
         permissions=sorted(permissions, key=_catalog_order),
         user_count=user_count,
         locked=role.system_key == ADMIN_ROLE_KEY,
+        require_mfa=role.require_mfa,
     )
 
 
@@ -351,7 +352,7 @@ def create_role(db: Session, actor: CurrentUser, payload: RoleCreate) -> TenantR
     _ensure_unique_name(db, tenant_id, name)
     permissions = _validated_permissions(payload.permissions)
     _ensure_subset(actor, permissions)
-    role = TenantRole(tenant_id=tenant_id, name=name, description=_clean_description(payload.description))
+    role = TenantRole(tenant_id=tenant_id, name=name, description=_clean_description(payload.description), require_mfa=payload.require_mfa)
     db.add(role)
     db.flush()
     _replace_permissions(db, role, permissions)
@@ -388,6 +389,8 @@ def update_role(db: Session, actor: CurrentUser, role: TenantRole, payload: Role
         role.name = name
         if "description" in fields:
             role.description = _clean_description(payload.description)
+        if "require_mfa" in fields and payload.require_mfa is not None:
+            role.require_mfa = payload.require_mfa
         if after != before:
             _replace_permissions(db, role, after)
         db.add(role)
@@ -411,7 +414,8 @@ def delete_role(db: Session, actor: CurrentUser, role: TenantRole) -> None:
 
 
 def import_role(
-    db: Session, tenant_id: int, *, system_key: str | None, name: str | None, description: str | None, permissions: Iterable[str]
+    db: Session, tenant_id: int, *, system_key: str | None, name: str | None, description: str | None, permissions: Iterable[str],
+    require_mfa: bool = False,
 ) -> TenantRole:
     """Übernimmt eine Rolle aus einem Mandantenexport in einen neu angelegten Mandanten. Die
     Standardrollen hat der Trigger schon angelegt (admin bleibt fest und unverändert), eigene
@@ -422,6 +426,7 @@ def import_role(
         return role
     role.name = name
     role.description = description
+    role.require_mfa = require_mfa  # MFA-Pflicht der Rolle (Migration 0192) geht beim Import nicht verloren
     db.add(role)
     db.flush()
     known = {permission.value for permission in P}

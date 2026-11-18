@@ -37,6 +37,8 @@ type RoleForm = {
   selected: Set<PermissionKey>;
   systemKey: RoleRead["system_key"];
   locked: boolean;
+  // MFA für alle Konten mit dieser Rolle (Migration 0192)
+  requireMfa: boolean;
 };
 
 const IMPLIED_BY = new Map<PermissionKey, PermissionKey[]>();
@@ -54,7 +56,7 @@ function RoleBadge({ role }: { role: RoleRead }) {
 }
 
 function emptyForm(): RoleForm {
-  return { name: "", description: "", selected: new Set(), systemKey: null, locked: false };
+  return { name: "", description: "", selected: new Set(), systemKey: null, locked: false, requireMfa: false };
 }
 
 /** Rollen des Mandanten: anlegen, benennen, Berechtigungen zuordnen, löschen. Die Bereiche sind
@@ -83,6 +85,7 @@ export function RoleManagement({ initialRoles, actorPermissions, enabledFeatures
       selected: minimalPermissions(role.permissions),
       systemKey: role.system_key,
       locked: role.locked || !canCustomize,
+      requireMfa: Boolean(role.require_mfa),
     });
   }
 
@@ -114,6 +117,7 @@ export function RoleManagement({ initialRoles, actorPermissions, enabledFeatures
       name: form.name.trim(),
       description: form.description.trim() || null,
       permissions: [...form.selected],
+      require_mfa: form.requireMfa,
     });
     try {
       const saved = form.id
@@ -211,6 +215,15 @@ export function RoleManagement({ initialRoles, actorPermissions, enabledFeatures
                 <input value={form.description} disabled={form.locked} onChange={(event) => setForm({ ...form, description: event.target.value })} />
               </label>
             </div>
+
+            <label className="profile-toggle">
+              <span className="profile-toggle-text">
+                <span>{t("fields.requireMfa")}</span>
+                <span className="field-help">{t("fields.requireMfaHelp")}</span>
+              </span>
+              <input type="checkbox" role="switch" checked={form.requireMfa} disabled={form.locked} onChange={(event) => setForm({ ...form, requireMfa: event.target.checked })} />
+              <span className="album-picker-switch-track" aria-hidden="true" />
+            </label>
 
             <div className="field-stack">
               <span className="field-label">

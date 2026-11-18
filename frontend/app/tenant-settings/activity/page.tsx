@@ -14,7 +14,7 @@ import { can } from "@/lib/permissions";
 // Verlauf des aktiven Mandanten (nur Mandanten-Admins, Datenschutz-Audit PRIV-013).
 export default async function TenantActivityPage() {
   const session = await requireSession();
-  if (!can(session, "settings.manage")) {
+  if (!can(session, "activity.read")) {
     redirect("/");
   }
   const [t, tTenant, state] = await Promise.all([

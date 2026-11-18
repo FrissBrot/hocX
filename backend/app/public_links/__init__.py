@@ -75,7 +75,6 @@ def collect_all(db: Session, tenant_id: int) -> list[PublicLink]:
 
 # Spalten mit Token- oder Slug-Charakter, die bewusst KEINEN Zugang zu Vereinsdaten geben.
 EXEMPT_COLUMNS: dict[str, str] = {
-    "tenant.public_slug": "Kurzname der Organisation für Login und Domain-Auswahl, gibt keinen Zugriff auf Daten",
     "tenant_domain.verification_token": "DNS-Nachweis für eigene Domains, gibt keinen Zugriff auf Daten",
     "submission_assignment.public_slug": "Adresse einer Abgabe innerhalb eines Abgabebox-Links; ohne gültigen Link wertlos",
     "platform_notification_settings.status_token_hash": "Plattform-Statusseite (hocX-Betrieb), kein Mandant",

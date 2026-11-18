@@ -51,7 +51,7 @@ def test_upsert_storage_package_creates_and_updates(db):
     )
     assert updated.name == "10 GB Paket (neu)"
     assert updated.price_monthly_rp == 600
-    assert updated.price_yearly_rp is None
+    assert updated.price_yearly_rp == 6000  # aus dem Monatspreis ergänzt (plan_pricing)
 
     packages_by_code = {p.code: p for p in service.list_storage_packages(db)}
     assert packages_by_code["extra_10gb"].name == "10 GB Paket (neu)"

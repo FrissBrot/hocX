@@ -299,3 +299,34 @@ def test_invite_mail_exists_in_every_language():
     subjects = {lang: _render_invite(lang).subject for lang in LOCALES}
     assert all("Musterverein Seeland" in subject and "hocX" in subject for subject in subjects.values())
     assert len(set(subjects.values())) == len(LOCALES)
+
+
+# ── 3-Tage-Frist bei bestehenden Konten (Migration 0192) ────────────────
+
+
+def _reader_login(db, club, email: str, *, existing: bool) -> tuple[TestClient, dict]:
+    password = _strong_password()
+    reader = make_app_user(db, email, tenant_id=club["tenant"].id, role_code="reader")
+    reader.password_hash = hash_password(password)
+    if existing:
+        reader.first_login_at = datetime.now(timezone.utc) - timedelta(days=30)
+    club["tenant"].require_mfa = True
+    db.flush()
+    client = _client(db)
+    return client, client.post("/api/auth/login", json={"email": email, "password": password}).json()
+
+
+def test_existing_account_in_grace_sees_setup_but_may_skip(db, club, no_ip_limit):
+    client, pending = _reader_login(db, club, "leser@example.com", existing=True)
+    assert pending["mfa"]["status"] == "setup_required" and pending["mfa"]["can_skip"] is True
+    assert pending["mfa"]["grace_until"]
+    skipped = client.post("/api/auth/mfa/setup/skip", json={"ticket": pending["mfa"]["ticket"]})
+    assert skipped.status_code == 200, skipped.text
+    session = _session(client)
+    assert session["authenticated"] is True and session["mfa_grace_until"]
+
+
+def test_new_account_must_set_up_without_skip(db, club, no_ip_limit):
+    client, pending = _reader_login(db, club, "neu-leser@example.com", existing=False)
+    assert pending["mfa"]["status"] == "setup_required" and pending["mfa"]["can_skip"] is False
+    assert client.post("/api/auth/mfa/setup/skip", json={"ticket": pending["mfa"]["ticket"]}).status_code == 403

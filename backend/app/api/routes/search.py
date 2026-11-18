@@ -49,7 +49,8 @@ def _like_pattern(query: str) -> str:
     return f"%{escaped}%"
 
 
-def search_people(db: Session, tenant_id: int, query: str, limit: int = GROUP_LIMIT) -> list[SearchPerson]:
+def search_people(db: Session, tenant_id: int, query: str, limit: int = GROUP_LIMIT, *, by_email: bool = True) -> list[SearchPerson]:
+    """by_email=False ohne participants.contacts: sonst verriete ein Treffer die Adresse."""
     pattern = _like_pattern(query)
     prefix = _like_pattern(query)[1:]  # «beginnt mit» zuerst
     name = _fold(Participant.display_name)
@@ -61,7 +62,7 @@ def search_people(db: Session, tenant_id: int, query: str, limit: int = GROUP_LI
                 name.like(pattern, escape="\\"),
                 _fold(func.coalesce(Participant.first_name, "")).like(pattern, escape="\\"),
                 _fold(func.coalesce(Participant.last_name, "")).like(pattern, escape="\\"),
-                _fold(func.coalesce(Participant.email, "")).like(pattern, escape="\\"),
+                *([_fold(func.coalesce(Participant.email, "")).like(pattern, escape="\\")] if by_email else []),
             ),
         )
         .order_by(
@@ -75,13 +76,16 @@ def search_people(db: Session, tenant_id: int, query: str, limit: int = GROUP_LI
     return [SearchPerson(id=row.public_id, name=row.display_name, email=row.email, is_active=row.is_active) for row in rows]
 
 
-def search_files(db: Session, tenant_id: int, query: str, limit: int = GROUP_LIMIT) -> list[SearchFile]:
+def search_files(
+    db: Session, tenant_id: int, query: str, limit: int = GROUP_LIMIT, *, documents: bool = True, images: bool = True
+) -> list[SearchFile]:
+    """Dokumente nur mit files.read, Fotos nur mit photos.read (getrennte Rechte, Phase 3)."""
     service = FileService()
-    documents = service.list_tenant_files(db, tenant_id, limit=limit, exclude_images=True, search=query)
-    images = service.list_tenant_files(db, tenant_id, limit=limit, only_images=True, search=query)
+    document_items = service.list_tenant_files(db, tenant_id, limit=limit, exclude_images=True, search=query) if documents else []
+    image_items = service.list_tenant_files(db, tenant_id, limit=limit, only_images=True, search=query) if images else []
     return [
         SearchFile(id=item.id, name=item.original_name, is_image=item.is_image, context=item.origin_tag or item.ref_label or "")
-        for item in [*documents, *images]
+        for item in [*document_items, *image_items]
     ]
 
 
@@ -138,13 +142,20 @@ def search_blocks(db: Session, tenant_id: int, query: str, limit: int = GROUP_LI
     ]
 
 
+def _without_contacts(people: list[SearchPerson], user: CurrentUser) -> list[SearchPerson]:
+    """E-Mail-Adressen nur mit participants.contacts (Plan «Berechtigungen», Phase 3)."""
+    if user.can(P.PARTICIPANTS_CONTACTS):
+        return people
+    return [person.model_copy(update={"email": None}) for person in people]
+
+
 @router.post("/search", response_model=GlobalSearchRead)
 def global_search(
     payload: GlobalSearchQuery,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_any_permission(user, P.PARTICIPANTS_MANAGE, P.FILES_MANAGE, P.TEMPLATES_EDIT)
+    require_any_permission(user, P.PARTICIPANTS_READ, P.FILES_READ, P.PHOTOS_READ, P.TEMPLATES_EDIT)
     tenant_id = user.current_tenant_id
     if tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
@@ -154,8 +165,11 @@ def global_search(
         return GlobalSearchRead(people=[], files=[])
     templates = user.can(P.TEMPLATES_EDIT)
     return GlobalSearchRead(
-        people=search_people(db, tenant_id, query) if user.can(P.PARTICIPANTS_MANAGE) else [],
-        files=search_files(db, tenant_id, query) if user.can(P.FILES_MANAGE) else [],
+        people=_without_contacts(search_people(db, tenant_id, query, by_email=user.can(P.PARTICIPANTS_CONTACTS)), user) if user.can(P.PARTICIPANTS_READ) else [],
+        files=(
+            search_files(db, tenant_id, query, documents=user.can(P.FILES_READ), images=user.can(P.PHOTOS_READ))
+            if user.can(P.FILES_READ) or user.can(P.PHOTOS_READ) else []
+        ),
         elements=search_elements(db, tenant_id, query) if templates else [],
         blocks=search_blocks(db, tenant_id, query) if templates else [],
     )

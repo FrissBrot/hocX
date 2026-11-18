@@ -90,19 +90,6 @@ export function MobileTenantGeneral({ initialTenant }: { initialTenant: TenantSu
           <span className="field-label">{t("tenantNameLabel")}</span>
           <input value={tenantForm.name} onChange={(event) => setTenantForm((current) => ({ ...current, name: event.target.value }))} required />
         </label>
-        <label className="field-stack">
-          <span className="field-label">{t("publicSlugLabel")}</span>
-          <input
-            value={tenantForm.publicSlug}
-            onChange={(event) => setTenantForm((current) => ({ ...current, publicSlug: event.target.value.toLowerCase() }))}
-            placeholder={t("publicSlugPlaceholder")}
-            pattern="[a-z0-9-]+"
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-          />
-          <span className="field-help">{t("help.publicSlug")}</span>
-        </label>
         <div className="field-stack">
           <span className="field-label">{t("tenantIdLabel")}</span>
           <CopyField label={t("tenantIdLabel")} value={initialTenant.id} />

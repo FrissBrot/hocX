@@ -35,7 +35,9 @@
     "name": "Name",
     "nameHelpSystem": "Leave empty for the default name.",
     "description": "Description",
-    "permissions": "Permissions"
+    "permissions": "Permissions",
+    "requireMfa": "Require MFA for this role",
+    "requireMfaHelp": "Everyone with this role signs in with a second factor. Existing accounts have 3 days to set it up, new ones set it up at their first login."
   },
   "toasts": {
     "created": "Role created",
@@ -77,6 +79,10 @@
       "edit": {
         "label": "Edit meetings",
         "description": "Create, edit and delete events, minutes, agenda items, tasks and lists; Word import."
+      },
+      "approve": {
+        "label": "Approve protocols",
+        "description": "Approve and close protocols. With the four-eyes principle, not one you wrote yourself."
       }
     },
     "templates": {
@@ -93,6 +99,18 @@
       "manage": {
         "label": "Manage participants",
         "description": "View, create, edit and import participants including contact details, and assign them to templates."
+      },
+      "read": {
+        "label": "View members",
+        "description": "View the member list and person pages, without contact details."
+      },
+      "contacts": {
+        "label": "View contact details",
+        "description": "View members’ email addresses."
+      },
+      "export": {
+        "label": "Export personal data",
+        "description": "Create data access requests for other people (all data of a person as ZIP)."
       }
     },
     "finances": {
@@ -115,6 +133,10 @@
       "manage": {
         "label": "Manage files & photos",
         "description": "Manage files, photo gallery and albums, public share links and album shares."
+      },
+      "read": {
+        "label": "View storage",
+        "description": "View and download files in the shared storage."
       }
     },
     "submissions": {
@@ -125,6 +147,10 @@
       "manage": {
         "label": "Manage submissions",
         "description": "Create, review and delete submission requests and public upload links."
+      },
+      "review": {
+        "label": "Review submissions",
+        "description": "Close and reopen submitted items."
       }
     },
     "settings": {
@@ -143,6 +169,40 @@
       "export": {
         "label": "Data exports",
         "description": "Full export of the organization and data access requests for other persons."
+      }
+    },
+    "todos": {
+      "complete_own": {
+        "label": "Complete own tasks",
+        "description": "Tick off and reopen your own tasks. Without this right, access is read-only."
+      }
+    },
+    "fines": {
+      "manage": {
+        "label": "Manage fines",
+        "description": "Record, collect and revert fines; tariffs and task fine rules."
+      }
+    },
+    "photos": {
+      "read": {
+        "label": "View photos",
+        "description": "View and download the photo gallery and albums."
+      },
+      "manage": {
+        "label": "Manage photos",
+        "description": "Upload, tag and delete photos; albums and partner sharing."
+      }
+    },
+    "sharing": {
+      "public": {
+        "label": "Share publicly",
+        "description": "Create and revoke public links for files, albums and submission uploads."
+      }
+    },
+    "activity": {
+      "read": {
+        "label": "View activity log",
+        "description": "Who changed what and when (organisation activity log)."
       }
     }
   },

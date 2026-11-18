@@ -117,7 +117,11 @@
     "enableConfirm": "MFA verlangen",
     "enabledToast": "MFA ist jetzt für alle Logins Pflicht",
     "disabledToast": "MFA ist nur noch bei Administrationsrechten Pflicht",
-    "saveFailed": "Die Einstellung konnte nicht gespeichert werden."
+    "saveFailed": "Die Einstellung konnte nicht gespeichert werden.",
+    "fourEyesTitle": "Vier-Augen-Prinzip für Protokolle",
+    "fourEyesHelp": "Wer ein Protokoll verfasst hat, kann es nicht selbst abschliessen – eine andere Person mit dem Recht «Protokolle abschliessen» schliesst ab.",
+    "fourEyesOn": "Vier-Augen-Prinzip eingeschaltet",
+    "fourEyesOff": "Vier-Augen-Prinzip ausgeschaltet"
   },
   "access": {
     "title": "Wer hat Zugriff",

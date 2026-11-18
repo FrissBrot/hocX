@@ -22,7 +22,7 @@ export default async function FinesPage() {
   const hasFinance = can(session, "finances.read");
   const fines = await backendFetchWithSession<AttendanceFineListItem[]>("/api/fines") ?? [];
   const accounts = hasFinance ? (await backendFetchWithSession<FinanceAccount[]>("/api/finance/accounts") ?? []) : [];
-  const canWrite = can(session, "finances.manage");
+  const canWrite = can(session, "fines.manage");
   // Pendenzen-Bussen (Feature todo_fines) stehen in derselben Liste; abgeschaltet nur lesbar.
   const todoFinesAccess = featureAccess(session, "todo_fines");
   const todoFines = todoFinesAccess !== "none" ? (await backendFetchWithSession<TodoFineListItem[]>("/api/todo-fines") ?? []) : null;

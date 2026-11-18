@@ -1134,7 +1134,7 @@ Sichtbarkeit von Personenstatistiken, Link zum Datenschutzhinweis.
 
 ### `admin.retention` – Aufbewahrung und Löschvorschläge
 
-Fristen für Einreichungen, ehemalige Mitglieder, alte Galeriebilder.
+Fristen für Einreichungen und alte Galeriebilder (Ausgetretene sind ab dem Austritt gesperrt).
 
 | Feld | Wert |
 |---|---|

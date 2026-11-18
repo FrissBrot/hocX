@@ -137,5 +137,11 @@
     "password_weak": "Le mot de passe est trop faible. Utilise au moins 12 caractères sans nom, e-mail ni mots courants.",
     "mfa_policy_own_mfa_missing": "Configurez d'abord la MFA pour votre propre compte.",
     "mfa_setup_required": "Votre organisation exige la MFA. Reconnectez-vous et configurez un second facteur."
+  },
+  "grace": {
+    "title": "Le second facteur devient obligatoire",
+    "message": "Votre organisation exige un second facteur pour votre compte. Configurez-le d’ici le {until} – ensuite, la connexion ne sera possible qu’avec lui.",
+    "later": "Plus tard",
+    "setup": "Configurer maintenant"
   }
 }

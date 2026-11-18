@@ -23,7 +23,6 @@ router = APIRouter()
 
 class RetentionPolicyRead(BaseModel):
     submissions_months: int | None = None
-    former_members_years: int | None = None
     unlinked_gallery_years: int | None = None
     auto_apply: bool = False
 
@@ -32,14 +31,13 @@ class RetentionPolicyUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     submissions_months: int | None = Field(default=None, ge=1, le=240)
-    former_members_years: int | None = Field(default=None, ge=1, le=50)
     unlinked_gallery_years: int | None = Field(default=None, ge=1, le=50)
     auto_apply: bool = False
 
 
 class RetentionProposalRead(BaseModel):
     id: uuid.UUID
-    kind: Literal["submission_upload", "former_member", "gallery_image"]
+    kind: Literal["submission_upload", "gallery_image"]
     label: str | None = None
     reference_date: date | None = None
     created_at: datetime
@@ -61,7 +59,7 @@ class RetentionDecisionResult(BaseModel):
 
 def _policy_read(policy) -> RetentionPolicyRead:
     return RetentionPolicyRead(
-        submissions_months=policy.submissions_months, former_members_years=policy.former_members_years,
+        submissions_months=policy.submissions_months,
         unlinked_gallery_years=policy.unlinked_gallery_years, auto_apply=bool(policy.auto_apply),
     )
 

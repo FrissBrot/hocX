@@ -4,8 +4,6 @@
   "masterDataEyebrow": "Stammdaten",
   "changeProfileImage": "Profilbild ändern",
   "tenantNameLabel": "Mandantenname",
-  "publicSlugLabel": "Kurzname",
-  "publicSlugPlaceholder": "z.B. muster-organisation",
   "tenantIdLabel": "Organisations-ID",
   "tenantIdHelp": "Wird benötigt, um dieser Organisation z.B. ein Fotoalbum freizugeben.",
   "saveSuccess": "Mandant gespeichert",
@@ -174,8 +172,6 @@
   },
   "activity": {
     "intro": "Änderungen, Anmeldungen und Zugriffe der hocX-Plattform auf Daten dieser Organisation. Ohne IP- und E-Mail-Adressen.",
-    "filterAll": "Alle",
-    "filterFailures": "Fehlgeschlagen",
     "category": "Bereich",
     "allCategories": "Alle Bereiche",
     "colTime": "Zeitpunkt",
@@ -192,19 +188,25 @@
     "outcome": {
       "success": "Erfolgreich",
       "failure": "Fehlgeschlagen"
-    }
+    },
+    "dateFrom": "Von",
+    "dateTo": "Bis",
+    "clearFilter": "Filter entfernen",
+    "allActions": "Alle Vorgänge",
+    "allActors": "Alle Personen",
+    "allOutcomes": "Alle Ergebnisse",
+    "chipDate": "{from} – {to}",
+    "removeFilter": "Filter «{filter}» entfernen",
+    "clearAll": "Alle Filter entfernen",
+    "emptyFiltered": "Keine Einträge für diese Filter"
   },
   "retention": {
-    "intro": "Lege fest, wie lange die Organisation bestimmte Daten aufbewahrt. Alle Regeln sind aus, bis du sie einschaltest. hocX schlägt passende Einträge täglich vor; du bestätigst oder verwirfst sie. Ehemalige Mitglieder werden nur deaktiviert, nie gelöscht.",
+    "intro": "Lege fest, wie lange die Organisation bestimmte Daten aufbewahrt. Alle Regeln sind aus, bis du sie einschaltest. hocX schlägt passende Einträge täglich vor; du bestätigst oder verwirfst sie. Ausgetretene Mitglieder sind ab dem Tag nach dem Austritt automatisch gesperrt; ihre Daten bleiben erhalten.",
     "rulesTitle": "Fristen",
     "rules": {
       "submissions_months": {
         "label": "Einreichungen der Abgabebox nach Abgabeschluss löschen",
         "hint": "Gilt für Abgaben mit Abgabeschluss. Gelöscht werden die eingereichten Dateien samt Vorschau."
-      },
-      "former_members_years": {
-        "label": "Ehemalige Mitglieder nach dem Austritt deaktivieren",
-        "hint": "Login wird gesperrt, laufende Sitzungen enden. Name, Anwesenheit, Bussen und Protokolle bleiben unverändert."
       },
       "unlinked_gallery_years": {
         "label": "Alte Galeriebilder ohne Album und Termin vorschlagen",
@@ -226,7 +228,6 @@
     "empty": "Keine offenen Vorschläge.",
     "kind": {
       "submission_upload": "Einreichungen ({count})",
-      "former_member": "Ehemalige Mitglieder deaktivieren ({count})",
       "gallery_image": "Galeriebilder ({count})"
     },
     "unnamed": "Ohne Bezeichnung",
@@ -270,7 +271,6 @@
   "help": {
     "domains": "Eine eigene Domain (z. B. app.example.ch) macht hocX, die Abgabebox oder die Prüfseite unter eurer Adresse erreichbar. Pro Zweck gibt es eine aktive Domain; eine neue ersetzt sie erst nach erfolgreicher Prüfung.",
     "dns": "Der TXT-Eintrag beweist, dass euch die Domain gehört. Der CNAME-Eintrag leitet die Adresse auf hocX weiter. Eine Hauptdomain ohne Vorsatz (example.ch) kann bei vielen Anbietern keinen CNAME haben – nimm dann eine Subdomain wie app.example.ch oder einen A-Eintrag auf die gleiche IP-Adresse wie das Ziel.",
-    "publicSlug": "Kurzer, eindeutiger Name eurer Organisation aus Kleinbuchstaben, Ziffern und Bindestrichen. Andere Organisationen finden euch darüber, z. B. beim Freigeben eines Fotoalbums. Links zur Abgabebox hängen nicht davon ab und bleiben bei einer Änderung gültig.",
     "modules": "«Aktiv» heisst voll nutzbar. «Nur lesen» bedeutet: Das Modul ist nicht mehr im Abo, eure Daten bleiben aber erhalten und lesbar; ändern ist gesperrt, bis das Modul wieder gebucht ist."
   },
   "errors": {

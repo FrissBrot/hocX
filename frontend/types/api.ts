@@ -4,6 +4,8 @@ export type MfaFactorType = "totp" | "webauthn";
 
 export type SessionInfo = {
   authenticated: boolean;
+  /** MFA ist Pflicht, das bestehende Konto hat Frist bis hierhin (Migration 0192) */
+  mfa_grace_until?: string | null;
   user: {
     id: string;
     first_name: string | null;
@@ -35,6 +37,8 @@ export type RoleRead = RoleRef & {
   user_count: number;
   // Standardrolle Administrator: fest, nicht änderbar, nicht löschbar.
   locked: boolean;
+  /** MFA für alle Konten mit dieser Rolle (Migration 0192) */
+  require_mfa?: boolean;
 };
 
 export type PendingMfaMethod = {
@@ -56,8 +60,10 @@ export type PendingMfaLogin = {
   default_factor_label: string | null;
   can_add_totp: boolean;
   can_add_passkey: boolean;
-  /** Nur Erstlogin über Einladung ohne MFA-Pflicht: «Später einrichten» erlaubt. */
+  /** «Später einrichten» erlaubt: Erstlogin ohne Pflicht oder bestehendes Konto in der Frist. */
   can_skip?: boolean;
+  /** Ende der 3-Tage-Frist (Migration 0192), wenn sie der Grund für can_skip ist */
+  grace_until?: string | null;
 };
 
 export type LoginResponse = SessionInfo & {
@@ -105,7 +111,6 @@ export type TenantSummary = {
   name: string;
   profile_image_path: string | null;
   profile_image_url: string | null;
-  public_slug: string | null;
   created_at?: string | null;
   updated_at?: string | null;
   enabled_features: string[];
@@ -460,7 +465,6 @@ export type TenantLookup = {
   id: string;
   trusted: boolean;
   name: string | null;
-  slug: string | null;
   participant_count: number | null;
   profile_image_url: string | null;
 };
@@ -743,7 +747,6 @@ export type AdminTenantSummary = {
   name: string;
   profile_image_path: string | null;
   profile_image_url: string | null;
-  public_slug: string | null;
   participant_count: number;
   user_count: number;
   created_at: string;
@@ -925,7 +928,6 @@ export type AdminTenantSubscriptionUpdate = {
 
 export type AdminTenantCreate = {
   name: string;
-  public_slug: string | null;
   plan_code: string | null;
   billing_cycle: "monthly" | "yearly";
 };
@@ -2536,7 +2538,16 @@ export type ActivityEntry = {
   entity_type: string | null;
 };
 
-export type ActivityPage = { items: ActivityEntry[]; total: number; categories: string[] };
+export type ActivityActor = { key: string; kind: ActivityEntry["actor_kind"]; name: string | null };
+
+export type ActivityPage = {
+  items: ActivityEntry[];
+  total: number;
+  categories: string[];
+  /** Auswahllisten der Spaltenfilter (alles, was im Verlauf vorkommt) */
+  actions?: string[];
+  actors?: ActivityActor[];
+};
 
 export type AuditLogEntry = {
   id: number;

@@ -10,12 +10,11 @@ import { formatDate } from "@/lib/utils/format";
 
 export type RetentionPolicy = {
   submissions_months: number | null;
-  former_members_years: number | null;
   unlinked_gallery_years: number | null;
   auto_apply: boolean;
 };
 
-type ProposalKind = "submission_upload" | "former_member" | "gallery_image";
+type ProposalKind = "submission_upload" | "gallery_image";
 
 type RetentionProposal = {
   id: string;
@@ -29,13 +28,12 @@ type DecisionResult = { applied: number; dismissed: number; failed: number; miss
 
 const RULES: { key: keyof Omit<RetentionPolicy, "auto_apply">; unit: "months" | "years"; max: number }[] = [
   { key: "submissions_months", unit: "months", max: 240 },
-  { key: "former_members_years", unit: "years", max: 50 },
   { key: "unlinked_gallery_years", unit: "years", max: 50 },
 ];
-const KINDS: ProposalKind[] = ["submission_upload", "former_member", "gallery_image"];
+const KINDS: ProposalKind[] = ["submission_upload", "gallery_image"];
 
 // Mandanten-Einstellungen → Aufbewahrung (Datenschutz-Audit Paket 8). Alle Regeln sind
-// standardmässig aus; ehemalige Mitglieder werden nur deaktiviert, nie gelöscht.
+// standardmässig aus. Ausgetretene sind ab dem Austritt gesperrt (keine eigene Regel mehr).
 export function RetentionSettings({ initialPolicy }: { initialPolicy: RetentionPolicy }) {
   const t = useTranslations("tenantSettings.retention");
   const toast = useToast();

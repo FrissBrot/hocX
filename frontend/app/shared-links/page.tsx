@@ -11,7 +11,7 @@ import { can, featureAccess } from "@/lib/permissions";
 
 export default async function SharedLinksPage() {
   const session = await requireSession();
-  const canView = can(session, "files.manage");
+  const canView = can(session, "sharing.public");
 
   if (!canView) {
     redirect("/");

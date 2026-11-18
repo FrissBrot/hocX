@@ -12,7 +12,7 @@ export default async function FineSettingsPage({ searchParams }: { searchParams:
   const { tab } = await searchParams;
   const session = await requireSession();
   if (featureAccess(session, "finance") === "none" || !can(session, "finances.read")) redirect("/");
-  const canManage = can(session, "finances.manage");
+  const canManage = can(session, "fines.manage");
   const todoFinesAccess = featureAccess(session, "todo_fines");
   const [tariff, tariffs, rules, accounts] = await Promise.all([
     backendFetchWithSession<FineTariff>("/api/fines/tariff"),

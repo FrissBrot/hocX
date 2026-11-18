@@ -21,7 +21,7 @@ from app.core.config import settings
 from app.core.rate_limit import enforce_rate_limit
 from app.core.permissions import P
 from app.core.features_generated import F
-from app.core.security import CurrentUser, get_current_user, require_feature, require_permission
+from app.core.security import CurrentUser, get_current_user, require_any_permission, require_feature, require_permission
 from app.models import ElementType, GalleryImage, Protocol, ProtocolElement, ProtocolElementBlock, ProtocolImage, StoredFile, Tenant
 from app.schemas.files import (
     AlbumPendingReleaseRead,
@@ -125,7 +125,13 @@ def list_files(
     exclude_images trennen die beiden). Nur mit files.manage: dies
     ist eine mandantenweite Aggregatsicht ueber alle Protokolle hinweg, nicht scopebar auf
     die feingranulare Pro-Protokoll-Leserechte-Pruefung von ensure_can_read_stored_file."""
-    require_permission(user, P.FILES_MANAGE)
+    require_any_permission(user, P.FILES_READ, P.PHOTOS_READ)
+    # Ablage und Fotos sind getrennte Rechte (Plan «Berechtigungen», Phase 3): wer nur eines hat,
+    # sieht nur diese Sorte.
+    if not user.can(P.FILES_READ):
+        only_images, exclude_images = True, False
+    elif not user.can(P.PHOTOS_READ):
+        exclude_images, only_images = True, False
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     album = _get_album(db, user, album_id) if album_id is not None else None
@@ -203,7 +209,7 @@ def files_timeline(
     """Einträge je Tag (group_date) der Mandantenübersicht, mit denselben Filtern wie GET /files.
     Die Fotogalerie berechnet daraus Höhen und Zeitstrahl, bevor sie Bilder lädt (Alben haben
     ihre eigene Reihenfolge und nutzen das nicht)."""
-    require_permission(user, P.FILES_MANAGE)
+    require_permission(user, P.PHOTOS_READ)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     return service.tenant_files_timeline(
@@ -221,7 +227,7 @@ def list_file_tags(
     """Autocomplete-Quelle fuer den Tag-Filter/-Editor auf der "Dateien"-Seite - jeder Tag,
     der aktuell auf irgendeiner Datei des Mandanten liegt, inklusive der automatischen
     Herkunfts-Tags (siehe FileOverviewItem.origin_tag)."""
-    require_permission(user, P.FILES_MANAGE)
+    require_any_permission(user, P.FILES_READ, P.PHOTOS_READ)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     return service.list_distinct_tags(db, user.current_tenant_id, query=query, limit=limit)
@@ -231,7 +237,7 @@ def list_file_tags(
 def get_analysis_progress(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     """Tenant-wide summary behind the Fotos page's "Foto-Analyse läuft" progress bar and
     the "Analyse läuft · N Bilder" pill."""
-    require_permission(user, P.FILES_MANAGE)
+    require_permission(user, P.PHOTOS_READ)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     return service.analysis_progress(db, user.current_tenant_id)
@@ -240,7 +246,7 @@ def get_analysis_progress(db: Session = Depends(get_db), user: CurrentUser = Dep
 @router.get("/files/stats", response_model=FileStats)
 def get_file_stats(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     """Backs the Dateien page's Dokumente/Fotos/Speicher stat cards."""
-    require_permission(user, P.FILES_MANAGE)
+    require_any_permission(user, P.FILES_READ, P.PHOTOS_READ)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     return service.file_stats(db, user.current_tenant_id)
@@ -260,7 +266,7 @@ def list_similarity_groups(
     "Ähnliche" (kind="series": Fotoserie derselben Szene). Gruppiert wird im Hintergrund
     (job-worker, FileService.refresh_similarity_results); diese Route liest nur das Ergebnis und
     filtert es mit denselben Filtern wie GET /files - siehe FileService.list_similarity_groups."""
-    require_permission(user, P.FILES_MANAGE)
+    require_permission(user, P.PHOTOS_READ)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     file_ids = None
@@ -405,7 +411,7 @@ def precheck_uploads(
     Protokollbilder): meldet je Datei, ob sie hochgeladen werden muss oder im eigenen
     Mandanten schon vorhanden ist, und ergaenzt bei Bildern fehlende Metadaten ohne erneute
     Uebertragung - siehe upload_precheck_service. Gleiche Rolle wie die Upload-Endpunkte."""
-    require_permission(user, P.FILES_MANAGE)
+    require_any_permission(user, P.FILES_MANAGE, P.PHOTOS_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     if payload.estimated_taken_on is not None and image_metadata_service.valid_estimated_date(payload.estimated_taken_on) is None:
@@ -486,7 +492,7 @@ async def _upload_gallery_images_impl(  # loop-ok: nur über run_coroutine_in_th
     damit ein mehrere GB grosses ZIP nicht die ganze Request-Laufzeit ueber im Speicher
     gehalten werden muss und der Upload-Dialog sofort schliessen kann. Poll GET
     .../gallery-upload-jobs/{id} fuer den Fortschritt."""
-    require_permission(user, P.FILES_MANAGE)
+    require_permission(user, P.PHOTOS_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     if len(files) > MAX_GALLERY_UPLOAD_BATCH_FILES:
@@ -735,7 +741,7 @@ def list_gallery_upload_jobs(db: Session = Depends(get_db), user: CurrentUser = 
     status bar - same tenant-wide-visibility idea as GET /files/analysis-progress (just a
     list here, not one aggregated object), so the bar shows up for any writer in the tenant
     (any tab, after a refresh, ...), not just whoever's browser sent the original request."""
-    require_permission(user, P.FILES_MANAGE)
+    require_permission(user, P.PHOTOS_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     jobs = db.scalars(
@@ -751,7 +757,7 @@ def get_gallery_upload_job(job_id: uuid.UUID, db: Session = Depends(get_db), use
     """Full result for one job - fetched once it's left the active listing above, so the
     frontend can show the same (items, errors) summary the old synchronous response used
     to return directly."""
-    require_permission(user, P.FILES_MANAGE)
+    require_permission(user, P.PHOTOS_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     job = db.get(GalleryUploadJob, job_id)
@@ -1030,13 +1036,15 @@ def update_stored_file_tags(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_permission(user, P.FILES_MANAGE)
+    require_any_permission(user, P.FILES_MANAGE, P.PHOTOS_MANAGE)
     # Nur Dateien des eigenen Mandanten (Security-Audit SEC-003): ensure_can_read_stored_file
     # erlaubt auch das Lesen von Partner-Fotos aus geteilten Alben - Schreiben darf das nie.
     stored_file = public_id_service.get_by_public_id(db, StoredFile, stored_file_id, tenant_id=user.current_tenant_id)
     if stored_file is None or user.current_tenant_id is None:
         raise HTTPException(status_code=404, detail="Stored file not found")
     access_service.ensure_can_read_stored_file(db, user, stored_file.id)
+    # Fotos verwaltet photos.manage, übrige Dateien files.manage (Plan «Berechtigungen», Phase 3)
+    require_permission(user, P.PHOTOS_MANAGE if (stored_file.mime_type or "").startswith("image/") else P.FILES_MANAGE)
     return service.update_stored_file_tags(db, stored_file, payload.tags)
 
 
@@ -1064,7 +1072,7 @@ def get_stored_file_metadata(
 def _can_edit_capture_date(user: CurrentUser, stored_file: StoredFile) -> bool:
     """Schreibrecht im eigenen Mandanten - nie fuer Fotos eines Partner-Mandanten aus einem
     geteilten Album."""
-    return user.can(P.FILES_MANAGE) and stored_file.tenant_id == user.current_tenant_id
+    return user.can(P.PHOTOS_MANAGE) and stored_file.tenant_id == user.current_tenant_id
 
 
 @router.patch("/stored-files/{stored_file_id}/capture-date", response_model=StoredFileMetadata)
@@ -1077,7 +1085,7 @@ def update_stored_file_capture_date(
     """Geschaetztes Aufnahmedatum setzen, aendern oder (null) entfernen - der einzige Weg,
     ein vorhandenes Schaetzdatum zu ueberschreiben. Echtes Aufnahmedatum (EXIF) und
     Uploaddatum bleiben unveraendert."""
-    require_permission(user, P.FILES_MANAGE)
+    require_permission(user, P.PHOTOS_MANAGE)
     stored_file = public_id_service.get_by_public_id(db, StoredFile, stored_file_id)
     if stored_file is None or user.current_tenant_id is None or stored_file.tenant_id != user.current_tenant_id:
         raise HTTPException(status_code=404, detail="Stored file not found")
@@ -1238,7 +1246,8 @@ ALBUM_INVITES_PER_HOUR = 30
 
 
 def _get_album(db: Session, user: CurrentUser, album_id: uuid.UUID):
-    require_permission(user, P.FILES_MANAGE)
+    # Lesen; schreibende Album-Routen prüfen photos.manage zusätzlich selbst
+    require_permission(user, P.PHOTOS_READ)
     album = photo_album_share_service.get_accessible_album(db, album_id, user.current_tenant_id)
     if album is None:
         raise HTTPException(status_code=404, detail="Album nicht gefunden")
@@ -1247,7 +1256,7 @@ def _get_album(db: Session, user: CurrentUser, album_id: uuid.UUID):
 
 @router.get("/files/albums", response_model=list[PhotoAlbumRead])
 def list_albums(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_permission(user, P.FILES_MANAGE)
+    require_permission(user, P.PHOTOS_READ)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     entries = photo_album_service.list_albums_with_stats(db, service, user.current_tenant_id)
@@ -1320,7 +1329,7 @@ def list_albums(db: Session = Depends(get_db), user: CurrentUser = Depends(get_c
 def list_album_pending_releases(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     """Eigene geteilte Alben mit automatisch einsortierten, noch nicht freigegebenen Fotos -
     fuer den Hinweis auf der Fotos-Seite."""
-    require_permission(user, P.FILES_MANAGE)
+    require_permission(user, P.PHOTOS_READ)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     return [
@@ -1335,7 +1344,7 @@ def release_album_items(
 ):
     """Gibt vorgemerkte Fotos eines eigenen Albums fuer die Partner frei - nur der Besitzer,
     denn nur er sieht die vorgemerkten Fotos."""
-    require_permission(user, P.FILES_MANAGE)
+    require_permission(user, P.PHOTOS_MANAGE)
     album = db.scalar(select(PhotoAlbum).where(PhotoAlbum.id == album_id, PhotoAlbum.tenant_id == user.current_tenant_id))
     if album is None:
         raise HTTPException(status_code=404, detail="Album nicht gefunden")
@@ -1354,7 +1363,7 @@ def list_upload_target_shared_albums(
 ):
     """Welche bereits geteilten Alben ein Galerie-Upload mit diesem Bezug fuellen wuerde - der
     Upload-Dialog fragt damit, ob die Fotos gleich freigegeben werden sollen."""
-    require_permission(user, P.FILES_MANAGE)
+    require_permission(user, P.PHOTOS_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     target = _resolve_upload_target(
@@ -1381,7 +1390,7 @@ def list_upload_target_shared_albums(
 def list_album_share_requests(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     """Offene Einladungen ANDERER Mandanten an den eigenen, fuer die "Anfragen"-Sektion auf
     der Fotos-Seite."""
-    require_permission(user, P.FILES_MANAGE)
+    require_permission(user, P.PHOTOS_READ)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     return [
@@ -1399,7 +1408,7 @@ def create_album_share(
     """Laedt einen anderen Mandanten (per public_id) zu diesem - eigenen - Album ein. Nur der
     Besitzer-Mandant darf einladen, daher hier bewusst PhotoAlbum.tenant_id statt _get_album
     (die eingeladene Seite soll das Album ja gerade noch NICHT sehen können)."""
-    require_permission(user, P.FILES_MANAGE)
+    require_permission(user, P.PHOTOS_MANAGE)
     require_feature(user, F.PHOTO_SHARING, write=True)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
@@ -1429,7 +1438,7 @@ def update_album_share(
 ):
     """Für einen Partner Standort (GPS) teilen und/oder öffentliche Links auf dieses Album erlauben
     - nur der Besitzer-Mandant (SEC-002)."""
-    require_permission(user, P.FILES_MANAGE)
+    require_permission(user, P.PHOTOS_MANAGE)
     require_feature(user, F.PHOTO_SHARING, write=True)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
@@ -1460,7 +1469,7 @@ def update_my_album_share(
 ):
     """Partner-Seite einer Freigabe: eigene Fotos in diesem Album in öffentlichen Links zeigen
     oder nicht (SEC-002). Nur für die Freigabe des eigenen Mandanten."""
-    require_permission(user, P.FILES_MANAGE)
+    require_permission(user, P.PHOTOS_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     try:
@@ -1479,7 +1488,7 @@ def respond_album_share(
     """Beantwortet eine offene Einladung an den EIGENEN Mandanten - keine tenant_public_id im
     Pfad noetig, da nur der eingeladene Mandant selbst (user.current_tenant_id) je antworten
     darf, siehe photo_album_share_service.respond."""
-    require_permission(user, P.FILES_MANAGE)
+    require_permission(user, P.PHOTOS_MANAGE)
     if payload.accept:
         # Annehmen öffnet mandantenübergreifenden Zugriff - nur mit Feature «Foto-Teilen» (Audit
         # Dateien/Fotos). Ablehnen bleibt immer möglich, damit keine Einladung hängen bleibt.
@@ -1500,7 +1509,7 @@ def delete_album_share(
 ):
     """Besitzer widerruft eine Freigabe, oder der geteilte Mandant verlaesst sie selbst -
     beides die gleiche Operation, siehe photo_album_share_service.revoke."""
-    require_permission(user, P.FILES_MANAGE)
+    require_permission(user, P.PHOTOS_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     album = db.get(PhotoAlbum, album_id)
@@ -1523,7 +1532,7 @@ def delete_album_share(
 
 @router.post("/files/albums", response_model=PhotoAlbumRead, status_code=201)
 def create_album(payload: PhotoAlbumCreate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_permission(user, P.FILES_MANAGE)
+    require_permission(user, P.PHOTOS_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     try:
@@ -1540,7 +1549,7 @@ def create_album(payload: PhotoAlbumCreate, db: Session = Depends(get_db), user:
 def _get_own_album(db: Session, user: CurrentUser, album_id: uuid.UUID) -> PhotoAlbum:
     """Album des eigenen Mandanten (Besitzer) - Partner eines geteilten Albums dürfen es weder
     umbenennen noch löschen (E-7). Fremde und unbekannte IDs: gleiche 404 (kein Existenz-Orakel)."""
-    require_permission(user, P.FILES_MANAGE)
+    require_permission(user, P.PHOTOS_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     album = db.scalar(select(PhotoAlbum).where(PhotoAlbum.id == album_id, PhotoAlbum.tenant_id == user.current_tenant_id))
@@ -1582,6 +1591,7 @@ def remove_album_items(
 ):
     """Fotos aus einem Album nehmen, ohne sie zu löschen. Der Besitzer darf jedes Foto entfernen,
     ein Partner eines geteilten Albums nur Fotos seines eigenen Vereins (E-7)."""
+    require_permission(user, P.PHOTOS_MANAGE)
     album = _get_album(db, user, album_id)
     ids = list(dict.fromkeys(payload.file_ids))
     if not ids or len(ids) > 200:
@@ -1600,6 +1610,7 @@ def remove_album_items(
 
 @router.post("/files/albums/{album_id}/items", status_code=204)
 def add_album_items(album_id: uuid.UUID, payload: PhotoAlbumItemsUpdate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    require_permission(user, P.PHOTOS_MANAGE)
     album = _get_album(db, user, album_id)
     ids = set(payload.file_ids)
     if not ids or len(ids) > 200:
@@ -1629,6 +1640,7 @@ def set_album_item_best(
     """Manually pins a photo in/out of its album's best-of ("Stern") selection, or (with
     best_override: null) hands it back to the automatic ranking - see
     photo_album_service.recompute_best_of."""
+    require_permission(user, P.PHOTOS_MANAGE)
     album = _get_album(db, user, album_id)
     try:
         photo_album_service.set_best_override(db, service, album, file_id, payload.best_override)
@@ -1646,7 +1658,7 @@ def set_file_best_everywhere(
     """Best-of toggle from the unscoped "Alle Fotos" view (no album in context) - applies
     to every album this tenant's photo belongs to, since is_best lives on PhotoAlbumItem,
     not the photo itself. See set_album_item_best for the album-scoped equivalent."""
-    require_permission(user, P.FILES_MANAGE)
+    require_permission(user, P.PHOTOS_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     touched = photo_album_service.set_best_override_everywhere(
@@ -1663,7 +1675,7 @@ def bulk_delete_files(payload: FileBulkDelete, db: Session = Depends(get_db), us
     """Multi-select "Löschen" auf der Fotos-Seite und "Nur beste behalten" im Ähnliche-Tab -
     löscht endgültig, nur Direkt-Uploads (siehe FileService.delete_gallery_images für die
     Begründung; andere Quellen werden als Fehler zurückgemeldet statt gelöscht)."""
-    require_permission(user, P.FILES_MANAGE)
+    require_permission(user, P.PHOTOS_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     ids = list(dict.fromkeys(payload.file_ids))
@@ -1683,10 +1695,14 @@ def bulk_delete_files(payload: FileBulkDelete, db: Session = Depends(get_db), us
 @router.post("/files/bulk-tags", status_code=204)
 def bulk_update_file_tags(payload: FileBulkTagsUpdate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     """Multi-select "Tags hinzufügen" auf der Fotos-Seite."""
-    require_permission(user, P.FILES_MANAGE)
+    require_permission(user, P.PHOTOS_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     ids = list(dict.fromkeys(payload.file_ids))
     if not ids or len(ids) > 200:
         raise HTTPException(status_code=422, detail="Bitte 1 bis 200 Dateien auswählen")
+    # Dokumente (keine Bilder) taggt nur, wer die Ablage verwalten darf (Phase 3, wie beim Einzel-Tag)
+    mimes = db.scalars(select(StoredFile.mime_type).where(StoredFile.tenant_id == user.current_tenant_id, StoredFile.public_id.in_(ids)))
+    if any(not (mime or "").startswith("image/") for mime in mimes):
+        require_permission(user, P.FILES_MANAGE)
     service.bulk_update_tags(db, user.current_tenant_id, ids, payload.add_tags, payload.remove_tags)

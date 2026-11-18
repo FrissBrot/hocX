@@ -252,7 +252,7 @@ export function AlbumShareModal({
                 <>
                   <strong>{preview.name}</strong>
                   <span className="album-share-entry-meta">
-                    {[preview.slug, preview.participant_count !== null ? t("participantsSuffix", { count: preview.participant_count }) : null].filter(Boolean).join(" · ")}
+                    {[preview.participant_count !== null ? t("participantsSuffix", { count: preview.participant_count }) : null].filter(Boolean).join(" · ")}
                   </span>
                 </>
               ) : (
@@ -278,7 +278,6 @@ export function AlbumShareModal({
                   <TenantAvatar name={tenant.name} imageUrl={tenant.profile_image_url} />
                   <span className="album-share-entry-text">
                     <strong>{tenant.name}</strong>
-                    {tenant.slug && <span className="album-share-entry-meta">{tenant.slug}</span>}
                   </span>
                 </button>
               </li>

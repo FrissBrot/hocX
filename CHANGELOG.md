@@ -55,6 +55,19 @@ Keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
 - Ausgetretene Personen (Austrittsdatum vor heute) können sich ab dem Update nicht mehr anmelden,
   auch wenn ihr Login eingeschaltet ist; laufende Sitzungen enden. Wer das Austrittsdatum entfernt,
   gibt den Login wieder frei.
+- Migration `0189_stored_file_context`: jede Datei bekommt einen Kontext (Abgabe, Protokoll, Album,
+  Ablage), nachgetragen aus den Verknüpfungen; Trigger halten ihn aktuell. Keine Verhaltensänderung.
+- Migration `0190_permission_catalog_v2`: zwölf neue Berechtigungen. Bestehende Rollen bekommen sie
+  so, dass **niemand ein Recht verliert** (z. B. «Dateien verwalten» → zusätzlich «Dateien ansehen»,
+  «Fotos ansehen/verwalten», «Öffentlich teilen»; «Kassen verwalten» → «Bussen verwalten»;
+  «Daten exportieren» → «Personendaten exportieren»). Alle Rollen bekommen «Eigene Pendenzen
+  erledigen»; wer nur lesen soll, dem nimmt man dieses Recht.
+- Migration `0191_tenant_four_eyes`: Vier-Augen-Prinzip für Protokolle je Organisation (Standard aus).
+- Migration `0192_mfa_role_and_grace`: MFA-Pflicht je Rolle (Standard aus), erste Anmeldung und
+  MFA-Frist je Konto; die erste Anmeldung wird aus dem Verlauf nachgetragen.
+- Migration `0193_drop_slug_and_member_rule`: der **Kurzname** der Organisation und die
+  Aufbewahrungsregel «Ehemalige Mitglieder deaktivieren» entfallen samt Daten (Ausgetretene sind
+  ohnehin ab dem Austritt gesperrt). Partner findet man beim Album-Teilen über den Namen.
 
 ### Neu: Server aus dem Backup wiederherstellen
 
@@ -191,6 +204,49 @@ Keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
   Organisation verlangen (Migration `0188_tenant_require_mfa`, auditiert). Konten ohne Faktor
   werden abgemeldet (API: 403 `mfa_setup_required`) und beim nächsten Login direkt in die
   Einrichtung geführt.
+- **MFA je Rolle:** Im Rollen-Editor «MFA für diese Rolle verlangen» (Migration `0192`).
+- **3 Tage Frist:** Wird MFA für ein bestehendes Konto neu Pflicht (Rolle oder Organisation), hat es
+  3 Tage Zeit: die Einrichtung erscheint bei jeder Anmeldung mit «Später einrichten», in der App
+  erinnert ein Hinweis. Danach ist sie Pflicht. Keine Frist bei Administrationsrechten und für neue
+  Konten – die richten den Faktor beim ersten Login ein.
+
+### Neu: Feinere Berechtigungen und Vier-Augen-Prinzip
+
+- Neue Rechte: Protokolle freigeben, eigene Pendenzen erledigen, Personen ansehen /
+  Kontaktdaten sehen / Personendaten exportieren (mit MFA), Bussen verwalten, Dateien ansehen,
+  Fotos ansehen / verwalten, öffentlich teilen, Abgaben prüfen, Verlauf ansehen.
+- **Nur-Lese-Zugang:** Ohne «Eigene Pendenzen erledigen» kann ein Konto nichts mehr ändern.
+  Mit dem Recht darf es nur Status und Erledigt-Datum der eigenen Pendenzen setzen.
+- **Personen ansehen** ohne Kontaktdaten: E-Mail nur mit «Kontaktdaten sehen», Login und Rollen
+  nur für Verwaltende.
+- **Dateien und Fotos getrennt:** Wer nur Fotos sehen darf, sieht keine Dokumente und umgekehrt.
+- **Vier-Augen-Prinzip** (Zugriff › Sicherheit, je Organisation): Wer ein Protokoll verfasst hat,
+  kann es nicht selbst abschliessen; abschliessen braucht «Protokolle freigeben».
+- Für Entwickler: Rechte-Inventar `docs/permissions-inventory.md` und Berechtigungsmatrix
+  (`permissions/permission-matrix.json`) werden generiert; ein Laufzeittest ruft jede GET-Route mit
+  jeder Standardrolle auf. Abweichungen zum Plan: `docs/permissions-plan-deviations.md`.
+
+### Neu: Pendenzen v2
+
+- Liste nach Fälligkeit gruppiert (Überfällig, Nächste 14 Tage, Später, Bis nächste Sitzung,
+  Schliesst mit Abgabe, Ohne Fälligkeit, Erledigt), Filter Alle/Meine und Offen/Erledigt mit
+  Zählern, Tags und Suche.
+- Board mit einer Spalte je Person; Ziehen weist neu zu (Tastatur: «Zuweisen an …»).
+- Kalender mit Pendenzen und Terminen, Seitenleiste «Überfällig» und «Ohne festes Datum».
+
+### Neu: Verlauf mit Filtern in jeder Spalte
+
+- Organisation › Verlauf: Bereich als durchsuchbare Auswahl; Zeitpunkt (von/bis), Vorgang, Person
+  und Ergebnis lassen sich direkt im Spaltenkopf filtern, aktive Filter stehen als Chips darüber.
+
+### Geändert: Kurzname entfällt, Partnersuche verzeiht Tippfehler
+
+- Der Kurzname der Organisation ist weg (Profil, Plattform-Admin, Teilen-Dialog). Die Suche nach
+  Partner-Organisationen beim Album-Teilen läuft über den Namen und ignoriert Gross/klein,
+  Umlaute (ä = ae), Satzzeichen und Wortreihenfolge, findet Wortanfänge, Kürzel («JW Sachseln»)
+  und einzelne Tippfehler.
+- Aufbewahrung: Die Regel «Ehemalige Mitglieder nach dem Austritt deaktivieren» entfällt –
+  Ausgetretene sind seit 1.4.0 ab dem Tag nach dem Austritt gesperrt.
 
 ### Neu: Erstlogin über die Einladung
 

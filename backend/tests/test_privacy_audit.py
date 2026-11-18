@@ -60,6 +60,12 @@ def test_failed_login_is_logged_without_the_entered_email(db, client_ip):
     assert "niemand" not in str(unknown)
 
 
+def _activity(db, user, **filters):
+    values = {"category": None, "action": None, "outcome": None, "date_from": None, "date_to": None, "actor": None, "with_options": True}
+    values.update(filters)
+    return list_activity(**values, limit=50, offset=0, db=db, user=user)
+
+
 def test_activity_shows_only_own_tenant_and_requires_admin(db):
     tenant = make_tenant(db, "Verlauf")
     other = make_tenant(db, "Fremd")
@@ -69,14 +75,46 @@ def test_activity_shows_only_own_tenant_and_requires_admin(db):
     audit.log(db, action="admin.tenant_users_viewed", tenant_id=tenant.id, actor_email="support@hocx.invalid")
     audit.log(db, action="protocol.deleted", tenant_id=other.id)
 
-    page = list_activity(category=None, outcome=None, limit=50, offset=0, db=db, user=make_current_user(tenant.id, role="admin", user_id=admin.id))
+    page = _activity(db, make_current_user(tenant.id, role="admin", user_id=admin.id))
 
     assert [(item.action, item.actor_kind) for item in page.items] == [("admin.tenant_users_viewed", "platform"), ("protocol.deleted", "user")]
     assert page.items[1].actor_name == admin.display_name
     assert "support@hocx.invalid" not in page.model_dump_json()
     with pytest.raises(HTTPException) as denied:
-        list_activity(category=None, outcome=None, limit=50, offset=0, db=db, user=make_current_user(tenant.id, role="writer"))
+        _activity(db, make_current_user(tenant.id, role="writer"))
     assert denied.value.status_code == 403
+
+
+def test_activity_filters_every_column(db):
+    """Verlauf: Filter je Spalte (Zeitpunkt, Vorgang, Von, Ergebnis) plus Auswahllisten."""
+    from datetime import date, timedelta
+
+    tenant = make_tenant(db, "Verlauf Filter")
+    admin = make_app_user(db, email="filter-admin@example.com", tenant_id=tenant.id, role_code="admin")
+    other = make_app_user(db, email="filter-andere@example.com", tenant_id=tenant.id)
+    audit = AuditService()
+    audit.log(db, action="protocol.deleted", tenant_id=tenant.id, actor_user_id=admin.id)
+    audit.log(db, action="user.login", tenant_id=tenant.id, actor_user_id=other.id)
+    audit.log(db, action="user.login", tenant_id=tenant.id, actor_user_id=other.id, outcome="failure")
+    audit.log(db, action="admin.tenant_users_viewed", tenant_id=tenant.id, actor_email="support@hocx.invalid")
+    db.execute(text("UPDATE audit_log SET created_at = now() - interval '10 days' WHERE tenant_id = :t AND action = 'protocol.deleted'"), {"t": tenant.id})
+    db.flush()
+    viewer = make_current_user(tenant.id, role="admin", user_id=admin.id)
+
+    def actions(**filters):
+        return sorted(item.action for item in _activity(db, viewer, **filters).items)
+
+    assert actions(action="user.login") == ["user.login", "user.login"]
+    assert actions(outcome="failure") == ["user.login"]
+    assert actions(actor=str(other.public_id)) == ["user.login", "user.login"]
+    assert actions(actor="platform") == ["admin.tenant_users_viewed"]
+    assert actions(date_to=date.today() - timedelta(days=5)) == ["protocol.deleted"]
+    assert actions(date_from=date.today() - timedelta(days=1)) == ["admin.tenant_users_viewed", "user.login", "user.login"]
+    assert actions(actor="kein-uuid") == []
+
+    page = _activity(db, viewer)
+    assert set(page.actions) >= {"protocol.deleted", "user.login", "admin.tenant_users_viewed"}
+    assert {actor.key for actor in page.actors} == {str(admin.public_id), str(other.public_id), "platform"}
 
 
 def test_deleting_a_person_removes_their_email_from_the_audit_log(db):

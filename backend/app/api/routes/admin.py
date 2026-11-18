@@ -497,7 +497,7 @@ def create_tenant(
     audit.log(
         db, action="admin.tenant_created", actor_email=current_admin.email, tenant_id=internal_tenant_id,
         entity_type="tenant", entity_id=internal_tenant_id,
-        details={"name": payload.name, "public_slug": payload.public_slug, "plan_code": payload.plan_code},
+        details={"name": payload.name, "plan_code": payload.plan_code},
     )
     return tenant
 
@@ -515,20 +515,18 @@ def get_tenant(tenant_id: uuid.UUID, db: Session = Depends(get_db)):
 async def update_tenant(
     tenant_id: uuid.UUID,
     name: str | None = Form(default=None),
-    public_slug: str | None = Form(default=None),
     profile_image: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_write),
 ):
     # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
     # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
-    return await run_coroutine_in_thread(_update_tenant_impl, tenant_id=tenant_id, name=name, public_slug=public_slug, profile_image=profile_image, db=db, current_admin=current_admin)
+    return await run_coroutine_in_thread(_update_tenant_impl, tenant_id=tenant_id, name=name, profile_image=profile_image, db=db, current_admin=current_admin)
 
 
 async def _update_tenant_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
     tenant_id: uuid.UUID,
     name: str | None = Form(default=None),
-    public_slug: str | None = Form(default=None),
     profile_image: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
     current_admin: CurrentAdmin = Depends(require_admin_write),
@@ -536,7 +534,7 @@ async def _update_tenant_impl(  # loop-ok: nur über run_coroutine_in_thread (co
     internal_tenant_id = _resolve_tenant_id(db, tenant_id)
     try:
         tenant = await tenant_service.update_tenant(
-            db, internal_tenant_id, TenantUpdate(name=name, public_slug=public_slug), profile_image,
+            db, internal_tenant_id, TenantUpdate(name=name), profile_image,
             admin_email=current_admin.email,
         )
     except SQLAlchemyError as exc:
@@ -547,7 +545,7 @@ async def _update_tenant_impl(  # loop-ok: nur über run_coroutine_in_thread (co
     audit.log(
         db, action="admin.tenant_updated", actor_email=current_admin.email, tenant_id=internal_tenant_id,
         entity_type="tenant", entity_id=internal_tenant_id,
-        details={"name": name, "public_slug": public_slug, "profile_image_changed": profile_image is not None},
+        details={"name": name, "profile_image_changed": profile_image is not None},
     )
     return tenant
 

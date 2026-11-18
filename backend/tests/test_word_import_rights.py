@@ -24,7 +24,9 @@ from app.schemas.word_import import (
 from tests.factories import make_current_user, make_template, make_tenant, system_role_permissions
 from tests.test_word_import_e2e import _build_template
 
-PROTOKOLLFUEHRUNG = frozenset({"meetings.read", "meetings.read_drafts", "meetings.edit"})
+# meetings.approve: bestehende Rollen mit meetings.edit bekommen es per Migration 0190; der Word-Import
+# legt Protokolle abgeschlossen an und verlangt es.
+PROTOKOLLFUEHRUNG = frozenset({"meetings.read", "meetings.read_drafts", "meetings.edit", "meetings.approve"})
 
 
 def _participant_count(db, tenant_id: int) -> int:

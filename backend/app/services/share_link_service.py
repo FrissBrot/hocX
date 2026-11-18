@@ -261,3 +261,28 @@ def status_for(link: ShareLink) -> str:
     if link.expires_at is not None and link.expires_at <= datetime.now(UTC):
         return "expired"
     return "active"
+
+
+def content_kinds(db: Session, links: list[ShareLink]) -> dict[uuid.UUID, set[str]]:
+    """Was ein Link öffentlich macht: «photos» (Album oder Bilder) und/oder «files» (Dokumente).
+    Für die Rechteprüfung beim Auflisten/Widerrufen (photos.read bzw. files.read, Phase 3)."""
+    kinds: dict[uuid.UUID, set[str]] = {link.id: ({"photos"} if link.album_id is not None else set()) for link in links}
+    file_link_ids = [link.id for link in links if link.album_id is None]
+    if file_link_ids:
+        rows = db.execute(
+            select(ShareLinkFile.share_link_id, StoredFile.mime_type)
+            .join(ShareLink, ShareLink.id == ShareLinkFile.share_link_id)
+            .join(StoredFile, and_(StoredFile.public_id == ShareLinkFile.file_id, StoredFile.tenant_id == ShareLink.tenant_id))
+            .where(ShareLinkFile.share_link_id.in_(file_link_ids))
+        ).all()
+        for link_id, mime in rows:
+            kinds[link_id].add("photos" if mime and mime.startswith("image/") else "files")
+    return kinds
+
+
+def may_see(user_can, kinds: set[str]) -> bool:
+    """user_can: CurrentUser.can. Ein Link ist nur sichtbar/widerrufbar, wenn man alles darin selbst
+    sehen darf - sonst öffnete die Token-URL Inhalte, die man im Verein nicht lesen darf."""
+    from app.core.permissions import P
+
+    return ("photos" not in kinds or user_can(P.PHOTOS_READ)) and ("files" not in kinds or user_can(P.FILES_READ))

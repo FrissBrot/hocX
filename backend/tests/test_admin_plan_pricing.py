@@ -70,7 +70,7 @@ def test_upsert_plan_creates_and_updates_with_feature_bundle(db):
         ),
     )
     assert updated.name == "Test Plan X Renamed"
-    assert updated.price_yearly_rp is None
+    assert updated.price_yearly_rp == 20000  # aus dem Monatspreis ergänzt (plan_pricing)
     assert updated.included_user_limit is None
     assert sorted(updated.feature_codes) == ["abgabebox", "finance"]
 
@@ -251,28 +251,20 @@ def test_create_plan_with_explicit_code_rejects_duplicates(db):
         raise AssertionError("Doppelter Plan-Code muss abgelehnt werden")
 
 
-def test_create_tenant_with_plan_slug_and_billing(db):
+def test_create_tenant_with_plan_and_billing(db):
     service = AdminTenantService()
     admin = make_platform_admin(db)
     service.upsert_plan(db, "test_plan_new_tenant", _plan_write(feature_codes=["finance"]))
 
     created = service.create_tenant(
         db,
-        AdminTenantCreate(name="Neuer Verein", public_slug="neuer-verein-test", plan_code="test_plan_new_tenant", billing_cycle="yearly"),
+        AdminTenantCreate(name="Neuer Verein", plan_code="test_plan_new_tenant", billing_cycle="yearly"),
         admin_id=admin.id,
     )
-    assert created.public_slug == "neuer-verein-test"
     assert created.plan_code == "test_plan_new_tenant"
     assert created.billing_cycle == "yearly"
     assert "finance" in created.enabled_features
     assert created.storage_quota_bytes == 1_000_000
-
-    try:
-        service.create_tenant(db, AdminTenantCreate(name="Kollision", public_slug="neuer-verein-test"))
-    except ValueError:
-        pass
-    else:
-        raise AssertionError("Vergebener Slug muss abgelehnt werden")
 
 
 def test_discount_and_note_are_stored_and_reduce_estimated_cost(db):
@@ -543,3 +535,17 @@ def test_subscription_lists_read_only_modules_without_charging_them(db):
     assert subscription is not None
     finance = next(feature for feature in subscription.features if feature.code == "finance")
     assert finance.read_only is True
+
+
+def test_missing_price_is_derived_from_the_other(db):
+    """Nur Monats- oder nur Jahrespreis eingetragen: der andere wird ergänzt (Monat = Jahr / 12
+    + 20 %, auf 5 Rappen), damit Website und Jahresabo einen Preis haben."""
+    from app.services import plan_pricing
+
+    service = AdminTenantService()
+    monthly_only = service.upsert_plan(db, "test_plan_monthly_only", _plan_write(price_monthly_rp=990, price_yearly_rp=None))
+    yearly_only = service.upsert_plan(db, "test_plan_yearly_only", _plan_write(price_monthly_rp=None, price_yearly_rp=9900))
+    assert (monthly_only.price_monthly_rp, monthly_only.price_yearly_rp) == (990, 9900)
+    assert (yearly_only.price_monthly_rp, yearly_only.price_yearly_rp) == (990, 9900)
+    assert plan_pricing.complete(None, None) == (None, None)
+    assert plan_pricing.complete(2900, 30000) == (2900, 30000)  # beide gesetzt: unverändert

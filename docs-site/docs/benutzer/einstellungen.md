@@ -9,17 +9,15 @@ Domains, das Abo, die Echtheitsprüfung, den Datenschutz, die Zugangslinks, Aufb
 
 ## Profil {#stammdaten}
 
-Unter **Organisation › Profil** stehen Name, Profilbild (Logo), Kurzname und die Organisations-ID.
+Unter **Organisation › Profil** stehen Name, Profilbild (Logo) und die Organisations-ID.
 
 - **Name**: erscheint in der App, in E-Mails und auf PDFs. Ist eure Organisation durch hocX
   [verifiziert](echtheit.md#verifizierung), hebt eine Namensänderung diese Verifizierung auf:
   neue PDFs werden dann nicht mehr als «verifiziert» ausgewiesen. hocX fragt deshalb vor dem
   Speichern nach. Die Verifizierung kannst du danach unter **Echtheitsprüfung** neu beantragen.
-- **Kurzname**: kurzer, eindeutiger Name aus Kleinbuchstaben, Ziffern und Bindestrichen (z. B.
-  `muster-organisation`). Andere Organisationen finden euch darüber, etwa wenn sie euch ein
-  Fotoalbum freigeben. Links zur [Abgabebox](abgabebox.md) hängen nicht davon ab und bleiben bei
-  einer Änderung gültig.
-- **Organisations-ID**: technische Kennung zum Kopieren, z. B. für eine Album-Freigabe.
+- **Organisations-ID**: technische Kennung zum Kopieren, z. B. für eine Album-Freigabe. Die erste
+  Freigabe an eine andere Organisation läuft über diese ID; danach findet ihr euch gegenseitig
+  über den Namen (die Suche verzeiht Tippfehler, Umlaute und Abkürzungen wie «JW»).
 
 ## Finanzen {#finanzen}
 
@@ -139,12 +137,16 @@ sie hier automatisch. Den Tab sehen nur Personen mit dem Recht, die Einstellunge
 ## Aufbewahrung {#aufbewahrung}
 
 Im Tab **Aufbewahrung** legst du Fristen fest, z. B. wann Einreichungen der Abgabebox nach dem
-Abgabeschluss gelöscht oder ehemalige Mitglieder deaktiviert werden. Alle Regeln sind aus, bis du
-sie einschaltest. hocX schlägt passende Einträge täglich vor; du bestätigst oder verwirfst sie.
-Ehemalige Mitglieder werden nur deaktiviert, nie gelöscht.
+Abgabeschluss gelöscht werden. Alle Regeln sind aus, bis du sie einschaltest. hocX schlägt passende
+Einträge täglich vor; du bestätigst oder verwirfst sie. Ausgetretene Mitglieder brauchen keine
+Regel: sie sind ab dem Tag nach dem Austritt automatisch gesperrt, ihre Daten bleiben erhalten.
 
 ## Verlauf {#aktivitaet}
 
 Der Tab **Verlauf** zeigt Änderungen, Anmeldungen und Zugriffe der hocX-Plattform auf Daten eurer
-Organisation, filterbar nach Bereich und Ergebnis. IP- und E-Mail-Adressen werden dort nicht
-angezeigt.
+Organisation. IP- und E-Mail-Adressen werden dort nicht angezeigt.
+
+- **Bereich** oben: Auswahl mit Suche.
+- **Spaltenfilter:** Ein Klick auf den Spaltenkopf filtert nach Zeitraum (von/bis), Vorgang, Person
+  oder Ergebnis. Aktive Filter erscheinen als Chips über der Tabelle; ein Klick darauf entfernt den
+  Filter, «Alle Filter entfernen» setzt alles zurück.

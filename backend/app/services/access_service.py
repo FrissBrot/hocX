@@ -155,7 +155,7 @@ class AccessService:
                 file_tenant_id is not None
                 and user.current_tenant_id is not None
                 and file_tenant_id != user.current_tenant_id
-                and user.can(P.FILES_MANAGE)
+                and user.can(P.PHOTOS_READ)
                 and self._can_read_via_shared_album(db, user.current_tenant_id, stored_file_id)
             ):
                 return
@@ -168,7 +168,15 @@ class AccessService:
         tenant_id = self.repository.tenant_id_for_stored_file(db, stored_file_id=stored_file_id)
         if tenant_id is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stored file not found")
-        if not (user.can(P.MEETINGS_READ_DRAFTS) or user.can(P.FILES_MANAGE)):
+        # Ablage mit files.read, Fotos (Galerie, Abgabe-Fotos) mit photos.read - bisher deckte
+        # files.manage beides (Plan «Berechtigungen», Phase 3; Mapping gibt beide Rechte weiter).
+        # Symmetrisch: files.read nur für Dokumente, photos.read nur für Bilder.
+        is_image = self.repository.stored_file_is_image(db, stored_file_id=stored_file_id)
+        if not (
+            user.can(P.MEETINGS_READ_DRAFTS)
+            or (user.can(P.FILES_READ) and not is_image)
+            or (user.can(P.PHOTOS_READ) and is_image)
+        ):
             # Leser dürfen PDFs herunterladen, die sie selbst mit der Dokument-Engine erzeugt
             # haben (Statistik, Termine, Todos …): das Rendern ist für sie erlaubt, die Inhalte
             # haben die Blöcke bereits nach ihren Rechten gefiltert.

@@ -248,5 +248,9 @@
   },
   "keys": {
     "ctrl": "Ctrl"
+  },
+  "columnFilter": {
+    "label": "Filtrer {column}",
+    "activeLabel": "Filtrer {column} (actif)"
   }
 }

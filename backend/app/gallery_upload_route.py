@@ -58,7 +58,7 @@ def authorize_gallery_upload(request: Request) -> None:
     from app.core.permissions import P
     from app.core.security import get_current_user, get_optional_current_user, require_permission
     with SessionLocal() as db:
-        require_permission(get_current_user(request, get_optional_current_user(request, db=db, session_cookie=None)), P.FILES_MANAGE)
+        require_permission(get_current_user(request, get_optional_current_user(request, db=db, session_cookie=None)), P.PHOTOS_MANAGE)
 
 
 class GalleryUploadRoute(APIRoute):

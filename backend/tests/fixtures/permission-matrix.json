@@ -1465,7 +1465,9 @@
       "handler": "todos.patch_todo",
       "allowed": [
         "admin",
-        "writer"
+        "writer",
+        "kassier",
+        "reader"
       ]
     },
     "POST /api/protocol-todos/{todo_id}/accept-tracked-change": {
@@ -1903,10 +1905,7 @@
     },
     "PATCH /api/stored-files/{stored_file_id}/tags": {
       "handler": "files.update_stored_file_tags",
-      "allowed": [
-        "admin",
-        "writer"
-      ]
+      "allowed": []
     },
     "GET /api/stored-files/{stored_file_id}/thumbnail": {
       "handler": "files.get_stored_file_thumbnail",
@@ -2652,6 +2651,18 @@
     },
     "PUT /api/users/mfa-policy": {
       "handler": "users.put_mfa_policy",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "GET /api/users/protocol-policy": {
+      "handler": "users.get_protocol_policy",
+      "allowed": [
+        "admin"
+      ]
+    },
+    "PUT /api/users/protocol-policy": {
+      "handler": "users.put_protocol_policy",
       "allowed": [
         "admin"
       ]

@@ -83,7 +83,7 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
     },
     {
       titleKey: "groups.members",
-      links: can(session, "participants.manage") ? [{ href: "/participants", labelKey: "memberList", icon: "participants" }] : [],
+      links: can(session, "participants.read") ? [{ href: "/participants", labelKey: "memberList", icon: "participants" }] : [],
       settings: can(session, "access.manage") ? { href: "/users", labelKey: "users", icon: "users" } : undefined,
     },
     {
@@ -103,13 +103,10 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
       titleKey: "groups.storage",
       links: [
         ...(editsMeetings ? [{ href: "/lists", labelKey: "lists", icon: "lists" as const }] : []),
-        ...(can(session, "files.manage")
-          ? [
-              { href: "/files", labelKey: "files", icon: "files" as const },
-              { href: "/photos", labelKey: "photos", icon: "photos" as const },
-              { href: "/shared-links", labelKey: "sharedLinks", icon: "share" as const },
-            ]
-          : []),
+        // Getrennte Rechte (Plan «Berechtigungen», Phase 3): Ablage, Fotos, öffentlich teilen
+        ...(can(session, "files.read") ? [{ href: "/files", labelKey: "files", icon: "files" as const }] : []),
+        ...(can(session, "photos.read") ? [{ href: "/photos", labelKey: "photos", icon: "photos" as const }] : []),
+        ...(can(session, "sharing.public") ? [{ href: "/shared-links", labelKey: "sharedLinks", icon: "share" as const }] : []),
       ],
     },
     {
@@ -140,9 +137,10 @@ export function buildNav(session: SessionInfo | null): NavGroup[] {
           { href: "/tenant-settings/abo", labelKey: "subscriptionAndUsage", icon: "storage" as const },
           { href: "/tenant-settings/privacy", labelKey: "privacy", icon: "activity" as const, match: ["/tenant-settings/retention"] },
           { href: "/tenant-settings/links", labelKey: "publicLinks", icon: "share" as const },
-          { href: "/tenant-settings/activity", labelKey: "activity", icon: "activity" as const },
         ]
       : []),
+    // Aktivitätsprotokoll ist ein eigenes Recht (activity.read, Plan «Berechtigungen» Phase 3)
+    ...(can(session, "activity.read") ? [{ href: "/tenant-settings/activity", labelKey: "activity", icon: "activity" as const }] : []),
     // Wie bisher nur in der Administration sichtbar (Navigation wie vor RBAC: Rolle admin).
     ...(managesTemplates ? [{ href: "/tools/import", labelKey: "import", icon: "tools" as const, match: ["/tools"] }] : []),
   ];

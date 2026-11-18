@@ -292,6 +292,7 @@ class AuthService:
             current_tenant=current_tenant,
             permissions=sorted(user.permissions),
             roles=[RoleRef(id=role.public_id, name=role.name, system_key=role.system_key) for role in user.roles],
+            mfa_grace_until=user.mfa_grace_until,
         )
 
     def _finish_login(
@@ -303,6 +304,12 @@ class AuthService:
         request_host: str | None,
         mfa_verified: bool,
     ) -> LoginResponse:
+        if user.first_login_at is None:
+            # Ab jetzt ein bestehendes Konto: wird MFA später Pflicht, gilt die 3-Tage-Frist
+            # (Migration 0192, app.core.mfa_policy.mfa_grace_until)
+            user.first_login_at = datetime.now(timezone.utc)
+            db.add(user)
+            db.commit()
         current_user = build_current_user(db, user, mfa_verified=mfa_verified)
         issue_session_cookie(response, user.id, mfa_verified=mfa_verified)
         issue_locale_cookie(response, user.preferred_language)

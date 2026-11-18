@@ -35,7 +35,9 @@
     "name": "Nom",
     "nameHelpSystem": "Laisser vide pour le nom standard.",
     "description": "Description",
-    "permissions": "Autorisations"
+    "permissions": "Autorisations",
+    "requireMfa": "Exiger la MFA pour ce rôle",
+    "requireMfaHelp": "Toutes les personnes ayant ce rôle se connectent avec un second facteur. Les comptes existants ont 3 jours pour le configurer, les nouveaux le font à la première connexion."
   },
   "toasts": {
     "created": "Rôle créé",
@@ -77,6 +79,10 @@
       "edit": {
         "label": "Modifier les séances",
         "description": "Créer, modifier et supprimer événements, procès-verbaux, points de l’ordre du jour, tâches et listes ; import Word."
+      },
+      "approve": {
+        "label": "Valider les procès-verbaux",
+        "description": "Valider et clôturer les procès-verbaux. Avec le principe des quatre yeux, pas celui que vous avez rédigé."
       }
     },
     "templates": {
@@ -93,6 +99,18 @@
       "manage": {
         "label": "Gérer les participants",
         "description": "Voir, créer, modifier et importer les participants avec leurs coordonnées et les attribuer aux modèles."
+      },
+      "read": {
+        "label": "Voir les membres",
+        "description": "Voir la liste des membres et les fiches, sans coordonnées."
+      },
+      "contacts": {
+        "label": "Voir les coordonnées",
+        "description": "Voir les adresses e-mail des membres."
+      },
+      "export": {
+        "label": "Exporter des données personnelles",
+        "description": "Créer des demandes d’accès pour d’autres personnes (toutes les données en ZIP)."
       }
     },
     "finances": {
@@ -115,6 +133,10 @@
       "manage": {
         "label": "Gérer fichiers & photos",
         "description": "Gérer fichiers, galerie photo et albums, liens de partage publics et partages d’albums."
+      },
+      "read": {
+        "label": "Voir les fichiers",
+        "description": "Voir et télécharger les fichiers du classement."
       }
     },
     "submissions": {
@@ -125,6 +147,10 @@
       "manage": {
         "label": "Gérer les dépôts",
         "description": "Créer, vérifier et supprimer des demandes de dépôt et des liens de téléversement publics."
+      },
+      "review": {
+        "label": "Contrôler les dépôts",
+        "description": "Clôturer et rouvrir les éléments déposés."
       }
     },
     "settings": {
@@ -143,6 +169,40 @@
       "export": {
         "label": "Exports de données",
         "description": "Export complet de l’organisation et droit d’accès pour d’autres personnes."
+      }
+    },
+    "todos": {
+      "complete_own": {
+        "label": "Terminer ses tâches",
+        "description": "Cocher et rouvrir ses propres tâches. Sans ce droit, l’accès est en lecture seule."
+      }
+    },
+    "fines": {
+      "manage": {
+        "label": "Gérer les amendes",
+        "description": "Saisir, encaisser et annuler des amendes ; tarifs et règles des tâches."
+      }
+    },
+    "photos": {
+      "read": {
+        "label": "Voir les photos",
+        "description": "Voir et télécharger la galerie et les albums."
+      },
+      "manage": {
+        "label": "Gérer les photos",
+        "description": "Téléverser, étiqueter et supprimer des photos ; albums et partage."
+      }
+    },
+    "sharing": {
+      "public": {
+        "label": "Partager publiquement",
+        "description": "Créer et révoquer des liens publics pour fichiers, albums et dépôts."
+      }
+    },
+    "activity": {
+      "read": {
+        "label": "Voir le journal d’activité",
+        "description": "Qui a modifié quoi et quand (journal de l’organisation)."
       }
     }
   },

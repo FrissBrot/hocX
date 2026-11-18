@@ -40,7 +40,7 @@ function makeAlbum(overrides: Partial<PhotoAlbum> = {}): PhotoAlbum {
 }
 
 function anonymous(id = TENANT_ID): TenantLookup {
-  return { id, trusted: false, name: null, slug: null, participant_count: null, profile_image_url: null };
+  return { id, trusted: false, name: null, participant_count: null, profile_image_url: null };
 }
 
 function trusted(overrides: Partial<TenantLookup> = {}): TenantLookup {
@@ -48,7 +48,6 @@ function trusted(overrides: Partial<TenantLookup> = {}): TenantLookup {
     id: TENANT_ID,
     trusted: true,
     name: "Jubla Sonnenberg",
-    slug: "jubla-sonnenberg",
     participant_count: 48,
     profile_image_url: `/api/tenants/${TENANT_ID}/profile-image`,
     ...overrides,
@@ -101,7 +100,7 @@ describe("AlbumShareModal", () => {
     typeInto(TENANT_ID);
 
     expect(await screen.findByText("Jubla Sonnenberg")).toBeTruthy();
-    expect(screen.getByText("jubla-sonnenberg · 48 Teilnehmer")).toBeTruthy();
+    expect(screen.getByText("48 Teilnehmer")).toBeTruthy();
     expect(document.querySelector(".album-share-found img")?.getAttribute("src")).toBe(`/api/tenants/${TENANT_ID}/profile-image`);
     expect(screen.getByRole("button", { name: "Jubla Sonnenberg einladen" })).toBeEnabled();
   });

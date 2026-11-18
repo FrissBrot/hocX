@@ -137,5 +137,11 @@
     "password_weak": "The password is too weak. Use at least 12 characters without your name, email or common words.",
     "mfa_policy_own_mfa_missing": "Set up MFA for your own account first.",
     "mfa_setup_required": "Your organisation requires MFA. Please sign in again and set up a second factor."
+  },
+  "grace": {
+    "title": "Second factor becomes mandatory",
+    "message": "Your organisation requires a second factor for your account. Set it up by {until} – after that you can only sign in with it.",
+    "later": "Later",
+    "setup": "Set up now"
   }
 }

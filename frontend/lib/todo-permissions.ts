@@ -2,9 +2,9 @@
 // darf (Checkbox in Liste, Board, Kalender und Mobile-Ansicht). Nur Benutzerführung - das Backend
 // prüft PATCH /api/protocol-todos/{id} selbst.
 //
-// Heute: meetings.edit. Geplant ist ein zusätzliches Recht «eigene Pendenzen erledigen»
-// (vermutlich todos.complete_own): beim Zusammenführen hier einhängen, z. B.
-//   can(session, "meetings.edit") || (can(session, "todos.complete_own") && isOwnTodo(session, todo))
+// meetings.edit darf jede Pendenz abhaken; «eigene Pendenzen erledigen» (todos.complete_own, Plan
+// «Berechtigungen» Phase 3) nur die eigenen - ohne beides ist der Zugang read-only. Seit 0108 sind
+// Teilnehmende und Konten dieselbe ID, eigene = Konto unter den Zugewiesenen.
 // Bewusst ohne "use client": Server Components können es genauso aufrufen.
 
 import { can } from "@/lib/permissions";
@@ -15,7 +15,12 @@ export type TodoToggleTarget = Pick<TodoListItem, "assigned_user_id" | "assigned
   assigned_participant_ids?: string[];
 };
 
+export function isOwnTodo(session: TodoToggleSession, todo: TodoToggleTarget): boolean {
+  const me = session?.user?.id != null ? String(session.user.id) : null;
+  if (!me) return false;
+  return [todo.assigned_user_id, todo.assigned_participant_id, ...(todo.assigned_participant_ids ?? [])].some((id) => id != null && String(id) === me);
+}
+
 export function canToggleTodo(session: TodoToggleSession, todo: TodoToggleTarget): boolean {
-  void todo; // für das künftige Recht auf eigene Pendenzen (siehe oben)
-  return can(session, "meetings.edit");
+  return can(session, "meetings.edit") || (can(session, "todos.complete_own") && isOwnTodo(session, todo));
 }

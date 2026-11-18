@@ -35,7 +35,9 @@
     "name": "Name",
     "nameHelpSystem": "Leer lassen für die Standardbezeichnung.",
     "description": "Beschreibung",
-    "permissions": "Berechtigungen"
+    "permissions": "Berechtigungen",
+    "requireMfa": "MFA für diese Rolle verlangen",
+    "requireMfaHelp": "Alle mit dieser Rolle melden sich mit zweitem Faktor an. Bestehende Konten haben 3 Tage Zeit zum Einrichten, neue richten ihn beim ersten Login ein."
   },
   "toasts": {
     "created": "Rolle erstellt",
@@ -77,6 +79,10 @@
       "edit": {
         "label": "Sitzungen bearbeiten",
         "description": "Termine, Protokolle, Traktanden, Aufgaben und Listen anlegen, bearbeiten und löschen; Word-Import."
+      },
+      "approve": {
+        "label": "Protokolle abschliessen",
+        "description": "Protokolle freigeben und abschliessen. Mit Vier-Augen-Prinzip nicht das selbst verfasste."
       }
     },
     "templates": {
@@ -93,6 +99,18 @@
       "manage": {
         "label": "Teilnehmende verwalten",
         "description": "Teilnehmende samt Kontaktdaten ansehen, anlegen, bearbeiten, importieren und Vorlagen zuordnen."
+      },
+      "read": {
+        "label": "Mitglieder ansehen",
+        "description": "Mitgliederliste und Personenseiten ansehen, ohne Kontaktdaten."
+      },
+      "contacts": {
+        "label": "Kontaktdaten ansehen",
+        "description": "E-Mail-Adressen der Mitglieder ansehen."
+      },
+      "export": {
+        "label": "Personendaten exportieren",
+        "description": "Datenauskunft für andere Personen erstellen (alle Daten einer Person als ZIP)."
       }
     },
     "finances": {
@@ -115,6 +133,10 @@
       "manage": {
         "label": "Dateien & Fotos verwalten",
         "description": "Dateien, Fotogalerie und Alben verwalten, öffentliche Freigabelinks und Albumfreigaben."
+      },
+      "read": {
+        "label": "Ablage ansehen",
+        "description": "Dateien der freien Ablage ansehen und herunterladen."
       }
     },
     "submissions": {
@@ -125,6 +147,10 @@
       "manage": {
         "label": "Abgaben verwalten",
         "description": "Abgabe-Aufträge und öffentliche Upload-Links anlegen, prüfen und löschen."
+      },
+      "review": {
+        "label": "Abgaben prüfen",
+        "description": "Eingereichte Abgaben schliessen und wieder öffnen."
       }
     },
     "settings": {
@@ -143,6 +169,40 @@
       "export": {
         "label": "Datenexporte",
         "description": "Gesamtexport der Organisation und Datenauskunft für andere Personen."
+      }
+    },
+    "todos": {
+      "complete_own": {
+        "label": "Eigene Pendenzen erledigen",
+        "description": "Eigene Pendenzen abhaken und wieder öffnen. Ohne dieses Recht ist der Zugang nur lesend."
+      }
+    },
+    "fines": {
+      "manage": {
+        "label": "Bussen verwalten",
+        "description": "Bussen erfassen, einkassieren und zurücknehmen, Tarife und Pendenzen-Regeln."
+      }
+    },
+    "photos": {
+      "read": {
+        "label": "Fotos ansehen",
+        "description": "Fotogalerie und Alben ansehen und herunterladen."
+      },
+      "manage": {
+        "label": "Fotos verwalten",
+        "description": "Fotos hochladen, taggen und löschen, Alben und Partner-Freigaben."
+      }
+    },
+    "sharing": {
+      "public": {
+        "label": "Öffentlich teilen",
+        "description": "Öffentliche Links für Dateien, Alben und Abgabe-Uploads erstellen und widerrufen."
+      }
+    },
+    "activity": {
+      "read": {
+        "label": "Aktivitätsprotokoll ansehen",
+        "description": "Wer wann was geändert hat (Aktivitätsprotokoll der Organisation)."
       }
     }
   },

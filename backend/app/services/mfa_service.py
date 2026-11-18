@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.rate_limit import check_account_lockout, enforce_rate_limit, record_failed_attempt
 from app.core.secret_crypto import decrypt_secret, encrypt_secret
-from app.core.mfa_policy import account_requires_mfa
+from app.core.mfa_policy import account_requires_mfa, mfa_grace_until
 from app.core.permissions import P
 from app.core.tenant_mfa import tenant_requires_mfa
 from app.core.security import CurrentUser, build_current_user, require_permission
@@ -302,6 +302,9 @@ class MfaService:
         # Fremd gelöschter Faktor beendet alle Sessions des Kontos (Security-Audit SEC-010): wer
         # den zweiten Faktor zurücksetzt, soll keine bestehende Anmeldung weiterlaufen lassen.
         user.session_revoke_at = datetime.now(UTC)
+        # Keine neue 3-Tage-Frist nach einem Zurücksetzen: ist MFA Pflicht, richtet die Person den
+        # Faktor beim nächsten Login ein (Security-Review Phase 3)
+        user.mfa_grace_until = user.session_revoke_at
         db.add(user)
         account_notifications.notify_security(db, user, "security.mfa_removed", by_admin=True)
         db.commit()
@@ -319,6 +322,7 @@ class MfaService:
         # Fremd gelöschter Faktor beendet alle Sessions des Kontos (Security-Audit SEC-010): wer
         # den zweiten Faktor zurücksetzt, soll keine bestehende Anmeldung weiterlaufen lassen.
         user.session_revoke_at = datetime.now(UTC)
+        user.mfa_grace_until = user.session_revoke_at  # keine neue Frist nach dem Zurücksetzen
         db.add(user)
         account_notifications.notify_security(db, user, "security.mfa_removed", by_admin=True)
         db.commit()
@@ -648,6 +652,9 @@ class MfaService:
         required = self.user_requires_mfa(db, user.id)
         if not factors and not required:
             return None
+        # Bestehendes Konto in der 3-Tage-Frist: Einrichtung kommt bei jedem Login, darf aber
+        # übersprungen werden (Entscheid 18.11.2026)
+        grace = None if factors else mfa_grace_until(db, user.id, tenant_id=user.tenant_id)
 
         ticket = self._create_flow(
             "login_ticket",
@@ -669,7 +676,7 @@ class MfaService:
                 default_factor_type=default_factor_type,
                 can_add_passkey=self.can_add_passkey_here(request_host),
             )
-        return self._build_pending_login(
+        pending = self._build_pending_login(
             ticket=ticket,
             user=user,
             current_user=current_user,
@@ -680,6 +687,10 @@ class MfaService:
             default_factor_type=None,
             can_add_passkey=self.can_add_passkey_here(request_host),
         )
+        if grace is not None:
+            pending.can_skip = True
+            pending.grace_until = grace
+        return pending
 
     def start_invite_setup(self, db: Session, *, user: AppUser, request_host: str | None) -> MfaPendingLoginRead | None:
         """Erstlogin über eine Einladung: nach dem verbrauchten Einladungslink (Passwort gesetzt,
@@ -721,10 +732,12 @@ class MfaService:
         Serverseitig geprüft, nicht nur in der Oberfläche: ein Ticket aus dem normalen Login (das
         es ohne Faktor nur bei Pflicht gibt) oder ein Konto mit Pflicht wird abgelehnt."""
         flow = self._load_flow(ticket, expected_kind="login_ticket")
-        if not flow.get("invite"):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "mfa_skip_not_allowed", "message": "Der zweite Faktor kann hier nicht übersprungen werden"})
         context = self._load_login_ticket(db, ticket)
-        if self._list_factors(db, context.user.id) or self.user_requires_mfa(db, context.user.id):
+        in_grace = mfa_grace_until(db, context.user.id, tenant_id=context.user.tenant_id) is not None
+        if not flow.get("invite") and not in_grace:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "mfa_skip_not_allowed", "message": "Der zweite Faktor kann hier nicht übersprungen werden"})
+        # Einladung: nur ohne Pflicht; bestehendes Konto: nur in der Frist (nie bei Adminrechten)
+        if self._list_factors(db, context.user.id) or (self.user_requires_mfa(db, context.user.id) and not in_grace):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"code": "mfa_skip_not_allowed", "message": "Der zweite Faktor kann hier nicht übersprungen werden"})
         from app.services.audit_service import AuditService
 

@@ -4,8 +4,6 @@
   "masterDataEyebrow": "Anagrafica",
   "changeProfileImage": "Cambia immagine del profilo",
   "tenantNameLabel": "Nome organizzazione",
-  "publicSlugLabel": "Nome breve",
-  "publicSlugPlaceholder": "ad es. organizzazione-esempio",
   "tenantIdLabel": "ID organizzazione",
   "tenantIdHelp": "Necessario ad esempio per condividere un album fotografico con questa organizzazione.",
   "saveSuccess": "Organizzazione salvata",
@@ -174,8 +172,6 @@
   },
   "activity": {
     "intro": "Modifiche, accessi e consultazioni della piattaforma hocX sui dati di questa organizzazione. Senza indirizzi IP né e-mail.",
-    "filterAll": "Tutti",
-    "filterFailures": "Non riusciti",
     "category": "Ambito",
     "allCategories": "Tutti gli ambiti",
     "colTime": "Momento",
@@ -192,19 +188,25 @@
     "outcome": {
       "success": "Riuscito",
       "failure": "Non riuscito"
-    }
+    },
+    "dateFrom": "Dal",
+    "dateTo": "Al",
+    "clearFilter": "Rimuovi filtro",
+    "allActions": "Tutte le operazioni",
+    "allActors": "Tutte le persone",
+    "allOutcomes": "Tutti i risultati",
+    "chipDate": "{from} – {to}",
+    "removeFilter": "Rimuovi filtro «{filter}»",
+    "clearAll": "Rimuovi tutti i filtri",
+    "emptyFiltered": "Nessuna voce per questi filtri"
   },
   "retention": {
-    "intro": "Stabilisci per quanto tempo l’organizzazione conserva determinati dati. Tutte le regole sono disattivate finché non le attivi. hocX propone ogni giorno gli elementi interessati; tu li confermi o li scarti. Gli ex membri vengono solo disattivati, mai eliminati.",
+    "intro": "Stabilisci per quanto tempo l’organizzazione conserva determinati dati. Tutte le regole sono disattivate finché non le attivi. hocX propone ogni giorno gli elementi interessati; tu li confermi o li scarti. Gli ex membri vengono bloccati automaticamente dal giorno dopo l’uscita; i loro dati restano conservati.",
     "rulesTitle": "Termini",
     "rules": {
       "submissions_months": {
         "label": "Eliminare le consegne della casella dopo la scadenza",
         "hint": "Vale per le consegne con scadenza. Vengono eliminati i file consegnati e le anteprime."
-      },
-      "former_members_years": {
-        "label": "Disattivare gli ex membri dopo l’uscita",
-        "hint": "L’accesso viene bloccato e le sessioni in corso terminano. Nome, presenze, multe e verbali restano invariati."
       },
       "unlinked_gallery_years": {
         "label": "Proporre vecchie immagini della galleria senza album né appuntamento",
@@ -226,7 +228,6 @@
     "empty": "Nessuna proposta aperta.",
     "kind": {
       "submission_upload": "Consegne ({count})",
-      "former_member": "Disattivare ex membri ({count})",
       "gallery_image": "Immagini della galleria ({count})"
     },
     "unnamed": "Senza nome",
@@ -270,7 +271,6 @@
   "help": {
     "domains": "Un dominio proprio (ad es. app.example.ch) rende hocX, la casella di consegna o la pagina di verifica raggiungibili al vostro indirizzo. Per ogni scopo c'è un dominio attivo; uno nuovo lo sostituisce solo dopo una verifica riuscita.",
     "dns": "Il record TXT dimostra che il dominio vi appartiene. Il record CNAME inoltra l'indirizzo a hocX. Presso molti provider un dominio principale senza prefisso (example.ch) non può avere un CNAME – usa allora un sottodominio come app.example.ch o un record A verso lo stesso indirizzo IP della destinazione.",
-    "publicSlug": "Nome breve e univoco della vostra organizzazione, composto da lettere minuscole, cifre e trattini. Altre organizzazioni vi trovano tramite questo nome, ad es. quando condividono un album fotografico. I link della casella di consegna non ne dipendono e restano validi in caso di modifica.",
     "modules": "«Attivo» significa pienamente utilizzabile. «Sola lettura» significa che il modulo non fa più parte dell'abbonamento, ma i vostri dati restano conservati e leggibili; le modifiche sono bloccate finché il modulo non viene prenotato di nuovo."
   },
   "errors": {

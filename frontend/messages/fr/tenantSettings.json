@@ -4,8 +4,6 @@
   "masterDataEyebrow": "Données de base",
   "changeProfileImage": "Changer la photo de profil",
   "tenantNameLabel": "Nom de l'organisation",
-  "publicSlugLabel": "Nom court",
-  "publicSlugPlaceholder": "p. ex. organisation-exemple",
   "tenantIdLabel": "ID de l'organisation",
   "tenantIdHelp": "Nécessaire par exemple pour partager un album photo avec cette organisation.",
   "saveSuccess": "Organisation enregistrée",
@@ -174,8 +172,6 @@
   },
   "activity": {
     "intro": "Modifications, connexions et accès de la plateforme hocX aux données de cette organisation. Sans adresses IP ni e-mail.",
-    "filterAll": "Tous",
-    "filterFailures": "Échoués",
     "category": "Domaine",
     "allCategories": "Tous les domaines",
     "colTime": "Moment",
@@ -192,19 +188,25 @@
     "outcome": {
       "success": "Réussi",
       "failure": "Échoué"
-    }
+    },
+    "dateFrom": "Du",
+    "dateTo": "Au",
+    "clearFilter": "Retirer le filtre",
+    "allActions": "Toutes les opérations",
+    "allActors": "Toutes les personnes",
+    "allOutcomes": "Tous les résultats",
+    "chipDate": "{from} – {to}",
+    "removeFilter": "Retirer le filtre « {filter} »",
+    "clearAll": "Retirer tous les filtres",
+    "emptyFiltered": "Aucune entrée pour ces filtres"
   },
   "retention": {
-    "intro": "Définissez combien de temps l’organisation conserve certaines données. Toutes les règles sont désactivées jusqu’à ce que vous les activiez. hocX propose chaque jour les éléments concernés ; vous les confirmez ou les rejetez. Les anciens membres sont seulement désactivés, jamais supprimés.",
+    "intro": "Définissez combien de temps l’organisation conserve certaines données. Toutes les règles sont désactivées jusqu’à ce que vous les activiez. hocX propose chaque jour les éléments concernés ; vous les confirmez ou les rejetez. Les anciens membres sont bloqués automatiquement dès le lendemain de leur départ ; leurs données sont conservées.",
     "rulesTitle": "Délais",
     "rules": {
       "submissions_months": {
         "label": "Supprimer les dépôts de la boîte de dépôt après l’échéance",
         "hint": "Concerne les dépôts avec échéance. Les fichiers déposés et leurs aperçus sont supprimés."
-      },
-      "former_members_years": {
-        "label": "Désactiver les anciens membres après leur départ",
-        "hint": "La connexion est bloquée et les sessions en cours se terminent. Nom, présences, amendes et procès-verbaux restent inchangés."
       },
       "unlinked_gallery_years": {
         "label": "Proposer les anciennes images de la galerie sans album ni rendez-vous",
@@ -226,7 +228,6 @@
     "empty": "Aucune proposition ouverte.",
     "kind": {
       "submission_upload": "Dépôts ({count})",
-      "former_member": "Désactiver les anciens membres ({count})",
       "gallery_image": "Images de la galerie ({count})"
     },
     "unnamed": "Sans nom",
@@ -270,7 +271,6 @@
   "help": {
     "domains": "Un domaine propre (p. ex. app.example.ch) rend hocX, la boîte de dépôt ou la page de vérification accessibles sous votre adresse. Il y a un domaine actif par usage ; un nouveau ne le remplace qu'après une vérification réussie.",
     "dns": "L'enregistrement TXT prouve que le domaine vous appartient. L'enregistrement CNAME redirige l'adresse vers hocX. Chez beaucoup de fournisseurs, un domaine racine sans préfixe (example.ch) ne peut pas avoir de CNAME – utilise alors un sous-domaine comme app.example.ch ou un enregistrement A vers la même adresse IP que la cible.",
-    "publicSlug": "Nom court et unique de votre organisation, en minuscules, chiffres et tirets. D'autres organisations vous trouvent grâce à lui, p. ex. lors du partage d'un album photo. Les liens de la boîte de dépôt n'en dépendent pas et restent valables en cas de modification.",
     "modules": "«Actif» signifie pleinement utilisable. «Lecture seule» signifie que le module ne fait plus partie de l'abonnement, mais vos données sont conservées et lisibles ; les modifications sont bloquées jusqu'à ce que le module soit à nouveau réservé."
   },
   "errors": {

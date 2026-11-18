@@ -94,7 +94,7 @@ def load_todo_fines(ctx: BuildContext, rows: list[Any]) -> TodoFines | None:
     if booked is None:
         return None
     user = ctx.user
-    only_participant = None if user is None or user.can(P.FINANCES_MANAGE) else ctx.own_fines_participant_id()
+    only_participant = None if user is None or user.can(P.FINES_MANAGE) else ctx.own_fines_participant_id()
 
     hidden = False
 

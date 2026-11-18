@@ -10,7 +10,7 @@ import { can } from "@/lib/permissions";
 
 export default async function FilesPage() {
   const session = await requireSession();
-  const canView = can(session, "files.manage");
+  const canView = can(session, "files.read");
 
   if (!canView) {
     redirect("/");

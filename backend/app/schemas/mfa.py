@@ -102,8 +102,11 @@ class MfaPendingLoginRead(BaseModel):
     default_factor_label: str | None = None
     can_add_totp: bool = True
     can_add_passkey: bool = True
-    # Nur Erstlogin über Einladung ohne MFA-Pflicht: «Später einrichten» (POST /auth/mfa/setup/skip)
+    # «Später einrichten» (POST /auth/mfa/setup/skip): Erstlogin über Einladung ohne MFA-Pflicht
+    # oder bestehendes Konto in der 3-Tage-Frist (Migration 0192)
     can_skip: bool = False
+    # Ende der Frist, wenn sie der Grund für can_skip ist
+    grace_until: datetime | None = None
 
 
 class MfaSkipRequest(BaseModel):
@@ -125,3 +128,8 @@ class TenantMfaPolicyRead(BaseModel):
 
 class TenantMfaPolicyUpdate(BaseModel):
     require_mfa: bool
+
+
+class TenantProtocolPolicy(BaseModel):
+    """Vier-Augen-Prinzip für Protokolle (tenant.four_eyes_protocols, Migration 0191)."""
+    four_eyes_protocols: bool

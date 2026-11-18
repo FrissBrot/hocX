@@ -55,16 +55,16 @@ def test_groups_follow_permissions(db, tenants, monkeypatch):
     own, _other = tenants
     calls: list[int] = []
 
-    def fake_files(db_, tenant_id, query, limit=5):
+    def fake_files(db_, tenant_id, query, limit=5, **_kinds):
         calls.append(tenant_id)
         return []
 
     monkeypatch.setattr(route, "search_files", fake_files)
-    only_files = make_current_user(own.id, permissions=frozenset({"files.manage"}))
+    only_files = make_current_user(own.id, permissions=frozenset({"files.read"}))
     result = route.global_search(GlobalSearchQuery.model_construct(q="jurg"), db=db, user=only_files)
     assert result.people == [] and calls == [own.id]
 
-    only_people = make_current_user(own.id, permissions=frozenset({"participants.manage"}))
+    only_people = make_current_user(own.id, permissions=frozenset({"participants.read"}))
     calls.clear()
     assert _names(route.global_search(GlobalSearchQuery.model_construct(q="jurg"), db=db, user=only_people)) == ["Jürg Müller"]
     assert calls == []
@@ -131,6 +131,6 @@ def test_elements_and_blocks_only_library_of_own_tenant(db, tenants, monkeypatch
     result = route.global_search(GlobalSearchQuery.model_construct(q="amtli"), db=db, user=writer)
     assert [element.title for element in result.elements] == ["Ämtliplan"]
 
-    people_only = make_current_user(own.id, permissions=frozenset({"participants.manage"}))
+    people_only = make_current_user(own.id, permissions=frozenset({"participants.read"}))
     result = route.global_search(GlobalSearchQuery.model_construct(q="kuche"), db=db, user=people_only)
     assert result.elements == [] and result.blocks == []

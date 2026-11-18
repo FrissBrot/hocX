@@ -66,7 +66,7 @@ def _read(user: CurrentUser) -> int:
 
 
 def _manage(user: CurrentUser) -> int:
-    require_permission(user, P.FINANCES_MANAGE)
+    require_permission(user, P.FINES_MANAGE)
     require_feature(user, F.TODO_FINES)
     return _tenant(user)
 
@@ -79,7 +79,7 @@ def _read_tariffs(user: CurrentUser) -> int:
 
 
 def _manage_tariffs(user: CurrentUser) -> int:
-    require_permission(user, P.FINANCES_MANAGE)
+    require_permission(user, P.FINES_MANAGE)
     require_feature(user, F.FINANCE)
     return _tenant(user)
 
@@ -433,7 +433,7 @@ def _evaluation(db: Session, user: CurrentUser, todo: ProtocolTodo, *, settings:
     if settings is not None:
         facts = dataclasses.replace(facts, **settings)
     evaluation = fines.evaluate(ctx, facts)
-    can_manage = user.can(P.FINANCES_MANAGE)
+    can_manage = user.can(P.FINES_MANAGE)
     sees_all = can_manage or user.can(P.REPORTS_PERSONAL)
     stored = db.execute(
         select(TodoFine, FinedPerson.public_id).outerjoin(FinedPerson, FinedPerson.id == TodoFine.participant_id)

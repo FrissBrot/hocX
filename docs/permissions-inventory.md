@@ -6,8 +6,8 @@ Rollen-Matrix: `permissions/permission-matrix.json` (geprüft von `tests/test_pe
 
 ## Übersicht
 
-- Routen gesamt: 567 (Plattform-Admin: 127)
-- Mandanten-Routen mit Rechteprüfung: 362
+- Routen gesamt: 569 (Plattform-Admin: 127)
+- Mandanten-Routen mit Rechteprüfung: 364
 - Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 78
 - Mandanten-Routen ohne Prüfung und ohne Begründung (Lücken): 0
 - Routen, die Dateiinhalt ausliefern: 21
@@ -140,7 +140,7 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 
 | Route | Prüfung |
 |---|---|
-| `GET /api/activity` | settings.manage |
+| `GET /api/activity` | activity.read |
 | `POST /api/admin/auth/login` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
 | `POST /api/admin/auth/logout` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
 | `POST /api/admin/auth/mfa/totp/setup/complete` | Plattform-Anmeldung: eigenes Sicherheitsmodell (core/admin_security.py, Rate-Limit) |
@@ -249,7 +249,7 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `POST /api/documents/preview/canvas` | meetings.read, settings.manage, templates.edit |
 | `POST /api/documents/render` | meetings.read |
 | `GET /api/documents/render-jobs/{job_id}` | meetings.read |
-| `GET /api/documents/sources/{source}` | finances.read, meetings.edit, meetings.read + files.manage oder meetings.read_drafts + meetings.edit oder participants.manage |
+| `GET /api/documents/sources/{source}` | finances.read, meetings.edit, meetings.read + meetings.edit oder participants.manage + meetings.read_drafts oder photos.read |
 | `GET /api/documents/{document_id}` | meetings.read |
 | `POST /api/documents/{document_id}/reprocess` | meetings.edit |
 | `GET /api/documents/{document_id}/versions/{version_id}/files/{role}` | meetings.read |
@@ -269,36 +269,36 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `DELETE /api/events/{event_id}` | meetings.edit |
 | `PATCH /api/events/{event_id}` | meetings.edit |
 | `GET /api/events/{event_id}/delete-impact` | meetings.edit |
-| `GET /api/files` | files.manage |
-| `GET /api/files/album-pending-releases` | files.manage |
-| `GET /api/files/album-share-requests` | files.manage |
-| `GET /api/files/albums` | files.manage |
-| `POST /api/files/albums` | files.manage |
-| `DELETE /api/files/albums/{album_id}` | files.manage |
-| `PATCH /api/files/albums/{album_id}` | files.manage |
-| `POST /api/files/albums/{album_id}/items` | files.manage |
-| `POST /api/files/albums/{album_id}/items/remove` | files.manage |
-| `PATCH /api/files/albums/{album_id}/items/{file_id}/best` | files.manage |
-| `PATCH /api/files/albums/{album_id}/my-share` | files.manage |
-| `POST /api/files/albums/{album_id}/release` | files.manage |
-| `POST /api/files/albums/{album_id}/respond` | files.manage · Feature photo_sharing |
-| `POST /api/files/albums/{album_id}/shares` | files.manage · Feature photo_sharing |
-| `DELETE /api/files/albums/{album_id}/shares/{tenant_public_id}` | files.manage |
-| `PATCH /api/files/albums/{album_id}/shares/{tenant_public_id}` | files.manage · Feature photo_sharing |
-| `GET /api/files/analysis-progress` | files.manage |
-| `POST /api/files/bulk-delete` | files.manage |
-| `POST /api/files/bulk-tags` | files.manage |
+| `GET /api/files` | photos.read + files.read oder photos.read |
+| `GET /api/files/album-pending-releases` | photos.read |
+| `GET /api/files/album-share-requests` | photos.read |
+| `GET /api/files/albums` | photos.read |
+| `POST /api/files/albums` | photos.manage |
+| `DELETE /api/files/albums/{album_id}` | photos.manage |
+| `PATCH /api/files/albums/{album_id}` | photos.manage |
+| `POST /api/files/albums/{album_id}/items` | photos.manage, photos.read |
+| `POST /api/files/albums/{album_id}/items/remove` | photos.manage, photos.read |
+| `PATCH /api/files/albums/{album_id}/items/{file_id}/best` | photos.manage, photos.read |
+| `PATCH /api/files/albums/{album_id}/my-share` | photos.manage |
+| `POST /api/files/albums/{album_id}/release` | photos.manage |
+| `POST /api/files/albums/{album_id}/respond` | photos.manage · Feature photo_sharing |
+| `POST /api/files/albums/{album_id}/shares` | photos.manage · Feature photo_sharing |
+| `DELETE /api/files/albums/{album_id}/shares/{tenant_public_id}` | photos.manage |
+| `PATCH /api/files/albums/{album_id}/shares/{tenant_public_id}` | photos.manage · Feature photo_sharing |
+| `GET /api/files/analysis-progress` | photos.read |
+| `POST /api/files/bulk-delete` | photos.manage |
+| `POST /api/files/bulk-tags` | files.manage, photos.manage |
 | `POST /api/files/document-uploads` | files.manage, submissions.manage |
-| `GET /api/files/gallery-upload-jobs` | files.manage |
-| `GET /api/files/gallery-upload-jobs/{job_id}` | files.manage |
-| `POST /api/files/gallery-uploads` | files.manage, submissions.manage |
-| `GET /api/files/similarity-groups` | files.manage |
-| `GET /api/files/stats` | files.manage |
-| `GET /api/files/tags` | files.manage |
-| `GET /api/files/timeline` | files.manage |
-| `POST /api/files/upload-precheck` | files.manage |
-| `GET /api/files/upload-target-shared-albums` | files.manage, submissions.manage |
-| `PATCH /api/files/{file_id}/best` | files.manage |
+| `GET /api/files/gallery-upload-jobs` | photos.manage |
+| `GET /api/files/gallery-upload-jobs/{job_id}` | photos.manage |
+| `POST /api/files/gallery-uploads` | photos.manage, submissions.manage |
+| `GET /api/files/similarity-groups` | photos.read |
+| `GET /api/files/stats` | files.read oder photos.read |
+| `GET /api/files/tags` | files.read oder photos.read |
+| `GET /api/files/timeline` | photos.read |
+| `POST /api/files/upload-precheck` | files.manage oder photos.manage |
+| `GET /api/files/upload-target-shared-albums` | photos.manage, submissions.manage |
+| `PATCH /api/files/{file_id}/best` | photos.manage |
 | `GET /api/finance-settings` | meetings.read |
 | `PATCH /api/finance-settings` | settings.manage |
 | `GET /api/finance/accounts` | finances.read |
@@ -312,14 +312,14 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `DELETE /api/finance/transactions/{tx_id}` | finances.manage |
 | `PATCH /api/finance/transactions/{tx_id}` | finances.manage |
 | `GET /api/fines` | eigene Bussen; alle nur mit reports.personal (im Rumpf) · Feature finance (lesen) |
-| `POST /api/fines` | finances.manage |
+| `POST /api/fines` | fines.manage |
 | `GET /api/fines/open-summary` | Summe der eigenen Bussen; alle nur mit reports.personal (im Rumpf, wie list_fines) · Feature finance (lesen) |
 | `GET /api/fines/tariff` | meetings.read · Feature finance (lesen) |
-| `PUT /api/fines/tariff` | finances.manage · Feature finance |
-| `DELETE /api/fines/{fine_id}` | finances.manage |
-| `POST /api/fines/{fine_id}/collect` | finances.manage |
-| `POST /api/fines/{fine_id}/reopen` | finances.manage |
-| `POST /api/fines/{fine_id}/restore` | finances.manage |
+| `PUT /api/fines/tariff` | fines.manage · Feature finance |
+| `DELETE /api/fines/{fine_id}` | fines.manage |
+| `POST /api/fines/{fine_id}/collect` | fines.manage |
+| `POST /api/fines/{fine_id}/reopen` | fines.manage |
+| `POST /api/fines/{fine_id}/restore` | fines.manage |
 | `GET /api/list-entries` | meetings.edit |
 | `DELETE /api/list-entries/{list_entry_id}` | meetings.edit |
 | `PATCH /api/list-entries/{list_entry_id}` | meetings.edit |
@@ -335,18 +335,18 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/lists/{list_definition_id}/entries` | meetings.edit |
 | `POST /api/lists/{list_definition_id}/entries` | meetings.edit |
 | `DELETE /api/participants` | access.manage, participants.manage |
-| `GET /api/participants` | participants.manage |
+| `GET /api/participants` | participants.read |
 | `POST /api/participants` | participants.manage |
 | `POST /api/participants/bulk-invite` | access.manage, participants.manage |
 | `POST /api/participants/bulk-roles` | access.manage, participants.manage |
 | `POST /api/participants/import-csv` | participants.manage |
 | `GET /api/participants/invites` | access.manage |
 | `DELETE /api/participants/{participant_id}` | access.manage, participants.manage |
-| `GET /api/participants/{participant_id}` | participants.manage |
+| `GET /api/participants/{participant_id}` | participants.read |
 | `PATCH /api/participants/{participant_id}` | access.manage, participants.manage |
 | `DELETE /api/participants/{participant_id}/invite` | access.manage, participants.manage |
 | `POST /api/participants/{participant_id}/invite` | access.manage, participants.manage |
-| `POST /api/participants/{participant_id}/personal-data` | data.export |
+| `POST /api/participants/{participant_id}/personal-data` | participants.export |
 | `GET /api/participants/{participant_id}/templates` | meetings.read |
 | `PUT /api/participants/{participant_id}/templates` | participants.manage |
 | `GET /api/privacy-settings` | settings.manage |
@@ -369,14 +369,14 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `POST /api/protocol-elements/{protocol_element_id}/blocks/from-event` | meetings.edit |
 | `DELETE /api/protocol-images/{image_id}` | meetings.edit |
 | `DELETE /api/protocol-todos/{todo_id}` | meetings.edit |
-| `PATCH /api/protocol-todos/{todo_id}` | meetings.edit |
+| `PATCH /api/protocol-todos/{todo_id}` | todos.complete_own |
 | `POST /api/protocol-todos/{todo_id}/accept-tracked-change` | meetings.edit |
 | `GET /api/protocol-todos/{todo_id}/details` | meetings.read |
 | `PUT /api/protocol-todos/{todo_id}/details` | meetings.edit |
 | `GET /api/protocol-todos/{todo_id}/due-events` | meetings.read |
 | `GET /api/protocol-todos/{todo_id}/fine` | meetings.read · Feature todo_fines (lesen) |
-| `PUT /api/protocol-todos/{todo_id}/fine` | finances.manage · Feature todo_fines |
-| `POST /api/protocol-todos/{todo_id}/fine/preview` | finances.manage · Feature todo_fines |
+| `PUT /api/protocol-todos/{todo_id}/fine` | fines.manage · Feature todo_fines |
+| `POST /api/protocol-todos/{todo_id}/fine/preview` | fines.manage · Feature todo_fines |
 | `GET /api/protocols` | meetings.read |
 | `POST /api/protocols/from-template` | meetings.edit |
 | `GET /api/protocols/next-session` | meetings.read |
@@ -386,7 +386,7 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/protocols/upcoming-sessions` | meetings.read |
 | `DELETE /api/protocols/{protocol_id}` | meetings.edit |
 | `GET /api/protocols/{protocol_id}` | meetings.read |
-| `PATCH /api/protocols/{protocol_id}` | meetings.edit |
+| `PATCH /api/protocols/{protocol_id}` | meetings.approve, meetings.edit |
 | `GET /api/protocols/{protocol_id}/agenda-items` | meetings.read |
 | `POST /api/protocols/{protocol_id}/agenda-items` | meetings.edit |
 | `POST /api/protocols/{protocol_id}/attendance/{participant_id}/excuse` | meetings.edit |
@@ -431,17 +431,17 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/roles/catalog` | access.manage |
 | `DELETE /api/roles/{role_id}` | access.manage |
 | `PATCH /api/roles/{role_id}` | access.manage · Feature custom_roles |
-| `POST /api/search` | files.manage oder participants.manage oder templates.edit |
-| `GET /api/share-links` | files.manage |
-| `POST /api/share-links` | files.manage · Feature photo_sharing |
-| `DELETE /api/share-links/{share_link_id}` | files.manage |
+| `POST /api/search` | files.read oder participants.read oder photos.read oder templates.edit |
+| `GET /api/share-links` | sharing.public |
+| `POST /api/share-links` | files.read, photos.read, sharing.public + files.read oder photos.read · Feature photo_sharing |
+| `DELETE /api/share-links/{share_link_id}` | sharing.public |
 | `GET /api/statistics/overview` | meetings.read |
 | `GET /api/storage/usage` | settings.manage |
-| `PATCH /api/stored-files/{stored_file_id}/capture-date` | files.manage |
+| `PATCH /api/stored-files/{stored_file_id}/capture-date` | photos.manage |
 | `GET /api/stored-files/{stored_file_id}/content` | meetings.read |
 | `GET /api/stored-files/{stored_file_id}/download` | meetings.read |
 | `GET /api/stored-files/{stored_file_id}/metadata` | meetings.read |
-| `PATCH /api/stored-files/{stored_file_id}/tags` | files.manage |
+| `PATCH /api/stored-files/{stored_file_id}/tags` | <P.PHOTOS_MANAGE if (stored_file.mime_type or '').startswith('image/') else P.FILES_MANAGE> + files.manage oder photos.manage |
 | `GET /api/stored-files/{stored_file_id}/thumbnail` | meetings.read |
 | `GET /api/submission-assignments` | submissions.manage |
 | `POST /api/submission-assignments` | submissions.manage |
@@ -452,17 +452,17 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/submission-assignments/{assignment_id}/deletion-preview` | submissions.manage |
 | `GET /api/submission-assignments/{assignment_id}/download-zip` | submissions.read |
 | `GET /api/submission-assignments/{assignment_id}/elements` | submissions.read |
-| `POST /api/submission-assignments/{assignment_id}/elements/{element_ref}/close` | submissions.manage |
-| `POST /api/submission-assignments/{assignment_id}/elements/{element_ref}/reopen` | submissions.manage |
+| `POST /api/submission-assignments/{assignment_id}/elements/{element_ref}/close` | submissions.review |
+| `POST /api/submission-assignments/{assignment_id}/elements/{element_ref}/reopen` | submissions.review |
 | `POST /api/submission-assignments/{assignment_id}/elements/{element_ref}/restore-withdrawn` | submissions.manage |
 | `POST /api/submission-assignments/{assignment_id}/rescan-pending` | submissions.manage |
 | `GET /api/submission-assignments/{assignment_id}/summary` | submissions.read |
 | `GET /api/submission-assignments/{assignment_id}/upload-log` | submissions.read |
 | `GET /api/submission-links` | submissions.manage |
-| `POST /api/submission-links` | submissions.manage |
-| `DELETE /api/submission-links/{link_id}` | submissions.manage |
+| `POST /api/submission-links` | sharing.public, submissions.manage |
+| `DELETE /api/submission-links/{link_id}` | sharing.public, submissions.manage |
 | `PATCH /api/submission-links/{link_id}` | submissions.manage |
-| `POST /api/submission-links/{link_id}/regenerate` | submissions.manage |
+| `POST /api/submission-links/{link_id}/regenerate` | sharing.public, submissions.manage |
 | `DELETE /api/submission-uploads/{upload_id}` | submissions.manage |
 | `DELETE /api/submission-uploads/{upload_id}/files/{file_id}` | submissions.manage |
 | `GET /api/submission-uploads/{upload_id}/files/{file_id}/content` | submissions.read |
@@ -512,8 +512,8 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `POST /api/tenant-data-exports` | data.export |
 | `GET /api/tenant-data-exports/{export_id}/download` | data.export |
 | `GET /api/tenants` | TenantService._manageable_tenant_ids (settings.manage) |
-| `GET /api/tenants/lookup` | files.manage |
-| `GET /api/tenants/trusted` | files.manage |
+| `GET /api/tenants/lookup` | photos.manage |
+| `GET /api/tenants/trusted` | photos.manage |
 | `PATCH /api/tenants/{tenant_id}` | TenantService (settings.manage) |
 | `GET /api/tenants/{tenant_id}/charges` | TenantService (settings.manage) |
 | `GET /api/tenants/{tenant_id}/domains` | TenantService (settings.manage) |
@@ -523,35 +523,35 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/tenants/{tenant_id}/profile-image` | Vereinslogo (auch für die Login-Seite) |
 | `GET /api/tenants/{tenant_id}/subscription` | TenantService (settings.manage) |
 | `GET /api/todo-fines` | eigene Pendenzen-Bussen; alle nur mit reports.personal (im Rumpf) · Feature todo_fines (lesen) |
-| `GET /api/todo-fines/filter-options` | finances.manage · Feature todo_fines |
+| `GET /api/todo-fines/filter-options` | fines.manage · Feature todo_fines |
 | `GET /api/todo-fines/rules` | finances.read · Feature todo_fines (lesen) |
-| `POST /api/todo-fines/rules` | finances.manage · Feature todo_fines |
-| `PUT /api/todo-fines/rules/order` | finances.manage · Feature todo_fines |
-| `DELETE /api/todo-fines/rules/{rule_id}` | finances.manage · Feature todo_fines |
-| `PUT /api/todo-fines/rules/{rule_id}` | finances.manage · Feature todo_fines |
-| `GET /api/todo-fines/tariff-members` | finances.manage · Feature finance |
-| `PUT /api/todo-fines/tariff-members` | finances.manage · Feature finance |
-| `PUT /api/todo-fines/tariff-members/{participant_id}` | finances.manage · Feature finance |
+| `POST /api/todo-fines/rules` | fines.manage · Feature todo_fines |
+| `PUT /api/todo-fines/rules/order` | fines.manage · Feature todo_fines |
+| `DELETE /api/todo-fines/rules/{rule_id}` | fines.manage · Feature todo_fines |
+| `PUT /api/todo-fines/rules/{rule_id}` | fines.manage · Feature todo_fines |
+| `GET /api/todo-fines/tariff-members` | fines.manage · Feature finance |
+| `PUT /api/todo-fines/tariff-members` | fines.manage · Feature finance |
+| `PUT /api/todo-fines/tariff-members/{participant_id}` | fines.manage · Feature finance |
 | `GET /api/todo-fines/tariffs` | finances.read · Feature finance (lesen) |
-| `POST /api/todo-fines/tariffs` | finances.manage · Feature finance |
-| `PUT /api/todo-fines/tariffs/order` | finances.manage · Feature finance |
-| `DELETE /api/todo-fines/tariffs/{tariff_id}` | finances.manage · Feature finance |
-| `PUT /api/todo-fines/tariffs/{tariff_id}` | finances.manage · Feature finance |
-| `POST /api/todo-fines/{fine_id}/collect` | finances.manage · Feature finance, todo_fines |
-| `POST /api/todo-fines/{fine_id}/reopen` | finances.manage · Feature todo_fines |
-| `POST /api/todo-fines/{fine_id}/restore` | finances.manage · Feature todo_fines |
-| `POST /api/todo-fines/{fine_id}/waive` | finances.manage · Feature todo_fines |
+| `POST /api/todo-fines/tariffs` | fines.manage · Feature finance |
+| `PUT /api/todo-fines/tariffs/order` | fines.manage · Feature finance |
+| `DELETE /api/todo-fines/tariffs/{tariff_id}` | fines.manage · Feature finance |
+| `PUT /api/todo-fines/tariffs/{tariff_id}` | fines.manage · Feature finance |
+| `POST /api/todo-fines/{fine_id}/collect` | fines.manage · Feature finance, todo_fines |
+| `POST /api/todo-fines/{fine_id}/reopen` | fines.manage · Feature todo_fines |
+| `POST /api/todo-fines/{fine_id}/restore` | fines.manage · Feature todo_fines |
+| `POST /api/todo-fines/{fine_id}/waive` | fines.manage · Feature todo_fines |
 | `GET /api/todos` | meetings.read |
 | `POST /api/todos` | meetings.edit |
 | `GET /api/todos/blocks` | meetings.read |
 | `GET /api/todos/my` | meetings.read |
 | `POST /api/tools/word-import/analyze` | meetings.edit |
-| `POST /api/tools/word-import/commit` | meetings.edit, participants.manage |
+| `POST /api/tools/word-import/commit` | meetings.approve, meetings.edit, participants.manage |
 | `GET /api/tools/word-import/documents` | meetings.edit |
 | `POST /api/tools/word-import/documents` | meetings.edit |
 | `DELETE /api/tools/word-import/documents/{document_id}` | meetings.edit |
 | `GET /api/tools/word-import/documents/{document_id}` | meetings.edit |
-| `POST /api/tools/word-import/documents/{document_id}/commit` | meetings.edit, participants.manage |
+| `POST /api/tools/word-import/documents/{document_id}/commit` | meetings.approve, meetings.edit, participants.manage |
 | `PUT /api/tools/word-import/documents/{document_id}/draft` | meetings.edit |
 | `POST /api/tools/word-import/documents/{document_id}/reanalyze` | meetings.edit |
 | `GET /api/tools/word-import/last-template` | meetings.edit |
@@ -573,6 +573,8 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `POST /api/users/me/personal-data` | eigene Datenauskunft (rate-limitiert) |
 | `GET /api/users/mfa-policy` | access.manage |
 | `PUT /api/users/mfa-policy` | access.manage |
+| `GET /api/users/protocol-policy` | settings.manage |
+| `PUT /api/users/protocol-policy` | settings.manage |
 | `DELETE /api/users/{user_id}` | UserService (access.manage) |
 | `GET /api/users/{user_id}` | UserService (access.manage) |
 | `PATCH /api/users/{user_id}` | UserService (access.manage) |

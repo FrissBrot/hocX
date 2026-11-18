@@ -7,12 +7,12 @@ const MFA_PERMISSIONS = new Set<string>(PERMISSIONS.filter((permission) => permi
 /** Verlangt eine der Rollen MFA (Administrations-Berechtigung, wie backend permissions.requires_mfa)? */
 export function rolesNeedMfa(roles: readonly RoleRead[], roleIds: Iterable<string>): boolean {
   const wanted = new Set(roleIds);
-  return roles.some((role) => wanted.has(role.id) && [...expandPermissions(role.permissions)].some((key) => MFA_PERMISSIONS.has(key)));
+  return roles.some((role) => wanted.has(role.id) && roleNeedsMfa(role));
 }
 
 /** Einzelne Rolle mit MFA-Pflicht (Badge «MFA» in Rollenlisten). */
 export function roleNeedsMfa(role: RoleRead): boolean {
-  return [...expandPermissions(role.permissions)].some((key) => MFA_PERMISSIONS.has(key));
+  return Boolean(role.require_mfa) || [...expandPermissions(role.permissions)].some((key) => MFA_PERMISSIONS.has(key));
 }
 
 export type MfaState = "active" | "missing" | "optional";

@@ -35,7 +35,9 @@
     "name": "Nome",
     "nameHelpSystem": "Lasciare vuoto per il nome standard.",
     "description": "Descrizione",
-    "permissions": "Autorizzazioni"
+    "permissions": "Autorizzazioni",
+    "requireMfa": "Richiedere la MFA per questo ruolo",
+    "requireMfaHelp": "Tutte le persone con questo ruolo accedono con un secondo fattore. Gli account esistenti hanno 3 giorni per configurarlo, i nuovi lo fanno al primo accesso."
   },
   "toasts": {
     "created": "Ruolo creato",
@@ -77,6 +79,10 @@
       "edit": {
         "label": "Modificare le sedute",
         "description": "Creare, modificare ed eliminare eventi, verbali, punti all’ordine del giorno, compiti e liste; importazione Word."
+      },
+      "approve": {
+        "label": "Approvare i verbali",
+        "description": "Approvare e chiudere i verbali. Con il principio dei quattro occhi, non quello redatto da sé."
       }
     },
     "templates": {
@@ -93,6 +99,18 @@
       "manage": {
         "label": "Gestire i partecipanti",
         "description": "Vedere, creare, modificare e importare i partecipanti con i dati di contatto e assegnarli ai modelli."
+      },
+      "read": {
+        "label": "Vedere i membri",
+        "description": "Vedere l’elenco dei membri e le schede, senza dati di contatto."
+      },
+      "contacts": {
+        "label": "Vedere i dati di contatto",
+        "description": "Vedere gli indirizzi e-mail dei membri."
+      },
+      "export": {
+        "label": "Esportare dati personali",
+        "description": "Creare richieste di accesso per altre persone (tutti i dati come ZIP)."
       }
     },
     "finances": {
@@ -115,6 +133,10 @@
       "manage": {
         "label": "Gestire file & foto",
         "description": "Gestire file, galleria fotografica e album, link di condivisione pubblici e condivisioni di album."
+      },
+      "read": {
+        "label": "Vedere l’archivio",
+        "description": "Vedere e scaricare i file dell’archivio."
       }
     },
     "submissions": {
@@ -125,6 +147,10 @@
       "manage": {
         "label": "Gestire le consegne",
         "description": "Creare, verificare ed eliminare richieste di consegna e link di caricamento pubblici."
+      },
+      "review": {
+        "label": "Verificare le consegne",
+        "description": "Chiudere e riaprire gli elementi consegnati."
       }
     },
     "settings": {
@@ -143,6 +169,40 @@
       "export": {
         "label": "Esportazioni di dati",
         "description": "Esportazione completa dell’organizzazione e diritto d’accesso per altre persone."
+      }
+    },
+    "todos": {
+      "complete_own": {
+        "label": "Completare i propri compiti",
+        "description": "Spuntare e riaprire i propri compiti. Senza questo diritto l’accesso è di sola lettura."
+      }
+    },
+    "fines": {
+      "manage": {
+        "label": "Gestire le multe",
+        "description": "Registrare, incassare e annullare multe; tariffe e regole dei compiti."
+      }
+    },
+    "photos": {
+      "read": {
+        "label": "Vedere le foto",
+        "description": "Vedere e scaricare la galleria e gli album."
+      },
+      "manage": {
+        "label": "Gestire le foto",
+        "description": "Caricare, etichettare ed eliminare foto; album e condivisioni."
+      }
+    },
+    "sharing": {
+      "public": {
+        "label": "Condividere pubblicamente",
+        "description": "Creare e revocare link pubblici per file, album e caricamenti."
+      }
+    },
+    "activity": {
+      "read": {
+        "label": "Vedere il registro attività",
+        "description": "Chi ha modificato cosa e quando (registro dell’organizzazione)."
       }
     }
   },

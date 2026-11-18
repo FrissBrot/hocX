@@ -587,3 +587,20 @@
     grid-column: 1 / -1;
   }
 }
+
+/* Verlauf: Bereich mit Suche, darunter aktive Spaltenfilter als Chips */
+.activity-filter-row {
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.activity-category-field {
+  min-width: 240px;
+}
+
+.activity-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}

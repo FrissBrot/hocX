@@ -2,12 +2,13 @@
 
 import { ChangeEvent, ClipboardEvent, FormEvent, KeyboardEvent, SVGProps, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import { DocsLink } from "@/components/ui/help-popover";
 import { apiErrorMessage } from "@/lib/api/error-message";
 import { attemptBridgeRedirect } from "@/lib/bridge-redirect";
 import { browserApiFetch } from "@/lib/api/client";
+import { formatDateTime } from "@/lib/utils/format";
 import { VersionNotice } from "@/components/ui/version-notice";
 import { getRuntimeConfig } from "@/lib/runtime-config";
 import { browserSupportsPasskeys, createPasskeyCredential, getPasskeyAssertion } from "@/lib/webauthn";
@@ -68,6 +69,7 @@ function sanitizeTotpCode(value: string) {
 export default function LoginPage() {
   const t = useTranslations("auth");
   const tSecurity = useTranslations("security");
+  const locale = useLocale();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -401,6 +403,23 @@ export default function LoginPage() {
     }
   }
 
+  // 3-Tage-Frist (bestehende Konten): Einrichtung kommt bei jedem Login, darf übersprungen werden
+  async function skipSetup() {
+    if (!pendingMfa) return;
+    setLoading(true);
+    try {
+      const session = await browserApiFetch<LoginResponse>("/api/auth/mfa/setup/skip", {
+        method: "POST",
+        body: JSON.stringify({ ticket: pendingMfa.ticket }),
+      });
+      finishLogin(session);
+    } catch (error) {
+      setStatusMsg(apiErrorMessage(error, tSecurity, "apiErrors", t("status.totpActivateFailed")));
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function completeTotpSetup() {
     if (!totpSetup) return;
     setLoading(true);
@@ -508,7 +527,13 @@ export default function LoginPage() {
                 ? t("mfa.requiredAdminDescription", { user: pendingMfa.user_display_name, tenant: pendingMfa.tenant_name })
                 : t("mfa.requiredGenericDescription", { user: pendingMfa.user_display_name })}
             </div>
+            {pendingMfa.can_skip && pendingMfa.grace_until ? (
+              <div className="muted">{t("mfa.graceDescription", { until: formatDateTime(pendingMfa.grace_until, locale) })}</div>
+            ) : null}
           </div>
+          {pendingMfa.can_skip && pendingMfa.grace_until ? (
+            <button type="button" className="button-secondary" disabled={loading} onClick={() => void skipSetup()}>{t("mfa.graceSkip")}</button>
+          ) : null}
         </div>
 
         <div className="wizard-steps">

@@ -12,14 +12,14 @@ export default async function ParticipantsPage({ searchParams }: { searchParams:
   const session = await requireSession();
   const canWrite = can(session, "participants.manage");
 
-  if (!canWrite) {
+  if (!can(session, "participants.read")) {
     redirect("/");
   }
   // Tarif-Filter vorbelegen (Links aus den Bussen-Regeln: /participants?tariff=<id>)
   const { tariff } = await searchParams;
   const access = can(session, "access.manage");
   const financeRead = can(session, "finances.read") && featureAccess(session, "finance") !== "none";
-  const financeManage = can(session, "finances.manage") && featureAccess(session, "finance") === "full";
+  const financeManage = can(session, "fines.manage") && featureAccess(session, "finance") === "full";
 
   const [participants, templates, roles, tariffs] = await Promise.all([
     backendFetchWithSession<ParticipantSummary[]>("/api/participants?include_former=true&limit=2000"),

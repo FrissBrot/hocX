@@ -117,7 +117,11 @@
     "enableConfirm": "Exiger la MFA",
     "enabledToast": "La MFA est désormais obligatoire pour toutes les connexions",
     "disabledToast": "La MFA n'est plus obligatoire que pour les droits d'administration",
-    "saveFailed": "Le paramètre n'a pas pu être enregistré."
+    "saveFailed": "Le paramètre n'a pas pu être enregistré.",
+    "fourEyesTitle": "Principe des quatre yeux pour les procès-verbaux",
+    "fourEyesHelp": "La personne qui a rédigé un procès-verbal ne peut pas le clôturer elle-même – une autre personne avec le droit «Valider les procès-verbaux» le fait.",
+    "fourEyesOn": "Principe des quatre yeux activé",
+    "fourEyesOff": "Principe des quatre yeux désactivé"
   },
   "access": {
     "title": "Qui a accès",

@@ -13,7 +13,6 @@ type SettingDef = { id: string; page: string; href: string; icon: NavIconKey };
 export const SETTING_DEFS: SettingDef[] = [
   { id: "tenantName", page: "/tenant-settings", href: "/tenant-settings#stammdaten", icon: "tenant" },
   { id: "tenantLogo", page: "/tenant-settings", href: "/tenant-settings#stammdaten", icon: "tenant" },
-  { id: "publicSlug", page: "/tenant-settings", href: "/tenant-settings#stammdaten", icon: "tenant" },
   { id: "eventFields", page: "/tenant-settings", href: "/tenant-settings#event-fields", icon: "tenant" },
   { id: "currencies", page: "/tenant-settings", href: "/tenant-settings#currencies", icon: "tenant" },
   { id: "privacyStatistics", page: "/tenant-settings/privacy", href: "/tenant-settings/privacy#privacy-statistics", icon: "tenant" },

@@ -99,7 +99,7 @@ def _participants(db, n):
     for i in range(n):
         make_participant(db, tenant.id, f"Person {i}")
     user = make_current_user(tenant.id, role="admin")
-    return lambda: participants.list_participants(active_only=False, skip=0, limit=100, db=db, user=user)
+    return lambda: participants.list_participants(active_only=False, include_former=False, skip=0, limit=100, db=db, user=user)
 
 
 def _fines(db, n):

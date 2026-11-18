@@ -25,6 +25,7 @@ import { CopyrightNotice } from "@/components/ui/copyright-notice";
 import { MobileShell } from "@/components/mobile/mobile-shell";
 import { useIsMobile } from "@/lib/hooks/use-is-mobile";
 import { InstallAppPrompt } from "@/components/ui/install-app-prompt";
+import { MfaGraceBanner } from "@/components/ui/mfa-grace-banner";
 import { findListSearchInput } from "@/lib/search/list-search";
 import { useGlobalSearchShortcuts, useShortcutLabel } from "@/lib/search/shortcuts";
 import type { GlobalSearchAction } from "@/components/search/global-search";
@@ -590,7 +591,10 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
               </Menu>
             </Popover>
           </header>
-          <div className="shell-content"><InstallAppPrompt />{children}</div>
+          <div className="shell-content">
+            <MfaGraceBanner until={session?.mfa_grace_until} onSetup={() => setProfileModalOpen(true)} />
+            <InstallAppPrompt />{children}
+          </div>
         </div>
       </div>
 

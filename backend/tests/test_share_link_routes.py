@@ -628,3 +628,27 @@ def test_public_album_thumbnail_resolves_single_file_and_respects_pending_releas
     with pytest.raises(HTTPException) as exc_info:
         public_share_routes._resolve_file_or_404(db, link, held_back.public_id)
     assert exc_info.value.status_code == 404
+
+
+def test_share_links_respect_the_split_between_documents_and_photos(db):
+    """Security-Review Phase 3: öffentlich teilen nur, was man selbst sehen darf - Bilder mit
+    photos.read, Dokumente mit files.read; die Linkliste zeigt nur solche Links."""
+    import dataclasses
+
+    tenant = make_tenant(db)
+    writer = make_current_user(tenant.id, role="writer")
+    photos_only = dataclasses.replace(writer, permissions=frozenset({"sharing.public", "photos.read"}))
+    pdf = _make_file(db, tenant.id, name="vertraulich.pdf", content=b"%PDF-1.4 test", mime_type="application/pdf")
+    photo = _make_file(db, tenant.id)
+
+    with pytest.raises(HTTPException) as denied:
+        share_links_routes.create_share_link(ShareLinkCreate(name="PDF", file_ids=[pdf.public_id]), db, photos_only)
+    assert denied.value.status_code == 403
+    share_links_routes.create_share_link(ShareLinkCreate(name="Foto", file_ids=[photo.public_id]), db, photos_only)
+    document_link = share_links_routes.create_share_link(ShareLinkCreate(name="Dokument", file_ids=[pdf.public_id]), db, writer)
+
+    assert [row.name for row in share_links_routes.list_share_links(db, photos_only)] == ["Foto"]
+    assert {row.name for row in share_links_routes.list_share_links(db, writer)} == {"Foto", "Dokument"}
+    with pytest.raises(HTTPException) as hidden:
+        share_links_routes.revoke_share_link(document_link.id, db, photos_only)
+    assert hidden.value.status_code == 404

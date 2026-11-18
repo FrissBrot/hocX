@@ -62,9 +62,8 @@ class PlatformAdminRead(PublicIdModel):
 
 class AdminTenantCreate(BaseModel):
     name: str
-    # Optional seit dem neuen "Neuer Mandant"-Dialog: Slug, Plan und Abrechnung koennen direkt
+    # Optional seit dem neuen "Neuer Mandant"-Dialog: Plan und Abrechnung koennen direkt
     # beim Anlegen gesetzt werden (sonst wie bisher spaeter in den Mandant-Einstellungen).
-    public_slug: str | None = Field(default=None, pattern=r"^[a-z0-9-]+$")
     plan_code: str | None = None
     billing_cycle: Literal["monthly", "yearly"] = "monthly"
 
@@ -84,7 +83,6 @@ class AdminTenantRead(BaseModel):
     name: str
     profile_image_path: str | None = None
     profile_image_url: str | None = None
-    public_slug: str | None = None
     participant_count: int = 0
     user_count: int = 0
     created_at: datetime

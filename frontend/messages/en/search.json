@@ -81,10 +81,6 @@
       "label": "Organisation picture",
       "keywords": "logo image crest avatar"
     },
-    "publicSlug": {
-      "label": "Public address",
-      "keywords": "slug short name URL link address"
-    },
     "eventFields": {
       "label": "Event fields",
       "keywords": "event fields location meeting point bring clothing"

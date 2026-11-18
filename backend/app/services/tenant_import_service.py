@@ -569,7 +569,7 @@ class TenantImportService:
         # collision, silently point at a template belonging to a completely different
         # tenant.
         overrides: dict[str, Any] = {
-            "name": new_name, "profile_image_path": None, "public_slug": None, "last_word_import_template_id": None,
+            "name": new_name, "profile_image_path": None, "last_word_import_template_id": None,
         }
         # plan.code is installation-wide seed data maintained in the admin panel - a plan
         # the source had doesn't necessarily exist here (FK would abort the whole import).
@@ -635,6 +635,7 @@ class TenantImportService:
                 name=name,
                 description=row.get("description"),
                 permissions=row.get("permissions") or [],
+                require_mfa=bool(row.get("require_mfa")),
             )
             self._role_map[row["id"]] = role.id
         self.db.commit()

@@ -16,12 +16,15 @@ export default async function AccessSecurityPage() {
   }
   const t = await getTranslations("nav");
   const policy = await backendFetchWithSession<TenantMfaPolicy>("/api/users/mfa-policy");
+  const protocolPolicy = can(session, "settings.manage")
+    ? await backendFetchWithSession<{ four_eyes_protocols: boolean }>("/api/users/protocol-policy")
+    : null;
 
   return (
     <AppShell initialSession={session}>
       <RouteTabs tabs={userAreaTabs(t)} activeHref="/users/security" />
       <section className="panel">
-        <AccessSecurity initialPolicy={policy} />
+        <AccessSecurity initialPolicy={policy} initialFourEyes={protocolPolicy ? protocolPolicy.four_eyes_protocols : null} />
       </section>
     </AppShell>
   );

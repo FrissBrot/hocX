@@ -13,7 +13,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 export default async function PersonDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await requireSession();
-  if (!can(session, "participants.manage")) {
+  if (!can(session, "participants.read")) {
     redirect("/");
   }
   if (!UUID_PATTERN.test(id)) {
@@ -21,7 +21,7 @@ export default async function PersonDetailPage({ params }: { params: Promise<{ i
   }
   const access = can(session, "access.manage");
   const financeRead = can(session, "finances.read") && featureAccess(session, "finance") !== "none";
-  const financeManage = can(session, "finances.manage") && featureAccess(session, "finance") === "full";
+  const financeManage = can(session, "fines.manage") && featureAccess(session, "finance") === "full";
   const encoded = encodeURIComponent(id);
 
   const [person, templates, assigned, roles, tariffs, invites] = await Promise.all([
@@ -51,7 +51,7 @@ export default async function PersonDetailPage({ params }: { params: Promise<{ i
           tariffs={tariffs ?? []}
           initialInvite={(invites ?? []).find((invite) => invite.participant_id === person.id) ?? null}
           initialMfa={mfa}
-          permissions={{ access, financeRead, financeManage, dataExport: can(session, "data.export") }}
+          permissions={{ access, financeRead, financeManage, dataExport: can(session, "participants.export") }}
           actorPermissions={session.permissions ?? []}
           enabledFeatures={session.current_tenant?.enabled_features ?? []}
           ownUserId={session.user?.id ?? null}

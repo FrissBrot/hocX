@@ -21,7 +21,6 @@ type Props = {
 
 type TenantFormState = {
   name: string;
-  publicSlug: string;
   profileImage: File | null;
   profileImageUrl: string | null;
 };
@@ -36,7 +35,6 @@ export function useTenantGeneralForm(initialTenant: TenantSummary) {
 
   const [tenantForm, setTenantForm] = useState<TenantFormState>({
     name: initialTenant.name,
-    publicSlug: initialTenant.public_slug ?? "",
     profileImage: null,
     profileImageUrl: initialTenant.profile_image_url,
   });
@@ -58,9 +56,6 @@ export function useTenantGeneralForm(initialTenant: TenantSummary) {
     try {
       const formData = new FormData();
       formData.append("name", tenantForm.name);
-      if (tenantForm.publicSlug.trim()) {
-        formData.append("public_slug", tenantForm.publicSlug.trim());
-      }
       if (tenantForm.profileImage) {
         formData.append("profile_image", tenantForm.profileImage);
       }
@@ -125,26 +120,10 @@ export function TenantGeneralSettings({ initialTenant }: Props) {
               }}
             />
           </div>
-          <div className="two-col">
-            <label className="field-stack">
-              <span className="field-label">{t("tenantNameLabel")}</span>
-              <input value={tenantForm.name} onChange={(event) => setTenantForm((current) => ({ ...current, name: event.target.value }))} required />
-            </label>
-            <label className="field-stack">
-              <span className="field-label">
-                {t("publicSlugLabel")}{" "}
-                <HelpPopover topic={t("publicSlugLabel")} docs={{ page: "einstellungen", anchor: "stammdaten" }}>
-                  {t("help.publicSlug")}
-                </HelpPopover>
-              </span>
-              <input
-                value={tenantForm.publicSlug}
-                onChange={(event) => setTenantForm((current) => ({ ...current, publicSlug: event.target.value.toLowerCase() }))}
-                placeholder={t("publicSlugPlaceholder")}
-                pattern="[a-z0-9-]+"
-              />
-            </label>
-          </div>
+          <label className="field-stack">
+            <span className="field-label">{t("tenantNameLabel")}</span>
+            <input value={tenantForm.name} onChange={(event) => setTenantForm((current) => ({ ...current, name: event.target.value }))} required />
+          </label>
           <label className="field-stack">
             <span className="field-label">{t("tenantIdLabel")}</span>
             <CopyField label={t("tenantIdLabel")} value={initialTenant.id} />

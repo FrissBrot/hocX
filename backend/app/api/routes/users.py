@@ -10,13 +10,14 @@ from app.core.config import settings
 from app.core.db import get_db
 from app.core.permissions import P
 from app.core.security import CurrentUser, get_current_user, issue_locale_cookie, issue_session_cookie, require_permission
-from app.models.entities import AppUser, UserMfaFactor
+from app.models.entities import AppUser, Tenant, UserMfaFactor
 from app.schemas.mfa import (
     PasskeyRegistrationComplete,
     PasskeyRegistrationStartRead,
     PreferredMfaMethodUpdate,
     TenantMfaPolicyRead,
     TenantMfaPolicyUpdate,
+    TenantProtocolPolicy,
     TotpEnrollmentComplete,
     TotpEnrollmentStartRead,
     UserMfaRead,
@@ -120,6 +121,29 @@ def put_mfa_policy(
             details={"require_mfa": result.require_mfa, "logins_without_mfa": result.logins_without_mfa},
         )
     return result
+
+
+@router.get("/protocol-policy", response_model=TenantProtocolPolicy)
+def get_protocol_policy(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Vier-Augen-Prinzip (Zugriff › Sicherheit): Verfasser schliesst eigenes Protokoll nicht ab."""
+    require_permission(user, P.SETTINGS_MANAGE)
+    tenant = db.get(Tenant, user.current_tenant_id)
+    return TenantProtocolPolicy(four_eyes_protocols=bool(tenant and tenant.four_eyes_protocols))
+
+
+@router.put("/protocol-policy", response_model=TenantProtocolPolicy)
+def put_protocol_policy(payload: TenantProtocolPolicy, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    require_permission(user, P.SETTINGS_MANAGE)
+    tenant = db.get(Tenant, user.current_tenant_id)
+    if tenant is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    before = tenant.four_eyes_protocols
+    tenant.four_eyes_protocols = payload.four_eyes_protocols
+    db.commit()
+    if before != payload.four_eyes_protocols:
+        audit.log(db, action="tenant.protocol_policy_updated", actor=user, entity_type="tenant", entity_id=tenant.id,
+                  details={"four_eyes_protocols": payload.four_eyes_protocols})
+    return TenantProtocolPolicy(four_eyes_protocols=tenant.four_eyes_protocols)
 
 
 @router.get("/me", response_model=UserRead)

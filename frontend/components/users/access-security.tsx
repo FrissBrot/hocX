@@ -14,13 +14,35 @@ import type { TenantMfaPolicy } from "@/types/api";
 
 /** Zugriff › Sicherheit: MFA-Regeln der Organisation. Die Pflicht bei Administrationsrechten ist
  * fest (Katalog), «MFA für alle Logins» schaltet der Admin (tenant.require_mfa, access.manage). */
-export function AccessSecurity({ initialPolicy }: { initialPolicy: TenantMfaPolicy | null }) {
+export function AccessSecurity({ initialPolicy, initialFourEyes = null }: {
+  initialPolicy: TenantMfaPolicy | null;
+  /** Vier-Augen-Prinzip (Migration 0191); null = keine Berechtigung (settings.manage) */
+  initialFourEyes?: boolean | null;
+}) {
   const t = useTranslations("users");
   const tSecurity = useTranslations("security");
   const showToast = useToast();
   const confirm = useConfirm();
   const [policy, setPolicy] = useState(initialPolicy);
   const [busy, setBusy] = useState(false);
+  const [fourEyes, setFourEyes] = useState(initialFourEyes);
+
+  async function toggleFourEyes(next: boolean) {
+    if (fourEyes === null || busy) return;
+    setBusy(true);
+    try {
+      const saved = await browserApiFetch<{ four_eyes_protocols: boolean }>("/api/users/protocol-policy", {
+        method: "PUT",
+        body: JSON.stringify({ four_eyes_protocols: next }),
+      });
+      setFourEyes(saved?.four_eyes_protocols ?? next);
+      showToast(t(next ? "security.fourEyesOn" : "security.fourEyesOff"), "success");
+    } catch (error) {
+      showToast(apiErrorMessage(error, tSecurity, "apiErrors", t("security.saveFailed")), "error");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function toggle(next: boolean) {
     if (!policy || busy) return;
@@ -95,6 +117,16 @@ export function AccessSecurity({ initialPolicy }: { initialPolicy: TenantMfaPoli
       ) : (
         <StatusBanner tone="error" message={t("security.loadFailed")} />
       )}
+      {fourEyes !== null ? (
+        <label className="profile-toggle">
+          <span className="profile-toggle-text">
+            <span>{t("security.fourEyesTitle")}</span>
+            <span className="field-help">{t("security.fourEyesHelp")}</span>
+          </span>
+          <input type="checkbox" role="switch" checked={fourEyes} disabled={busy} onChange={(event) => void toggleFourEyes(event.target.checked)} />
+          <span className="album-picker-switch-track" aria-hidden="true" />
+        </label>
+      ) : null}
       <DocsLink page="konto" anchor="mfa">{t("security.docs")}</DocsLink>
     </div>
   );

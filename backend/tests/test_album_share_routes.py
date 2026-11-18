@@ -321,7 +321,6 @@ def test_ensure_can_read_stored_file_still_denies_photos_outside_any_shared_albu
 def _trusted_pair(db):
     owner = make_tenant(db, "Pfadi Wildegg")
     partner = make_tenant(db, "Jubla Sonnenberg")
-    partner.public_slug = "jubla-sonnenberg"
     partner.profile_image_path = "tenant-profile-images/jubla.png"
     album = _make_album(db, owner.id)
     db.commit()
@@ -341,7 +340,6 @@ def test_lookup_tenant_without_trust_only_confirms_the_id(db):
     assert result.trusted is False
     assert result.name is None
     assert result.profile_image_url is None
-    assert result.slug is None
     assert result.participant_count is None
 
 
@@ -370,7 +368,6 @@ def test_accepting_a_share_establishes_mutual_trust_that_survives_revoking(db):
 
     assert seen_by_owner.trusted is True
     assert seen_by_owner.name == "Jubla Sonnenberg"
-    assert seen_by_owner.slug == "jubla-sonnenberg"
     assert seen_by_owner.participant_count == 2
     assert seen_by_owner.profile_image_url == f"/api/tenants/{partner.public_id}/profile-image"
     assert seen_by_partner.trusted is True
@@ -403,3 +400,18 @@ def test_declining_a_share_does_not_establish_trust(db):
 
     assert result.trusted is False
     assert result.name is None
+
+
+def test_partner_search_is_tolerant():
+    """Suche nach Partner-Vereinen nur über den Namen (Kurzname entfällt, Migration 0193), aber
+    tolerant: Gross/klein, Umlaute, Satzzeichen, Wortanfänge, Kürzel, einzelne Tippfehler."""
+    from app.services.tenant_trust_service import name_match_score
+
+    name = "Jungwacht Säschseln-Flüeli"
+    for query in ("jungwacht", "JUNGW", "saschseln", "saeschseln", "jungwacht-saschseln", "JW Säschseln",
+                  "flueli", "flüeli jungwacht", "jungwcht", "saschsln"):
+        assert name_match_score(name, query) > 0, query
+    for query in ("pfadi", "blauring", "jungwacht pfadi", "", "  "):
+        assert name_match_score(name, query) == 0, query
+    # Bessere Treffer zuerst: ganzer Name vor Tippfehler
+    assert name_match_score(name, "jungwacht saschseln") > name_match_score(name, "jungwcht")

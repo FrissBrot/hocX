@@ -57,7 +57,6 @@ class Tenant(Base, TimestampMixin):
     tag_config_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
     # Alias/Ausblenden der Spezialfelder der Termine (Migration 0165, schemas/event_field_config.py)
     event_field_config_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict)
-    public_slug: Mapped[str | None] = mapped_column(Text, unique=True)
     # Vorlage, die im Import-Assistenten zuletzt ausgewählt wurde - wird beim nächsten
     # Öffnen der Seite wieder vorausgewählt. SET NULL statt CASCADE, damit das Löschen
     # einer Vorlage nicht versehentlich den Tenant mitreisst; die UI fällt dann einfach
@@ -100,6 +99,8 @@ class Tenant(Base, TimestampMixin):
     # MFA-Pflicht für alle Logins der Organisation (Migration 0188, durchgesetzt in
     # app/core/security.py::get_optional_current_user und mfa_service.user_requires_mfa)
     require_mfa: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"), default=False)
+    # Vier-Augen-Prinzip (Migration 0191): Verfasser schliesst eigenes Protokoll nicht selbst ab
+    four_eyes_protocols: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"), default=False)
     # Identität der Organisation durch einen Plattform-Admin bestätigt (Abzeichen auf der
     # Prüfseite). Eine Namensänderung hebt die Bestätigung auf (revoked_*).
     identity_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -301,6 +302,8 @@ class TenantRole(Base, TimestampMixin, UpdatedAtMixin):
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str | None] = mapped_column(Text)
     description: Mapped[str | None] = mapped_column(Text)
+    # MFA für alle Konten mit dieser Rolle (Migration 0192)
+    require_mfa: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"), default=False)
     system_key: Mapped[str | None] = mapped_column(Text)
 
 
@@ -349,6 +352,10 @@ class Participant(Base, TimestampMixin, UpdatedAtMixin):
     # A user belongs to exactly one tenant; roles come from user_role (several per account, see
     # TenantRole). Deleting the tenant deletes its users (every other FK into app_user is CASCADE
     # or SET NULL, so this never blocks).
+    # Erste Anmeldung (Migration 0192): ohne gilt das Konto als neu - MFA beim ersten Login
+    first_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Frist, bis zu der ein bestehendes Konto MFA einrichten muss (3 Tage, Migration 0192)
+    mfa_grace_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
     first_name: Mapped[str | None] = mapped_column(Text)
     last_name: Mapped[str | None] = mapped_column(Text)
@@ -2891,13 +2898,11 @@ class TenantRetentionPolicy(Base):
     __tablename__ = "tenant_retention_policy"
     __table_args__ = (
         CheckConstraint("submissions_months > 0", name="tenant_retention_policy_submissions_months_check"),
-        CheckConstraint("former_members_years > 0", name="tenant_retention_policy_former_members_years_check"),
         CheckConstraint("unlinked_gallery_years > 0", name="tenant_retention_policy_unlinked_gallery_years_check"),
     )
 
     tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), primary_key=True)
     submissions_months: Mapped[int | None] = mapped_column(SmallInteger)
-    former_members_years: Mapped[int | None] = mapped_column(SmallInteger)
     unlinked_gallery_years: Mapped[int | None] = mapped_column(SmallInteger)
     auto_apply: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
@@ -2909,7 +2914,7 @@ class RetentionProposal(Base):
 
     __tablename__ = "retention_proposal"
     __table_args__ = (
-        CheckConstraint("kind IN ('submission_upload', 'former_member', 'gallery_image')", name="ck_retention_proposal_kind"),
+        CheckConstraint("kind IN ('submission_upload', 'gallery_image')", name="ck_retention_proposal_kind"),
         CheckConstraint("status IN ('open', 'applied', 'dismissed')", name="ck_retention_proposal_status"),
         UniqueConstraint("tenant_id", "kind", "subject_id", name="uq_retention_proposal_subject"),
         Index("idx_retention_proposal_open", "tenant_id", "status"),

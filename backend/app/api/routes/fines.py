@@ -105,7 +105,7 @@ def update_fine_tariff(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_permission(user, P.FINANCES_MANAGE)
+    require_permission(user, P.FINES_MANAGE)
     require_feature(user, "finance")
     try:
         result = fine_tariff_service.update_tariff(db, user.current_tenant_id, payload)
@@ -149,7 +149,7 @@ def create_fine(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_permission(user, P.FINANCES_MANAGE)
+    require_permission(user, P.FINES_MANAGE)
     if payload.use_tariff:
         # Betrag nach Tarif der Person (0172); 0 = für diese Person keine Busse (204, nichts angelegt)
         protocol = public_id_service.get_by_public_id(db, Protocol, payload.protocol_id, tenant_id=user.current_tenant_id)
@@ -190,7 +190,7 @@ def delete_fine(
 ):
     """Offene Busse löschen. Im offenen Ursprungsprotokoll hart, sonst mit Begründung
     (Status `deleted`, aufgeführt im Protokoll `protocol_id` bzw. im nächsten offenen)."""
-    require_permission(user, P.FINANCES_MANAGE)
+    require_permission(user, P.FINES_MANAGE)
     internal_id = _resolve_fine_id(db, fine_id, user)
     payload = payload or DeleteFinePayload()
     protocol_context_id = None
@@ -225,7 +225,7 @@ def restore_fine(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_permission(user, P.FINANCES_MANAGE)
+    require_permission(user, P.FINES_MANAGE)
     internal_id = _resolve_fine_id(db, fine_id, user)
     try:
         result = repo.restore_fine(db, internal_id, user.current_tenant_id)
@@ -245,7 +245,7 @@ def collect_fine(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_permission(user, P.FINANCES_MANAGE)
+    require_permission(user, P.FINES_MANAGE)
     internal_id = _resolve_fine_id(db, fine_id, user)
     collecting_protocol_internal_id = None
     if payload.collecting_protocol_id is not None:
@@ -271,7 +271,7 @@ def reopen_fine(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_permission(user, P.FINANCES_MANAGE)
+    require_permission(user, P.FINES_MANAGE)
     internal_id = _resolve_fine_id(db, fine_id, user)
     try:
         result = repo.reopen_fine(db, internal_id, user.current_tenant_id)

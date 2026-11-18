@@ -145,7 +145,6 @@ class TenantService:
             name=tenant.name,
             profile_image_path=tenant.profile_image_path,
             profile_image_url=build_tenant_profile_image_url(tenant.public_id, tenant.profile_image_path),
-            public_slug=tenant.public_slug,
             created_at=tenant.created_at,
             updated_at=tenant.updated_at,
             enabled_features=sorted(actor.current_tenant_features),
@@ -282,8 +281,6 @@ class TenantService:
         old_name = tenant.name
         if payload.name is not None:
             tenant.name = payload.name
-        if payload.public_slug is not None:
-            tenant.public_slug = payload.public_slug
 
         if profile_image is not None:
             await apply_tenant_profile_image(db, tenant, profile_image)

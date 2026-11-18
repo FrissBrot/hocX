@@ -187,3 +187,6 @@ lesend, im Aktivitätsprotokoll vermerkt).
 ## Nicht-Ziele
 Keine Verbots-Regeln (Deny) auf Ebene 2. Kein Schreibzugriff über Kontext-Freigaben. Keine frei
 definierbaren Berechtigungsschlüssel durch Vereine.
+- «Öffentlich teilen» (`sharing.public`): eigenes Recht **ohne MFA-Pflicht** (Entscheid 18.11.2026,
+  Abweichung vom Plan), damit Schreiber nicht neu MFA einrichten müssen; wer MFA will, nutzt
+  «MFA für alle Logins».

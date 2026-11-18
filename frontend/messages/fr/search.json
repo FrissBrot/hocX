@@ -81,10 +81,6 @@
       "label": "Image de l’organisation",
       "keywords": "logo image blason avatar"
     },
-    "publicSlug": {
-      "label": "Adresse publique",
-      "keywords": "slug nom court URL lien adresse"
-    },
     "eventFields": {
       "label": "Champs des rendez-vous",
       "keywords": "champs rendez-vous lieu point de rencontre matériel tenue"

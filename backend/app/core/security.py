@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.locale_config_generated import LOCALE_COOKIE_NAME, normalize_locale
-from app.core.mfa_policy import account_requires_mfa
+from app.core.mfa_policy import account_requires_mfa, mfa_grace_until
 from app.core.permissions import CATALOG, P, effective_permissions
 from app.core.features_generated import FEATURES
 from app.core.tenant_mfa import tenant_requires_mfa
@@ -52,6 +52,8 @@ class CurrentUser:
     mfa_verified: bool = False
     # MFA-Pflicht des Mandanten für alle Logins (tenant.require_mfa, Migration 0188).
     tenant_require_mfa: bool = False
+    # Laufende Frist zum Einrichten von MFA (bestehende Konten, Migration 0192) - für den Hinweis
+    mfa_grace_until: datetime | None = None
     # Feature-Gating pro Mandant (orthogonal zu den Rollen): welche Features fuer
     # current_tenant_id gebucht sind. Leer per Default (deny-by-default) - build_current_user
     # laedt den echten Stand aus tenant_feature.
@@ -293,6 +295,13 @@ def get_optional_current_user(
     if has_mfa_factor and not current_user.mfa_verified:
         return None
     if _requires_mfa(db, current_user) and (not has_mfa_factor or not current_user.mfa_verified):
+        if not has_mfa_factor:
+            # Bestehendes Konto, MFA neu Pflicht (nicht wegen Administrationsrechten): 3 Tage Frist
+            grace = mfa_grace_until(db, current_user.user_id, permissions=current_user.permissions, tenant_id=current_user.current_tenant_id)
+            if grace is not None:
+                current_user.mfa_grace_until = grace
+                bind_tenant_scope(db, current_user.current_tenant_id)
+                return current_user
         if not has_mfa_factor and request is not None:
             # Nur als Grund für get_current_user (klare Fehlermeldung); die Session bleibt
             # ungültig, auch für Endpunkte mit optionalem Login.

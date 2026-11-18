@@ -117,7 +117,11 @@
     "enableConfirm": "Require MFA",
     "enabledToast": "MFA is now required for all logins",
     "disabledToast": "MFA is now only required for administrative permissions",
-    "saveFailed": "The setting could not be saved."
+    "saveFailed": "The setting could not be saved.",
+    "fourEyesTitle": "Four-eyes principle for protocols",
+    "fourEyesHelp": "Whoever wrote a protocol cannot close it themselves – another person with the right «Approve protocols» closes it.",
+    "fourEyesOn": "Four-eyes principle on",
+    "fourEyesOff": "Four-eyes principle off"
   },
   "access": {
     "title": "Who has access",

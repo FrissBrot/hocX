@@ -4,7 +4,7 @@
     "GET /api/activity": {
       "handler": "activity.list_activity",
       "requires": [
-        "settings.manage"
+        "activity.read"
       ]
     },
     "GET /api/admin/admins": {
@@ -1168,12 +1168,12 @@
       ],
       "requires_any": [
         [
-          "files.manage",
-          "meetings.read_drafts"
-        ],
-        [
           "meetings.edit",
           "participants.manage"
+        ],
+        [
+          "meetings.read_drafts",
+          "photos.read"
         ]
       ]
     },
@@ -1304,79 +1304,91 @@
     "GET /api/files": {
       "handler": "files.list_files",
       "requires": [
-        "files.manage"
+        "photos.read"
+      ],
+      "requires_any": [
+        [
+          "files.read",
+          "photos.read"
+        ]
+      ],
+      "branches": [
+        "files.read"
       ]
     },
     "GET /api/files/album-pending-releases": {
       "handler": "files.list_album_pending_releases",
       "requires": [
-        "files.manage"
+        "photos.read"
       ]
     },
     "GET /api/files/album-share-requests": {
       "handler": "files.list_album_share_requests",
       "requires": [
-        "files.manage"
+        "photos.read"
       ]
     },
     "GET /api/files/albums": {
       "handler": "files.list_albums",
       "requires": [
-        "files.manage"
+        "photos.read"
       ]
     },
     "POST /api/files/albums": {
       "handler": "files.create_album",
       "requires": [
-        "files.manage"
+        "photos.manage"
       ]
     },
     "DELETE /api/files/albums/{album_id}": {
       "handler": "files.delete_album",
       "requires": [
-        "files.manage"
+        "photos.manage"
       ]
     },
     "PATCH /api/files/albums/{album_id}": {
       "handler": "files.rename_album",
       "requires": [
-        "files.manage"
+        "photos.manage"
       ]
     },
     "POST /api/files/albums/{album_id}/items": {
       "handler": "files.add_album_items",
       "requires": [
-        "files.manage"
+        "photos.manage",
+        "photos.read"
       ]
     },
     "POST /api/files/albums/{album_id}/items/remove": {
       "handler": "files.remove_album_items",
       "requires": [
-        "files.manage"
+        "photos.manage",
+        "photos.read"
       ]
     },
     "PATCH /api/files/albums/{album_id}/items/{file_id}/best": {
       "handler": "files.set_album_item_best",
       "requires": [
-        "files.manage"
+        "photos.manage",
+        "photos.read"
       ]
     },
     "PATCH /api/files/albums/{album_id}/my-share": {
       "handler": "files.update_my_album_share",
       "requires": [
-        "files.manage"
+        "photos.manage"
       ]
     },
     "POST /api/files/albums/{album_id}/release": {
       "handler": "files.release_album_items",
       "requires": [
-        "files.manage"
+        "photos.manage"
       ]
     },
     "POST /api/files/albums/{album_id}/respond": {
       "handler": "files.respond_album_share",
       "requires": [
-        "files.manage"
+        "photos.manage"
       ],
       "features": [
         "photo_sharing"
@@ -1385,7 +1397,7 @@
     "POST /api/files/albums/{album_id}/shares": {
       "handler": "files.create_album_share",
       "requires": [
-        "files.manage"
+        "photos.manage"
       ],
       "features": [
         "photo_sharing"
@@ -1394,13 +1406,13 @@
     "DELETE /api/files/albums/{album_id}/shares/{tenant_public_id}": {
       "handler": "files.delete_album_share",
       "requires": [
-        "files.manage"
+        "photos.manage"
       ]
     },
     "PATCH /api/files/albums/{album_id}/shares/{tenant_public_id}": {
       "handler": "files.update_album_share",
       "requires": [
-        "files.manage"
+        "photos.manage"
       ],
       "features": [
         "photo_sharing"
@@ -1409,19 +1421,20 @@
     "GET /api/files/analysis-progress": {
       "handler": "files.get_analysis_progress",
       "requires": [
-        "files.manage"
+        "photos.read"
       ]
     },
     "POST /api/files/bulk-delete": {
       "handler": "files.bulk_delete_files",
       "requires": [
-        "files.manage"
+        "photos.manage"
       ]
     },
     "POST /api/files/bulk-tags": {
       "handler": "files.bulk_update_file_tags",
       "requires": [
-        "files.manage"
+        "files.manage",
+        "photos.manage"
       ]
     },
     "POST /api/files/document-uploads": {
@@ -1434,63 +1447,72 @@
     "GET /api/files/gallery-upload-jobs": {
       "handler": "files.list_gallery_upload_jobs",
       "requires": [
-        "files.manage"
+        "photos.manage"
       ]
     },
     "GET /api/files/gallery-upload-jobs/{job_id}": {
       "handler": "files.get_gallery_upload_job",
       "requires": [
-        "files.manage"
+        "photos.manage"
       ]
     },
     "POST /api/files/gallery-uploads": {
       "handler": "files.upload_gallery_images",
       "requires": [
-        "files.manage",
+        "photos.manage",
         "submissions.manage"
       ]
     },
     "GET /api/files/similarity-groups": {
       "handler": "files.list_similarity_groups",
       "requires": [
-        "files.manage"
+        "photos.read"
       ]
     },
     "GET /api/files/stats": {
       "handler": "files.get_file_stats",
-      "requires": [
-        "files.manage"
+      "requires_any": [
+        [
+          "files.read",
+          "photos.read"
+        ]
       ]
     },
     "GET /api/files/tags": {
       "handler": "files.list_file_tags",
-      "requires": [
-        "files.manage"
+      "requires_any": [
+        [
+          "files.read",
+          "photos.read"
+        ]
       ]
     },
     "GET /api/files/timeline": {
       "handler": "files.files_timeline",
       "requires": [
-        "files.manage"
+        "photos.read"
       ]
     },
     "POST /api/files/upload-precheck": {
       "handler": "files.precheck_uploads",
-      "requires": [
-        "files.manage"
+      "requires_any": [
+        [
+          "files.manage",
+          "photos.manage"
+        ]
       ]
     },
     "GET /api/files/upload-target-shared-albums": {
       "handler": "files.list_upload_target_shared_albums",
       "requires": [
-        "files.manage",
+        "photos.manage",
         "submissions.manage"
       ]
     },
     "PATCH /api/files/{file_id}/best": {
       "handler": "files.set_file_best_everywhere",
       "requires": [
-        "files.manage"
+        "photos.manage"
       ]
     },
     "GET /api/finance-settings": {
@@ -1578,7 +1600,7 @@
     "POST /api/fines": {
       "handler": "fines.create_fine",
       "requires": [
-        "finances.manage"
+        "fines.manage"
       ]
     },
     "GET /api/fines/open-summary": {
@@ -1603,7 +1625,7 @@
     "PUT /api/fines/tariff": {
       "handler": "fines.update_fine_tariff",
       "requires": [
-        "finances.manage"
+        "fines.manage"
       ],
       "features": [
         "finance"
@@ -1612,25 +1634,25 @@
     "DELETE /api/fines/{fine_id}": {
       "handler": "fines.delete_fine",
       "requires": [
-        "finances.manage"
+        "fines.manage"
       ]
     },
     "POST /api/fines/{fine_id}/collect": {
       "handler": "fines.collect_fine",
       "requires": [
-        "finances.manage"
+        "fines.manage"
       ]
     },
     "POST /api/fines/{fine_id}/reopen": {
       "handler": "fines.reopen_fine",
       "requires": [
-        "finances.manage"
+        "fines.manage"
       ]
     },
     "POST /api/fines/{fine_id}/restore": {
       "handler": "fines.restore_fine",
       "requires": [
-        "finances.manage"
+        "fines.manage"
       ]
     },
     "GET /api/list-entries": {
@@ -1727,10 +1749,13 @@
     "GET /api/participants": {
       "handler": "participants.list_participants",
       "requires": [
-        "participants.manage"
+        "participants.read"
       ],
       "branches": [
-        "finances.read"
+        "access.manage",
+        "finances.read",
+        "participants.contacts",
+        "participants.manage"
       ]
     },
     "POST /api/participants": {
@@ -1775,10 +1800,13 @@
     "GET /api/participants/{participant_id}": {
       "handler": "participants.get_participant",
       "requires": [
-        "participants.manage"
+        "participants.read"
       ],
       "branches": [
-        "finances.read"
+        "access.manage",
+        "finances.read",
+        "participants.contacts",
+        "participants.manage"
       ]
     },
     "PATCH /api/participants/{participant_id}": {
@@ -1805,7 +1833,7 @@
     "POST /api/participants/{participant_id}/personal-data": {
       "handler": "participants.export_participant_personal_data",
       "requires": [
-        "data.export"
+        "participants.export"
       ]
     },
     "GET /api/participants/{participant_id}/templates": {
@@ -1940,16 +1968,17 @@
         "meetings.edit"
       ],
       "branches": [
-        "finances.manage"
+        "fines.manage"
       ]
     },
     "PATCH /api/protocol-todos/{todo_id}": {
       "handler": "todos.patch_todo",
       "requires": [
-        "meetings.edit"
+        "todos.complete_own"
       ],
       "branches": [
-        "finances.manage"
+        "fines.manage",
+        "meetings.edit"
       ]
     },
     "POST /api/protocol-todos/{todo_id}/accept-tracked-change": {
@@ -1985,14 +2014,14 @@
         "todo_fines (lesen)"
       ],
       "branches": [
-        "finances.manage",
+        "fines.manage",
         "reports.personal"
       ]
     },
     "PUT /api/protocol-todos/{todo_id}/fine": {
       "handler": "todo_fines.put_todo_fine",
       "requires": [
-        "finances.manage"
+        "fines.manage"
       ],
       "features": [
         "todo_fines"
@@ -2004,7 +2033,7 @@
     "POST /api/protocol-todos/{todo_id}/fine/preview": {
       "handler": "todo_fines.preview_todo_fine",
       "requires": [
-        "finances.manage"
+        "fines.manage"
       ],
       "features": [
         "todo_fines"
@@ -2070,6 +2099,7 @@
     "PATCH /api/protocols/{protocol_id}": {
       "handler": "protocols.patch_protocol",
       "requires": [
+        "meetings.approve",
         "meetings.edit"
       ]
     },
@@ -2331,27 +2361,38 @@
       "handler": "search.global_search",
       "requires_any": [
         [
-          "files.manage",
-          "participants.manage",
+          "files.read",
+          "participants.read",
+          "photos.read",
           "templates.edit"
         ]
       ],
       "branches": [
-        "files.manage",
-        "participants.manage",
+        "files.read",
+        "participants.contacts",
+        "participants.read",
+        "photos.read",
         "templates.edit"
       ]
     },
     "GET /api/share-links": {
       "handler": "share_links.list_share_links",
       "requires": [
-        "files.manage"
+        "sharing.public"
       ]
     },
     "POST /api/share-links": {
       "handler": "share_links.create_share_link",
       "requires": [
-        "files.manage"
+        "files.read",
+        "photos.read",
+        "sharing.public"
+      ],
+      "requires_any": [
+        [
+          "files.read",
+          "photos.read"
+        ]
       ],
       "features": [
         "photo_sharing"
@@ -2360,7 +2401,7 @@
     "DELETE /api/share-links/{share_link_id}": {
       "handler": "share_links.revoke_share_link",
       "requires": [
-        "files.manage"
+        "sharing.public"
       ]
     },
     "GET /api/statistics/overview": {
@@ -2381,7 +2422,7 @@
     "PATCH /api/stored-files/{stored_file_id}/capture-date": {
       "handler": "files.update_stored_file_capture_date",
       "requires": [
-        "files.manage"
+        "photos.manage"
       ]
     },
     "GET /api/stored-files/{stored_file_id}/content": {
@@ -2413,13 +2454,20 @@
       ],
       "branches": [
         "files.manage",
-        "meetings.edit"
+        "meetings.edit",
+        "photos.manage"
       ]
     },
     "PATCH /api/stored-files/{stored_file_id}/tags": {
       "handler": "files.update_stored_file_tags",
       "requires": [
-        "files.manage"
+        "<P.PHOTOS_MANAGE if (stored_file.mime_type or '').startswith('image/') else P.FILES_MANAGE>"
+      ],
+      "requires_any": [
+        [
+          "files.manage",
+          "photos.manage"
+        ]
       ]
     },
     "GET /api/stored-files/{stored_file_id}/thumbnail": {
@@ -2487,13 +2535,13 @@
     "POST /api/submission-assignments/{assignment_id}/elements/{element_ref}/close": {
       "handler": "submission_assignments.close_element",
       "requires": [
-        "submissions.manage"
+        "submissions.review"
       ]
     },
     "POST /api/submission-assignments/{assignment_id}/elements/{element_ref}/reopen": {
       "handler": "submission_assignments.reopen_element",
       "requires": [
-        "submissions.manage"
+        "submissions.review"
       ]
     },
     "POST /api/submission-assignments/{assignment_id}/elements/{element_ref}/restore-withdrawn": {
@@ -2529,12 +2577,14 @@
     "POST /api/submission-links": {
       "handler": "submission_assignments.create_link",
       "requires": [
+        "sharing.public",
         "submissions.manage"
       ]
     },
     "DELETE /api/submission-links/{link_id}": {
       "handler": "submission_assignments.delete_link",
       "requires": [
+        "sharing.public",
         "submissions.manage"
       ]
     },
@@ -2547,6 +2597,7 @@
     "POST /api/submission-links/{link_id}/regenerate": {
       "handler": "submission_assignments.regenerate_link",
       "requires": [
+        "sharing.public",
         "submissions.manage"
       ]
     },
@@ -2897,13 +2948,13 @@
     "GET /api/tenants/lookup": {
       "handler": "tenants.lookup_tenant",
       "requires": [
-        "files.manage"
+        "photos.manage"
       ]
     },
     "GET /api/tenants/trusted": {
       "handler": "tenants.search_trusted_tenants",
       "requires": [
-        "files.manage"
+        "photos.manage"
       ]
     },
     "PATCH /api/tenants/{tenant_id}": {
@@ -2951,7 +3002,7 @@
     "GET /api/todo-fines/filter-options": {
       "handler": "todo_fines.get_filter_options",
       "requires": [
-        "finances.manage"
+        "fines.manage"
       ],
       "features": [
         "todo_fines"
@@ -2969,7 +3020,7 @@
     "POST /api/todo-fines/rules": {
       "handler": "todo_fines.create_rule",
       "requires": [
-        "finances.manage"
+        "fines.manage"
       ],
       "features": [
         "todo_fines"
@@ -2978,7 +3029,7 @@
     "PUT /api/todo-fines/rules/order": {
       "handler": "todo_fines.order_rules",
       "requires": [
-        "finances.manage"
+        "fines.manage"
       ],
       "features": [
         "todo_fines"
@@ -2987,7 +3038,7 @@
     "DELETE /api/todo-fines/rules/{rule_id}": {
       "handler": "todo_fines.delete_rule",
       "requires": [
-        "finances.manage"
+        "fines.manage"
       ],
       "features": [
         "todo_fines"
@@ -2996,7 +3047,7 @@
     "PUT /api/todo-fines/rules/{rule_id}": {
       "handler": "todo_fines.update_rule",
       "requires": [
-        "finances.manage"
+        "fines.manage"
       ],
       "features": [
         "todo_fines"
@@ -3005,7 +3056,7 @@
     "GET /api/todo-fines/tariff-members": {
       "handler": "todo_fines.list_tariff_members",
       "requires": [
-        "finances.manage"
+        "fines.manage"
       ],
       "features": [
         "finance"
@@ -3014,7 +3065,7 @@
     "PUT /api/todo-fines/tariff-members": {
       "handler": "todo_fines.assign_tariff_bulk",
       "requires": [
-        "finances.manage"
+        "fines.manage"
       ],
       "features": [
         "finance"
@@ -3023,7 +3074,7 @@
     "PUT /api/todo-fines/tariff-members/{participant_id}": {
       "handler": "todo_fines.assign_tariff",
       "requires": [
-        "finances.manage"
+        "fines.manage"
       ],
       "features": [
         "finance"
@@ -3041,7 +3092,7 @@
     "POST /api/todo-fines/tariffs": {
       "handler": "todo_fines.create_tariff",
       "requires": [
-        "finances.manage"
+        "fines.manage"
       ],
       "features": [
         "finance"
@@ -3050,7 +3101,7 @@
     "PUT /api/todo-fines/tariffs/order": {
       "handler": "todo_fines.order_tariffs",
       "requires": [
-        "finances.manage"
+        "fines.manage"
       ],
       "features": [
         "finance"
@@ -3059,7 +3110,7 @@
     "DELETE /api/todo-fines/tariffs/{tariff_id}": {
       "handler": "todo_fines.delete_tariff",
       "requires": [
-        "finances.manage"
+        "fines.manage"
       ],
       "features": [
         "finance"
@@ -3068,7 +3119,7 @@
     "PUT /api/todo-fines/tariffs/{tariff_id}": {
       "handler": "todo_fines.update_tariff",
       "requires": [
-        "finances.manage"
+        "fines.manage"
       ],
       "features": [
         "finance"
@@ -3077,7 +3128,7 @@
     "POST /api/todo-fines/{fine_id}/collect": {
       "handler": "todo_fines.collect_todo_fine",
       "requires": [
-        "finances.manage"
+        "fines.manage"
       ],
       "features": [
         "finance",
@@ -3087,7 +3138,7 @@
     "POST /api/todo-fines/{fine_id}/reopen": {
       "handler": "todo_fines.reopen_todo_fine",
       "requires": [
-        "finances.manage"
+        "fines.manage"
       ],
       "features": [
         "todo_fines"
@@ -3096,7 +3147,7 @@
     "POST /api/todo-fines/{fine_id}/restore": {
       "handler": "todo_fines.restore_todo_fine",
       "requires": [
-        "finances.manage"
+        "fines.manage"
       ],
       "features": [
         "todo_fines"
@@ -3105,7 +3156,7 @@
     "POST /api/todo-fines/{fine_id}/waive": {
       "handler": "todo_fines.waive_todo_fine",
       "requires": [
-        "finances.manage"
+        "fines.manage"
       ],
       "features": [
         "todo_fines"
@@ -3144,6 +3195,7 @@
     "POST /api/tools/word-import/commit": {
       "handler": "word_import.commit_word_import",
       "requires": [
+        "meetings.approve",
         "meetings.edit",
         "participants.manage"
       ]
@@ -3175,6 +3227,7 @@
     "POST /api/tools/word-import/documents/{document_id}/commit": {
       "handler": "word_import.commit_word_import_document",
       "requires": [
+        "meetings.approve",
         "meetings.edit",
         "participants.manage"
       ]
@@ -3273,6 +3326,18 @@
       "handler": "users.put_mfa_policy",
       "requires": [
         "access.manage"
+      ]
+    },
+    "GET /api/users/protocol-policy": {
+      "handler": "users.get_protocol_policy",
+      "requires": [
+        "settings.manage"
+      ]
+    },
+    "PUT /api/users/protocol-policy": {
+      "handler": "users.put_protocol_policy",
+      "requires": [
+        "settings.manage"
       ]
     },
     "DELETE /api/users/{user_id}": {

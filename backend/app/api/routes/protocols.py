@@ -24,7 +24,7 @@ from app.services.collaboration_service import protocol_channel
 from app.services.event_service import EventService
 from app.services.protocol_service import ProtocolService
 from app.services.protocol_todo_service import ProtocolTodoService
-from app.models.entities import CycleConfig, DocumentExport, Participant, Protocol, ProtocolElement, StoredFile, Template, UserProtocolScroll, UserProtocolTemplatePreference, WordImportDocument
+from app.models.entities import CycleConfig, DocumentExport, Participant, Protocol, ProtocolElement, StoredFile, Template, Tenant, UserProtocolScroll, UserProtocolTemplatePreference, WordImportDocument
 
 router = APIRouter()
 service = ProtocolService()
@@ -171,6 +171,18 @@ def _build_protocol_reads(db: Session, protocols: list) -> list[ProtocolRead]:
         result.append(r)
     return result
 
+
+
+def _ensure_can_approve(db: Session, user: CurrentUser, protocol: Protocol) -> None:
+    """Abschliessen = freigeben (Plan «Berechtigungen», Phase 3): braucht meetings.approve; mit
+    Vier-Augen-Prinzip der Organisation (tenant.four_eyes_protocols) nicht durch den Verfasser."""
+    require_permission(user, P.MEETINGS_APPROVE)
+    tenant = db.get(Tenant, protocol.tenant_id)
+    if tenant is not None and tenant.four_eyes_protocols and protocol.created_by is not None and protocol.created_by == user.user_id:
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "four_eyes_required", "message": "Vier-Augen-Prinzip: Eine andere Person muss das Protokoll abschliessen."},
+        )
 
 @router.get("/protocols", response_model=list[ProtocolRead])
 def list_protocols(
@@ -366,6 +378,8 @@ def patch_protocol(
         )
     # Vor dem Update festhalten: existing ist dasselbe Objekt, das update_protocol ändert.
     previous_status = existing.status
+    if payload.status == "abgeschlossen" and previous_status != "abgeschlossen":
+        _ensure_can_approve(db, user, existing)
     if previous_status == "abgeschlossen" and _FROZEN_CONTENT_FIELDS & payload.model_fields_set:
         # Abgeschlossen = eingefrorener Stand, zu dem das signierte PDF passt. Ändern nur nach
         # dem Zurückstufen (Audit 2026-11, vorher liefen Titel/Datum/Notizen hier durch).

@@ -81,10 +81,6 @@
       "label": "Profilbild des Vereins",
       "keywords": "Logo Bild Wappen Avatar"
     },
-    "publicSlug": {
-      "label": "Öffentliche Adresse",
-      "keywords": "Slug Kurzname URL Link Adresse"
-    },
     "eventFields": {
       "label": "Felder für Termine",
       "keywords": "Terminfelder Ort Treffpunkt Mitnehmen Kleidung Anlass"

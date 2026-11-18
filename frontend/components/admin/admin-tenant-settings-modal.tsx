@@ -52,13 +52,12 @@ type Props = {
 
 type TenantFormState = {
   name: string;
-  publicSlug: string;
   profileImage: File | null;
   profileImageUrl: string | null;
   showOnWebsite: boolean;
 };
 
-const emptyTenantForm: TenantFormState = { name: "", publicSlug: "", profileImage: null, profileImageUrl: null, showOnWebsite: false };
+const emptyTenantForm: TenantFormState = { name: "", profileImage: null, profileImageUrl: null, showOnWebsite: false };
 
 type TFunc = (key: string, values?: Record<string, string | number | Date>) => string;
 
@@ -162,7 +161,6 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     }
     setTenantForm({
       name: tenant.name,
-      publicSlug: tenant.public_slug ?? "",
       showOnWebsite: tenant.show_on_website,
       profileImage: null,
       profileImageUrl: tenant.profile_image_url
@@ -412,9 +410,6 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
     try {
       const formData = new FormData();
       formData.append("name", tenantForm.name);
-      if (tenantForm.publicSlug.trim()) {
-        formData.append("public_slug", tenantForm.publicSlug.trim());
-      }
       if (tenantForm.profileImage) {
         formData.append("profile_image", tenantForm.profileImage);
       }
@@ -550,21 +545,10 @@ export function AdminTenantSettingsModal({ open, onClose, tenant, onSaved }: Pro
             label: t("tenantModal.tabs.masterData"),
             content: (
               <form id="admin-tenant-stammdaten" className="grid admin-tenant-form" onSubmit={submitTenant}>
-                <div className="two-col">
-                  <label className="field-stack">
-                    <span className="field-label">{t("tenantModal.fields.tenantName")}</span>
-                    <input value={tenantForm.name} onChange={(event) => setTenantForm((current) => ({ ...current, name: event.target.value }))} required />
-                  </label>
-                  <label className="field-stack">
-                    <span className="field-label">{t("tenantModal.fields.publicSlug")}</span>
-                    <input
-                      value={tenantForm.publicSlug}
-                      onChange={(event) => setTenantForm((current) => ({ ...current, publicSlug: event.target.value.toLowerCase() }))}
-                      placeholder={t("tenantModal.fields.publicSlugPlaceholder")}
-                      pattern="[a-z0-9-]+"
-                    />
-                  </label>
-                </div>
+                <label className="field-stack">
+                  <span className="field-label">{t("tenantModal.fields.tenantName")}</span>
+                  <input value={tenantForm.name} onChange={(event) => setTenantForm((current) => ({ ...current, name: event.target.value }))} required />
+                </label>
                 <div className="field-stack">
                   <span className="field-label">{t("tenantModal.fields.profileImage")}</span>
                   <div

@@ -44,7 +44,6 @@ def _lookup_read(db: Session, tenant: Tenant, *, trusted: bool) -> TenantLookupR
         id=tenant.public_id,
         trusted=True,
         name=tenant.name,
-        slug=tenant.public_slug,
         participant_count=participant_count or 0,
         profile_image_url=build_tenant_profile_image_url(tenant.public_id, tenant.profile_image_path),
     )
@@ -60,7 +59,7 @@ def lookup_tenant(public_id: uuid.UUID, db: Session = Depends(get_db), user: Cur
     tenant_trust_service) bestaetigt die Antwort nur, dass die ID existiert - kein Name, kein
     Profilbild. Nur mit files.manage (Album-Freigaben), damit nicht jeder authentifizierte Nutzer beliebige
     Mandanten-IDs durchprobieren kann."""
-    require_permission(user, P.FILES_MANAGE)
+    require_permission(user, P.PHOTOS_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     tenant = public_id_service.get_by_public_id(db, Tenant, public_id)
@@ -76,7 +75,7 @@ def search_trusted_tenants(
     user: CurrentUser = Depends(get_current_user),
 ):
     """Namenssuche - ausschliesslich unter Mandanten, mit denen bereits ein Trust besteht."""
-    require_permission(user, P.FILES_MANAGE)
+    require_permission(user, P.PHOTOS_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     return [_lookup_read(db, tenant, trusted=True) for tenant in tenant_trust_service.search_trusted(db, user.current_tenant_id, search)]
@@ -86,20 +85,18 @@ def search_trusted_tenants(
 async def patch_tenant(
     tenant_id: uuid.UUID,
     name: str | None = Form(default=None),
-    public_slug: str | None = Form(default=None),
     profile_image: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     # Ganze Verarbeitung im Worker-Thread (Concurrency-Audit CONC-001): sie mischt synchrone
     # DB-Zugriffe mit awaits und blockierte sonst den Event-Loop des ganzen Workers.
-    return await run_coroutine_in_thread(_patch_tenant_impl, tenant_id=tenant_id, name=name, public_slug=public_slug, profile_image=profile_image, db=db, user=user)
+    return await run_coroutine_in_thread(_patch_tenant_impl, tenant_id=tenant_id, name=name, profile_image=profile_image, db=db, user=user)
 
 
 async def _patch_tenant_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offload.py)
     tenant_id: uuid.UUID,
     name: str | None = Form(default=None),
-    public_slug: str | None = Form(default=None),
     profile_image: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
@@ -109,7 +106,7 @@ async def _patch_tenant_impl(  # loop-ok: nur über run_coroutine_in_thread (cor
         raise HTTPException(status_code=404, detail="Tenant not found")
     try:
         tenant = await service.update_tenant(
-            db, internal_id, user, TenantUpdate(name=name, public_slug=public_slug), profile_image
+            db, internal_id, user, TenantUpdate(name=name), profile_image
         )
     except SQLAlchemyError as exc:
         db.rollback()

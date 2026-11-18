@@ -81,10 +81,6 @@
       "label": "Immagine dell’organizzazione",
       "keywords": "logo immagine stemma avatar"
     },
-    "publicSlug": {
-      "label": "Indirizzo pubblico",
-      "keywords": "slug nome breve URL link indirizzo"
-    },
     "eventFields": {
       "label": "Campi degli appuntamenti",
       "keywords": "campi appuntamenti luogo ritrovo materiale abbigliamento"

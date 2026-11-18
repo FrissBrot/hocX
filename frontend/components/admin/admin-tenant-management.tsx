@@ -37,21 +37,10 @@ const PAGE_SIZE = 50;
 // Ab diesem Anteil wird der Speicherbalken in der Liste als Warnung eingefärbt.
 const STORAGE_WARNING_RATIO = 0.85;
 
-function slugify(value: string): string {
-  return value
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-const emptyCreateForm: AdminTenantCreate & { slugTouched: boolean } = {
+const emptyCreateForm: AdminTenantCreate = {
   name: "",
-  public_slug: "",
   plan_code: null,
   billing_cycle: "monthly",
-  slugTouched: false,
 };
 
 export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFilter = "" }: Props) {
@@ -162,7 +151,6 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
     try {
       const payload: AdminTenantCreate = {
         name: createForm.name.trim(),
-        public_slug: createForm.public_slug?.trim() || null,
         plan_code: createForm.plan_code,
         billing_cycle: createForm.billing_cycle,
       };
@@ -386,7 +374,6 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
               </td>
               <td>
                 <strong>{tenant.name}</strong>
-                {tenant.public_slug ? <div className="muted admin-cell-sub">/{tenant.public_slug}</div> : null}
               </td>
               <td>
                 {tenant.plan_code ? (
@@ -440,34 +427,15 @@ export function AdminTenantManagement({ initialPage, initialPlans, initialPlanFi
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={t("newTenant")} description={t("newTenantDescription")}>
         <form className="grid" onSubmit={submit}>
-          <div className="two-col">
-            <label className="field-stack">
-              <span className="field-label">{t("tenantName")}</span>
-              <input
-                value={createForm.name}
-                onChange={(event) => {
-                  const name = event.target.value;
-                  setCreateForm((current) => ({ ...current, name, public_slug: current.slugTouched ? current.public_slug : slugify(name) }));
-                }}
-                placeholder={t("tenantNamePlaceholder")}
-                required
-              />
-            </label>
-            <label className="field-stack">
-              <span className="field-label">{t("publicSlug")}</span>
-              <span className="admin-slug-input">
-                <span className="admin-slug-prefix" aria-hidden="true">/</span>
-                <input
-                  value={createForm.public_slug ?? ""}
-                  onChange={(event) =>
-                    setCreateForm((current) => ({ ...current, public_slug: event.target.value.toLowerCase(), slugTouched: event.target.value !== "" }))
-                  }
-                  pattern="[a-z0-9-]+"
-                  aria-label={t("publicSlug")}
-                />
-              </span>
-            </label>
-          </div>
+          <label className="field-stack">
+            <span className="field-label">{t("tenantName")}</span>
+            <input
+              value={createForm.name}
+              onChange={(event) => setCreateForm((current) => ({ ...current, name: event.target.value }))}
+              placeholder={t("tenantNamePlaceholder")}
+              required
+            />
+          </label>
           <div className="field-stack">
             <span className="field-label">{t("plan")}</span>
             <div className="admin-plan-options" role="radiogroup" aria-label={t("plan")}>

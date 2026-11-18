@@ -49,9 +49,9 @@ Handy) werden beendet. Du bekommst einen Sicherheitshinweis per E-Mail.
 
 ## Zweiter Faktor (MFA) {#mfa}
 
-Ein zweiter Faktor schützt dein Konto, auch wenn jemand dein Passwort kennt. Wer eine
-Administrationsberechtigung hat, muss einen einrichten. Einrichten unter **Profil** →
-**Sicherheit**:
+Ein zweiter Faktor schützt dein Konto, auch wenn jemand dein Passwort kennt. Pflicht ist er, wenn
+du eine Administrationsberechtigung hast, eine deiner Rollen MFA verlangt oder deine Organisation
+MFA für alle Logins verlangt. Einrichten unter **Profil** → **Sicherheit**:
 
 - **Authenticator-App** (z. B. eine App für Einmalcodes): QR-Code scannen und den 6-stelligen
   Code bestätigen.
@@ -61,13 +61,19 @@ Administrationsberechtigung hat, muss einen einrichten. Einrichten unter **Profi
 Du kannst mehrere Faktoren einrichten und einen als Standard wählen. Ist ein zweiter Faktor
 Pflicht, lässt sich der letzte nicht entfernen.
 
+**Frist von 3 Tagen:** Wird der zweite Faktor für dein bestehendes Konto neu Pflicht (über eine
+Rolle oder die Organisation), hast du 3 Tage Zeit. Bis dahin erscheint die Einrichtung bei jeder
+Anmeldung mit «Später einrichten», und in der App erinnert ein Hinweis mit dem Enddatum. Danach
+geht die Anmeldung nur noch mit zweitem Faktor. Keine Frist gibt es bei Administrationsrechten und
+für neue Konten: Sie richten den Faktor gleich bei der ersten Anmeldung ein.
+
 ## Zweiten Faktor verloren {#verlust}
 
 hocX hat keine Wiederherstellungscodes. Hast du dein Gerät verloren:
 
 1. Wenn möglich, mit einem anderen eingerichteten Faktor anmelden (zum Beispiel Passkey statt App).
 2. Sonst eine Person mit «Benutzer & Rollen verwalten» bitten, deinen zweiten Faktor
-   zurückzusetzen: **Logins & Rollen** → bei dir **MFA** → Faktor entfernen.
+   zurückzusetzen: **Zugriff** → bei dir **MFA** → Faktor entfernen.
 3. Danach anmelden und einen neuen Faktor einrichten.
 
 Jede Änderung am zweiten Faktor meldet hocX dir per E-Mail.

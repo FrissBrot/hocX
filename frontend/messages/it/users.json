@@ -117,7 +117,11 @@
     "enableConfirm": "Richiedi l'MFA",
     "enabledToast": "L'MFA è ora obbligatoria per tutti gli accessi",
     "disabledToast": "L'MFA è ora obbligatoria solo per i diritti di amministrazione",
-    "saveFailed": "Non è stato possibile salvare l'impostazione."
+    "saveFailed": "Non è stato possibile salvare l'impostazione.",
+    "fourEyesTitle": "Principio dei quattro occhi per i verbali",
+    "fourEyesHelp": "Chi ha redatto un verbale non può chiuderlo personalmente – lo chiude un’altra persona con il diritto «Approvare i verbali».",
+    "fourEyesOn": "Principio dei quattro occhi attivato",
+    "fourEyesOff": "Principio dei quattro occhi disattivato"
   },
   "access": {
     "title": "Chi ha accesso",

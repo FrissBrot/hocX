@@ -28,7 +28,6 @@ class TenantRead(BaseModel):
     name: str
     profile_image_path: str | None = None
     profile_image_url: str | None = None
-    public_slug: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
     tag_config_json: dict[str, Any] = {}
@@ -56,7 +55,6 @@ class TenantLookupRead(BaseModel):
     # alles andere None - bestaetigt also lediglich, dass die ID existiert.
     trusted: bool = False
     name: str | None = None
-    slug: str | None = None
     participant_count: int | None = None
     profile_image_url: str | None = None
 
@@ -222,6 +220,8 @@ class SessionRead(BaseModel):
     permissions: list[str] = Field(default_factory=list)
     roles: list[RoleRef] = Field(default_factory=list)
     bridge_redirect_url: str | None = None
+    # MFA ist Pflicht, aber das bestehende Konto hat noch Frist bis hierhin (Migration 0192)
+    mfa_grace_until: datetime | None = None
 
 
 class BridgePreviewRead(BaseModel):
@@ -238,7 +238,6 @@ class BridgeRedeemRequest(BaseModel):
 
 class TenantUpdate(BaseModel):
     name: str | None = None
-    public_slug: str | None = Field(default=None, pattern=r"^[a-z0-9-]+$")
 
 
 class TenantDomainCreate(BaseModel):

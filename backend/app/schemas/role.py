@@ -21,12 +21,15 @@ class RoleRead(RoleRef):
     user_count: int
     # Standardrolle admin: nicht änderbar, nicht löschbar.
     locked: bool = False
+    # MFA für alle Konten mit dieser Rolle (Migration 0192)
+    require_mfa: bool = False
 
 
 class RoleCreate(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     description: str | None = Field(default=None, max_length=500)
     permissions: list[str] = Field(default_factory=list, max_length=100)
+    require_mfa: bool = False
 
 
 class RoleUpdate(BaseModel):
@@ -34,6 +37,7 @@ class RoleUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=80)
     description: str | None = Field(default=None, max_length=500)
     permissions: list[str] | None = Field(default=None, max_length=100)
+    require_mfa: bool | None = None
 
 
 class UserRolesUpdate(BaseModel):

@@ -313,8 +313,17 @@ def patch_todo(
     # editing the same todo concurrently therefore remains last-write-wins, same as before
     # this pass; a real fix would need the frontend to start locking todos as its own
     # field_key first.
-    require_permission(user, P.MEETINGS_EDIT)
-    existing = _todo_or_404(db, user, todo_id)
+    if user.can(P.MEETINGS_EDIT):
+        existing = _todo_or_404(db, user, todo_id)
+    else:
+        # «Eigene Pendenzen erledigen» (Plan «Berechtigungen», Phase 3): nur den Status der
+        # eigenen (zugewiesenen) Pendenz - ohne dieses Recht ist der Zugang read-only.
+        require_permission(user, P.TODOS_COMPLETE_OWN)
+        if payload.model_fields_set - {"todo_status_id", "completed_at"}:
+            raise HTTPException(status_code=403, detail="Permission required")
+        existing = _todo_or_404(db, user, todo_id)
+        if user.user_id not in access_service._todo_assignee_user_ids(db, existing):
+            raise HTTPException(status_code=404, detail="Todo not found")  # wie fremde: kein Orakel
     previous_status_id = existing.todo_status_id
     protocol_id = access_service.repository.protocol_id_for_todo(db, todo_id=existing.id)
     # Standalone todos (protocol_id None) have no protocol at all.
@@ -324,7 +333,7 @@ def patch_todo(
     try:
         todo = service.update_todo(
             db, existing.id, payload, track_changes_active=track_changes_active, actor_user_id=user.user_id,
-            can_manage_fines=user.can(P.FINANCES_MANAGE), fine_changes=fine_changes,
+            can_manage_fines=user.can(P.FINES_MANAGE), fine_changes=fine_changes,
         )
     except todo_fine_service.TodoFineError as exc:
         # Die Prüfung läuft vor jedem Schreiben - nichts zurückzurollen
@@ -433,7 +442,7 @@ def delete_todo(
     # Löschen beendet eine laufende Busse: nicht durch die gebüsste Person selbst. Eingefrorene
     # Bussen bleiben stehen (todo_fine.protocol_todo_id ON DELETE SET NULL, Snapshots).
     try:
-        todo_fine_service.ensure_may_change(db, existing, actor_user_id=user.user_id, can_manage=user.can(P.FINANCES_MANAGE))
+        todo_fine_service.ensure_may_change(db, existing, actor_user_id=user.user_id, can_manage=user.can(P.FINES_MANAGE))
     except todo_fine_service.TodoFineError as exc:
         raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)}) from exc
     running_before = todo_fine_service.running_amount(db, existing)

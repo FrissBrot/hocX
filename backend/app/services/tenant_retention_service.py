@@ -23,11 +23,11 @@ from sqlalchemy import select, text as sql
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from app.models import AppUser, RetentionProposal, StoredFile, SubmissionUpload, TenantRetentionPolicy
+from app.models import RetentionProposal, StoredFile, SubmissionUpload, TenantRetentionPolicy
 
 _logger = logging.getLogger(__name__)
 
-AUTO_KINDS = ("submission_upload", "former_member")
+AUTO_KINDS = ("submission_upload",)
 _MAX_PER_RULE = 2000
 
 
@@ -41,7 +41,7 @@ def save_policy(db: Session, tenant_id: int, values: dict[str, Any]) -> TenantRe
     if policy is None:
         policy = TenantRetentionPolicy(tenant_id=tenant_id)
         db.add(policy)
-    for key in ("submissions_months", "former_members_years", "unlinked_gallery_years", "auto_apply"):
+    for key in ("submissions_months", "unlinked_gallery_years", "auto_apply"):
         if key in values:
             setattr(policy, key, values[key])
     policy.updated_at = datetime.now(UTC)
@@ -72,15 +72,6 @@ def _candidates(db: Session, policy: TenantRetentionPolicy) -> list[dict[str, An
         for r in rows:
             element = " ".join(part for part in (r["event_date"].strftime("%d.%m.%Y") if r["event_date"] else None, r["event_title"]) if part)
             found.append({"kind": "submission_upload", "subject_id": r["id"], "label": " – ".join(p for p in (r["title"], element) if p), "reference_date": r["ref"]})
-    if policy.former_members_years:
-        rows = db.execute(sql("""
-            SELECT id, COALESCE(NULLIF(display_name, ''), trim(concat(first_name, ' ', last_name))) AS name, left_at
-            FROM app_user
-            WHERE tenant_id = :t AND is_active AND left_at IS NOT NULL
-              AND left_at < current_date - make_interval(years => :years)
-            ORDER BY left_at, id LIMIT :limit
-        """), {**params, "years": policy.former_members_years}).mappings().all()
-        found += [{"kind": "former_member", "subject_id": r["id"], "label": r["name"], "reference_date": r["left_at"]} for r in rows]
     if policy.unlinked_gallery_years:
         rows = db.execute(sql("""
             SELECT s.id, s.original_name, CAST(COALESCE(s.exif_taken_at, s.created_at) AS date) AS ref
@@ -185,16 +176,6 @@ def decide(db: Session, tenant_id: int, proposal_ids: list[uuid.UUID], *, action
 def _apply(db: Session, tenant_id: int, kind: str, subject_id: int) -> None:
     from app.services import erasure_journal
 
-    if kind == "former_member":
-        person = db.scalar(select(AppUser).where(AppUser.id == subject_id, AppUser.tenant_id == tenant_id))
-        if person is None:
-            return
-        # Nur deaktivieren: Login aus, laufende Sitzungen beenden, Daten bleiben vollständig.
-        person.is_active = False
-        person.login_enabled = False
-        person.session_revoke_at = datetime.now(UTC)
-        db.flush()
-        return
     if kind == "submission_upload":
         from app.models import SubmissionAssignment
 

@@ -26,6 +26,7 @@ from app.core.security import (
     CurrentUser,
     _has_active_mfa_factor,
     _requires_mfa,
+    mfa_grace_until,
     build_current_user,
     parse_session_token,
 )
@@ -99,7 +100,10 @@ def _authenticate_in(db: Session, token: str | None) -> CurrentUser | None:
     if has_mfa_factor and not current_user.mfa_verified:
         return None
     if _requires_mfa(db, current_user) and (not has_mfa_factor or not current_user.mfa_verified):
-        return None
+        # Gleiche Frist wie der REST-Pfad (get_optional_current_user): bestehende Konten ohne
+        # Administrationsrechte dürfen 3 Tage ohne Faktor weiterarbeiten
+        if has_mfa_factor or mfa_grace_until(db, current_user.user_id, permissions=current_user.permissions, tenant_id=current_user.current_tenant_id) is None:
+            return None
     return current_user
 
 

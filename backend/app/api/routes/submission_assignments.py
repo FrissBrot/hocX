@@ -77,6 +77,7 @@ def create_link(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.SUBMISSIONS_MANAGE)
+    require_permission(user, P.SHARING_PUBLIC)  # öffentlicher Upload-Link (Plan «Berechtigungen», Phase 3)
     try:
         return link_service.create_link(db, payload, tenant_id=user.current_tenant_id)
     except (SQLAlchemyError, ValueError) as exc:
@@ -110,6 +111,7 @@ def regenerate_link(
 ):
     """Issues a new token - the old URL stops working immediately."""
     require_permission(user, P.SUBMISSIONS_MANAGE)
+    require_permission(user, P.SHARING_PUBLIC)  # öffentlicher Upload-Link (Plan «Berechtigungen», Phase 3)
     link = _get_link_or_404(db, link_id, user)
     try:
         result = link_service.regenerate_token(db, link)
@@ -128,6 +130,7 @@ def delete_link(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.SUBMISSIONS_MANAGE)
+    require_permission(user, P.SHARING_PUBLIC)  # öffentlicher Upload-Link (Plan «Berechtigungen», Phase 3)
     link = _get_link_or_404(db, link_id, user)
     affected = link_service.assignments_for_link(db, link)
     try:
@@ -311,7 +314,7 @@ def reopen_element(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_permission(user, P.SUBMISSIONS_MANAGE)
+    require_permission(user, P.SUBMISSIONS_REVIEW)  # Abgaben prüfen
     assignment = _get_assignment_or_404(db, assignment_id, user)
     try:
         return service.reopen_element(db, assignment, element_ref)
@@ -353,7 +356,7 @@ def close_element(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    require_permission(user, P.SUBMISSIONS_MANAGE)
+    require_permission(user, P.SUBMISSIONS_REVIEW)  # Abgaben prüfen
     assignment = _get_assignment_or_404(db, assignment_id, user)
     try:
         return service.close_element(db, assignment, element_ref)

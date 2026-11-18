@@ -891,6 +891,10 @@ def commit_word_import(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.MEETINGS_EDIT)
+    # Der Import legt das Protokoll abgeschlossen an: braucht «Protokolle freigeben». Das
+    # Vier-Augen-Prinzip gilt bewusst nicht - importiert werden ausserhalb genehmigte, historische
+    # Protokolle (docs/permissions-plan-deviations.md, Phase 3).
+    require_permission(user, P.MEETINGS_APPROVE)
     _require_people_rights_for_new_participants(user, payload)
     internal_payload = _decode_commit(db, user.current_tenant_id, payload)
     try:
@@ -1149,6 +1153,10 @@ def commit_word_import_document(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.MEETINGS_EDIT)
+    # Der Import legt das Protokoll abgeschlossen an: braucht «Protokolle freigeben». Das
+    # Vier-Augen-Prinzip gilt bewusst nicht - importiert werden ausserhalb genehmigte, historische
+    # Protokolle (docs/permissions-plan-deviations.md, Phase 3).
+    require_permission(user, P.MEETINGS_APPROVE)
     _require_people_rights_for_new_participants(user, payload)
     internal_document_id = _resolve_document_id(db, user.current_tenant_id, document_id)
     document = queue_service.get_document(db, tenant_id=user.current_tenant_id, document_id=internal_document_id)

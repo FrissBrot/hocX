@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.db import get_db
 from app.core.permissions import P
 from app.core.features_generated import F
-from app.core.security import CurrentUser, get_current_user, require_feature, require_permission
+from app.core.security import CurrentUser, get_current_user, require_any_permission, require_feature, require_permission
 from app.models.entities import ShareLink
 from app.schemas.files import ShareLinkCreate, ShareLinkRead
 from app.services import photo_album_share_service, share_link_service
@@ -45,7 +45,9 @@ MAX_LINK_FILES = 200
 
 @router.post("/share-links", response_model=ShareLinkRead, status_code=201)
 def create_share_link(payload: ShareLinkCreate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_permission(user, P.FILES_MANAGE)
+    # Öffentlich teilen (Plan «Berechtigungen», Phase 3) - und nur, was man selbst sehen darf
+    require_permission(user, P.SHARING_PUBLIC)
+    require_any_permission(user, P.FILES_READ, P.PHOTOS_READ)
     require_feature(user, F.PHOTO_SHARING, write=True)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
@@ -59,6 +61,7 @@ def create_share_link(payload: ShareLinkCreate, db: Session = Depends(get_db), u
     metadata = MetadataPolicy(location=payload.share_location, capture_date=payload.share_capture_date, camera=payload.share_camera)
 
     if has_album:
+        require_permission(user, P.PHOTOS_READ)
         album = photo_album_share_service.get_accessible_album(db, payload.album_id, user.current_tenant_id)
         if album is None:
             raise HTTPException(status_code=404, detail="Album nicht gefunden")
@@ -78,6 +81,11 @@ def create_share_link(payload: ShareLinkCreate, db: Session = Depends(get_db), u
     found = service.list_tenant_files(db, user.current_tenant_id, file_ids=ids, limit=MAX_LINK_FILES)
     if {item.id for item in found} != set(ids):
         raise HTTPException(status_code=404, detail="Mindestens eine Datei wurde nicht gefunden")
+    # Je Datei nur, was man selbst sehen darf: Bilder mit photos.read, Dokumente mit files.read
+    if any(item.mime_type and item.mime_type.startswith("image/") for item in found):
+        require_permission(user, P.PHOTOS_READ)
+    if any(not (item.mime_type and item.mime_type.startswith("image/")) for item in found):
+        require_permission(user, P.FILES_READ)
     if any(item.scan_status in BLOCKED_SCAN_STATUSES for item in found):
         # Gesperrte Dateien zeigt die öffentliche Seite nie - nicht erst aufnehmen und mitzählen.
         raise HTTPException(status_code=422, detail="Gesperrte Dateien (Virenprüfung) können nicht geteilt werden.")
@@ -92,21 +100,29 @@ def create_share_link(payload: ShareLinkCreate, db: Session = Depends(get_db), u
 
 @router.get("/share-links", response_model=list[ShareLinkRead])
 def list_share_links(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_permission(user, P.FILES_MANAGE)
+    require_permission(user, P.SHARING_PUBLIC)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
+    rows = share_link_service.list_for_tenant(db, user.current_tenant_id)
+    kinds = share_link_service.content_kinds(db, [row.link for row in rows])
+    # Nur Links, deren Inhalt man selbst sehen darf (die Token-URL öffnet ihn ohne Anmeldung)
     return [
         _read(row.link, album_name=row.album_name, file_count=row.file_count, created_by_name=row.created_by_name)
-        for row in share_link_service.list_for_tenant(db, user.current_tenant_id)
+        for row in rows
+        if share_link_service.may_see(user.can, kinds.get(row.link.id, set()))
     ]
 
 
 @router.delete("/share-links/{share_link_id}", status_code=204)
 def revoke_share_link(share_link_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
-    require_permission(user, P.FILES_MANAGE)
+    require_permission(user, P.SHARING_PUBLIC)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     link = db.get(ShareLink, share_link_id)
-    if link is None or not share_link_service.can_manage(db, link, user.current_tenant_id):
+    if (
+        link is None
+        or not share_link_service.can_manage(db, link, user.current_tenant_id)
+        or not share_link_service.may_see(user.can, share_link_service.content_kinds(db, [link]).get(link.id, set()))
+    ):
         raise HTTPException(status_code=404, detail="Link nicht gefunden")
     share_link_service.revoke(db, link)

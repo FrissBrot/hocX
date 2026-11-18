@@ -54,6 +54,7 @@ type PlanFormState = {
   storageGb: string;
   storageUnlimited: boolean;
   monthlyTouched: boolean;
+  yearlyTouched: boolean;
   featureCodes: Set<string>;
 };
 
@@ -73,6 +74,7 @@ type StoragePackageFormState = {
   priceMonthlyChf: string;
   priceYearlyChf: string;
   monthlyTouched: boolean;
+  yearlyTouched: boolean;
 };
 
 function storagePackageToForm(pkg: AdminStoragePackage): StoragePackageFormState {
@@ -85,6 +87,7 @@ function storagePackageToForm(pkg: AdminStoragePackage): StoragePackageFormState
     priceMonthlyChf: rpToChfInput(pkg.price_monthly_rp),
     priceYearlyChf: rpToChfInput(pkg.price_yearly_rp),
     monthlyTouched: isManualMonthly(pkg.price_monthly_rp, pkg.price_yearly_rp),
+    yearlyTouched: isManualYearly(pkg.price_monthly_rp, pkg.price_yearly_rp),
   };
 }
 
@@ -97,6 +100,7 @@ const emptyStoragePackageForm: StoragePackageFormState = {
   priceMonthlyChf: "",
   priceYearlyChf: "",
   monthlyTouched: false,
+  yearlyTouched: false,
 };
 
 // Monatspreis-Vorschlag: Jahrespreis / 12 + 20 % Aufschlag, auf 5 Rappen gerundet.
@@ -109,6 +113,22 @@ function suggestMonthlyChf(yearlyChf: string): string {
   return yearlyRp === null ? "" : rpToChfInput(suggestMonthlyRp(yearlyRp));
 }
 
+// Umgekehrt: Jahrespreis = Monatspreis × 12 / 1.2, auf 5 Rappen (wie backend app/services/plan_pricing.py).
+function suggestYearlyRp(monthlyRp: number): number {
+  return Math.round((monthlyRp * 12) / 1.2 / 5) * 5;
+}
+
+function suggestYearlyChf(monthlyChf: string): string {
+  const monthlyRp = chfInputToRp(monthlyChf);
+  return monthlyRp === null ? "" : rpToChfInput(suggestYearlyRp(monthlyRp));
+}
+
+// Ein Jahrespreis, der weder leer ist noch zum Monatspreis passt, gilt als bewusst gesetzt.
+function isManualYearly(monthlyRp: number | null, yearlyRp: number | null): boolean {
+  if (yearlyRp === null) return false;
+  return monthlyRp === null || (yearlyRp !== suggestYearlyRp(monthlyRp) && monthlyRp !== suggestMonthlyRp(yearlyRp));
+}
+
 // Ein bestehender Monatspreis, der vom Vorschlag abweicht, gilt als bewusst gesetzt und wird
 // beim Ändern des Jahrespreises nicht mehr automatisch überschrieben.
 function isManualMonthly(monthlyRp: number | null, yearlyRp: number | null): boolean {
@@ -116,20 +136,22 @@ function isManualMonthly(monthlyRp: number | null, yearlyRp: number | null): boo
   return yearlyRp === null || monthlyRp !== suggestMonthlyRp(yearlyRp);
 }
 
-function comparePrice(a: number | null, b: number | null): number {
-  if (a === b) return 0;
-  if (a === null) return -1;
-  if (b === null) return 1;
-  return a - b;
+// Gleiche Reihenfolge wie das Backend: links günstig, rechts teuer (Monatspreis bzw. aus dem
+// Jahrespreis umgerechnet); Pläne ohne Preis (individuell) ganz rechts.
+function monthlyEquivalent(plan: AdminPlan): number | null {
+  if (plan.price_monthly_rp !== null) return plan.price_monthly_rp;
+  return plan.price_yearly_rp !== null ? suggestMonthlyRp(plan.price_yearly_rp) : null;
 }
 
-// Gleiche Reihenfolge wie das Backend: günstigster Plan zuoberst, Pläne ohne Preis vorneweg.
 function comparePlans(a: AdminPlan, b: AdminPlan): number {
-  return (
-    comparePrice(a.price_yearly_rp, b.price_yearly_rp) ||
-    comparePrice(a.price_monthly_rp, b.price_monthly_rp) ||
-    a.code.localeCompare(b.code)
-  );
+  const priceA = monthlyEquivalent(a);
+  const priceB = monthlyEquivalent(b);
+  if (priceA !== priceB) {
+    if (priceA === null) return 1;
+    if (priceB === null) return -1;
+    return priceA - priceB;
+  }
+  return a.code.localeCompare(b.code);
 }
 
 // Kleinstes Paket zuoberst.
@@ -175,6 +197,7 @@ function planToForm(plan: AdminPlan): PlanFormState {
     storageGb: plan.included_storage_bytes === null ? "" : bytesToGbInput(plan.included_storage_bytes),
     storageUnlimited: plan.included_storage_bytes === null,
     monthlyTouched: isManualMonthly(plan.price_monthly_rp, plan.price_yearly_rp),
+    yearlyTouched: isManualYearly(plan.price_monthly_rp, plan.price_yearly_rp),
     featureCodes: new Set(plan.feature_codes),
   };
 }
@@ -194,6 +217,7 @@ const emptyPlanForm: PlanFormState = {
   storageGb: "5",
   storageUnlimited: false,
   monthlyTouched: false,
+  yearlyTouched: false,
   featureCodes: new Set(),
 };
 
@@ -731,6 +755,7 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
                   yearlyChf={planForm.priceYearlyChf}
                   monthlyChf={planForm.priceMonthlyChf}
                   monthlyTouched={planForm.monthlyTouched}
+                  yearlyTouched={planForm.yearlyTouched}
                   onChange={(prices) => updatePlanForm(prices)}
                 />
                 <span className="field-help">
@@ -950,6 +975,7 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
               yearlyChf={storagePackageForm.priceYearlyChf}
               monthlyChf={storagePackageForm.priceMonthlyChf}
               monthlyTouched={storagePackageForm.monthlyTouched}
+              yearlyTouched={storagePackageForm.yearlyTouched}
               onChange={(prices) => setStoragePackageForm((current) => (current ? { ...current, ...prices } : current))}
             />
             <div className="modal-actions">
@@ -967,19 +993,22 @@ export function AdminPlanPricing({ initialPlans, initialFeatures, initialStorage
   );
 }
 
-type PriceFieldsValue = { priceYearlyChf: string; priceMonthlyChf: string; monthlyTouched: boolean };
+type PriceFieldsValue = { priceYearlyChf: string; priceMonthlyChf: string; monthlyTouched: boolean; yearlyTouched: boolean };
 
-/** Jahrespreis zuerst; der Monatspreis wird daraus vorgeschlagen (Jahr / 12 + 20 %), solange er
- * nicht von Hand geändert wurde. */
+/** Monats- und Jahrespreis berechnen sich gegenseitig (Monat = Jahr / 12 + 20 %), solange der
+ * andere Wert nicht von Hand gesetzt wurde; Leeren schaltet die Berechnung wieder ein. Fehlt beim
+ * Speichern einer, ergänzt ihn das Backend nach derselben Regel. */
 function PriceFields({
   yearlyChf,
   monthlyChf,
   monthlyTouched,
+  yearlyTouched,
   onChange,
 }: {
   yearlyChf: string;
   monthlyChf: string;
   monthlyTouched: boolean;
+  yearlyTouched: boolean;
   onChange: (value: PriceFieldsValue) => void;
 }) {
   const t = useTranslations("admin.pricing");
@@ -997,6 +1026,8 @@ function PriceFields({
               priceYearlyChf: event.target.value,
               priceMonthlyChf: monthlyTouched ? monthlyChf : suggestMonthlyChf(event.target.value),
               monthlyTouched,
+              // Leeren schaltet die Berechnung aus dem Monatspreis wieder ein
+              yearlyTouched: event.target.value.trim() !== "",
             })
           }
         />
@@ -1010,10 +1041,11 @@ function PriceFields({
           value={monthlyChf}
           onChange={(event) =>
             onChange({
-              priceYearlyChf: yearlyChf,
+              priceYearlyChf: yearlyTouched ? yearlyChf : suggestYearlyChf(event.target.value),
               priceMonthlyChf: event.target.value,
               // Leeren schaltet den automatischen Vorschlag wieder ein.
               monthlyTouched: event.target.value.trim() !== "",
+              yearlyTouched,
             })
           }
         />

@@ -4,8 +4,6 @@
   "masterDataEyebrow": "Master data",
   "changeProfileImage": "Change profile picture",
   "tenantNameLabel": "Organization name",
-  "publicSlugLabel": "Short name",
-  "publicSlugPlaceholder": "e.g. sample-organization",
   "tenantIdLabel": "Organization ID",
   "tenantIdHelp": "Needed, for example, to share a photo album with this organization.",
   "saveSuccess": "Organization saved",
@@ -174,8 +172,6 @@
   },
   "activity": {
     "intro": "Changes, sign-ins and accesses by the hocX platform to this organization's data. Without IP or email addresses.",
-    "filterAll": "All",
-    "filterFailures": "Failed",
     "category": "Area",
     "allCategories": "All areas",
     "colTime": "Time",
@@ -192,19 +188,25 @@
     "outcome": {
       "success": "Successful",
       "failure": "Failed"
-    }
+    },
+    "dateFrom": "From",
+    "dateTo": "To",
+    "clearFilter": "Remove filter",
+    "allActions": "All actions",
+    "allActors": "All people",
+    "allOutcomes": "All results",
+    "chipDate": "{from} – {to}",
+    "removeFilter": "Remove filter “{filter}”",
+    "clearAll": "Remove all filters",
+    "emptyFiltered": "No entries for these filters"
   },
   "retention": {
-    "intro": "Decide how long the organization keeps certain data. All rules are off until you switch them on. hocX suggests matching entries every day; you confirm or dismiss them. Former members are only deactivated, never deleted.",
+    "intro": "Decide how long the organization keeps certain data. All rules are off until you switch them on. hocX suggests matching entries every day; you confirm or dismiss them. Former members are locked automatically from the day after they leave; their data is kept.",
     "rulesTitle": "Retention periods",
     "rules": {
       "submissions_months": {
         "label": "Delete upload box submissions after the deadline",
         "hint": "Applies to submissions with a deadline. The submitted files and their previews are deleted."
-      },
-      "former_members_years": {
-        "label": "Deactivate former members after they leave",
-        "hint": "Login is blocked and running sessions end. Name, attendance, fines and minutes stay unchanged."
       },
       "unlinked_gallery_years": {
         "label": "Suggest old gallery images without album or event",
@@ -226,7 +228,6 @@
     "empty": "No open suggestions.",
     "kind": {
       "submission_upload": "Submissions ({count})",
-      "former_member": "Deactivate former members ({count})",
       "gallery_image": "Gallery images ({count})"
     },
     "unnamed": "Unnamed",
@@ -270,7 +271,6 @@
   "help": {
     "domains": "A custom domain (e.g. app.example.ch) makes hocX, the submission box or the verification page available under your own address. There is one active domain per purpose; a new one only replaces it after successful verification.",
     "dns": "The TXT record proves that you own the domain. The CNAME record points the address to hocX. A root domain without a prefix (example.ch) cannot have a CNAME with many providers – use a subdomain such as app.example.ch or an A record pointing to the same IP address as the target.",
-    "publicSlug": "Short, unique name of your organization made of lowercase letters, digits and hyphens. Other organizations find you by it, e.g. when sharing a photo album. Submission box links do not depend on it and remain valid if you change it.",
     "modules": "«Active» means fully usable. «Read only» means the module is no longer part of your subscription, but your data is kept and readable; changes are blocked until the module is booked again."
   },
   "errors": {

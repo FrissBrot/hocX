@@ -137,5 +137,11 @@
     "password_weak": "Das Passwort ist zu schwach. Nimm mindestens 12 Zeichen ohne Name, E-Mail oder häufige Wörter.",
     "mfa_policy_own_mfa_missing": "Richte zuerst für dein eigenes Konto MFA ein.",
     "mfa_setup_required": "Deine Organisation verlangt MFA. Bitte melde dich neu an und richte einen zweiten Faktor ein."
+  },
+  "grace": {
+    "title": "Zweiter Faktor wird Pflicht",
+    "message": "Deine Organisation verlangt für dein Konto einen zweiten Faktor. Richte ihn bis {until} ein – danach geht die Anmeldung nur noch damit.",
+    "later": "Später",
+    "setup": "Jetzt einrichten"
   }
 }

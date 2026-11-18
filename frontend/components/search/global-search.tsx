@@ -86,8 +86,8 @@ export function GlobalSearch({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const userId = session?.user?.id != null ? String(session.user.id) : null;
-  const searchesPeople = can(session, "participants.manage");
-  const searchesFiles = can(session, "files.manage");
+  const searchesPeople = can(session, "participants.read");
+  const searchesFiles = can(session, "files.read") || can(session, "photos.read");
   const searchesElements = can(session, "templates.edit");
   const searchesRoles = can(session, "access.manage");
   const [roles, setRoles] = useState<RoleRead[] | null>(null);
