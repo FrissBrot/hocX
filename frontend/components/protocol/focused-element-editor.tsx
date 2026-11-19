@@ -1730,6 +1730,10 @@ function FocusedElementEditorImpl({
           <h2>{element.section_name_snapshot}</h2>
         </div>
       </div>
+      {/* Inhalt unter dem Kopf: im Akkordeon klappt protocol-editor.tsx (accordion-scroll.ts) ihn
+          über die Höhe dieses Rahmens stetig auf und zu. */}
+      <div className="protocol-doc-section-body">
+      <div className="protocol-doc-section-body-inner">
       <div className="element-block-stack">
         {element.blocks.length === 0 && element.show_when_empty && (
           isPlanningMode ? (
@@ -3991,6 +3995,8 @@ function FocusedElementEditorImpl({
         onAcceptTrackedChange={acceptTodoTrackedChange}
         onResizeTask={autoResizeTodoField}
       />
+      </div>
+      </div>
     </section>
     {isPlanningMode && (() => {
       const referenceBlock = element.blocks.find((b) => asObject(b.configuration_snapshot_json).repeat_source_type === "event");

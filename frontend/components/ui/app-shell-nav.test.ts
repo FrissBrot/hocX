@@ -76,7 +76,7 @@ describe("buildNav", () => {
       SETTINGS_GROUP, "groups.organisation",
     ]);
     expect(hrefsOf(admin, null)).toEqual(["/", "/my-tasks"]);
-    expect(hrefsOf(admin, "groups.sessions")).toEqual(["/events", "/agenda", "/protocols"]);
+    expect(hrefsOf(admin, "groups.sessions")).toEqual(["/protocols", "/events", "/agenda"]);
     expect(hrefsOf(admin, "groups.storage")).toEqual(["/lists", "/files", "/photos", "/shared-links"]);
     expect(hrefsOf(admin, "groups.organisation")).toEqual([
       "/tenant-settings", "/tenant-settings/abo", "/tenant-settings/privacy", "/tenant-settings/links", "/tenant-settings/activity", "/tools/import",

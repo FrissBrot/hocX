@@ -8,6 +8,15 @@ Installationen aktualisieren können.
 
 ## [Unreleased]
 
+### Geändert
+
+- **Protokoll scrollen ohne Sprung:** Mit eingeklappten Punkten öffnet sich der nächste Punkt
+  schon beim Hinscrollen schrittweise, der vorherige schliesst sich im gleichen Mass. Der Inhalt
+  in der Bildmitte läuft genau mit dem Mausrad mit; kein schlagartiges Auf-/Zuklappen und kein
+  Nachrücken der Ansicht mehr. Scrollbalken und Sprünge (Schnellzugriff, Suche) rechnen mit dem
+  ganz offenen Dokument und landen dadurch exakt.
+- **Menü «Sitzungen»:** «Protokolle» steht zuoberst, vor Kalender und Anliegen.
+
 ## [1.4.0] - 2026-11-18
 
 Eine neu eingeteilte Seitenleiste nach Tätigkeiten mit «Meine Aufgaben» und gesammelten

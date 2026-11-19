@@ -68,10 +68,10 @@ export function buildNav(session: NavSession | null): NavGroup[] {
     {
       titleKey: "groups.sessions",
       links: [
+        { href: "/protocols", labelKey: "protocols", icon: "protocols" },
         // Leseansicht für meetings.read, Bearbeiten nur mit meetings.edit (Seite selbst prüft).
         ...(can(session, "meetings.read") ? [{ href: "/events", labelKey: "calendar", icon: "events" as const }] : []),
         { href: "/agenda", labelKey: "agenda", icon: "agenda" },
-        { href: "/protocols", labelKey: "protocols", icon: "protocols" },
       ],
       // Protokollvorlagen mit Bausteinen; das Arbeitsjahr (Zyklen) braucht templates.manage.
       settings: editsTemplates

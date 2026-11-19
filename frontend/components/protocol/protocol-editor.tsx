@@ -81,16 +81,13 @@ import {
   nativeSmoothScroll,
   type SectionLayout,
   offsetTopWithin,
-  passiveSnapTarget,
   prefersReducedMotion,
-  revealSection,
   sectionScrollTarget,
   SPY_HYSTERESIS,
   supportsNativeSmoothScroll,
-  WHEEL_HOLD_AFTER_SNAP_MS,
-  WHEEL_HOLD_MAX_MS,
   wheelVars,
 } from "@/components/protocol/document-scroll";
+import { createAccordionEngine, type AccordionEngine } from "@/components/protocol/accordion-scroll";
 import { localIsoDate } from "@/lib/documents/todo-export-filter";
 
 type ProtocolEditorProps = {
@@ -547,12 +544,8 @@ export function ProtocolEditor({
   const shouldAutoFocusRef = useRef(false);
   // The first scroll after opening jumps instantly instead of animating from the top.
   const isInitialScrollRef = useRef(false);
-  // Akkordeon: Lage des neu aktiven Abschnitts VOR dem Auf-/Zuklappen (relativ zum sichtbaren
-  // Bereich). Nach dem Umbau des Layouts wird er genau dort gehalten - nach unten scrollend die
-  // Oberkante, nach oben scrollend die Unterkante. Dadurch springt beim passiven Wechsel nichts.
-  const passiveSnapRef = useRef<{ id: string; top: number; bottom: number; up: boolean } | null>(null);
-  // Bis hierhin wird Mausrad nach unten abgefangen (Rest-Schwung nach dem Betreten eines Punkts)
-  const holdWheelRef = useRef({ until: 0, up: false });
+  // Akkordeon an die Scrollposition gekoppelt (accordion-scroll.ts)
+  const accordionEngineRef = useRef<AccordionEngine | null>(null);
   const cancelScrollAnimationRef = useRef<(() => void) | null>(null);
   // True while a programmatic smooth scroll (search, nav click, Ctrl+Enter) is in flight.
   // The scroll-spy must stay passive during that time - otherwise it selects every section
@@ -915,16 +908,22 @@ export function ProtocolEditor({
         const container = documentRef.current;
         const section = document.getElementById(`protocol-element-${selectedElementId}`);
         if (container && section) {
+          // Akkordeon: Ziel im Scrollraum des ganz offenen Dokuments (dort liegt jeder Punkt
+          // immer, accordion-scroll.ts) - unterwegs klappen die Punkte stetig mit.
+          const engine = accordionEngineRef.current;
+          const place = engine?.target(selectedElementId) ?? null;
           const target = sectionScrollTarget({
-            top: offsetTopWithin(section, container),
-            height: section.offsetHeight,
+            top: place?.top ?? offsetTopWithin(section, container),
+            height: place?.height ?? section.offsetHeight,
             viewport: container.clientHeight,
             scrollHeight: container.scrollHeight,
             // Der erste Punkt steht oben statt mittig - sonst zeigt das Öffnen eines Protokolls
             // zuerst den leeren Scrollraum (.protocol-document-spaced::before) darüber.
             first: container.querySelector(".protocol-doc-section") === section,
           });
-          scrollDocumentTo(container, target, scrollBehavior === "smooth" && !prefersReducedMotion() ? "smooth" : "instant");
+          scrollDocumentTo(container, target, scrollBehavior === "smooth" && !prefersReducedMotion() ? "smooth" : "instant", {
+            onDone: engine ? () => accordionEngineRef.current?.settle() : undefined,
+          });
         }
 
       // Safety net: on the locked document-mode desktop layout the outer page must
@@ -954,59 +953,24 @@ export function ProtocolEditor({
     });
   }, [selectedElementId, scrollRequestId]);
 
-  // Akkordeon, passiver Wechsel (Scroll-Spy): der neu aktive Abschnitt wird dort gehalten, wo
-  // er vor dem Auf-/Zuklappen stand (passiveSnapRef). Nach unten scrollend holt eine kurze
-  // Animation seinen Anfang an den oberen Rand und der Rest-Schwung des Mausrads wird kurz
-  // abgefangen, damit man nicht über den Anfang hinausrutscht. useLayoutEffect: läuft nach dem
-  // Umbau des Layouts, aber bevor der Browser zeichnet - kein sichtbarer Sprung. Klicks und
-  // Tastatur haben ihren eigenen Weg (Effekt oben).
-  useLayoutEffect(() => {
-    const snap = passiveSnapRef.current;
-    if (!snap || snap.id !== selectedElementId) return;
-    passiveSnapRef.current = null;
-    if (!accordionEnabled) return;
-
-    const container = documentRef.current;
-    const section = document.getElementById(`protocol-element-${selectedElementId}`);
-    if (!container || !section) return;
-
-    const top = offsetTopWithin(section, container);
-    const height = section.offsetHeight;
-    const viewport = container.clientHeight;
-    const max = container.scrollHeight - viewport;
-    const anchored = snap.up ? top + height - snap.bottom : top - snap.top;
-    scrollDocumentTo(container, Math.max(0, Math.min(anchored, max)), "instant");
-    revealSection(section, snap.up);
-
-    // Nach unten beginnt ein Punkt oben (Anfang am oberen Rand), nach oben unten (Ende am
-    // unteren Rand). Ein kurzer Punkt wird nur so weit verschoben, dass er ganz im Bild steht.
-    const target = Math.max(0, Math.min(passiveSnapTarget({ top, height, viewport, scrollTop: container.scrollTop, up: snap.up }), max));
-    // Rest-Schwung nur abfangen, bis der Wechsel steht (plus ein kurzer Nachlauf) - eine feste
-    // Sperre ab dem Start fühlte sich an, als bliebe das Mausrad hängen.
-    const up = snap.up;
-    holdWheelRef.current = { until: performance.now() + WHEEL_HOLD_MAX_MS, up };
-    const releaseHold = () => {
-      holdWheelRef.current = { until: performance.now() + WHEEL_HOLD_AFTER_SNAP_MS, up };
-    };
-    if (Math.abs(target - container.scrollTop) > 1) {
-      scrollDocumentTo(container, target, prefersReducedMotion() ? "instant" : "smooth", { duration: 300, cancelOnWheel: false, onDone: releaseHold });
-    } else {
-      releaseHold();
-    }
-  }, [accordionEnabled, selectedElementId, scrollDocumentTo]);
-
-  // Rest-Schwung abfangen (siehe oben): nur in der Richtung, in der der Punkt betreten wurde,
-  // nur kurz danach.
+  // Akkordeon: Öffnungsgrad der Punkte folgt der Scrollposition (accordion-scroll.ts), auch
+  // während eines Sprungs. Der Punkt unter der Mittellinie wird aktiv.
   useEffect(() => {
     const container = documentRef.current;
-    if (!container) return;
-    function onWheel(event: WheelEvent) {
-      const hold = holdWheelRef.current;
-      if (performance.now() < hold.until && (hold.up ? event.deltaY < 0 : event.deltaY > 0)) event.preventDefault(); // i18n-ok: Vergleich, kein UI-Text
-    }
-    container.addEventListener("wheel", onWheel, { passive: false });
-    return () => container.removeEventListener("wheel", onWheel);
-  }, []);
+    if (!accordionEnabled || !container) return;
+    const engine = createAccordionEngine(container, {
+      onActiveChange: (id) => {
+        if (selectedElementIdRef.current === id) return;
+        selectedElementIdRef.current = id;
+        setSelectedElementId(id);
+      },
+    });
+    accordionEngineRef.current = engine;
+    return () => {
+      engine.destroy();
+      accordionEngineRef.current = null;
+    };
+  }, [accordionEnabled, visibleElementIdsKey]);
 
   // Scroll-spy for the continuous document layout: tracks whichever section is closest to
   // the visual centre of .protocol-document. Uses plain
@@ -1016,10 +980,10 @@ export function ProtocolEditor({
   // didn't reliably fire (nothing ever got marked active). getBoundingClientRect always
   // reports already-zoomed, viewport-relative coordinates, so it isn't affected by that.
   // Deliberately avoids focusElement/shouldScrollToElementRef so passive scrolling never
-  // focuses a form field. The layout effect above only anchors the newly opened neighbour.
+  // focuses a form field. Im Akkordeon übernimmt das accordion-scroll.ts (Effekt oben).
   useEffect(() => {
     const container = documentRef.current;
-    if (!container) return;
+    if (!container || accordionEnabled) return;
 
     let rafId: number | null = null;
     // Positionen der Abschnitte zwischenspeichern: sie ändern sich nur mit Grösse oder Inhalt
@@ -1072,26 +1036,8 @@ export function ProtocolEditor({
         }
       }
       if (bestIndex < 0) return;
-      // Akkordeon: zugeklappte Punkte sind so kurz, dass ein Mausrad-Schritt die Mittellinie
-      // über einen hinwegschiebt - dann käme der übernächste dran. Liegt der Nachbar höchstens
-      // eine Bildschirmhöhe ausserhalb (weiter schiebt kein Mausrad-Schritt), ist er der nächste
-      // Punkt; weite Sprünge (Scrollbalken ziehen) bleiben möglich.
-      if (accordionEnabled && currentIndex >= 0 && Math.abs(bestIndex - currentIndex) > 1) {
-        const neighbour = currentIndex + Math.sign(bestIndex - currentIndex);
-        const viewport = root.clientHeight;
-        if (tops[neighbour] < scrollTop + 2 * viewport && tops[neighbour] + heights[neighbour] > scrollTop - viewport) bestIndex = neighbour;
-      }
       const bestId = ids[bestIndex];
       if (selectedElementIdRef.current === bestId) return;
-      // Am Dokumentanfang nicht verankern: der erste Punkt bleibt oben stehen
-      passiveSnapRef.current = accordionEnabled && !atDocumentStart
-        ? {
-            id: bestId,
-            top: tops[bestIndex] - scrollTop,
-            bottom: tops[bestIndex] - scrollTop + heights[bestIndex],
-            up: currentIndex > bestIndex,
-          }
-        : null;
       selectedElementIdRef.current = bestId;
       setSelectedElementId(bestId);
     }

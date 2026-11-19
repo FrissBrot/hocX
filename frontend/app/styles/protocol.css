@@ -405,6 +405,23 @@
   pointer-events: none;
 }
 
+/* Akkordeon (accordion-scroll.ts): die Abstandshalter nehmen zusätzlich die Höhe auf, die den
+   eingeklappten Punkten darüber bzw. darunter fehlt - jeder Punkt bleibt so im Scrollraum an
+   seiner Stelle. Kein Scroll-Anchoring des Browsers dazwischen. */
+.protocol-document-accordion {
+  --accordion-above: 0px;
+  --accordion-below: 0px;
+  overflow-anchor: none;
+}
+
+.protocol-document-accordion.protocol-document-spaced::before {
+  flex-basis: calc(50% + var(--accordion-above));
+}
+
+.protocol-document-accordion.protocol-document-spaced::after {
+  flex-basis: calc(50% + var(--accordion-below));
+}
+
 .protocol-doc-section {
   min-width: 0; /* flex item default is min-width:auto - without this, wide inner content
     (tables etc.) grows the section past .protocol-document's width instead of scrolling
@@ -480,44 +497,50 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent 65%), var(--shadow-soft);
 }
 
-/* Accordion document: inactive protocol points remain as compact, scannable headings.
-   The scroll-spy promotes the point nearest the viewport centre to active, which reveals
-   its existing block stack without mounting/unmounting editors or losing draft state. */
-.protocol-document-accordion .protocol-doc-section-inactive {
+/* Akkordeon, an die Scrollposition gekoppelt (accordion-scroll.ts): jeder Punkt hat einen
+   Öffnungsgrad --open (0..1), den protocol-editor.tsx pro Scroll-Frame setzt, zusammen mit der
+   Höhe von .protocol-doc-section-body. Alles andere hier ändert keine Höhe - sonst entstünde beim
+   Wechsel des aktiven Punkts wieder ein Sprung. Abschwächung und kleinerer Titel laufen stetig
+   über --open (opacity/transform, ohne Transition: sie folgen dem Scrollen). */
+.protocol-document-accordion .protocol-doc-section {
+  --open: 1;
   padding-block: var(--space-4);
-  margin-inline: var(--space-3);
-  /* Ohne filter (grayscale/blur): der lag auf allen inaktiven Punkten und musste beim Scrollen
-     neu gerastert werden. Die Abschwächung kommt aus opacity und Hintergrund. */
-  opacity: 0.68;
-  background: color-mix(in srgb, var(--panel-solid) 84%, var(--bg) 16%);
-  transition:
-    opacity var(--dur-base) ease,
-    background var(--dur-base) ease,
-    border-color var(--dur-base) ease,
-    box-shadow var(--dur-base) ease;
+  opacity: calc(0.68 + 0.32 * var(--open));
 }
 
-.protocol-document-accordion .protocol-doc-section-inactive .editor-panel-header h2 {
-  margin-top: var(--space-2);
-  font-size: var(--text-lg);
+.protocol-document-accordion .protocol-doc-section-inactive {
+  --open: 0;
 }
 
-.protocol-document-accordion .protocol-doc-section-inactive .eyebrow {
-  font-size: var(--text-xs);
+.protocol-document-accordion .protocol-doc-section .editor-panel-header h2 {
+  transform: scale(calc(0.84 + 0.16 * var(--open)));
+  transform-origin: left center;
 }
 
-.protocol-document-accordion .protocol-doc-section-wrap:hover .protocol-doc-section-inactive {
-  opacity: 0.82;
-}
-
-.protocol-document-accordion .protocol-doc-section-inactive > .editor-panel-header {
+.protocol-document-accordion .protocol-doc-section > .editor-panel-header {
   margin-bottom: 0;
 }
 
-/* Zugeklappt bleibt nur die Überschrift: neben den Blöcken stehen auch Anliegen und die im
-   Protokoll erfassten Pendenzen direkt im Abschnitt (focused-element-editor.tsx). */
-.protocol-document-accordion .protocol-doc-section-inactive > :not(.editor-panel-header) {
-  display: none;
+.protocol-document-accordion .protocol-doc-section-body {
+  overflow: hidden;
+}
+
+/* Vor der ersten Rechnung (Laden): nur der aktive Punkt offen */
+.protocol-document-accordion .protocol-doc-section-inactive .protocol-doc-section-body {
+  height: 0;
+}
+
+/* Der Abstand unter dem Kopf gehört zum Inhalt, damit er mitklappt */
+.protocol-document-accordion .protocol-doc-section-body-inner {
+  padding-top: var(--space-4);
+}
+
+.protocol-doc-section-body-inner {
+  display: flow-root;
+}
+
+.protocol-document-accordion .protocol-doc-section-wrap:hover .protocol-doc-section-inactive {
+  opacity: calc(0.82 + 0.18 * var(--open));
 }
 
 /* The section itself is inert while inactive (see focused-element-editor.tsx), so clicks pass

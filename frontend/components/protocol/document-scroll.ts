@@ -7,10 +7,6 @@
 export const SCROLL_INSET = 16;
 /** Der aktive Abschnitt bleibt, bis die Mittellinie so weit über seine Kante hinaus ist. */
 export const SPY_HYSTERESIS = 32;
-/** Rest-Schwung des Mausrads nach dem Ende eines Akkordeon-Wechsels noch so lange abfangen. */
-export const WHEEL_HOLD_AFTER_SNAP_MS = 150;
-/** Obergrenze, falls das Ende des Wechsels nie gemeldet wird. */
-export const WHEEL_HOLD_MAX_MS = 900;
 // Abweichung in px, ab der ein scrollend als «am Ziel» gilt (Rundung, Zoom).
 export const SCROLL_END_TOLERANCE = 2;
 
@@ -37,18 +33,6 @@ export function sectionScrollTarget(
   const tall = height >= viewport - SCROLL_INSET * 2;
   const want = tall || first ? top - SCROLL_INSET : top - (viewport - height) / 2;
   return Math.max(0, Math.min(want, scrollHeight - viewport));
-}
-
-/** scrollTop nach dem passiven Wechsel im Akkordeon: nach unten steht der Anfang eines langen
- * Punkts oben, nach oben sein Ende unten. Ein kurzer Punkt wird nur so weit verschoben, dass er
- * ganz im Bild steht. Ohne Begrenzung auf den Scrollbereich. */
-export function passiveSnapTarget(
-  { top, height, viewport, scrollTop, up }: { top: number; height: number; viewport: number; scrollTop: number; up: boolean }
-): number {
-  const showStart = top - SCROLL_INSET;
-  const showEnd = top + height + SCROLL_INSET - viewport;
-  if (height >= viewport - SCROLL_INSET * 2) return up ? showEnd : showStart;
-  return Math.min(Math.max(scrollTop, showEnd), showStart);
 }
 
 /** Weiter als so viele Punkte vom aktiven entfernt bleibt ein Punkt flach (keine eigene Ebene).
@@ -165,20 +149,4 @@ export function nativeSmoothScroll(container: HTMLElement, target: number, { onD
 
 export function prefersReducedMotion(): boolean {
   return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-
-/** Akkordeon: neu geöffneten Punkt kurz einblenden (nur transform/opacity, die Verankerung
- * bleibt exakt). Von oben kommend gleitet der Inhalt nach unten, von unten nach oben. */
-export function revealSection(section: HTMLElement, fromBelow: boolean) {
-  if (prefersReducedMotion()) return;
-  const body = section.querySelector<HTMLElement>(":scope > .element-block-stack");
-  body?.animate?.(
-    [{ opacity: 0, transform: `translateY(${fromBelow ? "-6px" : "6px"})` }, { opacity: 1, transform: "none" }],
-    { duration: 260, easing: "cubic-bezier(.2,.7,.2,1)" }
-  );
-  const heading = section.querySelector<HTMLElement>(":scope > .editor-panel-header h2");
-  heading?.animate?.(
-    [{ transform: "scale(.94)", transformOrigin: "left center" }, { transform: "none", transformOrigin: "left center" }],
-    { duration: 220, easing: "cubic-bezier(.2,.7,.2,1)" }
-  );
 }
