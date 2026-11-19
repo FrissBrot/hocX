@@ -18,6 +18,11 @@ Installationen aktualisieren können.
   Steuerzeichen; Bildrouten antworten bei fremden Protokollen mit 404; Termin- und
   Listeneintrag-Löschen lassen bei gleichzeitigem Upload keine Datei zurück.
 - pydantic-Update mit Sicherheitsfix (GHSA-qpmf-fgh3-ff25, GHSA-3r8g-cqwr-jr29).
+- Offene Verdachte aus dem Nachtlauf 2026-11-19 geklärt: Anwesenheitslisten übernehmen und zeigen
+  nur Personen des eigenen Vereins; Vorlagen nehmen Listeneinträge nur aus der genannten Liste des
+  eigenen Vereins an; der Foto-Worker darf an Analyseaufträgen nur noch Status, Zeiten und Fehler
+  ändern (Migration 0197); Logos, Bilder und Schriften des Document Studio zählen zum
+  Speicherkontingent und werden bei vollem Kontingent abgelehnt.
 
 ### Behoben
 
@@ -28,6 +33,11 @@ Installationen aktualisieren können.
   und Speicher-Bereinigung landen im Fehlerprotokoll bzw. blockieren nicht mehr; übersetzte
   Texte im Revisionsvergleich, auf der Prüfseite und im Word-Import, Exportdialog bleibt nach
   Wechsel auf Kalender nicht hängen, Word-Import-Dateiauswahl per Tastatur.
+- Suchen behandeln % und _ überall als Text (Vorlagen, Protokolle, Dateien, Pendenzen-Termine,
+  Plattform-Admin: Mandanten, Domains, Rechnungen, Mail-Protokoll, Audit-Log); im Mail-Protokoll
+  findet «max_muster» die Adresse wieder.
+- Termine: Wählen zwei Personen gleichzeitig jemanden in eine Rolle (Teilnehmende, Leitung …),
+  bleiben beide Änderungen erhalten - gespeichert wird nur noch die Differenz zum Ausgangsstand.
 
 ### Geändert
 

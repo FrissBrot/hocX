@@ -25,6 +25,7 @@ from app.models.entities import ElementDefinition, Participant
 from app.schemas.search import GlobalSearchQuery, GlobalSearchRead, SearchBlock, SearchElement, SearchFile, SearchPerson
 from app.services.file_service import FileService
 from app.services import context_visibility_service
+from app.core.sql_like import contains_pattern
 
 router = APIRouter()
 
@@ -46,8 +47,7 @@ def fold_text(value: str) -> str:
 
 def _like_pattern(query: str) -> str:
     # % und _ aus der Eingabe sind Text, keine Platzhalter
-    escaped = fold_text(query).replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-    return f"%{escaped}%"
+    return contains_pattern(fold_text(query))
 
 
 def search_people(db: Session, tenant_id: int, query: str, limit: int = GROUP_LIMIT, *, by_email: bool = True) -> list[SearchPerson]:

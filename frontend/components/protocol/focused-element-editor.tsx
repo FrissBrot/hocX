@@ -21,6 +21,7 @@ import { DateInput } from "@/components/ui/date-input";
 import { TimeInput } from "@/components/ui/time-input";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { formatTimeValue } from "@/lib/utils/time";
+import { eventFieldSelectionPatch } from "@/lib/utils/event-patch";
 import { TrackedChangeHideButton } from "@/components/ui/tracked-change-hide-button";
 import { Modal } from "@/components/ui/modal";
 import { LightboxImage } from "@/components/ui/lightbox-image";
@@ -51,6 +52,7 @@ import { applyEventFilter, blockEventFilter, eventFilterTagText, eventMatchesFil
 import {
   AttendanceFine,
   AttendanceFineListItem,
+  EventPatch,
   EventSummary,
   FinanceAccount,
   FinanceTransaction,
@@ -251,7 +253,7 @@ function FocusedElementEditorImpl({
   acceptTrackedRow: (blockId: string, rowId: string) => Promise<void>;
   acceptTextTrackedChanges: (protocolElementBlockId: string) => Promise<void>;
   createEventFromBlock: (protocolElementBlockId: string, blockConfig: Record<string, any>, draftOverride?: ProtocolEventDraft) => Promise<EventSummary | null>;
-  updateEventFromBlock: (protocolElementBlockId: string, eventId: string, patch: Partial<EventSummary>) => Promise<boolean>;
+  updateEventFromBlock: (protocolElementBlockId: string, eventId: string, patch: EventPatch) => Promise<boolean>;
   deleteEventFromBlock: (protocolElementBlockId: string, eventId: string) => Promise<void>;
   onEventContextMenu: (nativeEvent: React.MouseEvent, eventRow: EventSummary, protocolElementBlockId: string) => void;
   uploadImage: (protocolElementBlockId: string, includeGps?: boolean) => Promise<void>;
@@ -560,6 +562,8 @@ function FocusedElementEditorImpl({
         applyMultiParticipantSelection(currentBlock.id, asObject(currentBlock.configuration_snapshot_json), {
           picker: next,
           closeAfter: false,
+          // Auswahl vor diesem Klick = zuletzt gespeicherter Stand (Termin-Rollen: nur die Differenz speichern)
+          baseIds: current.selectedIds,
         });
       }
       return next;
@@ -642,7 +646,7 @@ function FocusedElementEditorImpl({
   function applyMultiParticipantSelection(
     currentBlockId: string,
     currentConfig: Record<string, unknown>,
-    options?: { picker?: NonNullable<typeof multiParticipantPicker>; closeAfter?: boolean }
+    options?: { picker?: NonNullable<typeof multiParticipantPicker>; closeAfter?: boolean; baseIds?: string[] }
   ) {
     const picker = options?.picker ?? multiParticipantPicker;
     const closeAfter = options?.closeAfter ?? true;
@@ -650,9 +654,7 @@ function FocusedElementEditorImpl({
       return;
     }
     if (picker.kind === "event_field" && picker.eventId && picker.eventFieldName) {
-      void updateEventFromBlock(currentBlockId, picker.eventId, {
-        [picker.eventFieldName]: picker.selectedIds,
-      } as Partial<EventSummary>);
+      void updateEventFromBlock(currentBlockId, picker.eventId, eventFieldSelectionPatch(picker.eventFieldName, picker.selectedIds, options?.baseIds));
       if (closeAfter) closeParticipantPicker();
       return;
     }

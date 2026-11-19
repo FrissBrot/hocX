@@ -37,6 +37,7 @@
     "templateNotPublished": "Il modello non è ancora pubblicato.",
     "templateTypeMismatch": "Il modello appartiene a un altro tipo di documento.",
     "tooLarge": "Il file è troppo grande.",
+    "quotaExceeded": "La quota di archiviazione dell’associazione è esaurita - il file non è stato salvato.",
     "unknownType": "Tipo di documento sconosciuto.",
     "verificationAlreadyPending": "Esiste già una richiesta aperta.",
     "verificationAlreadyVerified": "L’organizzazione è già verificata.",

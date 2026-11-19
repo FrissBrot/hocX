@@ -23,9 +23,9 @@ class SnapshotReferenceLoader:
     Blöcke lesen aus dem Speicher. Ohne Loader legt jeder Helfer einen eigenen an - gleiche
     Abfragen und gleiches Ergebnis wie bisher.
 
-    Mandantenbindung wie in den einzelnen Helfern: alles gebunden an ``tenant_id``, nur die
-    Anwesenheitsliste (translate_attendance_entries) lädt wie bisher ohne Mandantenfilter (RLS
-    bindet die Session trotzdem)."""
+    Mandantenbindung wie in den einzelnen Helfern: alles gebunden an ``tenant_id``, auch die
+    Anwesenheitsliste (translate_attendance_entries; bis Nachtlauf 2026-11-19 ohne Filter, nur RLS
+    schützte vor der Übersetzung fremder Personen-IDs)."""
 
     def __init__(self, db, tenant_id: int | None) -> None:
         self.db = db
@@ -84,7 +84,7 @@ class SnapshotReferenceLoader:
         """Merkt die ids vor, die translate_attendance_entries (falls ``attendance``),
         translate_participant_refs und translate_list_snapshot_refs für ``config`` brauchen."""
         if attendance:
-            self.want((_PUBLIC, Participant, False), _attendance_internal_ids(config))
+            self.want((_PUBLIC, Participant, True), _attendance_internal_ids(config))
         participant_ids, event_ids = _participant_ref_internal_ids(config)
         wanted = _list_snapshot_internal_ids(config)
         self.want((_PUBLIC, Participant, True), participant_ids | wanted[Participant])
@@ -113,7 +113,9 @@ def _attendance_internal_ids(config: dict) -> set[int]:
     }
 
 
-def translate_attendance_entries(db, config: dict, *, refs: SnapshotReferenceLoader | None = None) -> dict:
+def translate_attendance_entries(
+    db, config: dict, tenant_id: int | None, *, refs: SnapshotReferenceLoader | None = None
+) -> dict:
     """The standalone "attendance" element type stores attendance_entries keyed by the
     participant's internal int id (see ProtocolService.create_from_template/
     refresh_membership_blocks/set_attendance_excused and ProtocolElementService.
@@ -126,15 +128,18 @@ def translate_attendance_entries(db, config: dict, *, refs: SnapshotReferenceLoa
     showing every status as unselected right after it was just saved (bug found 2026-10-05).
     Only touches entries whose participant_id is actually an int: matrix-embedded
     attendance rows (matrix-embedded-block-editor.tsx) already store the public UUID
-    directly and must be left untouched."""
+    directly and must be left untouched.
+
+    Nur Personen des Protokoll-Mandanten (``tenant_id``) werden übersetzt; eine fremde interne ID
+    bleibt unübersetzt (Nachtlauf 2026-11-19)."""
     entries = config.get("attendance_entries")
     if not isinstance(entries, list):
         return config
     internal_ids = _attendance_internal_ids(config)
     if not internal_ids:
         return config
-    refs = refs or SnapshotReferenceLoader(db, None)
-    id_map = refs.lookup((_PUBLIC, Participant, False), internal_ids)
+    refs = refs or SnapshotReferenceLoader(db, tenant_id)
+    id_map = refs.lookup((_PUBLIC, Participant, True), internal_ids)
     translated = [
         {**entry, "participant_id": id_map[entry["participant_id"]]}
         if isinstance(entry, dict) and entry.get("participant_id") in id_map
@@ -144,7 +149,7 @@ def translate_attendance_entries(db, config: dict, *, refs: SnapshotReferenceLoa
     return {**config, "attendance_entries": translated}
 
 
-def normalize_attendance_entries(db, config: dict, tenant_id: int) -> dict:
+def normalize_attendance_entries(db, config: dict, tenant_id: int, *, stored_config: dict | None = None) -> dict:
     """Gegenstueck zu translate_attendance_entries fuer den Schreibpfad (generischer Block-
     PATCH): der Client bekommt attendance_entries mit public UUIDs und schickt sie beim
     Speichern der ganzen Konfiguration genau so zurueck. Alle Backend-Leser der
@@ -153,7 +158,13 @@ def normalize_attendance_entries(db, config: dict, tenant_id: int) -> dict:
     Mandanten-Transfer, PDF-Export) erwarten dort aber die interne int-ID - sonst z.B.
     "invalid literal for int() with base 10: '<uuid>'" im Export bzw. verlorene Status
     (Bug 2026-10-05). Uebersetzt UUIDs tenant-gebunden zurueck; nicht aufloesbare Werte
-    bleiben unveraendert."""
+    bleiben unveraendert.
+
+    Interne int-IDs im Request (Nachtlauf 2026-11-19): der Client kennt sie nur, wenn das Lesen sie
+    nicht übersetzen konnte (Altbestand). Erlaubt sind deshalb nur Ints, die schon in
+    ``stored_config`` stehen oder zu einer Person des Mandanten gehören; jeder andere Eintrag mit
+    int-ID fällt weg - sonst liesse sich die ID einer fremden Person einschleusen, die das Lesen
+    danach in ihre public UUID übersetzte."""
     entries = config.get("attendance_entries")
     if not isinstance(entries, list):
         return config
@@ -165,21 +176,33 @@ def normalize_attendance_entries(db, config: dict, tenant_id: int) -> dict:
                 public_ids[value] = uuid.UUID(value)
             except ValueError:
                 continue
-    if not public_ids:
+    internal_ids = _attendance_internal_ids(config)
+    if not public_ids and not internal_ids:
         return config
-    rows = db.execute(
-        select(Participant.public_id, Participant.id).where(
-            Participant.public_id.in_(set(public_ids.values())), Participant.tenant_id == tenant_id
+    id_map: dict[str, int] = {}
+    if public_ids:
+        rows = db.execute(
+            select(Participant.public_id, Participant.id).where(
+                Participant.public_id.in_(set(public_ids.values())), Participant.tenant_id == tenant_id
+            )
+        ).all()
+        by_public_id = {public_id: internal_id for public_id, internal_id in rows}
+        id_map = {raw: by_public_id[parsed] for raw, parsed in public_ids.items() if parsed in by_public_id}
+    allowed_ints = _attendance_internal_ids(stored_config or {})
+    unknown_ints = internal_ids - allowed_ints
+    if unknown_ints:
+        allowed_ints |= set(
+            db.scalars(select(Participant.id).where(Participant.id.in_(unknown_ints), Participant.tenant_id == tenant_id))
         )
-    ).all()
-    by_public_id = {public_id: internal_id for public_id, internal_id in rows}
-    id_map = {raw: by_public_id[parsed] for raw, parsed in public_ids.items() if parsed in by_public_id}
-    normalized = [
-        {**entry, "participant_id": id_map[entry["participant_id"]]}
-        if isinstance(entry, dict) and isinstance(entry.get("participant_id"), str) and entry["participant_id"] in id_map
-        else entry
-        for entry in entries
-    ]
+    normalized = []
+    for entry in entries:
+        value = entry.get("participant_id") if isinstance(entry, dict) else None
+        if isinstance(value, str) and value in id_map:
+            normalized.append({**entry, "participant_id": id_map[value]})
+        elif _is_internal_id(value) and value not in allowed_ints:
+            continue
+        else:
+            normalized.append(entry)
     return {**config, "attendance_entries": normalized}
 
 

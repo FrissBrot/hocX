@@ -4,6 +4,7 @@ from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import (
+    DocumentAsset,
     GalleryImage,
     DocumentExport,
     ProtocolImage,
@@ -40,8 +41,9 @@ class StorageService:
                  user "hochgeladen" hat), but they occupy real disk space and belong in a
                  storage report.
     - other:     everything else - tenant-import/-clone artifacts, orphaned rows, non-
-                 image-typed leftovers. (The tenant logo is a raw path on Tenant, not a
-                 stored_file row at all.) Each stored_file lands in exactly one bucket, so
+                 image-typed leftovers, and the Document Studio assets (document_asset,
+                 not a stored_file row, but counted here and in the quota). (The tenant logo
+                 is a raw path on Tenant, not a stored_file row at all.) Each stored_file lands in exactly one bucket, so
                  the categories always reconcile with SUM(file_size_bytes), the number that
                  actually matters for a quota check.
     """
@@ -80,7 +82,22 @@ class StorageService:
             bucket = totals.setdefault(row_tenant_id, {})
             bucket[key] = int(total or 0)
             bucket["total"] = bucket.get("total", 0) + int(total or 0)
+        # Document-Studio-Assets liegen nicht in stored_file, belegen aber Speicher und zählen
+        # zum Kontingent (StoredFileRepository.total_bytes_for_tenant) - unter «Sonstiges».
+        for row_tenant_id, total in self._asset_sums(db, tenant_id).items():
+            bucket = totals.setdefault(row_tenant_id, {})
+            bucket["other"] = bucket.get("other", 0) + total
+            bucket["total"] = bucket.get("total", 0) + total
         return totals
+
+    @staticmethod
+    def _asset_sums(db: Session, tenant_id: int | None) -> dict[int, int]:
+        query = select(DocumentAsset.tenant_id, func.coalesce(func.sum(DocumentAsset.file_size_bytes), 0)).group_by(
+            DocumentAsset.tenant_id
+        )
+        if tenant_id is not None:
+            query = query.where(DocumentAsset.tenant_id == tenant_id)
+        return {row_tenant_id: int(total or 0) for row_tenant_id, total in db.execute(query).all()}
 
     def total_bytes_by_tenant(self, db: Session) -> dict[int, int]:
         """Cheap one-query total per tenant - used for the admin tenant list, which only
@@ -90,7 +107,10 @@ class StorageService:
                 StoredFile.tenant_id
             )
         ).all()
-        return {tenant_id: int(total or 0) for tenant_id, total in rows}
+        totals = {tenant_id: int(total or 0) for tenant_id, total in rows}
+        for tenant_id, total in self._asset_sums(db, None).items():
+            totals[tenant_id] = totals.get(tenant_id, 0) + total
+        return totals
 
     def breakdown_for_tenant(self, db: Session, tenant_id: int) -> StorageUsageRead:
         sums = self._category_sums(db, tenant_id).get(tenant_id, {})

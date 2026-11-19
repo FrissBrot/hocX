@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Event, EventCategory, Protocol
 from app.services import public_id_service
+from app.core.sql_like import LIKE_ESCAPE, contains_pattern
 
 
 class EventRepository:
@@ -45,10 +46,9 @@ class EventRepository:
             statement = statement.where(Event.id.in_(event_ids))
         if search:
             # % und _ aus der Eingabe sind Text, keine Platzhalter (wie routes/search.py)
-            escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            pattern = f"%{escaped}%"
+            pattern = contains_pattern(search)
             statement = statement.where(
-                or_(Event.title.ilike(pattern, escape="\\"), Event.tag.ilike(pattern, escape="\\"))
+                or_(Event.title.ilike(pattern, escape=LIKE_ESCAPE), Event.tag.ilike(pattern, escape=LIKE_ESCAPE))
             )
         total = db.scalar(select(func.count()).select_from(statement.subquery())) or 0
         statement = statement.order_by(Event.event_date.desc(), Event.event_end_date.desc(), Event.id.desc()).offset(skip).limit(limit)

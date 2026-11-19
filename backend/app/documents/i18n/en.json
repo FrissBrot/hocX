@@ -37,6 +37,7 @@
     "templateNotPublished": "The template has not been published yet.",
     "templateTypeMismatch": "The template belongs to a different document type.",
     "tooLarge": "The file is too large.",
+    "quotaExceeded": "The organisation's storage quota has been reached - the file was not saved.",
     "unknownType": "Unknown document type.",
     "verificationAlreadyPending": "There is already an open request.",
     "verificationAlreadyVerified": "The organisation is already verified.",

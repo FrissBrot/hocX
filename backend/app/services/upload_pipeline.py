@@ -554,6 +554,12 @@ def _enforce_tenant_storage_quota(db: Session, *, tenant_id: int, repo: StoredFi
         )
 
 
+def enforce_tenant_storage_quota(db: Session, *, tenant_id: int, incoming_bytes: int) -> None:
+    """Kontingentprüfung für Speicher ausserhalb von stored_file (Document-Studio-Assets): gleiche
+    Sperre und gleiche Belegung wie bei Datei-Uploads. Wirft UploadRejected (code quota_exceeded)."""
+    _enforce_tenant_storage_quota(db, tenant_id=tenant_id, repo=StoredFileRepository(), incoming_bytes=incoming_bytes)
+
+
 # Audit MAIN-BE-015: ingest_file schreibt Original und Thumbnail vor dem Commit des Aufrufers.
 # Scheitert dessen Commit (z. B. Sort-Index-Kollision bei parallelen Bild-Uploads), blieben die
 # Dateien als Waisen liegen. Die Pfade werden deshalb an der Session vermerkt: ein Commit gibt

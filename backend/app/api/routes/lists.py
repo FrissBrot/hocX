@@ -42,6 +42,7 @@ from app.services import public_id_service
 from app.services.list_service import ListService
 from app.services.submission_service import SubmissionService
 from app.services.task_package_service import sync_packages_after_change
+from app.core.sql_like import contains_pattern
 
 router = APIRouter()
 service = ListService()
@@ -276,8 +277,7 @@ def column_usages(db: Session, *, tenant_id: int, column_key: str, limit: int = 
     Textvergleich auf dem JSON trifft genau ihn. Offene Protokolle zählen, abgeschlossene nicht
     (eingefroren, lesen über den v1/v2-Snapshot)."""
     # Key als Text, nicht als LIKE-Muster (%, _ und \\ aus einem importierten Key sind Zeichen)
-    escaped = column_key.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-    pattern = f"%{escaped}%"
+    pattern = contains_pattern(column_key)
     usages: list[ListColumnUsage] = []
     for public_id, title in db.execute(
         select(ElementDefinition.public_id, ElementDefinition.title).where(

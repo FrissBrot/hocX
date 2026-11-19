@@ -301,6 +301,7 @@
     "invalidFont": "Nur gültige TTF- oder OTF-Schriften sind erlaubt.",
     "invalidKind": "Unbekannte Dateiart.",
     "tooLarge": "Die Datei ist zu gross.",
+    "quotaExceeded": "Das Speicherkontingent des Vereins ist erreicht - die Datei wurde nicht gespeichert.",
     "infected": "Die Datei wurde vom Virenscanner abgelehnt.",
     "scanFailed": "Die Datei konnte nicht auf Viren geprüft werden. Bitte später erneut versuchen.",
     "assetInUse": "Die Datei wird noch von einem Brand-Profil, einer Vorlage oder einer Komponente verwendet.",

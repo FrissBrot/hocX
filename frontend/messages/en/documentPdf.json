@@ -301,6 +301,7 @@
     "invalidFont": "Only valid TTF or OTF fonts are allowed.",
     "invalidKind": "Unknown file kind.",
     "tooLarge": "The file is too large.",
+    "quotaExceeded": "The organisation's storage quota has been reached - the file was not saved.",
     "infected": "The file was rejected by the virus scanner.",
     "scanFailed": "The file could not be scanned for viruses. Please try again later.",
     "assetInUse": "The file is still used by a brand profile, a template or a component.",

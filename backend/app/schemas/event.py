@@ -129,6 +129,18 @@ class EventUpdate(BaseModel):
     spezial_time2: time | None = None
     program: str | None = None
     cycle_assignments: list[CycleAssignment] | None = None
+    # Stand der Rollenlisten, von dem der Client ausging (je Feld wie organizer_ids). Ist ein Feld
+    # hier angegeben, übernimmt der Server nur die Differenz zur gesendeten Liste (hinzugefügt/
+    # entfernt) auf den aktuellen Stand - zwei gleichzeitige Änderungen überschreiben sich nicht
+    # mehr (Nachtlauf 2026-11-19). Ohne Angabe ersetzt die Liste wie bisher den Stand.
+    role_ids_base: dict[str, list[uuid.UUID]] | None = None
+
+    @field_validator("role_ids_base")
+    @classmethod
+    def _known_role_fields(cls, value: dict[str, list[uuid.UUID]] | None) -> dict[str, list[uuid.UUID]] | None:
+        if value is not None and not set(value) <= set(_PARTICIPANT_ID_FIELDS):
+            raise ValueError("role_ids_base only accepts role id fields")
+        return value
 
     @field_validator("event_date", "title", "is_cancelled")
     @classmethod

@@ -55,6 +55,7 @@ from app.services import plan_pricing
 from app.services import cashflow_service, identity_verification_service, photo_album_service, submission_link_service, traefik_config_service, user_limit_service
 from app.services.storage_service import StorageService
 from app.services.tenant_service import apply_tenant_profile_image
+from app.core.sql_like import LIKE_ESCAPE, contains_pattern
 
 _logger = logging.getLogger(__name__)
 
@@ -169,8 +170,7 @@ class AdminTenantService:
         # to filter only the already-fetched current page, so a match on a later page was
         # invisible while browsing an earlier one.
         if q and q.strip():
-            pattern = f"%{q.strip()}%"
-            query = query.filter(Tenant.name.ilike(pattern))
+            query = query.filter(Tenant.name.ilike(contains_pattern(q.strip()), escape=LIKE_ESCAPE))
         # Plan-Filter der Mandantenliste (Chips "Alle / <Plan>") - ebenfalls vor der Paginierung.
         if plan_code:
             query = query.filter(Tenant.plan_code == plan_code)

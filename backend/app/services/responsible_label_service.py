@@ -34,6 +34,7 @@ def _resolve_ids_for_assignments(
     db: Session | None,
     entries_by_id: dict[int, ListEntry] | None = None,
     definitions_by_id: dict[int, ListDefinition] | None = None,
+    tenant_id: int | None,
 ) -> list[int]:
     """Resolves the deduplicated, order-preserving list of participant ids referenced by
     `assignments`, following the same list-entry/list-definition/participant_id fallback as
@@ -62,7 +63,14 @@ def _resolve_ids_for_assignments(
                 definition = db.get(ListDefinition, int(list_definition_id)) if db is not None else None
             # Nur Einträge der genannten Liste: list_entry_id stammt aus der frei setzbaren
             # Block-Konfiguration (gleiches Muster wie list_snapshot_service, Nachtlauf 2026-11-19)
-            if entry is not None and definition is not None and entry.list_definition_id == definition.id:
+            # ... und nur Listen des eigenen Mandanten (sonst landeten fremde Personen-IDs als
+            # «Teilnehmer <id>» im Titel)
+            if (
+                entry is not None
+                and definition is not None
+                and entry.list_definition_id == definition.id
+                and definition.tenant_id == tenant_id
+            ):
                 ids = _list_entry_participant_ids(entry, definition)
         for pid in ids:
             if not pid or pid in seen_ids:
@@ -117,6 +125,7 @@ def resolve_responsible_label(
         db=db,
         entries_by_id=entries_by_id,
         definitions_by_id=definitions_by_id,
+        tenant_id=tenant_id,
     )
     names: list[str] = []
     for pid in resolved_ids:
@@ -180,6 +189,7 @@ def resolve_responsible_labels_batch(db: Session, elements: list[ProtocolElement
             db=None,
             entries_by_id=entries_by_id,
             definitions_by_id=definitions_by_id,
+            tenant_id=tenant_id,
         )
         for element in elements
     }
@@ -289,6 +299,7 @@ def resolve_display_section_titles_batch(
             db=None,
             entries_by_id=entries_by_id,
             definitions_by_id=definitions_by_id,
+            tenant_id=tenant_id,
         )
         for element in live_elements
     }

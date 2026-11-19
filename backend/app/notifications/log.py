@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.models import AppUser, Notification, Tenant
 from app.schemas.admin import NotificationLogEntry, NotificationLogPage
+from app.core.sql_like import LIKE_ESCAPE, contains_pattern
 
 STATUSES = ("pending", "sent", "skipped", "failed")
 
@@ -22,8 +23,9 @@ def list_log(db: Session, *, status: str | None = None, search: str | None = Non
         conditions.append(Notification.status == status)
     needle = (search or "").strip()
     if needle:
-        pattern = f"%{needle.replace('%', '').replace('_', '')}%"
-        conditions.append(or_(Tenant.name.ilike(pattern), AppUser.display_name.ilike(pattern), AppUser.email.ilike(pattern)))
+        # % und _ sind Text (vorher entfernt: «max_muster@…» fand die Adresse nicht mehr)
+        pattern = contains_pattern(needle)
+        conditions.append(or_(*(column.ilike(pattern, escape=LIKE_ESCAPE) for column in (Tenant.name, AppUser.display_name, AppUser.email))))
     base = (
         select(Notification, Tenant.name.label("tenant_name"), AppUser.display_name.label("recipient_name"), AppUser.email.label("recipient_email"))
         .join(Tenant, Tenant.id == Notification.tenant_id)

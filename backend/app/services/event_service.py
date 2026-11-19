@@ -140,6 +140,29 @@ class EventService:
             resolved[field] = [mapping[i] for i in ids]
         return resolved
 
+    def _merge_role_ids(
+        self, db: Session, event: Event, values: dict, base: dict[str, list[uuid.UUID]] | None
+    ) -> dict[str, list[int] | None]:
+        """Rollenlisten mit Ausgangsstand (``EventUpdate.role_ids_base``) als Differenz anwenden:
+        entfernt wird, was im Ausgangsstand war und in der gesendeten Liste fehlt, hinzugefügt, was
+        neu dazukam. Alles andere bleibt wie in der (unter Zeilensperre gelesenen) Datenbank - so
+        gehen gleichzeitig hinzugefügte Personen nicht verloren. Unbekannte IDs im Ausgangsstand
+        (inzwischen gelöschte Personen) werden ignoriert."""
+        fields = [field for field in (base or {}) if field in values]
+        if not fields:
+            return {}
+        requested = {public_id for field in fields for public_id in base[field]}
+        mapping = public_id_service.resolve_internal_ids(db, Participant, list(requested), tenant_id=event.tenant_id)
+        merged: dict[str, list[int] | None] = {}
+        for field in fields:
+            sent = list(values[field] or [])
+            before = {mapping[public_id] for public_id in base[field] if public_id in mapping}
+            removed = before - set(sent)
+            current = [pid for pid in (getattr(event, field) or []) if pid not in removed]
+            current += [pid for pid in sent if pid not in before and pid not in current]
+            merged[field] = current
+        return merged
+
     def create_event(self, db: Session, payload: EventCreate, *, tenant_id: int) -> Event:
         category_id = self.repository.category_id_by_code(db, "other")
         if category_id is None:
@@ -202,7 +225,7 @@ class EventService:
         )
         if event is None:
             return None
-        values = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if k != "cycle_assignments"}
+        values = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if k not in ("cycle_assignments", "role_ids_base")}
         next_start = values.get("event_date", event.event_date)
         next_end = values.get("event_end_date", event.event_end_date)
         if next_end and next_end < next_start:
@@ -215,6 +238,7 @@ class EventService:
             id_lists={field: values[field] for field in self._PARTICIPANT_ID_FIELDS if field in values},
         )
         values.update(resolved_ids)
+        values.update(self._merge_role_ids(db, event, values, payload.role_ids_base))
         previous_date = event.event_date
         # Zuordnungen, die noch exakt dem Standard fürs alte Datum entsprechen, gelten als
         # nicht manuell angepasst und wandern bei einer Datumsänderung mit.

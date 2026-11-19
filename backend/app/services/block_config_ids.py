@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Event, FinanceAccount, ListDefinition, ListEntry, Participant
@@ -44,6 +45,25 @@ def _decode_id(db: Session, model: type, value: Any, *, tenant_id: int) -> Any:
     internal_id = public_id_service.resolve_internal_id(db, model, value, tenant_id=tenant_id)
     if internal_id is None:
         raise ValueError(f"{model.__name__} {value} not found")
+    return internal_id
+
+
+def _decode_list_entry(db: Session, value: Any, *, tenant_id: int, list_definition_id: Any) -> Any:
+    """Listeneintrag nur aus der genannten Liste des eigenen Mandanten. ListEntry hat keine eigene
+    tenant_id - _decode_id (get_by_public_id) würde den Mandanten stillschweigend ignorieren und
+    Einträge fremder Mandanten oder anderer Listen annehmen (Nachtlauf 2026-11-19)."""
+    if value is None:
+        return None
+    statement = (
+        select(ListEntry.id)
+        .join(ListDefinition, ListDefinition.id == ListEntry.list_definition_id)
+        .where(ListEntry.public_id == value, ListDefinition.tenant_id == tenant_id)
+    )
+    if list_definition_id is not None:
+        statement = statement.where(ListEntry.list_definition_id == list_definition_id)
+    internal_id = db.scalar(statement)
+    if internal_id is None:
+        raise ValueError(f"ListEntry {value} not found")
     return internal_id
 
 
@@ -79,7 +99,9 @@ def _decode_row(db: Session, row: Any, *, tenant_id: int) -> Any:
     if isinstance(row_config, dict):
         row_config = dict(row_config)
         row_config["linked_list_id"] = _decode_id(db, ListDefinition, row_config.get("linked_list_id"), tenant_id=tenant_id)
-        row_config["linked_list_entry_id"] = _decode_id(db, ListEntry, row_config.get("linked_list_entry_id"), tenant_id=tenant_id)
+        row_config["linked_list_entry_id"] = _decode_list_entry(
+            db, row_config.get("linked_list_entry_id"), tenant_id=tenant_id, list_definition_id=row_config["linked_list_id"]
+        )
         row["row_config"] = row_config
     return row
 
@@ -100,7 +122,9 @@ def _decode_responsibility_assignment(db: Session, assignment: Any, *, tenant_id
     assignment = dict(assignment)
     assignment["participant_id"] = _decode_id(db, Participant, assignment.get("participant_id"), tenant_id=tenant_id)
     assignment["list_definition_id"] = _decode_id(db, ListDefinition, assignment.get("list_definition_id"), tenant_id=tenant_id)
-    assignment["list_entry_id"] = _decode_id(db, ListEntry, assignment.get("list_entry_id"), tenant_id=tenant_id)
+    assignment["list_entry_id"] = _decode_list_entry(
+        db, assignment.get("list_entry_id"), tenant_id=tenant_id, list_definition_id=assignment["list_definition_id"]
+    )
     return assignment
 
 

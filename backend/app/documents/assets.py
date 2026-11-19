@@ -21,6 +21,7 @@ from app import scanner
 from app.core.config import settings
 from app.core.storage import MAIN, InvalidObjectKey, ObjectNotFound, get_object_store, validate_key
 from app.models import DocumentAsset
+from app.services import upload_pipeline
 from app.services.file_service import MAX_UPLOAD_BYTES
 
 ASSET_DIR = "document_assets"
@@ -136,6 +137,12 @@ async def create_asset(  # loop-ok: nur im Worker-Thread (core/offload.run_corou
         raise AssetValidationError("apiError.infected")
     if status == "error":
         raise AssetValidationError("apiError.scanFailed")
+    # Assets zählen zum Speicherkontingent des Mandanten wie jede andere Datei (Nachtlauf
+    # 2026-11-19: vorher weder geprüft noch gezählt).
+    try:
+        upload_pipeline.enforce_tenant_storage_quota(db, tenant_id=tenant_id, incoming_bytes=len(content))
+    except upload_pipeline.UploadRejected as exc:
+        raise AssetValidationError("apiError.quotaExceeded") from exc
     key = validate_key(f"{ASSET_DIR}/tenant-{tenant_id}/{uuid.uuid4().hex}{suffix}")
     store = get_object_store()
     store.put_bytes(db, MAIN, key, content, content_type=mime_type)

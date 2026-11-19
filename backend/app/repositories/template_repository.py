@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.models import Participant, Template, TemplateParticipant
 from app.repositories.participant_repository import participant_eligible_on
 from app.services import public_id_service
+from app.core.sql_like import LIKE_ESCAPE, contains_pattern
 
 
 class TemplateRepository:
@@ -27,7 +28,7 @@ class TemplateRepository:
                 return []
             statement = statement.where(Template.id.in_(template_ids))
         if query:
-            statement = statement.where(Template.name.ilike(f"%{query}%"))
+            statement = statement.where(Template.name.ilike(contains_pattern(query), escape=LIKE_ESCAPE))
         if status:
             statement = statement.where(Template.status == status)
         statement = statement.order_by(Template.id.desc())

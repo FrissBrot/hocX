@@ -9,6 +9,7 @@ from sqlalchemy.engine import Row
 from sqlalchemy.orm import Session, aliased
 
 from app.models import (
+    DocumentAsset,
     CycleConfig,
     Event,
     GalleryImage,
@@ -29,6 +30,7 @@ from app.models.entities import PhotoAlbumItem
 from app.models.document_entities import Document, DocumentFile, DocumentVersion
 from app.services import public_id_service
 from app.services.capture_date import date_source_sql, effective_capture_date_sql
+from app.core.sql_like import LIKE_ESCAPE, contains_pattern
 
 # Cap for the "list every tag/origin-tag currently in use" suggestion query - this app is
 # per-tenant scout/school data (hundreds to low thousands of files), not enterprise scale,
@@ -96,11 +98,15 @@ class StoredFileRepository:
         """SUM(file_size_bytes) across every stored_file this tenant owns, regardless of
         origin - the same number storage_service.py's per-category breakdown reconciles
         to, used here as the single cheap check upload_pipeline.ingest_file needs before
-        accepting a new file against Tenant.storage_quota_bytes."""
-        return int(
-            db.scalar(select(func.coalesce(func.sum(StoredFile.file_size_bytes), 0)).where(StoredFile.tenant_id == tenant_id))
-            or 0
+        accepting a new file against Tenant.storage_quota_bytes.
+
+        Plus die Assets des Document Studio (Logos, Bilder, Schriften): sie liegen nicht in
+        stored_file, belegen aber denselben Speicher (Nachtlauf 2026-11-19)."""
+        files = db.scalar(select(func.coalesce(func.sum(StoredFile.file_size_bytes), 0)).where(StoredFile.tenant_id == tenant_id))
+        assets = db.scalar(
+            select(func.coalesce(func.sum(DocumentAsset.file_size_bytes), 0)).where(DocumentAsset.tenant_id == tenant_id)
         )
+        return int(files or 0) + int(assets or 0)
 
     def list_tenant_image_hashes(self, db: Session, tenant_id: int, *, exclude_stored_file_id: int | None = None) -> list[tuple[int, str]]:
         """(id, perceptual_hash) for every image already hashed in this tenant - used for the
@@ -451,16 +457,16 @@ class StoredFileRepository:
             # Name, Tag oder Termin: besides the file name also the linked protocol/abgabe/
             # Termin (ref_label/context_label), the computed origin_tag and the user tags
             # (jsonb array matched as its text form - good enough for a substring search).
-            pattern = f"%{search}%"
+            pattern = contains_pattern(search)
             context_match = or_(
-                cast(union_query.c.ref_label, String).ilike(pattern),
-                cast(union_query.c.context_label, String).ilike(pattern),
-                cast(union_query.c.origin_tag, String).ilike(pattern),
-                cast(union_query.c.tags, String).ilike(pattern),
+                cast(union_query.c.ref_label, String).ilike(pattern, escape=LIKE_ESCAPE),
+                cast(union_query.c.context_label, String).ilike(pattern, escape=LIKE_ESCAPE),
+                cast(union_query.c.origin_tag, String).ilike(pattern, escape=LIKE_ESCAPE),
+                cast(union_query.c.tags, String).ilike(pattern, escape=LIKE_ESCAPE),
             )
             if viewer_tenant_id is not None:
                 context_match = and_(union_query.c.tenant_id == viewer_tenant_id, context_match)
-            query = query.where(or_(union_query.c.original_name.ilike(pattern), context_match))
+            query = query.where(or_(union_query.c.original_name.ilike(pattern, escape=LIKE_ESCAPE), context_match))
         if tags:
             # AND across selected tags (each further tag narrows the result), OR within a
             # single tag between a user-assigned tag (jsonb containment) and the computed

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.models import Tenant, TenantDomain
 from app.schemas.admin import AdminDomainPage, AdminDomainRead
 from app.services import traefik_config_service
+from app.core.sql_like import LIKE_ESCAPE, contains_pattern
 
 
 class AdminDomainService:
@@ -43,8 +44,8 @@ class AdminDomainService:
         # Applied before the offset/limit slice (audit A1, 2026-08-16) - see the identical
         # fix in AdminTenantService.list_tenants/AdminUserService.list_users.
         if q and q.strip():
-            like = f"%{q.strip()}%"
-            query = query.filter(or_(TenantDomain.domain.ilike(like), Tenant.name.ilike(like)))
+            like = contains_pattern(q.strip())
+            query = query.filter(or_(TenantDomain.domain.ilike(like, escape=LIKE_ESCAPE), Tenant.name.ilike(like, escape=LIKE_ESCAPE)))
         total = query.count()
         query = query.offset(offset)
         if limit is not None:

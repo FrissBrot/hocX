@@ -1445,6 +1445,17 @@ export type EventSummary = {
   updated_at: string;
 };
 
+export type EventRoleField = "organizer_ids" | "leadership_ids" | "participant_ids" | "spezial1_ids" | "spezial2_ids" | "spezial3_ids";
+
+/**
+ * Body von PATCH /api/events/{id}. `role_ids_base` nennt je Rollenfeld den Stand, von dem die
+ * Änderung ausging: der Server übernimmt dann nur hinzugefügte/entfernte Personen, statt die ganze
+ * Liste zu ersetzen (sonst überschreiben sich zwei gleichzeitige Änderungen).
+ */
+export type EventPatch = Partial<EventSummary> & {
+  role_ids_base?: Partial<Record<EventRoleField, string[]>>;
+};
+
 export type EventImportPreviewRow = {
   row_number: number;
   event_date: string | null;
