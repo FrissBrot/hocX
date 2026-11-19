@@ -511,3 +511,43 @@ def test_unreachable_storage_yields_503_not_500():
     except Exception as exc:  # pragma: no cover - Logging darf die Antwort nie verhindern
         pytest.fail(f"Handler warf {exc!r}")
     assert response.status_code == 503 and response.headers["retry-after"] == "30"
+
+
+# Bereinigung alter Generationen: dauerhafter Fehler ----------------------------------------------
+
+
+def test_failing_generation_purge_is_logged_once_and_does_not_block_others(committed_storage, monkeypatch):
+    """Ist der Speicher einer alten Generation dauerhaft weg (Anbieter gekündigt, Zugang abgelaufen),
+    versuchte der Storage-Worker sie bei jedem Durchlauf (alle 5 s) erneut, schrieb jedes Mal einen
+    Eintrag ins Fehlerprotokoll und bereinigte - immer dieselbe, kleinste ID zuerst - keine andere
+    angeforderte Generation mehr."""
+    db = committed_storage
+    run = uuid.uuid4().hex[:8]
+    broken = create_test_profile(db, f"Weg {run}", f"purge-{run}/weg")
+    healthy = create_test_profile(db, f"Da {run}", f"purge-{run}/da")
+    base = (db.scalar(select(text("COALESCE(MAX(generation), 0)")).select_from(StorageGeneration)) or 0) + 1000
+    failing = StorageGeneration(profile_id=broken.id, generation=base, status="purge_requested")
+    other = StorageGeneration(profile_id=healthy.id, generation=base + 1, status="purge_requested")
+    db.add_all([failing, other])
+    db.commit()
+
+    store = get_object_store()
+
+    def factory(config):
+        if config.profile_id == broken.id:
+            raise StorageUnavailable("Speicher der alten Generation nicht erreichbar")
+        return S3Backend(config)
+
+    monkeypatch.setattr(store, "_backend_factory", factory)
+    monkeypatch.setattr(store, "_backends", {})
+    logged: list[Exception] = []
+    monkeypatch.setattr(storage_worker, "record_system_error", lambda _db, *, exc: logged.append(exc))
+
+    for _ in range(3):
+        storage_worker.purge_generations()
+
+    db.expire_all()
+    assert db.get(StorageGeneration, other.id).status == "purged"
+    still = db.get(StorageGeneration, failing.id)
+    assert still.status == "purge_requested" and "StorageUnavailable" in still.purge_error
+    assert len(logged) == 1

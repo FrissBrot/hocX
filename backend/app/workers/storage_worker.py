@@ -1147,7 +1147,11 @@ def purge_generations() -> int:
                                                 StorageGeneration.profile_id.notin_(fs_profiles))
         if held is not None:
             query = query.where(StorageGeneration.generation != held)
-        generation = db.scalars(query.order_by(StorageGeneration.id).limit(1).with_for_update(skip_locked=True)).first()
+        # Zuletzt gescheiterte Bereinigungen (purge_error gesetzt) nach hinten: eine Generation, deren
+        # Speicher dauerhaft weg ist, blockierte sonst als kleinste ID jede andere Bereinigung.
+        generation = db.scalars(
+            query.order_by(StorageGeneration.purge_error.is_not(None), StorageGeneration.id).limit(1).with_for_update(skip_locked=True)
+        ).first()
         if generation is None:
             return 0
         generation.status = "purging"
@@ -1164,9 +1168,14 @@ def purge_generations() -> int:
             generation.purged_at = datetime.now(UTC)
             generation.purge_error = None
         except Exception as exc:
-            record_system_error(db, exc=exc)
+            error = f"{type(exc).__name__}: {exc}"[:2000]
+            # Nur beim ersten Auftreten bzw. bei geänderter Ursache ins Fehlerprotokoll - der Worker
+            # versucht es bei jedem Durchlauf (POLL_SECONDS) erneut; der aktuelle Fehler steht an
+            # der Generation (Adminportal).
+            if error != generation.purge_error:
+                record_system_error(db, exc=exc)
             generation.status = "purge_requested"
-            generation.purge_error = f"{type(exc).__name__}: {exc}"[:2000]
+            generation.purge_error = error
         db.commit()
     return purged
 
