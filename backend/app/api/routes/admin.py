@@ -78,6 +78,7 @@ from app.services.admin_domain_service import AdminDomainService
 from app.services.admin_error_log_service import AdminErrorLogService
 from app.services.admin_job_status_service import AdminJobStatusService
 from app.services import ntfy_client, system_alert_service, system_health_service
+from app.core.sql_like import prefix_pattern
 from app.services.notification_settings_service import NotificationSettingsService
 from app.services.admin_upload_pipeline_status_service import AdminUploadPipelineStatusService
 from app.services.admin_tenant_service import AdminTenantService
@@ -251,14 +252,14 @@ def list_audit_log(
     Präfix (``user.login`` trifft auch ``user.login_failed``)."""
     params = {
         "tenant_id": _resolve_tenant_id(db, tenant_id) if tenant_id is not None else None,
-        "action": action.replace("%", "").replace("_", "\\_") + "%" if action else None,
+        "action": prefix_pattern(action) if action else None,
         "outcome": outcome,
         "limit": limit,
         "offset": offset,
     }
     filters = """
         WHERE (CAST(:tenant_id AS bigint) IS NULL OR l.tenant_id = :tenant_id)
-          AND (CAST(:action AS text) IS NULL OR l.action LIKE :action)
+          AND (CAST(:action AS text) IS NULL OR l.action LIKE :action ESCAPE '\\')
           AND (CAST(:outcome AS text) IS NULL OR l.outcome = :outcome)"""
     rows = db.execute(
         text(

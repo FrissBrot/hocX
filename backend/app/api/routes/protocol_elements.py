@@ -132,7 +132,7 @@ def _block_to_read(db: Session, block) -> ProtocolElementBlockRead:
     config = dict(block.configuration_snapshot_json or {})
     if element_type_code(block.element_type_id) == "attendance":
         config.update(attendance_fine_values(db, config, protocol.tenant_id, protocol.template_id))
-    config = translate_attendance_entries(db, config)
+    config = translate_attendance_entries(db, config, protocol.tenant_id)
     config = translate_participant_refs(db, config, protocol.tenant_id)
     config = translate_list_snapshot_refs(db, config, protocol.tenant_id)
     return ProtocolElementBlockRead(
@@ -232,7 +232,9 @@ def patch_protocol_element_block(
     existing, protocol = _block_and_protocol_or_404(db, user, protocol_element_block_id)
     _ensure_block_not_locked_by_other(protocol.id, existing.public_id, user)
     if payload.configuration_snapshot_json is not None:
-        payload.configuration_snapshot_json = normalize_attendance_entries(db, payload.configuration_snapshot_json, protocol.tenant_id)
+        payload.configuration_snapshot_json = normalize_attendance_entries(
+            db, payload.configuration_snapshot_json, protocol.tenant_id, stored_config=existing.configuration_snapshot_json
+        )
         payload.configuration_snapshot_json = normalize_list_snapshot_refs(db, payload.configuration_snapshot_json, protocol.tenant_id)
         payload.configuration_snapshot_json = list_columns.normalize_config_column_keys(
             db, payload.configuration_snapshot_json, tenant_id=protocol.tenant_id

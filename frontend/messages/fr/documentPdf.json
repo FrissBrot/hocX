@@ -301,6 +301,7 @@
     "invalidFont": "Seules les polices TTF ou OTF valides sont autorisées.",
     "invalidKind": "Type de fichier inconnu.",
     "tooLarge": "Le fichier est trop volumineux.",
+    "quotaExceeded": "Le quota de stockage de l’association est atteint - le fichier n’a pas été enregistré.",
     "infected": "Le fichier a été refusé par l’antivirus.",
     "scanFailed": "Le fichier n’a pas pu être analysé. Veuillez réessayer plus tard.",
     "assetInUse": "Le fichier est encore utilisé par un profil de marque, un modèle ou un composant.",

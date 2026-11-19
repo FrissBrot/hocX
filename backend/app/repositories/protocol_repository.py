@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Protocol
 from app.services import public_id_service
+from app.core.sql_like import LIKE_ESCAPE, contains_pattern
 
 
 class ProtocolRepository:
@@ -30,7 +31,8 @@ class ProtocolRepository:
             statement = statement.where(Protocol.id.in_(protocol_ids))
         if query:
             statement = statement.where(
-                Protocol.protocol_number.ilike(f"%{query}%") | Protocol.title.ilike(f"%{query}%")
+                Protocol.protocol_number.ilike(contains_pattern(query), escape=LIKE_ESCAPE)
+                | Protocol.title.ilike(contains_pattern(query), escape=LIKE_ESCAPE)
             )
         if status:
             statement = statement.where(Protocol.status == status)

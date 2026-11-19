@@ -25,6 +25,7 @@ from app.services.audit_service import AuditService
 from app.services.protocol_service import ProtocolService
 from app.services.protocol_todo_service import ProtocolTodoService
 from app.services import todo_fine_service
+from app.core.sql_like import LIKE_ESCAPE, contains_pattern
 
 router = APIRouter()
 service = ProtocolTodoService()
@@ -264,7 +265,7 @@ def get_todo_due_events(
     )
     if tag_filter:
         tag_lower = tag_filter.strip().lower()
-        stmt = stmt.where(Event.tag.ilike(f"%{tag_lower}%"))
+        stmt = stmt.where(Event.tag.ilike(contains_pattern(tag_lower), escape=LIKE_ESCAPE))
     stmt = stmt.order_by(Event.event_date.asc()).limit(50)
     events = db.execute(stmt).scalars().all()
 

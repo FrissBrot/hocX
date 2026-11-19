@@ -1330,7 +1330,9 @@ async def _upload_document_asset_impl(  # loop-ok: nur über run_coroutine_in_th
     user: CurrentUser = Depends(get_current_user),
 ):
     permissions.require_brand(user)
-    content = await file.read()
+    # Höchstens ein Byte über der Grenze lesen: create_asset lehnt das ab, ohne dass eine grosse
+    # Datei ganz in den Speicher geladen wird.
+    content = await file.read(asset_service.MAX_UPLOAD_BYTES + 1)
     try:
         asset = await asset_service.create_asset(db, user.current_tenant_id, kind=kind, filename=file.filename or "", content=content, user_id=user.user_id, category=category, name=name)
         db.commit()

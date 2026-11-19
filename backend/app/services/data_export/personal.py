@@ -22,6 +22,7 @@ from app.documents.strings import normalize_language, text
 from app.models import AppUser, Tenant
 from app.services.data_export import workbook
 from app.services.data_export.archive import EncryptedZip, safe_name
+from app.core.sql_like import contains_pattern
 
 _EXCERPT = 80
 _MAX_MENTIONS = 200
@@ -196,14 +197,14 @@ def _mentions(db: Session, person: AppUser) -> list[dict[str, Any]]:
         return []
     results: list[dict[str, Any]] = []
     for name in sorted(names):
-        pattern = "%" + name.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        pattern = contains_pattern(name)
         for row in _rows(db, f"""
             SELECT p.protocol_number, p.protocol_date, b.block_title_snapshot, x.content
             FROM protocol_text x
             JOIN protocol_element_block b ON b.id = x.protocol_element_block_id
             JOIN protocol_element e ON e.id = b.protocol_element_id
             JOIN protocol p ON p.id = e.protocol_id
-            WHERE p.tenant_id = :tenant_id AND x.content ILIKE :pattern
+            WHERE p.tenant_id = :tenant_id AND x.content ILIKE :pattern ESCAPE '\\'
             ORDER BY p.protocol_date LIMIT {_MAX_MENTIONS}
         """, {"tenant_id": person.tenant_id, "pattern": pattern}):  # sql-ok: LIMIT ist eine Konstante
             content = row["content"] or ""

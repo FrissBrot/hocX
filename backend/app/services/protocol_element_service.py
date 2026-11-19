@@ -92,7 +92,7 @@ class ProtocolElementService:
         for index, row in enumerate(block_rows):
             config = configs[index]
             if row.element_type_code == "attendance":
-                config = translate_attendance_entries(db, config, refs=refs)
+                config = translate_attendance_entries(db, config, protocol_tenant_id, refs=refs)
             if protocol_tenant_id is not None:
                 config = translate_participant_refs(db, config, protocol_tenant_id, refs=refs)
                 config = translate_list_snapshot_refs(db, config, protocol_tenant_id, refs=refs)

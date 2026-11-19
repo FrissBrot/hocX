@@ -49,6 +49,7 @@ from app.schemas.cashflow import (
     TenantPortalCharge,
     TenantPortalCharges,
 )
+from app.core.sql_like import LIKE_ESCAPE, contains_pattern
 
 _TZ = ZoneInfo("Europe/Zurich")
 # Advisory-Lock der Forderungserzeugung (Namensraum 2026000xx, siehe background_loops.py).
@@ -294,7 +295,7 @@ def list_charges(
     base = select(TenantCharge, Tenant.public_id).outerjoin(Tenant, Tenant.id == TenantCharge.tenant_id)
     filters = []
     if q and q.strip():
-        filters.append(TenantCharge.tenant_name.ilike(f"%{q.strip()}%"))
+        filters.append(TenantCharge.tenant_name.ilike(contains_pattern(q.strip()), escape=LIKE_ESCAPE))
     if year is not None:
         filters.append(TenantCharge.period_start.between(date(year, 1, 1), date(year, 12, 31)))
     totals = {key: TenantChargeStatusTotals() for key in CHARGE_STATUSES}

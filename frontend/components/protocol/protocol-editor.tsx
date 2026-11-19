@@ -4,6 +4,7 @@ import { useShortcutLabel } from "@/lib/search/shortcuts";
 import { eventFilterTagText, normalizeEventFilter } from "@/lib/element-types/event-filter";
 import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { runSerializedByKey } from "@/lib/utils/serialize-by-key";
+import { mergeEventPatches } from "@/lib/utils/event-patch";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
@@ -37,6 +38,7 @@ import { protocolStatusVariant } from "@/components/protocol/protocol-status";
 import {
   AttendanceFine,
   AttendanceFineListItem,
+  EventPatch,
   EventSummary,
   FinanceAccount,
   FinanceTransaction,
@@ -1691,11 +1693,11 @@ export function ProtocolEditor({
   // Übernehmen der Antwort -, die Eingabe ging dann teilweise verloren (Bug 2026-11-08). Darum
   // je Termin: sofort lokal anzeigen, nacheinander speichern, und was während einer laufenden
   // Anfrage dazukommt, in einer einzigen Folgeanfrage zusammenfassen.
-  const queuedEventPatches = useRef(new Map<string, Partial<EventSummary>>());
+  const queuedEventPatches = useRef(new Map<string, EventPatch>());
   const queuedEventSaves = useRef(new Map<string, Promise<boolean>>());
   const confirmedEvents = useRef(new Map<string, EventSummary>());
 
-  function updateEventFromBlock(protocolElementBlockId: string, eventId: string, patch: Partial<EventSummary>): Promise<boolean> {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
+  function updateEventFromBlock(protocolElementBlockId: string, eventId: string, patch: EventPatch): Promise<boolean> {  // i18n-ok: TS-Generic-Signatur, kein UI-Text
     setEvents((current) => current.map((event) => {
       if (event.id !== eventId) return event;
       if (!confirmedEvents.current.has(eventId)) confirmedEvents.current.set(eventId, event);
@@ -1703,7 +1705,7 @@ export function ProtocolEditor({
     }));
     setStatus(protocolElementBlockId, "saving");
     const queued = queuedEventPatches.current.get(eventId);
-    queuedEventPatches.current.set(eventId, { ...(queued ?? {}), ...patch });
+    queuedEventPatches.current.set(eventId, mergeEventPatches(queued, patch));
     const pending = queuedEventSaves.current.get(eventId);
     if (queued && pending) return pending;
     const save = runSerializedByKey(`event:${eventId}`, async () => {

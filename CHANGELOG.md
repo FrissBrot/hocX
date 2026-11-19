@@ -24,6 +24,11 @@ Installationen aktualisieren können.
   Mandanten gebunden (RLS); Kalender-Abo und ICS-Export entfernen auch U+0085/U+2028/U+2029 und
   DEL; Fehlertexte einer Speicher-Migration (auch für Support-Admins sichtbar) enthalten keine
   Objektschlüssel, Pfade oder SQL-Parameter mehr.
+- Offene Verdachte aus dem Nachtlauf 2026-11-19 geklärt: Anwesenheitslisten übernehmen und zeigen
+  nur Personen des eigenen Vereins; Vorlagen nehmen Listeneinträge nur aus der genannten Liste des
+  eigenen Vereins an; der Foto-Worker darf an Analyseaufträgen nur noch Status, Zeiten und Fehler
+  ändern (Migration 0197); Logos, Bilder und Schriften des Document Studio zählen zum
+  Speicherkontingent und werden bei vollem Kontingent abgelehnt.
 
 ### Behoben
 
@@ -46,6 +51,11 @@ Installationen aktualisieren können.
   erkennt jetzt auch Text neben `{Ausdrücken}` und Template-Literale.
 - ICS-Export im Document Studio übersteht Termine mit Enddatum 9999-12-31 (wie das Kalender-Abo);
   der Katalog-Import vermerkt den importierenden Admin bei neu gebuchten Modulen.
+- Suchen behandeln % und _ überall als Text (Vorlagen, Protokolle, Dateien, Pendenzen-Termine,
+  Plattform-Admin: Mandanten, Domains, Rechnungen, Mail-Protokoll, Audit-Log); im Mail-Protokoll
+  findet «max_muster» die Adresse wieder.
+- Termine: Wählen zwei Personen gleichzeitig jemanden in eine Rolle (Teilnehmende, Leitung …),
+  bleiben beide Änderungen erhalten - gespeichert wird nur noch die Differenz zum Ausgangsstand.
 
 ### Geändert
 

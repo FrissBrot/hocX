@@ -301,6 +301,7 @@
     "invalidFont": "Sono ammessi solo caratteri TTF o OTF validi.",
     "invalidKind": "Tipo di file sconosciuto.",
     "tooLarge": "Il file è troppo grande.",
+    "quotaExceeded": "La quota di archiviazione dell’associazione è esaurita - il file non è stato salvato.",
     "infected": "Il file è stato rifiutato dall’antivirus.",
     "scanFailed": "Impossibile controllare il file. Riprova più tardi.",
     "assetInUse": "Il file è ancora usato da un profilo brand, un modello o un componente.",

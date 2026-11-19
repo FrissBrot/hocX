@@ -151,7 +151,7 @@ def resolve_assignee_ids(db: Session, item: TaskPackageItem, *, tenant_id: int) 
     """Verantwortliche einer Aufgabe, live aus den verknüpften Listenzeilen. Nur Personen des
     eigenen Mandanten - responsible_json wird zwar beim Speichern geprüft, eine Listenzeile kann
     sich danach aber ändern."""
-    ids = _resolve_ids_for_assignments(item.responsible_json, live=True, db=db)
+    ids = _resolve_ids_for_assignments(item.responsible_json, live=True, db=db, tenant_id=tenant_id)
     if not ids:
         return []
     allowed = set(

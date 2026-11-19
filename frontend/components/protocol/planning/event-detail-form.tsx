@@ -13,13 +13,14 @@ import { LazyRichTextEditor as RichTextEditor } from "@/components/ui/rich-text-
 import { TimeInput } from "@/components/ui/time-input";
 import { TagInput } from "@/components/ui/tag-input";
 import { HelpPopover } from "@/components/ui/help-popover";
-import { CycleAssignment, EventSummary, ParticipantSummary } from "@/types/api";
+import { CycleAssignment, EventPatch, EventRoleField, EventSummary, ParticipantSummary } from "@/types/api";
+import { toggleRolePatch } from "@/lib/utils/event-patch";
 import { useCycleOptions } from "@/lib/hooks/use-cycle-options";
 import { useEventFieldConfig } from "@/lib/hooks/use-event-field-config";
 import { formatTimeValue } from "@/lib/utils/time";
 import type { TagConfig } from "@/lib/hooks/use-tag-config";
 
-type RoleField = "organizer_ids" | "leadership_ids" | "participant_ids" | "spezial1_ids" | "spezial2_ids" | "spezial3_ids";
+type RoleField = EventRoleField;
 
 /** Text- und Zahlenfelder speichern entprellt: erst nach dieser Tipp-Pause (oder beim Verlassen). */
 export const EVENT_TEXT_SAVE_DELAY_MS = 600;
@@ -66,7 +67,7 @@ type EventDetailFormProps = {
   onTagColorChange: (tag: string, color: string) => Promise<void>;
   onTagRename: (oldTag: string, newTag: string) => Promise<void | boolean>;
   /** Rückgabe `false` oder eine Exception gelten als «nicht gespeichert». */
-  onUpdate: (patch: Partial<EventSummary>) => void | boolean | Promise<void | boolean>;
+  onUpdate: (patch: EventPatch) => void | boolean | Promise<void | boolean>;
   /** Nur ansehen (Leserecht): Felder gesperrt, nichts wird gespeichert. */
   readOnly?: boolean;
   /** Hinweis auf die Einstellungen für Rollen-/Zusatzfelder (nur wer sie ändern darf). */
@@ -94,7 +95,7 @@ export function useEventAutosave(eventId: string, onUpdate: EventDetailFormProps
     onUpdateRef.current = onUpdate;
   });
 
-  const send = useCallback((patch: Partial<EventSummary>) => {
+  const send = useCallback((patch: EventPatch) => {
     // Ziel jetzt festhalten: der Aufruf gilt dem Termin, zu dem die Änderung gehört.
     const target = onUpdateRef.current;
     inFlightRef.current += 1;
@@ -150,7 +151,7 @@ export function useEventAutosave(eventId: string, onUpdate: EventDetailFormProps
 
   /** Für Klick-Felder (Checkbox, Datum, Auswahl): offene Texte zuerst, dann sofort speichern. */
   const commit = useCallback(
-    (patch: Partial<EventSummary>) => {
+    (patch: EventPatch) => {
       flush();
       send(patch);
     },
@@ -250,11 +251,7 @@ export function EventDetailForm({
   }
 
   function toggleParticipant(field: RoleField, participantId: string) {
-    const current = ((event[field] as string[] | null) ?? []) as string[];
-    const next = current.includes(participantId)
-      ? current.filter((id) => id !== participantId)
-      : [...current, participantId];
-    commit({ [field]: next } as Partial<EventSummary>);
+    commit(toggleRolePatch(event, field, participantId));
   }
 
   const activeRoleLabel = ROLE_FIELDS.find((r) => r.field === activeRoleField)?.label ?? "";

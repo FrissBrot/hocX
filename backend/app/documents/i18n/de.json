@@ -37,6 +37,7 @@
     "templateNotPublished": "Die Vorlage ist noch nicht veröffentlicht.",
     "templateTypeMismatch": "Die Vorlage gehört zu einem anderen Dokumenttyp.",
     "tooLarge": "Die Datei ist zu gross.",
+    "quotaExceeded": "Das Speicherkontingent des Vereins ist erreicht - die Datei wurde nicht gespeichert.",
     "unknownType": "Unbekannter Dokumenttyp.",
     "verificationAlreadyPending": "Es gibt bereits einen offenen Antrag.",
     "verificationAlreadyVerified": "Die Organisation ist bereits verifiziert.",
