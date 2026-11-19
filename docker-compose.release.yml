@@ -481,8 +481,8 @@ services:
     depends_on:
       - backend
     healthcheck:
-      # Anders als der dev-Container (der auf der node:24-bookworm "deps"-Stage laeuft) hat das
-      # hier gebaute Release-Image nur die node:24-bookworm-slim "run"-Stage - kein curl/wget
+      # Anders als der dev-Container (der auf der node:26-bookworm "deps"-Stage laeuft) hat das
+      # hier gebaute Release-Image nur die node:26-bookworm-slim "run"-Stage - kein curl/wget
       # (verifiziert gegen ghcr.io/.../hocx-frontend), aber node selbst ist immer da.
       # "/" liefert bei fehlender Session ein 307 nach /login statt eines 200 - als reiner
       # Liveness-Check reicht "hat ueberhaupt geantwortet, kein 5xx/Verbindungsfehler".
