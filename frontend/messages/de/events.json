@@ -260,6 +260,7 @@
     "startDateFormat": "Zeile {row}: Startdatum «{value}» hat ein unbekanntes Format",
     "endDateFormat": "Zeile {row}: Enddatum «{value}» hat ein unbekanntes Format",
     "endBeforeStart": "Zeile {row}: Enddatum liegt vor dem Startdatum",
-    "participantCountInvalid": "Zeile {row}: Teilnehmerzahl ist keine ganze Zahl"
+    "participantCountInvalid": "Zeile {row}: Teilnehmerzahl ist keine ganze Zahl",
+    "tagTooLong": "Zeile {row}: Tag ist länger als {max} Zeichen"
   }
 }

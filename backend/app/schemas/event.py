@@ -11,6 +11,17 @@ from app.models.entities import CycleConfig, Participant, Tenant
 from app.schemas.base import PublicIdModel
 from app.services import public_id_service
 
+# Gleiche Grenze wie POST /events/rename-tag für den neuen Tag. Ohne sie entstanden per API oder
+# CSV längere Tags, die sich danach nie mehr umbenennen oder zusammenführen liessen.
+EVENT_TAG_MAX_LENGTH = 100
+
+
+def check_event_tag_length(value: str | None) -> str | None:
+    if value is not None and len(value) > EVENT_TAG_MAX_LENGTH:
+        raise ValueError(f"tag must be at most {EVENT_TAG_MAX_LENGTH} characters")
+    return value
+
+
 _PARTICIPANT_ID_FIELDS = (
     "organizer_ids",
     "leadership_ids",
@@ -65,6 +76,11 @@ class EventBase(BaseModel):
 class EventCreate(EventBase):
     cycle_assignments: list[CycleAssignment] | None = None
 
+    @field_validator("tag")
+    @classmethod
+    def _tag_length(cls, value: str | None) -> str | None:
+        return check_event_tag_length(value)
+
 
 class EventUpdate(BaseModel):
     event_date: date | None = None
@@ -94,6 +110,11 @@ class EventUpdate(BaseModel):
         if value is None:
             raise ValueError("must not be null")
         return value
+
+    @field_validator("tag")
+    @classmethod
+    def _tag_length(cls, value: str | None) -> str | None:
+        return check_event_tag_length(value)
 
 
 class EventRead(PublicIdModel, EventBase):

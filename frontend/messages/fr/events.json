@@ -260,6 +260,7 @@
     "startDateFormat": "Ligne {row} : la date de début «{value}» a un format inconnu",
     "endDateFormat": "Ligne {row} : la date de fin «{value}» a un format inconnu",
     "endBeforeStart": "Ligne {row} : la date de fin est antérieure à la date de début",
-    "participantCountInvalid": "Ligne {row} : le nombre de participants n'est pas un nombre entier"
+    "participantCountInvalid": "Ligne {row} : le nombre de participants n'est pas un nombre entier",
+    "tagTooLong": "Ligne {row} : le tag dépasse {max} caractères"
   }
 }

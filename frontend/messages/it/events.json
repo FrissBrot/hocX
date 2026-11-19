@@ -260,6 +260,7 @@
     "startDateFormat": "Riga {row}: la data d'inizio «{value}» ha un formato sconosciuto",
     "endDateFormat": "Riga {row}: la data di fine «{value}» ha un formato sconosciuto",
     "endBeforeStart": "Riga {row}: la data di fine precede la data d'inizio",
-    "participantCountInvalid": "Riga {row}: il numero di partecipanti non è un numero intero"
+    "participantCountInvalid": "Riga {row}: il numero di partecipanti non è un numero intero",
+    "tagTooLong": "Riga {row}: il tag supera {max} caratteri"
   }
 }

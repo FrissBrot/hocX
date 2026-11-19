@@ -12,7 +12,7 @@ from app.core.cycle_utils import format_cycle_name, get_cycle_year
 from app.models import Event, Participant, Protocol
 from app.models.entities import CycleConfig, EventCycle, SubmissionUpload, SubmissionUploadFile
 from app.repositories.event_repository import EventRepository
-from app.schemas.event import CycleAssignment, EventCreate, EventUpdate
+from app.schemas.event import EVENT_TAG_MAX_LENGTH, CycleAssignment, EventCreate, EventUpdate
 from app.schemas.protocol import ProtocolCycleInfo
 from app.services import public_id_service
 from app.services.event_cycle_service import list_cycle_event_ids, resolve_protocol_cycle
@@ -483,12 +483,20 @@ class EventService:
                     raise CsvRowError(
                         "endBeforeStart", f"CSV row {row_number}: Enddatum liegt vor dem Startdatum", row=row_number
                     )
+                tag = value_for("tag") or None
+                if tag and len(tag) > EVENT_TAG_MAX_LENGTH:
+                    raise CsvRowError(
+                        "tagTooLong",
+                        f"CSV row {row_number}: Tag ist länger als {EVENT_TAG_MAX_LENGTH} Zeichen",
+                        row=row_number,
+                        max=EVENT_TAG_MAX_LENGTH,
+                    )
                 participant_count = self._parse_participant_count(value_for("participant_count"), row_number=row_number)
                 entry.update(
                     {
                         "event_date": event_date.isoformat(),
                         "event_end_date": event_end_date.isoformat() if event_end_date else None,
-                        "tag": value_for("tag") or None,
+                        "tag": tag,
                         "title": title,
                         "description": value_for("description") or None,
                         "participant_count": participant_count,
