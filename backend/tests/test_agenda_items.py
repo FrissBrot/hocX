@@ -33,7 +33,11 @@ from tests.factories import (
 )
 
 service = AgendaItemService()
-TODAY = date.today()
+# Gleiches «heute» wie der Dienst (Schweizer Zeit): mit date.today() (UTC im Container) schlugen
+# die Tests zwischen Mitternacht und 1 bzw. 2 Uhr fehl.
+from app.services.todo_fine_service import today as _service_today  # noqa: E402
+
+TODAY = _service_today()
 
 
 def _setup(db, name="Anliegen"):
