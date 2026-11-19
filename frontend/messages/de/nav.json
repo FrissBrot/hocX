@@ -8,7 +8,8 @@
     "storage": "Ablage",
     "appearance": "Auftritt",
     "settings": "Einstellungen",
-    "organisation": "Organisation"
+    "organisation": "Organisation",
+    "settingsAreas": "Bereiche"
   },
   "protocols": "Protokolle",
   "events": "Termine",
@@ -84,5 +85,6 @@
   "workYear": "Arbeitsjahr",
   "accessWho": "Wer hat Zugriff",
   "accessSecurity": "Sicherheit",
-  "submissionPhotos": "Fotos aus Abgaben"
+  "submissionPhotos": "Fotos aus Abgaben",
+  "settingsOverview": "Alle Einstellungen"
 }

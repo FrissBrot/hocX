@@ -7,15 +7,15 @@ import { EventFieldSettings } from "@/components/settings/event-field-settings";
 import { FinanceCurrencySettings } from "@/components/settings/finance-currency-settings";
 import { TenantGeneralSettings } from "@/components/settings/tenant-general-settings";
 import { AppShell } from "@/components/ui/app-shell";
-import { RouteTabs } from "@/components/ui/route-tabs";
-import { tenantSettingsTabs } from "@/components/ui/section-tabs";
 import { requireSession, resolveManageableTenant } from "@/lib/api/server";
 
+// Einstellungen › Organisation › Profil (Design «hocX Einstellungen»): Stammdaten, Finanzen und
+// Spezialfelder der Termine als eigene Abschnitte. Unternavigation kommt aus dem Einstellungen-Rahmen.
 export default async function TenantSettingsPage({ searchParams }: { searchParams: Promise<{ tenantId?: string }> }) {
   const { tenantId } = await searchParams;
   const session = await requireSession();
   const tenant = await resolveManageableTenant(session, tenantId);
-  const [t, tTenant] = await Promise.all([getTranslations("nav"), getTranslations("tenantSettings")]);
+  const [t, tTenant, tSettings] = await Promise.all([getTranslations("nav"), getTranslations("tenantSettings"), getTranslations("settings")]);
   // Spezialfelder gelten für den angemeldeten Mandanten (API ohne Mandanten-Parameter)
   const isCurrentTenant = tenant.id === session.current_tenant?.id;
   const currency = tenant.finance_currency ?? session.current_tenant?.finance_currency ?? "CHF";
@@ -25,22 +25,17 @@ export default async function TenantSettingsPage({ searchParams }: { searchParam
       <ResponsiveView
         mobile={<MobileTenantSettings title={tTenant("pageTitle")}><MobileTenantGeneral initialTenant={tenant} />{isCurrentTenant && <FinanceCurrencySettings initialCurrency={currency} />}{isCurrentTenant && <EventFieldSettings />}</MobileTenantSettings>}
         desktop={
-          <>
-          <section className="panel">
-            <div className="section-stack">
-              <div className="page-header">
-                <div>
-                  <h1 className="page-title">{tTenant("pageTitle")}</h1>
-                  <p className="muted">{tTenant("pageDescription", { tenant: tenant.name })}</p>
-                </div>
+          <div className="tenant-profile-page">
+            <div className="page-header">
+              <div>
+                <h1 className="page-title">{t("organisationProfile")}</h1>
+                <p className="muted">{isCurrentTenant ? tSettings("hub.cards.organisationProfile.description") : tTenant("pageDescription", { tenant: tenant.name })}</p>
               </div>
-              <RouteTabs tabs={tenantSettingsTabs(t)} activeHref="/tenant-settings" variant="pill" />
-              <TenantGeneralSettings initialTenant={tenant} />
-              {isCurrentTenant && <FinanceCurrencySettings initialCurrency={currency} />}
-              {isCurrentTenant && <EventFieldSettings />}
             </div>
-          </section>
-          </>
+            <TenantGeneralSettings initialTenant={tenant} />
+            {isCurrentTenant && <FinanceCurrencySettings initialCurrency={currency} />}
+            {isCurrentTenant && <EventFieldSettings />}
+          </div>
         }
       />
     </AppShell>

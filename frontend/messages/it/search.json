@@ -68,7 +68,8 @@
     "domainsAndVerification": "dominio indirizzo autenticità verifica qr",
     "organisationProfile": "organizzazione profilo generale nome logo impostazioni configurazione associazione",
     "cycles": "flussi cicli Cicli",
-    "myTasks": "I miei compiti cose da fare consegne"
+    "myTasks": "I miei compiti cose da fare consegne",
+    "settings": "impostazioni configurazione panoramica opzioni"
   },
   "blockIn": "Blocco in «{element}»",
   "roleLabel": "Ruolo",

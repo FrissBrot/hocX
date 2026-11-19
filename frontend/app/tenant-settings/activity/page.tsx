@@ -5,8 +5,6 @@ import { redirect } from "next/navigation";
 
 import { ActivityLog } from "@/components/settings/activity-log";
 import { AppShell } from "@/components/ui/app-shell";
-import { RouteTabs } from "@/components/ui/route-tabs";
-import { tenantSettingsTabs } from "@/components/ui/section-tabs";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { ActivityPage } from "@/types/api";
 import { can } from "@/lib/permissions";
@@ -17,9 +15,10 @@ export default async function TenantActivityPage() {
   if (!can(session, "activity.read")) {
     redirect("/");
   }
-  const [t, tTenant, state] = await Promise.all([
+  const [t, tTenant, tSettings, state] = await Promise.all([
     getTranslations("nav"),
     getTranslations("tenantSettings"),
+    getTranslations("settings"),
     backendFetchWithSession<ActivityPage>("/api/activity"),
   ]);
   const content = state ? <ActivityLog initialPage={state} /> : null;
@@ -34,11 +33,10 @@ export default async function TenantActivityPage() {
             <div className="section-stack">
               <div className="page-header">
                 <div>
-                  <h1 className="page-title">{tTenant("pageTitle")}</h1>
-                  <p className="muted">{tTenant("pageDescription", { tenant: session.current_tenant?.name ?? "" })}</p>
+                  <h1 className="page-title">{t("activity")}</h1>
+                  <p className="muted">{tSettings("hub.cards.activity.description")}</p>
                 </div>
               </div>
-              <RouteTabs tabs={tenantSettingsTabs(t)} activeHref="/tenant-settings/activity" variant="pill" />
               {content}
             </div>
           </section>

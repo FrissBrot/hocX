@@ -9,7 +9,7 @@ import { useTranslations } from "next-intl";
 import { MobileIcon, MobileIconName } from "@/components/mobile/mobile-icons";
 import { isTodoOverdue } from "@/components/mobile/mobile-utils";
 import { MobileAvatar, MobileListRow } from "@/components/mobile/mobile-ui";
-import { buildNav, formatRoleLabel, isNavLinkActive } from "@/components/ui/app-shell-nav";
+import { buildNav, buildSettingsNav, formatRoleLabel, isNavLinkActive, type NavGroup, SETTINGS_GROUP, SETTINGS_HREF } from "@/components/ui/app-shell-nav";
 import { NavIcon } from "@/components/ui/nav-icons";
 import { ConnectivityStatus } from "@/components/ui/connectivity-status";
 import { browserApiFetch } from "@/lib/api/client";
@@ -42,18 +42,23 @@ export function useOpenMore(): () => void {
 }
 
 // Bereiche unter "Mehr": dieselbe rollenabhaengige Navigation wie die Desktop-Sidebar
-// (buildNav), ohne Übersicht/Termine/Todos (eigene Tabs; «Meine Aufgaben» zeigt der Pendenzen-Tab)
-// und ohne Import (nur Computer). Bussen stehen seit der neuen Einteilung selbst in der Kasse.
-const TAB_ROUTES = new Set(["/", "/my-tasks", "/events", "/todos", "/tools/import"]);
+// (buildNav), ohne Übersicht/Termine/Todos (eigene Tabs; «Meine Aufgaben» zeigt der Pendenzen-Tab).
+// Bussen stehen seit der neuen Einteilung selbst in der Kasse. Wie am Computer stehen die
+// Einstellungen nicht einzeln, sondern als ein Eintrag «Einstellungen» (Übersicht /settings).
+const TAB_ROUTES = new Set(["/", "/my-tasks", "/events", "/todos"]);
 
-export function mobileMoreGroups(session: SessionInfo | null) {
-  return buildNav(session)
+export function mobileMoreGroups(session: SessionInfo | null): NavGroup[] {
+  const groups: NavGroup[] = buildNav(session)
     .filter((group) => group.titleKey !== null)
     .map((group) => ({
       titleKey: group.titleKey as string,
       links: group.links.filter((link) => !TAB_ROUTES.has(link.href)),
     }))
     .filter((group) => group.links.length > 0);
+  if (buildSettingsNav(session).length > 0) {
+    groups.push({ titleKey: SETTINGS_GROUP, links: [{ href: SETTINGS_HREF, labelKey: "settingsOverview", icon: "tenant", match: [] }] });
+  }
+  return groups;
 }
 
 type TabKey = "overview" | "events" | "todos" | "more";
@@ -256,7 +261,7 @@ function MobileMorePanel({
       </button>
 
       {mobileMoreGroups(session).map((group) => (
-        <MobileGroup key={group.titleKey} label={tNav(group.titleKey)}>
+        <MobileGroup key={group.titleKey} label={tNav(group.titleKey!)}>
           {group.links.map((link) => (
             <Link
               key={link.href}

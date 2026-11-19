@@ -8,7 +8,8 @@
     "storage": "Storage",
     "appearance": "Public image",
     "settings": "Settings",
-    "organisation": "Organization"
+    "organisation": "Organization",
+    "settingsAreas": "Areas"
   },
   "protocols": "Protocols",
   "events": "Events",
@@ -84,5 +85,6 @@
   "workYear": "Working year",
   "accessWho": "Who has access",
   "accessSecurity": "Security",
-  "submissionPhotos": "Photos from submissions"
+  "submissionPhotos": "Photos from submissions",
+  "settingsOverview": "All settings"
 }

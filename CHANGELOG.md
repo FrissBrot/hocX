@@ -27,6 +27,17 @@ Installationen aktualisieren können.
   und das im Jahr Bezahlte, die Liste mit Filter Alle/Offen/Erledigt und pro Rechnung ein
   Seitenpanel mit Periode, Fälligkeit, Zahlung und Positionen. Der Überfällig-Hinweis öffnet die
   Rechnung direkt.
+- **Einstellungen an einem Ort (Design «hocX Einstellungen»):** Die Seitenleiste zeigt nur noch
+  die Arbeitsbereiche – Übersicht und Meine Aufgaben, Sitzungen (Protokolle, Kalender, Anliegen),
+  Aufgaben (Pendenzen, Abgaben), Kasse (Konten, Bussen) und Ablage (Mitglieder, Dateien, Fotos,
+  Listen). Alle Einstellungen öffnet der neue Knopf «Einstellungen» über der Benutzerkarte: eine
+  Übersicht mit Suchfeld, Hinweis «Braucht Aufmerksamkeit» (Zugangslinks ohne Ablaufdatum) und
+  Karten in den Gruppen Bereiche, Auftritt und Organisation, je mit Beschreibung und – wo bekannt –
+  Status. Jede Einstellungsseite hat denselben Rahmen: Kopfzeile «Einstellungen / Seite», links die
+  Unternavigation und bei Einstellungen eines Bereichs der Weg «← Zurück zu …». Das Profil der
+  Organisation ist neu in Stammdaten, Finanzen und Spezialfelder der Termine gegliedert. Die
+  globale Suche findet weiterhin jede Einstellung; auf dem Handy steht unter «Mehr» der Eintrag
+  «Einstellungen».
 - **Protokoll scrollen ohne Sprung:** Mit eingeklappten Punkten öffnet sich der nächste Punkt
   schon beim Hinscrollen schrittweise, der vorherige schliesst sich im gleichen Mass. Der Inhalt
   in der Bildmitte läuft genau mit dem Mausrad mit; kein schlagartiges Auf-/Zuklappen und kein

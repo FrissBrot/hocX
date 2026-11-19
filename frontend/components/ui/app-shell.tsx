@@ -13,7 +13,19 @@ import { CONNECTIONS_HREF } from "@/lib/calendar-feeds";
 import { getRuntimeConfig } from "@/lib/runtime-config";
 import { SessionInfo } from "@/types/api";
 
-import { buildNav, formatRoleLabel, isNavLinkActive, NavLink, relatedNavLink } from "@/components/ui/app-shell-nav";
+import {
+  activeSettingsLink,
+  buildNav,
+  buildSettingsNav,
+  formatRoleLabel,
+  isNavLinkActive,
+  isSettingsPath,
+  NavLink,
+  relatedNavLink,
+  SETTINGS_GROUP,
+  SETTINGS_HREF,
+} from "@/components/ui/app-shell-nav";
+import { SettingsFrame, SettingsIcon, usesSettingsFrame } from "@/components/ui/settings-frame";
 import { NavIcon } from "@/components/ui/nav-icons";
 import { ToastProvider, useToast } from "@/contexts/toast-context";
 import { ConfirmProvider, useConfirm } from "@/contexts/confirm-context";
@@ -164,6 +176,8 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
   }, [session?.authenticated]);
 
   const navGroups = useMemo(() => buildNav(session), [session]);
+  const settingsGroups = useMemo(() => buildSettingsNav(session), [session]);
+  const inSettings = isSettingsPath(settingsGroups, pathname);
   const activeNavGroup = useMemo(
     () => navGroups.find((group) => group.links.some((link) => isNavLinkActive(link, pathname)))?.titleKey ?? null,
     [navGroups, pathname]
@@ -284,21 +298,29 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
   }, [initialSession, router, t]);
 
   const activeCrumb = useMemo(() => {
+    // Einstellungen: «Einstellungen / <Seite>», die Gruppe verlinkt auf die Übersicht
+    if (pathname === SETTINGS_HREF) {
+      return { group: null, label: t(SETTINGS_GROUP), settings: false };
+    }
+    const setting = activeSettingsLink(settingsGroups, pathname);
+    if (setting) {
+      return { group: t(SETTINGS_GROUP), label: t(setting.labelKey), settings: true };
+    }
     for (const group of navGroups) {
       for (const link of group.links) {
         if (isNavLinkActive(link, pathname)) {
-          return { group: group.titleKey ? t(group.titleKey) : null, label: t(link.labelKey) };
+          return { group: group.titleKey ? t(group.titleKey) : null, label: t(link.labelKey), settings: false };
         }
       }
     }
     // Seiten aus dem Benutzermenue stehen nicht in der Sidebar-Navigation.
     if (pathname === CONNECTIONS_HREF) {
-      return { group: null, label: t("connections") };
+      return { group: null, label: t("connections"), settings: false };
     }
-    return { group: null, label: t("dashboard") };
-  }, [navGroups, pathname, t]);
+    return { group: null, label: t("dashboard"), settings: false };
+  }, [navGroups, settingsGroups, pathname, t]);
 
-  const related = useMemo(() => relatedNavLink(navGroups, pathname), [navGroups, pathname]);
+  const related = useMemo(() => relatedNavLink(navGroups, settingsGroups, pathname), [navGroups, settingsGroups, pathname]);
 
   const tenantName = session?.current_tenant?.name ?? t("defaultTenantName");
   const userInitial = session?.user?.display_name?.slice(0, 1) ?? "U";
@@ -473,6 +495,17 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
             })}
           </nav>
           <div className="sidebar-footer">
+            {settingsGroups.length > 0 ? (
+              <Link
+                href={SETTINGS_HREF as Route}
+                className={inSettings ? "nav-link sidebar-settings-link nav-link-active" : "nav-link sidebar-settings-link"}
+                aria-current={inSettings ? "page" : undefined}
+                onClick={() => setMobileNavOpen(false)}
+              >
+                <SettingsIcon className="nav-link-icon" />
+                <span className="nav-link-label">{t(SETTINGS_GROUP)}</span>
+              </Link>
+            ) : null}
             <div className="identity-panel">
               <div className="identity-card">
                 <button
@@ -506,7 +539,11 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
             <nav className="topbar-breadcrumb" aria-label={tCommon("breadcrumbNav")}>
               {activeCrumb.group ? (
                 <>
-                  <span className="topbar-breadcrumb-group">{activeCrumb.group}</span>
+                  {activeCrumb.settings ? (
+                    <Link href={SETTINGS_HREF as Route} className="topbar-breadcrumb-group topbar-breadcrumb-link">{activeCrumb.group}</Link>
+                  ) : (
+                    <span className="topbar-breadcrumb-group">{activeCrumb.group}</span>
+                  )}
                   <span className="topbar-breadcrumb-sep">/</span>
                 </>
               ) : null}
@@ -518,10 +555,7 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
                 className="topbar-related"
                 aria-label={t("related.openSettings", { name: t(related.link.labelKey) })}
               >
-                <svg className="topbar-related-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                </svg>
+                <SettingsIcon className="topbar-related-icon" width={16} height={16} />
                 <span className="topbar-related-label">{t(related.link.labelKey)}</span>
               </Link>
             )}
@@ -593,7 +627,12 @@ function AppShellInner({ children, initialSession = null }: { children: ReactNod
           </header>
           <div className="shell-content">
             <MfaGraceBanner until={session?.mfa_grace_until} onSetup={() => setProfileModalOpen(true)} />
-            <InstallAppPrompt />{children}
+            <InstallAppPrompt />
+            {inSettings && usesSettingsFrame(pathname) ? (
+              <SettingsFrame groups={settingsGroups} pathname={pathname}>{children}</SettingsFrame>
+            ) : (
+              children
+            )}
           </div>
         </div>
       </div>

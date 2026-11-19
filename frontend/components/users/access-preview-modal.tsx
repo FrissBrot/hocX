@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { buildNav, type NavSession } from "@/components/ui/app-shell-nav";
+import { buildNav, buildSettingsNav, type NavSession } from "@/components/ui/app-shell-nav";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { StatusBanner } from "@/components/ui/status-banner";
@@ -63,7 +63,7 @@ export function AccessPreviewModal({ open, onClose, userId, name }: Props) {
         read_only_features: preview.read_only_features,
       },
     };
-    return buildNav(session);
+    return [...buildNav(session), ...buildSettingsNav(session)];
   }, [preview]);
 
   const areas = useMemo(() => {

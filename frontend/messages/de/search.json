@@ -68,7 +68,8 @@
     "domainsAndVerification": "Domain Adresse Webadresse Echtheit Prüfung QR",
     "organisationProfile": "Organisation Profil Allgemein Name Logo Einstellungen Konfiguration Verein Stammdaten",
     "cycles": "Abläufe Zyklen Zyklen",
-    "myTasks": "Meine Pendenzen Aufgaben To-do Abgaben offene Punkte erledigen"
+    "myTasks": "Meine Pendenzen Aufgaben To-do Abgaben offene Punkte erledigen",
+    "settings": "Einstellungen Konfiguration Übersicht Optionen"
   },
   "blockIn": "Block in «{element}»",
   "roleLabel": "Rolle",

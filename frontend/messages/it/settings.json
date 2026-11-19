@@ -63,5 +63,69 @@
   },
   "logoutFailed": "Disconnessione non riuscita. Riprova.",
   "logoutPendingConfirm": "Ci sono modifiche non ancora salvate. Uscendo andranno perse su questo dispositivo.",
-  "logoutAnyway": "Esci comunque"
+  "logoutAnyway": "Esci comunque",
+  "hub": {
+    "title": "Impostazioni",
+    "description": "Tutto ciò che definisce come hocX funziona per {tenant}.",
+    "overview": "Panoramica",
+    "searchLabel": "Trova un'impostazione",
+    "searchPlaceholder": "Trova un'impostazione …",
+    "noResults": "Nessuna impostazione trovata.",
+    "attentionTitle": "Richiede attenzione",
+    "linksWithoutExpiry": "{count, plural, one {# link di accesso non scade mai} other {# link di accesso non scadono mai}}",
+    "linksWithoutExpiryHint": "I link senza data di scadenza restano validi finché qualcuno non li revoca.",
+    "review": "Verifica",
+    "status": {
+      "verified": "Confermato da hocX",
+      "currency": "Valuta: {currency}",
+      "modules": "{count, plural, =0 {Nessun modulo prenotato} one {# modulo attivo} other {# moduli attivi}}",
+      "mfaRequired": "MFA richiesta per tutti gli accessi",
+      "mfaOptional": "MFA facoltativa",
+      "publicLinks": "{count, plural, =0 {Nessun link di accesso attivo} one {# link di accesso attivo} other {# link di accesso attivi}}"
+    },
+    "cards": {
+      "sessionTemplates": {
+        "description": "Modelli di verbale, elementi e anno di lavoro delle sedute."
+      },
+      "taskPackages": {
+        "description": "Compiti ricorrenti raggruppati in pacchetti da assegnare a una seduta."
+      },
+      "fineSettings": {
+        "description": "Multe di presenza, tariffe e regole per le multe sui compiti."
+      },
+      "users": {
+        "description": "Ruoli, chi accede a cosa e regole di sicurezza per gli accessi."
+      },
+      "documentTemplates": {
+        "description": "L'aspetto in PDF di verbali, liste e altri documenti."
+      },
+      "documentBrand": {
+        "description": "Colori, caratteri, logo e immagini per tutti i documenti."
+      },
+      "domainsAndVerification": {
+        "description": "Domini propri per hocX e la casella di consegna, verifica di autenticità dei documenti."
+      },
+      "organisationProfile": {
+        "description": "Nome, immagine del profilo, valuta e campi speciali degli appuntamenti."
+      },
+      "subscriptionAndUsage": {
+        "description": "Moduli prenotati, utenti e spazio di archiviazione."
+      },
+      "privacy": {
+        "description": "Informativa sulla privacy, statistiche, visibilità e conservazione."
+      },
+      "publicLinks": {
+        "description": "Tutti i modi per accedere ai dati dell'associazione senza login."
+      },
+      "sharedLinks": {
+        "description": "File, album e documenti condivisi con un link pubblico."
+      },
+      "activity": {
+        "description": "Chi ha modificato cosa, e quando."
+      },
+      "import": {
+        "description": "Importare verbali e dati da Word e altre fonti."
+      }
+    }
+  }
 }

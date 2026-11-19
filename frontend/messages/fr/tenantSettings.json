@@ -295,7 +295,8 @@
       "spezial_text3": "Texte spécial 3",
       "spezial_time1": "Heure spéciale 1",
       "spezial_time2": "Heure spéciale 2"
-    }
+    },
+    "hideFor": "Masquer {field}"
   },
   "replacesDomainHint": "Remplace {domain} dès que la vérification a réussi. D'ici là, {domain} reste actif sans changement.",
   "recheckDomain": "Vérifier à nouveau",
@@ -435,5 +436,12 @@
       "administration": "Administration",
       "other": "Autres fonctions"
     }
+  },
+  "profile": {
+    "masterDataDescription": "L'apparence de l'organisation dans hocX, dans les invitations et sur les documents.",
+    "profileImageHelp": "Affichée dans la barre latérale et dans les e-mails.",
+    "domainHintNone": "Pas encore de domaine propre : hocX fonctionne sous l'adresse commune.",
+    "domainHintManage": "Domaines et authenticité",
+    "financeDescription": "Une devise pour tous les comptes et amendes de l'association."
   }
 }

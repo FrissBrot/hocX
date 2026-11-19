@@ -8,7 +8,8 @@
     "storage": "Classement",
     "appearance": "Image",
     "settings": "Paramètres",
-    "organisation": "Organisation"
+    "organisation": "Organisation",
+    "settingsAreas": "Domaines"
   },
   "protocols": "Procès-verbaux",
   "events": "Événements",
@@ -84,5 +85,6 @@
   "workYear": "Année de travail",
   "accessWho": "Qui a accès",
   "accessSecurity": "Sécurité",
-  "submissionPhotos": "Photos des dépôts"
+  "submissionPhotos": "Photos des dépôts",
+  "settingsOverview": "Tous les paramètres"
 }
