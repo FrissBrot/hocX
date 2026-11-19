@@ -350,3 +350,24 @@ def test_public_link_binds_the_tenant_for_row_level_security(db, box, monkeypatc
         assert bound_tenant_id(db) is None
     finally:
         bind_tenant_scope(db, None)
+
+
+def test_withdrawn_mail_is_not_sent_after_the_manager_lost_the_permission(db, box, sent):
+    """Beim Versand wird alles neu geprüft (notifications/dispatch.py) - auch das Recht, Abgaben
+    zu verwalten: wer es vor dem Versand verloren hat, bekommt keine Mail über die Abgabe mehr."""
+    from app.services import role_service
+
+    make_app_user(db, "boss@example.com", tenant_id=box["tenant"].id, first_name="Boss", last_name="B", role_code="admin")
+    chef = make_app_user(db, "chef@example.com", tenant_id=box["tenant"].id, first_name="Chef", last_name="C", role_code="admin")
+    _manage(box)
+    _submit(db, box)
+    access_service.withdraw(db, access_service.resolve(db, _issue(db, box)))
+    assert chef.id in [row.recipient_id for row in db.scalars(select(Notification).where(Notification.kind == "submission.withdrawn"))]
+    # Vor dem Versand zum Leser zurückgestuft (ohne submissions.manage)
+    role_service.set_user_roles(db, None, chef, [role_service.system_role(db, box["tenant"].id, "reader")])
+    db.flush()
+    _enable_email(db)
+    db.execute(Notification.__table__.update().values(deliver_after=datetime.now(UTC) - timedelta(minutes=1)))
+    dispatch.run(db)
+    assert not [mail for mail in sent if mail.to == "chef@example.com"]
+    assert [mail for mail in sent if mail.to == "boss@example.com"]

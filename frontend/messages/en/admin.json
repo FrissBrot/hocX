@@ -1432,6 +1432,7 @@
       "no_email": "no email address",
       "no_login": "no login, emails not allowed",
       "preference_off": "turned off by the person",
+      "permission_missing": "permission no longer held at sending",
       "obsolete": "outdated (done, changed or text no longer valid)",
       "email_disabled": "delivery was turned off"
     }

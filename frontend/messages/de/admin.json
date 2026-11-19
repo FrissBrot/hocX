@@ -1432,6 +1432,7 @@
       "no_email": "keine E-Mail-Adresse",
       "no_login": "ohne Login, Mails nicht erlaubt",
       "preference_off": "von der Person abgeschaltet",
+      "permission_missing": "Berechtigung beim Versand nicht mehr vorhanden",
       "obsolete": "überholt (erledigt, geändert oder Text nicht mehr gültig)",
       "email_disabled": "Versand war ausgeschaltet"
     }
