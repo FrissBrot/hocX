@@ -377,7 +377,14 @@
       "docsLink": "Maggiori informazioni sulla tariffa delle multe nella guida"
     },
     "invitationVisible": "Nell’invito e nell’ordine del giorno",
-    "invitationToggleFailed": "Impossibile salvare l’impostazione."
+    "invitationToggleFailed": "Impossibile salvare l’impostazione.",
+    "participantPickerSelected": "{count, plural, one {# selezionato} other {# selezionati}}",
+    "participantPickerWithoutAttendance": "{count} senza controllo presenze",
+    "participantPickerVisible": "{count} visibili",
+    "responsibilityListMatchInfo": "Nel confronto con una lista, il testo libero della lista viene confrontato con il titolo dell’elemento. I partecipanti trovati vengono ripresi una sola volta. Con il lucchetto puoi poi fissare il collegamento a una riga precisa della tabella.",
+    "responsibilityWithResponsible": "{count} con responsabili",
+    "responsibilityMatchingLists": "{count, plural, one {# lista corrispondente} other {# liste corrispondenti}}",
+    "responsibilityAssigned": "{count, plural, one {# assegnato} other {# assegnati}}"
   },
   "elementEditor": {
     "advancedShow": "Avanzate",

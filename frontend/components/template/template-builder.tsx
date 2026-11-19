@@ -1283,9 +1283,9 @@ export function TemplateEditor({
             <SearchInput value={participantPickerSearch} onChange={setParticipantPickerSearch} placeholder={t("searchParticipantsPlaceholder")} autoFocus />
           </label>
           <div className="status-row">
-            <span className="pill">{assignedParticipantIds.length} ausgewählt</span>
-            <span className="pill">{excludedAttendanceCount} ohne Anwesenheitskontrolle</span>
-            <span className="pill">{filteredPickerParticipants.length} sichtbar</span>
+            <span className="pill">{t("participantPickerSelected", { count: assignedParticipantIds.length })}</span>
+            <span className="pill">{t("participantPickerWithoutAttendance", { count: excludedAttendanceCount })}</span>
+            <span className="pill">{t("participantPickerVisible", { count: filteredPickerParticipants.length })}</span>
           </div>
           <div className="table-toolbar-actions">
             <button
@@ -1411,14 +1411,12 @@ export function TemplateEditor({
               </button>
             </div>
           </div>
-          <div className="info-note">
-            Beim Listenabgleich wird der Freitext der Liste mit dem Elementtitel verglichen. Gefundene Teilnehmende werden einmalig übernommen. Mit dem Schloss fixierst du danach bei Bedarf die Verknüpfung auf eine konkrete Tabellenzeile.
-          </div>
+          <div className="info-note">{t("responsibilityListMatchInfo")}</div>
           <div className="status-row">
             <span className="pill">
-              {orderedElements.filter((item) => parseResponsibilityConfig(item.configuration_json).assignments.length > 0).length} mit Verantwortlichen
+              {t("responsibilityWithResponsible", { count: orderedElements.filter((item) => parseResponsibilityConfig(item.configuration_json).assignments.length > 0).length })}
             </span>
-            <span className="pill">{eligibleResponsibleLists.length} passende Listen</span>
+            <span className="pill">{t("responsibilityMatchingLists", { count: eligibleResponsibleLists.length })}</span>
             {responsibilityAutoListId ? (
               <span className="pill">
                 {t("autoListLabel", { name: eligibleResponsibleLists.find((item) => String(item.definition.id) === responsibilityAutoListId)?.definition.name ?? t("unknownList") })}
@@ -1446,7 +1444,7 @@ export function TemplateEditor({
                 <h3>{currentResponsibilityTitle(responsibilityModalElement)}</h3>
                 <p className="muted">{t("titlePreviewHelp")}</p>
                 <div className="status-row">
-                  <span className="pill">{assignments.length} zugewiesen</span>
+                  <span className="pill">{t("responsibilityAssigned", { count: assignments.length })}</span>
                   <span className="pill">
                     {t("displayModeLabel", { mode: responsibilityNameMode === "display_name" ? t("displayNameOption") : responsibilityNameMode === "first_name" ? t("firstNameOption") : t("lastNameOption") })}
                   </span>

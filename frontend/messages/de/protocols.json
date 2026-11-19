@@ -357,7 +357,11 @@
     "openEventOverview": "Terminübersicht öffnen",
     "rowLabelPlaceholder": "Zeilenbezeichnung",
     "unknown": "Unbekannt",
-    "timeLabel": "Uhrzeit"
+    "timeLabel": "Uhrzeit",
+    "unnamed": "Unbenannt",
+    "deleteTodoConfirm": "Todo «{name}» endgültig löschen?",
+    "deleteRowConfirm": "Zeile «{name}» endgültig löschen?",
+    "deleteBulletConfirm": "Bulletpoint «{name}» endgültig löschen?"
   },
   "newBulletPlaceholder": "Neuen Aufzählungspunkt mit dem Button hinzufügen",
   "newBulletPlus": "+ Punkt",
@@ -619,5 +623,8 @@
     "linked": "aus Pendenz",
     "linkedTitle": "Wert aus der Pendenz, für die dieser Block entstanden ist. Geändert wird er in der Pendenz.",
     "empty": "leer"
-  }
+  },
+  "elementPointNumber": "Punkt {number}",
+  "participantPickerSelected": "{count} ausgewählt",
+  "participantPickerVisible": "{count} sichtbar"
 }

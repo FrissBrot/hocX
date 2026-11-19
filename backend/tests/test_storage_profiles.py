@@ -257,3 +257,10 @@ def test_migration_object_keys_are_owner_only_like_the_report(db):
     owner = _client(db)
     response = owner.get(f"/api/admin/storage/migrations/{migration.id}/objects")
     assert response.status_code == 200 and response.json()[0]["key"] == "tenants/1/files/Ausweis-Muster.pdf"
+
+
+def test_purging_an_unknown_generation_is_404_not_409(db):
+    """Unbekannte Generation: 404 wie bei jeder unbekannten ID (vorher 409 «Generation nicht gefunden»)."""
+    missing = (db.scalar(text("SELECT COALESCE(MAX(id), 0) FROM storage_generation")) or 0) + 10_000
+    response = _client(db).post(f"/api/admin/storage/generations/{missing}/purge", json={"confirmation": "g1"})
+    assert response.status_code == 404

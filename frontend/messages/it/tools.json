@@ -177,6 +177,37 @@
     "whereCountText": "{count}× testo",
     "whichEventForBlock": "In base a quale evento viene creato questo blocco?",
     "whichValueToUse": "Quale valore usare?",
-    "wordOrPdfFile": "File Word o PDF (.docx, .pdf)"
+    "wordOrPdfFile": "File Word o PDF (.docx, .pdf)",
+    "warning": {
+      "elementNotFound": "Nessun elemento corrispondente trovato per la sezione «{heading}» – assegnalo manualmente.",
+      "reviewEventUnmatched": "Non è stato possibile associare il riepilogo «{heading}» a un evento – sceglilo manualmente.",
+      "fieldsNotDetected": "Non è stato possibile riconoscere campi per «{heading}» – compilali manualmente.",
+      "participantNotFound": "Nessun partecipante corrispondente trovato per «{name}».",
+      "eventsToReview": "Trovati eventi nuovi o divergenti – verificali e accettali o rifiutali.",
+      "tableListNotFound": "Tabella n. {table}: nessuna lista corrispondente trovata – sceglila manualmente.",
+      "listBlockMissing": "Il modello non ha un blocco per la lista «{list}» – la tabella non verrà importata.",
+      "listParticipantsNotFound": "Partecipanti non trovati nella lista «{list}»: {names}",
+      "tableMatrixNotFound": "Tabella n. {table}: nessuna matrice corrispondente trovata – sceglila manualmente.",
+      "matrixColumnsByPosition": "Matrice «{matrix}»: le colonne non sono quasi state associate tramite l’etichetta – riprese in base alla posizione, verifica.",
+      "matrixRowUnmatched": "Matrice «{matrix}»: la riga «{row}» non è stata associata a nessuna riga – verrà saltata.",
+      "matrixColumnUnmatched": "Matrice «{matrix}»: la colonna «{column}» non è stata associata – gli eventi di questa colonna verranno saltati.",
+      "matrixRowTypeUnsupported": "Matrice «{matrix}»: la riga «{row}» ha un tipo di riga non supportato e verrà saltata.",
+      "matrixParticipantsNotFound": "Partecipanti non trovati nella matrice «{matrix}»: {names}",
+      "matrixColumnsUncertain": "Matrice «{matrix}»: non tutte le colonne sono state associate in modo univoco – verifica.",
+      "dateNotDetected": "Nessuna data riconosciuta nel documento – inseriscila manualmente.",
+      "sectionNoBlock": "La sezione «{heading}» non è stata associata a nessun blocco ed è stata saltata.",
+      "sectionBlockConflict": "La sezione «{heading}» punta allo stesso blocco di «{other}». I valori del modulo non possono essere aggiunti come testo libero; sono stati ripresi i valori successivi.",
+      "eventFieldNotOverwritten": "Sezione «{heading}»: il campo «{field}» dell’evento collegato non è stato sovrascritto perché il valore attuale differisce dal testo importato e il conflitto non è stato confermato.",
+      "sectionNotWritable": "La sezione «{heading}» non è stata scritta (il blocco di destinazione non supporta testo).",
+      "matrixCellInvalidKey": "La cella di matrice «{row}»/«{column}» aveva una chiave di matrice non valida ed è stata saltata.",
+      "matrixCellNoBlock": "La cella di matrice «{row}»/«{column}» non è stata associata a nessun blocco ed è stata saltata."
+    },
+    "previousValue": "finora: {value}",
+    "attendanceNamesDetected": "{count, plural, one {# nome riconosciuto} other {# nomi riconosciuti}} nel documento.",
+    "syncFieldConflict": "Il campo «{field}» dell’evento collegato contiene già un valore diverso. Quale valore va ripreso?",
+    "syncFieldMatch": "Questo testo viene scritto anche nel campo «{field}» dell’evento collegato – il valore presente coincide già.",
+    "syncFieldEmpty": "Questo testo viene ripreso anche nel campo «{field}» dell’evento collegato (attualmente vuoto).",
+    "unsupportedFieldType": "Il tipo di campo «{type}» non è supportato dall’importazione.",
+    "noNamesDetected": "– nessun nome riconosciuto –"
   }
 }

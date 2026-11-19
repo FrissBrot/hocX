@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { ApiError } from "./client";
-import { apiErrorCode, apiErrorMessage } from "./error-message";
+import { apiErrorCode, apiErrorMessage, apiErrorParams } from "./error-message";
 
 function fakeT(messages: Record<string, string>) {
   const t = ((key: string) => messages[key] ?? key) as ((key: string) => string) & { has: (key: string) => boolean };
@@ -33,5 +33,20 @@ describe("apiErrorMessage", () => {
   it("erkennt ein 429 ohne Code (z. B. vom Proxy) als rate_limited", () => {
     expect(apiErrorCode(new ApiError("Too Many Requests", "backend", 429))).toBe("rate_limited");
     expect(apiErrorCode(new ApiError("x", "backend", 429, { code: "login_locked" }))).toBe("login_locked");
+  });
+});
+
+describe("apiErrorParams", () => {
+  it("reicht Parameter aus detail.params an die Übersetzung weiter (z. B. CSV-Zeilenlimit)", () => {
+    const error = new ApiError("Zu viele Zeilen", "backend", 400, { code: "csv_too_many_rows", message: "Zu viele Zeilen", params: { max: 2000, bad: { x: 1 } } });
+    expect(apiErrorParams(error)).toEqual({ max: 2000 });
+    const seen: Array<Record<string, string | number> | undefined> = [];
+    const t = ((key: string, values?: Record<string, string | number>) => {
+      seen.push(values);
+      return `${key}:${values?.max}`;
+    }) as ((key: string, values?: Record<string, string | number>) => string) & { has: (key: string) => boolean };
+    t.has = () => true;
+    expect(apiErrorMessage(error, t, "csvImportErrors", "fallback")).toBe("csvImportErrors.csv_too_many_rows:2000");
+    expect(apiErrorParams(new ApiError("x", "backend", 400, "nur Text"))).toEqual({});
   });
 });

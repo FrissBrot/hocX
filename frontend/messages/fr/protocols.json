@@ -357,7 +357,11 @@
     "openEventOverview": "Ouvrir l'aperçu des événements",
     "rowLabelPlaceholder": "Libellé de la ligne",
     "unknown": "Inconnu",
-    "timeLabel": "Heure"
+    "timeLabel": "Heure",
+    "unnamed": "Sans nom",
+    "deleteTodoConfirm": "Supprimer définitivement la tâche « {name} » ?",
+    "deleteRowConfirm": "Supprimer définitivement la ligne « {name} » ?",
+    "deleteBulletConfirm": "Supprimer définitivement la puce « {name} » ?"
   },
   "newBulletPlaceholder": "Ajouter un nouveau point avec le bouton",
   "newBulletPlus": "+ Point",
@@ -619,5 +623,8 @@
     "linked": "de la tâche",
     "linkedTitle": "Valeur de la tâche pour laquelle ce bloc a été créé. Elle se modifie dans la tâche.",
     "empty": "vide"
-  }
+  },
+  "elementPointNumber": "Point {number}",
+  "participantPickerSelected": "{count, plural, one {# sélectionné} other {# sélectionnés}}",
+  "participantPickerVisible": "{count, plural, one {# visible} other {# visibles}}"
 }

@@ -38,6 +38,7 @@ export function PhotoBulkBar({
   selectedItems?: { id: string; original_name: string; content_url: string }[];
 }) {
   const t = useTranslations("photos.bulkBar");
+  const tShareRelease = useTranslations("photos.shareRelease");
   const confirm = useConfirm();
   const showToast = useToast();
   const [albums, setAlbums] = useState<PhotoAlbum[]>([]);
@@ -58,7 +59,7 @@ export function PhotoBulkBar({
   async function addToAlbum() {
     if (!selectedAlbumId || busy) return;
     const album = albums.find((candidate) => candidate.id === selectedAlbumId);
-    if (album && !(await confirmAddToSharedAlbum(confirm, album, selectedIds.length))) return;
+    if (album && !(await confirmAddToSharedAlbum(confirm, tShareRelease, album, selectedIds.length))) return;
     setBusy(true);
     try {
       await browserApiFetch(`/api/files/albums/${selectedAlbumId}/items`, {

@@ -377,7 +377,14 @@
       "docsLink": "More about the fine tariff in the help"
     },
     "invitationVisible": "In invitation and agenda",
-    "invitationToggleFailed": "Setting could not be saved."
+    "invitationToggleFailed": "Setting could not be saved.",
+    "participantPickerSelected": "{count} selected",
+    "participantPickerWithoutAttendance": "{count} without attendance tracking",
+    "participantPickerVisible": "{count} visible",
+    "responsibilityListMatchInfo": "When matching against a list, the list’s free text is compared with the element title. Participants found are taken over once. Use the lock to pin the link to a specific table row if needed.",
+    "responsibilityWithResponsible": "{count} with responsible persons",
+    "responsibilityMatchingLists": "{count, plural, one {# matching list} other {# matching lists}}",
+    "responsibilityAssigned": "{count} assigned"
   },
   "elementEditor": {
     "advancedShow": "Advanced",

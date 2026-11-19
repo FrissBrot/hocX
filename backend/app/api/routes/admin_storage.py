@@ -346,6 +346,9 @@ def purge_generation(
     """Alte Speicherquelle löschen: eigener, auditierter und bestätigungspflichtiger Vorgang."""
     try:
         generation = sms.request_generation_purge(db, generation_id, confirmation=payload.confirmation, actor_email=admin.email)
+    except sms.GenerationNotFound as exc:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except sms.MigrationError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail=str(exc)) from exc

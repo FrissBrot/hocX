@@ -357,7 +357,11 @@
     "openEventOverview": "Open event overview",
     "rowLabelPlaceholder": "Row label",
     "unknown": "Unknown",
-    "timeLabel": "Time"
+    "timeLabel": "Time",
+    "unnamed": "Unnamed",
+    "deleteTodoConfirm": "Permanently delete todo “{name}”?",
+    "deleteRowConfirm": "Permanently delete row “{name}”?",
+    "deleteBulletConfirm": "Permanently delete bullet point “{name}”?"
   },
   "newBulletPlaceholder": "Add a new bullet point with the button",
   "newBulletPlus": "+ Bullet",
@@ -619,5 +623,8 @@
     "linked": "from to-do",
     "linkedTitle": "Value from the to-do this block was created for. Change it in the to-do.",
     "empty": "empty"
-  }
+  },
+  "elementPointNumber": "Item {number}",
+  "participantPickerSelected": "{count} selected",
+  "participantPickerVisible": "{count} visible"
 }

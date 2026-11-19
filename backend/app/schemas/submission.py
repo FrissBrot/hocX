@@ -17,6 +17,11 @@ SubmissionAutoClose = Literal["never", "first_upload", "max_files"]
 
 # 0 = aktueller Zyklus, -1 = vorheriger usw. (siehe SubmissionAssignment.cycle_offsets)
 CycleOffset = Annotated[int, Field(ge=-20, le=0)]
+# Zeitfenster einer Termin-Abgabe in Tagen vor/nach dem Termin. Ohne Obergrenze lief Datum ± Offset
+# über date.min/date.max (OverflowError beim Abgleich, die Abgabe glich nie mehr ab). 10 Jahre
+# reichen für jedes reale Fenster; Lesen (SubmissionAssignmentRead) bleibt bewusst ohne Grenze.
+OFFSET_DAYS_MAX = 3650
+OffsetDays = Annotated[int, Field(ge=0, le=OFFSET_DAYS_MAX)]
 
 SLUG_PATTERN = r"^[a-z0-9-]+$"
 
@@ -61,6 +66,8 @@ class SubmissionFileVisibility(BaseModel):
 
 class SubmissionAssignmentCreate(SubmissionAssignmentBase):
     public_slug: str = Field(pattern=SLUG_PATTERN)
+    offset_days_before: OffsetDays | None = None
+    offset_days_after: OffsetDays | None = None
     # Ueber welche Links die Abgabe erreichbar ist. None = die Standard-Links des Mandanten
     # (Verhalten fuer API-Clients ohne Link-Auswahl); [] = ueber keinen Link erreichbar.
     link_ids: list[uuid.UUID] | None = None
@@ -76,8 +83,8 @@ class SubmissionAssignmentUpdate(BaseModel):
     public_slug: str | None = Field(default=None, pattern=SLUG_PATTERN)
     source_type: SubmissionSourceType | None = None
     tag_filter: str | None = None
-    offset_days_before: int | None = Field(default=None, ge=0)
-    offset_days_after: int | None = Field(default=None, ge=0)
+    offset_days_before: OffsetDays | None = None
+    offset_days_after: OffsetDays | None = None
     cycle_config_id: uuid.UUID | None = None
     cycle_offsets: list[CycleOffset] | None = None
     list_definition_id: uuid.UUID | None = None

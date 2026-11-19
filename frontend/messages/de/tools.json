@@ -177,6 +177,37 @@
     "whereCountText": "{count}× Text",
     "whichEventForBlock": "Aufgrund welchem Termin wird dieser Block erstellt?",
     "whichValueToUse": "Welchen Wert übernehmen?",
-    "wordOrPdfFile": "Word- oder PDF-Datei (.docx, .pdf)"
+    "wordOrPdfFile": "Word- oder PDF-Datei (.docx, .pdf)",
+    "warning": {
+      "elementNotFound": "Kein passendes Element für Abschnitt «{heading}» gefunden – bitte manuell zuweisen.",
+      "reviewEventUnmatched": "Rückblick «{heading}» konnte keinem Anlass zugeordnet werden – bitte manuell wählen.",
+      "fieldsNotDetected": "Für «{heading}» konnten keine Felder erkannt werden – bitte manuell ausfüllen.",
+      "participantNotFound": "Kein passender Teilnehmer für «{name}» gefunden.",
+      "eventsToReview": "Neue oder abweichende Termine gefunden – bitte prüfen und übernehmen oder ablehnen.",
+      "tableListNotFound": "Tabelle #{table}: keine passende Liste gefunden – bitte manuell auswählen.",
+      "listBlockMissing": "Vorlage hat keinen Block für Liste «{list}» – Tabelle wird nicht importiert.",
+      "listParticipantsNotFound": "Nicht gefundene Teilnehmer in Liste «{list}»: {names}",
+      "tableMatrixNotFound": "Tabelle #{table}: keine passende Matrix gefunden – bitte manuell auswählen.",
+      "matrixColumnsByPosition": "Matrix «{matrix}»: Spalten konnten über die Bezeichnung kaum zugeordnet werden – stattdessen anhand der Position übernommen, bitte prüfen.",
+      "matrixRowUnmatched": "Matrix «{matrix}»: Zeile «{row}» konnte keiner Zeile zugeordnet werden – wird übersprungen.",
+      "matrixColumnUnmatched": "Matrix «{matrix}»: Spalte «{column}» konnte nicht zugeordnet werden – Termine aus dieser Spalte werden übersprungen.",
+      "matrixRowTypeUnsupported": "Matrix «{matrix}»: Zeile «{row}» hat einen nicht unterstützten Zeilentyp und wird übersprungen.",
+      "matrixParticipantsNotFound": "Nicht gefundene Teilnehmer in Matrix «{matrix}»: {names}",
+      "matrixColumnsUncertain": "Matrix «{matrix}»: nicht alle Spalten konnten eindeutig zugeordnet werden – bitte prüfen.",
+      "dateNotDetected": "Kein Datum im Dokument erkannt – bitte manuell angeben.",
+      "sectionNoBlock": "Abschnitt «{heading}» konnte keinem Block zugeordnet werden und wurde übersprungen.",
+      "sectionBlockConflict": "Abschnitt «{heading}» zielt auf denselben Block wie «{other}». Formularwerte können nicht als Freitext angehängt werden; die späteren Werte wurden übernommen.",
+      "eventFieldNotOverwritten": "Abschnitt «{heading}»: Feld «{field}» des verknüpften Termins wurde nicht überschrieben, da der aktuelle Wert vom eingelesenen Text abweicht und dieser Konflikt nicht bestätigt wurde.",
+      "sectionNotWritable": "Abschnitt «{heading}» konnte nicht geschrieben werden (Zielblock unterstützt keinen Text).",
+      "matrixCellInvalidKey": "Matrix-Zelle «{row}»/«{column}» hatte einen ungültigen Matrix-Schlüssel und wurde übersprungen.",
+      "matrixCellNoBlock": "Matrix-Zelle «{row}»/«{column}» konnte keinem Block zugeordnet werden und wurde übersprungen."
+    },
+    "previousValue": "bisher: {value}",
+    "attendanceNamesDetected": "{count, plural, one {# Name} other {# Namen}} im Dokument erkannt.",
+    "syncFieldConflict": "Das Feld «{field}» des verknüpften Termins enthält bereits einen abweichenden Wert. Welcher Wert soll übernommen werden?",
+    "syncFieldMatch": "Dieser Text wird ausserdem in das Feld «{field}» des verknüpften Termins geschrieben – der dortige Wert stimmt bereits damit überein.",
+    "syncFieldEmpty": "Dieser Text wird ausserdem in das Feld «{field}» des verknüpften Termins übernommen (dort aktuell leer).",
+    "unsupportedFieldType": "Feldtyp «{type}» wird beim Import nicht unterstützt.",
+    "noNamesDetected": "– keine Namen erkannt –"
   }
 }

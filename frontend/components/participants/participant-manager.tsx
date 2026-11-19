@@ -134,6 +134,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, r
   const t = useTranslations("participants");
   const tNav = useTranslations("nav");
   const tSecurity = useTranslations("security");
+  const tCommon = useTranslations("common");
   const router = useRouter();
   const showToast = useToast();
   const confirm = useConfirm();
@@ -398,7 +399,7 @@ export function ParticipantManager({ initialParticipants, templates, tenantId, r
       setImportResult(result);
       await reloadAll();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("toasts.csvImportFailed"), "error");
+      showToast(apiErrorMessage(error, tCommon, "csvImportErrors", t("toasts.csvImportFailed")), "error");
       // Keeps the preview open on failure (audit F9, 2026-08-16) - a transient error
       // (network blip, brief server hiccup) shouldn't force re-selecting the file just to
       // retry the same import.

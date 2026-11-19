@@ -551,3 +551,49 @@ def test_failing_generation_purge_is_logged_once_and_does_not_block_others(commi
     still = db.get(StorageGeneration, failing.id)
     assert still.status == "purge_requested" and "StorageUnavailable" in still.purge_error
     assert len(logged) == 1
+
+
+def test_failing_generation_purge_is_retried_with_backoff(committed_storage, monkeypatch):
+    """Eine scheiternde Bereinigung wurde bei jedem Durchlauf (alle 5 s) erneut gegen den
+    unerreichbaren Speicher versucht. Jetzt wartet der Worker exponentiell länger (30 s, 60 s ...)."""
+    db = committed_storage
+    run = uuid.uuid4().hex[:8]
+    broken = create_test_profile(db, f"Weg {run}", f"purge-backoff-{run}/weg")
+    base = (db.scalar(select(text("COALESCE(MAX(generation), 0)")).select_from(StorageGeneration)) or 0) + 1000
+    failing = StorageGeneration(profile_id=broken.id, generation=base, status="purge_requested")
+    db.add(failing)
+    db.commit()
+
+    store = get_object_store()
+    attempts: list[int] = []
+
+    def factory(config):
+        if config.profile_id == broken.id:
+            attempts.append(1)
+            raise StorageUnavailable("Speicher der alten Generation nicht erreichbar")
+        return S3Backend(config)
+
+    monkeypatch.setattr(store, "_backend_factory", factory)
+    monkeypatch.setattr(store, "_backends", {})
+    monkeypatch.setattr(storage_worker, "record_system_error", lambda _db, *, exc: None)
+    monkeypatch.setattr(storage_worker, "_purge_retry", {})
+
+    # Mehrere Durchläufe: die gemeinsame Test-DB kann weitere angeforderte Generationen enthalten
+    # (ein Durchlauf bearbeitet genau eine).
+    for _ in range(10):
+        storage_worker.purge_generations()
+    assert len(attempts) == 1  # weitere Durchläufe innerhalb des Backoffs versuchen nicht erneut
+    failures, _retry_at = storage_worker._purge_retry[failing.id]
+    assert failures == 1
+
+    # Wartezeit abgelaufen -> genau ein neuer Versuch, danach doppelt so lange warten.
+    storage_worker._purge_retry[failing.id] = (failures, 0.0)
+    for _ in range(10):
+        storage_worker.purge_generations()
+    assert len(attempts) == 2
+    assert storage_worker._purge_retry[failing.id][0] == 2
+    assert storage_worker.purge_retry_delay(1) == 30 and storage_worker.purge_retry_delay(2) == 60
+    assert storage_worker.purge_retry_delay(50) == storage_worker.PURGE_RETRY_CAP_SECONDS
+    db.expire_all()
+    still = db.get(StorageGeneration, failing.id)
+    assert still.status == "purge_requested" and "StorageUnavailable" in still.purge_error

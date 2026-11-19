@@ -86,6 +86,10 @@ class MigrationError(ValueError):
     """Erwartete Ablehnung (ValueError-Konvention: kein Eintrag im Fehlerlog)."""
 
 
+class GenerationNotFound(MigrationError):
+    """Unbekannte Generation - die Route antwortet mit 404 statt 409."""
+
+
 def merged_options(options: dict[str, Any] | None) -> dict[str, Any]:
     merged = dict(DEFAULT_OPTIONS)
     for key, value in (options or {}).items():
@@ -421,7 +425,7 @@ def request_generation_purge(db: Session, generation_id: int, *, confirmation: s
     Generationsnummer), nur nach Ablauf der Rückfallfrist bzw. für abgebrochene Ziele."""
     generation = db.scalars(select(StorageGeneration).where(StorageGeneration.id == generation_id).with_for_update()).first()
     if generation is None:
-        raise MigrationError("Generation nicht gefunden")
+        raise GenerationNotFound("Generation nicht gefunden")
     if confirmation.strip() != f"g{generation.generation}":
         raise MigrationError(f"Zur Bestätigung 'g{generation.generation}' eingeben")
     if generation.status == "active":

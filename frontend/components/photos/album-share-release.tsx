@@ -4,21 +4,19 @@ import type { useConfirm } from "@/contexts/confirm-context";
 import { PhotoAlbum } from "@/types/api";
 
 type ConfirmFn = ReturnType<typeof useConfirm>;
-
-function photoCount(count: number) {
-  return count === 1 ? "1 Foto" : `${count} Fotos`;
-}
+/** `t` aus useTranslations("photos.shareRelease"). */
+type ShareReleaseT = (key: "title" | "ownerMessage" | "noOwnerMessage" | "confirmLabel", values?: Record<string, string | number>) => string;
 
 /** Warnhinweis vor dem manuellen Hinzufügen zu einem geteilten Album: hinzugefügte Fotos sind
  * sofort für alle sichtbar, die Zugriff auf das Album haben. Bei ungeteilten Alben keine Rückfrage. */
-export function confirmAddToSharedAlbum(confirm: ConfirmFn, album: PhotoAlbum, count: number): Promise<boolean> {
+export function confirmAddToSharedAlbum(confirm: ConfirmFn, t: ShareReleaseT, album: PhotoAlbum, count: number): Promise<boolean> {
   if (!album.is_shared) return Promise.resolve(true);
   return confirm({
-    title: "Fotos werden geteilt",
+    title: t("title"),
     message: album.owner_tenant_name
-      ? `„${album.name}“ wird von ${album.owner_tenant_name} geteilt. ${photoCount(count)} ${count === 1 ? "ist" : "sind"} danach für alle Beteiligten sichtbar.`
-      : `„${album.name}“ ist geteilt. ${photoCount(count)} ${count === 1 ? "wird" : "werden"} damit sofort für alle Mandanten und Links freigegeben, die Zugriff auf das Album haben.`,
-    confirmLabel: "Hinzufügen und teilen",
+      ? t("ownerMessage", { count, albumName: album.name, owner: album.owner_tenant_name })
+      : t("noOwnerMessage", { count, albumName: album.name }),
+    confirmLabel: t("confirmLabel"),
   });
 }
 

@@ -417,5 +417,6 @@
       "visibility": "Vedono i file: {who}",
       "unreachable": "Senza link la consegna non è raggiungibile"
     }
-  }
+  },
+  "offsetOutOfRange": "Finestra temporale: al massimo {max} giorni prima o dopo l’evento"
 }

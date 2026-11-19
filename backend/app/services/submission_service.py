@@ -87,6 +87,16 @@ def element_has_clean_files(element: SubmissionElementRead) -> bool:
     return any(file.scan_status == "clean" for file in element.files)
 
 
+def _shift_date(day: date, days: int) -> date:
+    """Datum ± Tage, an date.min/date.max geklemmt: Altbestände mit riesigem Offset (vor der
+    Schema-Grenze OFFSET_DAYS_MAX) liefen sonst in einen OverflowError, und die Abgabe glich nie
+    mehr ab."""
+    try:
+        return day + timedelta(days=days)
+    except OverflowError:
+        return date.max if days > 0 else date.min
+
+
 def _element_ref(*, event_public_id: uuid.UUID | None, list_entry_public_id: uuid.UUID | None) -> str:
     if event_public_id is not None:
         return f"event-{event_public_id}"
@@ -346,11 +356,11 @@ class SubmissionService:
                     # None (kein Offset gesetzt) = kein Zeitfenster auf dieser Seite - die
                     # Abgabe bleibt offen, bis sie manuell geschlossen wird.
                     "window_start": (
-                        event.event_date - timedelta(days=assignment.offset_days_before)
+                        _shift_date(event.event_date, -assignment.offset_days_before)
                         if assignment.offset_days_before is not None else None
                     ),
                     "window_end": (
-                        (event.event_end_date or event.event_date) + timedelta(days=assignment.offset_days_after)
+                        _shift_date(event.event_end_date or event.event_date, assignment.offset_days_after)
                         if assignment.offset_days_after is not None else None
                     ),
                     "responsible_participant_ids": _resolve_event_responsible(event, source),

@@ -377,7 +377,14 @@
       "docsLink": "En savoir plus sur le tarif des amendes dans l’aide"
     },
     "invitationVisible": "Dans l’invitation et l’ordre du jour",
-    "invitationToggleFailed": "Le réglage n’a pas pu être enregistré."
+    "invitationToggleFailed": "Le réglage n’a pas pu être enregistré.",
+    "participantPickerSelected": "{count, plural, one {# sélectionné} other {# sélectionnés}}",
+    "participantPickerWithoutAttendance": "{count} sans contrôle des présences",
+    "participantPickerVisible": "{count, plural, one {# visible} other {# visibles}}",
+    "responsibilityListMatchInfo": "Lors de la comparaison avec une liste, le texte libre de la liste est comparé au titre de l’élément. Les participants trouvés sont repris une seule fois. Avec le cadenas, tu peux ensuite fixer le lien sur une ligne précise du tableau.",
+    "responsibilityWithResponsible": "{count} avec responsables",
+    "responsibilityMatchingLists": "{count, plural, one {# liste correspondante} other {# listes correspondantes}}",
+    "responsibilityAssigned": "{count, plural, one {# attribué} other {# attribués}}"
   },
   "elementEditor": {
     "advancedShow": "Avancé",

@@ -417,5 +417,6 @@
       "visibility": "Voient les fichiers : {who}",
       "unreachable": "Sans lien, le dépôt n'est pas accessible"
     }
-  }
+  },
+  "offsetOutOfRange": "Période : {max} jours au maximum avant ou après l’événement"
 }

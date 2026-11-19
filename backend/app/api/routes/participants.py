@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 
+from app.core.csv_limits import CsvTooManyRows
 from app.core.db import get_db
 from app.core.rate_limit import enforce_rate_limit
 from app.core.permissions import P
@@ -278,6 +279,9 @@ async def _import_participants_csv_impl(  # loop-ok: nur über run_coroutine_in_
     try:
         content = raw_bytes.decode("utf-8-sig")
         return participant_service.import_csv(db, content, tenant_id=user.current_tenant_id)
+    except CsvTooManyRows as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=exc.detail()) from exc
     except (SQLAlchemyError, UnicodeDecodeError) as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="CSV import failed") from exc

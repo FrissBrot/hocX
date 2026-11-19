@@ -177,6 +177,37 @@
     "whereCountText": "{count}× text",
     "whichEventForBlock": "Which event is this block created for?",
     "whichValueToUse": "Which value should be used?",
-    "wordOrPdfFile": "Word or PDF file (.docx, .pdf)"
+    "wordOrPdfFile": "Word or PDF file (.docx, .pdf)",
+    "warning": {
+      "elementNotFound": "No matching element found for section “{heading}” – please assign it manually.",
+      "reviewEventUnmatched": "Review “{heading}” could not be matched to an event – please choose one manually.",
+      "fieldsNotDetected": "No fields could be detected for “{heading}” – please fill them in manually.",
+      "participantNotFound": "No matching participant found for “{name}”.",
+      "eventsToReview": "New or differing events found – please review and accept or reject them.",
+      "tableListNotFound": "Table #{table}: no matching list found – please choose one manually.",
+      "listBlockMissing": "The template has no block for list “{list}” – the table will not be imported.",
+      "listParticipantsNotFound": "Participants not found in list “{list}”: {names}",
+      "tableMatrixNotFound": "Table #{table}: no matching matrix found – please choose one manually.",
+      "matrixColumnsByPosition": "Matrix “{matrix}”: columns could hardly be matched by their labels – matched by position instead, please check.",
+      "matrixRowUnmatched": "Matrix “{matrix}”: row “{row}” could not be matched to any row – it will be skipped.",
+      "matrixColumnUnmatched": "Matrix “{matrix}”: column “{column}” could not be matched – events from this column will be skipped.",
+      "matrixRowTypeUnsupported": "Matrix “{matrix}”: row “{row}” has an unsupported row type and will be skipped.",
+      "matrixParticipantsNotFound": "Participants not found in matrix “{matrix}”: {names}",
+      "matrixColumnsUncertain": "Matrix “{matrix}”: not all columns could be matched unambiguously – please check.",
+      "dateNotDetected": "No date detected in the document – please enter it manually.",
+      "sectionNoBlock": "Section “{heading}” could not be matched to a block and was skipped.",
+      "sectionBlockConflict": "Section “{heading}” targets the same block as “{other}”. Form values cannot be appended as free text; the later values were used.",
+      "eventFieldNotOverwritten": "Section “{heading}”: field “{field}” of the linked event was not overwritten because its current value differs from the imported text and this conflict was not confirmed.",
+      "sectionNotWritable": "Section “{heading}” could not be written (the target block does not support text).",
+      "matrixCellInvalidKey": "Matrix cell “{row}”/“{column}” had an invalid matrix key and was skipped.",
+      "matrixCellNoBlock": "Matrix cell “{row}”/“{column}” could not be matched to a block and was skipped."
+    },
+    "previousValue": "previously: {value}",
+    "attendanceNamesDetected": "{count, plural, one {# name} other {# names}} detected in the document.",
+    "syncFieldConflict": "The field “{field}” of the linked event already contains a different value. Which value should be used?",
+    "syncFieldMatch": "This text is also written to the field “{field}” of the linked event – the value there already matches.",
+    "syncFieldEmpty": "This text is also copied to the field “{field}” of the linked event (currently empty there).",
+    "unsupportedFieldType": "Field type “{type}” is not supported by the import.",
+    "noNamesDetected": "– no names detected –"
   }
 }

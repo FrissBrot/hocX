@@ -7,6 +7,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.csv_limits import limit_csv_rows
 from app.core.error_log import record_system_error
 from app.core.locale_config_generated import DEFAULT_LOCALE
 from app.models import ListDefinition, ListEntry, Participant, Template
@@ -253,7 +254,9 @@ class ParticipantService:
         errors: list[str] = []
         failures: list[Exception] = []
 
-        for i, row in enumerate(reader, start=2):
+        # Zeilenlimit vor dem ersten Insert prüfen (CsvTooManyRows -> 400), nicht erst nach 2000 Zeilen.
+        csv_rows = list(limit_csv_rows(reader))
+        for i, row in enumerate(csv_rows, start=2):
             try:
                 first_name = _csv_field(row, "first_name")
                 last_name = _csv_field(row, "last_name")

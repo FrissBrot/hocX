@@ -13,6 +13,27 @@ EventMatchStatus = Literal["matched", "changed", "new"]
 ListRowStatus = Literal["matched", "changed", "new"]
 
 
+class WordImportWarning(BaseModel):
+    """Analyse-/Importhinweis als Code mit Parametern; das Frontend übersetzt ihn unter
+    `tools.wordImport.warning.<code>`. `warnings` (deutscher Text) bleibt parallel als Fallback
+    für ältere Clients und für Analyse-Snapshots, die vor diesem Feld gespeichert wurden."""
+
+    code: str
+    params: dict[str, str | int] = Field(default_factory=dict)
+
+
+class WordImportWarnings(list[str]):
+    """Liste der deutschen Hinweistexte, die zu jedem Eintrag Code und Parameter mitführt."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.details: list[WordImportWarning] = []
+
+    def add(self, code: str, text: str, **params: str | int) -> None:
+        self.append(text)
+        self.details.append(WordImportWarning(code=code, params={key: value if isinstance(value, int) else str(value) for key, value in params.items()}))
+
+
 class TablePreview(BaseModel):
     index: int
     header_cells: list[str] = Field(default_factory=list)
@@ -366,6 +387,7 @@ class WordImportAnalysis(BaseModel):
     matrix_mappings: list[WordImportMatrixCellMapping] = Field(default_factory=list)
     profile_applied: bool = False
     warnings: list[str] = Field(default_factory=list)
+    warning_details: list[WordImportWarning] = Field(default_factory=list)
     duplicate_protocols: list[WordImportDuplicateProtocol] = Field(default_factory=list)
 
 
@@ -547,6 +569,7 @@ class WordImportCommitResult(BaseModel):
 
     id: int
     warnings: list[str] = Field(default_factory=list)
+    warning_details: list[WordImportWarning] = Field(default_factory=list)
 
 
 class WordImportDuplicateCandidate(BaseModel):
@@ -797,6 +820,7 @@ class PublicWordImportAnalysis(BaseModel):
     matrix_mappings: list[PublicWordImportMatrixCellMapping] = Field(default_factory=list)
     profile_applied: bool = False
     warnings: list[str] = Field(default_factory=list)
+    warning_details: list[WordImportWarning] = Field(default_factory=list)
     duplicate_protocols: list[PublicWordImportDuplicateProtocol] = Field(default_factory=list)
 
 
@@ -891,6 +915,7 @@ class PublicWordImportCommit(BaseModel):
 class PublicWordImportCommitResult(BaseModel):
     id: uuid.UUID
     warnings: list[str] = Field(default_factory=list)
+    warning_details: list[WordImportWarning] = Field(default_factory=list)
 
 
 class PublicWordImportDuplicateCandidate(BaseModel):

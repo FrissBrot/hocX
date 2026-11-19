@@ -27,6 +27,7 @@ import { useOpenRequest } from "@/lib/search/handoff";
 import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
+import { apiErrorMessage } from "@/lib/api/error-message";
 import type { ParticipantSummary, TemplateSummary } from "@/types/api";
 import { can } from "@/lib/permissions";
 import { parseParticipantCsv } from "@/lib/utils/participant-csv";
@@ -428,6 +429,7 @@ function ParticipantSheet({
 
 function ImportSheet({ onClose, onImported }: { onClose: () => void; onImported: (result: ImportResult) => void }) {
   const t = useTranslations("participants");
+  const tCommon = useTranslations("common");
   const tMobile = useTranslations("mobile");
   const showToast = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -455,7 +457,7 @@ function ImportSheet({ onClose, onImported }: { onClose: () => void; onImported:
       setResult(imported);
       onImported(imported);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("toasts.csvImportFailed"), "error");
+      showToast(apiErrorMessage(error, tCommon, "csvImportErrors", t("toasts.csvImportFailed")), "error");
     } finally {
       setBusy(false);
     }

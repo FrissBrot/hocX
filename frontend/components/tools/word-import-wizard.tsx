@@ -17,6 +17,7 @@ import { browserApiFetch } from "@/lib/api/client";
 import { useConfirm } from "@/contexts/confirm-context";
 import { formatDate, formatDateRange } from "@/lib/utils/format";
 import { syncFieldLabel } from "@/lib/constants/event-sync-fields";
+import { translateWordImportWarnings, type WordImportWarningDetail } from "@/lib/word-import-warnings";
 import {
   analyzeWordImport,
   commitWordImport,
@@ -924,7 +925,7 @@ function textSummaryLabel(text: TextDraft, target: WordImportTextTarget | undefi
   return label;
 }
 
-export type WordImportDoneSummary = { attendance: number; events: number; lists: number; matrices: number; skipped: number; warnings: string[] };
+export type WordImportDoneSummary = { attendance: number; events: number; lists: number; matrices: number; skipped: number; warnings: string[]; warningDetails?: WordImportWarningDetail[] };
 
 /** Abschluss des Imports: was übernommen bzw. übersprungen wurde (ICU-Plural je Sprache). */
 export function WordImportDoneStats({ summary }: { summary: WordImportDoneSummary }) {
@@ -954,6 +955,7 @@ export function WordImportWizard({
   const t = useTranslations("tools.wordImport");
   const tSyncFields = useTranslations("templates.elementEditor");
   const eventFieldConfig = useEventFieldConfig();
+  const warningFieldLabel = (field: string) => syncFieldLabel(field, tSyncFields, eventFieldConfig.label);
   const steps = wizardSteps(t);
   const tableRolePills = tableRolePillOptions(t);
   // Queue documents live at their own URL (/tools/import/[id], mirroring /protocols/[id])
@@ -1649,7 +1651,7 @@ export function WordImportWizard({
                     />
                   </div>
                 ))}
-                {linked && col2Differs && <div className="muted">bisher: {linked.second_display}</div>}
+                {linked && col2Differs && <div className="muted">{t("previousValue", { value: linked.second_display })}</div>}
               </div>
             ) : (
               linked &&
@@ -2422,6 +2424,7 @@ export function WordImportWizard({
               (text.template_element_id === null || (text.isEventRepeat && text.linkedEventId === null))
           ).length,
         warnings: result.warnings,
+        warningDetails: result.warning_details,
       });
       setCreatedProtocolId(result.id);
       setStep("done");
@@ -2638,7 +2641,7 @@ export function WordImportWizard({
                 <WarningIcon /> {t("analysisWarnings", { count: analysis.warnings.length })}
               </summary>
               <ul style={{ margin: "var(--space-2) 0 0", paddingLeft: "var(--space-4)" }}>
-                {analysis.warnings.map((warning, index) => (
+                {translateWordImportWarnings(analysis.warnings, analysis.warning_details, t, warningFieldLabel).map((warning, index) => (
                   <li key={index}>{warning}</li>
                 ))}
               </ul>
@@ -2929,7 +2932,7 @@ export function WordImportWizard({
                 <>
                   <div>
                     <h3 className="word-import-panel-title">{t("attendanceLabel")}</h3>
-                    <p className="word-import-panel-desc">{attendance.length} Namen im Dokument erkannt.</p>
+                    <p className="word-import-panel-desc">{t("attendanceNamesDetected", { count: attendance.length })}</p>
                   </div>
                   <div className="grid" style={{ gap: "var(--space-3)" }}>
                     {attendance.map((entry, index) => renderAttendanceRow(entry, index))}
@@ -3280,10 +3283,7 @@ export function WordImportWizard({
                                   <div className="grid" style={{ gap: "var(--space-3)" }}>
                                     {text.syncFieldStatus === "conflict" ? (
                                       <>
-                                        <span>
-                                          Das Feld &quot;{syncFieldLabel(text.syncTargetField, tSyncFields, eventFieldConfig.label)}&quot; des
-                                          verknüpften Termins enthält bereits einen abweichenden Wert. Welcher Wert soll übernommen werden?
-                                        </span>
+                                        <span>{t("syncFieldConflict", { field: syncFieldLabel(text.syncTargetField, tSyncFields, eventFieldConfig.label) })}</span>
                                         <div className="word-import-diff-options">
                                           <label className="field-radio-option">
                                             <input
@@ -3320,15 +3320,9 @@ export function WordImportWizard({
                                         </div>
                                       </>
                                     ) : text.syncFieldStatus === "match" ? (
-                                      <span>
-                                        Dieser Text wird außerdem in das Feld &quot;{syncFieldLabel(text.syncTargetField, tSyncFields, eventFieldConfig.label)}
-                                        &quot; des verknüpften Termins geschrieben – der dortige Wert stimmt bereits damit überein.
-                                      </span>
+                                      <span>{t("syncFieldMatch", { field: syncFieldLabel(text.syncTargetField, tSyncFields, eventFieldConfig.label) })}</span>
                                     ) : (
-                                      <span>
-                                        Dieser Text wird außerdem in das Feld &quot;{syncFieldLabel(text.syncTargetField, tSyncFields, eventFieldConfig.label)}
-                                        &quot; des verknüpften Termins übernommen (dort aktuell leer).
-                                      </span>
+                                      <span>{t("syncFieldEmpty", { field: syncFieldLabel(text.syncTargetField, tSyncFields, eventFieldConfig.label) })}</span>
                                     )}
                                   </div>
                                 </div>
@@ -3414,10 +3408,10 @@ export function WordImportWizard({
                                             ))}
                                           </div>
                                         ) : (
-                                          <span className="muted">{field.raw_value || "– keine Namen erkannt –"}</span>
+                                          <span className="muted">{field.raw_value || t("noNamesDetected")}</span>
                                         )
                                       ) : (
-                                        <span className="muted">Feldtyp &quot;{field.row_type}&quot; wird beim Import nicht unterstützt.</span>
+                                        <span className="muted">{t("unsupportedFieldType", { type: field.row_type })}</span>
                                       )}
                                     </div>
                                   ))}
@@ -3490,7 +3484,7 @@ export function WordImportWizard({
                 <div className="word-import-alert word-import-alert-block" style={{ marginTop: "var(--space-3)" }}>
                   <WarningIcon />
                   <ul style={{ margin: 0, paddingLeft: "var(--space-4)" }}>
-                    {doneSummary.warnings.map((warning, index) => (
+                    {translateWordImportWarnings(doneSummary.warnings, doneSummary.warningDetails, t, warningFieldLabel).map((warning, index) => (
                       <li key={index}>{warning}</li>
                     ))}
                   </ul>

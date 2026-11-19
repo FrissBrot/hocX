@@ -8,6 +8,7 @@ from sqlalchemy import func, select, update
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel, Field
 
+from app.core.csv_limits import CsvTooManyRows
 from app.core.db import get_db
 from app.core.permissions import P
 from app.core.security import CurrentUser, get_current_user, require_permission
@@ -93,6 +94,8 @@ async def _preview_events_csv_impl(  # loop-ok: nur über run_coroutine_in_threa
     try:
         content = (await file.read()).decode("utf-8-sig")
         return service.preview_csv(db, content, column_map=_parse_column_map(column_map))
+    except CsvTooManyRows as exc:
+        raise HTTPException(status_code=400, detail=exc.detail()) from exc
     except (UnicodeDecodeError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc) if isinstance(exc, ValueError) else "CSV preview failed") from exc
 
@@ -119,6 +122,9 @@ async def _import_events_csv_impl(  # loop-ok: nur über run_coroutine_in_thread
     try:
         content = (await file.read()).decode("utf-8-sig")
         created = service.import_csv(db, content, tenant_id=user.current_tenant_id, column_map=_parse_column_map(column_map))
+    except CsvTooManyRows as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=exc.detail()) from exc
     except (SQLAlchemyError, UnicodeDecodeError, ValueError) as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc) if isinstance(exc, ValueError) else "CSV import failed") from exc

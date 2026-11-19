@@ -67,6 +67,7 @@ from app.schemas.word_import import (
     WordImportNameResolution,
     WordImportTextMapping,
     WordImportTextTarget,
+    WordImportWarnings,
 )
 from app.services import block_field_sync, list_columns, list_legacy_adapter
 from app.services.event_filter import event_matches_filter, normalize_event_filter
@@ -1924,7 +1925,7 @@ class WordImportService:
         # abgebrochen statt den aufrufenden Worker unbegrenzt zu blockieren.
         parsed = parse_document_isolated(raw_bytes)
         protocol_date = protocol_date_hint or parsed.protocol_date
-        warnings: list[str] = []
+        warnings = WordImportWarnings()
 
         profile = db.execute(
             select(WordImportProfile).where(
@@ -2294,7 +2295,7 @@ class WordImportService:
                     template_element_id = None
                     block_sort_index = None
                     confidence = round(best_score, 2)
-                    warnings.append(f'Kein passendes Element für Abschnitt "{section.heading}" gefunden – bitte manuell zuweisen.')
+                    warnings.add("elementNotFound", f'Kein passendes Element für Abschnitt "{section.heading}" gefunden – bitte manuell zuweisen.', heading=section.heading)
 
             is_event_repeat = (
                 template_element_id is not None
@@ -2328,7 +2329,7 @@ class WordImportService:
                 best_event_score, best_event = (scored_events[0] if scored_events else (0.0, None))
                 matched_event_id = best_event.id if best_event is not None and best_event_score >= _EVENT_REPEAT_MATCH_THRESHOLD else None
                 if matched_event_id is None:
-                    warnings.append(f'Rückblick "{section.heading}" konnte keinem Anlass zugeordnet werden – bitte manuell wählen.')
+                    warnings.add("reviewEventUnmatched", f'Rückblick "{section.heading}" konnte keinem Anlass zugeordnet werden – bitte manuell wählen.', heading=section.heading)
 
             sync_target_field = sync_field_by_key.get((template_element_id, block_sort_index)) if is_event_repeat else None
             sync_field_status = None
@@ -2377,7 +2378,7 @@ class WordImportService:
                     )
                 form_fields_by_target[f"{form_key[0]}:{form_key[1]}"] = fields_for_target
                 if is_form_block and form_key == (template_element_id, block_sort_index) and not parsed_field_values:
-                    warnings.append(f'Für "{section.heading}" konnten keine Felder erkannt werden – bitte manuell ausfüllen.')
+                    warnings.add("fieldsNotDetected", f'Für "{section.heading}" konnten keine Felder erkannt werden – bitte manuell ausfüllen.', heading=section.heading)
             form_fields = (
                 form_fields_by_target.get(f"{template_element_id}:{block_sort_index}", []) if is_form_block else []
             )
@@ -2512,7 +2513,7 @@ class WordImportService:
             # every later import that happens to contain the same row again.
             remembered_no_link = suggested is None and _normalize(raw_name) in no_link_names
             if suggested is None and not remembered_no_link:
-                warnings.append(f'Kein passender Teilnehmer für "{raw_name}" gefunden.')
+                warnings.add("participantNotFound", f'Kein passender Teilnehmer für "{raw_name}" gefunden.', name=raw_name)
             candidates = [
                 WordImportAttendanceCandidate(
                     participant_id=participant.id, score=round(score, 3),
@@ -2694,7 +2695,7 @@ class WordImportService:
         # len(...), once the for-loop above completes.
         row_index = len(extracted_event_rows)
         if any(mapping.status != "matched" for mapping in event_mappings):
-            warnings.append("Neue oder abweichende Termine gefunden – bitte prüfen und übernehmen oder ablehnen.")
+            warnings.add("eventsToReview", "Neue oder abweichende Termine gefunden – bitte prüfen und übernehmen oder ablehnen.")
 
         previous_protocol_id = (
             _nearest_previous_protocol_id(db, tenant_id=tenant_id, template_id=template_id, protocol_date=protocol_date)
@@ -2709,13 +2710,15 @@ class WordImportService:
                 continue
             list_definition_id = table_list_definitions.get(table.index)
             if list_definition_id is None or list_definition_id not in list_definitions_by_id:
-                warnings.append(f"Tabelle #{table.index + 1}: keine passende Liste gefunden – bitte manuell auswählen.")
+                warnings.add("tableListNotFound", f"Tabelle #{table.index + 1}: keine passende Liste gefunden – bitte manuell auswählen.", table=table.index + 1)
                 continue
             has_snapshot_target = list_definition_id in template_linked_list_ids
             if not has_snapshot_target:
-                warnings.append(
+                warnings.add(
+                    "listBlockMissing",
                     f'Vorlage hat keinen Block für Liste "{list_definitions_by_id[list_definition_id].name}" – '
-                    "Tabelle wird nicht importiert."
+                    "Tabelle wird nicht importiert.",
+                    list=list_definitions_by_id[list_definition_id].name,
                 )
             definition = list_definitions_by_id[list_definition_id]
             existing_entries = list(
@@ -2835,7 +2838,7 @@ class WordImportService:
                     resolution.raw_name for resolution in (col1_names + col2_names) if resolution.participant_id is None
                 ]
                 if unmatched_names:
-                    warnings.append(f'Nicht gefundene Teilnehmer in Liste "{definition.name}": {", ".join(unmatched_names)}')
+                    warnings.add("listParticipantsNotFound", f'Nicht gefundene Teilnehmer in Liste "{definition.name}": {", ".join(unmatched_names)}', list=definition.name, names=", ".join(unmatched_names))
                 list_mappings.append(
                     WordImportListRowMapping(
                         table_index=table.index,
@@ -2863,7 +2866,7 @@ class WordImportService:
             matrix_key = table_matrix_keys.get(table.index)
             matrix = matrices_by_key.get(matrix_key) if matrix_key else None
             if matrix is None:
-                warnings.append(f"Tabelle #{table.index + 1}: keine passende Matrix gefunden – bitte manuell auswählen.")
+                warnings.add("tableMatrixNotFound", f"Tabelle #{table.index + 1}: keine passende Matrix gefunden – bitte manuell auswählen.", table=table.index + 1)
                 continue
             matrix_rows = matrix["rows"]
             matrix_columns = matrix["columns"]
@@ -3125,9 +3128,11 @@ class WordImportService:
                     positional_resolution = _positional_matrix_column_resolution(doc_column_labels, matrix_columns)
                     if _count_confident_matrix_columns(positional_resolution) > _count_confident_matrix_columns(column_resolution):
                         column_resolution = positional_resolution
-                        warnings.append(
+                        warnings.add(
+                            "matrixColumnsByPosition",
                             f'Matrix "{matrix["title"]}": Spalten konnten über die Bezeichnung kaum zugeordnet werden – '
-                            "stattdessen anhand der Position übernommen, bitte prüfen."
+                            "stattdessen anhand der Position übernommen, bitte prüfen.",
+                            matrix=matrix["title"],
                         )
 
             matrix_has_unresolved_column = False
@@ -3142,7 +3147,7 @@ class WordImportService:
                 )
                 best_row_score, best_row = scored_rows[0] if scored_rows else (0.0, None)
                 if best_row is None or best_row_score < _MATRIX_ROW_MATCH_THRESHOLD:
-                    warnings.append(f'Matrix "{matrix["title"]}": Zeile "{row_label_raw}" konnte keiner Zeile zugeordnet werden – wird übersprungen.')
+                    warnings.add("matrixRowUnmatched", f'Matrix "{matrix["title"]}": Zeile "{row_label_raw}" konnte keiner Zeile zugeordnet werden – wird übersprungen.', matrix=matrix["title"], row=row_label_raw)
                     continue
                 row_type = str(best_row.get("row_type") or "text")
                 # row_type "7" is an embedded Terminliste block (element_type_id 7) - the
@@ -3174,9 +3179,11 @@ class WordImportService:
                         column_key, _column_candidates = column_resolution.get(col_idx, (None, []))
                         if column_key is None:
                             matrix_has_unresolved_column = True
-                            warnings.append(
+                            warnings.add(
+                                "matrixColumnUnmatched",
                                 f'Matrix "{matrix["title"]}": Spalte "{column_label_raw}" konnte nicht zugeordnet werden – '
-                                "Termine aus dieser Spalte werden übersprungen."
+                                "Termine aus dieser Spalte werden übersprungen.",
+                                matrix=matrix["title"], column=column_label_raw,
                             )
                             continue
                         matched_column = next((column for column in matrix_columns if str(column.get("id")) == column_key), None)
@@ -3250,7 +3257,7 @@ class WordImportService:
                             row_index += 1
                     continue
                 if row_type not in _MATRIX_SUPPORTED_ROW_TYPES:
-                    warnings.append(f'Matrix "{matrix["title"]}": Zeile "{row_label_raw}" hat einen nicht unterstützten Zeilentyp und wird übersprungen.')
+                    warnings.add("matrixRowTypeUnsupported", f'Matrix "{matrix["title"]}": Zeile "{row_label_raw}" hat einen nicht unterstützten Zeilentyp und wird übersprungen.', matrix=matrix["title"], row=row_label_raw)
                     continue
                 row_id = str(best_row.get("id"))
                 for col_idx, column_label_raw in enumerate(doc_column_labels):
@@ -3267,7 +3274,7 @@ class WordImportService:
                         names = _match_names(raw_value, participants, participant_name_overrides, rejected_candidates, participant_match_threshold)
                         unmatched_names = [name.raw_name for name in names if name.participant_id is None]
                         if unmatched_names:
-                            warnings.append(f'Nicht gefundene Teilnehmer in Matrix "{matrix["title"]}": {", ".join(unmatched_names)}')
+                            warnings.add("matrixParticipantsNotFound", f'Nicht gefundene Teilnehmer in Matrix "{matrix["title"]}": {", ".join(unmatched_names)}', matrix=matrix["title"], names=", ".join(unmatched_names))
                     matrix_mappings.append(
                         WordImportMatrixCellMapping(
                             table_index=table.index,
@@ -3285,12 +3292,12 @@ class WordImportService:
                         )
                     )
             if matrix_has_unresolved_column:
-                warnings.append(f'Matrix "{matrix["title"]}": nicht alle Spalten konnten eindeutig zugeordnet werden – bitte prüfen.')
+                warnings.add("matrixColumnsUncertain", f'Matrix "{matrix["title"]}": nicht alle Spalten konnten eindeutig zugeordnet werden – bitte prüfen.', matrix=matrix["title"])
 
         event_mappings = _dedupe_event_mappings(event_mappings)
 
         if protocol_date is None:
-            warnings.append("Kein Datum im Dokument erkannt – bitte manuell angeben.")
+            warnings.add("dateNotDetected", "Kein Datum im Dokument erkannt – bitte manuell angeben.")
 
         duplicate_protocols: list[WordImportDuplicateProtocol] = []
         if protocol_date is not None:
@@ -3326,7 +3333,8 @@ class WordImportService:
             matrix_options=[WordImportMatrixOption(matrix_key=matrix["matrix_key"], title=matrix["title"]) for matrix in matrices_for_matching],
             matrix_mappings=matrix_mappings,
             profile_applied=profile_applied,
-            warnings=warnings,
+            warnings=list(warnings),
+            warning_details=warnings.details,
             duplicate_protocols=duplicate_protocols,
         )
 
@@ -3443,7 +3451,7 @@ class WordImportService:
         # WordImportCommitResult) - every `continue` below that used to silently drop
         # content now also records why, so the reviewer isn't left thinking the import
         # fully succeeded when part of it didn't.
-        commit_warnings: list[str] = []
+        commit_warnings = WordImportWarnings()
         # ProtocolElementBlock.id -> the first section assigned to that block. Additional
         # ordinary text sections are appended in document order instead of overwriting
         # earlier content. Form blocks cannot be concatenated generically because their
@@ -3716,9 +3724,11 @@ class WordImportService:
                 else:
                     continue
                 if block is None:
-                    commit_warnings.append(
+                    commit_warnings.add(
+                        "sectionNoBlock",
                         f'Abschnitt "{text_commit.extracted_heading}" konnte keinem Block zugeordnet werden '
-                        "und wurde übersprungen."
+                        "und wurde übersprungen.",
+                        heading=text_commit.extracted_heading,
                     )
                     continue
                 # Keyed on the actually-resolved block's own id (not just
@@ -3728,10 +3738,12 @@ class WordImportService:
                 # sharing a block_sort_index resolve to the SAME instance and should.
                 claimed_by = claimed_text_blocks.get(block.id)
                 if claimed_by is not None and text_commit.is_form_block:
-                    commit_warnings.append(
+                    commit_warnings.add(
+                        "sectionBlockConflict",
                         f'Abschnitt "{text_commit.extracted_heading}" zielt auf denselben Block wie '
                         f'"{claimed_by}". Formularwerte können nicht als Freitext angehängt werden; '
-                        "die späteren Werte wurden übernommen."
+                        "die späteren Werte wurden übernommen.",
+                        heading=text_commit.extracted_heading, other=claimed_by,
                     )
                 if claimed_by is None:
                     claimed_text_blocks[block.id] = text_commit.extracted_heading
@@ -3848,10 +3860,12 @@ class WordImportService:
                                     # text, same validate-at-commit-time approach event_commit
                                     # already applies to title/date conflicts.
                                     final_content = str(getattr(linked_event, sync_field, "") or "")
-                                    commit_warnings.append(
+                                    commit_warnings.add(
+                                        "eventFieldNotOverwritten",
                                         f'Abschnitt "{text_commit.extracted_heading}": Feld "{sync_field}" des '
                                         "verknüpften Termins wurde nicht überschrieben, da der aktuelle Wert vom "
-                                        "eingelesenen Text abweicht und dieser Konflikt nicht bestätigt wurde."
+                                        "eingelesenen Text abweicht und dieser Konflikt nicht bestätigt wurde.",
+                                        heading=text_commit.extracted_heading, field=sync_field,
                                     )
                             # protocol_text mirrors whatever wins so the block and the Event
                             # field never diverge right after import, same guarantee manual
@@ -3870,9 +3884,11 @@ class WordImportService:
                         # the template changed between analyze() and commit()) -
                         # block_sort_index is client-supplied and never re-validated
                         # against which blocks can actually hold a ProtocolText.
-                        commit_warnings.append(
+                        commit_warnings.add(
+                            "sectionNotWritable",
                             f'Abschnitt "{text_commit.extracted_heading}" konnte nicht geschrieben werden '
-                            "(Zielblock unterstützt keinen Text)."
+                            "(Zielblock unterstützt keinen Text).",
+                            heading=text_commit.extracted_heading,
                         )
 
             # Learned here (not straight from payload.attendance) so create_new rows contribute
@@ -4013,16 +4029,20 @@ class WordImportService:
                     template_element_id_str, sort_index_str = matrix_commit.matrix_key.split(":", 1)
                     block_key = (int(template_element_id_str), int(sort_index_str))
                 except (ValueError, AttributeError):
-                    commit_warnings.append(
+                    commit_warnings.add(
+                        "matrixCellInvalidKey",
                         f'Matrix-Zelle "{matrix_commit.row_id}"/"{matrix_commit.column_label}" hatte einen '
-                        "ungültigen Matrix-Schlüssel und wurde übersprungen."
+                        "ungültigen Matrix-Schlüssel und wurde übersprungen.",
+                        row=matrix_commit.row_id, column=matrix_commit.column_label,
                     )
                     continue
                 block = block_by_key.get(block_key)
                 if block is None:
-                    commit_warnings.append(
+                    commit_warnings.add(
+                        "matrixCellNoBlock",
                         f'Matrix-Zelle "{matrix_commit.row_id}"/"{matrix_commit.column_label}" konnte keinem Block '
-                        "zugeordnet werden und wurde übersprungen."
+                        "zugeordnet werden und wurde übersprungen.",
+                        row=matrix_commit.row_id, column=matrix_commit.column_label,
                     )
                     continue
                 config = dict(block.configuration_snapshot_json or {})
@@ -4353,4 +4373,4 @@ class WordImportService:
         from app.services.submission_service import SubmissionService
 
         SubmissionService().sync_todos_for_tenant(db, tenant_id=tenant_id)
-        return WordImportCommitResult(id=protocol_id, warnings=commit_warnings)
+        return WordImportCommitResult(id=protocol_id, warnings=list(commit_warnings), warning_details=commit_warnings.details)

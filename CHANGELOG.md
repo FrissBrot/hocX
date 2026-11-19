@@ -28,6 +28,16 @@ Installationen aktualisieren können.
   und Speicher-Bereinigung landen im Fehlerprotokoll bzw. blockieren nicht mehr; übersetzte
   Texte im Revisionsvergleich, auf der Prüfseite und im Word-Import, Exportdialog bleibt nach
   Wechsel auf Kalender nicht hängen, Word-Import-Dateiauswahl per Tastatur.
+- Restpunkte aus dem Nachtlauf 2026-11-19: eine scheiternde Bereinigung alter Speichergenerationen
+  wird mit wachsendem Abstand (30 s bis 1 h) statt alle 5 s wiederholt; unbekannte Generation ergibt
+  404 statt 409. Hinweise der Word-Import-Analyse und des Imports erscheinen in der UI-Sprache.
+  CSV-Importe von Terminen und Personen nehmen höchstens 2000 Zeilen an (übersetzte Meldung statt
+  langer Verarbeitung). Das Zeitfenster einer Abgabe ist auf 3650 Tage vor/nach dem Termin begrenzt;
+  Altbestände mit grösserem Wert gleichen wieder ab. Ein Termin, der gleichzeitig mit einem neuen
+  Zyklus (oder einer Stichtag-Änderung) angelegt wird, landet jetzt zuverlässig im richtigen Zyklus.
+  Weitere fest deutsche Texte (Vorlagen-Teilnehmerauswahl, Verantwortliche, Matrix-Löschfragen,
+  Word-Import-Feldabgleich, Rückfrage beim Teilen von Fotos) übersetzt; der Hardcoded-Text-Check
+  erkennt jetzt auch Text neben `{Ausdrücken}` und Template-Literale.
 
 ### Geändert
 

@@ -417,5 +417,6 @@
       "visibility": "Dateien sehen: {who}",
       "unreachable": "Ohne Link ist die Abgabe nicht erreichbar"
     }
-  }
+  },
+  "offsetOutOfRange": "Zeitfenster: höchstens {max} Tage vor bzw. nach dem Termin"
 }

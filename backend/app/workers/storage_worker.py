@@ -1122,6 +1122,19 @@ def run_migration(ctx: Ctx) -> float | None:
 
 # --- Generationen bereinigen ------------------------------------------------------------------
 
+# Backoff gescheiterter Bereinigungen: Generation-ID -> (Fehlversuche, frühester nächster Versuch,
+# time.monotonic()). Bewusst im Prozessspeicher statt in einer Spalte (keine Migration): nach einem
+# Neustart des Workers wird einmal sofort erneut versucht, danach greift das Backoff wieder. Der
+# Worker läuft als einzelner Prozess; die Zeilensperre (skip_locked) verhindert Doppelarbeit.
+PURGE_RETRY_BASE_SECONDS = 30.0
+PURGE_RETRY_CAP_SECONDS = 3600.0
+_purge_retry: dict[int, tuple[int, float]] = {}
+
+
+def purge_retry_delay(failures: int) -> float:
+    """Wartezeit nach dem n-ten Fehlversuch: 30 s, 60 s, 120 s ... höchstens 1 h."""
+    return min(PURGE_RETRY_CAP_SECONDS, PURGE_RETRY_BASE_SECONDS * (2 ** max(0, failures - 1)))
+
 
 def purge_generations() -> int:
     """Führt bestätigte Bereinigungen alter Generationen aus (nie automatisch angestossen)."""
@@ -1147,6 +1160,10 @@ def purge_generations() -> int:
                                                 StorageGeneration.profile_id.notin_(fs_profiles))
         if held is not None:
             query = query.where(StorageGeneration.generation != held)
+        now = time.monotonic()
+        waiting = [gid for gid, (_failures, retry_at) in _purge_retry.items() if retry_at > now]
+        if waiting:
+            query = query.where(StorageGeneration.id.notin_(waiting))
         # Zuletzt gescheiterte Bereinigungen (purge_error gesetzt) nach hinten: eine Generation, deren
         # Speicher dauerhaft weg ist, blockierte sonst als kleinste ID jede andere Bereinigung.
         generation = db.scalars(
@@ -1167,13 +1184,16 @@ def purge_generations() -> int:
             generation.status = "purged"
             generation.purged_at = datetime.now(UTC)
             generation.purge_error = None
+            _purge_retry.pop(generation.id, None)
         except Exception as exc:
             error = f"{type(exc).__name__}: {exc}"[:2000]
             # Nur beim ersten Auftreten bzw. bei geänderter Ursache ins Fehlerprotokoll - der Worker
-            # versucht es bei jedem Durchlauf (POLL_SECONDS) erneut; der aktuelle Fehler steht an
-            # der Generation (Adminportal).
+            # versucht es mit exponentiellem Backoff erneut (purge_retry_delay); der aktuelle Fehler
+            # steht an der Generation (Adminportal).
             if error != generation.purge_error:
                 record_system_error(db, exc=exc)
+            failures = _purge_retry.get(generation.id, (0, 0.0))[0] + 1
+            _purge_retry[generation.id] = (failures, time.monotonic() + purge_retry_delay(failures))
             generation.status = "purge_requested"
             generation.purge_error = error
         db.commit()

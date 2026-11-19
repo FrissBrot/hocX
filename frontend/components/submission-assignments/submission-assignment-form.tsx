@@ -207,22 +207,31 @@ export function assignmentPayload(form: FormState) {
   };
 }
 
+/** Grösstes Zeitfenster in Tagen vor/nach dem Termin (Backend: schemas/submission.py OFFSET_DAYS_MAX). */
+export const OFFSET_DAYS_MAX = 3650;
+
+function offsetOutOfRange(value: number | ""): boolean {
+  return value !== "" && (!Number.isInteger(value) || value < 0 || value > OFFSET_DAYS_MAX);
+}
+
 export function formProblem(form: FormState, t: TFunc): string | null {
   if (!form.title.trim()) return t("titleMissing");
   if (form.source_type === "events") {
     if (!form.tag_filter) return t("tagFilterMissing");
     if (form.cycle_config_id && form.cycle_offsets.length === 0) return t("cycleSelectionMissing");
+    if (offsetOutOfRange(form.offset_days_before) || offsetOutOfRange(form.offset_days_after)) return t("offsetOutOfRange", { max: OFFSET_DAYS_MAX });
   }
   if (form.source_type === "list" && !form.list_definition_id) return t("listMissing");
   return null;
 }
 
 /** Welches Feld den Fehler aus formProblem hat (für die Markierung). */
-function problemFieldOf(form: FormState): "title" | "tag" | "cycle" | "list" | null {
+function problemFieldOf(form: FormState): "title" | "tag" | "cycle" | "window" | "list" | null {
   if (!form.title.trim()) return "title";
   if (form.source_type === "events") {
     if (!form.tag_filter) return "tag";
     if (form.cycle_config_id && form.cycle_offsets.length === 0) return "cycle";
+    if (offsetOutOfRange(form.offset_days_before) || offsetOutOfRange(form.offset_days_after)) return "window";
   }
   if (form.source_type === "list" && !form.list_definition_id) return "list";
   return null;
@@ -700,7 +709,7 @@ export function SubmissionAssignmentFormModal({
       case "window":
         return form.source_type === "events" ? (
           <>
-            <div className="field-stack">
+            <div className={problemField === "window" ? "field-stack subm-edit-invalid" : "field-stack"}>
               <span className="field-label">
                 {t("windowLabel")}
                 <HelpPopover topic={t("windowLabel")} docs={help("zeitfenster")}>{t("helpWindow")}</HelpPopover>
@@ -710,6 +719,7 @@ export function SubmissionAssignmentFormModal({
                 <input
                   type="number"
                   min={0}
+                  max={OFFSET_DAYS_MAX}
                   aria-label={t("daysBeforeEvent")}
                   placeholder={t("noLimitPlaceholder")}
                   value={form.offset_days_before}
@@ -719,6 +729,7 @@ export function SubmissionAssignmentFormModal({
                 <input
                   type="number"
                   min={0}
+                  max={OFFSET_DAYS_MAX}
                   aria-label={t("daysAfterEvent")}
                   placeholder={t("noLimitPlaceholder")}
                   value={form.offset_days_after}

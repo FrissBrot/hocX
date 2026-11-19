@@ -254,5 +254,8 @@
   "columnFilter": {
     "label": "Filter {column}",
     "activeLabel": "Filter {column} (active)"
+  },
+  "csvImportErrors": {
+    "csv_too_many_rows": "The CSV file has too many rows (at most {max, number} data rows). Please split it and import it in several steps."
   }
 }

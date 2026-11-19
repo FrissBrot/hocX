@@ -254,5 +254,8 @@
   "columnFilter": {
     "label": "{column} filtern",
     "activeLabel": "{column} filtern (aktiv)"
+  },
+  "csvImportErrors": {
+    "csv_too_many_rows": "Die CSV-Datei hat zu viele Zeilen (höchstens {max, number} Datenzeilen). Bitte aufteilen und in mehreren Schritten importieren."
   }
 }

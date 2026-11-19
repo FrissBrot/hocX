@@ -486,6 +486,7 @@ def _encode_analysis(db: Session, analysis: WordImportAnalysis) -> PublicWordImp
         matrix_mappings=matrix_mappings,
         profile_applied=analysis.profile_applied,
         warnings=analysis.warnings,
+        warning_details=analysis.warning_details,
         duplicate_protocols=duplicate_protocols,
     )
 
@@ -796,6 +797,7 @@ def _encode_commit_result(db: Session, result: WordImportCommitResult) -> Public
     return PublicWordImportCommitResult(
         id=_pub(protocols, result.id, "protocol"),
         warnings=result.warnings,
+        warning_details=result.warning_details,
     )
 
 

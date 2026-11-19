@@ -454,6 +454,23 @@ def test_no_link_attendance_name_is_remembered_and_reused(db):
     assert 'Kein passender Teilnehmer für "Total" gefunden.' not in second_analysis.warnings
 
 
+def test_analysis_warnings_carry_codes_and_params_for_translation(db):
+    """Die Analysehinweise waren nur deutscher Fliesstext und erschienen so auch in der
+    englischen/französischen/italienischen Oberfläche. Jeder Hinweis führt jetzt parallel einen
+    Code mit Parametern (`warning_details`), den das Frontend übersetzt."""
+    ctx = _build_template(db)
+    tenant, template = ctx["tenant"], ctx["template"]
+    spec = default_spec(protocol_date=date(2026, 10, 18))
+    spec.attendance.rows = [*spec.attendance.rows, ["Total", ""]]
+    analysis = WordImportService().analyze(
+        db, tenant_id=tenant.id, template_id=template.id, protocol_date_hint=None, raw_bytes=render_docx(spec),
+    )
+    assert len(analysis.warning_details) == len(analysis.warnings)
+    index = analysis.warnings.index('Kein passender Teilnehmer für "Total" gefunden.')
+    detail = analysis.warning_details[index]
+    assert detail.code == "participantNotFound" and detail.params == {"name": "Total"}
+
+
 def test_matrix_column_resolution_is_remembered_and_reused_when_no_candidate_matches(db):
     """Timo's screenshot: a Matrix's fixed "Ziel-Spalte" picker for a document column
     header ("Mega Rammer & Bigfoots") that doesn't resemble any configured column title

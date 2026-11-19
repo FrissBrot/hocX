@@ -8,6 +8,7 @@ import {
   SubmissionAssignmentFormModal,
   describeAssignment,
   formProblem,
+  OFFSET_DAYS_MAX,
   initialForm,
   assignmentTemplates,
   pickExampleEvent,
@@ -89,6 +90,13 @@ describe("formProblem", () => {
   it("verlangt für Listen eine Liste, für manuelle Abgaben nichts weiter", () => {
     expect(formProblem({ ...initialForm, title: "Bilder", source_type: "list" }, t)).toBe("Liste fehlt");
     expect(formProblem({ ...initialForm, title: "Bilder", source_type: "manual" }, t)).toBeNull();
+  });
+
+  it("begrenzt das Zeitfenster auf OFFSET_DAYS_MAX Tage", () => {
+    const form = { ...initialForm, title: "Bilder", tag_filter: "x" };
+    expect(formProblem({ ...form, offset_days_before: OFFSET_DAYS_MAX, offset_days_after: 0 }, t)).toBeNull();
+    expect(formProblem({ ...form, offset_days_after: OFFSET_DAYS_MAX + 1 }, t)).toMatch(/3650/);
+    expect(formProblem({ ...form, offset_days_before: 1_000_000_000 }, t)).toMatch(/3650/);
   });
 
   it("verlangt bei aktivem Zyklus-Filter mindestens einen Zyklus", () => {

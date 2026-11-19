@@ -30,6 +30,7 @@ const SOURCE_BY_FILTER: Record<SourceFilter, FileOverviewSource | null> = {
  * sichtbar (gedimmt, "Im Album"), lassen sich aber nicht erneut wählen. */
 export function AlbumPhotoPicker({ album, onClose, onAdded }: { album: PhotoAlbum; onClose: () => void; onAdded: () => void }) {
   const t = useTranslations("photos.albumPicker");
+  const tShareRelease = useTranslations("photos.shareRelease");
   const toast = useToast();
   const confirm = useConfirm();
   const [search, setSearch] = useState("");
@@ -140,7 +141,7 @@ export function AlbumPhotoPicker({ album, onClose, onAdded }: { album: PhotoAlbu
   async function submit() {
     if (busy || selectedIds.size === 0) return;
     const count = selectedIds.size;
-    if (!(await confirmAddToSharedAlbum(confirm, album, count))) return;
+    if (!(await confirmAddToSharedAlbum(confirm, tShareRelease, album, count))) return;
     setBusy(true);
     try {
       await browserApiFetch(`/api/files/albums/${album.id}/items`, {

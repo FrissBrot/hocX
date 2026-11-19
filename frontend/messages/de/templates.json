@@ -377,7 +377,14 @@
       "docsLink": "Mehr zum Bussentarif in der Hilfe"
     },
     "invitationVisible": "In Einladung und Traktandenliste",
-    "invitationToggleFailed": "Einstellung konnte nicht gespeichert werden."
+    "invitationToggleFailed": "Einstellung konnte nicht gespeichert werden.",
+    "participantPickerSelected": "{count} ausgewählt",
+    "participantPickerWithoutAttendance": "{count} ohne Anwesenheitskontrolle",
+    "participantPickerVisible": "{count} sichtbar",
+    "responsibilityListMatchInfo": "Beim Listenabgleich wird der Freitext der Liste mit dem Elementtitel verglichen. Gefundene Teilnehmende werden einmalig übernommen. Mit dem Schloss fixierst du danach bei Bedarf die Verknüpfung auf eine konkrete Tabellenzeile.",
+    "responsibilityWithResponsible": "{count} mit Verantwortlichen",
+    "responsibilityMatchingLists": "{count, plural, one {# passende Liste} other {# passende Listen}}",
+    "responsibilityAssigned": "{count} zugewiesen"
   },
   "elementEditor": {
     "advancedShow": "Erweitert",

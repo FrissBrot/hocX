@@ -177,6 +177,37 @@
     "whereCountText": "{count}× texte",
     "whichEventForBlock": "Pour quel événement ce bloc est-il créé ?",
     "whichValueToUse": "Quelle valeur utiliser ?",
-    "wordOrPdfFile": "Fichier Word ou PDF (.docx, .pdf)"
+    "wordOrPdfFile": "Fichier Word ou PDF (.docx, .pdf)",
+    "warning": {
+      "elementNotFound": "Aucun élément correspondant trouvé pour la section « {heading} » – veuillez l’attribuer manuellement.",
+      "reviewEventUnmatched": "La rétrospective « {heading} » n’a pu être associée à aucun événement – veuillez choisir manuellement.",
+      "fieldsNotDetected": "Aucun champ n’a pu être détecté pour « {heading} » – veuillez les remplir manuellement.",
+      "participantNotFound": "Aucun participant correspondant trouvé pour « {name} ».",
+      "eventsToReview": "Événements nouveaux ou divergents trouvés – veuillez les vérifier puis les accepter ou les refuser.",
+      "tableListNotFound": "Tableau n° {table} : aucune liste correspondante trouvée – veuillez la choisir manuellement.",
+      "listBlockMissing": "Le modèle n’a pas de bloc pour la liste « {list} » – le tableau ne sera pas importé.",
+      "listParticipantsNotFound": "Participants introuvables dans la liste « {list} » : {names}",
+      "tableMatrixNotFound": "Tableau n° {table} : aucune matrice correspondante trouvée – veuillez la choisir manuellement.",
+      "matrixColumnsByPosition": "Matrice « {matrix} » : les colonnes n’ont guère pu être associées par leur libellé – reprises selon leur position, veuillez vérifier.",
+      "matrixRowUnmatched": "Matrice « {matrix} » : la ligne « {row} » n’a pu être associée à aucune ligne – elle sera ignorée.",
+      "matrixColumnUnmatched": "Matrice « {matrix} » : la colonne « {column} » n’a pas pu être associée – les événements de cette colonne seront ignorés.",
+      "matrixRowTypeUnsupported": "Matrice « {matrix} » : la ligne « {row} » a un type de ligne non pris en charge et sera ignorée.",
+      "matrixParticipantsNotFound": "Participants introuvables dans la matrice « {matrix} » : {names}",
+      "matrixColumnsUncertain": "Matrice « {matrix} » : toutes les colonnes n’ont pas pu être associées de manière univoque – veuillez vérifier.",
+      "dateNotDetected": "Aucune date détectée dans le document – veuillez la saisir manuellement.",
+      "sectionNoBlock": "La section « {heading} » n’a pu être associée à aucun bloc et a été ignorée.",
+      "sectionBlockConflict": "La section « {heading} » vise le même bloc que « {other} ». Les valeurs de formulaire ne peuvent pas être ajoutées comme texte libre ; les valeurs les plus récentes ont été reprises.",
+      "eventFieldNotOverwritten": "Section « {heading} » : le champ « {field} » de l’événement lié n’a pas été écrasé, car sa valeur actuelle diffère du texte importé et ce conflit n’a pas été confirmé.",
+      "sectionNotWritable": "La section « {heading} » n’a pas pu être écrite (le bloc cible ne prend pas en charge le texte).",
+      "matrixCellInvalidKey": "La cellule de matrice « {row} »/« {column} » avait une clé de matrice invalide et a été ignorée.",
+      "matrixCellNoBlock": "La cellule de matrice « {row} »/« {column} » n’a pu être associée à aucun bloc et a été ignorée."
+    },
+    "previousValue": "jusqu’ici : {value}",
+    "attendanceNamesDetected": "{count, plural, one {# nom détecté} other {# noms détectés}} dans le document.",
+    "syncFieldConflict": "Le champ « {field} » de l’événement lié contient déjà une valeur différente. Quelle valeur faut-il reprendre ?",
+    "syncFieldMatch": "Ce texte est aussi écrit dans le champ « {field} » de l’événement lié – la valeur qui s’y trouve correspond déjà.",
+    "syncFieldEmpty": "Ce texte est aussi repris dans le champ « {field} » de l’événement lié (actuellement vide).",
+    "unsupportedFieldType": "Le type de champ « {type} » n’est pas pris en charge par l’import.",
+    "noNamesDetected": "– aucun nom détecté –"
   }
 }

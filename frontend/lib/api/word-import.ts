@@ -1,4 +1,5 @@
 import { browserApiFetch, LONG_RUNNING_TIMEOUT_MS } from "@/lib/api/client";
+import type { WordImportWarningDetail } from "@/lib/word-import-warnings";
 
 export type TableRole = "attendance" | "events" | "list" | "matrix" | "ignore";
 export type EventMatchStatus = "matched" | "changed" | "new";
@@ -256,6 +257,8 @@ export type WordImportAnalysis = {
   matrix_mappings: WordImportMatrixCellMapping[];
   profile_applied: boolean;
   warnings: string[];
+  // Gleiche Reihenfolge wie `warnings`; fehlt bei Analysen, die vor diesem Feld gespeichert wurden.
+  warning_details?: WordImportWarningDetail[];
   duplicate_protocols: WordImportDuplicateProtocol[];
 };
 
@@ -370,7 +373,7 @@ export async function analyzeWordImport(
   return browserApiFetch<WordImportAnalysis>("/api/tools/word-import/analyze", { method: "POST", body: formData, timeoutMs: LONG_RUNNING_TIMEOUT_MS });
 }
 
-export type WordImportCommitResult = { id: string; warnings: string[] };
+export type WordImportCommitResult = { id: string; warnings: string[]; warning_details?: WordImportWarningDetail[] };
 
 export async function commitWordImport(payload: WordImportCommitPayload): Promise<WordImportCommitResult> {
   return browserApiFetch<WordImportCommitResult>("/api/tools/word-import/commit", {

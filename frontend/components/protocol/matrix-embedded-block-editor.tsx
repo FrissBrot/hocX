@@ -346,9 +346,9 @@ export function MatrixEmbeddedBlockEditor({
                   className="button-secondary button-danger todo-delete"
                   onClick={async () => {
                     const ok = await confirm({
-                      message: `Todo "${String(item.task ?? "").trim() || "Unbenannt"}" endgültig löschen?`,
+                      message: t("deleteTodoConfirm", { name: String(item.task ?? "").trim() || t("unnamed") }),
                       tone: "danger",
-                      confirmLabel: "Löschen",
+                      confirmLabel: tCommon("delete"),
                     });
                     if (!ok) return;
                     updateEmbeddedConfig((current) => ({
@@ -623,9 +623,9 @@ export function MatrixEmbeddedBlockEditor({
                 className="button-secondary button-danger todo-delete"
                 onClick={async () => {
                   const ok = await confirm({
-                    message: `Zeile "${String(row.label ?? "").trim() || "Unbenannt"}" endgültig löschen?`,
+                    message: t("deleteRowConfirm", { name: String(row.label ?? "").trim() || t("unnamed") }),
                     tone: "danger",
-                    confirmLabel: "Löschen",
+                    confirmLabel: tCommon("delete"),
                   });
                   if (!ok) return;
                   updateEmbeddedConfig((current) => ({
@@ -998,9 +998,9 @@ export function MatrixEmbeddedBlockEditor({
                               aria-label={t("deleteEvent")}
                               onClick={async () => {
                                 const ok = await confirm({
-                                  message: `Termin "${eventRow.title}" endgültig löschen? Das entfernt ihn aus allen Protokollen.`,
+                                  message: tRoot("deleteEventConfirmNamed", { title: eventRow.title }),
                                   tone: "danger",
-                                  confirmLabel: "Löschen"
+                                  confirmLabel: tCommon("delete")
                                 });
                                 if (!ok) return;
                                 await deleteEvent(eventRow.id);
@@ -1102,9 +1102,9 @@ export function MatrixEmbeddedBlockEditor({
                 className="button-secondary button-danger todo-delete"
                 onClick={async () => {
                   const ok = await confirm({
-                    message: `Bulletpoint "${String(item ?? "").trim() || "Unbenannt"}" endgültig löschen?`,
+                    message: t("deleteBulletConfirm", { name: String(item ?? "").trim() || t("unnamed") }),
                     tone: "danger",
-                    confirmLabel: "Löschen",
+                    confirmLabel: tCommon("delete"),
                   });
                   if (!ok) return;
                   updateEmbeddedConfig((current) => ({

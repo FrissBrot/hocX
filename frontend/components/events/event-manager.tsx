@@ -23,6 +23,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { EventDetailForm } from "@/components/protocol/planning/event-detail-form";
 import { browserApiFetch, LONG_RUNNING_TIMEOUT_MS } from "@/lib/api/client";
+import { apiErrorMessage } from "@/lib/api/error-message";
 import { useToast } from "@/contexts/toast-context";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
 import { sortTagsByImportance, useTagConfig } from "@/lib/hooks/use-tag-config";
@@ -103,6 +104,7 @@ export function EventManager({
   canManageSettings = false,
 }: Props) {
   const t = useTranslations("events");
+  const tCommon = useTranslations("common");
   const locale = useLocale();
   const CSV_TARGET_FIELDS = useMemo(() => csvTargetFields(t), [t]);
   const ROW_FIELD_OPTIONS = useMemo(() => rowFieldOptions(t), [t]);
@@ -624,7 +626,7 @@ export function EventManager({
         setImportColumnMap(preview.resolved_map as Partial<Record<CsvTargetField, string>>);
       }
     } catch (error) {
-      setImportError(error instanceof Error ? error.message : t("toasts.previewFailed"));
+      setImportError(apiErrorMessage(error, tCommon, "csvImportErrors", t("toasts.previewFailed")));
       setImportPreview(null);
     } finally {
       setImportPreviewLoading(false);
@@ -664,7 +666,7 @@ export function EventManager({
       showToast(t("toasts.importedCount", { count: imported.length }), "success");
       setShowImportModal(false);
     } catch (error) {
-      showToast(error instanceof Error ? error.message : t("toasts.csvImportFailed"), "error");
+      showToast(apiErrorMessage(error, tCommon, "csvImportErrors", t("toasts.csvImportFailed")), "error");
     } finally {
       setImportCommitting(false);
     }

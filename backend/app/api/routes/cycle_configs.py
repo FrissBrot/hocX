@@ -12,6 +12,7 @@ from app.core.security import CurrentUser, get_current_user, require_permission
 from app.models.entities import CycleConfig, Protocol, SubmissionAssignment, Template
 from app.schemas.cycle_config import CycleConfigCreate, CycleConfigRead, CycleConfigUpdate, CycleInfo
 from app.services import public_id_service
+from app.services.event_cycle_service import lock_cycle_assignments
 from app.services.event_service import EventService, swiss_today
 
 router = APIRouter()
@@ -45,6 +46,8 @@ def create_cycle_config(
     user: CurrentUser = Depends(get_current_user),
 ):
     require_permission(user, P.TEMPLATES_MANAGE)
+    # Nicht gleichzeitig mit dem Anlegen eines Termins (der sonst keine Zuordnung erhält).
+    lock_cycle_assignments(db, user.current_tenant_id, exclusive=True)
     obj = CycleConfig(
         tenant_id=user.current_tenant_id,
         name=payload.name,
@@ -85,6 +88,9 @@ def update_cycle_config(
     require_permission(user, P.TEMPLATES_MANAGE)
     obj = _get_owned(db, cycle_config_id, user.current_tenant_id)
     values = payload.model_dump(exclude_unset=True)
+    if "reset_month" in values or "reset_day" in values:
+        lock_cycle_assignments(db, user.current_tenant_id, exclusive=True)
+        db.refresh(obj)  # Stand nach dem Warten auf laufende Termin-Anlagen
     previous_reset = (obj.reset_month, obj.reset_day)
     for k, v in values.items():
         setattr(obj, k, v)
@@ -108,6 +114,8 @@ def delete_cycle_config(
 ):
     require_permission(user, P.TEMPLATES_MANAGE)
     obj = _get_owned(db, cycle_config_id, user.current_tenant_id)
+    # Ein parallel angelegter Termin schriebe sonst eine Zuordnung auf den gelöschten Zyklus.
+    lock_cycle_assignments(db, user.current_tenant_id, exclusive=True)
     # Check if any template is still using this config
     in_use = db.scalar(select(Template.id).where(Template.cycle_config_id == obj.id).limit(1))
     if in_use:

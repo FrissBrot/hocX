@@ -1726,7 +1726,7 @@ function FocusedElementEditorImpl({
     >
       <div className="editor-panel-header">
         <div>
-          <div className="eyebrow">Punkt {elementIndex + 1}<PdfOmittedHint entry={pdfElementCoverage} /></div>
+          <div className="eyebrow">{t("elementPointNumber", { number: elementIndex + 1 })}<PdfOmittedHint entry={pdfElementCoverage} /></div>
           <h2>{element.section_name_snapshot}</h2>
         </div>
       </div>
@@ -4207,8 +4207,8 @@ function FocusedElementEditorImpl({
         </label>
         {!multiParticipantPicker?.singleSelect && (
           <div className="status-row">
-            <span className="pill">{multiParticipantPicker?.selectedIds.length ?? 0} ausgewählt</span>
-            <span className="pill">{filteredParticipants.length} sichtbar</span>
+            <span className="pill">{t("participantPickerSelected", { count: multiParticipantPicker?.selectedIds.length ?? 0 })}</span>
+            <span className="pill">{t("participantPickerVisible", { count: filteredParticipants.length })}</span>
           </div>
         )}
         <div className="selection-list">

@@ -8,6 +8,7 @@ from io import StringIO
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.csv_limits import limit_csv_rows
 from app.core.cycle_utils import format_cycle_name, get_cycle_year
 from app.models import Event, Participant, Protocol
 from app.models.entities import CycleConfig, EventCycle, SubmissionUpload, SubmissionUploadFile
@@ -15,7 +16,7 @@ from app.repositories.event_repository import EventRepository
 from app.schemas.event import EVENT_DATE_MAX, EVENT_DATE_MIN, EVENT_TAG_MAX_LENGTH, CycleAssignment, EventCreate, EventUpdate
 from app.schemas.protocol import ProtocolCycleInfo
 from app.services import public_id_service
-from app.services.event_cycle_service import list_cycle_event_ids, resolve_protocol_cycle
+from app.services.event_cycle_service import list_cycle_event_ids, lock_cycle_assignments, resolve_protocol_cycle
 
 
 def swiss_today() -> date:
@@ -176,6 +177,7 @@ class EventService:
             program=payload.program,
         )
         try:
+            lock_cycle_assignments(db, tenant_id, exclusive=False)
             created = self.repository.create(db, event, commit=False)
             if payload.cycle_assignments is None:
                 # Ohne explizite Angabe gehört ein Termin standardmässig zu dem Zyklus, in den
@@ -197,6 +199,13 @@ class EventService:
         # Zeile sperren: zwei gleichzeitige Änderungen ersetzten sonst beide die Zyklus-Zuordnungen
         # (DELETE + INSERT, der zweite scheiterte an pk_event_cycle), und ein PATCH während des
         # Löschens lief auf eine verschwundene Zeile (StaleDataError statt 404).
+        if "event_date" in payload.model_fields_set or payload.cycle_assignments is not None:
+            # Zyklus-Zuordnungen ändern sich: nicht gleichzeitig mit einer Zyklus-Änderung
+            # (lock_cycle_assignments, vor der Zeilensperre).
+            tenant_id = db.scalar(select(Event.tenant_id).where(Event.id == event_id))
+            if tenant_id is None:
+                return None
+            lock_cycle_assignments(db, tenant_id, exclusive=False)
         event = db.scalar(
             select(Event).where(Event.id == event_id).with_for_update().execution_options(populate_existing=True)
         )
@@ -393,6 +402,7 @@ class EventService:
         if category_id is None:
             raise ValueError("Default event category missing")
 
+        lock_cycle_assignments(db, tenant_id, exclusive=False)
         created: list[Event] = []
         for row in rows:
             if row["error"]:
@@ -475,7 +485,7 @@ class EventService:
 
     def _parse_csv_rows_unchecked(self, reader: csv.DictReader, resolved_map: dict[str, str]) -> list[dict]:
         results: list[dict] = []
-        for row_number, row in enumerate(reader, start=2):
+        for row_number, row in enumerate(limit_csv_rows(reader), start=2):
             if not row or not any(str(value or "").strip() for value in row.values()):
                 continue
 

@@ -357,7 +357,11 @@
     "openEventOverview": "Apri panoramica eventi",
     "rowLabelPlaceholder": "Etichetta riga",
     "unknown": "Sconosciuto",
-    "timeLabel": "Ora"
+    "timeLabel": "Ora",
+    "unnamed": "Senza nome",
+    "deleteTodoConfirm": "Eliminare definitivamente l’attività «{name}»?",
+    "deleteRowConfirm": "Eliminare definitivamente la riga «{name}»?",
+    "deleteBulletConfirm": "Eliminare definitivamente il punto elenco «{name}»?"
   },
   "newBulletPlaceholder": "Aggiungi un nuovo punto con il pulsante",
   "newBulletPlus": "+ Punto",
@@ -619,5 +623,8 @@
     "linked": "dall’attività",
     "linkedTitle": "Valore dell’attività per cui è stato creato questo blocco. Si modifica nell’attività.",
     "empty": "vuoto"
-  }
+  },
+  "elementPointNumber": "Punto {number}",
+  "participantPickerSelected": "{count, plural, one {# selezionato} other {# selezionati}}",
+  "participantPickerVisible": "{count} visibili"
 }
