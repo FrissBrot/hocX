@@ -162,7 +162,13 @@
       "statistics": "Annual report",
       "list": "List",
       "custom": "Document",
-      "protocol_excerpt": "Protocol excerpt"
+      "protocol_excerpt": "Protocol excerpt",
+      "agenda": "Agenda",
+      "attendance": "Attendance list",
+      "calendar": "Calendar",
+      "transactions": "Transaction list",
+      "fines": "Fines overview",
+      "form": "Form"
     },
     "createdBy": "Created in the hocX account of {name}.",
     "verifiedBadge": "Verified organisation",

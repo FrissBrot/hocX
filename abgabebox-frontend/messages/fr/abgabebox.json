@@ -162,7 +162,13 @@
       "statistics": "Rapport annuel",
       "list": "Liste",
       "custom": "Document",
-      "protocol_excerpt": "Extrait de procès-verbal"
+      "protocol_excerpt": "Extrait de procès-verbal",
+      "agenda": "Ordre du jour",
+      "attendance": "Liste de présence",
+      "calendar": "Calendrier",
+      "transactions": "Liste des écritures",
+      "fines": "Aperçu des amendes",
+      "form": "Formulaire"
     },
     "createdBy": "Créé dans le compte hocX de {name}.",
     "verifiedBadge": "Organisation vérifiée",

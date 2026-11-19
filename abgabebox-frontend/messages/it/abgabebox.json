@@ -162,7 +162,13 @@
       "statistics": "Rapporto annuale",
       "list": "Lista",
       "custom": "Documento",
-      "protocol_excerpt": "Estratto del verbale"
+      "protocol_excerpt": "Estratto del verbale",
+      "agenda": "Ordine del giorno",
+      "attendance": "Elenco presenze",
+      "calendar": "Calendario",
+      "transactions": "Elenco movimenti",
+      "fines": "Panoramica multe",
+      "form": "Modulo"
     },
     "createdBy": "Creato nell’account hocX di {name}.",
     "verifiedBadge": "Organizzazione verificata",
