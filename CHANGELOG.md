@@ -49,6 +49,8 @@ Keine Migration, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Cha
   die echte Domain auf (Frontend, Backend-API, Abgabebox-Seite und -API samt Prüfseite, Admin, Docs,
   Website). Ist ein Dienst nicht erreichbar, geht das Update automatisch auf das vorherige Release
   zurück. `verify_release.sh` nutzt dieselben Prüfungen.
+- **Fotos, Zeitstrahl rechts:** Ganz oben lag die Monatsangabe («Okt. 2026») über der Jahreszahl
+  und ragte aus der Leiste. Sie steht dort jetzt unter der Linie, die Jahreszahl am Cursor entfällt.
 - **Abgeschlossene Protokolle:** «PDF öffnen» zeigt das finale PDF sofort. Bisher lief jedes Öffnen
   über den PDF-Auftrag im Hintergrund (Ladeseite «Ihr PDF wird erstellt»), obwohl am Ende dasselbe
   PDF mit derselben Dokument-ID zurückkam.

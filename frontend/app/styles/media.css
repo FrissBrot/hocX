@@ -1286,3 +1286,9 @@
     animation: none;
   }
 }
+
+/* Cursor am oberen Rand: Monatsangabe unter der Linie, damit sie in der Leiste bleibt */
+.photo-timeline-cursor-label-below {
+  bottom: auto;
+  top: var(--space-1);
+}

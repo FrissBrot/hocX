@@ -63,6 +63,10 @@ function documentTop(element: HTMLElement | null): number {
   return element ? element.getBoundingClientRect().top + window.scrollY : 0;
 }
 
+// Abstände der Leiste in px: Höhe der Monatsangabe am Cursor, Mindestabstand einer Jahreszahl zum Cursor
+const CURSOR_LABEL_HEIGHT = 20;
+const YEAR_LABEL_CLEARANCE = 14;
+
 export function PhotoTimeline({
   filterQuery,
   sortDir,
@@ -354,6 +358,7 @@ function TimelineScrubber({
   };
   const hoverDate = hover === null ? null : days[Math.max(0, dayIndexAt(offsets, hover))]?.date;
 
+  const cursorTop = position * railHeight;
   return (
     <div className="photo-timeline-scrubber">
       <div
@@ -402,11 +407,20 @@ function TimelineScrubber({
         {marks.months.map((mark) => (
           <span key={mark.key} className="photo-timeline-dot" style={{ top: mark.y }} aria-hidden="true" />
         ))}
-        {marks.years.map((mark) => (
-          <span key={mark.key} className="photo-timeline-year" style={{ top: mark.y }} aria-hidden="true">{mark.label}</span>
-        ))}
-        <span className="photo-timeline-cursor" style={{ top: position * railHeight }} aria-hidden="true">
-          {current ? <span className="photo-timeline-cursor-label">{monthOf(current.date)}</span> : null}
+        {marks.years
+          // Die Jahreszahl direkt am Cursor verdeckte sich mit dessen Monatsangabe («Okt. 2026»
+          // über «2026») - der Cursor nennt das Jahr ohnehin.
+          .filter((mark) => !current || Math.abs(mark.y - cursorTop) > YEAR_LABEL_CLEARANCE)
+          .map((mark) => (
+            <span key={mark.key} className="photo-timeline-year" style={{ top: mark.y }} aria-hidden="true">{mark.label}</span>
+          ))}
+        <span className="photo-timeline-cursor" style={{ top: cursorTop }} aria-hidden="true">
+          {current ? (
+            // Am oberen Rand unter statt über der Linie, sonst ragt die Angabe aus der Leiste
+            <span className={cursorTop < CURSOR_LABEL_HEIGHT ? "photo-timeline-cursor-label photo-timeline-cursor-label-below" : "photo-timeline-cursor-label"}>
+              {monthOf(current.date)}
+            </span>
+          ) : null}
         </span>
         {hover !== null && hoverDate ? (
           <span className="photo-timeline-hover" style={{ top: (hover / scrollable) * railHeight }} aria-hidden="true">
