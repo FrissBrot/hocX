@@ -443,7 +443,7 @@ def _photos(db: Session, tenant_id: int, lang: str) -> list[tuple[str, str, str]
         FROM gallery_image g
         JOIN stored_file s ON s.id = g.stored_file_id
         LEFT JOIN event e ON e.id = g.event_id
-        WHERE g.tenant_id = :t AND s.scan_status = 'clean'
+        WHERE g.tenant_id = :t AND s.scan_status = 'clean' AND s.deleted_at IS NULL
         ORDER BY s.created_at, s.id
     """, {"t": tenant_id})
     files = []
@@ -470,7 +470,7 @@ def _submissions(db: Session, tenant_id: int, lang: str) -> list[tuple[str, str,
         LEFT JOIN event e ON e.id = u.event_id
         LEFT JOIN list_entry le ON le.id = u.list_entry_id
         LEFT JOIN list_definition ld ON ld.id = le.list_definition_id
-        WHERE a.tenant_id = :t AND s.scan_status = 'clean'
+        WHERE a.tenant_id = :t AND s.scan_status = 'clean' AND s.deleted_at IS NULL
         ORDER BY a.title, u.id, f.sort_index
     """, {"t": tenant_id})
     files = []
@@ -493,7 +493,7 @@ def _documents(db: Session, tenant_id: int, lang: str) -> list[tuple[str, str, s
         FROM document d
         JOIN document_file f ON f.document_version_id = d.current_version_id AND f.role = 'original'
         JOIN stored_file s ON s.id = f.stored_file_id
-        WHERE d.tenant_id = :t AND d.source_kind = 'upload' AND s.scan_status = 'clean'
+        WHERE d.tenant_id = :t AND d.source_kind = 'upload' AND s.scan_status = 'clean' AND s.deleted_at IS NULL
         ORDER BY d.display_name, d.id
     """, {"t": tenant_id})
     return [(MAIN, r["storage_path"], f"{folder}/{safe_name(r['original_name'] or r['display_name'])}") for r in rows]

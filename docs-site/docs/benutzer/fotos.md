@@ -79,9 +79,10 @@ Albumeintrag verschwindet.
   damit. Automatische Alben lassen sich nicht löschen, weil hocX sie beim nächsten passenden
   Upload sofort wieder anlegen würde.
 
-**Fotos endgültig löschen** kannst du in «Alle Fotos» über die Auswahl und **Löschen**. Das geht
-nur für direkt hochgeladene Fotos; Bilder aus Protokollen und Abgaben löschst du dort, wo sie
-herkommen. Solche Bilder bleiben beim Löschen auch in ihren Alben stehen.
+**Fotos löschen** kannst du in «Alle Fotos» über die Auswahl und **Löschen** oder in der
+Foto-Ansicht mit **In den Papierkorb**. Das geht nur für direkt hochgeladene Fotos; Bilder aus
+Protokollen und Abgaben löschst du dort, wo sie herkommen. Gelöschte Fotos landen im
+[Papierkorb](dateien.md#papierkorb) und verschwinden überall, auch aus Alben und Freigabelinks.
 
 ## Best-of {#best-of}
 

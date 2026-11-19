@@ -629,6 +629,31 @@ export type FileBulkDeleteResult = {
   errors: string[];
 };
 
+// Papierkorb (Migration 0199): GET /api/files/trash
+export type FileTrashItem = {
+  id: string;
+  original_name: string;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  is_image: boolean;
+  thumbnail_url: string | null;
+  deleted_at: string;
+  deleted_by_name: string | null;
+  purge_at: string;
+  days_left: number;
+};
+
+export type FileTrashList = {
+  items: FileTrashItem[];
+  total_bytes: number;
+  retention_days: number;
+};
+
+export type FileTrashActionResult = {
+  file_ids: string[];
+  errors: string[];
+};
+
 export type PhotoAnalysisJob = {
   id: string;
   status: "queued" | "running" | "done" | "failed";
@@ -1006,7 +1031,7 @@ export type AdminTenantPage = {
 
 // User-facing groupings (see storage_service.py's docstring): uploaded images, other uploads,
 // generated PDF exports, and the catch-all "everything else" bucket.
-export type StorageCategoryKey = "photos" | "files" | "protocols" | "other";
+export type StorageCategoryKey = "photos" | "files" | "protocols" | "trash" | "other";
 
 export type StorageCategoryUsage = {
   key: StorageCategoryKey;

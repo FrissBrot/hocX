@@ -551,6 +551,10 @@
       "todo_reminders": {
         "title": "Rappels de tâches",
         "description": "Crée chaque jour dès 07:00 des rappels pour les tâches échues dans 3 jours ou en retard depuis hier."
+      },
+      "file_trash_purge": {
+        "title": "Vider la corbeille (délai)",
+        "description": "Supprime définitivement les fichiers et photos placés dans la corbeille depuis 30 jours - objet stocké, miniature et journal de suppression compris."
       }
     }
   },

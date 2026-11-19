@@ -1401,6 +1401,7 @@ class StoredFile(Base, TimestampMixin):
             postgresql_where=text("scan_status <> 'clean'"),
         ),
         Index("idx_stored_file_tenant_gps", "tenant_id", postgresql_where=text("gps_latitude IS NOT NULL")),
+        Index("idx_stored_file_trash", "tenant_id", "deleted_at", postgresql_where=text("deleted_at IS NOT NULL")),
         Index(
             "idx_stored_file_metadata_backfill",
             "id",
@@ -1514,6 +1515,11 @@ class StoredFile(Base, TimestampMixin):
     # stored here so it always reflects the current protocol number / assignment title.
     tags: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"), default=list)
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    # Papierkorb (Migration 0199): gesetzt = gelöscht, aber noch nicht endgültig entfernt. Solche
+    # Zeilen blendet app/core/trash_scope.py aus jeder ORM-Abfrage aus; endgültig löscht erst
+    # file_trash_service (von Hand oder nach TRASH_RETENTION).
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deleted_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
 
 
 class ProtocolText(Base, TimestampMixin, UpdatedAtMixin):

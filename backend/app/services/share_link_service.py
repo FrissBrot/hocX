@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
+from app.core.trash_scope import not_trashed_public_id
 from app.models.entities import AppUser, PhotoAlbum, PhotoAlbumItem, ShareLink, ShareLinkFile, StoredFile
 from app.services import photo_album_share_service
 from app.services.photo_metadata_privacy import MetadataPolicy
@@ -150,7 +151,13 @@ def file_ids_for_link(db: Session, link: ShareLink) -> list[uuid.UUID]:
                 .exists()
             )
         return list(db.scalars(statement))
-    return list(db.scalars(select(ShareLinkFile.file_id).where(ShareLinkFile.share_link_id == link.id)))
+    # Papierkorb: der Eintrag bleibt (Wiederherstellen bringt die Freigabe zurück), die Datei
+    # erscheint aber nicht mehr im Link.
+    return list(
+        db.scalars(
+            select(ShareLinkFile.file_id).where(ShareLinkFile.share_link_id == link.id, not_trashed_public_id(ShareLinkFile.file_id))
+        )
+    )
 
 
 def link_contains_file(db: Session, link: ShareLink, file_id: uuid.UUID) -> bool:
@@ -179,7 +186,14 @@ def link_contains_file(db: Session, link: ShareLink, file_id: uuid.UUID) -> bool
             if hidden is not None:
                 return False
         return True
-    return db.scalar(select(ShareLinkFile.file_id).where(ShareLinkFile.share_link_id == link.id, ShareLinkFile.file_id == file_id)) is not None
+    return (
+        db.scalar(
+            select(ShareLinkFile.file_id).where(
+                ShareLinkFile.share_link_id == link.id, ShareLinkFile.file_id == file_id, not_trashed_public_id(ShareLinkFile.file_id)
+            )
+        )
+        is not None
+    )
 
 
 @dataclass

@@ -279,6 +279,14 @@ async def todo_reminders_loop() -> None:
     await run_advisory_locked_loop(name="todo_reminders", interval_seconds=30 * 60, task=todo_notifications.scan_reminders)
 
 
+async def file_trash_purge_loop() -> None:
+    """Papierkorb: Dateien nach Ablauf der Frist (TRASH_RETENTION) endgültig löschen
+    (services/file_trash_service.py). Fehler einzelner Dateien landen im Fehlerprotokoll."""
+    from app.services import file_trash_service
+
+    await run_advisory_locked_loop(name="file_trash_purge", interval_seconds=60 * 60, task=file_trash_service.purge_expired)
+
+
 async def retention_proposals_loop() -> None:
     """Aufbewahrungsfristen der Vereine: Vorschläge anlegen, bei auto_apply umsetzen
     (services/tenant_retention_service.py)."""
@@ -373,4 +381,5 @@ JOB_WORKER_LOOPS: tuple[LoopFactory, ...] = (
     tenant_data_export_loop,
     notification_dispatch_loop,
     todo_reminders_loop,
+    file_trash_purge_loop,
 )

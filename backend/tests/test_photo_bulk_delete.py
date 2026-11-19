@@ -151,8 +151,12 @@ def test_bulk_delete_route_keeps_refused_photo_in_its_albums(db):
 
     assert result.deleted_ids == [item.id]
     assert len(result.errors) == 1
+    # Papierkorb (0199): beide Album-Einträge bleiben stehen - der des gelöschten Fotos für
+    # «Wiederherstellen», er zählt aber nicht mehr mit.
     remaining = {row.file_id for row in db.query(PhotoAlbumItem).filter_by(album_id=album.id)}
-    assert remaining == {protocol_file.public_id}
+    assert remaining == {protocol_file.public_id, item.id}
+    assert service.stored_file_repository.get_by_public_id(db, item.id, tenant_id=tenant.id) is None
+    assert service.stored_file_repository.get_by_public_id(db, protocol_file.public_id, tenant_id=tenant.id) is not None
 
 
 def test_bulk_update_tags_adds_and_removes(db):
@@ -187,7 +191,9 @@ def test_bulk_delete_route_rejects_more_than_200_ids(db):
     assert exc_info.value.status_code == 422
 
 
-def test_bulk_delete_route_deletes_and_cleans_up_album(db):
+def test_bulk_delete_route_moves_to_trash_and_hides_from_album(db):
+    """Papierkorb (0199): Löschen in der Mehrfachauswahl legt das Foto in den Papierkorb. Der
+    Album-Eintrag bleibt für «Wiederherstellen», das Album zählt das Foto aber nicht mehr."""
     tenant = make_tenant(db)
     item = _upload_gallery_image(db, tenant.id)
     album = PhotoAlbum(tenant_id=tenant.id, name="Album", kind="manual")
@@ -201,7 +207,9 @@ def test_bulk_delete_route_deletes_and_cleans_up_album(db):
 
     assert result.deleted_ids == [item.id]
     assert result.errors == []
-    assert db.query(PhotoAlbumItem).filter_by(album_id=album.id).count() == 0
+    assert db.query(PhotoAlbumItem).filter_by(album_id=album.id).count() == 1
+    stats = photo_album_service.list_albums_with_stats(db, service, tenant.id)
+    assert [row.photo_count for row in stats if row.album.id == album.id] == [0]
 
 
 def test_set_file_best_everywhere_route_422_when_photo_has_no_album(db):

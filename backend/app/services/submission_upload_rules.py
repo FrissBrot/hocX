@@ -23,6 +23,7 @@ from pathlib import Path
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.trash_scope import not_trashed_id
 from app.models.entities import GalleryImage, SubmissionAssignment, SubmissionUpload, SubmissionUploadFile
 from app.services.submission_service import _parse_element_ref
 
@@ -99,6 +100,9 @@ def load_rules(db: Session, assignment: SubmissionAssignment, element_ref: str) 
                 GalleryImage.submission_assignment_id == assignment.id,
                 GalleryImage.submission_element_ref == element_ref,
                 GalleryImage.submission_withdrawn_at.is_(None),
+                # Papierkorb-Dateien belegen keinen Platz im Element (sonst blockierte das
+                # Löschen den Ersatz-Upload bis zum endgültigen Löschen).
+                not_trashed_id(GalleryImage.stored_file_id),
             )
         ) or 0
         remaining = max(0, assignment.max_files_per_element - abgabebox_files - in_app_files)

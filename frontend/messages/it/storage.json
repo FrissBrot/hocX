@@ -3,6 +3,7 @@
     "photos": "Galleria, immagini dei verbali e immagini della cassetta di consegna",
     "files": "Import Word, documenti della cassetta di consegna e altri caricamenti",
     "protocols": "Esportazioni PDF generate",
+    "trash": "File e foto eliminati, fino alla rimozione definitiva (conta nella quota)",
     "other": "Loghi, import e altri file"
   },
   "quotaComposition": {

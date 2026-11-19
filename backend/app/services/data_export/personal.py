@@ -167,7 +167,10 @@ def collect(db: Session, person: AppUser) -> dict[str, list[dict[str, Any]]]:
     """, {**params, "id_array": json.dumps([pid])})]
 
     data["files"] = [dict(row) for row in _rows(db, """
-        SELECT original_name AS name, mime_type, file_size_bytes AS size_bytes, created_at, exif_taken_at AS taken_at
+        -- Auskunft (Art. 15): auch Dateien im Papierkorb, sie sind bis zum endgültigen Löschen
+        -- noch gespeichert - mit Datum, seit wann sie dort liegen.
+        SELECT original_name AS name, mime_type, file_size_bytes AS size_bytes, created_at, exif_taken_at AS taken_at,
+               deleted_at AS trashed_at
         FROM stored_file WHERE tenant_id = :tenant_id AND created_by = :pid ORDER BY created_at
     """, params)]
 
@@ -230,7 +233,7 @@ _SECTIONS: dict[str, list[str]] = {
     "events": ["date", "title", "location", "role"],
     "templates": ["template", "exclude_from_attendance"],
     "lists": ["list", "position"],
-    "files": ["name", "mime_type", "size_bytes", "created_at", "taken_at"],
+    "files": ["name", "mime_type", "size_bytes", "created_at", "taken_at", "trashed_at"],
     "security": ["kind", "detail", "label", "created_at", "last_used_at"],
     "activity": ["created_at", "action", "outcome"],
     "mentions": ["protocol", "date", "block", "excerpt"],

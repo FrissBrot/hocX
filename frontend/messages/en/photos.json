@@ -109,9 +109,9 @@
     "apply": "Apply",
     "clearSelection": "Clear selection",
     "delete": "Delete",
-    "deleteConfirm": "{count, plural, one {1 image will be permanently deleted. This action cannot be undone.} other {# images will be permanently deleted. This action cannot be undone.}}",
+    "deleteConfirm": "{count, plural, one {Move 1 image to the trash?} other {Move # images to the trash?}} They can be restored there for 30 days.",
     "deleteError": "Images could not be deleted.",
-    "deletedToast": "{count, plural, one {1 image deleted.} other {# images deleted.}}",
+    "deletedToast": "{count, plural, one {1 image moved to the trash.} other {# images moved to the trash.}}",
     "markBest": "★ Best-of",
     "markedBestToast": "Added to best-of.",
     "noAlbumToast": "{count, plural, one {# photo doesn't belong to an album - best-of isn't possible.} other {# photos don't belong to an album - best-of isn't possible.}}",
@@ -259,12 +259,12 @@
     "tooMany": "Too many photos for automatic grouping (at most {max, number}).",
     "computedAt": "As of {time} · new photos appear after a few minutes.",
     "helpTopic": "Similar photos",
-    "help": "Duplicates are practically identical images, series are photos taken in quick succession. «Keep only the best» permanently deletes the other directly uploaded photos."
+    "help": "Duplicates are practically identical images, series are photos taken in quick succession. “Keep only the best” moves the other directly uploaded photos to the trash."
   },
   "similarGroups": {
     "bestChoice": "Best pick",
     "bestError": "The best-of status could not be changed.",
-    "deleteConfirm": "{count, plural, one {1 image will be permanently deleted. The checked photos are kept.} other {# images will be permanently deleted. The checked photos are kept.}}",
+    "deleteConfirm": "{count, plural, one {Move 1 image to the trash? The checked photos are kept.} other {Move # images to the trash? The checked photos are kept.}}",
     "deleteDisabledTitle": "Only directly uploaded, unchecked photos can be deleted here.",
     "deleteError": "The selection could not be deleted.",
     "deleteSelection": "Delete selection",
@@ -289,7 +289,7 @@
     "bestSuffix": " · best pick",
     "cleanError": "The series could not be cleaned up.",
     "cleanedToast": "Series cleaned up - only the best photo remains.",
-    "deleteConfirm": "{count, plural, one {1 image will be permanently deleted. Only the sharpest, best-exposed photo of the series is kept.} other {# images will be permanently deleted. Only the sharpest, best-exposed photo of the series is kept.}}",
+    "deleteConfirm": "{count, plural, one {Move 1 image to the trash? Only the sharpest, best-exposed photo of the series is kept.} other {Move # images to the trash? Only the sharpest, best-exposed photo of the series is kept.}}",
     "empty": "No similar photos found.",
     "intro": "Near-identical shots - same picture, just a different crop or quality - are grouped into duplicate groups here. The sharpest, best-exposed photo of each group is preselected - the rest can be deleted in one step.",
     "keepOnlyBest": "Keep only best",
@@ -448,7 +448,8 @@
       "done": "Done"
     },
     "bestHelpTopic": "Best-of",
-    "bestHelp": "Every album has a selection of the best photos. hocX suggests them based on the photo analysis. With the star you permanently include a photo in the selection or exclude it; this stays even after later recalculations. In “All photos” the star applies to every album containing the photo."
+    "bestHelp": "Every album has a selection of the best photos. hocX suggests them based on the photo analysis. With the star you permanently include a photo in the selection or exclude it; this stays even after later recalculations. In “All photos” the star applies to every album containing the photo.",
+    "moveToTrash": "Move to trash"
   },
   "dateMarker": {
     "estimated": "Estimated capture date",

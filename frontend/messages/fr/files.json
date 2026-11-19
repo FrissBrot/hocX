@@ -236,5 +236,34 @@
     "noPdf": "Pas de vue PDF",
     "noPdfFailed": "Pas de vue PDF – le traitement a échoué",
     "originalHint": "Vue PDF de « {name} »"
+  },
+  "trash": {
+    "open": "Corbeille",
+    "title": "Corbeille",
+    "moveLabel": "Mettre à la corbeille",
+    "moveConfirm": "Mettre « {name} » à la corbeille ? Tu pourras le restaurer jusqu'à sa suppression définitive.",
+    "movedToast": "« {name} » est dans la corbeille.",
+    "quotaHint": "Les fichiers et photos supprimés restent {days} jours dans la corbeille, puis sont supprimés définitivement. D'ici là, ils occupent {size} et comptent dans le quota de stockage.",
+    "columns": {
+      "name": "Nom",
+      "deleted": "Supprimé",
+      "remaining": "Restant",
+      "actions": "Actions"
+    },
+    "deletedBy": "par {name}",
+    "deletedByUnknown": "par inconnu",
+    "daysLeft": "{count, plural, =0 {Aujourd'hui} one {Encore 1 jour} other {Encore # jours}}",
+    "restore": "Restaurer",
+    "restoredToast": "« {name} » a été restauré.",
+    "purgeLabel": "Supprimer définitivement",
+    "purgeConfirm": "Supprimer définitivement « {name} » ? Cette action est irréversible.",
+    "purgedToast": "« {name} » a été supprimé définitivement.",
+    "emptyLabel": "Vider la corbeille",
+    "emptyConfirm": "{count, plural, one {Supprimer définitivement 1 fichier ?} other {Supprimer définitivement # fichiers ?}} Cette action est irréversible.",
+    "emptiedToast": "{count, plural, =0 {Rien n'a été supprimé.} one {1 fichier supprimé définitivement.} other {# fichiers supprimés définitivement.}}",
+    "empty": "La corbeille est vide.",
+    "loading": "Chargement de la corbeille …",
+    "loadError": "Impossible de charger la corbeille.",
+    "actionError": "L'action n'a pas pu être effectuée."
   }
 }

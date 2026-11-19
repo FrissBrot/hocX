@@ -213,6 +213,7 @@
       "status": "Status",
       "tag": "Tag",
       "taken_at": "Aufgenommen",
+      "trashed_at": "Im Papierkorb seit",
       "tariff": "Tarif",
       "task": "Aufgabe",
       "template": "Vorlage",

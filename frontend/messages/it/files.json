@@ -236,5 +236,34 @@
     "noPdf": "Nessuna vista PDF",
     "noPdfFailed": "Nessuna vista PDF – elaborazione non riuscita",
     "originalHint": "Vista PDF di «{name}»"
+  },
+  "trash": {
+    "open": "Cestino",
+    "title": "Cestino",
+    "moveLabel": "Sposta nel cestino",
+    "moveConfirm": "Spostare «{name}» nel cestino? Potrai ripristinarlo fino all'eliminazione definitiva.",
+    "movedToast": "«{name}» è nel cestino.",
+    "quotaHint": "File e foto eliminati restano {days} giorni nel cestino e poi vengono eliminati definitivamente. Fino ad allora occupano {size} e contano nella quota di archiviazione.",
+    "columns": {
+      "name": "Nome",
+      "deleted": "Eliminato",
+      "remaining": "Rimanente",
+      "actions": "Azioni"
+    },
+    "deletedBy": "da {name}",
+    "deletedByUnknown": "da sconosciuto",
+    "daysLeft": "{count, plural, =0 {Oggi} one {Ancora 1 giorno} other {Ancora # giorni}}",
+    "restore": "Ripristina",
+    "restoredToast": "«{name}» è stato ripristinato.",
+    "purgeLabel": "Elimina definitivamente",
+    "purgeConfirm": "Eliminare definitivamente «{name}»? L'operazione non può essere annullata.",
+    "purgedToast": "«{name}» è stato eliminato definitivamente.",
+    "emptyLabel": "Svuota cestino",
+    "emptyConfirm": "{count, plural, one {Eliminare definitivamente 1 file?} other {Eliminare definitivamente # file?}} L'operazione non può essere annullata.",
+    "emptiedToast": "{count, plural, =0 {Nulla eliminato.} one {1 file eliminato definitivamente.} other {# file eliminati definitivamente.}}",
+    "empty": "Il cestino è vuoto.",
+    "loading": "Caricamento del cestino …",
+    "loadError": "Impossibile caricare il cestino.",
+    "actionError": "Impossibile eseguire l'azione."
   }
 }

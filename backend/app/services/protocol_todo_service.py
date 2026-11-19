@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from app.core.trash_scope import not_trashed_id
 from app.models import (
     AppUser,
     Event,
@@ -589,7 +590,13 @@ class ProtocolTodoService:
             ) if public_ids else {}
             if len(internal) != len(public_ids):
                 raise ValueError("Unknown file")
-            db.execute(delete(ProtocolTodoFile).where(ProtocolTodoFile.protocol_todo_id == todo.id))
+            # Verknüpfungen zu Papierkorb-Dateien bleiben stehen (die Liste aus dem Client kennt sie
+            # nicht): «Wiederherstellen» bringt die Datei samt Pendenz-Bezug zurück.
+            db.execute(
+                delete(ProtocolTodoFile).where(
+                    ProtocolTodoFile.protocol_todo_id == todo.id, not_trashed_id(ProtocolTodoFile.stored_file_id)
+                )
+            )
             for index, public_id in enumerate(public_ids):
                 db.add(ProtocolTodoFile(protocol_todo_id=todo.id, stored_file_id=internal[public_id], sort_index=index))
         db.commit()

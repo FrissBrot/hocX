@@ -213,6 +213,7 @@
       "status": "Statut",
       "tag": "Étiquette",
       "taken_at": "Pris le",
+      "trashed_at": "Dans la corbeille depuis",
       "tariff": "Tarif",
       "task": "Tâche",
       "template": "Modèle",

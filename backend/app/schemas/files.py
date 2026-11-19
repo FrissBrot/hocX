@@ -468,10 +468,45 @@ class FileBulkDelete(BaseModel):
 
 
 class FileBulkDeleteResult(BaseModel):
+    # Seit dem Papierkorb (Migration 0199): in den Papierkorb gelegt, nicht endgültig gelöscht.
     deleted_ids: list[uuid.UUID]
     # Per-file reasons a requested id wasn't deleted (wrong source, not found, ...) - same
     # partial-success shape as GalleryUploadJobDetail.errors.
     errors: list[str]
+
+
+class FileTrashItem(BaseModel):
+    """Eine Datei im Papierkorb (file_trash_service)."""
+
+    id: uuid.UUID
+    original_name: str
+    mime_type: str | None
+    file_size_bytes: int | None
+    is_image: bool
+    thumbnail_url: str | None
+    deleted_at: datetime
+    deleted_by_name: str | None
+    purge_at: datetime
+    days_left: int
+
+
+class FileTrashList(BaseModel):
+    items: list[FileTrashItem]
+    total_bytes: int
+    retention_days: int
+
+
+class FileTrashAction(BaseModel):
+    file_ids: list[uuid.UUID] = Field(min_length=1, max_length=200)
+
+
+class FileTrashActionResult(BaseModel):
+    file_ids: list[uuid.UUID]
+    errors: list[str]
+
+
+class FileTrashEmptyResult(BaseModel):
+    purged: int
 
 
 class FileBulkTagsUpdate(BaseModel):

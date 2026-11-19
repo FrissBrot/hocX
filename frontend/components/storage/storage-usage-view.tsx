@@ -9,6 +9,7 @@ export const CATEGORY_COLORS: Record<StorageCategoryKey, string> = {
   photos: "#db2777",
   files: "#6366f1",
   protocols: "#0d9488",
+  trash: "var(--chart-4)",
   other: "#9ca3af",
 };
 
@@ -20,6 +21,7 @@ export function categoryHints(t: (key: string) => string): Record<StorageCategor
     photos: t("categoryHints.photos"),
     files: t("categoryHints.files"),
     protocols: t("categoryHints.protocols"),
+    trash: t("categoryHints.trash"),
     other: t("categoryHints.other"),
   };
 }

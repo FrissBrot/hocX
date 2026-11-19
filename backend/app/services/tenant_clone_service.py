@@ -10,6 +10,7 @@ from uuid import uuid4
 from sqlalchemy import inspect as sa_inspect, select
 from sqlalchemy.orm import Session
 
+from app.core.trash_scope import include_trashed
 from app.core.config import settings
 from app.models import (
     AttendanceFine,
@@ -134,7 +135,9 @@ class TenantCloneService:
         return self._run_with_partial_cleanup(db, self._clone_structure_impl, source_tenant_id, new_name)
 
     def clone_full(self, db: Session, source_tenant_id: int, new_name: str) -> Tenant:
-        return self._run_with_partial_cleanup(db, self._clone_full_impl, source_tenant_id, new_name)
+        # Vollständige Kopie inklusive Papierkorb (Zeilen, auf die Galerie-Einträge zeigen).
+        with include_trashed(db):
+            return self._run_with_partial_cleanup(db, self._clone_full_impl, source_tenant_id, new_name)
 
     def _run_with_partial_cleanup(self, db: Session, impl, source_tenant_id: int, new_name: str) -> Tenant:
         """Both clone modes commit progressively (one table at a time) rather than as one big

@@ -109,9 +109,9 @@
     "apply": "Applica",
     "clearSelection": "Annulla selezione",
     "delete": "Elimina",
-    "deleteConfirm": "{count, plural, one {1 immagine verrà eliminata definitivamente. Questa azione non può essere annullata.} other {# immagini verranno eliminate definitivamente. Questa azione non può essere annullata.}}",
+    "deleteConfirm": "{count, plural, one {Spostare 1 immagine nel cestino?} other {Spostare # immagini nel cestino?}} Lì possono essere ripristinate per 30 giorni.",
     "deleteError": "Impossibile eliminare le immagini.",
-    "deletedToast": "{count, plural, one {1 immagine eliminata.} other {# immagini eliminate.}}",
+    "deletedToast": "{count, plural, one {1 immagine spostata nel cestino.} other {# immagini spostate nel cestino.}}",
     "markBest": "★ Best-of",
     "markedBestToast": "Aggiunto al best-of.",
     "noAlbumToast": "{count, plural, one {# foto non appartiene a nessun album - best-of non possibile.} other {# foto non appartengono a nessun album - best-of non possibile.}}",
@@ -259,12 +259,12 @@
     "tooMany": "Troppe foto per il raggruppamento automatico (al massimo {max, number}).",
     "computedAt": "Aggiornato al {time} · le nuove foto compaiono dopo pochi minuti.",
     "helpTopic": "Foto simili",
-    "help": "I duplicati sono immagini praticamente identiche, le serie foto scattate in rapida successione. «Tieni solo le migliori» elimina definitivamente le altre foto caricate direttamente."
+    "help": "I duplicati sono immagini praticamente identiche, le serie foto scattate in rapida successione. «Mantieni solo le migliori» sposta nel cestino le altre foto caricate direttamente."
   },
   "similarGroups": {
     "bestChoice": "Scelta migliore",
     "bestError": "Impossibile modificare lo stato best-of.",
-    "deleteConfirm": "{count, plural, one {1 immagine verrà eliminata definitivamente. Le foto selezionate vengono conservate.} other {# immagini verranno eliminate definitivamente. Le foto selezionate vengono conservate.}}",
+    "deleteConfirm": "{count, plural, one {Spostare 1 immagine nel cestino? Le foto spuntate vengono mantenute.} other {Spostare # immagini nel cestino? Le foto spuntate vengono mantenute.}}",
     "deleteDisabledTitle": "Qui possono essere eliminate solo le foto caricate direttamente e non selezionate.",
     "deleteError": "Impossibile eliminare la selezione.",
     "deleteSelection": "Elimina selezione",
@@ -289,7 +289,7 @@
     "bestSuffix": " · scelta migliore",
     "cleanError": "Impossibile ripulire la serie.",
     "cleanedToast": "Serie ripulita - resta solo la foto migliore.",
-    "deleteConfirm": "{count, plural, one {1 immagine verrà eliminata definitivamente. Resta solo la foto più nitida e meglio esposta della serie.} other {# immagini verranno eliminate definitivamente. Resta solo la foto più nitida e meglio esposta della serie.}}",
+    "deleteConfirm": "{count, plural, one {Spostare 1 immagine nel cestino? Viene mantenuta solo la foto più nitida e meglio esposta della serie.} other {Spostare # immagini nel cestino? Viene mantenuta solo la foto più nitida e meglio esposta della serie.}}",
     "empty": "Nessuna foto simile trovata.",
     "intro": "Scatti quasi identici - stessa immagine, solo ritaglio o qualità diversi - vengono raggruppati qui in gruppi di duplicati. La foto più nitida e meglio esposta di ogni gruppo è preselezionata - le altre possono essere eliminate in un solo passaggio.",
     "keepOnlyBest": "Mantieni solo la migliore",
@@ -448,7 +448,8 @@
       "done": "Fatto"
     },
     "bestHelpTopic": "Best-of",
-    "bestHelp": "Ogni album ha una selezione delle foto migliori. hocX la propone in base all’analisi delle foto. Con la stella includi una foto in modo fisso nella selezione o la escludi; resta così anche dopo nuovi calcoli. In «Tutte le foto» la stella vale per tutti gli album che contengono la foto."
+    "bestHelp": "Ogni album ha una selezione delle foto migliori. hocX la propone in base all’analisi delle foto. Con la stella includi una foto in modo fisso nella selezione o la escludi; resta così anche dopo nuovi calcoli. In «Tutte le foto» la stella vale per tutti gli album che contengono la foto.",
+    "moveToTrash": "Sposta nel cestino"
   },
   "dateMarker": {
     "estimated": "Data di scatto stimata",

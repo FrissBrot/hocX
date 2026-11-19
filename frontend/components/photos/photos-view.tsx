@@ -17,6 +17,7 @@ import { PhotoDateGroups } from "./photo-date-groups";
 import { PhotoSimilarGroups } from "./photo-similar-groups";
 import { PhotoSimilarSeries } from "./photo-similar-series";
 import { PhotoViewer } from "./photo-viewer";
+import { TrashModal } from "@/components/files/trash-modal";
 import { UploadResultsModal, uploadResultsSummary } from "@/components/files/upload-results-modal";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FileDropOverlay } from "@/components/ui/file-drop-overlay";
@@ -36,6 +37,7 @@ import { countUploadResults, jobHintMessages, normalizeResult, resultsFromLegacy
 import {
   AlbumPendingRelease,
   FileOverviewItem,
+  FileTrashActionResult,
   GalleryUploadJob,
   GalleryUploadJobDetail,
   StoredFileMetadata,
@@ -72,9 +74,13 @@ type Props = {
   // Mobile-Oberflaeche: Kopf kommt von MobilePhotos, Upload als schwebender Plus-Button,
   // Reiter als Segment, Sortierung/Tag-Filter entfallen (Suche bleibt).
   mobile?: boolean;
+  /** photos.manage: Fotos in der Ansicht in den Papierkorb legen (Papierkorb, Migration 0199). */
+  canManage?: boolean;
+  /** photos.manage oder files.manage: Papierkorb öffnen. */
+  canOpenTrash?: boolean;
 };
 
-export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobile = false }: Props) {
+export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobile = false, canManage = false, canOpenTrash = false }: Props) {
   const t = useTranslations("photos.view");
   const tFiles = useTranslations("files");
   // Ein Upload-Vorgang kann aus mehreren Aufträgen (Batches) plus Dateien bestehen, die der
@@ -430,6 +436,26 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
     );
   }
 
+  const [trashOpen, setTrashOpen] = useState(false);
+
+  // Foto-Ansicht «In den Papierkorb»: nur Direkt-Uploads, danach zum nächsten Foto.
+  async function trashFromViewer(item: FileOverviewItem) {
+    const ok = await confirm({ tone: "danger", message: tFiles("trash.moveConfirm", { name: item.original_name }), confirmLabel: tFiles("trash.moveLabel") });
+    if (!ok) return;
+    try {
+      const result = await browserApiFetch<FileTrashActionResult>("/api/files/trash", { method: "POST", body: JSON.stringify({ file_ids: [item.id] }) });
+      if (result && result.file_ids.length > 0) {
+        const remaining = items.length - 1;
+        handleDeletedElsewhere([item.id]);
+        setViewerIndex((current) => (current === null || remaining <= 0 ? null : Math.min(current, remaining - 1)));
+        showToast(tFiles("trash.movedToast", { name: item.original_name }), "success");
+      }
+      if (result && result.errors.length > 0) showToast(result.errors.join(" · "), "error");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : tFiles("trash.actionError"), "error");
+    }
+  }
+
   function closeViewer() {
     setViewerIndex(null);
     if (captureDateChangedRef.current) {
@@ -556,6 +582,11 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
                     : t("uploadPillNoTotal", { processed: galleryUploadJobs.reduce((sum, job) => sum + job.processed_files, 0) })}
                 </span>
               )}
+              {canOpenTrash ? (
+                <button type="button" className="button-secondary" onClick={() => setTrashOpen(true)}>
+                  {tFiles("trash.open")}
+                </button>
+              ) : null}
               <button type="button" className="button-primary photos-upload-button" onClick={() => {
                 setDroppedFiles([]);
                 setUploadModalOpen(true);
@@ -813,8 +844,11 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
           onToggleBest={albumId ? handleAlbumScopedToggleBest : handleUnscopedToggleBest}
           onTagsSaved={handleTagsSaved}
           onCaptureDateSaved={handleCaptureDateSaved}
+          onTrash={canManage ? (item) => void trashFromViewer(item) : undefined}
         />
       )}
+
+      {canOpenTrash ? <TrashModal open={trashOpen} onClose={() => setTrashOpen(false)} onRestored={() => reload()} /> : null}
 
       {uploadModalOpen && (
         <GalleryUploadModal

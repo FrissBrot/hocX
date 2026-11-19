@@ -3,6 +3,7 @@
     "photos": "Galerie, Protokoll-Bilder und Abgabebox-Bilder",
     "files": "Word-Importe, Abgabebox-Dokumente und weitere Uploads",
     "protocols": "Erzeugte PDF-Exporte",
+    "trash": "Gelöschte Dateien und Fotos, bis sie endgültig entfernt werden (zählt zum Kontingent)",
     "other": "Logos, Importe und übrige Dateien"
   },
   "quotaComposition": {

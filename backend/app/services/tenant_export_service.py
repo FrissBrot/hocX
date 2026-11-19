@@ -38,6 +38,7 @@ from typing import Any, Literal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.trash_scope import include_trashed
 from app.core.config import settings
 from app.core.secret_crypto import decrypt_secret
 from app.models import (
@@ -171,7 +172,17 @@ class TenantExportService:
     def collect(
         self, db: Session, tenant_id: int, scope: ExportScope, *, include_credentials: bool = False
     ) -> tuple[dict[str, Any], list[tuple[str, str, str]]]:
-        """Manifest (Tabellen) und Liste der Dateien (namespace, key, member_name) - ohne ZIP."""
+        """Manifest (Tabellen) und Liste der Dateien (namespace, key, member_name) - ohne ZIP.
+
+        Papierkorb: Der Mandanten-Export ist eine vollständige Sicherung/Übertragung. Er nimmt
+        Papierkorb-Dateien samt deleted_at mit (sonst fehlten Zeilen, auf die Galerie-Einträge
+        zeigen); der Import stellt den Papierkorb so wieder her, die Frist läuft weiter."""
+        with include_trashed(db):
+            return self._collect(db, tenant_id, scope, include_credentials=include_credentials)
+
+    def _collect(
+        self, db: Session, tenant_id: int, scope: ExportScope, *, include_credentials: bool = False
+    ) -> tuple[dict[str, Any], list[tuple[str, str, str]]]:
         tenant = db.get(Tenant, tenant_id)
         if tenant is None:
             raise ValueError("Tenant not found")

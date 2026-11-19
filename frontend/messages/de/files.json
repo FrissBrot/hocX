@@ -236,5 +236,34 @@
     "noPdf": "Keine PDF-Ansicht",
     "noPdfFailed": "Keine PDF-Ansicht – Verarbeitung fehlgeschlagen",
     "originalHint": "PDF-Ansicht von «{name}»"
+  },
+  "trash": {
+    "open": "Papierkorb",
+    "title": "Papierkorb",
+    "moveLabel": "In den Papierkorb",
+    "moveConfirm": "«{name}» in den Papierkorb legen? Du kannst die Datei dort wiederherstellen, bis sie endgültig gelöscht wird.",
+    "movedToast": "«{name}» liegt im Papierkorb.",
+    "quotaHint": "Gelöschte Dateien und Fotos bleiben {days} Tage im Papierkorb und werden danach automatisch endgültig gelöscht. Bis dahin belegen sie {size} und zählen zum Speicherkontingent.",
+    "columns": {
+      "name": "Name",
+      "deleted": "Gelöscht",
+      "remaining": "Verbleibend",
+      "actions": "Aktionen"
+    },
+    "deletedBy": "von {name}",
+    "deletedByUnknown": "von unbekannt",
+    "daysLeft": "{count, plural, =0 {Heute} one {Noch 1 Tag} other {Noch # Tage}}",
+    "restore": "Wiederherstellen",
+    "restoredToast": "«{name}» ist wiederhergestellt.",
+    "purgeLabel": "Endgültig löschen",
+    "purgeConfirm": "«{name}» endgültig löschen? Das lässt sich nicht rückgängig machen.",
+    "purgedToast": "«{name}» ist endgültig gelöscht.",
+    "emptyLabel": "Papierkorb leeren",
+    "emptyConfirm": "{count, plural, one {1 Datei endgültig löschen?} other {# Dateien endgültig löschen?}} Das lässt sich nicht rückgängig machen.",
+    "emptiedToast": "{count, plural, =0 {Nichts gelöscht.} one {1 Datei endgültig gelöscht.} other {# Dateien endgültig gelöscht.}}",
+    "empty": "Der Papierkorb ist leer.",
+    "loading": "Papierkorb wird geladen …",
+    "loadError": "Papierkorb konnte nicht geladen werden.",
+    "actionError": "Aktion konnte nicht ausgeführt werden."
   }
 }

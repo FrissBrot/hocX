@@ -551,6 +551,10 @@
       "todo_reminders": {
         "title": "Task reminders",
         "description": "Creates reminders daily from 07:00 for tasks due in 3 days or overdue since yesterday."
+      },
+      "file_trash_purge": {
+        "title": "Empty trash (retention)",
+        "description": "Permanently deletes files and photos that have been in the trash for 30 days - including the stored object, thumbnail and erasure journal."
       }
     }
   },

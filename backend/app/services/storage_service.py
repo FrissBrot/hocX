@@ -20,11 +20,12 @@ CATEGORY_LABELS: dict[str, str] = {
     "photos": "Fotos",
     "files": "Dateien",
     "protocols": "Protokolle",
+    "trash": "Papierkorb",
     "other": "Sonstiges",
 }
 
 # "other" always last.
-_KNOWN_CATEGORY_KEYS = ("photos", "files", "protocols")
+_KNOWN_CATEGORY_KEYS = ("photos", "files", "protocols", "trash")
 
 
 class StorageService:
@@ -40,6 +41,10 @@ class StorageService:
                  overview deliberately excludes these (a generated PDF isn't something a
                  user "hochgeladen" hat), but they occupy real disk space and belong in a
                  storage report.
+    - trash:     Dateien im Papierkorb (stored_file.deleted_at, Migration 0199). Sie belegen bis
+                 zum endgültigen Löschen weiter Speicher und zählen zum Kontingent - eigene
+                 Kategorie, damit die Summe stimmt und sichtbar ist, was «Papierkorb leeren»
+                 freigibt.
     - other:     everything else - tenant-import/-clone artifacts, orphaned rows, non-
                  image-typed leftovers, and the Document Studio assets (document_asset,
                  not a stored_file row, but counted here and in the quota). (The tenant logo
@@ -64,6 +69,7 @@ class StorageService:
         )
         is_image = StoredFile.mime_type.like("image/%")
         category = case(
+            (StoredFile.deleted_at.is_not(None), "trash"),
             (is_export, "protocols"),
             (is_generated_document_file, "files"),
             (is_upload & is_image, "photos"),
@@ -73,7 +79,7 @@ class StorageService:
 
         query = select(
             StoredFile.tenant_id, category, func.coalesce(func.sum(StoredFile.file_size_bytes), 0)
-        ).group_by(StoredFile.tenant_id, category)
+        ).group_by(StoredFile.tenant_id, category).execution_options(include_trashed=True)
         if tenant_id is not None:
             query = query.where(StoredFile.tenant_id == tenant_id)
 
@@ -103,9 +109,9 @@ class StorageService:
         """Cheap one-query total per tenant - used for the admin tenant list, which only
         needs the headline number, not the full per-category breakdown."""
         rows = db.execute(
-            select(StoredFile.tenant_id, func.coalesce(func.sum(StoredFile.file_size_bytes), 0)).group_by(
-                StoredFile.tenant_id
-            )
+            select(StoredFile.tenant_id, func.coalesce(func.sum(StoredFile.file_size_bytes), 0))
+            .group_by(StoredFile.tenant_id)
+            .execution_options(include_trashed=True)  # Papierkorb zählt zum Kontingent
         ).all()
         totals = {tenant_id: int(total or 0) for tenant_id, total in rows}
         for tenant_id, total in self._asset_sums(db, None).items():

@@ -1286,3 +1286,28 @@
     animation: none;
   }
 }
+
+/* Papierkorb (Dateien- und Fotos-Seite, components/files/trash-modal.tsx) */
+.trash-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.trash-thumb {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--panel-solid);
+}
+
+.trash-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}

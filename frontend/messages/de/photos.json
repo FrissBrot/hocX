@@ -109,9 +109,9 @@
     "apply": "Anwenden",
     "clearSelection": "Auswahl aufheben",
     "delete": "Löschen",
-    "deleteConfirm": "{count, plural, one {1 Bild wird endgültig gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.} other {# Bilder werden endgültig gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.}}",
+    "deleteConfirm": "{count, plural, one {1 Bild in den Papierkorb legen?} other {# Bilder in den Papierkorb legen?}} Dort lassen sie sich 30 Tage lang wiederherstellen.",
     "deleteError": "Bilder konnten nicht gelöscht werden.",
-    "deletedToast": "{count, plural, one {1 Bild gelöscht.} other {# Bilder gelöscht.}}",
+    "deletedToast": "{count, plural, one {1 Bild in den Papierkorb gelegt.} other {# Bilder in den Papierkorb gelegt.}}",
     "markBest": "★ Best-of",
     "markedBestToast": "Zu Best-of hinzugefügt.",
     "noAlbumToast": "{count} Foto(s) gehören zu keinem Album - Best-of nicht möglich.",
@@ -259,12 +259,12 @@
     "tooMany": "Zu viele Fotos für die automatische Gruppierung (höchstens {max, number}).",
     "computedAt": "Stand {time} · neue Fotos erscheinen nach wenigen Minuten.",
     "helpTopic": "Ähnliche Fotos",
-    "help": "Duplikate sind praktisch gleiche Bilder, Serien kurz nacheinander aufgenommene Fotos. «Nur beste behalten» löscht die übrigen direkt hochgeladenen Fotos endgültig."
+    "help": "Duplikate sind praktisch gleiche Bilder, Serien kurz nacheinander aufgenommene Fotos. «Nur beste behalten» legt die übrigen direkt hochgeladenen Fotos in den Papierkorb."
   },
   "similarGroups": {
     "bestChoice": "Beste Wahl",
     "bestError": "Best-of-Status konnte nicht geändert werden.",
-    "deleteConfirm": "{count, plural, one {1 Bild wird endgültig gelöscht. Die angehakten Fotos bleiben erhalten.} other {# Bilder werden endgültig gelöscht. Die angehakten Fotos bleiben erhalten.}}",
+    "deleteConfirm": "{count, plural, one {1 Bild in den Papierkorb legen? Die angehakten Fotos bleiben erhalten.} other {# Bilder in den Papierkorb legen? Die angehakten Fotos bleiben erhalten.}}",
     "deleteDisabledTitle": "Nur direkt hochgeladene, nicht angehakte Fotos können hier gelöscht werden.",
     "deleteError": "Auswahl konnte nicht gelöscht werden.",
     "deleteSelection": "Auswahl löschen",
@@ -289,7 +289,7 @@
     "bestSuffix": " · beste Wahl",
     "cleanError": "Serie konnte nicht bereinigt werden.",
     "cleanedToast": "Serie bereinigt - nur das beste Foto bleibt.",
-    "deleteConfirm": "{count, plural, one {1 Bild wird endgültig gelöscht. Nur das schärfste, am besten belichtete Foto der Serie bleibt erhalten.} other {# Bilder werden endgültig gelöscht. Nur das schärfste, am besten belichtete Foto der Serie bleibt erhalten.}}",
+    "deleteConfirm": "{count, plural, one {1 Bild in den Papierkorb legen? Nur das schärfste, am besten belichtete Foto der Serie bleibt erhalten.} other {# Bilder in den Papierkorb legen? Nur das schärfste, am besten belichtete Foto der Serie bleibt erhalten.}}",
     "empty": "Keine ähnlichen Fotos gefunden.",
     "intro": "Nahezu identische Aufnahmen - gleiches Bild, nur anderer Ausschnitt oder andere Qualität - werden zu Duplikat-Gruppen zusammengefasst. Das schärfste, am besten belichtete Foto jeder Gruppe ist vorausgewählt - die übrigen können in einem Schritt gelöscht werden.",
     "keepOnlyBest": "Nur beste behalten",
@@ -448,7 +448,8 @@
       "done": "Fertig"
     },
     "bestHelpTopic": "Best-of",
-    "bestHelp": "Jedes Album hat eine Auswahl der besten Fotos. hocX schlägt sie anhand der Foto-Analyse vor. Mit dem Stern nimmst du ein Foto fest in die Auswahl auf oder schliesst es fest aus; das bleibt auch bei späteren Neuberechnungen so. In «Alle Fotos» wirkt der Stern auf alle Alben, in denen das Foto liegt."
+    "bestHelp": "Jedes Album hat eine Auswahl der besten Fotos. hocX schlägt sie anhand der Foto-Analyse vor. Mit dem Stern nimmst du ein Foto fest in die Auswahl auf oder schliesst es fest aus; das bleibt auch bei späteren Neuberechnungen so. In «Alle Fotos» wirkt der Stern auf alle Alben, in denen das Foto liegt.",
+    "moveToTrash": "In den Papierkorb"
   },
   "dateMarker": {
     "estimated": "Geschätztes Aufnahmedatum",

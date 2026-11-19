@@ -28,11 +28,14 @@ export function useFileActions({
   onOpenDetail,
   onShare,
   onChanged,
+  onTrash,
 }: {
   onOpenDetail: (item: FileOverviewItem) => void;
   onShare: (item: FileOverviewItem) => void;
   /** Nach «Erneut verarbeiten»: Liste neu laden. */
   onChanged?: () => void;
+  /** «In den Papierkorb» - nur für Direkt-Uploads und mit files.manage (Papierkorb, Migration 0199). */
+  onTrash?: (item: FileOverviewItem) => void;
 }) {
   const t = useTranslations("files");
   const showToast = useToast();
@@ -67,6 +70,9 @@ export function useFileActions({
     }
     if (document && (document.status === "failed" || document.status === "partial")) {
       items.push({ label: t("document.reprocess"), onClick: () => void reprocess(item) });
+    }
+    if (onTrash && item.source === "gallery_upload") {
+      items.push({ label: t("trash.moveLabel"), onClick: () => onTrash(item), danger: true });
     }
     return items;
   };

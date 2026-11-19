@@ -3,6 +3,7 @@
     "photos": "Gallery, protocol images and submission-box images",
     "files": "Word imports, submission-box documents and other uploads",
     "protocols": "Generated PDF exports",
+    "trash": "Deleted files and photos until they are permanently removed (counts towards the quota)",
     "other": "Logos, imports and other files"
   },
   "quotaComposition": {

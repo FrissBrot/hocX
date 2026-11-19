@@ -3,6 +3,7 @@
     "photos": "Galerie, images de procès-verbaux et images de la boîte de dépôt",
     "files": "Imports Word, documents de la boîte de dépôt et autres téléversements",
     "protocols": "Exports PDF générés",
+    "trash": "Fichiers et photos supprimés, jusqu'à leur suppression définitive (compte dans le quota)",
     "other": "Logos, imports et autres fichiers"
   },
   "quotaComposition": {
