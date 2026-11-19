@@ -428,5 +428,89 @@
   "periodClosing": "Saldo finale",
   "exportButton": "Esporta",
   "reopenConfirm": "Annullare l’incasso di {amount} per {name}? La registrazione nelle finanze verrà eliminata e la multa sarà di nuovo aperta.",
-  "currencyFromSettings": "Tutti i conti e le multe usano la valuta {currency}. Si imposta in Organizzazione › Profilo."
+  "currencyFromSettings": "Tutti i conti e le multe usano la valuta {currency}. Si imposta in Organizzazione › Profilo.",
+  "kasse": {
+    "title": "Cassa",
+    "helpLink": "Aiuto sulle finanze ↗",
+    "leadFines": "Ritardi e assenze dai verbali e compiti completati in ritardo. Spuntare significa: denaro ricevuto.",
+    "leadAccounts": "Conti, saldo e registrazioni. Le multe incassate vengono registrate automaticamente sul loro conto.",
+    "undo": "Annulla",
+    "markCollected": "Segna come incassata",
+    "markCollectedFor": "Segna la multa di {name} come incassata",
+    "collect": "Incassa",
+    "collectAll": "Incassa tutto",
+    "sourceProtocol": "Verbale · {account}",
+    "sourceTodo": "Compito · {account}",
+    "due": "scadenza {date}",
+    "ruleName": "Regola {name}",
+    "reasonDetail": "{days} · {rule}",
+    "status": {
+      "pending": "Aperta",
+      "running": "In corso",
+      "conflict": "Conflitto",
+      "collected": "Incassata",
+      "deleted": "Eliminata"
+    },
+    "hint": {
+      "running": "L’importo cresce ogni giorno",
+      "collectedBy": "{date} · {user}"
+    },
+    "action": {
+      "delete": "Elimina",
+      "waive": "Condona",
+      "reopen": "Riapri",
+      "restore": "Ripristina",
+      "chooseRule": "Scegli regola"
+    },
+    "toast": {
+      "collected": "{name}: {amount} incassato",
+      "deleted": "Multa di {name} eliminata",
+      "waived": "Multa di {name} condonata",
+      "reopened": "Multa di {name} di nuovo aperta",
+      "restored": "Multa di {name} ripristinata",
+      "undone": "Annullato: {name}"
+    },
+    "empty": {
+      "openTitle": "Tutto incassato.",
+      "openText": "Al momento non ci sono multe aperte.",
+      "searchTitle": "Nessun risultato.",
+      "searchText": "Modifica la ricerca o cambia filtro.",
+      "filterTitle": "Nessuna multa.",
+      "filterText": "Nulla in questo filtro."
+    },
+    "kpi": {
+      "open": "Aperto",
+      "collected": "Incassato {year}",
+      "people": "Persone con multe aperte",
+      "fines": "{count, plural, one {# multa} other {# multe}}",
+      "ofTotal": "su {count}"
+    },
+    "conflict": {
+      "title": "{count, plural, one {# multa per compiti richiede una decisione.} other {# multe per compiti richiedono una decisione.}}",
+      "text": "Più regole corrispondono allo stesso compito. Scegli la regola manualmente.",
+      "show": "Mostra",
+      "onlyConflicts": "Solo conflitti ✕",
+      "clear": "Rimuovi il filtro «Solo conflitti»"
+    },
+    "filter": {
+      "open": "Aperte",
+      "collected": "Incassate",
+      "deleted": "Eliminate",
+      "all": "Tutte"
+    },
+    "searchPlaceholder": "Persona, verbale o compito",
+    "view": {
+      "label": "Vista",
+      "person": "Per persona",
+      "list": "Elenco"
+    },
+    "person": {
+      "open": "{count, plural, one {# aperta} other {# aperte}}",
+      "nothingOpen": "nulla di aperto",
+      "more": "{count, plural, one {# altra} other {# altre}}"
+    },
+    "accountOpen": "+ {amount} aperto",
+    "provisionalOpen": "+ {amount} da multe aperte, non ancora incassate",
+    "fromFine": "Da una multa · modificabile solo tramite le multe"
+  }
 }

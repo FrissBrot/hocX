@@ -14,7 +14,8 @@ Die Übersicht der Abgaben und das Abgabe-Detail folgen jetzt vollständig dem D
 (in 1.4.0 war nur der Dialog zum Anlegen und Bearbeiten umgesetzt). Einzelabgaben haben neu
 beliebig viele, von Hand angelegte Abgabeelemente mit eigenem Stichtag und eigenen Verantwortlichen.
 Dazu ein Papierkorb für Dateien und Fotos, ein korrigierbares Aufnahmedatum (einzeln und als
-Mehrfachauswahl), Blättern im Datei-Detail, Prüfungen aller Dienste von aussen beim Update und die
+Mehrfachauswahl), die Seite «Kasse» mit Konten und Bussen nach Design «Kasse und Bussen v2»,
+Blättern im Datei-Detail, Prüfungen aller Dienste von aussen beim Update und die
 Behebung des 504 auf Prüfseite und Abgabebox. Drei Migrationen (0198, 0199, 0200), keine neuen
 Secrets oder Umgebungsvariablen, keine Breaking Changes.
 
@@ -76,6 +77,20 @@ Secrets oder Umgebungsvariablen, keine Breaking Changes.
 - **Datei-Details:** Bei Dateien aus einer Abgabe steht unter «Element», aus welchem Termin (mit
   Datum) bzw. Listeneintrag sie stammt. Mit ← / → (oder den Knöpfen oben) blättert man wie bei den
   Fotos durch die Dateien der Liste; offene Tag-Änderungen werden vorher gespeichert.
+
+- **Kasse (Design «Kasse und Bussen v2»):** Konten und Bussen sind eine Seite «Kasse» mit den
+  Reitern «Konten» und «Bussen» (Zähler der offenen Bussen am Reiter); `/finances` und `/fines`
+  bleiben die Adressen der Reiter, Links, Suche und Seitenleiste funktionieren unverändert.
+  - **Bussen:** Kennzahlen (offen, kassiert im laufenden Jahr, Personen mit offenen Bussen), ein
+    Hinweis auf Pendenzen-Bussen mit Regel-Konflikt samt «Anzeigen», Filter Offen/Kassiert/Gelöscht/
+    Alle mit Suche und die Ansichten «Nach Person» (Karte je Person mit Tarif, offener Summe und
+    «Kassieren» bzw. «Alle kassieren») und «Liste» (sortierbare Tabelle). Jede Zeile hat Haken,
+    Status («Offen», «Läuft», «Konflikt», «Kassiert», «Gelöscht») und ihre Aktion (Löschen, Erlassen,
+    Wieder öffnen, Wiederherstellen, Regel wählen). Nach Kassieren, Löschen, Erlassen und Wieder
+    öffnen bietet der Hinweis «Rückgängig» an (führt die Gegenaktion aus). «+ Busse» steht im Kopf.
+  - **Konten:** Kontenliste mit Anzahl Buchungen, Saldo und offenen Bussen je Konto, das erste Konto
+    ist gleich geöffnet; Jahres-Chips statt Auswahlliste, «+ Buchung» als Hauptaktion, neue Buchungen
+    werden kurz hervorgehoben und Buchungen aus Bussen tragen «Aus Busse · nur über Bussen änderbar».
 
 ### Behoben
 

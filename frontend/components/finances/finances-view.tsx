@@ -1,15 +1,15 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import { DateInput } from "@/components/ui/date-input";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ActionIcon } from "@/components/ui/action-icons";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
-import { Select } from "@/components/ui/select";
 import { StatusBanner } from "@/components/ui/status-banner";
-import { DocsLink, HelpPopover } from "@/components/ui/help-popover";
+import { HelpPopover } from "@/components/ui/help-popover";
+import { KasseHeader } from "@/components/finances/kasse-header";
 import { DocumentExportButton } from "@/components/documents/export-dialog";
 import { FinanceAccount, FinancePeriodSummary, FinanceTransaction } from "@/types/api";
 import { browserApiFetch } from "@/lib/api/client";
@@ -29,9 +29,15 @@ type Props = {
   canWrite: boolean;
   /** Feature «finance» nur noch lesend (Downgrade): Hinweisbanner statt Schreibaktionen. */
   readOnly?: boolean;
+  /** Anzahl offener Bussen für den Zähler am Reiter «Bussen» (null = unbekannt). */
+  openFineCount?: number | null;
 };
 
-export function FinancesView({ initialAccounts, currency: tenantCurrency, canWrite, readOnly = false }: Props) {
+const ALL_YEARS = "all";
+/** Wie lange eine neu erfasste Buchung hervorgehoben bleibt. */
+const HIGHLIGHT_MS = 2400;
+
+export function FinancesView({ initialAccounts, currency: tenantCurrency, canWrite, readOnly = false, openFineCount = null }: Props) {
   const t = useTranslations("finances");
   const tCommon = useTranslations("common");
   const locale = useLocale();
@@ -48,6 +54,8 @@ export function FinancesView({ initialAccounts, currency: tenantCurrency, canWri
   const [summary, setSummary] = useState<FinancePeriodSummary | null>(null);
   // Schneller Kontowechsel A→B: nur die Antwort der letzten Anfrage zählt (wie mobile-finances).
   const requestRef = useRef(0);
+  // Neu erfasste Buchung kurz hervorheben (Design «Kasse und Bussen v2»)
+  const [highlightTxId, setHighlightTxId] = useState<string | null>(null);
 
   // Account form
   const [showAccountForm, setShowAccountForm] = useState(false);
@@ -63,6 +71,18 @@ export function FinancesView({ initialAccounts, currency: tenantCurrency, canWri
   const [txDirection, setTxDirection] = useState<"income" | "expense">("income");
   const parsedTxAmount = Number(txDraft.amount.replace(",", "."));
   const validTx = Boolean(txDraft.description.trim() && txDraft.transaction_date && Number.isFinite(parsedTxAmount) && parsedTxAmount > 0);
+
+  // Wie im Design ist immer ein Konto offen: beim Laden das erste wählen.
+  useEffect(() => {
+    if (initialAccounts.length > 0) void openAccount(initialAccounts[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!highlightTxId) return;
+    const timer = setTimeout(() => setHighlightTxId(null), HIGHLIGHT_MS);
+    return () => clearTimeout(timer);
+  }, [highlightTxId]);
 
   async function openAccount(account: FinanceAccount) {
     setSelected(account);
@@ -222,10 +242,11 @@ export function FinancesView({ initialAccounts, currency: tenantCurrency, canWri
           body: JSON.stringify({ amount, description: txDraft.description, transaction_date: txDraft.transaction_date }),
         });
       } else {
-        await browserApiFetch<FinanceTransaction>(`/api/finance/accounts/${selected.id}/transactions`, {
+        const created = await browserApiFetch<FinanceTransaction>(`/api/finance/accounts/${selected.id}/transactions`, {
           method: "POST",
           body: JSON.stringify({ amount, description: txDraft.description, transaction_date: txDraft.transaction_date }),
         });
+        if (created?.id) setHighlightTxId(created.id);
       }
       // A single mutated transaction can shift the running balance of every transaction
       // after it, so reload the first page fresh rather than patching state locally.
@@ -293,15 +314,12 @@ export function FinancesView({ initialAccounts, currency: tenantCurrency, canWri
   );
 
 
+  const header = <KasseHeader active="/finances" showAccountsTab openCount={openFineCount} lead={t("kasse.leadAccounts")} />;
+
   if (accounts.length === 0) {
     return (
-      <div className="grid">
-        <div className="page-header">
-          <div>
-            <h1 className="page-title">{t("pageTitle")}</h1>
-            <p className="muted">{t("pageDescription")} <DocsLink page="finanzen">{t("docsLink")}</DocsLink></p>
-          </div>
-        </div>
+      <div className="grid kasse">
+        {header}
         {readOnly ? <StatusBanner tone="neutral" message={t("readOnlyBanner")} /> : null}
         <EmptyState
           title={t("emptyTitle")}
@@ -321,7 +339,8 @@ export function FinancesView({ initialAccounts, currency: tenantCurrency, canWri
   }
 
   return (
-    <div className="grid">
+    <div className="grid kasse">
+    {header}
     {readOnly ? <StatusBanner tone="neutral" message={t("readOnlyBanner")} /> : null}
     <div className="finance-layout">
       {/* ── Account sidebar ── */}
@@ -343,18 +362,18 @@ export function FinancesView({ initialAccounts, currency: tenantCurrency, canWri
                 onClick={() => void openAccount(account)}
               >
                 <span className="finance-account-name">{account.name}</span>
+                <span className="finance-account-count">{t("transactionCount", { count: account.transaction_count })}</span>
                 <span className={`finance-account-balance${account.balance < 0 ? " finance-balance-negative" : ""}`}>
-                  {formatAmount(account.balance, account.currency_label, locale)}
+                  {formatAmount(account.balance, account.currency_label, locale, true)}
                 </span>
                 {account.provisional_balance > 0 ? (
                   <span className="finance-account-provisional">
-                    + {formatAmount(account.provisional_balance, account.currency_label, locale)} {t("provisional")}
+                    {t("kasse.accountOpen", { amount: formatAmount(account.provisional_balance, account.currency_label, locale, true) })}
                   </span>
                 ) : null}
                 {account.description ? <span className="finance-account-desc">{account.description}</span> : null}
               </button>
               <div className="finance-account-actions">
-                <span className="finance-account-count">{t("transactionCount", { count: account.transaction_count })}</span>
                 {canWrite && <button type="button" className="button-icon-soft-sm" onClick={() => startEditAccount(account)} title={tCommon("edit")} aria-label={tCommon("edit")}><ActionIcon name="edit" /></button>}
                 {canWrite && <button type="button" className="button-icon-soft-sm button-icon-soft-danger" onClick={() => void deleteAccount(account)} title={tCommon("delete")} aria-label={tCommon("delete")}><ActionIcon name="delete" /></button>}
               </div>
@@ -381,7 +400,7 @@ export function FinancesView({ initialAccounts, currency: tenantCurrency, canWri
                 </div>
                 {selected.provisional_balance > 0 ? (
                   <div className="finance-account-provisional">
-                    + {formatAmount(selected.provisional_balance, selected.currency_label, locale, true)} {t("provisionalPending")}{" "}
+                    {t("kasse.provisionalOpen", { amount: formatAmount(selected.provisional_balance, selected.currency_label, locale, true) })}{" "}
                     <HelpPopover topic={t("provisionalHelpTopic")} docs={{ page: "finanzen", anchor: "provisorischer-saldo" }}>{t("provisionalHelp")}</HelpPopover>
                   </div>
                 ) : null}
@@ -394,20 +413,22 @@ export function FinancesView({ initialAccounts, currency: tenantCurrency, canWri
                     params: { account_id: selected.id, ...(year ? { date_from: `${year}-01-01`, date_to: `${year}-12-31` } : {}) },
                   }}
                 />
-                {canWrite && !showTxForm && <button type="button" className="button-secondary" onClick={startCreateTx}>{t("addTransaction")}</button>}
+                {canWrite && <button type="button" className="button-primary" disabled={showTxForm} onClick={startCreateTx}>{t("addTransaction")}</button>}
               </div>
             </div>
 
             <div className="finance-period">
-              <label className="field-stack finance-period-year">
-                <span className="field-label">{t("yearLabel")}</span>
-                <Select value={year} onChange={(event) => void changeYear(event.target.value)}>
-                  <option value="">{t("yearAll")}</option>
-                  {(summary?.years ?? []).map((value) => (
-                    <option key={value} value={String(value)}>{value}</option>
-                  ))}
-                </Select>
-              </label>
+              <div className="finance-period-year" role="group" aria-label={t("yearLabel")}>
+                <FilterTabs
+                  variant="chips"
+                  options={[
+                    ...(summary?.years ?? []).map((value) => ({ value: String(value), label: String(value) })),
+                    { value: ALL_YEARS, label: t("yearAll") },
+                  ]}
+                  value={year || ALL_YEARS}
+                  onChange={(value) => void changeYear(value === ALL_YEARS ? "" : value)}
+                />
+              </div>
               {summary ? (
                 <dl className="finance-period-totals">
                   {year ? (
@@ -495,10 +516,13 @@ export function FinancesView({ initialAccounts, currency: tenantCurrency, canWri
                   const running = tx.running_balance ?? tx.amount;
                   const lockedText = lockedReasonText(tx, t);
                   return (
-                    <div key={tx.id} className={`finance-tx-row${tx.amount < 0 ? " finance-tx-expense" : " finance-tx-income"}`}>
+                    <div key={tx.id} className={`finance-tx-row${tx.amount < 0 ? " finance-tx-expense" : " finance-tx-income"}${tx.id === highlightTxId ? " finance-tx-row-new" : ""}`}>
                       <span className="finance-tx-date">{formatDate(tx.transaction_date)}</span>
                       <span className="finance-tx-desc">
                         {tx.description}
+                        {tx.locked_reason === "fine_transaction" || tx.locked_reason === "todo_fine_transaction" ? (
+                          <span className="finance-tx-origin">{t("kasse.fromFine")}</span>
+                        ) : null}
                       </span>
                       <span className={`finance-tx-amount finance-tx-cell-right${tx.amount < 0 ? " finance-amount-neg" : " finance-amount-pos"}`}>
                         {tx.amount > 0 ? "+" : ""}{formatAmount(tx.amount, currency, locale)}
@@ -555,6 +579,7 @@ function today(): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-function formatAmount(amount: number, currency: string, locale: string, currencyFirst = false): string {
+// Wie im Design «Kasse und Bussen v2» überall «CHF 15.50» (Währung vorne).
+function formatAmount(amount: number, currency: string, locale: string, currencyFirst = true): string {
   return formatMoney(amount, currency, locale, { currencyFirst });
 }

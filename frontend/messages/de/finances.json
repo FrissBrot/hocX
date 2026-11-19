@@ -428,5 +428,89 @@
   "periodClosing": "Endsaldo",
   "exportButton": "Exportieren",
   "reopenConfirm": "Einkassierung von {amount} für {name} rückgängig machen? Die Buchung in den Finanzen wird gelöscht und die Busse ist wieder offen.",
-  "currencyFromSettings": "Alle Konten und Bussen verwenden die Währung {currency}. Sie wird unter Organisation › Profil festgelegt."
+  "currencyFromSettings": "Alle Konten und Bussen verwenden die Währung {currency}. Sie wird unter Organisation › Profil festgelegt.",
+  "kasse": {
+    "title": "Kasse",
+    "helpLink": "Hilfe zu Finanzen ↗",
+    "leadFines": "Verspätung und Absenz aus den Protokollen sowie zu spät erledigte Pendenzen. Haken setzen heisst: Geld erhalten.",
+    "leadAccounts": "Konten, Saldo und Buchungen. Kassierte Bussen werden automatisch auf ihr Konto gebucht.",
+    "undo": "Rückgängig",
+    "markCollected": "Als kassiert markieren",
+    "markCollectedFor": "Busse von {name} als kassiert markieren",
+    "collect": "Kassieren",
+    "collectAll": "Alle kassieren",
+    "sourceProtocol": "Protokoll · {account}",
+    "sourceTodo": "Pendenz · {account}",
+    "due": "fällig {date}",
+    "ruleName": "Regel {name}",
+    "reasonDetail": "{days} · {rule}",
+    "status": {
+      "pending": "Offen",
+      "running": "Läuft",
+      "conflict": "Konflikt",
+      "collected": "Kassiert",
+      "deleted": "Gelöscht"
+    },
+    "hint": {
+      "running": "Betrag wächst täglich",
+      "collectedBy": "{date} · {user}"
+    },
+    "action": {
+      "delete": "Löschen",
+      "waive": "Erlassen",
+      "reopen": "Wieder öffnen",
+      "restore": "Wiederherstellen",
+      "chooseRule": "Regel wählen"
+    },
+    "toast": {
+      "collected": "{name}: {amount} kassiert",
+      "deleted": "Busse von {name} gelöscht",
+      "waived": "Busse von {name} erlassen",
+      "reopened": "Busse von {name} wieder offen",
+      "restored": "Busse von {name} wiederhergestellt",
+      "undone": "Rückgängig gemacht: {name}"
+    },
+    "empty": {
+      "openTitle": "Alles kassiert.",
+      "openText": "Es gibt im Moment keine offenen Bussen.",
+      "searchTitle": "Keine Treffer.",
+      "searchText": "Suche anpassen oder Filter wechseln.",
+      "filterTitle": "Keine Bussen.",
+      "filterText": "In diesem Filter gibt es nichts."
+    },
+    "kpi": {
+      "open": "Offen",
+      "collected": "Kassiert {year}",
+      "people": "Personen mit offenen Bussen",
+      "fines": "{count, plural, one {# Busse} other {# Bussen}}",
+      "ofTotal": "von {count}"
+    },
+    "conflict": {
+      "title": "{count, plural, one {# Pendenzen-Busse braucht eine Entscheidung.} other {# Pendenzen-Bussen brauchen eine Entscheidung.}}",
+      "text": "Mehrere Regeln passen auf dieselbe Pendenz. Wähle die Regel von Hand.",
+      "show": "Anzeigen",
+      "onlyConflicts": "Nur Konflikte ✕",
+      "clear": "Filter «Nur Konflikte» entfernen"
+    },
+    "filter": {
+      "open": "Offen",
+      "collected": "Kassiert",
+      "deleted": "Gelöscht",
+      "all": "Alle"
+    },
+    "searchPlaceholder": "Person, Protokoll oder Pendenz",
+    "view": {
+      "label": "Ansicht",
+      "person": "Nach Person",
+      "list": "Liste"
+    },
+    "person": {
+      "open": "{count, plural, other {# offen}}",
+      "nothingOpen": "nichts offen",
+      "more": "{count, plural, other {# weitere}}"
+    },
+    "accountOpen": "+ {amount} offen",
+    "provisionalOpen": "+ {amount} aus offenen Bussen, noch nicht kassiert",
+    "fromFine": "Aus Busse · nur über Bussen änderbar"
+  }
 }

@@ -100,7 +100,8 @@ describe("Gesperrte Buchungen und Jahressicht", () => {
     await screen.findByText("Raummiete");
     expect(fetchMock).toHaveBeenCalledWith(`/api/finance/accounts/${account.id}/summary`);
     expect(screen.getByText("Einnahmen")).toBeInTheDocument();
-    fireEvent.change(screen.getByRole("combobox", { name: "Zeitraum" }), { target: { value: "2025" } });
+    // Jahres-Chips statt Auswahlliste (Design «Kasse und Bussen v2»)
+    fireEvent.click(await screen.findByRole("tab", { name: "2025" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(`/api/finance/accounts/${account.id}/transactions?limit=50&year=2025`));
   });
 });

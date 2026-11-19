@@ -428,5 +428,89 @@
   "periodClosing": "Solde final",
   "exportButton": "Exporter",
   "reopenConfirm": "Annuler l’encaissement de {amount} pour {name} ? L’écriture dans les finances sera supprimée et l’amende sera de nouveau ouverte.",
-  "currencyFromSettings": "Tous les comptes et amendes utilisent la devise {currency}. Elle se définit sous Organisation › Profil."
+  "currencyFromSettings": "Tous les comptes et amendes utilisent la devise {currency}. Elle se définit sous Organisation › Profil.",
+  "kasse": {
+    "title": "Caisse",
+    "helpLink": "Aide sur les finances ↗",
+    "leadFines": "Retards et absences tirés des procès-verbaux ainsi que tâches terminées en retard. Cocher signifie : argent reçu.",
+    "leadAccounts": "Comptes, solde et écritures. Les amendes encaissées sont comptabilisées automatiquement sur leur compte.",
+    "undo": "Annuler",
+    "markCollected": "Marquer comme encaissée",
+    "markCollectedFor": "Marquer l’amende de {name} comme encaissée",
+    "collect": "Encaisser",
+    "collectAll": "Tout encaisser",
+    "sourceProtocol": "Procès-verbal · {account}",
+    "sourceTodo": "Tâche · {account}",
+    "due": "échéance {date}",
+    "ruleName": "Règle {name}",
+    "reasonDetail": "{days} · {rule}",
+    "status": {
+      "pending": "Ouverte",
+      "running": "En cours",
+      "conflict": "Conflit",
+      "collected": "Encaissée",
+      "deleted": "Supprimée"
+    },
+    "hint": {
+      "running": "Le montant augmente chaque jour",
+      "collectedBy": "{date} · {user}"
+    },
+    "action": {
+      "delete": "Supprimer",
+      "waive": "Remettre",
+      "reopen": "Rouvrir",
+      "restore": "Restaurer",
+      "chooseRule": "Choisir la règle"
+    },
+    "toast": {
+      "collected": "{name} : {amount} encaissé",
+      "deleted": "Amende de {name} supprimée",
+      "waived": "Amende de {name} remise",
+      "reopened": "Amende de {name} de nouveau ouverte",
+      "restored": "Amende de {name} restaurée",
+      "undone": "Annulé : {name}"
+    },
+    "empty": {
+      "openTitle": "Tout est encaissé.",
+      "openText": "Il n’y a actuellement aucune amende ouverte.",
+      "searchTitle": "Aucun résultat.",
+      "searchText": "Modifiez la recherche ou changez de filtre.",
+      "filterTitle": "Aucune amende.",
+      "filterText": "Rien dans ce filtre."
+    },
+    "kpi": {
+      "open": "Ouvert",
+      "collected": "Encaissé {year}",
+      "people": "Personnes avec amendes ouvertes",
+      "fines": "{count, plural, one {# amende} other {# amendes}}",
+      "ofTotal": "sur {count}"
+    },
+    "conflict": {
+      "title": "{count, plural, one {# amende de tâche demande une décision.} other {# amendes de tâches demandent une décision.}}",
+      "text": "Plusieurs règles correspondent à la même tâche. Choisissez la règle manuellement.",
+      "show": "Afficher",
+      "onlyConflicts": "Conflits seulement ✕",
+      "clear": "Retirer le filtre «Conflits seulement»"
+    },
+    "filter": {
+      "open": "Ouvertes",
+      "collected": "Encaissées",
+      "deleted": "Supprimées",
+      "all": "Toutes"
+    },
+    "searchPlaceholder": "Personne, procès-verbal ou tâche",
+    "view": {
+      "label": "Affichage",
+      "person": "Par personne",
+      "list": "Liste"
+    },
+    "person": {
+      "open": "{count, plural, one {# ouverte} other {# ouvertes}}",
+      "nothingOpen": "rien d’ouvert",
+      "more": "{count, plural, one {# autre} other {# autres}}"
+    },
+    "accountOpen": "+ {amount} ouvert",
+    "provisionalOpen": "+ {amount} d’amendes ouvertes, pas encore encaissées",
+    "fromFine": "Issue d’une amende · modifiable uniquement via les amendes"
+  }
 }
