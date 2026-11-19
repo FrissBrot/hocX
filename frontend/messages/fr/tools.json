@@ -48,6 +48,7 @@
     "documentLoading": "Chargement du document…",
     "documentPageIntro": "Vérifier les suggestions et reprendre comme nouveau procès-verbal.",
     "dragOrClickFile": "Glissez un .docx/.pdf ici ou cliquez",
+    "replaceFileHint": "{size} Mo · cliquer ou glisser un fichier ici pour le remplacer",
     "emptyListCheckGrouping": "La liste est encore vide – veuillez vérifier le regroupement et l'ajuster si nécessaire.",
     "entriesNeedReview": "{count, plural, one {# entrée nécessite} other {# entrées nécessitent}} une vérification manuelle avant que le procès-verbal puisse être créé.",
     "eventsDescription": "Faire correspondre les événements mentionnés dans le document avec des événements existants.",

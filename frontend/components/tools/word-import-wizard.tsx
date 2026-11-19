@@ -955,6 +955,7 @@ export function WordImportWizard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [analysis, setAnalysis] = useState<WordImportAnalysis | null>(null);
   const [protocolDate, setProtocolDate] = useState("");
@@ -2517,6 +2518,15 @@ export function WordImportWizard({
             <span className="field-label">{t("wordOrPdfFile")}</span>
             <label
               className={`word-import-dropzone${isDragOver ? " is-dragover" : ""}`}
+              // Das Dateifeld selbst ist versteckt: die Fläche ist per Tab erreichbar und öffnet
+              // die Dateiauswahl mit Enter/Leertaste (Klick erledigt das <label>)
+              role="button"
+              tabIndex={0}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                fileInputRef.current?.click();
+              }}
               onDragOver={(event) => {
                 event.preventDefault();
                 setIsDragOver(true);
@@ -2534,9 +2544,7 @@ export function WordImportWizard({
                     <UploadIcon />
                   </span>
                   <strong>{file.name}</strong>
-                  <span className="muted">
-                    {(file.size / (1024 * 1024)).toFixed(1)} MB · zum Ersetzen klicken oder Datei hierher ziehen
-                  </span>
+                  <span className="muted">{t("replaceFileHint", { size: (file.size / (1024 * 1024)).toFixed(1) })}</span>
                 </>
               ) : (
                 <>
@@ -2547,7 +2555,7 @@ export function WordImportWizard({
                   <span className="muted">{t("dragOrClickFile")}</span>
                 </>
               )}
-              <input type="file" accept=".docx,.pdf" onChange={(event) => pickFile(event.target.files?.[0] ?? null)} hidden />
+              <input ref={fileInputRef} type="file" accept=".docx,.pdf" onChange={(event) => pickFile(event.target.files?.[0] ?? null)} hidden />
             </label>
           </label>
           <button type="button" className="button-primary" disabled={busy || !file || !templateId} onClick={() => void submitUpload()}>
