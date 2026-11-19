@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any, Iterable
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.orm import Session
 
 from app.core.error_log import record_system_error
@@ -54,6 +54,10 @@ _logger = logging.getLogger(__name__)
 # landet in protocol_todo.overridden_fields und wird danach nicht mehr überschrieben.
 MANAGED_FIELDS = ("task", "reference_link", "tags", "due_date", "assignees")
 _CLOSED_STATUS_CODES = ("done", "cancelled")
+
+# Transaktions-Lock je Paket für den Abgleich. Andere Namensräume: upload_lock (909100001),
+# submission_service (909100002), protocol_service (909100011).
+TASK_PACKAGE_SYNC_LOCK_NAMESPACE = 909100012
 
 
 @dataclass(frozen=True)
@@ -307,6 +311,14 @@ def sync_package_cycle(db: Session, package: TaskPackage, package_cycle: TaskPac
 
 
 def sync_package(db: Session, package: TaskPackage, *, today: date | None = None, commit: bool = True) -> tuple[int, int]:
+    # Zwei gleichzeitige Abgleiche desselben Pakets (z. B. zwei Terminänderungen mit demselben
+    # Tag) legten sonst beide dieselbe Instanz an: der zweite scheiterte am Unique-Index
+    # uq_protocol_todo_package_occurrence und rollte seinen ganzen Abgleich zurück. Mit dem
+    # Lock wartet er und sieht danach (READ COMMITTED) die Instanzen des ersten.
+    db.execute(
+        text("SELECT pg_advisory_xact_lock(:ns, :package_id)"),
+        {"ns": TASK_PACKAGE_SYNC_LOCK_NAMESPACE, "package_id": package.id},
+    )
     created = updated = 0
     for package_cycle in _package_cycles(db, package.id):
         c, u = sync_package_cycle(db, package, package_cycle, today=today)
@@ -329,6 +341,7 @@ def sync_packages_for_list(db: Session, *, tenant_id: int, list_definition_id: i
             TaskPackageItem.responsible_json.contains([{"list_definition_id": list_definition_id}]),
         )
         .distinct()
+        .order_by(TaskPackage.id)  # feste Lock-Reihenfolge (sync_package), sonst Deadlock möglich
     ).all()
     for package in packages:
         sync_package(db, package, today=today, commit=False)
@@ -350,6 +363,7 @@ def sync_packages_for_event_tag(db: Session, *, tenant_id: int, tag: str | None,
             TaskPackageItem.recurrence_json.contains({"type": "events", "event_tag": tag}),
         )
         .distinct()
+        .order_by(TaskPackage.id)  # feste Lock-Reihenfolge (sync_package), sonst Deadlock möglich
     ).all()
     for package in packages:
         sync_package(db, package, today=today, commit=False)
