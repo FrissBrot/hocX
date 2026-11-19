@@ -92,22 +92,6 @@ Secrets oder Umgebungsvariablen, keine Breaking Changes.
     ist gleich geöffnet; Jahres-Chips statt Auswahlliste, «+ Buchung» als Hauptaktion, neue Buchungen
     werden kurz hervorgehoben und Buchungen aus Bussen tragen «Aus Busse · nur über Bussen änderbar».
 
-### Behoben
-
-- **Prüfseite und Abgabebox antworteten live mit 504:** Die Abgabebox hängt in zwei Docker-Netzen;
-  ohne Angabe wählte Traefik je nach Neustart die IP im internen Speicher-Netz, das es nicht erreicht.
-  Jetzt ist das Netz fest vorgegeben (wie beim Backend), ein Test prüft das für alle Dienste.
-- **Update prüft alle Dienste von aussen:** `deploy.sh` ruft nach dem Start jeden Traefik-Router über
-  die echte Domain auf (Frontend, Backend-API, Abgabebox-Seite und -API samt Prüfseite, Admin, Docs,
-  Website). Ist ein Dienst nicht erreichbar, geht das Update automatisch auf das vorherige Release
-  zurück. `verify_release.sh` nutzt dieselben Prüfungen.
-- **Fotos, Zeitstrahl rechts:** Ganz oben lag die Monatsangabe («Okt. 2026») über der Jahreszahl
-  und ragte aus der Leiste. Sie steht dort jetzt unter der Linie, die Jahreszahl am Cursor entfällt.
-- **Bussen-Regeln › Pendenzen-Regeln:** Ein Klick irgendwo in die Zeile öffnet «Bearbeiten».
-- **Personenseite:** Texte genau nach Design «Mitglied Profil» (Kartenbeschreibungen, Hinweis bei «Aktives Mitglied» je nach Zustand, einziger Tarif).
-- **Abgeschlossene Protokolle:** «PDF öffnen» zeigt das finale PDF sofort. Bisher lief jedes Öffnen
-  über den PDF-Auftrag im Hintergrund (Ladeseite «Ihr PDF wird erstellt»), obwohl am Ende dasselbe
-  PDF mit derselben Dokument-ID zurückkam.
 - **Fotos: Aufnahmedatum korrigieren:** Stimmt das Aufnahmedatum eines Bildes nicht (z. B. falsch
   gestellte Kamera), lässt es sich im Foto-Viewer korrigieren (Datum, optional Uhrzeit) oder in der
   Galerie per Mehrfachauswahl «Aufnahmedatum» für bis zu 500 Bilder ändern: alle auf dasselbe Datum
@@ -126,6 +110,23 @@ Secrets oder Umgebungsvariablen, keine Breaking Changes.
   Stichtag, nachgeführt bei Änderung und Entfernen), Fortschritt, ZIP-Download und Datenexport je
   Element. Bestehende Einzelabgaben behalten ihr eines Element und verhalten sich wie bisher. Die
   Datenauskunft listet die Elemente, für die eine Person verantwortlich ist.
+
+### Behoben
+
+- **Prüfseite und Abgabebox antworteten live mit 504:** Die Abgabebox hängt in zwei Docker-Netzen;
+  ohne Angabe wählte Traefik je nach Neustart die IP im internen Speicher-Netz, das es nicht erreicht.
+  Jetzt ist das Netz fest vorgegeben (wie beim Backend), ein Test prüft das für alle Dienste.
+- **Update prüft alle Dienste von aussen:** `deploy.sh` ruft nach dem Start jeden Traefik-Router über
+  die echte Domain auf (Frontend, Backend-API, Abgabebox-Seite und -API samt Prüfseite, Admin, Docs,
+  Website). Ist ein Dienst nicht erreichbar, geht das Update automatisch auf das vorherige Release
+  zurück. `verify_release.sh` nutzt dieselben Prüfungen.
+- **Fotos, Zeitstrahl rechts:** Ganz oben lag die Monatsangabe («Okt. 2026») über der Jahreszahl
+  und ragte aus der Leiste. Sie steht dort jetzt unter der Linie, die Jahreszahl am Cursor entfällt.
+- **Bussen-Regeln › Pendenzen-Regeln:** Ein Klick irgendwo in die Zeile öffnet «Bearbeiten».
+- **Personenseite:** Texte genau nach Design «Mitglied Profil» (Kartenbeschreibungen, Hinweis bei «Aktives Mitglied» je nach Zustand, einziger Tarif).
+- **Abgeschlossene Protokolle:** «PDF öffnen» zeigt das finale PDF sofort. Bisher lief jedes Öffnen
+  über den PDF-Auftrag im Hintergrund (Ladeseite «Ihr PDF wird erstellt»), obwohl am Ende dasselbe
+  PDF mit derselben Dokument-ID zurückkam.
 
 ## [1.4.0] - 2026-11-19
 
