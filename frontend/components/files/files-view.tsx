@@ -13,6 +13,7 @@ import { FileDetailModal } from "./file-detail-modal";
 import { useFileActions } from "./file-actions";
 import { FilesGrid } from "./files-grid";
 import { FilesTable } from "./files-table";
+import { TrashModal } from "./trash-modal";
 import { ActionIcon } from "@/components/ui/action-icons";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FileDropOverlay } from "@/components/ui/file-drop-overlay";
@@ -22,11 +23,12 @@ import { SearchInput } from "@/components/ui/search-input";
 import { useOpenRequest } from "@/lib/search/handoff";
 import { ShareLinkModal } from "@/components/ui/share-link-modal";
 import { TagInput } from "@/components/ui/tag-input";
+import { useConfirm } from "@/contexts/confirm-context";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { useFileDrop } from "@/lib/hooks/use-file-drop";
 import { useInfiniteScroll } from "@/lib/hooks/use-infinite-scroll";
-import { DocumentUploadResult, FileOverviewItem, FileOverviewSource, UploadFileResult } from "@/types/api";
+import { DocumentUploadResult, FileOverviewItem, FileOverviewSource, FileTrashActionResult, UploadFileResult } from "@/types/api";
 
 const PAGE_SIZE = 60;
 
@@ -64,12 +66,18 @@ const VIEW_STORAGE_KEY = "hocx.files.view";
 
 type Props = {
   initialItems: FileOverviewItem[];
+  /** files.manage: Dateien in den Papierkorb legen. */
+  canDelete?: boolean;
+  /** files.manage oder photos.manage: Papierkorb öffnen. */
+  canOpenTrash?: boolean;
 };
 
-export function FilesView({ initialItems }: Props) {
+export function FilesView({ initialItems, canDelete = false, canOpenTrash = false }: Props) {
   const t = useTranslations("files");
   const router = useRouter();
   const showToast = useToast();
+  const confirm = useConfirm();
+  const [trashOpen, setTrashOpen] = useState(false);
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [search, setSearch] = useState("");
   const [tagFilter, setTagFilter] = useState<string[]>([]);
@@ -217,7 +225,28 @@ export function FilesView({ initialItems }: Props) {
     onLoadMore: () => void loadMore(),
   });
 
-  const actionsFor = useFileActions({ onOpenDetail: setDetailItem, onShare: setShareItem, onChanged: () => void reloadFromStart() });
+  async function moveToTrash(item: FileOverviewItem) {
+    const ok = await confirm({ tone: "danger", message: t("trash.moveConfirm", { name: item.original_name }), confirmLabel: t("trash.moveLabel") });
+    if (!ok) return;
+    try {
+      const result = await browserApiFetch<FileTrashActionResult>("/api/files/trash", { method: "POST", body: JSON.stringify({ file_ids: [item.id] }) });
+      if (result && result.file_ids.length > 0) {
+        setItems((current) => current.filter((entry) => entry.id !== item.id));
+        setDetailItem((current) => (current && current.id === item.id ? null : current));
+        showToast(t("trash.movedToast", { name: item.original_name }), "success");
+      }
+      if (result && result.errors.length > 0) showToast(result.errors.join(" · "), "error");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : t("trash.actionError"), "error");
+    }
+  }
+
+  const actionsFor = useFileActions({
+    onOpenDetail: setDetailItem,
+    onShare: setShareItem,
+    onChanged: () => void reloadFromStart(),
+    onTrash: canDelete ? (item) => void moveToTrash(item) : undefined,
+  });
 
   function handleTagsSaved(itemId: string, tags: string[]) {
     setItems((current) => current.map((item) => (item.id === itemId ? { ...item, tags } : item)));
@@ -243,11 +272,18 @@ export function FilesView({ initialItems }: Props) {
               : t.rich("view.descriptionLinked", { photos: (chunks) => <Link href="/photos">{chunks}</Link> })}
           </p>
         </div>
-        {hasNoFiles ? null : (
+        {hasNoFiles && !canOpenTrash ? null : (
           <div className="table-toolbar-actions">
-            <button type="button" className="button-primary" onClick={openUpload}>
-              {t("view.uploadButton")}
-            </button>
+            {canOpenTrash ? (
+              <button type="button" className="button-secondary" onClick={() => setTrashOpen(true)}>
+                {t("trash.open")}
+              </button>
+            ) : null}
+            {hasNoFiles ? null : (
+              <button type="button" className="button-primary" onClick={openUpload}>
+                {t("view.uploadButton")}
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -331,6 +367,8 @@ export function FilesView({ initialItems }: Props) {
       )}
 
       {uploadResults && <UploadResultsModal results={uploadResults} onClose={() => setUploadResults(null)} />}
+
+      {canOpenTrash ? <TrashModal open={trashOpen} onClose={() => setTrashOpen(false)} onRestored={() => void reloadFromStart()} /> : null}
 
       <FileDropOverlay active={isFileDragging} title={t("view.dropOverlayTitle")} hint={t("view.dropOverlayHint")} />
 

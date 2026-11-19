@@ -551,6 +551,10 @@
       "todo_reminders": {
         "title": "Aufgaben-Erinnerungen",
         "description": "Legt täglich ab 07:00 Erinnerungen für Aufgaben an, die in 3 Tagen fällig oder seit gestern überfällig sind."
+      },
+      "file_trash_purge": {
+        "title": "Papierkorb leeren (Frist)",
+        "description": "Löscht Dateien und Fotos endgültig, die seit 30 Tagen im Papierkorb liegen - mit Speicherobjekt, Vorschaubild und Löschjournal."
       }
     }
   },

@@ -279,3 +279,6 @@ __all__ += [
     "CashflowCost",
     "TenantCharge",
 ]
+
+# Papierkorb-Hook (do_orm_execute) für jede Session registrieren, auch ohne app.core.db.
+from app.core import trash_scope as _trash_scope  # noqa: E402,F401

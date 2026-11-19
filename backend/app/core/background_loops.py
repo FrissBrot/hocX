@@ -66,6 +66,8 @@ BACKGROUND_LOCK_IDS: dict[str, int] = {
     # Benachrichtigungen (Migration 0170, app/notifications)
     "notification_dispatch": 202600032,
     "todo_reminders": 202600033,
+    # Papierkorb für Dateien (Migration 0199, services/file_trash_service.py)
+    "file_trash_purge": 202600034,
 }
 
 # Lock-IDs anderer Dienste auf derselben Datenbank - Advisory Locks gelten datenbankweit, nicht

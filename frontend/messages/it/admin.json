@@ -551,6 +551,10 @@
       "todo_reminders": {
         "title": "Promemoria compiti",
         "description": "Crea ogni giorno dalle 07:00 promemoria per i compiti in scadenza tra 3 giorni o scaduti da ieri."
+      },
+      "file_trash_purge": {
+        "title": "Svuotare il cestino (termine)",
+        "description": "Elimina definitivamente file e foto che si trovano nel cestino da 30 giorni, compresi oggetto archiviato, anteprima e registro delle cancellazioni."
       }
     }
   },

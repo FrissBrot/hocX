@@ -27,7 +27,8 @@ def test_deleted_photo_disappears_from_file_link(db):
 
     files_routes.bulk_delete_files(FileBulkDelete(file_ids=[gone.public_id]), db, user)
 
-    assert db.scalar(select(ShareLinkFile.file_id).where(ShareLinkFile.file_id == gone.public_id)) is None
+    # Papierkorb (0199): der Link-Eintrag bleibt für «Wiederherstellen», die Datei erscheint nicht mehr.
+    assert db.scalar(select(ShareLinkFile.file_id).where(ShareLinkFile.file_id == gone.public_id)) == gone.public_id
     result = public_share_routes.get_public_share(_token(created), _FakeRequest(), db)
     assert [f.id for f in result.files] == [keep.public_id]
 

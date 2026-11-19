@@ -205,6 +205,9 @@ def _public_file_response(
 def get_public_share(token: str, request: Request, db: Session = Depends(get_db)):
     _enforce_rate_limit(request, "page", limit=60)
     link = _resolve_link_or_404(db, token)
+    if link.album_id is None and not share_link_service.file_ids_for_link(db, link):
+        # Alle Dateien des Links liegen im Papierkorb: wie ein unbekannter Link (kein Orakel).
+        raise HTTPException(status_code=404, detail="Link ungültig oder abgelaufen")
     stored_files = _clean_stored_files_for_link(db, link)
     base = f"/api/public/share/{token}"
     documents = _document_previews(db, stored_files)

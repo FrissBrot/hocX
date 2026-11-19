@@ -109,9 +109,9 @@
     "apply": "Appliquer",
     "clearSelection": "Désélectionner",
     "delete": "Supprimer",
-    "deleteConfirm": "{count, plural, one {1 image sera définitivement supprimée. Cette action est irréversible.} other {# images seront définitivement supprimées. Cette action est irréversible.}}",
+    "deleteConfirm": "{count, plural, one {Mettre 1 image à la corbeille ?} other {Mettre # images à la corbeille ?}} Elles peuvent y être restaurées pendant 30 jours.",
     "deleteError": "Impossible de supprimer les images.",
-    "deletedToast": "{count, plural, one {1 image supprimée.} other {# images supprimées.}}",
+    "deletedToast": "{count, plural, one {1 image mise à la corbeille.} other {# images mises à la corbeille.}}",
     "markBest": "★ Best-of",
     "markedBestToast": "Ajouté au best-of.",
     "noAlbumToast": "{count, plural, one {# photo n’appartient à aucun album - best-of impossible.} other {# photos n’appartiennent à aucun album - best-of impossible.}}",
@@ -259,12 +259,12 @@
     "tooMany": "Trop de photos pour le regroupement automatique (au maximum {max, number}).",
     "computedAt": "État au {time} · les nouvelles photos apparaissent après quelques minutes.",
     "helpTopic": "Photos similaires",
-    "help": "Les doublons sont des images pratiquement identiques, les séries des photos prises coup sur coup. « Ne garder que les meilleures » supprime définitivement les autres photos téléversées directement."
+    "help": "Les doublons sont des images pratiquement identiques, les séries des photos prises coup sur coup. « Ne garder que les meilleures » met les autres photos téléversées directement à la corbeille."
   },
   "similarGroups": {
     "bestChoice": "Meilleur choix",
     "bestError": "Impossible de modifier le statut best-of.",
-    "deleteConfirm": "{count, plural, one {1 image sera définitivement supprimée. Les photos cochées sont conservées.} other {# images seront définitivement supprimées. Les photos cochées sont conservées.}}",
+    "deleteConfirm": "{count, plural, one {Mettre 1 image à la corbeille ? Les photos cochées sont conservées.} other {Mettre # images à la corbeille ? Les photos cochées sont conservées.}}",
     "deleteDisabledTitle": "Seules les photos importées directement et non cochées peuvent être supprimées ici.",
     "deleteError": "Impossible de supprimer la sélection.",
     "deleteSelection": "Supprimer la sélection",
@@ -289,7 +289,7 @@
     "bestSuffix": " · meilleur choix",
     "cleanError": "Impossible de nettoyer la série.",
     "cleanedToast": "Série nettoyée - seule la meilleure photo reste.",
-    "deleteConfirm": "{count, plural, one {1 image sera définitivement supprimée. Seule la photo la plus nette et la mieux exposée de la série est conservée.} other {# images seront définitivement supprimées. Seule la photo la plus nette et la mieux exposée de la série est conservée.}}",
+    "deleteConfirm": "{count, plural, one {Mettre 1 image à la corbeille ? Seule la photo la plus nette et la mieux exposée de la série est conservée.} other {Mettre # images à la corbeille ? Seule la photo la plus nette et la mieux exposée de la série est conservée.}}",
     "empty": "Aucune photo similaire trouvée.",
     "intro": "Les prises quasi identiques - même image, juste un cadrage ou une qualité différente - sont regroupées ici en groupes de doublons. La photo la plus nette et la mieux exposée de chaque groupe est présélectionnée - les autres peuvent être supprimées en une étape.",
     "keepOnlyBest": "Ne garder que la meilleure",
@@ -448,7 +448,8 @@
       "done": "Terminé"
     },
     "bestHelpTopic": "Best-of",
-    "bestHelp": "Chaque album a une sélection des meilleures photos. hocX la propose à partir de l’analyse des photos. Avec l’étoile, tu inclus une photo de façon fixe dans la sélection ou tu l’exclus ; cela reste ainsi même après de nouveaux calculs. Dans « Toutes les photos », l’étoile s’applique à tous les albums qui contiennent la photo."
+    "bestHelp": "Chaque album a une sélection des meilleures photos. hocX la propose à partir de l’analyse des photos. Avec l’étoile, tu inclus une photo de façon fixe dans la sélection ou tu l’exclus ; cela reste ainsi même après de nouveaux calculs. Dans « Toutes les photos », l’étoile s’applique à tous les albums qui contiennent la photo.",
+    "moveToTrash": "Mettre à la corbeille"
   },
   "dateMarker": {
     "estimated": "Date de prise de vue estimée",

@@ -8,12 +8,15 @@ Installationen aktualisieren können.
 
 ## [Unreleased]
 
-## [1.4.1] - 2026-11-19
+## [1.4.1] - 2026-11-20
 
 Die Übersicht der Abgaben und das Abgabe-Detail folgen jetzt vollständig dem Design «Abgaben v4»
 (in 1.4.0 war nur der Dialog zum Anlegen und Bearbeiten umgesetzt). Einzelabgaben haben neu
 beliebig viele, von Hand angelegte Abgabeelemente mit eigenem Stichtag und eigenen Verantwortlichen.
-Eine Migration (0198), keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
+Dazu ein Papierkorb für Dateien und Fotos, ein korrigierbares Aufnahmedatum (einzeln und als
+Mehrfachauswahl), Blättern im Datei-Detail, Prüfungen aller Dienste von aussen beim Update und die
+Behebung des 504 auf Prüfseite und Abgabebox. Drei Migrationen (0198, 0199, 0200), keine neuen
+Secrets oder Umgebungsvariablen, keine Breaking Changes.
 
 ### Update
 
@@ -33,9 +36,31 @@ Eine Migration (0198), keine neuen Secrets oder Umgebungsvariablen, keine Breaki
   Downgrade möglich: Einreichungen zusätzlicher Elemente gehen im einen Element der Einzelabgabe
   auf, deren persönliche Links werden widerrufen, der Stichtag kommt vom Standard-Element zurück.
   Abgabebox-Backend und Backend gemeinsam ausrollen (das Deploy-Skript tut das).
+- **Migration `0199_stored_file_soft_delete`** (Papierkorb): neue Spalten `stored_file.deleted_at`
+  und `deleted_by`, ein Teilindex und eine RESTRICTIVE-Policy, die Papierkorb-Dateien vor den
+  Rollen `hocx_abgabebox` und `hocx_photo_worker` verbirgt. Läuft beim Deploy automatisch, ohne
+  Datenänderung. Ein Downgrade holt alle Dateien aus dem Papierkorb zurück (nichts wird gelöscht).
+  Neuer Hintergrundjob `file_trash_purge` im job-worker (stündlich, unter `/admin/jobs`).
 
+- **Migration `0200_photo_capture_override`** (Aufnahmedatum korrigieren): neue, leere Spalten in
+  `stored_file` (`capture_corrected_at`, `capture_corrected_has_time`, `capture_corrected_set_at`,
+  `capture_corrected_set_by`). Rein additiv, EXIF-Datum und Dateien bleiben unverändert; Rücknahme
+  mit `alembic downgrade` entfernt die Korrekturen.
 ### Geändert
 
+- **Papierkorb für Dateien und Fotos:** Löschen auf der Dateien-Seite, in der Foto-Ansicht, in der
+  Mehrfachauswahl und bei «Nur beste behalten» legt Direkt-Uploads in den Papierkorb, statt sie
+  sofort zu entfernen. Gelöschte Dateien verschwinden überall (Listen, Galerie, Zeitstrahl, Suche,
+  Alben, Freigabelinks, Pendenzen, Exporte, Statistik); ein Freigabelink nur auf gelöschte Dateien
+  liefert «Link ungültig». «Papierkorb» auf der Dateien- und der Fotos-Seite zeigt Name, Datum und
+  Person der Löschung sowie die verbleibenden Tage; «Wiederherstellen» bringt Alben, Tags,
+  Termin-/Abgabe-Bezug, Pendenz-Verknüpfungen und Freigaben zurück, «Endgültig löschen» und
+  «Papierkorb leeren» löschen sofort. Nach 30 Tagen löscht der Job `file_trash_purge` endgültig.
+  Papierkorb-Dateien zählen bis dahin zum Speicherkontingent (eigene Kategorie «Papierkorb» in der
+  Speicherbelegung). Wer Fotos bzw. Dateien verwalten darf, sieht und bedient den Papierkorb.
+  Löschungen nach Datenschutzrecht, beim Offboarding, durch Aufbewahrungsfristen und bei
+  Virenfunden bleiben sofort und endgültig und schliessen den Papierkorb ein. Ein erneuter Upload
+  einer Datei aus dem Papierkorb wird normal gespeichert statt als Duplikat abgelehnt.
 - **Abgaben-Übersicht (Design «Abgaben v4»):** Jede Abgabe ist eine Karte mit Titel, Quelle und
   Zeitfenster, Fortschrittsbalken samt Status («7 von 9 erledigt · 1 geschlossen · 1 in Prüfung»)
   sowie Bearbeiten und Löschen. Die Reiter «Offen» und «Abgeschlossen» sind unterstrichen, im Kopf

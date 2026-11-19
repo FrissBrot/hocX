@@ -240,5 +240,34 @@
     "noPdf": "No PDF view",
     "noPdfFailed": "No PDF view – processing failed",
     "originalHint": "PDF view of “{name}”"
+  },
+  "trash": {
+    "open": "Trash",
+    "title": "Trash",
+    "moveLabel": "Move to trash",
+    "moveConfirm": "Move “{name}” to the trash? You can restore it there until it is permanently deleted.",
+    "movedToast": "“{name}” is in the trash.",
+    "quotaHint": "Deleted files and photos stay in the trash for {days} days and are then permanently deleted automatically. Until then they use {size} and count towards the storage quota.",
+    "columns": {
+      "name": "Name",
+      "deleted": "Deleted",
+      "remaining": "Remaining",
+      "actions": "Actions"
+    },
+    "deletedBy": "by {name}",
+    "deletedByUnknown": "by unknown",
+    "daysLeft": "{count, plural, =0 {Today} one {1 day left} other {# days left}}",
+    "restore": "Restore",
+    "restoredToast": "“{name}” has been restored.",
+    "purgeLabel": "Delete permanently",
+    "purgeConfirm": "Permanently delete “{name}”? This cannot be undone.",
+    "purgedToast": "“{name}” has been permanently deleted.",
+    "emptyLabel": "Empty trash",
+    "emptyConfirm": "{count, plural, one {Permanently delete 1 file?} other {Permanently delete # files?}} This cannot be undone.",
+    "emptiedToast": "{count, plural, =0 {Nothing deleted.} one {1 file permanently deleted.} other {# files permanently deleted.}}",
+    "empty": "The trash is empty.",
+    "loading": "Loading trash …",
+    "loadError": "The trash could not be loaded.",
+    "actionError": "The action could not be completed."
   }
 }

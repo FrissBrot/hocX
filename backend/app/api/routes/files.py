@@ -1,9 +1,10 @@
 import json
+import math
 import re
 import uuid
 import zipfile
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -47,6 +48,11 @@ from app.schemas.files import (
     FileBulkDeleteResult,
     FileBulkTagsUpdate,
     FileOverviewItem,
+    FileTrashAction,
+    FileTrashActionResult,
+    FileTrashEmptyResult,
+    FileTrashItem,
+    FileTrashList,
     PhotoTimelineDay,
     FileOverviewSource,
     FileStats,
@@ -61,7 +67,8 @@ from app.schemas.files import (
     UploadPrecheckResponse,
 )
 from app.schemas.protocol import ProtocolImageRead
-from app.services import image_export_service, image_metadata_service, photo_album_service, photo_album_share_service, public_id_service
+from app.services import file_trash_service, image_export_service, image_metadata_service, photo_album_service, photo_album_share_service, public_id_service
+from app.core.trash_scope import TRASH_RETENTION, include_trashed
 from app.services.access_service import AccessService
 from app.services.audit_service import AuditService
 from app.services import apple_media
@@ -70,7 +77,6 @@ from app.services.apple_media import pair_live_clips, MAX_LIVE_CLIP_BYTES
 from app.core.storage import MAIN, ObjectNotFound, _content_disposition, get_object_store, object_response, read_bytes_or_404, write_object_to_zip
 from app.services.photo_metadata_privacy import MetadataPolicy, sanitize_image
 from app.services.file_service import BLOCKED_SCAN_STATUSES, MAX_UPLOAD_BYTES, FileService
-from app.services.file_eraser import FileEraser
 from app.services import submission_upload_rules
 from app.services.submission_service import SubmissionService, _element_ref, _parse_element_ref, raw_element_key
 from app.services.upload_pipeline import GALLERY_DIRECT_IMAGE_MAX_BYTES, GALLERY_ZIP_MAX_BYTES, stage_upload_to_disk, inspect_gallery_zip, _enforce_tenant_storage_quota, safe_entry_name
@@ -1869,24 +1875,114 @@ def set_file_best_everywhere(
 @router.post("/files/bulk-delete", response_model=FileBulkDeleteResult)
 def bulk_delete_files(payload: FileBulkDelete, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     """Multi-select "Löschen" auf der Fotos-Seite und "Nur beste behalten" im Ähnliche-Tab -
-    löscht endgültig, nur Direkt-Uploads (siehe FileService.delete_gallery_images für die
-    Begründung; andere Quellen werden als Fehler zurückgemeldet statt gelöscht)."""
+    legt die Fotos in den Papierkorb (file_trash_service), nur Direkt-Uploads; andere Quellen
+    werden als Fehler zurückgemeldet. Endgültig löscht erst der Papierkorb."""
     require_permission(user, P.PHOTOS_MANAGE)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
     ids = list(dict.fromkeys(payload.file_ids))
     if not ids or len(ids) > 200:
         raise HTTPException(status_code=422, detail="Bitte 1 bis 200 Dateien auswählen")
-    # Erst berechtigen, dann atomar handeln (Audit Dateien/Fotos): delete_gallery_images prüft
-    # Mandant und Quelle je Datei, und nur tatsächlich gelöschte Dateien verlieren ihre Album- und
-    # Linkeinträge (FileEraser.erase). Abgelehnte Fotos bleiben in allen Alben. Ein einziger Commit;
-    # Vorschaubilder und «beste Bilder» erst danach.
     _ensure_files_in_scope(db, user, ids)
-    eraser = FileEraser(service)
-    deleted, errors = service.delete_gallery_images(db, user.current_tenant_id, ids, eraser=eraser)
-    db.commit()
-    eraser.after_commit(db)
-    return FileBulkDeleteResult(deleted_ids=deleted, errors=errors)
+    trashed, errors = file_trash_service.trash_files(db, user, ids)
+    return FileBulkDeleteResult(deleted_ids=trashed, errors=errors)
+
+
+# ── Papierkorb (Migration 0199, services/file_trash_service.py) ──────────────────────────────
+
+
+def _require_trash_access(user: CurrentUser) -> None:
+    """Papierkorb sieht, wer löschen darf: photos.manage (Fotos/Videos) oder files.manage (übrige
+    Dateien). Welche Einträge, entscheidet file_trash_service je Datei."""
+    require_any_permission(user, P.FILES_MANAGE, P.PHOTOS_MANAGE)
+    if user.current_tenant_id is None:
+        raise HTTPException(status_code=400, detail="No active tenant")
+
+
+@router.get("/files/trash", response_model=FileTrashList)
+def list_trash(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    _require_trash_access(user)
+    now = datetime.now(UTC)
+    entries = file_trash_service.list_trash(db, user)
+    _count, total_bytes = file_trash_service.summary(db, user)
+    items = [
+        FileTrashItem(
+            id=entry.stored_file.public_id,
+            original_name=entry.stored_file.original_name,
+            mime_type=entry.stored_file.mime_type,
+            file_size_bytes=entry.stored_file.file_size_bytes,
+            is_image=(entry.stored_file.mime_type or "").startswith("image/"),
+            thumbnail_url=(
+                f"/api/files/trash/{entry.stored_file.public_id}/thumbnail"
+                if (entry.stored_file.mime_type or "").startswith("image/") and entry.stored_file.scan_status == "clean"
+                else None
+            ),
+            deleted_at=entry.stored_file.deleted_at,
+            deleted_by_name=entry.deleted_by_name,
+            purge_at=entry.purge_at,
+            days_left=max(0, math.ceil((entry.purge_at - now).total_seconds() / 86400)),
+        )
+        for entry in entries
+    ]
+    return FileTrashList(items=items, total_bytes=total_bytes, retention_days=TRASH_RETENTION.days)
+
+
+@router.post("/files/trash", response_model=FileTrashActionResult)
+def move_to_trash(payload: FileTrashAction, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Löschen einer Datei auf der Dateien-Seite bzw. eines Fotos in der Ansicht: in den Papierkorb."""
+    _require_trash_access(user)
+    ids = list(dict.fromkeys(payload.file_ids))
+    _ensure_files_in_scope(db, user, ids)
+    trashed, errors = file_trash_service.trash_files(db, user, ids)
+    return FileTrashActionResult(file_ids=trashed, errors=errors)
+
+
+@router.post("/files/trash/restore", response_model=FileTrashActionResult)
+def restore_from_trash(payload: FileTrashAction, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    _require_trash_access(user)
+    restored, errors = file_trash_service.restore(db, user, list(dict.fromkeys(payload.file_ids)))
+    return FileTrashActionResult(file_ids=restored, errors=errors)
+
+
+@router.post("/files/trash/purge", response_model=FileTrashActionResult)
+def purge_from_trash(payload: FileTrashAction, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """«Endgültig löschen»: Speicherobjekt, Vorschaubild, Dokument, Album-/Linkeinträge, Journal."""
+    _require_trash_access(user)
+    try:
+        purged, errors = file_trash_service.purge(db, user, list(dict.fromkeys(payload.file_ids)))
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Dateien konnten nicht endgültig gelöscht werden") from exc
+    return FileTrashActionResult(file_ids=purged, errors=errors)
+
+
+@router.post("/files/trash/empty", response_model=FileTrashEmptyResult)
+def empty_trash(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    _require_trash_access(user)
+    try:
+        purged = file_trash_service.empty(db, user)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Papierkorb konnte nicht geleert werden") from exc
+    return FileTrashEmptyResult(purged=purged)
+
+
+@router.get("/files/trash/{file_id}/thumbnail")
+def get_trash_thumbnail(file_id: uuid.UUID, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    """Vorschau eines Fotos im Papierkorb - nur für Konten, die es dort sehen (sonst 404)."""
+    _require_trash_access(user)
+    with include_trashed(db):
+        stored_file = file_trash_service.get_trashed(db, user, file_id)
+        if stored_file is None or stored_file.scan_status != "clean" or not (stored_file.mime_type or "").startswith("image/"):
+            raise HTTPException(status_code=404, detail="Datei nicht im Papierkorb")
+        thumbnail_path = service.ensure_thumbnail(db, stored_file, settings.storage_root)
+    if thumbnail_path is None:
+        raise HTTPException(status_code=404, detail="Keine Vorschau verfügbar")
+    return release_for_stream(db, FileResponse(
+        path=thumbnail_path,
+        media_type="image/jpeg",
+        headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"},
+    ))
 
 
 @router.post("/files/bulk-tags", status_code=204)

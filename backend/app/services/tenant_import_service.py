@@ -32,6 +32,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app import scanner
+from app.core.trash_scope import include_trashed
 from app.core.config import settings
 from app.core.storage import MAIN, get_object_store, namespace_for_root, new_object_key
 from app.core.secret_crypto import decrypt_secret, encrypt_secret
@@ -233,7 +234,10 @@ class TenantImportService:
         self._todo_repeat_block_ids: list[int] = []
 
         try:
-            new_tenant = self._run(new_name)
+            # Papierkorb sichtbar: belegte public_ids (_claim_uuid) schliessen Papierkorb-Dateien
+            # ein, importierte Papierkorb-Zeilen bleiben für die Verknüpfungen auffindbar.
+            with include_trashed(db):
+                new_tenant = self._run(new_name)
         except Exception as exc:
             # The pipeline below commits progressively (one table at a time, matching
             # TenantCloneService's style) rather than as one big transaction - a failure

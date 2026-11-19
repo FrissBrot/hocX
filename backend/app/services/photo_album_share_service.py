@@ -27,6 +27,7 @@ from datetime import UTC, datetime
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
+from app.core.trash_scope import not_trashed_public_id
 from app.models.entities import PhotoAlbum, PhotoAlbumItem, PhotoAlbumTenantShare, ShareLink, StoredFile, Tenant
 from app.services import tenant_trust_service
 from app.services.tenant_service import build_tenant_profile_image_url
@@ -143,7 +144,11 @@ def list_pending_releases(
     query = (
         select(PhotoAlbum.id, PhotoAlbum.name, PhotoAlbum.kind, func.count())
         .join(PhotoAlbumItem, PhotoAlbumItem.album_id == PhotoAlbum.id)
-        .where(PhotoAlbum.tenant_id == tenant_id, PhotoAlbumItem.share_pending.is_(True))
+        .where(
+            PhotoAlbum.tenant_id == tenant_id,
+            PhotoAlbumItem.share_pending.is_(True),
+            not_trashed_public_id(PhotoAlbumItem.file_id),  # Papierkorb-Fotos gibt man nicht frei
+        )
     )
     if readable_assignment_ids is not None:
         from app.services.context_visibility_service import abgabe_scope_clause

@@ -25,7 +25,11 @@ export default async function FilesPage() {
         desktop={
           <>
           <section className="files-page">
-            <FilesView initialItems={files ?? []} />
+            <FilesView
+              initialItems={files ?? []}
+              canDelete={can(session, "files.manage")}
+              canOpenTrash={can(session, "files.manage") || can(session, "photos.manage")}
+            />
           </section>
           </>
         }

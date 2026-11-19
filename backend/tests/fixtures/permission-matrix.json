@@ -986,6 +986,49 @@
         "writer"
       ]
     },
+    "GET /api/files/trash": {
+      "handler": "files.list_trash",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
+    "POST /api/files/trash": {
+      "handler": "files.move_to_trash",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
+    "POST /api/files/trash/empty": {
+      "handler": "files.empty_trash",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
+    "POST /api/files/trash/purge": {
+      "handler": "files.purge_from_trash",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
+    "POST /api/files/trash/restore": {
+      "handler": "files.restore_from_trash",
+      "allowed": [
+        "admin",
+        "writer"
+      ]
+    },
+    "GET /api/files/trash/{file_id}/thumbnail": {
+      "handler": "files.get_trash_thumbnail",
+      "allowed": [
+        "admin",
+        "writer"
+      ],
+      "serves_files": true
+    },
     "POST /api/files/upload-precheck": {
       "handler": "files.precheck_uploads",
       "allowed": [

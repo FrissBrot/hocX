@@ -101,8 +101,15 @@ class StoredFileRepository:
         accepting a new file against Tenant.storage_quota_bytes.
 
         Plus die Assets des Document Studio (Logos, Bilder, Schriften): sie liegen nicht in
-        stored_file, belegen aber denselben Speicher (Nachtlauf 2026-11-19)."""
-        files = db.scalar(select(func.coalesce(func.sum(StoredFile.file_size_bytes), 0)).where(StoredFile.tenant_id == tenant_id))
+        stored_file, belegen aber denselben Speicher (Nachtlauf 2026-11-19).
+
+        Papierkorb-Dateien zählen mit, bis sie endgültig gelöscht sind (Migration 0199): sie
+        belegen den Speicher weiterhin, und Löschen soll das Kontingent nicht umgehen."""
+        files = db.scalar(
+            select(func.coalesce(func.sum(StoredFile.file_size_bytes), 0))
+            .where(StoredFile.tenant_id == tenant_id)
+            .execution_options(include_trashed=True)
+        )
         assets = db.scalar(
             select(func.coalesce(func.sum(DocumentAsset.file_size_bytes), 0)).where(DocumentAsset.tenant_id == tenant_id)
         )

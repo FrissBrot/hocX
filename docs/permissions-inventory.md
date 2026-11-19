@@ -6,11 +6,11 @@ Rollen-Matrix: `permissions/permission-matrix.json` (geprüft von `tests/test_pe
 
 ## Übersicht
 
-- Routen gesamt: 576 (Plattform-Admin: 127)
-- Mandanten-Routen mit Rechteprüfung: 371
+- Routen gesamt: 582 (Plattform-Admin: 127)
+- Mandanten-Routen mit Rechteprüfung: 377
 - Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 78
 - Mandanten-Routen ohne Prüfung und ohne Begründung (Lücken): 0
-- Routen, die Dateiinhalt ausliefern: 21
+- Routen, die Dateiinhalt ausliefern: 22
 
 ## Lücken (Routen ohne Prüfung und ohne Begründung)
 
@@ -39,6 +39,7 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/document-templates/{template_id}/thumbnail` | document_studio.get_document_template_thumbnail | meetings.read |
 | `POST /api/documents/export` | documents.export_document_format | meetings.read |
 | `GET /api/documents/{document_id}/versions/{version_id}/files/{role}` | managed_documents.get_document_file | meetings.read |
+| `GET /api/files/trash/{file_id}/thumbnail` | files.get_trash_thumbnail | files.manage oder photos.manage |
 | `GET /api/public/calendar/{token}.ics` | calendar_feeds.get_calendar_feed | öffentlicher .ics-Abruf: Token + can_subscribe in calendar_feed_service.resolve |
 | `GET /api/public/share/{token}/download` | public_share.download_public_share_all | öffentliche Freigabelinks: Token + Rate-Limit (share_link_service) |
 | `GET /api/public/share/{token}/files/{file_id}/download` | public_share.download_public_share_file | öffentliche Freigabelinks: Token + Rate-Limit (share_link_service) |
@@ -300,6 +301,12 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `GET /api/files/stats` | files.read oder photos.read |
 | `GET /api/files/tags` | files.read oder photos.read |
 | `GET /api/files/timeline` | photos.read |
+| `GET /api/files/trash` | files.manage oder photos.manage |
+| `POST /api/files/trash` | files.manage oder photos.manage |
+| `POST /api/files/trash/empty` | files.manage oder photos.manage |
+| `POST /api/files/trash/purge` | files.manage oder photos.manage |
+| `POST /api/files/trash/restore` | files.manage oder photos.manage |
+| `GET /api/files/trash/{file_id}/thumbnail` | files.manage oder photos.manage |
 | `POST /api/files/upload-precheck` | files.manage oder photos.manage |
 | `GET /api/files/upload-target-shared-albums` | photos.manage, submissions.manage |
 | `PATCH /api/files/{file_id}/best` | photos.manage |

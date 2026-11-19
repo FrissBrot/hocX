@@ -514,7 +514,8 @@ def database_references(db: Session) -> dict[tuple[str, str], str]:
     refs: dict[tuple[str, str], str] = {}
     abgabebox_ids = set(db.scalars(select(SubmissionUploadFile.stored_file_id)))
     export_prefix = generated_export_prefix()
-    for stored_id, path in db.execute(select(StoredFile.id, StoredFile.storage_path)).all():
+    # Papierkorb-Dateien sind weiter referenziert: ihre Objekte werden migriert und gelten nie als verwaist.
+    for stored_id, path in db.execute(select(StoredFile.id, StoredFile.storage_path).execution_options(include_trashed=True)).all():
         if stored_id in abgabebox_ids:
             refs[("abgabebox", path)] = "stored_file"
         elif export_prefix and path.startswith(export_prefix):

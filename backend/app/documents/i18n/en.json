@@ -213,6 +213,7 @@
       "status": "Status",
       "tag": "Tag",
       "taken_at": "Taken",
+      "trashed_at": "In trash since",
       "tariff": "Tariff",
       "task": "Task",
       "template": "Template",

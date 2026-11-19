@@ -4,6 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core import tenant_scope  # noqa: F401  registriert den RLS-Hook (after_begin) für alle Sessions
+from app.core import trash_scope  # noqa: F401  blendet Papierkorb-Dateien aus jeder ORM-Abfrage aus
 from app.core.config import settings
 
 # application_name: in pg_stat_activity lassen sich Backend, job-worker, document-worker usw.

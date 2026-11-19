@@ -819,7 +819,9 @@ def verify_tenant_files(db: Session, store: Any, tenant_id: int) -> dict[str, in
 
     abgabebox_ids = set(db.scalars(select(SubmissionUploadFile.stored_file_id)))
     checked = missing = 0
-    for file_id, path in db.execute(select(StoredFile.id, StoredFile.storage_path).where(StoredFile.tenant_id == tenant_id)).all():
+    # Auch Papierkorb-Dateien: der Import stellt sie mit ihren Objekten wieder her.
+    files = select(StoredFile.id, StoredFile.storage_path).where(StoredFile.tenant_id == tenant_id).execution_options(include_trashed=True)
+    for file_id, path in db.execute(files).all():
         checked += 1
         if not store.exists("abgabebox" if file_id in abgabebox_ids else "main", path):
             missing += 1

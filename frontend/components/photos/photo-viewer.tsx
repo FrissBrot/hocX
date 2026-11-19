@@ -50,6 +50,7 @@ export function PhotoViewer({
   onToggleBest,
   onTagsSaved,
   onCaptureDateSaved,
+  onTrash,
 }: {
   items: FileOverviewItem[];
   index: number;
@@ -59,6 +60,8 @@ export function PhotoViewer({
   onTagsSaved: (id: string, tags: string[]) => void;
   // Geschätztes oder korrigiertes Aufnahmedatum geändert - die Galerie sortiert/gruppiert danach neu.
   onCaptureDateSaved?: (id: string, metadata: StoredFileMetadata) => void;
+  /** «In den Papierkorb» (nur Direkt-Uploads, photos.manage) - ohne Callback kein Knopf. */
+  onTrash?: (item: FileOverviewItem) => void;
 }) {
   const t = useTranslations("photos.viewer");
   const locale = useLocale();
@@ -288,6 +291,11 @@ export function PhotoViewer({
               )}
             </div>
           )}
+          {onTrash && item.source === "gallery_upload" ? (
+            <button type="button" className="pill" onClick={() => onTrash(item)}>
+              {t("moveToTrash")}
+            </button>
+          ) : null}
           <a href={fileUrl} target="_blank" rel="noreferrer" className="pill photo-viewer-pill-solid">
             {t("openOriginal")}
           </a>

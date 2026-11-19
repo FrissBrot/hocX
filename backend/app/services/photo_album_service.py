@@ -25,6 +25,7 @@ from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
+from app.core.trash_scope import not_trashed_public_id
 from app.core.cycle_utils import format_cycle_name, get_cycle_year
 from app.models.entities import (
     CycleConfig,
@@ -61,7 +62,11 @@ def recompute_best_of(db: Session, file_service, album: PhotoAlbum) -> None:
     """Recomputes is_best for every item in `album`. Items with a manual best_override are
     never touched by the automatic ranking - it only fills in the remaining slots (see
     BEST_OF_FRACTION) around whatever the user pinned in/out."""
-    item_rows = list(db.scalars(select(PhotoAlbumItem).where(PhotoAlbumItem.album_id == album.id)))
+    # Papierkorb-Fotos nehmen weder Plätze ein noch werden sie bewertet; ihr is_best bleibt bis
+    # zum Wiederherstellen unverändert.
+    item_rows = list(
+        db.scalars(select(PhotoAlbumItem).where(PhotoAlbumItem.album_id == album.id, not_trashed_public_id(PhotoAlbumItem.file_id)))
+    )
     if not item_rows:
         return
 
@@ -176,7 +181,11 @@ def list_albums_with_stats(
     album_ids = [album.id for album in albums]
     # Noch nicht freigegebene Fotos (share_pending) zaehlen nur in eigenen Alben mit - ein
     # Partner sieht sie weder in den Zahlen noch als Cover.
-    item_visible = or_(PhotoAlbumItem.share_pending.is_(False), PhotoAlbum.tenant_id == tenant_id)
+    # Papierkorb-Fotos zählen nicht mit (der Album-Eintrag bleibt für «Wiederherstellen»).
+    item_visible = and_(
+        or_(PhotoAlbumItem.share_pending.is_(False), PhotoAlbum.tenant_id == tenant_id),
+        not_trashed_public_id(PhotoAlbumItem.file_id),
+    )
     if readable_assignment_ids is not None:
         # Reichweite «nur zugewiesene» (Phase 4/5): Abgabe-Fotos anderer Aufträge zählen weder
         # mit noch erscheinen sie als Cover.

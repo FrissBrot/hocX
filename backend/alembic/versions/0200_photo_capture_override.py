@@ -15,7 +15,7 @@ stored_file:
 Priorität siehe backend/app/services/capture_date.py: korrigiert > EXIF > geschätzt > Upload.
 
 Revision ID: 0200_photo_capture_override
-Revises: 0198_submission_manual_elements
+Revises: 0199_stored_file_soft_delete
 Create Date: 2026-11-19
 """
 
@@ -23,7 +23,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0200_photo_capture_override"
-down_revision = "0198_submission_manual_elements"
+down_revision = "0199_stored_file_soft_delete"
 branch_labels = None
 depends_on = None
 

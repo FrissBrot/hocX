@@ -23,6 +23,7 @@ from sqlalchemy import select, text as sql
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
+from app.core.trash_scope import include_trashed
 from app.models import RetentionProposal, StoredFile, SubmissionUpload, TenantRetentionPolicy
 
 _logger = logging.getLogger(__name__)
@@ -78,6 +79,7 @@ def _candidates(db: Session, policy: TenantRetentionPolicy) -> list[dict[str, An
             FROM gallery_image g JOIN stored_file s ON s.id = g.stored_file_id
             WHERE g.tenant_id = :t AND g.event_id IS NULL AND g.submission_assignment_id IS NULL
               AND NOT EXISTS (SELECT 1 FROM photo_album_item i WHERE i.file_id = s.public_id)
+              AND s.deleted_at IS NULL
               AND s.created_at < now() - make_interval(years => :years)
             ORDER BY s.created_at, s.id LIMIT :limit
         """), {**params, "years": policy.unlinked_gallery_years}).mappings().all()
@@ -154,7 +156,9 @@ def decide(db: Session, tenant_id: int, proposal_ids: list[uuid.UUID], *, action
         kind, subject_id = proposal.kind, proposal.subject_id
         try:
             if action == "apply":
-                _apply(db, tenant_id, kind, subject_id)
+                # Aufbewahrung löscht endgültig - auch eine inzwischen in den Papierkorb gelegte Datei.
+                with include_trashed(db):
+                    _apply(db, tenant_id, kind, subject_id)
             proposal = db.get(RetentionProposal, proposal_id)
             if proposal is not None:
                 proposal.status = "applied" if action == "apply" else "dismissed"

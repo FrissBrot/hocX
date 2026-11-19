@@ -22,6 +22,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from app.core.trash_scope import not_trashed_id
 from app.core.features_generated import F
 from app.core.tenant_scope import bind_tenant_scope
 from app.models import (
@@ -294,6 +295,7 @@ def withdrawn_count(db: Session, assignment: SubmissionAssignment, element_ref: 
         select(func.count(GalleryImage.id)).where(
             GalleryImage.submission_assignment_id == assignment.id, GalleryImage.submission_element_ref == element_ref,
             GalleryImage.submission_withdrawn_at.is_not(None),
+            not_trashed_id(GalleryImage.stored_file_id),
         )
     ) or 0
     return int(files) + int(linked)

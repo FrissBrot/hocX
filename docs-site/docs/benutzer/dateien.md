@@ -33,6 +33,29 @@ Exportierst du ein Protokoll mehrmals, entsteht kein neuer Eintrag, sondern eine
 immer die aktuelle Version; ältere öffnest du in den Details unter **Versionen**. Mit dem
 Filter **Protokollexporte** siehst du nur diese Dokumente.
 
+## Papierkorb {#papierkorb}
+
+Wer Dateien bzw. Fotos verwalten darf, kann direkt hochgeladene Dateien über das Menü **···**
+einer Datei (bzw. in der Foto-Ansicht und der Mehrfachauswahl) **in den Papierkorb** legen. Eine
+Datei im Papierkorb ist nirgends mehr zu sehen: nicht in Listen, Galerie, Suche, Alben,
+Pendenzen und Exporten, und ein Freigabelink liefert sie nicht mehr aus.
+
+Der **Papierkorb** (Knopf auf der Dateien- und der Fotos-Seite) zeigt, wer was wann gelöscht hat
+und wie viele Tage bis zum endgültigen Löschen bleiben:
+
+- **Wiederherstellen** bringt die Datei mit allem zurück: Alben, Tags, Termin- oder Abgabe-Bezug,
+  Pendenz-Verknüpfungen und Freigabelinks.
+- **Endgültig löschen** bzw. **Papierkorb leeren** entfernt sofort und unwiderruflich.
+- Nach **30 Tagen** löscht hocX automatisch endgültig.
+
+Bis dahin belegen Dateien im Papierkorb weiter Speicher und **zählen zum Speicherkontingent**
+(Kategorie «Papierkorb» unter Abo & Speicher). Lädst du eine Datei aus dem Papierkorb erneut
+hoch, wird sie normal gespeichert.
+
+Löschungen nach Datenschutzrecht, das Löschen einer ganzen Organisation, Aufbewahrungsfristen und
+das Löschen von Protokollen oder Abgaben samt Dateien gehen nicht über den Papierkorb: sie
+löschen sofort und schliessen Dateien im Papierkorb mit ein.
+
 ## Gut zu wissen
 
 - Bilder gehören in den Bereich **Fotos** (siehe [Fotos und Alben](fotos.md)); ZIP-Archive bleiben normale Dateien ohne

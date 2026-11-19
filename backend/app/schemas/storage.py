@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-StorageCategoryKey = Literal["photos", "files", "protocols", "other"]
+StorageCategoryKey = Literal["photos", "files", "protocols", "trash", "other"]
 
 
 class StorageCategoryUsage(BaseModel):

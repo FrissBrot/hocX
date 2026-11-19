@@ -22,7 +22,10 @@ export default async function PhotosPage() {
         desktop={
           <>
           <section className="photos-page">
-            <PhotosView />
+            <PhotosView
+              canManage={can(session, "photos.manage")}
+              canOpenTrash={can(session, "photos.manage") || can(session, "files.manage")}
+            />
           </section>
           </>
         }

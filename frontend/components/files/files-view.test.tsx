@@ -16,6 +16,10 @@ vi.mock("@/contexts/toast-context", () => ({
   useToast: () => showToastMock,
 }));
 
+vi.mock("@/contexts/confirm-context", () => ({
+  useConfirm: () => vi.fn(),
+}));
+
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: routerPushMock }),
 }));

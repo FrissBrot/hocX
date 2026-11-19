@@ -18,6 +18,7 @@ from datetime import datetime
 
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
+from app.core.trash_scope import include_trashed
 
 _logger = logging.getLogger(__name__)
 
@@ -76,7 +77,13 @@ def purge(db: Session, *, retention_days: int) -> int:
 def apply(db: Session, entries: list[ErasureEntry], *, tenant_id: int | None = None, skip_kinds: tuple[str, ...] = ()) -> dict[str, int]:
     """Führt die Löschungen erneut aus. ``tenant_id``: nur innerhalb dieses Mandanten (Mandanten-Kopie).
     Nicht mehr vorhandene Objekte zählen als erledigt; ein Fehler bei einem Eintrag bricht nicht ab,
-    sondern wird gezählt (der Restore meldet ihn)."""
+    sondern wird gezählt (der Restore meldet ihn). Eine im Sicherungsstand noch im Papierkorb
+    liegende Datei wird ebenfalls gefunden und endgültig gelöscht."""
+    with include_trashed(db):
+        return _apply(db, entries, tenant_id=tenant_id, skip_kinds=skip_kinds)
+
+
+def _apply(db: Session, entries: list[ErasureEntry], *, tenant_id: int | None, skip_kinds: tuple[str, ...]) -> dict[str, int]:
     from app.core.error_log import record_system_error
     from app.models import AppUser, Event, Protocol, StoredFile, SubmissionAssignment, SubmissionUpload, Tenant
 

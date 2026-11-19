@@ -11,6 +11,7 @@ from fastapi import UploadFile
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
+from app.core.trash_scope import include_trashed
 from app.core.config import settings
 from app.core.storage import ABGABEBOX, MAIN, StorageError, delete_prefix, get_object_store
 from app.core.features_generated import FEATURES, MODULES, F
@@ -723,6 +724,12 @@ class AdminTenantService:
         return self._read_model(db, tenant)
 
     def delete_tenant(self, db: Session, tenant_id: int) -> dict | None:
+        # Offboarding entfernt alles endgültig, auch den Papierkorb: ohne include_trashed fehlten
+        # dessen Speicherobjekte und Vorschaubilder in der Liste unten und blieben liegen.
+        with include_trashed(db):
+            return self._delete_tenant(db, tenant_id)
+
+    def _delete_tenant(self, db: Session, tenant_id: int) -> dict | None:
         """Deletes a tenant and everything under it.
 
         Plain `DELETE FROM tenant` would fail: several tenant-scoped tables have an

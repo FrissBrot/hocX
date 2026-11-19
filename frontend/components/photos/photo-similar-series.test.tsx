@@ -122,7 +122,7 @@ describe("PhotoSimilarSeries", () => {
 
     await waitFor(() => expect(confirmMock).toHaveBeenCalled());
     const [options] = confirmMock.mock.calls[0];
-    expect(options.message).toContain("2 Bilder werden endgültig gelöscht");
+    expect(options.message).toContain("2 Bilder in den Papierkorb legen");
   });
 
   it("issues no delete request when the confirmation is cancelled", async () => {

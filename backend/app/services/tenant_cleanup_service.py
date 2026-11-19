@@ -3,6 +3,7 @@ from __future__ import annotations
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
+from app.core.trash_scope import include_trashed
 from app.core.config import settings
 from app.models import (
     Document,
@@ -37,6 +38,10 @@ class TenantCleanupService:
     """
 
     def preview(self, db: Session, tenant_id: int) -> TenantCleanupCounts:
+        with include_trashed(db):
+            return self._preview(db, tenant_id)
+
+    def _preview(self, db: Session, tenant_id: int) -> TenantCleanupCounts:
         list_entries = int(
             db.scalar(
                 select(func.count(ListEntry.id))
@@ -89,6 +94,11 @@ class TenantCleanupService:
         )
 
     def cleanup(self, db: Session, tenant_id: int, categories: list[TenantCleanupCategory]) -> TenantCleanupCounts | None:
+        # Aufräumen löscht endgültig - Papierkorb-Dateien eingeschlossen.
+        with include_trashed(db):
+            return self._cleanup(db, tenant_id, categories)
+
+    def _cleanup(self, db: Session, tenant_id: int, categories: list[TenantCleanupCategory]) -> TenantCleanupCounts | None:
         tenant = db.get(Tenant, tenant_id)
         if tenant is None:
             return None
