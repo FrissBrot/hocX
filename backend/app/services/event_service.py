@@ -12,7 +12,7 @@ from app.core.cycle_utils import format_cycle_name, get_cycle_year
 from app.models import Event, Participant, Protocol
 from app.models.entities import CycleConfig, EventCycle, SubmissionUpload, SubmissionUploadFile
 from app.repositories.event_repository import EventRepository
-from app.schemas.event import EVENT_TAG_MAX_LENGTH, CycleAssignment, EventCreate, EventUpdate
+from app.schemas.event import EVENT_DATE_MAX, EVENT_DATE_MIN, EVENT_TAG_MAX_LENGTH, CycleAssignment, EventCreate, EventUpdate
 from app.schemas.protocol import ProtocolCycleInfo
 from app.services import public_id_service
 from app.services.event_cycle_service import list_cycle_event_ids, resolve_protocol_cycle
@@ -625,9 +625,17 @@ class EventService:
             lambda raw: datetime.strptime(raw, "%Y/%m/%d").date(),
         ):
             try:
-                return parser(normalized)
+                parsed = parser(normalized)
             except ValueError:
                 continue
+            if not (EVENT_DATE_MIN <= parsed <= EVENT_DATE_MAX):
+                raise CsvRowError(
+                    "dateOutOfRange",
+                    f"CSV row {row_number}: {field_label} liegt ausserhalb von {EVENT_DATE_MIN.year}–{EVENT_DATE_MAX.year}",
+                    row=row_number,
+                    value=normalized[:40],
+                )
+            return parsed
         code = "startDateFormat" if field_label == "Startdatum" else "endDateFormat"
         raise CsvRowError(code, f"CSV row {row_number}: {field_label} hat ein unbekanntes Format", row=row_number, value=normalized[:40])
 

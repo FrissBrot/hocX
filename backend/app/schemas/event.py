@@ -22,6 +22,19 @@ def check_event_tag_length(value: str | None) -> str | None:
     return value
 
 
+# Plausibler Bereich für Termindaten. Ohne Grenze nahm die API jedes ISO-Datum an (z. B.
+# 9999-12-31): Kalender-Abo (DTEND = Enddatum + 1 Tag), Zyklus (Jahr + 1) und Abgabe-Zeitfenster
+# rechnen damit über date.max hinaus und brechen mit OverflowError/ValueError ab.
+EVENT_DATE_MIN = date(1900, 1, 1)
+EVENT_DATE_MAX = date(2999, 12, 31)
+
+
+def check_event_date_range(value: date | None) -> date | None:
+    if value is not None and not (EVENT_DATE_MIN <= value <= EVENT_DATE_MAX):
+        raise ValueError(f"date must be between {EVENT_DATE_MIN.isoformat()} and {EVENT_DATE_MAX.isoformat()}")
+    return value
+
+
 _PARTICIPANT_ID_FIELDS = (
     "organizer_ids",
     "leadership_ids",
@@ -86,6 +99,11 @@ class EventCreate(EventBase):
     def _tag_length(cls, value: str | None) -> str | None:
         return check_event_tag_length(value)
 
+    @field_validator("event_date", "event_end_date")
+    @classmethod
+    def _date_in_range(cls, value: date | None) -> date | None:
+        return check_event_date_range(value)
+
 
 class EventUpdate(BaseModel):
     event_date: date | None = None
@@ -125,6 +143,11 @@ class EventUpdate(BaseModel):
     @classmethod
     def _tag_length(cls, value: str | None) -> str | None:
         return check_event_tag_length(value)
+
+    @field_validator("event_date", "event_end_date")
+    @classmethod
+    def _date_in_range(cls, value: date | None) -> date | None:
+        return check_event_date_range(value)
 
 
 class EventRead(PublicIdModel, EventBase):

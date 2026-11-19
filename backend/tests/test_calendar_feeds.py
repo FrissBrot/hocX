@@ -420,3 +420,20 @@ def test_public_fetch_binds_the_feed_tenant_for_row_level_security(db, monkeypat
 
     assert seen == [tenant.id]
     bind_tenant_scope(db, None)
+
+
+def test_events_feed_survives_an_end_date_at_the_end_of_the_calendar(db):
+    """Altdaten mit Enddatum 9999-12-31: DTEND (+1 Tag) lief über date.max, der Feed antwortete
+    für alle Abonnenten des Mandanten mit 500 (Bug-Bounty 2026-11-19, termine/eingaben)."""
+    tenant = make_tenant(db)
+    _, user = _user(db, tenant.id)
+    token = _token(_enable(db, user))
+    make_event(db, tenant.id, title="Endlos", event_date=TODAY, event_end_date=date(9999, 12, 31))
+    make_event(db, tenant.id, title="Normal", event_date=TODAY + timedelta(days=1))
+    db.flush()
+
+    ics = _ics(db, token)
+
+    assert "SUMMARY:Endlos" in ics
+    assert "DTEND;VALUE=DATE:99991231" in ics
+    assert "SUMMARY:Normal" in ics
