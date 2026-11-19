@@ -34,7 +34,7 @@ describe("FinesView: Wieder öffnen einer einkassierten Pendenzen-Busse", () => 
   it("fragt nach (Buchung wird gelöscht) und bricht bei Nein ab", async () => {
     confirmMock.mockResolvedValue(false);
     renderView();
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Rückgängig" })); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Wieder öffnen" })); });
     expect(confirmMock).toHaveBeenCalledTimes(1);
     const options = confirmMock.mock.calls[0][0];
     expect(options.tone).toBe("danger");
@@ -47,8 +47,12 @@ describe("FinesView: Wieder öffnen einer einkassierten Pendenzen-Busse", () => 
     confirmMock.mockResolvedValue(true);
     fetchMock.mockResolvedValue({ ...collected, status: "pending", can_reopen: false });
     renderView();
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Rückgängig" })); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Wieder öffnen" })); });
     expect(fetchMock).toHaveBeenCalledWith("/api/todo-fines/tf-1/reopen", { method: "POST" });
-    expect(toastMock).toHaveBeenCalledWith("Busse wieder geöffnet, Buchung gelöscht.", "success");
+    // Rückgängig im Toast kassiert wieder (serverseitige Gegenaktion)
+    expect(toastMock).toHaveBeenCalledWith("Busse von Anna wieder offen", "success", { action: expect.objectContaining({ label: "Rückgängig" }) });
+    fetchMock.mockResolvedValue({ ...collected });
+    await act(async () => { toastMock.mock.calls[0][2].action.onClick(); });
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/todo-fines/tf-1/collect", { method: "POST" });
   });
 });

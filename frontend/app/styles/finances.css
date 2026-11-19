@@ -1,4 +1,4 @@
-/* Bereichs-CSS, geladen nur von: finances. Siehe design/DESIGN.md Abschnitt 10. */
+/* Bereichs-CSS, geladen nur von: finances, fines (Seite «Kasse»). Siehe design/DESIGN.md Abschnitt 10. */
 
 /* ── Finance module ─────────────────────────────────────────────── */
 
@@ -78,7 +78,7 @@
 .finance-account-open:active { background: transparent; transform: none; box-shadow: none; }
 
 .finance-account-card-active,
-.finance-account-card-active:hover { background: var(--accent-soft) !important; border-color: transparent !important; }
+.finance-account-card-active:hover { background: var(--accent-soft) !important; border-color: var(--accent) !important; box-shadow: var(--focus-ring); }
 
 .finance-account-name {
   font-size: var(--text-base);
@@ -146,16 +146,14 @@
 }
 
 .finance-main-title {
-  font-size: var(--text-xs);
+  font-size: var(--text-xl);
   font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin: 0 0 var(--space-2);
+  color: var(--text);
+  margin: 0 0 var(--space-1);
 }
 
 .finance-main-balance {
-  font-size: 2.6rem; /* design-ok: Display-Zahl (Hero) */
+  font-size: 2.125rem; /* design-ok: Display-Zahl (Hero, 34 px laut Design «Kasse und Bussen v2») */
   font-weight: 700;
   color: var(--text);
   font-variant-numeric: tabular-nums;
@@ -308,7 +306,13 @@
 
 .finance-tx-date { font-size: var(--text-sm); color: var(--muted); white-space: nowrap; }
 
-.finance-tx-desc { font-size: var(--text-base); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.finance-tx-desc { display: grid; min-width: 0; font-size: var(--text-base); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Buchung aus einer Busse: Herkunft unter der Beschreibung (Schloss rechts) */
+.finance-tx-origin { font-size: var(--text-xs); color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+
+/* Neu erfasste Buchung kurz hervorheben */
+.finance-tx-row-new { background: var(--accent-soft); }
 
 .finance-tx-amount { font-size: var(--text-base); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
@@ -377,7 +381,7 @@
 /* ── Provisional balance ────────────────────────────────────────── */
 .finance-account-provisional {
   font-size: var(--text-xs);
-  color: var(--success);
+  color: var(--info-fg);
   font-weight: 600;
   margin-top: 2px;
 }
@@ -400,11 +404,19 @@
 .finance-period {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--space-4);
 }
 
-.finance-period-year { min-width: 160px; }
+/* Jahres-Chips: aktiver Chip dunkel gefüllt (Design «Kasse und Bussen v2») */
+.finance-period-year .filter-tabs-option-active,
+.finance-period-year .filter-tabs-option-active:hover {
+  --button-bg: var(--primary);
+  --button-hover-bg: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-contrast);
+}
 
 .finance-period-totals {
   display: flex;
@@ -430,5 +442,277 @@
 @media (max-width: 640px) {
   .finance-main-header { flex-wrap: wrap; }
   .finance-main-actions { justify-content: flex-start; }
-  .finance-period-year { min-width: 0; width: 100%; }
+  .finance-period-year { width: 100%; }
+}
+
+/* ── Seite «Kasse» (Design «Kasse und Bussen v2») ───────────────── */
+
+.finance-account-open .finance-account-balance { font-size: var(--text-xl); }
+
+.finance-account-open .finance-account-count { flex: none; }
+
+.kasse-head { display: grid; gap: var(--space-3); }
+
+.kasse-head .page-header { margin-bottom: 0; }
+
+.kasse-lead { max-width: 72ch; }
+
+.kasse-head-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+.kasse-sub {
+  display: block;
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kasse-cell { display: grid; gap: 2px; min-width: 0; justify-items: start; }
+
+/* Kennzahlen: drei Zellen, durch Linien getrennt */
+.kasse-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.kasse-kpi {
+  display: grid;
+  gap: 2px;
+  padding: var(--space-4) var(--space-5);
+  min-width: 0;
+}
+
+.kasse-kpi + .kasse-kpi { border-left: 1px solid var(--border); }
+
+.kasse-kpi dt {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.kasse-kpi dd { margin: 0; }
+
+.kasse-kpi-value {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.kasse-kpi-success { color: var(--success); }
+
+/* Konflikt-Hinweis (Pendenzen-Bussen mit mehreren passenden Regeln) */
+.kasse-conflict {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent);
+  border-radius: var(--radius-md);
+  background: var(--warning-bg);
+  color: var(--warning-fg);
+}
+
+.kasse-conflict-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--warning);
+  color: var(--on-solid);
+  font-weight: 700;
+  font-size: var(--text-sm);
+}
+
+.kasse-conflict-text { display: grid; gap: 2px; flex: 1; min-width: 0; font-size: var(--text-sm); }
+
+/* Werkzeugleiste: Filter, Suche, Ansicht */
+.kasse-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.kasse-search { flex: 1 1 220px; max-width: 300px; }
+
+.kasse-view-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.kasse-view-label { font-size: var(--text-sm); color: var(--muted); }
+
+/* Leerzustand im Filter */
+.kasse-empty {
+  display: grid;
+  gap: var(--space-1);
+  justify-items: center;
+  padding: var(--space-6) var(--space-4);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+/* Ansicht «Nach Person» */
+.kasse-people { display: grid; gap: var(--space-4); }
+
+.kasse-person {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.kasse-person-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--neutral-bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.kasse-avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.kasse-person-name { display: grid; flex: 1; min-width: 0; }
+
+.kasse-person-total {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: none;
+}
+
+.kasse-person-sum {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.kasse-collect-button { display: inline-flex; align-items: center; gap: var(--space-2); }
+
+.kasse-collect-button svg { width: 14px; height: 14px; }
+
+.kasse-rows { margin: 0; padding: 0; list-style: none; }
+
+.kasse-row {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1.4fr) minmax(0, 1.2fr) 110px minmax(0, 1fr) 120px;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+.kasse-row:first-child { border-top: none; }
+
+.kasse-row-done > :not(.kasse-row-action):not(.kasse-row-check) { opacity: 0.55; }
+
+.kasse-row-amount { text-align: right; }
+
+.kasse-row-action { display: flex; justify-content: flex-end; }
+
+.kasse-amount { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.kasse-amount-struck { text-decoration: line-through; color: var(--muted); }
+
+.kasse-source { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.kasse-source-link { font-weight: 600; color: var(--accent-strong); text-decoration: none; }
+
+.kasse-source-link:hover { text-decoration: underline; }
+
+/* Haken «als kassiert markieren» */
+.kasse-check {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  min-height: 0;
+  padding: 0;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-xs);
+  background: var(--panel-solid);
+  color: transparent;
+  box-shadow: none;
+  cursor: pointer;
+  transition: border-color var(--dur-fast), color var(--dur-fast), background var(--dur-fast);
+}
+
+.kasse-check svg { width: 14px; height: 14px; }
+
+.kasse-check:hover:not(:disabled) { border-color: var(--success); color: var(--success); background: var(--panel-solid); }
+
+.kasse-check:disabled { cursor: default; }
+
+.kasse-check-done,
+.kasse-check-done:disabled {
+  border-color: var(--success);
+  background: var(--success);
+  color: var(--on-solid);
+  opacity: 1;
+}
+
+/* Ansicht «Liste»: Tabelle mit Mindestbreite, horizontal scrollbar (.table-shell) */
+.kasse-table { min-width: 940px; }
+
+.kasse-table td { white-space: normal; }
+
+.kasse-table .kasse-source { white-space: normal; }
+
+.kasse-table .kasse-amount,
+.kasse-table .row-text-action { white-space: nowrap; }
+
+.kasse-conflict-chip { white-space: nowrap; }
+
+@media (max-width: 900px) {
+  .kasse-row {
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "check source amount"
+      "check reason status"
+      "check action action";
+  }
+  .kasse-row > :nth-child(1) { grid-area: check; align-self: start; }
+  .kasse-row > :nth-child(2) { grid-area: source; }
+  .kasse-row > :nth-child(3) { grid-area: reason; }
+  .kasse-row > :nth-child(4) { grid-area: amount; }
+  .kasse-row > :nth-child(5) { grid-area: status; justify-items: end; text-align: right; }
+  .kasse-row > :nth-child(6) { grid-area: action; justify-content: flex-start; }
+  .kasse-row-action:empty { display: none; }
+}
+
+@media (max-width: 640px) {
+  .kasse-kpis { grid-template-columns: minmax(0, 1fr); }
+  .kasse-kpi + .kasse-kpi { border-left: none; border-top: 1px solid var(--border); }
+  .kasse-kpi { padding: var(--space-3) var(--space-4); }
+  .kasse-person-head { flex-wrap: wrap; }
+  .kasse-person-total { width: 100%; justify-content: space-between; }
+  .kasse-search { max-width: none; flex-basis: 100%; }
+  .kasse-view-toggle { margin-left: 0; }
+  .kasse-conflict { flex-wrap: wrap; }
 }

@@ -11,7 +11,8 @@ Installationen aktualisieren können.
 ## [1.4.1] - 2026-11-19
 
 Die Übersicht der Abgaben und das Abgabe-Detail folgen jetzt vollständig dem Design «Abgaben v4»
-(in 1.4.0 war nur der Dialog zum Anlegen und Bearbeiten umgesetzt).
+(in 1.4.0 war nur der Dialog zum Anlegen und Bearbeiten umgesetzt). Konten und Bussen sind neu
+eine Seite «Kasse» nach dem Design «Kasse und Bussen v2».
 Keine Migration, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
 
 ### Update
@@ -28,6 +29,19 @@ Keine Migration, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Cha
   als Kacheln mit Statuspunkt und Kurzinfo, unten der Hinweis zur ClamAV-Prüfung neben «Alle Dateien
   (.zip)». Ein einzelner Termin oder Eintrag öffnet sich im selben Fenster, «← Termine» führt
   zurück. Der Links-Dialog erklärt kurz, wie Links und Abgaben zusammenhängen.
+- **Kasse (Design «Kasse und Bussen v2»):** Konten und Bussen sind eine Seite «Kasse» mit den
+  Reitern «Konten» und «Bussen» (Zähler der offenen Bussen am Reiter); `/finances` und `/fines`
+  bleiben die Adressen der Reiter, Links, Suche und Seitenleiste funktionieren unverändert.
+  - **Bussen:** Kennzahlen (offen, kassiert im laufenden Jahr, Personen mit offenen Bussen), ein
+    Hinweis auf Pendenzen-Bussen mit Regel-Konflikt samt «Anzeigen», Filter Offen/Kassiert/Gelöscht/
+    Alle mit Suche und die Ansichten «Nach Person» (Karte je Person mit Tarif, offener Summe und
+    «Kassieren» bzw. «Alle kassieren») und «Liste» (sortierbare Tabelle). Jede Zeile hat Haken,
+    Status («Offen», «Läuft», «Konflikt», «Kassiert», «Gelöscht») und ihre Aktion (Löschen, Erlassen,
+    Wieder öffnen, Wiederherstellen, Regel wählen). Nach Kassieren, Löschen, Erlassen und Wieder
+    öffnen bietet der Hinweis «Rückgängig» an (führt die Gegenaktion aus). «+ Busse» steht im Kopf.
+  - **Konten:** Kontenliste mit Anzahl Buchungen, Saldo und offenen Bussen je Konto, das erste Konto
+    ist gleich geöffnet; Jahres-Chips statt Auswahlliste, «+ Buchung» als Hauptaktion, neue Buchungen
+    werden kurz hervorgehoben und Buchungen aus Bussen tragen «Aus Busse · nur über Bussen änderbar».
 
 ## [1.4.0] - 2026-11-19
 

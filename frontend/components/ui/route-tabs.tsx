@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 
-export type RouteTab = { href: string; label: string };
+export type RouteTab = { href: string; label: string; /** Zählerabzeichen hinter dem Titel (0/leer = ohne), wie `Tabs`. */ count?: number | null };
 
 // Tab strip whose tabs are separate routes (each keeps its own URL, page and access check).
 // Pages pass only the tabs the current role may open - the strip does no filtering itself.
@@ -35,6 +35,7 @@ export function RouteTabs({
             className={isActive ? `${baseClass} ${activeClass}` : baseClass}
           >
             {tab.label}
+            {tab.count ? <span className="tabs-count">{tab.count}</span> : null}
           </Link>
         );
       })}

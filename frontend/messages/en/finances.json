@@ -428,5 +428,89 @@
   "periodClosing": "Closing balance",
   "exportButton": "Export",
   "reopenConfirm": "Undo the collection of {amount} for {name}? The finance booking will be deleted and the fine is open again.",
-  "currencyFromSettings": "All accounts and fines use the currency {currency}. It is set under Organization › Profile."
+  "currencyFromSettings": "All accounts and fines use the currency {currency}. It is set under Organization › Profile.",
+  "kasse": {
+    "title": "Cash",
+    "helpLink": "Finance help ↗",
+    "leadFines": "Lateness and absence from the minutes, plus tasks completed late. Ticking means: money received.",
+    "leadAccounts": "Accounts, balance and transactions. Collected fines are booked to their account automatically.",
+    "undo": "Undo",
+    "markCollected": "Mark as collected",
+    "markCollectedFor": "Mark fine of {name} as collected",
+    "collect": "Collect",
+    "collectAll": "Collect all",
+    "sourceProtocol": "Minutes · {account}",
+    "sourceTodo": "Task · {account}",
+    "due": "due {date}",
+    "ruleName": "Rule {name}",
+    "reasonDetail": "{days} · {rule}",
+    "status": {
+      "pending": "Open",
+      "running": "Running",
+      "conflict": "Conflict",
+      "collected": "Collected",
+      "deleted": "Deleted"
+    },
+    "hint": {
+      "running": "Amount grows daily",
+      "collectedBy": "{date} · {user}"
+    },
+    "action": {
+      "delete": "Delete",
+      "waive": "Waive",
+      "reopen": "Reopen",
+      "restore": "Restore",
+      "chooseRule": "Choose rule"
+    },
+    "toast": {
+      "collected": "{name}: {amount} collected",
+      "deleted": "Fine of {name} deleted",
+      "waived": "Fine of {name} waived",
+      "reopened": "Fine of {name} open again",
+      "restored": "Fine of {name} restored",
+      "undone": "Undone: {name}"
+    },
+    "empty": {
+      "openTitle": "All collected.",
+      "openText": "There are no open fines right now.",
+      "searchTitle": "No matches.",
+      "searchText": "Adjust the search or change the filter.",
+      "filterTitle": "No fines.",
+      "filterText": "Nothing in this filter."
+    },
+    "kpi": {
+      "open": "Open",
+      "collected": "Collected {year}",
+      "people": "People with open fines",
+      "fines": "{count, plural, one {# fine} other {# fines}}",
+      "ofTotal": "of {count}"
+    },
+    "conflict": {
+      "title": "{count, plural, one {# task fine needs a decision.} other {# task fines need a decision.}}",
+      "text": "Several rules match the same task. Choose the rule manually.",
+      "show": "Show",
+      "onlyConflicts": "Conflicts only ✕",
+      "clear": "Remove filter «Conflicts only»"
+    },
+    "filter": {
+      "open": "Open",
+      "collected": "Collected",
+      "deleted": "Deleted",
+      "all": "All"
+    },
+    "searchPlaceholder": "Person, minutes or task",
+    "view": {
+      "label": "View",
+      "person": "By person",
+      "list": "List"
+    },
+    "person": {
+      "open": "{count, plural, other {# open}}",
+      "nothingOpen": "nothing open",
+      "more": "{count, plural, other {# more}}"
+    },
+    "accountOpen": "+ {amount} open",
+    "provisionalOpen": "+ {amount} from open fines, not yet collected",
+    "fromFine": "From fine · change via fines only"
+  }
 }
