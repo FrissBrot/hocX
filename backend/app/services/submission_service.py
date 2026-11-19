@@ -811,7 +811,11 @@ class SubmissionService:
         if link is None:
             raise ValueError("Die Abgabe ist über keinen Link erreichbar – bitte zuerst einen Link auswählen")
 
-        raw_elements = self._resolve_raw_elements(db, assignment) if assignment.responsible_participant_source else []
+        # Zwei gleichzeitige Abgleiche (z. B. zwei Terminänderungen) legten sonst dieselbe Pendenz
+        # an; der zweite scheiterte an uix_protocol_todo_submission_element und landete im
+        # Fehlerprotokoll. Mit dem Lock je Abgabe wartet er und sieht danach die Pendenzen des ersten.
+        lock_submission_element(db, assignment.id)
+        raw_elements =self._resolve_raw_elements(db, assignment) if assignment.responsible_participant_source else []
         states = (
             {element.element_ref: element for element in self.get_assignment_elements(db, assignment)}
             if raw_elements else {}
