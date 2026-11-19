@@ -42,22 +42,20 @@ export default async function PersonDetailPage({ params }: { params: Promise<{ i
 
   return (
     <AppShell initialSession={session}>
-      <section className="panel">
-        <PersonPage
-          initialPerson={person}
-          templates={templates ?? []}
-          initialTemplateIds={(assigned ?? []).map((template) => template.id)}
-          roles={roles ?? []}
-          tariffs={tariffs ?? []}
-          initialInvite={(invites ?? []).find((invite) => invite.participant_id === person.id) ?? null}
-          initialMfa={mfa}
-          permissions={{ access, financeRead, financeManage, dataExport: can(session, "participants.export") }}
-          actorPermissions={session.permissions ?? []}
-          enabledFeatures={session.current_tenant?.enabled_features ?? []}
-          ownUserId={session.user?.id ?? null}
-          tenantRequiresMfa={Boolean(session.current_tenant?.require_mfa)}
-        />
-      </section>
+      <PersonPage
+        initialPerson={person}
+        templates={templates ?? []}
+        initialTemplateIds={(assigned ?? []).map((template) => template.id)}
+        roles={roles ?? []}
+        tariffs={tariffs ?? []}
+        initialInvite={(invites ?? []).find((invite) => invite.participant_id === person.id) ?? null}
+        initialMfa={mfa}
+        permissions={{ access, financeRead, financeManage, dataExport: can(session, "participants.export") }}
+        actorPermissions={session.permissions ?? []}
+        enabledFeatures={session.current_tenant?.enabled_features ?? []}
+        ownUserId={session.user?.id ?? null}
+        tenantRequiresMfa={Boolean(session.current_tenant?.require_mfa)}
+      />
     </AppShell>
   );
 }

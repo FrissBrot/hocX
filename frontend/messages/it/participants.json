@@ -168,8 +168,7 @@
       "master": "Dati anagrafici",
       "membership": "Appartenenza",
       "tariff": "Tariffa delle multe",
-      "login": "Accesso e ruoli",
-      "more": "Altre azioni"
+      "login": "Accesso e ruoli"
     },
     "emailHelp": "Per l'invito e le notifiche.",
     "emailLoginHelp": "È anche l'indirizzo di accesso. Una modifica vale dal prossimo accesso.",
@@ -190,19 +189,50 @@
     "rolesExplained": "Cosa possono fare i ruoli? →",
     "mfa": "MFA",
     "revokeHelp": "Blocca l'accesso e termina le sessioni in corso. La persona resta membro.",
-    "exportHelp": "Tutti i dati della persona come file ZIP protetto da password.",
-    "deleteHelp": "Eliminare definitivamente, con presenze, multe e compiti. Per gli ex membri è meglio impostare una data di uscita.",
-    "delete": "Elimina …",
     "unsaved": "Modifiche non salvate",
     "discard": "Scarta",
     "blockers": {
       "displayName": "Salvataggio bloccato: manca il nome visualizzato.",
-      "dates": "Salvataggio bloccato: l'uscita è prima dell'entrata."
+      "dates": "Salvataggio bloccato: l'uscita è prima dell'entrata.",
+      "loginEmail": "Salvataggio bloccato: per l'accesso la persona ha bisogno di un indirizzo e-mail."
     },
     "previewAction": "Visualizza come …",
     "previewHelp": "Mostra quali voci di menu, autorizzazioni e consegne vede questo account (solo lettura, registrato nella cronologia).",
     "previewSavedOnly": "L'anteprima mostra lo stato salvato. Salva prima i ruoli modificati.",
-    "previewNotAllowed": "Solo per account che non hanno più autorizzazioni di te."
+    "previewNotAllowed": "Solo per account che non hanno più autorizzazioni di te.",
+    "status": {
+      "active": "Attivo",
+      "inactive": "Inattivo",
+      "left": "Uscita il {date}"
+    },
+    "memberSince": "Membro dal {date}",
+    "tariffMeta": "Tariffa {tariff}",
+    "loginAndRole": "Accesso e ruolo",
+    "moreActions": "Altre azioni",
+    "descriptions": {
+      "master": "Nome e contatto. Il nome visualizzato appare in elenchi, verbali e compiti.",
+      "membership": "Se la persona è attiva, da quando ne fa parte e in quali liste di presenza appare.",
+      "tariff": "Quali importi delle multe valgono per questa persona.",
+      "login": "Se la persona può accedere e cosa può vedere e modificare in hocX."
+    },
+    "displayNameFromParts": "Da nome e cognome",
+    "loginBadge": "Accesso",
+    "emailLoginChanged": "Nuovo indirizzo di accesso – vale dal prossimo accesso. Il vecchio indirizzo {email} ne viene informato.",
+    "activeMember": "Membro attivo",
+    "activeMemberHelp": "Le persone inattive conservano tutti i dati, ma l'accesso è bloccato.",
+    "attendanceLists": "Appare nelle liste di presenza",
+    "attendanceCount": "{selected} di {total}",
+    "noTemplates": "Ancora nessun modello con lista di presenza.",
+    "noTariffs": "Ancora nessuna tariffa delle multe configurata.",
+    "tariffSingle": "L'organizzazione ha solo questa tariffa, valida per tutti i membri.",
+    "tariffDefaultHint": "Predefinita per chi non ha una tariffa propria",
+    "tariffMembers": "{count, plural, =0 {Ancora nessuno} one {# membro} other {# membri}}",
+    "loginLabel": "Accesso",
+    "createdAt": "Registrato il {date}",
+    "updatedAt": "ultima modifica il {date}",
+    "deleteMember": "Elimina membro",
+    "unsavedCount": "{count, plural, one {# modifica non salvata} other {# modifiche non salvate}}",
+    "savedCheck": "✓ Salvato"
   },
   "newMember": {
     "description": "La persona compare poi nella lista dei membri. Senza invito resta membro senza accesso.",

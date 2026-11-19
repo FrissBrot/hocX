@@ -168,8 +168,7 @@
       "master": "Stammdaten",
       "membership": "Mitgliedschaft",
       "tariff": "Bussentarif",
-      "login": "Login & Rollen",
-      "more": "Weitere Aktionen"
+      "login": "Login & Rollen"
     },
     "emailHelp": "Für Einladung und Benachrichtigungen.",
     "emailLoginHelp": "Ist auch die Login-Adresse. Eine Änderung gilt ab dem nächsten Login.",
@@ -190,19 +189,50 @@
     "rolesExplained": "Was dürfen die Rollen? →",
     "mfa": "MFA",
     "revokeHelp": "Sperrt die Anmeldung und beendet laufende Sitzungen. Die Person bleibt Mitglied.",
-    "exportHelp": "Alle Daten der Person als passwortgeschützte ZIP-Datei.",
-    "deleteHelp": "Endgültig löschen, mit Anwesenheit, Bussen und Aufgaben. Für Ausgetretene besser ein Austrittsdatum setzen.",
-    "delete": "Löschen …",
     "unsaved": "Ungespeicherte Änderungen",
     "discard": "Verwerfen",
     "blockers": {
       "displayName": "Speichern ist gesperrt: der Anzeigename fehlt.",
-      "dates": "Speichern ist gesperrt: der Austritt liegt vor dem Eintritt."
+      "dates": "Speichern ist gesperrt: der Austritt liegt vor dem Eintritt.",
+      "loginEmail": "Speichern ist gesperrt: für den Login braucht die Person eine E-Mail-Adresse."
     },
     "previewAction": "Ansehen als …",
     "previewHelp": "Zeigt, welche Menüpunkte, Rechte und Abgaben dieses Konto sieht (nur lesend, im Verlauf vermerkt).",
     "previewSavedOnly": "Die Vorschau zeigt den gespeicherten Stand. Speichere zuerst die geänderten Rollen.",
-    "previewNotAllowed": "Nur für Konten, die nicht mehr Berechtigungen haben als du."
+    "previewNotAllowed": "Nur für Konten, die nicht mehr Berechtigungen haben als du.",
+    "status": {
+      "active": "Aktiv",
+      "inactive": "Inaktiv",
+      "left": "Austritt {date}"
+    },
+    "memberSince": "Mitglied seit {date}",
+    "tariffMeta": "Tarif {tariff}",
+    "loginAndRole": "Login und Rolle",
+    "moreActions": "Weitere Aktionen",
+    "descriptions": {
+      "master": "Name und Kontakt. Der Anzeigename erscheint in Listen, Protokollen und Pendenzen.",
+      "membership": "Ob die Person aktiv ist, seit wann sie dabei ist und in welchen Anwesenheitslisten sie erscheint.",
+      "tariff": "Welche Bussenansätze für diese Person gelten.",
+      "login": "Ob sich die Person anmelden kann und was sie in hocX sehen und ändern darf."
+    },
+    "displayNameFromParts": "Aus Vor- und Nachname",
+    "loginBadge": "Login",
+    "emailLoginChanged": "Neue Login-Adresse – gilt ab dem nächsten Login. Die bisherige Adresse {email} wird darüber informiert.",
+    "activeMember": "Aktives Mitglied",
+    "activeMemberHelp": "Inaktive Personen behalten alle Daten, ein Login ist aber gesperrt.",
+    "attendanceLists": "Erscheint in Anwesenheitslisten",
+    "attendanceCount": "{selected} von {total}",
+    "noTemplates": "Noch keine Vorlagen mit Anwesenheitsliste.",
+    "noTariffs": "Noch keine Bussentarife eingerichtet.",
+    "tariffSingle": "Der Verein hat nur diesen Tarif, er gilt für alle Mitglieder.",
+    "tariffDefaultHint": "Standard für alle ohne eigenen Tarif",
+    "tariffMembers": "{count, plural, =0 {Noch niemand} one {# Mitglied} other {# Mitglieder}}",
+    "loginLabel": "Login",
+    "createdAt": "Erfasst am {date}",
+    "updatedAt": "zuletzt geändert {date}",
+    "deleteMember": "Mitglied löschen",
+    "unsavedCount": "{count, plural, one {# ungespeicherte Änderung} other {# ungespeicherte Änderungen}}",
+    "savedCheck": "✓ Gespeichert"
   },
   "newMember": {
     "description": "Die Person erscheint danach in der Mitgliederliste. Ohne Einladung bleibt sie Mitglied ohne Login.",

@@ -10,6 +10,15 @@ Installationen aktualisieren können.
 
 ### Geändert
 
+- **Personenseite im neuen Profil-Design:** Der Kopf zeigt Initialen, Name, Status (Aktiv,
+  Inaktiv oder Austritt mit Datum), «Mitglied seit …» und den Tarif; rechts führt «Login und
+  Rolle» zum Abschnitt «Login & Rollen», das ⋯-Menü bündelt «Ansehen als …», Datenauskunft und
+  «Login entziehen». Stammdaten, Mitgliedschaft, Bussentarif und Login & Rollen stehen als Karten
+  mit Beschreibung links. Neu: «Aus Vor- und Nachname» für den Anzeigenamen, ein Hinweis bei
+  geänderter Login-Adresse, ein Schalter «Aktives Mitglied», die Anwesenheitslisten als
+  Checkliste mit Zähler und der Tarif als Kachel, Karten oder Liste je nach Anzahl Tarife.
+  Unten stehen Erfasst-/Änderungsdatum und «Mitglied löschen»; die schwebende Leiste zählt die
+  ungespeicherten Änderungen und bestätigt mit «✓ Gespeichert».
 - **Protokoll scrollen ohne Sprung:** Mit eingeklappten Punkten öffnet sich der nächste Punkt
   schon beim Hinscrollen schrittweise, der vorherige schliesst sich im gleichen Mass. Der Inhalt
   in der Bildmitte läuft genau mit dem Mausrad mit; kein schlagartiges Auf-/Zuklappen und kein

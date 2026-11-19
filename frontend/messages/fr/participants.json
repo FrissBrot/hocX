@@ -168,8 +168,7 @@
       "master": "Données de base",
       "membership": "Adhésion",
       "tariff": "Tarif des amendes",
-      "login": "Connexion et rôles",
-      "more": "Autres actions"
+      "login": "Connexion et rôles"
     },
     "emailHelp": "Pour l'invitation et les notifications.",
     "emailLoginHelp": "C'est aussi l'adresse de connexion. Une modification s'applique dès la prochaine connexion.",
@@ -190,19 +189,50 @@
     "rolesExplained": "Que permettent les rôles ? →",
     "mfa": "MFA",
     "revokeHelp": "Bloque la connexion et termine les sessions en cours. La personne reste membre.",
-    "exportHelp": "Toutes les données de la personne dans un fichier ZIP protégé par mot de passe.",
-    "deleteHelp": "Supprimer définitivement, avec présences, amendes et tâches. Pour les anciens membres, mieux vaut définir une date de sortie.",
-    "delete": "Supprimer …",
     "unsaved": "Modifications non enregistrées",
     "discard": "Annuler les modifications",
     "blockers": {
       "displayName": "Enregistrement bloqué : le nom affiché manque.",
-      "dates": "Enregistrement bloqué : la sortie précède l'entrée."
+      "dates": "Enregistrement bloqué : la sortie précède l'entrée.",
+      "loginEmail": "Enregistrement bloqué : la personne a besoin d'une adresse e-mail pour se connecter."
     },
     "previewAction": "Voir en tant que …",
     "previewHelp": "Montre quels éléments de menu, autorisations et remises ce compte voit (lecture seule, consigné dans l'historique).",
     "previewSavedOnly": "L'aperçu montre l'état enregistré. Enregistre d'abord les rôles modifiés.",
-    "previewNotAllowed": "Uniquement pour les comptes qui n'ont pas plus d'autorisations que toi."
+    "previewNotAllowed": "Uniquement pour les comptes qui n'ont pas plus d'autorisations que toi.",
+    "status": {
+      "active": "Actif",
+      "inactive": "Inactif",
+      "left": "Sortie le {date}"
+    },
+    "memberSince": "Membre depuis le {date}",
+    "tariffMeta": "Tarif {tariff}",
+    "loginAndRole": "Connexion et rôle",
+    "moreActions": "Autres actions",
+    "descriptions": {
+      "master": "Nom et contact. Le nom affiché apparaît dans les listes, procès-verbaux et tâches.",
+      "membership": "Si la personne est active, depuis quand elle est membre et dans quelles listes de présence elle apparaît.",
+      "tariff": "Quels montants d'amende s'appliquent à cette personne.",
+      "login": "Si la personne peut se connecter et ce qu'elle peut voir et modifier dans hocX."
+    },
+    "displayNameFromParts": "À partir du prénom et du nom",
+    "loginBadge": "Connexion",
+    "emailLoginChanged": "Nouvelle adresse de connexion – valable dès la prochaine connexion. L'ancienne adresse {email} en sera informée.",
+    "activeMember": "Membre actif",
+    "activeMemberHelp": "Les personnes inactives conservent toutes leurs données, mais leur connexion est bloquée.",
+    "attendanceLists": "Apparaît dans les listes de présence",
+    "attendanceCount": "{selected} sur {total}",
+    "noTemplates": "Aucun modèle avec liste de présence pour le moment.",
+    "noTariffs": "Aucun tarif d'amende configuré pour le moment.",
+    "tariffSingle": "L'organisation n'a que ce tarif ; il s'applique à tous les membres.",
+    "tariffDefaultHint": "Par défaut pour toutes les personnes sans tarif propre",
+    "tariffMembers": "{count, plural, =0 {Personne pour le moment} one {# membre} other {# membres}}",
+    "loginLabel": "Connexion",
+    "createdAt": "Saisi le {date}",
+    "updatedAt": "dernière modification le {date}",
+    "deleteMember": "Supprimer le membre",
+    "unsavedCount": "{count, plural, one {# modification non enregistrée} other {# modifications non enregistrées}}",
+    "savedCheck": "✓ Enregistré"
   },
   "newMember": {
     "description": "La personne apparaît ensuite dans la liste des membres. Sans invitation, elle reste membre sans connexion.",

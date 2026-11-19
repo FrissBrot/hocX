@@ -101,21 +101,102 @@
   gap: var(--space-1);
 }
 
-/* Personenseite /participants/[id] */
+/* Personenseite /participants/[id] (Design «hocX Mitglied Profil») */
+.person-page {
+  width: 100%;
+  max-width: 1080px;
+  margin-inline: auto;
+  gap: var(--space-4);
+}
+
 .person-back-link {
+  justify-self: start;
   font-size: var(--text-sm);
 }
 
-.person-section {
-  display: grid;
-  gap: var(--space-3);
+/* Kopf: Avatar, Name (Serif), Status, Meta; rechts Login und Rolle + Menü */
+.person-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  padding-bottom: var(--space-2);
 }
 
-.person-section-head {
+.person-hero-avatar {
+  width: 64px;
+  height: 64px;
+  font-size: var(--text-xl);
+}
+
+.person-hero-text {
+  display: grid;
+  flex: 1 1 280px;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.person-hero-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.person-hero-title {
+  margin: 0;
+  font-family: "Canela", "Iowan Old Style", "Palatino Linotype", serif;
+  font-size: var(--text-3xl);
+  font-weight: 600;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.person-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.person-hero-meta > span + span::before {
+  content: "·";
+  margin-right: var(--space-2);
+}
+
+.person-hero-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
+  gap: var(--space-2);
+}
+
+/* Abschnitte: Karte mit Beschreibungsspalte links */
+.person-card {
+  display: grid;
+  grid-template-columns: minmax(200px, 260px) minmax(0, 1fr);
+  gap: var(--space-5);
+}
+
+.person-card-intro {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+}
+
+.person-card-description {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.person-card-body {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+  min-width: 0;
 }
 
 .person-section-title {
@@ -124,8 +205,155 @@
   font-weight: 700;
 }
 
+.person-section-title:focus {
+  outline: none;
+}
+
+.person-section-title:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
 .person-section-link {
+  justify-self: start;
   font-size: var(--text-sm);
+}
+
+.person-field-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+/* Textaktion neben einem Feld-Label («Aus Vor- und Nachname») */
+.person-inline-action {
+  --button-bg: transparent;
+  --button-hover-bg: transparent;
+  width: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: var(--button-bg);
+  color: var(--accent);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.person-inline-action:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.person-inline-action:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.person-email-change {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--info-bg);
+  color: var(--info-fg);
+  font-size: var(--text-sm);
+}
+
+.person-checkbox-line {
+  align-items: flex-start;
+  color: var(--text);
+}
+
+.person-counter {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Checkliste (Anwesenheitslisten, Tarife ab 5) */
+.person-checklist {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.person-check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--panel-solid);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.person-check-row + .person-check-row {
+  border-top: 1px solid var(--border);
+}
+
+.person-check-row:hover {
+  background: var(--bg);
+}
+
+.person-check-row-active,
+.person-check-row-active:hover {
+  background: var(--accent-soft);
+}
+
+.person-check-row input,
+.person-tariff-card input {
+  flex: none;
+  margin-top: 2px;
+}
+
+.person-check-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  font-size: var(--text-base);
+}
+
+.person-check-text .muted {
+  font-size: var(--text-sm);
+}
+
+/* Bussentarif: Info-Kachel (1 Tarif) und Karten (2-4 Tarife) */
+.person-tariff-tile {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+}
+
+.person-tariff-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3);
+}
+
+.person-tariff-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel-solid);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.person-tariff-card:hover {
+  border-color: var(--border-strong);
+}
+
+.person-tariff-card-active,
+.person-tariff-card-active:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .person-login-row {
@@ -138,25 +366,101 @@
   border-top: 1px solid var(--border);
 }
 
-.person-unsaved-bar {
+/* Fusszeile: Verlauf und Löschen */
+.person-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0 var(--space-4);
+}
+
+.person-footer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.person-footer-meta > span + span::before {
+  content: "·";
+  margin-right: var(--space-2);
+}
+
+/* Schwebende Speicherleiste unten */
+.person-save-bar {
   position: sticky;
-  bottom: 0;
+  bottom: var(--space-4);
   z-index: var(--z-sticky);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
+  justify-self: center;
   gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
+  width: min(640px, 100%);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   background: var(--panel-solid);
-  box-shadow: var(--shadow-popover);
+  box-shadow: var(--shadow-overlay);
 }
 
-.person-unsaved-text {
+.person-save-bar-text {
   margin-right: auto;
   font-weight: 600;
+}
+
+.person-save-bar-done {
+  width: auto;
+  justify-content: center;
+  padding: var(--space-3) var(--space-4);
+  border-color: var(--success);
+  background: var(--success-bg);
+  color: var(--success-fg);
+}
+
+.person-save-bar-done .person-save-bar-text {
+  margin-right: 0;
+}
+
+/* Mobile-Shell (bis 900 px): Seite ohne .panel-Rahmen braucht eigenen Rand, die Leiste
+   schwebt über der Tableiste */
+.mobile-shell .person-page {
+  padding: var(--space-3) var(--space-4) 0;
+}
+
+.mobile-shell .person-save-bar {
+  bottom: calc(var(--mobile-bottom-inset) + var(--space-2));
+}
+
+@media (max-width: 900px) {
+  .person-card {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+  }
+}
+
+@media (max-width: 640px) {
+  .person-hero-avatar {
+    width: 52px;
+    height: 52px;
+    font-size: var(--text-lg);
+  }
+
+  .person-hero-title {
+    font-size: var(--text-2xl);
+  }
+
+  .person-hero-actions {
+    width: 100%;
+  }
+
+  .person-hero-actions .button-secondary {
+    flex: 1 1 auto;
+  }
+
 }
 
 .file-card-ref {
