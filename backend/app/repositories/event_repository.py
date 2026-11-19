@@ -44,8 +44,12 @@ class EventRepository:
         if event_ids is not None:
             statement = statement.where(Event.id.in_(event_ids))
         if search:
-            pattern = f"%{search}%"
-            statement = statement.where(or_(Event.title.ilike(pattern), Event.tag.ilike(pattern)))
+            # % und _ aus der Eingabe sind Text, keine Platzhalter (wie routes/search.py)
+            escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            pattern = f"%{escaped}%"
+            statement = statement.where(
+                or_(Event.title.ilike(pattern, escape="\\"), Event.tag.ilike(pattern, escape="\\"))
+            )
         total = db.scalar(select(func.count()).select_from(statement.subquery())) or 0
         statement = statement.order_by(Event.event_date.desc(), Event.event_end_date.desc(), Event.id.desc()).offset(skip).limit(limit)
         return list(db.scalars(statement)), int(total)
