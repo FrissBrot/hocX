@@ -38,6 +38,8 @@ export function FileDetailModal({
   onNavigate,
   onTagsSaved,
   onShare,
+  onStep,
+  position,
 }: {
   item: FileOverviewItem;
   tagSuggestions: string[];
@@ -46,6 +48,10 @@ export function FileDetailModal({
   onTagsSaved: (tags: string[]) => void;
   /** Optional: "Link teilen" direkt im Dialog (Mobile - dort gibt es keine Tabellen-Aktionen). */
   onShare?: () => void;
+  /** Blättern wie im Foto-Viewer (Pfeiltasten und Knöpfe): -1 zurück, +1 weiter. */
+  onStep?: (direction: -1 | 1) => void;
+  /** Stelle in der geladenen Liste, z. B. { index: 3, total: 40 } - fehlt, gibt es kein Blättern. */
+  position?: { index: number; total: number };
 }) {
   const t = useTranslations("files");
   const [metadata, setMetadata] = useState<StoredFileMetadata | null>(null);
@@ -89,6 +95,38 @@ export function FileDetailModal({
     if (await flush()) onClose();
   }
 
+  const hasPrev = Boolean(onStep && position && position.index > 0);
+  const hasNext = Boolean(onStep && position && position.index < position.total - 1);
+  async function step(direction: -1 | 1) {
+    if (!onStep || (direction < 0 ? !hasPrev : !hasNext)) return;
+    // Offene Tag-Änderung zuerst speichern, sonst ginge sie beim Wechsel verloren
+    if (await flush()) onStep(direction);
+  }
+
+  useEffect(() => {
+    if (!onStep) return;
+    function onKey(event: KeyboardEvent) {
+      // Beim Tippen (Tag-Feld) bewegen die Pfeiltasten den Cursor, nicht die Datei
+      const target = event.target as HTMLElement | null;
+      if (target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.key === "ArrowLeft") { event.preventDefault(); void step(-1); }
+      if (event.key === "ArrowRight") { event.preventDefault(); void step(1); }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // step hängt an position/onStep; bei jedem Wechsel der Datei neu binden
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onStep, position?.index, position?.total, item.id]);
+
+  const navigation = onStep && position && position.total > 1 ? (
+    <div className="file-detail-nav">
+      <button type="button" className="button-icon-soft" aria-label={t("detail.previousFile")} title={t("detail.previousFile")} disabled={!hasPrev} onClick={() => void step(-1)}>‹</button>
+      <span className="file-detail-nav-count">{t("detail.position", { index: position.index + 1, total: position.total })}</span>
+      <button type="button" className="button-icon-soft" aria-label={t("detail.nextFile")} title={t("detail.nextFile")} disabled={!hasNext} onClick={() => void step(1)}>›</button>
+    </div>
+  ) : undefined;
+
   const dimensions = metadata?.width && metadata?.height ? `${metadata.width} × ${metadata.height} px` : null;
   // PDF-Ansicht einer Word-Datei steht vorne (Titel mit .pdf), das Original bleibt in den Details
   const display = fileDisplay(item);
@@ -96,7 +134,7 @@ export function FileDetailModal({
   const isImage = Boolean(item.mime_type?.startsWith("image/")) && !previewFailed;
 
   return (
-    <Modal open title={display.name} onEscape={saveAndClose} onClose={() => void saveAndClose()} size="wide" className="file-detail-modal">
+    <Modal open title={display.name} onEscape={saveAndClose} onClose={() => void saveAndClose()} size="wide" className="file-detail-modal" headerActions={navigation}>
       {saveError && <p role="alert">{saveError}</p>}
       <div className="file-detail">
         <div className="file-detail-preview">
@@ -140,6 +178,15 @@ export function FileDetailModal({
                       item.ref_label
                     )}
                     {item.ref_date ? <span className="muted"> · {formatDate(item.ref_date)}</span> : null}
+                  </dd>
+                </div>
+              )}
+              {item.element_label && (
+                <div>
+                  <dt>{t("detail.submissionElement")}</dt>
+                  <dd>
+                    {item.element_label}
+                    {item.element_date ? <span className="muted"> · {formatDate(item.element_date)}</span> : null}
                   </dd>
                 </div>
               )}

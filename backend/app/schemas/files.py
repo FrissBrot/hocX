@@ -57,6 +57,10 @@ class FileOverviewItem(BaseModel):
     # "Termin, Tag 2", ... (see grouping.ts's groupContextLabel).
     ref_end_date: date | None = None
     ref_href: str | None
+    # Abgabe-Uploads: das Element der Abgabe, aus dem die Datei stammt (Termin samt Datum bzw.
+    # Listeneintrag) - der Bezug (ref_label) ist die Abgabe selbst.
+    element_label: str | None = None
+    element_date: date | None = None
     # User-assigned tags (editable, see PATCH .../tags) - does not include origin_tag below.
     tags: list[str]
     # Auto-derived, non-editable "where did this come from" tag (e.g. "Protokoll 5/2026 –

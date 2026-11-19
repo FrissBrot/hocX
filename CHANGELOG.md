@@ -36,6 +36,9 @@ Keine Migration, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Cha
   Notizen und Dateien, rechts Zuweisung (auch mehrere Personen), Fälligkeit und Protokoll.
 - **Mitglied erfassen:** Der Anzeigename füllt sich beim Tippen aus Vor- und Nachname und lässt sich
   danach von Hand ändern; eine eigene Eingabe bleibt stehen.
+- **Datei-Details:** Bei Dateien aus einer Abgabe steht unter «Element», aus welchem Termin (mit
+  Datum) bzw. Listeneintrag sie stammt. Mit ← / → (oder den Knöpfen oben) blättert man wie bei den
+  Fotos durch die Dateien der Liste; offene Tag-Änderungen werden vorher gespeichert.
 
 ### Behoben
 

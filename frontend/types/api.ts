@@ -430,6 +430,9 @@ export type FileOverviewItem = {
   // sections "Termin, Tag 1", "Termin, Tag 2", ... (see grouping.ts).
   ref_end_date: string | null;
   ref_href: string | null;
+  /** Abgabe-Upload: Element der Abgabe (Termin bzw. Listeneintrag), aus dem die Datei stammt. */
+  element_label?: string | null;
+  element_date?: string | null;
   tags: string[];
   origin_tag: string;
   sharpness_score: number | null;

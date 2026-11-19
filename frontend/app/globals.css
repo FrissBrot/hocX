@@ -15426,3 +15426,17 @@ a.export-step-meta {
     display: none;
   }
 }
+
+/* Blättern im Datei-Detail (← / →, wie im Foto-Viewer) */
+.file-detail-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.file-detail-nav-count {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}

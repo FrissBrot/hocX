@@ -82,6 +82,8 @@ export function FilesView({ initialItems }: Props) {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isReloading, setIsReloading] = useState(false);
   const [detailItem, setDetailItem] = useState<FileOverviewItem | null>(null);
+  // Stelle der offenen Datei in der geladenen Liste (Blättern mit ← / → im Detail)
+  const detailIndex = detailItem ? items.findIndex((entry) => entry.id === detailItem.id) : -1;
   const [shareItem, setShareItem] = useState<FileOverviewItem | null>(null);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   // Files dropped onto the page - they open the upload dialog with these already queued.
@@ -347,6 +349,11 @@ export function FilesView({ initialItems }: Props) {
           onClose={() => setDetailItem(null)}
           onNavigate={(href) => router.push(href as Route)}
           onTagsSaved={(tags) => handleTagsSaved(detailItem.id, tags)}
+          position={detailIndex >= 0 ? { index: detailIndex, total: items.length } : undefined}
+          onStep={(direction) => {
+            const next = items[detailIndex + direction];
+            if (next) setDetailItem(next);
+          }}
         />
       )}
     </div>

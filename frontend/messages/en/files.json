@@ -62,7 +62,11 @@
     "saving": "Saving…",
     "tagPlaceholder": "Add tag…",
     "openOriginalNewTab": "Open original in new tab",
-    "shareLink": "Share link"
+    "shareLink": "Share link",
+    "submissionElement": "Element",
+    "previousFile": "Previous file (←)",
+    "nextFile": "Next file (→)",
+    "position": "{index} of {total}"
   },
   "table": {
     "columnName": "Name",

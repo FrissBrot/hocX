@@ -396,6 +396,8 @@ def _hide_owner_context(item: FileOverviewItem) -> None:
     item.ref_date = None
     item.ref_end_date = None
     item.ref_href = None
+    item.element_label = None
+    item.element_date = None
     item.context_label = None
     item.tags = []
     item.origin_tag = SHARED_ALBUM_ORIGIN_TAG
@@ -560,6 +562,7 @@ class FileService:
         )
         items = [self._build_overview_item(row) for row in rows]
         self._attach_documents(db, rows, items)
+        self._attach_submission_elements(db, rows, items)
         if viewer_tenant_id is not None:
             for row, item in zip(rows, items):
                 if row.tenant_id != viewer_tenant_id:
@@ -571,6 +574,50 @@ class FileService:
         wie list_tenant_files (only_images, search, tags)."""
         rows = self.stored_file_repository.tenant_files_timeline(db, tenant_id, sort_dir=sort_dir, **filters)
         return [PhotoTimelineDay(date=row.day, count=int(row.count)) for row in rows]
+
+    def _attach_submission_elements(self, db: Session, rows, items: list[FileOverviewItem]) -> None:
+        """Element der Abgabe je Abgabe-Upload: Termin (Titel, Datum) oder Listeneintrag
+        (Bezeichnung) - eine Abfragerunde je Seite, immer im Mandanten der Datei."""
+        from app.models.entities import ListDefinition, ListEntry, SubmissionUpload
+        from app.services.list_columns import label_of
+
+        pairs = [(row, item) for row, item in zip(rows, items) if row.source == "submission_upload" and row.upload_id is not None]
+        if not pairs:
+            return
+        uploads = {
+            upload_id: (event_id, list_entry_id)
+            for upload_id, event_id, list_entry_id in db.execute(
+                select(SubmissionUpload.id, SubmissionUpload.event_id, SubmissionUpload.list_entry_id)
+                .join(SubmissionAssignment, SubmissionAssignment.id == SubmissionUpload.assignment_id)
+                .where(
+                    SubmissionUpload.id.in_({row.upload_id for row, _ in pairs}),
+                    SubmissionAssignment.tenant_id.in_({row.tenant_id for row, _ in pairs}),
+                )
+            ).all()
+        }
+        event_ids = {event_id for event_id, _ in uploads.values() if event_id is not None}
+        entry_ids = {entry_id for _, entry_id in uploads.values() if entry_id is not None}
+        events = {
+            event.id: event
+            for event in db.scalars(select(Event).where(Event.id.in_(event_ids))).all()
+        } if event_ids else {}
+        entries = {entry.id: entry for entry in db.scalars(select(ListEntry).where(ListEntry.id.in_(entry_ids))).all()} if entry_ids else {}
+        definitions = {
+            definition.id: definition
+            for definition in db.scalars(select(ListDefinition).where(ListDefinition.id.in_({entry.list_definition_id for entry in entries.values()}))).all()
+        } if entries else {}
+        for row, item in pairs:
+            event_id, entry_id = uploads.get(row.upload_id, (None, None))
+            event = events.get(event_id) if event_id is not None else None
+            if event is not None and event.tenant_id == row.tenant_id:
+                item.element_label = event.title or None
+                item.element_date = event.event_date
+                continue
+            entry = entries.get(entry_id) if entry_id is not None else None
+            if entry is not None:
+                definition = definitions.get(entry.list_definition_id)
+                if definition is not None and definition.tenant_id == row.tenant_id:
+                    item.element_label = label_of(entry, definition) or None
 
     def _attach_documents(self, db: Session, rows, items: list[FileOverviewItem]) -> None:
         """Kurzstatus des logischen Dokuments je Eintrag (eine Abfragerunde je Seite). Nur für

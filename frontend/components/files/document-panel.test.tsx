@@ -167,6 +167,52 @@ describe("Dokumente im Dateien-Tab", () => {
   });
 });
 
+describe("FileDetailModal: Element der Abgabe und Blättern", () => {
+  beforeEach(() => browserApiFetchMock.mockReset().mockResolvedValue(null));
+
+  it("zeigt bei einer Abgabe-Datei das Element samt Datum", async () => {
+    render(
+      <FileDetailModal
+        item={makeItem({ document: null, source: "submission_upload", ref_label: "Gliähwurm Berichte", element_label: "Scharanlass", element_date: "2026-10-25" })}
+        tagSuggestions={[]} onClose={() => {}} onNavigate={() => {}} onTagsSaved={() => {}}
+      />
+    );
+    expect(await screen.findByText("Element")).toBeInTheDocument();
+    expect(screen.getByText("Scharanlass")).toBeInTheDocument();
+    expect(screen.getByText(/25\.10\.2026/)).toBeInTheDocument();
+  });
+
+  it("blättert mit Pfeiltasten und Knöpfen, aber nicht beim Tippen", async () => {
+    const onStep = vi.fn();
+    render(
+      <FileDetailModal item={makeItem({ document: null })} tagSuggestions={[]} onClose={() => {}} onNavigate={() => {}} onTagsSaved={() => {}}
+        onStep={onStep} position={{ index: 1, total: 3 }} />
+    );
+    expect(screen.getByText("2 von 3")).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    await waitFor(() => expect(onStep).toHaveBeenCalledWith(1));
+    fireEvent.click(screen.getByRole("button", { name: "Vorherige Datei (←)" }));
+    await waitFor(() => expect(onStep).toHaveBeenCalledWith(-1));
+    onStep.mockClear();
+    const tagField = screen.getByPlaceholderText("Tag hinzufügen…");
+    fireEvent.keyDown(tagField, { key: "ArrowLeft" });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(onStep).not.toHaveBeenCalled();
+  });
+
+  it("kein Weiter auf der letzten Datei", async () => {
+    const onStep = vi.fn();
+    render(
+      <FileDetailModal item={makeItem({ document: null })} tagSuggestions={[]} onClose={() => {}} onNavigate={() => {}} onTagsSaved={() => {}}
+        onStep={onStep} position={{ index: 2, total: 3 }} />
+    );
+    expect(screen.getByRole("button", { name: "Nächste Datei (→)" })).toBeDisabled();
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(onStep).not.toHaveBeenCalled();
+  });
+});
+
 describe("useDocumentDetail", () => {
   it("verwirft eine verspätete Antwort für ein vorher gewähltes Dokument", async () => {
     const { renderHook } = await import("@testing-library/react");
