@@ -74,7 +74,7 @@ def _candidates(db: Session, policy: TenantRetentionPolicy) -> list[dict[str, An
             found.append({"kind": "submission_upload", "subject_id": r["id"], "label": " – ".join(p for p in (r["title"], element) if p), "reference_date": r["ref"]})
     if policy.unlinked_gallery_years:
         rows = db.execute(sql("""
-            SELECT s.id, s.original_name, CAST(COALESCE(s.exif_taken_at, s.created_at) AS date) AS ref
+            SELECT s.id, s.original_name, CAST(COALESCE(s.capture_corrected_at, s.exif_taken_at, s.created_at) AS date) AS ref
             FROM gallery_image g JOIN stored_file s ON s.id = g.stored_file_id
             WHERE g.tenant_id = :t AND g.event_id IS NULL AND g.submission_assignment_id IS NULL
               AND NOT EXISTS (SELECT 1 FROM photo_album_item i WHERE i.file_id = s.public_id)

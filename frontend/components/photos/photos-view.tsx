@@ -422,6 +422,7 @@ export function PhotosView({ albumId, sharePendingOnly = false, onReleased, mobi
           ? {
               ...item,
               estimated_taken_on: metadata.estimated_taken_on ?? null,
+              capture_corrected_at: metadata.capture_corrected_at ?? null,
               date_source: item.date_source === "context" ? "context" : metadata.date_source,
               group_date: item.date_source === "context" ? item.group_date : metadata.effective_date ?? item.group_date,
             }

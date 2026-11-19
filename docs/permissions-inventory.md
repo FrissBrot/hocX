@@ -6,8 +6,8 @@ Rollen-Matrix: `permissions/permission-matrix.json` (geprüft von `tests/test_pe
 
 ## Übersicht
 
-- Routen gesamt: 574 (Plattform-Admin: 127)
-- Mandanten-Routen mit Rechteprüfung: 369
+- Routen gesamt: 576 (Plattform-Admin: 127)
+- Mandanten-Routen mit Rechteprüfung: 371
 - Mandanten-Routen mit eigenem Sicherheitsmodell (begründete Ausnahme): 78
 - Mandanten-Routen ohne Prüfung und ohne Begründung (Lücken): 0
 - Routen, die Dateiinhalt ausliefern: 21
@@ -289,6 +289,7 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `DELETE /api/files/albums/{album_id}/shares/{tenant_public_id}` | photos.manage |
 | `PATCH /api/files/albums/{album_id}/shares/{tenant_public_id}` | photos.manage · Feature photo_sharing |
 | `GET /api/files/analysis-progress` | photos.read |
+| `POST /api/files/bulk-capture-date` | photos.manage |
 | `POST /api/files/bulk-delete` | photos.manage |
 | `POST /api/files/bulk-tags` | files.manage, photos.manage |
 | `POST /api/files/document-uploads` | files.manage, submissions.manage |
@@ -440,6 +441,7 @@ Keine – `tests/test_route_permission_inventory.py` verhindert neue.
 | `DELETE /api/share-links/{share_link_id}` | sharing.public |
 | `GET /api/statistics/overview` | meetings.read |
 | `GET /api/storage/usage` | settings.manage |
+| `PATCH /api/stored-files/{stored_file_id}/capture-correction` | photos.manage |
 | `PATCH /api/stored-files/{stored_file_id}/capture-date` | photos.manage |
 | `GET /api/stored-files/{stored_file_id}/content` | meetings.read |
 | `GET /api/stored-files/{stored_file_id}/download` | meetings.read |

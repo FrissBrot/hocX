@@ -167,7 +167,7 @@ def collect(db: Session, person: AppUser) -> dict[str, list[dict[str, Any]]]:
     """, {**params, "id_array": json.dumps([pid])})]
 
     data["files"] = [dict(row) for row in _rows(db, """
-        SELECT original_name AS name, mime_type, file_size_bytes AS size_bytes, created_at, exif_taken_at AS taken_at
+        SELECT original_name AS name, mime_type, file_size_bytes AS size_bytes, created_at, COALESCE(capture_corrected_at, exif_taken_at) AS taken_at
         FROM stored_file WHERE tenant_id = :tenant_id AND created_by = :pid ORDER BY created_at
     """, params)]
 

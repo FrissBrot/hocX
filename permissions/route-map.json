@@ -1445,6 +1445,12 @@
         "photos.read"
       ]
     },
+    "POST /api/files/bulk-capture-date": {
+      "handler": "files.bulk_update_capture_date",
+      "requires": [
+        "photos.manage"
+      ]
+    },
     "POST /api/files/bulk-delete": {
       "handler": "files.bulk_delete_files",
       "requires": [
@@ -2438,6 +2444,12 @@
       "handler": "storage.get_storage_usage",
       "requires": [
         "settings.manage"
+      ]
+    },
+    "PATCH /api/stored-files/{stored_file_id}/capture-correction": {
+      "handler": "files.update_stored_file_capture_correction",
+      "requires": [
+        "photos.manage"
       ]
     },
     "PATCH /api/stored-files/{stored_file_id}/capture-date": {

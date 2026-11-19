@@ -7,6 +7,8 @@ import { useLocale, useTranslations } from "next-intl";
 import { usePopupEscape, usePopupScrollLock } from "@/lib/hooks/use-popup-escape";
 import { LivePhotoClip } from "@/components/photos/live-photo-clip";
 import { DateInput } from "@/components/ui/date-input";
+import { TimeInput } from "@/components/ui/time-input";
+import { CaptureCorrectionRequest, useCaptureCorrectionConfirm } from "@/components/photos/photo-capture-date-dialog";
 import { todayIso } from "@/components/mobile/mobile-utils";
 import { TagInput } from "@/components/ui/tag-input";
 import { PhotoDateMarker } from "@/components/photos/photo-date-marker";
@@ -14,6 +16,7 @@ import { ActionIcon } from "@/components/ui/action-icons";
 import { HelpPopover } from "@/components/ui/help-popover";
 import { useDeferredPopupSave } from "@/lib/hooks/use-deferred-popup-save";
 import { browserApiBaseUrl, browserApiFetch } from "@/lib/api/client";
+import { useToast } from "@/contexts/toast-context";
 import { formatCaptureDateTime, formatDate, formatDateTime, formatFileSize, formatWeekdayDate } from "@/lib/utils/format";
 import { FileOverviewItem, StoredFileMetadata } from "@/types/api";
 
@@ -54,7 +57,7 @@ export function PhotoViewer({
   onClose: () => void;
   onToggleBest: (item: FileOverviewItem) => void;
   onTagsSaved: (id: string, tags: string[]) => void;
-  // Geschätztes Aufnahmedatum geändert - die Galerie sortiert/gruppiert danach neu.
+  // Geschätztes oder korrigiertes Aufnahmedatum geändert - die Galerie sortiert/gruppiert danach neu.
   onCaptureDateSaved?: (id: string, metadata: StoredFileMetadata) => void;
 }) {
   const t = useTranslations("photos.viewer");
@@ -200,6 +203,11 @@ export function PhotoViewer({
       setMetadata((current) => (current && current.id === saved.id ? saved : current));
       onCaptureDateSaved?.(fileId, saved);
     });
+  }
+
+  function handleCorrectionSaved(saved: StoredFileMetadata) {
+    setMetadata((current) => (current && current.id === saved.id ? saved : current));
+    onCaptureDateSaved?.(item.id, saved);
   }
 
   function handleTagsChange(value: string) {
@@ -366,9 +374,12 @@ export function PhotoViewer({
           <div className="photo-viewer-section">
             <div className="photo-viewer-section-title">{t("detailsSection")}</div>
             <CaptureDateBox
+              key={item.id}
+              fileId={item.id}
               metadata={metadata}
               locale={locale}
               onChange={handleEstimatedDateChange}
+              onCorrectionSaved={handleCorrectionSaved}
             />
             <dl className="photo-viewer-details">
               {bezugParts.length > 0 && (
@@ -473,29 +484,60 @@ function describeExposure(score: number, t: TFunc): string {
   return t("exposureFormat", { label, percent: Math.round(score * 100) });
 }
 
-/** Aufnahmedatum als eigener Kasten: echtes Datum aus EXIF, geschätztes Datum (hervorgehoben,
- * bearbeitbar) oder unbekannt. Das Schätzdatum zählt nur ohne echtes Aufnahmedatum. */
-function CaptureDateBox({ metadata, locale, onChange }: {
+/** Aufnahmedatum als eigener Kasten: korrigiertes Datum (Vorrang, mit dem Original darunter),
+ * echtes Datum aus EXIF (korrigierbar), geschätztes Datum (hervorgehoben, bearbeitbar) oder
+ * unbekannt. Das Schätzdatum zählt nur ohne echtes Aufnahmedatum. */
+function CaptureDateBox({ fileId, metadata, locale, onChange, onCorrectionSaved }: {
+  fileId: string;
   metadata: StoredFileMetadata | null;
   locale: string;
   onChange: (value: string) => void;
+  onCorrectionSaved: (metadata: StoredFileMetadata) => void;
 }) {
   const t = useTranslations("photos.viewer");
+  const tc = useTranslations("photos.captureCorrection");
   const [editing, setEditing] = useState(false);
+  const [correcting, setCorrecting] = useState(false);
   if (!metadata) return <div className="photo-date-box">…</div>;
 
-  if (metadata.exif_taken_at) {
+  const canEdit = Boolean(metadata.can_edit_capture_date);
+  const corrected = metadata.capture_corrected_at;
+  if (corrected || metadata.exif_taken_at) {
+    let originalNote: string;
+    if (!corrected) originalNote = t("dateBox.exifNote");
+    else if (metadata.exif_taken_at) originalNote = tc("originalExif", { value: formatCaptureDateTime(metadata.exif_taken_at, metadata.exif_taken_offset, locale) });
+    else if (metadata.estimated_taken_on) originalNote = tc("originalEstimated", { value: formatDate(metadata.estimated_taken_on) });
+    else originalNote = tc("originalNone");
     return (
-      <div className="photo-date-box">
-        <span className="photo-date-box-kicker">{t("dateBox.exifKicker")}</span>
-        <strong className="photo-date-box-value">{formatCaptureDateTime(metadata.exif_taken_at, metadata.exif_taken_offset, locale)}</strong>
-        <span className="photo-date-box-note">{t("dateBox.exifNote")}</span>
+      <div className={`photo-date-box${corrected ? " photo-date-box-corrected" : ""}`}>
+        <div className="photo-date-box-head">
+          <span className="photo-date-box-kicker">{corrected ? tc("correctedKicker") : t("dateBox.exifKicker")}</span>
+          {canEdit && !correcting ? (
+            <button type="button" className="photo-date-box-action" onClick={() => setCorrecting(true)}>
+              {corrected ? tc("changeAction") : tc("correctAction")}
+            </button>
+          ) : null}
+        </div>
+        {correcting ? (
+          <CaptureCorrectionEditor
+            fileId={fileId}
+            metadata={metadata}
+            onSaved={(saved) => { setCorrecting(false); onCorrectionSaved(saved); }}
+            onCancel={() => setCorrecting(false)}
+          />
+        ) : (
+          <strong className="photo-date-box-value">
+            {corrected
+              ? metadata.capture_corrected_has_time ? formatCaptureDateTime(corrected, null, locale) : formatDate(corrected.slice(0, 10))
+              : formatCaptureDateTime(metadata.exif_taken_at, metadata.exif_taken_offset, locale)}
+          </strong>
+        )}
+        <span className="photo-date-box-note">{originalNote}</span>
       </div>
     );
   }
 
   const estimated = metadata.estimated_taken_on;
-  const canEdit = metadata.can_edit_capture_date;
   const showEditor = canEdit && (editing || !estimated);
   return (
     <div className={`photo-date-box${estimated ? " photo-date-box-estimated" : ""}`}>
@@ -524,3 +566,62 @@ function CaptureDateBox({ metadata, locale, onChange }: {
   );
 }
 
+/** Aufnahmedatum korrigieren (Datum, optional Uhrzeit) oder die Korrektur entfernen - immer mit
+ * Bestätigung. Vorbelegt mit dem aktuell gültigen Datum. Nur gemountet, solange bearbeitet wird. */
+function CaptureCorrectionEditor({ fileId, metadata, onSaved, onCancel }: {
+  fileId: string;
+  metadata: StoredFileMetadata;
+  onSaved: (metadata: StoredFileMetadata) => void;
+  onCancel: () => void;
+}) {
+  const tc = useTranslations("photos.captureCorrection");
+  const showToast = useToast();
+  const confirmCorrection = useCaptureCorrectionConfirm();
+  const current = metadata.capture_corrected_at ?? metadata.exif_taken_at ?? null;
+  const currentHasTime = metadata.capture_corrected_at ? Boolean(metadata.capture_corrected_has_time) : Boolean(metadata.exif_taken_at);
+  const [date, setDate] = useState(current ? current.slice(0, 10) : "");
+  const [time, setTime] = useState(current && currentHasTime ? current.slice(11, 16) : "");
+  const [busy, setBusy] = useState(false);
+
+  async function submit(request: CaptureCorrectionRequest) {
+    if (busy) return;
+    if (!(await confirmCorrection(request, 1))) return;
+    setBusy(true);
+    try {
+      const body = request.mode === "set"
+        ? { corrected_date: request.date, corrected_time: request.time || null }
+        : { corrected_date: null };
+      const saved = await browserApiFetch<StoredFileMetadata>(`/api/stored-files/${fileId}/capture-correction`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+      if (saved) onSaved(saved);
+    } catch (error) {
+      showToast(error instanceof Error && error.message ? error.message : tc("error"), "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="photo-viewer-correction">
+      <div className="two-col">
+        <label className="field-stack">
+          <span className="field-label">{tc("dateLabel")}</span>
+          <DateInput value={date} onChange={setDate} max={todayIso()} aria-label={tc("dateLabel")} />
+        </label>
+        <label className="field-stack">
+          <span className="field-label">{tc("timeLabel")}</span>
+          <TimeInput value={time} onChange={setTime} aria-label={tc("timeLabel")} />
+        </label>
+      </div>
+      <div className="photo-viewer-correction-actions">
+        <button type="button" className="button-ghost" onClick={onCancel} disabled={busy}>{tc("cancel")}</button>
+        {metadata.capture_corrected_at ? (
+          <button type="button" className="button-secondary" onClick={() => void submit({ mode: "reset" })} disabled={busy}>{tc("resetAction")}</button>
+        ) : null}
+        <button type="button" className="button-primary" onClick={() => void submit({ mode: "set", date, time })} disabled={busy || !date}>{tc("save")}</button>
+      </div>
+    </div>
+  );
+}

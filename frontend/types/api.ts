@@ -455,6 +455,8 @@ export type FileOverviewItem = {
   exif_taken_at?: string | null;
   // Calendar date only ("YYYY-MM-DD") - never carries a time or time zone.
   estimated_taken_on?: string | null;
+  // Vom Benutzer korrigiertes Aufnahmedatum (Vorrang vor EXIF), floating wie exif_taken_at.
+  capture_corrected_at?: string | null;
   // Short context label for that date group's header (protocol/word-import/submission/
   // event) - null when there's nothing more specific than the plain date.
   context_label: string | null;
@@ -632,6 +634,15 @@ export type FileBulkDeleteResult = {
   errors: string[];
 };
 
+// POST /api/files/bulk-capture-date - je Liste die IDs der Bilder.
+export type FileBulkCaptureDateResult = {
+  updated_ids: string[];
+  unchanged_ids: string[];
+  skipped_no_date_ids: string[];
+  invalid_ids: string[];
+  not_found_ids: string[];
+};
+
 export type PhotoAnalysisJob = {
   id: string;
   status: "queued" | "running" | "done" | "failed";
@@ -657,7 +668,7 @@ export type GalleryUploadJob = {
   error: string | null;
 };
 
-export type PhotoDateSource = "exif" | "estimated" | "upload" | "context";
+export type PhotoDateSource = "corrected" | "exif" | "estimated" | "upload" | "context";
 
 export type MetadataField = "taken_at" | "gps" | "camera" | "dimensions" | "orientation" | "estimated_taken_on";
 
@@ -739,6 +750,11 @@ export type StoredFileMetadata = {
   estimated_taken_on?: string | null;
   estimated_taken_set_at?: string | null;
   estimated_taken_set_by_name?: string | null;
+  // Korrigiertes Aufnahmedatum (Vorrang vor EXIF); ohne Uhrzeit technisch 12:00.
+  capture_corrected_at?: string | null;
+  capture_corrected_has_time?: boolean;
+  capture_corrected_set_at?: string | null;
+  capture_corrected_set_by_name?: string | null;
   effective_date?: string | null;
   date_source?: PhotoDateSource;
   camera_make?: string | null;

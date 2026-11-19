@@ -7,6 +7,7 @@ const paths = {
   delete: "M4 7h16M9 7V3h6v4M6 7l1 14h10l1-14M10 10v7m4-7v7",
   close: "m6 6 12 12M18 6 6 18",
   expand: "M14 4h6v6m0-6-7 7M10 20H4v-6m0 6 7-7",
+  calendar: "M4 6h16v14H4zM4 10h16M8 3v4m8-4v4",
 };
 export function PhotoActionIcon({ name }: { name: keyof typeof paths }) {
   return <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name]} /></svg>;

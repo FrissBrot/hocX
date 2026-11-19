@@ -1420,6 +1420,10 @@ class StoredFile(Base, TimestampMixin):
             " AND (gps_source IS NULL OR gps_source IN ('server', 'client', 'backfill'))",
             name="ck_stored_file_metadata_source",
         ),
+        CheckConstraint(
+            "capture_corrected_at IS NOT NULL OR capture_corrected_has_time = false",
+            name="ck_stored_file_capture_corrected_time",
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -1487,6 +1491,16 @@ class StoredFile(Base, TimestampMixin):
     estimated_taken_on: Mapped[date | None] = mapped_column(Date)
     estimated_taken_set_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     estimated_taken_set_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
+    # Vom Benutzer korrigiertes Aufnahmedatum (Migration 0200) - Vorrang vor EXIF und Schaetzung,
+    # das EXIF-Datum oben bleibt unveraendert gespeichert ("urspruenglich"). Gleiche Konvention
+    # wie exif_taken_at (lokale Zeit als waere sie UTC); ohne Uhrzeit technisch 12:00 und
+    # capture_corrected_has_time False. Prioritaet siehe capture_date.py.
+    capture_corrected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    capture_corrected_has_time: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false"), default=False
+    )
+    capture_corrected_set_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    capture_corrected_set_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id", ondelete="SET NULL"))
     # GPS (WGS84, Sued/West negativ) fuer eine spaetere Kartenansicht. Als Wert nur ueber
     # berechtigte, mandantengebundene Endpunkte lesbar (/metadata). Exportierte Dateikopien
     # (Download, auch fuer Partner-Mandanten geteilter Alben, und oeffentliche Freigaben, die

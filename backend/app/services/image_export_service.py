@@ -19,6 +19,13 @@ B. Nur ein geschätztes Datum: es wird als Aufnahmedatum eingetragen, damit ande
    hocX-Markierung und übernimmt das Datum wieder als geschätztes Datum, nicht als echtes.
 C. Weder echtes noch geschätztes Datum: es wird kein Datum geschrieben, insbesondere nie das
    Uploaddatum.
+D. Korrigiertes Aufnahmedatum (StoredFile.capture_corrected_at, Migration 0200): hat Vorrang vor
+   allem anderen und ersetzt in der Exportkopie DateTimeOriginal/DateTimeDigitized, auch wenn die
+   Datei schon ein (falsches) Datum trägt; OffsetTime* entfällt (die Korrektur kennt keine
+   Zeitzone). Ohne Uhrzeit gilt dieselbe Mittag-Konvention wie bei B. XMP bekommt
+   photoshop:DateCreated nur, wenn das XMP noch kein Datum hat (sonst bleibt es unverändert -
+   Einschränkung, dokumentiert). Keine hocX-Schätz-Markierung: ein Re-Import übernimmt das
+   Datum als echtes Aufnahmedatum.
 
 Zusätzlich: Liegen GPS-Daten nur in der Datenbank vor (z. B. vom Browser für ein konvertiertes
 Bild nachgeliefert), aber nicht in der Datei, werden sie beim Export in das GPS-IFD geschrieben.
@@ -35,7 +42,8 @@ import logging
 import re
 import struct
 import zlib
-from datetime import date
+from dataclasses import dataclass
+from datetime import date, datetime
 from fractions import Fraction
 from typing import Any
 
@@ -62,10 +70,30 @@ _XMP_JPEG_HEADER = b"http://ns.adobe.com/xap/1.0/\x00"
 # --- Entscheidung -------------------------------------------------------------------------
 
 
-def _wants_date(stored_file: Any) -> date | None:
+@dataclass(frozen=True)
+class _DateTarget:
+    """Welches Datum in die Exportkopie geschrieben wird."""
+
+    day: date
+    exif_stamp: str  # "JJJJ:MM:TT HH:MM:SS"
+    xmp_value: str  # photoshop:DateCreated
+    corrected: bool  # True: überschreibt ein vorhandenes Datum, ohne Schätz-Markierung
+
+
+def _wants_date(stored_file: Any) -> _DateTarget | None:
+    corrected = getattr(stored_file, "capture_corrected_at", None)
+    if corrected is not None:
+        naive = corrected.replace(tzinfo=None)
+        if getattr(stored_file, "capture_corrected_has_time", False):
+            return _DateTarget(naive.date(), f"{naive:%Y:%m:%d %H:%M:%S}", f"{naive:%Y-%m-%dT%H:%M:%S}", True)
+        day = naive.date()
+        return _DateTarget(day, f"{day:%Y:%m:%d} {ESTIMATED_TIME_CONVENTION}", day.isoformat(), True)
     if stored_file.exif_taken_at is not None:
         return None
-    return stored_file.estimated_taken_on
+    estimated = stored_file.estimated_taken_on
+    if estimated is None:
+        return None
+    return _DateTarget(estimated, f"{estimated:%Y:%m:%d} {ESTIMATED_TIME_CONVENTION}", estimated.isoformat(), False)
 
 
 def _wants_gps(stored_file: Any) -> bool:
@@ -106,12 +134,12 @@ def _export(stored_file: Any, original: bytes) -> bytes | None:
     else:
         exif_bytes, xmp = _webp_metadata(original)
 
-    estimated = _wants_date(stored_file)
-    new_exif = _updated_exif(exif_bytes, stored_file, estimated)
+    target = _wants_date(stored_file)
+    new_exif = _updated_exif(exif_bytes, stored_file, target)
     if new_exif is None:
         return None
-    date_written = estimated is not None and new_exif[1]
-    new_xmp = _updated_xmp(xmp, estimated) if date_written else None
+    date_written = target is not None and new_exif[1]
+    new_xmp = _updated_xmp(xmp, target) if date_written and target is not None else None
     if mime == "image/jpeg":
         return _write_jpeg(original, new_exif[0], new_xmp)
     if mime == "image/png":
@@ -150,24 +178,25 @@ def _gps_ifd(stored_file: Any) -> dict[int, Any]:
     return gps
 
 
-def _updated_exif(exif_bytes: bytes | None, stored_file: Any, estimated: date | None) -> tuple[bytes, bool] | None:
+def _updated_exif(exif_bytes: bytes | None, stored_file: Any, target: _DateTarget | None) -> tuple[bytes, bool] | None:
     """(neuer EXIF-Block mit "Exif\\0\\0"-Präfix, Datum geschrieben?) oder None, wenn nichts
-    zu ändern ist. Ein in der Datei vorhandenes echtes Aufnahmedatum gewinnt immer."""
+    zu ändern ist. Ein in der Datei vorhandenes echtes Aufnahmedatum gewinnt gegen eine
+    Schätzung, nie aber gegen eine Korrektur."""
     exif = Image.Exif()
     if exif_bytes:
         exif.load(exif_bytes)
     exif_ifd = dict(exif.get_ifd(_EXIF_IFD)) if _EXIF_IFD in exif else {}
     changed = False
     date_written = False
-    if estimated is not None and parse_exif_datetime(exif_ifd.get(_DATETIME_ORIGINAL)) is None:
-        stamp = f"{estimated:%Y:%m:%d} {ESTIMATED_TIME_CONVENTION}"
-        exif_ifd[_DATETIME_ORIGINAL] = stamp
-        exif_ifd[_DATETIME_DIGITIZED] = stamp
-        for tag in _OFFSET_TAGS:
-            exif_ifd.pop(tag, None)
-        if _USER_COMMENT not in exif_ifd:
-            exif_ifd[_USER_COMMENT] = b"ASCII\x00\x00\x00" + _USER_COMMENT_TEXT.encode("ascii")
-        changed = date_written = True
+    if target is not None and (target.corrected or parse_exif_datetime(exif_ifd.get(_DATETIME_ORIGINAL)) is None):
+        if exif_ifd.get(_DATETIME_ORIGINAL) != target.exif_stamp or any(tag in exif_ifd for tag in _OFFSET_TAGS) or not target.corrected:
+            exif_ifd[_DATETIME_ORIGINAL] = target.exif_stamp
+            exif_ifd[_DATETIME_DIGITIZED] = target.exif_stamp
+            for tag in _OFFSET_TAGS:
+                exif_ifd.pop(tag, None)
+            if not target.corrected and _USER_COMMENT not in exif_ifd:
+                exif_ifd[_USER_COMMENT] = b"ASCII\x00\x00\x00" + _USER_COMMENT_TEXT.encode("ascii")
+            changed = date_written = True
     has_gps = _GPS_IFD in exif and bool(exif.get_ifd(_GPS_IFD).get(2))
     if _wants_gps(stored_file) and not has_gps:
         exif[_GPS_IFD] = _gps_ifd(stored_file)
@@ -181,14 +210,17 @@ def _updated_exif(exif_bytes: bytes | None, stored_file: Any, estimated: date | 
     return exif.tobytes(), date_written
 
 
-def _updated_xmp(xmp: bytes | None, estimated: date) -> bytes | None:
+def _updated_xmp(xmp: bytes | None, target: _DateTarget) -> bytes | None:
     """Neues XMP-Paket bzw. vorhandenes mit ergänzten Attributen. None, wenn das vorhandene
     XMP schon ein Erstellungsdatum hat oder sich nicht sicher ergänzen lässt."""
-    iso = estimated.isoformat()
-    attributes = (
-        f' xmlns:photoshop="http://ns.adobe.com/photoshop/1.0/" xmlns:hocx="{HOCX_XMP_NAMESPACE}"'
-        f' photoshop:DateCreated="{iso}" hocx:CaptureDateEstimated="True" hocx:EstimatedCaptureDate="{iso}"'
-    )
+    if target.corrected:
+        attributes = f' xmlns:photoshop="http://ns.adobe.com/photoshop/1.0/" photoshop:DateCreated="{target.xmp_value}"'
+    else:
+        iso = target.day.isoformat()
+        attributes = (
+            f' xmlns:photoshop="http://ns.adobe.com/photoshop/1.0/" xmlns:hocx="{HOCX_XMP_NAMESPACE}"'
+            f' photoshop:DateCreated="{iso}" hocx:CaptureDateEstimated="True" hocx:EstimatedCaptureDate="{iso}"'
+        )
     if xmp is None:
         packet = (
             '<?xpacket begin="﻿" id="W5M0MpCehiHzreSzNTczkc9d"?>'
