@@ -947,6 +947,10 @@ services:
       start_period: 20s
     labels:
       - "traefik.enable=true"
+      # Die Abgabebox hängt zusätzlich im internen Netz storage - ohne diese Angabe wählt Traefik je
+      # nach Reihenfolge die dort unerreichbare IP und jede Anfrage endet mit 504 (Prüfseite und
+      # Abgabebox live ausgefallen nach dem Update auf 1.4.0, interne Prüfungen blieben grün).
+      - "traefik.docker.network=${COMPOSE_PROJECT_NAME}_default"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.rule=Host(`${TRAEFIK_ABGABEBOX_DOMAIN}`) && PathPrefix(`/api`)"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.middlewares=${ROUTER_PREFIX:-hocx}-api-inflight"
       - "traefik.http.routers.${ROUTER_PREFIX:-hocx}-abgabebox-backend.entrypoints=websecure"

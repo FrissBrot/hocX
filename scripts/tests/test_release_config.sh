@@ -29,6 +29,23 @@ assert users == ["backend", "redis"], f"cache-Netz genutzt von: {users}"
 docker compose --env-file .env.prod.example "${COMPOSE_FILES[@]}" config --format json | assert_redis_isolated
 docker compose -p hocx-e2e --env-file .env.e2e.example -f docker-compose.yml -f docker-compose.dev.yml config --format json | assert_redis_isolated
 
+# Jeder von Traefik angesprochene Dienst in mehr als einem Netz nennt das Netz für Traefik - sonst
+# wählt Traefik je nach Reihenfolge eine IP in einem internen Netz, das es nicht erreicht (504).
+docker compose --env-file .env.prod.example "${COMPOSE_FILES[@]}" config --format json | python3 -c '
+import json, sys
+services = json.load(sys.stdin)["services"]
+missing = []
+for name, service in services.items():
+    labels = service.get("labels") or {}
+    if isinstance(labels, list):
+        labels = dict(item.split("=", 1) for item in labels)
+    if labels.get("traefik.enable") != "true" or len(service.get("networks") or {}) <= 1:
+        continue
+    if not labels.get("traefik.docker.network"):
+        missing.append(name)
+assert not missing, f"traefik.docker.network fehlt bei: {missing}"
+'
+
 # MAIN-OPS-005 (Rest): Im Release-Stack verlangt Redis ein Passwort aus dem Secret, das Backend
 # bekommt dasselbe Secret; das Passwort steht nie in der Kommandozeile.
 docker compose --env-file .env.prod.example "${COMPOSE_FILES[@]}" config --format json | python3 -c '
