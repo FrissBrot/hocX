@@ -92,7 +92,8 @@ class AccessService:
 
     def ensure_can_read_template(self, db: Session, user: CurrentUser, template_id: int) -> None:
         if not self.can_read_template(db, user, template_id):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Template not assigned to current reader")
+            # 404 wie bei einer unbekannten Vorlage: keine Auskunft, dass es sie gibt (SECURITY-RULES 1.6)
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
 
     def ensure_can_read_protocol(self, db: Session, user: CurrentUser, protocol_id: int, *, detail: str = "Protocol not found") -> None:
         """404 statt 403: Wer ein Protokoll (z. B. einen Entwurf oder ein nicht zugeordnetes)
@@ -205,7 +206,7 @@ class AccessService:
                 and self.repository.is_own_document_export_file(db, stored_file_id=stored_file_id, user_id=user.user_id, tenant_id=tenant_id)
             ):
                 return
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Stored file not accessible")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stored file not found")
         if user.current_tenant_id == tenant_id:
             # Reichweite «nur zugewiesene» (Phase 4): Dateien aus Abgabe-Aufträgen, die das Konto
             # nicht lesen darf, sind auch über files.read/photos.read nicht erreichbar - 404 wie
@@ -219,7 +220,7 @@ class AccessService:
         # a mandantenuebergreifend geteiltes Album.
         if user.current_tenant_id is not None and self._can_read_via_shared_album(db, user.current_tenant_id, stored_file_id):
             return
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Stored file not accessible")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stored file not found")
 
     def _can_read_via_shared_album(self, db: Session, tenant_id: int, stored_file_id: int) -> bool:
         """Eine Abfrage statt einer pro Album (Audit Dateien/Fotos, N+1 bei jedem Partner-Thumbnail):

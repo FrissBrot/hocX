@@ -27,6 +27,13 @@ describe("mergeEventPatches", () => {
     expect(merged).toEqual({ title: "Neu", organizer_ids: ["x"], participant_ids: ["a", "b"], role_ids_base: { organizer_ids: [], participant_ids: ["a"] } });
   });
 
+  it("drops the old base when a later patch replaces the field outright", () => {
+    const first = toggleRolePatch(roles, "participant_ids", "b");
+    expect(mergeEventPatches(first, { participant_ids: ["z"] })).toEqual({ participant_ids: ["z"] });
+    // ein anderes Feld ohne Ausgangsstand lässt die Differenz des ersten Felds bestehen
+    expect(mergeEventPatches(first, { title: "Neu" })).toEqual({ participant_ids: ["a", "b"], title: "Neu", role_ids_base: { participant_ids: ["a"] } });
+  });
+
   it("leaves patches without base unchanged", () => {
     expect(mergeEventPatches(undefined, { title: "x" })).toEqual({ title: "x" });
   });

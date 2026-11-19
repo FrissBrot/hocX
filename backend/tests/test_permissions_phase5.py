@@ -219,7 +219,7 @@ def test_file_routes_are_protected_alike(db, org, monkeypatch):
         lambda: files_routes.download_stored_file(pdf, request=None, part="image", db=db, user=member),
         lambda: files_routes.get_stored_file_metadata(pdf, db=db, user=member),
     ):
-        assert _status(call).status_code == 403
+        assert _status(call).status_code == 404
     # Freigegebenes Bild: die Zugriffsprüfung lässt durch (Vorschau fehlt nur im Test-Speicher)
     monkeypatch.setattr(files_routes.service, "ensure_thumbnail", lambda *args, **kwargs: None)
     error = _status(lambda: files_routes.get_stored_file_thumbnail(org.lager_photo.public_id, db=db, user=member))

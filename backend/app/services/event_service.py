@@ -276,14 +276,19 @@ class EventService:
         ihre Dateien werden vorher vollständig gelöscht, sonst blieben sie verwaist (PRIV-003)."""
         from app.services import deletion_service, erasure_journal
 
-        if self.repository.get(db, event_id) is None:
+        existing = self.repository.get(db, event_id)
+        if existing is None:
             return False
+        tenant_id = existing.tenant_id
         # erase_uploads_of committet. Eine Einreichung, die danach, aber vor dem Löschen des
         # Termins eintrifft, fiele per Kaskade weg und liesse ihre Datei verwaist zurück. Daher
         # den Termin sperren (ein neuer Upload braucht per FK einen Key-Share-Lock auf ihn und
         # wartet) und erst löschen, wenn unter der Sperre keine Datei mehr dranhängt.
         for _attempt in range(5):
             deletion_service.erase_uploads_of(db, event_id=event_id)
+            # Geteilter Zyklus-Lock vor der Zeilensperre (wie update_event): ein gleichzeitig neu
+            # angelegter Zyklus wartet, statt beim Zuordnen am gelöschten Termin zu scheitern.
+            lock_cycle_assignments(db, tenant_id, exclusive=False)
             event = db.scalar(select(Event).where(Event.id == event_id).with_for_update().execution_options(populate_existing=True))
             if event is None:
                 return False

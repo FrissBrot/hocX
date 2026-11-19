@@ -109,6 +109,10 @@ Keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
   eigenen Vereins an; der Foto-Worker darf an Analyseaufträgen nur noch Status, Zeiten und Fehler
   ändern (Migration 0197); Logos, Bilder und Schriften des Document Studio zählen zum
   Speicherkontingent und werden bei vollem Kontingent abgelehnt.
+- Nachbesserungen aus dem Security-Review: auch nicht zugewiesene Vorlagen und nicht lesbare Dateien
+  antworten mit 404 wie unbekannte; Fehlertexte der Speicher-Bereinigung zeigen Support-Admins keine
+  Objektschlüssel mehr; ersetzt man eine Rollenliste nach einer Einzeländerung ganz, gilt die
+  Ersetzung; Termin löschen und gleichzeitig einen Zyklus anlegen scheitert nicht mehr.
 
 ### Behoben (Nachtlauf 19.11. und Restpunkte)
 

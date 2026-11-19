@@ -439,7 +439,7 @@ def test_metadata_shows_three_separate_dates_and_gps_to_the_own_tenant_only(db):
     # Leser haben auf Galeriebilder keinen Zugriff - auch nicht auf deren Standort.
     with pytest.raises(HTTPException) as exc:
         files_routes.get_stored_file_metadata(row.public_id, db=db, user=make_current_user(tenant.id, role="reader"))
-    assert exc.value.status_code == 403
+    assert exc.value.status_code == 404
     with pytest.raises(HTTPException):
         files_routes.get_stored_file_metadata(row.public_id, db=db, user=_writer(db, other.id))
 

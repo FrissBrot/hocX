@@ -29,8 +29,17 @@ export function eventFieldSelectionPatch(field: string, next: string[], base?: s
  */
 export function mergeEventPatches(earlier: EventPatch | undefined, later: EventPatch): EventPatch {
   const merged: EventPatch = { ...(earlier ?? {}), ...later };
-  if (earlier?.role_ids_base || later.role_ids_base) {
-    merged.role_ids_base = { ...later.role_ids_base, ...earlier?.role_ids_base };
+  // Ausgangsstand je Feld: der älteste gilt - aber nur, solange auch der spätere Patch für dieses
+  // Feld eine Differenz meint. Ersetzt der spätere Patch das Feld bewusst (ohne Ausgangsstand),
+  // gilt die Ersetzung (Security-Review 2026-11-19).
+  const base: Record<string, string[]> = { ...(earlier?.role_ids_base ?? {}) };
+  for (const field of Object.keys(later)) {
+    if (field !== "role_ids_base" && !(later.role_ids_base && field in later.role_ids_base)) delete base[field];
   }
+  for (const [field, ids] of Object.entries(later.role_ids_base ?? {})) {
+    if (!(field in base)) base[field] = ids;
+  }
+  if (Object.keys(base).length > 0) merged.role_ids_base = base as EventPatch["role_ids_base"];
+  else delete merged.role_ids_base;
   return merged;
 }

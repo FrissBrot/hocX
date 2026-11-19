@@ -125,7 +125,7 @@ def verify_everything(db, expected: dict[int, bytes], tenant_id: int, other_tena
         assert response.status_code == 200 and response.content == content
         ranged = client.get(f"/api/stored-files/{row.public_id}/content", headers={"Range": "bytes=0-7"})
         assert ranged.status_code in (200, 206) and ranged.content[:8] == content[:8]
-        assert foreign.get(f"/api/stored-files/{row.public_id}/content").status_code == 403  # Berechtigung
+        assert foreign.get(f"/api/stored-files/{row.public_id}/content").status_code == 404  # Berechtigung (404 wie unbekannt)
     for key in deleted_keys(db, deleted):
         assert not store.exists(MAIN, key), f"gelöschte Datei {key} ist wieder aufgetaucht"
     report = storage_verify.verify(full=True)

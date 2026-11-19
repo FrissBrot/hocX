@@ -1205,7 +1205,9 @@ def purge_generations() -> int:
             generation.purge_error = None
             _purge_retry.pop(generation.id, None)
         except Exception as exc:
-            error = f"{type(exc).__name__}: {exc}"[:2000]
+            # Kuratiert wie last_error: die Generation lesen auch Support-Admins (Speicherübersicht),
+            # Schlüssel, Pfade und SQL gehören nur ins Fehlerprotokoll (Security-Review 2026-11-19)
+            error = public_error_message(exc)[:2000]
             # Nur beim ersten Auftreten bzw. bei geänderter Ursache ins Fehlerprotokoll - der Worker
             # versucht es mit exponentiellem Backoff erneut (purge_retry_delay); der aktuelle Fehler
             # steht an der Generation (Adminportal).

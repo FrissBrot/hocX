@@ -132,7 +132,7 @@ def test_reader_role_gets_no_more_than_on_the_original(db, document_storage):
     reader = make_current_user(tenant.id, role="reader")
     with pytest.raises(HTTPException) as info:
         routes.get_document(document.public_id, db=db, user=reader)
-    assert info.value.status_code == 403
+    assert info.value.status_code == 404  # kein Existenz-Orakel (Security-Review 2026-11-19)
 
 
 def test_abgabebox_documents_require_the_abgabebox_feature(db, document_storage):
