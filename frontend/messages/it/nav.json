@@ -8,7 +8,8 @@
     "storage": "Archivio",
     "appearance": "Immagine",
     "settings": "Impostazioni",
-    "organisation": "Organizzazione"
+    "organisation": "Organizzazione",
+    "settingsAreas": "Ambiti"
   },
   "protocols": "Verbali",
   "events": "Eventi",
@@ -84,5 +85,6 @@
   "workYear": "Anno di lavoro",
   "accessWho": "Chi ha accesso",
   "accessSecurity": "Sicurezza",
-  "submissionPhotos": "Foto dalle consegne"
+  "submissionPhotos": "Foto dalle consegne",
+  "settingsOverview": "Tutte le impostazioni"
 }

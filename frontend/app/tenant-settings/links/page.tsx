@@ -5,8 +5,6 @@ import { redirect } from "next/navigation";
 
 import { PublicLinksOverview } from "@/components/settings/public-links-overview";
 import { AppShell } from "@/components/ui/app-shell";
-import { RouteTabs } from "@/components/ui/route-tabs";
-import { tenantSettingsTabs } from "@/components/ui/section-tabs";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { PublicLinkItem } from "@/types/api";
 import { can } from "@/lib/permissions";
@@ -17,9 +15,10 @@ export default async function TenantPublicLinksPage() {
   if (!can(session, "settings.manage")) {
     redirect("/");
   }
-  const [t, tTenant, state] = await Promise.all([
+  const [t, tTenant, tSettings, state] = await Promise.all([
     getTranslations("nav"),
     getTranslations("tenantSettings"),
+    getTranslations("settings"),
     backendFetchWithSession<PublicLinkItem[]>("/api/public-links"),
   ]);
   const content = <PublicLinksOverview links={state ?? []} />;
@@ -35,11 +34,10 @@ export default async function TenantPublicLinksPage() {
             <div className="section-stack">
               <div className="page-header">
                 <div>
-                  <h1 className="page-title">{tTenant("pageTitle")}</h1>
-                  <p className="muted">{tTenant("pageDescription", { tenant: session.current_tenant?.name ?? "" })}</p>
+                  <h1 className="page-title">{t("publicLinks")}</h1>
+                  <p className="muted">{tSettings("hub.cards.publicLinks.description")}</p>
                 </div>
               </div>
-              <RouteTabs tabs={tenantSettingsTabs(t)} activeHref="/tenant-settings/links" variant="pill" />
               {content}
             </div>
           </section>

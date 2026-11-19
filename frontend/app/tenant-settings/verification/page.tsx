@@ -17,9 +17,10 @@ export default async function TenantVerificationPage() {
   if (!can(session, "settings.manage")) {
     redirect("/");
   }
-  const [t, tTenant, state] = await Promise.all([
+  const [t, tTenant, tSettings, state] = await Promise.all([
     getTranslations("nav"),
     getTranslations("tenantSettings"),
+    getTranslations("settings"),
     backendFetchWithSession<DocumentVerificationState>("/api/document-verification"),
   ]);
   const content = state ? <DocumentVerificationSettings initialState={state} /> : null;
@@ -35,7 +36,7 @@ export default async function TenantVerificationPage() {
               <div className="page-header">
                 <div>
                   <h1 className="page-title">{t("domainsAndVerification")}</h1>
-                  <p className="muted">{tTenant("pageDescription", { tenant: session.current_tenant?.name ?? "" })}</p>
+                  <p className="muted">{tSettings("hub.cards.domainsAndVerification.description")}</p>
                 </div>
               </div>
               <RouteTabs tabs={domainTabs(t)} activeHref="/tenant-settings/verification" variant="pill" />

@@ -1,0 +1,162 @@
+/* Bereichs-CSS, geladen nur von: settings (Übersicht der Einstellungen). Siehe design/DESIGN.md Abschnitt 10. */
+
+.settings-hub {
+  gap: var(--space-5);
+}
+
+.settings-hub-mobile {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.settings-hub-search {
+  max-width: 420px;
+}
+
+.settings-hub-group {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.settings-hub-group-title {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.settings-hub-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-3);
+}
+
+/* Karte = Link auf die Einstellung (kein button-*: eigener Hintergrund, DESIGN.md Abschnitt 7) */
+.settings-hub-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel-solid);
+  color: var(--text);
+  text-decoration: none;
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+
+.settings-hub-card:hover {
+  border-color: var(--border-strong);
+  background: var(--accent-soft);
+}
+
+.settings-hub-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.settings-hub-card-text {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.settings-hub-card-title {
+  font-weight: 600;
+  font-size: var(--text-md);
+}
+
+.settings-hub-card-description {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+
+.settings-hub-card-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.settings-hub-card-status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--neutral-fg);
+}
+
+.settings-hub-card-status-success::before {
+  background: var(--success);
+}
+
+.settings-hub-card-status-warning {
+  color: var(--warning-fg);
+}
+
+.settings-hub-card-status-warning::before {
+  background: var(--warning);
+}
+
+/* «Braucht Aufmerksamkeit»: Hinweiszeilen mit Weg zur Einstellung */
+.settings-hub-attention {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.settings-hub-attention-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--warning-bg);
+}
+
+.settings-hub-attention-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warning);
+}
+
+.settings-hub-attention-text {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  color: var(--warning-fg);
+}
+
+.settings-hub-attention-text .muted {
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 640px) {
+  .settings-hub-search {
+    max-width: none;
+  }
+
+  .settings-hub-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-hub-attention-row {
+    flex-wrap: wrap;
+  }
+}

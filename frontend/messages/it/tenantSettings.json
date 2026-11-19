@@ -282,7 +282,8 @@
       "spezial_text3": "Testo speciale 3",
       "spezial_time1": "Orario speciale 1",
       "spezial_time2": "Orario speciale 2"
-    }
+    },
+    "hideFor": "Nascondi {field}"
   },
   "replacesDomainHint": "Sostituisce {domain} dopo una verifica riuscita. Fino ad allora {domain} resta attivo senza modifiche.",
   "recheckDomain": "Verifica di nuovo",
@@ -389,5 +390,12 @@
     "revokeConfirm": "Revocare il link «{name}»? Chi lo possiede non potrà più accedere ai contenuti.",
     "revoked": "Link revocato",
     "revokeFailed": "Impossibile revocare il link"
+  },
+  "profile": {
+    "masterDataDescription": "Come appare l'organizzazione in hocX, negli inviti e sui documenti.",
+    "profileImageHelp": "Visualizzata nella barra laterale e nelle e-mail.",
+    "domainHintNone": "Ancora nessun dominio proprio: hocX funziona all'indirizzo comune.",
+    "domainHintManage": "Domini e autenticità",
+    "financeDescription": "Una valuta per tutti i conti e le multe dell'associazione."
   }
 }

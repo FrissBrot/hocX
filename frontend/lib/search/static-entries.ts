@@ -1,15 +1,14 @@
-import { buildNav } from "@/components/ui/app-shell-nav";
+import { buildNav, buildSettingsNav, SETTINGS_GROUP, SETTINGS_HREF, type NavGroup } from "@/components/ui/app-shell-nav";
 import type { NavIconKey } from "@/components/ui/nav-icons";
 import {
   dashboardTabs,
   designAreaTabs,
   domainTabs,
   financeTabs,
+  privacyTabs,
   protocolTemplateTabs,
-  tenantSettingsTabs,
   userAreaTabs,
 } from "@/components/ui/section-tabs";
-import { SETTINGS_GROUP } from "@/components/ui/app-shell-nav";
 import { can } from "@/lib/permissions";
 import type { RouteTab } from "@/components/ui/route-tabs";
 import { CONNECTIONS_HREF } from "@/lib/calendar-feeds";
@@ -42,11 +41,9 @@ const TABS_BY_HREF: Record<string, (t: TFunc, session: SessionInfo | null) => Ro
   "/templates": (t, session) => protocolTemplateTabs(t, can(session, "templates.manage")),
   "/documents/brand": designAreaTabs,
   "/users": userAreaTabs,
-  "/tenant-settings": tenantSettingsTabs,
+  "/tenant-settings/privacy": privacyTabs,
   "/tenant-settings/domains": domainTabs,
 };
-
-const SETTINGS_GROUPS = new Set([SETTINGS_GROUP, "groups.organisation"]);
 
 function keywordsFor(tSearch: HasT, key: string): string | undefined {
   const full = `keywords.${key}`;
@@ -55,14 +52,31 @@ function keywordsFor(tSearch: HasT, key: string): string | undefined {
 
 /**
  * Menüs und Einstellungen, die die Person sehen darf - aus derselben Navigation wie die
- * Seitenleiste (buildNav), damit Suche und Menü nie auseinanderlaufen.
+ * Seitenleiste (buildNav) und die Einstellungen-Übersicht (buildSettingsNav), damit Suche und
+ * Menü nie auseinanderlaufen.
  */
 export function buildStaticEntries(session: SessionInfo | null, tNav: TFunc, tSearch: HasT): SearchEntry[] {
   const entries: SearchEntry[] = [];
   const seen = new Set<string>();
-  for (const group of buildNav(session)) {
+  const settingsGroups = buildSettingsNav(session);
+  const sections: { group: NavGroup; kind: SearchGroup }[] = [
+    ...buildNav(session).map((group) => ({ group, kind: "pages" as const })),
+    ...settingsGroups.map((group) => ({ group, kind: "settings" as const })),
+  ];
+  // Übersicht aller Einstellungen (Knopf «Einstellungen» in der Seitenleiste)
+  if (settingsGroups.length > 0) {
+    seen.add(SETTINGS_HREF);
+    entries.push({
+      id: `nav:${SETTINGS_HREF}`,
+      group: "settings",
+      label: tNav(SETTINGS_GROUP),
+      keywords: keywordsFor(tSearch, "settings"),
+      icon: "tenant",
+      href: SETTINGS_HREF,
+    });
+  }
+  for (const { group, kind } of sections) {
     const groupLabel = group.titleKey ? tNav(group.titleKey) : undefined;
-    const kind: SearchGroup = group.titleKey && SETTINGS_GROUPS.has(group.titleKey) ? "settings" : "pages";
     for (const link of group.links) {
       const label = tNav(link.labelKey);
       const tabs = TABS_BY_HREF[link.href]?.(tNav, session) ?? [];

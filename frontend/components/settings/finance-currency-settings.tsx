@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
+import { ProfileSection } from "@/components/settings/profile-section";
 import { HelpPopover } from "@/components/ui/help-popover";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
@@ -19,6 +20,7 @@ const MAX_LENGTH = 20;
 export function FinanceCurrencySettings({ initialCurrency }: { initialCurrency: string }) {
   const t = useTranslations("tenantSettings.finance");
   const tCommon = useTranslations("common");
+  const tTenant = useTranslations("tenantSettings");
   const router = useRouter();
   const showToast = useToast();
   const [saved, setSaved] = useState(initialCurrency);
@@ -45,9 +47,8 @@ export function FinanceCurrencySettings({ initialCurrency }: { initialCurrency: 
   }
 
   return (
-    <section className="card settings-anchor" id="currencies">
-      <div className="eyebrow">{t("eyebrow")}</div>
-      <form className="grid" onSubmit={submit}>
+    <ProfileSection id="currencies" title={t("eyebrow")} description={tTenant("profile.financeDescription")}>
+      <form className="grid tenant-profile-narrow" onSubmit={submit}>
         <label className="field-stack">
           <span className="field-label">
             {t("currencyLabel")}{" "}
@@ -64,6 +65,6 @@ export function FinanceCurrencySettings({ initialCurrency }: { initialCurrency: 
           </button>
         </div>
       </form>
-    </section>
+    </ProfileSection>
   );
 }

@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { PrivacySettings, type PrivacySettingsState } from "@/components/settings/privacy-settings";
 import { AppShell } from "@/components/ui/app-shell";
 import { RouteTabs } from "@/components/ui/route-tabs";
-import { tenantSettingsTabs } from "@/components/ui/section-tabs";
+import { privacyTabs } from "@/components/ui/section-tabs";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { can } from "@/lib/permissions";
 import { ContextVisibilityModule } from "@/types/api";
@@ -17,9 +17,10 @@ export default async function TenantPrivacyPage() {
   if (!can(session, "settings.manage")) {
     redirect("/");
   }
-  const [t, tTenant, state, fileVisibility] = await Promise.all([
+  const [t, tTenant, tSettings, state, fileVisibility] = await Promise.all([
     getTranslations("nav"),
     getTranslations("tenantSettings"),
+    getTranslations("settings"),
     backendFetchWithSession<PrivacySettingsState>("/api/privacy-settings"),
     // Kontext-Freigaben (Plan «Berechtigungen», Phase 5)
     backendFetchWithSession<ContextVisibilityModule[]>("/api/context-visibility"),
@@ -36,11 +37,11 @@ export default async function TenantPrivacyPage() {
             <div className="section-stack">
               <div className="page-header">
                 <div>
-                  <h1 className="page-title">{tTenant("pageTitle")}</h1>
-                  <p className="muted">{tTenant("pageDescription", { tenant: session.current_tenant?.name ?? "" })}</p>
+                  <h1 className="page-title">{t("privacy")}</h1>
+                  <p className="muted">{tSettings("hub.cards.privacy.description")}</p>
                 </div>
               </div>
-              <RouteTabs tabs={tenantSettingsTabs(t)} activeHref="/tenant-settings/privacy" variant="pill" />
+              <RouteTabs tabs={privacyTabs(t)} activeHref="/tenant-settings/privacy" variant="pill" />
               {content}
             </div>
           </section>

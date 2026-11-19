@@ -282,7 +282,8 @@
       "spezial_text3": "Special text 3",
       "spezial_time1": "Special time 1",
       "spezial_time2": "Special time 2"
-    }
+    },
+    "hideFor": "Hide {field}"
   },
   "replacesDomainHint": "Replaces {domain} once verification succeeds. Until then, {domain} stays active unchanged.",
   "recheckDomain": "Check again",
@@ -389,5 +390,12 @@
     "revokeConfirm": "Revoke link “{name}”? Anyone who has it can no longer access the content.",
     "revoked": "Link revoked",
     "revokeFailed": "Link could not be revoked"
+  },
+  "profile": {
+    "masterDataDescription": "How your organisation appears in hocX, in invitations and on documents.",
+    "profileImageHelp": "Shown in the sidebar and in emails.",
+    "domainHintNone": "No custom domain yet: hocX runs under the shared address.",
+    "domainHintManage": "Domains & authenticity",
+    "financeDescription": "One currency for all accounts and fines of your organisation."
   }
 }

@@ -13,7 +13,8 @@ export default async function TenantDomainsPage({ searchParams }: { searchParams
   const { tenantId } = await searchParams;
   const session = await requireSession();
   const tenant = await resolveManageableTenant(session, tenantId);
-  const [t, tTenant] = await Promise.all([getTranslations("nav"), getTranslations("tenantSettings")]);
+  const [t, tTenant, tSettings] = await Promise.all([getTranslations("nav"), getTranslations("tenantSettings"),
+    getTranslations("settings")]);
 
   return (
     <AppShell initialSession={session}>
@@ -26,7 +27,7 @@ export default async function TenantDomainsPage({ searchParams }: { searchParams
               <div className="page-header">
                 <div>
                   <h1 className="page-title">{t("domainsAndVerification")}</h1>
-                  <p className="muted">{tTenant("pageDescription", { tenant: tenant.name })}</p>
+                  <p className="muted">{tSettings("hub.cards.domainsAndVerification.description")}</p>
                 </div>
               </div>
               <RouteTabs tabs={domainTabs(t)} activeHref="/tenant-settings/domains" variant="pill" />

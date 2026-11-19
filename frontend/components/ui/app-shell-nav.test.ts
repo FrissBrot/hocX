@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildNav, formatRoleLabel, isNavLinkActive, relatedNavLink, SETTINGS_GROUP } from "./app-shell-nav";
+import { buildNav, buildSettingsNav, formatRoleLabel, isNavLinkActive, isSettingsPath, relatedNavLink, SETTINGS_GROUP } from "./app-shell-nav";
 import { locales } from "@/i18n/locale-config.generated";
 import deNav from "@/messages/de/nav.json";
 import enNav from "@/messages/en/nav.json";
@@ -66,20 +66,31 @@ describe("formatRoleLabel", () => {
 });
 
 describe("buildNav", () => {
-  const hrefsOf = (groups: ReturnType<typeof buildNav>, titleKey: string | null) =>
+  const hrefsOf = (groups: { titleKey: string | null; links: { href: string }[] }[], titleKey: string | null) =>
     groups.find((group) => group.titleKey === titleKey)?.links.map((link) => link.href) ?? [];
+  const settingsOf = (session: SessionInfo) => buildSettingsNav(session);
 
-  it("ordnet nach Tätigkeiten: Bereiche oben, Einstellungen und Organisation unten", () => {
+  it("ordnet die Seitenleiste nach Tätigkeiten, ohne Einstellungen (Design «hocX Einstellungen»)", () => {
     const admin = buildNav(adminSession());
-    expect(admin.map((group) => group.titleKey)).toEqual([
-      null, "groups.sessions", "groups.tasks", "groups.members", "groups.cash", "groups.storage", "groups.appearance",
-      SETTINGS_GROUP, "groups.organisation",
-    ]);
+    expect(admin.map((group) => group.titleKey)).toEqual([null, "groups.sessions", "groups.tasks", "groups.cash", "groups.storage"]);
     expect(hrefsOf(admin, null)).toEqual(["/", "/my-tasks"]);
     expect(hrefsOf(admin, "groups.sessions")).toEqual(["/protocols", "/events", "/agenda"]);
-    expect(hrefsOf(admin, "groups.storage")).toEqual(["/lists", "/files", "/photos", "/shared-links"]);
-    expect(hrefsOf(admin, "groups.organisation")).toEqual([
-      "/tenant-settings", "/tenant-settings/abo", "/tenant-settings/privacy", "/tenant-settings/links", "/tenant-settings/activity", "/tools/import",
+    expect(hrefsOf(admin, "groups.tasks")).toEqual(["/todos", "/submission-assignments"]);
+    expect(hrefsOf(admin, "groups.cash")).toEqual(["/finances", "/fines"]);
+    expect(hrefsOf(admin, "groups.storage")).toEqual(["/participants", "/files", "/photos", "/lists"]);
+    const settingsHrefs = settingsOf(adminSession()).flatMap((group) => group.links.map((link) => link.href));
+    for (const href of settingsHrefs) {
+      expect(admin.flatMap((group) => group.links.map((link) => link.href))).not.toContain(href);
+    }
+  });
+
+  it("gruppiert die Einstellungen in Bereiche, Auftritt und Organisation", () => {
+    const settings = settingsOf(adminSession());
+    expect(settings.map((group) => group.titleKey)).toEqual(["groups.settingsAreas", "groups.appearance", "groups.organisation"]);
+    expect(hrefsOf(settings, "groups.settingsAreas")).toEqual(["/templates", "/task-packages", "/fine-settings", "/users"]);
+    expect(hrefsOf(settings, "groups.appearance")).toEqual(["/documents", "/documents/brand", "/tenant-settings/domains"]);
+    expect(hrefsOf(settings, "groups.organisation")).toEqual([
+      "/tenant-settings", "/tenant-settings/abo", "/tenant-settings/privacy", "/tenant-settings/links", "/shared-links", "/tenant-settings/activity", "/tools/import",
     ]);
   });
 
@@ -92,34 +103,49 @@ describe("buildNav", () => {
     expect(hrefsOf(buildNav({ ...adminSession(), shared_submission_photos: true } as SessionInfo), "groups.storage")).not.toContain("/photos/submissions");
   });
 
-  it("sammelt die Einstellungen der Bereiche - jede nur mit dem Recht, sie zu öffnen", () => {
-    expect(hrefsOf(buildNav(adminSession()), SETTINGS_GROUP)).toEqual([
-      "/templates", "/task-packages", "/users", "/fine-settings", "/tenant-settings/domains",
-    ]);
+  it("zeigt jede Einstellung nur mit dem Recht, sie zu öffnen", () => {
+    const allHrefs = (session: SessionInfo) => settingsOf(session).flatMap((group) => group.links.map((link) => link.href));
     // Aufgabenpakete und Arbeitsjahr brauchen templates.manage, Bussen-Regeln Feature finance
-    expect(hrefsOf(buildNav(sessionFor("writer")), SETTINGS_GROUP)).toEqual(["/templates", "/fine-settings"]);
-    expect(hrefsOf(buildNav(sessionFor("kassier")), SETTINGS_GROUP)).toEqual(["/fine-settings"]);
+    expect(hrefsOf(settingsOf(sessionFor("writer")), "groups.settingsAreas")).toEqual(["/templates", "/fine-settings"]);
+    expect(hrefsOf(settingsOf(sessionFor("kassier")), "groups.settingsAreas")).toEqual(["/fine-settings"]);
     const noFinance = { ...sessionFor("writer"), current_tenant: { ...sessionFor("writer").current_tenant!, enabled_features: ["abgabebox"] } } as SessionInfo;
-    expect(hrefsOf(buildNav(noFinance), SETTINGS_GROUP)).not.toContain("/fine-settings");
+    expect(allHrefs(noFinance)).not.toContain("/fine-settings");
     // Leser haben finances.read und sahen die Bussen-Einstellungen schon bisher - sonst nichts
-    expect(hrefsOf(buildNav(sessionFor("reader")), SETTINGS_GROUP)).toEqual(["/fine-settings"]);
+    expect(hrefsOf(settingsOf(sessionFor("reader")), "groups.settingsAreas")).toEqual(["/fine-settings"]);
+    expect(allHrefs(sessionFor("reader"))).not.toContain("/tenant-settings");
+    expect(allHrefs(sessionFor("writer"))).not.toContain("/tenant-settings");
+    // Ohne jede Einstellung: kein Knopf, keine Übersicht
+    expect(buildSettingsNav({ permissions: [], current_tenant: null })).toEqual([]);
+  });
+
+  it("markiert Übersicht und alle Einstellungsseiten als «in den Einstellungen»", () => {
+    const settings = settingsOf(adminSession());
+    expect(isSettingsPath(settings, "/settings")).toBe(true);
+    expect(isSettingsPath(settings, "/tenant-settings/retention")).toBe(true);
+    expect(isSettingsPath(settings, "/cycles")).toBe(true);
+    expect(isSettingsPath(settings, "/documents/assets")).toBe(true);
+    expect(isSettingsPath(settings, "/fines")).toBe(false);
+    expect(isSettingsPath(settings, "/")).toBe(false);
   });
 
   it("verweist von einem Bereich auf seine Einstellung und zurück", () => {
     const admin = buildNav(adminSession());
-    expect(relatedNavLink(admin, "/fines")).toMatchObject({ kind: "settings", link: { href: "/fine-settings" } });
-    expect(relatedNavLink(admin, "/protocols/abc")).toMatchObject({ kind: "settings", link: { href: "/templates" } });
-    expect(relatedNavLink(admin, "/fine-settings")).toMatchObject({ kind: "area", groupTitleKey: "groups.cash", link: { href: "/finances" } });
-    expect(relatedNavLink(admin, "/cycles")).toMatchObject({ kind: "area", groupTitleKey: "groups.sessions" });
-    expect(relatedNavLink(admin, "/tenant-settings/verification")).toMatchObject({ kind: "area", groupTitleKey: "groups.appearance" });
-    expect(relatedNavLink(admin, "/lists")).toBeNull();
-    expect(relatedNavLink(admin, "/tenant-settings/abo")).toBeNull();
+    const settings = settingsOf(adminSession());
+    expect(relatedNavLink(admin, settings, "/fines")).toMatchObject({ kind: "settings", link: { href: "/fine-settings" } });
+    expect(relatedNavLink(admin, settings, "/protocols/abc")).toMatchObject({ kind: "settings", link: { href: "/templates" } });
+    expect(relatedNavLink(admin, settings, "/participants")).toMatchObject({ kind: "settings", link: { href: "/users" } });
+    expect(relatedNavLink(admin, settings, "/fine-settings")).toMatchObject({ kind: "area", groupTitleKey: "groups.cash", link: { href: "/finances" } });
+    expect(relatedNavLink(admin, settings, "/cycles")).toMatchObject({ kind: "area", groupTitleKey: "groups.sessions" });
+    expect(relatedNavLink(admin, settings, "/users/roles")).toMatchObject({ kind: "area", groupTitleKey: "participants", link: { href: "/participants" } });
+    expect(relatedNavLink(admin, settings, "/lists")).toBeNull();
+    expect(relatedNavLink(admin, settings, "/tenant-settings/abo")).toBeNull();
     // Ohne Recht auf die Einstellung kein Zahnrad
-    expect(relatedNavLink(buildNav(sessionFor("reader")), "/todos")).toBeNull();
+    const reader = sessionFor("reader");
+    expect(relatedNavLink(buildNav(reader), settingsOf(reader), "/todos")).toBeNull();
   });
 
   it("liefert fuer eine Admin-Session alle Gruppen mit uebersetzbaren labelKey/titleKey (keine fertigen Texte)", () => {
-    const groups = buildNav(adminSession());
+    const groups = [...buildNav(adminSession()), ...settingsOf(adminSession())];
     expect(groups.length).toBeGreaterThan(1);
     for (const group of groups) {
       for (const link of group.links) {
@@ -132,19 +158,23 @@ describe("buildNav", () => {
 
   it.each(locales)("jeder Navigationseintrag loest in '%s' zu einem nicht-leeren, uebersetzten Label auf", (locale) => {
     const t = translatorFor(locale);
-    const groups = buildNav(adminSession());
+    const groups = [...buildNav(adminSession()), ...settingsOf(adminSession())];
+    expect(t(SETTINGS_GROUP)).not.toBe(SETTINGS_GROUP);
     for (const group of groups) {
       if (group.titleKey) {
         expect(t(group.titleKey)).not.toBe(group.titleKey);
       }
       for (const link of group.links) {
         expect(t(link.labelKey)).not.toBe(link.labelKey);
+        if ("area" in link && link.area) {
+          expect(t(link.area.titleKey)).not.toBe(link.area.titleKey);
+        }
       }
     }
   });
 
   it("isNavLinkActive erkennt die aktive Route unabhaengig von der Sprache (reine Pfadlogik)", () => {
-    const groups = buildNav(adminSession());
+    const groups = [...buildNav(adminSession()), ...settingsOf(adminSession())];
     const dashboardLink = groups[0].links[0];
     expect(isNavLinkActive(dashboardLink, "/")).toBe(true);
     expect(isNavLinkActive(dashboardLink, "/statistics")).toBe(true);
@@ -160,7 +190,8 @@ describe("buildNav", () => {
   });
 
   it("zeigt Bereiche nur mit der passenden Berechtigung", () => {
-    const hrefs = (role: SystemRoleKey) => buildNav(sessionFor(role)).flatMap((group) => group.links.map((link) => link.href));
+    const hrefs = (role: SystemRoleKey) =>
+      [...buildNav(sessionFor(role)), ...settingsOf(sessionFor(role))].flatMap((group) => group.links.map((link) => link.href));
     expect(hrefs("reader")).not.toContain("/participants");
     expect(hrefs("reader")).not.toContain("/users");
     expect(hrefs("kassier")).toContain("/finances");

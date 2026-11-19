@@ -48,8 +48,26 @@ test("Zahnrad in der Kopfzeile führt vom Bereich zur Einstellung und zurück", 
   await expect(page).toHaveURL(/\/task-packages$/);
   // Auf der Einstellung: zurück zum Bereich (erste Seite der Gruppe «Aufgaben»)
   await expect(page.locator(".topbar-related")).toHaveAttribute("href", "/todos");
-  // Die Einstellung steht gesammelt unter «Einstellungen», die Gruppe ist aufgeklappt
-  await expect(page.locator('.nav-group-expanded .nav-link[href="/task-packages"]')).toBeVisible();
+  // Die Einstellung steht nicht mehr in der Seitenleiste: Knopf «Einstellungen» ist aktiv, die
+  // Unternavigation des Einstellungen-Rahmens markiert die Seite
+  await expect(page.locator('.sidebar .nav-link[href="/task-packages"]')).toHaveCount(0);
+  await expect(page.locator(".sidebar-settings-link")).toHaveClass(/nav-link-active/);
+  await expect(page.locator('.settings-subnav-link-active[href="/task-packages"]')).toBeVisible();
+});
+
+test("Einstellungen: Knopf über der Benutzerkarte führt zur Übersicht mit Suche", async ({ page }) => {
+  await page.goto("/todos");
+  await page.locator(".sidebar-settings-link").click();
+  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page.getByRole("heading", { name: "Einstellungen", level: 1 })).toBeVisible();
+  await expect(page.locator('.settings-hub-card[href="/tenant-settings"]')).toBeVisible();
+  await page.getByRole("textbox", { name: "Einstellung finden" }).fill("dsgvo");
+  await expect(page.locator('.settings-hub-card[href="/tenant-settings/privacy"]')).toBeVisible();
+  await expect(page.locator('.settings-hub-card[href="/tenant-settings"]')).toHaveCount(0);
+  await page.locator('.settings-hub-card[href="/tenant-settings/privacy"]').click();
+  await expect(page).toHaveURL(/\/tenant-settings\/privacy$/);
+  await expect(page.locator(".topbar-breadcrumb")).toContainText("Einstellungen");
+  await expect(page.locator(".topbar-breadcrumb")).toContainText("Datenschutz");
 });
 
 test("Meine Aufgaben verlinkt auf alle Pendenzen", async ({ page }) => {

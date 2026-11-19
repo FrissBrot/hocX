@@ -63,5 +63,69 @@
   },
   "logoutFailed": "Abmelden fehlgeschlagen. Bitte erneut versuchen.",
   "logoutPendingConfirm": "Es gibt noch nicht gespeicherte Änderungen. Beim Abmelden gehen sie auf diesem Gerät verloren.",
-  "logoutAnyway": "Trotzdem abmelden"
+  "logoutAnyway": "Trotzdem abmelden",
+  "hub": {
+    "title": "Einstellungen",
+    "description": "Alles, was festlegt, wie hocX für {tenant} arbeitet.",
+    "overview": "Übersicht",
+    "searchLabel": "Einstellung finden",
+    "searchPlaceholder": "Einstellung finden …",
+    "noResults": "Keine Einstellung gefunden.",
+    "attentionTitle": "Braucht Aufmerksamkeit",
+    "linksWithoutExpiry": "{count, plural, one {# Zugangslink läuft nie ab} other {# Zugangslinks laufen nie ab}}",
+    "linksWithoutExpiryHint": "Links ohne Ablaufdatum bleiben gültig, bis jemand sie widerruft.",
+    "review": "Prüfen",
+    "status": {
+      "verified": "Durch hocX bestätigt",
+      "currency": "Währung: {currency}",
+      "modules": "{count, plural, =0 {Keine Module gebucht} one {# Modul aktiv} other {# Module aktiv}}",
+      "mfaRequired": "MFA für alle Logins verlangt",
+      "mfaOptional": "MFA freiwillig",
+      "publicLinks": "{count, plural, =0 {Keine aktiven Zugangslinks} one {# aktiver Zugangslink} other {# aktive Zugangslinks}}"
+    },
+    "cards": {
+      "sessionTemplates": {
+        "description": "Protokollvorlagen, Bausteine und das Arbeitsjahr der Sitzungen."
+      },
+      "taskPackages": {
+        "description": "Wiederkehrende Pendenzen als Paket, das man einer Sitzung zuweist."
+      },
+      "fineSettings": {
+        "description": "Anwesenheitsbussen, Tarife und Regeln für Pendenzen-Bussen."
+      },
+      "users": {
+        "description": "Rollen, wer worauf zugreift und Sicherheitsregeln für Logins."
+      },
+      "documentTemplates": {
+        "description": "Wie Protokolle, Listen und weitere Dokumente als PDF aussehen."
+      },
+      "documentBrand": {
+        "description": "Farben, Schriften, Logo und Bilder für alle Dokumente."
+      },
+      "domainsAndVerification": {
+        "description": "Eigene Domains für hocX und die Abgabebox, Echtheitsprüfung von Dokumenten."
+      },
+      "organisationProfile": {
+        "description": "Name, Profilbild, Währung und Spezialfelder der Termine."
+      },
+      "subscriptionAndUsage": {
+        "description": "Gebuchte Module, Benutzer und Speicherplatz."
+      },
+      "privacy": {
+        "description": "Datenschutzhinweis, Statistiken, Sichtbarkeit und Aufbewahrung."
+      },
+      "publicLinks": {
+        "description": "Alle Wege, auf denen jemand ohne Anmeldung an Daten des Vereins kommt."
+      },
+      "sharedLinks": {
+        "description": "Geteilte Dateien, Alben und Dokumente mit öffentlichem Link."
+      },
+      "activity": {
+        "description": "Wer wann was geändert hat."
+      },
+      "import": {
+        "description": "Protokolle und Daten aus Word und anderen Quellen übernehmen."
+      }
+    }
+  }
 }

@@ -562,29 +562,104 @@
   gap: var(--space-1);
 }
 
-/* Mandant-Einstellungen: Spezialfelder der Termine (Feld | Alias | Ausblenden) */
-.event-field-settings {
+/* ── Profil (Design «hocX Einstellungen»): Abschnitte Stammdaten, Finanzen, Spezialfelder ── */
+.tenant-profile-page {
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) minmax(160px, 2fr) auto;
-  gap: var(--space-2) var(--space-3);
-  align-items: center;
+  gap: var(--space-4);
+  align-content: start;
 }
 
-.event-field-settings-row {
-  display: contents;
+.tenant-section {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.tenant-section-head {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.tenant-section-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.tenant-section-description {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.tenant-profile-form {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.tenant-profile-image {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  text-align: center;
+}
+
+.tenant-profile-image .tenant-avatar-preview {
+  width: 96px;
+  height: 96px;
+  font-size: var(--text-2xl);
+}
+
+.tenant-profile-fields {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 560px;
+}
+
+.tenant-profile-domain-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+.tenant-profile-narrow {
+  max-width: 320px;
+}
+
+/* Spezialfelder der Termine: Tabelle Feld | Eigener Name | Ausblenden */
+.event-field-table td {
+  vertical-align: middle;
+}
+
+.event-field-table .event-field-name {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.event-field-table input:not([type="checkbox"]) {
+  width: 100%;
+  min-width: 160px;
+}
+
+.event-field-row-hidden .event-field-name {
+  color: var(--muted);
+  text-decoration: line-through;
 }
 
 @media (max-width: 640px) {
-  .event-field-settings {
-    grid-template-columns: 1fr auto;
+  .tenant-profile-form {
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .event-field-settings > .field-label:nth-child(2) {
-    display: none;
-  }
-
-  .event-field-settings-row > input {
-    grid-column: 1 / -1;
+  .tenant-profile-narrow {
+    max-width: none;
   }
 }
 

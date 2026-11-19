@@ -68,7 +68,8 @@
     "domainsAndVerification": "domain address authenticity verification qr",
     "organisationProfile": "organization profile general name logo settings configuration preferences club master data",
     "cycles": "workflows cycles Cycles",
-    "myTasks": "My to-dos tasks submissions"
+    "myTasks": "My to-dos tasks submissions",
+    "settings": "settings configuration overview options preferences"
   },
   "blockIn": "Block in «{element}»",
   "roleLabel": "Role",

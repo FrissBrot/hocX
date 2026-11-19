@@ -63,5 +63,69 @@
   },
   "logoutFailed": "Échec de la déconnexion. Veuillez réessayer.",
   "logoutPendingConfirm": "Des modifications ne sont pas encore enregistrées. En te déconnectant, elles seront perdues sur cet appareil.",
-  "logoutAnyway": "Se déconnecter quand même"
+  "logoutAnyway": "Se déconnecter quand même",
+  "hub": {
+    "title": "Paramètres",
+    "description": "Tout ce qui définit le fonctionnement de hocX pour {tenant}.",
+    "overview": "Vue d'ensemble",
+    "searchLabel": "Trouver un paramètre",
+    "searchPlaceholder": "Trouver un paramètre …",
+    "noResults": "Aucun paramètre trouvé.",
+    "attentionTitle": "Demande votre attention",
+    "linksWithoutExpiry": "{count, plural, one {# lien d'accès n'expire jamais} other {# liens d'accès n'expirent jamais}}",
+    "linksWithoutExpiryHint": "Les liens sans date d'expiration restent valables jusqu'à leur révocation.",
+    "review": "Vérifier",
+    "status": {
+      "verified": "Confirmé par hocX",
+      "currency": "Devise : {currency}",
+      "modules": "{count, plural, =0 {Aucun module réservé} one {# module actif} other {# modules actifs}}",
+      "mfaRequired": "MFA exigée pour toutes les connexions",
+      "mfaOptional": "MFA facultative",
+      "publicLinks": "{count, plural, =0 {Aucun lien d'accès actif} one {# lien d'accès actif} other {# liens d'accès actifs}}"
+    },
+    "cards": {
+      "sessionTemplates": {
+        "description": "Modèles de procès-verbal, éléments et année de travail des séances."
+      },
+      "taskPackages": {
+        "description": "Tâches récurrentes regroupées en paquets à attribuer à une séance."
+      },
+      "fineSettings": {
+        "description": "Amendes de présence, tarifs et règles pour les amendes de tâches."
+      },
+      "users": {
+        "description": "Rôles, qui accède à quoi et règles de sécurité des connexions."
+      },
+      "documentTemplates": {
+        "description": "L'apparence des procès-verbaux, listes et autres documents en PDF."
+      },
+      "documentBrand": {
+        "description": "Couleurs, polices, logo et images pour tous les documents."
+      },
+      "domainsAndVerification": {
+        "description": "Domaines propres pour hocX et la boîte de dépôt, vérification d'authenticité des documents."
+      },
+      "organisationProfile": {
+        "description": "Nom, photo de profil, devise et champs spéciaux des rendez-vous."
+      },
+      "subscriptionAndUsage": {
+        "description": "Modules réservés, utilisateurs et espace de stockage."
+      },
+      "privacy": {
+        "description": "Avis de confidentialité, statistiques, visibilité et conservation."
+      },
+      "publicLinks": {
+        "description": "Tous les accès aux données de l'association sans connexion."
+      },
+      "sharedLinks": {
+        "description": "Fichiers, albums et documents partagés par lien public."
+      },
+      "activity": {
+        "description": "Qui a modifié quoi, et quand."
+      },
+      "import": {
+        "description": "Reprendre des procès-verbaux et données depuis Word et d'autres sources."
+      }
+    }
+  }
 }

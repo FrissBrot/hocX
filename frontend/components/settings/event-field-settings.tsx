@@ -5,6 +5,8 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
+import { ProfileSection } from "@/components/settings/profile-section";
+import { DataTable } from "@/components/ui/data-table";
 import { useToast } from "@/contexts/toast-context";
 import { browserApiFetch } from "@/lib/api/client";
 import {
@@ -39,35 +41,34 @@ export function EventFieldSettings() {
   }
 
   return (
-    <section className="card settings-anchor" id="event-fields">
-      <div className="eyebrow">{t("eyebrow")}</div>
+    <ProfileSection id="event-fields" title={t("eyebrow")} description={t("description")}>
       <form className="grid" onSubmit={save}>
-        <p className="muted">{t("description")}</p>
-        <div className="event-field-settings">
-          <span className="field-label">{t("columnField")}</span>
-          <span className="field-label">{t("columnAlias")}</span>
-          <span className="field-label">{t("columnHidden")}</span>
+        <DataTable columns={[{ key: "field", label: t("columnField") }, { key: "alias", label: t("columnAlias") }, { key: "hidden", label: t("hide") }]} className="event-field-table">
           {EVENT_SPECIAL_FIELDS.map((field) => (
-            <div key={field} className="event-field-settings-row">
-              <span>{t(`defaults.${field}`)}</span>
-              <input
-                value={draft[field].label}
-                maxLength={60}
-                placeholder={t(`defaults.${field}`)}
-                aria-label={t("aliasFor", { field: t(`defaults.${field}`) })}
-                onChange={(event) => setDraft({ ...draft, [field]: { ...draft[field], label: event.target.value } })}
-              />
-              <label className="studio-inline-check">
+            <tr key={field} className={draft[field].hidden ? "event-field-row-hidden" : undefined}>
+              <td className="event-field-name">{t(`defaults.${field}`)}</td>
+              <td>
                 <input
-                  type="checkbox"
-                  checked={draft[field].hidden}
-                  onChange={(event) => setDraft({ ...draft, [field]: { ...draft[field], hidden: event.target.checked } })}
+                  value={draft[field].label}
+                  maxLength={60}
+                  placeholder={t(`defaults.${field}`)}
+                  aria-label={t("aliasFor", { field: t(`defaults.${field}`) })}
+                  onChange={(event) => setDraft({ ...draft, [field]: { ...draft[field], label: event.target.value } })}
                 />
-                <span>{t("hide")}</span>
-              </label>
-            </div>
+              </td>
+              <td>
+                <label className="studio-inline-check">
+                  <input
+                    type="checkbox"
+                    aria-label={t("hideFor", { field: t(`defaults.${field}`) })}
+                    checked={draft[field].hidden}
+                    onChange={(event) => setDraft({ ...draft, [field]: { ...draft[field], hidden: event.target.checked } })}
+                  />
+                </label>
+              </td>
+            </tr>
           ))}
-        </div>
+        </DataTable>
         <span className="field-help">{t("help")}</span>
         <div className="table-actions table-actions-start">
           <button type="submit" className="button-primary" disabled={saving}>
@@ -75,6 +76,6 @@ export function EventFieldSettings() {
           </button>
         </div>
       </form>
-    </section>
+    </ProfileSection>
   );
 }

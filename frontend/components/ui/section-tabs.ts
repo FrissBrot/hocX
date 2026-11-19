@@ -58,17 +58,18 @@ export function userAreaTabs(t: TFunc): RouteTab[] {
   ];
 }
 
-// Admin-only section: every route below redirects non-admins on its own.
-/** Organisation: alles, was den ganzen Mandanten betrifft. Domains und Echtheitsprüfung gehören
- * zum Auftritt und haben eine eigene Leiste (domainTabs). */
-export function tenantSettingsTabs(t: TFunc): RouteTab[] {
+/** Früher die Reiter der Organisation; seit dem Einstellungen-Rahmen (Design «hocX Einstellungen»)
+ * führt die Unternavigation links dorthin. Bleibt leer bestehen, damit Seiten, die die Reiter noch
+ * einbinden (RouteTabs zeigt unter zwei Reitern nichts), ohne Änderung weiter funktionieren. */
+export function tenantSettingsTabs(_t: TFunc): RouteTab[] {
+  return [];
+}
+
+/** Datenschutz: Einstellungen und Aufbewahrungsregeln (beide nur mit settings.manage). */
+export function privacyTabs(t: TFunc): RouteTab[] {
   return [
-    { href: "/tenant-settings", label: t("organisationProfile") },
-    { href: "/tenant-settings/abo", label: t("subscriptionAndUsage") },
     { href: "/tenant-settings/privacy", label: t("privacy") },
-    { href: "/tenant-settings/links", label: t("publicLinks") },
     { href: "/tenant-settings/retention", label: t("retention") },
-    { href: "/tenant-settings/activity", label: t("activity") },
   ];
 }
 

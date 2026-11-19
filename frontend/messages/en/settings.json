@@ -63,5 +63,69 @@
   },
   "logoutFailed": "Logout failed. Please try again.",
   "logoutPendingConfirm": "There are unsaved changes. Signing out discards them on this device.",
-  "logoutAnyway": "Sign out anyway"
+  "logoutAnyway": "Sign out anyway",
+  "hub": {
+    "title": "Settings",
+    "description": "Everything that defines how hocX works for {tenant}.",
+    "overview": "Overview",
+    "searchLabel": "Find a setting",
+    "searchPlaceholder": "Find a setting …",
+    "noResults": "No setting found.",
+    "attentionTitle": "Needs attention",
+    "linksWithoutExpiry": "{count, plural, one {# access link never expires} other {# access links never expire}}",
+    "linksWithoutExpiryHint": "Links without an expiry date stay valid until someone revokes them.",
+    "review": "Review",
+    "status": {
+      "verified": "Verified by hocX",
+      "currency": "Currency: {currency}",
+      "modules": "{count, plural, =0 {No modules booked} one {# module active} other {# modules active}}",
+      "mfaRequired": "MFA required for all logins",
+      "mfaOptional": "MFA optional",
+      "publicLinks": "{count, plural, =0 {No active access links} one {# active access link} other {# active access links}}"
+    },
+    "cards": {
+      "sessionTemplates": {
+        "description": "Minutes templates, building blocks and the working year of your meetings."
+      },
+      "taskPackages": {
+        "description": "Recurring tasks bundled into packages you assign to a meeting."
+      },
+      "fineSettings": {
+        "description": "Attendance fines, rates and rules for task fines."
+      },
+      "users": {
+        "description": "Roles, who can access what, and security rules for logins."
+      },
+      "documentTemplates": {
+        "description": "How minutes, lists and other documents look as PDF."
+      },
+      "documentBrand": {
+        "description": "Colours, fonts, logo and images for all documents."
+      },
+      "domainsAndVerification": {
+        "description": "Custom domains for hocX and the drop box, document authenticity check."
+      },
+      "organisationProfile": {
+        "description": "Name, profile picture, currency and special fields of events."
+      },
+      "subscriptionAndUsage": {
+        "description": "Booked modules, users and storage."
+      },
+      "privacy": {
+        "description": "Privacy notice, statistics, visibility and retention."
+      },
+      "publicLinks": {
+        "description": "Every way someone can reach your organisation's data without signing in."
+      },
+      "sharedLinks": {
+        "description": "Shared files, albums and documents with a public link."
+      },
+      "activity": {
+        "description": "Who changed what, and when."
+      },
+      "import": {
+        "description": "Bring in minutes and data from Word and other sources."
+      }
+    }
+  }
 }

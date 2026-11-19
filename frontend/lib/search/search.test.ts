@@ -77,6 +77,19 @@ describe("buildStaticEntries", () => {
     const ids = entries.map((entry) => entry.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
+
+  it("findet alle Einstellungen, obwohl sie nicht mehr in der Seitenleiste stehen", () => {
+    const entries = buildStaticEntries(sessionFor("admin"), tNav, tSearch);
+    const settingsHrefs = entries.filter((entry) => entry.group === "settings").map((entry) => entry.href);
+    for (const href of ["/settings", "/templates", "/task-packages", "/fine-settings", "/users", "/documents", "/documents/brand",
+      "/tenant-settings/domains", "/tenant-settings", "/tenant-settings/abo", "/tenant-settings/privacy", "/tenant-settings/retention",
+      "/tenant-settings/links", "/shared-links", "/tenant-settings/activity", "/tools/import"]) {
+      expect(settingsHrefs).toContain(href);
+    }
+    expect(rankEntries(entries, "einstellungen")[0]).toMatchObject({ href: "/settings" });
+    // Arbeitsbereiche bleiben «Seiten»
+    expect(entries.find((entry) => entry.href === "/fines")?.group).toBe("pages");
+  });
 });
 
 describe("Listensuche", () => {

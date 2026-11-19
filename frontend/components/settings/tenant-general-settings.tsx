@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import type { Route } from "next";
 import { ChangeEvent, FormEvent, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -7,8 +9,8 @@ import { useTranslations } from "next-intl";
 import { initials } from "@/components/protocol/collaboration-presence";
 import { domainStatus, TenantDomainRowContent } from "@/components/settings/tenant-domain-row";
 import { useTenantDomains } from "@/components/settings/tenant-domains-manager";
+import { ProfileSection } from "@/components/settings/profile-section";
 import { CopyField } from "@/components/ui/copy-field";
-import { HelpPopover } from "@/components/ui/help-popover";
 import { useConfirm } from "@/contexts/confirm-context";
 import { browserApiFetch } from "@/lib/api/client";
 import { useToast } from "@/contexts/toast-context";
@@ -85,65 +87,73 @@ export function TenantGeneralSettings({ initialTenant }: Props) {
   const showToast = useToast();
   const { tenantForm, setTenantForm, submitTenant, saving, primaryDomain } = useTenantGeneralForm(initialTenant);
   const profileImageInputRef = useRef<HTMLInputElement>(null);
+  const nameChanged = tenantForm.name.trim() !== initialTenant.name;
+  const dirty = nameChanged || tenantForm.profileImage !== null;
 
   return (
-    <>
-      <section className="card settings-anchor" id="stammdaten">
-        <div className="eyebrow">{t("masterDataEyebrow")}</div>
-        <form className="grid" onSubmit={submitTenant}>
-          <div className="tenant-avatar-row">
-            <div className="identity-avatar tenant-avatar-preview">
-              {tenantForm.profileImageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={tenantForm.profileImageUrl} alt={tenantForm.name} />
-              ) : (
-                <span>{initials(tenantForm.name || initialTenant.name)}</span>
-              )}
-            </div>
-            <button type="button" className="button-secondary" onClick={() => profileImageInputRef.current?.click()}>
-              {t("changeProfileImage")}
-            </button>
-            <input
-              ref={profileImageInputRef}
-              type="file"
-              accept={PROFILE_IMAGE_ACCEPT}
-              hidden
-              onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                const file = event.target.files?.[0] ?? null;
-                const problem = file ? profileImageProblem(file) : null;
-                if (problem) {
-                  showToast(tCommon(`profileImage.${problem}`), "error");
-                  event.target.value = "";
-                  return;
-                }
-                setTenantForm((current) => ({ ...current, profileImage: file }));
-              }}
-            />
+    <ProfileSection id="stammdaten" title={t("masterDataEyebrow")} description={t("profile.masterDataDescription")}>
+      <form className="tenant-profile-form" onSubmit={submitTenant}>
+        <div className="tenant-profile-image">
+          <div className="identity-avatar tenant-avatar-preview">
+            {tenantForm.profileImageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={tenantForm.profileImageUrl} alt={tenantForm.name} />
+            ) : (
+              <span>{initials(tenantForm.name || initialTenant.name)}</span>
+            )}
           </div>
+          <button type="button" className="button-secondary" onClick={() => profileImageInputRef.current?.click()}>
+            {t("changeProfileImage")}
+          </button>
+          <span className="field-help">{tenantForm.profileImage ? tenantForm.profileImage.name : t("profile.profileImageHelp")}</span>
+          <input
+            ref={profileImageInputRef}
+            type="file"
+            accept={PROFILE_IMAGE_ACCEPT}
+            hidden
+            onChange={(event: ChangeEvent<HTMLInputElement>) => {
+              const file = event.target.files?.[0] ?? null;
+              const problem = file ? profileImageProblem(file) : null;
+              if (problem) {
+                showToast(tCommon(`profileImage.${problem}`), "error");
+                event.target.value = "";
+                return;
+              }
+              setTenantForm((current) => ({ ...current, profileImage: file }));
+            }}
+          />
+        </div>
+        <div className="tenant-profile-fields">
           <label className="field-stack">
             <span className="field-label">{t("tenantNameLabel")}</span>
             <input value={tenantForm.name} onChange={(event) => setTenantForm((current) => ({ ...current, name: event.target.value }))} required />
           </label>
-          <label className="field-stack">
+          <div className="field-stack">
             <span className="field-label">{t("tenantIdLabel")}</span>
             <CopyField label={t("tenantIdLabel")} value={initialTenant.id} />
             <span className="field-help">{t("tenantIdHelp")}</span>
-          </label>
+          </div>
           {primaryDomain ? (
             <div className="tenant-domain-row">
               <TenantDomainRowContent domain={primaryDomain} />
               <div className="tenant-domain-row-trailing">
                 <span className={`record-list-row-dot record-list-row-dot-${domainStatus(primaryDomain, t).variant}`} />
+                <Link href={"/tenant-settings/domains" as Route} className="button-secondary button-ghost">{t("profile.domainHintManage")}</Link>
               </div>
             </div>
-          ) : null}
+          ) : (
+            <div className="tenant-profile-domain-hint">
+              <span className="muted">{t("profile.domainHintNone")}</span>
+              <Link href={"/tenant-settings/domains" as Route} className="button-secondary button-ghost">{t("profile.domainHintManage")}</Link>
+            </div>
+          )}
           <div className="table-actions table-actions-start">
-            <button type="submit" className="button-primary" disabled={saving}>
+            <button type="submit" className="button-primary" disabled={saving || !dirty || !tenantForm.name.trim()}>
               {tCommon("save")}
             </button>
           </div>
-        </form>
-      </section>
-    </>
+        </div>
+      </form>
+    </ProfileSection>
   );
 }

@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { RetentionSettings, type RetentionPolicy } from "@/components/settings/retention-settings";
 import { AppShell } from "@/components/ui/app-shell";
 import { RouteTabs } from "@/components/ui/route-tabs";
-import { tenantSettingsTabs } from "@/components/ui/section-tabs";
+import { privacyTabs } from "@/components/ui/section-tabs";
 import { backendFetchWithSession, requireSession } from "@/lib/api/server";
 import { can } from "@/lib/permissions";
 
@@ -16,9 +16,10 @@ export default async function TenantRetentionPage() {
   if (!can(session, "settings.manage")) {
     redirect("/");
   }
-  const [t, tTenant, state] = await Promise.all([
+  const [t, tTenant, tSettings, state] = await Promise.all([
     getTranslations("nav"),
     getTranslations("tenantSettings"),
+    getTranslations("settings"),
     backendFetchWithSession<RetentionPolicy>("/api/retention/policy"),
   ]);
   const content = state ? <RetentionSettings initialPolicy={state} /> : null;
@@ -33,11 +34,11 @@ export default async function TenantRetentionPage() {
             <div className="section-stack">
               <div className="page-header">
                 <div>
-                  <h1 className="page-title">{tTenant("pageTitle")}</h1>
-                  <p className="muted">{tTenant("pageDescription", { tenant: session.current_tenant?.name ?? "" })}</p>
+                  <h1 className="page-title">{t("privacy")}</h1>
+                  <p className="muted">{tSettings("hub.cards.privacy.description")}</p>
                 </div>
               </div>
-              <RouteTabs tabs={tenantSettingsTabs(t)} activeHref="/tenant-settings/retention" variant="pill" />
+              <RouteTabs tabs={privacyTabs(t)} activeHref="/tenant-settings/retention" variant="pill" />
               {content}
             </div>
           </section>
