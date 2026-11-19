@@ -3399,6 +3399,11 @@ button.table-row-link:hover {
   font-variant-numeric: tabular-nums;
 }
 
+.tabs-count-danger {
+  background: var(--danger);
+  color: var(--on-solid);
+}
+
 .tabs-note {
   margin-left: var(--space-2);
   color: var(--muted);
