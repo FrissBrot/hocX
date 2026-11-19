@@ -66,7 +66,7 @@ from app.services.photo_metadata_privacy import MetadataPolicy, sanitize_image
 from app.services.file_service import BLOCKED_SCAN_STATUSES, MAX_UPLOAD_BYTES, FileService
 from app.services.file_eraser import FileEraser
 from app.services import submission_upload_rules
-from app.services.submission_service import SubmissionService, _element_ref, _parse_element_ref
+from app.services.submission_service import SubmissionService, _element_ref, _parse_element_ref, raw_element_key
 from app.services.upload_pipeline import GALLERY_DIRECT_IMAGE_MAX_BYTES, GALLERY_ZIP_MAX_BYTES, stage_upload_to_disk, inspect_gallery_zip, _enforce_tenant_storage_quota, safe_entry_name
 from app.repositories.file_repository import StoredFileRepository
 from app.services.upload_lock import acquire_upload_lock
@@ -361,7 +361,7 @@ def _resolve_upload_target(
         upload_assignment = db.get(SubmissionAssignment, target.assignment_id)
         target.assignment = upload_assignment
         try:
-            parsed_event_id, parsed_list_entry_id = _parse_element_ref(db, submission_element_ref)
+            parsed_key = _parse_element_ref(db, submission_element_ref)
         except ValueError:
             raise HTTPException(status_code=422, detail="Ungültige Abgabe-Element-Referenz") from None
         # _parse_element_ref resolves the event/list-entry public id without a tenant
@@ -370,7 +370,7 @@ def _resolve_upload_target(
         # event_id at another tenant's event and leak this upload into that tenant's Zyklus
         # album.
         elements = submission_service._resolve_raw_elements(db, upload_assignment)
-        match = next((e for e in elements if e["event_id"] == parsed_event_id and e["list_entry_id"] == parsed_list_entry_id), None)
+        match = next((e for e in elements if raw_element_key(e) == parsed_key), None)
         if match is None:
             raise HTTPException(status_code=404, detail="Abgabe-Element nicht gefunden")
         target.event_id = match["event_id"]

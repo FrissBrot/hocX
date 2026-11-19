@@ -24,7 +24,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.entities import GalleryImage, SubmissionAssignment, SubmissionUpload, SubmissionUploadFile
-from app.services.submission_service import _parse_element_ref
+from app.services.submission_service import _parse_element_ref, upload_key_filter
 
 
 @dataclass(frozen=True)
@@ -81,17 +81,14 @@ def load_rules(db: Session, assignment: SubmissionAssignment, element_ref: str) 
     files.py's _resolve_upload_target)."""
     remaining: int | None = None
     if assignment.max_files_per_element is not None:
-        event_id, list_entry_id = _parse_element_ref(db, element_ref)
+        key = _parse_element_ref(db, element_ref)
         abgabebox_files = db.scalar(
             select(func.count(SubmissionUploadFile.id))
             .join(SubmissionUpload, SubmissionUpload.id == SubmissionUploadFile.upload_id)
             .where(
                 SubmissionUpload.assignment_id == assignment.id,
                 SubmissionUploadFile.withdrawn_at.is_(None),
-                SubmissionUpload.event_id == event_id if event_id is not None else SubmissionUpload.event_id.is_(None),
-                SubmissionUpload.list_entry_id == list_entry_id
-                if list_entry_id is not None
-                else SubmissionUpload.list_entry_id.is_(None),
+                *upload_key_filter(key),
             )
         ) or 0
         in_app_files = db.scalar(

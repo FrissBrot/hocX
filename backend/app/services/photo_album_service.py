@@ -40,7 +40,7 @@ from app.models.entities import (
 )
 from app.services import photo_album_share_service
 from app.services.photo_quality import composite_quality_score
-from app.services.submission_service import SubmissionService, _element_ref
+from app.services.submission_service import SubmissionService, _element_ref, raw_element_key, raw_element_ref
 
 # Best-of selection ("beste Bilder vorschlagen", see file_service.py's Phase 1/3 scoring
 # docstrings): at most this fraction of an album's images get starred.
@@ -532,6 +532,7 @@ def sync_submission_uploads(db: Session, file_service) -> None:
             SubmissionUpload.assignment_id,
             SubmissionUpload.event_id,
             SubmissionUpload.list_entry_id,
+            SubmissionUpload.manual_element_id,
             SubmissionUploadFile.delete_comment,
         )
         .select_from(SubmissionUploadFile)
@@ -547,16 +548,16 @@ def sync_submission_uploads(db: Session, file_service) -> None:
         return
 
     processed_ids: list[int] = [row.id for row in rows]
-    active_by_target: dict[tuple[int, int, int | None, int | None], list[uuid.UUID]] = {}
+    active_by_target: dict[tuple[int, int, int | None, int | None, int | None], list[uuid.UUID]] = {}
     removed_ids: set[uuid.UUID] = set()
     assignment_ids: set[int] = set()
     event_ids: set[int] = set()
     list_entry_ids: set[int] = set()
-    for _row_id, public_id, tenant_id, assignment_id, event_id, list_entry_id, delete_comment in rows:
+    for _row_id, public_id, tenant_id, assignment_id, event_id, list_entry_id, manual_element_id, delete_comment in rows:
         if delete_comment is not None:
             removed_ids.add(public_id)
             continue
-        key = (tenant_id, assignment_id, event_id, list_entry_id)
+        key = (tenant_id, assignment_id, event_id, list_entry_id, manual_element_id)
         active_by_target.setdefault(key, []).append(public_id)
         assignment_ids.add(assignment_id)
         if event_id is not None:
@@ -569,10 +570,11 @@ def sync_submission_uploads(db: Session, file_service) -> None:
     list_entries = {e.id: e for e in db.scalars(select(ListEntry).where(ListEntry.id.in_(list_entry_ids)))} if list_entry_ids else {}
 
     submission_service = SubmissionService()
-    labels_by_assignment: dict[int, dict[tuple[int | None, int | None], str]] = {}
+    # (event_id, list_entry_id, manual_element_id) -> (element_ref, Bezeichnung) je Abgabe
+    labels_by_assignment: dict[int, dict[tuple[int | None, int | None, int | None], tuple[str, str]]] = {}
 
     touched: dict[uuid.UUID, PhotoAlbum] = {}
-    for (tenant_id, assignment_id, event_id, list_entry_id), file_ids in active_by_target.items():
+    for (tenant_id, assignment_id, event_id, list_entry_id, manual_element_id), file_ids in active_by_target.items():
         assignment = assignments.get(assignment_id)
         if assignment is None:
             continue
@@ -585,8 +587,13 @@ def sync_submission_uploads(db: Session, file_service) -> None:
         )
         if assignment_id not in labels_by_assignment:
             raw_elements = submission_service._resolve_raw_elements(db, assignment)
-            labels_by_assignment[assignment_id] = {(r["event_id"], r["list_entry_id"]): r["label"] for r in raw_elements}
-        element_label = labels_by_assignment[assignment_id].get((event_id, list_entry_id), element_ref)
+            labels_by_assignment[assignment_id] = {raw_element_key(r): (raw_element_ref(r), r["label"]) for r in raw_elements}
+        known = labels_by_assignment[assignment_id].get((event_id, list_entry_id, manual_element_id))
+        if known is not None:
+            element_ref = known[0]
+        elif manual_element_id is not None:
+            continue  # Element inzwischen entfernt
+        element_label = known[1] if known is not None else element_ref
 
         submission_album = get_or_create_submission_album(db, tenant_id=tenant_id, assignment=assignment)
         add_items(db, submission_album, file_ids)

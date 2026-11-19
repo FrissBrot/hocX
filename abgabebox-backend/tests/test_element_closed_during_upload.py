@@ -26,7 +26,7 @@ class _FakeDb:
 
 
 def test_insert_refuses_when_element_was_closed_meanwhile(monkeypatch):
-    monkeypatch.setattr(repository, "latest_status_by_element", lambda db, assignment_id: {(7, None): "closed"})
+    monkeypatch.setattr(repository, "latest_status_by_element", lambda db, assignment_id: {(7, None, None): "closed"})
     db = _FakeDb()
     with pytest.raises(repository.ElementClosedError):
         repository.insert_full_upload(db, assignment_id=3, event_id=7, list_entry_id=None, files=[])
@@ -83,7 +83,7 @@ def test_upload_answers_400_and_removes_files_when_closed_meanwhile(monkeypatch)
 
 def test_upload_is_refused_early_when_closed_by_hand(monkeypatch):
     setup_upload(monkeypatch)
-    monkeypatch.setattr(public.repository, "latest_status_by_element", lambda *a, **k: {(1, None): "closed"})
+    monkeypatch.setattr(public.repository, "latest_status_by_element", lambda *a, **k: {(1, None, None): "closed"})
     with pytest.raises(HTTPException) as excinfo:
         upload([NEW])
     assert excinfo.value.status_code == 400

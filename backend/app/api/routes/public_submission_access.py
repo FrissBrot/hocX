@@ -26,7 +26,7 @@ from app.schemas.files import UploadFileResult
 from app.services import submission_access_service as access_service
 from app.services import submission_upload_rules
 from app.services.file_service import FileService
-from app.services.submission_service import SubmissionService, _element_ref
+from app.services.submission_service import SubmissionService, raw_element_ref
 from app.services.upload_pipeline import MAX_UPLOAD_BYTES, stage_upload_to_disk
 
 router = APIRouter()
@@ -196,7 +196,7 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (core/offl
     # Wie der In-App-Upload (files.py::_resolve_upload_target): Termin und Bezeichnung des Elements
     raw = next(
         (item for item in SubmissionService()._resolve_raw_elements(db, access.assignment)
-         if _element_ref(event_public_id=item["event_public_id"], list_entry_public_id=item["list_entry_public_id"]) == element_ref),
+         if raw_element_ref(item) == element_ref),
         None,
     )
     if raw is None:

@@ -7,7 +7,7 @@ einen Link, wählen aus, wofür sie etwas abgeben, und laden ihre Dateien hoch �
 Eingerichtet und ausgewertet wird alles im Bereich **Abgaben** in der Navigation. Eine
 **Abgabe** ist dabei ein Auftrag, zum Beispiel «Lagerberichte 2026». Jede Abgabe hat ein oder
 mehrere **Abgabefelder**: das, wofür einzeln abgegeben wird – ein Termin, ein Listeneintrag
-oder bei einer Einzelabgabe die Abgabe selbst. In der öffentlichen Abgabebox heisst ein
+oder bei einer Einzelabgabe ein von Hand angelegtes Element. In der öffentlichen Abgabebox heisst ein
 Abgabefeld für die Einreichenden «Dokument» («Welches Dokument reichst du ein?»).
 
 !!! info "Berechtigungen"
@@ -25,9 +25,10 @@ Abgabefeld für die Einreichenden «Dokument» («Welches Dokument reichst du ei
    *Einzelabgabe*. Was das bedeutet, steht unter [Quelle](#quelle). Schneller geht es mit einer
    der Vorlagen unter «Schnellstart mit Vorlage» (z. B. «Berichte pro Termin»); sie füllen
    Quelle, Zeitraum und Dateiregeln vor, du kannst danach alles anpassen.
-4. **Zeitraum**: Lege bei Terminen das [Zeitfenster](#zeitfenster) fest, bei Listen und
-   Einzelabgaben den [Stichtag](#stichtag). Beides darfst du leer lassen, dann bleibt die
-   Abgabe offen, bis du sie von Hand schliesst.
+4. **Zeitraum**: Lege bei Terminen das [Zeitfenster](#zeitfenster) fest, bei Listen den
+   [Stichtag](#stichtag). Bei Einzelabgaben heisst der Schritt **Elemente**: dort legst du die
+   [Abgabeelemente](#einzelabgabe-elemente) an, je mit eigenem Stichtag. Beides darfst du leer
+   lassen, dann bleibt die Abgabe offen, bis du sie von Hand schliesst.
 5. Optional: eine [verantwortliche Person](#verantwortliche) und unter **Erweitert** die
    **Beschreibung** (erscheint für die Einreichenden über dem Upload-Feld),
    [Dateitypen und Grössen](#dateien) und [automatisches Schliessen](#automatisch-schliessen).
@@ -56,7 +57,7 @@ Unter **Verknüpfung** wählst du die Quelle der Abgabefelder:
 |---|---|---|
 | **Termine** | Ein Abgabefeld je Termin mit dem gewählten **Tag**, z. B. alle Termine mit dem Tag «Badetag». | [Zeitfenster](#zeitfenster) je Termin |
 | **Liste** | Ein Abgabefeld je Eintrag der gewählten [Liste](listen.md), z. B. je Lagergruppe. | ein gemeinsamer [Stichtag](#stichtag) |
-| **Einzelabgabe** | Genau ein Abgabefeld, das wie die Abgabe heisst – unabhängig von Terminen und Listen. | optionaler [Stichtag](#stichtag) |
+| **Einzelabgabe** | Von Hand angelegte [Abgabeelemente](#einzelabgabe-elemente) – unabhängig von Terminen und Listen. Neu angelegt gibt es eines, das wie die Abgabe heisst. | je Element optionaler Start und Stichtag |
 
 Die Abgabefelder folgen der Quelle laufend: Bekommt ein neuer Termin den Tag oder kommt ein
 Listeneintrag dazu, erscheint automatisch ein neues Abgabefeld. Wird ein Termin gelöscht oder
@@ -98,9 +99,24 @@ Vor Beginn des Zeitfensters sehen die Einreichenden das Abgabefeld noch nicht. N
 verschwindet es aus der Abgabebox, ausser du hast [Nach dem Ende offen halten](#offen-halten)
 eingeschaltet.
 
-## Stichtag bei Listen- und Einzelabgaben {#stichtag}
+## Elemente einer Einzelabgabe {#einzelabgabe-elemente}
 
-Listen- und Einzelabgaben haben einen gemeinsamen **Stichtag** für alle Abgabefelder. Bis und
+Bei einer Einzelabgabe legst du die Abgabefelder selbst an: im Schritt **Elemente** mit
+«+ Element», je mit **Name**, optionalem **Start** und **Stichtag**; das Papierkorb-Symbol entfernt
+ein Element. Im Schritt **Verantwortlich** wählst du je Element eine oder mehrere Personen.
+
+Jedes Element verhält sich wie ein Termin einer Termin-Abgabe: eine eigene Kachel im Detail, in
+der Abgabebox einzeln wählbar, eine eigene [Pendenz](#verantwortliche) für die Verantwortlichen
+(fällig am Stichtag), eigener Fortschritt und ein eigener Ordner im ZIP-Download. Ohne Start ist
+ein Element sofort offen, ohne Stichtag bleibt es offen, bis du es von Hand schliesst.
+
+!!! warning "Element entfernen"
+    Entfernst du ein gespeichertes Element, werden beim Speichern auch die dafür eingereichten
+    Dateien gelöscht. hocX fragt deshalb vorher nach.
+
+## Stichtag bei Listenabgaben {#stichtag}
+
+Listenabgaben haben einen gemeinsamen **Stichtag** für alle Abgabefelder. Bis und
 mit diesem Tag kann abgegeben werden, danach ist die Abgabe in der Abgabebox nicht mehr
 sichtbar.
 
@@ -168,15 +184,14 @@ Häkchen, um Abgabefelder **nach dem Ende offen zu halten**. Ist es gesetzt,
 
 ## Verantwortliche Person {#verantwortliche}
 
-Bei Termin- und Listen-Abgaben kannst du unter **Verantwortliche Person** festlegen, wer für
-die Abgabe zuständig ist:
+Unter **Verantwortliche Person** legst du fest, wer für die Abgabe zuständig ist:
 
 - **Termine**: ein Personenfeld des Termins (*Spezial 1* bis *Spezial 3*, bzw. die Namen, die
   deine Organisation diesen Feldern unter Organisation › Profil gegeben hat).
 - **Liste**: eine Listenspalte, die Personen enthält.
+- **Einzelabgabe**: die Personen, die du je [Element](#einzelabgabe-elemente) wählst.
 
-Steht dort mehr als eine Person, sind sie gemeinsam verantwortlich. Einzelabgaben haben keine
-verantwortliche Person.
+Steht dort mehr als eine Person, sind sie gemeinsam verantwortlich.
 
 Was dann passiert:
 
@@ -300,7 +315,7 @@ Bei Abgaben mit verantwortlicher Person steht unter jedem Abgabefeld, wer verant
 sobald jedes Abgabefeld eine geprüfte Datei hat oder geschlossen ist (Dateien in der Virenprüfung
 zählen noch nicht) und nichts mehr dazukommen kann:
 
-- **Einzelabgabe**: sofort,
+- **Einzelabgabe**: sobald jedes Element abgegeben oder geschlossen ist,
 - **Termine**: kein Zeitfenster endet mehr in der Zukunft,
 - **Liste**: der Stichtag ist vorbei; ohne Stichtag zählt der aktuelle Stand der Liste.
 

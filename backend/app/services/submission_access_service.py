@@ -147,7 +147,7 @@ def resolve(db: Session, token: str, *, touch: bool = True) -> Access | None:
 
 
 def _resolve_bound(db: Session, row: SubmissionAccessToken, now: datetime, *, touch: bool) -> Access | None:
-    from app.services.submission_service import SubmissionService, _element_ref
+    from app.services.submission_service import SubmissionService, raw_element_ref
 
     assignment = db.get(SubmissionAssignment, row.assignment_id)
     if assignment is None or assignment.tenant_id != row.tenant_id or assignment.owner_access == "off":
@@ -163,7 +163,7 @@ def _resolve_bound(db: Session, row: SubmissionAccessToken, now: datetime, *, to
     raw = next(
         (
             entry for entry in service._resolve_raw_elements(db, assignment)
-            if _element_ref(event_public_id=entry["event_public_id"], list_entry_public_id=entry["list_entry_public_id"]) == row.element_ref
+            if raw_element_ref(entry) == row.element_ref
         ),
         None,
     )
@@ -181,10 +181,11 @@ def _resolve_bound(db: Session, row: SubmissionAccessToken, now: datetime, *, to
     return Access(token=row, assignment=assignment, element=element, person=person, level=level, tenant_name=tenant_name)
 
 
-def _element_keys(db: Session, element_ref: str) -> tuple[int | None, int | None]:
-    from app.services.submission_service import _parse_element_ref
+def _element_filter(db: Session, element_ref: str) -> list:
+    """WHERE-Bedingungen für die Einreichungen des Elements (event_id, list_entry_id, manual_element_id)."""
+    from app.services.submission_service import _parse_element_ref, upload_key_filter
 
-    return _parse_element_ref(db, element_ref)
+    return upload_key_filter(_parse_element_ref(db, element_ref))
 
 
 def can_withdraw(access: Access) -> bool:
@@ -211,11 +212,8 @@ def can_upload(access: Access) -> bool:
 
 def _set_withdrawn(db: Session, assignment: SubmissionAssignment, element_ref: str, value: datetime | None) -> int:
     """Markiert (value) bzw. entmarkiert (None) alle Dateien des Elements - Abgabebox und App."""
-    event_id, list_entry_id = _element_keys(db, element_ref)
     upload_ids = select(SubmissionUpload.id).where(
-        SubmissionUpload.assignment_id == assignment.id,
-        SubmissionUpload.event_id == event_id if event_id is not None else SubmissionUpload.event_id.is_(None),
-        SubmissionUpload.list_entry_id == list_entry_id if list_entry_id is not None else SubmissionUpload.list_entry_id.is_(None),
+        SubmissionUpload.assignment_id == assignment.id, *_element_filter(db, element_ref),
     )
     current = SubmissionUploadFile.withdrawn_at.is_(None) if value is not None else SubmissionUploadFile.withdrawn_at.is_not(None)
     changed = db.execute(
@@ -284,14 +282,12 @@ def restore(db: Session, assignment: SubmissionAssignment, element_ref: str) -> 
 def withdrawn_count(db: Session, assignment: SubmissionAssignment, element_ref: str) -> int:
     from sqlalchemy import func
 
-    event_id, list_entry_id = _element_keys(db, element_ref)
     files = db.scalar(
         select(func.count(SubmissionUploadFile.id))
         .join(SubmissionUpload, SubmissionUpload.id == SubmissionUploadFile.upload_id)
         .where(
             SubmissionUpload.assignment_id == assignment.id, SubmissionUploadFile.withdrawn_at.is_not(None),
-            SubmissionUpload.event_id == event_id if event_id is not None else SubmissionUpload.event_id.is_(None),
-            SubmissionUpload.list_entry_id == list_entry_id if list_entry_id is not None else SubmissionUpload.list_entry_id.is_(None),
+            *_element_filter(db, element_ref),
         )
     ) or 0
     linked = db.scalar(

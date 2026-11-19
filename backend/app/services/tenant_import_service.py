@@ -82,6 +82,7 @@ from app.models import (
     StoredFile,
     SubmissionAssignment,
     SubmissionLink,
+    SubmissionManualElement,
     SubmissionUpload,
     SubmissionUploadFile,
     SubmissionUploadLog,
@@ -213,6 +214,8 @@ class TenantImportService:
         self.lookup_cache = LookupCodeCache(db)
         self.user_cache = UserIdentityCache(db)
         self.warnings: list[str] = []
+        # Stichtag von Einzelabgaben aus Exporten vor 0198 (neue Abgabe-ID -> Datum)
+        self._manual_deadlines: dict[int, Any] = {}
         # SHA-256 der tatsächlich importierten PDF-Bytes (TYPST-007): nur dafür gilt ein
         # Register-Eintrag aus dem Archiv als belegt.
         self._imported_pdf_hashes: set[str] = set()
@@ -465,8 +468,9 @@ class TenantImportService:
         self._restore_last_word_import_template(new_tenant, template_map)
         self._import_template_participants(template_map, participant_map)
         submission_assignment_map = self._import_submission_assignments(new_tenant.id, list_definition_map, cycle_config_map)
+        manual_element_map = self._import_submission_manual_elements(new_tenant.id, submission_assignment_map, participant_map)
         self._import_submission_links(new_tenant.id, submission_assignment_map)
-        submission_upload_map = self._import_submission_uploads(submission_assignment_map, event_map, list_entry_map)
+        submission_upload_map = self._import_submission_uploads(submission_assignment_map, event_map, list_entry_map, manual_element_map)
         self._import_submission_upload_logs(submission_assignment_map)
         stored_file_map = self._import_stored_files(new_tenant.id)
         self._import_submission_upload_files(submission_upload_map, stored_file_map)
@@ -1406,14 +1410,59 @@ class TenantImportService:
                 if overrides["cycle_config_id"] is None:
                     overrides["cycle_offsets"] = []
                     self.warnings.append(f"Abgabe '{data.get('title')}': Zyklus fehlt im Export, Zyklus-Filter entfernt.")
+            if data.get("source_type") == "manual":
+                # Seit 0198 hat eine Einzelabgabe keinen eigenen Stichtag mehr: ein Export davor
+                # bringt ihn mit, er wird zum Ende des Standard-Elements (_import_submission_manual_elements)
+                overrides["deadline"] = None
             new_row = self._build(SubmissionAssignment, data, overrides)
             self.db.add(new_row)
             self.db.flush()
             id_map[row["id"]] = new_row.id
+            if data.get("source_type") == "manual" and data.get("deadline"):
+                self._manual_deadlines[new_row.id] = coerce_value(SubmissionAssignment.__table__.c.deadline, data["deadline"])
         self.db.commit()
         return id_map
 
-    def _import_submission_uploads(self, submission_assignment_map: dict[int, int], event_map: dict[int, int], list_entry_map: dict[int, int]) -> dict[int, int]:
+    def _import_submission_manual_elements(
+        self, new_tenant_id: int, submission_assignment_map: dict[int, int], participant_map: dict[int, int]
+    ) -> dict[int, int]:
+        """Elemente der Einzelabgaben (0198). Verantwortliche nur, wenn die Person mit importiert
+        wurde (nie eine ID aus dem Archiv ungeprüft übernehmen). Exporte vor 0198 haben keine
+        Elemente: dann entsteht beim ersten Abgleich bzw. Bearbeiten das Standard-Element nicht von
+        selbst - deshalb hier aus Titel und Stichtag nachholen."""
+        id_map: dict[int, int] = {}
+        with_elements: set[int] = set()
+        for row in self._t("submission_manual_element"):
+            new_assignment_id = submission_assignment_map.get(row.get("assignment_id"))
+            if new_assignment_id is None:
+                continue
+            responsible = [participant_map[int(pid)] for pid in (row.get("responsible_participant_ids") or []) if int(pid) in participant_map]
+            new_row = self._build(SubmissionManualElement, row, {
+                "tenant_id": new_tenant_id, "assignment_id": new_assignment_id, "responsible_participant_ids": responsible,
+            })
+            self.db.add(new_row)
+            self.db.flush()
+            id_map[row["id"]] = new_row.id
+            with_elements.add(new_assignment_id)
+        for assignment in self.db.scalars(
+            select(SubmissionAssignment).where(
+                SubmissionAssignment.tenant_id == new_tenant_id, SubmissionAssignment.source_type == "manual"
+            )
+        ):
+            if assignment.id in with_elements:
+                continue
+            self.db.add(SubmissionManualElement(
+                tenant_id=new_tenant_id, assignment_id=assignment.id, is_default=True,
+                name=(assignment.title or "").strip()[:200] or "Abgabe", window_end=self._manual_deadlines.get(assignment.id), sort_index=0,
+            ))
+        self.db.commit()
+        return id_map
+
+    def _import_submission_uploads(
+        self, submission_assignment_map: dict[int, int], event_map: dict[int, int], list_entry_map: dict[int, int],
+        manual_element_map: dict[int, int] | None = None,
+    ) -> dict[int, int]:
+        manual_element_map = manual_element_map or {}
         id_map: dict[int, int] = {}
         for row in self._t("submission_upload"):
             new_assignment_id = submission_assignment_map.get(row["assignment_id"])
@@ -1421,12 +1470,16 @@ class TenantImportService:
                 continue
             new_event_id = event_map.get(row["event_id"]) if row.get("event_id") else None
             new_list_entry_id = list_entry_map.get(row["list_entry_id"]) if row.get("list_entry_id") else None
+            new_manual_element_id = manual_element_map.get(row["manual_element_id"]) if row.get("manual_element_id") else None
             if row.get("event_id") and new_event_id is None:
                 continue
             if row.get("list_entry_id") and new_list_entry_id is None:
                 continue
+            if row.get("manual_element_id") and new_manual_element_id is None:
+                continue
             new_row = self._build(SubmissionUpload, row, {
                 "assignment_id": new_assignment_id, "event_id": new_event_id, "list_entry_id": new_list_entry_id,
+                "manual_element_id": new_manual_element_id,
             })
             self.db.add(new_row)
             self.db.flush()

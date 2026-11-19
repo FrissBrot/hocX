@@ -636,7 +636,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
   const isDoneElement = (el: SubmissionElementStatusEntry) => el.status === "submitted" || el.status === "closed";
   const doneElementCount = elements.filter(isDoneElement).length;
   const visibleElements = elementFilter === "all" ? elements : elements.filter((el) => (elementFilter === "done") === isDoneElement(el));
-  const sectionLabel = selectedAssignment?.source_type === "manual" ? t("assignmentLabel") : selectedAssignment?.source_type === "events" ? t("eventElementsLabel") : t("listElementsLabel");
+  const sectionLabel = selectedAssignment?.source_type === "manual" ? t("manualElementsLabel") : selectedAssignment?.source_type === "events" ? t("eventElementsLabel") : t("listElementsLabel");
 
   function metaLine(assignment: SubmissionAssignment): string {
     if (assignment.source_type === "events") {
@@ -655,8 +655,11 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
       return t("sourceSummary", { source, window });
     }
     if (assignment.source_type === "manual") {
-      const deadline = assignment.deadline ? t("deadlineNamed", { date: formatDateShort(assignment.deadline, t) }) : t("noDeadlineOpenUntilClosed");
-      return t("sourceSummaryManual", { deadline });
+      // Elemente mit eigenem Stichtag (Migration 0198): Anzahl und frühester Stichtag
+      const elements = assignment.manual_elements ?? [];
+      const next = elements.map((element) => element.window_end).filter((value): value is string => Boolean(value)).sort()[0];
+      const deadline = next ? t("deadlineNamed", { date: formatDateShort(next, t) }) : t("noDeadlineOpenUntilClosed");
+      return t("sourceSummaryManual", { elements: t("manualElementCount", { count: Math.max(1, elements.length) }), deadline });
     }
     const list = availableLists.find((l) => l.id === assignment.list_definition_id);
     const source = list ? t("sourceListNamed", { name: list.name }) : t("sourceList");
@@ -1062,6 +1065,10 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
         availableCycleConfigs={availableCycleConfigs}
         availableEvents={availableEvents}
         availableReviewers={availableReviewers}
+        availableParticipants={availableParticipants}
+        confirmRemoveElement={(name) =>
+          confirm({ message: t("wizard.manual.removeConfirm", { name }), tone: "danger", confirmLabel: t("wizard.manual.removeConfirmLabel") })
+        }
         onSubmit={submit}
         onClose={() => setModalOpen(false)}
         onManageLinks={openLinksFromForm}

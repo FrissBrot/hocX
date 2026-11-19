@@ -124,7 +124,7 @@
   "logValidationFailed": "Validierungsfehler",
   "makeDefaultButton": "Als Standard festlegen",
   "manageLinksAction": "Abgabe-Links verwalten",
-  "manualSubject": "Diese Abgabe hat ein einziges Abgabefeld, unabhängig von Terminen und Listen.",
+  "manualSubject": "Diese Einzelabgabe hat {count, plural, one {ein Abgabeelement} other {# Abgabeelemente}}, unabhängig von Terminen und Listen.",
   "maxFilesCount": "max. {count, plural, one {# Datei} other {# Dateien}}",
   "maxFilesLabel": "Max. Dateien",
   "maxSizeLabel": "Max. Grösse (MB)",
@@ -205,9 +205,9 @@
   "sourceListDescription": "Ein Abgabefeld pro Listeneintrag, ein gemeinsamer Stichtag.",
   "sourceListNamed": "Liste „{name}“",
   "sourceManual": "Einzelabgabe",
-  "sourceManualDescription": "Ein einzelnes Abgabefeld, unabhängig von Terminen und Listen.",
+  "sourceManualDescription": "Abgabeelemente von Hand anlegen, unabhängig von Terminen und Listen.",
   "sourceSummary": "Quelle: {source} · {window}",
-  "sourceSummaryManual": "Quelle: Einzelabgabe · {deadline}",
+  "sourceSummaryManual": "Quelle: Einzelabgabe · {elements} · {deadline}",
   "special1": "Spezial 1",
   "special2": "Spezial 2",
   "special3": "Spezial 3",
@@ -342,7 +342,6 @@
     "withDeadline": "Mit Stichtag",
     "openUntilClosed": "Offen bis von Hand geschlossen",
     "deadlineHelp": "Bis zu diesem Tag kann abgegeben werden. Die Pendenzen der Verantwortlichen sind an diesem Tag fällig.",
-    "noResponsibleManual": "Einzelabgaben haben keine verantwortliche Person – es entstehen keine Pendenzen.",
     "noResponsibleList": "Die gewählte Liste hat keine Personen-Spalte. Ohne sie gibt es keine Verantwortlichen.",
     "ownerDaysBefore": "Link gültig für",
     "ownerDaysAfter": "Tage ab Versand der Mail",
@@ -356,14 +355,16 @@
       "window": "Zeitraum",
       "responsible": "Verantwortlich",
       "files": "Dateien",
-      "access": "Zugriff"
+      "access": "Zugriff",
+      "windowManual": "Elemente"
     },
     "questions": {
       "basics": "Was soll abgegeben werden?",
       "window": "Wann ist die Abgabe offen?",
       "responsible": "Wer ist verantwortlich?",
       "files": "Welche Dateien?",
-      "access": "Wer kann abgeben und wer sieht die Dateien?"
+      "access": "Wer kann abgeben und wer sieht die Dateien?",
+      "windowManual": "Welche Elemente sollen abgegeben werden?"
     },
     "visibilityChip": {
       "default": "Standard",
@@ -391,14 +392,13 @@
       "listDetail": "Jeder Eintrag bekommt ein eigenes Abgabefeld",
       "listNoName": "Liste – fehlt",
       "listMissing": "Bitte eine Liste wählen",
-      "manualDetail": "Ein einziges Abgabefeld für alle",
+      "manualDetail": "Abgabeelemente von Hand angelegt",
       "before": "ab {count, plural, one {# Tag} other {# Tagen}} vorher",
       "after": "bis {count, plural, one {# Tag} other {# Tage}} danach",
       "openUntilClosed": "offen bis von Hand geschlossen",
       "noDeadline": "Kein Stichtag",
       "deadlineDetail": "Die Pendenzen der Verantwortlichen sind an diesem Tag fällig",
       "noDeadlineDetail": "Bleibt offen, bis sie von Hand geschlossen wird.",
-      "responsibleManual": "Bei Einzelabgaben nicht möglich",
       "responsibleNoColumn": "Liste ohne Personen-Spalte",
       "responsibleValue": "{name} · Link: {mode}",
       "todoPerEvent": "Pendenz je Termin",
@@ -415,7 +415,34 @@
       "noLink": "Kein Link",
       "reviewers": "{count, plural, =0 {keine Prüfer} one {# Prüfer} other {# Prüfer}}",
       "visibility": "Dateien sehen: {who}",
-      "unreachable": "Ohne Link ist die Abgabe nicht erreichbar"
+      "unreachable": "Ohne Link ist die Abgabe nicht erreichbar",
+      "manualElements": "{count, plural, one {# Element} other {# Elemente}}",
+      "manualNextDeadline": "nächster Stichtag {date}",
+      "manualResponsibleValue": "{count, plural, one {# Element} other {# Elemente}} mit Verantwortlichen · Link: {mode}",
+      "todoPerElement": "Pendenz je Element"
+    },
+    "manual": {
+      "elementsLabel": "Abgabeelemente",
+      "help": "Jedes Element ist ein eigenes Abgabefeld: eigene Kachel, eigener Upload in der Abgabebox, eigene Pendenz. Ohne Stichtag bleibt es offen, bis es von Hand geschlossen wird.",
+      "nameLabel": "Name",
+      "namePlaceholder": "z. B. Anmeldeformular",
+      "startLabel": "Start (optional)",
+      "endLabel": "Stichtag",
+      "startAria": "Start von Element {index}",
+      "endAria": "Stichtag von Element {index}",
+      "addElement": "+ Element",
+      "removeElement": "Element «{name}» entfernen",
+      "unnamed": "ohne Namen",
+      "windowHelp": "Ohne Start ist das Element sofort offen. Die Pendenzen der Verantwortlichen sind am Stichtag fällig.",
+      "responsibleHelp": "Wer für ein Element verantwortlich ist, bekommt dafür eine Pendenz, fällig am Stichtag des Elements.",
+      "responsibleNone": "Niemand",
+      "responsibleAria": "Verantwortliche für «{name}»",
+      "noParticipants": "Keine Personen gefunden",
+      "elementsMissing": "Mindestens ein Element anlegen",
+      "nameMissing": "Jedes Element braucht einen Namen",
+      "windowInvalid": "Bei einem Element liegt der Start nach dem Stichtag",
+      "removeConfirm": "Element «{name}» entfernen? Bereits eingereichte Dateien dieses Elements werden beim Speichern gelöscht.",
+      "removeConfirmLabel": "Entfernen"
     }
   },
   "offsetOutOfRange": "Zeitfenster: höchstens {max} Tage vor bzw. nach dem Termin",
@@ -424,5 +451,10 @@
     "all": "Alle",
     "done": "Abgegeben",
     "pending": "Ausstehend"
-  }
+  },
+  "manualNextDeadlineSentence": "Der nächste Stichtag ist am {date}.",
+  "manualNoDeadlineSentence": "Ohne Stichtag bleibt ein Element offen, bis es von Hand geschlossen wird.",
+  "manualTodoSentence": "{count, plural, one {Für ein Element entsteht eine Pendenz.} other {Für # Elemente entsteht je eine Pendenz.}}",
+  "manualElementsLabel": "Abgabeelemente",
+  "manualElementCount": "{count, plural, one {# Element} other {# Elemente}}"
 }

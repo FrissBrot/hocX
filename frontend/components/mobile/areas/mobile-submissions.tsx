@@ -168,7 +168,8 @@ export function MobileSubmissions({
       const list = availableLists.find((item) => item.id === assignment.list_definition_id);
       return `${list ? t("sourceListNamed", { name: list.name }) : t("sourceList")} · ${deadline}`;
     }
-    return `${t("sourceManual")} · ${deadline}`;
+    // Einzelabgabe: Anzahl Elemente (Migration 0198)
+    return `${t("sourceManual")} · ${t("manualElementCount", { count: Math.max(1, assignment.manual_elements?.length ?? 0) })}`;
   }
 
   async function openAssignment(assignment: SubmissionAssignment) {
@@ -256,6 +257,10 @@ export function MobileSubmissions({
         availableCycleConfigs={availableCycleConfigs}
         availableEvents={availableEvents}
         availableReviewers={availableReviewers}
+        availableParticipants={availableParticipants}
+        confirmRemoveElement={(name) =>
+          confirm({ message: t("wizard.manual.removeConfirm", { name }), tone: "danger", confirmLabel: t("wizard.manual.removeConfirmLabel") })
+        }
         onSubmit={save}
         onClose={() => setFormOpen(false)}
         onManageLinks={() => {

@@ -13,6 +13,10 @@ def _stub(monkeypatch, withdrawn: set):
     calls = []
     monkeypatch.setattr(repository, "latest_status_by_element", lambda db, assignment_id: {})
     monkeypatch.setattr(repository, "count_files_by_element", lambda db, assignment_id: {})
+    # Einzelabgabe mit dem Standard-Element «manual» (Migration 0198)
+    monkeypatch.setattr(repository, "list_manual_elements", lambda db, assignment_id: [
+        {"id": 1, "public_id": None, "is_default": True, "name": "Bericht", "window_start": None, "window_end": None, "sort_index": 0},
+    ])
 
     def withdrawn_elements(db, assignment_id):
         calls.append(assignment_id)
@@ -23,7 +27,7 @@ def _stub(monkeypatch, withdrawn: set):
 
 
 def test_withdrawn_element_is_locked_only_with_the_option(monkeypatch):
-    calls = _stub(monkeypatch, {(None, None)})
+    calls = _stub(monkeypatch, {(None, None, None)})
     assert len(element_resolver.resolve_open_elements(None, _assignment())) == 1
     assert calls == []  # ohne Option keine zusätzliche Abfrage
     assert element_resolver.resolve_open_elements(None, _assignment(owner_resubmit_only_personal=True)) == []
@@ -31,5 +35,5 @@ def test_withdrawn_element_is_locked_only_with_the_option(monkeypatch):
 
 
 def test_other_elements_stay_open(monkeypatch):
-    _stub(monkeypatch, {(99, None)})
+    _stub(monkeypatch, {(99, None, None)})
     assert len(element_resolver.resolve_open_elements(None, _assignment(owner_resubmit_only_personal=True))) == 1

@@ -124,7 +124,7 @@
   "logValidationFailed": "Erreur de validation",
   "makeDefaultButton": "Définir par défaut",
   "manageLinksAction": "Gérer les liens de dépôt",
-  "manualSubject": "Ce dépôt a un seul champ, indépendant des événements et des listes.",
+  "manualSubject": "Ce dépôt unique comporte {count, plural, one {un élément} other {# éléments}}, indépendamment des événements et des listes.",
   "maxFilesCount": "max. {count, plural, one {# fichier} other {# fichiers}}",
   "maxFilesLabel": "Nb max. de fichiers",
   "maxSizeLabel": "Taille max. (Mo)",
@@ -205,9 +205,9 @@
   "sourceListDescription": "Un champ de dépôt par entrée de liste, une échéance commune.",
   "sourceListNamed": "Liste « {name} »",
   "sourceManual": "Remise unique",
-  "sourceManualDescription": "Un seul champ de dépôt, indépendant des événements et des listes.",
+  "sourceManualDescription": "Créer les éléments de dépôt à la main, indépendamment des événements et des listes.",
   "sourceSummary": "Source : {source} · {window}",
-  "sourceSummaryManual": "Source : remise unique · {deadline}",
+  "sourceSummaryManual": "Source : remise unique · {elements} · {deadline}",
   "special1": "Spécial 1",
   "special2": "Spécial 2",
   "special3": "Spécial 3",
@@ -342,7 +342,6 @@
     "withDeadline": "Avec date limite",
     "openUntilClosed": "Ouvert jusqu'à fermeture manuelle",
     "deadlineHelp": "Les dépôts sont possibles jusqu'à ce jour. Les tâches des responsables sont dues ce jour-là.",
-    "noResponsibleManual": "Les dépôts uniques n'ont pas de responsable – aucune tâche n'est créée.",
     "noResponsibleList": "La liste choisie n'a pas de colonne de personnes. Sans elle, il n'y a pas de responsables.",
     "ownerDaysBefore": "Lien valable",
     "ownerDaysAfter": "jours après l'envoi du courriel",
@@ -356,14 +355,16 @@
       "window": "Période",
       "responsible": "Responsable",
       "files": "Fichiers",
-      "access": "Accès"
+      "access": "Accès",
+      "windowManual": "Éléments"
     },
     "questions": {
       "basics": "Que faut-il déposer ?",
       "window": "Quand le dépôt est-il ouvert ?",
       "responsible": "Qui est responsable ?",
       "files": "Quels fichiers ?",
-      "access": "Qui peut déposer et qui voit les fichiers ?"
+      "access": "Qui peut déposer et qui voit les fichiers ?",
+      "windowManual": "Quels éléments faut-il déposer ?"
     },
     "visibilityChip": {
       "default": "Standard",
@@ -391,14 +392,13 @@
       "listDetail": "Chaque entrée reçoit son propre champ de dépôt",
       "listNoName": "Liste – manquante",
       "listMissing": "Veuillez choisir une liste",
-      "manualDetail": "Un seul champ de dépôt pour tous",
+      "manualDetail": "Éléments de dépôt créés à la main",
       "before": "dès {count, plural, one {# jour} other {# jours}} avant",
       "after": "jusqu'à {count, plural, one {# jour} other {# jours}} après",
       "openUntilClosed": "ouvert jusqu'à fermeture manuelle",
       "noDeadline": "Pas de date limite",
       "deadlineDetail": "Les tâches des responsables sont dues ce jour-là",
       "noDeadlineDetail": "Reste ouvert jusqu'à sa fermeture manuelle.",
-      "responsibleManual": "Impossible pour les dépôts uniques",
       "responsibleNoColumn": "Liste sans colonne de personnes",
       "responsibleValue": "{name} · Lien : {mode}",
       "todoPerEvent": "Tâche par rendez-vous",
@@ -415,7 +415,34 @@
       "noLink": "Aucun lien",
       "reviewers": "{count, plural, =0 {aucun vérificateur} one {# vérificateur} other {# vérificateurs}}",
       "visibility": "Voient les fichiers : {who}",
-      "unreachable": "Sans lien, le dépôt n'est pas accessible"
+      "unreachable": "Sans lien, le dépôt n'est pas accessible",
+      "manualElements": "{count, plural, one {# élément} other {# éléments}}",
+      "manualNextDeadline": "prochaine échéance {date}",
+      "manualResponsibleValue": "{count, plural, one {# élément} other {# éléments}} avec responsables · Lien : {mode}",
+      "todoPerElement": "Tâche par élément"
+    },
+    "manual": {
+      "elementsLabel": "Éléments de dépôt",
+      "help": "Chaque élément est un champ de dépôt à part : sa propre tuile, son propre envoi dans la boîte de dépôt, sa propre tâche. Sans échéance, il reste ouvert jusqu'à sa fermeture manuelle.",
+      "nameLabel": "Nom",
+      "namePlaceholder": "p. ex. Formulaire d'inscription",
+      "startLabel": "Début (facultatif)",
+      "endLabel": "Échéance",
+      "startAria": "Début de l'élément {index}",
+      "endAria": "Échéance de l'élément {index}",
+      "addElement": "+ Élément",
+      "removeElement": "Supprimer l'élément «{name}»",
+      "unnamed": "sans nom",
+      "windowHelp": "Sans début, l'élément est ouvert immédiatement. Les tâches des responsables sont dues à l'échéance.",
+      "responsibleHelp": "Les responsables d'un élément reçoivent une tâche, due à l'échéance de l'élément.",
+      "responsibleNone": "Personne",
+      "responsibleAria": "Responsables de «{name}»",
+      "noParticipants": "Aucune personne trouvée",
+      "elementsMissing": "Créer au moins un élément",
+      "nameMissing": "Chaque élément doit avoir un nom",
+      "windowInvalid": "Un élément commence après son échéance",
+      "removeConfirm": "Supprimer l'élément «{name}» ? Les fichiers déjà déposés pour cet élément seront supprimés à l'enregistrement.",
+      "removeConfirmLabel": "Supprimer"
     }
   },
   "offsetOutOfRange": "Période : {max} jours au maximum avant ou après l’événement",
@@ -424,5 +451,10 @@
     "all": "Tous",
     "done": "Remis",
     "pending": "En attente"
-  }
+  },
+  "manualNextDeadlineSentence": "La prochaine échéance est le {date}.",
+  "manualNoDeadlineSentence": "Sans échéance, un élément reste ouvert jusqu'à sa fermeture manuelle.",
+  "manualTodoSentence": "{count, plural, one {Un élément crée une tâche.} other {# éléments créent chacun une tâche.}}",
+  "manualElementsLabel": "Éléments de dépôt",
+  "manualElementCount": "{count, plural, one {# élément} other {# éléments}}"
 }

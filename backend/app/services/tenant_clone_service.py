@@ -45,6 +45,7 @@ from app.models import (
     StoredFile,
     SubmissionAssignment,
     SubmissionLink,
+    SubmissionManualElement,
     SubmissionUpload,
     SubmissionUploadFile,
     SubmissionUploadLog,
@@ -267,9 +268,15 @@ class TenantCloneService:
         submission_assignment_map = self._clone_submission_assignments(
             db, source.id, new_tenant.id, list_definition_map=list_definition_map, cycle_config_map=cycle_config_map
         )
+        manual_element_map = self._clone_submission_manual_elements(
+            db, source.id, new_tenant.id, submission_assignment_map=submission_assignment_map, participant_map=participant_map
+        )
+        # "manual-<public_id>" in Upload-Log, Pendenzen und Galerie-Verknüpfungen (0198)
+        self._element_ref_public_ids.update(self._public_id_map(db, SubmissionManualElement, manual_element_map))
         self._clone_submission_links(db, source.id, new_tenant.id, submission_assignment_map=submission_assignment_map)
         submission_upload_map = self._clone_submission_uploads(
-            db, submission_assignment_map=submission_assignment_map, event_map=event_map, list_entry_map=list_entry_map
+            db, submission_assignment_map=submission_assignment_map, event_map=event_map, list_entry_map=list_entry_map,
+            manual_element_map=manual_element_map,
         )
         self._clone_submission_upload_logs(db, submission_assignment_map=submission_assignment_map)
         stored_file_map = self._clone_stored_files(db, source.id, new_tenant.id)
@@ -855,9 +862,37 @@ class TenantCloneService:
             )
         db.commit()
 
-    def _clone_submission_uploads(
-        self, db: Session, *, submission_assignment_map: dict[int, int], event_map: dict[int, int], list_entry_map: dict[int, int]
+    def _clone_submission_manual_elements(
+        self, db: Session, source_tenant_id: int, new_tenant_id: int, *,
+        submission_assignment_map: dict[int, int], participant_map: dict[int, int],
     ) -> dict[int, int]:
+        """Elemente der Einzelabgaben (0198); Verantwortliche nur über die Personen-Zuordnung des Klons."""
+        rows = db.scalars(
+            select(SubmissionManualElement).where(SubmissionManualElement.tenant_id == source_tenant_id).order_by(SubmissionManualElement.id)
+        ).all()
+        id_map: dict[int, int] = {}
+        for row in rows:
+            new_assignment_id = submission_assignment_map.get(row.assignment_id)
+            if new_assignment_id is None:
+                continue
+            new_row = _copy_row(row, {
+                "tenant_id": new_tenant_id,
+                "assignment_id": new_assignment_id,
+                "responsible_participant_ids": [
+                    participant_map[int(pid)] for pid in (row.responsible_participant_ids or []) if int(pid) in participant_map
+                ],
+            })
+            db.add(new_row)
+            db.flush()
+            id_map[row.id] = new_row.id
+        db.commit()
+        return id_map
+
+    def _clone_submission_uploads(
+        self, db: Session, *, submission_assignment_map: dict[int, int], event_map: dict[int, int], list_entry_map: dict[int, int],
+        manual_element_map: dict[int, int] | None = None,
+    ) -> dict[int, int]:
+        manual_element_map = manual_element_map or {}
         if not submission_assignment_map:
             return {}
         rows = db.scalars(select(SubmissionUpload).where(SubmissionUpload.assignment_id.in_(submission_assignment_map.keys()))).all()
@@ -872,10 +907,14 @@ class TenantCloneService:
                 continue
             if row.list_entry_id and new_list_entry_id is None:
                 continue
+            new_manual_element_id = manual_element_map.get(row.manual_element_id) if row.manual_element_id else None
+            if row.manual_element_id and new_manual_element_id is None:
+                continue
             new_row = _copy_row(row, {
                 "assignment_id": new_assignment_id,
                 "event_id": new_event_id,
                 "list_entry_id": new_list_entry_id,
+                "manual_element_id": new_manual_element_id,
             })
             db.add(new_row)
             db.flush()

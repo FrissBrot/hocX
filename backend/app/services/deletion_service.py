@@ -289,9 +289,18 @@ def preview_read(files: list[DeletionFile]):
     return DeletionPreview(files=items)
 
 
-def erase_uploads_of(db: Session, *, event_id: int | None = None, list_entry_id: int | None = None) -> int:
-    """Einreichungen hängen per CASCADE an Termin bzw. Listeneintrag. Vor deren Löschung hier die
-    Dateien vollständig löschen, sonst blieben sie verwaist im Abgabebox-Speicher (PRIV-003)."""
+def erase_uploads_of(
+    db: Session,
+    *,
+    event_id: int | None = None,
+    list_entry_id: int | None = None,
+    manual_element_id: int | None = None,
+    manual_default_assignment_id: int | None = None,
+) -> int:
+    """Einreichungen hängen per CASCADE an Termin bzw. Listeneintrag bzw. Element einer Einzelabgabe
+    (0198). Vor deren Löschung hier die Dateien vollständig löschen, sonst blieben sie verwaist im
+    Abgabebox-Speicher (PRIV-003). Das Standard-Element einer Einzelabgabe hat kein Ziel in der
+    Einreichung: `manual_default_assignment_id` meint die Einreichungen ohne Ziel dieser Abgabe."""
     statement = (
         select(SubmissionUploadFile, StoredFile)
         .join(StoredFile, StoredFile.id == SubmissionUploadFile.stored_file_id)
@@ -301,6 +310,15 @@ def erase_uploads_of(db: Session, *, event_id: int | None = None, list_entry_id:
         statement = statement.where(SubmissionUpload.event_id == event_id)
     elif list_entry_id is not None:
         statement = statement.where(SubmissionUpload.list_entry_id == list_entry_id)
+    elif manual_element_id is not None:
+        statement = statement.where(SubmissionUpload.manual_element_id == manual_element_id)
+    elif manual_default_assignment_id is not None:
+        statement = statement.where(
+            SubmissionUpload.assignment_id == manual_default_assignment_id,
+            SubmissionUpload.event_id.is_(None),
+            SubmissionUpload.list_entry_id.is_(None),
+            SubmissionUpload.manual_element_id.is_(None),
+        )
     else:
         return 0
     rows = [(row[0], row[1]) for row in db.execute(statement).all()]

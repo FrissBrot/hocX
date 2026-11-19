@@ -462,7 +462,8 @@ def _submissions(db: Session, tenant_id: int, lang: str) -> list[tuple[str, str,
     folder = _t(lang, "tenant.folder.submissions")
     rows = _rows(db, """
         SELECT a.title AS assignment, s.original_name, s.storage_path,
-               e.event_date, e.title AS event_title, le.sort_index AS entry_index, ld.name AS list_name
+               e.event_date, e.title AS event_title, le.sort_index AS entry_index, ld.name AS list_name,
+               COALESCE(m.name, md.name) AS manual_name
         FROM submission_upload_file f
         JOIN submission_upload u ON u.id = f.upload_id
         JOIN submission_assignment a ON a.id = u.assignment_id
@@ -470,6 +471,10 @@ def _submissions(db: Session, tenant_id: int, lang: str) -> list[tuple[str, str,
         LEFT JOIN event e ON e.id = u.event_id
         LEFT JOIN list_entry le ON le.id = u.list_entry_id
         LEFT JOIN list_definition ld ON ld.id = le.list_definition_id
+        -- Elemente einer Einzelabgabe (0198): eigenes Element bzw. Standard-Element (ohne Ziel)
+        LEFT JOIN submission_manual_element m ON m.id = u.manual_element_id
+        LEFT JOIN submission_manual_element md
+          ON md.assignment_id = a.id AND md.is_default AND u.event_id IS NULL AND u.list_entry_id IS NULL AND u.manual_element_id IS NULL
         WHERE a.tenant_id = :t AND s.scan_status = 'clean'
         ORDER BY a.title, u.id, f.sort_index
     """, {"t": tenant_id})
@@ -479,6 +484,8 @@ def _submissions(db: Session, tenant_id: int, lang: str) -> list[tuple[str, str,
             element = f"{_fmt_date(r['event_date'])} {r['event_title'] or ''}".strip()
         elif r["entry_index"] is not None:
             element = f"{r['list_name'] or ''} {r['entry_index'] + 1}".strip()
+        elif r["manual_name"]:
+            element = r["manual_name"]
         else:
             element = "-"
         member = f"{folder}/{safe_name(r['assignment'], 'Abgabe')}/{safe_name(element, '-')}/{safe_name(r['original_name'])}"

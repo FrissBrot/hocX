@@ -138,6 +138,15 @@ def collect(db: Session, person: AppUser) -> dict[str, list[dict[str, Any]]]:
         ORDER BY p.protocol_date, e.id
     """, params)]
 
+    # Verantwortlich für Elemente von Einzelabgaben (Migration 0198, von Hand zugewiesen)
+    data["submission_elements"] = [dict(row) for row in _rows(db, """
+        SELECT a.title, m.name, m.window_end AS due_date
+        FROM submission_manual_element m JOIN submission_assignment a ON a.id = m.assignment_id
+        WHERE m.tenant_id = :tenant_id AND a.tenant_id = :tenant_id
+          AND m.responsible_participant_ids @> CAST(:id_array AS jsonb)
+        ORDER BY a.title, m.sort_index, m.id
+    """, {**params, "id_array": json.dumps([pid])})]
+
     roles = (("organizer_ids", "organizer"), ("leadership_ids", "leadership"), ("participant_ids", "participant"),
              ("spezial1_ids", "special1"), ("spezial2_ids", "special2"), ("spezial3_ids", "special3"))
     data["events"] = []
@@ -226,6 +235,7 @@ _SECTIONS: dict[str, list[str]] = {
     "todos": ["task", "due_date", "status", "completed_at", "protocol", "notes"],
     "notifications": ["kind", "status", "created_at", "sent_at"],
     "responsibilities": ["protocol", "date", "element"],
+    "submission_elements": ["title", "name", "due_date"],
     "agenda_items": ["title", "text", "template", "month", "protocol", "created_at"],
     "events": ["date", "title", "location", "role"],
     "templates": ["template", "exclude_from_attendance"],

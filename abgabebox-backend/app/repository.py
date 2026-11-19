@@ -23,12 +23,31 @@ from app.models import (
     submission_assignment_link_table,
     submission_assignment_table,
     submission_link_table,
+    submission_manual_element_table,
     submission_upload_file_table,
     submission_upload_log_table,
     submission_upload_table,
     system_error_log_table,
     tenant_feature_table,
 )
+
+
+# Schlüssel der Einreichungen eines Elements: (event_id, list_entry_id, manual_element_id). Das
+# Standard-Element einer Einzelabgabe hat kein Ziel (alle drei NULL), wie vor Migration 0198.
+ElementKey = tuple[int | None, int | None, int | None]
+
+
+def element_key(element: dict) -> ElementKey:
+    return element.get("event_id"), element.get("list_entry_id"), element.get("manual_element_id")
+
+
+def _key_filter(key: ElementKey) -> list:
+    columns = (
+        submission_upload_table.c.event_id,
+        submission_upload_table.c.list_entry_id,
+        submission_upload_table.c.manual_element_id,
+    )
+    return [column == value if value is not None else column.is_(None) for column, value in zip(columns, key)]
 
 
 def get_link_by_token(db: Session, *, token: str) -> dict | None:
@@ -170,6 +189,16 @@ def list_list_entries(db: Session, *, list_definition_id: int) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def list_manual_elements(db: Session, *, assignment_id: int) -> list[dict]:
+    """Elemente einer Einzelabgabe in der Reihenfolge aus dem Formular (RLS: nur der Mandant des Links)."""
+    rows = db.execute(
+        select(submission_manual_element_table)
+        .where(submission_manual_element_table.c.assignment_id == assignment_id)
+        .order_by(submission_manual_element_table.c.sort_index.asc(), submission_manual_element_table.c.id.asc())
+    ).mappings()
+    return [dict(row) for row in rows]
+
+
 def get_participants(db: Session, *, participant_ids: list[int]) -> dict[int, dict]:
     if not participant_ids:
         return {}
@@ -186,29 +215,31 @@ def get_events(db: Session, *, event_ids: list[int]) -> dict[int, dict]:
     return {row["id"]: dict(row) for row in rows}
 
 
-def latest_status_by_element(db: Session, *, assignment_id: int) -> dict[tuple[int | None, int | None], str]:
-    """Letzter Status je (event_id, list_entry_id), berechnet aus der append-only Log-Tabelle.
+def latest_status_by_element(db: Session, *, assignment_id: int) -> dict[ElementKey, str]:
+    """Letzter Status je (event_id, list_entry_id, manual_element_id), berechnet aus der append-only
+    Log-Tabelle.
 
-    Bewusst ohne submitted_at (nicht gegrantet) - nur (id, event_id, list_entry_id, status).
+    Bewusst ohne submitted_at (nicht gegrantet) - nur (id, Ziel, status).
     """
     rows = db.execute(
         select(
             submission_upload_table.c.id,
             submission_upload_table.c.event_id,
             submission_upload_table.c.list_entry_id,
+            submission_upload_table.c.manual_element_id,
             submission_upload_table.c.status,
         )
         .where(submission_upload_table.c.assignment_id == assignment_id)
         .order_by(submission_upload_table.c.id.asc())
     )
-    latest: dict[tuple[int | None, int | None], str] = {}
+    latest: dict[ElementKey, str] = {}
     for row in rows:
-        latest[(row.event_id, row.list_entry_id)] = row.status
+        latest[(row.event_id, row.list_entry_id, row.manual_element_id)] = row.status
     return latest
 
 
 def list_checksums_for_element(
-    db: Session, *, assignment_id: int, event_id: int | None, list_entry_id: int | None
+    db: Session, *, assignment_id: int, event_id: int | None, list_entry_id: int | None, manual_element_id: int | None = None
 ) -> set[str]:
     """SHA-256-Checksums aller bereits fuer dieses Abgabe-Element hochgeladenen Dateien -
     fuer die Exakt-Duplikat-Pruefung in routes/public.py (verhindert, dass dieselbe Datei
@@ -228,8 +259,7 @@ def list_checksums_for_element(
         )
         .where(
             submission_upload_table.c.assignment_id == assignment_id,
-            submission_upload_table.c.event_id == event_id,
-            submission_upload_table.c.list_entry_id == list_entry_id,
+            *_key_filter((event_id, list_entry_id, manual_element_id)),
             submission_upload_file_table.c.withdrawn_at.is_(None),
             stored_file_table.c.checksum_sha256.is_not(None),
         )
@@ -261,8 +291,8 @@ def list_assignment_image_hashes(db: Session, *, assignment_id: int) -> list[tup
     return [(row[0], row[1]) for row in rows]
 
 
-def count_files_by_element(db: Session, *, assignment_id: int) -> dict[tuple[int | None, int | None], int]:
-    """Anzahl bereits hochgeladener Dateien je (event_id, list_entry_id), ueber alle
+def count_files_by_element(db: Session, *, assignment_id: int) -> dict[ElementKey, int]:
+    """Anzahl bereits hochgeladener Dateien je (event_id, list_entry_id, manual_element_id), ueber alle
     kumulativen Upload-Vorgaenge eines Elements hinweg - fuer die "bereits hochgeladen"-Anzeige
     in der Abgabebox. Zaehlt nur Zeilenanzahl (submission_upload_file), liest nie original_name/
     storage_path aus stored_file - die restricted Rolle darf hier keine Dateinamen/-pfade
@@ -272,6 +302,7 @@ def count_files_by_element(db: Session, *, assignment_id: int) -> dict[tuple[int
         select(
             submission_upload_table.c.event_id,
             submission_upload_table.c.list_entry_id,
+            submission_upload_table.c.manual_element_id,
             func.count(submission_upload_file_table.c.id).label("file_count"),
         )
         .select_from(
@@ -281,28 +312,30 @@ def count_files_by_element(db: Session, *, assignment_id: int) -> dict[tuple[int
             )
         )
         .where(submission_upload_table.c.assignment_id == assignment_id, submission_upload_file_table.c.withdrawn_at.is_(None))
-        .group_by(submission_upload_table.c.event_id, submission_upload_table.c.list_entry_id)
+        .group_by(
+            submission_upload_table.c.event_id, submission_upload_table.c.list_entry_id, submission_upload_table.c.manual_element_id
+        )
     )
-    counts = {(row.event_id, row.list_entry_id): row.file_count for row in rows}
+    counts: dict[ElementKey, int] = {(row.event_id, row.list_entry_id, row.manual_element_id): row.file_count for row in rows}
     # In der App direkt verknüpfte Dateien zählen wie im Backend (submission_upload_rules) mit; die
     # Rolle darf gallery_image nicht lesen, die Funktion liefert nur Zahlen (Migration 0175)
     for row in db.execute(
-        text("SELECT event_id, list_entry_id, file_count FROM public.submission_linked_file_counts(:assignment_id)"),
+        text("SELECT event_id, list_entry_id, manual_element_id, file_count FROM public.submission_linked_file_counts(:assignment_id)"),
         {"assignment_id": assignment_id},
     ):
-        key = (row.event_id, row.list_entry_id)
+        key = (row.event_id, row.list_entry_id, row.manual_element_id)
         counts[key] = counts.get(key, 0) + row.file_count
     return counts
 
 
-def withdrawn_elements(db: Session, *, assignment_id: int) -> set[tuple[int | None, int | None]]:
-    """Elemente mit zurückgezogenen Dateien (Migration 0182, SECURITY DEFINER, nur im Mandanten
+def withdrawn_elements(db: Session, *, assignment_id: int) -> set[ElementKey]:
+    """Elemente mit zurückgezogenen Dateien (Migration 0182/0198, SECURITY DEFINER, nur im Mandanten
     des gesetzten Links)."""
     rows = db.execute(
-        text("SELECT event_id, list_entry_id FROM public.submission_withdrawn_elements(:assignment_id)"),
+        text("SELECT event_id, list_entry_id, manual_element_id FROM public.submission_withdrawn_elements(:assignment_id)"),
         {"assignment_id": assignment_id},
     ).all()
-    return {(row[0], row[1]) for row in rows}
+    return {(row[0], row[1], row[2]) for row in rows}
 
 
 def insert_upload_log(
@@ -340,6 +373,7 @@ def insert_full_upload(
     list_entry_id: int | None,
     files: list[dict],
     close_after: bool = False,
+    manual_element_id: int | None = None,
 ) -> int:
     """Insert submission_upload + all stored_files + upload_files in one transaction.
 
@@ -354,7 +388,7 @@ def insert_full_upload(
         text("SELECT pg_advisory_xact_lock(:ns, :assignment_id)"),
         {"ns": SUBMISSION_ELEMENT_LOCK_NAMESPACE, "assignment_id": assignment_id},
     )
-    if latest_status_by_element(db, assignment_id=assignment_id).get((event_id, list_entry_id)) == "closed":
+    if latest_status_by_element(db, assignment_id=assignment_id).get((event_id, list_entry_id, manual_element_id)) == "closed":
         db.rollback()
         raise ElementClosedError()
     upload_result = db.execute(
@@ -363,6 +397,7 @@ def insert_full_upload(
             assignment_id=assignment_id,
             event_id=event_id,
             list_entry_id=list_entry_id,
+            manual_element_id=manual_element_id,
             status="submitted",
             submitted_at=datetime.now(UTC),
         )
@@ -404,6 +439,7 @@ def insert_full_upload(
                 assignment_id=assignment_id,
                 event_id=event_id,
                 list_entry_id=list_entry_id,
+                manual_element_id=manual_element_id,
                 status="closed",
                 submitted_at=None,
             )

@@ -473,7 +473,8 @@
       "mentions": "Mentions",
       "agenda_items": "Sujets",
       "todo_fines": "Amendes pour tâches",
-      "notifications": "Notifications par e-mail"
+      "notifications": "Notifications par e-mail",
+      "submission_elements": "Éléments de dépôt"
     },
     "col": {
       "first_name": "Prénom",

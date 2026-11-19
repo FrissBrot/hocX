@@ -445,7 +445,8 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
     # wird unten erneut geprüft. Nur zwei gleichzeitige identische Einreichungen werden dadurch
     # ggf. beide gescannt - gespeichert wird weiterhin nur eine.
     known_checksums = repository.list_checksums_for_element(
-        db, assignment_id=assignment["id"], event_id=element["event_id"], list_entry_id=element["list_entry_id"]
+        db, assignment_id=assignment["id"], event_id=element["event_id"], list_entry_id=element["list_entry_id"],
+        manual_element_id=element.get("manual_element_id"),
     )
     known_checksums = set(known_checksums)
     to_scan = []
@@ -463,7 +464,8 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
         # Keep the received count stable so the public response does not reveal duplicates.
         files_received = len(contents)
         existing_checksums = repository.list_checksums_for_element(
-            db, assignment_id=assignment["id"], event_id=element["event_id"], list_entry_id=element["list_entry_id"]
+            db, assignment_id=assignment["id"], event_id=element["event_id"], list_entry_id=element["list_entry_id"],
+            manual_element_id=element.get("manual_element_id"),
         )
         unique_contents = []
         checksums = []
@@ -512,7 +514,8 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
         quarantine_files: list[dict] = []
         with tenant_upload_lock(tenant["id"]):
             existing_checksums_locked = repository.list_checksums_for_element(
-                db, assignment_id=assignment["id"], event_id=element["event_id"], list_entry_id=element["list_entry_id"]
+                db, assignment_id=assignment["id"], event_id=element["event_id"], list_entry_id=element["list_entry_id"],
+                manual_element_id=element.get("manual_element_id"),
             )
             remaining_files = [
                 (item, checksum, phash)
@@ -556,7 +559,7 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
             # Auch von Hand geschlossen (Verwaltung) - nicht nur auto_close. Die endgültige Prüfung
             # macht insert_full_upload unter dem Element-Lock.
             latest_status = repository.latest_status_by_element(db, assignment_id=assignment["id"]).get(
-                (element["event_id"], element["list_entry_id"])
+                repository.element_key(element)
             )
             if latest_status == "closed":
                 _log("element_closed", "Element ist nicht (mehr) offen")
@@ -565,7 +568,7 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
             already_uploaded = 0
             if max_files is not None:
                 already_uploaded = repository.count_files_by_element(db, assignment_id=assignment["id"]).get(
-                    (element["event_id"], element["list_entry_id"]), 0
+                    repository.element_key(element), 0
                 )
                 if already_uploaded + len(contents) > max_files:
                     remaining = max(0, max_files - already_uploaded)
@@ -672,6 +675,7 @@ async def _upload_impl(  # loop-ok: nur über run_coroutine_in_thread (upload)
                 assignment_id=assignment["id"],
                 event_id=element["event_id"],
                 list_entry_id=element["list_entry_id"],
+                manual_element_id=element.get("manual_element_id"),
                 files=saved_files,
                 close_after=_closes_after_upload(assignment, files_after_upload=already_uploaded + len(saved_files)),
             )

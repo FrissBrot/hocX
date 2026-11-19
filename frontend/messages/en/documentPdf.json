@@ -473,7 +473,8 @@
       "mentions": "Mentions",
       "agenda_items": "Topics",
       "todo_fines": "Task fines",
-      "notifications": "Email notifications"
+      "notifications": "Email notifications",
+      "submission_elements": "Submission items"
     },
     "col": {
       "first_name": "First name",

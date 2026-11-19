@@ -473,7 +473,8 @@
       "mentions": "Menzioni",
       "agenda_items": "Argomenti",
       "todo_fines": "Multe per compiti",
-      "notifications": "Notifiche e-mail"
+      "notifications": "Notifiche e-mail",
+      "submission_elements": "Elementi di consegna"
     },
     "col": {
       "first_name": "Nome",

@@ -5,8 +5,12 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   FormState,
+  ResponsibleCandidate,
   SubmissionAssignmentFormModal,
+  assignmentPayload,
   describeAssignment,
+  formFromAssignment,
+  newManualElement,
   formProblem,
   OFFSET_DAYS_MAX,
   initialForm,
@@ -18,7 +22,7 @@ import {
   windowExample,
 } from "./submission-assignment-form";
 import { assignmentPublicUrl } from "./submission-share-link";
-import { SubmissionLink } from "@/types/api";
+import { SubmissionAssignment, SubmissionLink } from "@/types/api";
 
 const t = useTranslations("submissionAssignments");
 
@@ -33,8 +37,32 @@ const link = (overrides: Partial<SubmissionLink> = {}): SubmissionLink => ({
   ...overrides,
 });
 
-function Harness({ start = initialForm, onSubmit = vi.fn(), editing = false }: { start?: FormState; onSubmit?: () => void; editing?: boolean }) {
-  const [form, setForm] = useState<FormState>(start);
+const people: ResponsibleCandidate[] = [
+  { id: "p-anna", display_name: "Anna Muster", is_active: true },
+  { id: "p-ben", display_name: "Ben Beispiel", is_active: true },
+  { id: "p-alt", display_name: "Ehemalig", is_active: false },
+];
+
+function Harness({
+  start = initialForm,
+  onSubmit = vi.fn(),
+  editing = false,
+  onChange,
+  confirmRemoveElement,
+}: {
+  start?: FormState;
+  onSubmit?: () => void;
+  editing?: boolean;
+  onChange?: (form: FormState) => void;
+  confirmRemoveElement?: (name: string) => Promise<boolean>;
+}) {
+  const [form, setFormState] = useState<FormState>(start);
+  const setForm: typeof setFormState = (update) =>
+    setFormState((current) => {
+      const next = typeof update === "function" ? update(current) : update;
+      onChange?.(next);
+      return next;
+    });
   return (
     <SubmissionAssignmentFormModal
       open
@@ -46,6 +74,8 @@ function Harness({ start = initialForm, onSubmit = vi.fn(), editing = false }: {
       availableLists={[]}
       availableTags={["Scharanlass", "Hauptversammlung"]}
       availableCycleConfigs={[]}
+      availableParticipants={people}
+      confirmRemoveElement={confirmRemoveElement}
       onSubmit={onSubmit}
       onClose={vi.fn()}
       onManageLinks={vi.fn()}
@@ -54,7 +84,7 @@ function Harness({ start = initialForm, onSubmit = vi.fn(), editing = false }: {
 }
 
 describe("describeAssignment – automatisch schliessen", () => {
-  const base: FormState = { ...initialForm, title: "Bericht", source_type: "manual" };
+  const base: FormState = { ...initialForm, title: "Bericht", source_type: "manual", manual_elements: [newManualElement("Bericht")] };
 
   it("erwähnt nichts, wenn nie automatisch geschlossen wird", () => {
     expect(describeAssignment(base, null, t)).not.toContain("automatisch");
@@ -87,9 +117,14 @@ describe("formProblem", () => {
     expect(formProblem({ ...initialForm, title: "Bilder", tag_filter: "Scharanlass" }, t)).toBeNull();
   });
 
-  it("verlangt für Listen eine Liste, für manuelle Abgaben nichts weiter", () => {
+  it("verlangt für Listen eine Liste, für Einzelabgaben benannte Elemente mit gültigem Zeitfenster", () => {
     expect(formProblem({ ...initialForm, title: "Bilder", source_type: "list" }, t)).toBe("Liste fehlt");
-    expect(formProblem({ ...initialForm, title: "Bilder", source_type: "manual" }, t)).toBeNull();
+    const manual: FormState = { ...initialForm, title: "Bilder", source_type: "manual" };
+    expect(formProblem(manual, t)).toBe("Mindestens ein Element anlegen");
+    expect(formProblem({ ...manual, manual_elements: [newManualElement("Bilder")] }, t)).toBeNull();
+    expect(formProblem({ ...manual, manual_elements: [newManualElement("Bilder"), newManualElement("  ")] }, t)).toBe("Jedes Element braucht einen Namen");
+    const backwards = newManualElement("Bilder", { window_start: "2026-12-10", window_end: "2026-12-01" });
+    expect(formProblem({ ...manual, manual_elements: [backwards] }, t)).toBe("Bei einem Element liegt der Start nach dem Stichtag");
   });
 
   it("begrenzt das Zeitfenster auf OFFSET_DAYS_MAX Tage", () => {
@@ -117,10 +152,20 @@ describe("describeAssignment", () => {
     expect(describeAssignment({ ...initialForm, tag_filter: "x" }, null, t)).toContain("bleibt offen, bis es von Hand geschlossen wird");
   });
 
-  it("beschreibt manuelle Abgaben mit einem einzigen Abgabefeld und optionalem Stichtag", () => {
-    const manual = { ...initialForm, source_type: "manual" as const };
-    expect(describeAssignment(manual, null, t)).toContain("einziges Abgabefeld");
-    expect(describeAssignment({ ...manual, deadline: "2026-12-31" }, null, t)).toContain("bis 31.12.2026");
+  it("beschreibt Einzelabgaben mit ihren Elementen, dem nächsten Stichtag und den Pendenzen", () => {
+    const manual: FormState = { ...initialForm, source_type: "manual", manual_elements: [newManualElement("Anmeldung")] };
+    expect(describeAssignment(manual, null, t)).toContain("ein Abgabeelement");
+    expect(describeAssignment(manual, null, t)).toContain("bleibt ein Element offen");
+    const two: FormState = {
+      ...manual,
+      manual_elements: [
+        newManualElement("Anmeldung", { window_end: "2026-12-31", responsible_participant_ids: ["p-anna"] }),
+        newManualElement("Fotos", { window_end: "2026-12-20" }),
+      ],
+    };
+    expect(describeAssignment(two, null, t)).toContain("2 Abgabeelemente");
+    expect(describeAssignment(two, null, t)).toContain("am 20.12.2026");
+    expect(describeAssignment(two, null, t)).toContain("Für ein Element entsteht eine Pendenz.");
   });
 
   it("nennt bei Listen den Namen der Liste", () => {
@@ -176,8 +221,10 @@ describe("SubmissionAssignmentFormModal – Anlegen in fünf Schritten", () => {
     fireEvent.click(screen.getByRole("radio", { name: /Einzelabgabe/ }));
     expect(screen.queryByText("Tag-Filter")).not.toBeInTheDocument();
 
-    goTo(/2\. Zeitraum/);
-    expect(screen.getByRole("radio", { name: "Offen bis von Hand geschlossen" })).toHaveAttribute("aria-checked", "true");
+    // Schritt 2 heisst bei Einzelabgaben «Elemente»; das erste Element trägt den Titel
+    goTo(/2\. Elemente/);
+    expect(screen.getByRole("heading", { name: "Welche Elemente sollen abgegeben werden?" })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Vereinsfotos")).toBeInTheDocument();
     goTo(/4\. Dateien/);
     expect(screen.queryByText("Sortierung")).not.toBeInTheDocument();
 
@@ -254,10 +301,102 @@ describe("sectionSummaries", () => {
     expect(summary.access).toMatchObject({ value: "Eltern · 1 Prüfer", detail: "Dateien sehen: Standard der Organisation", warn: false });
   });
 
-  it("nennt bei Einzelabgaben den Stichtag und keine Verantwortlichen", () => {
-    const summary = sectionSummaries({ ...initialForm, title: "X", source_type: "manual", deadline: "2026-11-30" }, { ...context, hasResponsibleOptions: false }, t);
-    expect(summary.window).toMatchObject({ label: "Stichtag", value: "30.11.2026" });
-    expect(summary.responsible.detail).toBe("Bei Einzelabgaben nicht möglich");
+  it("fasst bei Einzelabgaben Elemente, nächsten Stichtag und Verantwortliche zusammen", () => {
+    const form: FormState = {
+      ...initialForm,
+      title: "X",
+      source_type: "manual",
+      manual_elements: [
+        newManualElement("Anmeldung", { window_end: "2026-11-30", responsible_participant_ids: ["p-anna"] }),
+        newManualElement("Fotos"),
+      ],
+    };
+    const summary = sectionSummaries(form, { ...context, hasResponsibleOptions: false }, t);
+    expect(summary.window).toMatchObject({ label: "Abgabeelemente", value: "2 Elemente", detail: "Anmeldung, Fotos · nächster Stichtag 30.11.2026", warn: false });
+    expect(summary.responsible).toMatchObject({ value: "1 Element mit Verantwortlichen · Link: verwalten", detail: "Pendenz je Element · persönlicher Link 30 Tage gültig" });
+    const nobody = sectionSummaries({ ...form, manual_elements: [newManualElement("Anmeldung")] }, context, t);
+    expect(nobody.responsible.value).toBe("Keine Zuweisung");
+  });
+});
+
+describe("Einzelabgabe mit mehreren Elementen (Migration 0198)", () => {
+  const manualStart: FormState = { ...initialForm, title: "Lager", public_slug: "lager", source_type: "manual", manual_elements: [newManualElement("Anmeldung")] };
+
+  it("legt Elemente mit «+ Element» an, entfernt sie per Icon und sendet sie mit Verantwortlichen", () => {
+    let latest: FormState = manualStart;
+    render(<Harness start={manualStart} onChange={(form) => (latest = form)} />);
+    goTo(/2\. Elemente/);
+    // Das letzte Element lässt sich nicht entfernen
+    expect(screen.getByRole("button", { name: "Element «Anmeldung» entfernen" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Element" }));
+    const names = screen.getAllByLabelText("Name");
+    expect(names).toHaveLength(2);
+    fireEvent.change(names[1], { target: { value: "Fotos" } });
+    fireEvent.change(screen.getByLabelText("Stichtag von Element 2"), { target: { value: "31.12.2026" } });
+    fireEvent.blur(screen.getByLabelText("Stichtag von Element 2"));
+    expect(latest.manual_elements.map((element) => element.name)).toEqual(["Anmeldung", "Fotos"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Element" }));
+    expect(screen.getAllByLabelText("Name")).toHaveLength(3);
+    goTo(/5\. Zugriff/);
+    expect(screen.getByRole("status")).toHaveTextContent("Jedes Element braucht einen Namen");
+    goTo(/2\. Elemente/);
+    fireEvent.click(screen.getByRole("button", { name: "Element «ohne Namen» entfernen" }));
+    expect(screen.getAllByLabelText("Name")).toHaveLength(2);
+
+    goTo(/3\. Verantwortlich/);
+    expect(screen.queryByText(/keine verantwortliche Person/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Verantwortliche für «Fotos»" }));
+    fireEvent.click(screen.getByRole("option", { name: /Anna Muster/ }));
+    // Inaktive Personen stehen nicht zur Wahl
+    expect(screen.queryByRole("option", { name: /Ehemalig/ })).not.toBeInTheDocument();
+    expect(latest.manual_elements[1].responsible_participant_ids).toEqual(["p-anna"]);
+    // Mit Verantwortlichen erscheint der persönliche Link
+    expect(screen.getByRole("radiogroup", { name: "Persönlicher Link für Verantwortliche" })).toBeInTheDocument();
+
+    const payload = assignmentPayload(latest);
+    expect(payload.deadline).toBeNull();
+    expect(payload.manual_elements).toEqual([
+      { id: null, name: "Anmeldung", window_start: null, window_end: null, responsible_participant_ids: [] },
+      { id: null, name: "Fotos", window_start: null, window_end: latest.manual_elements[1].window_end || null, responsible_participant_ids: ["p-anna"] },
+    ]);
+  });
+
+  it("fragt vor dem Entfernen eines gespeicherten Elements nach", async () => {
+    const confirm = vi.fn().mockResolvedValue(false);
+    const saved = newManualElement("Anmeldung", { id: "el-1", key: "el-1" });
+    render(<Harness start={{ ...manualStart, manual_elements: [saved, newManualElement("Fotos")] }} confirmRemoveElement={confirm} />);
+    goTo(/2\. Elemente/);
+    fireEvent.click(screen.getByRole("button", { name: "Element «Anmeldung» entfernen" }));
+    await vi.waitFor(() => expect(confirm).toHaveBeenCalledWith("Anmeldung"));
+    expect(screen.getAllByLabelText("Name")).toHaveLength(2);
+    // Neue (noch nicht gespeicherte) Elemente gehen ohne Rückfrage
+    fireEvent.click(screen.getByRole("button", { name: "Element «Fotos» entfernen" }));
+    expect(screen.getAllByLabelText("Name")).toHaveLength(1);
+    expect(confirm).toHaveBeenCalledTimes(1);
+  });
+
+  it("übernimmt Elemente aus der API und sendet sie nur bei Einzelabgaben", () => {
+    const assignment = {
+      id: "a-1", tenant_id: "t-1", title: "Lager", description: null, public_slug: "lager", source_type: "manual",
+      tag_filter: null, offset_days_before: null, offset_days_after: null, cycle_config_id: null, cycle_offsets: [],
+      list_definition_id: null, deadline: null, allowed_file_types: [], max_files_per_element: 5, max_file_size_mb: 20,
+      sort_order: "date", auto_close: "never", responsible_participant_source: null, link_ids: [],
+      manual_elements: [
+        { id: "el-1", element_ref: "manual", name: "Anmeldung", window_start: "2026-12-01", window_end: "2026-12-31", is_default: true, responsible_participant_ids: ["p-ben"] },
+      ],
+      created_at: "2026-11-19T10:00:00Z", updated_at: "2026-11-19T10:00:00Z",
+    } as SubmissionAssignment;
+    const form = formFromAssignment(assignment);
+    expect(form.manual_elements).toEqual([
+      { key: "el-1", id: "el-1", name: "Anmeldung", window_start: "2026-12-01", window_end: "2026-12-31", responsible_participant_ids: ["p-ben"] },
+    ]);
+    expect(assignmentPayload(form).manual_elements?.[0]).toMatchObject({ id: "el-1", window_start: "2026-12-01" });
+    expect(assignmentPayload({ ...form, source_type: "events", tag_filter: "x" })).not.toHaveProperty("manual_elements");
+    // Ohne Elemente aus der API (Altbestand): ein Element mit Titel und bisherigem Stichtag
+    const legacy = formFromAssignment({ ...assignment, manual_elements: [], deadline: "2026-10-01" });
+    expect(legacy.manual_elements).toMatchObject([{ id: null, name: "Lager", window_end: "2026-10-01" }]);
   });
 });
 

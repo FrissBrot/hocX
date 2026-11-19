@@ -8,15 +8,20 @@ from app import element_resolver, repository
 
 
 def _stub(monkeypatch, *, status=None, events=()):
-    statuses = {(None, None): status} if status else {}
+    statuses = {(None, None, None): status} if status else {}
     monkeypatch.setattr(repository, "latest_status_by_element", lambda db, assignment_id: statuses)
+    # Einzelabgabe: das Ende liegt seit Migration 0198 am Element (Standard-Element, Ende vor 3 Tagen)
+    monkeypatch.setattr(repository, "list_manual_elements", lambda db, assignment_id: [
+        {"id": 1, "public_id": None, "is_default": True, "name": "Bericht", "window_start": None,
+         "window_end": date.today() - timedelta(days=3), "sort_index": 0},
+    ])
     monkeypatch.setattr(repository, "count_files_by_element", lambda db, assignment_id: {})
     monkeypatch.setattr(repository, "list_events_by_tag", lambda db, **kwargs: list(events))
 
 
 def _manual(**overrides) -> dict:
     return {"id": 1, "tenant_id": 1, "title": "Bericht", "source_type": "manual", "sort_order": "date",
-            "deadline": date.today() - timedelta(days=3), **overrides}
+            "deadline": None, **overrides}
 
 
 def test_past_deadline_closes_without_option(monkeypatch):

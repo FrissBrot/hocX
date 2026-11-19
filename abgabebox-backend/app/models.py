@@ -155,9 +155,25 @@ participant_table = Table(
     Column("display_name", Text),
 )
 
+# Von Hand angelegte Elemente einer Einzelabgabe (Migration 0198). Nur lesend und nur diese
+# Spalten (Spalten-Grant), keine Verantwortlichen; RLS: nur der Mandant des gesetzten Links.
+submission_manual_element_table = Table(
+    "submission_manual_element",
+    metadata,
+    Column("id", BigInteger, primary_key=True),
+    Column("public_id", UUID(as_uuid=True)),
+    Column("tenant_id", BigInteger),
+    Column("assignment_id", BigInteger),
+    Column("is_default", Boolean),
+    Column("name", Text),
+    Column("window_start", Date),
+    Column("window_end", Date),
+    Column("sort_index", Integer),
+)
+
 # submission_upload: die restricted Rolle darf NUR (id, assignment_id, event_id,
-# list_entry_id, status) lesen - bewusst kein submitted_at im SELECT-Grant. Fuer INSERT
-# ist die gesamte Tabelle freigegeben (separate Privilegien in Postgres), submitted_at
+# list_entry_id, manual_element_id, status) lesen - bewusst kein submitted_at im SELECT-Grant.
+# Fuer INSERT ist die gesamte Tabelle freigegeben (separate Privilegien in Postgres), submitted_at
 # wird also beim Insert mitgeschrieben, aber nie zurückgelesen.
 submission_upload_table = Table(
     "submission_upload",
@@ -166,6 +182,8 @@ submission_upload_table = Table(
     Column("assignment_id", BigInteger),
     Column("event_id", BigInteger),
     Column("list_entry_id", BigInteger),
+    # Element einer Einzelabgabe (0198); NULL beim Standard-Element «manual»
+    Column("manual_element_id", BigInteger),
     Column("status", Text),
     Column("submitted_at", DateTime(timezone=True)),
 )
