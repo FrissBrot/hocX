@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from app.core.db import get_db
 from app.core.permissions import P
 from app.core.security import CurrentUser, get_current_user, require_permission
-from app.schemas.event import EventCreate, EventImportPreview, EventRead, EventUpdate
+from app.schemas.event import EVENT_TAG_MAX_LENGTH, EventCreate, EventImportPreview, EventRead, EventUpdate
 from app.services import public_id_service
 from app.services.event_service import EventService
 from app.services.submission_service import SubmissionService
@@ -206,11 +206,13 @@ def delete_event(
     return {"message": "Event deleted"}
 
 
-MAX_TAG_LENGTH = 100
+MAX_TAG_LENGTH = EVENT_TAG_MAX_LENGTH
 
 
 class RenameTagPayload(BaseModel):
-    old_tag: str = Field(max_length=MAX_TAG_LENGTH * 2)
+    # old_tag grosszügig: Tags, die vor der Längenprüfung beim Anlegen entstanden, müssen sich
+    # umbenennen lassen (der Body ist ohnehin über RequestBodyLimitMiddleware begrenzt).
+    old_tag: str = Field(max_length=10_000)
     new_tag: str = Field(max_length=MAX_TAG_LENGTH * 2)
     # Nur zählen (für die Rückfrage im Frontend), nichts ändern.
     dry_run: bool = False
