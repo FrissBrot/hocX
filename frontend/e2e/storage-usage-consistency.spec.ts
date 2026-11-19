@@ -9,7 +9,8 @@ import { authFiles } from "./auth";
 // (storage-usage-view.tsx) - this test pins that down at the E2E level so a future regression
 // (one of the two call sites diverging again) actually gets caught. The tenant-facing view
 // used to be a standalone /storage page; it now lives in the "Abo & Nutzung" tab of
-// /tenant-settings (design update, 2026-09-23).
+// /tenant-settings (design update, 2026-09-23), seit dem Einstellungen-Rahmen auf eigener Seite
+// /tenant-settings/abo.
 test("tenant Abo & Nutzung tab and admin tenant-settings Speicher tab show the same bytes used", async ({ page, request, browser }) => {
   const session = await (await request.get("/api/auth/session")).json();
   const tenantName = session.current_tenant.name as string;
@@ -24,8 +25,7 @@ test("tenant Abo & Nutzung tab and admin tenant-settings Speicher tab show the s
     // together until they agree (or the timeout proves a genuine, persistent divergence)
     // instead of comparing two one-shot snapshots.
     await expect(async () => {
-      await page.goto("/tenant-settings");
-      await page.getByRole("tab", { name: "Abo & Nutzung" }).click();
+      await page.goto("/tenant-settings/abo");
       const tenantValue = (
         await page.locator(".tenant-usage-storage-card .tenant-usage-big-number").innerText()
       ).trim();
