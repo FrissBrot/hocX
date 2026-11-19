@@ -5,6 +5,7 @@ Titel mit Umlauten wären sonst kaputt."""
 from __future__ import annotations
 
 import base64
+import http.client
 import json
 import urllib.error
 import urllib.request
@@ -58,3 +59,7 @@ def send(*, server_url: str, topic: str, token: str | None, message: NtfyMessage
         raise NtfyError(f"ntfy antwortete mit HTTP {exc.code}: {body}") from exc
     except OSError as exc:
         raise NtfyError(f"ntfy nicht erreichbar: {exc}") from exc
+    except http.client.HTTPException as exc:
+        # Abgebrochene Antwort/kaputte Statuszeile (z. B. hinter einem Proxy) ist kein OSError -
+        # ohne diese Abbildung liefe der Fehler an der Fehlerbehandlung der Aufrufer vorbei.
+        raise NtfyError(f"ntfy-Antwort unlesbar: {type(exc).__name__}") from exc

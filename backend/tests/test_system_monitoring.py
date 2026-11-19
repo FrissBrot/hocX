@@ -336,6 +336,30 @@ def test_send_failure_is_kept_on_settings_and_logged_once(clean_state, monkeypat
     assert len(logged) == 1
 
 
+
+class _TruncatedResponse(_FakeResponse):
+    def read(self):
+        import http.client
+
+        raise http.client.IncompleteRead(b"{", 120)
+
+
+@pytest.mark.parametrize("failure", ["truncated", "bad_status"])
+def test_broken_ntfy_response_is_a_send_error(monkeypatch, failure):
+    """http.client.HTTPException (abgebrochene Antwort, kaputte Statuszeile hinter einem Proxy) ist
+    kein OSError. Ohne Abbildung auf NtfyError lief der Fehler am Fehlerpfad von _send_all vorbei:
+    kein last_send_error, Tick fehlgeschlagen, Fehlerprotokoll-Eintrag bei jedem Tick."""
+    import http.client
+
+    def fake_urlopen(request, timeout):
+        if failure == "truncated":
+            return _TruncatedResponse(b"")
+        raise http.client.BadStatusLine("garbage")
+
+    monkeypatch.setattr(ntfy_client.urllib.request, "urlopen", fake_urlopen)
+    with pytest.raises(ntfy_client.NtfyError):
+        ntfy_client.send(server_url="https://ntfy.example.com", topic="t", token=None, message=ntfy_client.NtfyMessage(title="x", message="y"))
+
 # ── Einstellungen und Endpunkte ──────────────────────────────────────────────────────────
 
 
