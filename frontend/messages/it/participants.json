@@ -210,21 +210,20 @@
     "loginAndRole": "Accesso e ruolo",
     "moreActions": "Altre azioni",
     "descriptions": {
-      "master": "Nome e contatto. Il nome visualizzato appare in elenchi, verbali e compiti.",
-      "membership": "Se la persona è attiva, da quando ne fa parte e in quali liste di presenza appare.",
-      "tariff": "Quali importi delle multe valgono per questa persona.",
+      "master": "Il nome visualizzato appare nei verbali, nelle liste e nelle multe.",
+      "membership": "Entrata e uscita determinano in quali liste di presenza appare la persona. Dall'uscita l'accesso è bloccato.",
+      "tariff": "Determina quali importi delle multe valgono per questa persona.",
       "login": "Se la persona può accedere e cosa può vedere e modificare in hocX."
     },
     "displayNameFromParts": "Da nome e cognome",
     "loginBadge": "Accesso",
     "emailLoginChanged": "Nuovo indirizzo di accesso – vale dal prossimo accesso. Il vecchio indirizzo {email} ne viene informato.",
     "activeMember": "Membro attivo",
-    "activeMemberHelp": "Le persone inattive conservano tutti i dati, ma l'accesso è bloccato.",
     "attendanceLists": "Appare nelle liste di presenza",
     "attendanceCount": "{selected} di {total}",
     "noTemplates": "Ancora nessun modello con lista di presenza.",
     "noTariffs": "Ancora nessuna tariffa delle multe configurata.",
-    "tariffSingle": "L'organizzazione ha solo questa tariffa, valida per tutti i membri.",
+    "tariffSingle": "Unica tariffa – vale automaticamente per tutti i membri.",
     "tariffDefaultHint": "Predefinita per chi non ha una tariffa propria",
     "tariffMembers": "{count, plural, =0 {Ancora nessuno} one {# membro} other {# membri}}",
     "loginLabel": "Accesso",
@@ -232,7 +231,9 @@
     "updatedAt": "ultima modifica il {date}",
     "deleteMember": "Elimina membro",
     "unsavedCount": "{count, plural, one {# modifica non salvata} other {# modifiche non salvate}}",
-    "savedCheck": "✓ Salvato"
+    "savedCheck": "✓ Salvato",
+    "activeMemberOn": "Appare nelle liste, può accedere.",
+    "activeMemberOff": "Nascosto nelle liste, accesso bloccato."
   },
   "newMember": {
     "description": "La persona compare poi nella lista dei membri. Senza invito resta membro senza accesso.",

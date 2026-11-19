@@ -210,21 +210,20 @@
     "loginAndRole": "Login und Rolle",
     "moreActions": "Weitere Aktionen",
     "descriptions": {
-      "master": "Name und Kontakt. Der Anzeigename erscheint in Listen, Protokollen und Pendenzen.",
-      "membership": "Ob die Person aktiv ist, seit wann sie dabei ist und in welchen Anwesenheitslisten sie erscheint.",
-      "tariff": "Welche Bussenansätze für diese Person gelten.",
+      "master": "Der Anzeigename erscheint in Protokollen, Listen und Bussen.",
+      "membership": "Eintritt und Austritt steuern, in welchen Anwesenheitslisten die Person erscheint. Ab dem Austritt ist das Login gesperrt.",
+      "tariff": "Bestimmt, welche Beträge bei Bussen für diese Person gelten.",
       "login": "Ob sich die Person anmelden kann und was sie in hocX sehen und ändern darf."
     },
     "displayNameFromParts": "Aus Vor- und Nachname",
     "loginBadge": "Login",
     "emailLoginChanged": "Neue Login-Adresse – gilt ab dem nächsten Login. Die bisherige Adresse {email} wird darüber informiert.",
     "activeMember": "Aktives Mitglied",
-    "activeMemberHelp": "Inaktive Personen behalten alle Daten, ein Login ist aber gesperrt.",
     "attendanceLists": "Erscheint in Anwesenheitslisten",
     "attendanceCount": "{selected} von {total}",
     "noTemplates": "Noch keine Vorlagen mit Anwesenheitsliste.",
     "noTariffs": "Noch keine Bussentarife eingerichtet.",
-    "tariffSingle": "Der Verein hat nur diesen Tarif, er gilt für alle Mitglieder.",
+    "tariffSingle": "Einziger Tarif – gilt automatisch für alle Mitglieder.",
     "tariffDefaultHint": "Standard für alle ohne eigenen Tarif",
     "tariffMembers": "{count, plural, =0 {Noch niemand} one {# Mitglied} other {# Mitglieder}}",
     "loginLabel": "Login",
@@ -232,7 +231,9 @@
     "updatedAt": "zuletzt geändert {date}",
     "deleteMember": "Mitglied löschen",
     "unsavedCount": "{count, plural, one {# ungespeicherte Änderung} other {# ungespeicherte Änderungen}}",
-    "savedCheck": "✓ Gespeichert"
+    "savedCheck": "✓ Gespeichert",
+    "activeMemberOn": "Erscheint in Listen, kann sich anmelden.",
+    "activeMemberOff": "Ausgeblendet in Listen, Login gesperrt."
   },
   "newMember": {
     "description": "Die Person erscheint danach in der Mitgliederliste. Ohne Einladung bleibt sie Mitglied ohne Login.",

@@ -210,21 +210,20 @@
     "loginAndRole": "Connexion et rôle",
     "moreActions": "Autres actions",
     "descriptions": {
-      "master": "Nom et contact. Le nom affiché apparaît dans les listes, procès-verbaux et tâches.",
-      "membership": "Si la personne est active, depuis quand elle est membre et dans quelles listes de présence elle apparaît.",
-      "tariff": "Quels montants d'amende s'appliquent à cette personne.",
+      "master": "Le nom affiché apparaît dans les procès-verbaux, les listes et les amendes.",
+      "membership": "Les dates d'entrée et de sortie déterminent dans quelles listes de présence la personne apparaît. Dès la sortie, la connexion est bloquée.",
+      "tariff": "Détermine les montants des amendes qui s'appliquent à cette personne.",
       "login": "Si la personne peut se connecter et ce qu'elle peut voir et modifier dans hocX."
     },
     "displayNameFromParts": "À partir du prénom et du nom",
     "loginBadge": "Connexion",
     "emailLoginChanged": "Nouvelle adresse de connexion – valable dès la prochaine connexion. L'ancienne adresse {email} en sera informée.",
     "activeMember": "Membre actif",
-    "activeMemberHelp": "Les personnes inactives conservent toutes leurs données, mais leur connexion est bloquée.",
     "attendanceLists": "Apparaît dans les listes de présence",
     "attendanceCount": "{selected} sur {total}",
     "noTemplates": "Aucun modèle avec liste de présence pour le moment.",
     "noTariffs": "Aucun tarif d'amende configuré pour le moment.",
-    "tariffSingle": "L'organisation n'a que ce tarif ; il s'applique à tous les membres.",
+    "tariffSingle": "Tarif unique – s'applique automatiquement à tous les membres.",
     "tariffDefaultHint": "Par défaut pour toutes les personnes sans tarif propre",
     "tariffMembers": "{count, plural, =0 {Personne pour le moment} one {# membre} other {# membres}}",
     "loginLabel": "Connexion",
@@ -232,7 +231,9 @@
     "updatedAt": "dernière modification le {date}",
     "deleteMember": "Supprimer le membre",
     "unsavedCount": "{count, plural, one {# modification non enregistrée} other {# modifications non enregistrées}}",
-    "savedCheck": "✓ Enregistré"
+    "savedCheck": "✓ Enregistré",
+    "activeMemberOn": "Apparaît dans les listes, peut se connecter.",
+    "activeMemberOff": "Masqué dans les listes, connexion bloquée."
   },
   "newMember": {
     "description": "La personne apparaît ensuite dans la liste des membres. Sans invitation, elle reste membre sans connexion.",

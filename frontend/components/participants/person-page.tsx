@@ -449,7 +449,7 @@ export function PersonPage({
           <label className="profile-toggle">
             <span className="profile-toggle-text">
               <span>{t("person.activeMember")}</span>
-              <span className="field-help">{t("person.activeMemberHelp")}</span>
+              <span className="field-help">{t(draft.is_active ? "person.activeMemberOn" : "person.activeMemberOff")}</span>
             </span>
             <input type="checkbox" role="switch" checked={draft.is_active} onChange={(event) => set("is_active", event.target.checked)} />
             <span className="album-picker-switch-track" aria-hidden="true" />

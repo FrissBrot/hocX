@@ -210,21 +210,20 @@
     "loginAndRole": "Login and role",
     "moreActions": "More actions",
     "descriptions": {
-      "master": "Name and contact. The display name appears in lists, minutes and tasks.",
-      "membership": "Whether the person is active, since when they belong and which attendance lists they appear in.",
-      "tariff": "Which fine amounts apply to this person.",
+      "master": "The display name appears in minutes, lists and fines.",
+      "membership": "Joining and leaving dates control which attendance lists the person appears in. From the leaving date the login is blocked.",
+      "tariff": "Determines which amounts apply to this person's fines.",
       "login": "Whether the person can sign in and what they may see and change in hocX."
     },
     "displayNameFromParts": "From first and last name",
     "loginBadge": "Login",
     "emailLoginChanged": "New login address – applies from the next login. The previous address {email} will be notified.",
     "activeMember": "Active member",
-    "activeMemberHelp": "Inactive people keep all their data, but their login is blocked.",
     "attendanceLists": "Appears in attendance lists",
     "attendanceCount": "{selected} of {total}",
     "noTemplates": "No templates with an attendance list yet.",
     "noTariffs": "No fine rates set up yet.",
-    "tariffSingle": "The organisation has only this rate; it applies to all members.",
+    "tariffSingle": "Only tariff – applies automatically to all members.",
     "tariffDefaultHint": "Default for everyone without their own rate",
     "tariffMembers": "{count, plural, =0 {Nobody yet} one {# member} other {# members}}",
     "loginLabel": "Login",
@@ -232,7 +231,9 @@
     "updatedAt": "last changed {date}",
     "deleteMember": "Delete member",
     "unsavedCount": "{count, plural, one {# unsaved change} other {# unsaved changes}}",
-    "savedCheck": "✓ Saved"
+    "savedCheck": "✓ Saved",
+    "activeMemberOn": "Appears in lists, can sign in.",
+    "activeMemberOff": "Hidden in lists, login blocked."
   },
   "newMember": {
     "description": "The person then appears in the member list. Without an invitation they remain a member without a login.",

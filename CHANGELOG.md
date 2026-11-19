@@ -52,6 +52,7 @@ Keine Migration, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Cha
 - **Fotos, Zeitstrahl rechts:** Ganz oben lag die Monatsangabe («Okt. 2026») über der Jahreszahl
   und ragte aus der Leiste. Sie steht dort jetzt unter der Linie, die Jahreszahl am Cursor entfällt.
 - **Bussen-Regeln › Pendenzen-Regeln:** Ein Klick irgendwo in die Zeile öffnet «Bearbeiten».
+- **Personenseite:** Texte genau nach Design «Mitglied Profil» (Kartenbeschreibungen, Hinweis bei «Aktives Mitglied» je nach Zustand, einziger Tarif).
 - **Abgeschlossene Protokolle:** «PDF öffnen» zeigt das finale PDF sofort. Bisher lief jedes Öffnen
   über den PDF-Auftrag im Hintergrund (Ladeseite «Ihr PDF wird erstellt»), obwohl am Ende dasselbe
   PDF mit derselben Dokument-ID zurückkam.
