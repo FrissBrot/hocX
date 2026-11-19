@@ -10,6 +10,8 @@ Installationen aktualisieren können.
 
 ### Geändert
 
+- **Sitzungsvorlagen:** Duplizieren, Archivieren und Löschen stehen im ⋮-Menü der Zeile; die
+  Tabelle passt so auch neben die Einstellungs-Navigation.
 - **Personenseite im neuen Profil-Design:** Der Kopf zeigt Initialen, Name, Status (Aktiv,
   Inaktiv oder Austritt mit Datum), «Mitglied seit …» und den Tarif; rechts führt «Login und
   Rolle» zum Abschnitt «Login & Rollen», das ⋯-Menü bündelt «Ansehen als …», Datenauskunft und

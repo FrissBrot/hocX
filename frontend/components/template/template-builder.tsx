@@ -8,6 +8,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
+import { ActionMenu } from "@/components/ui/action-menu";
 import { DataTable } from "@/components/ui/data-table";
 import { Modal, ModalSaveForm } from "@/components/ui/modal";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -454,33 +455,15 @@ export function TemplateBuilder({ initialTemplates, availableCycleConfigs, canMa
             <td className="table-cell-wrap">{template.description ?? t("noDescription")}</td>
             <td>{template.version}</td>
             {canManage ? (
-            <td>
-              <div className="table-actions">
-                <button
-                  type="button"
-                  className="button-secondary button-ghost"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    openDuplicate(template);
-                  }}
-                >
-                  {t("duplicate")}
-                </button>
-                <button
-                  type="button"
-                  className="button-secondary button-ghost"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void toggleTemplateArchived(template);
-                  }}
-                >
-                  {template.status === "archived" ? t("unarchive") : t("archive")}
-                </button>
-                <button type="button" className="button-secondary button-danger" onClick={(event) => {
-                  event.stopPropagation();
-                  void deleteTemplate(template.id);
-                }}>{t("delete")}</button>
-              </div>
+            <td onClick={(event) => event.stopPropagation()}>
+              {/* Drei Aktionen: als Menü (DESIGN.md Abschnitt 8) - passt auch neben der Einstellungs-Navigation */}
+              <ActionMenu
+                items={[
+                  { label: t("duplicate"), onClick: () => openDuplicate(template) },
+                  { label: template.status === "archived" ? t("unarchive") : t("archive"), onClick: () => void toggleTemplateArchived(template) },
+                  { label: t("delete"), danger: true, onClick: () => void deleteTemplate(template.id) },
+                ]}
+              />
             </td>
             ) : null}
           </tr>
