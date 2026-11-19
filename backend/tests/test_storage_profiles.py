@@ -233,3 +233,27 @@ def test_admin_profile_input_allows_external_and_lan_endpoints_and_the_existing_
     sps.check_admin_profile_input({"provider": "hetzner", "region": "fsn1"})
     builtin = StorageProfile(provider="garage_local", name="Lokal", endpoint_url="http://local-s3:3900")
     sps.check_admin_profile_input({"provider": "garage_local", "name": "Neuer Name"}, current=builtin)
+
+
+def test_migration_object_keys_are_owner_only_like_the_report(db):
+    """Der Prüfbericht ist nur für Owner, weil er Dateipfade enthält - dieselben Objekt-Schlüssel
+    darf ein Support-Admin dann auch nicht über die Objektliste der Migration abrufen."""
+    from app.models import StorageMigration, StorageMigrationObject
+
+    state = db.get(StorageState, 1)
+    profile = sps.create_profile(db, _values(), actor_email="x")
+    migration = StorageMigration(
+        kind="initial", state="failed", source_profile_id=state.active_profile_id, source_generation=state.active_generation,
+        source_config_version=1, target_profile_id=profile.id, target_generation=9_000_000 + state.active_generation,
+        target_config_version=profile.config_version,
+    )
+    db.add(migration)
+    db.flush()
+    db.add(StorageMigrationObject(migration_id=migration.id, namespace="main", key="tenants/1/files/Ausweis-Muster.pdf", status="failed"))
+    db.flush()
+    support = _client(db, role="support")
+    assert support.get(f"/api/admin/storage/migrations/{migration.id}/report").status_code == 403
+    assert support.get(f"/api/admin/storage/migrations/{migration.id}/objects").status_code == 403
+    owner = _client(db)
+    response = owner.get(f"/api/admin/storage/migrations/{migration.id}/objects")
+    assert response.status_code == 200 and response.json()[0]["key"] == "tenants/1/files/Ausweis-Muster.pdf"

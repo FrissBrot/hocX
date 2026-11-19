@@ -247,7 +247,9 @@ def list_migration_objects(
     migration_id: uuid.UUID, db: Session = Depends(get_db),
     status: str | None = Query(None, pattern="^(pending|copying|copied|verified|failed|dead|deleted)$"),
     offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=500),
+    admin: CurrentAdmin = Depends(require_admin_owner),
 ):
+    """Objekt-Schlüssel sind Dateipfade (wie im Prüfbericht) - nur Owner, nicht Support."""
     _migration_or_404(db, migration_id)
     query = select(StorageMigrationObject).where(StorageMigrationObject.migration_id == migration_id)
     if status:
