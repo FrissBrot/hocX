@@ -217,7 +217,7 @@
   "statusOpen": "Open",
   "statusPending": "Pending",
   "statusSubmitted": "Submitted",
-  "submissionLinksDescription": "These links make the public submission box reachable.",
+  "submissionLinksDescription": "The submission box can only be reached through a link with a random key. You choose which submission is reachable through which link on the submission itself.",
   "submissionLinksTitle": "Submission links",
   "submittedCount": "{label} submitted",
   "tagFilterLabel": "Tag filter",
@@ -418,5 +418,11 @@
       "unreachable": "Without a link the submission cannot be reached"
     }
   },
-  "offsetOutOfRange": "Time window: at most {max} days before or after the event"
+  "offsetOutOfRange": "Time window: at most {max} days before or after the event",
+  "linksButton": "Links",
+  "detailFilter": {
+    "all": "All",
+    "done": "Submitted",
+    "pending": "Outstanding"
+  }
 }

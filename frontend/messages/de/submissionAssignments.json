@@ -217,7 +217,7 @@
   "statusOpen": "Offen",
   "statusPending": "Ausstehend",
   "statusSubmitted": "Abgegeben",
-  "submissionLinksDescription": "Über diese Links ist die öffentliche Abgabebox erreichbar.",
+  "submissionLinksDescription": "Die Abgabebox ist nur über einen Link mit zufälligem Schlüssel erreichbar. Welche Abgabe über welchen Link erreichbar ist, legst du bei der Abgabe fest.",
   "submissionLinksTitle": "Abgabe-Links",
   "submittedCount": "{label} eingereicht",
   "tagFilterLabel": "Tag-Filter",
@@ -418,5 +418,11 @@
       "unreachable": "Ohne Link ist die Abgabe nicht erreichbar"
     }
   },
-  "offsetOutOfRange": "Zeitfenster: höchstens {max} Tage vor bzw. nach dem Termin"
+  "offsetOutOfRange": "Zeitfenster: höchstens {max} Tage vor bzw. nach dem Termin",
+  "linksButton": "Links",
+  "detailFilter": {
+    "all": "Alle",
+    "done": "Abgegeben",
+    "pending": "Ausstehend"
+  }
 }

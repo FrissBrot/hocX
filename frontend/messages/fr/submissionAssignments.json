@@ -217,7 +217,7 @@
   "statusOpen": "Ouvert",
   "statusPending": "En attente",
   "statusSubmitted": "Déposé",
-  "submissionLinksDescription": "Ces liens permettent d'accéder à la boîte de dépôt publique.",
+  "submissionLinksDescription": "La boîte de dépôt n'est accessible que par un lien avec une clé aléatoire. Tu choisis dans chaque dépôt par quel lien il est accessible.",
   "submissionLinksTitle": "Liens de dépôt",
   "submittedCount": "{label} déposé(s)",
   "tagFilterLabel": "Filtre de tag",
@@ -418,5 +418,11 @@
       "unreachable": "Sans lien, le dépôt n'est pas accessible"
     }
   },
-  "offsetOutOfRange": "Période : {max} jours au maximum avant ou après l’événement"
+  "offsetOutOfRange": "Période : {max} jours au maximum avant ou après l’événement",
+  "linksButton": "Liens",
+  "detailFilter": {
+    "all": "Tous",
+    "done": "Remis",
+    "pending": "En attente"
+  }
 }

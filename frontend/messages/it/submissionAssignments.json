@@ -217,7 +217,7 @@
   "statusOpen": "Aperto",
   "statusPending": "In sospeso",
   "statusSubmitted": "Consegnato",
-  "submissionLinksDescription": "Questi link rendono raggiungibile la casella di consegna pubblica.",
+  "submissionLinksDescription": "La casella di consegna è raggiungibile solo tramite un link con una chiave casuale. Per ogni consegna scegli tramite quale link è raggiungibile.",
   "submissionLinksTitle": "Link di consegna",
   "submittedCount": "{label} consegnato/i",
   "tagFilterLabel": "Filtro tag",
@@ -418,5 +418,11 @@
       "unreachable": "Senza link la consegna non è raggiungibile"
     }
   },
-  "offsetOutOfRange": "Finestra temporale: al massimo {max} giorni prima o dopo l’evento"
+  "offsetOutOfRange": "Finestra temporale: al massimo {max} giorni prima o dopo l’evento",
+  "linksButton": "Link",
+  "detailFilter": {
+    "all": "Tutti",
+    "done": "Consegnati",
+    "pending": "In sospeso"
+  }
 }

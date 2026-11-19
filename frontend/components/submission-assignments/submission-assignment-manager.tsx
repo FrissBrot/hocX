@@ -6,9 +6,7 @@ import { StatusBanner } from "@/components/ui/status-banner";
 
 import { Badge, BadgeVariant } from "@/components/ui/badge";
 import { ActionIcon } from "@/components/ui/action-icons";
-import { DataTable } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
-import { FilterTabs } from "@/components/ui/filter-tabs";
 import { DocsLink } from "@/components/ui/help-popover";
 import { Modal } from "@/components/ui/modal";
 import { SearchInput } from "@/components/ui/search-input";
@@ -317,6 +315,7 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
   const [summaries, setSummaries] = useState<Record<string, AssignmentSummary>>({});
   const rescanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [elementModal, setElementModal] = useState<SubmissionElementStatusEntry | null>(null);
+  const [elementFilter, setElementFilter] = useState<"all" | "done" | "pending">("all");
   const [logEntries, setLogEntries] = useState<SubmissionUploadLogEntry[]>([]);
   const [logLoading, setLogLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -438,6 +437,8 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
   async function loadElements(assignmentId: string) {
     clearRescanTimer();
     setSelectedId(assignmentId);
+    setElementModal(null);
+    setElementFilter("all");
     setElementsLoading(true);
     try {
       const data = await refreshElements(assignmentId);
@@ -632,6 +633,10 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
 
   const selectedAssignment = assignments.find((a) => a.id === selectedId);
   const hasPendingFiles = elements.some((el) => el.files.some((f) => f.scan_status === "pending"));
+  const isDoneElement = (el: SubmissionElementStatusEntry) => el.status === "submitted" || el.status === "closed";
+  const doneElementCount = elements.filter(isDoneElement).length;
+  const visibleElements = elementFilter === "all" ? elements : elements.filter((el) => (elementFilter === "done") === isDoneElement(el));
+  const sectionLabel = selectedAssignment?.source_type === "manual" ? t("assignmentLabel") : selectedAssignment?.source_type === "events" ? t("eventElementsLabel") : t("listElementsLabel");
 
   function metaLine(assignment: SubmissionAssignment): string {
     if (assignment.source_type === "events") {
@@ -665,8 +670,8 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
     <div className="grid subm-root">
       {deleteModal}
       {/* Header — always visible, including ClamAV status */}
-      <div className="page-header">
-        <div>
+      <div className="page-header subm-page-header">
+        <div className="subm-page-intro">
           <h1 className="page-title">{t("pageTitle")}</h1>
           <p className="muted">
             {hasNoAssignments ? t("pageIntroEmpty") : t("pageIntro")}{" "}
@@ -682,8 +687,9 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
             {clamavStatus === "online" ? t("clamavActive") : clamavStatus === "offline" ? t("clamavOffline") : t("clamavChecking")}
           </span>
           {canManage ? (
-            <button type="button" className="button-ghost" onClick={() => setLinksModalOpen(true)}>
-              {t("linksCount", { count: links.length })}
+            <button type="button" className="button-secondary subm-links-button" aria-label={t("linksCount", { count: links.length })} onClick={() => setLinksModalOpen(true)}>
+              {t("linksButton")}
+              <span className="subm-list-tab-count">{links.length}</span>
             </button>
           ) : null}
           {hasNoAssignments || !canManage ? null : (
@@ -711,44 +717,58 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
         )
       ) : (
       <>
-      <div className="list-filter-row">
-        <FilterTabs
-          options={[
-            { value: "open", label: t("completionTabs.open"), count: assignments.length - completedCount },
-            { value: "completed", label: t("completionTabs.completed"), count: completedCount },
-          ]}
-          value={completion}
-          onChange={setCompletion}
-        />
-        <div className="list-filter-search">
+      <div className="subm-list-toolbar">
+        <div className="tabs-list subm-list-tabs" role="tablist">
+          {(["open", "completed"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={completion === value}
+              className={completion === value ? "tabs-trigger tabs-trigger-active" : "tabs-trigger"}
+              onClick={() => setCompletion(value)}
+            >
+              {t(`completionTabs.${value}`)}
+              <span className="subm-list-tab-count">{value === "open" ? assignments.length - completedCount : completedCount}</span>
+            </button>
+          ))}
+        </div>
+        <div className="subm-list-search">
           <SearchInput value={search} onChange={setSearch} placeholder={t("searchAssignmentsPlaceholder")} />
         </div>
       </div>
 
-      <DataTable
-        className="data-table-lg"
-        columns={canManage ? [t("colTitle"), t("colSourcePeriod"), t("colProgress"), t("colActions")] : [t("colTitle"), t("colSourcePeriod"), t("colProgress")]}
-        emptyMessage={search.trim() ? t("noMatches") : completion === "completed" ? t("completedEmpty") : t("openEmpty")}
-      >
+      {filteredAssignments.length === 0 ? (
+        <div className="subm-list-empty">
+          {search.trim() ? t("noMatches") : completion === "completed" ? t("completedEmpty") : t("openEmpty")}
+        </div>
+      ) : (
+        <div className="subm-list">
           {filteredAssignments.map((assignment) => (
-            <tr
+            <article
               key={assignment.id}
-              className="table-row-clickable"
+              className="subm-card"
+              role="button"
+              tabIndex={0}
+              aria-label={assignment.title}
               onClick={() => void loadElements(assignment.id)}
+              onKeyDown={(e) => {
+                if (e.target !== e.currentTarget) return;
+                if (e.key === "Enter" || e.key === " ") { e.preventDefault(); void loadElements(assignment.id); }
+              }}
             >
-              <td className="table-cell-wrap">
-                <strong>{assignment.title}</strong>
-                {assignment.completed_at ? <> <Badge variant="success">{t("completedBadge")}</Badge></> : null}
-              </td>
-              <td className="table-cell-wrap">
-                <span className="muted">{metaLine(assignment)}</span>
-              </td>
-              <td>
+              <div className="subm-card-main">
+                <div className="subm-card-title-row">
+                  <span className="subm-card-title">{assignment.title}</span>
+                  {assignment.completed_at ? <Badge variant="success">{t("completedBadge")}</Badge> : null}
+                </div>
+                <span className="subm-card-meta">{metaLine(assignment)}</span>
+              </div>
+              <div className="subm-card-progress">
                 <SummaryBar summary={summaries[assignment.id]} />
-              </td>
+              </div>
               {canManage ? (
-              <td>
-                <div className="table-actions table-actions-start">
+                <div className="subm-card-actions">
                   <button
                     type="button"
                     className="subm-sidebar-icon-button"
@@ -768,18 +788,18 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
                     <ActionIcon name="delete" />
                   </button>
                 </div>
-              </td>
               ) : null}
-            </tr>
+            </article>
           ))}
-      </DataTable>
+        </div>
+      )}
       </>
       )}
 
       {/* Assignment detail popup — participants + progress */}
       <Modal
         open={selectedId !== null}
-        onClose={() => setSelectedId(null)}
+        onClose={() => { setSelectedId(null); setElementModal(null); }}
         title={selectedAssignment?.title ?? ""}
         description={selectedAssignment ? metaLine(selectedAssignment) : undefined}
         size="wide"
@@ -790,7 +810,146 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
           </button>
         ) : undefined}
       >
-        {selectedId !== null ? (
+        {selectedId !== null && elementModal ? (
+              <div className="grid subm-element-modal">
+              <button type="button" className="subm-back-link" onClick={() => setElementModal(null)}>
+                ← {sectionLabel}
+              </button>
+              <div className="subm-element-head">
+                <span className="subm-element-title">{elementModal.label}</span>
+              </div>
+                <div className="status-row">
+                  <Badge variant={statusVariant(elementModal)}>{statusLabel(elementModal, t)}</Badge>
+                  {elementModal.window_start && elementModal.window_end ? (
+                    <span className="subm-modal-meta">{t("windowRange", { start: formatDate(elementModal.window_start), end: formatDate(elementModal.window_end) })}</span>
+                  ) : elementModal.window_end ? (
+                    <span className="subm-modal-meta">{t("deadlineNamed", { date: formatDate(elementModal.window_end) })}</span>
+                  ) : null}
+                  {responsibleNames(elementModal) ? (() => {
+                    const name = responsibleNames(elementModal);
+                    return (
+                      <span className="subm-responsible">
+                        <span className="subm-avatar">{initials(name)}</span>
+                        {name}
+                      </span>
+                    );
+                  })() : null}
+                </div>
+
+                <div className="subm-modal-section">
+                  <div className="subm-modal-section-title">{t("filesLabel")}</div>
+                  {elementModal.files.length === 0 ? (
+                    <p className="muted">{t("noFilesPresent")}</p>
+                  ) : (
+                    <div className="subm-file-list subm-file-list-modal">
+                      {elementModal.files.map((file) => (
+                        <div key={file.id} className="subm-file-row">
+                          <span className="subm-file-icon"><FileIcon /></span>
+                          {file.scan_status === "clean" ? (
+                            <a href={file.content_url} target="_blank" rel="noreferrer" className="subm-file-link">
+                              {file.original_name}
+                            </a>
+                          ) : (
+                            <span className="subm-file-name-muted">{file.original_name}</span>
+                          )}
+                          {file.scan_status === "clean" ? (
+                            <>
+                              <span className="subm-verified" title={t("verified")}>
+                                <VerifiedIcon />
+                              </span>
+                              <button
+                                type="button"
+                                className="subm-file-download-button"
+                                title={t("downloadFileTitle")}
+                                onClick={() => void downloadFile(file.content_url, file.original_name)}
+                              >
+                                <DownloadIcon />
+                              </button>
+                            </>
+                          ) : (
+                            <Badge variant={SCAN_STATUS_VARIANT[file.scan_status] ?? "neutral"}>
+                              {scanStatusLabel(t)[file.scan_status] ?? file.scan_status}
+                            </Badge>
+                          )}
+                          {canManage ? (
+                            <button
+                              type="button"
+                              className="button-icon-soft button-icon-soft-danger"
+                              aria-label={t("deleteFileAction")}
+                              title={t("deleteFileAction")}
+                              onClick={() => void deleteSubmittedFile(file)}
+                            >
+                              <ActionIcon name="delete" />
+                            </button>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {elementModal.withdrawn_count ? (
+                  <StatusBanner tone="neutral" message={t("withdrawnInfo", { count: elementModal.withdrawn_count })} />
+                ) : null}
+
+                <div className="table-toolbar-actions">
+                  {elementModal.withdrawn_count && canManage ? (
+                    <button
+                      type="button"
+                      className="button-ghost button-secondary"
+                      onClick={() => selectedId && void restoreWithdrawn(selectedId, elementModal.element_ref)}
+                    >
+                      {t("restoreWithdrawnAction")}
+                    </button>
+                  ) : null}
+                  {!canReview ? null : elementModal.status === "closed" ? (
+                    <button
+                      type="button"
+                      className="button-ghost button-secondary subm-reopen-button"
+                      onClick={() => selectedId && void reopenElement(selectedId, elementModal.element_ref)}
+                    >
+                      {t("reopenAction")}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="button-ghost button-secondary subm-close-button"
+                      onClick={() => selectedId && void closeElement(selectedId, elementModal.element_ref)}
+                    >
+                      {t("closeElementAction")}
+                    </button>
+                  )}
+                </div>
+
+                <div className="subm-modal-section">
+                  <div className="subm-modal-section-title">{t("logLabel")}</div>
+                  {logLoading ? (
+                    <p className="muted">{t("loadingEllipsis")}</p>
+                  ) : logEntries.length === 0 ? (
+                    <p className="muted">{t("noEntriesPresent")}</p>
+                  ) : (
+                    <div className="subm-log-list">
+                      {logEntries.map((entry) => {
+                        const variant = LOG_STATUS_VARIANT[entry.status] ?? "neutral";
+                        const tone = variant === "danger" ? "error" : variant;
+                        return (
+                          <div key={entry.id} className={`subm-log-entry subm-log-entry-${tone}`}>
+                            <span className="subm-log-dot" />
+                            <div className="subm-log-body">
+                              <div className="subm-log-header">
+                                <Badge variant={variant}>{logStatusLabel(t)[entry.status] ?? entry.status}</Badge>
+                                <span className="subm-log-time">{formatDateTime(entry.created_at, locale)}</span>
+                              </div>
+                              {entry.error_message ? <div className="subm-log-detail">{entry.error_message}</div> : null}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+        ) : selectedId !== null ? (
           <div className="grid subm-detail">
             <SummaryBar summary={summaries[selectedId]} size="detail" />
             {selectedAssignment && canManage ? <AssignmentLinkField assignment={selectedAssignment} links={links} /> : null}
@@ -801,7 +960,26 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
               </Badge>
             )}
 
-            <div className="subm-modal-section-title">{selectedAssignment?.source_type === "manual" ? t("assignmentLabel") : selectedAssignment?.source_type === "events" ? t("eventElementsLabel") : t("listElementsLabel")}</div>
+            <div className="subm-detail-filter-row">
+              {elements.length > 0 ? (
+                <div className="filter-tabs filter-tabs-chips" role="tablist">
+                  {(["all", "done", "pending"] as const).map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      role="tab"
+                      aria-selected={elementFilter === value}
+                      className={elementFilter === value ? "filter-tabs-option filter-tabs-option-active" : "filter-tabs-option"}
+                      onClick={() => setElementFilter(value)}
+                    >
+                      {t(`detailFilter.${value}`)}
+                      <span className="filter-tabs-count">{value === "all" ? elements.length : value === "done" ? doneElementCount : elements.length - doneElementCount}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              <span className="subm-modal-section-title subm-detail-section-label">{sectionLabel}</span>
+            </div>
 
             {elementsLoading ? (
               <div className="subm-skeleton-box">
@@ -812,50 +990,40 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
             ) : elements.length === 0 ? (
               <p className="muted">{t("noElementsFound")}</p>
             ) : (
-              <div className="subm-participant-list">
-                {elements.map((element, rowIndex) => {
+              <div className="subm-element-grid">
+                {visibleElements.length === 0 ? <p className="muted">{t("noMatches")}</p> : null}
+                {visibleElements.map((element) => {
                   const responsibleName = responsibleNames(element) || null;
-                  // Titel ist immer das Element (Termin/Listeneintrag), die verantwortliche Person steht in der Metazeile
-                  // - auch "Niemand zugewiesen", sofern die Abgabe überhaupt eine Verantwortlichen-Quelle hat.
-                  const tracksResponsible = Boolean(selectedAssignment?.responsible_participant_source);
                   const hasFiles = element.files.length > 0;
                   const variant = statusVariant(element);
-                  const label = statusLabel(element, t);
-                  const status = hasFiles
+                  // Kurzinfo wie im Design: Dateien und Zeitpunkt, sonst die verantwortliche Person
+                  const short = hasFiles
                     ? `${t("fileCount", { count: element.files.length })}${element.submitted_at ? ` · ${relativeTime(element.submitted_at, t)}` : ""}`
-                    : t("notSubmittedYet");
-                  const responsible = responsibleName
-                    ? t("responsibleMeta", { name: responsibleName })
-                    : tracksResponsible ? t("noResponsibleAssigned") : null;
-                  const meta = responsible ? `${responsible} · ${status}` : status;
+                    : responsibleName ?? t("notSubmittedYet");
                   return (
-                    <div
+                    <button
                       key={element.element_ref}
-                      className="subm-participant-row"
-                      style={{ animationDelay: `${Math.min(rowIndex, 14) * 25}ms` }}
+                      type="button"
+                      className="subm-element-card"
                       onClick={() => void openElementModal(selectedId, element)}
                     >
-                      {responsibleName ? (
-                        <span className="subm-avatar subm-avatar-lg" title={responsibleName}>{initials(responsibleName)}</span>
-                      ) : (
-                        <span className={`subm-avatar subm-avatar-lg${tracksResponsible ? " subm-avatar-empty" : ""}`}>{tracksResponsible ? "?" : initials(element.label)}</span>
-                      )}
-                      <div className="subm-participant-info">
-                        <div className="subm-participant-name">{element.label}</div>
-                        <div className="subm-participant-meta">{meta}</div>
-                      </div>
-                      <div className="subm-participant-status">
-                        <Badge variant={variant}>
-                          {hasFiles ? <DownloadIcon /> : null} {label}
-                        </Badge>
-                      </div>
-                    </div>
+                      <span className={`subm-element-dot subm-element-dot-${variant}`} aria-hidden="true" />
+                      <span className="subm-element-text">
+                        <span className="subm-element-label">{element.label}</span>
+                        <span className="subm-element-short">{short}</span>
+                      </span>
+                      <Badge variant={variant}>{statusLabel(element, t)}</Badge>
+                    </button>
                   );
                 })}
               </div>
             )}
 
             <div className="subm-detail-footer">
+              <span className="subm-detail-footer-note">
+                <span className="subm-clamav-dot" aria-hidden="true" />
+                {t("clamavScanNote")}
+              </span>
               <button
                 type="button"
                 className="button-ghost button-secondary"
@@ -870,148 +1038,6 @@ export function SubmissionAssignmentManager({ initialAssignments, initialLinks, 
         ) : null}
       </Modal>
 
-      {/* Element detail popup — files + log combined */}
-      <Modal
-        open={elementModal !== null}
-        onClose={() => setElementModal(null)}
-        title={elementModal?.label ?? t("elementFallback")}
-        size="wide"
-      >
-        {elementModal ? (
-          <div className="grid subm-element-modal">
-            <div className="status-row">
-              <Badge variant={statusVariant(elementModal)}>{statusLabel(elementModal, t)}</Badge>
-              {elementModal.window_start && elementModal.window_end ? (
-                <span className="subm-modal-meta">{t("windowRange", { start: formatDate(elementModal.window_start), end: formatDate(elementModal.window_end) })}</span>
-              ) : elementModal.window_end ? (
-                <span className="subm-modal-meta">{t("deadlineNamed", { date: formatDate(elementModal.window_end) })}</span>
-              ) : null}
-              {responsibleNames(elementModal) ? (() => {
-                const name = responsibleNames(elementModal);
-                return (
-                  <span className="subm-responsible">
-                    <span className="subm-avatar">{initials(name)}</span>
-                    {name}
-                  </span>
-                );
-              })() : null}
-            </div>
-
-            <div className="subm-modal-section">
-              <div className="subm-modal-section-title">{t("filesLabel")}</div>
-              {elementModal.files.length === 0 ? (
-                <p className="muted">{t("noFilesPresent")}</p>
-              ) : (
-                <div className="subm-file-list subm-file-list-modal">
-                  {elementModal.files.map((file) => (
-                    <div key={file.id} className="subm-file-row">
-                      <span className="subm-file-icon"><FileIcon /></span>
-                      {file.scan_status === "clean" ? (
-                        <a href={file.content_url} target="_blank" rel="noreferrer" className="subm-file-link">
-                          {file.original_name}
-                        </a>
-                      ) : (
-                        <span className="subm-file-name-muted">{file.original_name}</span>
-                      )}
-                      {file.scan_status === "clean" ? (
-                        <>
-                          <span className="subm-verified" title={t("verified")}>
-                            <VerifiedIcon />
-                          </span>
-                          <button
-                            type="button"
-                            className="subm-file-download-button"
-                            title={t("downloadFileTitle")}
-                            onClick={() => void downloadFile(file.content_url, file.original_name)}
-                          >
-                            <DownloadIcon />
-                          </button>
-                        </>
-                      ) : (
-                        <Badge variant={SCAN_STATUS_VARIANT[file.scan_status] ?? "neutral"}>
-                          {scanStatusLabel(t)[file.scan_status] ?? file.scan_status}
-                        </Badge>
-                      )}
-                      {canManage ? (
-                        <button
-                          type="button"
-                          className="button-icon-soft button-icon-soft-danger"
-                          aria-label={t("deleteFileAction")}
-                          title={t("deleteFileAction")}
-                          onClick={() => void deleteSubmittedFile(file)}
-                        >
-                          <ActionIcon name="delete" />
-                        </button>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {elementModal.withdrawn_count ? (
-              <StatusBanner tone="neutral" message={t("withdrawnInfo", { count: elementModal.withdrawn_count })} />
-            ) : null}
-
-            <div className="table-toolbar-actions">
-              {elementModal.withdrawn_count && canManage ? (
-                <button
-                  type="button"
-                  className="button-ghost button-secondary"
-                  onClick={() => selectedId && void restoreWithdrawn(selectedId, elementModal.element_ref)}
-                >
-                  {t("restoreWithdrawnAction")}
-                </button>
-              ) : null}
-              {!canReview ? null : elementModal.status === "closed" ? (
-                <button
-                  type="button"
-                  className="button-ghost button-secondary subm-reopen-button"
-                  onClick={() => selectedId && void reopenElement(selectedId, elementModal.element_ref)}
-                >
-                  {t("reopenAction")}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="button-ghost button-secondary subm-close-button"
-                  onClick={() => selectedId && void closeElement(selectedId, elementModal.element_ref)}
-                >
-                  {t("closeElementAction")}
-                </button>
-              )}
-            </div>
-
-            <div className="subm-modal-section">
-              <div className="subm-modal-section-title">{t("logLabel")}</div>
-              {logLoading ? (
-                <p className="muted">{t("loadingEllipsis")}</p>
-              ) : logEntries.length === 0 ? (
-                <p className="muted">{t("noEntriesPresent")}</p>
-              ) : (
-                <div className="subm-log-list">
-                  {logEntries.map((entry) => {
-                    const variant = LOG_STATUS_VARIANT[entry.status] ?? "neutral";
-                    const tone = variant === "danger" ? "error" : variant;
-                    return (
-                      <div key={entry.id} className={`subm-log-entry subm-log-entry-${tone}`}>
-                        <span className="subm-log-dot" />
-                        <div className="subm-log-body">
-                          <div className="subm-log-header">
-                            <Badge variant={variant}>{logStatusLabel(t)[entry.status] ?? entry.status}</Badge>
-                            <span className="subm-log-time">{formatDateTime(entry.created_at, locale)}</span>
-                          </div>
-                          {entry.error_message ? <div className="subm-log-detail">{entry.error_message}</div> : null}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        ) : null}
-      </Modal>
 
       {/* Links: Zugang zur öffentlichen Abgabebox */}
       <Modal

@@ -8,6 +8,27 @@ Installationen aktualisieren können.
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-11-19
+
+Die Übersicht der Abgaben und das Abgabe-Detail folgen jetzt vollständig dem Design «Abgaben v4»
+(in 1.4.0 war nur der Dialog zum Anlegen und Bearbeiten umgesetzt).
+Keine Migration, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Changes.
+
+### Update
+
+- Von **1.4.0**: `./scripts/deploy.sh <test|prod>`.
+
+### Geändert
+
+- **Abgaben-Übersicht (Design «Abgaben v4»):** Jede Abgabe ist eine Karte mit Titel, Quelle und
+  Zeitfenster, Fortschrittsbalken samt Status («7 von 9 erledigt · 1 geschlossen · 1 in Prüfung»)
+  sowie Bearbeiten und Löschen. Die Reiter «Offen» und «Abgeschlossen» sind unterstrichen, im Kopf
+  stehen «Virenprüfung aktiv» als Chip, «Links» mit Anzahl und «+ Abgabe».
+- **Abgabe-Detail:** Filter «Alle / Abgegeben / Ausstehend» mit Anzahl, die Termine bzw. Einträge
+  als Kacheln mit Statuspunkt und Kurzinfo, unten der Hinweis zur ClamAV-Prüfung neben «Alle Dateien
+  (.zip)». Ein einzelner Termin oder Eintrag öffnet sich im selben Fenster, «← Termine» führt
+  zurück. Der Links-Dialog erklärt kurz, wie Links und Abgaben zusammenhängen.
+
 ## [1.4.0] - 2026-11-19
 
 Eine neu eingeteilte Seitenleiste nach Tätigkeiten mit «Meine Aufgaben» und gesammelten
