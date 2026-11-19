@@ -321,3 +321,35 @@ def test_unexpected_error_counts_as_attempt_and_subject_is_one_line(db, club, se
         assert row.status == "pending" and row.attempts == 1
     finally:
         email_transport.override_transport(None)
+
+
+def test_error_while_preparing_the_mail_counts_as_attempt(db, club, sent, monkeypatch):
+    """Ein Fehler beim Laden/Rendern (vor dem SMTP-Versand) zählte nicht als Versuch: die Gruppe
+    blieb mit attempts=0 «pending», wurde jede Minute erneut versucht, schrieb jedes Mal einen
+    Fehlerprotokoll-Eintrag und endete nie als «failed»."""
+    from app.models import SystemErrorLog
+
+    _standalone(db, club)
+    _enable_email(db)
+    _make_due(db)
+
+    def broken_render(**_kwargs):
+        raise RuntimeError("Vorlage kaputt")
+
+    monkeypatch.setattr(dispatch, "render", broken_render)
+    # Wie tests/document_support.savepoint_rollback: ein echtes rollback() nähme die äussere
+    # Testtransaktion samt Testdaten mit; der Fehler hier lässt keine halben Änderungen zurück.
+    monkeypatch.setattr(db, "rollback", db.expire_all)
+    assert dispatch.run(db).get("error") == 1
+    row = db.scalar(select(Notification).where(Notification.recipient_id == club["anna"].id))
+    assert row.status == "pending" and row.attempts == 1 and row.deliver_after > datetime.now(TZ)
+    assert "RuntimeError" in row.last_error
+    assert db.scalars(select(SystemErrorLog).where(SystemErrorLog.tenant_id == club["tenant"].id)).one().error_type == "RuntimeError"
+    assert sent == []
+
+    # Bis MAX_ATTEMPTS: danach «failed» statt endloser Wiederholung.
+    for _ in range(dispatch.MAX_ATTEMPTS - 1):
+        _make_due(db)
+        dispatch.run(db)
+    db.refresh(row)
+    assert row.status == "failed" and row.attempts == dispatch.MAX_ATTEMPTS
