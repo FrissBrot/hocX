@@ -48,6 +48,7 @@
     "documentLoading": "Dokument wird geladen…",
     "documentPageIntro": "Vorschläge prüfen und als neues Protokoll übernehmen.",
     "dragOrClickFile": ".docx/.pdf hierher ziehen oder klicken",
+    "replaceFileHint": "{size} MB · zum Ersetzen klicken oder Datei hierher ziehen",
     "emptyListCheckGrouping": "Liste ist noch leer – bitte Gruppierung prüfen und ggf. anpassen.",
     "entriesNeedReview": "{count, plural, one {# Eintrag benötigt} other {# Einträge benötigen}} eine manuelle Prüfung, bevor das Protokoll erstellt werden kann.",
     "eventsDescription": "Im Dokument erwähnte Anlässe mit bestehenden Terminen abgleichen.",

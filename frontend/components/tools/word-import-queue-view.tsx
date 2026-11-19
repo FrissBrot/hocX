@@ -195,6 +195,16 @@ export function WordImportQueueView({ templates, initialDocuments, initialTempla
             <span className="field-label">{t("queueView.fileFieldLabel")}</span>
             <label
               className={`word-import-dropzone word-import-dropzone-compact${isDragOver ? " is-dragover" : ""}`}
+              // Das Dateifeld selbst ist versteckt: die Fläche ist per Tab erreichbar und öffnet
+              // die Dateiauswahl mit Enter/Leertaste (Klick erledigt das <label>)
+              role="button"
+              tabIndex={0}
+              aria-disabled={uploading || !uploadTemplateId}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                fileInputRef.current?.click();
+              }}
               onDragOver={(event) => {
                 event.preventDefault();
                 setIsDragOver(true);

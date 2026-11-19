@@ -48,6 +48,7 @@
     "documentLoading": "Loading document…",
     "documentPageIntro": "Review suggestions and adopt as a new minutes document.",
     "dragOrClickFile": "Drag a .docx/.pdf here or click",
+    "replaceFileHint": "{size} MB · click or drag a file here to replace it",
     "emptyListCheckGrouping": "The list is still empty – please check the grouping and adjust if needed.",
     "entriesNeedReview": "{count, plural, one {# entry needs} other {# entries need}} manual review before the protocol can be created.",
     "eventsDescription": "Match events mentioned in the document with existing events.",

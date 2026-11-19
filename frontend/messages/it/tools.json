@@ -48,6 +48,7 @@
     "documentLoading": "Caricamento del documento…",
     "documentPageIntro": "Controlla i suggerimenti e adotta come nuovo verbale.",
     "dragOrClickFile": "Trascina qui un .docx/.pdf o clicca",
+    "replaceFileHint": "{size} MB · fai clic o trascina qui un file per sostituirlo",
     "emptyListCheckGrouping": "La lista è ancora vuota – controlla il raggruppamento e modificalo se necessario.",
     "entriesNeedReview": "{count, plural, one {# voce richiede} other {# voci richiedono}} una verifica manuale prima che il verbale possa essere creato.",
     "eventsDescription": "Confronta gli eventi menzionati nel documento con eventi esistenti.",
