@@ -34,7 +34,7 @@ from app.services.access_service import AccessService
 
 # Namensraum für pg_advisory_xact_lock(ns, template_id): Nummernvergabe und Umnummerierung
 # einer Vorlage nacheinander (Audit 2026-11). Andere Namensräume: upload_lock (909100001),
-# submission_service (909100002).
+# submission_service (909100002), task_package_service (909100012).
 PROTOCOL_NUMBERING_LOCK_NAMESPACE = 909100011
 
 
