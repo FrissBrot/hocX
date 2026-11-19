@@ -29,6 +29,7 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.error_log import record_system_error
 from app.core.objstore_client import ObjectNotFound, StorageError, StorageUnavailable, StorageWriteFenced
 from app.core.storage import MAIN, get_object_store, storage_work_dir
 from app.models import StoredFile
@@ -225,6 +226,7 @@ def process_job(db: Session, job_id: int, owner: str) -> JobOutcome:
         db.commit()
         return JobOutcome(status="queued", result="scan_pending")
 
+    tenant_id = job.tenant_id
     work_dir = storage_work_dir("documents", f"job-{job.id}-{uuid.uuid4().hex[:8]}")
     try:
         if job.kind == JOB_KIND_PDF:
@@ -244,8 +246,16 @@ def process_job(db: Session, job_id: int, owner: str) -> JobOutcome:
     except (StorageWriteFenced, StorageUnavailable, TransientJobError) as exc:
         db.rollback()
         return _handle_failure(db, job_id, owner, exc, transient=True)
+    except (sandbox.SandboxError, ValueError) as exc:
+        # Erwartet: kaputte/unlesbare Eingabe (Parser/LibreOffice in der Sandbox) oder kuratierte
+        # Meldung (fehlendes Original) - steht am Auftrag, nicht im Fehlerprotokoll.
+        db.rollback()
+        return _handle_failure(db, job_id, owner, exc, transient=False)
     except Exception as exc:  # noqa: BLE001 - jeder Fehler wird am Auftrag vermerkt
         db.rollback()
+        # Unerwartet (Programmfehler, DB): der Worker läuft ausserhalb eines Requests, kein
+        # globaler Handler sieht den Fehler - ohne diesen Aufruf stünde er nur am Auftrag.
+        record_system_error(db, exc=exc, tenant_id=tenant_id)
         return _handle_failure(db, job_id, owner, exc, transient=False)
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)
