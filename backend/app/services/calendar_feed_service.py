@@ -320,6 +320,9 @@ def _event_entries(db: Session, feed: CalendarFeed, user: CurrentUser, *, today:
     entries = []
     for event in events:
         end = event.event_end_date if event.event_end_date and event.event_end_date >= event.event_date else event.event_date
+        # DTEND ist exklusiv (+1 Tag): ein Enddatum am Kalenderende (Altdaten, z. B. 9999-12-31)
+        # brächte sonst den ganzen Feed mit OverflowError zum Absturz.
+        end = min(end, date.max - timedelta(days=1))
         entries.append(
             _Entry(
                 uid=f"event-{event.public_id}@hocx",
