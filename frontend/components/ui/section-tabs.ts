@@ -58,13 +58,6 @@ export function userAreaTabs(t: TFunc): RouteTab[] {
   ];
 }
 
-/** Früher die Reiter der Organisation; seit dem Einstellungen-Rahmen (Design «hocX Einstellungen»)
- * führt die Unternavigation links dorthin. Bleibt leer bestehen, damit Seiten, die die Reiter noch
- * einbinden (RouteTabs zeigt unter zwei Reitern nichts), ohne Änderung weiter funktionieren. */
-export function tenantSettingsTabs(_t: TFunc): RouteTab[] {
-  return [];
-}
-
 /** Datenschutz: Einstellungen und Aufbewahrungsregeln (beide nur mit settings.manage). */
 export function privacyTabs(t: TFunc): RouteTab[] {
   return [

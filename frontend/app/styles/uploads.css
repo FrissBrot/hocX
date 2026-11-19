@@ -916,3 +916,7 @@
 .upload-results-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-base); }
 
 .upload-results-detail { grid-column: 1 / -1; font-size: var(--text-sm); color: var(--muted); }
+
+/* Design «Mitglied Profil»: Löschen als dezenter roter Textlink in der Fusszeile (Rückfrage per useConfirm) */
+.person-delete-link { width: auto; padding-inline: 0; color: var(--danger); font-size: var(--text-sm); font-weight: 600; }
+.person-delete-link:hover { color: var(--danger); text-decoration: underline; }

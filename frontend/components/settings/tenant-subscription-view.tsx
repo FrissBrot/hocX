@@ -1,5 +1,6 @@
 "use client";
 
+import type { Route } from "next";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -132,7 +133,7 @@ export function TenantSubscriptionView({ initialTenant }: Props) {
     if (next === "invoices") params.set("tab", "invoices");
     else params.delete("tab");
     const query = params.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    router.replace((query ? `${pathname}?${query}` : pathname) as Route, { scroll: false });
   }
 
   function openCharge(charge: TenantPortalCharge) {

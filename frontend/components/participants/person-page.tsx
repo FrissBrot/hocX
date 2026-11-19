@@ -653,7 +653,7 @@ export function PersonPage({
           {person.updated_at ? <span>{t("person.updatedAt", { date: formatDate(person.updated_at) })}</span> : null}
         </span>
         {!isSelf ? (
-          <button type="button" className="button-secondary button-danger" onClick={() => void deletePerson()}>{t("person.deleteMember")}</button>
+          <button type="button" className="button-ghost person-delete-link" onClick={() => void deletePerson()}>{t("person.deleteMember")}</button>
         ) : null}
       </footer>
 
