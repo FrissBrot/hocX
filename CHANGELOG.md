@@ -16,6 +16,11 @@ Installationen aktualisieren können.
   Nachrücken der Ansicht mehr. Scrollbalken und Sprünge (Schnellzugriff, Suche) rechnen mit dem
   ganz offenen Dokument und landen dadurch exakt.
 - **Menü «Sitzungen»:** «Protokolle» steht zuoberst, vor Kalender und Anliegen.
+- **Pendenzen-Kalender neu gestaltet:** Monat gross im Kopf, daneben ‹ / Heute / ›, rechts das
+  Feld «Anzeigen» mit den Umschaltern «Pendenzen» und «Termine». Tage anderer Monate sind grau
+  hinterlegt, Einträge stehen als einzeilige Chips (Pendenzen mit Kästchen, überfällige rot,
+  Termine grün mit Uhrzeit). Die rechte Spalte mit «Überfällig», «Ohne festes Datum», Legende und
+  Abo-Link scrollt eigenständig; auf schmalen Bildschirmen steht sie unter dem Raster.
 
 ## [1.4.0] - 2026-11-18
 
