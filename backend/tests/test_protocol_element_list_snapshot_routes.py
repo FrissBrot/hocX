@@ -112,3 +112,45 @@ def test_sync_does_not_require_writer_role_change_but_rejects_reader(db):
     with pytest.raises(HTTPException) as exc_info:
         protocol_elements.sync_block_list_snapshot(block.public_id, db=db, user=reader)
     assert exc_info.value.status_code == 403
+
+
+def test_row_link_with_foreign_list_entry_id_does_not_copy_foreign_values(db):
+    """Nachtlauf 2026-11-19 (protokolle/mandantentrennung): rows[].linked_list_entry_id ist
+    frei setzbar (PATCH configuration_snapshot_json speichert das JSON ungeprüft). Die Liste
+    selbst wird auf den Mandanten geprüft, der Eintrag aber per db.get geladen - ohne Bezug
+    zur Liste. Ein Schreiber verweist so auf eine eigene Liste und eine fremde (fortlaufende,
+    erratbare) Eintrags-ID und liest beim Aktualisieren die Werte des fremden Mandanten."""
+    from app.schemas.protocol import ProtocolElementBlockUpdate
+
+    tenant_a = make_tenant(db, "Tenant A")
+    tenant_b = make_tenant(db, "Tenant B")
+    own_definition = make_list_definition(db, tenant_a.id)
+    own_entry = make_list_entry(db, own_definition.id, column_one_value={"text_value": "eigen"})
+    foreign_definition = make_list_definition(db, tenant_b.id)
+    foreign_entry = make_list_entry(db, foreign_definition.id, column_one_value={"text_value": "geheim"})
+    _protocol, block = _row_block(db, tenant_a, own_definition, own_entry)
+    user = make_current_user(tenant_a.id)
+
+    config = dict(block.configuration_snapshot_json)
+    config["rows"] = [{**config["rows"][0], "linked_list_entry_id": foreign_entry.id}]
+    protocol_elements.patch_protocol_element_block(
+        block.public_id, ProtocolElementBlockUpdate(configuration_snapshot_json=config), db=db, user=user
+    )
+    refreshed = protocol_elements.refresh_block_list_snapshot(block.public_id, db=db, user=user)
+
+    snapshot = refreshed.configuration_snapshot_json["rows"][0]["list_snapshot"]
+    assert snapshot["entry_exists"] is False
+    assert "geheim" not in str(refreshed.configuration_snapshot_json)
+
+
+def test_row_link_with_entry_of_other_own_list_is_not_resolved(db):
+    """Gleiche Ursache innerhalb eines Mandanten: der Eintrag muss zur verknüpften Liste gehören."""
+    from app.services import list_snapshot_service
+
+    tenant = make_tenant(db)
+    list_one = make_list_definition(db, tenant.id)
+    list_two = make_list_definition(db, tenant.id, name="Zweite Liste")
+    entry_two = make_list_entry(db, list_two.id, column_one_value={"text_value": "andere Liste"})
+
+    snapshot = list_snapshot_service.compute_row_list_snapshot(db, list_one.id, entry_two.id, tenant.id)
+    assert snapshot["entry_exists"] is False

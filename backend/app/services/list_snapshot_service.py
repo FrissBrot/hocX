@@ -164,6 +164,11 @@ def compute_row_list_snapshot(
         entry = next((e for e in cache.entries[list_definition_id] if e.id == list_entry_id), None)
     else:
         entry = db.get(ListEntry, list_entry_id)
+        # linked_list_entry_id ist wie linked_list_id frei setzbar (Block-Konfiguration): nur
+        # Einträge der oben mandantengeprüften Liste gelten, sonst wäre über eine eigene Liste
+        # jeder fremde Eintrag lesbar (Nachtlauf 2026-11-19, ohne RLS wirksam).
+        if entry is not None and entry.list_definition_id != definition.id:
+            entry = None
     base = _structure(definition)
     if entry is None:
         return {**base, "entry_exists": False}
