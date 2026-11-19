@@ -58,14 +58,15 @@ test("Zahnrad in der Kopfzeile führt vom Bereich zur Einstellung und zurück", 
 test("Einstellungen: Knopf über der Benutzerkarte führt zur Übersicht mit Suche", async ({ page }) => {
   await page.goto("/todos");
   await page.locator(".sidebar-settings-link").click();
-  await expect(page).toHaveURL(/\/settings$/);
+  // Erster Aufruf: der Next-Server des E2E-Stacks kompiliert /settings erst (kann >5 s dauern)
+  await expect(page).toHaveURL(/\/settings$/, { timeout: 30_000 });
   await expect(page.getByRole("heading", { name: "Einstellungen", level: 1 })).toBeVisible();
   await expect(page.locator('.settings-hub-card[href="/tenant-settings"]')).toBeVisible();
   await page.getByRole("textbox", { name: "Einstellung finden" }).fill("dsgvo");
   await expect(page.locator('.settings-hub-card[href="/tenant-settings/privacy"]')).toBeVisible();
   await expect(page.locator('.settings-hub-card[href="/tenant-settings"]')).toHaveCount(0);
   await page.locator('.settings-hub-card[href="/tenant-settings/privacy"]').click();
-  await expect(page).toHaveURL(/\/tenant-settings\/privacy$/);
+  await expect(page).toHaveURL(/\/tenant-settings\/privacy$/, { timeout: 30_000 });
   await expect(page.locator(".topbar-breadcrumb")).toContainText("Einstellungen");
   await expect(page.locator(".topbar-breadcrumb")).toContainText("Datenschutz");
 });
