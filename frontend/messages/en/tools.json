@@ -102,6 +102,9 @@
     "previewLabel": "Preview",
     "protocolCreateFailed": "Protocol could not be created",
     "protocolCreated": "Protocol created",
+    "analysisWarnings": "{count, plural, one {# note} other {# notes}} on the analysis",
+    "doneSummary": "{attendance, plural, one {# attendance record} other {# attendance records}}, {events, plural, one {# event} other {# events}}, {lists, plural, one {# list entry} other {# list entries}} and {matrices, plural, one {# matrix value} other {# matrix values}} were imported.",
+    "doneSkipped": "{count, plural, one {# entry was skipped and can be added manually.} other {# entries were skipped and can be added manually.}}",
     "protocolDateNotDetected": "The protocol date could not be detected automatically.",
     "queueView": {
       "alreadyImportedNamed": "\"{name}\" (already imported)",

@@ -102,6 +102,9 @@
     "previewLabel": "Aperçu",
     "protocolCreateFailed": "Le procès-verbal n'a pas pu être créé",
     "protocolCreated": "Procès-verbal créé",
+    "analysisWarnings": "{count, plural, one {# remarque} other {# remarques}} sur l’analyse",
+    "doneSummary": "{attendance, plural, one {# présence} other {# présences}}, {events, plural, one {# rendez-vous} other {# rendez-vous}}, {lists, plural, one {# entrée de liste} other {# entrées de liste}} et {matrices, plural, one {# valeur de matrice} other {# valeurs de matrice}} ont été repris.",
+    "doneSkipped": "{count, plural, one {# entrée a été ignorée et peut être ajoutée manuellement.} other {# entrées ont été ignorées et peuvent être ajoutées manuellement.}}",
     "protocolDateNotDetected": "La date du procès-verbal n'a pas pu être détectée automatiquement.",
     "queueView": {
       "alreadyImportedNamed": "« {name} » (déjà importé)",

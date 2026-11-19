@@ -102,6 +102,9 @@
     "previewLabel": "Anteprima",
     "protocolCreateFailed": "Il verbale non ha potuto essere creato",
     "protocolCreated": "Verbale creato",
+    "analysisWarnings": "{count, plural, one {# nota} other {# note}} sull’analisi",
+    "doneSummary": "{attendance, plural, one {# presenza} other {# presenze}}, {events, plural, one {# appuntamento} other {# appuntamenti}}, {lists, plural, one {# voce di elenco} other {# voci di elenco}} e {matrices, plural, one {# valore di matrice} other {# valori di matrice}} sono stati importati.",
+    "doneSkipped": "{count, plural, one {# voce è stata saltata e può essere aggiunta manualmente.} other {# voci sono state saltate e possono essere aggiunte manualmente.}}",
     "protocolDateNotDetected": "La data del verbale non ha potuto essere rilevata automaticamente.",
     "queueView": {
       "alreadyImportedNamed": "«{name}» (già importato)",
