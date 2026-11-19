@@ -222,8 +222,12 @@ def ics(events: list[Event], *, tenant_name: str) -> str:
     """Termine als iCalendar (ganztägig, wie in der App erfasst)."""
     from datetime import UTC, datetime, timedelta
 
+    # Gleiche Regeln wie das Kalender-Abo: Steuerzeichen (auch ein einzelnes CR) entfernen, damit
+    # kein Termintext eine neue iCal-Zeile beginnt, und Zeilen auf 75 Oktette falten.
+    from app.services.calendar_feed_service import _escape, _fold
+
     def escape(value: str) -> str:
-        return str(value or "").replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+        return _escape(str(value or ""))
 
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//hocX//Dokument-Engine//DE", f"X-WR-CALNAME:{escape(tenant_name)}"]
@@ -245,7 +249,7 @@ def ics(events: list[Event], *, tenant_name: str) -> str:
             lines.append("STATUS:CANCELLED")
         lines.append("END:VEVENT")
     lines.append("END:VCALENDAR")
-    return "\r\n".join(lines) + "\r\n"
+    return "".join(_fold(line) + "\r\n" for line in lines)
 
 
 def event_inline_label(event: Event, row_config: dict | None = None) -> str:
