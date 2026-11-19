@@ -29,15 +29,18 @@ type Props = {
   /** Genau eines von fileIds/albumId wird gesetzt - feste Auswahl vs. "live" Album-Link. */
   fileIds?: string[];
   albumId?: string;
+  /** Vorschlag, falls kein Name eingegeben wird (Platzhalter im Feld). Der Name ist freiwillig. */
   defaultName?: string;
+  /** Werden Bilder geteilt? Nur dann gibt es die Auswahl der Foto-Angaben (Datum, Standort, Kamera). */
+  includesImages?: boolean;
   onCreated?: () => void;
 };
 
-export function ShareLinkModal({ open, onClose, fileIds, albumId, defaultName = "", onCreated }: Props) {
+export function ShareLinkModal({ open, onClose, fileIds, albumId, defaultName = "", includesImages = true, onCreated }: Props) {
   const t = useTranslations("sharedLinks");
   const tCommon = useTranslations("common");
   const toast = useToast();
-  const [name, setName] = useState(defaultName);
+  const [name, setName] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
   const [metadata, setMetadata] = useState<MetadataChoice>(DEFAULT_METADATA);
   const [busy, setBusy] = useState(false);
@@ -45,17 +48,18 @@ export function ShareLinkModal({ open, onClose, fileIds, albumId, defaultName = 
 
   async function create(event: FormEvent) {
     event.preventDefault();
-    if (busy || !name.trim()) return;
+    if (busy) return;
     setBusy(true);
     try {
       const link = await browserApiFetch<ShareLink>("/api/share-links", {
         method: "POST",
         body: JSON.stringify({
-          name: name.trim(),
+          // Ohne Eingabe gilt der Vorschlag; ohne Vorschlag vergibt das Backend einen Namen
+          name: name.trim() || defaultName.trim() || null,
           expires_at: expiresAt || null,
           file_ids: albumId ? null : fileIds,
           album_id: albumId ?? null,
-          ...metadata,
+          ...(includesImages ? metadata : DEFAULT_METADATA),
         }),
       });
       if (link) {
@@ -70,7 +74,7 @@ export function ShareLinkModal({ open, onClose, fileIds, albumId, defaultName = 
   }
 
   function handleClose() {
-    setName(defaultName);
+    setName("");
     setExpiresAt("");
     setMetadata(DEFAULT_METADATA);
     setCreated(null);
@@ -96,13 +100,15 @@ export function ShareLinkModal({ open, onClose, fileIds, albumId, defaultName = 
           {albumId && <StatusBanner tone="neutral" message={t("createModal.albumLiveNotice")} />}
           <label className="field-stack">
             <span className="field-label">{t("createModal.nameLabel")}</span>
-            <input autoFocus required maxLength={120} value={name} onChange={(event) => setName(event.target.value)} />
+            <input autoFocus maxLength={120} value={name} placeholder={defaultName || undefined} onChange={(event) => setName(event.target.value)} />
+            <span className="field-help">{t("createModal.nameHelp")}</span>
           </label>
           <label className="field-stack">
             <span className="field-label">{t("createModal.expiryLabel")}</span>
             <DateInput value={expiresAt} onChange={setExpiresAt} />
             <span className="field-help">{t("createModal.expiryHelp")}</span>
           </label>
+          {includesImages && (
           <fieldset className="share-metadata-fieldset">
             <legend className="field-label">
               {t("createModal.metadataLegend")}{" "}
@@ -127,9 +133,10 @@ export function ShareLinkModal({ open, onClose, fileIds, albumId, defaultName = 
             ))}
             <span className="field-help">{t("createModal.metadataHelp")}</span>
           </fieldset>
+          )}
           <div className="modal-actions">
             <button type="button" className="button-ghost" onClick={handleClose}>{tCommon("cancel")}</button>
-            <button className="button-primary" data-modal-save type="submit" disabled={busy || !name.trim()}>
+            <button className="button-primary" data-modal-save type="submit" disabled={busy}>
               {busy ? t("createModal.creatingEllipsis") : t("createModal.createButton")}
             </button>
           </div>

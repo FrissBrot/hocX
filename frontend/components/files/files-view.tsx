@@ -337,6 +337,7 @@ export function FilesView({ initialItems }: Props) {
         onClose={() => setShareItem(null)}
         fileIds={shareItem ? [shareItem.id] : []}
         defaultName={shareItem?.original_name ?? ""}
+        includesImages={shareItem?.is_image ?? false}
       />
 
       {detailItem && (

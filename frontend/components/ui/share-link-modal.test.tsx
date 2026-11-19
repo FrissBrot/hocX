@@ -76,6 +76,34 @@ describe("ShareLinkModal", () => {
     expect(body).toMatchObject({ share_location: true, share_capture_date: false, share_camera: false });
   });
 
+  it("does not require a name and hides photo options for documents", async () => {
+    browserApiFetchMock.mockResolvedValue(makeLink());
+
+    render(<ShareLinkModal open onClose={() => {}} fileIds={["file-1"]} includesImages={false} />);
+
+    expect(screen.queryByRole("switch", { name: /Standort \(GPS\)/ })).toBeNull();
+    const submit = screen.getByRole("button", { name: "Link erstellen" });
+    expect(submit).not.toBeDisabled();
+    fireEvent.click(submit);
+
+    await waitFor(() => expect(browserApiFetchMock).toHaveBeenCalledTimes(1));
+    const body = JSON.parse((browserApiFetchMock.mock.calls[0][1] as RequestInit).body as string);
+    // Ohne Namen vergibt das Backend einen; Foto-Angaben bleiben auf den privaten Vorgaben
+    expect(body).toMatchObject({ name: null, share_location: false, share_camera: false });
+  });
+
+  it("uses a typed name over the suggestion", async () => {
+    browserApiFetchMock.mockResolvedValue(makeLink());
+
+    render(<ShareLinkModal open onClose={() => {}} fileIds={["file-1"]} defaultName="1 Foto" />);
+    fireEvent.change(screen.getByPlaceholderText("1 Foto"), { target: { value: "Für Eltern" } });
+    fireEvent.click(screen.getByRole("button", { name: "Link erstellen" }));
+
+    await waitFor(() => expect(browserApiFetchMock).toHaveBeenCalledTimes(1));
+    const body = JSON.parse((browserApiFetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(body).toMatchObject({ name: "Für Eltern" });
+  });
+
   it("creates an album share link with album_id instead of file_ids", async () => {
     browserApiFetchMock.mockResolvedValue(makeLink({ album_name: "Sommerlager" }));
 

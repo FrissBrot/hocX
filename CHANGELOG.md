@@ -16,6 +16,11 @@ Installationen aktualisieren können.
   Nachrücken der Ansicht mehr. Scrollbalken und Sprünge (Schnellzugriff, Suche) rechnen mit dem
   ganz offenen Dokument und landen dadurch exakt.
 - **Menü «Sitzungen»:** «Protokolle» steht zuoberst, vor Kalender und Anliegen.
+- **Links teilen ohne Namen:** Der Name eines Freigabe-Links ist freiwillig. Ohne Eingabe gilt
+  der Vorschlag im Feld bzw. heisst der Link wie die Datei, das Album oder «N Dateien».
+- **Foto-Angaben nur bei Bildern:** Aufnahmedatum, Standort und Kamera werden beim Teilen nur
+  angeboten, wenn auch Bilder geteilt werden; Dokumente gehen ohne diese Auswahl.
+- **Dateien:** Die Liste nutzt die volle Breite wie die Fotos-Seite.
 
 ## [1.4.0] - 2026-11-18
 

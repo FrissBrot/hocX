@@ -205,7 +205,7 @@ export function MobileFiles({ initialItems }: { initialItems: FileOverviewItem[]
           }}
         />
       ) : null}
-      <ShareLinkModal open={share !== null} onClose={() => setShare(null)} fileIds={share ? [share.id] : []} defaultName={share?.original_name ?? ""} />
+      <ShareLinkModal open={share !== null} onClose={() => setShare(null)} fileIds={share ? [share.id] : []} defaultName={share?.original_name ?? ""} includesImages={share?.is_image ?? false} />
       {uploading ? <DocumentUploadModal tagSuggestions={tagSuggestions} initialFiles={[]} onClose={() => setUploading(false)} onUploaded={uploaded} /> : null}
     </div>
   );

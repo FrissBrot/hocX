@@ -24,8 +24,10 @@
 
 .files-overview { gap: var(--space-4); min-width: 0; }
 
+/* Volle Breite wie die Fotos-Seite (Kopf mit «Dateien hochladen» reicht auch bis zum Rand) - die
+   gemeinsame Tabellenbreite (--table-max-width) liess rechts eine leere Fläche, v. a. in der
+   Kachelansicht. */
 .files-card {
-  max-width: var(--table-max-width);
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--border);

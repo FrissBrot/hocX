@@ -107,6 +107,25 @@ def test_create_share_link_for_files_returns_the_relative_share_url(db):
     assert result.url.startswith("/share/")
 
 
+def test_create_share_link_without_a_name_gets_one(db):
+    """Der Name ist freiwillig: eine Datei heisst wie sie selbst, mehrere werden gezählt, ein Album
+    behält seinen Namen. Zu lang bleibt abgelehnt."""
+    tenant = make_tenant(db)
+    user = make_current_user(tenant.id, role="writer")
+    a = _make_file(db, tenant.id, name="lager.png")
+    b = _make_file(db, tenant.id, name="zelt.png")
+    album = PhotoAlbum(tenant_id=tenant.id, name="Sommerlager", kind="manual")
+    db.add(album)
+    db.flush()
+
+    assert share_links_routes.create_share_link(ShareLinkCreate(file_ids=[a.public_id]), db, user).name == "lager.png"
+    assert share_links_routes.create_share_link(ShareLinkCreate(name="  ", file_ids=[a.public_id, b.public_id]), db, user).name == "2 Dateien"
+    assert share_links_routes.create_share_link(ShareLinkCreate(album_id=album.id), db, user).name == "Sommerlager"
+    with pytest.raises(HTTPException) as too_long:
+        share_links_routes.create_share_link(ShareLinkCreate(name="x" * 121, file_ids=[a.public_id]), db, user)
+    assert too_long.value.status_code == 422
+
+
 def test_create_share_link_rejects_an_album_the_tenant_cannot_see(db):
     owner = make_tenant(db)
     other = make_tenant(db)

@@ -484,7 +484,8 @@ class ShareLinkCreate(BaseModel):
     """Exactly one of file_ids/album_id must be set (files.py validates this) - a fixed
     selection vs. a "live" link that always shows an album's current contents."""
 
-    name: str
+    # Optional: ohne Namen vergibt create_share_link einen (Albumname, Dateiname, «N Dateien»)
+    name: str | None = None
     expires_at: datetime | None = None
     file_ids: list[uuid.UUID] | None = None
     album_id: uuid.UUID | None = None

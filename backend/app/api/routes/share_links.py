@@ -60,9 +60,9 @@ def create_share_link(payload: ShareLinkCreate, db: Session = Depends(get_db), u
     require_feature(user, F.PHOTO_SHARING, write=True)
     if user.current_tenant_id is None:
         raise HTTPException(status_code=400, detail="No active tenant")
-    name = payload.name.strip()
-    if not name or len(name) > 120:
-        raise HTTPException(status_code=422, detail="Name muss zwischen 1 und 120 Zeichen lang sein")
+    name = (payload.name or "").strip()
+    if len(name) > 120:
+        raise HTTPException(status_code=422, detail="Name darf höchstens 120 Zeichen lang sein")
     has_files = bool(payload.file_ids)
     has_album = payload.album_id is not None
     if has_files == has_album:
@@ -78,7 +78,7 @@ def create_share_link(payload: ShareLinkCreate, db: Session = Depends(get_db), u
             # SEC-002: der Besitzer hat öffentliche Links für diesen Partner abgeschaltet.
             raise HTTPException(status_code=403, detail="Der Besitzer dieses Albums erlaubt keine öffentlichen Links.")
         link = share_link_service.create_for_album(
-            db, tenant_id=user.current_tenant_id, name=name, album=album, expires_at=payload.expires_at, created_by=user.user_id, metadata=metadata
+            db, tenant_id=user.current_tenant_id, name=name or album.name[:120], album=album, expires_at=payload.expires_at, created_by=user.user_id, metadata=metadata
         )
         _audit(db, user, "public_link.created", link, expires_at=link.expires_at.isoformat() if link.expires_at else None)
         return _read(link, album_name=album.name, file_count=len(share_link_service.file_ids_for_link(db, link)), created_by_name=user.display_name)
@@ -102,6 +102,9 @@ def create_share_link(payload: ShareLinkCreate, db: Session = Depends(get_db), u
     if any(item.scan_status in BLOCKED_SCAN_STATUSES for item in found):
         # Gesperrte Dateien zeigt die öffentliche Seite nie - nicht erst aufnehmen und mitzählen.
         raise HTTPException(status_code=422, detail="Gesperrte Dateien (Virenprüfung) können nicht geteilt werden.")
+    if not name:
+        # Ohne Namen: eine Datei heisst wie sie selbst, mehrere werden gezählt
+        name = (found[0].original_name or "Datei")[:120] if len(found) == 1 else f"{len(found)} Dateien"
     try:
         link = share_link_service.create_for_files(
             db, tenant_id=user.current_tenant_id, name=name, file_ids=ids, expires_at=payload.expires_at, created_by=user.user_id, metadata=metadata
