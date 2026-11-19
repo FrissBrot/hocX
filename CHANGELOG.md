@@ -38,6 +38,10 @@ Keine Migration, keine neuen Secrets oder Umgebungsvariablen, keine Breaking Cha
 - **Prüfseite und Abgabebox antworteten live mit 504:** Die Abgabebox hängt in zwei Docker-Netzen;
   ohne Angabe wählte Traefik je nach Neustart die IP im internen Speicher-Netz, das es nicht erreicht.
   Jetzt ist das Netz fest vorgegeben (wie beim Backend), ein Test prüft das für alle Dienste.
+- **Update prüft alle Dienste von aussen:** `deploy.sh` ruft nach dem Start jeden Traefik-Router über
+  die echte Domain auf (Frontend, Backend-API, Abgabebox-Seite und -API samt Prüfseite, Admin, Docs,
+  Website). Ist ein Dienst nicht erreichbar, geht das Update automatisch auf das vorherige Release
+  zurück. `verify_release.sh` nutzt dieselben Prüfungen.
 - **Abgeschlossene Protokolle:** «PDF öffnen» zeigt das finale PDF sofort. Bisher lief jedes Öffnen
   über den PDF-Auftrag im Hintergrund (Ladeseite «Ihr PDF wird erstellt»), obwohl am Ende dasselbe
   PDF mit derselben Dokument-ID zurückkam.

@@ -17,6 +17,8 @@ ENVIRONMENT="${1:-}"
 
 # shellcheck source=scripts/lib/env.sh
 source "$REPO_DIR/scripts/lib/env.sh"
+# shellcheck source=scripts/lib/traefik_checks.sh
+source "$REPO_DIR/scripts/lib/traefik_checks.sh"
 
 case "$ENVIRONMENT" in
   test)
@@ -81,40 +83,6 @@ probe_from_backend() {
   "${DC[@]}" exec -T backend python3 -c "import urllib.request,sys; resp=urllib.request.urlopen('$url', timeout=10); sys.exit(0 if resp.status < 500 else 1)"
 }
 
-# curl gegen Traefik mit dem echten Host-Namen der URL. Gibt die effektive URL (nach Redirects)
-# aus; HTTP-Fehler (>= 400) und TLS-Fehler lassen den Check scheitern.
-curl_via_traefik() {
-  local url="$1" host bind ca
-  local -a args=(--silent --show-error --fail --location --max-time 15 --output /dev/null --write-out '%{url_effective}')
-  host="${url#https://}"
-  host="${host%%/*}"
-  bind="${TRAEFIK_WEBSECURE_BIND:-0.0.0.0}"
-  if [ "$bind" != 0.0.0.0 ]; then
-    args+=(--resolve "$host:443:$bind")
-  elif ! getent hosts "$host" > /dev/null 2>&1; then
-    args+=(--resolve "$host:443:127.0.0.1")
-  fi
-  ca="${HOCX_VERIFY_CA_FILE:-}"
-  if [ -n "$ca" ]; then
-    [[ "$ca" == /* ]] || ca="$REPO_DIR/$ca"
-    args+=(--cacert "$ca")
-  fi
-  curl "${args[@]}" "$url"
-}
-
-probe_domain() {
-  curl_via_traefik "$1" > /dev/null
-}
-
-# Landet die Website-Domain auf /login, erkennt das Frontend sie nicht als Website (z. B.
-# TRAEFIK_WEBSITE_DOMAIN fehlt im Container) - der reine Statuscode waere trotzdem 200.
-probe_website_domain() {
-  local effective path
-  effective="$(curl_via_traefik "$1")" || return 1
-  path="${effective#https://*/}"
-  [[ "/$path" != /login* ]]
-}
-
 check_backend_health() {
   probe_from_backend "http://localhost:8000/api/health"
 }
@@ -167,14 +135,7 @@ run_check "Docs antworten lokal" check_docs_local
 run_check "Alembic steht auf head" check_alembic_head
 
 command -v curl > /dev/null 2>&1 || { echo "curl wird fuer die Domain-Checks benoetigt." >&2; exit 1; }
-run_check "Hauptdomain antwortet via Traefik" probe_domain "https://${TRAEFIK_DOMAIN}/login"
-run_check "Abgabebox antwortet via Traefik" probe_domain "https://${TRAEFIK_ABGABEBOX_DOMAIN}/"
-if [ -n "${TRAEFIK_DOCS_DOMAIN:-}" ]; then
-  run_check "Docs-Domain antwortet via Traefik" probe_domain "https://${TRAEFIK_DOCS_DOMAIN}/"
-fi
-if [ -n "${TRAEFIK_WEBSITE_DOMAIN:-}" ]; then
-  run_check "Website-Domain liefert die Landing Page via Traefik" probe_website_domain "https://${TRAEFIK_WEBSITE_DOMAIN}/"
-fi
+run_check "Alle Traefik-Router von aussen (Frontend, APIs, Prüfseite, Admin, Docs, Website)" traefik_route_checks
 
 note "Alle Verify-Checks erfolgreich fuer $HOCX_VERSION"
 

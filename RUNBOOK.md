@@ -92,6 +92,12 @@ Alembic explizit ausfuehren → Container neu starten → Smoke-Checks
 (`scripts/seed_test_tenant.py` loescht und baut den Mandanten "Jubla Sonnenberg" bei
 jedem Test-Deploy komplett neu auf - Login siehe Skript-Output/-Docstring. Laeuft nur auf
 `test`, nie auf `prod`).
+Nach den Smoke-Checks prueft `deploy.sh` jeden Traefik-Router von aussen (`scripts/lib/traefik_checks.sh`:
+Frontend und Backend-API der Hauptdomain, Abgabebox-Frontend und -API inklusive `POST /api/public/verify`,
+Admin-Frontend und -API ueber Port `TRAEFIK_ADMIN_PORT`, Docs, Website). Erreicht ein Router seinen Dienst
+nicht (z. B. 504 wegen falschem Docker-Netz), rollt `deploy.sh` automatisch auf das vorherige Release zurueck;
+bei der allerersten Installation gibt es nur eine Warnung.
+
 `verify_release.sh test` prueft danach zusaetzlich:
 - Backend / Abgabebox-Backend lokal erreichbar
 - Frontend / Docs lokal erreichbar

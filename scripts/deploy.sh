@@ -54,6 +54,8 @@ source "$REPO_DIR/scripts/lib/env.sh"
 source "$REPO_DIR/scripts/lib/env_migrate.sh"
 # shellcheck source=scripts/lib/cosign.sh
 source "$REPO_DIR/scripts/lib/cosign.sh"
+# shellcheck source=scripts/lib/traefik_checks.sh
+source "$REPO_DIR/scripts/lib/traefik_checks.sh"
 # shellcheck source=scripts/lib/github.sh
 source "$REPO_DIR/scripts/lib/github.sh"
 # shellcheck source=scripts/lib/dump_crypto.sh
@@ -1080,6 +1082,22 @@ fi
 if ! run_smoke_checks; then
   rollback_apps || true
   exit 1
+fi
+
+# Von aussen über Traefik: jeder Router muss seinen Dienst erreichen (falsches Docker-Netz,
+# fehlende Middleware, Zertifikat). Die Smoke-Checks oben laufen in den Containern und sehen das
+# nicht - 1.4.0 ging so mit einer per 504 ausgefallenen Abgabebox-API live.
+echo "==> [$ENVIRONMENT] Prüfung über Traefik"
+if ! traefik_route_checks; then
+  if [ -f "$PROJECT_DIR/.releases/current.env" ]; then
+    echo "    Mindestens ein Dienst ist über Traefik nicht erreichbar - Rollback." >&2
+    rollback_apps || true
+    exit 1
+  fi
+  # Erste Installation: kein Release zum Zurückgehen; oft fehlt nur noch das Zertifikat (DNS,
+  # Let's Encrypt). Nicht alles stoppen, sondern deutlich warnen.
+  echo "    WARNUNG: Erste Installation, nicht alle Dienste über Traefik erreichbar (Zertifikat/DNS prüfen," >&2
+  echo "    danach ./scripts/verify_release.sh $ENVIRONMENT)." >&2
 fi
 
 # Ab hier ist das neue Release das Rollback-Ziel: Folgeschritte (Storage-Controller, Cron,
