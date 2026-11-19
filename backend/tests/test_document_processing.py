@@ -9,7 +9,7 @@ import pytest
 from sqlalchemy import func, select, text, update
 
 from app.core.storage import MAIN, get_object_store
-from app.models import StoredFile
+from app.models import StoredFile, SystemErrorLog
 from app.models.document_entities import (
     Document,
     DocumentExtraction,
@@ -231,6 +231,26 @@ def test_corrupt_file_is_retried_with_backoff_then_fails(db, document_storage):
     assert extraction.status == "failed"
     # Das Original bleibt verfügbar.
     assert _files(db, document.current_version_id)["original"].stored_file_id is not None
+    # Eine kaputte Datei ist ein erwarteter Fehler (Sandbox) - kein Eintrag im Fehlerprotokoll.
+    assert db.scalar(select(func.count()).select_from(SystemErrorLog).where(SystemErrorLog.tenant_id == tenant.id)) == 0
+
+
+def test_unexpected_error_is_recorded_in_system_error_log(db, document_storage, monkeypatch):
+    """Ein Programmfehler in der Verarbeitung darf nicht nur am Auftrag stehen (CLAUDE.md,
+    Zentrale Fehlererfassung Punkt 2/4): der Worker läuft ausserhalb eines Requests."""
+    tenant = make_tenant(db)
+    document = document_service.register_upload(db, gallery_document(db, tenant.id, "sample.md"))
+    job = _jobs(db, document)["extract"]
+    db.flush()
+
+    def broken(*_args, **_kwargs):
+        raise RuntimeError("Programmfehler in der Extraktion")
+
+    monkeypatch.setattr(processing, "_run_extract", broken)
+    outcome = _run(db, job)
+    assert outcome.status == "queued" and "RuntimeError" in outcome.error
+    entry = db.scalars(select(SystemErrorLog).where(SystemErrorLog.tenant_id == tenant.id)).one()
+    assert entry.error_type == "RuntimeError" and entry.source == "backend"
 
 
 def test_missing_original_object_is_not_retried_forever(db, document_storage):
